@@ -1,0 +1,210 @@
+<div class="flex h-full min-h-0 flex-col">
+  <div
+    class="flex h-12 shrink-0 items-center gap-2 border-b border-white/5 px-3 whitespace-nowrap"
+  >
+    <lucide-angular [img]="BarChart3" [size]="15" class="shrink-0 text-zinc-400" />
+    <span class="shrink-0 text-[13px] font-medium text-zinc-200">Visuals</span>
+
+    <div class="ml-auto flex shrink-0 items-center gap-1.5">
+      @if (visualization(); as visual) {
+        <!-- Single version control: which version is shown, which is current, and the action -->
+        <div class="relative">
+          <button
+            type="button"
+            (click)="versionMenuOpen.set(!versionMenuOpen())"
+            [attr.aria-expanded]="versionMenuOpen()"
+            title="Version history"
+            class="flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[12px] hover:bg-white/[0.06]"
+            [class.border-white/10]="!viewingOldVersion()"
+            [class.text-zinc-300]="!viewingOldVersion()"
+            [class.border-amber-500/40]="viewingOldVersion()"
+            [class.text-amber-300]="viewingOldVersion()"
+          >
+            <lucide-angular [img]="History" [size]="13" />
+            <span>v{{ visual.version }}</span>
+            <lucide-angular [img]="ChevronDown" [size]="12" />
+          </button>
+          @if (versionMenuOpen()) {
+            <button
+              type="button"
+              aria-label="Close version menu"
+              class="fixed inset-0 z-20 cursor-default"
+              (click)="versionMenuOpen.set(false)"
+            ></button>
+            <div
+              class="absolute top-full right-0 z-30 mt-1 w-80 rounded-xl border border-white/10 bg-[#2a2a2a] p-1.5 shadow-xl"
+            >
+              @if (viewingOldVersion()) {
+                <button
+                  type="button"
+                  (click)="revertVersion.emit(visual.version); versionMenuOpen.set(false)"
+                  class="mb-1 flex w-full items-center justify-between rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-2 text-left text-[12px] text-emerald-300 hover:bg-emerald-500/20"
+                >
+                  <span>Make v{{ visual.version }} the current version</span>
+                  <span class="text-[11px] text-emerald-300/70">now v{{ currentVersion() }}</span>
+                </button>
+              }
+              <div class="max-h-64 overflow-y-auto">
+                @for (entry of versions(); track entry.version) {
+                  <button
+                    type="button"
+                    (click)="pickVersion(entry.version)"
+                    class="flex w-full flex-col rounded-lg px-2.5 py-2 text-left hover:bg-white/10"
+                    [class.bg-white\/5]="visual.version === entry.version"
+                  >
+                    <span class="flex w-full items-center gap-2 text-[12px] text-zinc-200">
+                      <span>Version {{ entry.version }}</span>
+                      @if (entry.version === currentVersion()) {
+                        <span class="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-300">current</span>
+                      }
+                      @if (entry.version === visual.version) {
+                        <span class="ml-auto text-[10px] text-zinc-500">viewing</span>
+                      }
+                    </span>
+                    <span class="mt-0.5 w-full truncate text-[11px] text-zinc-500">
+                      {{ entry.instruction ? entry.instruction : "Initial version" }} · {{ formatCreatedAt(entry.createdAt) }}
+                    </span>
+                  </button>
+                }
+              </div>
+            </div>
+          }
+        </div>
+
+        <button
+          type="button"
+          title="Download bundle (HTML, CSS, JS, answer.md, data.json)"
+          aria-label="Download bundle"
+          (click)="downloadVisual.emit(visual)"
+          [disabled]="downloading()"
+          class="flex items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] p-1.5 text-zinc-300 hover:border-white/20 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          @if (downloading()) {
+            <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+          } @else {
+            <lucide-angular [img]="Download" [size]="14" />
+          }
+        </button>
+      }
+
+      @if (savedVisualizations(); as visuals) {
+        @if (visuals.length > 0) {
+          <div class="relative">
+            <button
+              type="button"
+              (click)="visualMenuOpen.set(!visualMenuOpen())"
+              [attr.aria-expanded]="visualMenuOpen()"
+              title="Saved visuals in this project"
+              class="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-[12px] text-zinc-300 hover:border-white/20 hover:bg-white/[0.06]"
+            >
+              <lucide-angular [img]="GalleryVerticalEnd" [size]="13" />
+              <span>{{ visuals.length }}</span>
+              <lucide-angular [img]="ChevronDown" [size]="12" />
+            </button>
+            @if (visualMenuOpen()) {
+              <button
+                type="button"
+                aria-label="Close visual menu"
+                class="fixed inset-0 z-20 cursor-default"
+                (click)="visualMenuOpen.set(false)"
+              ></button>
+              <div
+                class="absolute top-full right-0 z-30 mt-1 max-h-72 w-80 overflow-y-auto rounded-xl border border-white/10 bg-[#2a2a2a] p-1.5 shadow-xl"
+              >
+                @for (visual of visuals; track visual.id) {
+                  <button
+                    type="button"
+                    (click)="selectVisualization(visual)"
+                    class="flex w-full flex-col rounded-lg px-2.5 py-2 text-left hover:bg-white/10"
+                    [class.bg-white\/5]="visualization()?.id === visual.id"
+                  >
+                    <span class="w-full truncate text-[12px] text-zinc-200">{{ visual.title }}</span>
+                    <span class="mt-0.5 text-[11px] text-zinc-500">v{{ visual.currentVersion ?? 1 }} · {{ formatCreatedAt(visual.createdAt) }}</span>
+                  </button>
+                }
+              </div>
+            }
+          </div>
+        }
+      }
+    </div>
+  </div>
+
+  @if (loading()) {
+    <div
+      class="flex flex-1 flex-col items-center justify-center gap-3 px-8 text-center"
+    >
+      <span
+        class="flex h-10 w-10 items-center justify-center rounded-xl bg-white/5"
+      >
+        <lucide-angular
+          [img]="Loader2"
+          [size]="18"
+          class="animate-spin text-zinc-300"
+        />
+      </span>
+      <div>
+        <p class="text-[13px] font-medium text-zinc-200">
+          Designing the visual
+        </p>
+        <p class="mt-1 text-[12px] leading-5 text-zinc-500">
+          Building and saving HTML, CSS, and JavaScript in the project
+          workspace…
+        </p>
+      </div>
+    </div>
+  } @else if (error()) {
+    <div
+      class="flex flex-1 flex-col items-center justify-center px-8 text-center"
+    >
+      <p class="text-[13px] font-medium text-red-300">
+        Visual generation failed
+      </p>
+      <p class="mt-1 text-[12px] leading-5 text-zinc-500">{{ error() }}</p>
+    </div>
+  } @else if (visualization(); as visual) {
+    <div class="relative min-h-0 flex-1 p-3 pb-0">
+      @if (runtimeError(); as runtimeError) {
+        <div
+          class="absolute inset-x-3 top-3 z-10 flex items-start gap-2 rounded-lg border border-red-500/30 bg-[#2a1a1a] px-3 py-2 text-[12px] text-red-300"
+        >
+          <lucide-angular [img]="TriangleAlert" [size]="14" class="mt-0.5 shrink-0" />
+          <span class="min-w-0">
+            <span class="font-medium">This visual hit a runtime error.</span>
+            <span class="text-red-300/80"> {{ runtimeError }} — ask the assistant to fix it or revert to an earlier version.</span>
+          </span>
+        </div>
+      }
+      <iframe
+        class="h-full w-full rounded-xl border border-white/10 bg-[#171717]"
+        sandbox="allow-scripts"
+        referrerpolicy="no-referrer"
+        title="Interactive visualization"
+        [srcdoc]="safeDocument()"
+      ></iframe>
+    </div>
+    <!-- Title, takeaway and analysis now live inside the document itself. -->
+    <div class="flex shrink-0 items-center justify-between gap-3 px-4 py-2.5">
+      <p class="truncate text-[12px] text-zinc-400">{{ visual.title }}</p>
+      <p class="shrink-0 font-mono text-[10px] text-zinc-600">{{ visual.path }}/v{{ visual.version }}</p>
+    </div>
+  } @else {
+    <div
+      class="flex flex-1 flex-col items-center justify-center gap-3 px-8 text-center"
+    >
+      <span
+        class="flex h-10 w-10 items-center justify-center rounded-xl bg-white/5"
+      >
+        <lucide-angular [img]="Sparkles" [size]="18" class="text-zinc-400" />
+      </span>
+      <div>
+        <p class="text-[13px] font-medium text-zinc-300">
+          No visual generated yet
+        </p>
+        <p class="mt-1 text-[12px] leading-5 text-zinc-500">
+          Generate an interactive visual from any completed assistant answer.
+        </p>
+      </div>
+    </div>
+  }
+</div>

@@ -1,0 +1,72 @@
+export type DatasourceKind = 'databricks' | 'postgres';
+
+export const DATASOURCE_KINDS: { value: DatasourceKind; label: string }[] = [
+  { value: 'databricks', label: 'Databricks' },
+  { value: 'postgres', label: 'PostgreSQL' },
+];
+
+export interface DatabricksConfig {
+  host: string;
+  token: string;
+  warehouseId: string;
+}
+
+export interface PostgresConfig {
+  host: string;
+  port: number;
+  database: string;
+  user: string;
+  password: string;
+  ssl: boolean;
+}
+
+export type DatasourceConfig = DatabricksConfig | PostgresConfig;
+
+export interface Datasource {
+  id: string;
+  name: string;
+  kind: DatasourceKind;
+  /** One-line description of where it points (no secrets). */
+  summary: string;
+  /** Secrets arrive masked (••••••••); send them back unchanged to keep them. */
+  config: DatasourceConfig;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface DatasourceActionResult {
+  ok: boolean;
+  message: string;
+  datasource?: Datasource;
+}
+
+export interface ColumnInfo {
+  name: string;
+  type: string;
+  nullable: boolean;
+}
+
+export interface TableInfo {
+  name: string;
+  columns: ColumnInfo[];
+}
+
+export interface SchemaInfo {
+  name: string;
+  tables: TableInfo[];
+}
+
+export interface CatalogInfo {
+  name: string;
+  schemas: SchemaInfo[];
+}
+
+export interface InventoryResult {
+  ok: boolean;
+  message?: string;
+  catalogs?: CatalogInfo[];
+}
+
+export function kindLabel(kind: DatasourceKind | undefined): string {
+  return DATASOURCE_KINDS.find((k) => k.value === kind)?.label ?? 'Unknown';
+}

@@ -1,0 +1,562 @@
+<div
+  class="flex h-screen bg-[#1c1c1c] text-[13px] text-zinc-300 select-none"
+  [class.resizing-right-panel]="rightPanelResizing()"
+>
+  @if (sidebarOpen()) {
+    @if (settingsOpen()) {
+      <!-- Settings panel -->
+      <aside
+        aria-label="Settings sidebar"
+        class="flex w-[296px] shrink-0 flex-col border-r border-white/5 bg-[#181818]"
+      >
+        <!-- Header: back -->
+        <div class="app-drag flex h-11 items-center justify-end px-3 pt-3">
+          <button
+            (click)="settingsOpen.set(false)"
+            class="flex items-center gap-1.5 rounded-md px-2 py-1 text-zinc-300 hover:bg-white/5"
+          >
+            <lucide-angular [img]="ArrowLeft" [size]="15" />
+            <span>Back</span>
+          </button>
+        </div>
+
+        <!-- Account row -->
+        <button
+          class="mx-2 mt-3 flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-white/5"
+        >
+          <span
+            class="flex h-5 w-5 items-center justify-center rounded-full bg-zinc-600 text-[10px] font-medium text-zinc-200"
+          >
+            D
+          </span>
+          <span class="truncate font-medium text-zinc-200">Demo User</span>
+          <lucide-angular
+            [img]="ChevronDown"
+            [size]="14"
+            class="shrink-0 text-zinc-500"
+          />
+        </button>
+
+        <!-- Search settings -->
+        <div
+          class="mx-3 mt-3 flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5"
+        >
+          <lucide-angular
+            [img]="Search"
+            [size]="14"
+            class="shrink-0 text-zinc-500"
+          />
+          <input
+            placeholder="Search settings"
+            class="w-full bg-transparent text-[13px] text-zinc-200 outline-none placeholder:text-zinc-500"
+          />
+          <kbd
+            class="shrink-0 rounded border border-white/10 px-1 py-0.5 text-[10px] text-zinc-500"
+            >⌘ F</kbd
+          >
+        </div>
+
+        <!-- Options -->
+        <nav
+          aria-label="Settings navigation"
+          class="mt-4 flex flex-col gap-0.5 px-2"
+        >
+          <button
+            (click)="selectSection('datasources')"
+            class="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-zinc-200 hover:bg-white/10"
+            [class.option-active]="settingsSection() === 'datasources'"
+          >
+            <lucide-angular
+              [img]="Database"
+              [size]="15"
+              class="text-zinc-400"
+            />
+            <span>Datasource Configuration</span>
+          </button>
+          <button
+            (click)="selectSection('llm')"
+            class="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-zinc-200 hover:bg-white/10"
+            [class.option-active]="settingsSection() === 'llm'"
+          >
+            <lucide-angular [img]="Bot" [size]="15" class="text-zinc-400" />
+            <span>LLM Configuration</span>
+          </button>
+        </nav>
+
+        <div class="flex-1"></div>
+      </aside>
+    } @else {
+      <!-- Sidebar -->
+      <aside
+        aria-label="Primary sidebar"
+        class="flex w-[296px] shrink-0 flex-col border-r border-white/5 bg-[#181818]"
+      >
+        <!-- Header: collapse toggle right-aligned, clear of macOS traffic lights -->
+        <div class="app-drag flex h-11 items-center justify-end px-3">
+          <button
+            (click)="sidebarOpen.set(false)"
+            title="Collapse sidebar"
+            class="rounded p-1 text-zinc-500 hover:bg-white/5 hover:text-zinc-300"
+          >
+            <lucide-angular [img]="PanelLeft" [size]="16" />
+          </button>
+        </div>
+
+        <!-- Account row -->
+        <button
+          class="mx-2 mt-3 flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-white/5"
+        >
+          <span
+            class="flex h-5 w-5 items-center justify-center rounded-full bg-zinc-600 text-[10px] font-medium text-zinc-200"
+          >
+            D
+          </span>
+          <span class="truncate font-medium text-zinc-200">Demo User</span>
+          <lucide-angular
+            [img]="ChevronDown"
+            [size]="14"
+            class="shrink-0 text-zinc-500"
+          />
+        </button>
+
+        <!-- Top section -->
+        <nav
+          aria-label="Workspace navigation"
+          class="mt-2 flex flex-col gap-0.5 px-2 pb-3"
+        >
+          <button
+            (click)="
+              mainView.set(mainView() === 'sandbox' ? 'home' : 'sandbox')
+            "
+            class="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
+            [class.option-active]="mainView() === 'sandbox'"
+          >
+            <lucide-angular [img]="FlaskConical" [size]="15" />
+            <span>Data Sandbox</span>
+          </button>
+        </nav>
+
+        <!-- Divider -->
+        <div class="border-t border-white/5"></div>
+
+        <!-- Bottom section -->
+        <nav
+          aria-label="Projects navigation"
+          class="mt-3 flex flex-col gap-0.5 px-2"
+        >
+          <div
+            class="group flex items-center gap-2.5 rounded-md px-2 py-1.5 text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
+            [class.option-active]="mainView() === 'conversation-new'"
+          >
+            <lucide-angular [img]="FolderKanban" [size]="15" />
+            <span>Projects</span>
+            <button
+              (click)="openComposer()"
+              title="New conversation"
+              class="ml-auto rounded p-0.5 text-zinc-500 opacity-0 group-hover:opacity-100 hover:bg-white/10 hover:text-zinc-200"
+              [class.opacity-100]="mainView() === 'conversation-new'"
+            >
+              <lucide-angular [img]="Plus" [size]="15" />
+            </button>
+          </div>
+          <!-- Project children -->
+          @for (project of projects(); track project.id) {
+            <div
+              [attr.data-testid]="'project-' + project.id"
+              class="group relative ml-6 flex items-center rounded-md text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
+              [class.option-active]="
+                mainView() === 'project-chat' &&
+                activeProject()?.id === project.id
+              "
+            >
+              <button
+                (click)="openProject(project)"
+                [disabled]="deletingProject() === project.id"
+                class="min-w-0 flex-1 truncate px-2 py-1.5 text-left text-[12px] disabled:opacity-50"
+              >
+                {{ project.name }}
+              </button>
+              <button
+                type="button"
+                title="Project options"
+                [attr.aria-label]="'Options for ' + project.name"
+                (click)="toggleProjectMenu(project.id)"
+                [disabled]="deletingProject() === project.id"
+                class="mr-1 rounded p-0.5 text-zinc-500 opacity-0 hover:bg-white/10 hover:text-zinc-200 group-hover:opacity-100 disabled:cursor-not-allowed"
+                [class.opacity-100]="projectMenuOpen() === project.id"
+              >
+                <lucide-angular [img]="EllipsisVertical" [size]="14" />
+              </button>
+              @if (projectMenuOpen() === project.id) {
+                <div
+                  class="fixed inset-0 z-20"
+                  (click)="projectMenuOpen.set(null)"
+                ></div>
+                <div
+                  class="absolute top-full right-0 z-30 mt-1 w-44 rounded-lg border border-white/10 bg-[#2a2a2a] p-1 shadow-xl"
+                >
+                  <button
+                    type="button"
+                    (click)="deleteProject(project)"
+                    class="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] text-red-400 hover:bg-white/10"
+                  >
+                    <lucide-angular [img]="Trash2" [size]="14" />
+                    <span>Delete project</span>
+                  </button>
+                </div>
+              }
+            </div>
+          }
+        </nav>
+
+        <!-- Empty body -->
+        <div class="flex-1"></div>
+
+        <!-- Footer -->
+        <div
+          class="flex items-center justify-end gap-1 px-3 pb-3 text-zinc-500"
+        >
+          <button
+            type="button"
+            (click)="systemLogsOpen.set(true)"
+            title="System logs and diagnostics"
+            aria-label="Open system logs"
+            class="relative rounded p-1.5 hover:bg-white/5 hover:text-zinc-300"
+          >
+            <lucide-angular [img]="ScrollText" [size]="15" />
+            @if (diagnostics.issueCount() > 0) {
+              <span
+                class="absolute -top-1 -right-1 flex min-w-3.5 items-center justify-center rounded-full bg-red-500 px-1 text-[8px] font-semibold leading-3.5 text-white"
+                >{{
+                  diagnostics.issueCount() > 99
+                    ? "99+"
+                    : diagnostics.issueCount()
+                }}</span
+              >
+            }
+          </button>
+          <button
+            (click)="settingsOpen.set(true)"
+            title="Settings"
+            class="rounded p-1.5 hover:bg-white/5 hover:text-zinc-300"
+          >
+            <lucide-angular [img]="Settings" [size]="15" />
+          </button>
+        </div>
+      </aside>
+    }
+  }
+
+  <div class="flex min-w-0 flex-1 flex-col">
+    <!-- Top bar -->
+    <header
+      class="app-drag flex h-12 shrink-0 items-center border-b border-white/5 pr-3"
+      [class.pl-3]="sidebarOpen()"
+      [class.pl-traffic-lights]="!sidebarOpen()"
+    >
+      @if (!sidebarOpen()) {
+        <button
+          (click)="sidebarOpen.set(true)"
+          title="Expand sidebar"
+          class="rounded p-1 text-zinc-500 hover:bg-white/5 hover:text-zinc-300"
+        >
+          <lucide-angular [img]="PanelLeft" [size]="16" />
+        </button>
+      }
+      @if (mainView() === "project-chat" && activeProject()) {
+        <div
+          class="ml-3 flex min-w-0 items-center gap-2"
+          [class.ml-0]="sidebarOpen()"
+        >
+          <lucide-angular
+            [img]="Database"
+            [size]="14"
+            class="shrink-0 text-zinc-500"
+          />
+          <span
+            class="shrink-0 text-[10px] font-medium tracking-[0.08em] text-zinc-600 uppercase"
+            >Datasource</span
+          >
+          @if (loadingProjectDatasources()) {
+            <span class="h-4 w-24 animate-pulse rounded bg-white/5"></span>
+          } @else if (activeProjectDatasources().length > 0) {
+            <div class="flex min-w-0 items-center gap-1.5">
+              @for (
+                datasource of activeProjectDatasources();
+                track datasource.id
+              ) {
+                <span
+                  class="flex min-w-0 items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.03] px-2 py-1"
+                  [title]="datasource.summary"
+                >
+                  <span class="max-w-40 truncate text-[12px] text-zinc-300">{{
+                    datasource.name
+                  }}</span>
+                  <span class="shrink-0 text-[10px] text-zinc-500">{{
+                    datasourceKindLabel(datasource.kind)
+                  }}</span>
+                </span>
+              }
+            </div>
+          } @else {
+            <span class="truncate text-[12px] text-zinc-500">Unavailable</span>
+          }
+        </div>
+      }
+      @if (!rightPanelOpen()) {
+        <button
+          (click)="rightPanelOpen.set(true)"
+          title="Expand right panel"
+          class="ml-auto rounded p-1 text-zinc-500 hover:bg-white/5 hover:text-zinc-300"
+        >
+          <lucide-angular [img]="PanelRight" [size]="16" />
+        </button>
+      }
+    </header>
+
+    <!-- Tab strip -->
+    <div class="h-10 shrink-0 border-b border-white/5"></div>
+
+    <!-- Content area -->
+    <main class="flex min-h-0 flex-1 flex-col">
+      <h1 class="sr-only">Questions to Insights</h1>
+      @if (settingsOpen() && settingsSection() === "datasources") {
+        <div class="flex flex-1 justify-center overflow-y-auto px-6 py-10">
+          <app-datasource-config class="w-full max-w-[560px]" />
+        </div>
+      } @else if (settingsOpen() && settingsSection() === "llm") {
+        <div class="flex flex-1 justify-center overflow-y-auto px-6 py-10">
+          <app-llm-config class="w-full max-w-[480px]" />
+        </div>
+      } @else if (mainView() === "sandbox") {
+        <div class="flex flex-1 justify-center overflow-y-auto px-8 py-10">
+          <app-sandbox-list
+            class="w-full max-w-[960px]"
+            (newSandbox)="openSandboxEditor(null)"
+            (openSandbox)="openSandboxEditor($event)"
+          />
+        </div>
+      } @else if (mainView() === "sandbox-new") {
+        <div class="flex flex-1 justify-center overflow-y-auto px-8 py-10">
+          <app-catalog-browser
+            class="w-full max-w-[960px]"
+            [initial]="editingSandbox()"
+            (saved)="mainView.set('sandbox')"
+          />
+        </div>
+      } @else if (mainView() === "project-chat" && activeProject()) {
+        <app-project-chat
+          class="min-h-0 flex-1"
+          [project]="activeProject()!"
+          [visualGenerating]="generatingVisualProject() === activeProject()!.id"
+          [activeVisualizationId]="activeVisualization()?.id ?? null"
+          (generateVisual)="generateInteractiveVisual($event)"
+          (visualUpdated)="onVisualUpdated($event)"
+          (viewVisual)="showVisualization($event, $event.version)"
+        />
+      } @else if (mainView() === "conversation-new") {
+        <!-- New conversation composer -->
+        <div
+          class="flex flex-1 flex-col items-center overflow-y-auto px-6 pt-10 pb-8"
+        >
+          <div
+            class="w-full max-w-[920px] rounded-2xl border border-white/10 bg-[#232323] p-4 shadow-lg"
+          >
+            <label class="flex flex-col gap-1.5">
+              <span class="text-[11px] font-medium text-zinc-500"
+                >Project name</span
+              >
+              <input
+                type="text"
+                placeholder="My new project"
+                [value]="composerName()"
+                (input)="composerName.set($any($event.target).value)"
+                class="rounded-md border border-white/10 bg-white/5 px-3 py-2 text-[14px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+              />
+            </label>
+            <div class="mt-4 flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <button
+                  class="flex items-center gap-1.5 rounded-md px-1.5 py-1 hover:bg-white/5"
+                  [class.text-zinc-300]="llmModel()"
+                  [class.text-zinc-500]="!llmModel()"
+                >
+                  <lucide-angular [img]="Sparkle" [size]="13" />
+                  <span>{{ llmModel() ?? "No model configured" }}</span>
+                </button>
+                <div class="relative">
+                  <button
+                    (click)="effortMenuOpen.set(!effortMenuOpen())"
+                    title="Reasoning effort"
+                    class="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-zinc-400 capitalize hover:bg-white/5"
+                  >
+                    <lucide-angular [img]="Signal" [size]="13" />
+                    <span>{{ llmEffort() }}</span>
+                  </button>
+                  @if (effortMenuOpen()) {
+                    <div
+                      class="fixed inset-0 z-10"
+                      (click)="effortMenuOpen.set(false)"
+                    ></div>
+                    <div
+                      class="absolute bottom-full left-0 z-20 mb-1 w-36 rounded-lg border border-white/10 bg-[#2a2a2a] p-1 shadow-xl"
+                    >
+                      @for (effort of reasoningEfforts; track effort) {
+                        <button
+                          (click)="setEffort(effort)"
+                          class="flex w-full items-center rounded-md px-2.5 py-1.5 text-left text-[13px] capitalize hover:bg-white/10"
+                          [class.text-zinc-100]="llmEffort() === effort"
+                          [class.text-zinc-400]="llmEffort() !== effort"
+                        >
+                          {{ effort }}
+                        </button>
+                      }
+                    </div>
+                  }
+                </div>
+              </div>
+              <div class="flex items-center gap-3">
+                <button
+                  (click)="createProject()"
+                  [disabled]="
+                    creatingProject() ||
+                    selectedSandboxes().size === 0 ||
+                    composerName().trim() === ''
+                  "
+                  title="Name the project and select at least one sandbox"
+                  class="flex items-center gap-1.5 rounded-lg bg-zinc-200 px-3.5 py-2 text-[13px] font-medium text-zinc-900 hover:bg-white disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+                >
+                  @if (creatingProject()) {
+                    <span>Creating…</span>
+                  } @else {
+                    <span>Create</span>
+                    <lucide-angular [img]="CornerDownLeft" [size]="14" />
+                  }
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sandbox selection: the project needs at least one -->
+          <div class="mt-8 w-full max-w-[920px]">
+            <p class="text-[12px] text-zinc-500">
+              Select at least one sandbox for this project
+            </p>
+            @if (composerSandboxes().length === 0) {
+              <p class="mt-3 text-[13px] text-zinc-500">
+                No sandboxes yet — create one in Data Sandbox first.
+              </p>
+            } @else {
+              <div class="mt-2 flex flex-col gap-1">
+                @for (sandbox of composerSandboxes(); track sandbox.name) {
+                  <button
+                    (click)="toggleSandboxSelection(sandbox.name)"
+                    class="flex items-center gap-3 rounded-xl border px-3 py-2.5 text-left hover:bg-white/5"
+                    [class.border-emerald-500/40]="
+                      selectedSandboxes().has(sandbox.name)
+                    "
+                    [class.bg-emerald-500/5]="
+                      selectedSandboxes().has(sandbox.name)
+                    "
+                    [class.border-white/10]="
+                      !selectedSandboxes().has(sandbox.name)
+                    "
+                  >
+                    <span
+                      class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/5 text-zinc-400"
+                    >
+                      <lucide-angular [img]="Workflow" [size]="15" />
+                    </span>
+                    <span class="truncate text-[13px] text-zinc-200">{{
+                      sandbox.name
+                    }}</span>
+                    <span class="text-[12px] text-zinc-500"
+                      >{{ sandbox.tables.length }} entities</span
+                    >
+                    @if (selectedSandboxes().has(sandbox.name)) {
+                      <lucide-angular
+                        [img]="CircleCheck"
+                        [size]="16"
+                        class="ml-auto shrink-0 text-emerald-400"
+                      />
+                    }
+                  </button>
+                }
+              </div>
+            }
+          </div>
+        </div>
+      } @else {
+        <div class="flex-1"></div>
+
+        <!-- Chat input container -->
+        <div class="flex justify-center px-6 pb-6">
+          <div
+            class="h-28 w-full max-w-[860px] rounded-2xl border border-white/10 bg-[#232323]"
+          ></div>
+        </div>
+      }
+    </main>
+  </div>
+
+  <!-- Right panel -->
+  @if (rightPanelOpen()) {
+    <aside
+      aria-label="Details panel"
+      class="relative flex shrink-0 flex-col border-l border-white/5 bg-[#161616]"
+      [style.width.px]="rightPanelWidth()"
+    >
+      <div
+        class="right-panel-resize-handle"
+        role="separator"
+        tabindex="0"
+        aria-label="Resize right panel"
+        aria-orientation="vertical"
+        [attr.aria-valuemin]="rightPanelMinWidth"
+        [attr.aria-valuemax]="rightPanelMaxWidth()"
+        [attr.aria-valuenow]="rightPanelWidth()"
+        title="Drag to resize · Double-click to reset"
+        (pointerdown)="startRightPanelResize($event)"
+        (keydown)="resizeRightPanelWithKeyboard($event)"
+        (dblclick)="resetRightPanelWidth()"
+      ></div>
+
+      <!-- Panel header: collapse -->
+      <div class="app-drag flex h-12 shrink-0 items-center justify-end px-3">
+        <button
+          (click)="rightPanelOpen.set(false)"
+          title="Collapse right panel"
+          class="rounded p-1 text-zinc-500 hover:bg-white/5 hover:text-zinc-300"
+        >
+          <lucide-angular [img]="PanelRight" [size]="16" />
+        </button>
+      </div>
+
+      <!-- Panel body -->
+      @if (mainView() === "project-chat" && activeProject()) {
+        <app-interactive-visual-panel
+          class="min-h-0 flex-1"
+          [visualization]="activeVisualization()"
+          [visualizations]="activeProject()!.visualizations ?? []"
+          [loading]="generatingVisualProject() === activeProject()!.id"
+          [error]="visualizationError()"
+          [downloading]="
+            downloadingVisualization() === activeVisualization()?.id
+          "
+          (viewVisual)="showVisualization($event)"
+          (downloadVisual)="downloadVisualization($event)"
+          (selectVersion)="selectVisualVersion($event)"
+          (revertVersion)="revertVisualVersion($event)"
+        />
+      } @else {
+        <app-entity-details class="min-h-0 flex-1 overflow-y-auto" />
+      }
+    </aside>
+  }
+
+  @if (systemLogsOpen()) {
+    <app-system-logs-panel (dismiss)="systemLogsOpen.set(false)" />
+  }
+
+  <app-toast-container />
+</div>

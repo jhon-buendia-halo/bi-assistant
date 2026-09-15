@@ -1,0 +1,90 @@
+{
+  "name": "frontend",
+  "version": "0.0.0",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "ng": "ng",
+    "start": "ng serve",
+    "build": "ng build",
+    "watch": "ng build --watch --configuration development",
+    "test": "ng test",
+    "test:e2e:prepare": "tsc -p e2e/tsconfig.json && npm --prefix ../backend run build && ng build --base-href ./",
+    "test:e2e": "npm run test:e2e:prepare && playwright test",
+    "test:e2e:ui": "npm run test:e2e:prepare && playwright test --ui",
+    "test:e2e:update": "npm run test:e2e:prepare && playwright test --update-snapshots",
+    "electron": "npm --prefix ../backend run build && ng build --base-href ./ && electron .",
+    "electron:dev": "ELECTRON_DEV_URL=http://localhost:4200 electron .",
+    "stage:backend": "bash scripts/stage-backend.sh",
+    "electron:dist": "npm run stage:backend && ng build --base-href ./ && electron-builder"
+  },
+  "build": {
+    "appId": "com.halopowered.questions-to-insights",
+    "productName": "Questions to Insights",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/frontend/**",
+      "electron/**",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../backend/release-staging",
+        "to": "backend"
+      },
+      {
+        "from": "../backend/release-staging/node_modules",
+        "to": "backend/node_modules"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.productivity"
+    }
+  },
+  "prettier": {
+    "overrides": [
+      {
+        "files": "*.html",
+        "options": {
+          "parser": "angular"
+        }
+      }
+    ]
+  },
+  "private": true,
+  "dependencies": {
+    "@angular/common": "^20.0.0",
+    "@angular/compiler": "^20.0.0",
+    "@angular/core": "^20.0.0",
+    "@angular/forms": "^20.0.0",
+    "@angular/platform-browser": "^20.0.0",
+    "@angular/router": "^20.0.0",
+    "@tailwindcss/postcss": "4.3.3",
+    "dompurify": "3.4.15",
+    "lucide-angular": "1.0.0",
+    "marked": "18.0.13",
+    "postcss": "8.5.28",
+    "rxjs": "~7.8.0",
+    "tailwindcss": "4.3.3",
+    "tslib": "^2.3.0",
+    "zone.js": "~0.15.0"
+  },
+  "devDependencies": {
+    "@angular/build": "^20.0.4",
+    "@angular/cli": "^20.0.4",
+    "@angular/compiler-cli": "^20.0.0",
+    "@playwright/test": "1.63.0",
+    "@types/jasmine": "~5.1.0",
+    "axe-core": "4.13.0",
+    "electron": "44.3.0",
+    "electron-builder": "26.15.3",
+    "jasmine-core": "~5.7.0",
+    "karma": "~6.4.0",
+    "karma-chrome-launcher": "~3.2.0",
+    "karma-coverage": "~2.2.0",
+    "karma-jasmine": "~5.1.0",
+    "karma-jasmine-html-reporter": "~2.1.0",
+    "typescript": "~5.8.2"
+  }
+}

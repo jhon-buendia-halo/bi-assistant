@@ -1,0 +1,146 @@
+@if (selection(); as sel) {
+  <div class="flex flex-col gap-4 px-4 py-3">
+    <!-- Include / remove -->
+    <button
+      (click)="toggleInclusion()"
+      class="flex items-center justify-center gap-2 rounded-md px-3 py-1.5 font-medium"
+      [class.bg-zinc-200]="inclusionState() !== 'full'"
+      [class.text-zinc-900]="inclusionState() !== 'full'"
+      [class.hover:bg-white]="inclusionState() !== 'full'"
+      [class.bg-emerald-600]="inclusionState() === 'full'"
+      [class.text-white]="inclusionState() === 'full'"
+      [class.hover:bg-emerald-500]="inclusionState() === 'full'"
+    >
+      @if (inclusionState() === "full") {
+        <lucide-angular [img]="CircleCheck" [size]="14" />
+        <span>Included — click to remove</span>
+      } @else if (inclusionState() === "partial") {
+        <lucide-angular [img]="CircleMinus" [size]="14" />
+        <span>Include item (partially included)</span>
+      } @else {
+        <span>Include item</span>
+      }
+    </button>
+    @switch (sel.kind) {
+      @case ("catalog") {
+        <div class="flex items-center gap-2.5">
+          <lucide-angular [img]="Database" [size]="16" class="text-sky-400" />
+          <span class="font-mono text-[14px] font-medium text-zinc-100">{{
+            sel.catalog.name
+          }}</span>
+        </div>
+        <p class="text-[11px] uppercase tracking-wider text-zinc-500">
+          Catalog
+        </p>
+        <div class="flex flex-col gap-2 text-[13px]">
+          <div class="flex justify-between">
+            <span class="text-zinc-500">Schemas</span>
+            <span class="text-zinc-200">{{ sel.catalog.schemas.length }}</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-zinc-500">Entities</span>
+            <span class="text-zinc-200">{{ totalEntities() }}</span>
+          </div>
+        </div>
+        <p class="mt-2 text-[11px] uppercase tracking-wider text-zinc-500">
+          Schemas
+        </p>
+        <div class="flex flex-col gap-1">
+          @for (schema of sel.catalog.schemas; track schema.name) {
+            <div
+              class="flex items-center justify-between rounded-md bg-white/5 px-2.5 py-1.5"
+            >
+              <span class="font-mono text-[12px] text-zinc-300">{{
+                schema.name
+              }}</span>
+              <span class="text-[11px] text-zinc-500"
+                >{{ schema.tables.length }} entities</span
+              >
+            </div>
+          }
+        </div>
+      }
+      @case ("schema") {
+        <div class="flex items-center gap-2.5">
+          <lucide-angular
+            [img]="FolderTree"
+            [size]="16"
+            class="text-amber-400"
+          />
+          <span class="font-mono text-[14px] font-medium text-zinc-100">{{
+            sel.schema.name
+          }}</span>
+        </div>
+        <p class="text-[11px] uppercase tracking-wider text-zinc-500">
+          Schema · {{ sel.catalogName }}
+        </p>
+        <div class="flex flex-col gap-2 text-[13px]">
+          <div class="flex justify-between">
+            <span class="text-zinc-500">Entities</span>
+            <span class="text-zinc-200">{{ sel.schema.tables.length }}</span>
+          </div>
+        </div>
+        <p class="mt-2 text-[11px] uppercase tracking-wider text-zinc-500">
+          Entities
+        </p>
+        <div class="flex flex-col gap-1">
+          @for (table of sel.schema.tables; track table.name) {
+            <div
+              class="flex items-center justify-between rounded-md bg-white/5 px-2.5 py-1.5"
+            >
+              <span class="truncate font-mono text-[12px] text-zinc-300">{{
+                table.name
+              }}</span>
+              <span class="shrink-0 text-[11px] text-zinc-500"
+                >{{ table.columns.length }} cols</span
+              >
+            </div>
+          }
+        </div>
+      }
+      @case ("table") {
+        <div class="flex items-center gap-2.5">
+          <lucide-angular [img]="Table2" [size]="16" class="text-emerald-400" />
+          <span
+            class="truncate font-mono text-[14px] font-medium text-zinc-100"
+            >{{ sel.table.name }}</span
+          >
+        </div>
+        <p class="break-all font-mono text-[11px] text-zinc-500">
+          {{ sel.catalogName }}.{{ sel.schemaName }}.{{ sel.table.name }}
+        </p>
+        <div class="flex flex-col gap-2 text-[13px]">
+          <div class="flex justify-between">
+            <span class="text-zinc-500">Columns</span>
+            <span class="text-zinc-200">{{ sel.table.columns.length }}</span>
+          </div>
+        </div>
+        @if (sel.table.columns.length > 0) {
+          <p class="mt-2 text-[11px] uppercase tracking-wider text-zinc-500">
+            Columns
+          </p>
+          <div class="flex flex-col gap-1">
+            @for (column of sel.table.columns; track column.name) {
+              <div
+                class="flex items-center justify-between gap-2 rounded-md bg-white/5 px-2.5 py-1.5"
+              >
+                <span class="truncate font-mono text-[12px] text-zinc-300">{{
+                  column.name
+                }}</span>
+                <span class="shrink-0 font-mono text-[11px] text-zinc-500">
+                  {{ column.type }}{{ column.nullable ? "" : " · not null" }}
+                </span>
+              </div>
+            }
+          </div>
+        }
+      }
+    }
+  </div>
+} @else {
+  <div
+    class="flex h-full items-center justify-center px-6 text-center text-[12px] text-zinc-400"
+  >
+    Select a catalog, schema or entity to see its details.
+  </div>
+}

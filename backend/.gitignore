@@ -1,0 +1,11 @@
+/node_modules
+/dist
+/release-staging
+/.mastra
+*.sqlite
+*.sqlite-*
+*.duckdb
+*.duckdb-*
+*.duckdb.*
+*.log
+.DS_Store

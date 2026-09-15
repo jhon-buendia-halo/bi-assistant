@@ -1,0 +1,214 @@
+<button
+  type="button"
+  aria-label="Close system logs"
+  class="fixed inset-0 z-40 cursor-default bg-black/55 backdrop-blur-[1px]"
+  (click)="dismiss.emit()"
+></button>
+
+<section
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="system-logs-title"
+  class="fixed inset-x-6 top-16 bottom-6 z-50 mx-auto flex max-w-[1100px] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#191919] shadow-2xl"
+>
+  <header
+    class="flex shrink-0 items-center gap-3 border-b border-white/10 px-4 py-3"
+  >
+    <span
+      class="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-zinc-300"
+    >
+      <lucide-angular [img]="ScrollText" [size]="16" />
+    </span>
+    <div>
+      <div class="flex items-center gap-2">
+        <h2
+          id="system-logs-title"
+          class="text-[14px] font-medium text-zinc-100"
+        >
+          System logs
+        </h2>
+        <span class="flex items-center gap-1 text-[10px] text-emerald-400">
+          <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+          LIVE
+        </span>
+      </div>
+      <p class="text-[11px] text-zinc-500">
+        Desktop, interface, backend, and AI runtime diagnostics
+      </p>
+    </div>
+
+    <div class="ml-auto flex items-center gap-1.5">
+      <button
+        type="button"
+        title="Refresh logs"
+        aria-label="Refresh logs"
+        (click)="diagnostics.refresh()"
+        class="rounded-lg border border-white/10 p-2 text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
+      >
+        <lucide-angular
+          [img]="RefreshCw"
+          [size]="14"
+          [class.animate-spin]="diagnostics.loading()"
+        />
+      </button>
+      <button
+        type="button"
+        (click)="exportForLlm()"
+        [disabled]="exporting()"
+        class="flex items-center gap-2 rounded-lg bg-zinc-100 px-3 py-2 text-[12px] font-medium text-zinc-900 hover:bg-white disabled:opacity-60"
+      >
+        <lucide-angular [img]="Download" [size]="14" />
+        <span>{{ exporting() ? "Exporting…" : "Export" }}</span>
+      </button>
+      <button
+        type="button"
+        title="Close"
+        aria-label="Close system logs"
+        (click)="dismiss.emit()"
+        class="rounded-lg p-2 text-zinc-500 hover:bg-white/5 hover:text-zinc-200"
+      >
+        <lucide-angular [img]="X" [size]="16" />
+      </button>
+    </div>
+  </header>
+
+  <div
+    class="flex shrink-0 items-center gap-2 border-b border-white/5 px-4 py-2.5"
+  >
+    <button
+      type="button"
+      (click)="filter.set('all')"
+      class="rounded-md px-2.5 py-1 text-[11px]"
+      [class.bg-white/10]="filter() === 'all'"
+      [class.text-zinc-200]="filter() === 'all'"
+      [class.text-zinc-500]="filter() !== 'all'"
+    >
+      All {{ diagnostics.entries().length }}
+    </button>
+    <button
+      type="button"
+      (click)="filter.set('issues')"
+      class="rounded-md px-2.5 py-1 text-[11px]"
+      [class.bg-white/10]="filter() === 'issues'"
+      [class.text-zinc-200]="filter() === 'issues'"
+      [class.text-zinc-500]="filter() !== 'issues'"
+    >
+      Issues {{ errorCount() + warningCount() }}
+    </button>
+    <span class="text-[11px] text-red-400">{{ errorCount() }} errors</span>
+    <span class="text-[11px] text-amber-400"
+      >{{ warningCount() }} warnings</span
+    >
+
+    <label
+      class="ml-auto flex w-64 items-center gap-2 rounded-lg border border-white/10 bg-black/10 px-2.5 py-1.5"
+    >
+      <lucide-angular
+        [img]="Search"
+        [size]="13"
+        class="shrink-0 text-zinc-500"
+      />
+      <input
+        type="search"
+        placeholder="Search messages or sources"
+        aria-label="Search system logs"
+        [value]="query()"
+        (input)="query.set($any($event.target).value)"
+        class="min-w-0 flex-1 bg-transparent text-[11px] text-zinc-300 outline-none placeholder:text-zinc-600"
+      />
+    </label>
+    <label class="flex items-center gap-1.5 text-[11px] text-zinc-500">
+      <input
+        type="checkbox"
+        [checked]="follow()"
+        (change)="follow.set($any($event.target).checked)"
+        class="accent-zinc-400"
+      />
+      Follow
+    </label>
+  </div>
+
+  @if (latestIssue(); as issue) {
+    <div
+      class="mx-4 mt-3 flex shrink-0 items-start gap-2.5 rounded-xl border border-amber-500/20 bg-amber-500/[0.06] px-3 py-2.5"
+    >
+      <lucide-angular
+        [img]="TriangleAlert"
+        [size]="15"
+        class="mt-0.5 shrink-0 text-amber-400"
+      />
+      <div class="min-w-0">
+        <p class="text-[11px] font-medium text-amber-200">
+          Latest issue · {{ formatTime(issue.timestamp) }}
+        </p>
+        <p class="mt-0.5 truncate text-[12px] text-zinc-300">
+          {{ issue.message }}
+        </p>
+        <p class="mt-0.5 text-[10px] text-zinc-500">
+          {{ explainSource(issue.source) }}
+        </p>
+      </div>
+    </div>
+  }
+
+  <div #scroller class="min-h-0 flex-1 overflow-auto px-4 py-3 font-mono">
+    @if (visibleEntries().length === 0) {
+      <div class="flex h-full flex-col items-center justify-center text-center">
+        <lucide-angular [img]="ScrollText" [size]="22" class="text-zinc-600" />
+        <p class="mt-2 text-[12px] text-zinc-400">No matching log entries</p>
+        <p class="mt-1 max-w-sm font-sans text-[11px] text-zinc-600">
+          New application events will appear here automatically.
+        </p>
+      </div>
+    } @else {
+      <div class="flex flex-col gap-1">
+        @for (entry of visibleEntries(); track entry.id) {
+          <details
+            class="group rounded-lg border border-transparent px-2 py-1.5 hover:border-white/5 hover:bg-white/[0.025]"
+          >
+            <summary
+              class="flex cursor-pointer list-none items-start gap-2 text-[11px] leading-5"
+            >
+              <span class="w-[86px] shrink-0 text-zinc-600">{{
+                formatTime(entry.timestamp)
+              }}</span>
+              <span
+                class="w-[52px] shrink-0 rounded border px-1.5 text-center text-[9px] font-semibold leading-4"
+                [class]="levelClasses(entry)"
+                >{{ entry.level.toUpperCase() }}</span
+              >
+              <span
+                class="w-32 shrink-0 truncate text-zinc-500"
+                [title]="entry.source"
+                >{{ entry.source }}</span
+              >
+              <span class="min-w-0 flex-1 break-words text-zinc-300">{{
+                entry.message
+              }}</span>
+            </summary>
+            <div
+              class="ml-[230px] mt-1 border-l border-white/10 pl-3 font-sans text-[11px] text-zinc-500"
+            >
+              <p>{{ explainSource(entry.source) }}</p>
+              @if (entry.details !== undefined) {
+                <pre
+                  class="mt-2 max-h-56 overflow-auto rounded-lg bg-black/25 p-2.5 font-mono text-[10px] leading-4 whitespace-pre-wrap text-zinc-400"
+                  >{{ formatDetails(entry.details) }}</pre>
+              }
+            </div>
+          </details>
+        }
+      </div>
+    }
+  </div>
+
+  <footer
+    class="flex shrink-0 items-center justify-between border-t border-white/5 px-4 py-2 text-[10px] text-zinc-600"
+  >
+    <span
+      >Up to 2,000 recent entries are retained. Logs are redacted before
+      export.</span
+    >
+    <span>Expand a row for context and stack details.</span>
+  </footer>
+</section>

@@ -1,0 +1,84 @@
+<div class="flex flex-col gap-3">
+  <div class="mb-2">
+    <h1 class="text-[15px] font-semibold text-zinc-100">LLM Configuration</h1>
+    <p class="mt-1 text-[12px] text-zinc-500">
+      Configure the language-model provider and verify the credentials.
+    </p>
+  </div>
+
+  <label class="flex flex-col gap-1">
+    <span class="text-[11px] font-medium text-zinc-500">Provider</span>
+    <select
+      [value]="provider()"
+      (change)="provider.set($any($event.target).value); onFieldChange()"
+      class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none focus:border-white/25"
+    >
+      <option value="openai" class="bg-[#232323]">OpenAI</option>
+      <option value="lenai" class="bg-[#232323]">LenAI (Halo gateway)</option>
+    </select>
+  </label>
+
+  <label class="flex flex-col gap-1">
+    <span class="text-[11px] font-medium text-zinc-500">
+      {{ provider() === 'lenai' ? 'Deployment name' : 'Model' }}
+    </span>
+    <input
+      type="text"
+      [placeholder]="provider() === 'lenai' ? 'my-deployment' : 'gpt-4o-mini'"
+      [value]="model()"
+      (input)="model.set($any($event.target).value); onFieldChange()"
+      class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+    />
+  </label>
+
+  @if (provider() === 'lenai') {
+    <label class="flex flex-col gap-1">
+      <span class="text-[11px] font-medium text-zinc-500">Base URL</span>
+      <input
+        type="text"
+        placeholder="https://lenai.example.com/v1"
+        [value]="baseUrl()"
+        (input)="baseUrl.set($any($event.target).value); onFieldChange()"
+        class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+      />
+    </label>
+  }
+
+  <label class="flex flex-col gap-1">
+    <span class="text-[11px] font-medium text-zinc-500">API key</span>
+    <input
+      type="password"
+      [placeholder]="apiKeyPlaceholder()"
+      [value]="apiKey()"
+      (input)="apiKey.set($any($event.target).value); onFieldChange()"
+      class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+    />
+  </label>
+
+  <button
+    (click)="testConnection()"
+    [disabled]="!canTest"
+    class="mt-1 flex items-center justify-center gap-2 rounded-md bg-zinc-200 px-3 py-1.5 font-medium text-zinc-900 hover:bg-white disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+  >
+    @if (testing()) {
+      <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+      <span>Testing…</span>
+    } @else {
+      <span>Test connection</span>
+    }
+  </button>
+
+  <button
+    (click)="saveConnection()"
+    [disabled]="!testedOk() || saving()"
+    title="Test the connection successfully before saving"
+    class="flex items-center justify-center gap-2 rounded-md bg-emerald-600 px-3 py-1.5 font-medium text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+  >
+    @if (saving()) {
+      <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+      <span>Saving…</span>
+    } @else {
+      <span>Save connection</span>
+    }
+  </button>
+</div>

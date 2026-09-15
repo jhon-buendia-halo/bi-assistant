@@ -1,0 +1,201 @@
+<div class="flex flex-col">
+  <div class="flex items-start justify-between gap-4">
+    <div>
+      <h1 class="font-serif text-[28px] font-semibold text-zinc-100">
+        {{ initial() ? "Edit sandbox" : "New sandbox" }}
+      </h1>
+      <p class="mt-1 text-[13px] text-zinc-500">
+        Catalogs, schemas and entities available through the selected
+        datasource.
+      </p>
+    </div>
+    <div class="flex shrink-0 items-center gap-2">
+      <select
+        aria-label="Datasource"
+        [value]="datasourceId()"
+        [disabled]="loading() || datasources().length === 0"
+        (change)="changeDatasource($any($event.target).value)"
+        class="max-w-[220px] rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[13px] text-zinc-200 outline-none focus:border-white/25 disabled:opacity-50"
+      >
+        @if (datasources().length === 0) {
+          <option value="" class="bg-[#232323]">No datasources</option>
+        }
+        @for (datasource of datasources(); track datasource.id) {
+          <option [value]="datasource.id" class="bg-[#232323]">
+            {{ datasource.name }} ·
+            {{ datasource.kind === "postgres" ? "PostgreSQL" : "Databricks" }}
+          </option>
+        }
+      </select>
+      <input
+        type="text"
+        placeholder="Sandbox name"
+        [value]="sandboxName()"
+        (input)="sandboxName.set($any($event.target).value)"
+        class="w-[220px] rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+      />
+      <button
+        (click)="saveSandbox()"
+        [disabled]="
+          saving() ||
+          !selectedDatasource() ||
+          includedCount() === 0 ||
+          sandboxName().trim() === ''
+        "
+        title="Name the sandbox and include at least one element"
+        class="flex items-center justify-center gap-2 rounded-lg bg-zinc-200 px-3.5 py-2 text-[13px] font-medium text-zinc-900 hover:bg-white disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+      >
+        @if (saving()) {
+          <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+          <span>Saving…</span>
+        } @else {
+          <span>Save sandbox ({{ includedCount() }})</span>
+        }
+      </button>
+    </div>
+  </div>
+
+  @if (loading()) {
+    <div class="mt-10 flex items-center gap-2.5 text-zinc-400">
+      <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
+      <span>Loading inventory from {{ datasourceLabel() }}…</span>
+    </div>
+  } @else if (error(); as err) {
+    <p
+      class="mt-8 rounded-md bg-red-500/10 px-3 py-2.5 text-[13px] text-red-400"
+    >
+      {{ err }}
+    </p>
+  } @else if (catalogs().length === 0) {
+    <p class="mt-8 text-[13px] text-zinc-500">No accessible catalogs found.</p>
+  } @else {
+    <div class="mt-6 flex flex-col gap-0.5">
+      @for (catalog of catalogs(); track catalog.name) {
+        <!-- Catalog row -->
+        <button
+          [attr.data-testid]="'catalog-' + catalog.name"
+          (click)="selectCatalog(catalog)"
+          class="flex items-center gap-2.5 rounded-lg px-2 py-2 text-left hover:bg-white/5"
+          [class.option-active]="selectedKey() === catalog.name"
+        >
+          <lucide-angular
+            [img]="ChevronRight"
+            [size]="14"
+            class="shrink-0 text-zinc-500 transition-transform"
+            [class.rotate-90]="isExpanded(catalog.name)"
+          />
+          <lucide-angular
+            [img]="Database"
+            [size]="15"
+            class="shrink-0 text-sky-400"
+          />
+          <span class="font-mono text-[13px] text-zinc-200">{{
+            catalog.name
+          }}</span>
+          <span class="text-[12px] text-zinc-500"
+            >{{ catalog.schemas.length }} schemas</span
+          >
+          @if (catalogState(catalog) === "full") {
+            <lucide-angular
+              [img]="CircleCheck"
+              [size]="14"
+              class="ml-auto shrink-0 text-emerald-400"
+            />
+          } @else if (catalogState(catalog) === "partial") {
+            <lucide-angular
+              [img]="CircleMinus"
+              [size]="14"
+              class="ml-auto shrink-0 text-amber-400"
+            />
+          }
+        </button>
+
+        @if (isExpanded(catalog.name)) {
+          @for (schema of catalog.schemas; track schema.name) {
+            <!-- Schema row -->
+            <button
+              [attr.data-testid]="'schema-' + catalog.name + '-' + schema.name"
+              (click)="selectSchema(catalog.name, schema)"
+              class="ml-6 flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-left hover:bg-white/5"
+              [class.option-active]="
+                selectedKey() === catalog.name + '.' + schema.name
+              "
+            >
+              <lucide-angular
+                [img]="ChevronRight"
+                [size]="14"
+                class="shrink-0 text-zinc-500 transition-transform"
+                [class.rotate-90]="isExpanded(catalog.name + '.' + schema.name)"
+              />
+              <lucide-angular
+                [img]="FolderTree"
+                [size]="14"
+                class="shrink-0 text-amber-400"
+              />
+              <span class="font-mono text-[12px] text-zinc-300">{{
+                schema.name
+              }}</span>
+              <span class="text-[12px] text-zinc-500"
+                >{{ schema.tables.length }} entities</span
+              >
+              @if (schemaState(catalog.name, schema) === "full") {
+                <lucide-angular
+                  [img]="CircleCheck"
+                  [size]="14"
+                  class="ml-auto shrink-0 text-emerald-400"
+                />
+              } @else if (schemaState(catalog.name, schema) === "partial") {
+                <lucide-angular
+                  [img]="CircleMinus"
+                  [size]="14"
+                  class="ml-auto shrink-0 text-amber-400"
+                />
+              }
+            </button>
+
+            @if (isExpanded(catalog.name + "." + schema.name)) {
+              @for (table of schema.tables; track table.name) {
+                <!-- Table row -->
+                <button
+                  [attr.data-testid]="
+                    'table-' +
+                    catalog.name +
+                    '-' +
+                    schema.name +
+                    '-' +
+                    table.name
+                  "
+                  (click)="selectTable(catalog.name, schema.name, table)"
+                  class="ml-14 flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-left hover:bg-white/5"
+                  [class.option-active]="
+                    selectedKey() ===
+                    catalog.name + '.' + schema.name + '.' + table.name
+                  "
+                >
+                  <lucide-angular
+                    [img]="Table2"
+                    [size]="14"
+                    class="shrink-0 text-emerald-400"
+                  />
+                  <span class="font-mono text-[12px] text-zinc-300">{{
+                    table.name
+                  }}</span>
+                  <span class="text-[12px] text-zinc-500"
+                    >{{ table.columns.length }} columns</span
+                  >
+                  @if (isTableIncluded(catalog.name, schema.name, table)) {
+                    <lucide-angular
+                      [img]="CircleCheck"
+                      [size]="14"
+                      class="ml-auto shrink-0 text-emerald-400"
+                    />
+                  }
+                </button>
+              }
+            }
+          }
+        }
+      }
+    </div>
+  }
+</div>
