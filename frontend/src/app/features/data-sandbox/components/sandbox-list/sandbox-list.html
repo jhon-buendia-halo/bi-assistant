@@ -1,0 +1,93 @@
+<div class="flex flex-col">
+  <h1 class="font-serif text-[28px] font-semibold text-zinc-100">Data Sandbox</h1>
+
+  <!-- Filters + actions -->
+  <div class="mt-5 flex items-center gap-1">
+    @for (filter of filters; track filter) {
+      <button
+        (click)="activeFilter.set(filter)"
+        class="rounded-lg px-3 py-1.5 text-[13px] hover:text-zinc-200"
+        [class.bg-white/10]="activeFilter() === filter"
+        [class.text-zinc-200]="activeFilter() === filter"
+        [class.text-zinc-400]="activeFilter() !== filter"
+      >
+        {{ filter }}
+      </button>
+    }
+    <div class="ml-auto flex items-center gap-2">
+      <button class="rounded-lg p-2 text-zinc-400 hover:bg-white/5 hover:text-zinc-200">
+        <lucide-angular [img]="Search" [size]="16" />
+      </button>
+      <button class="rounded-lg border border-white/15 p-2 text-zinc-300 hover:bg-white/5">
+        <lucide-angular [img]="LayoutGrid" [size]="16" />
+      </button>
+      <button
+        (click)="newSandbox.emit()"
+        class="flex items-center gap-1.5 rounded-lg bg-zinc-200 px-3.5 py-2 text-[13px] font-medium text-zinc-900 hover:bg-white"
+      >
+        <lucide-angular [img]="Plus" [size]="14" />
+        <span>New sandbox</span>
+      </button>
+    </div>
+  </div>
+
+  @if (loading()) {
+    <div class="mt-10 flex items-center gap-2.5 text-zinc-400">
+      <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
+      <span>Loading sandboxes…</span>
+    </div>
+  } @else if (error(); as err) {
+    <p class="mt-8 rounded-md bg-red-500/10 px-3 py-2.5 text-[13px] text-red-400">
+      {{ err }}
+    </p>
+  } @else if (sections().length === 0) {
+    <p class="mt-10 text-[13px] text-zinc-500">
+      No sandboxes yet — create one with “New sandbox”.
+    </p>
+  } @else {
+    @for (section of sections(); track section.label) {
+      <p class="mt-7 text-[12px] text-zinc-500">{{ section.label }}</p>
+      <div class="mt-2 flex flex-col">
+        @for (item of section.items; track item.name) {
+          <div class="group flex items-center gap-3.5 rounded-xl px-2 py-2.5 hover:bg-white/5">
+            <button
+              (click)="openSandbox.emit(item)"
+              class="flex min-w-0 flex-1 items-center gap-3.5 text-left"
+            >
+              <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/5 text-zinc-400">
+                <lucide-angular [img]="Workflow" [size]="17" />
+              </span>
+              <span class="truncate text-[14px] text-zinc-200">{{ item.name }}</span>
+              <span class="ml-auto flex shrink-0 items-center gap-1.5 text-[12px] text-zinc-500">
+                <lucide-angular [img]="Lock" [size]="13" />
+                <span>·</span>
+                <span>{{ editedLabel(item) }}</span>
+              </span>
+            </button>
+            <div class="relative">
+              <button
+                (click)="toggleMenu(item.name)"
+                class="rounded p-1 text-zinc-500 hover:bg-white/10 hover:text-zinc-300"
+              >
+                <lucide-angular [img]="EllipsisVertical" [size]="15" />
+              </button>
+              @if (menuOpen() === item.name) {
+                <!-- Backdrop closes the menu on outside click -->
+                <div class="fixed inset-0 z-10" (click)="menuOpen.set(null)"></div>
+                <div class="absolute top-full right-0 z-20 mt-1 w-44 rounded-lg border border-white/10 bg-[#2a2a2a] p-1 shadow-xl">
+                  <button
+                    (click)="deleteSandbox(item)"
+                    class="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] text-red-400 hover:bg-white/10"
+                  >
+                    <lucide-angular [img]="Trash2" [size]="14" />
+                    <span>Delete sandbox</span>
+                  </button>
+                </div>
+              }
+            </div>
+          </div>
+        }
+      </div>
+    }
+  }
+</div>

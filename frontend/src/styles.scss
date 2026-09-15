@@ -1,0 +1,58 @@
+@import "tailwindcss";
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+// Electron window dragging (title bar is hidden)
+.app-drag {
+  -webkit-app-region: drag;
+}
+
+.app-drag button,
+.app-drag input,
+.app-no-drag {
+  -webkit-app-region: no-drag;
+}
+
+// Clears the macOS traffic lights when they overlay this element
+.pl-traffic-lights {
+  padding-left: 76px;
+}
+
+// Selected state for sidebar option rows
+.option-active {
+  background: rgb(255 255 255 / 0.05);
+}
+
+// Conductor-style scrollbars: thin rounded grey thumb, no track
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgb(255 255 255 / 0.15);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(255 255 255 / 0.25);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
