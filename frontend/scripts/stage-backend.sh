@@ -14,6 +14,6 @@ cp -R dist "$STAGING_DIR/dist"
 cp package.json package-lock.json "$STAGING_DIR/"
 
 cd "$STAGING_DIR"
-npm ci --omit=dev --ignore-scripts --no-audit --no-fund
+npm ci --omit=dev --ignore-scripts --legacy-peer-deps --no-audit --no-fund
 
 echo "Backend staged at $STAGING_DIR"
