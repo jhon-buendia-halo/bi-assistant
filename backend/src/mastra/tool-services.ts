@@ -4,6 +4,8 @@
 
 export interface SandboxSnapshot {
   name: string;
+  datasourceId?: string;
+  datasourceKind?: 'databricks' | 'postgres';
   tables: string[];
   entities?: {
     key: string;
@@ -11,13 +13,34 @@ export interface SandboxSnapshot {
   }[];
 }
 
+export interface VisualToolResult {
+  visualId: string;
+  version: number;
+  title: string;
+  description: string;
+}
+
 export interface SandboxToolServices {
+  /** Create a visual for an answer in the project (latest answer if omitted). */
+  createVisual(
+    projectId: string,
+    sourceMessageAt: string | undefined,
+    instruction: string | undefined,
+  ): Promise<VisualToolResult>;
+  /** Produce a new version of an existing visual from a tailoring request. */
+  updateVisual(
+    projectId: string,
+    visualId: string,
+    instruction: string,
+  ): Promise<VisualToolResult>;
   getSandboxes(names: string[]): Promise<SandboxSnapshot[]>;
   sampleRows(
+    datasourceId: string,
     entity: string,
     limit: number,
   ): Promise<{ columns: string[]; rows: Record<string, unknown>[] }>;
   runReadOnlySql(
+    datasourceId: string,
     sql: string,
     limit: number,
   ): Promise<{ columns: string[]; rows: Record<string, unknown>[] }>;

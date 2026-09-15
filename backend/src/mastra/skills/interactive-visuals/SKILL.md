@@ -7,8 +7,12 @@ description: Create a self-contained interactive visualization from a completed,
 
 Turn the supplied question and answer into one focused visual explanation.
 
-- Use only facts and values present in the source answer. Never invent rows,
-  estimates, labels, or citations.
+- When a `<data>` block is supplied, it holds the exact query results the
+  answer was built from (JSON: tool, input SQL, columns, rows). Prefer it as
+  the source of truth for every value, series, and label — chart the full
+  rows, not just the numbers quoted in prose. When no data block exists, use
+  only facts present in the answer text.
+- Never invent rows, estimates, labels, or citations.
 - Choose the form that makes the main comparison easiest to understand: a
   small SVG chart, ranked bars, metric cards, a timeline, or a compact table.
 - Return a short title and a plain-language description explaining what the

@@ -17,12 +17,14 @@ import {
   Loader2,
   Table2,
 } from 'lucide-angular';
-import { DatabricksApiService } from '../../../databricks/services/databricks-api.service';
+import { DatasourcesApiService } from '../../../datasources/services/datasources-api.service';
 import {
   CatalogInfo,
+  Datasource,
+  kindLabel,
   SchemaInfo,
   TableInfo,
-} from '../../../databricks/models/databricks.model';
+} from '../../../datasources/models/datasource.model';
 import { SandboxSelectionService } from '../../services/sandbox-selection.service';
 import {
   InclusionState,
@@ -46,13 +48,15 @@ export class CatalogBrowser implements OnInit {
   readonly Loader2 = Loader2;
   readonly Table2 = Table2;
 
-  private readonly api = inject(DatabricksApiService);
+  private readonly api = inject(DatasourcesApiService);
   private readonly selectionService = inject(SandboxSelectionService);
   private readonly inclusionService = inject(SandboxInclusionService);
   private readonly sandboxApi = inject(SandboxApiService);
   private readonly toast = inject(ToastService);
 
   readonly loading = signal(true);
+  readonly datasources = signal<Datasource[]>([]);
+  readonly datasourceId = signal('');
   readonly error = signal<string | null>(null);
   readonly catalogs = signal<CatalogInfo[]>([]);
   readonly expanded = signal<Set<string>>(new Set());
@@ -61,8 +65,16 @@ export class CatalogBrowser implements OnInit {
   readonly saved = output<void>();
   /** When set, the browser opens in edit mode with this sandbox's data. */
   readonly initial = input<Sandbox | null>(null);
+  readonly selectedDatasource = computed(
+    () => this.datasources().find((d) => d.id === this.datasourceId()) ?? null,
+  );
+  readonly datasourceLabel = computed(() =>
+    kindLabel(this.selectedDatasource()?.kind),
+  );
 
-  readonly includedCount = computed(() => this.inclusionService.included().size);
+  readonly includedCount = computed(
+    () => this.inclusionService.included().size,
+  );
 
   /** Key of the currently selected element, for row highlighting. */
   readonly selectedKey = computed(() => {
@@ -83,13 +95,58 @@ export class CatalogBrowser implements OnInit {
       // A new sandbox starts with a clean selection.
       this.inclusionService.included.set(new Set());
     }
-    this.api.getInventory().subscribe({
+    this.api.list().subscribe({
       next: (res) => {
-        if (res.ok) {
-          this.catalogs.set(res.catalogs ?? []);
-        } else {
-          this.error.set(res.message ?? 'Failed to load the inventory');
+        const datasources = res.datasources;
+        this.datasources.set(datasources);
+        if (datasources.length === 0) {
+          this.error.set(
+            'No datasource configured. Add one in Datasource Configuration first.',
+          );
+          this.loading.set(false);
+          return;
         }
+        const editingId = editing?.datasourceId;
+        const selected =
+          datasources.find((d) => d.id === editingId) ??
+          datasources.find((d) => d.kind === 'databricks') ??
+          datasources[0];
+        if (editingId && selected.id !== editingId) {
+          this.inclusionService.included.set(new Set());
+          this.selectionService.clear();
+          this.toast.error(
+            'The sandbox datasource is no longer available. Choose entities from another datasource.',
+          );
+        }
+        this.datasourceId.set(selected.id);
+        this.loadInventory(selected.id);
+      },
+      error: (err) => {
+        this.error.set(
+          err?.error?.message ?? 'Could not load configured datasources',
+        );
+        this.loading.set(false);
+      },
+    });
+  }
+
+  changeDatasource(id: string): void {
+    if (!id || id === this.datasourceId()) return;
+    this.datasourceId.set(id);
+    this.catalogs.set([]);
+    this.expanded.set(new Set());
+    this.inclusionService.included.set(new Set());
+    this.selectionService.clear();
+    this.loadInventory(id);
+  }
+
+  private loadInventory(id: string): void {
+    this.loading.set(true);
+    this.error.set(null);
+    this.api.getInventory(id).subscribe({
+      next: (res) => {
+        if (res.ok) this.catalogs.set(res.catalogs ?? []);
+        else this.error.set(res.message ?? 'Failed to load the inventory');
         this.loading.set(false);
       },
       error: (err) => {
@@ -158,9 +215,12 @@ export class CatalogBrowser implements OnInit {
     }
     this.saving.set(true);
     // Schema snapshot for the included entities (we already have the
-    // inventory in hand) — spares the backend live Databricks round-trips.
+    // inventory in hand) — spares the backend live datasource round-trips.
     const included = this.inclusionService.included();
-    const entities: { key: string; columns: { name: string; type: string; nullable: boolean }[] }[] = [];
+    const entities: {
+      key: string;
+      columns: { name: string; type: string; nullable: boolean }[];
+    }[] = [];
     for (const catalog of this.catalogs()) {
       for (const schema of catalog.schemas) {
         for (const table of schema.tables) {
@@ -169,8 +229,17 @@ export class CatalogBrowser implements OnInit {
         }
       }
     }
+    const datasource = this.selectedDatasource();
+    if (!datasource) {
+      this.saving.set(false);
+      this.toast.error('Select a datasource first');
+      return;
+    }
     this.sandboxApi
-      .createSandbox(name, Array.from(included), entities)
+      .createSandbox(name, Array.from(included), entities, {
+        id: datasource.id,
+        kind: datasource.kind,
+      })
       .subscribe({
         next: (res) => {
           this.saving.set(false);

@@ -1,0 +1,274 @@
+<div class="flex flex-col gap-4">
+  <div class="flex items-start justify-between gap-4">
+    <div>
+      <h1 class="text-[15px] font-semibold text-zinc-100">
+        Datasource Configuration
+      </h1>
+      <p class="mt-1 text-[12px] text-zinc-500">
+        Connect the data platforms your sandboxes draw from — Databricks SQL
+        warehouses or PostgreSQL databases.
+      </p>
+    </div>
+    @if (!formOpen()) {
+      <button
+        type="button"
+        (click)="startNew()"
+        class="flex shrink-0 items-center gap-1.5 rounded-md bg-zinc-200 px-3 py-1.5 text-[13px] font-medium text-zinc-900 hover:bg-white"
+      >
+        <lucide-angular [img]="Plus" [size]="14" />
+        <span>New datasource</span>
+      </button>
+    }
+  </div>
+
+  <!-- Saved datasources -->
+  @if (loading()) {
+    <div class="flex items-center gap-2 text-[12px] text-zinc-500">
+      <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+      <span>Loading datasources…</span>
+    </div>
+  } @else if (loadError(); as error) {
+    <p class="rounded-md bg-red-500/10 px-3 py-2.5 text-[12px] text-red-400">
+      {{ error }}
+    </p>
+  } @else if (datasources().length === 0 && !formOpen()) {
+    <p
+      class="rounded-md border border-dashed border-white/10 px-3 py-4 text-center text-[12px] text-zinc-500"
+    >
+      No datasources yet. Add one to start building sandboxes.
+    </p>
+  } @else if (datasources().length > 0) {
+    <div class="flex flex-col gap-1.5">
+      @for (ds of datasources(); track ds.id) {
+        <div
+          [attr.data-testid]="'datasource-' + ds.id"
+          class="flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2.5"
+          [class.border-white/25]="editingId() === ds.id"
+        >
+          <span
+            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/5 text-zinc-400"
+          >
+            <lucide-angular [img]="Database" [size]="15" />
+          </span>
+          <span class="flex min-w-0 flex-1 flex-col">
+            <span class="flex items-center gap-2">
+              <span class="truncate text-[13px] text-zinc-200">{{
+                ds.name
+              }}</span>
+              <span
+                class="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-zinc-400"
+                >{{ kindLabel(ds.kind) }}</span
+              >
+            </span>
+            <span class="truncate font-mono text-[11px] text-zinc-500">{{
+              ds.summary
+            }}</span>
+          </span>
+          <button
+            type="button"
+            title="Edit"
+            (click)="startEdit(ds)"
+            class="rounded p-1.5 text-zinc-500 hover:bg-white/10 hover:text-zinc-200"
+          >
+            <lucide-angular [img]="Pencil" [size]="14" />
+          </button>
+          <button
+            type="button"
+            title="Delete"
+            (click)="remove(ds)"
+            [disabled]="deleting() === ds.id"
+            class="rounded p-1.5 text-zinc-500 hover:bg-white/10 hover:text-red-400 disabled:opacity-50"
+          >
+            @if (deleting() === ds.id) {
+              <lucide-angular
+                [img]="Loader2"
+                [size]="14"
+                class="animate-spin"
+              />
+            } @else {
+              <lucide-angular [img]="Trash2" [size]="14" />
+            }
+          </button>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- Form -->
+  @if (formOpen()) {
+    <div
+      class="flex flex-col gap-3 rounded-xl border border-white/10 bg-[#232323] p-4"
+    >
+      <p class="text-[13px] font-medium text-zinc-200">
+        {{ editingId() ? "Edit datasource" : "New datasource" }}
+      </p>
+
+      <label class="flex flex-col gap-1">
+        <span class="text-[11px] font-medium text-zinc-500">Name</span>
+        <input
+          type="text"
+          placeholder="Claims warehouse"
+          [value]="name()"
+          (input)="name.set($any($event.target).value)"
+          class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+        />
+      </label>
+
+      <label class="flex flex-col gap-1">
+        <span class="text-[11px] font-medium text-zinc-500">Kind</span>
+        <select
+          [value]="kind()"
+          [disabled]="!!editingId()"
+          (change)="setKind($any($event.target).value)"
+          class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none focus:border-white/25 disabled:opacity-60"
+        >
+          @for (k of kinds; track k.value) {
+            <option [value]="k.value" class="bg-[#232323]">
+              {{ k.label }}
+            </option>
+          }
+        </select>
+      </label>
+
+      @if (kind() === "databricks") {
+        <label class="flex flex-col gap-1">
+          <span class="text-[11px] font-medium text-zinc-500"
+            >Server hostname</span
+          >
+          <input
+            type="text"
+            placeholder="adb-1234567890.1.azuredatabricks.net"
+            [value]="databricks().host"
+            (input)="patchDatabricks({ host: $any($event.target).value })"
+            class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+          />
+        </label>
+        <label class="flex flex-col gap-1">
+          <span class="text-[11px] font-medium text-zinc-500"
+            >Personal access token</span
+          >
+          <input
+            type="password"
+            placeholder="dapi…"
+            [value]="databricks().token"
+            (input)="patchDatabricks({ token: $any($event.target).value })"
+            class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+          />
+        </label>
+        <label class="flex flex-col gap-1">
+          <span class="text-[11px] font-medium text-zinc-500"
+            >SQL warehouse ID</span
+          >
+          <input
+            type="text"
+            placeholder="1a2b3c4d5e6f7g8h"
+            [value]="databricks().warehouseId"
+            (input)="
+              patchDatabricks({ warehouseId: $any($event.target).value })
+            "
+            class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+          />
+        </label>
+      } @else {
+        <div class="grid grid-cols-3 gap-3">
+          <label class="col-span-2 flex flex-col gap-1">
+            <span class="text-[11px] font-medium text-zinc-500">Host</span>
+            <input
+              type="text"
+              placeholder="db.example.com"
+              [value]="postgres().host"
+              (input)="patchPostgres({ host: $any($event.target).value })"
+              class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+            />
+          </label>
+          <label class="flex flex-col gap-1">
+            <span class="text-[11px] font-medium text-zinc-500">Port</span>
+            <input
+              type="number"
+              placeholder="5432"
+              [value]="postgres().port"
+              (input)="patchPostgres({ port: +$any($event.target).value })"
+              class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+            />
+          </label>
+        </div>
+        <label class="flex flex-col gap-1">
+          <span class="text-[11px] font-medium text-zinc-500">Database</span>
+          <input
+            type="text"
+            placeholder="analytics"
+            [value]="postgres().database"
+            (input)="patchPostgres({ database: $any($event.target).value })"
+            class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+          />
+        </label>
+        <div class="grid grid-cols-2 gap-3">
+          <label class="flex flex-col gap-1">
+            <span class="text-[11px] font-medium text-zinc-500">User</span>
+            <input
+              type="text"
+              placeholder="readonly_user"
+              [value]="postgres().user"
+              (input)="patchPostgres({ user: $any($event.target).value })"
+              class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+            />
+          </label>
+          <label class="flex flex-col gap-1">
+            <span class="text-[11px] font-medium text-zinc-500">Password</span>
+            <input
+              type="password"
+              placeholder="••••••••"
+              [value]="postgres().password"
+              (input)="patchPostgres({ password: $any($event.target).value })"
+              class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+            />
+          </label>
+        </div>
+        <label class="flex items-center gap-2 text-[12px] text-zinc-400">
+          <input
+            type="checkbox"
+            [checked]="postgres().ssl"
+            (change)="patchPostgres({ ssl: $any($event.target).checked })"
+            class="h-3.5 w-3.5 accent-emerald-500"
+          />
+          <span>Use SSL</span>
+        </label>
+      }
+
+      <div class="mt-1 flex items-center gap-2">
+        <button
+          (click)="testConnection()"
+          [disabled]="!canTest()"
+          class="flex flex-1 items-center justify-center gap-2 rounded-md bg-zinc-200 px-3 py-1.5 font-medium text-zinc-900 hover:bg-white disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+        >
+          @if (testing()) {
+            <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+            <span>Testing…</span>
+          } @else {
+            <span>Test connection</span>
+          }
+        </button>
+        <button
+          (click)="save()"
+          [disabled]="!testedOk() || saving() || name().trim() === ''"
+          title="Test the connection successfully before saving"
+          class="flex flex-1 items-center justify-center gap-2 rounded-md bg-emerald-600 px-3 py-1.5 font-medium text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+        >
+          @if (saving()) {
+            <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+            <span>Saving…</span>
+          } @else {
+            <span>{{ editingId() ? "Save changes" : "Save datasource" }}</span>
+          }
+        </button>
+        <button
+          type="button"
+          (click)="cancel()"
+          class="rounded-md px-3 py-1.5 text-[13px] text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  }
+</div>

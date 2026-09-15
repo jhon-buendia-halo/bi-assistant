@@ -5,6 +5,7 @@ import {
   Get,
   Param,
   Post,
+  Query,
   Res,
 } from '@nestjs/common';
 import { ProjectsService } from './projects.service';
@@ -30,8 +31,41 @@ export class ProjectsController {
   getVisualization(
     @Param('id') id: string,
     @Param('visualizationId') visualizationId: string,
+    @Query('version') version?: string,
   ): Promise<InteractiveVisualization> {
-    return this.projectsService.getVisualization(id, visualizationId);
+    return this.projectsService.getVisualization(
+      id,
+      visualizationId,
+      parseVersion(version),
+    );
+  }
+
+  @Post(':id/visualizations/:visualizationId/revert')
+  async revertVisualization(
+    @Param('id') id: string,
+    @Param('visualizationId') visualizationId: string,
+    @Body() body: { version?: number },
+  ): Promise<{
+    ok: boolean;
+    message: string;
+    project?: ProjectDoc;
+    visualization?: InteractiveVisualization;
+  }> {
+    try {
+      const result = await this.projectsService.revertVisualization(
+        id,
+        visualizationId,
+        Number(body?.version),
+      );
+      return {
+        ok: true,
+        message: `Reverted to version ${result.visualization.version}`,
+        ...result,
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { ok: false, message };
+    }
   }
 
   @Get(':id/visualizations/:visualizationId/download')
@@ -39,9 +73,14 @@ export class ProjectsController {
     @Param('id') id: string,
     @Param('visualizationId') visualizationId: string,
     @Res() res: Response,
+    @Query('version') version?: string,
   ): Promise<void> {
     const { filename, archive } =
-      await this.projectsService.downloadVisualization(id, visualizationId);
+      await this.projectsService.downloadVisualization(
+        id,
+        visualizationId,
+        parseVersion(version),
+      );
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Length', archive.length);
     res.setHeader(
@@ -115,7 +154,7 @@ export class ProjectsController {
   @Post(':id/messages/stream')
   async streamMessage(
     @Param('id') id: string,
-    @Body() body: { content?: string },
+    @Body() body: { content?: string; activeVisualizationId?: string },
     @Res() res: Response,
   ): Promise<void> {
     res.setHeader('Content-Type', 'text/event-stream');
@@ -133,6 +172,9 @@ export class ProjectsController {
         body?.content ?? '',
         send,
         controller.signal,
+        typeof body?.activeVisualizationId === 'string'
+          ? body.activeVisualizationId
+          : undefined,
       );
     } catch (err) {
       if (!controller.signal.aborted) {
@@ -160,4 +202,9 @@ export class ProjectsController {
       return { ok: false, message };
     }
   }
+}
+
+function parseVersion(value?: string): number | undefined {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
 }

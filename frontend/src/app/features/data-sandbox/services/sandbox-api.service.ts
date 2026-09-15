@@ -10,6 +10,8 @@ export interface SandboxEntitySnapshot {
 
 export interface Sandbox {
   name: string;
+  datasourceId?: string;
+  datasourceKind?: 'databricks' | 'postgres';
   tables: string[];
   entities?: SandboxEntitySnapshot[];
   createdAt?: string;
@@ -33,11 +35,14 @@ export class SandboxApiService {
     name: string,
     tables: string[],
     entities: SandboxEntitySnapshot[],
+    datasource: { id: string; kind: 'databricks' | 'postgres' },
   ): Observable<SandboxActionResult> {
     return this.http.post<SandboxActionResult>(`${API_BASE_URL}/sandbox`, {
       name,
       tables,
       entities,
+      datasourceId: datasource.id,
+      datasourceKind: datasource.kind,
     });
   }
 

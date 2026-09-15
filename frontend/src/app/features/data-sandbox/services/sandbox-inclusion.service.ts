@@ -2,7 +2,7 @@ import { Injectable, signal } from '@angular/core';
 import {
   CatalogInfo,
   SchemaInfo,
-} from '../../databricks/models/databricks.model';
+} from '../../datasources/models/datasource.model';
 import { SandboxSelection } from './sandbox-selection.service';
 
 export type InclusionState = 'none' | 'partial' | 'full';
@@ -46,7 +46,8 @@ export class SandboxInclusionService {
 
   selectionState(sel: SandboxSelection): InclusionState {
     if (sel.kind === 'catalog') return this.catalogState(sel.catalog);
-    if (sel.kind === 'schema') return this.schemaState(sel.catalogName, sel.schema);
+    if (sel.kind === 'schema')
+      return this.schemaState(sel.catalogName, sel.schema);
     return this.isTableIncluded(sel.catalogName, sel.schemaName, sel.table.name)
       ? 'full'
       : 'none';
@@ -76,7 +77,10 @@ export class SandboxInclusionService {
         apply(next, this.tableKey(sel.catalogName, sel.schema.name, t.name));
       }
     } else {
-      apply(next, this.tableKey(sel.catalogName, sel.schemaName, sel.table.name));
+      apply(
+        next,
+        this.tableKey(sel.catalogName, sel.schemaName, sel.table.name),
+      );
     }
     this.included.set(next);
   }

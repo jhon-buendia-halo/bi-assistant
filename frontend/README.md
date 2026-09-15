@@ -46,13 +46,28 @@ ng test
 
 ## Running end-to-end tests
 
-For end-to-end (e2e) testing, run:
+The Playwright suite launches the real Electron shell and its child NestJS
+backend in an isolated user-data directory. It also starts the seeded World Cup
+PostgreSQL service from the repository's `docker-compose.yml`.
 
 ```bash
-ng e2e
+npm run test:e2e
 ```
 
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
+Docker must be running. If an equivalent World Cup database is already
+available at `127.0.0.1:55432`, skip Compose startup with:
+
+```bash
+E2E_SKIP_DOCKER=1 npm run test:e2e
+```
+
+Port 3000 must be free because every test launches its own backend. The suite
+runs with one worker to keep that port exclusive and attaches Electron output,
+diagnostic logs, screenshots, videos, and traces when a test fails.
+
+Use `npm run test:e2e:ui` for Playwright's interactive runner. When an intended
+UI change affects the checked-in visual baseline, update it with
+`npm run test:e2e:update` and review the resulting PNG before keeping it.
 
 ## Additional Resources
 

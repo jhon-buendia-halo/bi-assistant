@@ -1,4 +1,5 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, inject, signal } from '@angular/core';
+import { DiagnosticsService } from '../diagnostics/diagnostics.service';
 
 export type ToastKind = 'success' | 'error' | 'info';
 
@@ -14,6 +15,7 @@ const ERROR_DURATION_MS = 8000;
 
 @Injectable({ providedIn: 'root' })
 export class ToastService {
+  private readonly diagnostics = inject(DiagnosticsService);
   private seq = 0;
   readonly toasts = signal<Toast[]>([]);
 
@@ -22,6 +24,7 @@ export class ToastService {
   }
 
   error(message: string): void {
+    this.diagnostics.record('error', 'user-visible', message);
     this.show('error', message, ERROR_DURATION_MS);
   }
 

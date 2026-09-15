@@ -1,4 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
+import { DatasourcesService } from '../datasources/datasources.service';
 import { SandboxRepository } from './repositories/sandbox.repository';
 import type {
   SandboxDoc,
@@ -7,7 +8,10 @@ import type {
 
 @Controller('sandbox')
 export class SandboxController {
-  constructor(private readonly sandboxRepository: SandboxRepository) {}
+  constructor(
+    private readonly sandboxRepository: SandboxRepository,
+    private readonly datasources: DatasourcesService,
+  ) {}
 
   @Get()
   async list(): Promise<{ sandboxes: SandboxDoc[] }> {
@@ -16,7 +20,14 @@ export class SandboxController {
 
   @Post()
   async create(
-    @Body() body: { name?: unknown; tables?: unknown; entities?: unknown },
+    @Body()
+    body: {
+      name?: unknown;
+      tables?: unknown;
+      entities?: unknown;
+      datasourceId?: unknown;
+      datasourceKind?: unknown;
+    },
   ): Promise<{ ok: boolean; message: string }> {
     try {
       const name = typeof body?.name === 'string' ? body.name.trim() : '';
@@ -30,7 +41,26 @@ export class SandboxController {
       const entities = Array.isArray(body?.entities)
         ? (body.entities as SandboxEntitySnapshot[])
         : [];
-      await this.sandboxRepository.save(name, tables, entities);
+      const datasourceId =
+        typeof body?.datasourceId === 'string' ? body.datasourceId.trim() : '';
+      if (!datasourceId) {
+        return { ok: false, message: 'datasourceId is required' };
+      }
+      const savedDatasource = await this.datasources.get(datasourceId);
+      if (
+        body.datasourceKind !== undefined &&
+        body.datasourceKind !== savedDatasource.kind
+      ) {
+        return {
+          ok: false,
+          message: `Datasource kind must be ${savedDatasource.kind}`,
+        };
+      }
+      const datasource = {
+        id: savedDatasource.id,
+        kind: savedDatasource.kind,
+      };
+      await this.sandboxRepository.save(name, tables, entities, datasource);
       return {
         ok: true,
         message: `Sandbox "${name}" saved — ${tables.length} entities`,

@@ -3,15 +3,27 @@ import { z } from 'zod';
 import { resolveAgentModel } from '../model-resolver';
 import { PROJECT_WORKSPACE_CONTEXT_KEY } from '../project-workspaces';
 
+/**
+ * Visual design is a bounded transformation task: reasoning-heavy models add
+ * hidden-token latency without better output. `VISUAL_MODEL` (e.g.
+ * `openai/gpt-4.1-mini`) forces a model; otherwise any gpt-5 family model is
+ * swapped for gpt-4.1-mini and everything else (incl. LenAI) is kept.
+ */
+const VISUAL_MODEL_OVERRIDE = process.env.VISUAL_MODEL as
+  | `${string}/${string}`
+  | undefined;
+const REASONING_FAMILY = /^openai\/(gpt-5|o\d)/;
+const VISUAL_FALLBACK = 'openai/gpt-4.1-mini' as const;
+
 async function resolveVisualizationModel() {
   const configured = await resolveAgentModel();
   if (typeof configured === 'string') {
-    return configured === 'openai/gpt-5'
-      ? 'openai/gpt-4.1-mini'
-      : configured;
+    if (VISUAL_MODEL_OVERRIDE) return VISUAL_MODEL_OVERRIDE;
+    return REASONING_FAMILY.test(configured) ? VISUAL_FALLBACK : configured;
   }
-  return configured.id === 'openai/gpt-5'
-    ? { ...configured, id: 'openai/gpt-4.1-mini' as const }
+  if (VISUAL_MODEL_OVERRIDE) return { ...configured, id: VISUAL_MODEL_OVERRIDE };
+  return REASONING_FAMILY.test(configured.id) && !configured.url
+    ? { ...configured, id: VISUAL_FALLBACK }
     : configured;
 }
 

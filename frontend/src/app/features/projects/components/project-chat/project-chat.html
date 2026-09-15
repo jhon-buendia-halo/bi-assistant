@@ -141,11 +141,59 @@
               </div>
             }
           </div>
+        } @else if (message.visual; as visual) {
+          <!-- Visual event card -->
+          <div class="group">
+            <div class="flex items-center gap-3 rounded-xl border border-white/10 bg-[#232323] px-3 py-2.5">
+              <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/5 text-zinc-300">
+                <lucide-angular [img]="BarChart3" [size]="15" />
+              </span>
+              <span class="flex min-w-0 flex-col">
+                <span class="truncate text-[13px] text-zinc-200">
+                  {{ visual.action === "created" ? "Created" : visual.action === "updated" ? "Updated" : "Reverted" }}
+                  <span class="font-medium">{{ visual.title }}</span>
+                </span>
+                <span class="text-[12px] text-zinc-500">Version {{ visual.version }}</span>
+              </span>
+              <button
+                type="button"
+                (click)="viewVisual.emit(visual)"
+                class="ml-auto shrink-0 rounded-lg border border-white/10 px-2.5 py-1 text-[12px] text-zinc-300 hover:border-white/20 hover:bg-white/5"
+              >
+                View
+              </button>
+            </div>
+            @if (message.content && !message.content.startsWith("Created interactive visual") && !message.content.startsWith("Updated interactive visual") && !message.content.startsWith("Reverted interactive visual")) {
+              <div class="prose-dark mt-2" [innerHTML]="message.content | markdown"></div>
+            }
+          </div>
         } @else {
           <div class="group">
-            <p class="text-[13px] leading-7 whitespace-pre-wrap text-zinc-300">
-              {{ message.content }}
-            </p>
+            <div class="prose-dark" [innerHTML]="message.content | markdown"></div>
+            @if (message.data?.length) {
+              <details class="mt-2 rounded-lg border border-white/5 bg-white/[0.02] text-[12px]">
+                <summary class="cursor-pointer px-3 py-1.5 text-zinc-500 select-none hover:text-zinc-300">
+                  Data used ({{ message.data!.length }}
+                  {{ message.data!.length === 1 ? "query" : "queries" }})
+                </summary>
+                <div class="flex flex-col gap-2 border-t border-white/5 px-3 py-2">
+                  @for (record of message.data; track $index) {
+                    <div>
+                      <div class="flex items-center gap-2 text-zinc-400">
+                        <lucide-angular [img]="Wrench" [size]="12" class="shrink-0" />
+                        <span class="font-mono" [class.text-red-400]="record.error">{{ dataLabel(record) }}</span>
+                      </div>
+                      @if (record.input) {
+                        <pre class="mt-1 overflow-x-auto rounded bg-black/30 px-2.5 py-1.5 font-mono text-[11px] leading-5 whitespace-pre-wrap text-zinc-400">{{ record.input }}</pre>
+                      }
+                      @if (record.error) {
+                        <p class="mt-1 text-red-400/80">{{ record.error }}</p>
+                      }
+                    </div>
+                  }
+                </div>
+              </details>
+            }
             <button
               (click)="copyMessage(message.content)"
               title="Copy message"
@@ -198,15 +246,25 @@
             }
           </div>
           @for (tool of toolCalls(); track $index) {
-            <div class="ml-0.5 flex items-center gap-2.5 text-zinc-400">
-              <lucide-angular [img]="Wrench" [size]="13" class="shrink-0" />
-              <span class="font-mono text-[12px]">{{ tool }}</span>
+            <div class="ml-0.5 flex flex-col gap-1">
+              <div class="flex items-center gap-2.5 text-zinc-400">
+                <lucide-angular [img]="Wrench" [size]="13" class="shrink-0" />
+                <span class="font-mono text-[12px]">{{ tool.name }}</span>
+                @if (tool.error) {
+                  <span class="text-[12px] text-red-400">failed</span>
+                } @else if (tool.rowCount !== undefined) {
+                  <span class="text-[12px] text-zinc-500">{{ tool.rowCount }} rows</span>
+                } @else {
+                  <lucide-angular [img]="Loader2" [size]="11" class="animate-spin text-zinc-600" />
+                }
+              </div>
+              @if (tool.input) {
+                <pre class="ml-6 max-h-24 overflow-auto rounded bg-black/30 px-2.5 py-1.5 font-mono text-[11px] leading-5 whitespace-pre-wrap text-zinc-500">{{ tool.input }}</pre>
+              }
             </div>
           }
           @if (streamingText()) {
-            <p class="text-[13px] leading-7 whitespace-pre-wrap text-zinc-300">
-              {{ streamingText() }}
-            </p>
+            <div class="prose-dark" [innerHTML]="streamingText() | markdown"></div>
           }
           <div class="flex items-center gap-2 text-zinc-500">
             <lucide-angular [img]="Loader2" [size]="13" class="animate-spin" />

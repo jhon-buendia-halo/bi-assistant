@@ -7,11 +7,13 @@ import {
   input,
   output,
   signal,
+  untracked,
   viewChild,
 } from '@angular/core';
 import {
   LucideAngularModule,
   ArrowUp,
+  BarChart3,
   Brain,
   Copy,
   Loader2,
@@ -20,17 +22,32 @@ import {
   Wrench,
 } from 'lucide-angular';
 import { ProjectsApiService } from '../../services/projects-api.service';
-import { ChatMessage, Project } from '../../models/project.model';
+import {
+  ChatMessage,
+  Project,
+  ToolDataRecord,
+  VisualEvent,
+} from '../../models/project.model';
 import { ToastService } from '../../../../core/toast/toast.service';
+import { MarkdownPipe } from '../../../../shared/pipes/markdown.pipe';
+
+/** One tool call shown in the Thinking block, enriched when its result lands. */
+interface ToolActivity {
+  name: string;
+  input?: string;
+  rowCount?: number;
+  error?: string;
+}
 
 @Component({
   selector: 'app-project-chat',
-  imports: [LucideAngularModule],
+  imports: [LucideAngularModule, MarkdownPipe],
   templateUrl: './project-chat.html',
   styleUrl: './project-chat.scss',
 })
 export class ProjectChat {
   readonly ArrowUp = ArrowUp;
+  readonly BarChart3 = BarChart3;
   readonly Brain = Brain;
   readonly Copy = Copy;
   readonly Loader2 = Loader2;
@@ -43,15 +60,20 @@ export class ProjectChat {
 
   readonly project = input.required<Project>();
   readonly visualGenerating = input(false);
+  /** Visual open in the right panel — the default target for tailoring. */
+  readonly activeVisualizationId = input<string | null>(null);
   readonly generateVisual = output<ChatMessage>();
+  /** A turn created/updated a visual; the host should refresh the panel. */
+  readonly visualUpdated = output<VisualEvent>();
+  readonly viewVisual = output<VisualEvent>();
 
   readonly messages = signal<ChatMessage[]>([]);
   readonly draft = signal('');
   readonly sending = signal(false);
   /** Tail of the model's reasoning stream, shown Conductor-style. */
   readonly reasoning = signal('');
-  /** Names of tools invoked during the current turn. */
-  readonly toolCalls = signal<string[]>([]);
+  /** Tools invoked during the current turn, with result summaries. */
+  readonly toolCalls = signal<ToolActivity[]>([]);
   /** Streamed assistant text for the in-flight turn. */
   readonly streamingText = signal('');
   readonly elapsed = signal(0);
@@ -65,15 +87,28 @@ export class ProjectChat {
 
   private timer: ReturnType<typeof setInterval> | null = null;
   private activeStream: AbortController | null = null;
+  private syncedProjectId: string | null = null;
 
   private readonly scroller = viewChild<ElementRef<HTMLDivElement>>('scroller');
 
   constructor() {
     // Re-sync when the active project changes (component instance is reused).
     effect(() => {
+      const project = this.project();
+      if (project.id === this.syncedProjectId) {
+        // Same project, refreshed metadata (e.g. a visual was versioned).
+        // Never disturb an in-flight turn; `done` brings the final transcript.
+        if (!untracked(() => this.sending())) {
+          this.messages.set(project.messages);
+        }
+        return;
+      }
+      this.syncedProjectId = project.id;
       this.activeStream?.abort();
       this.activeStream = null;
-      this.messages.set(this.project().messages);
+      this.stopTimer();
+      this.sending.set(false);
+      this.messages.set(project.messages);
       this.draft.set('');
       this.customAnswer.set('');
       this.customAnswerOpen.set(false);
@@ -121,13 +156,39 @@ export class ProjectChat {
         },
         onTool: (name) => {
           if (this.activeStream !== controller) return;
-          this.toolCalls.set([...this.toolCalls(), name]);
+          this.toolCalls.set([...this.toolCalls(), { name }]);
           this.scrollToBottom();
+        },
+        onToolResult: (summary) => {
+          if (this.activeStream !== controller) return;
+          // Attach to the latest call of that tool still missing a result.
+          const calls = [...this.toolCalls()];
+          for (let i = calls.length - 1; i >= 0; i--) {
+            const call = calls[i];
+            if (
+              call.name === summary.tool &&
+              call.rowCount === undefined &&
+              call.error === undefined
+            ) {
+              calls[i] = {
+                ...call,
+                input: summary.input,
+                rowCount: summary.rowCount,
+                error: summary.error,
+              };
+              break;
+            }
+          }
+          this.toolCalls.set(calls);
         },
         onText: (delta) => {
           if (this.activeStream !== controller) return;
           this.streamingText.set(this.streamingText() + delta);
           this.scrollToBottom();
+        },
+        onVisualUpdated: (event) => {
+          if (this.activeStream !== controller) return;
+          this.visualUpdated.emit(event);
         },
         onDone: (project) => {
           if (this.activeStream !== controller) return;
@@ -148,6 +209,7 @@ export class ProjectChat {
         },
       },
       controller.signal,
+      this.activeVisualizationId() ?? undefined,
     );
   }
 
@@ -189,6 +251,13 @@ export class ProjectChat {
       clearInterval(this.timer);
       this.timer = null;
     }
+  }
+
+  /** Short label for a persisted data record under an answer. */
+  dataLabel(record: ToolDataRecord): string {
+    if (record.error) return `${record.tool} — failed`;
+    const rows = record.rowCount ?? record.rows?.length ?? 0;
+    return `${record.tool} — ${rows} row${rows === 1 ? '' : 's'}`;
   }
 
   copyMessage(content: string): void {

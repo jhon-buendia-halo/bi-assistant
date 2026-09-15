@@ -1,8 +1,12 @@
-<div class="flex h-screen bg-[#1c1c1c] text-zinc-300 text-[13px] select-none">
+<div
+  class="flex h-screen bg-[#1c1c1c] text-[13px] text-zinc-300 select-none"
+  [class.resizing-right-panel]="rightPanelResizing()"
+>
   @if (sidebarOpen()) {
     @if (settingsOpen()) {
       <!-- Settings panel -->
       <aside
+        aria-label="Settings sidebar"
         class="flex w-[296px] shrink-0 flex-col border-r border-white/5 bg-[#181818]"
       >
         <!-- Header: back -->
@@ -53,18 +57,21 @@
         </div>
 
         <!-- Options -->
-        <nav class="mt-4 flex flex-col gap-0.5 px-2">
+        <nav
+          aria-label="Settings navigation"
+          class="mt-4 flex flex-col gap-0.5 px-2"
+        >
           <button
-            (click)="selectSection('databricks')"
+            (click)="selectSection('datasources')"
             class="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-zinc-200 hover:bg-white/10"
-            [class.option-active]="settingsSection() === 'databricks'"
+            [class.option-active]="settingsSection() === 'datasources'"
           >
             <lucide-angular
               [img]="Database"
               [size]="15"
               class="text-zinc-400"
             />
-            <span>Databricks Configuration</span>
+            <span>Datasource Configuration</span>
           </button>
           <button
             (click)="selectSection('llm')"
@@ -81,6 +88,7 @@
     } @else {
       <!-- Sidebar -->
       <aside
+        aria-label="Primary sidebar"
         class="flex w-[296px] shrink-0 flex-col border-r border-white/5 bg-[#181818]"
       >
         <!-- Header: collapse toggle right-aligned, clear of macOS traffic lights -->
@@ -112,7 +120,10 @@
         </button>
 
         <!-- Top section -->
-        <nav class="mt-2 flex flex-col gap-0.5 px-2 pb-3">
+        <nav
+          aria-label="Workspace navigation"
+          class="mt-2 flex flex-col gap-0.5 px-2 pb-3"
+        >
           <button
             (click)="
               mainView.set(mainView() === 'sandbox' ? 'home' : 'sandbox')
@@ -129,7 +140,10 @@
         <div class="border-t border-white/5"></div>
 
         <!-- Bottom section -->
-        <nav class="mt-3 flex flex-col gap-0.5 px-2">
+        <nav
+          aria-label="Projects navigation"
+          class="mt-3 flex flex-col gap-0.5 px-2"
+        >
           <div
             class="group flex items-center gap-2.5 rounded-md px-2 py-1.5 text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
             [class.option-active]="mainView() === 'conversation-new'"
@@ -148,6 +162,7 @@
           <!-- Project children -->
           @for (project of projects(); track project.id) {
             <div
+              [attr.data-testid]="'project-' + project.id"
               class="group relative ml-6 flex items-center rounded-md text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
               [class.option-active]="
                 mainView() === 'project-chat' &&
@@ -201,8 +216,24 @@
         <div
           class="flex items-center justify-end gap-1 px-3 pb-3 text-zinc-500"
         >
-          <button class="rounded p-1.5 hover:bg-white/5 hover:text-zinc-300">
-            <lucide-angular [img]="CircleHelp" [size]="15" />
+          <button
+            type="button"
+            (click)="systemLogsOpen.set(true)"
+            title="System logs and diagnostics"
+            aria-label="Open system logs"
+            class="relative rounded p-1.5 hover:bg-white/5 hover:text-zinc-300"
+          >
+            <lucide-angular [img]="ScrollText" [size]="15" />
+            @if (diagnostics.issueCount() > 0) {
+              <span
+                class="absolute -top-1 -right-1 flex min-w-3.5 items-center justify-center rounded-full bg-red-500 px-1 text-[8px] font-semibold leading-3.5 text-white"
+                >{{
+                  diagnostics.issueCount() > 99
+                    ? "99+"
+                    : diagnostics.issueCount()
+                }}</span
+              >
+            }
           </button>
           <button
             (click)="settingsOpen.set(true)"
@@ -232,6 +263,46 @@
           <lucide-angular [img]="PanelLeft" [size]="16" />
         </button>
       }
+      @if (mainView() === "project-chat" && activeProject()) {
+        <div
+          class="ml-3 flex min-w-0 items-center gap-2"
+          [class.ml-0]="sidebarOpen()"
+        >
+          <lucide-angular
+            [img]="Database"
+            [size]="14"
+            class="shrink-0 text-zinc-500"
+          />
+          <span
+            class="shrink-0 text-[10px] font-medium tracking-[0.08em] text-zinc-600 uppercase"
+            >Datasource</span
+          >
+          @if (loadingProjectDatasources()) {
+            <span class="h-4 w-24 animate-pulse rounded bg-white/5"></span>
+          } @else if (activeProjectDatasources().length > 0) {
+            <div class="flex min-w-0 items-center gap-1.5">
+              @for (
+                datasource of activeProjectDatasources();
+                track datasource.id
+              ) {
+                <span
+                  class="flex min-w-0 items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.03] px-2 py-1"
+                  [title]="datasource.summary"
+                >
+                  <span class="max-w-40 truncate text-[12px] text-zinc-300">{{
+                    datasource.name
+                  }}</span>
+                  <span class="shrink-0 text-[10px] text-zinc-500">{{
+                    datasourceKindLabel(datasource.kind)
+                  }}</span>
+                </span>
+              }
+            </div>
+          } @else {
+            <span class="truncate text-[12px] text-zinc-500">Unavailable</span>
+          }
+        </div>
+      }
       @if (!rightPanelOpen()) {
         <button
           (click)="rightPanelOpen.set(true)"
@@ -248,9 +319,10 @@
 
     <!-- Content area -->
     <main class="flex min-h-0 flex-1 flex-col">
-      @if (settingsOpen() && settingsSection() === "databricks") {
+      <h1 class="sr-only">Questions to Insights</h1>
+      @if (settingsOpen() && settingsSection() === "datasources") {
         <div class="flex flex-1 justify-center overflow-y-auto px-6 py-10">
-          <app-databricks-config class="w-full max-w-[480px]" />
+          <app-datasource-config class="w-full max-w-[560px]" />
         </div>
       } @else if (settingsOpen() && settingsSection() === "llm") {
         <div class="flex flex-1 justify-center overflow-y-auto px-6 py-10">
@@ -277,7 +349,10 @@
           class="min-h-0 flex-1"
           [project]="activeProject()!"
           [visualGenerating]="generatingVisualProject() === activeProject()!.id"
+          [activeVisualizationId]="activeVisualization()?.id ?? null"
           (generateVisual)="generateInteractiveVisual($event)"
+          (visualUpdated)="onVisualUpdated($event)"
+          (viewVisual)="showVisualization($event, $event.version)"
         />
       } @else if (mainView() === "conversation-new") {
         <!-- New conversation composer -->
@@ -427,8 +502,25 @@
   <!-- Right panel -->
   @if (rightPanelOpen()) {
     <aside
-      class="flex w-[572px] shrink-0 flex-col border-l border-white/5 bg-[#161616]"
+      aria-label="Details panel"
+      class="relative flex shrink-0 flex-col border-l border-white/5 bg-[#161616]"
+      [style.width.px]="rightPanelWidth()"
     >
+      <div
+        class="right-panel-resize-handle"
+        role="separator"
+        tabindex="0"
+        aria-label="Resize right panel"
+        aria-orientation="vertical"
+        [attr.aria-valuemin]="rightPanelMinWidth"
+        [attr.aria-valuemax]="rightPanelMaxWidth()"
+        [attr.aria-valuenow]="rightPanelWidth()"
+        title="Drag to resize · Double-click to reset"
+        (pointerdown)="startRightPanelResize($event)"
+        (keydown)="resizeRightPanelWithKeyboard($event)"
+        (dblclick)="resetRightPanelWidth()"
+      ></div>
+
       <!-- Panel header: collapse -->
       <div class="app-drag flex h-12 shrink-0 items-center justify-end px-3">
         <button
@@ -448,14 +540,22 @@
           [visualizations]="activeProject()!.visualizations ?? []"
           [loading]="generatingVisualProject() === activeProject()!.id"
           [error]="visualizationError()"
-          [downloading]="downloadingVisualization() === activeVisualization()?.id"
+          [downloading]="
+            downloadingVisualization() === activeVisualization()?.id
+          "
           (viewVisual)="showVisualization($event)"
           (downloadVisual)="downloadVisualization($event)"
+          (selectVersion)="selectVisualVersion($event)"
+          (revertVersion)="revertVisualVersion($event)"
         />
       } @else {
         <app-entity-details class="min-h-0 flex-1 overflow-y-auto" />
       }
     </aside>
+  }
+
+  @if (systemLogsOpen()) {
+    <app-system-logs-panel (dismiss)="systemLogsOpen.set(false)" />
   }
 
   <app-toast-container />

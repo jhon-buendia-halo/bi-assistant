@@ -4,5 +4,8 @@
 /.mastra
 *.sqlite
 *.sqlite-*
+*.duckdb
+*.duckdb-*
+*.duckdb.*
 *.log
 .DS_Store

@@ -94,7 +94,13 @@ export class SandboxList implements OnInit {
     const when = date
       ? date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
       : '';
-    return `Edited ${when} · ${sandbox.tables.length} entities`;
+    const datasource =
+      sandbox.datasourceKind === 'postgres'
+        ? 'PostgreSQL · '
+        : sandbox.datasourceKind === 'databricks'
+          ? 'Databricks · '
+          : '';
+    return `Edited ${when} · ${datasource}${sandbox.tables.length} entities`;
   }
 }
 

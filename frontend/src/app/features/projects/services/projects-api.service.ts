@@ -6,6 +6,8 @@ import {
   InteractiveVisualization,
   Project,
   ProjectActionResult,
+  ToolDataRecord,
+  VisualEvent,
 } from '../models/project.model';
 
 @Injectable({ providedIn: 'root' })
@@ -14,6 +16,23 @@ export class ProjectsApiService {
 
   list(): Observable<{ projects: Project[] }> {
     return this.http.get<{ projects: Project[] }>(`${API_BASE_URL}/projects`);
+  }
+
+  get(id: string): Observable<Project> {
+    return this.http.get<Project>(
+      `${API_BASE_URL}/projects/${encodeURIComponent(id)}`,
+    );
+  }
+
+  revertVisualization(
+    projectId: string,
+    visualizationId: string,
+    version: number,
+  ): Observable<ProjectActionResult> {
+    return this.http.post<ProjectActionResult>(
+      `${API_BASE_URL}/projects/${encodeURIComponent(projectId)}/visualizations/${encodeURIComponent(visualizationId)}/revert`,
+      { version },
+    );
   }
 
   create(name: string, sandboxes: string[]): Observable<ProjectActionResult> {
@@ -42,9 +61,11 @@ export class ProjectsApiService {
   getVisualization(
     projectId: string,
     visualizationId: string,
+    version?: number,
   ): Observable<InteractiveVisualization> {
+    const query = version ? `?version=${version}` : '';
     return this.http.get<InteractiveVisualization>(
-      `${API_BASE_URL}/projects/${encodeURIComponent(projectId)}/visualizations/${encodeURIComponent(visualizationId)}`,
+      `${API_BASE_URL}/projects/${encodeURIComponent(projectId)}/visualizations/${encodeURIComponent(visualizationId)}${query}`,
     );
   }
 
@@ -73,10 +94,13 @@ export class ProjectsApiService {
       onReasoning?: (delta: string) => void;
       onText?: (delta: string) => void;
       onTool?: (name: string) => void;
+      onToolResult?: (summary: ToolDataRecord) => void;
+      onVisualUpdated?: (event: VisualEvent) => void;
       onDone?: (project: Project) => void;
       onError?: (message: string) => void;
     },
     signal?: AbortSignal,
+    activeVisualizationId?: string,
   ): Promise<void> {
     let res: Response;
     try {
@@ -85,7 +109,7 @@ export class ProjectsApiService {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content }),
+          body: JSON.stringify({ content, activeVisualizationId }),
           signal,
         },
       );
@@ -128,6 +152,20 @@ export class ProjectsApiService {
                 break;
               case 'tool':
                 handlers.onTool?.(event.content ?? 'tool');
+                break;
+              case 'tool-result':
+                try {
+                  handlers.onToolResult?.(JSON.parse(event.content ?? '{}'));
+                } catch {
+                  // Malformed summary — ignore.
+                }
+                break;
+              case 'visual-updated':
+                try {
+                  handlers.onVisualUpdated?.(JSON.parse(event.content ?? '{}'));
+                } catch {
+                  // Malformed event — ignore.
+                }
                 break;
               case 'done':
                 handlers.onDone?.(event.project);

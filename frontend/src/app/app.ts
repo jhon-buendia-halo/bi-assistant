@@ -1,11 +1,10 @@
-import { Component, effect, inject, signal } from '@angular/core';
-import { retry, timer } from 'rxjs';
+import { Component, HostListener, effect, inject, signal } from '@angular/core';
+import { forkJoin, retry, timer } from 'rxjs';
 import {
   LucideAngularModule,
   ArrowLeft,
   Bot,
   ChevronDown,
-  CircleHelp,
   CircleCheck,
   CornerDownLeft,
   Database,
@@ -16,19 +15,27 @@ import {
   PanelRight,
   Plus,
   Search,
+  ScrollText,
   Settings,
   Signal,
   Sparkle,
   Trash2,
   Workflow,
 } from 'lucide-angular';
-import { DatabricksConfig } from './features/databricks/components/databricks-config/databricks-config';
+import { DatasourceConfig } from './features/datasources/components/datasource-config/datasource-config';
+import {
+  Datasource,
+  kindLabel,
+} from './features/datasources/models/datasource.model';
+import { DatasourcesApiService } from './features/datasources/services/datasources-api.service';
 import { LlmConfig } from './features/llm/components/llm-config/llm-config';
 import { SandboxList } from './features/data-sandbox/components/sandbox-list/sandbox-list';
 import { CatalogBrowser } from './features/data-sandbox/components/catalog-browser/catalog-browser';
 import { EntityDetails } from './features/data-sandbox/components/entity-details/entity-details';
 import { SandboxSelectionService } from './features/data-sandbox/services/sandbox-selection.service';
 import { ToastContainer } from './shared/components/toast-container/toast-container';
+import { SystemLogsPanel } from './shared/components/system-logs-panel/system-logs-panel';
+import { DiagnosticsService } from './core/diagnostics/diagnostics.service';
 import {
   Sandbox,
   SandboxApiService,
@@ -42,24 +49,33 @@ import {
   InteractiveVisualization,
   Project,
   ProjectVisualization,
+  VisualEvent,
 } from './features/projects/models/project.model';
 import { ReasoningEffort } from './features/llm/models/llm.model';
 import { ToastService } from './core/toast/toast.service';
 
-type SettingsSection = 'databricks' | 'llm' | null;
+type SettingsSection = 'datasources' | 'llm' | null;
 type MainView =
   'home' | 'sandbox' | 'sandbox-new' | 'conversation-new' | 'project-chat';
+
+const DEFAULT_RIGHT_PANEL_WIDTH = 572;
+const MIN_RIGHT_PANEL_WIDTH = 360;
+const MAX_RIGHT_PANEL_WIDTH = 960;
+const MIN_PRIMARY_CONTENT_WIDTH = 240;
+const RIGHT_PANEL_RESIZE_STEP = 24;
+const RIGHT_PANEL_WIDTH_STORAGE_KEY = 'questions-to-insights:right-panel-width';
 
 @Component({
   selector: 'app-root',
   imports: [
     LucideAngularModule,
-    DatabricksConfig,
+    DatasourceConfig,
     LlmConfig,
     SandboxList,
     CatalogBrowser,
     EntityDetails,
     ToastContainer,
+    SystemLogsPanel,
     ProjectChat,
     InteractiveVisualPanel,
   ],
@@ -70,7 +86,6 @@ export class App {
   readonly ArrowLeft = ArrowLeft;
   readonly Bot = Bot;
   readonly ChevronDown = ChevronDown;
-  readonly CircleHelp = CircleHelp;
   readonly CircleCheck = CircleCheck;
   readonly CornerDownLeft = CornerDownLeft;
   readonly Database = Database;
@@ -81,6 +96,7 @@ export class App {
   readonly PanelRight = PanelRight;
   readonly Plus = Plus;
   readonly Search = Search;
+  readonly ScrollText = ScrollText;
   readonly Settings = Settings;
   readonly Signal = Signal;
   readonly Sparkle = Sparkle;
@@ -91,6 +107,13 @@ export class App {
   readonly settingsOpen = signal(false);
   readonly settingsSection = signal<SettingsSection>(null);
   readonly rightPanelOpen = signal(true);
+  readonly rightPanelResizing = signal(false);
+  readonly rightPanelWidth = signal(this.readRightPanelWidth());
+  readonly rightPanelMinWidth = MIN_RIGHT_PANEL_WIDTH;
+  readonly systemLogsOpen = signal(false);
+  readonly activeProjectDatasources = signal<Datasource[]>([]);
+  readonly loadingProjectDatasources = signal(false);
+  readonly datasourceKindLabel = kindLabel;
   readonly mainView = signal<MainView>('home');
   /** Sandbox being edited in the catalog browser; null = creating a new one. */
   readonly editingSandbox = signal<Sandbox | null>(null);
@@ -104,6 +127,7 @@ export class App {
   private readonly llmApi = inject(LlmApiService);
 
   private readonly toast = inject(ToastService);
+  readonly diagnostics = inject(DiagnosticsService);
 
   /** Model from the saved LLM configuration, shown in the composer chip. */
   readonly llmModel = signal<string | null>(null);
@@ -127,7 +151,125 @@ export class App {
   readonly visualizationError = signal<string | null>(null);
 
   private readonly sandboxApi = inject(SandboxApiService);
+  private readonly datasourcesApi = inject(DatasourcesApiService);
   private readonly projectsApi = inject(ProjectsApiService);
+  private rightPanelResizeStart:
+    { pointerId: number; x: number; width: number } | undefined;
+  private rightPanelResizeHandle: HTMLElement | undefined;
+
+  rightPanelMaxWidth(): number {
+    const viewportWidth =
+      typeof window === 'undefined'
+        ? MAX_RIGHT_PANEL_WIDTH + MIN_PRIMARY_CONTENT_WIDTH
+        : window.innerWidth;
+    return Math.max(
+      MIN_RIGHT_PANEL_WIDTH,
+      Math.min(
+        MAX_RIGHT_PANEL_WIDTH,
+        viewportWidth - MIN_PRIMARY_CONTENT_WIDTH,
+      ),
+    );
+  }
+
+  startRightPanelResize(event: PointerEvent): void {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    const handle = event.currentTarget as HTMLElement;
+    handle.setPointerCapture(event.pointerId);
+    this.rightPanelResizeHandle = handle;
+    this.rightPanelResizeStart = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      width: this.rightPanelWidth(),
+    };
+    this.rightPanelResizing.set(true);
+  }
+
+  @HostListener('document:pointermove', ['$event'])
+  resizeRightPanel(event: PointerEvent): void {
+    const start = this.rightPanelResizeStart;
+    if (!start || event.pointerId !== start.pointerId) return;
+    this.setRightPanelWidth(start.width + start.x - event.clientX);
+  }
+
+  @HostListener('document:pointerup', ['$event'])
+  @HostListener('document:pointercancel', ['$event'])
+  finishRightPanelResize(event: PointerEvent): void {
+    const start = this.rightPanelResizeStart;
+    if (!start || event.pointerId !== start.pointerId) return;
+    if (this.rightPanelResizeHandle?.hasPointerCapture(start.pointerId)) {
+      this.rightPanelResizeHandle.releasePointerCapture(start.pointerId);
+    }
+    this.rightPanelResizeStart = undefined;
+    this.rightPanelResizeHandle = undefined;
+    this.rightPanelResizing.set(false);
+    this.persistRightPanelWidth();
+  }
+
+  resizeRightPanelWithKeyboard(event: KeyboardEvent): void {
+    let nextWidth: number | undefined;
+    switch (event.key) {
+      case 'ArrowLeft':
+        nextWidth = this.rightPanelWidth() + RIGHT_PANEL_RESIZE_STEP;
+        break;
+      case 'ArrowRight':
+        nextWidth = this.rightPanelWidth() - RIGHT_PANEL_RESIZE_STEP;
+        break;
+      case 'Home':
+        nextWidth = MIN_RIGHT_PANEL_WIDTH;
+        break;
+      case 'End':
+        nextWidth = this.rightPanelMaxWidth();
+        break;
+    }
+    if (nextWidth === undefined) return;
+    event.preventDefault();
+    this.setRightPanelWidth(nextWidth);
+    this.persistRightPanelWidth();
+  }
+
+  resetRightPanelWidth(): void {
+    this.setRightPanelWidth(DEFAULT_RIGHT_PANEL_WIDTH);
+    this.persistRightPanelWidth();
+  }
+
+  @HostListener('window:resize')
+  constrainRightPanelWidth(): void {
+    this.setRightPanelWidth(this.rightPanelWidth());
+  }
+
+  private setRightPanelWidth(width: number): void {
+    this.rightPanelWidth.set(
+      Math.round(
+        Math.min(
+          this.rightPanelMaxWidth(),
+          Math.max(MIN_RIGHT_PANEL_WIDTH, width),
+        ),
+      ),
+    );
+  }
+
+  private readRightPanelWidth(): number {
+    if (typeof localStorage === 'undefined') return DEFAULT_RIGHT_PANEL_WIDTH;
+    const saved = localStorage.getItem(RIGHT_PANEL_WIDTH_STORAGE_KEY);
+    if (saved === null) return DEFAULT_RIGHT_PANEL_WIDTH;
+    const stored = Number(saved);
+    if (!Number.isFinite(stored)) return DEFAULT_RIGHT_PANEL_WIDTH;
+    return Math.round(
+      Math.min(
+        this.rightPanelMaxWidth(),
+        Math.max(MIN_RIGHT_PANEL_WIDTH, stored),
+      ),
+    );
+  }
+
+  private persistRightPanelWidth(): void {
+    if (typeof localStorage === 'undefined') return;
+    localStorage.setItem(
+      RIGHT_PANEL_WIDTH_STORAGE_KEY,
+      String(this.rightPanelWidth()),
+    );
+  }
 
   loadProjects(): void {
     this.projectsApi
@@ -150,7 +292,38 @@ export class App {
     this.projectMenuOpen.set(null);
     this.activeProject.set(project);
     this.mainView.set('project-chat');
+    this.loadActiveProjectDatasources(project);
     this.loadLatestVisualization(project);
+  }
+
+  private loadActiveProjectDatasources(project: Project): void {
+    this.activeProjectDatasources.set([]);
+    this.loadingProjectDatasources.set(true);
+    forkJoin({
+      sandboxes: this.sandboxApi.getSandboxes(),
+      datasources: this.datasourcesApi.list(),
+    }).subscribe({
+      next: ({ sandboxes, datasources }) => {
+        if (this.activeProject()?.id !== project.id) return;
+        const defaultDatasource =
+          datasources.datasources.find((item) => item.kind === 'databricks') ??
+          datasources.datasources[0];
+        const datasourceIds = new Set(
+          sandboxes.sandboxes
+            .filter((sandbox) => project.sandboxes.includes(sandbox.name))
+            .map((sandbox) => sandbox.datasourceId ?? defaultDatasource?.id)
+            .filter((id): id is string => Boolean(id)),
+        );
+        this.activeProjectDatasources.set(
+          datasources.datasources.filter((item) => datasourceIds.has(item.id)),
+        );
+        this.loadingProjectDatasources.set(false);
+      },
+      error: () => {
+        if (this.activeProject()?.id !== project.id) return;
+        this.loadingProjectDatasources.set(false);
+      },
+    });
   }
 
   private loadLatestVisualization(project: Project): void {
@@ -178,13 +351,80 @@ export class App {
     });
   }
 
-  showVisualization(visualization: ProjectVisualization): void {
+  /** Re-read the active project so visuals metadata (versions) is fresh. */
+  private refreshActiveProject(then?: (project: Project) => void): void {
+    const current = this.activeProject();
+    if (!current) return;
+    this.projectsApi.get(current.id).subscribe({
+      next: (project) => {
+        this.projects.update((projects) =>
+          projects.map((item) => (item.id === project.id ? project : item)),
+        );
+        if (this.activeProject()?.id === project.id) {
+          this.activeProject.set(project);
+          then?.(project);
+        }
+      },
+      error: () => {
+        // Keep the stale copy; the next turn will refresh it.
+      },
+    });
+  }
+
+  /** A chat turn created/updated a visual — show the new version live. */
+  onVisualUpdated(event: VisualEvent): void {
+    this.refreshActiveProject((project) => {
+      const meta = project.visualizations?.find((v) => v.id === event.visualId);
+      if (meta) this.showVisualization(meta, event.version);
+    });
+  }
+
+  selectVisualVersion(version: number): void {
+    const visual = this.activeVisualization();
+    if (!visual) return;
+    this.showVisualization(visual, version);
+  }
+
+  revertVisualVersion(version: number): void {
+    const project = this.activeProject();
+    const visual = this.activeVisualization();
+    if (!project || !visual) return;
+    this.projectsApi
+      .revertVisualization(project.id, visual.id, version)
+      .subscribe({
+        next: (result) => {
+          if (!result.ok || !result.project || !result.visualization) {
+            this.toast.error(result.message || 'Revert failed');
+            return;
+          }
+          this.projects.update((projects) =>
+            projects.map((item) =>
+              item.id === result.project!.id ? result.project! : item,
+            ),
+          );
+          if (this.activeProject()?.id === result.project.id) {
+            this.activeProject.set(result.project);
+            this.activeVisualization.set(result.visualization);
+          }
+          this.toast.success(result.message);
+        },
+        error: (err) =>
+          this.toast.error(err?.error?.message ?? 'Backend unreachable'),
+      });
+  }
+
+  showVisualization(
+    visualization: ProjectVisualization | VisualEvent,
+    version?: number,
+  ): void {
     const project = this.activeProject();
     if (!project) return;
+    const id =
+      'visualId' in visualization ? visualization.visualId : visualization.id;
     this.activeVisualization.set(null);
     this.visualizationError.set(null);
     this.rightPanelOpen.set(true);
-    this.projectsApi.getVisualization(project.id, visualization.id).subscribe({
+    this.projectsApi.getVisualization(project.id, id, version).subscribe({
       next: (loaded) => {
         if (this.activeProject()?.id === project.id) {
           this.activeVisualization.set(loaded);
@@ -377,7 +617,7 @@ export class App {
   }
 
   constructor() {
-    // Selecting a Databricks element reveals its details in the right panel.
+    // Selecting a datasource element reveals its details in the right panel.
     effect(() => {
       if (this.sandboxSelection.selection()) this.rightPanelOpen.set(true);
     });

@@ -1,0 +1,37 @@
+.right-panel-resize-handle {
+  position: absolute;
+  z-index: 30;
+  top: 0;
+  bottom: 0;
+  left: -5px;
+  width: 10px;
+  cursor: col-resize;
+  touch-action: none;
+  outline: none;
+}
+
+.right-panel-resize-handle::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 4px;
+  width: 2px;
+  content: "";
+  background: transparent;
+  transition: background-color 120ms ease;
+}
+
+.right-panel-resize-handle:hover::after,
+.right-panel-resize-handle:focus-visible::after,
+.resizing-right-panel .right-panel-resize-handle::after {
+  background: rgb(113 113 122 / 0.75);
+}
+
+.resizing-right-panel,
+.resizing-right-panel * {
+  cursor: col-resize !important;
+}
+
+.resizing-right-panel iframe {
+  pointer-events: none;
+}

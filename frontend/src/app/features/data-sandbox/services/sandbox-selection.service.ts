@@ -3,7 +3,7 @@ import {
   CatalogInfo,
   SchemaInfo,
   TableInfo,
-} from '../../databricks/models/databricks.model';
+} from '../../datasources/models/datasource.model';
 
 export type SandboxSelection =
   | { kind: 'catalog'; catalog: CatalogInfo }
@@ -15,7 +15,7 @@ export type SandboxSelection =
       table: TableInfo;
     };
 
-/** Currently selected Databricks element, shown in the right panel. */
+/** Currently selected datasource element, shown in the right panel. */
 @Injectable({ providedIn: 'root' })
 export class SandboxSelectionService {
   readonly selection = signal<SandboxSelection | null>(null);

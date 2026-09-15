@@ -10,11 +10,14 @@ export interface SandboxEntitySnapshot {
 
 export interface SandboxDoc {
   name: string;
+  /** Datasource the entities belong to (absent on pre-datasource sandboxes). */
+  datasourceId?: string;
+  datasourceKind?: 'databricks' | 'postgres';
   /** Fully-qualified included entities: `catalog.schema.table`. */
   tables: string[];
   /**
    * Schema snapshot taken at save time so agent context building and
-   * describe_entity don't need a live Databricks round-trip.
+   * describe_entity don't need a live datasource round-trip.
    */
   entities?: SandboxEntitySnapshot[];
   createdAt?: string;
@@ -41,18 +44,24 @@ export class SandboxRepository {
     name: string,
     tables: string[],
     entities: SandboxEntitySnapshot[],
+    datasource?: { id: string; kind: 'databricks' | 'postgres' },
   ): Promise<SandboxDoc | null> {
     return this.store.update(
       { name },
-      { name, tables, entities },
+      {
+        name,
+        tables,
+        entities,
+        ...(datasource
+          ? { datasourceId: datasource.id, datasourceKind: datasource.kind }
+          : {}),
+      },
       { upsert: true },
     );
   }
 
   getByNames(names: string[]): Promise<SandboxDoc[]> {
-    return this.list().then((all) =>
-      all.filter((s) => names.includes(s.name)),
-    );
+    return this.list().then((all) => all.filter((s) => names.includes(s.name)));
   }
 
   delete(name: string): Promise<number> {
