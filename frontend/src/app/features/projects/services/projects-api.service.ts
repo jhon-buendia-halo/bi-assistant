@@ -130,6 +130,7 @@ export class ProjectsApiService {
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
+    let terminalEventReceived = false;
     try {
       for (;;) {
         const { done, value } = await reader.read();
@@ -168,9 +169,11 @@ export class ProjectsApiService {
                 }
                 break;
               case 'done':
+                terminalEventReceived = true;
                 handlers.onDone?.(event.project);
                 break;
               case 'error':
+                terminalEventReceived = true;
                 handlers.onError?.(event.content ?? 'Unknown error');
                 break;
             }
@@ -187,6 +190,10 @@ export class ProjectsApiService {
         return;
       }
       handlers.onError?.('Stream disconnected');
+      return;
+    }
+    if (!signal?.aborted && !terminalEventReceived) {
+      handlers.onError?.('Stream ended before completion');
     }
   }
 }

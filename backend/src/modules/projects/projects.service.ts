@@ -30,6 +30,9 @@ import {
 } from './entities/project.entity';
 
 const STORED_ROWS_CAP = 200;
+const SYNTHESIS_ROWS_CAP = 50;
+const EMPTY_RESPONSE_FALLBACK =
+  'I completed the data analysis but could not produce a final response. Please retry your question.';
 const VISUAL_TOOLS = new Set(['create_visual', 'update_visual']);
 
 export type StreamEvent = {
@@ -521,6 +524,24 @@ export class ProjectsService implements OnModuleInit {
     if (!turn.signal.aborted && !clarification && !text) {
       text = ((await stream.text) ?? '').trim();
     }
+    if (
+      !turn.signal.aborted &&
+      !clarification &&
+      !text.trim() &&
+      !visualEvent
+    ) {
+      // A model can spend every allowed step on tools and finish without a
+      // user-facing answer. Give it one tool-disabled pass to turn the data it
+      // already collected into prose; never let a completed turn disappear.
+      text = await this.synthesizeToolOnlyTurn(
+        agent,
+        trimmed,
+        data,
+        turn.signal,
+      );
+      if (turn.signal.aborted) return;
+      if (text) emit({ type: 'text', content: text });
+    }
 
     // Visual tools persist metadata mid-turn; reload so this write keeps it.
     const fresh = await this.get(id);
@@ -546,6 +567,49 @@ export class ProjectsService implements OnModuleInit {
     const updated = await this.repository.update(id, { messages });
     if (!turn.signal.aborted || clarification) {
       emit({ type: 'done', project: updated ?? fresh });
+    }
+  }
+
+  private async synthesizeToolOnlyTurn(
+    agent: ReturnType<MastraService['getAgent']>,
+    question: string,
+    data: ToolDataRecord[],
+    abortSignal: AbortSignal,
+  ): Promise<string> {
+    if (!data.length) return EMPTY_RESPONSE_FALLBACK;
+
+    const compactData = data.map((record) => ({
+      ...record,
+      rows: record.rows?.slice(0, SYNTHESIS_ROWS_CAP),
+    }));
+    try {
+      const { reasoningEffort } = await this.llmService.getView();
+      const result = await agent.generate(
+        [
+          'Answer the original user question using only the tool results below.',
+          'Give concrete findings, comparisons, a short takeaway, and name the source entities from the SQL where possible.',
+          'Do not call tools and do not mention internal step limits.',
+          '',
+          `Original question: ${question}`,
+          '',
+          `Tool results: ${JSON.stringify(compactData)}`,
+        ].join('\n'),
+        {
+          instructions:
+            'You are a data analyst writing the final answer from completed query results.',
+          maxSteps: 1,
+          toolChoice: 'none',
+          abortSignal,
+          providerOptions: { openai: { reasoningEffort } },
+        },
+      );
+      return (result.text ?? '').trim() || EMPTY_RESPONSE_FALLBACK;
+    } catch (error) {
+      if (abortSignal.aborted) return '';
+      this.logger.warn(
+        `Final synthesis failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return EMPTY_RESPONSE_FALLBACK;
     }
   }
 
