@@ -1,0 +1,85 @@
+name: Build desktop installers
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows x64
+            os: windows-latest
+            target: win
+            format: nsis
+            arch: x64
+            artifact: questions-to-insights-windows-x64
+            installer: frontend/release/*.exe
+          - name: macOS Apple Silicon
+            os: macos-latest
+            target: mac
+            format: dmg
+            arch: arm64
+            artifact: questions-to-insights-macos-arm64
+            installer: frontend/release/*.dmg
+          - name: macOS Intel
+            os: macos-15-intel
+            target: mac
+            format: dmg
+            arch: x64
+            artifact: questions-to-insights-macos-x64
+            installer: frontend/release/*.dmg
+
+    env:
+      # Produce unsigned artifacts unless signing credentials are added later.
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      # This workflow stores installers as Actions artifacts; it does not publish releases.
+      GH_TOKEN: ""
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build installer
+        working-directory: frontend
+        run: npm run electron:dist -- --${{ matrix.target }} ${{ matrix.format }} --${{ matrix.arch }}
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.installer }}
+          if-no-files-found: error
+          retention-days: 14
