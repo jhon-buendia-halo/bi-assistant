@@ -30,6 +30,26 @@ export interface LlmTestResult {
   reply: string;
 }
 
+/**
+ * Halo LenAI exposes deployments through an Azure OpenAI-compatible route.
+ * Mastra appends `/chat/completions` to this deployment URL at request time.
+ * LenAI requires its key as `X-Api-Key`; bearer auth is also supplied by the
+ * OpenAI-compatible client.
+ */
+export function lenaiModelConfig(settings: {
+  model: string;
+  baseUrl: string;
+  apiKey: string;
+}) {
+  const base = settings.baseUrl.replace(/\/+$/, '');
+  return {
+    id: `lenai/${settings.model}` as const,
+    url: `${base}/openai/v1/deployments/${settings.model}`,
+    apiKey: settings.apiKey,
+    headers: { 'X-Api-Key': settings.apiKey },
+  };
+}
+
 @Injectable()
 export class LlmService implements OnModuleInit {
   private readonly logger = new Logger(LlmService.name);
@@ -54,11 +74,11 @@ export class LlmService implements OnModuleInit {
     }
     const apiKey = this.crypto.decrypt(doc.apiKeyCiphertext);
     if (doc.provider === 'lenai') {
-      return {
-        id: `openai/${doc.model}`,
+      return lenaiModelConfig({
+        model: doc.model,
+        baseUrl: doc.baseUrl,
         apiKey,
-        url: doc.baseUrl.replace(/\/+$/, ''),
-      };
+      });
     }
     return { id: `openai/${doc.model}`, apiKey };
   }
@@ -119,7 +139,11 @@ export class LlmService implements OnModuleInit {
   async testConnection(dto: SaveLlmSettingsDto): Promise<LlmTestResult> {
     const { provider, model, baseUrl } = this.validate(dto);
     const apiKey = await this.resolveApiKey(dto);
-    const url = `${provider === 'lenai' ? baseUrl.replace(/\/+$/, '') : OPENAI_BASE_URL}/chat/completions`;
+    const lenaiConfig =
+      provider === 'lenai'
+        ? lenaiModelConfig({ model, baseUrl, apiKey })
+        : null;
+    const url = `${lenaiConfig?.url ?? OPENAI_BASE_URL}/chat/completions`;
 
     this.logger.log(`[testConnection] ${provider}/${model} via ${url}`);
     const started = Date.now();
@@ -134,6 +158,7 @@ export class LlmService implements OnModuleInit {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${apiKey}`,
+          ...(lenaiConfig?.headers ?? {}),
         },
         body: JSON.stringify({
           model,

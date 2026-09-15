@@ -36,11 +36,15 @@
       <span class="text-[11px] font-medium text-zinc-500">Base URL</span>
       <input
         type="text"
-        placeholder="https://lenai.example.com/v1"
+        placeholder="https://lenai.example.com"
         [value]="baseUrl()"
         (input)="baseUrl.set($any($event.target).value); onFieldChange()"
         class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
       />
+      <span class="text-[10px] leading-4 text-zinc-600">
+        Gateway root; requests use
+        &lt;base URL&gt;/openai/v1/deployments/&lt;deployment&gt;.
+      </span>
     </label>
   }
 
