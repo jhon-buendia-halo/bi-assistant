@@ -77,7 +77,7 @@ jobs:
         run: npm run electron:dist -- --${{ matrix.target }} ${{ matrix.format }} --${{ matrix.arch }}
 
       - name: Upload installer
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.installer }}
