@@ -45,6 +45,8 @@ const SQL_REPAIRED_NOTE =
   'original query failed and was auto-corrected — cite the corrected SQL';
 const EMPTY_ROWS_NOTE =
   'query returned 0 rows — verify filters/values before concluding';
+const limitReachedNote = (limit: number) =>
+  `row limit ${limit} reached — results may be incomplete; aggregate or narrow the query for exact totals`;
 /** Character budget for the schema block handed to the fixer. */
 const FIXER_SCHEMA_CHARS = 4_000;
 
@@ -231,13 +233,18 @@ export class ProjectsService implements OnModuleInit {
           limit,
         );
         const repaired = statement !== sql;
+        // A full page of rows means the connector clipped the result set —
+        // the model must aggregate or caveat rather than treat it as total.
+        const truncated = result.rows.length >= limit;
         const notes = [
           ...(repaired ? [SQL_REPAIRED_NOTE] : []),
           ...(result.rows.length ? [] : [EMPTY_ROWS_NOTE]),
+          ...(truncated ? [limitReachedNote(limit)] : []),
         ];
         return {
           ...result,
           ...(repaired ? { correctedSql: statement } : {}),
+          ...(truncated ? { truncated: true } : {}),
           ...(notes.length ? { note: notes.join('; ') } : {}),
         };
       } catch (error) {
@@ -706,15 +713,20 @@ export class ProjectsService implements OnModuleInit {
     // Visual tools persist metadata mid-turn; reload so this write keeps it.
     const fresh = await this.get(id);
     const messages = fresh.messages;
+    const entities = sourceEntities(data);
     if (clarification) {
+      // The turn stops here, but the schema/sample work done before the
+      // question is real work — keep it on the card instead of dropping it.
       messages.push({
         role: 'assistant',
         content: clarification.question,
         at: new Date().toISOString(),
         clarification,
+        ...(data.length ? { data } : {}),
+        ...(entities.length ? { entities } : {}),
       });
     } else if (text.trim() || visualEvent) {
-      const entities = sourceEntities(data);
+      const interpretation = interpretationLine(data, entities);
       messages.push({
         role: 'assistant',
         content:
@@ -723,6 +735,10 @@ export class ProjectsService implements OnModuleInit {
         at: new Date().toISOString(),
         ...(data.length ? { data } : {}),
         ...(entities.length ? { entities } : {}),
+        ...(interpretation ? { interpretation } : {}),
+        ...((await this.matchesVerifiedQuery(project, data))
+          ? { verified: true }
+          : {}),
         ...(visualEvent ? { visual: visualEvent } : {}),
       });
     }
@@ -775,13 +791,38 @@ export class ProjectsService implements OnModuleInit {
     }
   }
 
+  /**
+   * Does this turn's final statement reproduce a query the user already
+   * approved? Drives the "Verified" badge — a library miss is not an error,
+   * so a failing lookup just leaves the answer unbadged.
+   */
+  private async matchesVerifiedQuery(
+    project: ProjectDoc,
+    data: ToolDataRecord[],
+  ): Promise<boolean> {
+    const sql = lastSuccessfulSql(data);
+    if (!sql) return false;
+    try {
+      return await this.verifiedQueries.isVerifiedSql(
+        sql,
+        await this.soleDatasourceId(project),
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Verified query lookup failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return false;
+    }
+  }
+
   // ------------------------------------------------------------- feedback
 
   /**
    * Persist a thumbs rating on one assistant answer. Thumbs-up promotes the
    * answer's question → SQL pair into the verified query library (Vanna
-   * pattern); thumbs-down removes whatever that answer contributed. An answer
-   * that ran no SQL just records the rating.
+   * pattern) and badges the answer as verified; thumbs-down removes whatever
+   * that answer contributed and clears the badge. An answer that ran no SQL
+   * just records the rating.
    */
   async recordFeedback(
     id: string,
@@ -801,12 +842,16 @@ export class ProjectsService implements OnModuleInit {
     }
     const messages = [...project.messages];
     const answer: ChatMessage = { ...messages[index], feedback: rating };
+    // The rating is the authority on the badge: approving an answer verifies
+    // it, rejecting it takes the badge away even if the SQL is still stored.
+    if (rating === 'up') answer.verified = true;
+    else delete answer.verified;
     messages[index] = answer;
 
     if (rating === 'down') {
       await this.verifiedQueries.removeForMessage(id, messageAt);
     } else {
-      const sql = lastSuccessfulSql(answer);
+      const sql = lastSuccessfulSql(answer.data);
       const question = messages
         .slice(0, index)
         .reverse()
@@ -865,6 +910,7 @@ function toolDataRecord(
     rows?: unknown;
     error?: unknown;
     correctedSql?: unknown;
+    truncated?: unknown;
   };
   // Show the statement that actually ran, so the answer and any visual cite
   // the repaired SQL rather than the one that failed.
@@ -885,24 +931,54 @@ function toolDataRecord(
   const columns = Array.isArray(value.columns)
     ? value.columns.map((c) => String(c))
     : Object.keys(rows[0] ?? {});
+  // Clipped either by the query's own row limit (flagged by the bridge) or by
+  // what we keep in the transcript.
+  const truncated = value.truncated === true || rows.length > STORED_ROWS_CAP;
   return {
     tool,
     input,
     columns,
     rows: rows.slice(0, STORED_ROWS_CAP),
     rowCount: rows.length,
+    ...(truncated ? { truncated: true } : {}),
   };
 }
 
-/** The SQL behind an answer: its last `run_readonly_sql` that did not fail. */
-function lastSuccessfulSql(message: ChatMessage): string | undefined {
-  const runs = (message.data ?? []).filter(
+/** Successful SQL runs behind an answer, oldest first. */
+function successfulSqlRuns(data: ToolDataRecord[] | undefined) {
+  return (data ?? []).filter(
     (record) =>
       record.tool === 'run_readonly_sql' &&
       !record.error &&
       record.input?.trim(),
   );
-  return runs.at(-1)?.input?.trim();
+}
+
+/** The SQL behind an answer: its last `run_readonly_sql` that did not fail. */
+function lastSuccessfulSql(
+  data: ToolDataRecord[] | undefined,
+): string | undefined {
+  return successfulSqlRuns(data).at(-1)?.input?.trim();
+}
+
+/**
+ * Deterministic one-line provenance summary shown above an answer's data
+ * expandables. Built from the captured records only — no model involved, so
+ * the claim can never drift from what actually ran.
+ */
+function interpretationLine(
+  data: ToolDataRecord[] | undefined,
+  entities: string[],
+): string | undefined {
+  const runs = successfulSqlRuns(data);
+  if (!runs.length) return undefined;
+  const rows = runs.reduce(
+    (total, record) => total + (record.rowCount ?? record.rows?.length ?? 0),
+    0,
+  );
+  const queries = `${runs.length} quer${runs.length === 1 ? 'y' : 'ies'}`;
+  const over = entities.length ? ` over ${entities.join(', ')}` : '';
+  return `Computed from ${queries}${over} — ${rows} row${rows === 1 ? '' : 's'} analyzed.`;
 }
 
 /** Parse a model's JSON reply, tolerating a markdown fence around it. */

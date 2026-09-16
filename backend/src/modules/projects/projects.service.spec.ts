@@ -46,11 +46,19 @@ jest.mock('./visualization-document', () => ({
 
 import { setSandboxToolServices } from '../../mastra/tool-services';
 import type { SandboxToolServices } from '../../mastra/tool-services';
+import { sourceEntities } from './visualization-document';
 import { ProjectsService, StreamEvent } from './projects.service';
 import type { ProjectDoc } from './entities/project.entity';
 
 describe('ProjectsService streaming', () => {
-  it('synthesizes a final answer after a tool-only turn', async () => {
+  /** A service wired to one streamed turn, with everything else stubbed. */
+  function buildStreaming(
+    fullStream: AsyncGenerator<unknown>,
+    options: {
+      answer?: string;
+      verified?: boolean;
+    } = {},
+  ) {
     const project: ProjectDoc = {
       id: 'project-1',
       name: 'World Cup analysis',
@@ -65,7 +73,6 @@ describe('ProjectsService streaming', () => {
         return project;
       }),
     };
-    const fullStream = toolOnlyStream(15);
     const agent = {
       getMemory: jest.fn().mockResolvedValue({
         getThreadById: jest.fn().mockResolvedValue({ id: project.id }),
@@ -75,8 +82,13 @@ describe('ProjectsService streaming', () => {
         text: Promise.resolve(''),
       }),
       generate: jest.fn().mockResolvedValue({
-        text: 'Argentina won through superior chance creation.',
+        text:
+          options.answer ?? 'Argentina won through superior chance creation.',
       }),
+    };
+    const verifiedQueries = {
+      referenceBlock: jest.fn().mockResolvedValue(undefined),
+      isVerifiedSql: jest.fn().mockResolvedValue(options.verified ?? false),
     };
     const service = new ProjectsService(
       repository as never,
@@ -86,14 +98,29 @@ describe('ProjectsService streaming', () => {
           .fn()
           .mockResolvedValue({ id: 'workspace-1' }),
       } as never,
-      { getByNames: jest.fn().mockResolvedValue([]) } as never,
+      {
+        getByNames: jest
+          .fn()
+          .mockResolvedValue([
+            { name: 'football', datasourceId: 'ds-1', tables: [] },
+          ]),
+      } as never,
       {} as never,
       {
         getView: jest.fn().mockResolvedValue({ reasoningEffort: 'medium' }),
       } as never,
       {} as never,
-      { referenceBlock: jest.fn().mockResolvedValue(undefined) } as never,
+      verifiedQueries as never,
     );
+    return { service, project, agent, verifiedQueries };
+  }
+
+  beforeEach(() => {
+    (sourceEntities as jest.Mock).mockReturnValue([]);
+  });
+
+  it('synthesizes a final answer after a tool-only turn', async () => {
+    const { service, project, agent } = buildStreaming(toolOnlyStream(15));
     const events: StreamEvent[] = [];
 
     await service.streamMessage(
@@ -113,6 +140,96 @@ describe('ProjectsService streaming', () => {
       }),
     );
     expect(events.at(-1)).toEqual({ type: 'done', project });
+  });
+
+  it('builds the interpretation line from the queries that ran', async () => {
+    (sourceEntities as jest.Mock).mockReturnValue(['main.football.matches']);
+    const { service, project } = buildStreaming(
+      answerStream([
+        { sql: 'select 1', rows: [{ n: 1 }, { n: 2 }] },
+        { sql: 'select 2', rows: [{ n: 3 }] },
+      ]),
+    );
+
+    await service.streamMessage('project-1', 'Why?', () => {});
+
+    expect(project.messages.at(-1)?.interpretation).toBe(
+      'Computed from 2 queries over main.football.matches — 3 rows analyzed.',
+    );
+  });
+
+  it('omits the interpretation line when no SQL ran', async () => {
+    const { service, project } = buildStreaming(answerStream([]));
+
+    await service.streamMessage('project-1', 'Hello', () => {});
+
+    expect(project.messages.at(-1)?.interpretation).toBeUndefined();
+  });
+
+  it('flags the answer verified when its final SQL matches the library', async () => {
+    const { service, project, verifiedQueries } = buildStreaming(
+      answerStream([
+        { sql: 'select 1', rows: [{ n: 1 }] },
+        { sql: 'select 2', rows: [{ n: 2 }] },
+      ]),
+      { verified: true },
+    );
+
+    await service.streamMessage('project-1', 'Why?', () => {});
+
+    expect(verifiedQueries.isVerifiedSql).toHaveBeenCalledWith(
+      'select 2',
+      'ds-1',
+    );
+    expect(project.messages.at(-1)?.verified).toBe(true);
+  });
+
+  it('leaves the answer unverified when nothing matches', async () => {
+    const { service, project } = buildStreaming(
+      answerStream([{ sql: 'select 1', rows: [{ n: 1 }] }]),
+    );
+
+    await service.streamMessage('project-1', 'Why?', () => {});
+
+    expect(project.messages.at(-1)?.verified).toBeUndefined();
+  });
+
+  it('keeps the data collected before a clarification on the card', async () => {
+    (sourceEntities as jest.Mock).mockReturnValue(['main.football.matches']);
+    const { service, project } = buildStreaming(clarificationStream());
+
+    await service.streamMessage('project-1', 'Which team?', () => {});
+
+    const message = project.messages.at(-1)!;
+    expect(message.clarification?.question).toBe('Which season?');
+    expect(message.data).toEqual([
+      expect.objectContaining({ tool: 'run_readonly_sql', input: 'select 1' }),
+    ]);
+    expect(message.entities).toEqual(['main.football.matches']);
+  });
+
+  it('marks a record truncated when storage keeps fewer rows than returned', async () => {
+    const rows = Array.from({ length: 250 }, (_, n) => ({ n }));
+    const { service, project } = buildStreaming(
+      answerStream([{ sql: 'select *', rows }]),
+    );
+
+    await service.streamMessage('project-1', 'Everything?', () => {});
+
+    const record = project.messages.at(-1)?.data?.[0];
+    expect(record?.truncated).toBe(true);
+    expect(record?.rowCount).toBe(250);
+    expect(record?.rows).toHaveLength(200);
+  });
+
+  it('carries the bridge truncation flag onto the stored record', async () => {
+    const { service, project } = buildStreaming(
+      answerStream([{ sql: 'select *', rows: [{ n: 1 }], truncated: true }]),
+    );
+
+    await service.streamMessage('project-1', 'Everything?', () => {});
+
+    expect(project.messages.at(-1)?.data?.[0]?.truncated).toBe(true);
   });
 });
 
@@ -222,6 +339,17 @@ describe('ProjectsService SQL self-correction', () => {
     expect(result.correctedSql).toBeUndefined();
     expect(result.note).toContain('0 rows');
   });
+
+  it('flags and notes a result that filled the row limit', async () => {
+    const rows = Array.from({ length: 100 }, (_, n) => ({ n }));
+    const runs = jest.fn().mockResolvedValue({ columns: ['n'], rows });
+    const { run } = await bridge({ runs });
+
+    const result = await run('SELECT n FROM main.health.claims');
+
+    expect(result.truncated).toBe(true);
+    expect(result.note).toContain('row limit 100 reached');
+  });
 });
 
 describe('ProjectsService answer feedback', () => {
@@ -308,6 +436,21 @@ describe('ProjectsService answer feedback', () => {
       sourceMessageAt: '2024-01-01T00:00:03.000Z',
     });
     expect(updated.messages.at(-1)?.feedback).toBe('up');
+    expect(updated.messages.at(-1)?.verified).toBe(true);
+  });
+
+  it('clears the verified badge on thumbs-down', async () => {
+    const project = answered();
+    project.messages[3].verified = true;
+    const { service } = build(project);
+
+    await service.recordFeedback(
+      'project-1',
+      '2024-01-01T00:00:03.000Z',
+      'down',
+    );
+
+    expect(project.messages.at(-1)?.verified).toBeUndefined();
   });
 
   it('removes the stored pair on thumbs-down', async () => {
@@ -339,6 +482,71 @@ describe('ProjectsService answer feedback', () => {
     expect(project.messages.at(-1)?.feedback).toBe('up');
   });
 });
+
+/** SQL runs followed by a written answer — the ordinary completed turn. */
+async function* answerStream(
+  runs: {
+    sql: string;
+    rows: Record<string, unknown>[];
+    truncated?: boolean;
+  }[],
+) {
+  for (const [index, run] of runs.entries()) {
+    const toolCallId = `call-${index}`;
+    yield {
+      type: 'tool-call',
+      payload: {
+        toolCallId,
+        toolName: 'run_readonly_sql',
+        args: { sql: run.sql },
+      },
+    };
+    yield {
+      type: 'tool-result',
+      payload: {
+        toolCallId,
+        toolName: 'run_readonly_sql',
+        result: {
+          columns: ['n'],
+          rows: run.rows,
+          ...(run.truncated ? { truncated: true } : {}),
+        },
+      },
+    };
+  }
+  yield { type: 'text-delta', payload: { text: 'Here is the answer.' } };
+}
+
+/** One SQL run, then the model asks for a clarification and the turn ends. */
+async function* clarificationStream() {
+  yield {
+    type: 'tool-call',
+    payload: {
+      toolCallId: 'call-0',
+      toolName: 'run_readonly_sql',
+      args: { sql: 'select 1' },
+    },
+  };
+  yield {
+    type: 'tool-result',
+    payload: {
+      toolCallId: 'call-0',
+      toolName: 'run_readonly_sql',
+      result: { columns: ['n'], rows: [{ n: 1 }] },
+    },
+  };
+  yield {
+    type: 'tool-call',
+    payload: {
+      toolCallId: 'call-1',
+      toolName: 'ask_clarification',
+      args: {
+        question: 'Which season?',
+        options: [{ label: '2022' }, { label: '2018' }],
+      },
+    },
+  };
+}
 
 async function* toolOnlyStream(count: number) {
   for (let index = 0; index < count; index++) {

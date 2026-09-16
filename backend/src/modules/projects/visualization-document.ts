@@ -26,6 +26,12 @@ export interface VisualContext {
   projectName?: string;
   version?: number;
   generatedAt?: string;
+  /**
+   * Rows the designer actually saw versus the rows the analysis ran on, when
+   * the prompt caps clipped them. Stated in the provenance section so the
+   * reader knows the chart is a sample — deterministic, never model output.
+   */
+  chartRows?: { shown: number; truncatedFrom: number };
 }
 
 const PROVENANCE_ROWS = 10;
@@ -96,7 +102,10 @@ function formatCell(value: unknown): string {
   return escapeHtml(text.length > CELL_CHARS ? `${text.slice(0, CELL_CHARS)}…` : text);
 }
 
-function renderProvenance(data: ToolDataRecord[]): string {
+function renderProvenance(
+  data: ToolDataRecord[],
+  chartRows?: VisualContext['chartRows'],
+): string {
   const items = data
     .map((record, index) => {
       const rows = record.rows ?? [];
@@ -104,7 +113,7 @@ function renderProvenance(data: ToolDataRecord[]): string {
       const count = record.rowCount ?? rows.length;
       const label = record.error
         ? `Query ${index + 1} — failed`
-        : `Query ${index + 1} — ${count} row${count === 1 ? '' : 's'}`;
+        : `Query ${index + 1} — ${count} row${count === 1 ? '' : 's'}${record.truncated ? ' (truncated)' : ''}`;
       const table =
         !record.error && rows.length && columns.length
           ? `<div class="qti-table-wrap"><table class="qti-table"><thead><tr>${columns
@@ -129,8 +138,12 @@ function renderProvenance(data: ToolDataRecord[]): string {
 </li>`;
     })
     .join('\n');
+  const sampled = chartRows
+    ? `<p class="qti-muted">Chart built from the first ${chartRows.shown} of ${chartRows.truncatedFrom} rows.</p>`
+    : '';
   return `<details class="qti-provenance">
   <summary>Data used (${data.length} ${data.length === 1 ? 'query' : 'queries'})</summary>
+  ${sampled}
   <ol>${items}</ol>
 </details>`;
 }
@@ -186,7 +199,7 @@ ${bodyFragment(bundle.html)}
       : ''
   }
 
-  ${context.data?.length ? `<section class="qti-section">${renderProvenance(context.data)}</section>` : ''}
+  ${context.data?.length ? `<section class="qti-section">${renderProvenance(context.data, context.chartRows)}</section>` : ''}
 
   ${footer ? `<footer class="qti-footer">${footer}</footer>` : ''}
 </main>`;
@@ -234,6 +247,7 @@ html, body { margin: 0; background: #171717; }
 .qti-provenance summary { cursor: pointer; padding: 10px 14px; font-size: 13px; color: #a1a1aa; }
 .qti-provenance summary:hover { color: #e4e4e7; }
 .qti-provenance ol { margin: 0; padding: 0 14px 14px 14px; list-style: none; }
+.qti-provenance > .qti-muted { margin: 0 0 4px; padding: 0 14px; }
 .qti-provenance li { margin-top: 12px; }
 .qti-query-label { margin: 0 0 6px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: #a1a1aa; }
 .qti-sql { margin: 0; padding: 10px 12px; border-radius: 8px; background: rgba(0,0,0,.35);

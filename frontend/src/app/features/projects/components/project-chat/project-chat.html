@@ -86,6 +86,11 @@
                 </button>
               }
             </div>
+            <!-- Work already done before the question — kept visible, not lost -->
+            <ng-container
+              [ngTemplateOutlet]="dataProvenance"
+              [ngTemplateOutletContext]="{ $implicit: message }"
+            />
             @if (isLatest(i)) {
               @if (customAnswerOpen()) {
                 <div
@@ -170,45 +175,31 @@
         } @else {
           <div class="group">
             <div class="prose-dark" [innerHTML]="message.content | markdown"></div>
-            @if (message.entities?.length) {
-              <div class="mt-2 flex flex-wrap items-center gap-1.5">
-                <span class="text-[11px] font-medium tracking-wide text-zinc-500 uppercase">
-                  Data entities
-                </span>
-                @for (entity of message.entities; track entity) {
-                  <span
-                    class="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 font-mono text-[11px] text-zinc-300"
-                  >
-                    {{ entity }}
-                  </span>
-                }
+            @if (message.interpretation) {
+              <!-- Deterministic provenance caption, built server-side -->
+              <div
+                class="mt-2 flex items-center gap-1.5 text-[11px] text-zinc-500"
+                [title]="message.interpretation"
+              >
+                <lucide-angular [img]="Info" [size]="12" class="shrink-0" />
+                <span class="truncate">{{ message.interpretation }}</span>
               </div>
             }
-            @if (message.data?.length) {
-              <details class="mt-2 rounded-lg border border-white/5 bg-white/[0.02] text-[12px]">
-                <summary class="cursor-pointer px-3 py-1.5 text-zinc-500 select-none hover:text-zinc-300">
-                  Data used ({{ message.data!.length }}
-                  {{ message.data!.length === 1 ? "query" : "queries" }})
-                </summary>
-                <div class="flex flex-col gap-2 border-t border-white/5 px-3 py-2">
-                  @for (record of message.data; track $index) {
-                    <div>
-                      <div class="flex items-center gap-2 text-zinc-400">
-                        <lucide-angular [img]="Wrench" [size]="12" class="shrink-0" />
-                        <span class="font-mono" [class.text-red-400]="record.error">{{ dataLabel(record) }}</span>
-                      </div>
-                      @if (record.input) {
-                        <pre class="mt-1 overflow-x-auto rounded bg-black/30 px-2.5 py-1.5 font-mono text-[11px] leading-5 whitespace-pre-wrap text-zinc-400">{{ record.input }}</pre>
-                      }
-                      @if (record.error) {
-                        <p class="mt-1 text-red-400/80">{{ record.error }}</p>
-                      }
-                    </div>
-                  }
-                </div>
-              </details>
-            }
+            <ng-container
+              [ngTemplateOutlet]="dataProvenance"
+              [ngTemplateOutletContext]="{ $implicit: message }"
+            />
             <div class="mt-1 flex items-center gap-1">
+              @if (message.verified) {
+                <!-- Answer's SQL matches a query in the verified library -->
+                <span
+                  title="Matches an approved query"
+                  class="mr-1 flex items-center gap-1 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2 py-0.5 text-[11px] font-medium text-emerald-400"
+                >
+                  <lucide-angular [img]="BadgeCheck" [size]="12" />
+                  Verified
+                </span>
+              }
               <button
                 (click)="copyMessage(message.content)"
                 title="Copy message"
@@ -376,3 +367,68 @@
     </div>
   </div>
 </div>
+
+<!--
+  Provenance blocks shared by answers and clarifications: a clarification that
+  ends a turn carries the data collected up to that point, so the work stays
+  visible instead of being lost.
+-->
+<ng-template #dataProvenance let-message>
+  @if (message.entities?.length) {
+    <div class="mt-2 flex flex-wrap items-center gap-1.5">
+      <span class="text-[11px] font-medium tracking-wide text-zinc-500 uppercase">
+        Data entities
+      </span>
+      @for (entity of message.entities; track entity) {
+        <span
+          class="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 font-mono text-[11px] text-zinc-300"
+        >
+          {{ entity }}
+        </span>
+      }
+    </div>
+  }
+  @if (message.data?.length) {
+    <details class="mt-2 rounded-lg border border-white/5 bg-white/[0.02] text-[12px]">
+      <summary class="cursor-pointer px-3 py-1.5 text-zinc-500 select-none hover:text-zinc-300">
+        Data used ({{ message.data.length }}
+        {{ message.data.length === 1 ? "query" : "queries" }})
+      </summary>
+      <div class="flex flex-col gap-2 border-t border-white/5 px-3 py-2">
+        @for (record of message.data; track $index) {
+          <div class="group/record">
+            <div class="flex items-center gap-2 text-zinc-400">
+              <lucide-angular [img]="Wrench" [size]="12" class="shrink-0" />
+              <span class="font-mono" [class.text-red-400]="record.error">{{ dataLabel(record) }}</span>
+              @if (record.truncated) {
+                <span
+                  class="shrink-0 text-amber-400/80"
+                  title="Row cap reached — counts may be incomplete"
+                >
+                  (truncated)
+                </span>
+              }
+              @if (record.input) {
+                <button
+                  type="button"
+                  (click)="copySql(record)"
+                  title="Copy SQL"
+                  aria-label="Copy SQL"
+                  class="ml-auto shrink-0 rounded p-1 text-zinc-500 opacity-0 group-hover/record:opacity-100 hover:bg-white/10 hover:text-zinc-300"
+                >
+                  <lucide-angular [img]="Copy" [size]="12" />
+                </button>
+              }
+            </div>
+            @if (record.input) {
+              <pre class="mt-1 overflow-x-auto rounded bg-black/30 px-2.5 py-1.5 font-mono text-[11px] leading-5 whitespace-pre-wrap text-zinc-400">{{ record.input }}</pre>
+            }
+            @if (record.error) {
+              <p class="mt-1 text-red-400/80">{{ record.error }}</p>
+            }
+          </div>
+        }
+      </div>
+    </details>
+  }
+</ng-template>

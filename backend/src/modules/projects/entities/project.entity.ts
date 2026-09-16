@@ -12,6 +12,11 @@ export interface ToolDataRecord {
   rows?: Record<string, unknown>[];
   /** Total rows the tool returned before storage truncation. */
   rowCount?: number;
+  /**
+   * True when rows were clipped anywhere: the query hit its row limit, or
+   * storage kept fewer rows than the tool returned.
+   */
+  truncated?: boolean;
   error?: string;
 }
 
@@ -34,6 +39,16 @@ export interface ChatMessage {
   };
   /** Present when this turn created, updated or reverted a visual. */
   visual?: VisualEvent;
+  /**
+   * The answer's final SQL matches a stored verified query, or the user
+   * promoted it with a thumbs-up.
+   */
+  verified?: boolean;
+  /**
+   * Deterministic one-line provenance summary built at persist time — never
+   * model output, same principle as the visual frame.
+   */
+  interpretation?: string;
   /**
    * The user's rating of this answer. A thumbs-up also stores the answer's
    * question → SQL pair in the verified query library.

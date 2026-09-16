@@ -1,3 +1,4 @@
+import { NgTemplateOutlet } from '@angular/common';
 import {
   Component,
   ElementRef,
@@ -13,9 +14,11 @@ import {
 import {
   LucideAngularModule,
   ArrowUp,
+  BadgeCheck,
   BarChart3,
   Brain,
   Copy,
+  Info,
   Loader2,
   Sparkles,
   Square,
@@ -44,15 +47,17 @@ interface ToolActivity {
 
 @Component({
   selector: 'app-project-chat',
-  imports: [LucideAngularModule, MarkdownPipe],
+  imports: [LucideAngularModule, MarkdownPipe, NgTemplateOutlet],
   templateUrl: './project-chat.html',
   styleUrl: './project-chat.scss',
 })
 export class ProjectChat {
   readonly ArrowUp = ArrowUp;
+  readonly BadgeCheck = BadgeCheck;
   readonly BarChart3 = BarChart3;
   readonly Brain = Brain;
   readonly Copy = Copy;
+  readonly Info = Info;
   readonly Loader2 = Loader2;
   readonly Sparkles = Sparkles;
   readonly Square = Square;
@@ -271,8 +276,19 @@ export class ProjectChat {
   }
 
   copyMessage(content: string): void {
-    void navigator.clipboard.writeText(content).then(
-      () => this.toast.success('Copied to clipboard'),
+    this.copyToClipboard(content, 'Copied to clipboard');
+  }
+
+  /** Copy the query behind one persisted data record. */
+  copySql(record: ToolDataRecord): void {
+    const sql = record.input?.trim();
+    if (!sql) return;
+    this.copyToClipboard(sql, 'SQL copied to clipboard');
+  }
+
+  private copyToClipboard(text: string, success: string): void {
+    void navigator.clipboard.writeText(text).then(
+      () => this.toast.success(success),
       () => this.toast.error('Copy failed'),
     );
   }

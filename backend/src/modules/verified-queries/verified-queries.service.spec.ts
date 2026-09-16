@@ -86,6 +86,59 @@ describe('VerifiedQueriesService.referenceBlock', () => {
   });
 });
 
+describe('VerifiedQueriesService.isVerifiedSql', () => {
+  const library = [
+    {
+      ...pair(
+        '1',
+        'Denied claims',
+        'SELECT count(*)\n  FROM main.health.claims',
+      ),
+      datasourceId: 'ds-1',
+    },
+    pair('2', 'Anything', 'SELECT 2'),
+  ];
+
+  it('matches regardless of case, whitespace and a trailing semicolon', async () => {
+    const { service } = build(library);
+
+    expect(
+      await service.isVerifiedSql('select COUNT(*) from main.health.claims ;'),
+    ).toBe(true);
+  });
+
+  it('does not match a different statement', async () => {
+    const { service } = build(library);
+
+    expect(await service.isVerifiedSql('select count(*) from other')).toBe(
+      false,
+    );
+  });
+
+  it('rejects a match recorded on another datasource', async () => {
+    const { service } = build(library);
+
+    expect(
+      await service.isVerifiedSql(
+        'SELECT count(*) FROM main.health.claims',
+        'ds-2',
+      ),
+    ).toBe(false);
+  });
+
+  it('accepts a pair stored without a datasource', async () => {
+    const { service } = build(library);
+
+    expect(await service.isVerifiedSql('select 2', 'ds-9')).toBe(true);
+  });
+
+  it('is false for an empty statement', async () => {
+    const { service } = build(library);
+
+    expect(await service.isVerifiedSql('   ')).toBe(false);
+  });
+});
+
 describe('VerifiedQueriesService.save', () => {
   it('trims the pair and keys it to the source answer', async () => {
     const { service, repository } = build();

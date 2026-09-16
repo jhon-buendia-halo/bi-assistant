@@ -29,7 +29,12 @@ export interface SqlRunResult {
   rows: Record<string, unknown>[];
   /** Present when the original statement failed and was auto-corrected. */
   correctedSql?: string;
-  /** Guidance for the agent (repair happened, or zero rows came back). */
+  /** The run filled its row limit — the result set is probably incomplete. */
+  truncated?: boolean;
+  /**
+   * Guidance for the agent (repair happened, zero rows came back, or the row
+   * limit was reached).
+   */
   note?: string;
 }
 

@@ -362,6 +362,9 @@ export class VisualizationService {
     feedback?: string,
   ): Promise<Bundle> {
     const agent = this.mastra.getAgent('visualization');
+    const block = context.answer?.data?.length
+      ? visualizationData(context.answer.data)
+      : undefined;
     const prompt = [
       context.current
         ? 'Tailor the existing interactive visual below according to the instruction.'
@@ -397,8 +400,18 @@ export class VisualizationService {
       '<answer>',
       context.answer?.content ?? '(answer unavailable)',
       '</answer>',
-      ...(context.answer?.data?.length
-        ? ['', '<data>', visualizationData(context.answer.data), '</data>']
+      ...(block
+        ? [
+            '',
+            '<data>',
+            ...(block.truncatedFrom
+              ? [
+                  `(showing first ${block.shown} of ${block.truncatedFrom} rows — say so if the visual implies a total)`,
+                ]
+              : []),
+            block.json,
+            '</data>',
+          ]
         : []),
       ...(feedback
         ? [
@@ -493,6 +506,11 @@ export class VisualizationService {
     );
     const question = answer ? this.findQuestion(project, answer) : undefined;
     const entry = meta.versions?.find((v) => v.version === version);
+    // Recomputed from the same function the designer prompt uses, so the frame
+    // reports exactly the rows the visual could have been built from.
+    const block = answer?.data?.length
+      ? visualizationData(answer.data)
+      : undefined;
     return {
       question: question?.content,
       answer: answer?.content,
@@ -501,6 +519,14 @@ export class VisualizationService {
       projectName: project.name,
       version,
       generatedAt: generatedAt ?? entry?.createdAt ?? meta.createdAt,
+      ...(block?.truncatedFrom
+        ? {
+            chartRows: {
+              shown: block.shown,
+              truncatedFrom: block.truncatedFrom,
+            },
+          }
+        : {}),
     };
   }
 
@@ -605,17 +631,29 @@ export function validateJavascript(javascript: string): string | null {
   }
 }
 
-/** JSON block of the answer's query results, bounded for the prompt. */
-export function visualizationData(records: ToolDataRecord[]): string {
-  const trimmed = records
-    .filter((r) => !r.error && (r.rows?.length ?? 0) > 0)
-    .map((r) => ({
-      tool: r.tool,
-      input: r.input,
-      columns: r.columns,
-      rowCount: r.rowCount,
-      rows: (r.rows ?? []).slice(0, VISUAL_ROWS_CAP),
-    }));
+/**
+ * JSON block of the answer's query results, bounded for the prompt, plus how
+ * many rows survived the caps. `truncatedFrom` is the original row total when
+ * the designer saw fewer rows than the analysis ran on — both the prompt and
+ * the readable frame say so rather than implying the chart covers everything.
+ */
+export function visualizationData(records: ToolDataRecord[]): {
+  json: string;
+  shown: number;
+  truncatedFrom?: number;
+} {
+  const kept = records.filter((r) => !r.error && (r.rows?.length ?? 0) > 0);
+  const total = kept.reduce(
+    (sum, r) => sum + (r.rowCount ?? r.rows?.length ?? 0),
+    0,
+  );
+  const trimmed = kept.map((r) => ({
+    tool: r.tool,
+    input: r.input,
+    columns: r.columns,
+    rowCount: r.rowCount,
+    rows: (r.rows ?? []).slice(0, VISUAL_ROWS_CAP),
+  }));
   let json = JSON.stringify(trimmed, null, 1);
   while (
     json.length > VISUAL_DATA_CHARS_CAP &&
@@ -630,7 +668,8 @@ export function visualizationData(records: ToolDataRecord[]): string {
     );
     json = JSON.stringify(trimmed, null, 1);
   }
-  return json;
+  const shown = trimmed.reduce((sum, r) => sum + r.rows.length, 0);
+  return { json, shown, ...(total > shown ? { truncatedFrom: total } : {}) };
 }
 
 /** Human-readable companion file: question, takeaway, full answer, sources. */

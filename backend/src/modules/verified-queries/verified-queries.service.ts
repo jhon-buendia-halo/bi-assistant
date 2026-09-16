@@ -106,6 +106,25 @@ export class VerifiedQueriesService {
     return this.repository.deleteForMessage(projectId, messageAt);
   }
 
+  /**
+   * Does this statement match a stored, user-approved query? Exact match on
+   * the normalized text — a paraphrase is not a verified query. A stored pair
+   * with no datasource recorded matches anywhere (provenance was ambiguous
+   * when it was saved), otherwise the datasources must agree.
+   */
+  async isVerifiedSql(sql: string, datasourceId?: string): Promise<boolean> {
+    const target = normalizeSql(sql);
+    if (!target) return false;
+    const all = await this.repository.list();
+    return all.some(
+      (doc) =>
+        normalizeSql(doc.sql) === target &&
+        (!datasourceId ||
+          !doc.datasourceId ||
+          doc.datasourceId === datasourceId),
+    );
+  }
+
   /** Top-k stored pairs whose question shares vocabulary with this one. */
   async findSimilar(
     question: string,
@@ -144,6 +163,20 @@ export class VerifiedQueriesService {
     }
     return lines.length > 1 ? lines.join('\n') : undefined;
   }
+}
+
+/**
+ * Canonical form used to compare two statements: lowercase, whitespace
+ * collapsed to single spaces, trailing semicolons dropped. The one place
+ * SQL equality is defined.
+ */
+export function normalizeSql(sql: string): string {
+  return (sql ?? '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/;+$/, '')
+    .trim()
+    .toLowerCase();
 }
 
 /** Lowercase, split on non-word characters, drop stopwords and 1-char noise. */

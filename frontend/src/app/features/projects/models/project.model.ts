@@ -10,6 +10,11 @@ export interface ToolDataRecord {
   rows?: Record<string, unknown>[];
   rowCount?: number;
   error?: string;
+  /**
+   * True when rows were clipped anywhere: the query hit its row limit, or
+   * storage kept fewer rows than the tool returned.
+   */
+  truncated?: boolean;
 }
 
 export interface ChatMessage {
@@ -29,6 +34,13 @@ export interface ChatMessage {
   visual?: VisualEvent;
   /** User rating of this answer; `up` saves it as a verified query. */
   feedback?: MessageFeedback;
+  /**
+   * The answer's final SQL matches a stored verified query (or was promoted
+   * via thumbs-up).
+   */
+  verified?: boolean;
+  /** Deterministic one-line provenance summary, built server-side. */
+  interpretation?: string;
 }
 
 export type MessageFeedback = 'up' | 'down';
