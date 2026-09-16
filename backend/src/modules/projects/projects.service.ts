@@ -20,6 +20,7 @@ import { DatasourcesService } from '../datasources/datasources.service';
 import { LlmService } from '../llm/llm.service';
 import { ProjectsRepository } from './repositories/projects.repository';
 import { VisualizationService } from './visualization.service';
+import { sourceEntities } from './visualization-document';
 import {
   ChatMessage,
   InteractiveVisualization,
@@ -554,6 +555,7 @@ export class ProjectsService implements OnModuleInit {
         clarification,
       });
     } else if (text.trim() || visualEvent) {
+      const entities = sourceEntities(data);
       messages.push({
         role: 'assistant',
         content:
@@ -561,6 +563,7 @@ export class ProjectsService implements OnModuleInit {
           `${visualEvent!.action === 'created' ? 'Created' : 'Updated'} interactive visual "${visualEvent!.title}" (v${visualEvent!.version}).`,
         at: new Date().toISOString(),
         ...(data.length ? { data } : {}),
+        ...(entities.length ? { entities } : {}),
         ...(visualEvent ? { visual: visualEvent } : {}),
       });
     }

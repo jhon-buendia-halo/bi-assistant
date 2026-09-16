@@ -51,16 +51,26 @@ export interface ColumnInfo {
 export interface TableInfo {
   name: string;
   columns: ColumnInfo[];
+  /**
+   * Whether the credentials can actually query this object (not browse-only).
+   * `undefined` = access unknown (probe not run / soft-failed) → treated as
+   * accessible. Only an explicit `false` means no access (renders greyed).
+   */
+  selectable?: boolean;
 }
 
 export interface SchemaInfo {
   name: string;
   tables: TableInfo[];
+  /** See {@link TableInfo.selectable}. */
+  selectable?: boolean;
 }
 
 export interface CatalogInfo {
   name: string;
   schemas: SchemaInfo[];
+  /** See {@link TableInfo.selectable}. */
+  selectable?: boolean;
 }
 
 export interface QueryResult {

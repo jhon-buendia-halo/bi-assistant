@@ -170,13 +170,32 @@ export class PostgresConnector implements DatasourceConnector<PostgresConfig> {
       await client.connect();
       return await run(client);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = describeError(err);
       this.logger.warn(`Postgres call failed: ${message}`);
       throw new Error(`Postgres — ${message}`);
     } finally {
       await client.end().catch(() => undefined);
     }
   }
+}
+
+/**
+ * Flatten an error into a legible message. `pg` throws an `AggregateError`
+ * (empty `.message`) when a host resolves to several addresses and each
+ * attempt fails — e.g. `localhost` → both `::1` and `127.0.0.1`. Without
+ * unwrapping its `.errors`, the surfaced message is blank and hides the real
+ * cause (connection refused, auth failure, …).
+ */
+function describeError(err: unknown): string {
+  if (err instanceof AggregateError && err.errors.length) {
+    const parts = err.errors.map(describeError).filter(Boolean);
+    if (parts.length) return Array.from(new Set(parts)).join('; ');
+  }
+  if (err instanceof Error) {
+    const code = (err as { code?: string }).code;
+    return err.message || (code ? String(code) : err.constructor.name);
+  }
+  return String(err) || 'unknown error';
 }
 
 /** Double-quote escape a PostgreSQL identifier for interpolation. */

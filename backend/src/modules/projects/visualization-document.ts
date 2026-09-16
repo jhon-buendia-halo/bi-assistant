@@ -21,6 +21,8 @@ export interface VisualContext {
   /** Assistant answer in markdown. */
   answer?: string;
   data?: ToolDataRecord[];
+  /** Pre-derived source entities; falls back to scanning `data` when absent. */
+  entities?: string[];
   projectName?: string;
   version?: number;
   generatedAt?: string;
@@ -72,7 +74,7 @@ export function renderMarkdown(markdown: string): string {
 }
 
 /** Source entities referenced in the SQL (`catalog.schema.table`). */
-function sourceEntities(data: ToolDataRecord[] | undefined): string[] {
+export function sourceEntities(data: ToolDataRecord[] | undefined): string[] {
   const found = new Set<string>();
   for (const record of data ?? []) {
     for (const match of (record.input ?? '').matchAll(
@@ -135,7 +137,15 @@ function renderProvenance(data: ToolDataRecord[]): string {
 
 /** Fixed, readable frame around the agent's visual. */
 function renderFrame(bundle: InteractiveVisualBundle, context: VisualContext): string {
-  const entities = sourceEntities(context.data);
+  const entities = context.entities?.length
+    ? context.entities
+    : sourceEntities(context.data);
+  const entityChips = entities.length
+    ? `<div class="qti-entities" aria-label="Data entities">
+    <span class="qti-label">Data entities</span>
+    ${entities.map((e) => `<span class="qti-chip">${escapeHtml(e)}</span>`).join('')}
+  </div>`
+    : '';
   const generated = context.generatedAt
     ? new Date(context.generatedAt).toLocaleString('en-US', {
         dateStyle: 'medium',
@@ -155,6 +165,7 @@ function renderFrame(bundle: InteractiveVisualBundle, context: VisualContext): s
   <header class="qti-header">
     <h1 class="qti-title">${escapeHtml(bundle.title)}</h1>
     ${context.question ? `<p class="qti-question"><span class="qti-label">Question</span>${escapeHtml(context.question)}</p>` : ''}
+    ${entityChips}
   </header>
 
   <section class="qti-visual" aria-label="Interactive visual">
@@ -196,6 +207,10 @@ html, body { margin: 0; background: #171717; }
 .qti-label { display: inline-block; margin-right: 8px; padding: 1px 7px; border-radius: 999px;
   background: rgba(255,255,255,.08); font-size: 11px; font-weight: 600; letter-spacing: .04em;
   text-transform: uppercase; color: #a1a1aa; vertical-align: middle; }
+.qti-entities { margin: 12px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.qti-chip { display: inline-block; padding: 2px 9px; border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.04);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; color: #d4d4d8; }
 .qti-visual { margin: 0 0 22px; padding: 16px; border: 1px solid rgba(255,255,255,.08);
   border-radius: 14px; background: rgba(255,255,255,.02); }
 .qti-section { margin: 0 0 22px; }

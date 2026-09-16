@@ -21,6 +21,12 @@ export interface ChatMessage {
   at: string;
   /** Structured data the assistant retrieved while producing this answer. */
   data?: ToolDataRecord[];
+  /**
+   * Fully-qualified `catalog.schema.table` entities the assistant queried to
+   * produce this answer, derived from `data`. Feeds the chat provenance chips
+   * and the visual frame's source list.
+   */
+  entities?: string[];
   /** Present when the assistant asked a clarifying question with options. */
   clarification?: {
     question: string;

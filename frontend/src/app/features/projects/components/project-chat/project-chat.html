@@ -170,6 +170,20 @@
         } @else {
           <div class="group">
             <div class="prose-dark" [innerHTML]="message.content | markdown"></div>
+            @if (message.entities?.length) {
+              <div class="mt-2 flex flex-wrap items-center gap-1.5">
+                <span class="text-[11px] font-medium tracking-wide text-zinc-500 uppercase">
+                  Data entities
+                </span>
+                @for (entity of message.entities; track entity) {
+                  <span
+                    class="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 font-mono text-[11px] text-zinc-300"
+                  >
+                    {{ entity }}
+                  </span>
+                }
+              </div>
+            }
             @if (message.data?.length) {
               <details class="mt-2 rounded-lg border border-white/5 bg-white/[0.02] text-[12px]">
                 <summary class="cursor-pointer px-3 py-1.5 text-zinc-500 select-none hover:text-zinc-300">
