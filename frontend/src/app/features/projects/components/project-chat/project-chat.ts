@@ -6,6 +6,7 @@ import {
   effect,
   inject,
   input,
+  OnDestroy,
   output,
   signal,
   untracked,
@@ -18,10 +19,15 @@ import {
   BarChart3,
   Brain,
   Copy,
+  Download,
   Info,
   Loader2,
+  ShieldAlert,
+  ShieldCheck,
+  ShieldOff,
   Sparkles,
   Square,
+  Telescope,
   ThumbsDown,
   ThumbsUp,
   Wrench,
@@ -29,8 +35,11 @@ import {
 } from 'lucide-angular';
 import { ProjectsApiService } from '../../services/projects-api.service';
 import {
+  AnalysisReport,
   ChatMessage,
+  CrossCheck,
   DataPointSelection,
+  DeepAnalysisStatus,
   MessageFeedback,
   Project,
   ToolDataRecord,
@@ -61,22 +70,62 @@ interface ToolActivity {
   error?: string;
 }
 
+/** The deep-analysis job this conversation is waiting on, if any. */
+interface DeepAnalysisActivity {
+  jobId: string;
+  question: string;
+  status: DeepAnalysisStatus;
+  progress?: string;
+  step?: number;
+  steps?: number;
+  error?: string;
+}
+
+/** Status cadence for the pending card — the job itself takes minutes. */
+export const DEEP_ANALYSIS_POLL_MS = 3_000;
+/** Unanswered polls tolerated before the card stops watching the job. */
+const MAX_POLL_FAILURES = 5;
+
+/** One line describing where a running job is, for the pending card. */
+export function deepAnalysisProgressLine(job: DeepAnalysisActivity): string {
+  if (job.progress?.trim()) return job.progress.trim();
+  switch (job.status) {
+    case 'planning':
+      return 'planning the investigation';
+    case 'investigating':
+      return job.steps
+        ? `investigating angle ${job.step ?? 1} of ${job.steps}`
+        : 'investigating';
+    case 'writing':
+      return 'writing the report';
+    case 'error':
+      return job.error ?? 'the analysis failed';
+    default:
+      return 'finishing up';
+  }
+}
+
 @Component({
   selector: 'app-project-chat',
   imports: [LucideAngularModule, MarkdownPipe, NgTemplateOutlet],
   templateUrl: './project-chat.html',
   styleUrl: './project-chat.scss',
 })
-export class ProjectChat {
+export class ProjectChat implements OnDestroy {
   readonly ArrowUp = ArrowUp;
   readonly BadgeCheck = BadgeCheck;
   readonly BarChart3 = BarChart3;
   readonly Brain = Brain;
   readonly Copy = Copy;
+  readonly Download = Download;
   readonly Info = Info;
   readonly Loader2 = Loader2;
+  readonly ShieldAlert = ShieldAlert;
+  readonly ShieldCheck = ShieldCheck;
+  readonly ShieldOff = ShieldOff;
   readonly Sparkles = Sparkles;
   readonly Square = Square;
+  readonly Telescope = Telescope;
   readonly ThumbsDown = ThumbsDown;
   readonly ThumbsUp = ThumbsUp;
   readonly Wrench = Wrench;
@@ -101,6 +150,12 @@ export class ProjectChat {
   readonly messages = signal<ChatMessage[]>([]);
   readonly draft = signal('');
   readonly sending = signal(false);
+  /**
+   * Careful mode: every turn sent while this is on is cross-checked by an
+   * independent query. Session-scoped — it lasts for this conversation, it is
+   * not stored with the project.
+   */
+  readonly careful = signal(false);
   /** Tail of the model's reasoning stream, shown Conductor-style. */
   readonly reasoning = signal('');
   /** Tools invoked during the current turn, with result summaries. */
@@ -110,6 +165,18 @@ export class ProjectChat {
   readonly elapsed = signal(0);
   /** `at` of the message whose rating is being persisted right now. */
   readonly feedbackPending = signal<string | null>(null);
+  /**
+   * Deep-analysis job this conversation started. It runs in the background —
+   * normal chat stays usable — and reports through polling until the report
+   * message lands in the transcript.
+   */
+  readonly deepAnalysisJob = signal<DeepAnalysisActivity | null>(null);
+  readonly deepAnalysisRunning = computed(() => {
+    const job = this.deepAnalysisJob();
+    return !!job && job.status !== 'error';
+  });
+  /** Job id whose report is being downloaded right now. */
+  readonly reportDownloading = signal<string | null>(null);
   /** Chat-history navigator (Conductor-style tick strip). */
   readonly historyOpen = signal(false);
   readonly historyItems = computed(() =>
@@ -119,6 +186,9 @@ export class ProjectChat {
   );
 
   private timer: ReturnType<typeof setInterval> | null = null;
+  private pollTimer: ReturnType<typeof setInterval> | null = null;
+  /** Consecutive unanswered status polls; too many and the card gives up. */
+  private pollFailures = 0;
   private activeStream: AbortController | null = null;
   private syncedProjectId: string | null = null;
 
@@ -163,12 +233,18 @@ export class ProjectChat {
       this.activeStream?.abort();
       this.activeStream = null;
       this.stopTimer();
+      // The job keeps running server-side; this conversation simply stops
+      // watching it — its report lands in the transcript either way.
+      this.stopPolling();
+      this.deepAnalysisJob.set(null);
       this.sending.set(false);
       this.messages.set(project.messages);
       this.feedbackPending.set(null);
       // Follow-up chips follow their input: the host drops the selection when
       // it opens another project, so nothing to reset here.
       this.draft.set('');
+      // A new conversation starts a new session — careful mode is opt-in again.
+      this.careful.set(false);
       this.customAnswer.set('');
       this.customAnswerOpen.set(false);
       this.resetTurnState();
@@ -295,7 +371,12 @@ export class ProjectChat {
       },
       controller.signal,
       this.activeVisualizationId() ?? undefined,
+      this.careful(),
     );
+  }
+
+  toggleCareful(): void {
+    this.careful.update((on) => !on);
   }
 
   stop(): void {
@@ -336,6 +417,203 @@ export class ProjectChat {
       clearInterval(this.timer);
       this.timer = null;
     }
+  }
+
+  ngOnDestroy(): void {
+    this.stopTimer();
+    this.stopPolling();
+  }
+
+  // --------------------------------------------------- deep analysis
+
+  /**
+   * Send the draft as a deep-analysis job instead of a chat turn. The job runs
+   * in the background: the composer stays free, ordinary turns still work, and
+   * the report arrives as a message when it is done.
+   */
+  runDeepAnalysis(): void {
+    const question = this.draft().trim();
+    if (!question || this.deepAnalysisRunning()) return;
+    this.draft.set('');
+    this.deepAnalysisJob.set({
+      jobId: '',
+      question,
+      status: 'planning',
+      progress: 'Starting the deep analysis',
+    });
+
+    this.api.startDeepAnalysis(this.project().id, question).subscribe({
+      next: (result) => {
+        if (!result.ok || !result.jobId) {
+          this.deepAnalysisJob.set(null);
+          // Give the question back rather than losing what the user typed.
+          if (!this.draft().trim()) this.draft.set(question);
+          this.toast.error(result.message || 'Could not start deep analysis');
+          return;
+        }
+        this.deepAnalysisJob.set({
+          jobId: result.jobId,
+          question,
+          status: result.status ?? 'planning',
+          progress: result.progress ?? 'Planning the investigation',
+        });
+        this.scrollToBottom();
+        this.startPolling(result.jobId);
+      },
+      error: (err) => {
+        this.deepAnalysisJob.set(null);
+        if (!this.draft().trim()) this.draft.set(question);
+        this.toast.error(err?.error?.message ?? 'Backend unreachable');
+      },
+    });
+  }
+
+  /** Stop watching a finished or failed job (the card's dismiss action). */
+  dismissDeepAnalysis(): void {
+    this.stopPolling();
+    this.deepAnalysisJob.set(null);
+  }
+
+  deepAnalysisLine(job: DeepAnalysisActivity): string {
+    return deepAnalysisProgressLine(job);
+  }
+
+  private startPolling(jobId: string): void {
+    this.stopPolling();
+    this.pollFailures = 0;
+    this.pollTimer = setInterval(
+      () => this.pollDeepAnalysis(jobId),
+      DEEP_ANALYSIS_POLL_MS,
+    );
+  }
+
+  private stopPolling(): void {
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer);
+      this.pollTimer = null;
+    }
+  }
+
+  private pollDeepAnalysis(jobId: string): void {
+    const projectId = this.project().id;
+    this.api.deepAnalysisStatus(projectId, jobId).subscribe({
+      next: (view) => {
+        const job = this.deepAnalysisJob();
+        if (!job || job.jobId !== jobId) return;
+        this.pollFailures = 0;
+        if (!view.ok || !view.status) {
+          this.failDeepAnalysis(view.message || 'Deep analysis was lost');
+          return;
+        }
+        this.deepAnalysisJob.set({
+          ...job,
+          status: view.status,
+          progress: view.progress,
+          step: view.step,
+          steps: view.steps,
+        });
+        if (view.status === 'done') {
+          this.stopPolling();
+          this.completeDeepAnalysis(projectId, jobId);
+        } else if (view.status === 'error') {
+          this.failDeepAnalysis(view.error || 'Deep analysis failed');
+        }
+      },
+      // A transient poll failure is not a job failure — try again in 3s, but
+      // do not keep polling a backend that has stopped answering.
+      error: () => {
+        if (++this.pollFailures >= MAX_POLL_FAILURES) {
+          this.failDeepAnalysis('Lost contact with the deep analysis');
+        }
+      },
+    });
+  }
+
+  private failDeepAnalysis(message: string): void {
+    this.stopPolling();
+    const job = this.deepAnalysisJob();
+    if (job) {
+      this.deepAnalysisJob.set({ ...job, status: 'error', error: message });
+    }
+    this.toast.error(message);
+  }
+
+  /** The report is persisted — pull the transcript that now contains it. */
+  private completeDeepAnalysis(projectId: string, jobId: string): void {
+    this.api.get(projectId).subscribe({
+      next: (project) => {
+        const job = this.deepAnalysisJob();
+        if (job?.jobId === jobId) this.deepAnalysisJob.set(null);
+        // Never disturb an in-flight turn; its `done` brings the transcript.
+        if (!this.sending()) this.messages.set(project.messages);
+        this.projectUpdated.emit(project);
+        this.scrollToBottom();
+        this.toast.success('Deep analysis report ready');
+      },
+      error: () =>
+        this.failDeepAnalysis('The report is ready but could not be loaded'),
+    });
+  }
+
+  /** Save one report's markdown to disk. */
+  downloadReport(report: AnalysisReport): void {
+    if (this.reportDownloading()) return;
+    this.reportDownloading.set(report.jobId);
+    this.api.downloadDeepAnalysis(this.project().id, report.jobId).subscribe({
+      next: (blob) => {
+        this.reportDownloading.set(null);
+        const slug =
+          report.title
+            .normalize('NFKD')
+            .replace(/[^a-zA-Z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '')
+            .toLowerCase()
+            .slice(0, 64) || `deep-analysis-${report.jobId.slice(0, 8)}`;
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${slug}.md`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 0);
+        this.toast.success('Report downloaded');
+      },
+      error: (err) => {
+        this.reportDownloading.set(null);
+        this.toast.error(err?.error?.message ?? 'Report download failed');
+      },
+    });
+  }
+
+  // --------------------------------------------------- cross-check chip
+
+  /** What the independent re-derivation concluded, in one word. */
+  crossCheckLabel(check: CrossCheck): string {
+    if (check.status === 'agree') return 'Cross-checked';
+    return check.status === 'disagree'
+      ? 'Cross-check differs'
+      : 'Cross-check failed';
+  }
+
+  crossCheckIcon(check: CrossCheck): typeof ShieldCheck {
+    if (check.status === 'agree') return this.ShieldCheck;
+    return check.status === 'disagree' ? this.ShieldAlert : this.ShieldOff;
+  }
+
+  /** Emerald when corroborated, amber when it differs, muted when it failed. */
+  crossCheckClass(check: CrossCheck): string {
+    if (check.status === 'agree') {
+      return 'border-emerald-400/20 bg-emerald-400/10 text-emerald-400';
+    }
+    return check.status === 'disagree'
+      ? 'border-amber-400/20 bg-amber-400/10 text-amber-400'
+      : 'border-white/10 bg-white/[0.04] text-zinc-500';
+  }
+
+  /** Tooltip: the backend's note, or the verdict when it sent none. */
+  crossCheckTitle(check: CrossCheck): string {
+    return check.note?.trim() || this.crossCheckLabel(check);
   }
 
   /** Short label for a persisted data record under an answer. */

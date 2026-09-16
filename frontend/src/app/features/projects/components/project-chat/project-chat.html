@@ -146,6 +146,54 @@
               </div>
             }
           </div>
+        } @else if (message.report; as report) {
+          <!-- Deep analysis report: title, executive summary, download -->
+          <div
+            class="rounded-2xl border border-white/10 bg-[#232323] p-4"
+            [id]="'msg-' + i"
+          >
+            <div class="flex items-start gap-3">
+              <span
+                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/5 text-zinc-300"
+              >
+                <lucide-angular [img]="Telescope" [size]="15" />
+              </span>
+              <span class="flex min-w-0 flex-1 flex-col">
+                <span class="truncate text-[14px] font-medium text-zinc-100">
+                  {{ report.title }}
+                </span>
+                <span class="text-[12px] text-zinc-500">
+                  Deep analysis · {{ report.angles }}
+                  {{ report.angles === 1 ? "angle" : "angles" }} investigated
+                </span>
+              </span>
+              <button
+                type="button"
+                (click)="downloadReport(report)"
+                [disabled]="reportDownloading() === report.jobId"
+                title="Download the full report (.md)"
+                aria-label="Download report"
+                class="flex shrink-0 items-center gap-1.5 rounded-lg border border-white/10 px-2.5 py-1 text-[12px] text-zinc-300 hover:border-white/20 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                @if (reportDownloading() === report.jobId) {
+                  <lucide-angular
+                    [img]="Loader2"
+                    [size]="13"
+                    class="animate-spin"
+                  />
+                } @else {
+                  <lucide-angular [img]="Download" [size]="13" />
+                }
+                Report
+              </button>
+            </div>
+            @if (message.content.trim()) {
+              <div
+                class="prose-dark mt-3"
+                [innerHTML]="message.content | markdown"
+              ></div>
+            }
+          </div>
         } @else if (message.visual; as visual) {
           <!-- Visual event card -->
           <div class="group">
@@ -198,6 +246,17 @@
                 >
                   <lucide-angular [img]="BadgeCheck" [size]="12" />
                   Verified
+                </span>
+              }
+              @if (message.crossCheck; as check) {
+                <!-- Careful mode: an independent query re-ran the question -->
+                <span
+                  [title]="crossCheckTitle(check)"
+                  class="mr-1 flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium"
+                  [class]="crossCheckClass(check)"
+                >
+                  <lucide-angular [img]="crossCheckIcon(check)" [size]="12" />
+                  {{ crossCheckLabel(check) }}
                 </span>
               }
               <button
@@ -324,6 +383,49 @@
           </div>
         </div>
       }
+
+      @if (deepAnalysisJob(); as job) {
+        <!-- Background deep analysis: local card, polled, chat stays usable -->
+        <div
+          class="flex items-start gap-3 rounded-2xl border border-white/10 bg-[#232323] p-4"
+          aria-label="Deep analysis status"
+        >
+          <span
+            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/5"
+            [class]="job.status === 'error' ? 'text-red-400' : 'text-zinc-300'"
+          >
+            @if (job.status === "error") {
+              <lucide-angular [img]="Telescope" [size]="15" />
+            } @else {
+              <lucide-angular [img]="Loader2" [size]="15" class="animate-spin" />
+            }
+          </span>
+          <span class="flex min-w-0 flex-1 flex-col">
+            <span class="text-[13px] text-zinc-200">
+              {{
+                job.status === "error"
+                  ? "Deep analysis failed"
+                  : "Deep analysis running"
+              }}
+              — {{ deepAnalysisLine(job) }}
+            </span>
+            <span class="truncate text-[12px] text-zinc-500">
+              {{ job.question }}
+            </span>
+          </span>
+          @if (job.status === "error") {
+            <button
+              type="button"
+              (click)="dismissDeepAnalysis()"
+              title="Dismiss"
+              aria-label="Dismiss deep analysis"
+              class="shrink-0 rounded-full p-1.5 text-zinc-500 hover:bg-white/10 hover:text-zinc-300"
+            >
+              <lucide-angular [img]="X" [size]="13" />
+            </button>
+          }
+        </div>
+      }
     </div>
   </div>
 
@@ -374,7 +476,46 @@
         (keydown)="onKeydown($event)"
         class="w-full resize-none bg-transparent text-[13px] text-zinc-200 outline-none placeholder:text-zinc-500"
       ></textarea>
-      <div class="mt-1 flex items-center justify-end">
+      <div class="mt-1 flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+        <!-- Careful mode: cross-check this turn's answer with a second query -->
+        <button
+          type="button"
+          (click)="toggleCareful()"
+          [attr.aria-pressed]="careful()"
+          aria-label="Careful mode"
+          [title]="
+            careful()
+              ? 'Careful mode on — an independent query re-checks each answer (slower)'
+              : 'Careful mode — re-check each answer with an independent query (slower)'
+          "
+          class="flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px]"
+          [class]="
+            careful()
+              ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-400'
+              : 'border-white/10 bg-white/[0.04] text-zinc-400 hover:border-white/20 hover:bg-white/[0.08] hover:text-zinc-200'
+          "
+        >
+          <lucide-angular [img]="ShieldCheck" [size]="12" class="shrink-0" />
+          Careful
+        </button>
+        <!-- Deep analysis: the draft becomes a background job, not a turn -->
+        <button
+          type="button"
+          (click)="runDeepAnalysis()"
+          [disabled]="draft().trim() === '' || deepAnalysisRunning()"
+          aria-label="Deep analysis"
+          [title]="
+            deepAnalysisRunning()
+              ? 'A deep analysis is already running for this project'
+              : 'Deep analysis — investigate this question from several angles and write a report (slow)'
+          "
+          class="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[12px] text-zinc-400 hover:border-white/20 hover:bg-white/[0.08] hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-white/10 disabled:hover:bg-white/[0.04] disabled:hover:text-zinc-400"
+        >
+          <lucide-angular [img]="Telescope" [size]="12" class="shrink-0" />
+          Deep analysis
+        </button>
+        </div>
         @if (sending()) {
           <button
             type="button"

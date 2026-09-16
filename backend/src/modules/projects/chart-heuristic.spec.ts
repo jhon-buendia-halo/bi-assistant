@@ -1,4 +1,8 @@
-import { recommendChartForm, recommendedFormBlock } from './chart-heuristic';
+import {
+  recommendChartForm,
+  recommendComposition,
+  recommendedFormBlock,
+} from './chart-heuristic';
 import type { ToolDataRecord } from './entities/project.entity';
 
 /** One successful query result in the shape the assistant stores. */
@@ -277,20 +281,135 @@ describe('recommendChartForm input handling', () => {
   });
 });
 
+describe('recommendComposition', () => {
+  /** Wide enough (two measures) and long enough (six rows) for a composition. */
+  const wideRows = Array.from({ length: 6 }, (_, n) => ({
+    month: `2024-0${n + 1}`,
+    claims: n * 10,
+    denials: n,
+  }));
+
+  it('composes when two queries succeeded', () => {
+    const composition = recommendComposition([
+      { tool: 'run_readonly_sql', rows: [{ total: 5 }], rowCount: 1 },
+      ...record([
+        { payer: 'Aetna', claims: 90 },
+        { payer: 'Cigna', claims: 40 },
+      ]),
+    ]);
+
+    expect(composition?.guidance).toContain('rests on 2 query results');
+    expect(composition?.guidance).toContain('KPI tiles');
+    expect(composition?.guidance).toContain('main chart');
+    expect(composition?.guidance).toContain('collapsible detail table');
+    expect(composition?.guidance).toContain('data-qti-value');
+  });
+
+  it('composes for one wide, reasonably long result set', () => {
+    const composition = recommendComposition(record(wideRows));
+
+    expect(composition?.guidance).toContain('2 measures over 6 rows');
+    expect(composition?.measures).toEqual(['claims', 'denials']);
+  });
+
+  it('does not compose for a single thin result set', () => {
+    expect(
+      recommendComposition(
+        record([
+          { payer: 'Aetna', claims: 90 },
+          { payer: 'Cigna', claims: 40 },
+        ]),
+      ),
+    ).toBeUndefined();
+  });
+
+  it('does not compose for one measure however many rows', () => {
+    const rows = Array.from({ length: 40 }, (_, n) => ({
+      month: `2024-${n}`,
+      claims: n,
+    }));
+
+    expect(recommendComposition(record(rows))).toBeUndefined();
+  });
+
+  it('does not compose for a short multi-measure result set', () => {
+    expect(recommendComposition(record(wideRows.slice(0, 3)))).toBeUndefined();
+  });
+
+  it('does not compose for a single row of headline numbers', () => {
+    expect(
+      recommendComposition(record([{ total_claims: 1204, denied: 88 }])),
+    ).toBeUndefined();
+  });
+
+  it('counts only successful, non-empty records as separate angles', () => {
+    expect(
+      recommendComposition([
+        { tool: 'run_readonly_sql', error: 'boom', rowCount: 10 },
+        { tool: 'run_readonly_sql', rows: [], rowCount: 0 },
+        ...record([
+          { payer: 'Aetna', claims: 90 },
+          { payer: 'Cigna', claims: 40 },
+        ]),
+      ]),
+    ).toBeUndefined();
+  });
+
+  it('counts the full row count, not just the stored sample', () => {
+    const composition = recommendComposition(
+      record(wideRows.slice(0, 3), undefined, 4_000),
+    );
+
+    expect(composition?.guidance).toContain('over 4000 rows');
+  });
+
+  it('returns nothing without chartable rows', () => {
+    expect(recommendComposition(undefined)).toBeUndefined();
+    expect(recommendComposition([])).toBeUndefined();
+  });
+});
+
 describe('recommendedFormBlock', () => {
   it('wraps the recommendation in the designer prompt block', () => {
-    const block = recommendedFormBlock(
+    const form = recommendedFormBlock(
       record([
         { payer: 'Aetna', claims: 90 },
         { payer: 'Cigna', claims: 40 },
       ]),
     );
 
-    expect(block).toContain('<recommended-form>');
-    expect(block).toContain('Data shape: 2 rows;');
-    expect(block).toContain('Recommended form: sorted horizontal bars');
-    expect(block).toContain('if you deviate, say why in the description.');
-    expect(block).toContain('</recommended-form>');
+    expect(form?.block).toContain('<recommended-form>');
+    expect(form?.block).toContain('Data shape: 2 rows;');
+    expect(form?.block).toContain('Recommended form: sorted horizontal bars');
+    expect(form?.block).toContain(
+      'if you deviate, say why in the description.',
+    );
+    expect(form?.block).toContain('</recommended-form>');
+    expect(form?.block).not.toContain('Composed answer:');
+    expect(form?.composed).toBe(false);
+  });
+
+  it('appends the composed paragraph and flags it when the data is rich', () => {
+    const form = recommendedFormBlock(
+      record(
+        Array.from({ length: 8 }, (_, n) => ({
+          month: `2024-0${n}`,
+          claims: n * 10,
+          denials: n,
+        })),
+      ),
+    );
+
+    expect(form?.composed).toBe(true);
+    expect(form?.block).toContain(
+      'Recommended form: a multi-series line chart',
+    );
+    expect(form?.block).toContain('Composed answer:');
+    expect(form?.block).toContain('collapsible detail table');
+    // Order matters: the composition builds on the form named above it.
+    expect(form!.block.indexOf('Recommended form:')).toBeLessThan(
+      form!.block.indexOf('Composed answer:'),
+    );
   });
 
   it('is absent when there is nothing chartable', () => {

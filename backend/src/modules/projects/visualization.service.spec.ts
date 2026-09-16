@@ -123,6 +123,65 @@ describe('visualizationData', () => {
     expect(block.json).toBe('[]');
     expect(block.truncatedFrom).toBeUndefined();
   });
+
+  it('carries every successful record, each with its own SQL', () => {
+    const block = visualizationData([
+      {
+        tool: 'run_readonly_sql',
+        input: 'SELECT count(*) FROM claims',
+        rows: [{ total: 5 }],
+        rowCount: 1,
+      },
+      { tool: 'run_readonly_sql', error: 'boom', rowCount: 9 },
+      {
+        tool: 'run_readonly_sql',
+        input: 'SELECT payer, n FROM claims GROUP BY payer',
+        rows: [
+          { payer: 'Aetna', n: 3 },
+          { payer: 'Cigna', n: 2 },
+        ],
+        rowCount: 2,
+      },
+    ]);
+
+    const parsed = JSON.parse(block.json) as { input: string }[];
+    expect(parsed).toHaveLength(2);
+    expect(parsed[0].input).toContain('count(*)');
+    expect(parsed[1].input).toContain('GROUP BY payer');
+    expect(block.shown).toBe(3);
+    expect(block.truncatedFrom).toBeUndefined();
+  });
+
+  it('keeps the three largest records and shares the row budget', () => {
+    const sized = (id: number, rows: number) => ({
+      tool: 'run_readonly_sql',
+      input: `SELECT ${id}`,
+      rows: Array.from({ length: rows }, (_, n) => ({ n })),
+      rowCount: rows,
+    });
+    const block = visualizationData([
+      sized(1, 50),
+      sized(2, 5),
+      sized(3, 60),
+      sized(4, 40),
+    ]);
+
+    const parsed = JSON.parse(block.json) as {
+      input: string;
+      rows: unknown[];
+    }[];
+    // Smallest record dropped; the survivors stay in the order they ran.
+    expect(parsed.map((r) => r.input)).toEqual([
+      'SELECT 1',
+      'SELECT 3',
+      'SELECT 4',
+    ]);
+    // 100 rows shared three ways.
+    expect(parsed.map((r) => r.rows.length)).toEqual([33, 33, 33]);
+    expect(block.shown).toBe(99);
+    // The dropped record's rows count as truncation, not as silent loss.
+    expect(block.truncatedFrom).toBe(155);
+  });
 });
 
 describe('VisualizationService truncation markers', () => {
@@ -200,6 +259,68 @@ describe('VisualizationService recommended form', () => {
     await service.create(project, undefined);
 
     expect(promptOf(agent)).not.toContain('<recommended-form>');
+  });
+});
+
+/** The same project whose answer rests on rows rich enough to compose. */
+function projectWithComposableRows(): ProjectDoc {
+  const project = projectWithRows(20, 20);
+  project.messages[1].data = [
+    {
+      tool: 'run_readonly_sql',
+      input: 'SELECT month, claims, denials FROM main.health.claims',
+      columns: ['month', 'claims', 'denials'],
+      rows: Array.from({ length: 12 }, (_, n) => ({
+        month: `2024-${String(n + 1).padStart(2, '0')}`,
+        claims: n * 10,
+        denials: n,
+      })),
+      rowCount: 12,
+    },
+  ];
+  return project;
+}
+
+describe('VisualizationService composed budget', () => {
+  const optionsOf = (agent: { generate: jest.Mock }) =>
+    (agent.generate.mock.calls as unknown[][])[0][1] as {
+      modelSettings: { maxOutputTokens: number };
+    };
+
+  it('keeps the tight budget for a single-form visual', async () => {
+    const { service, agent } = build();
+
+    await service.create(projectWithRows(20, 20), undefined);
+
+    const prompt = (agent.generate.mock.calls as unknown[][])[0][0] as string;
+    expect(prompt).toContain('below 12,000 characters');
+    expect(prompt).not.toContain('Composed answer:');
+    expect(optionsOf(agent).modelSettings.maxOutputTokens).toBe(6_000);
+  });
+
+  it('raises the budget only when the form is composed', async () => {
+    const { service, agent } = build();
+
+    await service.create(projectWithComposableRows(), undefined);
+
+    const prompt = (agent.generate.mock.calls as unknown[][])[0][0] as string;
+    expect(prompt).toContain('below 16,000 characters');
+    expect(prompt).toContain('Composed answer:');
+    expect(optionsOf(agent).modelSettings.maxOutputTokens).toBe(9_000);
+  });
+
+  it('raises it on the tailor path too', async () => {
+    const { service, agent } = build();
+
+    await service.update(
+      withVisual(projectWithComposableRows()),
+      'visual-1',
+      'add a table',
+    );
+
+    const prompt = (agent.generate.mock.calls as unknown[][])[0][0] as string;
+    expect(prompt).toContain('below 16,000 characters');
+    expect(optionsOf(agent).modelSettings.maxOutputTokens).toBe(9_000);
   });
 });
 

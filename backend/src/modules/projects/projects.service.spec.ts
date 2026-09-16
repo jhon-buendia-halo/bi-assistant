@@ -27,10 +27,16 @@ jest.mock('../llm/llm.service', () => ({ LlmService: class {} }));
 jest.mock('../verified-queries/verified-queries.service', () => ({
   VerifiedQueriesService: class {},
 }));
+jest.mock('../metrics/metrics.service', () => ({ MetricsService: class {} }));
 jest.mock('../../mastra/agents/sql-fixer.agent', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { z } = require('zod') as typeof import('zod');
   return { sqlFixOutputSchema: z.object({ sql: z.string() }) };
+});
+jest.mock('../../mastra/agents/sql-verifier.agent', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { z } = require('zod') as typeof import('zod');
+  return { sqlVerifyOutputSchema: z.object({ sql: z.string() }) };
 });
 jest.mock('./repositories/projects.repository', () => ({
   ProjectsRepository: class {},
@@ -57,6 +63,15 @@ describe('ProjectsService streaming', () => {
     options: {
       answer?: string;
       verified?: boolean;
+      metricsBlock?: string;
+      tables?: string[];
+      /** Careful mode: what the verifier replies and what its SQL returns. */
+      crossCheck?: {
+        sql?: string;
+        verifierFails?: boolean;
+        rows?: Record<string, unknown>[];
+        runFails?: boolean;
+      };
     } = {},
   ) {
     const project: ProjectDoc = {
@@ -90,29 +105,78 @@ describe('ProjectsService streaming', () => {
       referenceBlock: jest.fn().mockResolvedValue(undefined),
       isVerifiedSql: jest.fn().mockResolvedValue(options.verified ?? false),
     };
+    const metrics = {
+      definitionBlock: jest
+        .fn()
+        .mockResolvedValue(options.metricsBlock ?? undefined),
+    };
+    const check = options.crossCheck ?? {};
+    const verifier = {
+      generate: check.verifierFails
+        ? jest.fn().mockRejectedValue(new Error('verifier unavailable'))
+        : jest.fn().mockResolvedValue({
+            object: { sql: check.sql ?? 'SELECT count(*) FROM other.table' },
+          }),
+    };
+    const datasources = {
+      runReadOnlySql: check.runFails
+        ? jest.fn().mockRejectedValue(new Error('table not found'))
+        : jest
+            .fn()
+            .mockResolvedValue({ columns: ['n'], rows: check.rows ?? [] }),
+    };
     const service = new ProjectsService(
       repository as never,
       {
-        getAgent: jest.fn().mockReturnValue(agent),
+        getAgent: jest
+          .fn()
+          .mockImplementation((id: string) =>
+            id === 'sql-verifier' ? verifier : agent,
+          ),
         ensureProjectWorkspace: jest
           .fn()
           .mockResolvedValue({ id: 'workspace-1' }),
       } as never,
       {
-        getByNames: jest
-          .fn()
-          .mockResolvedValue([
-            { name: 'football', datasourceId: 'ds-1', tables: [] },
-          ]),
+        getByNames: jest.fn().mockResolvedValue([
+          {
+            name: 'football',
+            datasourceId: 'ds-1',
+            datasourceKind: 'databricks',
+            tables: options.tables ?? [],
+            entities: [
+              {
+                key: 'main.football.matches',
+                columns: [
+                  {
+                    name: 'winner',
+                    type: 'string',
+                    nullable: true,
+                    sampleValues: ['Argentina', 'France'],
+                  },
+                ],
+              },
+            ],
+          },
+        ]),
       } as never,
-      {} as never,
+      datasources as never,
       {
         getView: jest.fn().mockResolvedValue({ reasoningEffort: 'medium' }),
       } as never,
       {} as never,
       verifiedQueries as never,
+      metrics as never,
     );
-    return { service, project, agent, verifiedQueries };
+    return {
+      service,
+      project,
+      agent,
+      verifiedQueries,
+      metrics,
+      verifier,
+      datasources,
+    };
   }
 
   beforeEach(() => {
@@ -194,6 +258,43 @@ describe('ProjectsService streaming', () => {
     expect(project.messages.at(-1)?.verified).toBeUndefined();
   });
 
+  it('grounds the turn in the curated metrics for the sandbox entities', async () => {
+    const { service, agent, metrics } = buildStreaming(answerStream([]), {
+      tables: ['main.football.matches', 'main.football.players'],
+      metricsBlock: 'Governed metric definitions (curated — …):\n- Win rate',
+    });
+
+    await service.streamMessage('project-1', 'Win rate?', () => {});
+
+    expect(metrics.definitionBlock).toHaveBeenCalledWith([
+      'main.football.matches',
+      'main.football.players',
+    ]);
+    const options = (agent.stream.mock.calls as unknown[][])[0][1] as {
+      context: { content: string }[];
+    };
+    expect(
+      options.context.some((block) =>
+        block.content.includes('Governed metric definitions'),
+      ),
+    ).toBe(true);
+  });
+
+  it('omits the metrics block when no curated metric covers the project', async () => {
+    const { service, agent } = buildStreaming(answerStream([]));
+
+    await service.streamMessage('project-1', 'Why?', () => {});
+
+    const options = (agent.stream.mock.calls as unknown[][])[0][1] as {
+      context: { content: string }[];
+    };
+    expect(
+      options.context.some((block) =>
+        block.content.includes('Governed metric definitions'),
+      ),
+    ).toBe(false);
+  });
+
   it('keeps the data collected before a clarification on the card', async () => {
     (sourceEntities as jest.Mock).mockReturnValue(['main.football.matches']);
     const { service, project } = buildStreaming(clarificationStream());
@@ -231,6 +332,141 @@ describe('ProjectsService streaming', () => {
 
     expect(project.messages.at(-1)?.data?.[0]?.truncated).toBe(true);
   });
+
+  describe('careful mode cross-check', () => {
+    const PRIMARY = 'SELECT count(*) AS n FROM main.football.matches';
+
+    /** One careful turn whose answer ran `PRIMARY` and returned one row. */
+    function carefulTurn(
+      crossCheck: {
+        sql?: string;
+        verifierFails?: boolean;
+        rows?: Record<string, unknown>[];
+        runFails?: boolean;
+      },
+      primary: { rows?: Record<string, unknown>[]; truncated?: boolean } = {},
+    ) {
+      return buildStreaming(
+        answerStream([
+          {
+            sql: PRIMARY,
+            rows: primary.rows ?? [{ n: 64 }],
+            truncated: primary.truncated,
+          },
+        ]),
+        { crossCheck, tables: ['main.football.matches'] },
+      );
+    }
+
+    const run = (service: ProjectsService, careful: boolean) =>
+      service.streamMessage(
+        'project-1',
+        'How many matches were played?',
+        () => {},
+        undefined,
+        undefined,
+        careful,
+      );
+
+    it('does not cross-check a turn that was not flagged careful', async () => {
+      const { service, project, verifier, datasources } = carefulTurn({});
+
+      await run(service, false);
+
+      expect(verifier.generate).not.toHaveBeenCalled();
+      expect(datasources.runReadOnlySql).not.toHaveBeenCalled();
+      expect(project.messages.at(-1)?.crossCheck).toBeUndefined();
+    });
+
+    it('agrees when the independent query returns the same results', async () => {
+      const { service, project, verifier, datasources } = carefulTurn({
+        sql: 'SELECT COUNT(1) AS total FROM main.football.matches',
+        // Same fact, different column name and cell typing.
+        rows: [{ total: '64' }],
+      });
+
+      await run(service, true);
+
+      expect(datasources.runReadOnlySql).toHaveBeenCalledWith(
+        'ds-1',
+        'SELECT COUNT(1) AS total FROM main.football.matches',
+        200,
+      );
+      expect(project.messages.at(-1)?.crossCheck).toEqual({
+        status: 'agree',
+        note: 'independent re-derivation returned the same results',
+      });
+      // Independence: the verifier sees the question and the schema with its
+      // sample values, never the statement the analysis agent ran.
+      const prompt = (
+        verifier.generate.mock.calls as unknown[][]
+      )[0][0] as string;
+      expect(prompt).toContain('How many matches were played?');
+      expect(prompt).toContain(
+        'main.football.matches(winner string [e.g. Argentina, France])',
+      );
+      expect(prompt).toContain('Dialect: databricks');
+      expect(prompt).not.toContain(PRIMARY);
+    });
+
+    it('disagrees when the independent query returns something else', async () => {
+      const { service, project } = carefulTurn({ rows: [{ total: 63 }] });
+
+      await run(service, true);
+
+      const crossCheck = project.messages.at(-1)?.crossCheck;
+      expect(crossCheck?.status).toBe('disagree');
+      expect(crossCheck?.note).toContain('results differ — treat with care');
+    });
+
+    it('reports an error when the verifier cannot produce a query', async () => {
+      const { service, project, datasources } = carefulTurn({
+        verifierFails: true,
+      });
+
+      await run(service, true);
+
+      expect(datasources.runReadOnlySql).not.toHaveBeenCalled();
+      const crossCheck = project.messages.at(-1)?.crossCheck;
+      expect(crossCheck?.status).toBe('error');
+      expect(crossCheck?.note).toContain('verifier unavailable');
+    });
+
+    it('reports an error when the independent query fails to run', async () => {
+      const { service, project } = carefulTurn({ runFails: true });
+
+      await run(service, true);
+
+      const crossCheck = project.messages.at(-1)?.crossCheck;
+      expect(crossCheck?.status).toBe('error');
+      expect(crossCheck?.note).toContain('table not found');
+    });
+
+    it('refuses to compare against a truncated result set', async () => {
+      const { service, project, verifier } = carefulTurn(
+        {},
+        { truncated: true },
+      );
+
+      await run(service, true);
+
+      expect(verifier.generate).not.toHaveBeenCalled();
+      const crossCheck = project.messages.at(-1)?.crossCheck;
+      expect(crossCheck?.status).toBe('error');
+      expect(crossCheck?.note).toContain('row cap');
+    });
+
+    it('skips the cross-check when the turn ran no SQL', async () => {
+      const { service, project, verifier } = buildStreaming(answerStream([]), {
+        crossCheck: {},
+      });
+
+      await run(service, true);
+
+      expect(verifier.generate).not.toHaveBeenCalled();
+      expect(project.messages.at(-1)?.crossCheck).toBeUndefined();
+    });
+  });
 });
 
 describe('ProjectsService SQL self-correction', () => {
@@ -263,6 +499,7 @@ describe('ProjectsService SQL self-correction', () => {
       } as never,
       { getByNames: jest.fn().mockResolvedValue([sandbox]) } as never,
       { runReadOnlySql: overrides.runs } as never,
+      {} as never,
       {} as never,
       {} as never,
       {} as never,
@@ -379,6 +616,7 @@ describe('ProjectsService answer feedback', () => {
       {} as never,
       {} as never,
       verifiedQueries as never,
+      {} as never,
     );
     return { service, verifiedQueries };
   }
@@ -630,6 +868,7 @@ describe('ProjectsService visual tailoring and repair', () => {
       {} as never,
       {} as never,
       visuals as never,
+      {} as never,
       {} as never,
     );
     return { service, project, visuals };

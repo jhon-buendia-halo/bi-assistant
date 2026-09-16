@@ -4,6 +4,7 @@ import { join } from 'path';
 import {
   CONNECTIONS_STORE,
   DATASOURCE_INVENTORIES_STORE,
+  METRICS_STORE,
   PROJECTS_STORE,
   SANDBOX_SELECTIONS_STORE,
   SETTINGS_STORE,
@@ -29,6 +30,7 @@ const COLLECTIONS = [
   { token: PROJECTS_STORE, table: 'projects' },
   { token: DATASOURCE_INVENTORIES_STORE, table: 'datasource_inventories' },
   { token: VERIFIED_QUERIES_STORE, table: 'verified_queries' },
+  { token: METRICS_STORE, table: 'metrics' },
 ];
 
 const sqliteDbProvider: Provider = {

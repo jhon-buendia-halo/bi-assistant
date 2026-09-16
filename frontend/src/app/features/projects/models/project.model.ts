@@ -41,9 +41,54 @@ export interface ChatMessage {
   verified?: boolean;
   /** Deterministic one-line provenance summary, built server-side. */
   interpretation?: string;
+  /**
+   * Careful mode only: an independent query re-derived from the question was
+   * run and its results compared with this answer's.
+   */
+  crossCheck?: CrossCheck;
+  /**
+   * Present when a deep-analysis job produced a report. The content is the
+   * report's executive summary; the full markdown is downloadable.
+   */
+  report?: AnalysisReport;
+}
+
+export interface AnalysisReport {
+  jobId: string;
+  title: string;
+  /** Workspace-relative path of the stored markdown report. */
+  path: string;
+  angles: number;
+}
+
+/** Deep-analysis job lifecycle, as reported by polling. */
+export type DeepAnalysisStatus =
+  | 'planning'
+  | 'investigating'
+  | 'writing'
+  | 'done'
+  | 'error';
+
+export interface DeepAnalysisResult {
+  ok: boolean;
+  message: string;
+  jobId?: string;
+  status?: DeepAnalysisStatus;
+  /** Human-readable line for the pending card. */
+  progress?: string;
+  step?: number;
+  steps?: number;
+  title?: string;
+  error?: string;
 }
 
 export type MessageFeedback = 'up' | 'down';
+
+export interface CrossCheck {
+  status: 'agree' | 'disagree' | 'error';
+  /** Short human-readable line shown as the chip's tooltip. */
+  note?: string;
+}
 
 export interface VisualEvent {
   visualId: string;

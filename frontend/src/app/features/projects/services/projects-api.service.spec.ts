@@ -50,6 +50,35 @@ describe('ProjectsApiService feedback', () => {
     req.flush({ ok: true, message: 'Repaired' });
   });
 
+  it('starts a deep-analysis job and polls it', () => {
+    service.startDeepAnalysis('project 1', 'Why are denials rising?').subscribe();
+    const started = http.expectOne(
+      `${API_BASE_URL}/projects/project%201/deep-analysis`,
+    );
+    expect(started.request.method).toBe('POST');
+    expect(started.request.body).toEqual({
+      question: 'Why are denials rising?',
+    });
+    started.flush({ ok: true, message: 'Deep analysis started', jobId: 'job 1' });
+
+    service.deepAnalysisStatus('project 1', 'job 1').subscribe();
+    const polled = http.expectOne(
+      `${API_BASE_URL}/projects/project%201/deep-analysis/job%201`,
+    );
+    expect(polled.request.method).toBe('GET');
+    polled.flush({ ok: true, message: 'planning', status: 'planning' });
+  });
+
+  it('downloads the report as a blob', () => {
+    service.downloadDeepAnalysis('project 1', 'job 1').subscribe();
+    const req = http.expectOne(
+      `${API_BASE_URL}/projects/project%201/deep-analysis/job%201/download`,
+    );
+    expect(req.request.method).toBe('GET');
+    expect(req.request.responseType).toBe('blob');
+    req.flush(new Blob(['# report']));
+  });
+
   it('posts a tailoring instruction', () => {
     service
       .tailorVisualization('project 1', 'visual 1', 'Sort descending.')
@@ -109,7 +138,37 @@ describe('ProjectsApiService streaming', () => {
     expect(onDone).toHaveBeenCalledOnceWith(project);
     expect(onError).not.toHaveBeenCalled();
   });
+
+  it('asks for careful mode only when the turn requested it', async () => {
+    // A fresh Response per call: a body stream can only be read once.
+    const fetchSpy = spyOn(globalThis, 'fetch').and.callFake(() =>
+      Promise.resolve(sseResponse({ type: 'done' })),
+    );
+
+    await service.streamMessage('project-1', 'question', {});
+    expect(requestBody(fetchSpy)).toEqual({ content: 'question' });
+
+    await service.streamMessage(
+      'project-1',
+      'question',
+      {},
+      undefined,
+      'visual-1',
+      true,
+    );
+    expect(requestBody(fetchSpy)).toEqual({
+      content: 'question',
+      activeVisualizationId: 'visual-1',
+      careful: true,
+    });
+  });
 });
+
+/** The JSON body of the most recent fetch the service issued. */
+function requestBody(fetchSpy: jasmine.Spy): unknown {
+  const init = fetchSpy.calls.mostRecent().args[1] as RequestInit;
+  return JSON.parse(init.body as string);
+}
 
 function sseResponse(event: unknown): Response {
   const body = new ReadableStream({

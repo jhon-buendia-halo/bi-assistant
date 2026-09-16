@@ -11,6 +11,7 @@ import { MastraService } from '../../mastra/mastra.service';
 import { setSandboxToolServices } from '../../mastra/tool-services';
 import type { SandboxSnapshot, SqlRunResult } from '../../mastra/tool-services';
 import { sqlFixOutputSchema } from '../../mastra/agents/sql-fixer.agent';
+import { sqlVerifyOutputSchema } from '../../mastra/agents/sql-verifier.agent';
 import { SANDBOXES_CONTEXT_KEY } from '../../mastra/tools/sandbox.tools';
 import {
   ACTIVE_VISUAL_CONTEXT_KEY,
@@ -21,11 +22,14 @@ import { SandboxRepository } from '../sandbox/repositories/sandbox.repository';
 import { DatasourcesService } from '../datasources/datasources.service';
 import { LlmService } from '../llm/llm.service';
 import { VerifiedQueriesService } from '../verified-queries/verified-queries.service';
+import { MetricsService } from '../metrics/metrics.service';
 import { ProjectsRepository } from './repositories/projects.repository';
 import { VisualizationService } from './visualization.service';
 import { sourceEntities } from './visualization-document';
+import { compareResults } from './result-compare';
 import {
   ChatMessage,
+  CrossCheck,
   InteractiveVisualization,
   MessageFeedback,
   ProjectDoc,
@@ -49,6 +53,17 @@ const limitReachedNote = (limit: number) =>
   `row limit ${limit} reached — results may be incomplete; aggregate or narrow the query for exact totals`;
 /** Character budget for the schema block handed to the fixer. */
 const FIXER_SCHEMA_CHARS = 4_000;
+/** Character budget for the richer (sample-value bearing) verifier schema. */
+const VERIFIER_SCHEMA_CHARS = 6_000;
+/** Sample values shown per column to the verifier — value matching, not data. */
+const VERIFIER_SAMPLE_VALUES = 3;
+/** Longest cross-check note persisted on a message (tooltip-sized). */
+const CROSS_CHECK_NOTE_CHARS = 220;
+const CROSS_CHECK_AGREE_NOTE =
+  'independent re-derivation returned the same results';
+const CROSS_CHECK_DISAGREE_NOTE = 'results differ — treat with care';
+/** Rows the cross-check query may return — matches what the answer stored. */
+const CROSS_CHECK_ROW_LIMIT = STORED_ROWS_CAP;
 
 export type StreamEvent = {
   type:
@@ -69,6 +84,7 @@ export class ProjectsService implements OnModuleInit {
     private readonly llmService: LlmService,
     private readonly visuals: VisualizationService,
     private readonly verifiedQueries: VerifiedQueriesService,
+    private readonly metrics: MetricsService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -121,11 +137,15 @@ export class ProjectsService implements OnModuleInit {
 
   /**
    * Hybrid context: a cheap orientation block (sandbox names + entity keys,
-   * the project's visuals and which one is open) plus any user-approved
-   * question → SQL pairs resembling `question`, in the system context, and
-   * requestContext scoping the tools to this project.
+   * the project's visuals and which one is open), the curated metric
+   * definitions covering those entities, plus any user-approved question → SQL
+   * pairs resembling `question`, in the system context, and requestContext
+   * scoping the tools to this project.
+   *
+   * Memory-free on purpose — `agentOptions` adds the project's conversation
+   * thread, `backgroundAgentOptions` deliberately does not.
    */
-  private async agentOptions(
+  private async agentContext(
     project: ProjectDoc,
     question?: string,
     abortSignal?: AbortSignal,
@@ -157,6 +177,11 @@ export class ProjectsService implements OnModuleInit {
     const verified = question
       ? await this.verifiedQueries.referenceBlock(question)
       : undefined;
+    // Curated semantics for the entities this project can see — the one
+    // definition of each business number, never re-derived per turn.
+    const metrics = await this.metrics.definitionBlock(
+      sandboxes.flatMap((s) => s.tables ?? []),
+    );
     return {
       // Analysis often chains several schema + SQL tool calls per turn.
       maxSteps: 15,
@@ -180,13 +205,64 @@ export class ProjectsService implements OnModuleInit {
               : 'No visual is open in the right panel.',
           ].join('\n'),
         },
+        ...(metrics ? [{ role: 'system' as const, content: metrics }] : []),
         ...(verified ? [{ role: 'system' as const, content: verified }] : []),
       ],
       requestContext,
       abortSignal,
+    };
+  }
+
+  /** Chat turns: the shared grounding plus this project's memory thread. */
+  private async agentOptions(
+    project: ProjectDoc,
+    question?: string,
+    abortSignal?: AbortSignal,
+    activeVisualId?: string,
+  ) {
+    return {
+      ...(await this.agentContext(
+        project,
+        question,
+        abortSignal,
+        activeVisualId,
+      )),
       // Each project is an isolated, persistent Mastra conversation.
       memory: { thread: project.id, resource: project.id },
     };
+  }
+
+  /**
+   * Same grounding for a background job (deep analysis) — tools scoped to the
+   * project, the same system blocks — but **without** the conversation memory
+   * thread. A job fires many internal sub-calls; writing them into the thread
+   * would pollute the history the user's next chat question is answered from.
+   */
+  async backgroundAgentOptions(
+    project: ProjectDoc,
+    question?: string,
+    abortSignal?: AbortSignal,
+  ) {
+    return this.agentContext(project, question, abortSignal);
+  }
+
+  /**
+   * Append one assistant message written outside a chat turn (a deep-analysis
+   * report). Re-reads the project first, so a job that finishes while the user
+   * keeps chatting never overwrites the turns persisted meanwhile.
+   */
+  async appendAssistantMessage(
+    id: string,
+    message: Omit<ChatMessage, 'role' | 'at'>,
+  ): Promise<ProjectDoc> {
+    const fresh = await this.get(id);
+    const messages: ChatMessage[] = [
+      ...fresh.messages,
+      { role: 'assistant', at: new Date().toISOString(), ...message },
+    ];
+    return (
+      (await this.repository.update(id, { messages })) ?? { ...fresh, messages }
+    );
   }
 
   /**
@@ -333,22 +409,151 @@ export class ProjectsService implements OnModuleInit {
       const parsed = sqlFixOutputSchema.safeParse(
         result.object ?? parseJsonObject(result.text),
       );
-      if (!parsed.success) return undefined;
-      const corrected = parsed.data.sql
-        .trim()
-        .replace(/^```(?:sql)?\s*/i, '')
-        .replace(/\s*```$/, '')
-        .replace(/;+\s*$/, '')
-        .trim();
-      // The connector rejects anything else anyway — keep the original error
-      // instead of burning another round-trip on it.
-      return /^(select|with)\b/i.test(corrected) ? corrected : undefined;
+      // The connector rejects anything but a read-only statement anyway — keep
+      // the original error instead of burning another round-trip on it.
+      return parsed.success ? readOnlyStatement(parsed.data.sql) : undefined;
     } catch (err) {
       this.logger.warn(
         `SQL repair attempt failed: ${err instanceof Error ? err.message : String(err)}`,
       );
       return undefined;
     }
+  }
+
+  // ------------------------------------------------------- careful mode
+
+  /**
+   * Careful mode's cross-check: a second agent re-derives the question's SQL
+   * without ever seeing the statement the analysis agent ran, that statement is
+   * executed once, and the two result sets are compared as multisets. Agreement
+   * is therefore corroboration, not an echo of the first answer.
+   *
+   * Never throws — a check that cannot run reports `error`, because failing to
+   * verify must not lose the answer it was verifying.
+   */
+  private async crossCheckAnswer(
+    project: ProjectDoc,
+    question: string,
+    data: ToolDataRecord[],
+  ): Promise<CrossCheck | undefined> {
+    const record = successfulSqlRuns(data).at(-1);
+    // Nothing was executed — there is no result set to corroborate.
+    if (!record?.input?.trim()) return undefined;
+    try {
+      if (record.truncated) {
+        return crossCheck(
+          'error',
+          "the answer's result set hit the row cap — a partial result cannot be compared",
+        );
+      }
+      const context = await this.verifierContext(project);
+      if (!context) {
+        return crossCheck(
+          'error',
+          'no datasource is bound to this project, so the query could not be re-run',
+        );
+      }
+      const sql = await this.deriveIndependentSql(question, context);
+      if (!sql) {
+        return crossCheck(
+          'error',
+          'the independent check did not produce a usable query',
+        );
+      }
+      const result = await this.datasourcesService.runReadOnlySql(
+        context.datasourceId,
+        sql,
+        CROSS_CHECK_ROW_LIMIT,
+      );
+      const { match, reason } = compareResults(record.rows ?? [], result.rows);
+      return match
+        ? crossCheck('agree', CROSS_CHECK_AGREE_NOTE)
+        : crossCheck(
+            'disagree',
+            `${CROSS_CHECK_DISAGREE_NOTE} — ${reason || 'the independent query returned something else'}`,
+          );
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`Cross-check failed: ${detail}`);
+      return crossCheck('error', `the check could not complete — ${detail}`);
+    }
+  }
+
+  /** Dialect, datasource and a sample-value bearing schema for the verifier. */
+  private async verifierContext(project: ProjectDoc): Promise<
+    | {
+        dialect: string;
+        schema: string;
+        datasourceId: string;
+      }
+    | undefined
+  > {
+    const sandboxes = await this.boundSandboxes(project.sandboxes);
+    const datasourceId =
+      (await this.soleDatasourceId(project)) ??
+      sandboxes.find((s) => s.datasourceId)?.datasourceId;
+    if (!datasourceId) return undefined;
+    const inScope = sandboxes.filter((s) => s.datasourceId === datasourceId);
+    return {
+      dialect:
+        inScope.find((s) => s.datasourceKind)?.datasourceKind ?? 'databricks',
+      datasourceId,
+      schema: verifierSchema(inScope),
+    };
+  }
+
+  /**
+   * One verifier pass. It gets the question, the schema with sample values and
+   * the user-approved reference pairs — deliberately not the original SQL.
+   */
+  private async deriveIndependentSql(
+    question: string,
+    context: { dialect: string; schema: string },
+  ): Promise<string | undefined> {
+    let verified: string | undefined;
+    try {
+      verified = await this.verifiedQueries.referenceBlock(question);
+    } catch {
+      verified = undefined;
+    }
+    // A second opinion should think as hard as the answer it is checking.
+    const { reasoningEffort } = await this.llmService.getView();
+    const result = await this.mastra
+      .getAgent('sql-verifier')
+      .generate(
+        [
+          `Dialect: ${context.dialect}`,
+          '',
+          '<available-entities>',
+          context.schema || '(no schema snapshot stored for this project)',
+          '</available-entities>',
+          ...(verified
+            ? [
+                '',
+                '<verified-reference-queries>',
+                verified,
+                '</verified-reference-queries>',
+              ]
+            : []),
+          '',
+          '<question>',
+          question,
+          '</question>',
+        ].join('\n'),
+        {
+          maxSteps: 1,
+          toolChoice: 'none',
+          providerOptions: { openai: { reasoningEffort } },
+          structuredOutput: {
+            schema: sqlVerifyOutputSchema,
+            jsonPromptInjection: 'inline',
+          },
+        },
+      );
+    const parsed = sqlVerifyOutputSchema.safeParse(
+      result.object ?? parseJsonObject(result.text),
+    );
+    return parsed.success ? readOnlyStatement(parsed.data.sql) : undefined;
   }
 
   // --------------------------------------------------------------- internals
@@ -625,6 +830,10 @@ export class ProjectsService implements OnModuleInit {
   /**
    * Streamed chat turn: emits reasoning/text/tool deltas as they arrive,
    * persists the exchange at the end, then emits `done` with the project.
+   *
+   * `careful` opts the turn into an independent cross-check of the answer's
+   * SQL, run before `done` so the transcript the client receives already
+   * carries the verdict.
    */
   async streamMessage(
     id: string,
@@ -632,6 +841,7 @@ export class ProjectsService implements OnModuleInit {
     emit: (event: StreamEvent) => void,
     abortSignal?: AbortSignal,
     activeVisualId?: string,
+    careful = false,
   ): Promise<void> {
     const trimmed = (content ?? '').trim();
     if (!trimmed) throw new BadRequestException('message is required');
@@ -796,6 +1006,11 @@ export class ProjectsService implements OnModuleInit {
       });
     } else if (text.trim() || visualEvent) {
       const interpretation = interpretationLine(data, entities);
+      // Careful mode only, and only when there is a result set to corroborate.
+      const crossChecked =
+        careful && !turn.signal.aborted
+          ? await this.crossCheckAnswer(project, trimmed, data)
+          : undefined;
       messages.push({
         role: 'assistant',
         content:
@@ -809,6 +1024,7 @@ export class ProjectsService implements OnModuleInit {
           ? { verified: true }
           : {}),
         ...(visualEvent ? { visual: visualEvent } : {}),
+        ...(crossChecked ? { crossCheck: crossChecked } : {}),
       });
     }
     const updated = await this.repository.update(id, { messages });
@@ -1048,6 +1264,60 @@ function interpretationLine(
   const queries = `${runs.length} quer${runs.length === 1 ? 'y' : 'ies'}`;
   const over = entities.length ? ` over ${entities.join(', ')}` : '';
   return `Computed from ${queries}${over} — ${rows} row${rows === 1 ? '' : 's'} analyzed.`;
+}
+
+/**
+ * Strip fences/semicolons off a model-authored statement and keep it only if
+ * it is a read-only query. Shared by the fixer and the verifier.
+ */
+function readOnlyStatement(sql: string): string | undefined {
+  const cleaned = sql
+    .trim()
+    .replace(/^```(?:sql)?\s*/i, '')
+    .replace(/\s*```$/, '')
+    .replace(/;+\s*$/, '')
+    .trim();
+  return /^(select|with)\b/i.test(cleaned) ? cleaned : undefined;
+}
+
+/** A cross-check verdict with its note clipped to tooltip length. */
+function crossCheck(status: CrossCheck['status'], note: string): CrossCheck {
+  const flat = note.replace(/\s+/g, ' ').trim();
+  return {
+    status,
+    note:
+      flat.length > CROSS_CHECK_NOTE_CHARS
+        ? `${flat.slice(0, CROSS_CHECK_NOTE_CHARS - 1)}…`
+        : flat,
+  };
+}
+
+/**
+ * `entity(column type [e.g. a, b], …)` lines for the verifier. Richer than the
+ * fixer's block: sample values let it match filter literals to real data.
+ */
+function verifierSchema(sandboxes: SandboxSnapshot[]): string {
+  const lines: string[] = [];
+  let budget = VERIFIER_SCHEMA_CHARS;
+  for (const sandbox of sandboxes) {
+    for (const key of sandbox.tables) {
+      const columns =
+        sandbox.entities?.find((e) => e.key === key)?.columns ?? [];
+      const described = columns.map((column) => {
+        const samples = (column.sampleValues ?? []).slice(
+          0,
+          VERIFIER_SAMPLE_VALUES,
+        );
+        const shown = samples.length ? ` [e.g. ${samples.join(', ')}]` : '';
+        return `${column.name} ${column.type}${shown}`;
+      });
+      const line = `${key}(${described.join(', ')})`;
+      if (line.length > budget) return lines.join('\n');
+      budget -= line.length;
+      lines.push(line);
+    }
+  }
+  return lines.join('\n');
 }
 
 /** Parse a model's JSON reply, tolerating a markdown fence around it. */

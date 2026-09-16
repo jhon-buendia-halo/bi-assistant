@@ -214,7 +214,13 @@ export class ProjectsController {
   @Post(':id/messages/stream')
   async streamMessage(
     @Param('id') id: string,
-    @Body() body: { content?: string; activeVisualizationId?: string },
+    @Body()
+    body: {
+      content?: string;
+      activeVisualizationId?: string;
+      /** Careful mode: cross-check the answer before finishing the turn. */
+      careful?: boolean;
+    },
     @Res() res: Response,
   ): Promise<void> {
     res.setHeader('Content-Type', 'text/event-stream');
@@ -235,6 +241,7 @@ export class ProjectsController {
         typeof body?.activeVisualizationId === 'string'
           ? body.activeVisualizationId
           : undefined,
+        body?.careful === true,
       );
     } catch (err) {
       if (!controller.signal.aborted) {

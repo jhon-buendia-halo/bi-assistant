@@ -3,6 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { API_BASE_URL } from '../../../core/config/api.config';
 import {
+  DeepAnalysisResult,
   InteractiveVisualization,
   MessageFeedback,
   Project,
@@ -108,6 +109,40 @@ export class ProjectsApiService {
     );
   }
 
+  // ------------------------------------------------------- deep analysis
+
+  /**
+   * Start the slow path: a background job that plans several angles,
+   * investigates each one and writes a report into the conversation.
+   */
+  startDeepAnalysis(
+    projectId: string,
+    question: string,
+  ): Observable<DeepAnalysisResult> {
+    return this.http.post<DeepAnalysisResult>(
+      `${API_BASE_URL}/projects/${encodeURIComponent(projectId)}/deep-analysis`,
+      { question },
+    );
+  }
+
+  /** Poll one job: planning → investigating → writing → done/error. */
+  deepAnalysisStatus(
+    projectId: string,
+    jobId: string,
+  ): Observable<DeepAnalysisResult> {
+    return this.http.get<DeepAnalysisResult>(
+      `${API_BASE_URL}/projects/${encodeURIComponent(projectId)}/deep-analysis/${encodeURIComponent(jobId)}`,
+    );
+  }
+
+  /** The finished report as markdown. */
+  downloadDeepAnalysis(projectId: string, jobId: string): Observable<Blob> {
+    return this.http.get(
+      `${API_BASE_URL}/projects/${encodeURIComponent(projectId)}/deep-analysis/${encodeURIComponent(jobId)}/download`,
+      { responseType: 'blob' },
+    );
+  }
+
   sendMessage(id: string, content: string): Observable<ProjectActionResult> {
     return this.http.post<ProjectActionResult>(
       `${API_BASE_URL}/projects/${encodeURIComponent(id)}/messages`,
@@ -142,6 +177,8 @@ export class ProjectsApiService {
     },
     signal?: AbortSignal,
     activeVisualizationId?: string,
+    /** Careful mode: the backend cross-checks the answer before `done`. */
+    careful = false,
   ): Promise<void> {
     let res: Response;
     try {
@@ -150,7 +187,11 @@ export class ProjectsApiService {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content, activeVisualizationId }),
+          body: JSON.stringify({
+            content,
+            activeVisualizationId,
+            ...(careful ? { careful: true } : {}),
+          }),
           signal,
         },
       );

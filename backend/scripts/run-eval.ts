@@ -17,6 +17,12 @@ import { DatasourcesService } from '../src/modules/datasources/datasources.servi
 import type { QueryResult } from '../src/modules/datasources/entities/datasource.entity';
 import { LlmService } from '../src/modules/llm/llm.service';
 import { ProjectsService } from '../src/modules/projects/projects.service';
+// Result-set equality lives with the app code: careful mode's cross-check and
+// this harness must judge "same answer" exactly the same way.
+import {
+  compareResults,
+  normalizeValue,
+} from '../src/modules/projects/result-compare';
 import type {
   ChatMessage,
   ProjectDoc,
@@ -28,7 +34,6 @@ import { SandboxRepository } from '../src/modules/sandbox/repositories/sandbox.r
 const ROW_LIMIT = Number(process.env.EVAL_ROW_LIMIT ?? 500);
 const TURN_TIMEOUT_MS = Number(process.env.EVAL_TIMEOUT_MS ?? 300_000);
 const DEFAULT_GOLDEN_SET = join(__dirname, '..', 'eval', 'golden-set.json');
-const SIGNIFICANT_DIGITS = 6;
 
 interface GoldenCase {
   /** Short identifier used in the summary table. */
@@ -156,93 +161,6 @@ function loadGoldenSet(file: string): GoldenCase[] {
     }
     return value as GoldenCase;
   });
-}
-
-// ----------------------------------------------------------- comparison
-
-const NUMERIC = /^-?\d+(\.\d+)?([eE][+-]?\d+)?$/;
-
-/**
- * Cell values arrive typed differently per connector (Databricks returns some
- * numerics as strings, dates as Date objects), so compare on a canonical form:
- * numbers at 6 significant figures, strings trimmed, whitespace-collapsed and
- * case-folded.
- */
-function normalizeValue(value: unknown): string {
-  if (value === null || value === undefined) return '∅';
-  if (value instanceof Date) return value.toISOString();
-  if (typeof value === 'boolean') return value ? 'true' : 'false';
-  if (typeof value === 'bigint') return normalizeNumber(Number(value));
-  if (typeof value === 'number') return normalizeNumber(value);
-  if (typeof value === 'object') return JSON.stringify(value);
-  const text = String(value).trim().replace(/\s+/g, ' ');
-  if (text && NUMERIC.test(text)) return normalizeNumber(Number(text));
-  return text.toLowerCase();
-}
-
-function normalizeNumber(value: number): string {
-  if (!Number.isFinite(value)) return String(value);
-  return String(Number(value.toPrecision(SIGNIFICANT_DIGITS)));
-}
-
-/**
- * One row as an order-independent key: values are sorted, so a query that
- * returns the same facts under different column names or in a different column
- * order still matches.
- */
-function rowKey(row: Record<string, unknown>): string {
-  return Object.values(row).map(normalizeValue).sort().join(' | ');
-}
-
-function multiset(rows: Record<string, unknown>[]): Map<string, number> {
-  const counts = new Map<string, number>();
-  for (const row of rows) {
-    const key = rowKey(row);
-    counts.set(key, (counts.get(key) ?? 0) + 1);
-  }
-  return counts;
-}
-
-function compareResults(
-  expected: Record<string, unknown>[],
-  actual: Record<string, unknown>[],
-): { match: boolean; reason: string } {
-  const expectedWidth = Object.keys(expected[0] ?? {}).length;
-  const actualWidth = Object.keys(actual[0] ?? {}).length;
-  if (expected.length && actual.length && expectedWidth !== actualWidth) {
-    return {
-      match: false,
-      reason: `column count differs (expected ${expectedWidth}, got ${actualWidth})`,
-    };
-  }
-  const want = multiset(expected);
-  const got = multiset(actual);
-  const missing: string[] = [];
-  const extra: string[] = [];
-  for (const [key, count] of want) {
-    const delta = count - (got.get(key) ?? 0);
-    if (delta > 0) missing.push(`${key}${delta > 1 ? ` x${delta}` : ''}`);
-  }
-  for (const [key, count] of got) {
-    const delta = count - (want.get(key) ?? 0);
-    if (delta > 0) extra.push(`${key}${delta > 1 ? ` x${delta}` : ''}`);
-  }
-  if (!missing.length && !extra.length) return { match: true, reason: '' };
-  const parts: string[] = [];
-  if (expected.length !== actual.length) {
-    parts.push(`${expected.length} expected rows vs ${actual.length} returned`);
-  }
-  if (missing.length) parts.push(`missing ${preview(missing)}`);
-  if (extra.length) parts.push(`unexpected ${preview(extra)}`);
-  return { match: false, reason: parts.join('; ') };
-}
-
-function preview(keys: string[]): string {
-  const shown = keys
-    .slice(0, 2)
-    .map((key) => `[${key}]`)
-    .join(' ');
-  return keys.length > 2 ? `${shown} (+${keys.length - 2} more)` : shown;
 }
 
 // ------------------------------------------------------------- analysis

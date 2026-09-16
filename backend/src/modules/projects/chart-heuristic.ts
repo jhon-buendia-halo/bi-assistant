@@ -24,10 +24,30 @@ export interface ChartRecommendation {
   recommendation: string;
 }
 
+/** Advice to answer with a composed layout instead of a single chart. */
+export interface CompositionRecommendation {
+  /** Extra paragraph for `<recommended-form>` describing the composed layout. */
+  guidance: string;
+  /** Numeric columns the KPI tiles should headline (may be empty). */
+  measures: string[];
+}
+
+/** The `<recommended-form>` block plus whether it asks for a composed answer. */
+export interface RecommendedForm {
+  /** The prompt block, ready to be dropped into the designer prompt. */
+  block: string;
+  /** True when the block asks for KPI tiles + main chart + detail table. */
+  composed: boolean;
+}
+
 /** Same row cap `visualizationData` applies before the designer sees the rows. */
 const SAMPLE_ROWS_CAP = 100;
 /** Above this many categories a ranked bar chart needs a top-N + "Other" cut. */
 const MANY_CATEGORIES = 8;
+/** A single result set needs at least this many measures to carry KPI tiles. */
+const COMPOSED_MIN_MEASURES = 2;
+/** …and at least this many rows, so the main chart still has something to say. */
+const COMPOSED_MIN_ROWS = 6;
 
 /**
  * Column-name tokens that mark a temporal column even when the values are bare
@@ -124,13 +144,15 @@ export function profileColumns(
     .filter((profile): profile is ColumnProfile => profile !== undefined);
 }
 
-/** The record the visual is most likely built from: the widest result set. */
-function primaryRecord(
-  records: ToolDataRecord[],
-):
-  | { rows: Record<string, unknown>[]; columns: string[]; rowCount: number }
-  | undefined {
-  const usable = records
+interface UsableRecord {
+  rows: Record<string, unknown>[];
+  columns: string[];
+  rowCount: number;
+}
+
+/** Successful result sets that carry rows and columns, in their original order. */
+function usableRecords(records: ToolDataRecord[]): UsableRecord[] {
+  return records
     .filter((record) => !record.error && (record.rows?.length ?? 0) > 0)
     .map((record) => {
       const rows = (record.rows ?? []).slice(0, SAMPLE_ROWS_CAP);
@@ -144,6 +166,11 @@ function primaryRecord(
       };
     })
     .filter((record) => record.columns.length > 0);
+}
+
+/** The record the visual is most likely built from: the widest result set. */
+function primaryRecord(records: ToolDataRecord[]): UsableRecord | undefined {
+  const usable = usableRecords(records);
   if (!usable.length) return undefined;
   return usable.reduce((a, b) => (b.rows.length > a.rows.length ? b : a));
 }
@@ -257,17 +284,65 @@ export function recommendChartForm(
   );
 }
 
+/**
+ * Recommend a composed answer — KPI tiles, the main chart, and a detail table —
+ * when the rows behind the answer carry enough substance for it. Two or more
+ * successful queries mean the answer already has several angles; one wide,
+ * reasonably long result set has headline figures worth pulling out above the
+ * chart. Thin single-record data keeps the single-form recommendation.
+ */
+export function recommendComposition(
+  records: ToolDataRecord[] | undefined,
+): CompositionRecommendation | undefined {
+  const usable = usableRecords(records ?? []);
+  if (!usable.length) return undefined;
+
+  const primary = usable.reduce((a, b) =>
+    b.rows.length > a.rows.length ? b : a,
+  );
+  const measures = profileColumns(primary.columns, primary.rows)
+    .filter((profile) => profile.role === 'numeric')
+    .map((profile) => profile.name);
+
+  const multipleResultSets = usable.length >= 2;
+  const richSingleResultSet =
+    measures.length >= COMPOSED_MIN_MEASURES &&
+    primary.rowCount >= COMPOSED_MIN_ROWS;
+  if (!multipleResultSets && !richSingleResultSet) return undefined;
+
+  const because = multipleResultSets
+    ? `The answer rests on ${usable.length} query results`
+    : `The main result set has ${measures.length} measures over ${primary.rowCount} rows`;
+  const tiles = measures.length
+    ? `headline figures derived from the data (${list(measures)}) — value large, label beneath, and a delta only when the data itself supports one`
+    : 'headline figures derived from the data — value large, label beneath, and a delta only when the data itself supports one';
+  return {
+    guidance:
+      `${because}, so compose the answer instead of showing a single chart: ` +
+      `a row of KPI tiles at the top with ${tiles}; below it the main chart ` +
+      `described above; below that a collapsible detail table of the ` +
+      `underlying rows. Keep it one fragment, and keep the KPI tiles as ` +
+      `clickable as the chart marks (\`data-qti-value\` on both).`,
+    measures,
+  };
+}
+
 /** The `<recommended-form>` prompt block, or `undefined` when nothing applies. */
 export function recommendedFormBlock(
   records: ToolDataRecord[] | undefined,
-): string | undefined {
+): RecommendedForm | undefined {
   const recommendation = recommendChartForm(records);
   if (!recommendation) return undefined;
-  return [
-    '<recommended-form>',
-    `Data shape: ${recommendation.shape}.`,
-    `Recommended form: ${recommendation.recommendation}. Use this form unless the instruction or the`,
-    'data itself argues for another; if you deviate, say why in the description.',
-    '</recommended-form>',
-  ].join('\n');
+  const composition = recommendComposition(records);
+  return {
+    composed: composition !== undefined,
+    block: [
+      '<recommended-form>',
+      `Data shape: ${recommendation.shape}.`,
+      `Recommended form: ${recommendation.recommendation}. Use this form unless the instruction or the`,
+      'data itself argues for another; if you deviate, say why in the description.',
+      ...(composition ? ['', `Composed answer: ${composition.guidance}`] : []),
+      '</recommended-form>',
+    ].join('\n'),
+  };
 }
