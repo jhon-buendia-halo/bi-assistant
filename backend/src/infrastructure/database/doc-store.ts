@@ -50,6 +50,7 @@ export const SETTINGS_STORE = 'DOC_STORE_settings';
 export const SANDBOX_SELECTIONS_STORE = 'DOC_STORE_sandbox_selections';
 export const PROJECTS_STORE = 'DOC_STORE_projects';
 export const DATASOURCE_INVENTORIES_STORE = 'DOC_STORE_datasource_inventories';
+export const VERIFIED_QUERIES_STORE = 'DOC_STORE_verified_queries';
 
 export function isExistsCondition(v: FilterValue): v is ExistsCondition {
   return typeof v === 'object' && v !== null && '$exists' in v;

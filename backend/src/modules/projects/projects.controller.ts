@@ -10,7 +10,10 @@ import {
 } from '@nestjs/common';
 import { ProjectsService } from './projects.service';
 import type { ProjectDoc } from './entities/project.entity';
-import type { InteractiveVisualization } from './entities/project.entity';
+import type {
+  InteractiveVisualization,
+  MessageFeedback,
+} from './entities/project.entity';
 import type { Response } from 'express';
 
 @Controller('projects')
@@ -184,6 +187,31 @@ export class ProjectsController {
     }
     res.off('close', abort);
     if (!res.writableEnded) res.end();
+  }
+
+  @Post(':id/messages/feedback')
+  async rateMessage(
+    @Param('id') id: string,
+    @Body() body: { messageAt?: string; rating?: string },
+  ): Promise<{ ok: boolean; message: string; project?: ProjectDoc }> {
+    try {
+      const project = await this.projectsService.recordFeedback(
+        id,
+        body?.messageAt ?? '',
+        body?.rating as MessageFeedback,
+      );
+      return {
+        ok: true,
+        message:
+          body?.rating === 'up'
+            ? 'Answer saved as a verified query'
+            : 'Answer marked as wrong',
+        project,
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { ok: false, message };
+    }
   }
 
   @Post(':id/messages')

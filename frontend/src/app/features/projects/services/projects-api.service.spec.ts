@@ -1,6 +1,42 @@
 import { provideHttpClient } from '@angular/common/http';
+import {
+  HttpTestingController,
+  provideHttpClientTesting,
+} from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { API_BASE_URL } from '../../../core/config/api.config';
 import { ProjectsApiService } from './projects-api.service';
+
+describe('ProjectsApiService feedback', () => {
+  let service: ProjectsApiService;
+  let http: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
+    service = TestBed.inject(ProjectsApiService);
+    http = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => http.verify());
+
+  it('posts the rating for a message', () => {
+    service
+      .sendMessageFeedback('project 1', '2026-01-01T00:00:00.000Z', 'up')
+      .subscribe();
+
+    const req = http.expectOne(
+      `${API_BASE_URL}/projects/project%201/messages/feedback`,
+    );
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({
+      messageAt: '2026-01-01T00:00:00.000Z',
+      rating: 'up',
+    });
+    req.flush({ ok: true, message: 'Saved' });
+  });
+});
 
 describe('ProjectsApiService streaming', () => {
   let service: ProjectsApiService;

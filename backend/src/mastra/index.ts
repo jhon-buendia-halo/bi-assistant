@@ -2,6 +2,7 @@ import { Mastra } from '@mastra/core';
 import { PinoLogger } from '@mastra/loggers';
 import { MastraStorageExporter, Observability } from '@mastra/observability';
 import { assistantAgent } from './agents/assistant.agent';
+import { sqlFixerAgent } from './agents/sql-fixer.agent';
 import { visualizationAgent } from './agents/visualization.agent';
 import { mastraStorage } from './storage';
 import { watchProjectWorkspaceRegistry } from './project-workspaces';
@@ -13,6 +14,7 @@ export const mastra = new Mastra({
   agents: {
     assistant: assistantAgent,
     visualization: visualizationAgent,
+    'sql-fixer': sqlFixerAgent,
   },
   storage: mastraStorage,
   logger: new PinoLogger({ name: 'Mastra', level: 'info' }),

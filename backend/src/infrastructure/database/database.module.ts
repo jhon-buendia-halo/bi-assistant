@@ -7,6 +7,7 @@ import {
   PROJECTS_STORE,
   SANDBOX_SELECTIONS_STORE,
   SETTINGS_STORE,
+  VERIFIED_QUERIES_STORE,
 } from './doc-store';
 import { SqliteDocStore } from './sqlite-doc-store';
 
@@ -27,6 +28,7 @@ const COLLECTIONS = [
   { token: SANDBOX_SELECTIONS_STORE, table: 'sandbox_selections' },
   { token: PROJECTS_STORE, table: 'projects' },
   { token: DATASOURCE_INVENTORIES_STORE, table: 'datasource_inventories' },
+  { token: VERIFIED_QUERIES_STORE, table: 'verified_queries' },
 ];
 
 const sqliteDbProvider: Provider = {

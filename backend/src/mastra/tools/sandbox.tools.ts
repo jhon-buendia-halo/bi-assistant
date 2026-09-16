@@ -1,13 +1,17 @@
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
-import { getSandboxToolServices, SandboxSnapshot } from '../tool-services';
+import {
+  getSandboxToolServices,
+  SandboxColumnSnapshot,
+  SandboxSnapshot,
+} from '../tool-services';
 
 /** requestContext key carrying the project's sandbox names. */
 export const SANDBOXES_CONTEXT_KEY = 'sandboxes';
 
 interface EntityAccess {
   entity: string;
-  columns?: { name: string; type: string; nullable: boolean }[];
+  columns?: SandboxColumnSnapshot[];
   datasourceId?: string;
   datasourceKind?: string;
   sandbox: string;
@@ -123,7 +127,7 @@ export const listEntitiesTool = createTool({
 export const describeEntityTool = createTool({
   id: 'describe_entity',
   description:
-    'Describe one sandbox entity: its columns with types and nullability. Pass datasourceId when list_entities shows the same key on multiple datasources.',
+    'Describe one sandbox entity: its columns with types, nullability, and — when captured at save time — a description and real sample values per column. Pass datasourceId when list_entities shows the same key on multiple datasources.',
   inputSchema: z.object({
     entity: z.string().describe('Fully-qualified catalog.schema.table'),
     datasourceId: z.string().optional().describe('Datasource containing it'),
@@ -207,6 +211,7 @@ export const runReadOnlySqlTool = createTool({
         target.id,
         sql,
         limit ?? 100,
+        sandboxNames(requestContext),
       );
     } catch (err) {
       return { error: err instanceof Error ? err.message : String(err) };

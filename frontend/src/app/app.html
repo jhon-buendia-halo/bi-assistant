@@ -353,6 +353,7 @@
           (generateVisual)="generateInteractiveVisual($event)"
           (visualUpdated)="onVisualUpdated($event)"
           (viewVisual)="showVisualization($event, $event.version)"
+          (projectUpdated)="onProjectUpdated($event)"
         />
       } @else if (mainView() === "conversation-new") {
         <!-- New conversation composer -->

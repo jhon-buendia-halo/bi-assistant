@@ -371,6 +371,19 @@ export class App {
     });
   }
 
+  /**
+   * The chat persisted the project out of band (answer feedback). Refresh the
+   * cached copies; the chat guards same-id refreshes, so streams are safe.
+   */
+  onProjectUpdated(project: Project): void {
+    this.projects.update((projects) =>
+      projects.map((item) => (item.id === project.id ? project : item)),
+    );
+    if (this.activeProject()?.id === project.id) {
+      this.activeProject.set(project);
+    }
+  }
+
   /** A chat turn created/updated a visual — show the new version live. */
   onVisualUpdated(event: VisualEvent): void {
     this.refreshActiveProject((project) => {

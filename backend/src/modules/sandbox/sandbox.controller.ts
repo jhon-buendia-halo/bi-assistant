@@ -1,21 +1,15 @@
 import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
-import { DatasourcesService } from '../datasources/datasources.service';
-import { SandboxRepository } from './repositories/sandbox.repository';
-import type {
-  SandboxDoc,
-  SandboxEntitySnapshot,
-} from './repositories/sandbox.repository';
+import { SandboxService } from './sandbox.service';
+import type { SandboxDoc } from './repositories/sandbox.repository';
+import type { SandboxEntitySnapshot } from './repositories/sandbox.repository';
 
 @Controller('sandbox')
 export class SandboxController {
-  constructor(
-    private readonly sandboxRepository: SandboxRepository,
-    private readonly datasources: DatasourcesService,
-  ) {}
+  constructor(private readonly sandboxes: SandboxService) {}
 
   @Get()
   async list(): Promise<{ sandboxes: SandboxDoc[] }> {
-    return { sandboxes: await this.sandboxRepository.list() };
+    return { sandboxes: await this.sandboxes.list() };
   }
 
   @Post()
@@ -31,39 +25,24 @@ export class SandboxController {
   ): Promise<{ ok: boolean; message: string }> {
     try {
       const name = typeof body?.name === 'string' ? body.name.trim() : '';
-      if (!name) return { ok: false, message: 'Sandbox name is required' };
       const tables = Array.isArray(body?.tables)
         ? body.tables.map((t) => String(t))
         : [];
-      if (tables.length === 0) {
-        return { ok: false, message: 'Include at least one entity' };
-      }
-      const entities = Array.isArray(body?.entities)
-        ? (body.entities as SandboxEntitySnapshot[])
-        : [];
-      const datasourceId =
-        typeof body?.datasourceId === 'string' ? body.datasourceId.trim() : '';
-      if (!datasourceId) {
-        return { ok: false, message: 'datasourceId is required' };
-      }
-      const savedDatasource = await this.datasources.get(datasourceId);
-      if (
-        body.datasourceKind !== undefined &&
-        body.datasourceKind !== savedDatasource.kind
-      ) {
-        return {
-          ok: false,
-          message: `Datasource kind must be ${savedDatasource.kind}`,
-        };
-      }
-      const datasource = {
-        id: savedDatasource.id,
-        kind: savedDatasource.kind,
-      };
-      await this.sandboxRepository.save(name, tables, entities, datasource);
+      const saved = await this.sandboxes.save({
+        name,
+        tables,
+        entities: Array.isArray(body?.entities)
+          ? (body.entities as SandboxEntitySnapshot[])
+          : [],
+        datasourceId:
+          typeof body?.datasourceId === 'string'
+            ? body.datasourceId.trim()
+            : '',
+        datasourceKind: body?.datasourceKind,
+      });
       return {
         ok: true,
-        message: `Sandbox "${name}" saved — ${tables.length} entities`,
+        message: `Sandbox "${saved?.name ?? name}" saved — ${tables.length} entities`,
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -75,7 +54,7 @@ export class SandboxController {
   async remove(
     @Param('name') name: string,
   ): Promise<{ ok: boolean; message: string }> {
-    const removed = await this.sandboxRepository.delete(name);
+    const removed = await this.sandboxes.delete(name);
     if (removed === 0) {
       return { ok: false, message: `Sandbox "${name}" not found` };
     }

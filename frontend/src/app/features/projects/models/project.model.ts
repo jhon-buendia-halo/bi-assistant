@@ -27,7 +27,11 @@ export interface ChatMessage {
   };
   /** Present when this turn created, updated or reverted a visual. */
   visual?: VisualEvent;
+  /** User rating of this answer; `up` saves it as a verified query. */
+  feedback?: MessageFeedback;
 }
+
+export type MessageFeedback = 'up' | 'down';
 
 export interface VisualEvent {
   visualId: string;

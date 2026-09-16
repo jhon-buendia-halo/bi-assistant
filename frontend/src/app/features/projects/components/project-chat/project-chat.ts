@@ -19,11 +19,14 @@ import {
   Loader2,
   Sparkles,
   Square,
+  ThumbsDown,
+  ThumbsUp,
   Wrench,
 } from 'lucide-angular';
 import { ProjectsApiService } from '../../services/projects-api.service';
 import {
   ChatMessage,
+  MessageFeedback,
   Project,
   ToolDataRecord,
   VisualEvent,
@@ -53,6 +56,8 @@ export class ProjectChat {
   readonly Loader2 = Loader2;
   readonly Sparkles = Sparkles;
   readonly Square = Square;
+  readonly ThumbsDown = ThumbsDown;
+  readonly ThumbsUp = ThumbsUp;
   readonly Wrench = Wrench;
 
   private readonly api = inject(ProjectsApiService);
@@ -66,6 +71,8 @@ export class ProjectChat {
   /** A turn created/updated a visual; the host should refresh the panel. */
   readonly visualUpdated = output<VisualEvent>();
   readonly viewVisual = output<VisualEvent>();
+  /** The project was persisted out of band (answer feedback) — refresh copies. */
+  readonly projectUpdated = output<Project>();
 
   readonly messages = signal<ChatMessage[]>([]);
   readonly draft = signal('');
@@ -77,6 +84,8 @@ export class ProjectChat {
   /** Streamed assistant text for the in-flight turn. */
   readonly streamingText = signal('');
   readonly elapsed = signal(0);
+  /** `at` of the message whose rating is being persisted right now. */
+  readonly feedbackPending = signal<string | null>(null);
   /** Chat-history navigator (Conductor-style tick strip). */
   readonly historyOpen = signal(false);
   readonly historyItems = computed(() =>
@@ -109,6 +118,7 @@ export class ProjectChat {
       this.stopTimer();
       this.sending.set(false);
       this.messages.set(project.messages);
+      this.feedbackPending.set(null);
       this.draft.set('');
       this.customAnswer.set('');
       this.customAnswerOpen.set(false);
@@ -264,6 +274,56 @@ export class ProjectChat {
     void navigator.clipboard.writeText(content).then(
       () => this.toast.success('Copied to clipboard'),
       () => this.toast.error('Copy failed'),
+    );
+  }
+
+  /**
+   * Rate an answer. Same rating twice is a no-op; the other rating switches.
+   * The transcript is patched locally first so the click feels instant, then
+   * reconciled with the persisted project — never while a turn is streaming,
+   * because `done` brings the authoritative transcript.
+   */
+  rateMessage(message: ChatMessage, rating: MessageFeedback): void {
+    if (message.feedback === rating) return;
+    if (this.feedbackPending() === message.at) return;
+    const previous = message.feedback;
+    this.feedbackPending.set(message.at);
+    this.patchFeedback(message.at, rating);
+
+    this.api
+      .sendMessageFeedback(this.project().id, message.at, rating)
+      .subscribe({
+        next: (result) => {
+          this.feedbackPending.set(null);
+          if (!result.ok) {
+            this.patchFeedback(message.at, previous);
+            this.toast.error(result.message || 'Could not save feedback');
+            return;
+          }
+          if (result.project) {
+            if (!this.sending()) this.messages.set(result.project.messages);
+            this.projectUpdated.emit(result.project);
+          }
+          this.toast.success(result.message || 'Feedback saved');
+        },
+        error: (err) => {
+          this.feedbackPending.set(null);
+          this.patchFeedback(message.at, previous);
+          this.toast.error(err?.error?.message ?? 'Backend unreachable');
+        },
+      });
+  }
+
+  private patchFeedback(
+    at: string,
+    feedback: MessageFeedback | undefined,
+  ): void {
+    this.messages.update((messages) =>
+      messages.map((message) =>
+        message.role === 'assistant' && message.at === at
+          ? { ...message, feedback }
+          : message,
+      ),
     );
   }
 

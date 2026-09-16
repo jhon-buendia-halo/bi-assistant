@@ -208,13 +208,58 @@
                 </div>
               </details>
             }
-            <button
-              (click)="copyMessage(message.content)"
-              title="Copy message"
-              class="mt-1 rounded p-1 text-zinc-500 opacity-0 group-hover:opacity-100 hover:bg-white/10 hover:text-zinc-300"
-            >
-              <lucide-angular [img]="Copy" [size]="14" />
-            </button>
+            <div class="mt-1 flex items-center gap-1">
+              <button
+                (click)="copyMessage(message.content)"
+                title="Copy message"
+                class="rounded p-1 text-zinc-500 opacity-0 group-hover:opacity-100 hover:bg-white/10 hover:text-zinc-300"
+              >
+                <lucide-angular [img]="Copy" [size]="14" />
+              </button>
+              @if (message.data?.length) {
+                <!-- Answer rating: thumbs-up saves the query as verified -->
+                <button
+                  type="button"
+                  (click)="rateMessage(message, 'up')"
+                  [disabled]="feedbackPending() === message.at"
+                  [attr.aria-pressed]="message.feedback === 'up'"
+                  [title]="
+                    message.feedback === 'up'
+                      ? 'Saved as verified query'
+                      : 'Save as verified query'
+                  "
+                  aria-label="Save as verified query"
+                  class="rounded p-1 disabled:cursor-not-allowed disabled:opacity-40"
+                  [class]="
+                    message.feedback === 'up'
+                      ? 'qti-rating-on bg-emerald-400/10 text-emerald-400'
+                      : 'text-zinc-500 opacity-0 group-hover:opacity-100 hover:bg-white/10 hover:text-zinc-300'
+                  "
+                >
+                  <lucide-angular [img]="ThumbsUp" [size]="14" />
+                </button>
+                <button
+                  type="button"
+                  (click)="rateMessage(message, 'down')"
+                  [disabled]="feedbackPending() === message.at"
+                  [attr.aria-pressed]="message.feedback === 'down'"
+                  [title]="
+                    message.feedback === 'down'
+                      ? 'Marked as wrong'
+                      : 'Mark answer as wrong'
+                  "
+                  aria-label="Mark answer as wrong"
+                  class="rounded p-1 disabled:cursor-not-allowed disabled:opacity-40"
+                  [class]="
+                    message.feedback === 'down'
+                      ? 'qti-rating-on bg-red-400/10 text-red-400'
+                      : 'text-zinc-500 opacity-0 group-hover:opacity-100 hover:bg-white/10 hover:text-zinc-300'
+                  "
+                >
+                  <lucide-angular [img]="ThumbsDown" [size]="14" />
+                </button>
+              }
+            </div>
             @if (message.content.trim()) {
               <div class="mt-2 flex flex-wrap items-start gap-2">
                 <button

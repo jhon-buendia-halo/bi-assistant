@@ -34,7 +34,14 @@ export interface ChatMessage {
   };
   /** Present when this turn created, updated or reverted a visual. */
   visual?: VisualEvent;
+  /**
+   * The user's rating of this answer. A thumbs-up also stores the answer's
+   * question → SQL pair in the verified query library.
+   */
+  feedback?: MessageFeedback;
 }
+
+export type MessageFeedback = 'up' | 'down';
 
 export interface VisualEvent {
   visualId: string;

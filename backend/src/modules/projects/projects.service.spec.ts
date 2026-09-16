@@ -24,13 +24,28 @@ jest.mock('../datasources/datasources.service', () => ({
   DatasourcesService: class {},
 }));
 jest.mock('../llm/llm.service', () => ({ LlmService: class {} }));
+jest.mock('../verified-queries/verified-queries.service', () => ({
+  VerifiedQueriesService: class {},
+}));
+jest.mock('../../mastra/agents/sql-fixer.agent', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { z } = require('zod') as typeof import('zod');
+  return { sqlFixOutputSchema: z.object({ sql: z.string() }) };
+});
 jest.mock('./repositories/projects.repository', () => ({
   ProjectsRepository: class {},
 }));
 jest.mock('./visualization.service', () => ({
   VisualizationService: class {},
 }));
+// `marked` is ESM-only; stub the document builder so the suite runs under
+// Jest's CommonJS transform.
+jest.mock('./visualization-document', () => ({
+  sourceEntities: jest.fn().mockReturnValue([]),
+}));
 
+import { setSandboxToolServices } from '../../mastra/tool-services';
+import type { SandboxToolServices } from '../../mastra/tool-services';
 import { ProjectsService, StreamEvent } from './projects.service';
 import type { ProjectDoc } from './entities/project.entity';
 
@@ -77,6 +92,7 @@ describe('ProjectsService streaming', () => {
         getView: jest.fn().mockResolvedValue({ reasoningEffort: 'medium' }),
       } as never,
       {} as never,
+      { referenceBlock: jest.fn().mockResolvedValue(undefined) } as never,
     );
     const events: StreamEvent[] = [];
 
@@ -97,6 +113,230 @@ describe('ProjectsService streaming', () => {
       }),
     );
     expect(events.at(-1)).toEqual({ type: 'done', project });
+  });
+});
+
+describe('ProjectsService SQL self-correction', () => {
+  /** The `run_readonly_sql` bridge ProjectsService installs for the tools. */
+  async function bridge(overrides: {
+    runs: jest.Mock;
+    fixerReplies?: ({ sql: string } | undefined)[];
+  }) {
+    const fixer = { generate: jest.fn() };
+    for (const reply of overrides.fixerReplies ?? []) {
+      fixer.generate.mockResolvedValueOnce({ object: reply });
+    }
+    const sandbox = {
+      name: 'claims',
+      datasourceId: 'ds-1',
+      datasourceKind: 'databricks',
+      tables: ['main.health.claims'],
+      entities: [
+        {
+          key: 'main.health.claims',
+          columns: [{ name: 'claim_id', type: 'string', nullable: false }],
+        },
+      ],
+    };
+    const service = new ProjectsService(
+      { list: jest.fn().mockResolvedValue([]) } as never,
+      {
+        getAgent: jest.fn().mockReturnValue(fixer),
+        ensureProjectWorkspace: jest.fn().mockResolvedValue({ id: 'w' }),
+      } as never,
+      { getByNames: jest.fn().mockResolvedValue([sandbox]) } as never,
+      { runReadOnlySql: overrides.runs } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+    await service.onModuleInit();
+    const calls = (setSandboxToolServices as jest.Mock).mock
+      .calls as unknown[][];
+    const installed = calls.at(-1)![0] as SandboxToolServices;
+    return {
+      run: (sql: string) =>
+        installed.runReadOnlySql('ds-1', sql, 100, ['claims']),
+      fixer,
+    };
+  }
+
+  it('repairs a failed statement and reports the SQL that ran', async () => {
+    const runs = jest
+      .fn()
+      .mockRejectedValueOnce(new Error('Column claimid cannot be resolved'))
+      .mockResolvedValueOnce({ columns: ['n'], rows: [{ n: 3 }] });
+    const { run, fixer } = await bridge({
+      runs,
+      fixerReplies: [
+        { sql: 'SELECT count(claim_id) AS n FROM main.health.claims' },
+      ],
+    });
+
+    const result = await run(
+      'SELECT count(claimid) AS n FROM main.health.claims',
+    );
+
+    const prompt = (fixer.generate.mock.calls as unknown[][])[0][0] as string;
+    expect(fixer.generate).toHaveBeenCalledTimes(1);
+    expect(prompt).toContain('Column claimid cannot be resolved');
+    expect(prompt).toContain('Dialect: databricks');
+    expect(prompt).toContain('main.health.claims(claim_id string)');
+    expect(result).toEqual(
+      expect.objectContaining({
+        rows: [{ n: 3 }],
+        correctedSql: 'SELECT count(claim_id) AS n FROM main.health.claims',
+        note: expect.stringContaining('auto-corrected'),
+      }),
+    );
+  });
+
+  it('gives up after two repair attempts and rethrows the last error', async () => {
+    const runs = jest
+      .fn()
+      .mockRejectedValueOnce(new Error('first'))
+      .mockRejectedValueOnce(new Error('second'))
+      .mockRejectedValueOnce(new Error('third'));
+    const { run, fixer } = await bridge({
+      runs,
+      fixerReplies: [
+        { sql: 'SELECT 1 FROM main.health.claims' },
+        { sql: 'SELECT 2 FROM main.health.claims' },
+      ],
+    });
+
+    await expect(run('SELECT bad FROM main.health.claims')).rejects.toThrow(
+      'third',
+    );
+    expect(runs).toHaveBeenCalledTimes(3);
+    expect(fixer.generate).toHaveBeenCalledTimes(2);
+  });
+
+  it('notes an empty result set without calling the fixer', async () => {
+    const runs = jest.fn().mockResolvedValue({ columns: ['n'], rows: [] });
+    const { run, fixer } = await bridge({ runs });
+
+    const result = await run('SELECT 1 WHERE false');
+
+    expect(fixer.generate).not.toHaveBeenCalled();
+    expect(result.correctedSql).toBeUndefined();
+    expect(result.note).toContain('0 rows');
+  });
+});
+
+describe('ProjectsService answer feedback', () => {
+  function build(project: ProjectDoc) {
+    const repository = {
+      get: jest.fn().mockResolvedValue(project),
+      update: jest.fn().mockImplementation(async (_id, patch) => {
+        Object.assign(project, patch);
+        return project;
+      }),
+    };
+    const verifiedQueries = {
+      save: jest.fn().mockResolvedValue({}),
+      removeForMessage: jest.fn().mockResolvedValue(1),
+    };
+    const service = new ProjectsService(
+      repository as never,
+      {} as never,
+      {
+        getByNames: jest
+          .fn()
+          .mockResolvedValue([
+            { name: 'claims', datasourceId: 'ds-1', tables: [] },
+          ]),
+      } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      verifiedQueries as never,
+    );
+    return { service, verifiedQueries };
+  }
+
+  const answered = (): ProjectDoc => ({
+    id: 'project-1',
+    name: 'Claims',
+    sandboxes: ['claims'],
+    visualizations: [],
+    messages: [
+      { role: 'user', content: 'ignore me', at: '2024-01-01T00:00:00.000Z' },
+      {
+        role: 'assistant',
+        content: 'older answer',
+        at: '2024-01-01T00:00:01.000Z',
+      },
+      {
+        role: 'user',
+        content: 'How many claims were denied last year?',
+        at: '2024-01-01T00:00:02.000Z',
+      },
+      {
+        role: 'assistant',
+        content: '1,204 claims.',
+        at: '2024-01-01T00:00:03.000Z',
+        entities: ['main.health.claims'],
+        data: [
+          { tool: 'run_readonly_sql', input: 'SELECT 1', error: 'boom' },
+          {
+            tool: 'run_readonly_sql',
+            input: 'SELECT count(*) FROM main.health.claims',
+            rowCount: 1,
+          },
+        ],
+      },
+    ],
+  });
+
+  it('saves the preceding question with the last successful SQL on thumbs-up', async () => {
+    const project = answered();
+    const { service, verifiedQueries } = build(project);
+
+    const updated = await service.recordFeedback(
+      'project-1',
+      '2024-01-01T00:00:03.000Z',
+      'up',
+    );
+
+    expect(verifiedQueries.save).toHaveBeenCalledWith({
+      question: 'How many claims were denied last year?',
+      sql: 'SELECT count(*) FROM main.health.claims',
+      datasourceId: 'ds-1',
+      entities: ['main.health.claims'],
+      sourceProjectId: 'project-1',
+      sourceMessageAt: '2024-01-01T00:00:03.000Z',
+    });
+    expect(updated.messages.at(-1)?.feedback).toBe('up');
+  });
+
+  it('removes the stored pair on thumbs-down', async () => {
+    const project = answered();
+    const { service, verifiedQueries } = build(project);
+
+    await service.recordFeedback(
+      'project-1',
+      '2024-01-01T00:00:03.000Z',
+      'down',
+    );
+
+    expect(verifiedQueries.removeForMessage).toHaveBeenCalledWith(
+      'project-1',
+      '2024-01-01T00:00:03.000Z',
+    );
+    expect(verifiedQueries.save).not.toHaveBeenCalled();
+    expect(project.messages.at(-1)?.feedback).toBe('down');
+  });
+
+  it('records the rating but saves nothing when the answer ran no SQL', async () => {
+    const project = answered();
+    delete project.messages[3].data;
+    const { service, verifiedQueries } = build(project);
+
+    await service.recordFeedback('project-1', '2024-01-01T00:00:03.000Z', 'up');
+
+    expect(verifiedQueries.save).not.toHaveBeenCalled();
+    expect(project.messages.at(-1)?.feedback).toBe('up');
   });
 });
 

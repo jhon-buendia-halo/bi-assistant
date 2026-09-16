@@ -9,6 +9,8 @@ import { randomUUID } from 'crypto';
 import { RequestContext } from '@mastra/core/request-context';
 import { MastraService } from '../../mastra/mastra.service';
 import { setSandboxToolServices } from '../../mastra/tool-services';
+import type { SandboxSnapshot, SqlRunResult } from '../../mastra/tool-services';
+import { sqlFixOutputSchema } from '../../mastra/agents/sql-fixer.agent';
 import { SANDBOXES_CONTEXT_KEY } from '../../mastra/tools/sandbox.tools';
 import {
   ACTIVE_VISUAL_CONTEXT_KEY,
@@ -18,12 +20,14 @@ import { PROJECT_WORKSPACE_CONTEXT_KEY } from '../../mastra/project-workspaces';
 import { SandboxRepository } from '../sandbox/repositories/sandbox.repository';
 import { DatasourcesService } from '../datasources/datasources.service';
 import { LlmService } from '../llm/llm.service';
+import { VerifiedQueriesService } from '../verified-queries/verified-queries.service';
 import { ProjectsRepository } from './repositories/projects.repository';
 import { VisualizationService } from './visualization.service';
 import { sourceEntities } from './visualization-document';
 import {
   ChatMessage,
   InteractiveVisualization,
+  MessageFeedback,
   ProjectDoc,
   ProjectVisualization,
   ToolDataRecord,
@@ -35,6 +39,14 @@ const SYNTHESIS_ROWS_CAP = 50;
 const EMPTY_RESPONSE_FALLBACK =
   'I completed the data analysis but could not produce a final response. Please retry your question.';
 const VISUAL_TOOLS = new Set(['create_visual', 'update_visual']);
+/** Repair attempts allowed per failed statement (3 executions at most). */
+const SQL_REPAIR_ATTEMPTS = 2;
+const SQL_REPAIRED_NOTE =
+  'original query failed and was auto-corrected — cite the corrected SQL';
+const EMPTY_ROWS_NOTE =
+  'query returned 0 rows — verify filters/values before concluding';
+/** Character budget for the schema block handed to the fixer. */
+const FIXER_SCHEMA_CHARS = 4_000;
 
 export type StreamEvent = {
   type:
@@ -54,6 +66,7 @@ export class ProjectsService implements OnModuleInit {
     private readonly datasourcesService: DatasourcesService,
     private readonly llmService: LlmService,
     private readonly visuals: VisualizationService,
+    private readonly verifiedQueries: VerifiedQueriesService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -62,8 +75,8 @@ export class ProjectsService implements OnModuleInit {
       getSandboxes: (names) => this.boundSandboxes(names),
       sampleRows: (datasourceId, entity, limit) =>
         this.datasourcesService.sampleRows(datasourceId, entity, limit),
-      runReadOnlySql: (datasourceId, sql, limit) =>
-        this.datasourcesService.runReadOnlySql(datasourceId, sql, limit),
+      runReadOnlySql: (datasourceId, sql, limit, sandboxes) =>
+        this.runSqlWithRepair(datasourceId, sql, limit, sandboxes),
       createVisual: async (projectId, sourceMessageAt, instruction) => {
         const project = await this.get(projectId);
         const { metadata } = await this.visuals.create(
@@ -106,11 +119,13 @@ export class ProjectsService implements OnModuleInit {
 
   /**
    * Hybrid context: a cheap orientation block (sandbox names + entity keys,
-   * the project's visuals and which one is open) in the system context, plus
+   * the project's visuals and which one is open) plus any user-approved
+   * question → SQL pairs resembling `question`, in the system context, and
    * requestContext scoping the tools to this project.
    */
   private async agentOptions(
     project: ProjectDoc,
+    question?: string,
     abortSignal?: AbortSignal,
     activeVisualId?: string,
   ) {
@@ -137,6 +152,9 @@ export class ProjectsService implements OnModuleInit {
     );
     requestContext.set(PROJECT_WORKSPACE_CONTEXT_KEY, workspace.id);
     const { reasoningEffort } = await this.llmService.getView();
+    const verified = question
+      ? await this.verifiedQueries.referenceBlock(question)
+      : undefined;
     return {
       // Analysis often chains several schema + SQL tool calls per turn.
       maxSteps: 15,
@@ -160,6 +178,7 @@ export class ProjectsService implements OnModuleInit {
               : 'No visual is open in the right panel.',
           ].join('\n'),
         },
+        ...(verified ? [{ role: 'system' as const, content: verified }] : []),
       ],
       requestContext,
       abortSignal,
@@ -186,6 +205,146 @@ export class ProjectsService implements OnModuleInit {
           },
     );
   }
+
+  // ----------------------------------------------------- SQL self-correction
+
+  /**
+   * Execution-guided repair: when a statement fails to execute, hand it plus
+   * the engine error and the schema in scope to the `sql-fixer` agent and
+   * re-run, up to `SQL_REPAIR_ATTEMPTS` times. Empty result sets are not
+   * errors — they get a note, never an LLM call. The last error propagates so
+   * the tool reports it to the agent as before.
+   */
+  private async runSqlWithRepair(
+    datasourceId: string,
+    sql: string,
+    limit: number,
+    sandboxNames: string[],
+  ): Promise<SqlRunResult> {
+    let statement = sql;
+    let fixerContext: { dialect: string; schema: string } | undefined;
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const result = await this.datasourcesService.runReadOnlySql(
+          datasourceId,
+          statement,
+          limit,
+        );
+        const repaired = statement !== sql;
+        const notes = [
+          ...(repaired ? [SQL_REPAIRED_NOTE] : []),
+          ...(result.rows.length ? [] : [EMPTY_ROWS_NOTE]),
+        ];
+        return {
+          ...result,
+          ...(repaired ? { correctedSql: statement } : {}),
+          ...(notes.length ? { note: notes.join('; ') } : {}),
+        };
+      } catch (error) {
+        if (attempt >= SQL_REPAIR_ATTEMPTS) throw error;
+        const message = error instanceof Error ? error.message : String(error);
+        fixerContext ??= await this.sqlFixerContext(sandboxNames, datasourceId);
+        const corrected = await this.repairSql(
+          statement,
+          message,
+          fixerContext,
+        );
+        if (!corrected || corrected === statement) throw error;
+        this.logger.warn(
+          `Repairing failed SQL (attempt ${attempt + 1}): ${message}`,
+        );
+        statement = corrected;
+      }
+    }
+  }
+
+  /** Dialect + a capped `entity(column type, …)` block for the fixer prompt. */
+  private async sqlFixerContext(
+    sandboxNames: string[],
+    datasourceId: string,
+  ): Promise<{ dialect: string; schema: string }> {
+    const sandboxes = await this.boundSandboxes(sandboxNames);
+    const onDatasource = sandboxes.filter(
+      (s) => s.datasourceId === datasourceId,
+    );
+    const inScope: SandboxSnapshot[] = onDatasource.length
+      ? onDatasource
+      : sandboxes;
+    const dialect =
+      inScope.find((s) => s.datasourceKind)?.datasourceKind ?? 'databricks';
+    const lines: string[] = [];
+    let budget = FIXER_SCHEMA_CHARS;
+    for (const sandbox of inScope) {
+      for (const key of sandbox.tables) {
+        const columns =
+          sandbox.entities?.find((e) => e.key === key)?.columns ?? [];
+        const line = `${key}(${columns.map((c) => `${c.name} ${c.type}`).join(', ')})`;
+        if (line.length > budget) return { dialect, schema: lines.join('\n') };
+        budget -= line.length;
+        lines.push(line);
+      }
+    }
+    return { dialect, schema: lines.join('\n') };
+  }
+
+  /** One fixer pass; returns undefined when it produced nothing usable. */
+  private async repairSql(
+    sql: string,
+    error: string,
+    context: { dialect: string; schema: string },
+  ): Promise<string | undefined> {
+    try {
+      const result = await this.mastra
+        .getAgent('sql-fixer')
+        .generate(
+          [
+            `Dialect: ${context.dialect}`,
+            '',
+            '<available-entities>',
+            context.schema || '(no schema snapshot stored for this project)',
+            '</available-entities>',
+            '',
+            '<failed-sql>',
+            sql,
+            '</failed-sql>',
+            '',
+            '<error>',
+            error,
+            '</error>',
+          ].join('\n'),
+          {
+            maxSteps: 1,
+            toolChoice: 'none',
+            // A syntax/column fix does not benefit from hidden reasoning tokens.
+            providerOptions: { openai: { reasoningEffort: 'low' } },
+            structuredOutput: {
+              schema: sqlFixOutputSchema,
+              jsonPromptInjection: 'inline',
+            },
+          },
+        );
+      const parsed = sqlFixOutputSchema.safeParse(
+        result.object ?? parseJsonObject(result.text),
+      );
+      if (!parsed.success) return undefined;
+      const corrected = parsed.data.sql
+        .trim()
+        .replace(/^```(?:sql)?\s*/i, '')
+        .replace(/\s*```$/, '')
+        .replace(/;+\s*$/, '')
+        .trim();
+      // The connector rejects anything else anyway — keep the original error
+      // instead of burning another round-trip on it.
+      return /^(select|with)\b/i.test(corrected) ? corrected : undefined;
+    } catch (err) {
+      this.logger.warn(
+        `SQL repair attempt failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return undefined;
+    }
+  }
+
+  // --------------------------------------------------------------- internals
 
   /**
    * Mastra stores new turns itself once a project thread exists. For projects
@@ -374,7 +533,7 @@ export class ProjectsService implements OnModuleInit {
     const input = await this.agentInput(agent, project);
     const result = await agent.generate(
       input,
-      await this.agentOptions(project),
+      await this.agentOptions(project, trimmed),
     );
     project.messages.push({
       role: 'assistant',
@@ -415,7 +574,7 @@ export class ProjectsService implements OnModuleInit {
     abortSignal?.addEventListener('abort', forwardAbort, { once: true });
     const stream = await agent.stream(
       input,
-      await this.agentOptions(project, turn.signal, activeVisualId),
+      await this.agentOptions(project, trimmed, turn.signal, activeVisualId),
     );
 
     let text = '';
@@ -616,6 +775,68 @@ export class ProjectsService implements OnModuleInit {
     }
   }
 
+  // ------------------------------------------------------------- feedback
+
+  /**
+   * Persist a thumbs rating on one assistant answer. Thumbs-up promotes the
+   * answer's question → SQL pair into the verified query library (Vanna
+   * pattern); thumbs-down removes whatever that answer contributed. An answer
+   * that ran no SQL just records the rating.
+   */
+  async recordFeedback(
+    id: string,
+    messageAt: string,
+    rating: MessageFeedback,
+  ): Promise<ProjectDoc> {
+    if (rating !== 'up' && rating !== 'down') {
+      throw new BadRequestException("rating must be 'up' or 'down'");
+    }
+    if (!messageAt) throw new BadRequestException('messageAt is required');
+    const project = await this.get(id);
+    const index = project.messages.findIndex(
+      (m) => m.role === 'assistant' && m.at === messageAt,
+    );
+    if (index < 0) {
+      throw new NotFoundException(`No assistant message at ${messageAt}`);
+    }
+    const messages = [...project.messages];
+    const answer: ChatMessage = { ...messages[index], feedback: rating };
+    messages[index] = answer;
+
+    if (rating === 'down') {
+      await this.verifiedQueries.removeForMessage(id, messageAt);
+    } else {
+      const sql = lastSuccessfulSql(answer);
+      const question = messages
+        .slice(0, index)
+        .reverse()
+        .find((m) => m.role === 'user');
+      if (sql && question?.content.trim()) {
+        await this.verifiedQueries.save({
+          question: question.content,
+          sql,
+          datasourceId: await this.soleDatasourceId(project),
+          entities: answer.entities ?? [],
+          sourceProjectId: id,
+          sourceMessageAt: messageAt,
+        });
+      }
+    }
+    const updated = await this.repository.update(id, { messages });
+    return updated ?? { ...project, messages };
+  }
+
+  /** The project's datasource when it is unambiguous — provenance only. */
+  private async soleDatasourceId(
+    project: ProjectDoc,
+  ): Promise<string | undefined> {
+    const sandboxes = await this.boundSandboxes(project.sandboxes);
+    const ids = new Set(
+      sandboxes.map((s) => s.datasourceId).filter((id): id is string => !!id),
+    );
+    return ids.size === 1 ? Array.from(ids)[0] : undefined;
+  }
+
   /**
    * Append the user's prompt — unless the transcript already ends with that
    * exact unanswered prompt (a retry after a failed turn), in which case reuse
@@ -639,17 +860,22 @@ function toolDataRecord(
   result: unknown,
 ): ToolDataRecord | null {
   if (tool !== 'run_readonly_sql' && tool !== 'sample_rows') return null;
-  const input =
-    typeof args['sql'] === 'string'
-      ? args['sql']
-      : typeof args['entity'] === 'string'
-        ? args['entity']
-        : undefined;
   const value = (result ?? {}) as {
     columns?: unknown;
     rows?: unknown;
     error?: unknown;
+    correctedSql?: unknown;
   };
+  // Show the statement that actually ran, so the answer and any visual cite
+  // the repaired SQL rather than the one that failed.
+  const input =
+    typeof value.correctedSql === 'string'
+      ? value.correctedSql
+      : typeof args['sql'] === 'string'
+        ? args['sql']
+        : typeof args['entity'] === 'string'
+          ? args['entity']
+          : undefined;
   if (typeof value.error === 'string') {
     return { tool, input, error: value.error };
   }
@@ -666,4 +892,28 @@ function toolDataRecord(
     rows: rows.slice(0, STORED_ROWS_CAP),
     rowCount: rows.length,
   };
+}
+
+/** The SQL behind an answer: its last `run_readonly_sql` that did not fail. */
+function lastSuccessfulSql(message: ChatMessage): string | undefined {
+  const runs = (message.data ?? []).filter(
+    (record) =>
+      record.tool === 'run_readonly_sql' &&
+      !record.error &&
+      record.input?.trim(),
+  );
+  return runs.at(-1)?.input?.trim();
+}
+
+/** Parse a model's JSON reply, tolerating a markdown fence around it. */
+function parseJsonObject(text: string | undefined): unknown {
+  const trimmed = (text ?? '').trim();
+  if (!trimmed) return undefined;
+  try {
+    return JSON.parse(
+      trimmed.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''),
+    );
+  } catch {
+    return undefined;
+  }
 }

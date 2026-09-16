@@ -4,6 +4,7 @@ import { Observable } from 'rxjs';
 import { API_BASE_URL } from '../../../core/config/api.config';
 import {
   InteractiveVisualization,
+  MessageFeedback,
   Project,
   ProjectActionResult,
   ToolDataRecord,
@@ -83,6 +84,18 @@ export class ProjectsApiService {
     return this.http.post<ProjectActionResult>(
       `${API_BASE_URL}/projects/${encodeURIComponent(id)}/messages`,
       { content },
+    );
+  }
+
+  /** Rate an assistant answer; `up` saves it to the verified query library. */
+  sendMessageFeedback(
+    projectId: string,
+    messageAt: string,
+    rating: MessageFeedback,
+  ): Observable<ProjectActionResult> {
+    return this.http.post<ProjectActionResult>(
+      `${API_BASE_URL}/projects/${encodeURIComponent(projectId)}/messages/feedback`,
+      { messageAt, rating },
     );
   }
 
