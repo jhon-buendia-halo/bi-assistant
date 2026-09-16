@@ -7,6 +7,10 @@ frontend/   Angular app (Electron renderer) + Electron main process
 backend/    NestJS API
 ```
 
+## Model usage: plan vs. execute
+
+For planning purposes, Fable creates the plan. For execution, Opus is used once the execution plan is well defined by Fable.
+
 ## Frontend — Angular (Electron desktop app)
 
 This is a **desktop application**: Electron shell with the Angular app as renderer.
