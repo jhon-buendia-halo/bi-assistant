@@ -1,3 +1,8 @@
+// Selected answer rating: lucide ships stroke-only SVGs, so fill the thumb.
+.qti-rating-on ::ng-deep svg {
+  fill: currentColor;
+}
+
 // Dark prose styles for rendered assistant markdown.
 .prose-dark {
   font-size: 13px;

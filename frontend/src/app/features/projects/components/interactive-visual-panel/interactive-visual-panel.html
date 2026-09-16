@@ -71,6 +71,110 @@
           }
         </div>
 
+        <!-- Tailoring: chart type / sort / top-N become one plain-English instruction -->
+        <div class="relative">
+          <button
+            type="button"
+            (click)="toggleTailorMenu()"
+            [attr.aria-expanded]="tailorMenuOpen()"
+            [disabled]="viewingOldVersion() || !projectId()"
+            [title]="
+              viewingOldVersion()
+                ? 'Make this version current before tailoring'
+                : 'Tailor this visual'
+            "
+            class="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-[12px] text-zinc-300 hover:border-white/20 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            @if (tailoring()) {
+              <lucide-angular [img]="Loader2" [size]="13" class="animate-spin" />
+            } @else {
+              <lucide-angular [img]="SlidersHorizontal" [size]="13" />
+            }
+            <span>Tailor</span>
+          </button>
+          @if (tailorMenuOpen()) {
+            <button
+              type="button"
+              aria-label="Close tailoring form"
+              class="fixed inset-0 z-20 cursor-default"
+              (click)="tailorMenuOpen.set(false)"
+            ></button>
+            <div
+              class="absolute top-full right-0 z-30 mt-1 w-72 rounded-xl border border-white/10 bg-[#2a2a2a] p-3 shadow-xl"
+            >
+              <label class="flex flex-col gap-1">
+                <span class="text-[11px] font-medium text-zinc-500">Chart type</span>
+                <select
+                  aria-label="Chart type"
+                  [value]="tailorChartType()"
+                  (change)="tailorChartType.set($any($event.target).value)"
+                  class="rounded-lg border border-white/10 bg-[#232323] px-2.5 py-1.5 text-[12px] text-zinc-200 outline-none focus:border-white/25"
+                >
+                  @for (option of chartTypes; track option.value) {
+                    <option [value]="option.value">{{ option.label }}</option>
+                  }
+                </select>
+              </label>
+              <label class="mt-2.5 flex flex-col gap-1">
+                <span class="text-[11px] font-medium text-zinc-500">Sort</span>
+                <select
+                  aria-label="Sort"
+                  [value]="tailorSort()"
+                  (change)="tailorSort.set($any($event.target).value)"
+                  class="rounded-lg border border-white/10 bg-[#232323] px-2.5 py-1.5 text-[12px] text-zinc-200 outline-none focus:border-white/25"
+                >
+                  @for (option of sorts; track option.value) {
+                    <option [value]="option.value">{{ option.label }}</option>
+                  }
+                </select>
+              </label>
+              <label class="mt-2.5 flex flex-col gap-1">
+                <span class="text-[11px] font-medium text-zinc-500">
+                  Top N ({{ minTopN }}–{{ maxTopN }}, optional)
+                </span>
+                <input
+                  type="number"
+                  aria-label="Top N"
+                  placeholder="All items"
+                  [min]="minTopN"
+                  [max]="maxTopN"
+                  [value]="tailorTopN() ?? ''"
+                  (input)="setTopN($any($event.target).value)"
+                  class="rounded-lg border border-white/10 bg-[#232323] px-2.5 py-1.5 text-[12px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                />
+              </label>
+              @if (tailorInstruction(); as instruction) {
+                <p class="mt-2.5 rounded-lg bg-white/[0.04] px-2.5 py-1.5 text-[11px] leading-5 text-zinc-400">
+                  {{ instruction }}
+                </p>
+              }
+              @if (tailorError(); as tailorError) {
+                <p class="mt-2.5 text-[11px] leading-5 text-red-300">{{ tailorError }}</p>
+              }
+              <div class="mt-3 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  (click)="tailorMenuOpen.set(false)"
+                  class="rounded-lg px-2.5 py-1.5 text-[12px] text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  (click)="applyTailoring()"
+                  [disabled]="tailoring() || tailorInstruction() === ''"
+                  class="flex items-center gap-1.5 rounded-lg bg-zinc-200 px-3 py-1.5 text-[12px] font-medium text-zinc-900 hover:bg-white disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+                >
+                  @if (tailoring()) {
+                    <lucide-angular [img]="Loader2" [size]="12" class="animate-spin" />
+                  }
+                  <span>Apply</span>
+                </button>
+              </div>
+            </div>
+          }
+        </div>
+
         <button
           type="button"
           title="Download bundle (HTML, CSS, JS, answer.md, data.json)"
@@ -164,6 +268,15 @@
     </div>
   } @else if (visualization(); as visual) {
     <div class="relative min-h-0 flex-1 p-3 pb-0">
+      @if (repairing()) {
+        <!-- Silent auto-repair in flight; the banner only returns if it fails -->
+        <div
+          class="absolute inset-x-3 top-3 z-10 flex items-center gap-2 rounded-lg border border-white/10 bg-[#2a2a2a] px-3 py-2 text-[12px] text-zinc-300 shadow-lg"
+        >
+          <lucide-angular [img]="Loader2" [size]="14" class="shrink-0 animate-spin" />
+          <span>Fixing the visual…</span>
+        </div>
+      }
       @if (runtimeError(); as runtimeError) {
         <div
           class="absolute inset-x-3 top-3 z-10 flex items-start gap-2 rounded-lg border border-red-500/30 bg-[#2a1a1a] px-3 py-2 text-[12px] text-red-300"

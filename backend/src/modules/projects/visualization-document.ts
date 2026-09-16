@@ -26,6 +26,12 @@ export interface VisualContext {
   projectName?: string;
   version?: number;
   generatedAt?: string;
+  /**
+   * Rows the designer actually saw versus the rows the analysis ran on, when
+   * the prompt caps clipped them. Stated in the provenance section so the
+   * reader knows the chart is a sample — deterministic, never model output.
+   */
+  chartRows?: { shown: number; truncatedFrom: number };
 }
 
 const PROVENANCE_ROWS = 10;
@@ -96,7 +102,10 @@ function formatCell(value: unknown): string {
   return escapeHtml(text.length > CELL_CHARS ? `${text.slice(0, CELL_CHARS)}…` : text);
 }
 
-function renderProvenance(data: ToolDataRecord[]): string {
+function renderProvenance(
+  data: ToolDataRecord[],
+  chartRows?: VisualContext['chartRows'],
+): string {
   const items = data
     .map((record, index) => {
       const rows = record.rows ?? [];
@@ -104,7 +113,7 @@ function renderProvenance(data: ToolDataRecord[]): string {
       const count = record.rowCount ?? rows.length;
       const label = record.error
         ? `Query ${index + 1} — failed`
-        : `Query ${index + 1} — ${count} row${count === 1 ? '' : 's'}`;
+        : `Query ${index + 1} — ${count} row${count === 1 ? '' : 's'}${record.truncated ? ' (truncated)' : ''}`;
       const table =
         !record.error && rows.length && columns.length
           ? `<div class="qti-table-wrap"><table class="qti-table"><thead><tr>${columns
@@ -129,8 +138,12 @@ function renderProvenance(data: ToolDataRecord[]): string {
 </li>`;
     })
     .join('\n');
+  const sampled = chartRows
+    ? `<p class="qti-muted">Chart built from the first ${chartRows.shown} of ${chartRows.truncatedFrom} rows.</p>`
+    : '';
   return `<details class="qti-provenance">
   <summary>Data used (${data.length} ${data.length === 1 ? 'query' : 'queries'})</summary>
+  ${sampled}
   <ol>${items}</ol>
 </details>`;
 }
@@ -186,7 +199,7 @@ ${bodyFragment(bundle.html)}
       : ''
   }
 
-  ${context.data?.length ? `<section class="qti-section">${renderProvenance(context.data)}</section>` : ''}
+  ${context.data?.length ? `<section class="qti-section">${renderProvenance(context.data, context.chartRows)}</section>` : ''}
 
   ${footer ? `<footer class="qti-footer">${footer}</footer>` : ''}
 </main>`;
@@ -234,6 +247,7 @@ html, body { margin: 0; background: #171717; }
 .qti-provenance summary { cursor: pointer; padding: 10px 14px; font-size: 13px; color: #a1a1aa; }
 .qti-provenance summary:hover { color: #e4e4e7; }
 .qti-provenance ol { margin: 0; padding: 0 14px 14px 14px; list-style: none; }
+.qti-provenance > .qti-muted { margin: 0 0 4px; padding: 0 14px; }
 .qti-provenance li { margin-top: 12px; }
 .qti-query-label { margin: 0 0 6px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: #a1a1aa; }
 .qti-sql { margin: 0; padding: 10px 12px; border-radius: 8px; background: rgba(0,0,0,.35);
@@ -241,16 +255,28 @@ html, body { margin: 0; background: #171717; }
   white-space: pre-wrap; color: #a1a1aa; }
 .qti-error { margin: 6px 0 0; color: #f87171; font-size: 12.5px; }
 .qti-muted { margin: 6px 0 0; font-size: 12px; color: #71717a; }
+/* Clickable data marks: defaults the designer's own CSS can still override. */
+[data-qti-value] { cursor: pointer; }
+[data-qti-value]:focus-visible { outline: 2px solid #7dd3fc; outline-offset: 2px; }
 .qti-footer { padding-top: 14px; border-top: 1px solid rgba(255,255,255,.08); font-size: 12px; color: #71717a; }
 @media (max-width: 640px) { .qti-frame { padding: 16px 14px 32px; } .qti-title { font-size: 19px; } }
 @media (prefers-reduced-motion: reduce) { .qti-frame * { animation: none !important; transition: none !important; } }
 `;
 
+/** Message the blank-render watchdog reports; the host repairs on this too. */
+export const BLANK_RENDER_MESSAGE = 'visual rendered blank';
+/** How long after `load` the watchdog waits before calling the visual blank. */
+const BLANK_CHECK_DELAY_MS = 1500;
+/** A child shorter than this is a stray wrapper, not a rendered visual. */
+const BLANK_MIN_HEIGHT = 24;
+
 const RUNTIME_ERROR_HOOK = `
   // Report runtime failures to the host panel; the sandboxed frame has no
   // other way to say "the visual is broken".
   (function () {
+    var reported = false;
     var post = function (message) {
+      reported = true;
       try { window.parent.postMessage({ type: 'visual-error', message: String(message) }, '*'); } catch (e) {}
     };
     window.addEventListener('error', function (event) {
@@ -259,7 +285,68 @@ const RUNTIME_ERROR_HOOK = `
     window.addEventListener('unhandledrejection', function (event) {
       post(event.reason && event.reason.message ? event.reason.message : String(event.reason));
     });
+    // A visual can also fail silently: the script runs, throws nothing, and
+    // paints nothing. Treat an empty visual section as a runtime failure so
+    // the host can repair it.
+    var checkBlank = function () {
+      if (reported) return;
+      var section = document.querySelector('.qti-visual');
+      if (!section) return;
+      if (section.querySelector('svg, canvas, table, img')) return;
+      var children = section.children;
+      for (var i = 0; i < children.length; i++) {
+        if (children[i].offsetHeight >= ${BLANK_MIN_HEIGHT}) return;
+      }
+      post(${JSON.stringify(BLANK_RENDER_MESSAGE)});
+    };
+    window.addEventListener('load', function () {
+      setTimeout(checkBlank, ${BLANK_CHECK_DELAY_MS});
+    });
   })();`;
+
+/**
+ * Click-to-follow-up bridge. Any element the designer marks with
+ * `data-qti-value` (optionally `data-qti-label`) posts the selection to the
+ * host, which turns it into a follow-up question. Standalone (downloaded)
+ * copies have no host, so the postMessage is a harmless no-op there.
+ */
+export const FRAME_SELECT_SCRIPT = `(function () {
+  var select = function (value, label) {
+    if (value === null || value === undefined) return;
+    try {
+      window.parent.postMessage({
+        type: 'visual-select',
+        value: String(value),
+        label: label === null || label === undefined ? undefined : String(label)
+      }, '*');
+    } catch (e) {}
+  };
+  window.qti = window.qti || {};
+  window.qti.select = select;
+  var markFor = function (target) {
+    var node = target;
+    while (node && node !== document) {
+      if (node.getAttribute && node.getAttribute('data-qti-value') !== null) return node;
+      node = node.parentNode;
+    }
+    return null;
+  };
+  var fire = function (event) {
+    var mark = markFor(event.target);
+    if (!mark) return;
+    select(mark.getAttribute('data-qti-value'), mark.getAttribute('data-qti-label'));
+  };
+  document.addEventListener('click', fire);
+  document.addEventListener('keydown', function (event) {
+    if (event.key !== 'Enter') return;
+    if (!markFor(event.target)) return;
+    event.preventDefault();
+    fire(event);
+  });
+})();`;
+
+/** Filename the stored document loads the frame bridge from (CSP: script-src 'self'). */
+export const FRAME_SCRIPT_FILENAME = 'qti-frame.js';
 
 /** Standalone file persisted in the workspace alongside CSS and JavaScript. */
 export function storedVisualizationDocument(
@@ -278,6 +365,7 @@ export function storedVisualizationDocument(
 </head>
 <body>
 ${renderFrame(bundle, context)}
+  <script src="${FRAME_SCRIPT_FILENAME}"></script>
   <script src="script.js"></script>
 </body>
 </html>`;
@@ -301,6 +389,7 @@ export function sandboxedVisualizationDocument(
 <body>
 ${renderFrame(bundle, context)}
   <script>${RUNTIME_ERROR_HOOK}</script>
+  <script>${FRAME_SELECT_SCRIPT}</script>
   <script>"use strict";\n${safeScript(bundle.javascript)}</script>
 </body>
 </html>`;

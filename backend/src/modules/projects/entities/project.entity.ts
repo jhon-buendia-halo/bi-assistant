@@ -12,6 +12,11 @@ export interface ToolDataRecord {
   rows?: Record<string, unknown>[];
   /** Total rows the tool returned before storage truncation. */
   rowCount?: number;
+  /**
+   * True when rows were clipped anywhere: the query hit its row limit, or
+   * storage kept fewer rows than the tool returned.
+   */
+  truncated?: boolean;
   error?: string;
 }
 
@@ -34,6 +39,53 @@ export interface ChatMessage {
   };
   /** Present when this turn created, updated or reverted a visual. */
   visual?: VisualEvent;
+  /**
+   * The answer's final SQL matches a stored verified query, or the user
+   * promoted it with a thumbs-up.
+   */
+  verified?: boolean;
+  /**
+   * Deterministic one-line provenance summary built at persist time — never
+   * model output, same principle as the visual frame.
+   */
+  interpretation?: string;
+  /**
+   * The user's rating of this answer. A thumbs-up also stores the answer's
+   * question → SQL pair in the verified query library.
+   */
+  feedback?: MessageFeedback;
+  /**
+   * Careful mode only: an independent re-derivation of the question's SQL was
+   * executed and its result set compared with this answer's.
+   */
+  crossCheck?: CrossCheck;
+  /**
+   * Present when a deep-analysis job produced a report. The message content is
+   * the report's executive summary; the full markdown lives in the workspace.
+   */
+  report?: AnalysisReport;
+}
+
+export interface AnalysisReport {
+  /** Job that produced it — also the download key. */
+  jobId: string;
+  title: string;
+  /** Workspace-relative path of the stored markdown report. */
+  path: string;
+  /** How many investigation angles the report covers. */
+  angles: number;
+}
+
+export type MessageFeedback = 'up' | 'down';
+
+export interface CrossCheck {
+  /**
+   * `agree` — the independent query returned the same results; `disagree` —
+   * they differ; `error` — the check could not complete.
+   */
+  status: 'agree' | 'disagree' | 'error';
+  /** Short human-readable line shown as the chip's tooltip. */
+  note?: string;
 }
 
 export interface VisualEvent {

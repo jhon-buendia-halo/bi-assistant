@@ -35,11 +35,12 @@ import {
   SandboxInclusionService,
 } from '../../services/sandbox-inclusion.service';
 import { Sandbox, SandboxApiService } from '../../services/sandbox-api.service';
+import { MetricsPanel } from '../metrics-panel/metrics-panel';
 import { ToastService } from '../../../../core/toast/toast.service';
 
 @Component({
   selector: 'app-catalog-browser',
-  imports: [LucideAngularModule],
+  imports: [LucideAngularModule, MetricsPanel],
   templateUrl: './catalog-browser.html',
   styleUrl: './catalog-browser.scss',
 })
@@ -117,6 +118,11 @@ export class CatalogBrowser implements OnInit {
 
   readonly includedCount = computed(
     () => this.inclusionService.included().size,
+  );
+
+  /** Included entities, the scope the metrics panel curates definitions for. */
+  readonly includedEntities = computed(() =>
+    Array.from(this.inclusionService.included()),
   );
 
   /** Key of the currently selected element, for row highlighting. */

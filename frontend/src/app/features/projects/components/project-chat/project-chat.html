@@ -86,6 +86,11 @@
                 </button>
               }
             </div>
+            <!-- Work already done before the question — kept visible, not lost -->
+            <ng-container
+              [ngTemplateOutlet]="dataProvenance"
+              [ngTemplateOutletContext]="{ $implicit: message }"
+            />
             @if (isLatest(i)) {
               @if (customAnswerOpen()) {
                 <div
@@ -141,6 +146,54 @@
               </div>
             }
           </div>
+        } @else if (message.report; as report) {
+          <!-- Deep analysis report: title, executive summary, download -->
+          <div
+            class="rounded-2xl border border-white/10 bg-[#232323] p-4"
+            [id]="'msg-' + i"
+          >
+            <div class="flex items-start gap-3">
+              <span
+                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/5 text-zinc-300"
+              >
+                <lucide-angular [img]="Telescope" [size]="15" />
+              </span>
+              <span class="flex min-w-0 flex-1 flex-col">
+                <span class="truncate text-[14px] font-medium text-zinc-100">
+                  {{ report.title }}
+                </span>
+                <span class="text-[12px] text-zinc-500">
+                  Deep analysis · {{ report.angles }}
+                  {{ report.angles === 1 ? "angle" : "angles" }} investigated
+                </span>
+              </span>
+              <button
+                type="button"
+                (click)="downloadReport(report)"
+                [disabled]="reportDownloading() === report.jobId"
+                title="Download the full report (.md)"
+                aria-label="Download report"
+                class="flex shrink-0 items-center gap-1.5 rounded-lg border border-white/10 px-2.5 py-1 text-[12px] text-zinc-300 hover:border-white/20 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                @if (reportDownloading() === report.jobId) {
+                  <lucide-angular
+                    [img]="Loader2"
+                    [size]="13"
+                    class="animate-spin"
+                  />
+                } @else {
+                  <lucide-angular [img]="Download" [size]="13" />
+                }
+                Report
+              </button>
+            </div>
+            @if (message.content.trim()) {
+              <div
+                class="prose-dark mt-3"
+                [innerHTML]="message.content | markdown"
+              ></div>
+            }
+          </div>
         } @else if (message.visual; as visual) {
           <!-- Visual event card -->
           <div class="group">
@@ -170,51 +223,93 @@
         } @else {
           <div class="group">
             <div class="prose-dark" [innerHTML]="message.content | markdown"></div>
-            @if (message.entities?.length) {
-              <div class="mt-2 flex flex-wrap items-center gap-1.5">
-                <span class="text-[11px] font-medium tracking-wide text-zinc-500 uppercase">
-                  Data entities
-                </span>
-                @for (entity of message.entities; track entity) {
-                  <span
-                    class="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 font-mono text-[11px] text-zinc-300"
-                  >
-                    {{ entity }}
-                  </span>
-                }
+            @if (message.interpretation) {
+              <!-- Deterministic provenance caption, built server-side -->
+              <div
+                class="mt-2 flex items-center gap-1.5 text-[11px] text-zinc-500"
+                [title]="message.interpretation"
+              >
+                <lucide-angular [img]="Info" [size]="12" class="shrink-0" />
+                <span class="truncate">{{ message.interpretation }}</span>
               </div>
             }
-            @if (message.data?.length) {
-              <details class="mt-2 rounded-lg border border-white/5 bg-white/[0.02] text-[12px]">
-                <summary class="cursor-pointer px-3 py-1.5 text-zinc-500 select-none hover:text-zinc-300">
-                  Data used ({{ message.data!.length }}
-                  {{ message.data!.length === 1 ? "query" : "queries" }})
-                </summary>
-                <div class="flex flex-col gap-2 border-t border-white/5 px-3 py-2">
-                  @for (record of message.data; track $index) {
-                    <div>
-                      <div class="flex items-center gap-2 text-zinc-400">
-                        <lucide-angular [img]="Wrench" [size]="12" class="shrink-0" />
-                        <span class="font-mono" [class.text-red-400]="record.error">{{ dataLabel(record) }}</span>
-                      </div>
-                      @if (record.input) {
-                        <pre class="mt-1 overflow-x-auto rounded bg-black/30 px-2.5 py-1.5 font-mono text-[11px] leading-5 whitespace-pre-wrap text-zinc-400">{{ record.input }}</pre>
-                      }
-                      @if (record.error) {
-                        <p class="mt-1 text-red-400/80">{{ record.error }}</p>
-                      }
-                    </div>
-                  }
-                </div>
-              </details>
-            }
-            <button
-              (click)="copyMessage(message.content)"
-              title="Copy message"
-              class="mt-1 rounded p-1 text-zinc-500 opacity-0 group-hover:opacity-100 hover:bg-white/10 hover:text-zinc-300"
-            >
-              <lucide-angular [img]="Copy" [size]="14" />
-            </button>
+            <ng-container
+              [ngTemplateOutlet]="dataProvenance"
+              [ngTemplateOutletContext]="{ $implicit: message }"
+            />
+            <div class="mt-1 flex items-center gap-1">
+              @if (message.verified) {
+                <!-- Answer's SQL matches a query in the verified library -->
+                <span
+                  title="Matches an approved query"
+                  class="mr-1 flex items-center gap-1 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2 py-0.5 text-[11px] font-medium text-emerald-400"
+                >
+                  <lucide-angular [img]="BadgeCheck" [size]="12" />
+                  Verified
+                </span>
+              }
+              @if (message.crossCheck; as check) {
+                <!-- Careful mode: an independent query re-ran the question -->
+                <span
+                  [title]="crossCheckTitle(check)"
+                  class="mr-1 flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium"
+                  [class]="crossCheckClass(check)"
+                >
+                  <lucide-angular [img]="crossCheckIcon(check)" [size]="12" />
+                  {{ crossCheckLabel(check) }}
+                </span>
+              }
+              <button
+                (click)="copyMessage(message.content)"
+                title="Copy message"
+                class="rounded p-1 text-zinc-500 opacity-0 group-hover:opacity-100 hover:bg-white/10 hover:text-zinc-300"
+              >
+                <lucide-angular [img]="Copy" [size]="14" />
+              </button>
+              @if (message.data?.length) {
+                <!-- Answer rating: thumbs-up saves the query as verified -->
+                <button
+                  type="button"
+                  (click)="rateMessage(message, 'up')"
+                  [disabled]="feedbackPending() === message.at"
+                  [attr.aria-pressed]="message.feedback === 'up'"
+                  [title]="
+                    message.feedback === 'up'
+                      ? 'Saved as verified query'
+                      : 'Save as verified query'
+                  "
+                  aria-label="Save as verified query"
+                  class="rounded p-1 disabled:cursor-not-allowed disabled:opacity-40"
+                  [class]="
+                    message.feedback === 'up'
+                      ? 'qti-rating-on bg-emerald-400/10 text-emerald-400'
+                      : 'text-zinc-500 opacity-0 group-hover:opacity-100 hover:bg-white/10 hover:text-zinc-300'
+                  "
+                >
+                  <lucide-angular [img]="ThumbsUp" [size]="14" />
+                </button>
+                <button
+                  type="button"
+                  (click)="rateMessage(message, 'down')"
+                  [disabled]="feedbackPending() === message.at"
+                  [attr.aria-pressed]="message.feedback === 'down'"
+                  [title]="
+                    message.feedback === 'down'
+                      ? 'Marked as wrong'
+                      : 'Mark answer as wrong'
+                  "
+                  aria-label="Mark answer as wrong"
+                  class="rounded p-1 disabled:cursor-not-allowed disabled:opacity-40"
+                  [class]="
+                    message.feedback === 'down'
+                      ? 'qti-rating-on bg-red-400/10 text-red-400'
+                      : 'text-zinc-500 opacity-0 group-hover:opacity-100 hover:bg-white/10 hover:text-zinc-300'
+                  "
+                >
+                  <lucide-angular [img]="ThumbsDown" [size]="14" />
+                </button>
+              }
+            </div>
             @if (message.content.trim()) {
               <div class="mt-2 flex flex-wrap items-start gap-2">
                 <button
@@ -288,15 +383,92 @@
           </div>
         </div>
       }
+
+      @if (deepAnalysisJob(); as job) {
+        <!-- Background deep analysis: local card, polled, chat stays usable -->
+        <div
+          class="flex items-start gap-3 rounded-2xl border border-white/10 bg-[#232323] p-4"
+          aria-label="Deep analysis status"
+        >
+          <span
+            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/5"
+            [class]="job.status === 'error' ? 'text-red-400' : 'text-zinc-300'"
+          >
+            @if (job.status === "error") {
+              <lucide-angular [img]="Telescope" [size]="15" />
+            } @else {
+              <lucide-angular [img]="Loader2" [size]="15" class="animate-spin" />
+            }
+          </span>
+          <span class="flex min-w-0 flex-1 flex-col">
+            <span class="text-[13px] text-zinc-200">
+              {{
+                job.status === "error"
+                  ? "Deep analysis failed"
+                  : "Deep analysis running"
+              }}
+              — {{ deepAnalysisLine(job) }}
+            </span>
+            <span class="truncate text-[12px] text-zinc-500">
+              {{ job.question }}
+            </span>
+          </span>
+          @if (job.status === "error") {
+            <button
+              type="button"
+              (click)="dismissDeepAnalysis()"
+              title="Dismiss"
+              aria-label="Dismiss deep analysis"
+              class="shrink-0 rounded-full p-1.5 text-zinc-500 hover:bg-white/10 hover:text-zinc-300"
+            >
+              <lucide-angular [img]="X" [size]="13" />
+            </button>
+          }
+        </div>
+      }
     </div>
   </div>
 
   <!-- Input -->
-  <div class="flex justify-center px-6 pb-6">
+  <div class="flex flex-col items-center px-6 pb-6">
+    @if (followUpVisible()) {
+      <!-- Follow-ups for the data mark just clicked in the visual -->
+      <div
+        class="mb-2 flex w-full max-w-[860px] flex-wrap items-center gap-2"
+        aria-label="Follow-up suggestions"
+      >
+        <button
+          type="button"
+          (click)="useDrillPrompt()"
+          class="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[12px] text-zinc-300 hover:border-white/20 hover:bg-white/[0.08]"
+        >
+          <lucide-angular [img]="BarChart3" [size]="12" class="shrink-0" />
+          <span class="max-w-[320px] truncate">Drill into "{{ followUpLabel() }}"</span>
+        </button>
+        <button
+          type="button"
+          (click)="useWhyPrompt()"
+          class="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[12px] text-zinc-300 hover:border-white/20 hover:bg-white/[0.08]"
+        >
+          <lucide-angular [img]="Sparkles" [size]="12" class="shrink-0" />
+          <span class="max-w-[320px] truncate">Why "{{ followUpLabel() }}"?</span>
+        </button>
+        <button
+          type="button"
+          (click)="dismissFollowUps()"
+          title="Dismiss follow-ups"
+          aria-label="Dismiss follow-ups"
+          class="rounded-full p-1.5 text-zinc-500 hover:bg-white/10 hover:text-zinc-300"
+        >
+          <lucide-angular [img]="X" [size]="13" />
+        </button>
+      </div>
+    }
     <div
       class="w-full max-w-[860px] rounded-2xl border border-white/10 bg-[#232323] p-3"
     >
       <textarea
+        #composer
         rows="2"
         placeholder="Ask a follow-up question…"
         [value]="draft()"
@@ -304,7 +476,46 @@
         (keydown)="onKeydown($event)"
         class="w-full resize-none bg-transparent text-[13px] text-zinc-200 outline-none placeholder:text-zinc-500"
       ></textarea>
-      <div class="mt-1 flex items-center justify-end">
+      <div class="mt-1 flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+        <!-- Careful mode: cross-check this turn's answer with a second query -->
+        <button
+          type="button"
+          (click)="toggleCareful()"
+          [attr.aria-pressed]="careful()"
+          aria-label="Careful mode"
+          [title]="
+            careful()
+              ? 'Careful mode on — an independent query re-checks each answer (slower)'
+              : 'Careful mode — re-check each answer with an independent query (slower)'
+          "
+          class="flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px]"
+          [class]="
+            careful()
+              ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-400'
+              : 'border-white/10 bg-white/[0.04] text-zinc-400 hover:border-white/20 hover:bg-white/[0.08] hover:text-zinc-200'
+          "
+        >
+          <lucide-angular [img]="ShieldCheck" [size]="12" class="shrink-0" />
+          Careful
+        </button>
+        <!-- Deep analysis: the draft becomes a background job, not a turn -->
+        <button
+          type="button"
+          (click)="runDeepAnalysis()"
+          [disabled]="draft().trim() === '' || deepAnalysisRunning()"
+          aria-label="Deep analysis"
+          [title]="
+            deepAnalysisRunning()
+              ? 'A deep analysis is already running for this project'
+              : 'Deep analysis — investigate this question from several angles and write a report (slow)'
+          "
+          class="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[12px] text-zinc-400 hover:border-white/20 hover:bg-white/[0.08] hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-white/10 disabled:hover:bg-white/[0.04] disabled:hover:text-zinc-400"
+        >
+          <lucide-angular [img]="Telescope" [size]="12" class="shrink-0" />
+          Deep analysis
+        </button>
+        </div>
         @if (sending()) {
           <button
             type="button"
@@ -331,3 +542,68 @@
     </div>
   </div>
 </div>
+
+<!--
+  Provenance blocks shared by answers and clarifications: a clarification that
+  ends a turn carries the data collected up to that point, so the work stays
+  visible instead of being lost.
+-->
+<ng-template #dataProvenance let-message>
+  @if (message.entities?.length) {
+    <div class="mt-2 flex flex-wrap items-center gap-1.5">
+      <span class="text-[11px] font-medium tracking-wide text-zinc-500 uppercase">
+        Data entities
+      </span>
+      @for (entity of message.entities; track entity) {
+        <span
+          class="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 font-mono text-[11px] text-zinc-300"
+        >
+          {{ entity }}
+        </span>
+      }
+    </div>
+  }
+  @if (message.data?.length) {
+    <details class="mt-2 rounded-lg border border-white/5 bg-white/[0.02] text-[12px]">
+      <summary class="cursor-pointer px-3 py-1.5 text-zinc-500 select-none hover:text-zinc-300">
+        Data used ({{ message.data.length }}
+        {{ message.data.length === 1 ? "query" : "queries" }})
+      </summary>
+      <div class="flex flex-col gap-2 border-t border-white/5 px-3 py-2">
+        @for (record of message.data; track $index) {
+          <div class="group/record">
+            <div class="flex items-center gap-2 text-zinc-400">
+              <lucide-angular [img]="Wrench" [size]="12" class="shrink-0" />
+              <span class="font-mono" [class.text-red-400]="record.error">{{ dataLabel(record) }}</span>
+              @if (record.truncated) {
+                <span
+                  class="shrink-0 text-amber-400/80"
+                  title="Row cap reached — counts may be incomplete"
+                >
+                  (truncated)
+                </span>
+              }
+              @if (record.input) {
+                <button
+                  type="button"
+                  (click)="copySql(record)"
+                  title="Copy SQL"
+                  aria-label="Copy SQL"
+                  class="ml-auto shrink-0 rounded p-1 text-zinc-500 opacity-0 group-hover/record:opacity-100 hover:bg-white/10 hover:text-zinc-300"
+                >
+                  <lucide-angular [img]="Copy" [size]="12" />
+                </button>
+              }
+            </div>
+            @if (record.input) {
+              <pre class="mt-1 overflow-x-auto rounded bg-black/30 px-2.5 py-1.5 font-mono text-[11px] leading-5 whitespace-pre-wrap text-zinc-400">{{ record.input }}</pre>
+            }
+            @if (record.error) {
+              <p class="mt-1 text-red-400/80">{{ record.error }}</p>
+            }
+          </div>
+        }
+      </div>
+    </details>
+  }
+</ng-template>

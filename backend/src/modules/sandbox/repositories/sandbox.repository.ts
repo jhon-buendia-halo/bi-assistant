@@ -2,10 +2,24 @@ import { Inject, Injectable } from '@nestjs/common';
 import { SANDBOX_SELECTIONS_STORE } from '../../../infrastructure/database/doc-store';
 import type { DocStore } from '../../../infrastructure/database/doc-store';
 
+export interface SandboxColumnSnapshot {
+  name: string;
+  type: string;
+  nullable: boolean;
+  /**
+   * Distinct values observed in a save-time sample. Lets the assistant match
+   * user phrasing to the values actually stored (the #1 NL2SQL error class)
+   * without a live round-trip. Absent on sandboxes saved before enrichment.
+   */
+  sampleValues?: string[];
+  /** Catalog comment for the column, when the datasource exposes one. */
+  description?: string;
+}
+
 export interface SandboxEntitySnapshot {
   /** Fully-qualified `catalog.schema.table`. */
   key: string;
-  columns: { name: string; type: string; nullable: boolean }[];
+  columns: SandboxColumnSnapshot[];
 }
 
 export interface SandboxDoc {

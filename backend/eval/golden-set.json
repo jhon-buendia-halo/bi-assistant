@@ -1,0 +1,42 @@
+[
+  {
+    "name": "placeholder-total-paid-by-month",
+    "placeholder": true,
+    "notes": "PLACEHOLDER — not runnable as-is. Replace `sandbox` with a saved sandbox name, `expectedSql` with trusted SQL for your data, then delete `placeholder`.",
+    "sandbox": "REPLACE_WITH_SANDBOX_NAME",
+    "question": "What was the total paid amount per month last year?",
+    "expectedSql": "SELECT date_trunc('month', service_date) AS month, SUM(paid_amount) AS total_paid FROM REPLACE.health_claims.claims WHERE year(service_date) = 2024 GROUP BY 1 ORDER BY 1"
+  },
+  {
+    "name": "placeholder-top-diagnosis-categories",
+    "placeholder": true,
+    "notes": "PLACEHOLDER — not runnable as-is. Replace `sandbox` with a saved sandbox name, `expectedSql` with trusted SQL for your data, then delete `placeholder`.",
+    "sandbox": "REPLACE_WITH_SANDBOX_NAME",
+    "question": "Which five diagnosis categories drove the most spend?",
+    "expectedSql": "SELECT diagnosis_category, SUM(paid_amount) AS total_paid FROM REPLACE.health_claims.claims GROUP BY diagnosis_category ORDER BY total_paid DESC LIMIT 5"
+  },
+  {
+    "name": "placeholder-claim-denial-rate",
+    "placeholder": true,
+    "notes": "PLACEHOLDER — not runnable as-is. Replace `sandbox` with a saved sandbox name, `expectedSql` with trusted SQL for your data, then delete `placeholder`.",
+    "sandbox": "REPLACE_WITH_SANDBOX_NAME",
+    "question": "What is the claim denial rate overall?",
+    "expectedSql": "SELECT COUNT_IF(claim_status = 'DENIED') / COUNT(*) AS denial_rate FROM REPLACE.health_claims.claims"
+  },
+  {
+    "name": "placeholder-avg-cost-per-member-by-plan",
+    "placeholder": true,
+    "notes": "PLACEHOLDER — not runnable as-is. Exercises a join, which is where schema linking usually breaks. Replace `sandbox`, `expectedSql`, then delete `placeholder`.",
+    "sandbox": "REPLACE_WITH_SANDBOX_NAME",
+    "question": "What is the average cost per member for each plan?",
+    "expectedSql": "SELECT m.plan_name, SUM(c.paid_amount) / COUNT(DISTINCT m.member_id) AS cost_per_member FROM REPLACE.health_claims.claims c JOIN REPLACE.health_claims.members m ON c.member_id = m.member_id GROUP BY m.plan_name ORDER BY cost_per_member DESC"
+  },
+  {
+    "name": "placeholder-high-cost-claimants-count",
+    "placeholder": true,
+    "notes": "PLACEHOLDER — not runnable as-is. Exercises value matching on a status/threshold filter. Replace `sandbox`, `expectedSql`, then delete `placeholder`.",
+    "sandbox": "REPLACE_WITH_SANDBOX_NAME",
+    "question": "How many members had more than 50,000 in paid claims?",
+    "expectedSql": "SELECT COUNT(*) AS high_cost_members FROM (SELECT member_id, SUM(paid_amount) AS total_paid FROM REPLACE.health_claims.claims GROUP BY member_id HAVING SUM(paid_amount) > 50000)"
+  }
+]

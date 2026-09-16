@@ -10,7 +10,10 @@ import {
 } from '@nestjs/common';
 import { ProjectsService } from './projects.service';
 import type { ProjectDoc } from './entities/project.entity';
-import type { InteractiveVisualization } from './entities/project.entity';
+import type {
+  InteractiveVisualization,
+  MessageFeedback,
+} from './entities/project.entity';
 import type { Response } from 'express';
 
 @Controller('projects')
@@ -60,6 +63,63 @@ export class ProjectsController {
       return {
         ok: true,
         message: `Reverted to version ${result.visualization.version}`,
+        ...result,
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { ok: false, message };
+    }
+  }
+
+  @Post(':id/visualizations/:visualizationId/repair')
+  async repairVisualization(
+    @Param('id') id: string,
+    @Param('visualizationId') visualizationId: string,
+    @Body() body: { error?: string; version?: number },
+  ): Promise<{
+    ok: boolean;
+    message: string;
+    project?: ProjectDoc;
+    visualization?: InteractiveVisualization;
+  }> {
+    try {
+      const result = await this.projectsService.repairVisualization(
+        id,
+        visualizationId,
+        body?.error ?? '',
+        Number(body?.version),
+      );
+      return {
+        ok: true,
+        message: `Repaired as version ${result.visualization.version}`,
+        ...result,
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { ok: false, message };
+    }
+  }
+
+  @Post(':id/visualizations/:visualizationId/tailor')
+  async tailorVisualization(
+    @Param('id') id: string,
+    @Param('visualizationId') visualizationId: string,
+    @Body() body: { instruction?: string },
+  ): Promise<{
+    ok: boolean;
+    message: string;
+    project?: ProjectDoc;
+    visualization?: InteractiveVisualization;
+  }> {
+    try {
+      const result = await this.projectsService.tailorVisualization(
+        id,
+        visualizationId,
+        body?.instruction ?? '',
+      );
+      return {
+        ok: true,
+        message: `Updated to version ${result.visualization.version}`,
         ...result,
       };
     } catch (err) {
@@ -154,7 +214,13 @@ export class ProjectsController {
   @Post(':id/messages/stream')
   async streamMessage(
     @Param('id') id: string,
-    @Body() body: { content?: string; activeVisualizationId?: string },
+    @Body()
+    body: {
+      content?: string;
+      activeVisualizationId?: string;
+      /** Careful mode: cross-check the answer before finishing the turn. */
+      careful?: boolean;
+    },
     @Res() res: Response,
   ): Promise<void> {
     res.setHeader('Content-Type', 'text/event-stream');
@@ -175,6 +241,7 @@ export class ProjectsController {
         typeof body?.activeVisualizationId === 'string'
           ? body.activeVisualizationId
           : undefined,
+        body?.careful === true,
       );
     } catch (err) {
       if (!controller.signal.aborted) {
@@ -184,6 +251,31 @@ export class ProjectsController {
     }
     res.off('close', abort);
     if (!res.writableEnded) res.end();
+  }
+
+  @Post(':id/messages/feedback')
+  async rateMessage(
+    @Param('id') id: string,
+    @Body() body: { messageAt?: string; rating?: string },
+  ): Promise<{ ok: boolean; message: string; project?: ProjectDoc }> {
+    try {
+      const project = await this.projectsService.recordFeedback(
+        id,
+        body?.messageAt ?? '',
+        body?.rating as MessageFeedback,
+      );
+      return {
+        ok: true,
+        message:
+          body?.rating === 'up'
+            ? 'Answer saved as a verified query'
+            : 'Answer marked as wrong',
+        project,
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { ok: false, message };
+    }
   }
 
   @Post(':id/messages')

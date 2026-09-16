@@ -5,6 +5,9 @@ import { LlmModule } from './modules/llm/llm.module';
 import { SandboxModule } from './modules/sandbox/sandbox.module';
 import { MastraModule } from './mastra/mastra.module';
 import { ProjectsModule } from './modules/projects/projects.module';
+import { VerifiedQueriesModule } from './modules/verified-queries/verified-queries.module';
+import { MetricsModule } from './modules/metrics/metrics.module';
+import { DeepAnalysisModule } from './modules/deep-analysis/deep-analysis.module';
 
 @Module({
   imports: [
@@ -13,7 +16,10 @@ import { ProjectsModule } from './modules/projects/projects.module';
     LlmModule,
     SandboxModule,
     MastraModule,
+    VerifiedQueriesModule,
+    MetricsModule,
     ProjectsModule,
+    DeepAnalysisModule,
   ],
   controllers: [],
   providers: [],

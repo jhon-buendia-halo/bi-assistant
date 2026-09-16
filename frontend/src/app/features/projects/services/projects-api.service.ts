@@ -3,7 +3,9 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { API_BASE_URL } from '../../../core/config/api.config';
 import {
+  DeepAnalysisResult,
   InteractiveVisualization,
+  MessageFeedback,
   Project,
   ProjectActionResult,
   ToolDataRecord,
@@ -32,6 +34,34 @@ export class ProjectsApiService {
     return this.http.post<ProjectActionResult>(
       `${API_BASE_URL}/projects/${encodeURIComponent(projectId)}/visualizations/${encodeURIComponent(visualizationId)}/revert`,
       { version },
+    );
+  }
+
+  /**
+   * Ask the backend to regenerate the current version with the runtime error
+   * as feedback. The backend rejects stale versions and repairs of repairs.
+   */
+  repairVisualization(
+    projectId: string,
+    visualizationId: string,
+    error: string,
+    version: number,
+  ): Observable<ProjectActionResult> {
+    return this.http.post<ProjectActionResult>(
+      `${API_BASE_URL}/projects/${encodeURIComponent(projectId)}/visualizations/${encodeURIComponent(visualizationId)}/repair`,
+      { error, version },
+    );
+  }
+
+  /** Tailor the open visual with a plain-English instruction (update path). */
+  tailorVisualization(
+    projectId: string,
+    visualizationId: string,
+    instruction: string,
+  ): Observable<ProjectActionResult> {
+    return this.http.post<ProjectActionResult>(
+      `${API_BASE_URL}/projects/${encodeURIComponent(projectId)}/visualizations/${encodeURIComponent(visualizationId)}/tailor`,
+      { instruction },
     );
   }
 
@@ -79,10 +109,56 @@ export class ProjectsApiService {
     );
   }
 
+  // ------------------------------------------------------- deep analysis
+
+  /**
+   * Start the slow path: a background job that plans several angles,
+   * investigates each one and writes a report into the conversation.
+   */
+  startDeepAnalysis(
+    projectId: string,
+    question: string,
+  ): Observable<DeepAnalysisResult> {
+    return this.http.post<DeepAnalysisResult>(
+      `${API_BASE_URL}/projects/${encodeURIComponent(projectId)}/deep-analysis`,
+      { question },
+    );
+  }
+
+  /** Poll one job: planning → investigating → writing → done/error. */
+  deepAnalysisStatus(
+    projectId: string,
+    jobId: string,
+  ): Observable<DeepAnalysisResult> {
+    return this.http.get<DeepAnalysisResult>(
+      `${API_BASE_URL}/projects/${encodeURIComponent(projectId)}/deep-analysis/${encodeURIComponent(jobId)}`,
+    );
+  }
+
+  /** The finished report as markdown. */
+  downloadDeepAnalysis(projectId: string, jobId: string): Observable<Blob> {
+    return this.http.get(
+      `${API_BASE_URL}/projects/${encodeURIComponent(projectId)}/deep-analysis/${encodeURIComponent(jobId)}/download`,
+      { responseType: 'blob' },
+    );
+  }
+
   sendMessage(id: string, content: string): Observable<ProjectActionResult> {
     return this.http.post<ProjectActionResult>(
       `${API_BASE_URL}/projects/${encodeURIComponent(id)}/messages`,
       { content },
+    );
+  }
+
+  /** Rate an assistant answer; `up` saves it to the verified query library. */
+  sendMessageFeedback(
+    projectId: string,
+    messageAt: string,
+    rating: MessageFeedback,
+  ): Observable<ProjectActionResult> {
+    return this.http.post<ProjectActionResult>(
+      `${API_BASE_URL}/projects/${encodeURIComponent(projectId)}/messages/feedback`,
+      { messageAt, rating },
     );
   }
 
@@ -101,6 +177,8 @@ export class ProjectsApiService {
     },
     signal?: AbortSignal,
     activeVisualizationId?: string,
+    /** Careful mode: the backend cross-checks the answer before `done`. */
+    careful = false,
   ): Promise<void> {
     let res: Response;
     try {
@@ -109,7 +187,11 @@ export class ProjectsApiService {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content, activeVisualizationId }),
+          body: JSON.stringify({
+            content,
+            activeVisualizationId,
+            ...(careful ? { careful: true } : {}),
+          }),
           signal,
         },
       );

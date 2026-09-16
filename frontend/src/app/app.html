@@ -350,9 +350,11 @@
           [project]="activeProject()!"
           [visualGenerating]="generatingVisualProject() === activeProject()!.id"
           [activeVisualizationId]="activeVisualization()?.id ?? null"
+          [dataPointSelection]="selectedDataPoint()"
           (generateVisual)="generateInteractiveVisual($event)"
           (visualUpdated)="onVisualUpdated($event)"
           (viewVisual)="showVisualization($event, $event.version)"
+          (projectUpdated)="onProjectUpdated($event)"
         />
       } @else if (mainView() === "conversation-new") {
         <!-- New conversation composer -->
@@ -536,6 +538,7 @@
       @if (mainView() === "project-chat" && activeProject()) {
         <app-interactive-visual-panel
           class="min-h-0 flex-1"
+          [projectId]="activeProject()!.id"
           [visualization]="activeVisualization()"
           [visualizations]="activeProject()!.visualizations ?? []"
           [loading]="generatingVisualProject() === activeProject()!.id"
@@ -547,6 +550,8 @@
           (downloadVisual)="downloadVisualization($event)"
           (selectVersion)="selectVisualVersion($event)"
           (revertVersion)="revertVisualVersion($event)"
+          (visualRefreshed)="onVisualRefreshed($event)"
+          (dataPointSelected)="onDataPointSelected($event)"
         />
       } @else {
         <app-entity-details class="min-h-0 flex-1 overflow-y-auto" />
