@@ -3,6 +3,7 @@ import { mkdirSync } from 'fs';
 import { join } from 'path';
 import {
   CONNECTIONS_STORE,
+  DATASOURCE_INVENTORIES_STORE,
   PROJECTS_STORE,
   SANDBOX_SELECTIONS_STORE,
   SETTINGS_STORE,
@@ -25,6 +26,7 @@ const COLLECTIONS = [
   { token: SETTINGS_STORE, table: 'settings' },
   { token: SANDBOX_SELECTIONS_STORE, table: 'sandbox_selections' },
   { token: PROJECTS_STORE, table: 'projects' },
+  { token: DATASOURCE_INVENTORIES_STORE, table: 'datasource_inventories' },
 ];
 
 const sqliteDbProvider: Provider = {

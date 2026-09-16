@@ -74,6 +74,10 @@ export interface InventoryResult {
   ok: boolean;
   message?: string;
   catalogs?: CatalogInfo[];
+  /** ISO timestamp of the live fetch this inventory came from. */
+  fetchedAt?: string;
+  /** True when the backend served its stored snapshot instead of a live walk. */
+  cached?: boolean;
 }
 
 export function kindLabel(kind: DatasourceKind | undefined): string {

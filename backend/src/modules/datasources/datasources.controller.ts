@@ -1,4 +1,12 @@
-import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { DatasourcesService } from './datasources.service';
 import type {
   SaveDatasourceDto,
@@ -61,9 +69,17 @@ export class DatasourcesController {
   @Get(':id/inventory')
   async inventory(
     @Param('id') id: string,
-  ): Promise<{ ok: boolean; message?: string; catalogs?: CatalogInfo[] }> {
+    @Query('refresh') refresh?: string,
+  ): Promise<{
+    ok: boolean;
+    message?: string;
+    catalogs?: CatalogInfo[];
+    fetchedAt?: string;
+    cached?: boolean;
+  }> {
     try {
-      return { ok: true, catalogs: await this.datasources.inventory(id) };
+      const result = await this.datasources.inventory(id, refresh === 'true');
+      return { ok: true, ...result };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return { ok: false, message };

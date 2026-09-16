@@ -1,0 +1,195 @@
+const clients: FakeClient[] = [];
+
+jest.mock('@databricks/sql', () => ({
+  DBSQLClient: jest.fn().mockImplementation(() => {
+    const client = new FakeClient();
+    clients.push(client);
+    return client;
+  }),
+}));
+
+import { Logger } from '@nestjs/common';
+import { DatabricksConnector } from './databricks.connector';
+
+/** Rows the fake warehouse answers with, keyed by a fragment of the SQL. */
+type Responder = (sql: string) => Record<string, unknown>[];
+
+let respond: Responder = () => [];
+
+class FakeSession {
+  readonly statements: string[] = [];
+  closed = false;
+
+  executeStatement(sql: string) {
+    this.statements.push(sql);
+    const rows = respond(sql);
+    return Promise.resolve({ fetchAll: () => Promise.resolve(rows) });
+  }
+
+  close() {
+    this.closed = true;
+    return Promise.resolve();
+  }
+}
+
+class FakeClient {
+  readonly sessions: FakeSession[] = [];
+  closed = false;
+
+  connect() {
+    return Promise.resolve(this);
+  }
+
+  openSession() {
+    const session = new FakeSession();
+    this.sessions.push(session);
+    return Promise.resolve(session);
+  }
+
+  close() {
+    this.closed = true;
+    return Promise.resolve();
+  }
+}
+
+const config = {
+  host: 'example.cloud.databricks.com',
+  token: 'secret',
+  warehouseId: 'wh1',
+};
+
+/** Unity Catalog REST: `sales`/`ops` queryable, `archive` browse-only. */
+function mockUcFetch(): jest.Mock {
+  const fetchMock = jest.fn((url: string) => {
+    const body = url.includes('/catalogs')
+      ? {
+          catalogs: [
+            { name: 'sales' },
+            { name: 'ops' },
+            { name: 'archive', browse_only: true },
+          ],
+        }
+      : { schemas: [{ name: 'public' }] };
+    return Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
+  });
+  global.fetch = fetchMock as unknown as typeof fetch;
+  return fetchMock;
+}
+
+function statements(): string[] {
+  return clients.flatMap((c) => c.sessions.flatMap((s) => s.statements));
+}
+
+beforeEach(() => {
+  clients.length = 0;
+  respond = () => [];
+  mockUcFetch();
+  jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+});
+
+describe('DatabricksConnector inventory', () => {
+  it('walks only catalogs with query access, in one bulk sweep', async () => {
+    respond = (sql) => {
+      if (sql.includes('SHOW CATALOGS')) {
+        return [
+          { catalog: 'sales' },
+          { catalog: 'ops' },
+          { catalog: 'archive' },
+          { catalog: 'system' },
+        ];
+      }
+      if (sql.includes('system.information_schema.tables')) {
+        return [
+          {
+            table_catalog: 'sales',
+            table_schema: 'public',
+            table_name: 'orders',
+          },
+        ];
+      }
+      if (sql.includes('system.information_schema.columns')) {
+        return [
+          {
+            table_catalog: 'sales',
+            table_schema: 'public',
+            table_name: 'orders',
+            column_name: 'id',
+            full_data_type: 'bigint',
+            is_nullable: 'NO',
+            ordinal_position: 1,
+          },
+        ];
+      }
+      return [];
+    };
+
+    const result = await new DatabricksConnector().inventory(config);
+
+    // Browse-only and system catalogs never reach the warehouse.
+    const bulk = statements().filter((s) => s.includes('system.information_'));
+    expect(bulk).toHaveLength(2);
+    for (const sql of bulk) {
+      expect(sql).toContain("IN ('sales', 'ops')");
+    }
+    // One session for SHOW CATALOGS, one for the bulk sweep.
+    expect(clients).toHaveLength(2);
+    expect(result.map((c) => c.name)).toEqual(['ops', 'sales']);
+    // A catalog with no visible tables still shows up.
+    expect(result[0].schemas).toEqual([]);
+    expect(result[1].schemas).toEqual([
+      {
+        name: 'public',
+        tables: [
+          {
+            name: 'orders',
+            columns: [{ name: 'id', type: 'bigint', nullable: false }],
+            selectable: true,
+          },
+        ],
+        selectable: true,
+      },
+    ]);
+  });
+
+  it('falls back to per-catalog walks on one shared client when the bulk sweep fails', async () => {
+    respond = (sql) => {
+      if (sql.includes('SHOW CATALOGS')) {
+        return [{ catalog: 'sales' }, { catalog: 'ops' }];
+      }
+      if (sql.includes('system.information_schema')) {
+        throw new Error('PERMISSION_DENIED: system.information_schema');
+      }
+      if (sql.includes('information_schema.tables')) {
+        return [{ table_schema: 'public', table_name: 'orders' }];
+      }
+      return [];
+    };
+
+    const result = await new DatabricksConnector().inventory(config);
+
+    // SHOW CATALOGS client, bulk client, then one shared fallback client with
+    // a session per catalog.
+    expect(clients).toHaveLength(3);
+    const fallback = clients[2];
+    expect(fallback.sessions).toHaveLength(2);
+    expect(fallback.sessions.every((s) => s.closed)).toBe(true);
+    expect(fallback.closed).toBe(true);
+    expect(result.map((c) => c.name)).toEqual(['ops', 'sales']);
+    expect(result[1].schemas[0].tables.map((t) => t.name)).toEqual(['orders']);
+  });
+
+  it('walks every catalog when the access pre-filter fails', async () => {
+    global.fetch = jest.fn().mockRejectedValue(new Error('network down'));
+    respond = (sql) =>
+      sql.includes('SHOW CATALOGS')
+        ? [{ catalog: 'sales' }, { catalog: 'archive' }]
+        : [];
+
+    const result = await new DatabricksConnector().inventory(config);
+
+    expect(
+      statements().some((s) => s.includes("IN ('sales', 'archive')")),
+    ).toBe(true);
+    expect(result.map((c) => c.name)).toEqual(['archive', 'sales']);
+  });
+});

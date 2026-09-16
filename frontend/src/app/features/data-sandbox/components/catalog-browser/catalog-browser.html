@@ -8,6 +8,9 @@
         Catalogs, schemas and entities available through the selected
         datasource.
       </p>
+      @if (updatedLabel(); as updated) {
+        <p class="mt-1 text-[12px] text-zinc-600">Updated {{ updated }}</p>
+      }
     </div>
     <div class="flex shrink-0 items-center gap-2">
       <select
@@ -27,6 +30,20 @@
           </option>
         }
       </select>
+      <button
+        type="button"
+        aria-label="Refresh inventory"
+        title="Re-read catalogs, schemas and entities from the datasource"
+        (click)="refreshInventory()"
+        [disabled]="loading() || !selectedDatasource()"
+        class="flex shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5 p-2 text-zinc-300 hover:bg-white/10 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <lucide-angular
+          [img]="RefreshCw"
+          [size]="15"
+          [class.animate-spin]="loading()"
+        />
+      </button>
       <input
         type="text"
         placeholder="Sandbox name"
@@ -56,9 +73,15 @@
   </div>
 
   @if (loading()) {
-    <div class="mt-10 flex items-center gap-2.5 text-zinc-400">
-      <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
-      <span>Loading inventory from {{ datasourceLabel() }}…</span>
+    <div class="mt-10 flex flex-col gap-1.5">
+      <div class="flex items-center gap-2.5 text-zinc-400">
+        <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
+        <span>Loading inventory from {{ datasourceLabel() }}…</span>
+      </div>
+      <p class="pl-[26px] text-[12px] text-zinc-600">
+        The first load can take a while if the Databricks warehouse is starting
+        up.
+      </p>
     </div>
   } @else if (error(); as err) {
     <p

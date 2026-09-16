@@ -23,7 +23,9 @@ import {
 // a cold warehouse can take minutes to start.
 const TEST_TIMEOUT_MS = 30_000;
 const CATALOG_QUERY_TIMEOUT_MS = 15_000;
-const CATALOG_INVENTORY_TIMEOUT_MS = 60_000;
+// The bulk system.information_schema sweep covers every catalog in one query,
+// so it gets a wider budget than the old per-catalog walks had.
+const CATALOG_INVENTORY_TIMEOUT_MS = 120_000;
 const QUERY_TIMEOUT_MS = 120_000;
 const INVENTORY_CONCURRENCY = 5;
 // Unity Catalog REST API — used to flag objects the credentials can only
@@ -72,7 +74,11 @@ export class DatabricksConnector implements DatasourceConnector<DatabricksConfig
     }
   }
 
-  /** SHOW CATALOGS, then walk each non-system catalog's information_schema. */
+  /**
+   * SHOW CATALOGS → drop system and browse-only catalogs → one bulk sweep of
+   * `system.information_schema` for every remaining catalog, falling back to
+   * per-catalog walks when the credentials cannot read the system catalog.
+   */
   async inventory(raw: DatabricksConfig): Promise<CatalogInfo[]> {
     const config = this.validate(raw);
     const { client, session } = await this.openSession(config, TEST_TIMEOUT_MS);
@@ -88,19 +94,34 @@ export class DatabricksConnector implements DatasourceConnector<DatabricksConfig
       await client.close();
     }
 
-    const result: CatalogInfo[] = [];
-    for (let i = 0; i < catalogs.length; i += INVENTORY_CONCURRENCY) {
-      const batch = catalogs.slice(i, i + INVENTORY_CONCURRENCY);
-      const settled = await Promise.allSettled(
-        batch.map((catalog) => this.walkCatalog(config, catalog)),
+    // Browse-only catalogs cost a session each and yield nothing queryable —
+    // skip them before touching the warehouse. `null` = the probe failed, so
+    // we keep the old behaviour of walking everything.
+    let accessibleCatalogs: Set<string> | null = null;
+    try {
+      accessibleCatalogs = await this.listAccessible(config, 'catalogs');
+      const accessible = accessibleCatalogs;
+      const skipped = catalogs.filter((c) => !accessible.has(c));
+      if (skipped.length) {
+        this.logger.debug(
+          `Skipping ${skipped.length} catalogs without query access: ${skipped.join(', ')}`,
+        );
+      }
+      catalogs = catalogs.filter((c) => accessible.has(c));
+    } catch (err) {
+      this.logger.warn(
+        `Catalog access pre-filter failed, walking every catalog: ${(err as Error).message}`,
       );
-      settled.forEach((r, j) => {
-        if (r.status === 'fulfilled') result.push(r.value);
-        else
-          this.logger.warn(
-            `Skipping catalog ${batch[j]} during inventory: ${(r.reason as Error).message}`,
-          );
-      });
+    }
+
+    let result: CatalogInfo[];
+    try {
+      result = await this.bulkInventory(config, catalogs);
+    } catch (err) {
+      this.logger.warn(
+        `Bulk inventory from system.information_schema failed, falling back to per-catalog walk: ${(err as Error).message}`,
+      );
+      result = await this.walkCatalogs(config, catalogs);
     }
     result.sort((a, b) => a.name.localeCompare(b.name));
 
@@ -108,7 +129,7 @@ export class DatabricksConnector implements DatasourceConnector<DatabricksConfig
     // cannot query. Best-effort: a probe failure leaves `selectable` unset,
     // and everything renders as accessible.
     try {
-      await this.annotateAccess(config, result);
+      await this.annotateAccess(config, result, accessibleCatalogs);
     } catch (err) {
       this.logger.warn(
         `Skipping access annotation during inventory: ${(err as Error).message}`,
@@ -118,38 +139,153 @@ export class DatabricksConnector implements DatasourceConnector<DatabricksConfig
   }
 
   /**
+   * Whole inventory in one session: two queries against
+   * `system.information_schema`, scoped to the accessible catalogs. Catalogs
+   * with no visible tables still come back (with no schemas) so the browser
+   * lists everything the credentials can reach.
+   */
+  private async bulkInventory(
+    config: DatabricksConfig,
+    catalogs: string[],
+  ): Promise<CatalogInfo[]> {
+    if (!catalogs.length) return [];
+    const inList = catalogs.map((c) => `'${qStr(c)}'`).join(', ');
+    const { client, session } = await this.openSession(
+      config,
+      CATALOG_INVENTORY_TIMEOUT_MS,
+    );
+    try {
+      const [tablesOp, columnsOp] = await Promise.all([
+        session.executeStatement(
+          `SELECT table_catalog, table_schema, table_name
+           FROM system.information_schema.tables
+           WHERE table_catalog IN (${inList})
+             AND table_schema <> 'information_schema'
+           ORDER BY table_catalog, table_schema, table_name`,
+        ),
+        session.executeStatement(
+          `SELECT table_catalog, table_schema, table_name, column_name,
+                  full_data_type, is_nullable, ordinal_position
+           FROM system.information_schema.columns
+           WHERE table_catalog IN (${inList})
+             AND table_schema <> 'information_schema'
+           ORDER BY table_catalog, table_schema, table_name, ordinal_position`,
+        ),
+      ]);
+      const [tablesRes, columnsRes] = await Promise.all([
+        this.fetchWithTimeout(tablesOp, CATALOG_INVENTORY_TIMEOUT_MS),
+        this.fetchWithTimeout(columnsOp, CATALOG_INVENTORY_TIMEOUT_MS),
+      ]);
+
+      const columnsByTable = new Map<string, ColumnInfo[]>();
+      for (const row of columnsRes) {
+        const schemaName = String(row['table_schema']);
+        if (SYSTEM_SCHEMAS.has(schemaName.toLowerCase())) continue;
+        const key = `${String(row['table_catalog'])}.${schemaName}.${String(row['table_name'])}`;
+        const arr = columnsByTable.get(key) ?? [];
+        arr.push(toColumn(row));
+        columnsByTable.set(key, arr);
+      }
+      const byCatalog = new Map<string, Map<string, TableInfo[]>>();
+      for (const catalog of catalogs) byCatalog.set(catalog, new Map());
+      for (const row of tablesRes) {
+        const catalogName = String(row['table_catalog']);
+        const schemaName = String(row['table_schema']);
+        if (SYSTEM_SCHEMAS.has(schemaName.toLowerCase())) continue;
+        const tableName = String(row['table_name']);
+        const schemas = byCatalog.get(catalogName);
+        if (!schemas) continue;
+        const arr = schemas.get(schemaName) ?? [];
+        arr.push({
+          name: tableName,
+          columns:
+            columnsByTable.get(`${catalogName}.${schemaName}.${tableName}`) ??
+            [],
+        });
+        schemas.set(schemaName, arr);
+      }
+      return Array.from(byCatalog.entries()).map(([name, schemas]) => ({
+        name,
+        schemas: Array.from(schemas.entries()).map(([schema, tables]) => ({
+          name: schema,
+          tables,
+        })),
+      }));
+    } finally {
+      await session.close();
+      await client.close();
+    }
+  }
+
+  /** Per-catalog information_schema walks over one shared client. */
+  private async walkCatalogs(
+    config: DatabricksConfig,
+    catalogs: string[],
+  ): Promise<CatalogInfo[]> {
+    if (!catalogs.length) return [];
+    const client = await this.connect(config, CATALOG_INVENTORY_TIMEOUT_MS);
+    const result: CatalogInfo[] = [];
+    try {
+      for (let i = 0; i < catalogs.length; i += INVENTORY_CONCURRENCY) {
+        const batch = catalogs.slice(i, i + INVENTORY_CONCURRENCY);
+        const settled = await Promise.allSettled(
+          batch.map((catalog) => this.walkCatalog(client, catalog)),
+        );
+        settled.forEach((r, j) => {
+          if (r.status === 'fulfilled') result.push(r.value);
+          else
+            this.logger.warn(
+              `Skipping catalog ${batch[j]} during inventory: ${(r.reason as Error).message}`,
+            );
+        });
+      }
+    } finally {
+      await client.close();
+    }
+    return result;
+  }
+
+  /**
    * Set `selectable` on every catalog/schema/table from Unity Catalog's
    * `include_browse` listings: an object is accessible when it is returned
-   * without `browse_only: true`. Catalog access is probed once; schema access
-   * is probed per catalog and cascades to that schema's tables.
+   * without `browse_only: true`. Catalog access is reused from the inventory
+   * pre-filter when available; schema access is probed per catalog (in
+   * batches) and cascades to that schema's tables.
    */
   private async annotateAccess(
     config: DatabricksConfig,
     catalogs: CatalogInfo[],
+    accessibleCatalogs: Set<string> | null,
   ): Promise<void> {
-    const accessibleCatalogs = await this.listAccessible(config, 'catalogs');
+    const accessible =
+      accessibleCatalogs ?? (await this.listAccessible(config, 'catalogs'));
     for (const catalog of catalogs) {
-      catalog.selectable = accessibleCatalogs.has(catalog.name);
+      catalog.selectable = accessible.has(catalog.name);
     }
-    for (const catalog of catalogs) {
-      try {
-        const accessibleSchemas = await this.listAccessible(
-          config,
-          'schemas',
-          catalog.name,
-        );
-        for (const schema of catalog.schemas) {
-          const accessible = accessibleSchemas.has(schema.name);
-          schema.selectable = accessible;
-          for (const table of schema.tables) table.selectable = accessible;
+    for (let i = 0; i < catalogs.length; i += INVENTORY_CONCURRENCY) {
+      const batch = catalogs.slice(i, i + INVENTORY_CONCURRENCY);
+      const settled = await Promise.allSettled(
+        batch.map((catalog) =>
+          this.listAccessible(config, 'schemas', catalog.name),
+        ),
+      );
+      settled.forEach((r, j) => {
+        const catalog = batch[j];
+        if (r.status !== 'fulfilled') {
+          // Leave this catalog's schemas unflagged (accessible) on a soft
+          // failure rather than dropping the whole annotation pass.
+          this.logger.warn(
+            `Skipping schema access probe for ${catalog.name}: ${(r.reason as Error).message}`,
+          );
+          return;
         }
-      } catch (err) {
-        // Leave this catalog's schemas unflagged (accessible) on a soft
-        // failure rather than dropping the whole annotation pass.
-        this.logger.warn(
-          `Skipping schema access probe for ${catalog.name}: ${(err as Error).message}`,
-        );
-      }
+        for (const schema of catalog.schemas) {
+          const schemaAccessible = r.value.has(schema.name);
+          schema.selectable = schemaAccessible;
+          for (const table of schema.tables)
+            table.selectable = schemaAccessible;
+        }
+      });
     }
   }
 
@@ -242,13 +378,10 @@ export class DatabricksConnector implements DatasourceConnector<DatabricksConfig
   }
 
   private async walkCatalog(
-    config: DatabricksConfig,
+    client: DBSQLClient,
     catalog: string,
   ): Promise<CatalogInfo> {
-    const { client, session } = await this.openSession(
-      config,
-      CATALOG_INVENTORY_TIMEOUT_MS,
-    );
+    const session = await client.openSession();
     try {
       const [tablesOp, columnsOp] = await Promise.all([
         session.executeStatement(
@@ -276,11 +409,7 @@ export class DatabricksConnector implements DatasourceConnector<DatabricksConfig
         if (SYSTEM_SCHEMAS.has(schemaName.toLowerCase())) continue;
         const key = `${schemaName}.${String(row['table_name'])}`;
         const arr = columnsByTable.get(key) ?? [];
-        arr.push({
-          name: String(row['column_name']),
-          type: String(row['full_data_type']),
-          nullable: String(row['is_nullable']).toUpperCase() === 'YES',
-        });
+        arr.push(toColumn(row));
         columnsByTable.set(key, arr);
       }
       const schemas = new Map<string, TableInfo[]>();
@@ -304,26 +433,14 @@ export class DatabricksConnector implements DatasourceConnector<DatabricksConfig
       };
     } finally {
       await session.close();
-      await client.close();
     }
   }
 
-  private async openSession(
+  private async connect(
     config: DatabricksConfig,
     timeoutMs: number,
-  ): Promise<{ client: DBSQLClient; session: IDBSQLSession }> {
+  ): Promise<DBSQLClient> {
     const client = new DBSQLClient();
-    const timeout = new Promise<never>((_, reject) =>
-      setTimeout(
-        () =>
-          reject(
-            new Error(
-              `Databricks connection timed out after ${timeoutMs / 1000}s`,
-            ),
-          ),
-        timeoutMs,
-      ),
-    );
     const connect = (async () => {
       await client.connect({
         host: config.host,
@@ -332,26 +449,29 @@ export class DatabricksConnector implements DatasourceConnector<DatabricksConfig
         token: config.token,
         socketTimeout: timeoutMs,
       });
-      const session = await client.openSession();
-      return { client, session };
+      return client;
     })();
-    return Promise.race([connect, timeout]);
+    return raceTimeout(connect, timeoutMs, 'connection');
+  }
+
+  private async openSession(
+    config: DatabricksConfig,
+    timeoutMs: number,
+  ): Promise<{ client: DBSQLClient; session: IDBSQLSession }> {
+    const client = await this.connect(config, timeoutMs);
+    const session = await client.openSession();
+    return { client, session };
   }
 
   private async fetchWithTimeout(
     op: IOperation,
     timeoutMs: number,
   ): Promise<Record<string, unknown>[]> {
-    const timeout = new Promise<never>((_, reject) =>
-      setTimeout(
-        () =>
-          reject(
-            new Error(`Databricks query timed out after ${timeoutMs / 1000}s`),
-          ),
-        timeoutMs,
-      ),
+    const result: unknown = await raceTimeout(
+      op.fetchAll(),
+      timeoutMs,
+      'query',
     );
-    const result: unknown = await Promise.race([op.fetchAll(), timeout]);
     if (!Array.isArray(result)) return [];
     return result.filter(isRecord);
   }
@@ -381,6 +501,39 @@ export class DatabricksConnector implements DatasourceConnector<DatabricksConfig
 /** Backtick-escape a Unity Catalog identifier for interpolation. */
 function qIdent(ident: string): string {
   return ident.replace(/`/g, '``');
+}
+
+/** Reject when `work` outlives `timeoutMs`; the timer never outlives the race. */
+function raceTimeout<T>(
+  work: Promise<T>,
+  timeoutMs: number,
+  what: 'connection' | 'query',
+): Promise<T> {
+  let timer: NodeJS.Timeout;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () =>
+        reject(
+          new Error(`Databricks ${what} timed out after ${timeoutMs / 1000}s`),
+        ),
+      timeoutMs,
+    );
+  });
+  return Promise.race([work, timeout]).finally(() => clearTimeout(timer));
+}
+
+/** Escape a value for interpolation inside a SQL string literal. */
+function qStr(value: string): string {
+  return value.replace(/'/g, "''");
+}
+
+/** One information_schema.columns row → `ColumnInfo`. */
+function toColumn(row: Record<string, unknown>): ColumnInfo {
+  return {
+    name: String(row['column_name']),
+    type: String(row['full_data_type']),
+    nullable: String(row['is_nullable']).toUpperCase() === 'YES',
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

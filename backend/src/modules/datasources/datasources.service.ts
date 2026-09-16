@@ -8,6 +8,7 @@ import { PostgresConnector } from './connectors/postgres.connector';
 import type { DatasourceConnector } from './connectors/connector';
 import { MASKED } from './connectors/connector';
 import { DatasourcesRepository } from './repositories/datasources.repository';
+import { InventoryCacheRepository } from './repositories/inventory-cache.repository';
 import {
   CatalogInfo,
   DatabricksConfig,
@@ -25,6 +26,7 @@ import {
 export class DatasourcesService {
   constructor(
     private readonly repository: DatasourcesRepository,
+    private readonly inventoryCache: InventoryCacheRepository,
     private readonly databricks: DatabricksConnector,
     private readonly postgres: PostgresConnector,
   ) {}
@@ -91,12 +93,33 @@ export class DatasourcesService {
   async delete(id: string): Promise<Datasource> {
     const existing = await this.get(id);
     await this.repository.delete(id);
+    await this.inventoryCache.delete(id);
     return existing;
   }
 
-  async inventory(id: string): Promise<CatalogInfo[]> {
+  /**
+   * Cached by default — a live walk takes minutes on a cold warehouse. Pass
+   * `refresh` to re-read the datasource and replace the snapshot.
+   */
+  async inventory(
+    id: string,
+    refresh = false,
+  ): Promise<{ catalogs: CatalogInfo[]; fetchedAt: string; cached: boolean }> {
     const ds = await this.get(id);
-    return this.connector(ds.kind).inventory(ds.config);
+    if (!refresh) {
+      const cached = await this.inventoryCache.get(id);
+      if (cached) {
+        return {
+          catalogs: cached.catalogs,
+          fetchedAt: cached.fetchedAt,
+          cached: true,
+        };
+      }
+    }
+    const catalogs = await this.connector(ds.kind).inventory(ds.config);
+    const fetchedAt = new Date().toISOString();
+    await this.inventoryCache.save(id, catalogs, fetchedAt);
+    return { catalogs, fetchedAt, cached: false };
   }
 
   async sampleRows(
