@@ -15,7 +15,10 @@ import {
   Database,
   FolderTree,
   Loader2,
+  Lock,
+  Search,
   Table2,
+  X,
 } from 'lucide-angular';
 import { DatasourcesApiService } from '../../../datasources/services/datasources-api.service';
 import {
@@ -46,7 +49,10 @@ export class CatalogBrowser implements OnInit {
   readonly Database = Database;
   readonly FolderTree = FolderTree;
   readonly Loader2 = Loader2;
+  readonly Lock = Lock;
+  readonly Search = Search;
   readonly Table2 = Table2;
+  readonly X = X;
 
   private readonly api = inject(DatasourcesApiService);
   private readonly selectionService = inject(SandboxSelectionService);
@@ -59,7 +65,39 @@ export class CatalogBrowser implements OnInit {
   readonly datasourceId = signal('');
   readonly error = signal<string | null>(null);
   readonly catalogs = signal<CatalogInfo[]>([]);
+  /** Free-text filter over catalog / schema / entity names. */
+  readonly search = signal('');
   readonly expanded = signal<Set<string>>(new Set());
+
+  /**
+   * The tree pruned to the current search: a catalog matching by name keeps
+   * all its schemas/tables; otherwise only schemas (or their tables) that
+   * match survive. Empty search returns the full tree unchanged.
+   */
+  readonly filteredCatalogs = computed<CatalogInfo[]>(() => {
+    const term = this.search().trim().toLowerCase();
+    const catalogs = this.catalogs();
+    if (!term) return catalogs;
+    const has = (name: string) => name.toLowerCase().includes(term);
+    const result: CatalogInfo[] = [];
+    for (const catalog of catalogs) {
+      if (has(catalog.name)) {
+        result.push(catalog);
+        continue;
+      }
+      const schemas: SchemaInfo[] = [];
+      for (const schema of catalog.schemas) {
+        if (has(schema.name)) {
+          schemas.push(schema);
+          continue;
+        }
+        const tables = schema.tables.filter((t) => has(t.name));
+        if (tables.length) schemas.push({ ...schema, tables });
+      }
+      if (schemas.length) result.push({ ...catalog, schemas });
+    }
+    return result;
+  });
   readonly saving = signal(false);
   readonly sandboxName = signal('');
   readonly saved = output<void>();
@@ -134,6 +172,7 @@ export class CatalogBrowser implements OnInit {
     if (!id || id === this.datasourceId()) return;
     this.datasourceId.set(id);
     this.catalogs.set([]);
+    this.search.set('');
     this.expanded.set(new Set());
     this.inclusionService.included.set(new Set());
     this.selectionService.clear();
@@ -157,7 +196,9 @@ export class CatalogBrowser implements OnInit {
   }
 
   isExpanded(key: string): boolean {
-    return this.expanded().has(key);
+    // An active search force-expands the pruned tree so matches deep in a
+    // catalog stay visible without manual drilling.
+    return this.search().trim() !== '' || this.expanded().has(key);
   }
 
   toggle(key: string): void {
@@ -192,6 +233,19 @@ export class CatalogBrowser implements OnInit {
 
   schemaState(catalogName: string, schema: SchemaInfo): InclusionState {
     return this.inclusionService.schemaState(catalogName, schema);
+  }
+
+  /** No-access objects (browse-only) render greyed. Only explicit `false`. */
+  isCatalogLocked(catalog: CatalogInfo): boolean {
+    return catalog.selectable === false;
+  }
+
+  isSchemaLocked(schema: SchemaInfo): boolean {
+    return schema.selectable === false;
+  }
+
+  isTableLocked(table: TableInfo): boolean {
+    return table.selectable === false;
   }
 
   isTableIncluded(

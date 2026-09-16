@@ -26,9 +26,27 @@ const CATALOG_QUERY_TIMEOUT_MS = 15_000;
 const CATALOG_INVENTORY_TIMEOUT_MS = 60_000;
 const QUERY_TIMEOUT_MS = 120_000;
 const INVENTORY_CONCURRENCY = 5;
+// Unity Catalog REST API — used to flag objects the credentials can only
+// browse (metadata visible, not queryable). Mirrors data-readiness-agent's
+// ADR-0029: the `include_browse=true` listings return `browse_only: true`
+// for objects without SELECT, which the warehouse's information_schema walk
+// cannot distinguish on its own.
+const UC_API_TIMEOUT_MS = 20_000;
 
 const SYSTEM_CATALOGS = new Set(['system', '__databricks_internal']);
 const SYSTEM_SCHEMAS = new Set(['information_schema']);
+
+/** One object in a Unity Catalog REST list response. */
+interface UcObject {
+  name?: string;
+  browse_only?: boolean;
+}
+
+interface UcListResponse {
+  catalogs?: UcObject[];
+  schemas?: UcObject[];
+  next_page_token?: string;
+}
 
 @Injectable()
 export class DatabricksConnector implements DatasourceConnector<DatabricksConfig> {
@@ -85,7 +103,102 @@ export class DatabricksConnector implements DatasourceConnector<DatabricksConfig
       });
     }
     result.sort((a, b) => a.name.localeCompare(b.name));
+
+    // Flag browse-only objects so the UI can grey out what the credentials
+    // cannot query. Best-effort: a probe failure leaves `selectable` unset,
+    // and everything renders as accessible.
+    try {
+      await this.annotateAccess(config, result);
+    } catch (err) {
+      this.logger.warn(
+        `Skipping access annotation during inventory: ${(err as Error).message}`,
+      );
+    }
     return result;
+  }
+
+  /**
+   * Set `selectable` on every catalog/schema/table from Unity Catalog's
+   * `include_browse` listings: an object is accessible when it is returned
+   * without `browse_only: true`. Catalog access is probed once; schema access
+   * is probed per catalog and cascades to that schema's tables.
+   */
+  private async annotateAccess(
+    config: DatabricksConfig,
+    catalogs: CatalogInfo[],
+  ): Promise<void> {
+    const accessibleCatalogs = await this.listAccessible(config, 'catalogs');
+    for (const catalog of catalogs) {
+      catalog.selectable = accessibleCatalogs.has(catalog.name);
+    }
+    for (const catalog of catalogs) {
+      try {
+        const accessibleSchemas = await this.listAccessible(
+          config,
+          'schemas',
+          catalog.name,
+        );
+        for (const schema of catalog.schemas) {
+          const accessible = accessibleSchemas.has(schema.name);
+          schema.selectable = accessible;
+          for (const table of schema.tables) table.selectable = accessible;
+        }
+      } catch (err) {
+        // Leave this catalog's schemas unflagged (accessible) on a soft
+        // failure rather than dropping the whole annotation pass.
+        this.logger.warn(
+          `Skipping schema access probe for ${catalog.name}: ${(err as Error).message}`,
+        );
+      }
+    }
+  }
+
+  /**
+   * Names of catalogs (or schemas within `catalogName`) the credentials can
+   * query — i.e. listed without `browse_only: true`. Follows pagination.
+   */
+  private async listAccessible(
+    config: DatabricksConfig,
+    kind: 'catalogs' | 'schemas',
+    catalogName?: string,
+  ): Promise<Set<string>> {
+    const accessible = new Set<string>();
+    const base = `https://${config.host}/api/2.1/unity-catalog/${kind}`;
+    let pageToken: string | undefined;
+    do {
+      const url = new URL(base);
+      url.searchParams.set('include_browse', 'true');
+      if (catalogName) url.searchParams.set('catalog_name', catalogName);
+      if (pageToken) url.searchParams.set('page_token', pageToken);
+      const body = await this.ucFetch(url.toString(), config.token);
+      const items = (kind === 'catalogs' ? body.catalogs : body.schemas) ?? [];
+      for (const item of items) {
+        if (item?.browse_only !== true && typeof item?.name === 'string') {
+          accessible.add(item.name);
+        }
+      }
+      pageToken = body.next_page_token;
+    } while (pageToken);
+    return accessible;
+  }
+
+  private async ucFetch(url: string, token: string): Promise<UcListResponse> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), UC_API_TIMEOUT_MS);
+    try {
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        throw new Error(
+          `Unity Catalog API ${res.status} ${res.statusText}`.trim(),
+        );
+      }
+      return (await res.json()) as UcListResponse;
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   async sampleRows(

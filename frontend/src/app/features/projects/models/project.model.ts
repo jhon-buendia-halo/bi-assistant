@@ -18,6 +18,8 @@ export interface ChatMessage {
   at: string;
   /** Structured data the assistant retrieved while producing this answer. */
   data?: ToolDataRecord[];
+  /** `catalog.schema.table` entities queried to produce this answer. */
+  entities?: string[];
   /** Present when the assistant asked a clarifying question with options. */
   clarification?: {
     question: string;

@@ -69,14 +69,45 @@
   } @else if (catalogs().length === 0) {
     <p class="mt-8 text-[13px] text-zinc-500">No accessible catalogs found.</p>
   } @else {
-    <div class="mt-6 flex flex-col gap-0.5">
-      @for (catalog of catalogs(); track catalog.name) {
+    <div class="relative mt-6">
+      <lucide-angular
+        [img]="Search"
+        [size]="15"
+        class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-zinc-500"
+      />
+      <input
+        type="text"
+        placeholder="Filter catalogs, schemas and entities…"
+        [value]="search()"
+        (input)="search.set($any($event.target).value)"
+        class="w-full rounded-lg border border-white/10 bg-white/5 py-2 pr-9 pl-10 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+      />
+      @if (search().trim()) {
+        <button
+          type="button"
+          aria-label="Clear filter"
+          (click)="search.set('')"
+          class="absolute top-1/2 right-2.5 -translate-y-1/2 rounded p-1 text-zinc-500 hover:bg-white/10 hover:text-zinc-300"
+        >
+          <lucide-angular [img]="X" [size]="14" />
+        </button>
+      }
+    </div>
+
+    @if (filteredCatalogs().length === 0) {
+      <p class="mt-8 text-[13px] text-zinc-500">
+        No catalogs, schemas or entities match “{{ search().trim() }}”.
+      </p>
+    } @else {
+    <div class="mt-3 flex flex-col gap-0.5">
+      @for (catalog of filteredCatalogs(); track catalog.name) {
         <!-- Catalog row -->
         <button
           [attr.data-testid]="'catalog-' + catalog.name"
           (click)="selectCatalog(catalog)"
           class="flex items-center gap-2.5 rounded-lg px-2 py-2 text-left hover:bg-white/5"
           [class.option-active]="selectedKey() === catalog.name"
+          [class.is-locked]="isCatalogLocked(catalog)"
         >
           <lucide-angular
             [img]="ChevronRight"
@@ -95,7 +126,13 @@
           <span class="text-[12px] text-zinc-500"
             >{{ catalog.schemas.length }} schemas</span
           >
-          @if (catalogState(catalog) === "full") {
+          @if (isCatalogLocked(catalog)) {
+            <lucide-angular
+              [img]="Lock"
+              [size]="13"
+              class="ml-auto shrink-0 text-zinc-500"
+            />
+          } @else if (catalogState(catalog) === "full") {
             <lucide-angular
               [img]="CircleCheck"
               [size]="14"
@@ -120,6 +157,7 @@
               [class.option-active]="
                 selectedKey() === catalog.name + '.' + schema.name
               "
+              [class.is-locked]="isSchemaLocked(schema)"
             >
               <lucide-angular
                 [img]="ChevronRight"
@@ -138,7 +176,13 @@
               <span class="text-[12px] text-zinc-500"
                 >{{ schema.tables.length }} entities</span
               >
-              @if (schemaState(catalog.name, schema) === "full") {
+              @if (isSchemaLocked(schema)) {
+                <lucide-angular
+                  [img]="Lock"
+                  [size]="13"
+                  class="ml-auto shrink-0 text-zinc-500"
+                />
+              } @else if (schemaState(catalog.name, schema) === "full") {
                 <lucide-angular
                   [img]="CircleCheck"
                   [size]="14"
@@ -171,6 +215,7 @@
                     selectedKey() ===
                     catalog.name + '.' + schema.name + '.' + table.name
                   "
+                  [class.is-locked]="isTableLocked(table)"
                 >
                   <lucide-angular
                     [img]="Table2"
@@ -183,7 +228,13 @@
                   <span class="text-[12px] text-zinc-500"
                     >{{ table.columns.length }} columns</span
                   >
-                  @if (isTableIncluded(catalog.name, schema.name, table)) {
+                  @if (isTableLocked(table)) {
+                    <lucide-angular
+                      [img]="Lock"
+                      [size]="13"
+                      class="ml-auto shrink-0 text-zinc-500"
+                    />
+                  } @else if (isTableIncluded(catalog.name, schema.name, table)) {
                     <lucide-angular
                       [img]="CircleCheck"
                       [size]="14"
@@ -197,5 +248,6 @@
         }
       }
     </div>
+    }
   }
 </div>

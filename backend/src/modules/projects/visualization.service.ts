@@ -497,6 +497,7 @@ export class VisualizationService {
       question: question?.content,
       answer: answer?.content,
       data: answer?.data,
+      entities: answer?.entities,
       projectName: project.name,
       version,
       generatedAt: generatedAt ?? entry?.createdAt ?? meta.createdAt,
