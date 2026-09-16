@@ -36,6 +36,34 @@ export class ProjectsApiService {
     );
   }
 
+  /**
+   * Ask the backend to regenerate the current version with the runtime error
+   * as feedback. The backend rejects stale versions and repairs of repairs.
+   */
+  repairVisualization(
+    projectId: string,
+    visualizationId: string,
+    error: string,
+    version: number,
+  ): Observable<ProjectActionResult> {
+    return this.http.post<ProjectActionResult>(
+      `${API_BASE_URL}/projects/${encodeURIComponent(projectId)}/visualizations/${encodeURIComponent(visualizationId)}/repair`,
+      { error, version },
+    );
+  }
+
+  /** Tailor the open visual with a plain-English instruction (update path). */
+  tailorVisualization(
+    projectId: string,
+    visualizationId: string,
+    instruction: string,
+  ): Observable<ProjectActionResult> {
+    return this.http.post<ProjectActionResult>(
+      `${API_BASE_URL}/projects/${encodeURIComponent(projectId)}/visualizations/${encodeURIComponent(visualizationId)}/tailor`,
+      { instruction },
+    );
+  }
+
   create(name: string, sandboxes: string[]): Observable<ProjectActionResult> {
     return this.http.post<ProjectActionResult>(`${API_BASE_URL}/projects`, {
       name,

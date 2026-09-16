@@ -71,6 +71,63 @@ export class ProjectsController {
     }
   }
 
+  @Post(':id/visualizations/:visualizationId/repair')
+  async repairVisualization(
+    @Param('id') id: string,
+    @Param('visualizationId') visualizationId: string,
+    @Body() body: { error?: string; version?: number },
+  ): Promise<{
+    ok: boolean;
+    message: string;
+    project?: ProjectDoc;
+    visualization?: InteractiveVisualization;
+  }> {
+    try {
+      const result = await this.projectsService.repairVisualization(
+        id,
+        visualizationId,
+        body?.error ?? '',
+        Number(body?.version),
+      );
+      return {
+        ok: true,
+        message: `Repaired as version ${result.visualization.version}`,
+        ...result,
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { ok: false, message };
+    }
+  }
+
+  @Post(':id/visualizations/:visualizationId/tailor')
+  async tailorVisualization(
+    @Param('id') id: string,
+    @Param('visualizationId') visualizationId: string,
+    @Body() body: { instruction?: string },
+  ): Promise<{
+    ok: boolean;
+    message: string;
+    project?: ProjectDoc;
+    visualization?: InteractiveVisualization;
+  }> {
+    try {
+      const result = await this.projectsService.tailorVisualization(
+        id,
+        visualizationId,
+        body?.instruction ?? '',
+      );
+      return {
+        ok: true,
+        message: `Updated to version ${result.visualization.version}`,
+        ...result,
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { ok: false, message };
+    }
+  }
+
   @Get(':id/visualizations/:visualizationId/download')
   async downloadVisualization(
     @Param('id') id: string,

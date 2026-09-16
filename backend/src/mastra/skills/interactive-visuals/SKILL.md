@@ -29,3 +29,13 @@ Turn the supplied question and answer into one focused visual explanation.
   that ignores reduced-motion preferences.
 - Keep scripts deterministic. Do not use dynamic code execution, storage,
   network calls, navigation, timers, workers, or unbounded loops.
+- Make every data mark clickable for follow-up questions: put
+  `data-qti-value="<the category, series, or label the mark represents>"` on
+  each bar, slice, point, cell, or table row (add `data-qti-label="<pretty
+  label>"` when the value is a code or an id). Give those marks
+  `cursor: pointer` and `tabindex="0"`. The host listens for the click and
+  turns it into a follow-up question — do not add your own click handler,
+  navigation, or `postMessage` for it.
+- When a `<recommended-form>` block is supplied it states the data shape and
+  the form chosen for it. Follow it unless the instruction or the data clearly
+  argues otherwise, and say why in the description when you deviate.

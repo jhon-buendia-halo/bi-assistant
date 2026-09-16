@@ -486,6 +486,75 @@ export class ProjectsService implements OnModuleInit {
     };
   }
 
+  /**
+   * Panel path: tailor an open visual from a plain-English instruction. Same
+   * pipeline as the `update_visual` tool, but callable over HTTP, and it logs
+   * the `updated` chat event the way the generate button logs `created`.
+   */
+  async tailorVisualization(
+    id: string,
+    visualizationId: string,
+    instruction: string,
+  ): Promise<{ project: ProjectDoc; visualization: InteractiveVisualization }> {
+    const trimmed = (instruction ?? '').trim();
+    if (!trimmed) throw new BadRequestException('instruction is required');
+    const project = await this.get(id);
+    const { metadata } = await this.visuals.update(
+      project,
+      visualizationId,
+      trimmed,
+    );
+    const version = this.visuals.currentVersion(metadata);
+    const updated = await this.saveVisualMetadata(project, metadata, {
+      visualId: metadata.id,
+      version,
+      title: metadata.title,
+      action: 'updated',
+    });
+    return {
+      project: updated,
+      visualization: await this.visuals.load(updated, visualizationId, version),
+    };
+  }
+
+  /**
+   * Silent auto-repair of a visual that failed in the sandbox. Only the
+   * current version may be repaired, and only once — the version guard here
+   * repeats the client's check because the client is not trusted, and
+   * `VisualizationService.repair` refuses to repair an auto-repair.
+   */
+  async repairVisualization(
+    id: string,
+    visualizationId: string,
+    error: string,
+    version: number,
+  ): Promise<{ project: ProjectDoc; visualization: InteractiveVisualization }> {
+    const project = await this.get(id);
+    const meta = this.visuals.find(project, visualizationId);
+    const current = this.visuals.currentVersion(meta);
+    if (version !== current) {
+      throw new BadRequestException(
+        `Only the current version can be repaired (requested v${version}, current v${current})`,
+      );
+    }
+    const { metadata } = await this.visuals.repair(
+      project,
+      visualizationId,
+      error,
+    );
+    const repaired = this.visuals.currentVersion(metadata);
+    // No chat event: an automatic fix is not a conversation turn.
+    const updated = await this.saveVisualMetadata(project, metadata);
+    return {
+      project: updated,
+      visualization: await this.visuals.load(
+        updated,
+        visualizationId,
+        repaired,
+      ),
+    };
+  }
+
   /** Upsert visual metadata on the project, optionally logging a chat event. */
   private async saveVisualMetadata(
     project: ProjectDoc,

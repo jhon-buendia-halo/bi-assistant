@@ -46,8 +46,10 @@ import { ProjectChat } from './features/projects/components/project-chat/project
 import { InteractiveVisualPanel } from './features/projects/components/interactive-visual-panel/interactive-visual-panel';
 import {
   ChatMessage,
+  DataPointSelection,
   InteractiveVisualization,
   Project,
+  ProjectActionResult,
   ProjectVisualization,
   VisualEvent,
 } from './features/projects/models/project.model';
@@ -149,6 +151,8 @@ export class App {
   readonly downloadingVisualization = signal<string | null>(null);
   readonly activeVisualization = signal<InteractiveVisualization | null>(null);
   readonly visualizationError = signal<string | null>(null);
+  /** Latest data mark clicked inside a visual; drives the chat follow-up chips. */
+  readonly selectedDataPoint = signal<DataPointSelection | null>(null);
 
   private readonly sandboxApi = inject(SandboxApiService);
   private readonly datasourcesApi = inject(DatasourcesApiService);
@@ -290,6 +294,7 @@ export class App {
 
   openProject(project: Project): void {
     this.projectMenuOpen.set(null);
+    this.selectedDataPoint.set(null);
     this.activeProject.set(project);
     this.mainView.set('project-chat');
     this.loadActiveProjectDatasources(project);
@@ -406,24 +411,45 @@ export class App {
       .revertVisualization(project.id, visual.id, version)
       .subscribe({
         next: (result) => {
-          if (!result.ok || !result.project || !result.visualization) {
+          if (!this.applyVisualResult(result)) {
             this.toast.error(result.message || 'Revert failed');
             return;
-          }
-          this.projects.update((projects) =>
-            projects.map((item) =>
-              item.id === result.project!.id ? result.project! : item,
-            ),
-          );
-          if (this.activeProject()?.id === result.project.id) {
-            this.activeProject.set(result.project);
-            this.activeVisualization.set(result.visualization);
           }
           this.toast.success(result.message);
         },
         error: (err) =>
           this.toast.error(err?.error?.message ?? 'Backend unreachable'),
       });
+  }
+
+  /**
+   * The panel repaired or tailored the open visual and already has the fresh
+   * payload — same refresh path as revert (no SSE event to wait for).
+   */
+  onVisualRefreshed(result: ProjectActionResult): void {
+    if (this.applyVisualResult(result)) this.toast.success(result.message);
+  }
+
+  /**
+   * Adopt a `{project, visualization}` payload into the cached copies. Returns
+   * false when the call did not succeed, so callers can report it.
+   */
+  private applyVisualResult(result: ProjectActionResult): boolean {
+    if (!result.ok || !result.project || !result.visualization) return false;
+    const project = result.project;
+    this.projects.update((projects) =>
+      projects.map((item) => (item.id === project.id ? project : item)),
+    );
+    if (this.activeProject()?.id === project.id) {
+      this.activeProject.set(project);
+      this.activeVisualization.set(result.visualization);
+    }
+    return true;
+  }
+
+  /** A data mark inside the visual was clicked — offer follow-ups in the chat. */
+  onDataPointSelected(selection: DataPointSelection): void {
+    this.selectedDataPoint.set(selection);
   }
 
   showVisualization(
@@ -436,6 +462,7 @@ export class App {
       'visualId' in visualization ? visualization.visualId : visualization.id;
     this.activeVisualization.set(null);
     this.visualizationError.set(null);
+    this.selectedDataPoint.set(null);
     this.rightPanelOpen.set(true);
     this.projectsApi.getVisualization(project.id, id, version).subscribe({
       next: (loaded) => {

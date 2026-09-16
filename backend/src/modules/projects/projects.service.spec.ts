@@ -569,3 +569,147 @@ async function* toolOnlyStream(count: number) {
     };
   }
 }
+
+describe('ProjectsService visual tailoring and repair', () => {
+  const visual = (currentVersion: number) => ({
+    id: 'visual-1',
+    title: 'Claims by month',
+    description: 'Denials peak in March.',
+    path: 'visuals/visual-1',
+    sourceMessageAt: '2024-01-01T00:00:01.000Z',
+    createdAt: '2024-01-01T00:00:02.000Z',
+    currentVersion,
+    versions: [{ version: 1, createdAt: '2024-01-01T00:00:02.000Z' }],
+  });
+
+  function build(currentVersion = 1) {
+    const project: ProjectDoc = {
+      id: 'project-1',
+      name: 'Claims',
+      sandboxes: ['claims'],
+      messages: [],
+      visualizations: [visual(currentVersion)],
+    };
+    const repository = {
+      get: jest.fn().mockResolvedValue(project),
+      update: jest.fn().mockImplementation(async (_id, patch) => {
+        Object.assign(project, patch);
+        return project;
+      }),
+    };
+    const visuals = {
+      find: jest
+        .fn()
+        .mockImplementation((doc: ProjectDoc, id: string) =>
+          (doc.visualizations ?? []).find((v) => v.id === id),
+        ),
+      currentVersion: jest
+        .fn()
+        .mockImplementation(
+          (meta: { currentVersion?: number }) => meta.currentVersion ?? 1,
+        ),
+      update: jest
+        .fn()
+        .mockImplementation(async () => ({ metadata: visual(2) })),
+      repair: jest
+        .fn()
+        .mockImplementation(async () => ({ metadata: visual(2) })),
+      load: jest
+        .fn()
+        .mockImplementation(async (_doc, id: string, version: number) => ({
+          ...visual(version),
+          id,
+          version,
+          document: '<html></html>',
+        })),
+    };
+    const service = new ProjectsService(
+      repository as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      visuals as never,
+      {} as never,
+    );
+    return { service, project, visuals };
+  }
+
+  it('tailors a visual and records the updated event in the chat', async () => {
+    const { service, project, visuals } = build();
+
+    const result = await service.tailorVisualization(
+      'project-1',
+      'visual-1',
+      '  Change the visual to a line chart.  ',
+    );
+
+    expect(visuals.update).toHaveBeenCalledWith(
+      expect.anything(),
+      'visual-1',
+      'Change the visual to a line chart.',
+    );
+    expect(result.visualization.version).toBe(2);
+    const last = project.messages.at(-1);
+    expect(last?.role).toBe('assistant');
+    expect(last?.visual).toEqual({
+      visualId: 'visual-1',
+      version: 2,
+      title: 'Claims by month',
+      action: 'updated',
+    });
+    expect(last?.content).toContain('Updated interactive visual');
+  });
+
+  it('rejects an empty tailoring instruction before running the designer', async () => {
+    const { service, visuals } = build();
+
+    await expect(
+      service.tailorVisualization('project-1', 'visual-1', '   '),
+    ).rejects.toThrow(/instruction is required/);
+    expect(visuals.update).not.toHaveBeenCalled();
+  });
+
+  it('repairs the current version without logging a chat event', async () => {
+    const { service, project, visuals } = build();
+
+    const result = await service.repairVisualization(
+      'project-1',
+      'visual-1',
+      'visual rendered blank',
+      1,
+    );
+
+    expect(visuals.repair).toHaveBeenCalledWith(
+      expect.anything(),
+      'visual-1',
+      'visual rendered blank',
+    );
+    expect(result.visualization.version).toBe(2);
+    expect(project.messages).toHaveLength(0);
+    expect(project.visualizations?.[0].currentVersion).toBe(2);
+  });
+
+  it('refuses to repair anything but the current version', async () => {
+    const { service, visuals } = build(3);
+
+    await expect(
+      service.repairVisualization('project-1', 'visual-1', 'boom', 2),
+    ).rejects.toThrow(/Only the current version can be repaired/);
+    expect(visuals.repair).not.toHaveBeenCalled();
+  });
+
+  it('refuses a missing or non-numeric version from the client', async () => {
+    const { service, visuals } = build();
+
+    await expect(
+      service.repairVisualization(
+        'project-1',
+        'visual-1',
+        'boom',
+        Number(undefined),
+      ),
+    ).rejects.toThrow(/Only the current version can be repaired/);
+    expect(visuals.repair).not.toHaveBeenCalled();
+  });
+});

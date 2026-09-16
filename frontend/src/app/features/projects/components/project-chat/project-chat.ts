@@ -25,10 +25,12 @@ import {
   ThumbsDown,
   ThumbsUp,
   Wrench,
+  X,
 } from 'lucide-angular';
 import { ProjectsApiService } from '../../services/projects-api.service';
 import {
   ChatMessage,
+  DataPointSelection,
   MessageFeedback,
   Project,
   ToolDataRecord,
@@ -36,6 +38,20 @@ import {
 } from '../../models/project.model';
 import { ToastService } from '../../../../core/toast/toast.service';
 import { MarkdownPipe } from '../../../../shared/pipes/markdown.pipe';
+
+/** Human-readable text for a clicked mark: its label when it has one. */
+export function selectionText(selection: DataPointSelection): string {
+  return selection.label?.trim() || selection.value;
+}
+
+/** Prompts behind the two follow-up chips. The user reviews before sending. */
+export function drillPrompt(selection: DataPointSelection): string {
+  return `Drill into "${selection.value}": break it down further.`;
+}
+
+export function whyPrompt(selection: DataPointSelection): string {
+  return `Why does "${selection.value}" stand out? Explain the drivers.`;
+}
 
 /** One tool call shown in the Thinking block, enriched when its result lands. */
 interface ToolActivity {
@@ -64,6 +80,7 @@ export class ProjectChat {
   readonly ThumbsDown = ThumbsDown;
   readonly ThumbsUp = ThumbsUp;
   readonly Wrench = Wrench;
+  readonly X = X;
 
   private readonly api = inject(ProjectsApiService);
   private readonly toast = inject(ToastService);
@@ -72,6 +89,8 @@ export class ProjectChat {
   readonly visualGenerating = input(false);
   /** Visual open in the right panel — the default target for tailoring. */
   readonly activeVisualizationId = input<string | null>(null);
+  /** Data mark clicked in the open visual; offers follow-up chips. */
+  readonly dataPointSelection = input<DataPointSelection | null>(null);
   readonly generateVisual = output<ChatMessage>();
   /** A turn created/updated a visual; the host should refresh the panel. */
   readonly visualUpdated = output<VisualEvent>();
@@ -104,8 +123,31 @@ export class ProjectChat {
   private syncedProjectId: string | null = null;
 
   private readonly scroller = viewChild<ElementRef<HTMLDivElement>>('scroller');
+  private readonly composer =
+    viewChild<ElementRef<HTMLTextAreaElement>>('composer');
+
+  /** The selection whose chips were dismissed or already sent. */
+  private readonly usedSelection = signal<DataPointSelection | null>(null);
+  /**
+   * Selection currently offering follow-up chips. Derived, so a new click on a
+   * mark always replaces the row and dismissing only silences that selection —
+   * no effect can race the project re-sync.
+   */
+  readonly followUpSelection = computed(() => {
+    const selection = this.dataPointSelection();
+    return selection && selection !== this.usedSelection() ? selection : null;
+  });
+  readonly followUpLabel = computed(() => {
+    const selection = this.followUpSelection();
+    return selection ? selectionText(selection) : '';
+  });
+  /** Chips only make sense while a visual is open in the panel. */
+  readonly followUpVisible = computed(
+    () => !!this.followUpSelection() && !!this.activeVisualizationId(),
+  );
 
   constructor() {
+
     // Re-sync when the active project changes (component instance is reused).
     effect(() => {
       const project = this.project();
@@ -124,6 +166,8 @@ export class ProjectChat {
       this.sending.set(false);
       this.messages.set(project.messages);
       this.feedbackPending.set(null);
+      // Follow-up chips follow their input: the host drops the selection when
+      // it opens another project, so nothing to reset here.
       this.draft.set('');
       this.customAnswer.set('');
       this.customAnswerOpen.set(false);
@@ -145,9 +189,35 @@ export class ProjectChat {
     }
   }
 
+  /** Chip actions: prefill the composer, never send — the user decides. */
+  useDrillPrompt(): void {
+    this.fillComposer(drillPrompt);
+  }
+
+  useWhyPrompt(): void {
+    this.fillComposer(whyPrompt);
+  }
+
+  private fillComposer(build: (selection: DataPointSelection) => string): void {
+    const selection = this.followUpSelection();
+    if (!selection) return;
+    this.draft.set(build(selection));
+    setTimeout(() => {
+      const el = this.composer()?.nativeElement;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+    });
+  }
+
+  dismissFollowUps(): void {
+    this.usedSelection.set(this.dataPointSelection());
+  }
+
   send(): void {
     const content = this.draft().trim();
     if (!content || this.sending()) return;
+    this.dismissFollowUps();
     this.draft.set('');
     this.sending.set(true);
     this.resetTurnState();

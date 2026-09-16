@@ -52,6 +52,12 @@ export interface VisualEvent {
   action: 'created' | 'updated' | 'reverted';
 }
 
+/** A data mark the user clicked inside a visual (postMessage `visual-select`). */
+export interface DataPointSelection {
+  value: string;
+  label?: string;
+}
+
 export interface VisualizationVersion {
   version: number;
   createdAt: string;

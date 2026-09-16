@@ -72,6 +72,63 @@ describe('ProjectChat trust UX', () => {
     expect(el.querySelector('[aria-label="Copy SQL"]')).toBeTruthy();
   });
 
+  it('offers follow-up chips for a clicked data mark without sending', async () => {
+    await TestBed.configureTestingModule({
+      imports: [ProjectChat],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+    fixture = TestBed.createComponent(ProjectChat);
+    fixture.componentRef.setInput('project', projectWith(answer));
+    fixture.componentRef.setInput('activeVisualizationId', 'visual-1');
+    fixture.componentRef.setInput('dataPointSelection', {
+      value: 'Cardiology',
+      label: 'Cardiology (312 claims)',
+    });
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const chips = Array.from(
+      el.querySelectorAll<HTMLButtonElement>(
+        '[aria-label="Follow-up suggestions"] button',
+      ),
+    );
+
+    expect(chips.length).toBe(3);
+    expect(chips[0].textContent).toContain('Drill into "Cardiology (312 claims)"');
+    expect(chips[1].textContent).toContain('Why "Cardiology (312 claims)"?');
+
+    chips[0].click();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.draft()).toBe(
+      'Drill into "Cardiology": break it down further.',
+    );
+    // Filling the composer must not start a turn.
+    expect(fixture.componentInstance.sending()).toBeFalse();
+
+    // Dismiss clears the row.
+    chips[2].click();
+    fixture.detectChanges();
+    expect(
+      el.querySelector('[aria-label="Follow-up suggestions"]'),
+    ).toBeNull();
+  });
+
+  it('hides follow-up chips when no visual is open', async () => {
+    await TestBed.configureTestingModule({
+      imports: [ProjectChat],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+    fixture = TestBed.createComponent(ProjectChat);
+    fixture.componentRef.setInput('project', projectWith(answer));
+    fixture.componentRef.setInput('dataPointSelection', { value: 'Cardiology' });
+    fixture.detectChanges();
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector(
+        '[aria-label="Follow-up suggestions"]',
+      ),
+    ).toBeNull();
+  });
+
   it('shows the work collected before a clarification', async () => {
     const el = await render({
       role: 'assistant',

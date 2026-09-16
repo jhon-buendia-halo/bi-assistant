@@ -12,10 +12,13 @@ import { MastraService } from '../../mastra/mastra.service';
 import { PROJECT_WORKSPACE_CONTEXT_KEY } from '../../mastra/project-workspaces';
 import { interactiveVisualOutputSchema } from '../../mastra/agents/visualization.agent';
 import {
+  FRAME_SCRIPT_FILENAME,
+  FRAME_SELECT_SCRIPT,
   sandboxedVisualizationDocument,
   storedVisualizationDocument,
   VisualContext,
 } from './visualization-document';
+import { recommendedFormBlock } from './chart-heuristic';
 import { createZip } from './zip-archive';
 import {
   ChatMessage,
@@ -27,6 +30,16 @@ import {
 
 type Bundle = z.infer<typeof interactiveVisualOutputSchema>;
 
+/**
+ * What went wrong with the previous attempt, fed back to the designer. `parse`
+ * comes from the compile-only check here; `runtime` comes from the sandboxed
+ * frame reporting a thrown error or a blank render.
+ */
+export interface DesignerFeedback {
+  kind: 'parse' | 'runtime';
+  message: string;
+}
+
 interface DesignContext {
   question?: ChatMessage;
   answer?: ChatMessage;
@@ -34,6 +47,8 @@ interface DesignContext {
   instruction?: string;
   /** Existing bundle being tailored. */
   current?: Bundle;
+  /** Seed feedback for the first attempt (auto-repair of a broken visual). */
+  feedback?: DesignerFeedback;
 }
 
 type WorkspaceFilesystem = NonNullable<
@@ -43,6 +58,10 @@ type WorkspaceFilesystem = NonNullable<
 const GENERATION_TIMEOUT_MS = 120_000;
 const VISUAL_ROWS_CAP = 100;
 const VISUAL_DATA_CHARS_CAP = 40_000;
+/** Marks a version produced by the automatic runtime-repair loop. */
+export const AUTO_REPAIR_PREFIX = 'auto-repair: ';
+/** Runtime errors can be long; the instruction only needs the head of one. */
+const AUTO_REPAIR_ERROR_CHARS = 200;
 
 /**
  * Creates, tailors, versions, loads and packages interactive visuals stored
@@ -159,7 +178,63 @@ export class VisualizationService {
       instruction: trimmed,
       current,
     });
+    return this.appendVersion(project, meta, filesystem, bundle, trimmed);
+  }
 
+  /**
+   * Regenerate the current version after it failed in the sandbox (thrown
+   * error or blank render) and store the fix as a new version. Silent: the
+   * caller records no chat event, the version history carries the trail.
+   *
+   * Guards here rather than only in the controller, so no caller can loop:
+   * a version that is itself an auto-repair is never repaired again.
+   */
+  async repair(
+    project: ProjectDoc,
+    visualId: string,
+    errorMessage: string,
+  ): Promise<{ metadata: ProjectVisualization; bundle: Bundle }> {
+    const meta = this.find(project, visualId);
+    const version = this.currentVersion(meta);
+    const entry = meta.versions?.find((v) => v.version === version);
+    if (entry?.instruction?.startsWith(AUTO_REPAIR_PREFIX)) {
+      throw new BadRequestException(
+        `Version ${version} is already an automatic repair; not repairing again`,
+      );
+    }
+    const message =
+      (errorMessage ?? '').trim().slice(0, AUTO_REPAIR_ERROR_CHARS) ||
+      'the visual rendered nothing and reported no error';
+
+    const { workspace, filesystem } = await this.workspaceFor(project);
+    const current = await this.readBundle(filesystem, meta, version);
+    const answer = project.messages.find(
+      (m) => m.role === 'assistant' && m.at === meta.sourceMessageAt,
+    );
+    const question = answer ? this.findQuestion(project, answer) : undefined;
+    const bundle = await this.design(workspace, filesystem, {
+      question,
+      answer,
+      current,
+      feedback: { kind: 'runtime', message },
+    });
+    return this.appendVersion(
+      project,
+      meta,
+      filesystem,
+      bundle,
+      `${AUTO_REPAIR_PREFIX}${message}`,
+    );
+  }
+
+  /** Write a new version of an existing visual and return its metadata. */
+  private async appendVersion(
+    project: ProjectDoc,
+    meta: ProjectVisualization,
+    filesystem: WorkspaceFilesystem,
+    bundle: Bundle,
+    instruction: string,
+  ): Promise<{ metadata: ProjectVisualization; bundle: Bundle }> {
     const version = this.currentVersion(meta) + 1;
     const createdAt = new Date().toISOString();
     const history = meta.versions?.length
@@ -181,7 +256,7 @@ export class VisualizationService {
         {
           version,
           createdAt,
-          instruction: trimmed,
+          instruction,
           sourceMessageAt: meta.sourceMessageAt,
         },
       ],
@@ -276,6 +351,9 @@ export class VisualizationService {
         [
           { name: 'index.html', data: html },
           { name: 'styles.css', data: css },
+          // Always regenerated, so versions written before the bridge existed
+          // still download with a complete, self-consistent document.
+          { name: FRAME_SCRIPT_FILENAME, data: FRAME_SELECT_SCRIPT },
           { name: 'script.js', data: javascript },
           ...extras,
         ],
@@ -337,7 +415,7 @@ export class VisualizationService {
     const requestContext = new RequestContext();
     requestContext.set(PROJECT_WORKSPACE_CONTEXT_KEY, workspace.id);
 
-    let feedback: string | undefined;
+    let feedback: DesignerFeedback | undefined = context.feedback;
     for (let attempt = 0; attempt < 2; attempt++) {
       const bundle = await this.runDesigner(
         requestContext,
@@ -348,7 +426,7 @@ export class VisualizationService {
       const syntaxError = validateJavascript(bundle.javascript);
       if (!syntaxError) return bundle;
       this.logger.warn(`Visual JavaScript failed to parse: ${syntaxError}`);
-      feedback = syntaxError;
+      feedback = { kind: 'parse', message: syntaxError };
     }
     throw new Error(
       'visualization agent produced JavaScript that does not parse',
@@ -359,12 +437,15 @@ export class VisualizationService {
     requestContext: RequestContext,
     skill: string,
     context: DesignContext,
-    feedback?: string,
+    feedback?: DesignerFeedback,
   ): Promise<Bundle> {
     const agent = this.mastra.getAgent('visualization');
     const block = context.answer?.data?.length
       ? visualizationData(context.answer.data)
       : undefined;
+    // Deterministic form advice from the same rows the designer sees, so the
+    // chart type does not depend on the model's taste (create and tailor both).
+    const recommendedForm = recommendedFormBlock(context.answer?.data);
     const prompt = [
       context.current
         ? 'Tailor the existing interactive visual below according to the instruction.'
@@ -413,11 +494,14 @@ export class VisualizationService {
             '</data>',
           ]
         : []),
+      ...(recommendedForm ? ['', recommendedForm] : []),
       ...(feedback
         ? [
             '',
             '<previous-attempt-error>',
-            `Your previous JavaScript failed to parse: ${feedback}. Return corrected, complete code.`,
+            feedback.kind === 'runtime'
+              ? `Your previous code failed at runtime in the sandbox: ${feedback.message}. Return corrected, complete code that renders the same visual.`
+              : `Your previous JavaScript failed to parse: ${feedback.message}. Return corrected, complete code.`,
             '</previous-attempt-error>',
           ]
         : []),
@@ -556,6 +640,9 @@ export class VisualizationService {
         : []),
       // Body fragment stored on its own so loading never re-parses index.html.
       filesystem.writeFile(`${dir}/body.html`, bundle.html),
+      // The stored document's CSP is `script-src 'self'`, so the frame bridge
+      // (window.qti.select + data-qti-value delegation) ships as a file.
+      filesystem.writeFile(`${dir}/${FRAME_SCRIPT_FILENAME}`, FRAME_SELECT_SCRIPT),
       filesystem.writeFile(`${dir}/styles.css`, bundle.css),
       filesystem.writeFile(`${dir}/script.js`, bundle.javascript),
       filesystem.writeFile(

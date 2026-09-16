@@ -36,6 +36,32 @@ describe('ProjectsApiService feedback', () => {
     });
     req.flush({ ok: true, message: 'Saved' });
   });
+
+  it('posts a repair request with the failing version', () => {
+    service
+      .repairVisualization('project 1', 'visual 1', 'x is not defined', 2)
+      .subscribe();
+
+    const req = http.expectOne(
+      `${API_BASE_URL}/projects/project%201/visualizations/visual%201/repair`,
+    );
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ error: 'x is not defined', version: 2 });
+    req.flush({ ok: true, message: 'Repaired' });
+  });
+
+  it('posts a tailoring instruction', () => {
+    service
+      .tailorVisualization('project 1', 'visual 1', 'Sort descending.')
+      .subscribe();
+
+    const req = http.expectOne(
+      `${API_BASE_URL}/projects/project%201/visualizations/visual%201/tailor`,
+    );
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ instruction: 'Sort descending.' });
+    req.flush({ ok: true, message: 'Updated' });
+  });
 });
 
 describe('ProjectsApiService streaming', () => {
