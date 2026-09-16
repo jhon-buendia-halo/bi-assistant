@@ -16,6 +16,7 @@ import {
   FolderTree,
   Loader2,
   Lock,
+  RefreshCw,
   Search,
   Table2,
   X,
@@ -50,6 +51,7 @@ export class CatalogBrowser implements OnInit {
   readonly FolderTree = FolderTree;
   readonly Loader2 = Loader2;
   readonly Lock = Lock;
+  readonly RefreshCw = RefreshCw;
   readonly Search = Search;
   readonly Table2 = Table2;
   readonly X = X;
@@ -65,6 +67,9 @@ export class CatalogBrowser implements OnInit {
   readonly datasourceId = signal('');
   readonly error = signal<string | null>(null);
   readonly catalogs = signal<CatalogInfo[]>([]);
+  /** When the served inventory was read from the datasource (ISO), if known. */
+  readonly fetchedAt = signal<string | null>(null);
+  readonly cached = signal(false);
   /** Free-text filter over catalog / schema / entity names. */
   readonly search = signal('');
   readonly expanded = signal<Set<string>>(new Set());
@@ -172,6 +177,7 @@ export class CatalogBrowser implements OnInit {
     if (!id || id === this.datasourceId()) return;
     this.datasourceId.set(id);
     this.catalogs.set([]);
+    this.fetchedAt.set(null);
     this.search.set('');
     this.expanded.set(new Set());
     this.inclusionService.included.set(new Set());
@@ -179,13 +185,31 @@ export class CatalogBrowser implements OnInit {
     this.loadInventory(id);
   }
 
-  private loadInventory(id: string): void {
+  /** Re-read the inventory from the datasource, bypassing the cached snapshot. */
+  refreshInventory(): void {
+    const id = this.datasourceId();
+    if (!id || this.loading()) return;
+    this.loadInventory(id, true);
+  }
+
+  /** Local-time label for the snapshot timestamp, empty when unknown. */
+  readonly updatedLabel = computed(() => {
+    const at = this.fetchedAt();
+    if (!at) return '';
+    const date = new Date(at);
+    return isNaN(date.getTime()) ? '' : date.toLocaleString();
+  });
+
+  private loadInventory(id: string, refresh = false): void {
     this.loading.set(true);
     this.error.set(null);
-    this.api.getInventory(id).subscribe({
+    this.api.getInventory(id, { refresh }).subscribe({
       next: (res) => {
-        if (res.ok) this.catalogs.set(res.catalogs ?? []);
-        else this.error.set(res.message ?? 'Failed to load the inventory');
+        if (res.ok) {
+          this.catalogs.set(res.catalogs ?? []);
+          this.fetchedAt.set(res.fetchedAt ?? null);
+          this.cached.set(res.cached === true);
+        } else this.error.set(res.message ?? 'Failed to load the inventory');
         this.loading.set(false);
       },
       error: (err) => {

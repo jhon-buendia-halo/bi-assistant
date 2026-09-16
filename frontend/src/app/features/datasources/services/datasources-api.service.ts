@@ -49,9 +49,14 @@ export class DatasourcesApiService {
     );
   }
 
-  getInventory(id: string): Observable<InventoryResult> {
+  /** Served from the backend snapshot unless `refresh` forces a live walk. */
+  getInventory(
+    id: string,
+    opts?: { refresh?: boolean },
+  ): Observable<InventoryResult> {
+    const query = opts?.refresh ? '?refresh=true' : '';
     return this.http.get<InventoryResult>(
-      `${API_BASE_URL}/datasources/${encodeURIComponent(id)}/inventory`,
+      `${API_BASE_URL}/datasources/${encodeURIComponent(id)}/inventory${query}`,
     );
   }
 }
