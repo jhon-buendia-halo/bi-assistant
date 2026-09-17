@@ -88,6 +88,10 @@
             </div>
             <!-- Work already done before the question — kept visible, not lost -->
             <ng-container
+              [ngTemplateOutlet]="reasoningTrail"
+              [ngTemplateOutletContext]="{ $implicit: message }"
+            />
+            <ng-container
               [ngTemplateOutlet]="dataProvenance"
               [ngTemplateOutletContext]="{ $implicit: message }"
             />
@@ -223,6 +227,10 @@
         } @else {
           <div class="group">
             <div class="prose-dark" [innerHTML]="message.content | markdown"></div>
+            <ng-container
+              [ngTemplateOutlet]="reasoningTrail"
+              [ngTemplateOutletContext]="{ $implicit: message }"
+            />
             @if (message.interpretation) {
               <!-- Deterministic provenance caption, built server-side -->
               <div
@@ -367,6 +375,12 @@
                   <lucide-angular [img]="Loader2" [size]="11" class="animate-spin text-zinc-600" />
                 }
               </div>
+              @if (tool.rationale) {
+                <!-- The thought behind the call, forming as it streams -->
+                <p class="ml-6 text-[12px] leading-5 text-zinc-500">
+                  {{ tool.rationale }}
+                </p>
+              }
               @if (tool.input) {
                 <pre class="ml-6 max-h-24 overflow-auto rounded bg-black/30 px-2.5 py-1.5 font-mono text-[11px] leading-5 whitespace-pre-wrap text-zinc-500">{{ tool.input }}</pre>
               }
@@ -544,6 +558,45 @@
 </div>
 
 <!--
+  The assistant's route from the question to this answer, in its own words —
+  read before the SQL, so the narrative comes first and the raw queries second.
+-->
+<ng-template #reasoningTrail let-message>
+  @if (message.reasoning?.length) {
+    <details
+      class="mt-2 rounded-lg border border-white/5 bg-white/[0.02] text-[12px]"
+    >
+      <summary
+        class="cursor-pointer px-3 py-1.5 text-zinc-500 select-none hover:text-zinc-300"
+      >
+        How I worked this out ({{ message.reasoning.length }}
+        {{ message.reasoning.length === 1 ? "step" : "steps" }})
+      </summary>
+      <ol class="flex flex-col gap-2 border-t border-white/5 px-3 py-2">
+        @for (step of message.reasoning; track $index) {
+          <li class="flex gap-2.5">
+            <span class="shrink-0 font-mono text-[11px] leading-5 text-zinc-600">
+              {{ step.step }}.
+            </span>
+            <span class="flex min-w-0 flex-col">
+              <span class="leading-5 text-zinc-300">{{ step.rationale }}</span>
+              @if (reasoningOutcome(step); as outcome) {
+                <span
+                  class="text-[11px] leading-5"
+                  [class]="step.error ? 'text-red-400/80' : 'text-zinc-500'"
+                >
+                  {{ outcome }}
+                </span>
+              }
+            </span>
+          </li>
+        }
+      </ol>
+    </details>
+  }
+</ng-template>
+
+<!--
   Provenance blocks shared by answers and clarifications: a clarification that
   ends a turn carries the data collected up to that point, so the work stays
   visible instead of being lost.
@@ -595,6 +648,12 @@
                 </button>
               }
             </div>
+            @if (record.rationale) {
+              <!-- Why this query was run, before the query itself -->
+              <p class="mt-1 text-[11px] leading-5 text-zinc-500">
+                {{ record.rationale }}
+              </p>
+            }
             @if (record.input) {
               <pre class="mt-1 overflow-x-auto rounded bg-black/30 px-2.5 py-1.5 font-mono text-[11px] leading-5 whitespace-pre-wrap text-zinc-400">{{ record.input }}</pre>
             }

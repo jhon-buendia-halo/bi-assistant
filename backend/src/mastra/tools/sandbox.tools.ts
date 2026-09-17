@@ -105,6 +105,16 @@ function resolveDatasource(
   };
 }
 
+/**
+ * Every data-gathering call states, in the assistant's own words, why it is
+ * being made — so an answer can show the route it took, not just the SQL.
+ */
+const RATIONALE_DESCRIPTION = [
+  'One or two sentences of plain business English saying what this step',
+  "checks and why it moves toward answering the user's question. No SQL",
+  'jargon, no restating the statement.',
+].join(' ');
+
 export const listEntitiesTool = createTool({
   id: 'list_entities',
   description:
@@ -162,6 +172,7 @@ export const sampleRowsTool = createTool({
     entity: z.string().describe('Fully-qualified catalog.schema.table'),
     datasourceId: z.string().optional().describe('Datasource containing it'),
     limit: z.number().int().min(1).max(100).optional(),
+    rationale: z.string().describe(RATIONALE_DESCRIPTION),
   }),
   execute: async ({ entity, datasourceId, limit }, { requestContext }) => {
     const entities = allowedEntities(await projectSandboxes(requestContext));
@@ -201,6 +212,7 @@ export const runReadOnlySqlTool = createTool({
       .max(500)
       .optional()
       .describe('Max rows returned (default 100)'),
+    rationale: z.string().describe(RATIONALE_DESCRIPTION),
   }),
   execute: async ({ sql, datasourceId, limit }, { requestContext }) => {
     const sandboxes = await projectSandboxes(requestContext);

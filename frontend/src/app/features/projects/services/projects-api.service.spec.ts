@@ -5,7 +5,7 @@ import {
 } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { API_BASE_URL } from '../../../core/config/api.config';
-import { ProjectsApiService } from './projects-api.service';
+import { ProjectsApiService, parseToolEvent } from './projects-api.service';
 
 describe('ProjectsApiService feedback', () => {
   let service: ProjectsApiService;
@@ -137,6 +137,33 @@ describe('ProjectsApiService streaming', () => {
 
     expect(onDone).toHaveBeenCalledOnceWith(project);
     expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('reads the rationale off a tool frame, name-only frames included', async () => {
+    const onTool = jasmine.createSpy('onTool');
+    spyOn(globalThis, 'fetch').and.resolveTo(
+      sseResponse({
+        type: 'tool',
+        content: JSON.stringify({
+          name: 'run_readonly_sql',
+          rationale: 'No cost-per-member column, so I checked the keys first.',
+        }),
+      }),
+    );
+
+    await service.streamMessage('project-1', 'question', { onTool });
+    expect(onTool).toHaveBeenCalledOnceWith({
+      name: 'run_readonly_sql',
+      rationale: 'No cost-per-member column, so I checked the keys first.',
+    });
+
+    // Old contract: the frame is the bare tool name.
+    expect(parseToolEvent('run_readonly_sql')).toEqual({
+      name: 'run_readonly_sql',
+    });
+    expect(parseToolEvent('{"rationale":"orphaned"}')).toEqual({
+      name: '{"rationale":"orphaned"}',
+    });
   });
 
   it('asks for careful mode only when the turn requested it', async () => {
