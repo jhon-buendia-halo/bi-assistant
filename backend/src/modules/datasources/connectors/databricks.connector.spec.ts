@@ -85,6 +85,7 @@ beforeEach(() => {
   respond = () => [];
   mockUcFetch();
   jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+  jest.spyOn(Logger.prototype, 'debug').mockImplementation(() => undefined);
 });
 
 describe('DatabricksConnector inventory', () => {
@@ -191,5 +192,85 @@ describe('DatabricksConnector inventory', () => {
       statements().some((s) => s.includes("IN ('sales', 'archive')")),
     ).toBe(true);
     expect(result.map((c) => c.name)).toEqual(['archive', 'sales']);
+  });
+});
+
+describe('DatabricksConnector foreignKeys', () => {
+  /** One row as the informational-constraint query shapes it. */
+  const fkRow = {
+    from_catalog: 'sales',
+    from_schema: 'public',
+    from_table: 'orders',
+    from_column: 'customer_id',
+    to_catalog: 'sales',
+    to_schema: 'public',
+    to_table: 'customers',
+    to_column: 'id',
+  };
+
+  it('queries information_schema per catalog and maps rows to edges', async () => {
+    respond = (sql) =>
+      sql.includes('referential_constraints') ? [fkRow] : [];
+
+    const edges = await new DatabricksConnector().foreignKeys(config, [
+      'sales.public.orders',
+      'sales.public.customers',
+    ]);
+
+    const sql = statements();
+    expect(sql).toHaveLength(1);
+    expect(sql[0]).toContain('`sales`.information_schema.referential_constraints');
+    expect(sql[0]).toContain('`sales`.information_schema.table_constraints');
+    expect(sql[0]).toContain('`sales`.information_schema.key_column_usage');
+    // Composite keys pair up column by column.
+    expect(sql[0]).toContain('pk.ordinal_position = fk.ordinal_position');
+    expect(edges).toEqual([
+      {
+        from: { entity: 'sales.public.orders', column: 'customer_id' },
+        to: { entity: 'sales.public.customers', column: 'id' },
+      },
+    ]);
+    // One shared client, session per catalog, everything closed.
+    expect(clients).toHaveLength(1);
+    expect(clients[0].sessions.every((s) => s.closed)).toBe(true);
+    expect(clients[0].closed).toBe(true);
+  });
+
+  it('drops edges whose other end is not in the sandbox', async () => {
+    respond = (sql) =>
+      sql.includes('referential_constraints') ? [fkRow] : [];
+
+    const edges = await new DatabricksConnector().foreignKeys(config, [
+      'sales.public.orders',
+    ]);
+
+    expect(edges).toEqual([]);
+  });
+
+  it('skips catalogs whose information_schema is unreadable', async () => {
+    respond = (sql) => {
+      if (!sql.includes('referential_constraints')) return [];
+      if (sql.includes('`ops`')) throw new Error('PERMISSION_DENIED');
+      return [fkRow];
+    };
+
+    const edges = await new DatabricksConnector().foreignKeys(config, [
+      'sales.public.orders',
+      'sales.public.customers',
+      'ops.public.tickets',
+    ]);
+
+    expect(edges).toHaveLength(1);
+    expect(clients[0].closed).toBe(true);
+  });
+
+  it('returns no edges when nothing is in scope', async () => {
+    const edges = await new DatabricksConnector().foreignKeys(config, [
+      'system.information_schema.tables',
+      'bad-entity',
+    ]);
+
+    expect(clients).toHaveLength(0);
+    expect(edges).toEqual([]);
   });
 });

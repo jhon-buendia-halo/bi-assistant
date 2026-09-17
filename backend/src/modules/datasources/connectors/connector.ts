@@ -5,6 +5,12 @@ import type {
   QueryResult,
 } from '../entities/datasource.entity';
 
+/** A declared foreign key between two entities. Keys are `catalog.schema.table`. */
+export interface ForeignKeyEdge {
+  from: { entity: string; column: string };
+  to: { entity: string; column: string };
+}
+
 /**
  * One implementation per datasource kind. Stateless: every call receives the
  * saved config, so a single connector serves any number of datasources.
@@ -27,6 +33,12 @@ export interface DatasourceConnector<
     sql: string,
     rowLimit: number,
   ): Promise<QueryResult>;
+  /**
+   * Declared foreign keys among the given `catalog.schema.table` entities.
+   * Optional: platforms that cannot report them simply omit it, and callers
+   * fall back to inferring relationships from naming.
+   */
+  foreignKeys?(config: TConfig, entities: string[]): Promise<ForeignKeyEdge[]>;
   /** One-line description of where the datasource points (no secrets). */
   summary(config: TConfig): string;
   /** Same config with secret fields masked for API views. */

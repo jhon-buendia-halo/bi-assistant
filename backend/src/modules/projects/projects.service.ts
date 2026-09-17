@@ -9,7 +9,11 @@ import { randomUUID } from 'crypto';
 import { RequestContext } from '@mastra/core/request-context';
 import { MastraService } from '../../mastra/mastra.service';
 import { setSandboxToolServices } from '../../mastra/tool-services';
-import type { SandboxSnapshot, SqlRunResult } from '../../mastra/tool-services';
+import type {
+  SandboxColumnSnapshot,
+  SandboxSnapshot,
+  SqlRunResult,
+} from '../../mastra/tool-services';
 import { sqlFixOutputSchema } from '../../mastra/agents/sql-fixer.agent';
 import { sqlVerifyOutputSchema } from '../../mastra/agents/sql-verifier.agent';
 import { SANDBOXES_CONTEXT_KEY } from '../../mastra/tools/sandbox.tools';
@@ -57,6 +61,8 @@ const limitReachedNote = (limit: number) =>
 const FIXER_SCHEMA_CHARS = 4_000;
 /** Character budget for the richer (sample-value bearing) verifier schema. */
 const VERIFIER_SCHEMA_CHARS = 6_000;
+/** Join hints shown up front to the assistant — enough for a wide sandbox. */
+const JOIN_HINT_CHARS = 1_500;
 /** Sample values shown per column to the verifier — value matching, not data. */
 const VERIFIER_SAMPLE_VALUES = 3;
 /** Longest cross-check note persisted on a message (tooltip-sized). */
@@ -172,6 +178,7 @@ export class ProjectsService implements OnModuleInit {
           `- ${t} (sandbox: ${s.name}; datasource: ${s.datasourceKind ?? 'unknown'} ${s.datasourceId ?? ''})`,
       ),
     );
+    const joinHints = joinHintBlock(sandboxes);
     const visualLines = (project.visualizations ?? []).map(
       (v) =>
         `- ${v.id} — "${v.title}" v${this.visuals.currentVersion(v)} (from the answer at ${v.sourceMessageAt})`,
@@ -211,6 +218,7 @@ export class ProjectsService implements OnModuleInit {
               ? entityLines
               : ['(none — the sandboxes are empty)']),
             'Use describe_entity / sample_rows / run_readonly_sql to inspect and query them.',
+            ...(joinHints ? ['', joinHints] : []),
             '',
             'Interactive visuals in this project (id — title, current version):',
             ...(visualLines.length ? visualLines : ['(none yet)']),
@@ -1471,7 +1479,7 @@ function verifierSchema(sandboxes: SandboxSnapshot[]): string {
           VERIFIER_SAMPLE_VALUES,
         );
         const shown = samples.length ? ` [e.g. ${samples.join(', ')}]` : '';
-        return `${column.name} ${column.type}${shown}`;
+        return `${column.name} ${column.type}${shown}${referenceSuffix(column)}`;
       });
       const line = `${key}(${described.join(', ')})`;
       if (line.length > budget) return lines.join('\n');
@@ -1480,6 +1488,54 @@ function verifierSchema(sandboxes: SandboxSnapshot[]): string {
     }
   }
   return lines.join('\n');
+}
+
+/**
+ * ` -> teams.id` for a key column, so a schema line states where it joins.
+ * `~>` marks an inferred edge: the model should trust it less than a declared
+ * one and can confirm with describe_entity.
+ */
+function referenceSuffix(column: SandboxColumnSnapshot): string {
+  const reference = column.references;
+  if (!reference?.entity || !reference?.column) return '';
+  const arrow = reference.source === 'declared' ? '->' : '~>';
+  return ` ${arrow} ${reference.entity}.${reference.column}`;
+}
+
+/**
+ * The join graph, stated up front. Without it the assistant knows which
+ * entities exist but not which column joins to which, so it guesses — writing
+ * `goals.team_id` where the column is `goals.scoring_team_id`, which fails the
+ * query and ends in an answer naming a raw id instead of a team.
+ */
+function joinHintBlock(sandboxes: SandboxSnapshot[]): string {
+  const lines: string[] = [];
+  const seen = new Set<string>();
+  let budget = JOIN_HINT_CHARS;
+  for (const sandbox of sandboxes) {
+    for (const entity of sandbox.entities ?? []) {
+      for (const column of entity.columns ?? []) {
+        const suffix = referenceSuffix(column);
+        if (!suffix) continue;
+        const line = `- ${entity.key}.${column.name}${suffix}`;
+        if (seen.has(line)) continue;
+        if (line.length > budget) return joinHintHeader(lines);
+        budget -= line.length;
+        seen.add(line);
+        lines.push(line);
+      }
+    }
+  }
+  return joinHintHeader(lines);
+}
+
+function joinHintHeader(lines: string[]): string {
+  if (!lines.length) return '';
+  return [
+    'How these entities join (-> declared by the datasource, ~> inferred from',
+    'naming; join on these columns rather than guessing a key name):',
+    ...lines,
+  ].join('\n');
 }
 
 /** Parse a model's JSON reply, tolerating a markdown fence around it. */

@@ -16,6 +16,21 @@
  * unreachable, or no key was exported. The SQL and the prose of every turn are
  * printed, because reproducing a failure costs another round of model calls.
  *
+ * A single turn cannot tell a fixed defect from a lucky sample: these questions
+ * pass or fail stochastically, so one run is one draw. For measurement —
+ * comparing two schema-context arms, say — run the set many times and read
+ * proportions with intervals instead of verdicts:
+ *
+ *   CHECK_TRIALS=20 CHECK_ARM=with-join-hints OPENAI_API_KEY=... \
+ *     npm run check:answers
+ *
+ * `CHECK_TRIALS` (default 1) repeats the whole set in one invocation against one
+ * provisioned datastore; the summary then reports, per check, the pass rate with
+ * a Wilson 95% interval plus the three diagnostics that explain a regression:
+ * turns whose SQL never succeeded, answers naming raw identifiers instead of
+ * teams, and turns where a result guard fired. `CHECK_ARM` is free text echoed
+ * in the header so a captured transcript records which arm produced it.
+ *
  * Sibling of `scripts/run-eval.ts`: that one compares result sets against
  * trusted SQL, this one asserts the answer is not degenerate. Same boot path,
  * same throwaway-project mechanics.
@@ -40,6 +55,8 @@ const ROW_LIMIT = 100;
 const SANDBOX_NAME = 'World Cup';
 /** The cheapest model that still routes tools — and the one the ratio bug shipped on. */
 const MODEL = process.env.CHECK_MODEL ?? 'gpt-4o-mini';
+/** Free-text label for the configuration under test, echoed so output is self-describing. */
+const ARM = process.env.CHECK_ARM?.trim() ?? '';
 
 /** Entities the checks need. Keys are resolved from the live inventory, never typed by hand. */
 const REQUIRED_TABLES = [
@@ -71,11 +88,28 @@ interface Check {
 
 type Verdict = 'PASS' | 'FAIL' | 'ERROR';
 
+/**
+ * The three failure modes worth counting separately from the verdict. A check
+ * can fail for any of them, and which one dominates is the whole diagnosis:
+ * broken SQL means the schema context did not let the model join, raw ids mean
+ * it joined but never resolved the label, a guard warning means the guards
+ * caught what the prose would otherwise have claimed.
+ */
+interface Diagnostics {
+  /** No `run_readonly_sql` record succeeded — the turn never got data. */
+  failedSql: boolean;
+  /** The answer prose referenced a bare identifier ("Team ID 5"). */
+  rawId: boolean;
+  /** A persisted record carried `warnings`, i.e. a result guard fired. */
+  guardWarning: boolean;
+}
+
 interface CheckResult {
   name: string;
   verdict: Verdict;
   detail: string;
   durationMs: number;
+  diagnostics: Diagnostics;
 }
 
 /**
@@ -91,6 +125,27 @@ function percentagesIn(text: string): number[] {
   }
   return found;
 }
+
+/**
+ * A bare identifier standing in for a name: the defect this harness measures.
+ * Observed shapes, all of which must match, are `Team ID **5**` (markdown
+ * emphasis between the label and the number), `1. Team ID 5 2. Team ID 2`,
+ * `- **Team 4**: 87.13%` (no "id" at all — the noun and a key) and `team_id 5`.
+ *
+ * Hence the two branches: an entity noun with an *optional* id word, or a bare
+ * `id`. `(?![a-z])` rather than `\b` after each word so `team_id` is caught
+ * while `matches`, `teams`, `identifier` and `player_name` are not, and
+ * `[\W_]{0,4}` for the gap so `**`, `#`, `:`, `(` and `_` are crossed but a real
+ * word in between is not — that is what keeps `France scored the most goals
+ * (14)`, `France led with 14 goals.`, `Team France scored 14 goals` and
+ * `France won 7 matches and scored 14 goals` clean.
+ *
+ * A wrong pattern here silently invalidates the experiment in both directions —
+ * too loose and every arm looks broken, too tight and the defect disappears —
+ * so it is pinned against the strings above rather than eyeballed.
+ */
+const BARE_IDENTIFIER =
+  /(?:\b(?:team|player|match|club|squad)(?![a-z])(?:[\W_]{0,4}(?:id|no|number)(?![a-z]))?|\bid(?![a-z]))[\W_]{0,4}\d+\b/i;
 
 // ---------------------------------------------------------------- checks
 
@@ -180,6 +235,29 @@ const CHECKS: Check[] = [
         !/\b(all|every|only|entire|100\s?%|100 percent)\b/i.test(answer.text)
       ) {
         return 'the answer does not say the cards were all yellows';
+      }
+      return null;
+    },
+  },
+  {
+    name: 'entity-named-not-id',
+    question: 'Which team scored the most goals in total?',
+    guards:
+      'the raw-identifier answer: goals aggregate by a foreign key and the model reports "Team ID 5" instead of resolving the name',
+    verify: (answer) => {
+      if (!successfulSql(answer)) return 'no successful run_readonly_sql';
+      // Ground truth verified against the live fixture: France, 14 goals — a
+      // clear winner, so unlike `tie-not-ranked` there is exactly one name the
+      // answer has to carry.
+      if (!/France/i.test(answer.text)) {
+        return 'the answer never names France (ground truth: France, 14 goals)';
+      }
+      // Naming France is not enough: an answer that names it and still lists
+      // `Team ID 2` for the runners-up has not resolved the join, and reading it
+      // requires the database the reader does not have.
+      const bare = BARE_IDENTIFIER.exec(answer.text);
+      if (bare) {
+        return `the answer reports a bare identifier ("${oneLine(bare[0])}") instead of a team name`;
       }
       return null;
     },
@@ -302,6 +380,21 @@ async function ask(
   }
 }
 
+/**
+ * Read the diagnostics off a turn. Independent of the verdict on purpose: a
+ * check can pass while a guard fired, and both numbers are needed to explain an
+ * arm. A turn that never produced an answer counts as a failed-SQL turn, which
+ * is what it is from the reader's side.
+ */
+function diagnose(answer: Answer | undefined): Diagnostics {
+  if (!answer) return { failedSql: true, rawId: false, guardWarning: false };
+  return {
+    failedSql: !successfulSql(answer),
+    rawId: BARE_IDENTIFIER.test(answer.text),
+    guardWarning: answer.records.some((record) => record.warnings?.length),
+  };
+}
+
 async function runCheck(
   app: INestApplicationContext,
   check: Check,
@@ -318,10 +411,12 @@ async function runCheck(
       verdict: 'ERROR',
       detail: `turn failed — ${message(error)}`,
       durationMs: Date.now() - started,
+      diagnostics: diagnose(undefined),
     };
   }
   // Printed before the verdict: re-running to see the SQL costs another turn.
   report(answer);
+  const diagnostics = diagnose(answer);
   let reason: string | null;
   try {
     reason = check.verify(answer);
@@ -331,6 +426,7 @@ async function runCheck(
       verdict: 'ERROR',
       detail: `check crashed — ${message(error)}`,
       durationMs: Date.now() - started,
+      diagnostics,
     };
   }
   return {
@@ -338,6 +434,7 @@ async function runCheck(
     verdict: reason ? 'FAIL' : 'PASS',
     detail: reason ?? 'answer is sound',
     durationMs: Date.now() - started,
+    diagnostics,
   };
 }
 
@@ -356,14 +453,7 @@ function report(answer: Answer): void {
   console.log(`  answer: ${oneLine(answer.text)}`);
 }
 
-function summarize(results: CheckResult[]): void {
-  const rows = results.map((result) => [
-    result.name,
-    result.verdict,
-    `${(result.durationMs / 1000).toFixed(1)}s`,
-    oneLine(result.detail).slice(0, 80),
-  ]);
-  const header = ['CHECK', 'VERDICT', 'TIME', 'DETAIL'];
+function table(header: string[], rows: string[][]): void {
   const widths = header.map((label, column) =>
     Math.max(label.length, ...rows.map((row) => row[column].length)),
   );
@@ -377,13 +467,109 @@ function summarize(results: CheckResult[]): void {
   console.log(line(header));
   console.log(widths.map((width) => '-'.repeat(width)).join('  '));
   for (const row of rows) console.log(line(row));
+}
 
-  const count = (verdict: Verdict) =>
-    results.filter((result) => result.verdict === verdict).length;
+function countVerdict(results: CheckResult[], verdict: Verdict): number {
+  return results.filter((result) => result.verdict === verdict).length;
+}
+
+/** One trial's verdicts, with the reason each check gave. */
+function summarize(results: CheckResult[]): void {
+  table(
+    ['CHECK', 'VERDICT', 'TIME', 'DETAIL'],
+    results.map((result) => [
+      result.name,
+      result.verdict,
+      `${(result.durationMs / 1000).toFixed(1)}s`,
+      oneLine(result.detail).slice(0, 80),
+    ]),
+  );
+
   console.log('');
   console.log(
-    `${results.length} checks — ${count('PASS')} passed, ${count('FAIL')} failed, ` +
-      `${count('ERROR')} errored`,
+    `${results.length} checks — ${countVerdict(results, 'PASS')} passed, ` +
+      `${countVerdict(results, 'FAIL')} failed, ` +
+      `${countVerdict(results, 'ERROR')} errored`,
+  );
+}
+
+/**
+ * Wilson score interval at 95%, implemented inline to keep this script
+ * dependency-free. Deliberately not the normal approximation: at the rates these
+ * checks sit at (0.9 and up, sometimes 1.0) the Wald interval runs past 1 and
+ * collapses to zero width at 0/n and n/n, which would read as certainty
+ * manufactured by arithmetic. Sanity anchor: 9/10 → [0.596, 0.982].
+ */
+function wilson95(passes: number, trials: number): [number, number] {
+  if (trials <= 0) return [0, 0];
+  const z = 1.959963984540054;
+  const z2 = z * z;
+  const p = passes / trials;
+  const denominator = 1 + z2 / trials;
+  const centre = (p + z2 / (2 * trials)) / denominator;
+  const margin =
+    (z / denominator) *
+    Math.sqrt((p * (1 - p)) / trials + z2 / (4 * trials * trials));
+  return [Math.max(0, centre - margin), Math.min(1, centre + margin)];
+}
+
+/**
+ * Per-check proportions over every trial. This is the output an experiment is
+ * read from: a rate is only interpretable next to its interval and next to the
+ * counts that say *how* the failures failed.
+ */
+function summarizeTrials(trials: CheckResult[][]): void {
+  const flat = trials.flat();
+  const rows = CHECKS.map((check) => {
+    const runs = flat.filter((result) => result.name === check.name);
+    const passes = countVerdict(runs, 'PASS');
+    const [low, high] = wilson95(passes, runs.length);
+    const tally = (pick: (diagnostics: Diagnostics) => boolean) =>
+      String(runs.filter((run) => pick(run.diagnostics)).length);
+    return [
+      check.name,
+      `${passes}/${runs.length}`,
+      runs.length ? (passes / runs.length).toFixed(2) : '-',
+      `[${low.toFixed(2)}, ${high.toFixed(2)}]`,
+      tally((diagnostics) => diagnostics.failedSql),
+      tally((diagnostics) => diagnostics.rawId),
+      tally((diagnostics) => diagnostics.guardWarning),
+      String(countVerdict(runs, 'ERROR')),
+    ];
+  });
+
+  console.log('');
+  console.log(
+    `${trials.length} trial${trials.length === 1 ? '' : 's'} × ${CHECKS.length} checks` +
+      `${ARM ? ` — arm ${ARM}` : ''} (model ${MODEL})`,
+  );
+  table(
+    [
+      'CHECK',
+      'PASS',
+      'RATE',
+      '95% CI',
+      'FAILED-SQL',
+      'RAW-ID',
+      'WARNINGS',
+      'ERRORS',
+    ],
+    rows,
+  );
+
+  const total = flat.length;
+  const passed = countVerdict(flat, 'PASS');
+  const clean = trials.filter((trial) =>
+    trial.every((result) => result.verdict === 'PASS'),
+  ).length;
+  console.log('');
+  console.log(
+    `${passed}/${total} checks passed overall; ${clean}/${trials.length} trials ` +
+      'passed every check',
+  );
+  console.log(
+    'FAILED-SQL = no successful run_readonly_sql; RAW-ID = answer named a bare ' +
+      'identifier; WARNINGS = a result guard fired',
   );
 }
 
@@ -458,6 +644,20 @@ function message(error: unknown): string {
 
 // ------------------------------------------------------------------- main
 
+/** `CHECK_TRIALS` — repeats of the whole set, one provisioned datastore for all. */
+function trialCount(): number {
+  const raw = process.env.CHECK_TRIALS;
+  if (raw === undefined || raw.trim() === '') return 1;
+  const trials = Number(raw);
+  if (!Number.isInteger(trials) || trials < 1) {
+    throw new SetupError(
+      `CHECK_TRIALS must be a positive integer, got "${raw}". Each trial is a ` +
+        `full pass over ${CHECKS.length} live turns, so the bill scales with it.`,
+    );
+  }
+  return trials;
+}
+
 async function main(): Promise<number> {
   // The key is read from the environment and never stored, echoed or defaulted.
   const apiKey = process.env.OPENAI_API_KEY;
@@ -467,6 +667,7 @@ async function main(): Promise<number> {
         'money, so they never run implicitly — export a key and retry.',
     );
   }
+  const trials = trialCount();
   if (!(await worldCupReachable())) {
     throw new SetupError(
       `The World Cup fixture is not reachable on ${WORLD_CUP_CONNECTION.host}:` +
@@ -488,17 +689,34 @@ async function main(): Promise<number> {
   const app = await NestFactory.createApplicationContext(AppModule, {
     logger: ['warn', 'error'],
   });
-  const results: CheckResult[] = [];
+  const perTrial: CheckResult[][] = [];
   try {
+    // Provisioned once and reused by every trial: the settings, datasource and
+    // sandbox are the arm under test, so re-creating them per trial would both
+    // waste inventory round-trips and let the arm drift mid-experiment.
     await provision(app, apiKey);
     console.log(
-      `Running ${CHECKS.length} answer checks against the World Cup fixture ` +
-        `(model ${MODEL}, timeout ${Math.round(TURN_TIMEOUT_MS / 1000)}s)`,
+      `Running ${CHECKS.length} answer checks × ${trials} trial${trials === 1 ? '' : 's'} ` +
+        `against the World Cup fixture (model ${MODEL}, ` +
+        `timeout ${Math.round(TURN_TIMEOUT_MS / 1000)}s` +
+        `${ARM ? `, arm ${ARM}` : ''})`,
     );
-    for (const check of CHECKS) {
-      const result = await runCheck(app, check);
-      results.push(result);
-      console.log(`  ${result.verdict} — ${oneLine(result.detail)}`);
+    for (let trial = 1; trial <= trials; trial++) {
+      // Progress is printed even for a single trial: a 20-trial run is tens of
+      // minutes of model calls and silence is indistinguishable from a hang.
+      console.log(
+        `\n━━ trial ${trial}/${trials}${ARM ? ` — arm ${ARM}` : ''} ━━`,
+      );
+      const results: CheckResult[] = [];
+      for (const check of CHECKS) {
+        const result = await runCheck(app, check);
+        results.push(result);
+        console.log(`  ${result.verdict} — ${oneLine(result.detail)}`);
+      }
+      perTrial.push(results);
+      console.log(
+        `  trial ${trial}/${trials}: ${countVerdict(results, 'PASS')}/${results.length} passed`,
+      );
     }
   } finally {
     await app.close().catch(() => undefined);
@@ -506,8 +724,11 @@ async function main(): Promise<number> {
     rmSync(dataDir, { recursive: true, force: true });
   }
 
-  summarize(results);
-  return results.every((result) => result.verdict === 'PASS') ? 0 : 1;
+  // The verdict table stays the single-run view; the aggregate is what an
+  // experiment is read from.
+  if (perTrial.length === 1) summarize(perTrial[0]);
+  summarizeTrials(perTrial);
+  return perTrial.flat().every((result) => result.verdict === 'PASS') ? 0 : 1;
 }
 
 if (require.main === module) {

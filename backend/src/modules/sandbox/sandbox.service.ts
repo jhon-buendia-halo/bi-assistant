@@ -1,5 +1,7 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { DatasourcesService } from '../datasources/datasources.service';
+import type { ForeignKeyEdge } from '../datasources/connectors/connector';
+import { applyReferences, inferRelationships } from './relationships';
 import { SandboxRepository } from './repositories/sandbox.repository';
 import type {
   SandboxColumnSnapshot,
@@ -73,9 +75,10 @@ export class SandboxService {
   }
 
   /**
-   * Add `sampleValues` to each column from a live sample. Best effort per
-   * table: a sampling failure leaves that snapshot as-is, it never fails the
-   * save. Existing sandboxes are not backfilled — they enrich on re-save.
+   * Add `sampleValues` to each column from a live sample, then attach the join
+   * graph. Best effort per table: a sampling failure leaves that snapshot
+   * as-is, it never fails the save. Existing sandboxes are not backfilled —
+   * they enrich on re-save.
    */
   private async enrich(
     datasourceId: string,
@@ -109,9 +112,45 @@ export class SandboxService {
         }
       },
     );
-    return entities.map((entity) => enriched.get(entity?.key) ?? entity);
+    const sampled = entities.map(
+      (entity) => enriched.get(entity?.key) ?? entity,
+    );
+    return this.withJoins(datasourceId, tables, sampled);
+  }
+
+  /**
+   * Attach where each key column joins. Declared constraints win; naming
+   * inference fills the rest, which is what most lakehouse tables need since
+   * they declare no foreign keys at all. Without this the model is told which
+   * columns exist but never which one joins to which, and guesses.
+   */
+  private async withJoins(
+    datasourceId: string,
+    tables: string[],
+    entities: SandboxEntitySnapshot[],
+  ): Promise<SandboxEntitySnapshot[]> {
+    const inScope = entities.filter((entity) =>
+      new Set(tables).has(entity?.key),
+    );
+    let declared: ForeignKeyEdge[] = [];
+    try {
+      declared = await this.datasources.foreignKeys(datasourceId, tables);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`Declared foreign keys unavailable: ${message}`);
+    }
+    let inferred: ForeignKeyEdge[] = [];
+    try {
+      inferred = inferRelationships(inScope);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`Relationship inference failed: ${message}`);
+    }
+    return applyReferences(entities, declared, inferred);
   }
 }
+
+
 
 /** Attach up to `MAX_SAMPLE_VALUES` distinct stored values per column. */
 export function withSampleValues(
