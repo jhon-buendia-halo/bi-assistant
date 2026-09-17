@@ -329,6 +329,12 @@ function isBlank(value: unknown): boolean {
 
 /* row-cap-reached */
 
+/**
+ * Largest LIMIT still read as a deliberate top-N. Above this a LIMIT looks
+ * like a safety cap the result may have been clipped by.
+ */
+const DELIBERATE_TOP_N = 10;
+
 /** Landing exactly on the cap usually means the real answer has more rows than were seen. */
 function rowCapReached(
   mask: string,
@@ -361,7 +367,11 @@ function capOf(
   }
   const limits = [...mask.matchAll(/\blimit\s+(\d+)\b/gi)];
   const declared = limits.length ? Number(limits[limits.length - 1][1]) : null;
-  if (declared !== null && declared > 0 && rowCount === declared)
+  // A small LIMIT the query asked for is a deliberate top-N, not a ceiling it
+  // ran into: "the top scorer" returns one row because one row was wanted.
+  // Warning there taught the model to hedge a correct answer with "the result
+  // may have been truncated", which is worse than saying nothing.
+  if (declared !== null && declared > DELIBERATE_TOP_N && rowCount === declared)
     return declared;
   return null;
 }

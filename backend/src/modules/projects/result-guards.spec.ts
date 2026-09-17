@@ -288,13 +288,36 @@ describe('inspectResult / row-cap-reached', () => {
     expect(messageFor(warnings, 'row-cap-reached')).toContain('2 rows');
   });
 
-  it('flags results that exactly fill the declared LIMIT', () => {
+  it('flags results that exactly fill a large declared LIMIT', () => {
+    const rows = Array.from({ length: 100 }, (_, i) => ({ plan: `P${i}` }));
     const warnings = inspectResult(
-      'SELECT plan FROM t ORDER BY spend DESC LIMIT 3',
-      [{ plan: 'HMO' }, { plan: 'PPO' }, { plan: 'EPO' }],
+      'SELECT plan FROM t ORDER BY spend DESC LIMIT 100',
+      rows,
     );
-    expect(codes(warnings)).toEqual(['row-cap-reached']);
-    expect(messageFor(warnings, 'row-cap-reached')).toContain('3 rows');
+    expect(codes(warnings)).toContain('row-cap-reached');
+    expect(messageFor(warnings, 'row-cap-reached')).toContain('100 rows');
+  });
+
+  // A deliberate top-N is the query working, not a ceiling. Warning here made
+  // the assistant hedge a correct "France scored the most goals" with a
+  // truncation caveat, observed across 20 of 20 measured trials.
+  it('stays silent on a deliberate small top-N', () => {
+    expect(
+      codes(
+        inspectResult('SELECT team FROM t ORDER BY goals DESC LIMIT 1', [
+          { team: 'France' },
+        ]),
+      ),
+    ).toEqual([]);
+    expect(
+      codes(
+        inspectResult('SELECT plan FROM t ORDER BY spend DESC LIMIT 3', [
+          { plan: 'HMO' },
+          { plan: 'PPO' },
+          { plan: 'EPO' },
+        ]),
+      ),
+    ).toEqual([]);
   });
 
   it('does not fire below the cap', () => {
