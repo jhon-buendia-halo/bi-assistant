@@ -181,8 +181,31 @@ jobs:
         run: |
           set -euo pipefail
           ls -R installers
-          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
-            gh release upload "$TAG" --repo "$REPO" --clobber installers/*
-          else
-            gh release create "$TAG" --repo "$REPO" --title "$TAG" --generate-notes installers/*
+
+          # Create the release empty first. Handing the assets to `gh release
+          # create` means a single failed upload deletes the release it just
+          # made, so nothing survives a flaky transfer.
+          if ! gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            gh release create "$TAG" --repo "$REPO" --title "$TAG" --generate-notes
           fi
+
+          # Installers run to a few hundred MB and uploads.github.com rejects
+          # them intermittently (seen: HTTP 400, HTTP 500) with no useful
+          # detail. Upload one at a time and retry, so a stalled transfer costs
+          # one file instead of the whole publish. --clobber lets a retry
+          # replace a partial asset rather than collide with it.
+          failed=0
+          for asset in installers/*; do
+            name=$(basename "$asset")
+            for attempt in 1 2 3; do
+              echo "Uploading $name (attempt $attempt)"
+              if gh release upload "$TAG" --repo "$REPO" --clobber "$asset"; then
+                echo "Uploaded $name"
+                continue 2
+              fi
+              sleep $((attempt * 20))
+            done
+            echo "::error::Failed to upload $name after 3 attempts"
+            failed=1
+          done
+          exit $failed
