@@ -73,3 +73,42 @@
   }
   tbody tr:nth-child(even) td { background: rgb(255 255 255 / 0.02); }
 }
+
+// Instant styled tooltip for the composer mode buttons (native `title` is
+// slow to appear and easy to miss). Content comes from `data-tip`.
+.qti-tip {
+  position: relative;
+
+  &::after {
+    content: attr(data-tip);
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 0;
+    z-index: 30;
+    width: max-content;
+    max-width: 260px;
+    padding: 6px 9px;
+    border: 1px solid rgb(255 255 255 / 0.12);
+    border-radius: 6px;
+    background: #26262b;
+    color: rgb(228 228 231);
+    font-size: 11.5px;
+    line-height: 1.45;
+    text-align: left;
+    white-space: normal;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(2px);
+    transition: opacity 120ms ease, transform 120ms ease;
+  }
+
+  &:hover::after,
+  &:focus-visible::after {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qti-tip::after { transition: none; }
+}
