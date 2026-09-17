@@ -40,6 +40,22 @@ export interface VisualContext {
    * reader knows the chart is a sample — deterministic, never model output.
    */
   chartRows?: { shown: number; truncatedFrom: number };
+  /**
+   * The exact (bounded) query results the designer saw, injected into the
+   * document at runtime as `window.qti.data` so the visual's script renders
+   * from real rows instead of literals baked in at generation time. Same
+   * bounding as the designer prompt's `<data>` block.
+   */
+  chartData?: ChartDataRecord[];
+}
+
+/** One result set as handed to the runtime bridge — same shape as the `<data>` block. */
+export interface ChartDataRecord {
+  tool: string;
+  input?: string;
+  columns?: string[];
+  rowCount?: number;
+  rows: Record<string, unknown>[];
 }
 
 const PROVENANCE_ROWS = 10;
@@ -90,6 +106,20 @@ export function scopedStyle(value: string): string {
 
 function safeScript(value: string): string {
   return value.replace(/<\/script/gi, '<\\/script');
+}
+
+/**
+ * The visual's data, embedded as a JSON `<script>` block ahead of every other
+ * script. `type="application/json"` makes it inert (parsed as data, not
+ * executed), so it is unaffected by either document's CSP `script-src`. Read
+ * at runtime by the frame bridge into `window.qti.data`.
+ */
+function dataScriptTag(chartData: VisualContext['chartData']): string {
+  const json = JSON.stringify(chartData ?? []).replace(
+    /<\/script/gi,
+    '<\\/script',
+  );
+  return `<script type="application/json" id="qti-data">${json}</script>`;
 }
 
 /** Markdown → sanitized HTML (headings, lists, tables, emphasis, code only). */
@@ -208,6 +238,9 @@ function renderProvenance(
 </details>`;
 }
 
+/** Which document is being assembled: the full readable frame, or a dense dashboard tile. */
+export type DocumentMode = 'full' | 'tile';
+
 /** Muted "outcome" line under a reasoning step: row count, or the failure. */
 function reasoningOutcome(step: ReasoningStep): string {
   if (step.error) return `failed — ${step.error}`;
@@ -242,7 +275,22 @@ function renderReasoning(steps: ReasoningStep[]): string {
 function renderFrame(
   bundle: InteractiveVisualBundle,
   context: VisualContext,
+  mode: DocumentMode = 'full',
 ): string {
+  if (mode === 'tile') {
+    return `<main class="qti-frame qti-frame--tile">
+  <header class="qti-header qti-header--tile">
+    <h1 class="qti-title qti-title--tile">${escapeHtml(bundle.title)}</h1>
+  </header>
+
+  <section class="qti-visual" aria-label="Interactive visual">
+    <div class="qti-visual-body">
+${bodyFragment(bundle.html)}
+    </div>
+  </section>
+</main>`;
+  }
+
   const entities = context.entities?.length
     ? context.entities
     : sourceEntities(context.data);
@@ -304,7 +352,24 @@ ${bodyFragment(bundle.html)}
 
 /** Frame styles are namespaced (`qti-`) so the agent's CSS cannot break readability. */
 const FRAME_CSS = `
-:root { color-scheme: dark; }
+:root {
+  color-scheme: dark;
+  /* Categorical series palette — accessible on the #171717 dark background. */
+  --qti-cat-1: #38bdf8; /* sky-400 */
+  --qti-cat-2: #fbbf24; /* amber-400 */
+  --qti-cat-3: #34d399; /* emerald-400 */
+  --qti-cat-4: #a78bfa; /* violet-400 */
+  --qti-cat-5: #fb7185; /* rose-400 */
+  --qti-cat-6: #22d3ee; /* cyan-400 */
+  --qti-cat-7: #a3e635; /* lime-400 */
+  --qti-cat-8: #fb923c; /* orange-400 */
+  /* Semantic tokens. */
+  --qti-pos: #34d399;
+  --qti-neg: #f87171;
+  --qti-grid: rgba(255,255,255,.07);
+  --qti-axis: #71717a;
+  --qti-tooltip-bg: #26262b;
+}
 html, body { margin: 0; background: #171717; }
 .qti-frame {
   max-width: 920px; margin: 0 auto; padding: 24px 24px 40px; box-sizing: border-box;
@@ -369,8 +434,29 @@ html, body { margin: 0; background: #171717; }
 [data-qti-value] { cursor: pointer; }
 [data-qti-value]:focus-visible { outline: 2px solid #7dd3fc; outline-offset: 2px; }
 .qti-footer { padding-top: 14px; border-top: 1px solid rgba(255,255,255,.08); font-size: 12px; color: #71717a; }
+/* Ready-made KPI tile row for composed answers. */
+.qti-kpis { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 16px; }
+.qti-kpi { flex: 1 1 140px; padding: 12px 14px; border: 1px solid rgba(255,255,255,.08);
+  border-radius: 12px; background: rgba(255,255,255,.03); }
+.qti-kpi-value { display: block; font-size: 26px; line-height: 1.2; font-weight: 600;
+  color: #fafafa; font-variant-numeric: tabular-nums; }
+.qti-kpi-label { display: block; margin-top: 4px; font-size: 11px; font-weight: 600;
+  letter-spacing: .04em; text-transform: uppercase; color: #a1a1aa; }
+.qti-kpi-delta { display: inline-block; margin-top: 4px; font-size: 12px; font-weight: 600; }
+.qti-kpi-delta.qti-up { color: var(--qti-pos); }
+.qti-kpi-delta.qti-down { color: var(--qti-neg); }
+.qti-kpi-spark { display: block; height: 40px; margin-top: 6px; }
+/* Hover/focus readout box for chart marks. */
+.qti-tooltip { position: absolute; padding: 6px 9px; border-radius: 6px;
+  background: var(--qti-tooltip-bg); border: 1px solid rgba(255,255,255,.12);
+  font-size: 12px; line-height: 1.4; color: #e4e4e7; pointer-events: none; z-index: 10; }
 @media (max-width: 640px) { .qti-frame { padding: 16px 14px 32px; } .qti-title { font-size: 19px; } }
 @media (prefers-reduced-motion: reduce) { .qti-frame * { animation: none !important; transition: none !important; } }
+/* Dense dashboard tile: compact header, visual only — no question/entities/takeaway/analysis/provenance/footer. */
+.qti-frame--tile { max-width: none; padding: 12px 14px 14px; }
+.qti-header--tile { margin-bottom: 10px; }
+.qti-title--tile { font-size: 13px; font-weight: 500; color: #a1a1aa; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qti-frame--tile .qti-visual { margin-bottom: 0; padding: 10px; }
 `;
 
 /** Message the blank-render watchdog reports; the host repairs on this too. */
@@ -416,23 +502,111 @@ const RUNTIME_ERROR_HOOK = `
 
 /**
  * Click-to-follow-up bridge. Any element the designer marks with
- * `data-qti-value` (optionally `data-qti-label`) posts the selection to the
- * host, which turns it into a follow-up question. Standalone (downloaded)
- * copies have no host, so the postMessage is a harmless no-op there.
+ * `data-qti-value` (optionally `data-qti-label`, `data-qti-column`) posts the
+ * selection to the host, which turns it into a follow-up question (single
+ * view) or a dashboard cross-filter toggle (dashboard view, when a column is
+ * present). Standalone (downloaded) copies have no host, so the postMessage
+ * is a harmless no-op there.
+ *
+ * Also carries the dashboard filter bridge: the host broadcasts
+ * `{type:'qti-filter', filters:[{column, values}]}` to every tile, which is
+ * applied on top of a pristine (unfiltered) copy of the data kept alongside
+ * `window.qti.data` — so a later `qti-data` refresh and a currently-active
+ * filter compose instead of one clobbering the other.
  */
 export const FRAME_SELECT_SCRIPT = `(function () {
-  var select = function (value, label) {
+  var select = function (value, label, column) {
     if (value === null || value === undefined) return;
     try {
       window.parent.postMessage({
         type: 'visual-select',
         value: String(value),
-        label: label === null || label === undefined ? undefined : String(label)
+        label: label === null || label === undefined ? undefined : String(label),
+        column: column === null || column === undefined ? undefined : String(column)
       }, '*');
     } catch (e) {}
   };
   window.qti = window.qti || {};
   window.qti.select = select;
+
+  // The query results the visual was built from, injected as a JSON block
+  // ahead of this script. Scripts must read data from window.qti.data —
+  // never hardcode values, labels, or aggregates.
+  var dataEl = document.getElementById('qti-data');
+  var initialData = [];
+  if (dataEl) {
+    try {
+      var parsedData = JSON.parse(dataEl.textContent || '[]');
+      if (Array.isArray(parsedData)) initialData = parsedData;
+    } catch (e) {}
+  }
+  // The pristine (unfiltered) rows survive both data refreshes and dashboard
+  // filter changes, so a filter is always recomputed from the full set
+  // instead of compounding on an already-filtered one.
+  var pristineData = initialData;
+  var activeFilters = [];
+  window.qti.data = initialData;
+  var refreshCallbacks = [];
+  window.qti.onRefresh = function (cb) {
+    if (typeof cb === 'function') refreshCallbacks.push(cb);
+  };
+
+  var recordHasColumn = function (record, column) {
+    if (record && record.columns && record.columns.length) {
+      return record.columns.indexOf(column) !== -1;
+    }
+    var firstRow = record && record.rows && record.rows[0];
+    return !!firstRow && Object.prototype.hasOwnProperty.call(firstRow, column);
+  };
+  // Dashboard filters AND together; a filter on a column a record lacks does
+  // not affect that record.
+  var applyFilters = function () {
+    if (!activeFilters.length) return pristineData;
+    return pristineData.map(function (record) {
+      var applicable = activeFilters.filter(function (f) {
+        return f && f.column && recordHasColumn(record, f.column);
+      });
+      if (!applicable.length) return record;
+      var rows = (record.rows || []).filter(function (row) {
+        return applicable.every(function (f) {
+          return (f.values || []).indexOf(String(row[f.column])) !== -1;
+        });
+      });
+      var filtered = {};
+      for (var key in record) {
+        if (Object.prototype.hasOwnProperty.call(record, key)) filtered[key] = record[key];
+      }
+      filtered.rows = rows;
+      filtered.rowCount = rows.length;
+      return filtered;
+    });
+  };
+  var setData = function (data) {
+    window.qti.data = data;
+    refreshCallbacks.forEach(function (cb) {
+      try { cb(data); } catch (e) {}
+    });
+  };
+  // The host (or, for tiles, a future refresh bus) can swap in fresh rows
+  // without redesigning the visual — re-run the stored SQL, then post the
+  // new rows here. A refresh replaces the pristine copy and re-applies
+  // whatever dashboard filters are currently active.
+  window.addEventListener('message', function (event) {
+    var message = event.data;
+    if (!message || !message.type) return;
+    if (message.type === 'qti-data' && Array.isArray(message.data)) {
+      pristineData = message.data;
+      setData(applyFilters());
+      return;
+    }
+    // Dashboard-wide filters, broadcast from the host to every tile. An
+    // empty filters array restores the pristine, unfiltered data.
+    if (message.type === 'qti-filter' && Array.isArray(message.filters)) {
+      activeFilters = message.filters;
+      setData(applyFilters());
+    }
+  });
+
   var markFor = function (target) {
     var node = target;
     while (node && node !== document) {
@@ -444,7 +618,11 @@ export const FRAME_SELECT_SCRIPT = `(function () {
   var fire = function (event) {
     var mark = markFor(event.target);
     if (!mark) return;
-    select(mark.getAttribute('data-qti-value'), mark.getAttribute('data-qti-label'));
+    select(
+      mark.getAttribute('data-qti-value'),
+      mark.getAttribute('data-qti-label'),
+      mark.getAttribute('data-qti-column')
+    );
   };
   document.addEventListener('click', fire);
   document.addEventListener('keydown', function (event) {
@@ -476,6 +654,7 @@ export function storedVisualizationDocument(
 </head>
 <body>
 ${renderFrame(bundle, context)}
+  ${dataScriptTag(context.chartData)}
   <script src="${FRAME_SCRIPT_FILENAME}"></script>
   <script src="script.js"></script>
 </body>
@@ -486,6 +665,7 @@ ${renderFrame(bundle, context)}
 export function sandboxedVisualizationDocument(
   bundle: InteractiveVisualBundle,
   context: VisualContext = {},
+  options?: { mode?: DocumentMode },
 ): string {
   return `<!doctype html>
 <html lang="en">
@@ -498,7 +678,8 @@ export function sandboxedVisualizationDocument(
   <style>${scopedStyle(bundle.css)}</style>
 </head>
 <body>
-${renderFrame(bundle, context)}
+${renderFrame(bundle, context, options?.mode)}
+  ${dataScriptTag(context.chartData)}
   <script>${RUNTIME_ERROR_HOOK}</script>
   <script>${FRAME_SELECT_SCRIPT}</script>
   <script>"use strict";\n${safeScript(bundle.javascript)}</script>

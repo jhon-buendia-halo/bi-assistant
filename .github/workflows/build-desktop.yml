@@ -1,15 +1,12 @@
 name: Build desktop installers
 
+# Installers are built on demand (Actions → Build desktop installers → Run
+# workflow) or when a release tag is pushed — never automatically per PR.
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
     tags:
       - "v*"
-  pull_request:
-    branches:
-      - main
 
 permissions:
   contents: read

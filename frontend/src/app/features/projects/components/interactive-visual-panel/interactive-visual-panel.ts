@@ -1,5 +1,6 @@
 import {
   Component,
+  ElementRef,
   HostListener,
   computed,
   effect,
@@ -7,27 +8,39 @@ import {
   input,
   output,
   signal,
+  viewChildren,
 } from '@angular/core';
-import { DomSanitizer } from '@angular/platform-browser';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import {
   BarChart3,
   ChevronDown,
   Download,
+  Filter,
   GalleryVerticalEnd,
   History,
+  LayoutGrid,
   Loader2,
   LucideAngularModule,
+  Maximize2,
+  Pin,
+  PinOff,
+  RefreshCw,
+  Rows3,
   SlidersHorizontal,
   Sparkles,
   TriangleAlert,
 } from 'lucide-angular';
 import {
+  DashboardFilter,
   DataPointSelection,
   InteractiveVisualization,
   ProjectActionResult,
   ProjectVisualization,
 } from '../../models/project.model';
 import { ProjectsApiService } from '../../services/projects-api.service';
+
+/** How the right panel shows visuals: one at a time, or a pinned grid. */
+export type PanelViewMode = 'single' | 'dashboard';
 
 export type TailorChartType =
   | 'auto'
@@ -120,9 +133,16 @@ export class InteractiveVisualPanel {
   readonly BarChart3 = BarChart3;
   readonly ChevronDown = ChevronDown;
   readonly Download = Download;
+  readonly Filter = Filter;
   readonly GalleryVerticalEnd = GalleryVerticalEnd;
   readonly History = History;
+  readonly LayoutGrid = LayoutGrid;
   readonly Loader2 = Loader2;
+  readonly Maximize2 = Maximize2;
+  readonly Pin = Pin;
+  readonly PinOff = PinOff;
+  readonly RefreshCw = RefreshCw;
+  readonly Rows3 = Rows3;
   readonly SlidersHorizontal = SlidersHorizontal;
   readonly Sparkles = Sparkles;
   readonly TriangleAlert = TriangleAlert;
@@ -135,6 +155,8 @@ export class InteractiveVisualPanel {
   readonly projectId = input<string | null>(null);
   readonly visualization = input<InteractiveVisualization | null>(null);
   readonly visualizations = input<ProjectVisualization[]>([]);
+  /** Ids pinned to the dashboard, so the single view can show pinned state. */
+  readonly pins = input<string[]>([]);
   readonly loading = input(false);
   readonly error = input<string | null>(null);
   readonly downloading = input(false);
@@ -146,6 +168,8 @@ export class InteractiveVisualPanel {
   readonly visualRefreshed = output<ProjectActionResult>();
   /** The user clicked a data mark inside the sandboxed visual. */
   readonly dataPointSelected = output<DataPointSelection>();
+  /** A pin/unpin call succeeded — the host should refresh the project doc. */
+  readonly pinsChanged = output<void>();
   readonly visualMenuOpen = signal(false);
   readonly versionMenuOpen = signal(false);
   readonly tailorMenuOpen = signal(false);
@@ -159,9 +183,32 @@ export class InteractiveVisualPanel {
   readonly tailorSort = signal<TailorSort>('none');
   readonly tailorTopN = signal<number | null>(null);
 
+  /** Single visual vs. pinned dashboard grid. */
+  readonly viewMode = signal<PanelViewMode>('single');
+  readonly dashboardTiles = signal<InteractiveVisualization[]>([]);
+  readonly dashboardLoading = signal(false);
+  /** Filterable columns for the dashboard, derived server-side from the pinned tiles. */
+  readonly dashboardFilters = signal<DashboardFilter[]>([]);
+  /** Selected values per active filter column; a missing key means "no filter". */
+  readonly activeFilters = signal<Record<string, string[]>>({});
+  /** Which filter column's popover is open, if any. */
+  readonly openFilterColumn = signal<string | null>(null);
+  /** Every rendered dashboard tile iframe, kept live via a template ref. */
+  private readonly tileFrames = viewChildren<ElementRef<HTMLIFrameElement>>('tileFrame');
+  /** A pin/unpin call from the single view's Pin button is in flight. */
+  readonly pinning = signal(false);
+  /** `visualId` of a dashboard tile currently being unpinned. */
+  readonly unpinningTileId = signal<string | null>(null);
+  /** `visualId` of a dashboard tile currently having its data refreshed. */
+  readonly refreshingTileId = signal<string | null>(null);
+  /** A data-refresh call for the single open visual is in flight. */
+  readonly refreshingData = signal(false);
+
   private readonly api = inject(ProjectsApiService);
   /** `visualId:version` pairs already given their one auto-repair attempt. */
   private readonly repairAttempts = new Set<string>();
+  /** Tracks project changes so active filters reset for a new project. */
+  private lastFilteredProjectId: string | null = null;
 
   readonly tailorInstruction = computed(() =>
     buildTailorInstruction({
@@ -195,23 +242,259 @@ export class InteractiveVisualPanel {
       this.runtimeError.set(null);
       this.versionMenuOpen.set(false);
     });
+    // Fetch tiles whenever the dashboard becomes visible, and refetch when
+    // the project changes while it stays visible.
+    effect(() => {
+      const mode = this.viewMode();
+      const projectId = this.projectId();
+      if (mode === 'dashboard' && projectId) this.refreshDashboard();
+    });
+    // A new project starts with a clean filter bar.
+    effect(() => {
+      const projectId = this.projectId();
+      if (projectId === this.lastFilteredProjectId) return;
+      this.lastFilteredProjectId = projectId;
+      this.activeFilters.set({});
+    });
+    // Any change to the active filters is broadcast to every tile iframe.
+    effect(() => {
+      this.activeFilters();
+      this.broadcastFilters();
+    });
   }
 
   @HostListener('window:message', ['$event'])
   onFrameMessage(event: MessageEvent): void {
     const data = event.data as
-      | { type?: string; message?: string; value?: string; label?: string }
+      | {
+          type?: string;
+          message?: string;
+          value?: string;
+          label?: string;
+          column?: string;
+        }
       | null;
     if (data?.type === 'visual-error') {
+      // Repair targets the single open visual — a tile's runtime error must
+      // not kick off the auto-repair loop from underneath the dashboard grid.
+      if (this.viewMode() === 'dashboard') return;
       this.handleRuntimeError(data.message ?? 'The visual threw an error');
       return;
     }
     if (data?.type === 'visual-select' && data.value !== undefined) {
+      const column = data.column === undefined ? undefined : String(data.column);
+      if (this.viewMode() === 'dashboard') {
+        // Dashboard clicks cross-filter; only marks that name their column
+        // can drive that (an unmarked mark has nothing to filter by).
+        if (column) this.toggleFilterValue(column, String(data.value));
+        return;
+      }
       this.dataPointSelected.emit({
         value: String(data.value),
         label: data.label === undefined ? undefined : String(data.label),
+        ...(column ? { column } : {}),
       });
     }
+  }
+
+  // ------------------------------------------------------- dashboard filters
+
+  /** `{column, values}` pairs ready to post to every tile iframe. */
+  private activeFilterArray(): DashboardFilter[] {
+    return Object.entries(this.activeFilters()).map(([column, values]) => ({
+      column,
+      values,
+    }));
+  }
+
+  /** Post one message to a tile iframe's sandboxed window. Isolated in its
+   * own method so tests can verify what would be sent without depending on
+   * cross-origin (opaque `about:srcdoc`) postMessage delivery. */
+  private postToTile(
+    iframe: HTMLIFrameElement,
+    message: { type: 'qti-filter'; filters: DashboardFilter[] },
+  ): void {
+    iframe.contentWindow?.postMessage(message, '*');
+  }
+
+  /** Post the current filters to every dashboard tile iframe. */
+  private broadcastFilters(): void {
+    const filters = this.activeFilterArray();
+    for (const ref of this.tileFrames()) {
+      this.postToTile(ref.nativeElement, { type: 'qti-filter', filters });
+    }
+  }
+
+  /** A tile iframe finished (re)loading — catch it up on the active filters. */
+  onTileFrameLoad(event: Event): void {
+    const iframe = event.target as HTMLIFrameElement;
+    this.postToTile(iframe, {
+      type: 'qti-filter',
+      filters: this.activeFilterArray(),
+    });
+  }
+
+  isFilterActive(column: string): boolean {
+    return (this.activeFilters()[column]?.length ?? 0) > 0;
+  }
+
+  activeFilterCount(column: string): number {
+    return this.activeFilters()[column]?.length ?? 0;
+  }
+
+  isFilterValueSelected(column: string, value: string): boolean {
+    return this.activeFilters()[column]?.includes(value) ?? false;
+  }
+
+  readonly hasActiveFilters = computed(
+    () => Object.keys(this.activeFilters()).length > 0,
+  );
+
+  toggleFilterPopover(column: string): void {
+    this.openFilterColumn.update((current) => (current === column ? null : column));
+  }
+
+  toggleFilterValue(column: string, value: string): void {
+    this.activeFilters.update((current) => {
+      const existing = current[column] ?? [];
+      const next = existing.includes(value)
+        ? existing.filter((v) => v !== value)
+        : [...existing, value];
+      const updated = { ...current };
+      if (next.length) updated[column] = next;
+      else delete updated[column];
+      return updated;
+    });
+  }
+
+  clearFilters(): void {
+    this.activeFilters.set({});
+  }
+
+  /** Drop active filter entries whose column or values no longer exist. */
+  private pruneActiveFilters(filters: DashboardFilter[]): void {
+    const allowed = new Map(filters.map((f) => [f.column, new Set(f.values)]));
+    this.activeFilters.update((current) => {
+      let changed = false;
+      const next: Record<string, string[]> = {};
+      for (const [column, values] of Object.entries(current)) {
+        const allowedValues = allowed.get(column);
+        if (!allowedValues) {
+          changed = true;
+          continue;
+        }
+        const kept = values.filter((v) => allowedValues.has(v));
+        if (kept.length !== values.length) changed = true;
+        if (kept.length) next[column] = kept;
+        else changed = true;
+      }
+      return changed ? next : current;
+    });
+  }
+
+  setViewMode(mode: PanelViewMode): void {
+    this.viewMode.set(mode);
+  }
+
+  /** Ids pinned to the dashboard, for O(1) membership checks. */
+  private readonly pinnedIds = computed(() => new Set(this.pins()));
+
+  isPinned(visualId: string): boolean {
+    return this.pinnedIds().has(visualId);
+  }
+
+  /** Fetch the current pinned-visual tiles. Public so the host can call it
+   * after a tailor/repair/revert/create flow updates a pinned visual. */
+  refreshDashboard(): void {
+    const projectId = this.projectId();
+    if (!projectId) return;
+    this.dashboardLoading.set(true);
+    this.api.getDashboard(projectId).subscribe({
+      next: (result) => {
+        this.dashboardLoading.set(false);
+        this.dashboardTiles.set(result.tiles);
+        const filters = result.filters ?? [];
+        this.dashboardFilters.set(filters);
+        this.pruneActiveFilters(filters);
+      },
+      error: () => {
+        this.dashboardLoading.set(false);
+        this.dashboardTiles.set([]);
+        this.dashboardFilters.set([]);
+        this.activeFilters.set({});
+      },
+    });
+  }
+
+  /** Pin/unpin the visual open in the single view. */
+  togglePin(): void {
+    const visual = this.visualization();
+    const projectId = this.projectId();
+    if (!visual || !projectId || this.pinning()) return;
+    this.pinning.set(true);
+    const pinned = this.isPinned(visual.id);
+    const request$ = pinned
+      ? this.api.unpinVisualization(projectId, visual.id)
+      : this.api.pinVisualization(projectId, visual.id);
+    request$.subscribe({
+      next: () => {
+        this.pinning.set(false);
+        this.pinsChanged.emit();
+        if (this.viewMode() === 'dashboard') this.refreshDashboard();
+      },
+      error: () => this.pinning.set(false),
+    });
+  }
+
+  /** Unpin a tile from the dashboard grid, then refresh it. */
+  unpinTile(visualId: string): void {
+    const projectId = this.projectId();
+    if (!projectId || this.unpinningTileId()) return;
+    this.unpinningTileId.set(visualId);
+    this.api.unpinVisualization(projectId, visualId).subscribe({
+      next: () => {
+        this.unpinningTileId.set(null);
+        this.pinsChanged.emit();
+        this.refreshDashboard();
+      },
+      error: () => this.unpinningTileId.set(null),
+    });
+  }
+
+  /** Re-run a dashboard tile's stored SQL, then refetch its tile document. */
+  refreshTile(visualId: string): void {
+    const projectId = this.projectId();
+    if (!projectId || this.refreshingTileId()) return;
+    this.refreshingTileId.set(visualId);
+    this.api.refreshVisualizationData(projectId, visualId).subscribe({
+      next: () => {
+        this.refreshingTileId.set(null);
+        this.refreshDashboard();
+      },
+      error: () => this.refreshingTileId.set(null),
+    });
+  }
+
+  /** Re-run the open visual's stored SQL and adopt the fresh document. */
+  refreshData(): void {
+    const visual = this.visualization();
+    const projectId = this.projectId();
+    if (!visual || !projectId || this.refreshingData()) return;
+    this.refreshingData.set(true);
+    this.api.refreshVisualizationData(projectId, visual.id).subscribe({
+      next: (result) => {
+        this.refreshingData.set(false);
+        if (!result.ok || !result.visualization) return;
+        this.visualRefreshed.emit(result);
+      },
+      error: () => this.refreshingData.set(false),
+    });
+  }
+
+  /** Open a dashboard tile in the single view. */
+  openTileInSingle(tile: InteractiveVisualization): void {
+    this.viewMode.set('single');
+    this.viewVisual.emit(tile);
   }
 
   /**
@@ -328,6 +611,15 @@ export class InteractiveVisualPanel {
       this.visualization()?.document ?? '',
     ),
   );
+
+  /** Sandboxed documents for every dashboard tile, keyed by visual id. */
+  readonly safeTileDocuments = computed(() => {
+    const map = new Map<string, SafeHtml>();
+    for (const tile of this.dashboardTiles()) {
+      map.set(tile.id, this.sanitizer.bypassSecurityTrustHtml(tile.document));
+    }
+    return map;
+  });
 
   selectVisualization(visualization: ProjectVisualization): void {
     this.visualMenuOpen.set(false);

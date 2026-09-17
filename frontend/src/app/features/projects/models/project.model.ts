@@ -115,6 +115,8 @@ export interface VisualEvent {
 export interface DataPointSelection {
   value: string;
   label?: string;
+  /** The column the value belongs to — present when the mark carried `data-qti-column`. */
+  column?: string;
 }
 
 export interface VisualizationVersion {
@@ -122,6 +124,8 @@ export interface VisualizationVersion {
   createdAt: string;
   instruction?: string;
   sourceMessageAt: string;
+  /** Last time this version's data was refreshed by re-running its SQL. */
+  refreshedAt?: string;
 }
 
 export interface ProjectVisualization {
@@ -140,6 +144,11 @@ export interface InteractiveVisualization extends ProjectVisualization {
   version: number;
 }
 
+export interface ProjectDashboard {
+  /** Ordered list of pinned visual ids. */
+  pins: string[];
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -147,6 +156,8 @@ export interface Project {
   sandboxes: string[];
   messages: ChatMessage[];
   visualizations?: ProjectVisualization[];
+  /** Pinned-visual dashboard, a grid of visuals visible at once. */
+  dashboard?: ProjectDashboard;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -156,4 +167,16 @@ export interface ProjectActionResult {
   message: string;
   project?: Project;
   visualization?: InteractiveVisualization;
+}
+
+/** One column the dashboard filter bar can filter on, and its known values. */
+export interface DashboardFilter {
+  column: string;
+  values: string[];
+}
+
+/** Response shape of `GET /projects/:id/dashboard`. */
+export interface DashboardTiles {
+  tiles: InteractiveVisualization[];
+  filters: DashboardFilter[];
 }

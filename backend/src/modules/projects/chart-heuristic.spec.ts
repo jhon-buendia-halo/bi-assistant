@@ -1,4 +1,5 @@
 import {
+  deriveDashboardFilters,
   recommendChartForm,
   recommendComposition,
   recommendedFormBlock,
@@ -323,8 +324,20 @@ describe('recommendComposition', () => {
     ).toBeUndefined();
   });
 
-  it('does not compose for one measure however many rows', () => {
+  it('composes for a single measure once there are enough rows', () => {
     const rows = Array.from({ length: 40 }, (_, n) => ({
+      month: `2024-${n}`,
+      claims: n,
+    }));
+
+    const composition = recommendComposition(record(rows));
+
+    expect(composition?.measures).toEqual(['claims']);
+    expect(composition?.guidance).toContain('1 measures over 40 rows');
+  });
+
+  it('does not compose for a single measure with too few rows', () => {
+    const rows = Array.from({ length: 3 }, (_, n) => ({
       month: `2024-${n}`,
       claims: n,
     }));
@@ -414,5 +427,134 @@ describe('recommendedFormBlock', () => {
 
   it('is absent when there is nothing chartable', () => {
     expect(recommendedFormBlock([])).toBeUndefined();
+  });
+});
+
+describe('deriveDashboardFilters', () => {
+  it('keeps a categorical column with a modest cardinality', () => {
+    const filters = deriveDashboardFilters([
+      [
+        {
+          columns: ['payer', 'claims'],
+          rows: [
+            { payer: 'Aetna', claims: 90 },
+            { payer: 'Cigna', claims: 40 },
+            { payer: 'Aetna', claims: 12 },
+          ],
+        },
+      ],
+    ]);
+
+    expect(filters).toEqual([{ column: 'payer', values: ['Aetna', 'Cigna'] }]);
+  });
+
+  it('drops a categorical column whose per-tile cardinality is too high', () => {
+    const rows = Array.from({ length: 25 }, (_, n) => ({
+      patient_id: `p${n}`,
+      claims: n,
+    }));
+    const filters = deriveDashboardFilters([
+      [{ columns: ['patient_id', 'claims'], rows }],
+    ]);
+
+    expect(filters).toEqual([]);
+  });
+
+  it('keeps a low-cardinality temporal column', () => {
+    const filters = deriveDashboardFilters([
+      [
+        {
+          columns: ['month', 'claims'],
+          rows: [
+            { month: '2024-01', claims: 10 },
+            { month: '2024-02', claims: 20 },
+            { month: '2024-03', claims: 5 },
+          ],
+        },
+      ],
+    ]);
+
+    expect(filters).toEqual([
+      { column: 'month', values: ['2024-01', '2024-02', '2024-03'] },
+    ]);
+  });
+
+  it('excludes a purely numeric column', () => {
+    const filters = deriveDashboardFilters([
+      [
+        {
+          columns: ['claims', 'denials'],
+          rows: [
+            { claims: 90, denials: 4 },
+            { claims: 40, denials: 1 },
+          ],
+        },
+      ],
+    ]);
+
+    expect(filters).toEqual([]);
+  });
+
+  it('merges a column across tiles into the union of its values, sorted naturally', () => {
+    const filters = deriveDashboardFilters([
+      [
+        {
+          columns: ['payer', 'claims'],
+          rows: [
+            { payer: 'Payer 2', claims: 90 },
+            { payer: 'Payer 10', claims: 40 },
+          ],
+        },
+      ],
+      [
+        {
+          columns: ['payer', 'denials'],
+          rows: [
+            { payer: 'Payer 2', denials: 2 },
+            { payer: 'Payer 1', denials: 1 },
+          ],
+        },
+      ],
+    ]);
+
+    expect(filters).toEqual([
+      { column: 'payer', values: ['Payer 1', 'Payer 2', 'Payer 10'] },
+    ]);
+  });
+
+  it('drops a column whose merged (union) values exceed the cap', () => {
+    const tileA = Array.from({ length: 15 }, (_, n) => ({ payer: `P${n}` }));
+    const tileB = Array.from({ length: 15 }, (_, n) => ({
+      payer: `P${n + 15}`,
+    }));
+    const filters = deriveDashboardFilters([
+      [{ columns: ['payer'], rows: tileA }],
+      [{ columns: ['payer'], rows: tileB }],
+    ]);
+
+    expect(filters).toEqual([]);
+  });
+
+  it('sorts columns alphabetically', () => {
+    const filters = deriveDashboardFilters([
+      [
+        {
+          columns: ['payer', 'region', 'claims'],
+          rows: [
+            { payer: 'Aetna', region: 'West', claims: 1 },
+            { payer: 'Cigna', region: 'East', claims: 2 },
+          ],
+        },
+      ],
+    ]);
+
+    expect(filters.map((f) => f.column)).toEqual(['payer', 'region']);
+  });
+
+  it('returns nothing for empty or rowless input', () => {
+    expect(deriveDashboardFilters([])).toEqual([]);
+    expect(deriveDashboardFilters([[{ columns: ['payer'], rows: [] }]])).toEqual(
+      [],
+    );
   });
 });

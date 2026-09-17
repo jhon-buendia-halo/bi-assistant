@@ -93,6 +93,158 @@ describe('frame select bridge', () => {
   });
 });
 
+describe('tile mode document', () => {
+  const context = {
+    question: 'How do claims trend?',
+    answer: 'Claims rose steadily through the year.',
+    entities: ['main.health.claims'],
+    projectName: 'Claims',
+    version: 2,
+    generatedAt: '2024-01-01T00:00:00.000Z',
+    data: [
+      {
+        tool: 'run_readonly_sql',
+        input: 'SELECT month, n FROM main.health.claims',
+        columns: ['month', 'n'],
+        rows: [{ month: '2024-01', n: 5 }],
+        rowCount: 1,
+      },
+    ],
+  };
+
+  it('defaults to the full frame', () => {
+    const document = sandboxedVisualizationDocument(bundle, context);
+
+    expect(document).toContain('<main class="qti-frame">');
+    expect(document).not.toContain('class="qti-frame qti-frame--tile"');
+    expect(document).toContain('Analysis');
+    expect(document).toContain('Data used');
+    expect(document).toContain(context.question);
+  });
+
+  it('omits question, entities, takeaway, analysis, provenance and footer', () => {
+    const document = sandboxedVisualizationDocument(bundle, context, {
+      mode: 'tile',
+    });
+
+    expect(document).toContain('class="qti-frame qti-frame--tile"');
+    expect(document).toContain(bundle.title);
+    expect(document).not.toContain(context.question);
+    expect(document).not.toContain('class="qti-entities"');
+    expect(document).not.toContain('class="qti-takeaway"');
+    expect(document).not.toContain('class="qti-prose"');
+    expect(document).not.toContain('class="qti-provenance"');
+    expect(document).not.toContain('class="qti-footer"');
+  });
+
+  it('still keeps the runtime-error hook and select script in a tile', () => {
+    const document = sandboxedVisualizationDocument(bundle, context, {
+      mode: 'tile',
+    });
+
+    expect(document).toContain(BLANK_RENDER_MESSAGE);
+    expect(document).toContain(FRAME_SELECT_SCRIPT);
+    expect(document).toContain("type: 'visual-select'");
+  });
+});
+
+describe('injected qti-data block', () => {
+  const chartData = [
+    {
+      tool: 'run_readonly_sql',
+      input: 'SELECT month, n FROM main.health.claims',
+      columns: ['month', 'n'],
+      rowCount: 1,
+      rows: [{ month: '2024-01', n: 5 }],
+    },
+  ];
+
+  it('embeds the bounded records as a JSON script block ahead of the other scripts', () => {
+    const document = sandboxedVisualizationDocument(bundle, {
+      chartData,
+    });
+
+    expect(document).toContain('<script type="application/json" id="qti-data">');
+    expect(document.indexOf('id="qti-data"')).toBeLessThan(
+      document.indexOf(FRAME_SELECT_SCRIPT),
+    );
+    expect(document).toContain(JSON.stringify(chartData));
+  });
+
+  it('defaults to an empty array when no chart data is supplied', () => {
+    const document = sandboxedVisualizationDocument(bundle);
+
+    expect(document).toContain('<script type="application/json" id="qti-data">[]</script>');
+  });
+
+  it('escapes a closing script tag inside the data so the document stays intact', () => {
+    const malicious = [
+      { tool: 'run_readonly_sql', rows: [{ note: '</script>alert(1)' }] },
+    ];
+    const document = sandboxedVisualizationDocument(bundle, {
+      chartData: malicious,
+    });
+
+    expect(document).not.toContain('"note":"</script>alert(1)"');
+    expect(document).toContain('"note":"<\\/script>alert(1)"');
+  });
+
+  it('is also inlined (not blocked by CSP) in the stored, script-src self document', () => {
+    const document = storedVisualizationDocument(bundle, { chartData });
+
+    expect(document).toContain('<script type="application/json" id="qti-data">');
+    expect(document).toContain(JSON.stringify(chartData));
+    expect(document.indexOf('id="qti-data"')).toBeLessThan(
+      document.indexOf(FRAME_SCRIPT_FILENAME),
+    );
+  });
+});
+
+describe('frame bridge data + refresh API', () => {
+  it('exposes window.qti.data, onRefresh, and a qti-data message listener', () => {
+    expect(FRAME_SELECT_SCRIPT).toContain("getElementById('qti-data')");
+    expect(FRAME_SELECT_SCRIPT).toContain('window.qti.data = initialData;');
+    expect(FRAME_SELECT_SCRIPT).toContain('window.qti.onRefresh = function (cb)');
+    expect(FRAME_SELECT_SCRIPT).toContain("message.type === 'qti-data'");
+    expect(FRAME_SELECT_SCRIPT).toContain('pristineData = message.data;');
+  });
+});
+
+describe('frame bridge dashboard filtering', () => {
+  it('handles qti-filter messages against the pristine (unfiltered) copy', () => {
+    expect(FRAME_SELECT_SCRIPT).toContain("message.type === 'qti-filter'");
+    expect(FRAME_SELECT_SCRIPT).toContain('Array.isArray(message.filters)');
+    expect(FRAME_SELECT_SCRIPT).toContain('activeFilters = message.filters;');
+    expect(FRAME_SELECT_SCRIPT).toContain('var pristineData = initialData;');
+    expect(FRAME_SELECT_SCRIPT).toContain('var applyFilters = function ()');
+    expect(FRAME_SELECT_SCRIPT).toContain('if (!activeFilters.length) return pristineData;');
+  });
+
+  it('ANDs multiple filters and skips records that lack the filtered column', () => {
+    expect(FRAME_SELECT_SCRIPT).toContain('recordHasColumn(record, f.column)');
+    expect(FRAME_SELECT_SCRIPT).toContain(
+      "(f.values || []).indexOf(String(row[f.column])) !== -1",
+    );
+    expect(FRAME_SELECT_SCRIPT).toContain('applicable.every(function (f)');
+  });
+
+  it('re-applies filters on top of a fresh qti-data refresh', () => {
+    // pristineData is reassigned from the refresh, then filters recompute
+    // window.qti.data — a refresh never bypasses an active filter.
+    expect(FRAME_SELECT_SCRIPT.indexOf('pristineData = message.data;')).toBeGreaterThan(
+      FRAME_SELECT_SCRIPT.indexOf("message.type === 'qti-data'"),
+    );
+    expect(FRAME_SELECT_SCRIPT).toContain('setData(applyFilters());');
+  });
+
+  it('includes the mark\'s data-qti-column in the visual-select payload', () => {
+    expect(FRAME_SELECT_SCRIPT).toContain("getAttribute('data-qti-column')");
+    expect(FRAME_SELECT_SCRIPT).toContain(
+      'column: column === null || column === undefined ? undefined : String(column)',
+    );
+  });
+});
+
 describe('"How this was worked out" reasoning section', () => {
   const steps: ReasoningStep[] = [
     {
