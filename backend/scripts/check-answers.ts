@@ -78,6 +78,20 @@ interface CheckResult {
   durationMs: number;
 }
 
+/**
+ * Percentages the answer states in prose, as fractions of 1. A model that
+ * returns the numerator and denominator and divides in the narrative is
+ * answering correctly, so the figures have to be read from the text too.
+ */
+function percentagesIn(text: string): number[] {
+  const found: number[] = [];
+  for (const match of text.matchAll(/(\d{1,3}(?:\.\d+)?)\s*%/g)) {
+    const value = Number(match[1]);
+    if (Number.isFinite(value) && value > 0 && value <= 100) found.push(value);
+  }
+  return found;
+}
+
 // ---------------------------------------------------------------- checks
 
 const CHECKS: Check[] = [
@@ -102,17 +116,33 @@ const CHECKS: Check[] = [
       // Ground truth varies per team — Croatia .871, Brazil .870, England .869
       // — so a correct answer cannot be uniform, and a collapsed denominator
       // shows up as one value repeated on every row.
+      // Computing the share in SQL and computing it in prose from a correct
+      // numerator and denominator are both right answers — this check exists
+      // to catch a collapsed denominator, not to dictate where the division
+      // happens. An earlier version demanded a rate column and failed sound
+      // answers that divided in the narrative instead.
       const rates = ratesIn(record.rows ?? []);
-      if (rates.length < 2) {
-        return `found no per-team rate column in ${columnList(record)}`;
+      if (rates.length >= 2) {
+        const distinct = new Set(rates.map((rate) => rate.toFixed(4)));
+        if (distinct.size < 2) {
+          return `every team reports the same rate (${rates[0]})`;
+        }
+        const outOfRange = rates.filter((rate) => rate <= 0 || rate >= 1);
+        if (outOfRange.length) {
+          return `rate outside (0,1): ${outOfRange.slice(0, 3).join(', ')}`;
+        }
+        return null;
       }
-      const distinct = new Set(rates.map((rate) => rate.toFixed(4)));
-      if (distinct.size < 2) {
-        return `every team reports the same rate (${rates[0]})`;
+      // No rate column: the answer must still state varying percentages, and
+      // the row data must carry two different measures to divide.
+      const percentages = percentagesIn(answer.text);
+      const distinctText = new Set(percentages.map((pct) => pct.toFixed(1)));
+      if (distinctText.size < 2) {
+        return `no rate column in ${columnList(record)} and no varying percentages in the answer`;
       }
-      const outOfRange = rates.filter((rate) => rate <= 0 || rate >= 1);
-      if (outOfRange.length) {
-        return `rate outside (0,1): ${outOfRange.slice(0, 3).join(', ')}`;
+      const spread = Math.max(...percentages) - Math.min(...percentages);
+      if (spread < 0.5) {
+        return `the reported shares barely vary (spread ${spread.toFixed(2)})`;
       }
       return null;
     },
