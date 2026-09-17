@@ -25,6 +25,7 @@ import {
   InteractiveVisualization,
   ProjectDoc,
   ProjectVisualization,
+  ReasoningStep,
   ToolDataRecord,
 } from './entities/project.entity';
 
@@ -614,11 +615,17 @@ export class VisualizationService {
     const block = answer?.data?.length
       ? visualizationData(answer.data)
       : undefined;
+    // Older transcripts predate the persisted `reasoning` field: fall back to
+    // deriving it from the rationale each tool call already carried.
+    const reasoning = answer?.reasoning?.length
+      ? answer.reasoning
+      : deriveReasoning(answer?.data);
     return {
       question: question?.content,
       answer: answer?.content,
       data: answer?.data,
       entities: answer?.entities,
+      ...(reasoning.length ? { reasoning } : {}),
       projectName: project.name,
       version,
       generatedAt: generatedAt ?? entry?.createdAt ?? meta.createdAt,
@@ -792,6 +799,24 @@ export function visualizationData(records: ToolDataRecord[]): {
   return { json, shown, ...(total > shown ? { truncatedFrom: total } : {}) };
 }
 
+/**
+ * Fallback for transcripts recorded before `ChatMessage.reasoning` was
+ * persisted: rebuild the same shape from the rationale each tool call
+ * already carried, in the order the calls ran.
+ */
+function deriveReasoning(data: ToolDataRecord[] | undefined): ReasoningStep[] {
+  return (data ?? [])
+    .filter((record) => !!record.rationale)
+    .map((record, index) => ({
+      step: index + 1,
+      rationale: record.rationale as string,
+      tool: record.tool,
+      input: record.input,
+      rowCount: record.rowCount,
+      error: record.error,
+    }));
+}
+
 /** Human-readable companion file: question, takeaway, full answer, sources. */
 function answerMarkdown(
   bundle: { title: string; description: string },
@@ -801,6 +826,18 @@ function answerMarkdown(
   if (context.question) lines.push(`**Question:** ${context.question}`, '');
   lines.push('## Takeaway', '', bundle.description, '');
   if (context.answer) lines.push('## Analysis', '', context.answer, '');
+  if (context.reasoning?.length) {
+    lines.push('## How this was worked out', '');
+    context.reasoning.forEach((step) => {
+      const outcome = step.error
+        ? `failed — ${step.error}`
+        : step.rowCount !== undefined
+          ? `${step.rowCount.toLocaleString('en-US')} row${step.rowCount === 1 ? '' : 's'}`
+          : undefined;
+      lines.push(`${step.step}. ${step.rationale}${outcome ? ` (${outcome})` : ''}`);
+    });
+    lines.push('');
+  }
   if (context.data?.length) {
     lines.push('## Data used', '');
     context.data.forEach((record, index) => {

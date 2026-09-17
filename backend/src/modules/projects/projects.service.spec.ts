@@ -333,6 +333,131 @@ describe('ProjectsService streaming', () => {
     expect(project.messages.at(-1)?.data?.[0]?.truncated).toBe(true);
   });
 
+  describe('reasoning trail', () => {
+    const FIRST = 'There is no cost-per-member column, so I check how claims';
+    const SECOND = 'Now I total spend and divide it across the members found.';
+
+    it('keeps each stated reason on its record and trails them in order', async () => {
+      const { service, project } = buildStreaming(
+        answerStream([
+          { sql: 'select 1', rows: [{ n: 1 }], rationale: `  ${FIRST}  ` },
+          { sql: 'select 2', rows: [{ n: 2 }, { n: 3 }], rationale: SECOND },
+        ]),
+      );
+
+      await service.streamMessage('project-1', 'Cost per member?', () => {});
+
+      const message = project.messages.at(-1)!;
+      expect(message.data?.map((record) => record.rationale)).toEqual([
+        FIRST,
+        SECOND,
+      ]);
+      expect(message.reasoning).toEqual([
+        {
+          step: 1,
+          rationale: FIRST,
+          tool: 'run_readonly_sql',
+          input: 'select 1',
+          rowCount: 1,
+        },
+        {
+          step: 2,
+          rationale: SECOND,
+          tool: 'run_readonly_sql',
+          input: 'select 2',
+          rowCount: 2,
+        },
+      ]);
+    });
+
+    it('keeps the reason on a step whose query failed', async () => {
+      const { service, project } = buildStreaming(
+        answerStream([
+          {
+            sql: 'select bad',
+            error: 'Column bad cannot be resolved',
+            rationale: FIRST,
+          },
+          { sql: 'select 2', rows: [{ n: 2 }], rationale: SECOND },
+        ]),
+      );
+
+      await service.streamMessage('project-1', 'Cost per member?', () => {});
+
+      const message = project.messages.at(-1)!;
+      expect(message.data?.[0]).toEqual(
+        expect.objectContaining({
+          error: 'Column bad cannot be resolved',
+          rationale: FIRST,
+        }),
+      );
+      expect(message.reasoning).toEqual([
+        {
+          step: 1,
+          rationale: FIRST,
+          tool: 'run_readonly_sql',
+          input: 'select bad',
+          error: 'Column bad cannot be resolved',
+        },
+        {
+          step: 2,
+          rationale: SECOND,
+          tool: 'run_readonly_sql',
+          input: 'select 2',
+          rowCount: 1,
+        },
+      ]);
+    });
+
+    it('omits the trail when no call explained itself', async () => {
+      const { service, project } = buildStreaming(
+        answerStream([{ sql: 'select 1', rows: [{ n: 1 }] }]),
+      );
+
+      await service.streamMessage('project-1', 'Why?', () => {});
+
+      expect(project.messages.at(-1)?.data).toHaveLength(1);
+      expect(project.messages.at(-1)?.reasoning).toBeUndefined();
+    });
+
+    it('keeps the reasoning done before a clarification on the card', async () => {
+      const { service, project } = buildStreaming(clarificationStream());
+
+      await service.streamMessage('project-1', 'Which team?', () => {});
+
+      expect(project.messages.at(-1)?.reasoning).toEqual([
+        {
+          step: 1,
+          rationale: 'I check which seasons the data covers before narrowing.',
+          tool: 'run_readonly_sql',
+          input: 'select 1',
+          rowCount: 1,
+        },
+      ]);
+    });
+
+    it('streams the reason with the call and again with its result', async () => {
+      const { service } = buildStreaming(
+        answerStream([{ sql: 'select 1', rows: [{ n: 1 }], rationale: FIRST }]),
+      );
+      const events: StreamEvent[] = [];
+
+      await service.streamMessage('project-1', 'Why?', (event) =>
+        events.push(event),
+      );
+
+      const call = events.find((event) => event.type === 'tool');
+      expect(JSON.parse(call!.content!)).toEqual({
+        name: 'run_readonly_sql',
+        rationale: FIRST,
+      });
+      const result = events.find((event) => event.type === 'tool-result');
+      expect(JSON.parse(result!.content!)).toEqual(
+        expect.objectContaining({ rationale: FIRST }),
+      );
+    });
+  });
+
   describe('careful mode cross-check', () => {
     const PRIMARY = 'SELECT count(*) AS n FROM main.football.matches';
 
@@ -725,8 +850,12 @@ describe('ProjectsService answer feedback', () => {
 async function* answerStream(
   runs: {
     sql: string;
-    rows: Record<string, unknown>[];
+    rows?: Record<string, unknown>[];
     truncated?: boolean;
+    /** What the assistant said it was checking with this query. */
+    rationale?: string;
+    /** Set instead of rows when the query came back as a failure. */
+    error?: string;
   }[],
 ) {
   for (const [index, run] of runs.entries()) {
@@ -736,7 +865,10 @@ async function* answerStream(
       payload: {
         toolCallId,
         toolName: 'run_readonly_sql',
-        args: { sql: run.sql },
+        args: {
+          sql: run.sql,
+          ...(run.rationale ? { rationale: run.rationale } : {}),
+        },
       },
     };
     yield {
@@ -744,11 +876,13 @@ async function* answerStream(
       payload: {
         toolCallId,
         toolName: 'run_readonly_sql',
-        result: {
-          columns: ['n'],
-          rows: run.rows,
-          ...(run.truncated ? { truncated: true } : {}),
-        },
+        result: run.error
+          ? { error: run.error }
+          : {
+              columns: ['n'],
+              rows: run.rows ?? [],
+              ...(run.truncated ? { truncated: true } : {}),
+            },
       },
     };
   }
@@ -762,7 +896,10 @@ async function* clarificationStream() {
     payload: {
       toolCallId: 'call-0',
       toolName: 'run_readonly_sql',
-      args: { sql: 'select 1' },
+      args: {
+        sql: 'select 1',
+        rationale: 'I check which seasons the data covers before narrowing.',
+      },
     },
   };
   yield {

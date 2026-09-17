@@ -1,6 +1,6 @@
 import { marked } from 'marked';
 import sanitizeHtml from 'sanitize-html';
-import type { ToolDataRecord } from './entities/project.entity';
+import type { ReasoningStep, ToolDataRecord } from './entities/project.entity';
 
 export interface InteractiveVisualBundle {
   title: string;
@@ -23,6 +23,14 @@ export interface VisualContext {
   data?: ToolDataRecord[];
   /** Pre-derived source entities; falls back to scanning `data` when absent. */
   entities?: string[];
+  /**
+   * The assistant's plain-language route from question to answer, one step
+   * per data-gathering call that carried a rationale. Model-authored prose;
+   * the ordering and outcomes are deterministic, assembled at persist time
+   * (or derived here from `data` for older transcripts) so the trail can
+   * never claim a query that never ran.
+   */
+  reasoning?: ReasoningStep[];
   projectName?: string;
   version?: number;
   generatedAt?: string;
@@ -61,18 +69,65 @@ function safeStyle(value: string): string {
     .replace(/<\/style/gi, '<\\/style');
 }
 
+/**
+ * The designer writes CSS for a standalone page, so its bare `section`,
+ * `table` or `body` rules land on the readable frame too — a
+ * `section { max-width: 480px }` rule squeezed every frame section and pushed
+ * wide tables out of their card. Confine the whole sheet to the visual's own
+ * subtree, rewriting page-level selectors to the scope root first so custom
+ * properties declared on `:root` still reach the visual.
+ */
+export function scopedStyle(value: string): string {
+  const cleaned = safeStyle(value).trim();
+  if (!cleaned) return '';
+  const rescoped = cleaned.replace(
+    /(^|[{}])([^{}@]*)(?=\{)/g,
+    (_match, boundary: string, selector: string) =>
+      `${boundary}${selector.replace(/(^|[\s,>+~(])(?::root|html|body)\b/gi, '$1:scope')}`,
+  );
+  return `@scope (.qti-visual-body) {\n${rescoped}\n}`;
+}
+
 function safeScript(value: string): string {
   return value.replace(/<\/script/gi, '<\\/script');
 }
 
 /** Markdown → sanitized HTML (headings, lists, tables, emphasis, code only). */
 export function renderMarkdown(markdown: string): string {
-  const html = marked.parse(markdown, { async: false, gfm: true, breaks: true }) as string;
+  const html = marked.parse(markdown, {
+    async: false,
+    gfm: true,
+    breaks: true,
+  }) as string;
   return sanitizeHtml(html, {
     allowedTags: [
-      'p', 'br', 'strong', 'em', 'b', 'i', 'code', 'pre', 'blockquote', 'hr',
-      'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li',
-      'table', 'thead', 'tbody', 'tr', 'th', 'td', 'a', 'span',
+      'p',
+      'br',
+      'strong',
+      'em',
+      'b',
+      'i',
+      'code',
+      'pre',
+      'blockquote',
+      'hr',
+      'h1',
+      'h2',
+      'h3',
+      'h4',
+      'h5',
+      'h6',
+      'ul',
+      'ol',
+      'li',
+      'table',
+      'thead',
+      'tbody',
+      'tr',
+      'th',
+      'td',
+      'a',
+      'span',
     ],
     allowedAttributes: { a: ['href'], th: ['align'], td: ['align'] },
     allowedSchemes: ['https', 'http'],
@@ -99,7 +154,9 @@ function formatCell(value: unknown): string {
       : typeof value === 'object'
         ? JSON.stringify(value)
         : String(value);
-  return escapeHtml(text.length > CELL_CHARS ? `${text.slice(0, CELL_CHARS)}…` : text);
+  return escapeHtml(
+    text.length > CELL_CHARS ? `${text.slice(0, CELL_CHARS)}…` : text,
+  );
 }
 
 function renderProvenance(
@@ -109,7 +166,9 @@ function renderProvenance(
   const items = data
     .map((record, index) => {
       const rows = record.rows ?? [];
-      const columns = record.columns?.length ? record.columns : Object.keys(rows[0] ?? {});
+      const columns = record.columns?.length
+        ? record.columns
+        : Object.keys(rows[0] ?? {});
       const count = record.rowCount ?? rows.length;
       const label = record.error
         ? `Query ${index + 1} — failed`
@@ -132,6 +191,7 @@ function renderProvenance(
           : '';
       return `<li>
   <p class="qti-query-label">${escapeHtml(label)}</p>
+  ${record.rationale ? `<p class="qti-muted qti-why">${escapeHtml(record.rationale)}</p>` : ''}
   ${record.input ? `<pre class="qti-sql">${escapeHtml(record.input)}</pre>` : ''}
   ${record.error ? `<p class="qti-error">${escapeHtml(record.error)}</p>` : ''}
   ${table}
@@ -148,8 +208,41 @@ function renderProvenance(
 </details>`;
 }
 
+/** Muted "outcome" line under a reasoning step: row count, or the failure. */
+function reasoningOutcome(step: ReasoningStep): string {
+  if (step.error) return `failed — ${step.error}`;
+  if (step.rowCount !== undefined) {
+    return `${step.rowCount.toLocaleString('en-US')} row${step.rowCount === 1 ? '' : 's'}`;
+  }
+  return '';
+}
+
+/**
+ * "How this was worked out": the model's plain-language reasoning trail,
+ * rendered as inert text (never through the markdown pipeline) so a step's
+ * rationale can never inject markup or links.
+ */
+function renderReasoning(steps: ReasoningStep[]): string {
+  const items = steps
+    .map((step) => {
+      const outcome = reasoningOutcome(step);
+      return `<li>
+  <p class="qti-reasoning-rationale">${escapeHtml(step.rationale)}</p>
+  ${outcome ? `<p class="qti-muted">${escapeHtml(outcome)}</p>` : ''}
+</li>`;
+    })
+    .join('\n');
+  return `<section class="qti-section">
+    <h2 class="qti-h2">How this was worked out</h2>
+    <ol class="qti-reasoning">${items}</ol>
+  </section>`;
+}
+
 /** Fixed, readable frame around the agent's visual. */
-function renderFrame(bundle: InteractiveVisualBundle, context: VisualContext): string {
+function renderFrame(
+  bundle: InteractiveVisualBundle,
+  context: VisualContext,
+): string {
   const entities = context.entities?.length
     ? context.entities
     : sourceEntities(context.data);
@@ -182,7 +275,9 @@ function renderFrame(bundle: InteractiveVisualBundle, context: VisualContext): s
   </header>
 
   <section class="qti-visual" aria-label="Interactive visual">
+    <div class="qti-visual-body">
 ${bodyFragment(bundle.html)}
+    </div>
   </section>
 
   <section class="qti-section">
@@ -198,6 +293,8 @@ ${bodyFragment(bundle.html)}
   </section>`
       : ''
   }
+
+  ${context.reasoning?.length ? renderReasoning(context.reasoning) : ''}
 
   ${context.data?.length ? `<section class="qti-section">${renderProvenance(context.data, context.chartRows)}</section>` : ''}
 
@@ -225,7 +322,12 @@ html, body { margin: 0; background: #171717; }
   border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.04);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; color: #d4d4d8; }
 .qti-visual { margin: 0 0 22px; padding: 16px; border: 1px solid rgba(255,255,255,.08);
-  border-radius: 14px; background: rgba(255,255,255,.02); }
+  border-radius: 14px; background: rgba(255,255,255,.02);
+  /* The boundary wide designer content scrolls in instead of spilling out. */
+  position: relative; overflow-x: auto; }
+/* Scope root for the designer's stylesheet — a plain div, so its element
+   selectors (section, table, …) cannot reach the frame around it. */
+.qti-visual-body { position: relative; }
 .qti-section { margin: 0 0 22px; }
 .qti-h2 { margin: 0 0 8px; font-size: 12px; font-weight: 600; letter-spacing: .06em;
   text-transform: uppercase; color: #71717a; }
@@ -243,6 +345,14 @@ html, body { margin: 0; background: #171717; }
   border: 1px solid rgba(255,255,255,.08); white-space: nowrap; }
 .qti-prose th, .qti-table th { background: rgba(255,255,255,.06); color: #e4e4e7; font-weight: 600; }
 .qti-table-wrap { overflow-x: auto; margin-top: 8px; }
+.qti-reasoning { margin: 0; padding: 0; list-style: none; counter-reset: qti-step; }
+.qti-reasoning li { counter-increment: qti-step; margin: 0 0 14px; padding-left: 28px; position: relative; }
+.qti-reasoning li:last-child { margin-bottom: 0; }
+.qti-reasoning li::before { content: counter(qti-step); position: absolute; left: 0; top: 0;
+  width: 18px; height: 18px; border-radius: 999px; background: rgba(255,255,255,.08);
+  color: #a1a1aa; font-size: 11px; font-weight: 600; line-height: 18px; text-align: center; }
+.qti-reasoning-rationale { margin: 0; font-size: 14px; line-height: 1.6; color: #d4d4d8; }
+.qti-why { margin-top: 2px; }
 .qti-provenance { border: 1px solid rgba(255,255,255,.08); border-radius: 10px; background: rgba(255,255,255,.02); }
 .qti-provenance summary { cursor: pointer; padding: 10px 14px; font-size: 13px; color: #a1a1aa; }
 .qti-provenance summary:hover { color: #e4e4e7; }
@@ -361,7 +471,8 @@ export function storedVisualizationDocument(
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src data: blob:; font-src data:; connect-src 'none'">
   <title>${escapeHtml(bundle.title)}</title>
   <style>${FRAME_CSS}</style>
-  <link rel="stylesheet" href="styles.css">
+  <!-- Inlined rather than linked so the designer's sheet arrives scoped. -->
+  <style>${scopedStyle(bundle.css)}</style>
 </head>
 <body>
 ${renderFrame(bundle, context)}
@@ -384,7 +495,7 @@ export function sandboxedVisualizationDocument(
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'">
   <title>${escapeHtml(bundle.title)}</title>
   <style>${FRAME_CSS}</style>
-  <style>${safeStyle(bundle.css)}</style>
+  <style>${scopedStyle(bundle.css)}</style>
 </head>
 <body>
 ${renderFrame(bundle, context)}
