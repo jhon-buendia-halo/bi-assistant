@@ -24,6 +24,13 @@ export interface ToolDataRecord {
    * so it always exists alongside the statement it explains.
    */
   rationale?: string;
+  /**
+   * Faults the result guards found in this query — a ratio of a sum to
+   * itself, a metric constant on every row, an unordered "top N". Persisted
+   * so a questionable figure stays visible after the turn, whether or not
+   * anyone reads the SQL.
+   */
+  warnings?: string[];
 }
 
 /** One step of the assistant's plain-language route from question to answer. */

@@ -63,6 +63,9 @@ const VERIFIER_SAMPLE_VALUES = 3;
 const CROSS_CHECK_NOTE_CHARS = 220;
 const CROSS_CHECK_AGREE_NOTE =
   'independent re-derivation returned the same results';
+/** Agreement on the figures where the two queries projected different columns. */
+const CROSS_CHECK_AGREE_SHAPE_NOTE =
+  'independent re-derivation returned the same figures, over different columns';
 const CROSS_CHECK_DISAGREE_NOTE = 'results differ — treat with care';
 /** Rows the cross-check query may return — matches what the answer stored. */
 const CROSS_CHECK_ROW_LIMIT = STORED_ROWS_CAP;
@@ -452,6 +455,7 @@ export class ProjectsService implements OnModuleInit {
     if (!record?.input?.trim()) return undefined;
     try {
       if (record.truncated) {
+        this.logger.warn('Cross-check skipped: answer hit the row cap');
         return crossCheck(
           'error',
           "the answer's result set hit the row cap — a partial result cannot be compared",
@@ -459,6 +463,7 @@ export class ProjectsService implements OnModuleInit {
       }
       const context = await this.verifierContext(project);
       if (!context) {
+        this.logger.warn('Cross-check skipped: no datasource bound');
         return crossCheck(
           'error',
           'no datasource is bound to this project, so the query could not be re-run',
@@ -466,6 +471,7 @@ export class ProjectsService implements OnModuleInit {
       }
       const sql = await this.deriveIndependentSql(question, context);
       if (!sql) {
+        this.logger.warn('Cross-check skipped: verifier produced no usable query');
         return crossCheck(
           'error',
           'the independent check did not produce a usable query',
@@ -476,13 +482,31 @@ export class ProjectsService implements OnModuleInit {
         sql,
         CROSS_CHECK_ROW_LIMIT,
       );
-      const { match, reason } = compareResults(record.rows ?? [], result.rows);
-      return match
-        ? crossCheck('agree', CROSS_CHECK_AGREE_NOTE)
-        : crossCheck(
-            'disagree',
-            `${CROSS_CHECK_DISAGREE_NOTE} — ${reason || 'the independent query returned something else'}`,
-          );
+      // Width tolerance matters here: the verifier is told to project nothing
+      // beyond the question while the analysis agent selects the figures its
+      // answer needs, so equal facts routinely arrive at different widths.
+      const { match, reason, shapeDiffers } = compareResults(
+        record.rows ?? [],
+        result.rows,
+        { widthTolerant: true },
+      );
+      // Logged so the agree / shape / disagree / error split is measurable
+      // rather than anecdotal — `npm run eval` reports the same verdicts.
+      this.logger.log(
+        `Cross-check ${match ? (shapeDiffers ? 'agree (shape differs)' : 'agree') : 'disagree'}${
+          match ? '' : `: ${reason}`
+        }`,
+      );
+      if (match) {
+        return crossCheck(
+          'agree',
+          shapeDiffers ? CROSS_CHECK_AGREE_SHAPE_NOTE : CROSS_CHECK_AGREE_NOTE,
+        );
+      }
+      return crossCheck(
+        'disagree',
+        `${CROSS_CHECK_DISAGREE_NOTE} — ${reason || 'the independent query returned something else'}`,
+      );
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       this.logger.warn(`Cross-check failed: ${detail}`);
@@ -1254,6 +1278,7 @@ function toolDataRecord(
     error?: unknown;
     correctedSql?: unknown;
     truncated?: unknown;
+    warnings?: unknown;
   };
   // Show the statement that actually ran, so the answer and any visual cite
   // the repaired SQL rather than the one that failed.
@@ -1285,6 +1310,11 @@ function toolDataRecord(
   // Clipped either by the query's own row limit (flagged by the bridge) or by
   // what we keep in the transcript.
   const truncated = value.truncated === true || rows.length > STORED_ROWS_CAP;
+  // The guards ran in the tool, against the full result — keep their verdict
+  // with the rows it judged.
+  const warnings = Array.isArray(value.warnings)
+    ? value.warnings.map((w) => String(w)).filter(Boolean)
+    : [];
   return {
     tool,
     input,
@@ -1293,6 +1323,7 @@ function toolDataRecord(
     rowCount: rows.length,
     ...(truncated ? { truncated: true } : {}),
     ...(rationale ? { rationale } : {}),
+    ...(warnings.length ? { warnings } : {}),
   };
 }
 

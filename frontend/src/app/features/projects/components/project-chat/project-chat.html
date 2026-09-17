@@ -657,6 +657,18 @@
                 {{ record.rationale }}
               </p>
             }
+            @for (warning of record.warnings; track $index) {
+              <!-- A fault in the query itself: louder than the rationale,
+                   because the figures above it may not mean what they say -->
+              <p class="mt-1 flex items-start gap-1.5 text-[11px] leading-5 text-amber-400/90">
+                <lucide-angular
+                  [img]="TriangleAlert"
+                  [size]="12"
+                  class="mt-0.5 shrink-0"
+                />
+                <span>{{ warning }}</span>
+              </p>
+            }
             @if (record.input) {
               <pre class="mt-1 overflow-x-auto rounded bg-black/30 px-2.5 py-1.5 font-mono text-[11px] leading-5 whitespace-pre-wrap text-zinc-400">{{ record.input }}</pre>
             }

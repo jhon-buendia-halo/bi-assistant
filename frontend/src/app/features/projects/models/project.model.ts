@@ -17,6 +17,12 @@ export interface ToolDataRecord {
   truncated?: boolean;
   /** Plain-language reason the assistant ran this call. */
   rationale?: string;
+  /**
+   * Faults found in the query's own result — a ratio of a sum to itself, a
+   * metric identical on every row, a "top N" with nothing ordering it. Shown
+   * so a questionable figure is visible even when nobody reviews the SQL.
+   */
+  warnings?: string[];
 }
 
 /** One step of the assistant's plain-language route from question to answer. */

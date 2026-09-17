@@ -72,6 +72,18 @@ export const assistantAgent = new Agent({
     '  re-run it as an aggregation, or state in the answer that the result may',
     '  be truncated.',
     '- Ground every claim in data you actually retrieved; never invent values.',
+    '- A ratio needs two genuinely different measures. Never divide a sum by',
+    '  itself or alias the same expression twice: that returns 1 for every row',
+    '  and says nothing. If the columns for the denominator do not exist, say',
+    '  the data cannot answer the question instead of inventing a rate.',
+    '- Treat a metric that comes back identical on every row — above all 1 or',
+    '  0 — as a fault in your own query. Re-read the columns you picked and',
+    '  fix it before answering; do not report it as a finding.',
+    '- Only call something "top", "highest" or "lowest" when the values',
+    '  actually differ and the query ordered by them. When everything ties,',
+    '  say so plainly.',
+    '- A warning attached to a query result is about your own SQL. Act on it',
+    '  and re-run before answering, rather than passing it to the user.',
   ].join('\n'),
   // Dynamic model resolved at call time from the persisted LLM settings
   // (provider / model / runtime API key); see ../model-resolver.

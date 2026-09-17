@@ -70,3 +70,73 @@ describe('compareResults', () => {
     expect(result.reason).toContain('(+2 more)');
   });
 });
+
+describe('width tolerance', () => {
+  // Careful mode's verifier projects only what the question asked for, while
+  // the analysis agent also selects the figures its answer and visuals lean on.
+  const wide = [
+    { line: 'Dental', kept: 2963, total: 2963, rate: 1 },
+    { line: 'Vision', kept: 2963, total: 2963, rate: 1 },
+  ];
+
+  it('rejects a different column count outright by default', () => {
+    const narrow = [
+      { line: 'Dental', rate: 1 },
+      { line: 'Vision', rate: 1 },
+    ];
+    const result = compareResults(wide, narrow);
+    expect(result.match).toBe(false);
+    expect(result.reason).toBe('column count differs (expected 4, got 2)');
+  });
+
+  it('matches a narrower projection of the same facts when tolerant', () => {
+    const narrow = [
+      { line: 'Dental', rate: 1 },
+      { line: 'Vision', rate: 1 },
+    ];
+    const result = compareResults(wide, narrow, { widthTolerant: true });
+    expect(result.match).toBe(true);
+    expect(result.shapeDiffers).toBe(true);
+    expect(result.reason).toBe('');
+  });
+
+  it('is symmetric about which side is wider', () => {
+    const narrow = [
+      { line: 'Dental', rate: 1 },
+      { line: 'Vision', rate: 1 },
+    ];
+    const result = compareResults(narrow, wide, { widthTolerant: true });
+    expect(result.match).toBe(true);
+    expect(result.shapeDiffers).toBe(true);
+  });
+
+  // The case that motivated this: the analysis query divided a sum by itself,
+  // so every rate was 1, while the verifier computed the real rates. The width
+  // gate used to report "column count differs" and bury the disagreement.
+  it('reports a real difference instead of the width when the figures differ', () => {
+    const verifier = [
+      { line: 'Dental', rate: 0.82 },
+      { line: 'Vision', rate: 0.79 },
+    ];
+    const result = compareResults(wide, verifier, { widthTolerant: true });
+    expect(result.match).toBe(false);
+    expect(result.shapeDiffers).toBeUndefined();
+    expect(result.reason).toContain('figures differ');
+  });
+
+  it('does not match when the narrower result has a different row count', () => {
+    const narrow = [{ line: 'Dental', rate: 1 }];
+    const result = compareResults(wide, narrow, { widthTolerant: true });
+    expect(result.match).toBe(false);
+  });
+
+  it('still compares exactly when the widths agree', () => {
+    const other = [
+      { line: 'Dental', kept: 2963, total: 2963, rate: 1 },
+      { line: 'Vision', kept: 1, total: 2963, rate: 1 },
+    ];
+    const result = compareResults(wide, other, { widthTolerant: true });
+    expect(result.match).toBe(false);
+    expect(result.shapeDiffers).toBeUndefined();
+  });
+});

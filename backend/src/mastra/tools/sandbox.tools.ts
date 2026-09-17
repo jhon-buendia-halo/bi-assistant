@@ -1,5 +1,6 @@
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
+import { inspectResult } from '../../modules/projects/result-guards';
 import {
   getSandboxToolServices,
   SandboxColumnSnapshot,
@@ -218,13 +219,27 @@ export const runReadOnlySqlTool = createTool({
     const sandboxes = await projectSandboxes(requestContext);
     const target = resolveDatasource(sandboxes, datasourceId);
     if ('error' in target) return { error: target.error };
+    const rowLimit = limit ?? 100;
     try {
-      return await getSandboxToolServices().runReadOnlySql(
+      const result = await getSandboxToolServices().runReadOnlySql(
         target.id,
         sql,
-        limit ?? 100,
+        rowLimit,
         sandboxNames(requestContext),
       );
+      // Inspect the statement that actually ran — the fixer may have repaired
+      // the one the model wrote. Warnings ride back on the tool result so the
+      // agent has to face them before it writes an answer, instead of the
+      // defect only surfacing if someone reads the SQL.
+      const executed =
+        typeof (result as { correctedSql?: unknown }).correctedSql === 'string'
+          ? (result as { correctedSql: string }).correctedSql
+          : sql;
+      const rows = (result as { rows?: Record<string, unknown>[] }).rows ?? [];
+      const warnings = inspectResult(executed, rows, rowLimit).map(
+        (warning) => warning.message,
+      );
+      return warnings.length ? { ...result, warnings } : result;
     } catch (err) {
       return { error: err instanceof Error ? err.message : String(err) };
     }
