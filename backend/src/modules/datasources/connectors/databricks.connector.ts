@@ -13,6 +13,7 @@ import {
   assertReadOnlySql,
   clampRows,
   DatasourceConnector,
+  ForeignKeyEdge,
   MASKED,
   splitEntity,
 } from './connector';
@@ -334,6 +335,124 @@ export class DatabricksConnector implements DatasourceConnector<DatabricksConfig
       return (await res.json()) as UcListResponse;
     } finally {
       clearTimeout(timer);
+    }
+  }
+
+  /**
+   * Declared foreign keys among `entities`, from each catalog's
+   * `information_schema`. Unity Catalog constraints are *informational*
+   * (declared, never enforced), so most lakehouse tables have none and the
+   * credentials often cannot read `information_schema` at all — both cases are
+   * an empty result, not an error. Same tolerance as `inventory()`: one shared
+   * client, a session per catalog, and a catalog that refuses is skipped.
+   */
+  async foreignKeys(
+    raw: DatabricksConfig,
+    entities: string[],
+  ): Promise<ForeignKeyEdge[]> {
+    // Constraints live in the catalog of the referencing table, so only the
+    // catalogs actually present in the sandbox are worth querying.
+    const wanted = new Set<string>();
+    const catalogs = new Set<string>();
+    for (const entity of entities ?? []) {
+      const parts = (entity ?? '').split('.').map((p) => p.trim());
+      if (parts.length !== 3 || parts.some((p) => !p)) continue;
+      if (SYSTEM_CATALOGS.has(parts[0].toLowerCase())) continue;
+      wanted.add(parts.join('.').toLowerCase());
+      catalogs.add(parts[0]);
+    }
+    if (!catalogs.size) return [];
+
+    let client: DBSQLClient;
+    try {
+      const config = this.validate(raw);
+      client = await this.connect(config, CATALOG_QUERY_TIMEOUT_MS);
+    } catch (err) {
+      this.logger.debug(
+        `Databricks foreign keys unavailable, continuing without relationship hints: ${(err as Error).message}`,
+      );
+      return [];
+    }
+
+    const list = Array.from(catalogs);
+    const rows: Record<string, unknown>[] = [];
+    try {
+      for (let i = 0; i < list.length; i += INVENTORY_CONCURRENCY) {
+        const batch = list.slice(i, i + INVENTORY_CONCURRENCY);
+        const settled = await Promise.allSettled(
+          batch.map((catalog) => this.catalogForeignKeys(client, catalog)),
+        );
+        settled.forEach((r, j) => {
+          if (r.status === 'fulfilled') rows.push(...r.value);
+          else
+            this.logger.debug(
+              `Skipping catalog ${batch[j]} while reading foreign keys: ${(r.reason as Error).message}`,
+            );
+        });
+      }
+    } finally {
+      await client.close().catch(() => undefined);
+    }
+
+    const edges: ForeignKeyEdge[] = [];
+    for (const row of rows) {
+      const from = `${toText(row['from_catalog'])}.${toText(row['from_schema'])}.${toText(row['from_table'])}`;
+      const to = `${toText(row['to_catalog'])}.${toText(row['to_schema'])}.${toText(row['to_table'])}`;
+      // Both ends must be in the sandbox, otherwise the hint points at a table
+      // the model cannot query.
+      if (!wanted.has(from.toLowerCase())) continue;
+      if (!wanted.has(to.toLowerCase())) continue;
+      edges.push({
+        from: { entity: from, column: toText(row['from_column']) },
+        to: { entity: to, column: toText(row['to_column']) },
+      });
+    }
+    return edges;
+  }
+
+  /**
+   * One catalog's referential constraints. `referential_constraints` names the
+   * FK and the unique constraint it points at; `key_column_usage` is joined
+   * twice (by ordinal position, so composite keys pair up column by column) to
+   * resolve both column ends.
+   */
+  private async catalogForeignKeys(
+    client: DBSQLClient,
+    catalog: string,
+  ): Promise<Record<string, unknown>[]> {
+    const schema = `\`${qIdent(catalog)}\`.information_schema`;
+    const session = await client.openSession();
+    try {
+      const op = await session.executeStatement(
+        `SELECT tc.table_catalog AS from_catalog,
+                tc.table_schema  AS from_schema,
+                tc.table_name    AS from_table,
+                fk.column_name   AS from_column,
+                pk.table_catalog AS to_catalog,
+                pk.table_schema  AS to_schema,
+                pk.table_name    AS to_table,
+                pk.column_name   AS to_column
+         FROM ${schema}.referential_constraints rc
+         JOIN ${schema}.table_constraints tc
+           ON tc.constraint_catalog = rc.constraint_catalog
+          AND tc.constraint_schema = rc.constraint_schema
+          AND tc.constraint_name = rc.constraint_name
+          AND tc.constraint_type = 'FOREIGN KEY'
+         JOIN ${schema}.key_column_usage fk
+           ON fk.constraint_catalog = rc.constraint_catalog
+          AND fk.constraint_schema = rc.constraint_schema
+          AND fk.constraint_name = rc.constraint_name
+         JOIN ${schema}.key_column_usage pk
+           ON pk.constraint_catalog = rc.unique_constraint_catalog
+          AND pk.constraint_schema = rc.unique_constraint_schema
+          AND pk.constraint_name = rc.unique_constraint_name
+          AND pk.ordinal_position = fk.ordinal_position
+         WHERE tc.table_schema <> 'information_schema'
+         ORDER BY from_schema, from_table, from_column`,
+      );
+      return await this.fetchWithTimeout(op, CATALOG_QUERY_TIMEOUT_MS);
+    } finally {
+      await session.close();
     }
   }
 

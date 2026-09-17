@@ -30,6 +30,7 @@ import {
   Telescope,
   ThumbsDown,
   ThumbsUp,
+  TriangleAlert,
   Wrench,
   X,
 } from 'lucide-angular';
@@ -131,6 +132,7 @@ export class ProjectChat implements OnDestroy {
   readonly Telescope = Telescope;
   readonly ThumbsDown = ThumbsDown;
   readonly ThumbsUp = ThumbsUp;
+  readonly TriangleAlert = TriangleAlert;
   readonly Wrench = Wrench;
   readonly X = X;
 

@@ -10,6 +10,7 @@ import {
   assertReadOnlySql,
   clampRows,
   DatasourceConnector,
+  ForeignKeyEdge,
   MASKED,
   splitEntity,
 } from './connector';
@@ -19,6 +20,43 @@ const SYSTEM_SCHEMAS = new Set([
   'information_schema',
   'pg_toast',
 ]);
+
+interface ForeignKeyRow {
+  from_schema: string;
+  from_table: string;
+  from_column: string;
+  to_schema: string;
+  to_table: string;
+  to_column: string;
+}
+
+/**
+ * Declared foreign keys for the schemas in `$1`. `conkey`/`confkey` are
+ * parallel column-number arrays, so they are unnested WITH ORDINALITY and
+ * matched position by position — a composite key yields one row (one edge)
+ * per column pair, which is precise enough for analytics schemas.
+ */
+const FOREIGN_KEY_SQL = `
+  SELECT fn.nspname AS from_schema, fc.relname AS from_table,
+         fa.attname AS from_column,
+         tn.nspname AS to_schema, tc.relname AS to_table,
+         ta.attname AS to_column
+  FROM pg_constraint con
+  JOIN pg_class fc ON fc.oid = con.conrelid
+  JOIN pg_namespace fn ON fn.oid = fc.relnamespace
+  JOIN pg_class tc ON tc.oid = con.confrelid
+  JOIN pg_namespace tn ON tn.oid = tc.relnamespace
+  JOIN LATERAL unnest(con.conkey) WITH ORDINALITY AS fk(attnum, ord) ON TRUE
+  JOIN LATERAL unnest(con.confkey) WITH ORDINALITY AS pk(attnum, ord)
+    ON pk.ord = fk.ord
+  JOIN pg_attribute fa
+    ON fa.attrelid = con.conrelid AND fa.attnum = fk.attnum
+  JOIN pg_attribute ta
+    ON ta.attrelid = con.confrelid AND ta.attnum = pk.attnum
+  WHERE con.contype = 'f'
+    AND fn.nspname = ANY($1::text[])
+  ORDER BY fn.nspname, fc.relname, fa.attname
+`;
 
 /** Postgres connector, mirrored from data-readiness-agent's PostgresService. */
 @Injectable()
@@ -100,6 +138,60 @@ export class PostgresConnector implements DatasourceConnector<PostgresConfig> {
         },
       ];
     });
+  }
+
+  /**
+   * Declared foreign keys among `entities`, read straight from `pg_constraint`.
+   * The schema snapshot alone tells the model which columns exist but not which
+   * ones join, so it guesses (`goals.team_id` for `goals.scoring_team_id`) and
+   * the query dies. These edges are that missing half.
+   *
+   * Never throws: a relationship hint is a nice-to-have, so any failure
+   * (permissions, timeout, unreachable host) degrades to "no hint".
+   */
+  async foreignKeys(
+    config: PostgresConfig,
+    entities: string[],
+  ): Promise<ForeignKeyEdge[]> {
+    // Only entities in this datasource's database can have edges here; the
+    // catalog segment is the database name, exactly as `inventory()` emits it.
+    const wanted = new Set<string>();
+    const schemas = new Set<string>();
+    for (const entity of entities ?? []) {
+      const parts = (entity ?? '').split('.').map((p) => p.trim());
+      if (parts.length !== 3 || parts.some((p) => !p)) continue;
+      if (parts[0].toLowerCase() !== config.database.toLowerCase()) continue;
+      wanted.add(parts.join('.').toLowerCase());
+      schemas.add(parts[1]);
+    }
+    if (!schemas.size) return [];
+
+    try {
+      return await this.withClient(config, 10_000, async (client) => {
+        const result = await client.query<ForeignKeyRow>(FOREIGN_KEY_SQL, [
+          Array.from(schemas),
+        ]);
+        const edges: ForeignKeyEdge[] = [];
+        for (const row of result.rows) {
+          const from = `${config.database}.${row.from_schema}.${row.from_table}`;
+          const to = `${config.database}.${row.to_schema}.${row.to_table}`;
+          // Both ends must be in the sandbox, otherwise the hint points at a
+          // table the model cannot query.
+          if (!wanted.has(from.toLowerCase())) continue;
+          if (!wanted.has(to.toLowerCase())) continue;
+          edges.push({
+            from: { entity: from, column: row.from_column },
+            to: { entity: to, column: row.to_column },
+          });
+        }
+        return edges;
+      });
+    } catch (err) {
+      this.logger.debug(
+        `Postgres foreign keys unavailable, continuing without relationship hints: ${describeError(err)}`,
+      );
+      return [];
+    }
   }
 
   async sampleRows(
@@ -185,6 +277,12 @@ export class PostgresConnector implements DatasourceConnector<PostgresConfig> {
  * attempt fails — e.g. `localhost` → both `::1` and `127.0.0.1`. Without
  * unwrapping its `.errors`, the surfaced message is blank and hides the real
  * cause (connection refused, auth failure, …).
+ *
+ * `.detail` and `.hint` are appended because Postgres puts its own fix on the
+ * hint — `Perhaps you meant to reference the column "g.scoring_team_id"` — and
+ * the SQL repair loop only ever sees this string. Named fields only: the error
+ * object is never stringified wholesale, since `pg` hangs the client config
+ * (password included) off it.
  */
 function describeError(err: unknown): string {
   if (err instanceof AggregateError && err.errors.length) {
@@ -192,8 +290,19 @@ function describeError(err: unknown): string {
     if (parts.length) return Array.from(new Set(parts)).join('; ');
   }
   if (err instanceof Error) {
-    const code = (err as { code?: string }).code;
-    return err.message || (code ? String(code) : err.constructor.name);
+    const { code, detail, hint } = err as {
+      code?: string;
+      detail?: unknown;
+      hint?: unknown;
+    };
+    const base = err.message || (code ? String(code) : err.constructor.name);
+    const extras = [
+      ['DETAIL', detail],
+      ['HINT', hint],
+    ]
+      .filter(([, value]) => typeof value === 'string' && value.trim())
+      .map(([label, value]) => `${label as string}: ${(value as string).trim()}`);
+    return [base, ...extras].join(' — ');
   }
   return String(err) || 'unknown error';
 }

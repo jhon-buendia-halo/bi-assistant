@@ -1,11 +1,15 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { DatabricksConnector } from './connectors/databricks.connector';
 import { PostgresConnector } from './connectors/postgres.connector';
-import type { DatasourceConnector } from './connectors/connector';
+import type {
+  DatasourceConnector,
+  ForeignKeyEdge,
+} from './connectors/connector';
 import { MASKED } from './connectors/connector';
 import { DatasourcesRepository } from './repositories/datasources.repository';
 import { InventoryCacheRepository } from './repositories/inventory-cache.repository';
@@ -24,6 +28,8 @@ import {
 /** Kind-agnostic entry point: resolves a datasource and dispatches to its connector. */
 @Injectable()
 export class DatasourcesService {
+  private readonly logger = new Logger(DatasourcesService.name);
+
   constructor(
     private readonly repository: DatasourcesRepository,
     private readonly inventoryCache: InventoryCacheRepository,
@@ -120,6 +126,24 @@ export class DatasourcesService {
     const fetchedAt = new Date().toISOString();
     await this.inventoryCache.save(id, catalogs, fetchedAt);
     return { catalogs, fetchedAt, cached: false };
+  }
+
+  /**
+   * Declared foreign keys among the given entities, or `[]` when the platform
+   * cannot report them (most lakehouse tables declare none). Never throws: a
+   * missing join hint must degrade to no hint, never fail the caller.
+   */
+  async foreignKeys(id: string, entities: string[]): Promise<ForeignKeyEdge[]> {
+    const ds = await this.get(id);
+    const connector = this.connector(ds.kind);
+    if (!connector.foreignKeys) return [];
+    try {
+      return await connector.foreignKeys(ds.config, entities);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.debug(`Foreign keys unavailable for ${id}: ${message}`);
+      return [];
+    }
   }
 
   /**

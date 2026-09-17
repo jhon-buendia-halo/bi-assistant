@@ -10,6 +10,12 @@ export interface SandboxColumnSnapshot {
   /** Real values observed at save time — schema linking / value matching. */
   sampleValues?: string[];
   description?: string;
+  /** Join target for a key column — see SandboxColumnSnapshot in the repository. */
+  references?: {
+    entity: string;
+    column: string;
+    source: 'declared' | 'inferred';
+  };
 }
 
 export interface SandboxSnapshot {

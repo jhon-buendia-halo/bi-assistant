@@ -9,7 +9,11 @@ import { randomUUID } from 'crypto';
 import { RequestContext } from '@mastra/core/request-context';
 import { MastraService } from '../../mastra/mastra.service';
 import { setSandboxToolServices } from '../../mastra/tool-services';
-import type { SandboxSnapshot, SqlRunResult } from '../../mastra/tool-services';
+import type {
+  SandboxColumnSnapshot,
+  SandboxSnapshot,
+  SqlRunResult,
+} from '../../mastra/tool-services';
 import { sqlFixOutputSchema } from '../../mastra/agents/sql-fixer.agent';
 import { sqlVerifyOutputSchema } from '../../mastra/agents/sql-verifier.agent';
 import { SANDBOXES_CONTEXT_KEY } from '../../mastra/tools/sandbox.tools';
@@ -57,12 +61,17 @@ const limitReachedNote = (limit: number) =>
 const FIXER_SCHEMA_CHARS = 4_000;
 /** Character budget for the richer (sample-value bearing) verifier schema. */
 const VERIFIER_SCHEMA_CHARS = 6_000;
+/** Join hints shown up front to the assistant — enough for a wide sandbox. */
+const JOIN_HINT_CHARS = 1_500;
 /** Sample values shown per column to the verifier — value matching, not data. */
 const VERIFIER_SAMPLE_VALUES = 3;
 /** Longest cross-check note persisted on a message (tooltip-sized). */
 const CROSS_CHECK_NOTE_CHARS = 220;
 const CROSS_CHECK_AGREE_NOTE =
   'independent re-derivation returned the same results';
+/** Agreement on the figures where the two queries projected different columns. */
+const CROSS_CHECK_AGREE_SHAPE_NOTE =
+  'independent re-derivation returned the same figures, over different columns';
 const CROSS_CHECK_DISAGREE_NOTE = 'results differ — treat with care';
 /** Rows the cross-check query may return — matches what the answer stored. */
 const CROSS_CHECK_ROW_LIMIT = STORED_ROWS_CAP;
@@ -169,6 +178,7 @@ export class ProjectsService implements OnModuleInit {
           `- ${t} (sandbox: ${s.name}; datasource: ${s.datasourceKind ?? 'unknown'} ${s.datasourceId ?? ''})`,
       ),
     );
+    const joinHints = joinHintBlock(sandboxes);
     const visualLines = (project.visualizations ?? []).map(
       (v) =>
         `- ${v.id} — "${v.title}" v${this.visuals.currentVersion(v)} (from the answer at ${v.sourceMessageAt})`,
@@ -208,6 +218,7 @@ export class ProjectsService implements OnModuleInit {
               ? entityLines
               : ['(none — the sandboxes are empty)']),
             'Use describe_entity / sample_rows / run_readonly_sql to inspect and query them.',
+            ...(joinHints ? ['', joinHints] : []),
             '',
             'Interactive visuals in this project (id — title, current version):',
             ...(visualLines.length ? visualLines : ['(none yet)']),
@@ -452,6 +463,7 @@ export class ProjectsService implements OnModuleInit {
     if (!record?.input?.trim()) return undefined;
     try {
       if (record.truncated) {
+        this.logger.warn('Cross-check skipped: answer hit the row cap');
         return crossCheck(
           'error',
           "the answer's result set hit the row cap — a partial result cannot be compared",
@@ -459,6 +471,7 @@ export class ProjectsService implements OnModuleInit {
       }
       const context = await this.verifierContext(project);
       if (!context) {
+        this.logger.warn('Cross-check skipped: no datasource bound');
         return crossCheck(
           'error',
           'no datasource is bound to this project, so the query could not be re-run',
@@ -466,6 +479,7 @@ export class ProjectsService implements OnModuleInit {
       }
       const sql = await this.deriveIndependentSql(question, context);
       if (!sql) {
+        this.logger.warn('Cross-check skipped: verifier produced no usable query');
         return crossCheck(
           'error',
           'the independent check did not produce a usable query',
@@ -476,13 +490,31 @@ export class ProjectsService implements OnModuleInit {
         sql,
         CROSS_CHECK_ROW_LIMIT,
       );
-      const { match, reason } = compareResults(record.rows ?? [], result.rows);
-      return match
-        ? crossCheck('agree', CROSS_CHECK_AGREE_NOTE)
-        : crossCheck(
-            'disagree',
-            `${CROSS_CHECK_DISAGREE_NOTE} — ${reason || 'the independent query returned something else'}`,
-          );
+      // Width tolerance matters here: the verifier is told to project nothing
+      // beyond the question while the analysis agent selects the figures its
+      // answer needs, so equal facts routinely arrive at different widths.
+      const { match, reason, shapeDiffers } = compareResults(
+        record.rows ?? [],
+        result.rows,
+        { widthTolerant: true },
+      );
+      // Logged so the agree / shape / disagree / error split is measurable
+      // rather than anecdotal — `npm run eval` reports the same verdicts.
+      this.logger.log(
+        `Cross-check ${match ? (shapeDiffers ? 'agree (shape differs)' : 'agree') : 'disagree'}${
+          match ? '' : `: ${reason}`
+        }`,
+      );
+      if (match) {
+        return crossCheck(
+          'agree',
+          shapeDiffers ? CROSS_CHECK_AGREE_SHAPE_NOTE : CROSS_CHECK_AGREE_NOTE,
+        );
+      }
+      return crossCheck(
+        'disagree',
+        `${CROSS_CHECK_DISAGREE_NOTE} — ${reason || 'the independent query returned something else'}`,
+      );
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       this.logger.warn(`Cross-check failed: ${detail}`);
@@ -1254,6 +1286,7 @@ function toolDataRecord(
     error?: unknown;
     correctedSql?: unknown;
     truncated?: unknown;
+    warnings?: unknown;
   };
   // Show the statement that actually ran, so the answer and any visual cite
   // the repaired SQL rather than the one that failed.
@@ -1285,6 +1318,11 @@ function toolDataRecord(
   // Clipped either by the query's own row limit (flagged by the bridge) or by
   // what we keep in the transcript.
   const truncated = value.truncated === true || rows.length > STORED_ROWS_CAP;
+  // The guards ran in the tool, against the full result — keep their verdict
+  // with the rows it judged.
+  const warnings = Array.isArray(value.warnings)
+    ? value.warnings.map((w) => String(w)).filter(Boolean)
+    : [];
   return {
     tool,
     input,
@@ -1293,6 +1331,7 @@ function toolDataRecord(
     rowCount: rows.length,
     ...(truncated ? { truncated: true } : {}),
     ...(rationale ? { rationale } : {}),
+    ...(warnings.length ? { warnings } : {}),
   };
 }
 
@@ -1440,7 +1479,7 @@ function verifierSchema(sandboxes: SandboxSnapshot[]): string {
           VERIFIER_SAMPLE_VALUES,
         );
         const shown = samples.length ? ` [e.g. ${samples.join(', ')}]` : '';
-        return `${column.name} ${column.type}${shown}`;
+        return `${column.name} ${column.type}${shown}${referenceSuffix(column)}`;
       });
       const line = `${key}(${described.join(', ')})`;
       if (line.length > budget) return lines.join('\n');
@@ -1449,6 +1488,54 @@ function verifierSchema(sandboxes: SandboxSnapshot[]): string {
     }
   }
   return lines.join('\n');
+}
+
+/**
+ * ` -> teams.id` for a key column, so a schema line states where it joins.
+ * `~>` marks an inferred edge: the model should trust it less than a declared
+ * one and can confirm with describe_entity.
+ */
+function referenceSuffix(column: SandboxColumnSnapshot): string {
+  const reference = column.references;
+  if (!reference?.entity || !reference?.column) return '';
+  const arrow = reference.source === 'declared' ? '->' : '~>';
+  return ` ${arrow} ${reference.entity}.${reference.column}`;
+}
+
+/**
+ * The join graph, stated up front. Without it the assistant knows which
+ * entities exist but not which column joins to which, so it guesses — writing
+ * `goals.team_id` where the column is `goals.scoring_team_id`, which fails the
+ * query and ends in an answer naming a raw id instead of a team.
+ */
+function joinHintBlock(sandboxes: SandboxSnapshot[]): string {
+  const lines: string[] = [];
+  const seen = new Set<string>();
+  let budget = JOIN_HINT_CHARS;
+  for (const sandbox of sandboxes) {
+    for (const entity of sandbox.entities ?? []) {
+      for (const column of entity.columns ?? []) {
+        const suffix = referenceSuffix(column);
+        if (!suffix) continue;
+        const line = `- ${entity.key}.${column.name}${suffix}`;
+        if (seen.has(line)) continue;
+        if (line.length > budget) return joinHintHeader(lines);
+        budget -= line.length;
+        seen.add(line);
+        lines.push(line);
+      }
+    }
+  }
+  return joinHintHeader(lines);
+}
+
+function joinHintHeader(lines: string[]): string {
+  if (!lines.length) return '';
+  return [
+    'How these entities join (-> declared by the datasource, ~> inferred from',
+    'naming; join on these columns rather than guessing a key name):',
+    ...lines,
+  ].join('\n');
 }
 
 /** Parse a model's JSON reply, tolerating a markdown fence around it. */

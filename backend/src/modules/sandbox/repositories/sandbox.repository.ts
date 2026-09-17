@@ -14,6 +14,18 @@ export interface SandboxColumnSnapshot {
   sampleValues?: string[];
   /** Catalog comment for the column, when the datasource exposes one. */
   description?: string;
+  /**
+   * Where this column joins, when it is a key into another sandbox entity.
+   * The model is otherwise told which columns exist but never which one joins
+   * to which, and guesses — writing `goals.team_id` for `goals.scoring_team_id`.
+   * `declared` comes from the datasource's own constraints, `inferred` from
+   * naming, so the model knows which to trust.
+   */
+  references?: {
+    entity: string;
+    column: string;
+    source: 'declared' | 'inferred';
+  };
 }
 
 export interface SandboxEntitySnapshot {
