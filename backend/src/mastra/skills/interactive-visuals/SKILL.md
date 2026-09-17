@@ -72,6 +72,23 @@ data structure whether the visual is shown full-size, as a dashboard tile, or
 downloaded standalone — build tiles, the main chart, and any detail table from
 that one structure so they can never disagree.
 
+Rules that keep the script correct against real result sets:
+
+- **Each entry is a separate result set with its own columns.** Never
+  concatenate rows across entries (`qti.data.flatMap(d => d.rows)` mixes
+  incompatible schemas and produces `undefined` fields, `NaN` totals, and
+  empty charts). Select the result set whose columns match what you are
+  rendering, by column name:
+  `const rec = window.qti.data.find(r => (r.columns || []).includes('player'));`
+  A KPI computed from one result set and a chart from another is fine — but
+  each must read from the result set that actually carries its columns.
+- **Coerce numerics explicitly.** SQL drivers often return numbers as strings
+  (`"4"`, `"82.5"`). Wrap every numeric field in `Number(...)` before math,
+  and skip rows where the needed field is missing or not finite
+  (`Number.isFinite`) so one odd row cannot poison a total or an axis scale.
+- **Guard the empty case.** If the selected result set is missing or has no
+  rows, render a short "no data" message instead of NaN or a blank chart.
+
 Data can be refreshed after the visual is built by re-running the stored SQL,
 without regenerating your code. Call `window.qti.onRefresh(render)` with the
 same function (or an equivalent) you use for the initial render, so that when
