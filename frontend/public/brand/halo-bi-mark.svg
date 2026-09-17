@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="Halo BI">
+  <rect x="100" y="100" width="824" height="824" rx="185" ry="185" fill="#1c1c1c" />
+  <g fill="none" stroke="#ffffff" stroke-linecap="butt" stroke-linejoin="miter">
+    <!-- halo ring -->
+    <path stroke-width="40" d="M527.9 723.6 A230 230 0 1 0 496.1 723.6 L512 699 Z" />
+    <!-- BI, set inside the halo -->
+    <g stroke-width="26" transform="translate(432,430)">
+      <path d="M13 0 V160 M13 0 H53 A40 40 0 0 1 53 80 H13 M13 80 H60 A40 40 0 0 1 60 160 H13" />
+      <path d="M147 0 V160" />
+    </g>
+  </g>
+</svg>

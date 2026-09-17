@@ -22,8 +22,10 @@
     "productName": "Questions to Insights",
     "artifactName": "Questions-to-Insights-${version}-${os}-${arch}.${ext}",
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "build"
     },
+    "icon": "build/icon.png",
     "files": [
       "dist/frontend/**",
       "electron/**",
@@ -40,7 +42,11 @@
       }
     ],
     "mac": {
-      "category": "public.app-category.productivity"
+      "category": "public.app-category.productivity",
+      "icon": "build/icon.png"
+    },
+    "win": {
+      "icon": "build/icon.png"
     }
   },
   "prettier": {
