@@ -70,6 +70,7 @@ export class DatasourcesController {
   async inventory(
     @Param('id') id: string,
     @Query('refresh') refresh?: string,
+    @Query('cachedOnly') cachedOnly?: string,
   ): Promise<{
     ok: boolean;
     message?: string;
@@ -78,6 +79,13 @@ export class DatasourcesController {
     cached?: boolean;
   }> {
     try {
+      if (cachedOnly === 'true') {
+        // Snapshot-or-nothing: the caller decides whether to pay for a live walk.
+        const snapshot = await this.datasources.cachedInventory(id);
+        return snapshot
+          ? { ok: true, ...snapshot }
+          : { ok: true, cached: false };
+      }
       const result = await this.datasources.inventory(id, refresh === 'true');
       return { ok: true, ...result };
     } catch (err) {

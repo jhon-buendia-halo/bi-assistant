@@ -107,3 +107,31 @@ describe('DatasourcesService inventory cache', () => {
     expect(inventoryCache.delete).toHaveBeenCalledWith('ds-1');
   });
 });
+
+describe('DatasourcesService.cachedInventory', () => {
+  it('returns the stored snapshot without touching the connector', async () => {
+    const { service, databricks } = build({
+      catalogs,
+      fetchedAt: '2024-01-01T00:00:00.000Z',
+    });
+
+    const result = await service.cachedInventory('ds-1');
+
+    expect(result).toEqual({
+      catalogs,
+      fetchedAt: '2024-01-01T00:00:00.000Z',
+      cached: true,
+    });
+    expect(databricks.inventory).not.toHaveBeenCalled();
+  });
+
+  it('returns null instead of walking a datasource with no snapshot', async () => {
+    const { service, databricks, inventoryCache } = build(null);
+
+    const result = await service.cachedInventory('ds-1');
+
+    expect(result).toBeNull();
+    expect(databricks.inventory).not.toHaveBeenCalled();
+    expect(inventoryCache.save).not.toHaveBeenCalled();
+  });
+});

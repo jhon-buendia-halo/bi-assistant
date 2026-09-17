@@ -1,5 +1,6 @@
 import {
   Component,
+  OnDestroy,
   OnInit,
   computed,
   inject,
@@ -7,6 +8,7 @@ import {
   output,
   signal,
 } from '@angular/core';
+import { Subscription } from 'rxjs';
 import {
   LucideAngularModule,
   ChevronRight,
@@ -16,6 +18,7 @@ import {
   FolderTree,
   Loader2,
   Lock,
+  Play,
   RefreshCw,
   Search,
   Table2,
@@ -44,7 +47,7 @@ import { ToastService } from '../../../../core/toast/toast.service';
   templateUrl: './catalog-browser.html',
   styleUrl: './catalog-browser.scss',
 })
-export class CatalogBrowser implements OnInit {
+export class CatalogBrowser implements OnInit, OnDestroy {
   readonly ChevronRight = ChevronRight;
   readonly CircleCheck = CircleCheck;
   readonly CircleMinus = CircleMinus;
@@ -52,6 +55,7 @@ export class CatalogBrowser implements OnInit {
   readonly FolderTree = FolderTree;
   readonly Loader2 = Loader2;
   readonly Lock = Lock;
+  readonly Play = Play;
   readonly RefreshCw = RefreshCw;
   readonly Search = Search;
   readonly Table2 = Table2;
@@ -64,6 +68,14 @@ export class CatalogBrowser implements OnInit {
   private readonly toast = inject(ToastService);
 
   readonly loading = signal(true);
+  /**
+   * A datasource is picked but its inventory has not been requested yet. The
+   * first pull waits for the user so a slow datasource (a cold Databricks
+   * warehouse) never blocks picking a different one.
+   */
+  readonly awaitingChoice = signal(false);
+  /** In-flight inventory request, cancelled when the datasource changes. */
+  private inventorySub: Subscription | null = null;
   readonly datasources = signal<Datasource[]>([]);
   readonly datasourceId = signal('');
   readonly error = signal<string | null>(null);
@@ -168,7 +180,15 @@ export class CatalogBrowser implements OnInit {
           );
         }
         this.datasourceId.set(selected.id);
-        this.loadInventory(selected.id);
+        // With a real choice to make, never open a live connection before the
+        // user has settled on a datasource: a cached snapshot renders straight
+        // away, otherwise the picker waits for an explicit load. A single
+        // datasource leaves nothing to choose, so it loads as before.
+        if (editing || datasources.length === 1) {
+          this.loadInventory(selected.id);
+        } else {
+          this.loadCachedInventory(selected.id);
+        }
       },
       error: (err) => {
         this.error.set(
@@ -181,6 +201,9 @@ export class CatalogBrowser implements OnInit {
 
   changeDatasource(id: string): void {
     if (!id || id === this.datasourceId()) return;
+    // Switching is an explicit intent: drop whatever is still loading and
+    // pull the newly picked datasource straight away.
+    this.cancelInventoryRequest();
     this.datasourceId.set(id);
     this.catalogs.set([]);
     this.fetchedAt.set(null);
@@ -188,7 +211,25 @@ export class CatalogBrowser implements OnInit {
     this.expanded.set(new Set());
     this.inclusionService.included.set(new Set());
     this.selectionService.clear();
+    this.error.set(null);
+    this.awaitingChoice.set(false);
     this.loadInventory(id);
+  }
+
+  /** Pull the inventory for the datasource the user settled on. */
+  loadSelected(): void {
+    const id = this.datasourceId();
+    if (!id || this.loading()) return;
+    this.awaitingChoice.set(false);
+    this.loadInventory(id);
+  }
+
+  /** Abandon a slow pull and go back to the picker. */
+  cancelLoad(): void {
+    if (!this.loading()) return;
+    this.cancelInventoryRequest();
+    this.loading.set(false);
+    this.awaitingChoice.set(true);
   }
 
   /** Re-read the inventory from the datasource, bypassing the cached snapshot. */
@@ -206,10 +247,49 @@ export class CatalogBrowser implements OnInit {
     return isNaN(date.getTime()) ? '' : date.toLocaleString();
   });
 
-  private loadInventory(id: string, refresh = false): void {
+  /**
+   * Show the stored snapshot if the backend already has one; otherwise fall
+   * back to the picker so nothing is read until the user asks for it.
+   */
+  private loadCachedInventory(id: string): void {
+    this.cancelInventoryRequest();
     this.loading.set(true);
     this.error.set(null);
-    this.api.getInventory(id, { refresh }).subscribe({
+    this.inventorySub = this.api
+      .getInventory(id, { cachedOnly: true })
+      .subscribe({
+        next: (res) => {
+          if (res.ok && res.catalogs) {
+            this.catalogs.set(res.catalogs);
+            this.fetchedAt.set(res.fetchedAt ?? null);
+            this.cached.set(true);
+          } else {
+            this.awaitingChoice.set(true);
+          }
+          this.loading.set(false);
+        },
+        error: () => {
+          // A failed probe is not worth an error banner — offer the load.
+          this.awaitingChoice.set(true);
+          this.loading.set(false);
+        },
+      });
+  }
+
+  private cancelInventoryRequest(): void {
+    this.inventorySub?.unsubscribe();
+    this.inventorySub = null;
+  }
+
+  ngOnDestroy(): void {
+    this.cancelInventoryRequest();
+  }
+
+  private loadInventory(id: string, refresh = false): void {
+    this.cancelInventoryRequest();
+    this.loading.set(true);
+    this.error.set(null);
+    this.inventorySub = this.api.getInventory(id, { refresh }).subscribe({
       next: (res) => {
         if (res.ok) {
           this.catalogs.set(res.catalogs ?? []);

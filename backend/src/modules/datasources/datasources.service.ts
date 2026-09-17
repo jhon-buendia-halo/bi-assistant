@@ -122,6 +122,28 @@ export class DatasourcesService {
     return { catalogs, fetchedAt, cached: false };
   }
 
+  /**
+   * The stored snapshot only — never touches the datasource. Null when nothing
+   * is cached, so callers can offer a load instead of blocking on a cold
+   * warehouse.
+   */
+  async cachedInventory(
+    id: string,
+  ): Promise<{
+    catalogs: CatalogInfo[];
+    fetchedAt: string;
+    cached: true;
+  } | null> {
+    await this.get(id);
+    const cached = await this.inventoryCache.get(id);
+    if (!cached) return null;
+    return {
+      catalogs: cached.catalogs,
+      fetchedAt: cached.fetchedAt,
+      cached: true,
+    };
+  }
+
   async sampleRows(
     id: string,
     entity: string,
