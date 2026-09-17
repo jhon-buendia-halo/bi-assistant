@@ -1,23 +1,31 @@
 name: Build desktop installers
 
 # Installers are built on demand only: Actions → Build desktop installers → Run
-# workflow (pick which platforms and which ref), or by pushing a v* tag by hand.
-# Merges never build automatically — they only bump the version (see
+# workflow (tick the platforms you want and pick a ref), or by pushing a v* tag
+# by hand. Merges never build automatically — they only bump the version (see
 # version-on-merge.yml), so any build can be pointed at the tag you want.
+#
+# Each platform is an independent checkbox, so a run costs one runner per ticked
+# box. Separate runs accumulate on the same release: publishing uploads with
+# --clobber, so building macOS today and Windows tomorrow leaves both attached.
 on:
   workflow_dispatch:
     inputs:
-      targets:
-        description: Which installers to build
-        type: choice
-        required: true
-        default: all
-        options:
-          - all
-          - macos-all
-          - macos-arm64
-          - macos-x64
-          - windows-x64
+      windows_x64:
+        description: Windows x64 installer (.exe)
+        type: boolean
+        required: false
+        default: true
+      macos_arm64:
+        description: macOS Apple Silicon installer (.dmg)
+        type: boolean
+        required: false
+        default: true
+      macos_x64:
+        description: macOS Intel installer (.dmg)
+        type: boolean
+        required: false
+        default: true
       ref:
         description: "Git ref to build — tag, branch or SHA (empty = branch this run was started from)"
         type: string
@@ -46,7 +54,9 @@ jobs:
       - name: Resolve targets and ref
         id: select
         env:
-          TARGETS: ${{ inputs.targets || 'all' }}
+          WINDOWS_X64: ${{ inputs.windows_x64 }}
+          MACOS_ARM64: ${{ inputs.macos_arm64 }}
+          MACOS_X64: ${{ inputs.macos_x64 }}
           INPUT_REF: ${{ inputs.ref }}
         run: |
           set -euo pipefail
@@ -57,14 +67,27 @@ jobs:
             {"id":"macos-x64","name":"macOS Intel","os":"macos-15-intel","target":"mac","format":"dmg","arch":"x64","artifact":"questions-to-insights-macos-x64","installer":"frontend/release/*.dmg"}
           ]'
 
-          case "$TARGETS" in
-            all)        selected=$(jq -c '.' <<<"$all") ;;
-            macos-all)  selected=$(jq -c '[.[] | select(.target == "mac")]' <<<"$all") ;;
-            *)          selected=$(jq -c --arg id "$TARGETS" '[.[] | select(.id == $id)]' <<<"$all") ;;
-          esac
+          # A tag push carries no inputs at all, which means "build everything".
+          if [ -z "${WINDOWS_X64}${MACOS_ARM64}${MACOS_X64}" ]; then
+            wanted='["windows-x64","macos-arm64","macos-x64"]'
+          else
+            wanted='[]'
+            if [ "$WINDOWS_X64" = "true" ]; then
+              wanted=$(jq -c '. + ["windows-x64"]' <<<"$wanted")
+            fi
+            if [ "$MACOS_ARM64" = "true" ]; then
+              wanted=$(jq -c '. + ["macos-arm64"]' <<<"$wanted")
+            fi
+            if [ "$MACOS_X64" = "true" ]; then
+              wanted=$(jq -c '. + ["macos-x64"]' <<<"$wanted")
+            fi
+          fi
+
+          selected=$(jq -c --argjson want "$wanted" \
+            '[.[] | select(.id as $id | $want | index($id))]' <<<"$all")
 
           if [ "$(jq 'length' <<<"$selected")" -eq 0 ]; then
-            echo "No build target matches '$TARGETS'" >&2
+            echo "No installer selected — tick at least one platform." >&2
             exit 1
           fi
 
