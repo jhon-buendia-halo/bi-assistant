@@ -1,6 +1,6 @@
 {
   "name": "frontend",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "main": "electron/main.cjs",
   "scripts": {
     "ng": "ng",
@@ -20,6 +20,7 @@
   "build": {
     "appId": "com.halopowered.questions-to-insights",
     "productName": "Questions to Insights",
+    "artifactName": "Questions-to-Insights-${version}-${os}-${arch}.${ext}",
     "directories": {
       "output": "release"
     },

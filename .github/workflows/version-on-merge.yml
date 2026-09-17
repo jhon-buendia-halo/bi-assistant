@@ -1,0 +1,94 @@
+name: Version on merge
+
+# Every merge into the default branch bumps the app version and tags it, so any
+# later build carries that version in its installer filename
+# (Questions-to-Insights-<version>-<os>-<arch>.dmg/.exe).
+# Building installers is a separate, manual step: Actions → Build desktop
+# installers → Run workflow, with the tag as "ref".
+on:
+  push:
+    branches:
+      - implement-empty-layout
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# Serialize releases so two quick merges cannot race on the version commit.
+concurrency:
+  group: version-on-merge
+  cancel-in-progress: false
+
+jobs:
+  version:
+    name: Bump version and tag
+    runs-on: ubuntu-latest
+    # This workflow pushes its own commit; never react to that commit.
+    if: "!startsWith(github.event.head_commit.message, 'chore(release):')"
+    outputs:
+      version: ${{ steps.bump.outputs.version }}
+      tag: ${{ steps.bump.outputs.tag }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Decide bump level and write new version
+        id: bump
+        run: |
+          set -euo pipefail
+
+          previous_tag=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)
+          if [ -n "$previous_tag" ]; then
+            range="$previous_tag..HEAD"
+          else
+            range="HEAD"
+          fi
+
+          subjects=$(git log --format=%s "$range")
+          bodies=$(git log --format=%B "$range")
+
+          if printf '%s' "$bodies" | grep -qE 'BREAKING[ -]CHANGE' \
+            || printf '%s' "$subjects" | grep -qE '^[a-zA-Z]+(\([^)]*\))?!:'; then
+            level=major
+          elif printf '%s' "$subjects" | grep -qE '^feat(\([^)]*\))?:'; then
+            level=minor
+          else
+            level=patch
+          fi
+          echo "Commits in $range → $level bump"
+
+          new_version=$(cd frontend && npm version "$level" --no-git-tag-version --allow-same-version)
+          new_version=${new_version#v}
+          (cd backend && npm version "$new_version" --no-git-tag-version --allow-same-version >/dev/null)
+
+          echo "version=$new_version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$new_version" >> "$GITHUB_OUTPUT"
+
+      - name: Commit, tag and push
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/package.json frontend/package-lock.json \
+                  backend/package.json backend/package-lock.json
+          git commit -m "chore(release): ${{ steps.bump.outputs.tag }}"
+          git tag -a "${{ steps.bump.outputs.tag }}" -m "${{ steps.bump.outputs.tag }}"
+          git push origin "HEAD:${{ github.ref_name }}"
+          git push origin "${{ steps.bump.outputs.tag }}"
+
+      - name: Summary
+        run: |
+          {
+            echo "### Version ${{ steps.bump.outputs.tag }} tagged"
+            echo
+            echo "Build installers: **Actions → Build desktop installers → Run workflow**,"
+            echo "set \`ref\` to \`${{ steps.bump.outputs.tag }}\` and pick the platforms you want."
+          } >> "$GITHUB_STEP_SUMMARY"

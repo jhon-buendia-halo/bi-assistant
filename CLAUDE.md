@@ -25,6 +25,17 @@ This is a **desktop application**: Electron shell with the Angular app as render
 - `npm run electron:dev` — points the window at `ng serve` on http://localhost:4200 for live reload (run `npm start` first; backend spawns from `backend/dist` if built).
 - `npm run electron:dist` — full package via electron-builder: stages backend (`scripts/stage-backend.sh` → `backend/release-staging` with dist + prod-only node_modules), bundles it as `extraResources`, output in `frontend/release/`. Note: `extraResources` needs the explicit second `node_modules` mapping in `package.json` — electron-builder silently drops node_modules otherwise.
 
+### Versioning and releases
+
+`frontend/package.json`'s `version` is the single source of truth (electron-builder reads it; `backend/package.json` is kept in lockstep). Installer filenames carry it via `build.artifactName`: `Questions-to-Insights-<version>-<os>-<arch>.<ext>` (e.g. `Questions-to-Insights-0.1.1-mac-arm64.dmg`, `…-win-x64.exe`).
+
+**Versioning is automatic, building is manual.**
+
+- `.github/workflows/version-on-merge.yml` runs on every push to the default branch (`implement-empty-layout`, plus `main`): it derives the bump from the Conventional Commit subjects since the last `v*` tag (`BREAKING CHANGE` or `type!:` → major, `feat:` → minor, otherwise patch), writes the new version into both `package.json` + lockfiles, commits `chore(release): vX.Y.Z` and pushes the tag. It builds nothing; the run summary tells you which tag to build. Its own bump commit is filtered out of the trigger (`if: !startsWith(head_commit.message, 'chore(release):')`) and a `version-on-merge` concurrency group serializes back-to-back merges.
+- `.github/workflows/build-desktop.yml` builds installers on demand: **Actions → Build desktop installers → Run workflow**, with three inputs — `targets` (`all`, `macos-all`, `macos-arm64`, `macos-x64`, `windows-x64`), `ref` (the tag/branch/SHA to build, usually the `vX.Y.Z` the merge produced) and `publish` (attach the installers to that tag's GitHub release). A hand-pushed `v*` tag also triggers a full build + publish. The `prepare` job turns `targets` into the job matrix (`{"include":[…]}`), so a single platform costs a single runner.
+- The default branch must allow pushes from `github-actions[bot]` (version commit + tag). Protected-branch rules need a bypass for it, otherwise the version job fails at push.
+- Tags pushed by `GITHUB_TOKEN` do not trigger other workflows — that is what keeps merge-time tagging from kicking off builds.
+
 ### Architecture: feature-based
 
 All frontend code follows this feature-based structure. Every feature gets its own folder under `src/app/features/` containing everything that belongs to it (pages, components, services, models, store, routes).
