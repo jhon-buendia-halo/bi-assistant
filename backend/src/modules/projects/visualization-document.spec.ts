@@ -121,61 +121,6 @@ describe('frame select bridge', () => {
   });
 });
 
-describe('tile mode document', () => {
-  const context = {
-    question: 'How do claims trend?',
-    answer: 'Claims rose steadily through the year.',
-    entities: ['main.health.claims'],
-    projectName: 'Claims',
-    version: 2,
-    generatedAt: '2024-01-01T00:00:00.000Z',
-    data: [
-      {
-        tool: 'run_readonly_sql',
-        input: 'SELECT month, n FROM main.health.claims',
-        columns: ['month', 'n'],
-        rows: [{ month: '2024-01', n: 5 }],
-        rowCount: 1,
-      },
-    ],
-  };
-
-  it('defaults to the full frame', () => {
-    const document = sandboxedVisualizationDocument(bundle, context);
-
-    expect(document).toContain('<main class="qti-frame">');
-    expect(document).not.toContain('class="qti-frame qti-frame--tile"');
-    expect(document).toContain('Analysis');
-    expect(document).toContain('Data used');
-    expect(document).toContain(context.question);
-  });
-
-  it('omits question, entities, takeaway, analysis, provenance and footer', () => {
-    const document = sandboxedVisualizationDocument(bundle, context, {
-      mode: 'tile',
-    });
-
-    expect(document).toContain('class="qti-frame qti-frame--tile"');
-    expect(document).toContain(bundle.title);
-    expect(document).not.toContain(context.question);
-    expect(document).not.toContain('class="qti-entities"');
-    expect(document).not.toContain('class="qti-takeaway"');
-    expect(document).not.toContain('class="qti-prose"');
-    expect(document).not.toContain('class="qti-provenance"');
-    expect(document).not.toContain('class="qti-footer"');
-  });
-
-  it('still keeps the runtime-error hook and select script in a tile', () => {
-    const document = sandboxedVisualizationDocument(bundle, context, {
-      mode: 'tile',
-    });
-
-    expect(document).toContain(BLANK_RENDER_MESSAGE);
-    expect(document).toContain(FRAME_SELECT_SCRIPT);
-    expect(document).toContain("type: 'visual-select'");
-  });
-});
-
 describe('injected qti-data block', () => {
   const chartData = [
     {
@@ -268,19 +213,6 @@ describe('spec-rendered documents', () => {
     expect(document).toContain(
       '<div class="qti-visual-body">\n<div id="qti-chart-root"></div>',
     );
-  });
-
-  it('keeps the tile structurally unchanged — root div inside the visual body', () => {
-    const document = sandboxedVisualizationDocument(specBundle, undefined, {
-      mode: 'tile',
-    });
-
-    expect(document).toContain('class="qti-frame qti-frame--tile"');
-    expect(document).toContain(
-      '<div class="qti-visual-body">\n<div id="qti-chart-root"></div>',
-    );
-    expect(document).toContain('id="qti-spec"');
-    expect(document).toContain('/* runtime */');
   });
 
   it('references the runtime as a file in the stored, script-src self document', () => {

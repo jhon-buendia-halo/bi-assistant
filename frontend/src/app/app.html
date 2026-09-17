@@ -541,7 +541,6 @@
           [projectId]="activeProject()!.id"
           [visualization]="activeVisualization()"
           [visualizations]="activeProject()!.visualizations ?? []"
-          [pins]="activeProject()!.dashboard?.pins ?? []"
           [loading]="generatingVisualProject() === activeProject()!.id"
           [error]="visualizationError()"
           [downloading]="
@@ -553,7 +552,6 @@
           (revertVersion)="revertVisualVersion($event)"
           (visualRefreshed)="onVisualRefreshed($event)"
           (dataPointSelected)="onDataPointSelected($event)"
-          (pinsChanged)="onPinsChanged()"
         />
       } @else {
         <app-entity-details class="min-h-0 flex-1 overflow-y-auto" />

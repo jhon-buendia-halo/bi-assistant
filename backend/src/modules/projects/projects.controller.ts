@@ -14,7 +14,6 @@ import type {
   InteractiveVisualization,
   MessageFeedback,
 } from './entities/project.entity';
-import type { DashboardFilter } from './chart-heuristic';
 import type { Response } from 'express';
 
 @Controller('projects')
@@ -303,47 +302,6 @@ export class ProjectsController {
       const message = err instanceof Error ? err.message : String(err);
       return { ok: false, message };
     }
-  }
-
-  @Post(':id/dashboard/pins')
-  async pinVisualization(
-    @Param('id') id: string,
-    @Body() body: { visualId?: string },
-  ): Promise<{ ok: boolean; message: string; project?: ProjectDoc }> {
-    try {
-      const project = await this.projectsService.pinVisualization(
-        id,
-        body?.visualId ?? '',
-      );
-      return { ok: true, message: 'Visual pinned to dashboard', project };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return { ok: false, message };
-    }
-  }
-
-  @Delete(':id/dashboard/pins/:visualId')
-  async unpinVisualization(
-    @Param('id') id: string,
-    @Param('visualId') visualId: string,
-  ): Promise<{ ok: boolean; message: string; project?: ProjectDoc }> {
-    try {
-      const project = await this.projectsService.unpinVisualization(
-        id,
-        visualId,
-      );
-      return { ok: true, message: 'Visual unpinned from dashboard', project };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return { ok: false, message };
-    }
-  }
-
-  @Get(':id/dashboard')
-  getDashboard(
-    @Param('id') id: string,
-  ): Promise<{ tiles: InteractiveVisualization[]; filters: DashboardFilter[] }> {
-    return this.projectsService.getDashboard(id);
   }
 
   @Post(':id/messages')

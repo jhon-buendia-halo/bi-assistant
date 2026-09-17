@@ -4,7 +4,6 @@ import {
   effect,
   inject,
   signal,
-  viewChild,
 } from '@angular/core';
 import { forkJoin, retry, timer } from 'rxjs';
 import {
@@ -160,8 +159,6 @@ export class App {
   readonly visualizationError = signal<string | null>(null);
   /** Latest data mark clicked inside a visual; drives the chat follow-up chips. */
   readonly selectedDataPoint = signal<DataPointSelection | null>(null);
-  /** Lets tailor/repair/revert/create flows refresh the dashboard if it's open. */
-  readonly visualPanel = viewChild(InteractiveVisualPanel);
 
   private readonly sandboxApi = inject(SandboxApiService);
   private readonly datasourcesApi = inject(DatasourcesApiService);
@@ -404,18 +401,6 @@ export class App {
       const meta = project.visualizations?.find((v) => v.id === event.visualId);
       if (meta) this.showVisualization(meta, event.version);
     });
-    this.refreshDashboardTiles();
-  }
-
-  /** The panel pinned or unpinned a visual — the project doc's pins changed. */
-  onPinsChanged(): void {
-    this.refreshActiveProject();
-  }
-
-  /** Re-fetch dashboard tiles if the panel's dashboard grid is open. A pinned
-   * visual can change out from under it after a tailor/repair/revert/create. */
-  private refreshDashboardTiles(): void {
-    this.visualPanel()?.refreshDashboard();
   }
 
   selectVisualVersion(version: number): void {
@@ -437,7 +422,6 @@ export class App {
             return;
           }
           this.toast.success(result.message);
-          this.refreshDashboardTiles();
         },
         error: (err) =>
           this.toast.error(err?.error?.message ?? 'Backend unreachable'),
@@ -451,7 +435,6 @@ export class App {
   onVisualRefreshed(result: ProjectActionResult): void {
     if (this.applyVisualResult(result)) {
       this.toast.success(result.message);
-      this.refreshDashboardTiles();
     }
   }
 
@@ -566,7 +549,6 @@ export class App {
           this.activeVisualization.set(result.visualization);
         }
         this.toast.success(result.message);
-        this.refreshDashboardTiles();
       },
       error: (err) => {
         this.generatingVisualProject.set(null);

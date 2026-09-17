@@ -403,12 +403,11 @@ export class VisualizationService {
     };
   }
 
-  /** Assemble the sandboxed document for the panel (`mode` — full or dashboard tile). */
+  /** Assemble the sandboxed document for the panel. */
   async load(
     project: ProjectDoc,
     visualId: string,
     version?: number,
-    mode: 'full' | 'tile' = 'full',
   ): Promise<InteractiveVisualization> {
     const meta = this.find(project, visualId);
     const target = version ?? this.currentVersion(meta);
@@ -422,31 +421,8 @@ export class VisualizationService {
       document: sandboxedVisualizationDocument(
         bundle,
         await this.contextFor(filesystem, project, meta, target),
-        { mode },
       ),
     };
-  }
-
-  /**
-   * The same bounded chart records injected into a version's `qti-data` (the
-   * trimmed rows a tile actually renders from) — exposed so the dashboard can
-   * derive its filter bar from exactly what the tiles show, without
-   * re-running the designer or reassembling the document.
-   */
-  async chartRecords(
-    project: ProjectDoc,
-    visualId: string,
-    version?: number,
-  ): Promise<ChartDataRecord[]> {
-    const meta = this.find(project, visualId);
-    const target = version ?? this.currentVersion(meta);
-    const { filesystem } = await this.workspaceFor(project);
-    const answer = project.messages.find(
-      (m) => m.role === 'assistant' && m.at === meta.sourceMessageAt,
-    );
-    const data =
-      (await this.readVersionData(filesystem, meta, target)) ?? answer?.data;
-    return data?.length ? visualizationData(data).records : [];
   }
 
   /** Portable HTML/CSS/JS zip of one version. */

@@ -350,142 +350,6 @@ describe('InteractiveVisualPanel data refresh', () => {
   });
 });
 
-const dashboardUrl = `${API_BASE_URL}/projects/project-1/dashboard`;
-
-describe('InteractiveVisualPanel dashboard', () => {
-  let fixture: ComponentFixture<InteractiveVisualPanel>;
-  let panel: InteractiveVisualPanel;
-  let http: HttpTestingController;
-
-  beforeEach(async () => {
-    await TestBed.configureTestingModule({
-      imports: [InteractiveVisualPanel],
-      providers: [provideHttpClient(), provideHttpClientTesting()],
-    }).compileComponents();
-    fixture = TestBed.createComponent(InteractiveVisualPanel);
-    panel = fixture.componentInstance;
-    http = TestBed.inject(HttpTestingController);
-    fixture.componentRef.setInput('projectId', project.id);
-    fixture.componentRef.setInput('visualization', visual());
-    fixture.detectChanges();
-  });
-
-  afterEach(() => http.verify());
-
-  it('fetches and renders tiles when toggled to the dashboard view', () => {
-    panel.setViewMode('dashboard');
-    fixture.detectChanges();
-
-    const req = http.expectOne(dashboardUrl);
-    expect(req.request.method).toBe('GET');
-    req.flush({
-      tiles: [visual({ id: 'visual-2', title: 'Denials by payer' })],
-    });
-    fixture.detectChanges();
-
-    expect(panel.dashboardTiles().length).toBe(1);
-    expect(
-      fixture.nativeElement.querySelectorAll('iframe').length,
-    ).toBeGreaterThan(0);
-  });
-
-  it('shows the empty-dashboard hint when nothing is pinned', () => {
-    panel.setViewMode('dashboard');
-    fixture.detectChanges();
-    http.expectOne(dashboardUrl).flush({ tiles: [] });
-    fixture.detectChanges();
-
-    expect(fixture.nativeElement.textContent).toContain(
-      'Pin visuals to build a dashboard',
-    );
-  });
-
-  it('unpin calls the API and refetches the dashboard', () => {
-    panel.setViewMode('dashboard');
-    fixture.detectChanges();
-    http
-      .expectOne(dashboardUrl)
-      .flush({ tiles: [visual({ id: 'visual-2', title: 'Denials by payer' })] });
-    fixture.detectChanges();
-
-    const pinsChanged: void[] = [];
-    panel.pinsChanged.subscribe(() => pinsChanged.push(undefined));
-
-    panel.unpinTile('visual-2');
-
-    const req = http.expectOne(
-      `${API_BASE_URL}/projects/project-1/dashboard/pins/visual-2`,
-    );
-    expect(req.request.method).toBe('DELETE');
-    req.flush({ ok: true, message: 'Visual unpinned from dashboard', project });
-
-    expect(pinsChanged.length).toBe(1);
-    http.expectOne(dashboardUrl).flush({ tiles: [] });
-    expect(panel.dashboardTiles()).toEqual([]);
-  });
-
-  it('reflects pinned state on the single-view pin button', () => {
-    fixture.componentRef.setInput('pins', ['visual-1']);
-    fixture.detectChanges();
-
-    expect(panel.isPinned('visual-1')).toBeTrue();
-    const pinButton = fixture.nativeElement.querySelector(
-      'button[aria-label="Unpin from dashboard"]',
-    );
-    expect(pinButton).not.toBeNull();
-  });
-
-  it('shows the unpinned pin button and pins on click', () => {
-    expect(panel.isPinned('visual-1')).toBeFalse();
-    const pinButton: HTMLButtonElement = fixture.nativeElement.querySelector(
-      'button[aria-label="Pin to dashboard"]',
-    );
-    expect(pinButton).not.toBeNull();
-
-    pinButton.click();
-
-    const req = http.expectOne(
-      `${API_BASE_URL}/projects/project-1/dashboard/pins`,
-    );
-    expect(req.request.method).toBe('POST');
-    expect(req.request.body).toEqual({ visualId: 'visual-1' });
-    req.flush({ ok: true, message: 'Visual pinned to dashboard', project });
-  });
-
-  it('refreshing a tile calls the refresh endpoint and refetches the dashboard', () => {
-    panel.setViewMode('dashboard');
-    fixture.detectChanges();
-    http
-      .expectOne(dashboardUrl)
-      .flush({ tiles: [visual({ id: 'visual-2', title: 'Denials by payer' })] });
-    fixture.detectChanges();
-
-    panel.refreshTile('visual-2');
-
-    const req = http.expectOne(
-      `${API_BASE_URL}/projects/project-1/visualizations/visual-2/refresh`,
-    );
-    expect(req.request.method).toBe('POST');
-    req.flush({ ok: true, message: 'Refreshed data for version 1', project });
-
-    expect(panel.refreshingTileId()).toBeNull();
-    http.expectOne(dashboardUrl).flush({ tiles: [] });
-    expect(panel.dashboardTiles()).toEqual([]);
-  });
-
-  it('ignores visual-error postMessages from tiles while in dashboard view', () => {
-    panel.setViewMode('dashboard');
-    fixture.detectChanges();
-    http.expectOne(dashboardUrl).flush({ tiles: [] });
-
-    panel.onFrameMessage(errorMessage('boom from a tile'));
-
-    expect(panel.runtimeError()).toBeNull();
-    expect(panel.repairing()).toBeFalse();
-    http.expectNone(repairUrl);
-  });
-});
-
 function visualSelect(
   value: string,
   extra: { label?: string; column?: string } = {},
@@ -493,7 +357,7 @@ function visualSelect(
   return { data: { type: 'visual-select', value, ...extra } } as MessageEvent;
 }
 
-describe('InteractiveVisualPanel dashboard filters', () => {
+describe('InteractiveVisualPanel data point selection', () => {
   let fixture: ComponentFixture<InteractiveVisualPanel>;
   let panel: InteractiveVisualPanel;
   let http: HttpTestingController;
@@ -513,87 +377,7 @@ describe('InteractiveVisualPanel dashboard filters', () => {
 
   afterEach(() => http.verify());
 
-  function openDashboard(
-    filters: { column: string; values: string[] }[],
-    tiles = [visual({ id: 'visual-2', title: 'Denials by payer' })],
-  ): void {
-    panel.setViewMode('dashboard');
-    fixture.detectChanges();
-    http.expectOne(dashboardUrl).flush({ tiles, filters });
-    fixture.detectChanges();
-  }
-
-  it('renders the filter bar from the API-provided filters', () => {
-    openDashboard([{ column: 'payer', values: ['Aetna', 'Cigna'] }]);
-
-    expect(panel.dashboardFilters()).toEqual([
-      { column: 'payer', values: ['Aetna', 'Cigna'] },
-    ]);
-    const button = fixture.nativeElement.querySelector(
-      'button[aria-label="Filter by payer"]',
-    );
-    expect(button).not.toBeNull();
-  });
-
-  it('hides the filter bar when there are no filterable columns', () => {
-    openDashboard([]);
-
-    expect(
-      fixture.nativeElement.querySelector('button[aria-label^="Filter by"]'),
-    ).toBeNull();
-  });
-
-  it('selecting a filter value posts qti-filter to every tile iframe', () => {
-    openDashboard([{ column: 'payer', values: ['Aetna', 'Cigna'] }]);
-    const postToTile = spyOn<any>(panel, 'postToTile');
-
-    panel.toggleFilterValue('payer', 'Aetna');
-    fixture.detectChanges();
-
-    expect(panel.activeFilters()).toEqual({ payer: ['Aetna'] });
-    expect(postToTile).toHaveBeenCalled();
-    const [, message] = postToTile.calls.mostRecent().args;
-    expect(message).toEqual({
-      type: 'qti-filter',
-      filters: [{ column: 'payer', values: ['Aetna'] }],
-    });
-  });
-
-  it('clear filters empties active filters and broadcasts an empty array', () => {
-    openDashboard([{ column: 'payer', values: ['Aetna', 'Cigna'] }]);
-    panel.toggleFilterValue('payer', 'Aetna');
-    fixture.detectChanges();
-    const postToTile = spyOn<any>(panel, 'postToTile');
-
-    panel.clearFilters();
-    fixture.detectChanges();
-
-    expect(panel.activeFilters()).toEqual({});
-    const [, message] = postToTile.calls.mostRecent().args;
-    expect(message).toEqual({ type: 'qti-filter', filters: [] });
-  });
-
-  it('a dashboard visual-select with a column toggles the filter instead of a follow-up', () => {
-    openDashboard([{ column: 'payer', values: ['Aetna'] }]);
-    const selections: unknown[] = [];
-    panel.dataPointSelected.subscribe((s) => selections.push(s));
-
-    panel.onFrameMessage(visualSelect('Aetna', { column: 'payer' }));
-
-    expect(panel.activeFilters()).toEqual({ payer: ['Aetna'] });
-    expect(selections).toEqual([]);
-  });
-
-  it('ignores a dashboard visual-select without a column', () => {
-    openDashboard([{ column: 'payer', values: ['Aetna'] }]);
-
-    panel.onFrameMessage(visualSelect('Aetna'));
-
-    expect(panel.activeFilters()).toEqual({});
-  });
-
-  it('still emits dataPointSelected for single-view clicks, column included', () => {
-    // Default view mode is 'single'.
+  it('emits dataPointSelected for single-view clicks, column included', () => {
     const selections: { value: string; label?: string; column?: string }[] = [];
     panel.dataPointSelected.subscribe((s) => selections.push(s));
 
@@ -604,18 +388,12 @@ describe('InteractiveVisualPanel dashboard filters', () => {
     ]);
   });
 
-  it('resets active filters when the project changes', () => {
-    openDashboard([{ column: 'payer', values: ['Aetna'] }]);
-    panel.toggleFilterValue('payer', 'Aetna');
-    expect(panel.activeFilters()).toEqual({ payer: ['Aetna'] });
+  it('emits dataPointSelected for clicks without a column', () => {
+    const selections: { value: string; label?: string; column?: string }[] = [];
+    panel.dataPointSelected.subscribe((s) => selections.push(s));
 
-    fixture.componentRef.setInput('projectId', 'project-2');
-    fixture.detectChanges();
+    panel.onFrameMessage(visualSelect('Aetna'));
 
-    expect(panel.activeFilters()).toEqual({});
-    // Still in dashboard view, so the project switch also refetches — drain it.
-    http
-      .expectOne(`${API_BASE_URL}/projects/project-2/dashboard`)
-      .flush({ tiles: [], filters: [] });
+    expect(selections).toEqual([{ value: 'Aetna', label: undefined }]);
   });
 });
