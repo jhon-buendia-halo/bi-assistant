@@ -202,6 +202,84 @@ describe('ProjectChat trust UX', () => {
     expect(stream.calls.mostRecent().args[5]).toBeTrue();
   });
 
+  it('narrates how the answer was worked out, step by step', async () => {
+    const el = await render({
+      ...answer,
+      reasoning: [
+        {
+          step: 1,
+          rationale:
+            'There is no direct cost-per-member column, so I first checked how claims are keyed to members.',
+          tool: 'describe_table',
+          rowCount: 12,
+        },
+        {
+          step: 2,
+          rationale: 'Then I summed paid amounts per member for the plan year.',
+          tool: 'run_readonly_sql',
+          rowCount: 1240,
+        },
+        {
+          step: 3,
+          rationale: 'I tried splitting by plan tier, but that column is absent.',
+          tool: 'run_readonly_sql',
+          error: 'column plan_tier not found',
+        },
+      ],
+    });
+
+    expect(el.textContent).toContain('How I worked this out (3 steps)');
+    expect(el.textContent).toContain(
+      'There is no direct cost-per-member column, so I first checked how claims are keyed to members.',
+    );
+    expect(el.textContent).toContain('12 rows');
+    expect(el.textContent).toContain('1,240 rows');
+    expect(el.textContent).toContain('failed — column plan_tier not found');
+  });
+
+  it('shows no reasoning block when the answer carries none', async () => {
+    const el = await render(answer);
+    expect(el.textContent).not.toContain('How I worked this out');
+  });
+
+  it('explains each query in the data provenance list', async () => {
+    const el = await render({
+      ...answer,
+      data: [
+        {
+          ...answer.data![0],
+          rationale: 'Counting the claims keyed to a member first.',
+        },
+      ],
+    });
+    expect(el.textContent).toContain(
+      'Counting the claims keyed to a member first.',
+    );
+  });
+
+  it('shows the rationale under the tool while the turn streams', async () => {
+    const el = await render(answer);
+    const api = TestBed.inject(ProjectsApiService);
+    spyOn(api, 'streamMessage').and.callFake((_id, _content, handlers) => {
+      handlers.onTool?.({
+        name: 'run_readonly_sql',
+        rationale: 'Checking how claims are keyed to members.',
+      });
+      return Promise.resolve();
+    });
+
+    fixture.componentInstance.draft.set('What is the cost per member?');
+    fixture.componentInstance.send();
+    fixture.detectChanges();
+
+    expect(el.textContent).toContain('run_readonly_sql');
+    expect(el.textContent).toContain(
+      'Checking how claims are keyed to members.',
+    );
+
+    fixture.componentInstance.stop();
+  });
+
   it('shows the work collected before a clarification', async () => {
     const el = await render({
       role: 'assistant',

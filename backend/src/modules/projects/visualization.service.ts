@@ -27,6 +27,7 @@ import {
   InteractiveVisualization,
   ProjectDoc,
   ProjectVisualization,
+  ReasoningStep,
   ToolDataRecord,
 } from './entities/project.entity';
 
@@ -653,12 +654,20 @@ export class VisualizationService {
     // (and the injected window.qti.data) report exactly the rows the visual
     // could have been built from.
     const block = data?.length ? visualizationData(data) : undefined;
+    // Older transcripts predate the persisted `reasoning` field: fall back to
+    // deriving it from the rationale each tool call already carried. Always
+    // from the source answer's records — the trail explains how the answer
+    // was reached, not the latest refreshed rows.
+    const reasoning = answer?.reasoning?.length
+      ? answer.reasoning
+      : deriveReasoning(answer?.data);
     return {
       question: question?.content,
       answer: answer?.content,
       data,
       chartData: block?.records,
       entities: answer?.entities,
+      ...(reasoning.length ? { reasoning } : {}),
       projectName: project.name,
       version,
       generatedAt: generatedAt ?? entry?.refreshedAt ?? entry?.createdAt ?? meta.createdAt,
@@ -744,6 +753,7 @@ export class VisualizationService {
           return {
             tool: record.tool,
             input: record.input,
+            ...(record.rationale ? { rationale: record.rationale } : {}),
             error: datasourceError ?? 'unable to resolve a datasource',
           };
         }
@@ -763,6 +773,9 @@ export class VisualizationService {
           return {
             tool: record.tool,
             input: result.correctedSql ?? record.input,
+            // The rationale explains why the query ran; a refresh re-runs the
+            // same query, so the explanation carries over unchanged.
+            ...(record.rationale ? { rationale: record.rationale } : {}),
             columns,
             rows: rows.slice(0, REFRESH_STORED_ROWS_CAP),
             rowCount: rows.length,
@@ -771,7 +784,12 @@ export class VisualizationService {
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           this.logger.warn(`Refresh failed for a query: ${message}`);
-          return { tool: record.tool, input: record.input, error: message };
+          return {
+            tool: record.tool,
+            input: record.input,
+            ...(record.rationale ? { rationale: record.rationale } : {}),
+            error: message,
+          };
         }
       }),
     );
@@ -780,12 +798,18 @@ export class VisualizationService {
     const question = answer ? this.findQuestion(project, answer) : undefined;
     const generatedAt = new Date().toISOString();
     const block = refreshed.length ? visualizationData(refreshed) : undefined;
+    // Same fallback as contextFor: the reasoning trail explains how the answer
+    // was reached, so the regenerated document keeps it after a refresh.
+    const reasoning = answer?.reasoning?.length
+      ? answer.reasoning
+      : deriveReasoning(answer?.data);
     const context: VisualContext = {
       question: question?.content,
       answer: answer?.content,
       data: refreshed,
       chartData: block?.records,
       entities: answer?.entities,
+      ...(reasoning.length ? { reasoning } : {}),
       projectName: project.name,
       version,
       generatedAt,
@@ -986,6 +1010,24 @@ export function visualizationData(records: ToolDataRecord[]): {
   };
 }
 
+/**
+ * Fallback for transcripts recorded before `ChatMessage.reasoning` was
+ * persisted: rebuild the same shape from the rationale each tool call
+ * already carried, in the order the calls ran.
+ */
+function deriveReasoning(data: ToolDataRecord[] | undefined): ReasoningStep[] {
+  return (data ?? [])
+    .filter((record) => !!record.rationale)
+    .map((record, index) => ({
+      step: index + 1,
+      rationale: record.rationale as string,
+      tool: record.tool,
+      input: record.input,
+      rowCount: record.rowCount,
+      error: record.error,
+    }));
+}
+
 /** Human-readable companion file: question, takeaway, full answer, sources. */
 function answerMarkdown(
   bundle: { title: string; description: string },
@@ -995,6 +1037,18 @@ function answerMarkdown(
   if (context.question) lines.push(`**Question:** ${context.question}`, '');
   lines.push('## Takeaway', '', bundle.description, '');
   if (context.answer) lines.push('## Analysis', '', context.answer, '');
+  if (context.reasoning?.length) {
+    lines.push('## How this was worked out', '');
+    context.reasoning.forEach((step) => {
+      const outcome = step.error
+        ? `failed — ${step.error}`
+        : step.rowCount !== undefined
+          ? `${step.rowCount.toLocaleString('en-US')} row${step.rowCount === 1 ? '' : 's'}`
+          : undefined;
+      lines.push(`${step.step}. ${step.rationale}${outcome ? ` (${outcome})` : ''}`);
+    });
+    lines.push('');
+  }
   if (context.data?.length) {
     lines.push('## Data used', '');
     context.data.forEach((record, index) => {

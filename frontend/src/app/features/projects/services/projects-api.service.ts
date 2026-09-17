@@ -13,6 +13,41 @@ import {
   VisualEvent,
 } from '../models/project.model';
 
+/** A tool call announced mid-stream, with the assistant's reason for it. */
+export interface ToolCallEvent {
+  name: string;
+  /** Plain-English reason the assistant reached for this tool. */
+  rationale?: string;
+}
+
+/**
+ * `tool` frames carry `{"name":…,"rationale":…}`. Older backends send the bare
+ * tool name, so anything that is not a named tool call is read as that name.
+ */
+export function parseToolEvent(content: string): ToolCallEvent {
+  const raw = content.trim() || 'tool';
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') {
+      const { name, rationale } = parsed as {
+        name?: unknown;
+        rationale?: unknown;
+      };
+      if (typeof name === 'string' && name.trim()) {
+        return {
+          name: name.trim(),
+          ...(typeof rationale === 'string' && rationale.trim()
+            ? { rationale: rationale.trim() }
+            : {}),
+        };
+      }
+    }
+  } catch {
+    // Not JSON — the old contract, a plain tool name.
+  }
+  return { name: raw };
+}
+
 @Injectable({ providedIn: 'root' })
 export class ProjectsApiService {
   private readonly http = inject(HttpClient);
@@ -211,7 +246,8 @@ export class ProjectsApiService {
     handlers: {
       onReasoning?: (delta: string) => void;
       onText?: (delta: string) => void;
-      onTool?: (name: string) => void;
+      onTool?: (call: ToolCallEvent) => void;
+      /** Summary of one finished call, including why it was run. */
       onToolResult?: (summary: ToolDataRecord) => void;
       onVisualUpdated?: (event: VisualEvent) => void;
       onDone?: (project: Project) => void;
@@ -276,7 +312,7 @@ export class ProjectsApiService {
                 handlers.onText?.(event.content ?? '');
                 break;
               case 'tool':
-                handlers.onTool?.(event.content ?? 'tool');
+                handlers.onTool?.(parseToolEvent(event.content ?? 'tool'));
                 break;
               case 'tool-result':
                 try {

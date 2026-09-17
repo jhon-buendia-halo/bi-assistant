@@ -42,6 +42,7 @@ import {
   DeepAnalysisStatus,
   MessageFeedback,
   Project,
+  ReasoningStep,
   ToolDataRecord,
   VisualEvent,
 } from '../../models/project.model';
@@ -65,6 +66,8 @@ export function whyPrompt(selection: DataPointSelection): string {
 /** One tool call shown in the Thinking block, enriched when its result lands. */
 interface ToolActivity {
   name: string;
+  /** Why the assistant ran this call, in its own words. */
+  rationale?: string;
   input?: string;
   rowCount?: number;
   error?: string;
@@ -315,9 +318,12 @@ export class ProjectChat implements OnDestroy {
           if (this.activeStream !== controller) return;
           this.reasoning.set(this.reasoning() + delta);
         },
-        onTool: (name) => {
+        onTool: (call) => {
           if (this.activeStream !== controller) return;
-          this.toolCalls.set([...this.toolCalls(), { name }]);
+          this.toolCalls.set([
+            ...this.toolCalls(),
+            { name: call.name, rationale: call.rationale },
+          ]);
           this.scrollToBottom();
         },
         onToolResult: (summary) => {
@@ -333,6 +339,9 @@ export class ProjectChat implements OnDestroy {
             ) {
               calls[i] = {
                 ...call,
+                // The call frame usually carries the reason; take the
+                // result's when it did not.
+                rationale: call.rationale ?? summary.rationale,
                 input: summary.input,
                 rowCount: summary.rowCount,
                 error: summary.error,
@@ -614,6 +623,17 @@ export class ProjectChat implements OnDestroy {
   /** Tooltip: the backend's note, or the verdict when it sent none. */
   crossCheckTitle(check: CrossCheck): string {
     return check.note?.trim() || this.crossCheckLabel(check);
+  }
+
+  /**
+   * Muted outcome shown after one step of "How I worked this out": what the
+   * step returned, or why it failed. Empty when the step reported neither.
+   */
+  reasoningOutcome(step: ReasoningStep): string {
+    if (step.error) return `failed — ${step.error}`;
+    if (step.rowCount === undefined) return '';
+    const rows = step.rowCount.toLocaleString('en-US');
+    return `${rows} row${step.rowCount === 1 ? '' : 's'}`;
   }
 
   /** Short label for a persisted data record under an answer. */

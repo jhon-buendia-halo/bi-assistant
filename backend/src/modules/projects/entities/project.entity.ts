@@ -18,6 +18,28 @@ export interface ToolDataRecord {
    */
   truncated?: boolean;
   error?: string;
+  /**
+   * Why the assistant ran this call, in its own plain business language —
+   * the human reasoning behind the SQL, captured as a required tool argument
+   * so it always exists alongside the statement it explains.
+   */
+  rationale?: string;
+}
+
+/** One step of the assistant's plain-language route from question to answer. */
+export interface ReasoningStep {
+  /** 1-based position in the turn. */
+  step: number;
+  /** Model-authored: what this step checks and why it moves toward the answer. */
+  rationale: string;
+  /** Tool that carried the step out. */
+  tool: string;
+  /** The statement (or entity) the step used. */
+  input?: string;
+  /** Rows the step returned, when it succeeded. */
+  rowCount?: number;
+  /** Error text, when it failed. */
+  error?: string;
 }
 
 export interface ChatMessage {
@@ -59,6 +81,13 @@ export interface ChatMessage {
    * executed and its result set compared with this answer's.
    */
   crossCheck?: CrossCheck;
+  /**
+   * How the assistant reasoned its way from the question to this answer: one
+   * step per data-gathering call that carried a rationale. Assembled at
+   * persist time from `data` — the prose is the model's, the ordering and the
+   * outcomes are ours, so the trail can never claim a query that never ran.
+   */
+  reasoning?: ReasoningStep[];
   /**
    * Present when a deep-analysis job produced a report. The message content is
    * the report's executive summary; the full markdown lives in the workspace.

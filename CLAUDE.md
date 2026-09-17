@@ -9,7 +9,11 @@ backend/    NestJS API
 
 ## Model usage: plan vs. execute
 
-For planning purposes, Fable creates the plan. For execution, Opus is used once the execution plan is well defined by Fable.
+For planning purposes, Fable creates the plan.
+
+For execution, do not pin a fixed model. Once the execution plan is well defined, the session LLM picks whichever model version it judges best for the work at hand (capability vs. speed vs. cost for that plan) and runs the plan with it.
+
+Execute by fanning out: split the plan into independent units of work and dispatch them to parallel subagents (all agent calls for independent units go out in a single message so they run concurrently). Keep sequential only what genuinely depends on a previous result. The session LLM chooses the model per subagent the same way — cheap/fast models for mechanical or narrow-scope units, stronger models for units needing design judgment or cross-file reasoning.
 
 ## Frontend — Angular (Electron desktop app)
 

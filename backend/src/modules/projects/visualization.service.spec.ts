@@ -37,11 +37,16 @@ import {
   storedVisualizationDocument,
 } from './visualization-document';
 import { getSandboxToolServices } from '../../mastra/tool-services';
+import { createZip } from './zip-archive';
 import {
   VisualizationService,
   visualizationData,
 } from './visualization.service';
-import type { ProjectDoc, ToolDataRecord } from './entities/project.entity';
+import type {
+  ProjectDoc,
+  ReasoningStep,
+  ToolDataRecord,
+} from './entities/project.entity';
 
 const bundle = {
   title: 'Claims by month',
@@ -226,6 +231,136 @@ describe('VisualizationService truncation markers', () => {
       chartRows?: { shown: number; truncatedFrom: number };
     };
     expect(context.chartRows).toEqual({ shown: 100, truncatedFrom: 250 });
+  });
+});
+
+describe('VisualizationService contextFor reasoning', () => {
+  beforeEach(() => {
+    (storedVisualizationDocument as jest.Mock).mockClear();
+  });
+
+  const reasoningOf = (calls: unknown[][]) =>
+    (calls[0][1] as { reasoning?: ReasoningStep[] }).reasoning;
+
+  it('uses the persisted reasoning field when present, ignoring per-record rationale', async () => {
+    const { service } = build();
+    const project = projectWithRows(20, 20);
+    const persisted: ReasoningStep[] = [
+      {
+        step: 1,
+        rationale: 'Persisted rationale.',
+        tool: 'run_readonly_sql',
+        rowCount: 20,
+      },
+    ];
+    project.messages[1].reasoning = persisted;
+    project.messages[1].data![0].rationale = 'Should be ignored.';
+
+    await service.create(project, undefined);
+
+    const calls = (storedVisualizationDocument as jest.Mock).mock
+      .calls as unknown[][];
+    expect(reasoningOf(calls)).toEqual(persisted);
+  });
+
+  it('derives reasoning from data records carrying a rationale when the field is absent, in order', async () => {
+    const { service } = build();
+    const project = projectWithRows(20, 20);
+    project.messages[1].data = [
+      { tool: 'run_readonly_sql', input: 'SELECT 1' }, // no rationale: skipped
+      {
+        tool: 'run_readonly_sql',
+        input: 'SELECT 2',
+        rationale: 'First, sized up total volume.',
+        rowCount: 12,
+      },
+      {
+        tool: 'run_readonly_sql',
+        input: 'SELECT 3',
+        rationale: 'Then tried a regional split.',
+        error: 'boom',
+      },
+    ];
+
+    await service.create(project, undefined);
+
+    const calls = (storedVisualizationDocument as jest.Mock).mock
+      .calls as unknown[][];
+    expect(reasoningOf(calls)).toEqual([
+      {
+        step: 1,
+        rationale: 'First, sized up total volume.',
+        tool: 'run_readonly_sql',
+        input: 'SELECT 2',
+        rowCount: 12,
+        error: undefined,
+      },
+      {
+        step: 2,
+        rationale: 'Then tried a regional split.',
+        tool: 'run_readonly_sql',
+        input: 'SELECT 3',
+        rowCount: undefined,
+        error: 'boom',
+      },
+    ]);
+  });
+
+  it('omits reasoning entirely when no records carry a rationale', async () => {
+    const { service } = build();
+
+    await service.create(projectWithRows(20, 20), undefined);
+
+    const calls = (storedVisualizationDocument as jest.Mock).mock
+      .calls as unknown[][];
+    expect(reasoningOf(calls)).toBeUndefined();
+  });
+});
+
+describe('VisualizationService.download answer.md reasoning section', () => {
+  beforeEach(() => {
+    (createZip as jest.Mock).mockClear();
+  });
+
+  it('lists the reasoning steps before the data-used section', async () => {
+    const { service } = build();
+    const project = projectWithRows(20, 20);
+    project.messages[1].data = [
+      {
+        tool: 'run_readonly_sql',
+        input: 'SELECT month, n FROM main.health.claims',
+        rationale: 'Checked totals by month.',
+        rowCount: 20,
+      },
+    ];
+
+    await service.download(withVisual(project), 'visual-1');
+
+    const files = (createZip as jest.Mock).mock.calls[0][0] as {
+      name: string;
+      data: string;
+    }[];
+    const answerFile = files.find((f) => f.name === 'answer.md');
+    expect(answerFile).toBeDefined();
+    const md = answerFile!.data;
+    expect(md).toContain('## How this was worked out');
+    expect(md).toContain('1. Checked totals by month. (20 rows)');
+    expect(md.indexOf('## How this was worked out')).toBeLessThan(
+      md.indexOf('## Data used'),
+    );
+  });
+
+  it('omits the section when no step carries a rationale', async () => {
+    const { service } = build();
+
+    await service.download(withVisual(projectWithRows(20, 20)), 'visual-1');
+
+    const files = (createZip as jest.Mock).mock.calls[0][0] as {
+      name: string;
+      data: string;
+    }[];
+    const md = files.find((f) => f.name === 'answer.md')!.data;
+    expect(md).not.toContain('How this was worked out');
   });
 });
 

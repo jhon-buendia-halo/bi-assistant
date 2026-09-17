@@ -35,6 +35,7 @@ import {
   MessageFeedback,
   ProjectDoc,
   ProjectVisualization,
+  ReasoningStep,
   ToolDataRecord,
   VisualEvent,
 } from './entities/project.entity';
@@ -65,6 +66,8 @@ const CROSS_CHECK_AGREE_NOTE =
 const CROSS_CHECK_DISAGREE_NOTE = 'results differ — treat with care';
 /** Rows the cross-check query may return — matches what the answer stored. */
 const CROSS_CHECK_ROW_LIMIT = STORED_ROWS_CAP;
+/** Longest rationale kept per step — a sentence or two, never an essay. */
+const RATIONALE_CHARS = 400;
 
 export type StreamEvent = {
   type:
@@ -916,10 +919,12 @@ export class ProjectsService implements OnModuleInit {
       input,
       await this.agentOptions(project, trimmed),
     );
+    const reasoning = reasoningTrail(toolRecords(result));
     project.messages.push({
       role: 'assistant',
       content: (result.text ?? '').trim(),
       at: new Date().toISOString(),
+      ...(reasoning ? { reasoning } : {}),
     });
     const updated = await this.repository.update(id, {
       messages: project.messages,
@@ -1002,7 +1007,16 @@ export class ProjectsService implements OnModuleInit {
           if (payload.toolCallId) {
             pendingCalls.set(payload.toolCallId, payload.args ?? {});
           }
-          emit({ type: 'tool', content: payload.toolName ?? 'tool' });
+          // The client shows the reason before the result arrives, so the
+          // rationale travels with the call, not with its rows.
+          const rationale = statedRationale((payload.args ?? {})['rationale']);
+          emit({
+            type: 'tool',
+            content: JSON.stringify({
+              name: payload.toolName ?? 'tool',
+              ...(rationale ? { rationale } : {}),
+            }),
+          });
         } else if (chunk.type === 'tool-result') {
           const payload = chunk.payload as {
             toolCallId?: string;
@@ -1057,6 +1071,7 @@ export class ProjectsService implements OnModuleInit {
                 input: record.input,
                 rowCount: record.rowCount,
                 error: record.error,
+                rationale: record.rationale,
               }),
             });
           }
@@ -1093,6 +1108,7 @@ export class ProjectsService implements OnModuleInit {
     const fresh = await this.get(id);
     const messages = fresh.messages;
     const entities = sourceEntities(data);
+    const reasoning = reasoningTrail(data);
     if (clarification) {
       // The turn stops here, but the schema/sample work done before the
       // question is real work — keep it on the card instead of dropping it.
@@ -1103,6 +1119,7 @@ export class ProjectsService implements OnModuleInit {
         clarification,
         ...(data.length ? { data } : {}),
         ...(entities.length ? { entities } : {}),
+        ...(reasoning ? { reasoning } : {}),
       });
     } else if (text.trim() || visualEvent) {
       const interpretation = interpretationLine(data, entities);
@@ -1120,6 +1137,7 @@ export class ProjectsService implements OnModuleInit {
         ...(data.length ? { data } : {}),
         ...(entities.length ? { entities } : {}),
         ...(interpretation ? { interpretation } : {}),
+        ...(reasoning ? { reasoning } : {}),
         ...((await this.matchesVerifiedQuery(project, data))
           ? { verified: true }
           : {}),
@@ -1307,8 +1325,16 @@ function toolDataRecord(
         : typeof args['entity'] === 'string'
           ? args['entity']
           : undefined;
+  const rationale = statedRationale(args['rationale']);
   if (typeof value.error === 'string') {
-    return { tool, input, error: value.error };
+    // A step that failed still explained why it was attempted — keep it, the
+    // dead end is part of the route the assistant took.
+    return {
+      tool,
+      input,
+      error: value.error,
+      ...(rationale ? { rationale } : {}),
+    };
   }
   const rows = Array.isArray(value.rows)
     ? (value.rows as Record<string, unknown>[])
@@ -1326,7 +1352,47 @@ function toolDataRecord(
     rows: rows.slice(0, STORED_ROWS_CAP),
     rowCount: rows.length,
     ...(truncated ? { truncated: true } : {}),
+    ...(rationale ? { rationale } : {}),
   };
+}
+
+/**
+ * The reason the assistant gave for a call, as stored: flattened, trimmed and
+ * clipped. Anything that is not usable prose becomes nothing at all.
+ */
+function statedRationale(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const flat = value.replace(/\s+/g, ' ').trim();
+  if (!flat) return undefined;
+  return flat.length > RATIONALE_CHARS
+    ? `${flat.slice(0, RATIONALE_CHARS - 1)}\u2026`
+    : flat;
+}
+
+/**
+ * Records captured from a non-streamed turn. The stream path reads tool
+ * chunks one by one; `generate` hands them back in a batch, wrapped or flat
+ * depending on the provider, so both shapes are accepted.
+ */
+function toolRecords(result: unknown): ToolDataRecord[] {
+  const entries = (result as { toolResults?: unknown })?.toolResults;
+  if (!Array.isArray(entries)) return [];
+  const records: ToolDataRecord[] = [];
+  for (const entry of entries) {
+    const payload = ((entry as { payload?: unknown })?.payload ?? entry) as {
+      toolName?: string;
+      name?: string;
+      args?: Record<string, unknown>;
+      result?: unknown;
+    };
+    const record = toolDataRecord(
+      payload.toolName ?? payload.name ?? 'tool',
+      payload.args ?? {},
+      payload.result,
+    );
+    if (record) records.push(record);
+  }
+  return records;
 }
 
 /** Successful SQL runs behind an answer, oldest first. */
@@ -1364,6 +1430,31 @@ function interpretationLine(
   const queries = `${runs.length} quer${runs.length === 1 ? 'y' : 'ies'}`;
   const over = entities.length ? ` over ${entities.join(', ')}` : '';
   return `Computed from ${queries}${over} — ${rows} row${rows === 1 ? '' : 's'} analyzed.`;
+}
+
+/**
+ * The assistant's plain-language route from the question to the answer: one
+ * step per captured call that said why it ran, in the order they ran. Built
+ * at persist time like `interpretationLine` — the prose is the model's, the
+ * ordering and the outcomes are ours, so a step can never claim a query that
+ * never happened.
+ */
+function reasoningTrail(
+  data: ToolDataRecord[] | undefined,
+): ReasoningStep[] | undefined {
+  const steps: ReasoningStep[] = [];
+  for (const record of data ?? []) {
+    if (!record.rationale) continue;
+    steps.push({
+      step: steps.length + 1,
+      rationale: record.rationale,
+      tool: record.tool,
+      ...(record.input ? { input: record.input } : {}),
+      ...(record.rowCount === undefined ? {} : { rowCount: record.rowCount }),
+      ...(record.error ? { error: record.error } : {}),
+    });
+  }
+  return steps.length ? steps : undefined;
 }
 
 /**

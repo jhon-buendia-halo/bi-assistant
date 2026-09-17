@@ -15,6 +15,18 @@ export interface ToolDataRecord {
    * storage kept fewer rows than the tool returned.
    */
   truncated?: boolean;
+  /** Plain-language reason the assistant ran this call. */
+  rationale?: string;
+}
+
+/** One step of the assistant's plain-language route from question to answer. */
+export interface ReasoningStep {
+  step: number;
+  rationale: string;
+  tool: string;
+  input?: string;
+  rowCount?: number;
+  error?: string;
 }
 
 export interface ChatMessage {
@@ -46,6 +58,8 @@ export interface ChatMessage {
    * run and its results compared with this answer's.
    */
   crossCheck?: CrossCheck;
+  /** How the assistant worked its way from the question to this answer. */
+  reasoning?: ReasoningStep[];
   /**
    * Present when a deep-analysis job produced a report. The content is the
    * report's executive summary; the full markdown is downloadable.
