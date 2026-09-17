@@ -45,18 +45,45 @@ export interface VisualToolResult {
   description: string;
 }
 
+/**
+ * Mirrors `ToolDataRecord` (backend/src/modules/projects/entities) without
+ * importing it — same pattern as `SandboxSnapshot`/`SqlRunResult`: this file
+ * has no Nest DI and must stay decoupled from feature-module types.
+ */
+export interface SandboxToolTurnRecord {
+  tool: string;
+  input?: string;
+  columns?: string[];
+  rows?: Record<string, unknown>[];
+  rowCount?: number;
+  truncated?: boolean;
+  error?: string;
+  rationale?: string;
+}
+
 export interface SandboxToolServices {
-  /** Create a visual for an answer in the project (latest answer if omitted). */
+  /**
+   * Create a visual for an answer in the project (latest answer if omitted).
+   * `turnRecords`, when present, are the SQL/rows the current chat turn has
+   * captured so far — appended to the visual's data alongside the source
+   * answer's own records.
+   */
   createVisual(
     projectId: string,
     sourceMessageAt: string | undefined,
     instruction: string | undefined,
+    turnRecords?: SandboxToolTurnRecord[],
   ): Promise<VisualToolResult>;
-  /** Produce a new version of an existing visual from a tailoring request. */
+  /**
+   * Produce a new version of an existing visual from a tailoring request.
+   * `turnRecords` are merged onto the visual's stored data the same way as
+   * `createVisual`.
+   */
   updateVisual(
     projectId: string,
     visualId: string,
     instruction: string,
+    turnRecords?: SandboxToolTurnRecord[],
   ): Promise<VisualToolResult>;
   getSandboxes(names: string[]): Promise<SandboxSnapshot[]>;
   sampleRows(

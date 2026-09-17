@@ -1,10 +1,20 @@
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
 import { getSandboxToolServices } from '../tool-services';
+import type { SandboxToolTurnRecord } from '../tool-services';
 
 /** requestContext keys for the visual tools. */
 export const PROJECT_ID_CONTEXT_KEY = 'project-id';
 export const ACTIVE_VISUAL_CONTEXT_KEY = 'active-visual-id';
+/**
+ * Holds a live reference to the current chat turn's captured SQL/rows
+ * (`ToolDataRecord[]`), set once per turn in `ProjectsService.streamMessage`
+ * before the model starts and mutated in place as tool results arrive — so a
+ * `create_visual`/`update_visual` call later in the same turn sees everything
+ * gathered so far. A fresh object is created per turn, so there is no
+ * leakage between turns or between projects.
+ */
+export const TURN_RECORDS_CONTEXT_KEY = 'turn-data-records';
 
 function contextString(
   requestContext: { get: (key: string) => unknown },
@@ -12,6 +22,14 @@ function contextString(
 ): string | undefined {
   const value = requestContext.get(key);
   return typeof value === 'string' && value ? value : undefined;
+}
+
+function contextRecords(
+  requestContext: { get: (key: string) => unknown },
+  key: string,
+): SandboxToolTurnRecord[] | undefined {
+  const value = requestContext.get(key);
+  return Array.isArray(value) ? (value as SandboxToolTurnRecord[]) : undefined;
 }
 
 export const createVisualTool = createTool({
@@ -36,11 +54,16 @@ export const createVisualTool = createTool({
   execute: async ({ sourceMessageAt, instruction }, { requestContext }) => {
     const projectId = contextString(requestContext, PROJECT_ID_CONTEXT_KEY);
     if (!projectId) return { error: 'No project in context' };
+    const turnRecords = contextRecords(
+      requestContext,
+      TURN_RECORDS_CONTEXT_KEY,
+    );
     try {
       return await getSandboxToolServices().createVisual(
         projectId,
         sourceMessageAt,
         instruction,
+        turnRecords,
       );
     } catch (err) {
       return { error: err instanceof Error ? err.message : String(err) };
@@ -73,11 +96,16 @@ export const updateVisualTool = createTool({
           'No visual is open and none was specified — ask which visual to change or create one with create_visual',
       };
     }
+    const turnRecords = contextRecords(
+      requestContext,
+      TURN_RECORDS_CONTEXT_KEY,
+    );
     try {
       return await getSandboxToolServices().updateVisual(
         projectId,
         target,
         instruction,
+        turnRecords,
       );
     } catch (err) {
       return { error: err instanceof Error ? err.message : String(err) };

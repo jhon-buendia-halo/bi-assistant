@@ -7,6 +7,12 @@ jest.mock('sanitize-html', () => ({
   __esModule: true,
   default: (html: string) => html,
 }));
+// The runtime is a large generated string; these specs only care that the
+// document ships it, so a marker stands in for it.
+jest.mock('./visual-runtime', () => ({
+  VISUAL_RUNTIME_FILENAME: 'qti-chart.js',
+  VISUAL_RUNTIME_SCRIPT: '/* runtime */',
+}));
 
 import {
   BLANK_RENDER_MESSAGE,
@@ -17,6 +23,8 @@ import {
   storedVisualizationDocument,
   VisualContext,
 } from './visualization-document';
+import { VISUAL_RUNTIME_FILENAME } from './visual-runtime';
+import type { VisualSpec } from './visual-spec';
 import type { ReasoningStep } from './entities/project.entity';
 
 const bundle = {
@@ -25,6 +33,26 @@ const bundle = {
   html: '<div id="chart"></div>',
   css: '.chart { color: red; }',
   javascript: 'document.getElementById("chart").textContent = "hi";',
+};
+
+const spec: VisualSpec = {
+  spec: 1,
+  chart: {
+    form: 'bar',
+    select: ['payer', 'claims'],
+    x: 'payer',
+    y: 'claims',
+  },
+};
+
+/** The same visual, spec-rendered: synthetic body, empty sheet, bootstrap. */
+const specBundle = {
+  title: 'Claims by payer',
+  description: 'Aetna leads.',
+  html: '<div id="qti-chart-root"></div>',
+  css: '',
+  javascript: 'window.qtiChart.mount();',
+  spec,
 };
 
 describe('sandboxed document blank-render watchdog', () => {
@@ -196,6 +224,101 @@ describe('injected qti-data block', () => {
     expect(document).toContain(JSON.stringify(chartData));
     expect(document.indexOf('id="qti-data"')).toBeLessThan(
       document.indexOf(FRAME_SCRIPT_FILENAME),
+    );
+  });
+});
+
+describe('spec-rendered documents', () => {
+  const chartData = [
+    {
+      tool: 'run_readonly_sql',
+      columns: ['payer', 'claims'],
+      rows: [{ payer: 'Aetna', claims: 5 }],
+    },
+  ];
+
+  it('inlines the spec, the runtime and the bootstrap in the sandboxed document', () => {
+    const document = sandboxedVisualizationDocument(specBundle, { chartData });
+
+    expect(document).toContain(
+      `<script type="application/json" id="qti-spec">${JSON.stringify(spec)}</script>`,
+    );
+    expect(document).toContain('/* runtime */');
+    expect(document).toContain('window.qtiChart.mount();');
+    // Order: data → spec → error hook → frame bridge → runtime → bootstrap.
+    expect(document.indexOf('id="qti-data"')).toBeLessThan(
+      document.indexOf('id="qti-spec"'),
+    );
+    expect(document.indexOf('id="qti-spec"')).toBeLessThan(
+      document.indexOf(FRAME_SELECT_SCRIPT),
+    );
+    expect(document.indexOf(FRAME_SELECT_SCRIPT)).toBeLessThan(
+      document.indexOf('/* runtime */'),
+    );
+    expect(document.indexOf('/* runtime */')).toBeLessThan(
+      document.indexOf('window.qtiChart.mount();'),
+    );
+    // The frame still reports failures for a spec visual.
+    expect(document).toContain(BLANK_RENDER_MESSAGE);
+  });
+
+  it('renders the runtime mount point as the visual body', () => {
+    const document = sandboxedVisualizationDocument(specBundle);
+
+    expect(document).toContain(
+      '<div class="qti-visual-body">\n<div id="qti-chart-root"></div>',
+    );
+  });
+
+  it('keeps the tile structurally unchanged — root div inside the visual body', () => {
+    const document = sandboxedVisualizationDocument(specBundle, undefined, {
+      mode: 'tile',
+    });
+
+    expect(document).toContain('class="qti-frame qti-frame--tile"');
+    expect(document).toContain(
+      '<div class="qti-visual-body">\n<div id="qti-chart-root"></div>',
+    );
+    expect(document).toContain('id="qti-spec"');
+    expect(document).toContain('/* runtime */');
+  });
+
+  it('references the runtime as a file in the stored, script-src self document', () => {
+    const document = storedVisualizationDocument(specBundle, { chartData });
+
+    expect(document).toContain("script-src 'self'");
+    expect(document).toContain(`<script src="${VISUAL_RUNTIME_FILENAME}"></script>`);
+    expect(document).toContain('id="qti-spec"');
+    // Never inlined there: the CSP would block it.
+    expect(document).not.toContain('/* runtime */');
+    // Frame bridge → runtime → bootstrap (script.js).
+    expect(document.indexOf(FRAME_SCRIPT_FILENAME)).toBeLessThan(
+      document.indexOf(VISUAL_RUNTIME_FILENAME),
+    );
+    expect(document.indexOf(VISUAL_RUNTIME_FILENAME)).toBeLessThan(
+      document.indexOf('script.js'),
+    );
+  });
+
+  it('escapes a closing script tag inside the spec', () => {
+    const document = sandboxedVisualizationDocument({
+      ...specBundle,
+      spec: {
+        ...spec,
+        chart: { ...spec.chart, xLabel: '</script><script>alert(1)</script>' },
+      },
+    });
+
+    expect(document).not.toContain('"xLabel":"</script>');
+    expect(document).toContain('"xLabel":"<\\/script>');
+  });
+
+  it('ships no spec block or runtime for a freeform visual', () => {
+    expect(sandboxedVisualizationDocument(bundle)).not.toContain('id="qti-spec"');
+    expect(sandboxedVisualizationDocument(bundle)).not.toContain('/* runtime */');
+    expect(storedVisualizationDocument(bundle)).not.toContain('id="qti-spec"');
+    expect(storedVisualizationDocument(bundle)).not.toContain(
+      `<script src="${VISUAL_RUNTIME_FILENAME}"></script>`,
     );
   });
 });

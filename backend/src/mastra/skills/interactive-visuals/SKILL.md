@@ -1,11 +1,98 @@
 ---
 name: interactive-visuals
-description: Create a self-contained interactive visualization from a completed, data-grounded analysis answer for rendering inside the Questions to Insights project panel.
+description: Describe a completed, data-grounded analysis answer as a JSON chart spec (or, as a fallback, as a self-contained HTML/CSS/JS visual) for rendering inside the Questions to Insights project panel.
 ---
 
 # Interactive Visuals
 
 Turn the supplied question and answer into one focused visual explanation.
+
+When the request asks for a **spec**, that is all you return: a small JSON
+document. A fixed runtime draws it — axes, tooltips, legends, keyboard focus,
+click-to-follow-up, empty states, number formatting and dashboard filtering are
+already built and are not yours to write. You choose the form and the columns.
+
+The freeform HTML/CSS/JavaScript path further down is the fallback, used only
+when the request asks for a code bundle.
+
+## The spec
+
+```jsonc
+{
+  "spec": 1,
+  "kpis": [                                   // optional, max 4
+    { "label": "Total claims",                // short, title case
+      "select": ["month", "claims"],          // columns that identify the result set
+      "column": "claims",
+      "agg": "sum",                           // sum | avg | min | max | count | value
+      "format": "compact",                    // number | compact | percent | currency
+      "unit": "%" }                           // optional short suffix
+  ],
+  "chart": {                                  // required
+    "form": "line",                           // bar | line | scatter | heatmap | metric-cards | table | donut
+    "select": ["month", "claims"],
+    "x": "month",
+    "y": "claims",                            // or ["claims", "denials"] for several measures
+    "series": "payer",                        // splits into one series per value
+    "sort": { "by": "y", "dir": "desc" },
+    "topN": 8,
+    "stacked": false,
+    "labels": true,
+    "format": { "y": "compact" },
+    "xLabel": "Month",
+    "yLabel": "Claims"
+  },
+  "table": {                                  // optional detail table under the chart
+    "select": ["month", "claims"],
+    "columns": ["month", "claims"],           // omit for every column
+    "collapsed": true
+  }
+}
+```
+
+Rules:
+
+- **`select` picks the result set.** The `<data>` block is a list of separate
+  result sets, each with its own columns. `select` lists column names; the
+  runtime reads the first result set that contains all of them. A KPI from one
+  result set and a chart from another is fine — each names its own.
+- **Never invent a column.** Every `column`, `x`, `y`, `series` and table column
+  must appear verbatim in the result set its `select` resolves to. A spec that
+  names a column the data does not have is rejected and sent back to you.
+- **Measures must be numeric.** `y`, and every KPI `column` whose `agg` is not
+  `count`, must hold numbers in the supplied rows (numbers arriving as strings
+  are fine). `scatter` also needs a numeric `x`.
+- **`heatmap` needs `series`** — `x` and `series` are its two axes, `y` the
+  shaded value.
+- **Percent columns are already in percent units.** A `denial_rate` of `4.5`
+  means 4.5%; use `"format": "percent"` and never multiply by 100.
+- **More than 8 categories: set `topN`.** The runtime keeps the top N by value
+  and folds the rest into a single "Other" mark.
+- **KPI tiles for headline measures.** Two to four, only for figures the rows
+  actually contain. Skip them when the answer has no headline number.
+- **Detail table when the chart has 6 or more rows behind it**, `collapsed:
+  true`, so the reader can check the numbers.
+- Follow the `<recommended-form>` block's form unless the instruction or the
+  data clearly argues otherwise, and say why in the description when you
+  deviate.
+- No colours, sizes, fonts, HTML, CSS or JavaScript in the spec. There is no
+  field for them, and the frame's palette is already accessible on the dark
+  panel.
+
+Also return:
+
+- **`title`** — short, specific, no "chart of".
+- **`description`** — plain language: what the visual shows and its main
+  takeaway. This is the text under the visual, so write it for the reader, not
+  for a developer.
+
+When tailoring, a `<current-visual>` block holds the spec in place today.
+Change what the instruction asks for and keep the rest byte-identical.
+
+## Fallback: freeform HTML/CSS/JavaScript
+
+Used only when the request asks for an HTML, CSS and JavaScript bundle instead
+of a spec — for example when a spec cannot express the visual.
 
 - When a `<data>` block is supplied, it holds the exact query results the
   answer was built from (JSON: tool, input SQL, columns, rows). Prefer it as
@@ -50,7 +137,7 @@ Turn the supplied question and answer into one focused visual explanation.
   the form chosen for it. Follow it unless the instruction or the data clearly
   argues otherwise, and say why in the description when you deviate.
 
-## Consistency
+### Consistency
 
 - Use the frame-provided CSS custom properties for all series and semantic
   colors (`var(--qti-cat-1)` … `var(--qti-cat-8)`, `var(--qti-pos)` /
@@ -60,7 +147,7 @@ Turn the supplied question and answer into one focused visual explanation.
   tiles instead of restyling them from scratch.
 - Use `.qti-tooltip` for hover readouts.
 
-## Data access
+### Data access
 
 The frame injects the exact query results the `<data>` block above described
 into the rendered document, at `window.qti.data` — same shape (array of
@@ -100,7 +187,7 @@ applies the global filter bar and cross-filter clicks by swapping
 callback — a correct `onRefresh` re-render is all that is required for a
 visual to participate in dashboard filtering.
 
-## Composed answers
+### Composed answers
 
 When `<recommended-form>` contains a "Composed answer:" paragraph, the data is
 rich enough to answer with a small composition instead of a single chart. Build

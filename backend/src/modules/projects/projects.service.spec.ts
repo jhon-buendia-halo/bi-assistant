@@ -13,6 +13,7 @@ jest.mock('../../mastra/tools/sandbox.tools', () => ({
 jest.mock('../../mastra/tools/visual.tools', () => ({
   ACTIVE_VISUAL_CONTEXT_KEY: 'active-visual',
   PROJECT_ID_CONTEXT_KEY: 'project-id',
+  TURN_RECORDS_CONTEXT_KEY: 'turn-records',
 }));
 jest.mock('../../mastra/project-workspaces', () => ({
   PROJECT_WORKSPACE_CONTEXT_KEY: 'project-workspace',
@@ -53,6 +54,7 @@ jest.mock('./visualization-document', () => ({
 import { NotFoundException } from '@nestjs/common';
 import { setSandboxToolServices } from '../../mastra/tool-services';
 import type { SandboxToolServices } from '../../mastra/tool-services';
+import { TURN_RECORDS_CONTEXT_KEY } from '../../mastra/tools/visual.tools';
 import { sourceEntities } from './visualization-document';
 import { ProjectsService, StreamEvent } from './projects.service';
 import type { ProjectDoc } from './entities/project.entity';
@@ -459,6 +461,63 @@ describe('ProjectsService streaming', () => {
     });
   });
 
+  describe('turn records exposed to the visual tools', () => {
+    it('hands the visual tools a live reference to the records captured so far in the turn', async () => {
+      const { service, project, agent } = buildStreaming(
+        answerStream([{ sql: 'select stage_1', rows: [{ stage: 1, n: 10 }] }]),
+      );
+
+      await service.streamMessage(
+        'project-1',
+        'Drill into stage 1 and tailor the chart',
+        () => {},
+      );
+
+      // The same RequestContext instance handed to agent.stream() carries a
+      // key the tools read (see mastra/tools/visual.tools.ts) — its value is
+      // a live array, not a snapshot, so a create_visual/update_visual call
+      // made later in the same turn sees every record gathered up to then.
+      const options = (agent.stream.mock.calls as unknown[][])[0][1] as {
+        requestContext: { set: jest.Mock };
+      };
+      const setCalls = options.requestContext.set.mock.calls as [
+        string,
+        unknown,
+      ][];
+      const call = setCalls.find(([key]) => key === TURN_RECORDS_CONTEXT_KEY);
+      expect(call).toBeDefined();
+      const turnRecords = call![1] as unknown[];
+
+      // Same object, not a copy: it is the very array the answer's `data`
+      // field ends up holding once the turn finishes.
+      expect(turnRecords).toBe(project.messages.at(-1)?.data);
+      expect(turnRecords).toEqual([
+        expect.objectContaining({
+          tool: 'run_readonly_sql',
+          input: 'select stage_1',
+        }),
+      ]);
+    });
+
+    it('gives every turn its own empty array up front, before any tool has run', async () => {
+      const { service, agent } = buildStreaming(answerStream([]));
+
+      await service.streamMessage('project-1', 'Hello', () => {});
+
+      const options = (agent.stream.mock.calls as unknown[][])[0][1] as {
+        requestContext: { set: jest.Mock };
+      };
+      const setCalls = options.requestContext.set.mock.calls as [
+        string,
+        unknown,
+      ][];
+      const call = setCalls.find(([key]) => key === TURN_RECORDS_CONTEXT_KEY);
+      // Set before agent.stream() is called, so it exists throughout the run
+      // even for a turn that never calls a data-gathering tool.
+      expect(call?.[1]).toEqual([]);
+    });
+  });
+
   describe('careful mode cross-check', () => {
     const PRIMARY = 'SELECT count(*) AS n FROM main.football.matches';
 
@@ -712,6 +771,124 @@ describe('ProjectsService SQL self-correction', () => {
 
     expect(result.truncated).toBe(true);
     expect(result.note).toContain('row limit 100 reached');
+  });
+});
+
+describe('ProjectsService visual tool bridge (turn records)', () => {
+  /** The `createVisual`/`updateVisual` bridge ProjectsService installs for the tools. */
+  async function bridge() {
+    const project: ProjectDoc = {
+      id: 'project-1',
+      name: 'Claims',
+      sandboxes: ['claims'],
+      messages: [],
+      visualizations: [],
+    };
+    const repository = {
+      list: jest.fn().mockResolvedValue([]),
+      get: jest.fn().mockResolvedValue(project),
+      update: jest.fn().mockImplementation(async (_id, patch) => {
+        Object.assign(project, patch);
+        return project;
+      }),
+    };
+    const meta = (currentVersion: number) => ({
+      id: 'visual-1',
+      title: 'Chart',
+      description: 'A chart.',
+      path: 'visuals/visual-1',
+      sourceMessageAt: '2024-01-01T00:00:00.000Z',
+      createdAt: '2024-01-01T00:00:00.000Z',
+      currentVersion,
+    });
+    const visuals = {
+      create: jest.fn().mockResolvedValue({ metadata: meta(1) }),
+      update: jest.fn().mockResolvedValue({ metadata: meta(2) }),
+      currentVersion: jest
+        .fn()
+        .mockImplementation(
+          (m: { currentVersion?: number }) => m.currentVersion ?? 1,
+        ),
+    };
+    const service = new ProjectsService(
+      repository as never,
+      {
+        ensureProjectWorkspace: jest.fn().mockResolvedValue({ id: 'w' }),
+      } as never,
+      { getByNames: jest.fn().mockResolvedValue([]) } as never,
+      {} as never,
+      {} as never,
+      visuals as never,
+      {} as never,
+      {} as never,
+    );
+    await service.onModuleInit();
+    const calls = (setSandboxToolServices as jest.Mock).mock
+      .calls as unknown[][];
+    const installed = calls.at(-1)![0] as SandboxToolServices;
+    return { installed, visuals };
+  }
+
+  it("forwards the turn's records to VisualizationService.create", async () => {
+    const { installed, visuals } = await bridge();
+    const turnRecords = [
+      { tool: 'run_readonly_sql', input: 'select 1', rows: [{ n: 1 }] },
+    ];
+
+    await installed.createVisual(
+      'project-1',
+      undefined,
+      'chart it',
+      turnRecords,
+    );
+
+    expect(visuals.create).toHaveBeenCalledWith(
+      expect.anything(),
+      undefined,
+      'chart it',
+      turnRecords,
+    );
+  });
+
+  it("forwards the turn's records to VisualizationService.update", async () => {
+    const { installed, visuals } = await bridge();
+    const turnRecords = [
+      { tool: 'run_readonly_sql', input: 'select 2', rows: [{ n: 2 }] },
+    ];
+
+    await installed.updateVisual(
+      'project-1',
+      'visual-1',
+      'break it down further',
+      turnRecords,
+    );
+
+    expect(visuals.update).toHaveBeenCalledWith(
+      expect.anything(),
+      'visual-1',
+      'break it down further',
+      turnRecords,
+    );
+  });
+
+  it('passes nothing through for a tool call outside a turn (REST tailoring parity)', async () => {
+    const { installed, visuals } = await bridge();
+
+    await installed.createVisual('project-1', undefined, 'chart it');
+    await installed.updateVisual('project-1', 'visual-1', 'tweak it');
+
+    expect(visuals.create).toHaveBeenCalledWith(
+      expect.anything(),
+      undefined,
+      'chart it',
+      undefined,
+    );
+    expect(visuals.update).toHaveBeenCalledWith(
+      expect.anything(),
+      'visual-1',
+      'tweak it',
+      undefined,
+    );
   });
 });
 
