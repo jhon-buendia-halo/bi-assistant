@@ -16,6 +16,7 @@ import { SANDBOXES_CONTEXT_KEY } from '../../mastra/tools/sandbox.tools';
 import {
   ACTIVE_VISUAL_CONTEXT_KEY,
   PROJECT_ID_CONTEXT_KEY,
+  TURN_RECORDS_CONTEXT_KEY,
 } from '../../mastra/tools/visual.tools';
 import { PROJECT_WORKSPACE_CONTEXT_KEY } from '../../mastra/project-workspaces';
 import { SandboxRepository } from '../sandbox/repositories/sandbox.repository';
@@ -99,22 +100,29 @@ export class ProjectsService implements OnModuleInit {
         this.datasourcesService.sampleRows(datasourceId, entity, limit),
       runReadOnlySql: (datasourceId, sql, limit, sandboxes) =>
         this.runSqlWithRepair(datasourceId, sql, limit, sandboxes),
-      createVisual: async (projectId, sourceMessageAt, instruction) => {
+      createVisual: async (
+        projectId,
+        sourceMessageAt,
+        instruction,
+        turnRecords,
+      ) => {
         const project = await this.get(projectId);
         const { metadata } = await this.visuals.create(
           project,
           sourceMessageAt,
           instruction,
+          turnRecords,
         );
         await this.saveVisualMetadata(project, metadata);
         return this.toolResult(metadata);
       },
-      updateVisual: async (projectId, visualId, instruction) => {
+      updateVisual: async (projectId, visualId, instruction, turnRecords) => {
         const project = await this.get(projectId);
         const { metadata } = await this.visuals.update(
           project,
           visualId,
           instruction,
+          turnRecords,
         );
         await this.saveVisualMetadata(project, metadata);
         return this.toolResult(metadata);
@@ -963,15 +971,24 @@ export class ProjectsService implements OnModuleInit {
     const turn = new AbortController();
     const forwardAbort = () => turn.abort();
     abortSignal?.addEventListener('abort', forwardAbort, { once: true });
-    const stream = await agent.stream(
-      input,
-      await this.agentOptions(project, trimmed, turn.signal, activeVisualId),
+    const options = await this.agentOptions(
+      project,
+      trimmed,
+      turn.signal,
+      activeVisualId,
     );
+    // A live reference to this turn's captured records, handed to the visual
+    // tools via requestContext so create_visual/update_visual called later in
+    // the same turn can see SQL the turn already ran (drill-down queries a
+    // tailored visual needs but that never touched the source answer). Fresh
+    // RequestContext + array per call — no leakage across turns or projects.
+    const data: ToolDataRecord[] = [];
+    options.requestContext.set(TURN_RECORDS_CONTEXT_KEY, data);
+    const stream = await agent.stream(input, options);
 
     let text = '';
     let clarification: ChatMessage['clarification'] | null = null;
     let visualEvent: VisualEvent | undefined;
-    const data: ToolDataRecord[] = [];
     const pendingCalls = new Map<string, Record<string, unknown>>();
     try {
       for await (const chunk of stream.fullStream) {

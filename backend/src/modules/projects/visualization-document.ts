@@ -1,6 +1,16 @@
 import { marked } from 'marked';
 import sanitizeHtml from 'sanitize-html';
 import type { ReasoningStep, ToolDataRecord } from './entities/project.entity';
+import {
+  SPEC_BODY_HTML,
+  SPEC_BOOTSTRAP_SCRIPT,
+  SPEC_SCRIPT_ID,
+  type VisualSpec,
+} from './visual-spec';
+import {
+  VISUAL_RUNTIME_FILENAME,
+  VISUAL_RUNTIME_SCRIPT,
+} from './visual-runtime';
 
 export interface InteractiveVisualBundle {
   title: string;
@@ -8,6 +18,13 @@ export interface InteractiveVisualBundle {
   html: string;
   css: string;
   javascript: string;
+  /**
+   * Set when the visual is spec-rendered: the fixed runtime draws the chart
+   * from this document, and `html` / `css` / `javascript` are the synthetic
+   * root div, empty sheet and mount bootstrap that keep every older reader
+   * (download, body.html, legacy loaders) working unchanged.
+   */
+  spec?: VisualSpec;
 }
 
 /**
@@ -120,6 +137,16 @@ function dataScriptTag(chartData: VisualContext['chartData']): string {
     '<\\/script',
   );
   return `<script type="application/json" id="qti-data">${json}</script>`;
+}
+
+/**
+ * The visual's spec, embedded the same inert way as its data and read by the
+ * fixed runtime on `mount()`. Both documents carry it; only the way the
+ * runtime itself is delivered (inline vs. file) differs.
+ */
+function specScriptTag(spec: VisualSpec): string {
+  const json = JSON.stringify(spec).replace(/<\/script/gi, '<\\/script');
+  return `<script type="application/json" id="${SPEC_SCRIPT_ID}">${json}</script>`;
 }
 
 /** Markdown → sanitized HTML (headings, lists, tables, emphasis, code only). */
@@ -277,6 +304,9 @@ function renderFrame(
   context: VisualContext,
   mode: DocumentMode = 'full',
 ): string {
+  // A spec visual's body is always the runtime's mount point; a freeform one
+  // is the designer's own fragment, stripped of document-level markup.
+  const visualBody = bundle.spec ? SPEC_BODY_HTML : bodyFragment(bundle.html);
   if (mode === 'tile') {
     return `<main class="qti-frame qti-frame--tile">
   <header class="qti-header qti-header--tile">
@@ -285,7 +315,7 @@ function renderFrame(
 
   <section class="qti-visual" aria-label="Interactive visual">
     <div class="qti-visual-body">
-${bodyFragment(bundle.html)}
+${visualBody}
     </div>
   </section>
 </main>`;
@@ -324,7 +354,7 @@ ${bodyFragment(bundle.html)}
 
   <section class="qti-visual" aria-label="Interactive visual">
     <div class="qti-visual-body">
-${bodyFragment(bundle.html)}
+${visualBody}
     </div>
   </section>
 
@@ -636,6 +666,47 @@ export const FRAME_SELECT_SCRIPT = `(function () {
 /** Filename the stored document loads the frame bridge from (CSP: script-src 'self'). */
 export const FRAME_SCRIPT_FILENAME = 'qti-frame.js';
 
+/**
+ * Body scripts for the stored document (CSP `script-src 'self'`): everything
+ * ships as a file next to index.html. A spec visual adds the inert spec block
+ * and the runtime file ahead of the bootstrap in `script.js`.
+ */
+function storedScripts(
+  bundle: InteractiveVisualBundle,
+  context: VisualContext,
+): string {
+  return [
+    dataScriptTag(context.chartData),
+    ...(bundle.spec ? [specScriptTag(bundle.spec)] : []),
+    `<script src="${FRAME_SCRIPT_FILENAME}"></script>`,
+    ...(bundle.spec ? [`<script src="${VISUAL_RUNTIME_FILENAME}"></script>`] : []),
+    '<script src="script.js"></script>',
+  ].join('\n  ');
+}
+
+/**
+ * Body scripts for the sandboxed document (CSP `script-src 'unsafe-inline'`):
+ * everything is inlined, including the runtime, so the panel iframe needs no
+ * network or file access at all.
+ */
+function sandboxedScripts(
+  bundle: InteractiveVisualBundle,
+  context: VisualContext,
+): string {
+  return [
+    dataScriptTag(context.chartData),
+    ...(bundle.spec ? [specScriptTag(bundle.spec)] : []),
+    `<script>${RUNTIME_ERROR_HOOK}</script>`,
+    `<script>${FRAME_SELECT_SCRIPT}</script>`,
+    ...(bundle.spec
+      ? [
+          `<script>${safeScript(VISUAL_RUNTIME_SCRIPT)}</script>`,
+          `<script>"use strict";\n${SPEC_BOOTSTRAP_SCRIPT}</script>`,
+        ]
+      : [`<script>"use strict";\n${safeScript(bundle.javascript)}</script>`]),
+  ].join('\n  ');
+}
+
 /** Standalone file persisted in the workspace alongside CSS and JavaScript. */
 export function storedVisualizationDocument(
   bundle: InteractiveVisualBundle,
@@ -654,9 +725,7 @@ export function storedVisualizationDocument(
 </head>
 <body>
 ${renderFrame(bundle, context)}
-  ${dataScriptTag(context.chartData)}
-  <script src="${FRAME_SCRIPT_FILENAME}"></script>
-  <script src="script.js"></script>
+  ${storedScripts(bundle, context)}
 </body>
 </html>`;
 }
@@ -679,10 +748,7 @@ export function sandboxedVisualizationDocument(
 </head>
 <body>
 ${renderFrame(bundle, context, options?.mode)}
-  ${dataScriptTag(context.chartData)}
-  <script>${RUNTIME_ERROR_HOOK}</script>
-  <script>${FRAME_SELECT_SCRIPT}</script>
-  <script>"use strict";\n${safeScript(bundle.javascript)}</script>
+  ${sandboxedScripts(bundle, context)}
 </body>
 </html>`;
 }
