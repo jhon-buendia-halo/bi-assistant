@@ -1289,6 +1289,38 @@ function qtiLine(
   wrap.appendChild(svg);
 }
 
+/**
+ * Fan out points that share exact plot coordinates so ties stay visible:
+ * small-integer measures routinely stack several points on one spot, which
+ * reads as a broken, mostly-empty chart. Singles are untouched; groups of
+ * n > 1 are arranged on a small ring around the shared centre, in input
+ * order, so the layout is deterministic.
+ */
+export function spreadOverlaps(
+  points: { cx: number; cy: number }[],
+  spacing: number,
+): { cx: number; cy: number }[] {
+  const groups: Record<string, number[]> = {};
+  points.forEach(function (point, index) {
+    const key = point.cx.toFixed(1) + ':' + point.cy.toFixed(1);
+    (groups[key] = groups[key] || []).push(index);
+  });
+  const out = points.map(function (point) {
+    return { cx: point.cx, cy: point.cy };
+  });
+  for (const key in groups) {
+    if (!Object.prototype.hasOwnProperty.call(groups, key)) continue;
+    const members = groups[key];
+    if (members.length < 2) continue;
+    for (let i = 0; i < members.length; i++) {
+      const angle = (2 * Math.PI * i) / members.length;
+      out[members[i]].cx += spacing * Math.cos(angle);
+      out[members[i]].cy += spacing * Math.sin(angle);
+    }
+  }
+  return out;
+}
+
 /** Two measures against each other, coloured by series. */
 function qtiScatter(
   root: HTMLElement,
@@ -1379,13 +1411,19 @@ function qtiScatter(
     xLabel: chart.xLabel || x,
     yLabel: chart.yLabel || y,
   });
-  for (const row of plotted) {
+  const positions = spreadOverlaps(
+    plotted.map(function (row) {
+      return { cx: xScale(toNumber(row[x])), cy: yScale(toNumber(row[y])) };
+    }),
+    7,
+  );
+  plotted.forEach(function (row, index) {
     const name = chart.series ? String(row[chart.series]) : '';
     const xValue = toNumber(row[x]);
     const yValue = toNumber(row[y]);
     const point = qtiSvg('circle', {
-      cx: xScale(xValue),
-      cy: yScale(yValue),
+      cx: positions[index].cx,
+      cy: positions[index].cy,
       r: 4.5,
       fill: qtiSeriesColor(names.indexOf(name)),
       'fill-opacity': 0.85,
@@ -1399,7 +1437,7 @@ function qtiScatter(
     if (chart.series) lines.unshift(chart.series + ': ' + name);
     qtiBindTooltip(root, point, lines);
     svg.appendChild(point);
-  }
+  });
   wrap.appendChild(svg);
 }
 
@@ -1997,6 +2035,7 @@ const RUNTIME_MEMBERS: { toString(): string }[] = [
   chartMeasures,
   chartSelect,
   groupRows,
+  spreadOverlaps,
   qtiCreate,
   qtiSvg,
   qtiText,

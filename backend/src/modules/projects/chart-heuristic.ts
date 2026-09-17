@@ -40,16 +40,15 @@ export interface RecommendedForm {
   composed: boolean;
 }
 
-/** One column eligible for the dashboard filter bar and its allowed values. */
-export interface DashboardFilter {
-  column: string;
-  values: string[];
-}
-
 /** Same row cap `visualizationData` applies before the designer sees the rows. */
 const SAMPLE_ROWS_CAP = 100;
 /** Above this many categories a ranked bar chart needs a top-N + "Other" cut. */
 const MANY_CATEGORIES = 8;
+/**
+ * A labelled scatter needs at least this many rows to show a relationship;
+ * below it, grouped bars per label beat a handful of (often stacked) points.
+ */
+const SCATTER_MIN_ROWS = 13;
 /** A single result set needs at least this many measures to carry KPI tiles. */
 const COMPOSED_MIN_MEASURES = 1;
 /** …and at least this many rows, so the main chart still has something to say. */
@@ -148,76 +147,6 @@ export function profileColumns(
       return { name, role: classify(name, values), distinct };
     })
     .filter((profile): profile is ColumnProfile => profile !== undefined);
-}
-
-/** A record shape rich enough to derive dashboard filters from: the trimmed,
- * runtime-injected chart records (same shape as `ChartDataRecord`), not the
- * full `ToolDataRecord`. */
-export interface FilterableRecord {
-  columns?: string[];
-  rows: Record<string, unknown>[];
-}
-
-/** A column needs at least this many, and no more than this many, distinct
- * values within one tile's sampled rows to be worth filtering on. */
-const FILTER_MIN_DISTINCT = 2;
-const FILTER_MAX_DISTINCT_PER_TILE = 20;
-/** Merged (union, across every tile) values per column; over this the column
- * carries too many options to be a useful filter, so it is dropped. */
-const FILTER_MAX_UNION_VALUES = 24;
-
-/**
- * Dashboard filter bar columns, derived from the same bounded chart records
- * injected into each tile's `qti-data` (reuses `profileColumns`, the same
- * heuristic behind chart-form selection). A column becomes a filter when it
- * profiles as categorical or temporal with a modest cardinality (2-20 distinct
- * values) in at least one tile's own sampled rows. Its values are the union
- * across every tile that carries it — capped at 24, or dropped if the union
- * exceeds that. Columns are sorted alphabetically; each column's values are
- * sorted naturally.
- */
-export function deriveDashboardFilters(
-  tileRecords: FilterableRecord[][],
-): DashboardFilter[] {
-  const valuesByColumn = new Map<string, Set<string>>();
-  for (const records of tileRecords) {
-    for (const record of records) {
-      const rows = record.rows ?? [];
-      if (!rows.length) continue;
-      const columns = record.columns?.length
-        ? record.columns
-        : Object.keys(rows[0] ?? {});
-      for (const profile of profileColumns(columns, rows)) {
-        if (profile.role !== 'categorical' && profile.role !== 'temporal') {
-          continue;
-        }
-        if (
-          profile.distinct < FILTER_MIN_DISTINCT ||
-          profile.distinct > FILTER_MAX_DISTINCT_PER_TILE
-        ) {
-          continue;
-        }
-        const values = valuesByColumn.get(profile.name) ?? new Set<string>();
-        for (const row of rows) {
-          const raw = row[profile.name];
-          if (raw === null || raw === undefined) continue;
-          values.add(String(raw));
-        }
-        valuesByColumn.set(profile.name, values);
-      }
-    }
-  }
-  const filters: DashboardFilter[] = [];
-  for (const [column, values] of valuesByColumn) {
-    if (values.size > FILTER_MAX_UNION_VALUES) continue;
-    filters.push({
-      column,
-      values: Array.from(values).sort((a, b) =>
-        a.localeCompare(b, undefined, { numeric: true }),
-      ),
-    });
-  }
-  return filters.sort((a, b) => a.column.localeCompare(b.column));
 }
 
 interface UsableRecord {
@@ -333,7 +262,22 @@ export function recommendChartForm(
     );
   }
 
-  // 4 — two measures are a relationship, optionally split by one label.
+  // 4a — one label with two measures over few rows reads as a comparison per
+  // label, not a relationship: a scatter of small integers stacks most points
+  // on one spot and looks broken, while grouped bars show every value.
+  if (
+    numeric.length === 2 &&
+    categorical.length === 1 &&
+    record.rowCount < SCATTER_MIN_ROWS
+  ) {
+    return form(
+      `grouped bars — one group per ${categorical[0].name}, one bar for ` +
+        `${numeric[0].name} and one for ${numeric[1].name} in each group, ` +
+        `with a legend and the values labelled on the bars.`,
+    );
+  }
+
+  // 4b — two measures are a relationship, optionally split by one label.
   if (numeric.length === 2 && categorical.length <= 1) {
     const colour = categorical.length
       ? `, coloured by ${categorical[0].name} with a legend`

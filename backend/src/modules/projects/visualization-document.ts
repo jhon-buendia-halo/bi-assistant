@@ -265,9 +265,6 @@ function renderProvenance(
 </details>`;
 }
 
-/** Which document is being assembled: the full readable frame, or a dense dashboard tile. */
-export type DocumentMode = 'full' | 'tile';
-
 /** Muted "outcome" line under a reasoning step: row count, or the failure. */
 function reasoningOutcome(step: ReasoningStep): string {
   if (step.error) return `failed — ${step.error}`;
@@ -302,25 +299,10 @@ function renderReasoning(steps: ReasoningStep[]): string {
 function renderFrame(
   bundle: InteractiveVisualBundle,
   context: VisualContext,
-  mode: DocumentMode = 'full',
 ): string {
   // A spec visual's body is always the runtime's mount point; a freeform one
   // is the designer's own fragment, stripped of document-level markup.
   const visualBody = bundle.spec ? SPEC_BODY_HTML : bodyFragment(bundle.html);
-  if (mode === 'tile') {
-    return `<main class="qti-frame qti-frame--tile">
-  <header class="qti-header qti-header--tile">
-    <h1 class="qti-title qti-title--tile">${escapeHtml(bundle.title)}</h1>
-  </header>
-
-  <section class="qti-visual" aria-label="Interactive visual">
-    <div class="qti-visual-body">
-${visualBody}
-    </div>
-  </section>
-</main>`;
-  }
-
   const entities = context.entities?.length
     ? context.entities
     : sourceEntities(context.data);
@@ -482,11 +464,6 @@ html, body { margin: 0; background: #171717; }
   font-size: 12px; line-height: 1.4; color: #e4e4e7; pointer-events: none; z-index: 10; }
 @media (max-width: 640px) { .qti-frame { padding: 16px 14px 32px; } .qti-title { font-size: 19px; } }
 @media (prefers-reduced-motion: reduce) { .qti-frame * { animation: none !important; transition: none !important; } }
-/* Dense dashboard tile: compact header, visual only — no question/entities/takeaway/analysis/provenance/footer. */
-.qti-frame--tile { max-width: none; padding: 12px 14px 14px; }
-.qti-header--tile { margin-bottom: 10px; }
-.qti-title--tile { font-size: 13px; font-weight: 500; color: #a1a1aa; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.qti-frame--tile .qti-visual { margin-bottom: 0; padding: 10px; }
 `;
 
 /** Message the blank-render watchdog reports; the host repairs on this too. */
@@ -734,7 +711,6 @@ ${renderFrame(bundle, context)}
 export function sandboxedVisualizationDocument(
   bundle: InteractiveVisualBundle,
   context: VisualContext = {},
-  options?: { mode?: DocumentMode },
 ): string {
   return `<!doctype html>
 <html lang="en">
@@ -747,7 +723,7 @@ export function sandboxedVisualizationDocument(
   <style>${scopedStyle(bundle.css)}</style>
 </head>
 <body>
-${renderFrame(bundle, context, options?.mode)}
+${renderFrame(bundle, context)}
   ${sandboxedScripts(bundle, context)}
 </body>
 </html>`;

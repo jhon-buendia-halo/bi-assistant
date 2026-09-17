@@ -11,6 +11,7 @@ import {
   groupRows,
   scaleTicks,
   selectRecord,
+  spreadOverlaps,
   ticks,
   toNumber,
   topNCut,
@@ -318,6 +319,49 @@ describe('groupRows', () => {
 
     expect(grouped.categories).toEqual(['A']);
     expect(grouped.values).toEqual({ A: { '': 2 } });
+  });
+});
+
+describe('spreadOverlaps', () => {
+  it('leaves points with unique coordinates untouched', () => {
+    const points = [
+      { cx: 10, cy: 10 },
+      { cx: 20, cy: 20 },
+    ];
+
+    expect(spreadOverlaps(points, 7)).toEqual(points);
+  });
+
+  it('fans points sharing a coordinate onto a ring so ties stay visible', () => {
+    const spread = spreadOverlaps(
+      [
+        { cx: 100, cy: 100 },
+        { cx: 100, cy: 100 },
+        { cx: 100, cy: 100 },
+        { cx: 40, cy: 40 },
+      ],
+      7,
+    );
+
+    const keys = spread.map(
+      (point) => `${point.cx.toFixed(2)}:${point.cy.toFixed(2)}`,
+    );
+    expect(new Set(keys).size).toBe(4);
+    // Every fanned point stays on the ring around the shared centre.
+    for (const point of spread.slice(0, 3)) {
+      const distance = Math.hypot(point.cx - 100, point.cy - 100);
+      expect(distance).toBeCloseTo(7, 6);
+    }
+    expect(spread[3]).toEqual({ cx: 40, cy: 40 });
+  });
+
+  it('is deterministic for the same input', () => {
+    const points = [
+      { cx: 5, cy: 5 },
+      { cx: 5, cy: 5 },
+    ];
+
+    expect(spreadOverlaps(points, 7)).toEqual(spreadOverlaps(points, 7));
   });
 });
 
