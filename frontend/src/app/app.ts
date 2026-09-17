@@ -39,6 +39,7 @@ import { SandboxList } from './features/data-sandbox/components/sandbox-list/san
 import { CatalogBrowser } from './features/data-sandbox/components/catalog-browser/catalog-browser';
 import { EntityDetails } from './features/data-sandbox/components/entity-details/entity-details';
 import { SandboxSelectionService } from './features/data-sandbox/services/sandbox-selection.service';
+import { AppLogo } from './shared/components/app-logo/app-logo';
 import { ToastContainer } from './shared/components/toast-container/toast-container';
 import { SystemLogsPanel } from './shared/components/system-logs-panel/system-logs-panel';
 import { DiagnosticsService } from './core/diagnostics/diagnostics.service';
@@ -77,6 +78,7 @@ const RIGHT_PANEL_WIDTH_STORAGE_KEY = 'questions-to-insights:right-panel-width';
   selector: 'app-root',
   imports: [
     LucideAngularModule,
+    AppLogo,
     DatasourceConfig,
     LlmConfig,
     SandboxList,

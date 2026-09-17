@@ -370,6 +370,17 @@ async function waitForBackend() {
   return false;
 }
 
+// The Halo BI mark lives in build resources (electron-builder turns it into the
+// .icns/.ico) and is copied into the renderer bundle, which is the copy that
+// survives packaging.
+function resolveAppIcon() {
+  const candidates = [
+    path.join(__dirname, "../build/icon.png"),
+    path.join(__dirname, "../dist/frontend/browser/brand/icon.png"),
+  ];
+  return candidates.find((candidate) => fs.existsSync(candidate));
+}
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1440,
@@ -378,6 +389,9 @@ function createWindow() {
     minHeight: 600,
     titleBarStyle: "hiddenInset",
     backgroundColor: "#1c1c1c",
+    // Packaged macOS builds take the icon from the bundle; this covers the
+    // window/taskbar icon everywhere else (dev runs, Windows, Linux).
+    icon: resolveAppIcon(),
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -422,6 +436,12 @@ function createWindow() {
 
 app.whenReady().then(async () => {
   initializeDiagnostics();
+  // Unpackaged macOS runs keep Electron's own dock icon unless we set it; the
+  // packaged bundle already carries the Halo BI icon.
+  if (process.platform === "darwin" && !app.isPackaged) {
+    const icon = resolveAppIcon();
+    if (icon) app.dock?.setIcon(icon);
+  }
   startBackend();
   if (!(await waitForBackend())) {
     console.warn(
