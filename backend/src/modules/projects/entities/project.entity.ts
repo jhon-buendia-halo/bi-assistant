@@ -101,6 +101,8 @@ export interface VisualizationVersion {
   /** The tailoring request that produced this version (absent for v1). */
   instruction?: string;
   sourceMessageAt: string;
+  /** Last time this version's data was refreshed by re-running its SQL. */
+  refreshedAt?: string;
 }
 
 export interface ProjectVisualization {
@@ -126,6 +128,11 @@ export interface InteractiveVisualization extends ProjectVisualization {
   version: number;
 }
 
+export interface ProjectDashboard {
+  /** Ordered list of pinned visual ids. */
+  pins: string[];
+}
+
 export interface ProjectDoc {
   id: string;
   name: string;
@@ -135,6 +142,8 @@ export interface ProjectDoc {
   sandboxes: string[];
   messages: ChatMessage[];
   visualizations?: ProjectVisualization[];
+  /** Pinned-visual dashboard, a grid of visuals visible at once. */
+  dashboard?: ProjectDashboard;
   createdAt?: string;
   updatedAt?: string;
 }

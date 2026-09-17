@@ -25,7 +25,8 @@ import { VerifiedQueriesService } from '../verified-queries/verified-queries.ser
 import { MetricsService } from '../metrics/metrics.service';
 import { ProjectsRepository } from './repositories/projects.repository';
 import { VisualizationService } from './visualization.service';
-import { sourceEntities } from './visualization-document';
+import { ChartDataRecord, sourceEntities } from './visualization-document';
+import { DashboardFilter, deriveDashboardFilters } from './chart-heuristic';
 import { compareResults } from './result-compare';
 import {
   ChatMessage,
@@ -723,6 +724,29 @@ export class ProjectsService implements OnModuleInit {
   }
 
   /**
+   * Re-run the SQL behind the visual's current version and refresh its data
+   * in place — no new version, no designer call, no chat event. Separates
+   * the visual's data from its code: the code stays exactly as designed,
+   * only the rows change.
+   */
+  async refreshVisualizationData(
+    id: string,
+    visualizationId: string,
+  ): Promise<{ project: ProjectDoc; visualization: InteractiveVisualization }> {
+    const project = await this.get(id);
+    const { metadata } = await this.visuals.refreshData(
+      project,
+      visualizationId,
+    );
+    const version = this.visuals.currentVersion(metadata);
+    const updated = await this.saveVisualMetadata(project, metadata);
+    return {
+      project: updated,
+      visualization: await this.visuals.load(updated, visualizationId, version),
+    };
+  }
+
+  /**
    * Silent auto-repair of a visual that failed in the sandbox. Only the
    * current version may be repaired, and only once — the version guard here
    * repeats the client's check because the client is not trusted, and
@@ -757,6 +781,82 @@ export class ProjectsService implements OnModuleInit {
         visualizationId,
         repaired,
       ),
+    };
+  }
+
+  // ------------------------------------------------------------ dashboard
+
+  /** Pin a visual to the dashboard grid (no-op if already pinned). */
+  async pinVisualization(id: string, visualId: string): Promise<ProjectDoc> {
+    const trimmed = (visualId ?? '').trim();
+    if (!trimmed) throw new BadRequestException('visualId is required');
+    const project = await this.get(id);
+    // Throws NotFoundException when the visual does not exist on this project.
+    this.visuals.find(project, trimmed);
+    const pins = project.dashboard?.pins ?? [];
+    if (pins.includes(trimmed)) return project;
+    const dashboard = { pins: [...pins, trimmed] };
+    return (
+      (await this.repository.update(id, { dashboard })) ?? {
+        ...project,
+        dashboard,
+      }
+    );
+  }
+
+  /** Remove a visual from the dashboard grid. */
+  async unpinVisualization(id: string, visualId: string): Promise<ProjectDoc> {
+    const project = await this.get(id);
+    const dashboard = {
+      pins: (project.dashboard?.pins ?? []).filter((p) => p !== visualId),
+    };
+    return (
+      (await this.repository.update(id, { dashboard })) ?? {
+        ...project,
+        dashboard,
+      }
+    );
+  }
+
+  /**
+   * Dense tile documents for every pinned visual, loaded in parallel. A
+   * pinned id whose visual was deleted is skipped rather than failing the
+   * response; a tile that fails to assemble is logged and skipped too — the
+   * dashboard should degrade gracefully, not go blank over one broken visual.
+   */
+  async getDashboard(
+    id: string,
+  ): Promise<{ tiles: InteractiveVisualization[]; filters: DashboardFilter[] }> {
+    const project = await this.get(id);
+    const pins = project.dashboard?.pins ?? [];
+    const known = new Set((project.visualizations ?? []).map((v) => v.id));
+    const loaded = await Promise.all(
+      pins
+        .filter((pinId) => known.has(pinId))
+        .map(async (pinId) => {
+          try {
+            const [tile, records] = await Promise.all([
+              this.visuals.load(project, pinId, undefined, 'tile'),
+              this.visuals.chartRecords(project, pinId),
+            ]);
+            return { tile, records };
+          } catch (error) {
+            this.logger.warn(
+              `Dashboard tile ${pinId} failed to load: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+            );
+            return null;
+          }
+        }),
+    );
+    const succeeded = loaded.filter(
+      (t): t is { tile: InteractiveVisualization; records: ChartDataRecord[] } =>
+        t !== null,
+    );
+    return {
+      tiles: succeeded.map((t) => t.tile),
+      filters: deriveDashboardFilters(succeeded.map((t) => t.records)),
     };
   }
 

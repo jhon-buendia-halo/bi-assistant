@@ -3,6 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { API_BASE_URL } from '../../../core/config/api.config';
 import {
+  DashboardTiles,
   DeepAnalysisResult,
   InteractiveVisualization,
   MessageFeedback,
@@ -65,6 +66,17 @@ export class ProjectsApiService {
     );
   }
 
+  /** Re-run the stored SQL behind a visual and refresh its data in place. */
+  refreshVisualizationData(
+    projectId: string,
+    visualizationId: string,
+  ): Observable<ProjectActionResult> {
+    return this.http.post<ProjectActionResult>(
+      `${API_BASE_URL}/projects/${encodeURIComponent(projectId)}/visualizations/${encodeURIComponent(visualizationId)}/refresh`,
+      {},
+    );
+  }
+
   create(name: string, sandboxes: string[]): Observable<ProjectActionResult> {
     return this.http.post<ProjectActionResult>(`${API_BASE_URL}/projects`, {
       name,
@@ -106,6 +118,36 @@ export class ProjectsApiService {
     return this.http.get(
       `${API_BASE_URL}/projects/${encodeURIComponent(projectId)}/visualizations/${encodeURIComponent(visualizationId)}/download`,
       { responseType: 'blob' },
+    );
+  }
+
+  // ------------------------------------------------------------ dashboard
+
+  /** Pin a visual to the project's dashboard grid. */
+  pinVisualization(
+    projectId: string,
+    visualId: string,
+  ): Observable<ProjectActionResult> {
+    return this.http.post<ProjectActionResult>(
+      `${API_BASE_URL}/projects/${encodeURIComponent(projectId)}/dashboard/pins`,
+      { visualId },
+    );
+  }
+
+  /** Remove a visual from the project's dashboard grid. */
+  unpinVisualization(
+    projectId: string,
+    visualId: string,
+  ): Observable<ProjectActionResult> {
+    return this.http.delete<ProjectActionResult>(
+      `${API_BASE_URL}/projects/${encodeURIComponent(projectId)}/dashboard/pins/${encodeURIComponent(visualId)}`,
+    );
+  }
+
+  /** Dense tile documents for every pinned visual. */
+  getDashboard(projectId: string): Observable<DashboardTiles> {
+    return this.http.get<DashboardTiles>(
+      `${API_BASE_URL}/projects/${encodeURIComponent(projectId)}/dashboard`,
     );
   }
 

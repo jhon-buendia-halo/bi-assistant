@@ -6,6 +6,39 @@
     <span class="shrink-0 text-[13px] font-medium text-zinc-200">Visuals</span>
 
     <div class="ml-auto flex shrink-0 items-center gap-1.5">
+      <!-- Single visual vs. pinned dashboard grid -->
+      <div class="flex items-center rounded-lg border border-white/10 bg-white/[0.03] p-0.5">
+        <button
+          type="button"
+          title="Single visual"
+          aria-label="Single visual view"
+          [attr.aria-pressed]="viewMode() === 'single'"
+          (click)="setViewMode('single')"
+          class="flex items-center gap-1 rounded-md px-2 py-1 text-[11px]"
+          [class.bg-white\/10]="viewMode() === 'single'"
+          [class.text-zinc-100]="viewMode() === 'single'"
+          [class.text-zinc-500]="viewMode() !== 'single'"
+        >
+          <lucide-angular [img]="Rows3" [size]="12" />
+          <span>Single</span>
+        </button>
+        <button
+          type="button"
+          title="Dashboard"
+          aria-label="Dashboard view"
+          [attr.aria-pressed]="viewMode() === 'dashboard'"
+          (click)="setViewMode('dashboard')"
+          class="flex items-center gap-1 rounded-md px-2 py-1 text-[11px]"
+          [class.bg-white\/10]="viewMode() === 'dashboard'"
+          [class.text-zinc-100]="viewMode() === 'dashboard'"
+          [class.text-zinc-500]="viewMode() !== 'dashboard'"
+        >
+          <lucide-angular [img]="LayoutGrid" [size]="12" />
+          <span>Dashboard</span>
+        </button>
+      </div>
+
+      @if (viewMode() === 'single') {
       @if (visualization(); as visual) {
         <!-- Single version control: which version is shown, which is current, and the action -->
         <div class="relative">
@@ -63,6 +96,9 @@
                     </span>
                     <span class="mt-0.5 w-full truncate text-[11px] text-zinc-500">
                       {{ entry.instruction ? entry.instruction : "Initial version" }} · {{ formatCreatedAt(entry.createdAt) }}
+                      @if (entry.refreshedAt) {
+                        · refreshed {{ formatCreatedAt(entry.refreshedAt) }}
+                      }
                     </span>
                   </button>
                 }
@@ -177,6 +213,21 @@
 
         <button
           type="button"
+          title="Refresh data (re-run the stored query)"
+          aria-label="Refresh data"
+          (click)="refreshData()"
+          [disabled]="refreshingData() || viewingOldVersion()"
+          class="flex items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] p-1.5 text-zinc-300 hover:border-white/20 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          @if (refreshingData()) {
+            <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+          } @else {
+            <lucide-angular [img]="RefreshCw" [size]="14" />
+          }
+        </button>
+
+        <button
+          type="button"
           title="Download bundle (HTML, CSS, JS, answer.md, data.json)"
           aria-label="Download bundle"
           (click)="downloadVisual.emit(visual)"
@@ -187,6 +238,30 @@
             <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
           } @else {
             <lucide-angular [img]="Download" [size]="14" />
+          }
+        </button>
+
+        <!-- Pin this visual to the dashboard grid -->
+        <button
+          type="button"
+          [title]="isPinned(visual.id) ? 'Unpin from dashboard' : 'Pin to dashboard'"
+          [attr.aria-label]="isPinned(visual.id) ? 'Unpin from dashboard' : 'Pin to dashboard'"
+          [attr.aria-pressed]="isPinned(visual.id)"
+          (click)="togglePin()"
+          [disabled]="pinning()"
+          class="flex items-center justify-center rounded-lg border p-1.5 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
+          [class.border-amber-500/40]="isPinned(visual.id)"
+          [class.text-amber-300]="isPinned(visual.id)"
+          [class.bg-amber-500/10]="isPinned(visual.id)"
+          [class.border-white/10]="!isPinned(visual.id)"
+          [class.text-zinc-300]="!isPinned(visual.id)"
+        >
+          @if (pinning()) {
+            <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+          } @else if (isPinned(visual.id)) {
+            <lucide-angular [img]="PinOff" [size]="14" />
+          } @else {
+            <lucide-angular [img]="Pin" [size]="14" />
           }
         </button>
       }
@@ -231,10 +306,182 @@
           </div>
         }
       }
+      }
     </div>
   </div>
 
-  @if (loading()) {
+  @if (viewMode() === 'dashboard') {
+    @if (dashboardFilters().length > 0) {
+      <div
+        class="flex flex-wrap items-center gap-1.5 border-b border-white/5 px-3 py-2"
+      >
+        <lucide-angular [img]="Filter" [size]="13" class="shrink-0 text-zinc-500" />
+        @for (filter of dashboardFilters(); track filter.column) {
+          <div class="relative">
+            <button
+              type="button"
+              (click)="toggleFilterPopover(filter.column)"
+              [attr.aria-expanded]="openFilterColumn() === filter.column"
+              [attr.aria-label]="'Filter by ' + filter.column"
+              class="flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11px] hover:bg-white/[0.06]"
+              [class.border-sky-500/40]="isFilterActive(filter.column)"
+              [class.text-sky-300]="isFilterActive(filter.column)"
+              [class.bg-sky-500/10]="isFilterActive(filter.column)"
+              [class.border-white/10]="!isFilterActive(filter.column)"
+              [class.text-zinc-400]="!isFilterActive(filter.column)"
+            >
+              <span>{{ filter.column }}</span>
+              @if (isFilterActive(filter.column)) {
+                <span
+                  class="rounded-full bg-sky-500/20 px-1.5 text-[10px] text-sky-200"
+                  >{{ activeFilterCount(filter.column) }}</span
+                >
+              }
+              <lucide-angular [img]="ChevronDown" [size]="11" />
+            </button>
+            @if (openFilterColumn() === filter.column) {
+              <button
+                type="button"
+                aria-label="Close filter menu"
+                class="fixed inset-0 z-20 cursor-default"
+                (click)="openFilterColumn.set(null)"
+              ></button>
+              <div
+                class="absolute top-full left-0 z-30 mt-1 max-h-64 w-56 overflow-y-auto rounded-xl border border-white/10 bg-[#2a2a2a] p-1.5 shadow-xl"
+              >
+                @for (value of filter.values; track value) {
+                  <label
+                    class="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[12px] text-zinc-200 hover:bg-white/10"
+                  >
+                    <input
+                      type="checkbox"
+                      [checked]="isFilterValueSelected(filter.column, value)"
+                      (change)="toggleFilterValue(filter.column, value)"
+                      class="rounded border-white/20 bg-transparent"
+                    />
+                    <span class="min-w-0 truncate">{{ value }}</span>
+                  </label>
+                }
+              </div>
+            }
+          </div>
+        }
+        @if (hasActiveFilters()) {
+          <button
+            type="button"
+            (click)="clearFilters()"
+            class="ml-auto text-[11px] text-zinc-400 hover:text-zinc-200 hover:underline"
+          >
+            Clear filters
+          </button>
+        }
+      </div>
+    }
+    @if (dashboardLoading() && dashboardTiles().length === 0) {
+      <div
+        class="flex flex-1 flex-col items-center justify-center gap-3 px-8 text-center"
+      >
+        <span
+          class="flex h-10 w-10 items-center justify-center rounded-xl bg-white/5"
+        >
+          <lucide-angular
+            [img]="Loader2"
+            [size]="18"
+            class="animate-spin text-zinc-300"
+          />
+        </span>
+        <p class="text-[13px] font-medium text-zinc-200">Loading dashboard…</p>
+      </div>
+    } @else if (dashboardTiles().length === 0) {
+      <div
+        class="flex flex-1 flex-col items-center justify-center gap-3 px-8 text-center"
+      >
+        <span
+          class="flex h-10 w-10 items-center justify-center rounded-xl bg-white/5"
+        >
+          <lucide-angular [img]="Pin" [size]="18" class="text-zinc-400" />
+        </span>
+        <div>
+          <p class="text-[13px] font-medium text-zinc-300">
+            Pin visuals to build a dashboard
+          </p>
+          <p class="mt-1 text-[12px] leading-5 text-zinc-500">
+            Open a visual in Single view and pin it to see it here alongside
+            others.
+          </p>
+        </div>
+      </div>
+    } @else {
+      <div class="min-h-0 flex-1 overflow-y-auto p-3">
+        <div
+          class="grid gap-3"
+          style="grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));"
+        >
+          @for (tile of dashboardTiles(); track tile.id) {
+            <div
+              class="group flex flex-col overflow-hidden rounded-xl border border-white/10 bg-[#1c1c1c]"
+            >
+              <div
+                class="flex shrink-0 items-center justify-between gap-2 px-2.5 py-1.5"
+              >
+                <span class="truncate text-[11px] text-zinc-400">{{ tile.title }}</span>
+                <div
+                  class="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100"
+                >
+                  <button
+                    type="button"
+                    title="Open in single view"
+                    aria-label="Open in single view"
+                    (click)="openTileInSingle(tile)"
+                    class="flex items-center justify-center rounded-md p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
+                  >
+                    <lucide-angular [img]="Maximize2" [size]="12" />
+                  </button>
+                  <button
+                    type="button"
+                    title="Refresh data (re-run the stored query)"
+                    aria-label="Refresh data"
+                    (click)="refreshTile(tile.id)"
+                    [disabled]="refreshingTileId() === tile.id"
+                    class="flex items-center justify-center rounded-md p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    @if (refreshingTileId() === tile.id) {
+                      <lucide-angular [img]="Loader2" [size]="12" class="animate-spin" />
+                    } @else {
+                      <lucide-angular [img]="RefreshCw" [size]="12" />
+                    }
+                  </button>
+                  <button
+                    type="button"
+                    title="Unpin from dashboard"
+                    aria-label="Unpin from dashboard"
+                    (click)="unpinTile(tile.id)"
+                    [disabled]="unpinningTileId() === tile.id"
+                    class="flex items-center justify-center rounded-md p-1 text-zinc-400 hover:bg-white/10 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    @if (unpinningTileId() === tile.id) {
+                      <lucide-angular [img]="Loader2" [size]="12" class="animate-spin" />
+                    } @else {
+                      <lucide-angular [img]="PinOff" [size]="12" />
+                    }
+                  </button>
+                </div>
+              </div>
+              <iframe
+                #tileFrame
+                class="h-[300px] w-full border-0 bg-[#171717]"
+                sandbox="allow-scripts"
+                referrerpolicy="no-referrer"
+                [title]="tile.title"
+                [srcdoc]="safeTileDocuments().get(tile.id)"
+                (load)="onTileFrameLoad($event)"
+              ></iframe>
+            </div>
+          }
+        </div>
+      </div>
+    }
+  } @else if (loading()) {
     <div
       class="flex flex-1 flex-col items-center justify-center gap-3 px-8 text-center"
     >

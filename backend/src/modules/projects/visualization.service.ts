@@ -11,7 +11,9 @@ import { RequestContext } from '@mastra/core/request-context';
 import { MastraService } from '../../mastra/mastra.service';
 import { PROJECT_WORKSPACE_CONTEXT_KEY } from '../../mastra/project-workspaces';
 import { interactiveVisualOutputSchema } from '../../mastra/agents/visualization.agent';
+import { getSandboxToolServices } from '../../mastra/tool-services';
 import {
+  ChartDataRecord,
   FRAME_SCRIPT_FILENAME,
   FRAME_SELECT_SCRIPT,
   sandboxedVisualizationDocument,
@@ -63,14 +65,18 @@ const VISUAL_RECORDS_CAP = 3;
 /** Never shrink a record below this many rows when sharing the row budget. */
 const VISUAL_MIN_ROWS_PER_RECORD = 20;
 /** Bundle-size advice and output allowance: single form vs. composed answer. */
-const SINGLE_BUNDLE_CHARS = '12,000';
-const COMPOSED_BUNDLE_CHARS = '16,000';
-const SINGLE_OUTPUT_TOKENS = 6_000;
-const COMPOSED_OUTPUT_TOKENS = 9_000;
+const SINGLE_BUNDLE_CHARS = '14,000';
+const COMPOSED_BUNDLE_CHARS = '20,000';
+const SINGLE_OUTPUT_TOKENS = 7_000;
+const COMPOSED_OUTPUT_TOKENS = 11_000;
 /** Marks a version produced by the automatic runtime-repair loop. */
 export const AUTO_REPAIR_PREFIX = 'auto-repair: ';
 /** Runtime errors can be long; the instruction only needs the head of one. */
 const AUTO_REPAIR_ERROR_CHARS = 200;
+/** Rows kept per re-run record, same cap the transcript applies at capture time. */
+const REFRESH_STORED_ROWS_CAP = 200;
+/** Max rows requested per re-run — the query tool's own ceiling. */
+const REFRESH_ROW_LIMIT = 500;
 
 /**
  * Creates, tailors, versions, loads and packages interactive visuals stored
@@ -157,7 +163,7 @@ export class VisualizationService {
       bundle,
       metadata,
       1,
-      this.contextFor(project, metadata, 1, createdAt),
+      await this.contextFor(filesystem, project, metadata, 1, createdAt),
     );
     return { metadata, bundle };
   }
@@ -276,7 +282,7 @@ export class VisualizationService {
       bundle,
       metadata,
       version,
-      this.contextFor(project, metadata, version, createdAt),
+      await this.contextFor(filesystem, project, metadata, version, createdAt),
     );
     return { metadata, bundle };
   }
@@ -302,11 +308,12 @@ export class VisualizationService {
     };
   }
 
-  /** Assemble the sandboxed document for the panel. */
+  /** Assemble the sandboxed document for the panel (`mode` — full or dashboard tile). */
   async load(
     project: ProjectDoc,
     visualId: string,
     version?: number,
+    mode: 'full' | 'tile' = 'full',
   ): Promise<InteractiveVisualization> {
     const meta = this.find(project, visualId);
     const target = version ?? this.currentVersion(meta);
@@ -319,9 +326,32 @@ export class VisualizationService {
       version: target,
       document: sandboxedVisualizationDocument(
         bundle,
-        this.contextFor(project, meta, target),
+        await this.contextFor(filesystem, project, meta, target),
+        { mode },
       ),
     };
+  }
+
+  /**
+   * The same bounded chart records injected into a version's `qti-data` (the
+   * trimmed rows a tile actually renders from) — exposed so the dashboard can
+   * derive its filter bar from exactly what the tiles show, without
+   * re-running the designer or reassembling the document.
+   */
+  async chartRecords(
+    project: ProjectDoc,
+    visualId: string,
+    version?: number,
+  ): Promise<ChartDataRecord[]> {
+    const meta = this.find(project, visualId);
+    const target = version ?? this.currentVersion(meta);
+    const { filesystem } = await this.workspaceFor(project);
+    const answer = project.messages.find(
+      (m) => m.role === 'assistant' && m.at === meta.sourceMessageAt,
+    );
+    const data =
+      (await this.readVersionData(filesystem, meta, target)) ?? answer?.data;
+    return data?.length ? visualizationData(data).records : [];
   }
 
   /** Portable HTML/CSS/JS zip of one version. */
@@ -334,7 +364,7 @@ export class VisualizationService {
     const target = version ?? this.currentVersion(meta);
     const { filesystem } = await this.workspaceFor(project);
     const bundle = await this.readBundle(filesystem, meta, target);
-    const context = this.contextFor(project, meta, target);
+    const context = await this.contextFor(filesystem, project, meta, target);
     // Always assemble index.html from the bundle so legacy versions also ship
     // with the readable frame (question, takeaway, analysis, data).
     const html = storedVisualizationDocument(bundle, context);
@@ -507,6 +537,7 @@ export class VisualizationService {
               : []),
             block.json,
             '</data>',
+            'The exact rows above will also be available at runtime as window.qti.data (same shape) — read values from there, never hardcode them.',
           ]
         : []),
       ...(recommendedForm ? ['', recommendedForm.block] : []),
@@ -597,31 +628,40 @@ export class VisualizationService {
     };
   }
 
-  /** The analysis behind a visual, resolved from the project transcript. */
-  private contextFor(
+  /**
+   * The analysis behind a visual, resolved from the project transcript. When
+   * the version directory carries a `data.json` (written by `writeVersion` or
+   * a later `refreshData`), it wins over the source answer's captured data —
+   * a refresh must show up in the frame's provenance and in `window.qti.data`
+   * without needing a new version.
+   */
+  private async contextFor(
+    filesystem: WorkspaceFilesystem,
     project: ProjectDoc,
     meta: ProjectVisualization,
     version: number,
     generatedAt?: string,
-  ): VisualContext {
+  ): Promise<VisualContext> {
     const answer = project.messages.find(
       (m) => m.role === 'assistant' && m.at === meta.sourceMessageAt,
     );
     const question = answer ? this.findQuestion(project, answer) : undefined;
     const entry = meta.versions?.find((v) => v.version === version);
+    const data =
+      (await this.readVersionData(filesystem, meta, version)) ?? answer?.data;
     // Recomputed from the same function the designer prompt uses, so the frame
-    // reports exactly the rows the visual could have been built from.
-    const block = answer?.data?.length
-      ? visualizationData(answer.data)
-      : undefined;
+    // (and the injected window.qti.data) report exactly the rows the visual
+    // could have been built from.
+    const block = data?.length ? visualizationData(data) : undefined;
     return {
       question: question?.content,
       answer: answer?.content,
-      data: answer?.data,
+      data,
+      chartData: block?.records,
       entities: answer?.entities,
       projectName: project.name,
       version,
-      generatedAt: generatedAt ?? entry?.createdAt ?? meta.createdAt,
+      generatedAt: generatedAt ?? entry?.refreshedAt ?? entry?.createdAt ?? meta.createdAt,
       ...(block?.truncatedFrom
         ? {
             chartRows: {
@@ -631,6 +671,153 @@ export class VisualizationService {
           }
         : {}),
     };
+  }
+
+  /** Version's stored data.json, when one has been written; undefined otherwise. */
+  private async readVersionData(
+    filesystem: WorkspaceFilesystem,
+    meta: ProjectVisualization,
+    version: number,
+  ): Promise<ToolDataRecord[] | undefined> {
+    try {
+      const dir = await this.resolveVersionDir(filesystem, meta, version);
+      const parsed: unknown = JSON.parse(
+        await this.readText(filesystem, `${dir}/data.json`),
+      );
+      return Array.isArray(parsed) ? (parsed as ToolDataRecord[]) : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * Re-run the SQL behind the current version's stored data and refresh it in
+   * place: same version, same bundle, only `data.json` and `index.html`
+   * change. Records without a `run_readonly_sql` statement (or already
+   * failed) keep their existing rows; a query that fails to re-run stores its
+   * error instead of aborting the rest.
+   */
+  async refreshData(
+    project: ProjectDoc,
+    visualId: string,
+  ): Promise<{ metadata: ProjectVisualization; bundle: Bundle }> {
+    const meta = this.find(project, visualId);
+    const version = this.currentVersion(meta);
+    const { filesystem } = await this.workspaceFor(project);
+    const dir = await this.resolveVersionDir(filesystem, meta, version);
+    const answer = project.messages.find(
+      (m) => m.role === 'assistant' && m.at === meta.sourceMessageAt,
+    );
+    const existing =
+      (await this.readVersionData(filesystem, meta, version)) ??
+      answer?.data ??
+      [];
+
+    const sandboxes = await getSandboxToolServices().getSandboxes(
+      project.sandboxes,
+    );
+    const datasourceIds = new Set(
+      sandboxes
+        .map((s) => s.datasourceId)
+        .filter((value): value is string => !!value),
+    );
+    const datasourceError =
+      datasourceIds.size === 0
+        ? "No datasource is bound to this project's sandboxes"
+        : datasourceIds.size > 1
+          ? 'Several datasources are in scope for this project; refresh is not supported'
+          : undefined;
+    const datasourceId = datasourceError
+      ? undefined
+      : Array.from(datasourceIds)[0];
+
+    const refreshed = await Promise.all(
+      existing.map(async (record): Promise<ToolDataRecord> => {
+        if (
+          record.tool !== 'run_readonly_sql' ||
+          record.error ||
+          !record.input?.trim()
+        ) {
+          return record;
+        }
+        if (!datasourceId) {
+          return {
+            tool: record.tool,
+            input: record.input,
+            error: datasourceError ?? 'unable to resolve a datasource',
+          };
+        }
+        try {
+          const result = await getSandboxToolServices().runReadOnlySql(
+            datasourceId,
+            record.input,
+            REFRESH_ROW_LIMIT,
+            project.sandboxes,
+          );
+          const rows = result.rows ?? [];
+          const columns = result.columns?.length
+            ? result.columns
+            : Object.keys(rows[0] ?? {});
+          const truncated =
+            result.truncated === true || rows.length > REFRESH_STORED_ROWS_CAP;
+          return {
+            tool: record.tool,
+            input: result.correctedSql ?? record.input,
+            columns,
+            rows: rows.slice(0, REFRESH_STORED_ROWS_CAP),
+            rowCount: rows.length,
+            ...(truncated ? { truncated: true } : {}),
+          };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          this.logger.warn(`Refresh failed for a query: ${message}`);
+          return { tool: record.tool, input: record.input, error: message };
+        }
+      }),
+    );
+
+    const bundle = await this.readBundle(filesystem, meta, version);
+    const question = answer ? this.findQuestion(project, answer) : undefined;
+    const generatedAt = new Date().toISOString();
+    const block = refreshed.length ? visualizationData(refreshed) : undefined;
+    const context: VisualContext = {
+      question: question?.content,
+      answer: answer?.content,
+      data: refreshed,
+      chartData: block?.records,
+      entities: answer?.entities,
+      projectName: project.name,
+      version,
+      generatedAt,
+      ...(block?.truncatedFrom
+        ? { chartRows: { shown: block.shown, truncatedFrom: block.truncatedFrom } }
+        : {}),
+    };
+
+    await Promise.all([
+      filesystem.writeFile(`${dir}/data.json`, JSON.stringify(refreshed, null, 2)),
+      filesystem.writeFile(
+        `${dir}/index.html`,
+        storedVisualizationDocument(bundle, context),
+      ),
+    ]);
+
+    const history = meta.versions?.length
+      ? meta.versions
+      : [
+          {
+            version: 1,
+            createdAt: meta.createdAt,
+            sourceMessageAt: meta.sourceMessageAt,
+          },
+        ];
+    const metadata: ProjectVisualization = {
+      ...meta,
+      versions: history.map((v) =>
+        v.version === version ? { ...v, refreshedAt: generatedAt } : v,
+      ),
+    };
+    return { metadata, bundle };
   }
 
   private async writeVersion(
@@ -748,6 +935,8 @@ export function validateJavascript(javascript: string): string | null {
  */
 export function visualizationData(records: ToolDataRecord[]): {
   json: string;
+  /** Same rows as `json`, already parsed — for embedding without re-parsing. */
+  records: ChartDataRecord[];
   shown: number;
   truncatedFrom?: number;
 } {
@@ -789,7 +978,12 @@ export function visualizationData(records: ToolDataRecord[]): {
     json = JSON.stringify(trimmed, null, 1);
   }
   const shown = trimmed.reduce((sum, r) => sum + r.rows.length, 0);
-  return { json, shown, ...(total > shown ? { truncatedFrom: total } : {}) };
+  return {
+    json,
+    records: trimmed,
+    shown,
+    ...(total > shown ? { truncatedFrom: total } : {}),
+  };
 }
 
 /** Human-readable companion file: question, takeaway, full answer, sources. */

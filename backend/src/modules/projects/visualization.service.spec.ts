@@ -28,8 +28,15 @@ jest.mock('./visualization-document', () => ({
   FRAME_SELECT_SCRIPT: '/* frame bridge */',
 }));
 jest.mock('./zip-archive', () => ({ createZip: jest.fn() }));
+jest.mock('../../mastra/tool-services', () => ({
+  getSandboxToolServices: jest.fn(),
+}));
 
-import { storedVisualizationDocument } from './visualization-document';
+import {
+  sandboxedVisualizationDocument,
+  storedVisualizationDocument,
+} from './visualization-document';
+import { getSandboxToolServices } from '../../mastra/tool-services';
 import {
   VisualizationService,
   visualizationData,
@@ -290,12 +297,14 @@ describe('VisualizationService composed budget', () => {
   it('keeps the tight budget for a single-form visual', async () => {
     const { service, agent } = build();
 
-    await service.create(projectWithRows(20, 20), undefined);
+    // Below the composition floor (COMPOSED_MIN_ROWS = 4) so this stays a
+    // single-form visual even with one measure.
+    await service.create(projectWithRows(3, 3), undefined);
 
     const prompt = (agent.generate.mock.calls as unknown[][])[0][0] as string;
-    expect(prompt).toContain('below 12,000 characters');
+    expect(prompt).toContain('below 14,000 characters');
     expect(prompt).not.toContain('Composed answer:');
-    expect(optionsOf(agent).modelSettings.maxOutputTokens).toBe(6_000);
+    expect(optionsOf(agent).modelSettings.maxOutputTokens).toBe(7_000);
   });
 
   it('raises the budget only when the form is composed', async () => {
@@ -304,9 +313,9 @@ describe('VisualizationService composed budget', () => {
     await service.create(projectWithComposableRows(), undefined);
 
     const prompt = (agent.generate.mock.calls as unknown[][])[0][0] as string;
-    expect(prompt).toContain('below 16,000 characters');
+    expect(prompt).toContain('below 20,000 characters');
     expect(prompt).toContain('Composed answer:');
-    expect(optionsOf(agent).modelSettings.maxOutputTokens).toBe(9_000);
+    expect(optionsOf(agent).modelSettings.maxOutputTokens).toBe(11_000);
   });
 
   it('raises it on the tailor path too', async () => {
@@ -319,8 +328,8 @@ describe('VisualizationService composed budget', () => {
     );
 
     const prompt = (agent.generate.mock.calls as unknown[][])[0][0] as string;
-    expect(prompt).toContain('below 16,000 characters');
-    expect(optionsOf(agent).modelSettings.maxOutputTokens).toBe(9_000);
+    expect(prompt).toContain('below 20,000 characters');
+    expect(optionsOf(agent).modelSettings.maxOutputTokens).toBe(11_000);
   });
 });
 
@@ -353,6 +362,85 @@ function withVisual(
     ],
   };
 }
+
+describe('VisualizationService.load mode', () => {
+  beforeEach(() => {
+    (sandboxedVisualizationDocument as jest.Mock).mockClear();
+  });
+
+  it('defaults to the full document', async () => {
+    const { service } = build();
+
+    await service.load(withVisual(projectWithRows(20, 20)), 'visual-1', 1);
+
+    expect(sandboxedVisualizationDocument).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      { mode: 'full' },
+    );
+  });
+
+  it('passes the tile mode through to the document builder', async () => {
+    const { service } = build();
+
+    await service.load(
+      withVisual(projectWithRows(20, 20)),
+      'visual-1',
+      1,
+      'tile',
+    );
+
+    expect(sandboxedVisualizationDocument).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      { mode: 'tile' },
+    );
+  });
+});
+
+describe('VisualizationService.chartRecords', () => {
+  it('returns the bounded records built from the source answer\'s data', async () => {
+    const { service } = build();
+
+    const records = await service.chartRecords(
+      withVisual(projectWithRows(20, 20)),
+      'visual-1',
+    );
+
+    expect(records).toHaveLength(1);
+    expect(records[0].columns).toEqual(['month', 'n']);
+    expect(records[0].rows.length).toBeGreaterThan(0);
+  });
+
+  it('returns an empty array when the visual has no data behind it', async () => {
+    const { service } = build();
+    const project: ProjectDoc = {
+      id: 'project-1',
+      name: 'Claims',
+      sandboxes: ['claims'],
+      visualizations: [],
+      messages: [
+        {
+          role: 'assistant',
+          content: 'No data was queried.',
+          at: '2024-01-01T00:00:01.000Z',
+        },
+      ],
+    };
+
+    const records = await service.chartRecords(withVisual(project), 'visual-1');
+
+    expect(records).toEqual([]);
+  });
+
+  it('rejects an unknown visual', async () => {
+    const { service } = build();
+
+    await expect(
+      service.chartRecords(projectWithRows(20, 20), 'missing'),
+    ).rejects.toThrow(/not found/);
+  });
+});
 
 describe('VisualizationService.repair', () => {
   it('feeds the runtime error back to the designer and stores a new version', async () => {
@@ -449,5 +537,141 @@ describe('VisualizationService.repair', () => {
     await expect(
       service.repair(projectWithRows(20, 20), 'missing', 'boom'),
     ).rejects.toThrow(/not found/);
+  });
+});
+
+describe('VisualizationService.refreshData', () => {
+  const sandbox = {
+    name: 'claims',
+    datasourceId: 'ds-1',
+    datasourceKind: 'databricks' as const,
+    tables: ['main.health.claims'],
+  };
+
+  /** No data.json on disk yet — every readFile resolves the generic stub. */
+  function buildNoStoredData() {
+    return build();
+  }
+
+  beforeEach(() => {
+    (storedVisualizationDocument as jest.Mock).mockClear();
+    (sandboxedVisualizationDocument as jest.Mock).mockClear();
+    (getSandboxToolServices as jest.Mock).mockReset();
+  });
+
+  it('re-runs the stored SQL through the same executor the query tool uses', async () => {
+    const { service, filesystem } = buildNoStoredData();
+    const runReadOnlySql = jest.fn().mockResolvedValue({
+      columns: ['month', 'n'],
+      rows: [{ month: 1, n: 111 }],
+    });
+    (getSandboxToolServices as jest.Mock).mockReturnValue({
+      getSandboxes: jest.fn().mockResolvedValue([sandbox]),
+      runReadOnlySql,
+    });
+
+    const project = withVisual(projectWithRows(20, 20));
+    const { metadata } = await service.refreshData(project, 'visual-1');
+
+    expect(runReadOnlySql).toHaveBeenCalledWith(
+      'ds-1',
+      'SELECT month, n FROM main.health.claims',
+      expect.any(Number),
+      project.sandboxes,
+    );
+    // Same version, no new entry appended to the version history.
+    expect(metadata.currentVersion).toBe(1);
+    expect(metadata.versions).toHaveLength(1);
+    expect(metadata.versions?.[0]?.refreshedAt).toEqual(expect.any(String));
+
+    const dataWrite = (filesystem.writeFile as jest.Mock).mock.calls.find(
+      (call) => call[0] === 'visuals/visual-1/v1/data.json',
+    );
+    expect(dataWrite).toBeDefined();
+    const written = JSON.parse(dataWrite![1] as string) as ToolDataRecord[];
+    expect(written).toHaveLength(1);
+    expect(written[0].rows).toEqual([{ month: 1, n: 111 }]);
+    expect(written[0].error).toBeUndefined();
+
+    // index.html is regenerated from the refreshed rows; no other version dir touched.
+    expect(filesystem.writeFile).toHaveBeenCalledWith(
+      'visuals/visual-1/v1/index.html',
+      expect.any(String),
+    );
+    expect(
+      (filesystem.writeFile as jest.Mock).mock.calls.some((call) =>
+        String(call[0]).includes('/v2/'),
+      ),
+    ).toBe(false);
+  });
+
+  it('stores an error on a record whose re-run fails without aborting others', async () => {
+    const { service, filesystem } = buildNoStoredData();
+    const runReadOnlySql = jest.fn().mockRejectedValue(new Error('timed out'));
+    (getSandboxToolServices as jest.Mock).mockReturnValue({
+      getSandboxes: jest.fn().mockResolvedValue([sandbox]),
+      runReadOnlySql,
+    });
+
+    const project = withVisual(projectWithRows(20, 20));
+    await service.refreshData(project, 'visual-1');
+
+    const dataWrite = (filesystem.writeFile as jest.Mock).mock.calls.find(
+      (call) => call[0] === 'visuals/visual-1/v1/data.json',
+    );
+    const written = JSON.parse(dataWrite![1] as string) as ToolDataRecord[];
+    expect(written).toHaveLength(1);
+    expect(written[0].error).toBe('timed out');
+    expect(written[0].rows).toBeUndefined();
+  });
+
+  it('leaves records without a SQL statement untouched', async () => {
+    const { service, filesystem } = buildNoStoredData();
+    const runReadOnlySql = jest.fn();
+    (getSandboxToolServices as jest.Mock).mockReturnValue({
+      getSandboxes: jest.fn().mockResolvedValue([sandbox]),
+      runReadOnlySql,
+    });
+
+    const project = withVisual(projectWithRows(20, 20));
+    // sample_rows records carry no real SQL — nothing to re-run.
+    project.messages[1].data = [
+      { tool: 'sample_rows', input: 'main.health.claims', rows: [{ a: 1 }] },
+    ];
+
+    await service.refreshData(project, 'visual-1');
+
+    expect(runReadOnlySql).not.toHaveBeenCalled();
+    const dataWrite = (filesystem.writeFile as jest.Mock).mock.calls.find(
+      (call) => call[0] === 'visuals/visual-1/v1/data.json',
+    );
+    const written = JSON.parse(dataWrite![1] as string) as ToolDataRecord[];
+    expect(written).toEqual(project.messages[1].data);
+  });
+
+  it('load prefers the refreshed data.json over the original answer data', async () => {
+    const { service, filesystem } = buildNoStoredData();
+    const refreshedRecord: ToolDataRecord = {
+      tool: 'run_readonly_sql',
+      input: 'SELECT month, n FROM main.health.claims',
+      columns: ['month', 'n'],
+      rows: [{ month: 99, n: 999 }],
+      rowCount: 1,
+    };
+    (filesystem.readFile as jest.Mock).mockImplementation(
+      async (path: string) => {
+        if (path.endsWith('data.json')) {
+          return JSON.stringify([refreshedRecord]);
+        }
+        return '# skill';
+      },
+    );
+
+    await service.load(withVisual(projectWithRows(20, 20)), 'visual-1', 1);
+
+    const calls = (sandboxedVisualizationDocument as jest.Mock).mock
+      .calls as unknown[][];
+    const context = calls.at(-1)![1] as { data?: ToolDataRecord[] };
+    expect(context.data).toEqual([refreshedRecord]);
   });
 });
