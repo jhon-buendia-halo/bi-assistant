@@ -49,12 +49,21 @@ export class DatasourcesApiService {
     );
   }
 
-  /** Served from the backend snapshot unless `refresh` forces a live walk. */
+  /**
+   * Served from the backend snapshot unless `refresh` forces a live walk.
+   * With `cachedOnly` the datasource is never contacted: a miss comes back as
+   * `{ ok: true }` without catalogs, so the caller can offer a load instead of
+   * blocking on a cold warehouse.
+   */
   getInventory(
     id: string,
-    opts?: { refresh?: boolean },
+    opts?: { refresh?: boolean; cachedOnly?: boolean },
   ): Observable<InventoryResult> {
-    const query = opts?.refresh ? '?refresh=true' : '';
+    const query = opts?.refresh
+      ? '?refresh=true'
+      : opts?.cachedOnly
+        ? '?cachedOnly=true'
+        : '';
     return this.http.get<InventoryResult>(
       `${API_BASE_URL}/datasources/${encodeURIComponent(id)}/inventory${query}`,
     );

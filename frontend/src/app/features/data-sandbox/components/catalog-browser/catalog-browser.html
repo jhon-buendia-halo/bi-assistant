@@ -16,7 +16,7 @@
       <select
         aria-label="Datasource"
         [value]="datasourceId()"
-        [disabled]="loading() || datasources().length === 0"
+        [disabled]="datasources().length === 0"
         (change)="changeDatasource($any($event.target).value)"
         class="max-w-[220px] rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[13px] text-zinc-200 outline-none focus:border-white/25 disabled:opacity-50"
       >
@@ -24,7 +24,11 @@
           <option value="" class="bg-[#232323]">No datasources</option>
         }
         @for (datasource of datasources(); track datasource.id) {
-          <option [value]="datasource.id" class="bg-[#232323]">
+          <option
+            [value]="datasource.id"
+            [selected]="datasource.id === datasourceId()"
+            class="bg-[#232323]"
+          >
             {{ datasource.name }} ·
             {{ datasource.kind === "postgres" ? "PostgreSQL" : "Databricks" }}
           </option>
@@ -72,16 +76,45 @@
     </div>
   </div>
 
-  @if (loading()) {
-    <div class="mt-10 flex flex-col gap-1.5">
+  @if (awaitingChoice()) {
+    <div class="mt-10 flex flex-col items-start gap-3">
+      <div class="flex flex-col gap-1">
+        <p class="text-[13px] text-zinc-400">
+          Pick the datasource you want to browse, then load its entities.
+        </p>
+        <p class="text-[12px] text-zinc-600">
+          Nothing is read until you load, so a sleeping Databricks warehouse
+          never blocks switching to another datasource.
+        </p>
+      </div>
+      <button
+        type="button"
+        data-testid="load-inventory"
+        (click)="loadSelected()"
+        [disabled]="!selectedDatasource()"
+        class="flex items-center gap-2 rounded-lg bg-zinc-200 px-3.5 py-2 text-[13px] font-medium text-zinc-900 hover:bg-white disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+      >
+        <lucide-angular [img]="Play" [size]="14" />
+        <span>Load entities from {{ datasourceLabel() }}</span>
+      </button>
+    </div>
+  } @else if (loading()) {
+    <div class="mt-10 flex flex-col items-start gap-1.5">
       <div class="flex items-center gap-2.5 text-zinc-400">
         <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
         <span>Loading inventory from {{ datasourceLabel() }}…</span>
       </div>
       <p class="pl-[26px] text-[12px] text-zinc-600">
         The first load can take a while if the Databricks warehouse is starting
-        up.
+        up. You can switch datasource above at any time.
       </p>
+      <button
+        type="button"
+        (click)="cancelLoad()"
+        class="ml-[26px] mt-1 rounded-md border border-white/10 px-2.5 py-1 text-[12px] text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
+      >
+        Cancel
+      </button>
     </div>
   } @else if (error(); as err) {
     <p
