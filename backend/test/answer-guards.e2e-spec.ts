@@ -81,6 +81,13 @@ GROUP BY t.common_name
 `;
 
 /** Every card in the fixture is a yellow, so the share cannot vary. */
+/** Every goal minute — more rows than a deliberate top-N, so a cap can bite. */
+const GOALS_BY_MINUTE_SQL = `
+  SELECT g.minute, COUNT(*) AS goals
+  FROM world_cup.goals g
+  GROUP BY g.minute
+  ORDER BY g.minute`;
+
 const YELLOW_SHARE_SQL = `
 SELECT t.common_name, COUNT(*) FILTER (WHERE d.card_type = 'yellow')::numeric / COUNT(*) AS yellow_share
 FROM world_cup.disciplinary_events d JOIN world_cup.teams t ON t.id = d.team_id
@@ -254,17 +261,29 @@ describeLive('answer-quality guards on live World Cup data', () => {
 
   /**
    * Landing exactly on the cap means the answer was cut short, and a total
-   * computed over a truncated result is wrong rather than approximate.
+   * computed over a truncated result is wrong rather than approximate. Only a
+   * cap big enough to be a safety ceiling counts: a request for a handful of
+   * rows is a deliberate top-N, and warning about it taught the assistant to
+   * hedge correct answers with a truncation caveat.
    */
-  it('flags a result that stopped exactly on the row cap', async () => {
+  it('flags a result that stopped exactly on a large row cap', async () => {
+    const rows = await runSql(pool, GOALS_BY_MINUTE_SQL);
+
+    expect(rows.length).toBeGreaterThan(10);
+    expect(
+      codesOf(inspectResult(GOALS_BY_MINUTE_SQL, rows, rows.length)),
+    ).toContain('row-cap-reached');
+    // One row of headroom and the cap is not the explanation for the row count.
+    expect(
+      codesOf(inspectResult(GOALS_BY_MINUTE_SQL, rows, rows.length + 1)),
+    ).not.toContain('row-cap-reached');
+  });
+
+  it('stays silent on a deliberate small top-N', async () => {
     const rows = await runSql(pool, YELLOW_SHARE_SQL);
 
     expect(rows).toHaveLength(5);
-    expect(codesOf(inspectResult(YELLOW_SHARE_SQL, rows, 5))).toContain(
-      'row-cap-reached',
-    );
-    // One row of headroom and the cap is not the explanation for the row count.
-    expect(codesOf(inspectResult(YELLOW_SHARE_SQL, rows, 6))).not.toContain(
+    expect(codesOf(inspectResult(YELLOW_SHARE_SQL, rows, 5))).not.toContain(
       'row-cap-reached',
     );
   });
