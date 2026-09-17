@@ -357,10 +357,13 @@ function capOf(
   rowLimit?: number,
 ): number | null {
   if (rowCount <= 0) return null;
+  // A caller asking for ten rows or fewer wants exactly those — the assistant
+  // passes limit: 1 alongside its own LIMIT 1 for "the top scorer". Only a cap
+  // large enough to be a safety ceiling says anything about missing rows.
   if (
     typeof rowLimit === 'number' &&
     Number.isFinite(rowLimit) &&
-    rowLimit > 0 &&
+    rowLimit > DELIBERATE_TOP_N &&
     rowCount >= rowLimit
   ) {
     return rowLimit;

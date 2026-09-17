@@ -276,16 +276,25 @@ describe('inspectResult / blank-group-key', () => {
 
 describe('inspectResult / row-cap-reached', () => {
   it('flags results that reach the requested cap', () => {
-    const warnings = inspectResult(
-      'SELECT plan, spend FROM t',
-      [
-        { plan: 'HMO', spend: 4 },
-        { plan: 'PPO', spend: 9 },
-      ],
-      2,
-    );
+    const rows = Array.from({ length: 50 }, (_, i) => ({ plan: `P${i}` }));
+    const warnings = inspectResult('SELECT plan FROM t', rows, 50);
     expect(codes(warnings)).toEqual(['row-cap-reached']);
-    expect(messageFor(warnings, 'row-cap-reached')).toContain('2 rows');
+    expect(messageFor(warnings, 'row-cap-reached')).toContain('50 rows');
+  });
+
+  // The assistant passes limit: 1 next to its own LIMIT 1 for a top-one
+  // question; treating that as a ceiling produced a truncation caveat on a
+  // correct answer in every measured trial.
+  it('stays silent when the caller deliberately asked for a few rows', () => {
+    expect(
+      codes(
+        inspectResult(
+          'SELECT team FROM t ORDER BY goals DESC LIMIT 1',
+          [{ team: 'France' }],
+          1,
+        ),
+      ),
+    ).toEqual([]);
   });
 
   it('flags results that exactly fill a large declared LIMIT', () => {
@@ -341,15 +350,16 @@ describe('inspectResult / row-cap-reached', () => {
 
 describe('inspectResult / contract', () => {
   it('returns warnings in declaration order', () => {
-    const sql = `SELECT segment AS seg, SUM(x) AS kept, SUM(x) AS total FROM t LIMIT 2`;
-    const warnings = inspectResult(
-      sql,
-      [
-        { seg: 'Large', rate: 1, kept: 5, total: 5 },
-        { seg: null, rate: 1, kept: 7, total: 7 },
-      ],
-      2,
-    );
+    const sql = `SELECT segment AS seg, SUM(x) AS kept, SUM(x) AS total FROM t LIMIT 12`;
+    // Twelve rows against a cap of twelve: above the deliberate top-N size, so
+    // the cap genuinely looks like a ceiling the result ran into.
+    const rows = Array.from({ length: 12 }, (_, i) => ({
+      seg: i === 0 ? null : `Segment ${i}`,
+      rate: 1,
+      kept: 5,
+      total: 5,
+    }));
+    const warnings = inspectResult(sql, rows, 12);
     expect(codes(warnings)).toEqual([
       'degenerate-ratio',
       'constant-metric',
