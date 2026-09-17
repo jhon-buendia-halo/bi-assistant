@@ -18,7 +18,8 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "eval": "ts-node -T -P tsconfig.json scripts/run-eval.ts"
+    "eval": "ts-node -T -P tsconfig.json scripts/run-eval.ts",
+    "check:answers": "ts-node -T -P tsconfig.json scripts/check-answers.ts"
   },
   "dependencies": {
     "@databricks/sql": "2.1.0",

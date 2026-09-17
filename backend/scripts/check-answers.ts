@@ -1,0 +1,495 @@
+/**
+ * Live answer-quality gate (opt-in, costs real money).
+ *
+ * Every result guard in `src/modules/projects/result-guards.ts` exists because a
+ * *model* once produced a fluent, wrong answer: a rate divided by itself and
+ * reported as a flat 100%, a tie flattened into a ranking, a metric that cannot
+ * vary presented as a comparison. Unit tests pin the guards; only a real turn
+ * proves the assistant, with those guards in its loop, no longer ships the
+ * defect. So this runs by hand (or in a gate that opts in), never as part of
+ * `npm test`:
+ *
+ *   docker compose up -d                 # World Cup Postgres fixture
+ *   OPENAI_API_KEY=... npm run check:answers
+ *
+ * Exit 0 = every check passed. Non-zero = a check failed, the fixture was
+ * unreachable, or no key was exported. The SQL and the prose of every turn are
+ * printed, because reproducing a failure costs another round of model calls.
+ *
+ * Sibling of `scripts/run-eval.ts`: that one compares result sets against
+ * trusted SQL, this one asserts the answer is not degenerate. Same boot path,
+ * same throwaway-project mechanics.
+ */
+import { mkdtempSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
+import type { INestApplicationContext } from '@nestjs/common';
+import { NestFactory } from '@nestjs/core';
+// Pure heuristics — no DI, no datastore import, safe to pull in eagerly.
+import { inspectResult } from '../src/modules/projects/result-guards';
+import type {
+  ChatMessage,
+  ToolDataRecord,
+} from '../src/modules/projects/entities/project.entity';
+import { WORLD_CUP_CONNECTION, worldCupReachable } from '../test/world-cup';
+
+/** Real model calls take tens of seconds; a tight timeout only buys false alarms. */
+const TURN_TIMEOUT_MS = Number(process.env.CHECK_TIMEOUT_MS ?? 180_000);
+/** `run_readonly_sql` defaults to 100 rows; the guards judge truncation against the same cap. */
+const ROW_LIMIT = 100;
+const SANDBOX_NAME = 'World Cup';
+/** The cheapest model that still routes tools — and the one the ratio bug shipped on. */
+const MODEL = process.env.CHECK_MODEL ?? 'gpt-4o-mini';
+
+/** Entities the checks need. Keys are resolved from the live inventory, never typed by hand. */
+const REQUIRED_TABLES = [
+  'matches',
+  'goals',
+  'teams',
+  'match_team_statistics',
+  'disciplinary_events',
+  'players',
+];
+
+/** A misconfiguration the operator must fix — reported without a stack trace. */
+class SetupError extends Error {}
+
+interface Answer {
+  question: string;
+  text: string;
+  records: ToolDataRecord[];
+}
+
+interface Check {
+  name: string;
+  question: string;
+  /** Why this case exists — printed with the failure so the defect is legible. */
+  guards: string;
+  /** Null when the answer is acceptable, else the one-line reason it is not. */
+  verify: (answer: Answer) => string | null;
+}
+
+type Verdict = 'PASS' | 'FAIL' | 'ERROR';
+
+interface CheckResult {
+  name: string;
+  verdict: Verdict;
+  detail: string;
+  durationMs: number;
+}
+
+// ---------------------------------------------------------------- checks
+
+const CHECKS: Check[] = [
+  {
+    name: 'pass-completion-ratio',
+    question: 'What share of their attempted passes did each team complete?',
+    guards:
+      'the production bug: the same measure aliased twice and divided by itself, narrated as a flat rate',
+    verify: (answer) => {
+      const record = successfulSql(answer);
+      if (!record) return 'no successful run_readonly_sql';
+
+      const codes = inspectResult(
+        record.input ?? '',
+        record.rows ?? [],
+        ROW_LIMIT,
+      ).map((warning) => warning.code);
+      if (codes.includes('degenerate-ratio')) {
+        return 'the SQL divides a measure by itself (degenerate-ratio)';
+      }
+
+      // Ground truth varies per team — Croatia .871, Brazil .870, England .869
+      // — so a correct answer cannot be uniform, and a collapsed denominator
+      // shows up as one value repeated on every row.
+      const rates = ratesIn(record.rows ?? []);
+      if (rates.length < 2) {
+        return `found no per-team rate column in ${columnList(record)}`;
+      }
+      const distinct = new Set(rates.map((rate) => rate.toFixed(4)));
+      if (distinct.size < 2) {
+        return `every team reports the same rate (${rates[0]})`;
+      }
+      const outOfRange = rates.filter((rate) => rate <= 0 || rate >= 1);
+      if (outOfRange.length) {
+        return `rate outside (0,1): ${outOfRange.slice(0, 3).join(', ')}`;
+      }
+      return null;
+    },
+  },
+  {
+    name: 'tie-not-ranked',
+    question: 'Which teams scored exactly four goals in total?',
+    guards:
+      'ties flattened into a ranking: the model naming whichever tied team came back first',
+    verify: (answer) => {
+      if (!successfulSql(answer)) return 'no successful run_readonly_sql';
+      // Belgium and England both scored exactly four; naming one is wrong.
+      const missing = ['Belgium', 'England'].filter(
+        (team) => !new RegExp(team, 'i').test(answer.text),
+      );
+      return missing.length
+        ? `the answer never mentions ${missing.join(' or ')}`
+        : null;
+    },
+  },
+  {
+    name: 'constant-metric-not-compared',
+    question: 'What share of the disciplinary cards shown were yellow?',
+    guards:
+      'invented variation: breaking down a metric that is 100% on every row as if teams differed',
+    verify: (answer) => {
+      if (!successfulSql(answer)) return 'no successful run_readonly_sql';
+      // Every card in the fixture is a yellow, so the share is 100% and there
+      // is nothing to compare. Deliberately loose: this checks the shape of the
+      // claim, and pinning model wording would only buy flakes.
+      if (!/yellow/i.test(answer.text)) {
+        return 'the answer never mentions yellow cards';
+      }
+      if (
+        !/\b(all|every|only|entire|100\s?%|100 percent)\b/i.test(answer.text)
+      ) {
+        return 'the answer does not say the cards were all yellows';
+      }
+      return null;
+    },
+  },
+];
+
+// ------------------------------------------------------------ provisioning
+
+/**
+ * Write the LLM settings, the Postgres datasource and the sandbox into the
+ * throwaway datastore. Nothing here may reach the developer's real app.sqlite,
+ * which is why `main` redirects APP_DATA_DIR before the first Nest import.
+ */
+async function provision(
+  app: INestApplicationContext,
+  apiKey: string,
+): Promise<void> {
+  const { LlmService } =
+    require('../src/modules/llm/llm.service') as typeof import('../src/modules/llm/llm.service');
+  const { DatasourcesService } =
+    require('../src/modules/datasources/datasources.service') as typeof import('../src/modules/datasources/datasources.service');
+  const { SandboxService } =
+    require('../src/modules/sandbox/sandbox.service') as typeof import('../src/modules/sandbox/sandbox.service');
+
+  await app.get(LlmService).save({ provider: 'openai', model: MODEL, apiKey });
+
+  const datasources = app.get(DatasourcesService);
+  const datasource = await datasources.save({
+    name: SANDBOX_NAME,
+    kind: 'postgres',
+    config: {
+      host: WORLD_CUP_CONNECTION.host,
+      port: WORLD_CUP_CONNECTION.port,
+      database: WORLD_CUP_CONNECTION.database,
+      user: WORLD_CUP_CONNECTION.user,
+      password: WORLD_CUP_CONNECTION.password,
+      ssl: false,
+    },
+  });
+
+  // Entity keys come from the connector's inventory. Hand-building
+  // `catalog.schema.table` would hard-code that Postgres reports the database
+  // as the catalog — exactly the coupling that makes a fixture rename look like
+  // an assistant regression.
+  const { catalogs } = await datasources.inventory(datasource.id);
+  const entities = catalogs.flatMap((catalog) =>
+    catalog.schemas.flatMap((schema) =>
+      schema.tables
+        .filter((table) => REQUIRED_TABLES.includes(table.name))
+        .map((table) => ({
+          key: `${catalog.name}.${schema.name}.${table.name}`,
+          columns: table.columns,
+        })),
+    ),
+  );
+  const missing = REQUIRED_TABLES.filter(
+    (name) => !entities.some((entity) => entity.key.endsWith(`.${name}`)),
+  );
+  if (missing.length) {
+    throw new SetupError(
+      `The World Cup fixture is missing ${missing.join(', ')} — re-seed it ` +
+        '(docker compose down -v && docker compose up -d) and retry.',
+    );
+  }
+
+  await app.get(SandboxService).save({
+    name: SANDBOX_NAME,
+    tables: entities.map((entity) => entity.key),
+    entities,
+    datasourceId: datasource.id,
+  });
+}
+
+// ---------------------------------------------------------------- runtime
+
+/**
+ * One turn in a throwaway project through the same path the desktop app drives
+ * (`ProjectsService.streamMessage` with a no-op emitter), then the persisted
+ * assistant message — identical mechanics to `scripts/run-eval.ts`.
+ */
+async function ask(
+  app: INestApplicationContext,
+  question: string,
+): Promise<Answer> {
+  const { ProjectsService } =
+    require('../src/modules/projects/projects.service') as typeof import('../src/modules/projects/projects.service');
+  const projects = app.get(ProjectsService);
+  const project = await projects.create(
+    `check-answers ${new Date().toISOString()}`.slice(0, 64),
+    [SANDBOX_NAME],
+  );
+  try {
+    const turn = new AbortController();
+    const timer = setTimeout(() => turn.abort(), TURN_TIMEOUT_MS);
+    try {
+      await projects.streamMessage(project.id, question, () => {}, turn.signal);
+    } finally {
+      clearTimeout(timer);
+    }
+    if (turn.signal.aborted) {
+      throw new Error(
+        `the turn exceeded ${Math.round(TURN_TIMEOUT_MS / 1000)}s`,
+      );
+    }
+    const answered = await projects.get(project.id);
+    const message = lastAssistantMessage(answered.messages);
+    return {
+      question,
+      text: message?.content ?? '',
+      records: message?.data ?? [],
+    };
+  } finally {
+    await projects
+      .delete(project.id)
+      .catch((error: unknown) =>
+        console.warn(
+          `  ! could not delete throwaway project ${project.id} — ${message(error)}`,
+        ),
+      );
+  }
+}
+
+async function runCheck(
+  app: INestApplicationContext,
+  check: Check,
+): Promise<CheckResult> {
+  const started = Date.now();
+  console.log(`\n▶ ${check.name}: ${check.question}`);
+  console.log(`  guards ${check.guards}`);
+  let answer: Answer;
+  try {
+    answer = await ask(app, check.question);
+  } catch (error) {
+    return {
+      name: check.name,
+      verdict: 'ERROR',
+      detail: `turn failed — ${message(error)}`,
+      durationMs: Date.now() - started,
+    };
+  }
+  // Printed before the verdict: re-running to see the SQL costs another turn.
+  report(answer);
+  let reason: string | null;
+  try {
+    reason = check.verify(answer);
+  } catch (error) {
+    return {
+      name: check.name,
+      verdict: 'ERROR',
+      detail: `check crashed — ${message(error)}`,
+      durationMs: Date.now() - started,
+    };
+  }
+  return {
+    name: check.name,
+    verdict: reason ? 'FAIL' : 'PASS',
+    detail: reason ?? 'answer is sound',
+    durationMs: Date.now() - started,
+  };
+}
+
+// ----------------------------------------------------------------- output
+
+function report(answer: Answer): void {
+  for (const record of answer.records) {
+    if (record.tool !== 'run_readonly_sql') continue;
+    console.log(
+      `  sql${record.error ? ' (failed)' : ''}: ${oneLine(record.input ?? '')}`,
+    );
+    if (record.warnings?.length) {
+      console.log(`  warnings: ${record.warnings.join(' | ')}`);
+    }
+  }
+  console.log(`  answer: ${oneLine(answer.text)}`);
+}
+
+function summarize(results: CheckResult[]): void {
+  const rows = results.map((result) => [
+    result.name,
+    result.verdict,
+    `${(result.durationMs / 1000).toFixed(1)}s`,
+    oneLine(result.detail).slice(0, 80),
+  ]);
+  const header = ['CHECK', 'VERDICT', 'TIME', 'DETAIL'];
+  const widths = header.map((label, column) =>
+    Math.max(label.length, ...rows.map((row) => row[column].length)),
+  );
+  const line = (cells: string[]) =>
+    cells
+      .map((cell, i) => cell.padEnd(widths[i]))
+      .join('  ')
+      .trimEnd();
+
+  console.log('');
+  console.log(line(header));
+  console.log(widths.map((width) => '-'.repeat(width)).join('  '));
+  for (const row of rows) console.log(line(row));
+
+  const count = (verdict: Verdict) =>
+    results.filter((result) => result.verdict === verdict).length;
+  console.log('');
+  console.log(
+    `${results.length} checks — ${count('PASS')} passed, ${count('FAIL')} failed, ` +
+      `${count('ERROR')} errored`,
+  );
+}
+
+// ---------------------------------------------------------------- helpers
+
+function lastAssistantMessage(
+  messages: ChatMessage[],
+): ChatMessage | undefined {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === 'assistant') return messages[i];
+  }
+  return undefined;
+}
+
+/** The last `run_readonly_sql` that succeeded — the query the answer rests on. */
+function successfulSql(answer: Answer): ToolDataRecord | undefined {
+  for (let i = answer.records.length - 1; i >= 0; i--) {
+    const record = answer.records[i];
+    if (record.tool === 'run_readonly_sql' && !record.error && record.input) {
+      return record;
+    }
+  }
+  return undefined;
+}
+
+const RATE_NAME =
+  /(rate|ratio|share|pct|percent|accuracy|completion|complete)/i;
+const NUMERIC = /^-?\d+(\.\d+)?([eE][+-]?\d+)?$/;
+
+/**
+ * The rate column, whatever the model called it, as fractions. Postgres returns
+ * numerics as strings and models answer in either 0-1 or 0-100, so both are
+ * normalised: the assertion is about spread and plausibility, not the unit.
+ */
+function ratesIn(rows: Record<string, unknown>[]): number[] {
+  if (!rows.length) return [];
+  const columns = Object.keys(rows[0] ?? {});
+  const named = columns.filter((column) => RATE_NAME.test(column));
+  for (const column of named.length ? named : columns) {
+    const values = rows.map((row) => numeric(row?.[column]));
+    if (values.some((value) => value === null)) continue;
+    const numbers = values as number[];
+    const scaled =
+      Math.max(...numbers) > 1 ? numbers.map((value) => value / 100) : numbers;
+    // Anything outside (0,1] after scaling is a count or a key, not a share.
+    if (scaled.every((value) => value > 0 && value <= 1)) return scaled;
+  }
+  return [];
+}
+
+function numeric(value: unknown): number | null {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value === 'bigint') return Number(value);
+  if (typeof value === 'string' && NUMERIC.test(value.trim())) {
+    return Number(value.trim());
+  }
+  return null;
+}
+
+function columnList(record: ToolDataRecord): string {
+  const columns = record.columns ?? Object.keys(record.rows?.[0] ?? {});
+  return columns.length ? columns.join(', ') : '(no columns)';
+}
+
+function oneLine(text: string): string {
+  return text.replace(/\s+/g, ' ').trim();
+}
+
+function message(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+// ------------------------------------------------------------------- main
+
+async function main(): Promise<number> {
+  // The key is read from the environment and never stored, echoed or defaulted.
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new SetupError(
+      'OPENAI_API_KEY is not set. These checks drive the real model and cost ' +
+        'money, so they never run implicitly — export a key and retry.',
+    );
+  }
+  if (!(await worldCupReachable())) {
+    throw new SetupError(
+      `The World Cup fixture is not reachable on ${WORLD_CUP_CONNECTION.host}:` +
+        `${WORLD_CUP_CONNECTION.port} — run \`docker compose up -d\` from the ` +
+        'repo root and retry.',
+    );
+  }
+
+  // `database.module.ts` and `mastra/storage.ts` capture the data directory when
+  // they are first imported, so APP_DATA_DIR has to be redirected before the
+  // first Nest import. Static imports are hoisted above this statement, hence
+  // the deferred `require` below: without it these checks would write their LLM
+  // settings, datasource and sandbox into the developer's real app.sqlite.
+  const dataDir = mkdtempSync(join(tmpdir(), 'qti-llm-e2e-'));
+  process.env.APP_DATA_DIR = dataDir;
+  const { AppModule } =
+    require('../src/app.module') as typeof import('../src/app.module');
+
+  const app = await NestFactory.createApplicationContext(AppModule, {
+    logger: ['warn', 'error'],
+  });
+  const results: CheckResult[] = [];
+  try {
+    await provision(app, apiKey);
+    console.log(
+      `Running ${CHECKS.length} answer checks against the World Cup fixture ` +
+        `(model ${MODEL}, timeout ${Math.round(TURN_TIMEOUT_MS / 1000)}s)`,
+    );
+    for (const check of CHECKS) {
+      const result = await runCheck(app, check);
+      results.push(result);
+      console.log(`  ${result.verdict} — ${oneLine(result.detail)}`);
+    }
+  } finally {
+    await app.close().catch(() => undefined);
+    // Throwaway datastore: nothing it holds may outlive the run.
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+
+  summarize(results);
+  return results.every((result) => result.verdict === 'PASS') ? 0 : 1;
+}
+
+if (require.main === module) {
+  main()
+    .then((code) => process.exit(code))
+    .catch((error: unknown) => {
+      if (error instanceof SetupError) {
+        console.error(`\n✖ ${error.message}\n`);
+      } else {
+        console.error('\n✖ Answer checks crashed:');
+        console.error(error);
+      }
+      process.exit(1);
+    });
+}

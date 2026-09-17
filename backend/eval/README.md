@@ -39,7 +39,13 @@ Unordered **multiset** comparison, so row order never matters:
 - `null`/`undefined` collapse to one token; `Date`s compare as ISO strings.
 - Column **names and order are ignored**: each row is keyed by its sorted set of
   values. An answer that labels the column `total_paid` instead of `spend` still
-  passes; one that returns an extra column does not (column counts must match).
+  passes.
+- Column **count is tolerated** here: the reference SQL projects exactly what the
+  question asked, while the assistant also selects the figures its answer and
+  visuals lean on. A run whose facts match but whose projection is wider passes
+  as `PASS(extra-columns)`. A result whose figures actually differ is reported as
+  a figure difference, never as a column-count complaint — that distinction is
+  the whole point, since a real disagreement once hid behind a shape mismatch.
 
 Practical consequence: write `expectedSql` so it returns exactly the facts the
 question asks for — no extra bookkeeping columns, no `ORDER BY` dependence.
@@ -49,6 +55,7 @@ question asks for — no extra bookkeeping columns, no `ORDER BY` dependence.
 | Verdict                 | Meaning                                                                  |
 | ----------------------- | ------------------------------------------------------------------------ |
 | `PASS`                  | Result sets match.                                                       |
+| `PASS(extra-columns)`   | The facts match; the assistant projected more columns than the reference. |
 | `FAIL(result-mismatch)` | The assistant ran SQL, but the rows differ from the reference.           |
 | `FAIL(no-sql)`          | The answer ran no successful `run_readonly_sql` (often a clarification). |
 | `ERROR(expected-sql)`   | The case's own `expectedSql` failed to run — fix the case.               |
@@ -56,6 +63,39 @@ question asks for — no extra bookkeeping columns, no `ORDER BY` dependence.
 | `ERROR(timeout)`        | The turn exceeded `EVAL_TIMEOUT_MS`.                                     |
 | `ERROR(replay-failed)`  | The assistant's SQL could not be re-run and no stored rows existed.      |
 | `SKIP(placeholder)`     | Case still marked `"placeholder": true`.                                 |
+
+## The World Cup set
+
+The shipped cases run against the World Cup Postgres fixture in this repo, so
+the whole set is reproducible without touching customer data.
+
+```bash
+docker compose up -d            # from the repo root; postgres on localhost:55432
+```
+
+Then, in the app: add a PostgreSQL datasource (host `localhost`, port `55432`,
+database `world_cup`, user `world_cup`, password `world_cup_dev`), build a
+sandbox over the `world_cup` schema and save it as **`World Cup`** — the name
+every case's `sandbox` field expects.
+
+Each case exists to catch a specific way an answer goes wrong:
+
+| Case                        | Guards against                                                          |
+| --------------------------- | ----------------------------------------------------------------------- |
+| `pass-accuracy-by-team`     | A ratio built from one measure divided by itself — rates of 1 everywhere. |
+| `shot-accuracy-by-team`     | The same fault on a different column pair, so a narrow fix still fails.  |
+| `top-scoring-team`          | Ranking when the winner is unambiguous (France, 14).                    |
+| `teams-tied-on-four-goals`  | Ties — Belgium and England both scored 4, four more teams tie on 2.     |
+| `card-types-recorded`       | A metric that cannot vary: every card in the data is a yellow.          |
+| `goals-with-recorded-assist`| A group key blank on 45 of 47 rows.                                     |
+| `goals-by-type`             | Control: categorical breakdown, no ratio, no nulls.                     |
+| `attendance-by-tournament`  | Control: plain aggregate over a join.                                   |
+| `matches-by-stage`          | Ties at the bottom of a distribution.                                   |
+
+The same pathologies are asserted without an LLM — and therefore without cost or
+flakiness — in `backend/test/answer-guards.e2e-spec.ts` (`npm run test:e2e`).
+Run those first: if the guards themselves regress, the golden set will only tell
+you something is wrong, not what.
 
 ## Prerequisites
 

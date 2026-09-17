@@ -340,11 +340,21 @@ async function runCase(
       note = ' (compared the stored rows: replay failed)';
     }
 
-    const { match, reason } = compareResults(expected.rows, actualRows);
+    // The reference SQL projects exactly what the question asked; the assistant
+    // also selects the figures its answer leans on. Judging that difference as
+    // a failure would flag correct answers, so compare the facts and report the
+    // shape separately.
+    const { match, reason, shapeDiffers } = compareResults(
+      expected.rows,
+      actualRows,
+      { widthTolerant: true },
+    );
     return done({
       verdict: match ? 'PASS' : 'FAIL',
-      reason: match ? '' : 'result-mismatch',
-      detail: match ? `${expected.rows.length} rows match` : reason + note,
+      reason: match ? (shapeDiffers ? 'extra-columns' : '') : 'result-mismatch',
+      detail: match
+        ? `${expected.rows.length} rows match${shapeDiffers ? ' (assistant projected different columns)' : ''}`
+        : reason + note,
       expectedRows: expected.rows.length,
       actualRows: actualRows.length,
     });
