@@ -4,6 +4,9 @@ const fs = require("fs");
 const http = require("http");
 const path = require("path");
 
+const APP_DISPLAY_NAME = "Halo BI Assistant";
+// The productName every release before the rename shipped with.
+const LEGACY_APP_NAME = "Questions to Insights";
 const DEV_URL = process.env.ELECTRON_DEV_URL;
 const BACKEND_PORT = process.env.BACKEND_PORT || "3000";
 const BACKEND_READY_TIMEOUT_MS = 15_000;
@@ -15,7 +18,22 @@ const ANSI_ESCAPE = /\u001b\[[0-9;]*m/g;
 // developer's saved datasources, projects, panel preferences, or diagnostics.
 if (process.env.QUESTIONS_TO_INSIGHTS_USER_DATA_DIR) {
   app.setPath("userData", process.env.QUESTIONS_TO_INSIGHTS_USER_DATA_DIR);
+} else {
+  // Renaming the app moves `userData`, which is where the profile lives
+  // (app.sqlite, workspaces, diagnostics). Installs made under the old name
+  // keep theirs: prefer the current directory, fall back to the legacy one
+  // when only that exists.
+  const current = app.getPath("userData");
+  if (!fs.existsSync(current)) {
+    const legacy = path.join(path.dirname(current), LEGACY_APP_NAME);
+    if (fs.existsSync(legacy)) app.setPath("userData", legacy);
+  }
 }
+
+// Window title and About panel. The macOS menu bar ignores this — it reads the
+// running bundle's CFBundleName (build.productName when packaged, and the
+// patched Electron.app when running unpackaged via `scripts/brand-electron.sh`).
+app.setName(APP_DISPLAY_NAME);
 
 let backendProcess = null;
 let diagnosticsLogPath = null;
@@ -387,6 +405,7 @@ function createWindow() {
     height: 900,
     minWidth: 960,
     minHeight: 600,
+    title: APP_DISPLAY_NAME,
     titleBarStyle: "hiddenInset",
     backgroundColor: "#1c1c1c",
     // Packaged macOS builds take the icon from the bundle; this covers the

@@ -12,14 +12,15 @@
     "test:e2e": "npm run test:e2e:prepare && playwright test",
     "test:e2e:ui": "npm run test:e2e:prepare && playwright test --ui",
     "test:e2e:update": "npm run test:e2e:prepare && playwright test --update-snapshots",
-    "electron": "npm --prefix ../backend run build && ng build --base-href ./ && electron .",
-    "electron:dev": "ELECTRON_DEV_URL=http://localhost:4200 electron .",
+    "brand:electron": "bash scripts/brand-electron.sh",
+    "electron": "npm run brand:electron && npm --prefix ../backend run build && ng build --base-href ./ && electron .",
+    "electron:dev": "npm run brand:electron && ELECTRON_DEV_URL=http://localhost:4200 electron .",
     "stage:backend": "bash scripts/stage-backend.sh",
     "electron:dist": "npm run stage:backend && ng build --base-href ./ && electron-builder"
   },
   "build": {
     "appId": "com.halopowered.questions-to-insights",
-    "productName": "Questions to Insights",
+    "productName": "Halo BI Assistant",
     "artifactName": "Questions-to-Insights-${version}-${os}-${arch}.${ext}",
     "directories": {
       "output": "release",
