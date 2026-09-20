@@ -12,8 +12,8 @@ export interface VerifiedQueryDoc {
   datasourceId?: string;
   /** Fully-qualified entities the answer drew on (message provenance). */
   entities: string[];
-  /** Project + assistant-message `at` the pair came from; dedupe key. */
-  sourceProjectId: string;
+  /** Session + assistant-message `at` the pair came from; dedupe key. */
+  sourceSessionId: string;
   sourceMessageAt: string;
   createdAt?: string;
   updatedAt?: string;

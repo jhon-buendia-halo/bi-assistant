@@ -1,7 +1,7 @@
 /**
  * Live answer-quality gate (opt-in, costs real money).
  *
- * Every result guard in `src/modules/projects/result-guards.ts` exists because a
+ * Every result guard in `src/modules/sessions/result-guards.ts` exists because a
  * *model* once produced a fluent, wrong answer: a rate divided by itself and
  * reported as a flat 100%, a tie flattened into a ranking, a metric that cannot
  * vary presented as a comparison. Unit tests pin the guards; only a real turn
@@ -33,7 +33,7 @@
  *
  * Sibling of `scripts/run-eval.ts`: that one compares result sets against
  * trusted SQL, this one asserts the answer is not degenerate. Same boot path,
- * same throwaway-project mechanics.
+ * same throwaway-session mechanics.
  */
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
@@ -41,11 +41,11 @@ import { join } from 'path';
 import type { INestApplicationContext } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 // Pure heuristics — no DI, no datastore import, safe to pull in eagerly.
-import { inspectResult } from '../src/modules/projects/result-guards';
+import { inspectResult } from '../src/modules/sessions/result-guards';
 import type {
   ChatMessage,
   ToolDataRecord,
-} from '../src/modules/projects/entities/project.entity';
+} from '../src/modules/sessions/entities/session.entity';
 import { WORLD_CUP_CONNECTION, worldCupReachable } from '../test/world-cup';
 
 /** Real model calls take tens of seconds; a tight timeout only buys false alarms. */
@@ -334,18 +334,18 @@ async function provision(
 // ---------------------------------------------------------------- runtime
 
 /**
- * One turn in a throwaway project through the same path the desktop app drives
- * (`ProjectsService.streamMessage` with a no-op emitter), then the persisted
+ * One turn in a throwaway session through the same path the desktop app drives
+ * (`SessionsService.streamMessage` with a no-op emitter), then the persisted
  * assistant message — identical mechanics to `scripts/run-eval.ts`.
  */
 async function ask(
   app: INestApplicationContext,
   question: string,
 ): Promise<Answer> {
-  const { ProjectsService } =
-    require('../src/modules/projects/projects.service') as typeof import('../src/modules/projects/projects.service');
-  const projects = app.get(ProjectsService);
-  const project = await projects.create(
+  const { SessionsService } =
+    require('../src/modules/sessions/sessions.service') as typeof import('../src/modules/sessions/sessions.service');
+  const sessions = app.get(SessionsService);
+  const session = await sessions.create(
     `check-answers ${new Date().toISOString()}`.slice(0, 64),
     [SANDBOX_NAME],
   );
@@ -353,7 +353,7 @@ async function ask(
     const turn = new AbortController();
     const timer = setTimeout(() => turn.abort(), TURN_TIMEOUT_MS);
     try {
-      await projects.streamMessage(project.id, question, () => {}, turn.signal);
+      await sessions.streamMessage(session.id, question, () => {}, turn.signal);
     } finally {
       clearTimeout(timer);
     }
@@ -362,7 +362,7 @@ async function ask(
         `the turn exceeded ${Math.round(TURN_TIMEOUT_MS / 1000)}s`,
       );
     }
-    const answered = await projects.get(project.id);
+    const answered = await sessions.get(session.id);
     const message = lastAssistantMessage(answered.messages);
     return {
       question,
@@ -370,11 +370,11 @@ async function ask(
       records: message?.data ?? [],
     };
   } finally {
-    await projects
-      .delete(project.id)
+    await sessions
+      .delete(session.id)
       .catch((error: unknown) =>
         console.warn(
-          `  ! could not delete throwaway project ${project.id} — ${message(error)}`,
+          `  ! could not delete throwaway session ${session.id} — ${message(error)}`,
         ),
       );
   }

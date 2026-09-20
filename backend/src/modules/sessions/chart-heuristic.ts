@@ -1,4 +1,4 @@
-import type { ToolDataRecord } from './entities/project.entity';
+import type { ToolDataRecord } from './entities/session.entity';
 
 /**
  * Deterministic chart-form heuristic.

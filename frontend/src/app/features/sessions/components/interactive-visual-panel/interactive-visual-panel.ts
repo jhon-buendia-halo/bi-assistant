@@ -25,10 +25,10 @@ import {
 import {
   DataPointSelection,
   InteractiveVisualization,
-  ProjectActionResult,
-  ProjectVisualization,
-} from '../../models/project.model';
-import { ProjectsApiService } from '../../services/projects-api.service';
+  SessionActionResult,
+  SessionVisualization,
+} from '../../models/session.model';
+import { SessionsApiService } from '../../services/sessions-api.service';
 
 export type TailorChartType =
   | 'auto'
@@ -134,18 +134,18 @@ export class InteractiveVisualPanel {
   readonly minTopN = TAILOR_MIN_TOP_N;
   readonly maxTopN = TAILOR_MAX_TOP_N;
 
-  readonly projectId = input<string | null>(null);
+  readonly sessionId = input<string | null>(null);
   readonly visualization = input<InteractiveVisualization | null>(null);
-  readonly visualizations = input<ProjectVisualization[]>([]);
+  readonly visualizations = input<SessionVisualization[]>([]);
   readonly loading = input(false);
   readonly error = input<string | null>(null);
   readonly downloading = input(false);
-  readonly viewVisual = output<ProjectVisualization>();
+  readonly viewVisual = output<SessionVisualization>();
   readonly downloadVisual = output<InteractiveVisualization>();
   readonly selectVersion = output<number>();
   readonly revertVersion = output<number>();
-  /** A repair or tailoring call returned a fresh project + visualization. */
-  readonly visualRefreshed = output<ProjectActionResult>();
+  /** A repair or tailoring call returned a fresh session + visualization. */
+  readonly visualRefreshed = output<SessionActionResult>();
   /** The user clicked a data mark inside the sandboxed visual. */
   readonly dataPointSelected = output<DataPointSelection>();
   readonly visualMenuOpen = signal(false);
@@ -164,7 +164,7 @@ export class InteractiveVisualPanel {
   /** A data-refresh call for the single open visual is in flight. */
   readonly refreshingData = signal(false);
 
-  private readonly api = inject(ProjectsApiService);
+  private readonly api = inject(SessionsApiService);
   /** `visualId:version` pairs already given their one auto-repair attempt. */
   private readonly repairAttempts = new Set<string>();
 
@@ -230,10 +230,10 @@ export class InteractiveVisualPanel {
   /** Re-run the open visual's stored SQL and adopt the fresh document. */
   refreshData(): void {
     const visual = this.visualization();
-    const projectId = this.projectId();
-    if (!visual || !projectId || this.refreshingData()) return;
+    const sessionId = this.sessionId();
+    if (!visual || !sessionId || this.refreshingData()) return;
     this.refreshingData.set(true);
-    this.api.refreshVisualizationData(projectId, visual.id).subscribe({
+    this.api.refreshVisualizationData(sessionId, visual.id).subscribe({
       next: (result) => {
         this.refreshingData.set(false);
         if (!result.ok || !result.visualization) return;
@@ -250,10 +250,10 @@ export class InteractiveVisualPanel {
    */
   private handleRuntimeError(message: string): void {
     const visual = this.visualization();
-    const projectId = this.projectId();
+    const sessionId = this.sessionId();
     if (
       !visual ||
-      !projectId ||
+      !sessionId ||
       this.viewingOldVersion() ||
       this.repairing() ||
       this.isAutoRepairVersion() ||
@@ -267,7 +267,7 @@ export class InteractiveVisualPanel {
     this.runtimeError.set(null);
     this.repairing.set(true);
     this.api
-      .repairVisualization(projectId, visual.id, message, visual.version)
+      .repairVisualization(sessionId, visual.id, message, visual.version)
       .subscribe({
         next: (result) => {
           this.repairing.set(false);
@@ -310,12 +310,12 @@ export class InteractiveVisualPanel {
   applyTailoring(): void {
     const instruction = this.tailorInstruction();
     const visual = this.visualization();
-    const projectId = this.projectId();
-    if (!instruction || !visual || !projectId || this.tailoring()) return;
+    const sessionId = this.sessionId();
+    if (!instruction || !visual || !sessionId || this.tailoring()) return;
 
     this.tailorError.set(null);
     this.tailoring.set(true);
-    this.api.tailorVisualization(projectId, visual.id, instruction).subscribe({
+    this.api.tailorVisualization(sessionId, visual.id, instruction).subscribe({
       next: (result) => {
         this.tailoring.set(false);
         if (!result.ok || !result.visualization) {
@@ -358,7 +358,7 @@ export class InteractiveVisualPanel {
     ),
   );
 
-  selectVisualization(visualization: ProjectVisualization): void {
+  selectVisualization(visualization: SessionVisualization): void {
     this.visualMenuOpen.set(false);
     this.viewVisual.emit(visualization);
   }

@@ -2,7 +2,7 @@ import { expect, Page } from '@playwright/test';
 
 export const WORLD_CUP_DATASOURCE = 'World Cup PostgreSQL';
 export const WORLD_CUP_SANDBOX = 'World Cup Core';
-export const WORLD_CUP_PROJECT = 'World Cup analysis';
+export const WORLD_CUP_SESSION = 'World Cup analysis';
 
 export async function openDatasourceSettings(page: Page): Promise<void> {
   await page.getByTitle('Settings').click();
@@ -57,31 +57,31 @@ export async function createWorldCupSandbox(page: Page): Promise<void> {
   await expect(page.getByText(/PostgreSQL · 1 entities/)).toBeVisible();
 }
 
-export async function createWorldCupProject(page: Page): Promise<string> {
+export async function createWorldCupSession(page: Page): Promise<string> {
   await page.getByTitle('New conversation').click();
-  await expect(page.getByPlaceholder('My new project')).toBeVisible();
-  await page.getByPlaceholder('My new project').fill(WORLD_CUP_PROJECT);
+  await expect(page.getByPlaceholder('My new session')).toBeVisible();
+  await page.getByPlaceholder('My new session').fill(WORLD_CUP_SESSION);
   await page
     .getByRole('button', { name: new RegExp(WORLD_CUP_SANDBOX) })
     .click();
   await page.getByRole('button', { name: /^Create$/ }).click();
 
   await expect(
-    page.getByText(WORLD_CUP_PROJECT, { exact: true }),
+    page.getByText(WORLD_CUP_SESSION, { exact: true }),
   ).toBeVisible();
   await expect(page.locator('header')).toContainText(WORLD_CUP_DATASOURCE);
   await expect(page.locator('header')).toContainText('PostgreSQL');
 
-  const project = page.locator('[data-testid^="project-"]').filter({
-    hasText: WORLD_CUP_PROJECT,
+  const session = page.locator('[data-testid^="session-"]').filter({
+    hasText: WORLD_CUP_SESSION,
   });
-  const testId = await project.getAttribute('data-testid');
-  if (!testId) throw new Error('Created project did not expose its id');
-  return testId.slice('project-'.length);
+  const testId = await session.getAttribute('data-testid');
+  if (!testId) throw new Error('Created session did not expose its id');
+  return testId.slice('session-'.length);
 }
 
 export async function createWorldCupWorkspace(page: Page): Promise<string> {
   await createWorldCupDatasource(page);
   await createWorldCupSandbox(page);
-  return createWorldCupProject(page);
+  return createWorldCupSession(page);
 }

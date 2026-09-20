@@ -1,6 +1,6 @@
 jest.mock('../../mastra/mastra.service', () => ({ MastraService: class {} }));
-jest.mock('../projects/projects.service', () => ({
-  ProjectsService: class {},
+jest.mock('../sessions/sessions.service', () => ({
+  SessionsService: class {},
 }));
 
 import {
@@ -8,10 +8,10 @@ import {
   extractSqlBlocks,
   reportMarkdown,
 } from './deep-analysis.service';
-import type { ChatMessage } from '../projects/entities/project.entity';
+import type { ChatMessage } from '../sessions/entities/session.entity';
 
-const PROJECT = {
-  id: 'project-1',
+const SESSION = {
+  id: 'session-1',
   name: 'Denials review',
   sandboxes: ['claims'],
   messages: [],
@@ -55,13 +55,13 @@ function build(responses: unknown[], options: { plannerFails?: boolean } = {}) {
   };
   const mastra = {
     getAgent: jest.fn().mockReturnValue({ generate }),
-    ensureProjectWorkspace: jest
+    ensureSessionWorkspace: jest
       .fn()
       .mockResolvedValue({ id: 'workspace-1', filesystem }),
   };
   const appended: Omit<ChatMessage, 'role' | 'at'>[] = [];
-  const projects = {
-    get: jest.fn().mockResolvedValue({ ...PROJECT }),
+  const sessions = {
+    get: jest.fn().mockResolvedValue({ ...SESSION }),
     backgroundAgentOptions: jest
       .fn()
       .mockResolvedValue({ maxSteps: 15, context: [], requestContext: {} }),
@@ -69,11 +69,11 @@ function build(responses: unknown[], options: { plannerFails?: boolean } = {}) {
       .fn()
       .mockImplementation(async (_id: string, message: never) => {
         appended.push(message);
-        return PROJECT;
+        return SESSION;
       }),
   };
-  const service = new DeepAnalysisService(projects as never, mastra as never);
-  return { service, generate, filesystem, projects, appended };
+  const service = new DeepAnalysisService(sessions as never, mastra as never);
+  return { service, generate, filesystem, sessions, appended };
 }
 
 /** Let the in-process job run to completion (or failure). */
@@ -82,7 +82,7 @@ async function settle(
   jobId: string,
 ): Promise<void> {
   for (let i = 0; i < 500; i++) {
-    const { status } = service.status(PROJECT.id, jobId);
+    const { status } = service.status(SESSION.id, jobId);
     if (status === 'done' || status === 'error') return;
     await new Promise((resolve) => setImmediate(resolve));
   }
@@ -90,14 +90,14 @@ async function settle(
 }
 
 async function startJob(service: DeepAnalysisService): Promise<string> {
-  const result = await service.start(PROJECT.id, 'Why are denials rising?');
+  const result = await service.start(SESSION.id, 'Why are denials rising?');
   if (!('jobId' in result)) throw new Error('job was rejected');
   return result.jobId;
 }
 
 describe('DeepAnalysisService', () => {
   it('plans, investigates each angle, writes the report and posts it to the chat', async () => {
-    const { service, generate, filesystem, projects, appended } = build([
+    const { service, generate, filesystem, sessions, appended } = build([
       PLAN,
       finding(1),
       finding(2),
@@ -110,14 +110,14 @@ describe('DeepAnalysisService', () => {
 
     // One plan call, one per angle, one synthesis.
     expect(generate).toHaveBeenCalledTimes(5);
-    expect(projects.backgroundAgentOptions).toHaveBeenCalledTimes(5);
+    expect(sessions.backgroundAgentOptions).toHaveBeenCalledTimes(5);
 
-    const view = service.status(PROJECT.id, jobId);
+    const view = service.status(SESSION.id, jobId);
     expect(view.status).toBe('done');
     expect(view.steps).toBe(3);
     expect(view.title).toBe('Denial drivers deep dive');
 
-    // Report persisted in the project workspace.
+    // Report persisted in the session workspace.
     const [path, markdown] = filesystem.writeFile.mock.calls[0] as [
       string,
       string,
@@ -142,7 +142,7 @@ describe('DeepAnalysisService', () => {
     });
   });
 
-  it('keeps the job out of the project conversation memory', async () => {
+  it('keeps the job out of the session conversation memory', async () => {
     const { service, generate } = build([
       PLAN,
       finding(1),
@@ -179,10 +179,10 @@ describe('DeepAnalysisService', () => {
 
     const jobId = await startJob(service);
     for (let i = 0; i < 20; i++) {
-      if (service.status(PROJECT.id, jobId).step === 1) break;
+      if (service.status(SESSION.id, jobId).step === 1) break;
       await new Promise((resolve) => setImmediate(resolve));
     }
-    const view = service.status(PROJECT.id, jobId);
+    const view = service.status(SESSION.id, jobId);
     expect(view.status).toBe('investigating');
     expect(view.step).toBe(1);
     expect(view.steps).toBe(3);
@@ -192,7 +192,7 @@ describe('DeepAnalysisService', () => {
     await settle(service, jobId);
   });
 
-  it('rejects a second job while one is running for the project', async () => {
+  it('rejects a second job while one is running for the session', async () => {
     let release: (value: unknown) => void = () => {};
     const held = new Promise((resolve) => {
       release = resolve;
@@ -204,8 +204,8 @@ describe('DeepAnalysisService', () => {
     });
     generate.mockResolvedValue(REPORT);
 
-    const first = await service.start(PROJECT.id, 'Why are denials rising?');
-    const second = await service.start(PROJECT.id, 'Something else');
+    const first = await service.start(SESSION.id, 'Why are denials rising?');
+    const second = await service.start(SESSION.id, 'Something else');
     expect(second).toEqual({
       conflictWith: (first as { jobId: string }).jobId,
     });
@@ -213,8 +213,8 @@ describe('DeepAnalysisService', () => {
     release(undefined);
     await settle(service, (first as { jobId: string }).jobId);
 
-    // Once it finished, the project can start another one.
-    const third = await service.start(PROJECT.id, 'Now what?');
+    // Once it finished, the session can start another one.
+    const third = await service.start(SESSION.id, 'Now what?');
     expect(third).toHaveProperty('jobId');
   });
 
@@ -226,7 +226,7 @@ describe('DeepAnalysisService', () => {
     const jobId = await startJob(service);
     await settle(service, jobId);
 
-    const view = service.status(PROJECT.id, jobId);
+    const view = service.status(SESSION.id, jobId);
     expect(view.status).toBe('error');
     expect(view.error).toContain('no model');
     expect(filesystem.writeFile).not.toHaveBeenCalled();
@@ -245,13 +245,13 @@ describe('DeepAnalysisService', () => {
     const jobId = await startJob(service);
     await settle(service, jobId);
 
-    expect(service.status(PROJECT.id, jobId).status).toBe('done');
+    expect(service.status(SESSION.id, jobId).status).toBe('done');
     expect(appended[0].report?.angles).toBe(3);
   });
 
   it('serves the stored markdown for download', async () => {
     const { service, filesystem } = build([]);
-    const result = await service.download(PROJECT.id, 'job-1234abcd');
+    const result = await service.download(SESSION.id, 'job-1234abcd');
     expect(filesystem.readFile).toHaveBeenCalledWith(
       'reports/job-1234abcd.md',
       { encoding: 'utf-8' },
@@ -263,13 +263,13 @@ describe('DeepAnalysisService', () => {
   it('rejects a traversal attempt in the job id', async () => {
     const { service } = build([]);
     await expect(
-      service.download(PROJECT.id, '../../etc/passwd'),
+      service.download(SESSION.id, '../../etc/passwd'),
     ).rejects.toThrow(/invalid deep analysis id/);
   });
 
   it('404s an unknown job', () => {
     const { service } = build([]);
-    expect(() => service.status(PROJECT.id, 'nope')).toThrow(/not found/);
+    expect(() => service.status(SESSION.id, 'nope')).toThrow(/not found/);
   });
 });
 
@@ -292,7 +292,7 @@ describe('report assembly', () => {
         { title: 'A', question: 'qa', findings: 'f', sql: ['select 1'] },
         { title: 'B', question: 'qb', findings: 'f', sql: [] },
       ],
-      projectName: 'P',
+      sessionName: 'P',
       generatedAt: '2026-01-01T00:00:00.000Z',
       jobId: 'job-1',
     });

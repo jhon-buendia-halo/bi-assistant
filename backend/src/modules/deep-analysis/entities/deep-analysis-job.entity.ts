@@ -22,7 +22,7 @@ export interface AngleFinding extends AnalysisAngle {
 /** In-process job record — the slow path lives in memory, not in SQLite. */
 export interface DeepAnalysisJob {
   id: string;
-  projectId: string;
+  sessionId: string;
   question: string;
   status: DeepAnalysisStatus;
   /** Human-readable line for the pending card in the chat. */

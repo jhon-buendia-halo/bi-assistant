@@ -4,7 +4,7 @@ From `docs/research/competitive-research-and-improvement-plan.md` §3 Phase 2 (i
 
 ## Shared contract (types on `ChatMessage` / `ToolDataRecord`)
 
-`backend/src/modules/projects/entities/project.entity.ts` (mirror in `frontend/.../models/project.model.ts`):
+`backend/src/modules/sessions/entities/session.entity.ts` (mirror in `frontend/.../models/session.model.ts`):
 
 ```ts
 interface ToolDataRecord {
@@ -47,30 +47,30 @@ Full mid-turn suspend/resume of the SSE stream is out of scope (deliberate). Ins
 
 ### Item 8: Truncation markers
 
-- `toolDataRecord()` (projects.service.ts): set `truncated: true` when `rowCount > rows.length` stored (STORED_ROWS_CAP) — this already implies clipping.
+- `toolDataRecord()` (sessions.service.ts): set `truncated: true` when `rowCount > rows.length` stored (STORED_ROWS_CAP) — this already implies clipping.
 - Bridge `runReadOnlySql` result: when the connector returns exactly `limit` rows, append to the tool result a `note: 'row limit <limit> reached — results may be incomplete; aggregate or narrow the query for exact totals'` so the model sees it. Set `truncated` on the record in that case too (rowCount === limit).
 - Assistant instructions: one line — when a result hit the row limit, either re-aggregate or state the possible truncation in the answer.
 - Visuals: `visualizationData` (visualization.service.ts) caps rows at 100/40k chars — return alongside the capped rows a `truncatedFrom?: number` (original row count) and thread it into (a) the designer prompt (`<data>` block header: "showing first N of M rows") and (b) the visual frame's data-provenance section in `visualization-document.ts` ("chart built from the first N of M rows"). The frame text is deterministic, not from the designer model.
 
 ### Tests
-Extend `projects.service.spec.ts`: interpretation line built, verified flag set on SQL match, clarification message carries data, truncated flags on both paths. `verified-queries.service.spec.ts`: `isVerifiedSql` normalization. Visualization: truncatedFrom propagation (mock designer).
+Extend `sessions.service.spec.ts`: interpretation line built, verified flag set on SQL match, clarification message carries data, truncated flags on both paths. `verified-queries.service.spec.ts`: `isVerifiedSql` normalization. Visualization: truncatedFrom propagation (mock designer).
 
 ## Workstream B — Frontend
 
-Files: `project-chat.html/.ts/.scss`, `models/project.model.ts` (mirror contract fields only).
+Files: `session-chat.html/.ts/.scss`, `models/session.model.ts` (mirror contract fields only).
 
 ### Item 5 UI
 - On assistant messages with `interpretation`: render the line above the existing "Data entities" / "Data used" expandables, styled as a subtle single-line caption (e.g. zinc-500, small), prefixed "Interpreted as:" — actually render exactly the server text, prefix `How:` no — use a small info icon + the server-provided text verbatim. Keep it one line, truncate with ellipsis + title tooltip.
 - Inside the existing "Data used" expandable, per record: keep SQL display; add a small copy-SQL button (same idiom as the message Copy button).
 
 ### Item 6 UI
-- `verified` messages: small emerald check-badge chip ("Verified") next to the timestamp/actions row, tooltip "Matches an approved query". Also flip it live after a successful thumbs-up (project refresh already returns the updated message).
+- `verified` messages: small emerald check-badge chip ("Verified") next to the timestamp/actions row, tooltip "Matches an approved query". Also flip it live after a successful thumbs-up (session refresh already returns the updated message).
 
 ### Item 8 UI
 - In "Data used" records where `truncated`: after the row count, append "(truncated)" in amber-ish muted text with tooltip "Row cap reached — counts may be incomplete".
 
 ### Constraints
-- Same stream-safety rule as Phase 1: never abort an in-flight stream on same-id project refresh; patch local message state the same way feedback does.
+- Same stream-safety rule as Phase 1: never abort an in-flight stream on same-id session refresh; patch local message state the same way feedback does.
 - Standalone components + signals, Tailwind v4, lucide icons (`badge-check`, `info`, `copy`). Match existing chat idioms exactly.
 - Build + existing specs must pass; add a spec only where a pure helper warrants it.
 

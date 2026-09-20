@@ -9,7 +9,7 @@ import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { RequestContext } from '@mastra/core/request-context';
 import { MastraService } from '../../mastra/mastra.service';
-import { PROJECT_WORKSPACE_CONTEXT_KEY } from '../../mastra/project-workspaces';
+import { SESSION_WORKSPACE_CONTEXT_KEY } from '../../mastra/session-workspaces';
 import {
   interactiveVisualOutputSchema,
   specVisualOutputSchema,
@@ -41,11 +41,11 @@ import { createZip } from './zip-archive';
 import {
   ChatMessage,
   InteractiveVisualization,
-  ProjectDoc,
-  ProjectVisualization,
+  SessionDoc,
+  SessionVisualization,
   ReasoningStep,
   ToolDataRecord,
-} from './entities/project.entity';
+} from './entities/session.entity';
 
 /**
  * What a version renders from. Spec visuals carry `spec` and keep synthetic
@@ -95,7 +95,7 @@ function effectiveData(context: DesignContext): ToolDataRecord[] | undefined {
 }
 
 type WorkspaceFilesystem = NonNullable<
-  Awaited<ReturnType<MastraService['ensureProjectWorkspace']>>['filesystem']
+  Awaited<ReturnType<MastraService['ensureSessionWorkspace']>>['filesystem']
 >;
 
 const GENERATION_TIMEOUT_MS = 120_000;
@@ -125,7 +125,7 @@ const REFRESH_ROW_LIMIT = 500;
 
 /**
  * Creates, tailors, versions, loads and packages interactive visuals stored
- * in the project's Mastra workspace (`visuals/<id>/v<N>/`).
+ * in the session's Mastra workspace (`visuals/<id>/v<N>/`).
  */
 @Injectable()
 export class VisualizationService {
@@ -133,12 +133,12 @@ export class VisualizationService {
 
   constructor(private readonly mastra: MastraService) {}
 
-  currentVersion(meta: ProjectVisualization): number {
+  currentVersion(meta: SessionVisualization): number {
     return meta.currentVersion ?? 1;
   }
 
   /** Version directory; legacy single-version visuals keep files at the root. */
-  versionPath(meta: ProjectVisualization, version: number): string {
+  versionPath(meta: SessionVisualization, version: number): string {
     if (!meta.versions?.length && version <= 1) return meta.path;
     return `${meta.path}/v${version}`;
   }
@@ -149,7 +149,7 @@ export class VisualizationService {
    */
   private async resolveVersionDir(
     filesystem: WorkspaceFilesystem,
-    meta: ProjectVisualization,
+    meta: SessionVisualization,
     version: number,
   ): Promise<string> {
     const dir = this.versionPath(meta, version);
@@ -162,11 +162,11 @@ export class VisualizationService {
     }
   }
 
-  find(project: ProjectDoc, visualId: string): ProjectVisualization {
-    const meta = (project.visualizations ?? []).find((v) => v.id === visualId);
+  find(session: SessionDoc, visualId: string): SessionVisualization {
+    const meta = (session.visualizations ?? []).find((v) => v.id === visualId);
     if (!meta) {
       throw new NotFoundException(
-        `Visualization ${visualId} not found in project ${project.id}`,
+        `Visualization ${visualId} not found in session ${session.id}`,
       );
     }
     return meta;
@@ -181,14 +181,14 @@ export class VisualizationService {
    * pass none (button/REST paths).
    */
   async create(
-    project: ProjectDoc,
+    session: SessionDoc,
     sourceMessageAt: string | undefined,
     instruction?: string,
     turnRecords?: ToolDataRecord[],
-  ): Promise<{ metadata: ProjectVisualization; bundle: Bundle }> {
-    const answer = this.findSourceAnswer(project, sourceMessageAt);
-    const question = this.findQuestion(project, answer);
-    const { workspace, filesystem } = await this.workspaceFor(project);
+  ): Promise<{ metadata: SessionVisualization; bundle: Bundle }> {
+    const answer = this.findSourceAnswer(session, sourceMessageAt);
+    const question = this.findQuestion(session, answer);
+    const { workspace, filesystem } = await this.workspaceFor(session);
     const mergedData = mergeToolDataRecords(answer.data, turnRecords);
     const bundle = await this.design(workspace, filesystem, {
       question,
@@ -200,7 +200,7 @@ export class VisualizationService {
     const visualId = randomUUID();
     const path = `visuals/${visualId}`;
     const createdAt = new Date().toISOString();
-    const metadata: ProjectVisualization = {
+    const metadata: SessionVisualization = {
       id: visualId,
       title: bundle.title,
       description: bundle.description,
@@ -220,7 +220,7 @@ export class VisualizationService {
       1,
       await this.contextFor(
         filesystem,
-        project,
+        session,
         metadata,
         1,
         createdAt,
@@ -236,24 +236,24 @@ export class VisualizationService {
    * source answer's data — see the class-level note on `create`.
    */
   async update(
-    project: ProjectDoc,
+    session: SessionDoc,
     visualId: string,
     instruction: string,
     turnRecords?: ToolDataRecord[],
-  ): Promise<{ metadata: ProjectVisualization; bundle: Bundle }> {
+  ): Promise<{ metadata: SessionVisualization; bundle: Bundle }> {
     const trimmed = (instruction ?? '').trim();
     if (!trimmed) throw new BadRequestException('instruction is required');
-    const meta = this.find(project, visualId);
-    const { workspace, filesystem } = await this.workspaceFor(project);
+    const meta = this.find(session, visualId);
+    const { workspace, filesystem } = await this.workspaceFor(session);
     const current = await this.readBundle(
       filesystem,
       meta,
       this.currentVersion(meta),
     );
-    const answer = project.messages.find(
+    const answer = session.messages.find(
       (m) => m.role === 'assistant' && m.at === meta.sourceMessageAt,
     );
-    const question = answer ? this.findQuestion(project, answer) : undefined;
+    const question = answer ? this.findQuestion(session, answer) : undefined;
     const baseData =
       (await this.readVersionData(
         filesystem,
@@ -269,7 +269,7 @@ export class VisualizationService {
       mergedData,
     });
     return this.appendVersion(
-      project,
+      session,
       meta,
       filesystem,
       bundle,
@@ -287,11 +287,11 @@ export class VisualizationService {
    * a version that is itself an auto-repair is never repaired again.
    */
   async repair(
-    project: ProjectDoc,
+    session: SessionDoc,
     visualId: string,
     errorMessage: string,
-  ): Promise<{ metadata: ProjectVisualization; bundle: Bundle }> {
-    const meta = this.find(project, visualId);
+  ): Promise<{ metadata: SessionVisualization; bundle: Bundle }> {
+    const meta = this.find(session, visualId);
     const version = this.currentVersion(meta);
     const entry = meta.versions?.find((v) => v.version === version);
     if (entry?.instruction?.startsWith(AUTO_REPAIR_PREFIX)) {
@@ -303,12 +303,12 @@ export class VisualizationService {
       (errorMessage ?? '').trim().slice(0, AUTO_REPAIR_ERROR_CHARS) ||
       'the visual rendered nothing and reported no error';
 
-    const { workspace, filesystem } = await this.workspaceFor(project);
+    const { workspace, filesystem } = await this.workspaceFor(session);
     const current = await this.readBundle(filesystem, meta, version);
-    const answer = project.messages.find(
+    const answer = session.messages.find(
       (m) => m.role === 'assistant' && m.at === meta.sourceMessageAt,
     );
-    const question = answer ? this.findQuestion(project, answer) : undefined;
+    const question = answer ? this.findQuestion(session, answer) : undefined;
     const bundle = await this.design(workspace, filesystem, {
       question,
       answer,
@@ -316,7 +316,7 @@ export class VisualizationService {
       feedback: { kind: 'runtime', message },
     });
     return this.appendVersion(
-      project,
+      session,
       meta,
       filesystem,
       bundle,
@@ -331,13 +331,13 @@ export class VisualizationService {
    * data.json-or-answer lookup.
    */
   private async appendVersion(
-    project: ProjectDoc,
-    meta: ProjectVisualization,
+    session: SessionDoc,
+    meta: SessionVisualization,
     filesystem: WorkspaceFilesystem,
     bundle: Bundle,
     instruction: string,
     overrideData?: ToolDataRecord[],
-  ): Promise<{ metadata: ProjectVisualization; bundle: Bundle }> {
+  ): Promise<{ metadata: SessionVisualization; bundle: Bundle }> {
     const version = this.currentVersion(meta) + 1;
     const createdAt = new Date().toISOString();
     const history = meta.versions?.length
@@ -349,7 +349,7 @@ export class VisualizationService {
             sourceMessageAt: meta.sourceMessageAt,
           },
         ];
-    const metadata: ProjectVisualization = {
+    const metadata: SessionVisualization = {
       ...meta,
       title: bundle.title,
       description: bundle.description,
@@ -372,7 +372,7 @@ export class VisualizationService {
       version,
       await this.contextFor(
         filesystem,
-        project,
+        session,
         metadata,
         version,
         createdAt,
@@ -384,16 +384,16 @@ export class VisualizationService {
 
   /** Point the visual at an earlier version (no files change). */
   async revert(
-    project: ProjectDoc,
+    session: SessionDoc,
     visualId: string,
     version: number,
-  ): Promise<ProjectVisualization> {
-    const meta = this.find(project, visualId);
+  ): Promise<SessionVisualization> {
+    const meta = this.find(session, visualId);
     const known = meta.versions?.some((v) => v.version === version);
     if (!known && !(version === 1 && !meta.versions?.length)) {
       throw new BadRequestException(`Version ${version} does not exist`);
     }
-    const { filesystem } = await this.workspaceFor(project);
+    const { filesystem } = await this.workspaceFor(session);
     const bundle = await this.readBundle(filesystem, meta, version);
     return {
       ...meta,
@@ -405,13 +405,13 @@ export class VisualizationService {
 
   /** Assemble the sandboxed document for the panel. */
   async load(
-    project: ProjectDoc,
+    session: SessionDoc,
     visualId: string,
     version?: number,
   ): Promise<InteractiveVisualization> {
-    const meta = this.find(project, visualId);
+    const meta = this.find(session, visualId);
     const target = version ?? this.currentVersion(meta);
-    const { filesystem } = await this.workspaceFor(project);
+    const { filesystem } = await this.workspaceFor(session);
     const bundle = await this.readBundle(filesystem, meta, target);
     return {
       ...meta,
@@ -420,22 +420,22 @@ export class VisualizationService {
       version: target,
       document: sandboxedVisualizationDocument(
         bundle,
-        await this.contextFor(filesystem, project, meta, target),
+        await this.contextFor(filesystem, session, meta, target),
       ),
     };
   }
 
   /** Portable HTML/CSS/JS zip of one version. */
   async download(
-    project: ProjectDoc,
+    session: SessionDoc,
     visualId: string,
     version?: number,
   ): Promise<{ filename: string; archive: Buffer }> {
-    const meta = this.find(project, visualId);
+    const meta = this.find(session, visualId);
     const target = version ?? this.currentVersion(meta);
-    const { filesystem } = await this.workspaceFor(project);
+    const { filesystem } = await this.workspaceFor(session);
     const bundle = await this.readBundle(filesystem, meta, target);
-    const context = await this.contextFor(filesystem, project, meta, target);
+    const context = await this.contextFor(filesystem, session, meta, target);
     // Always assemble index.html from the bundle so legacy versions also ship
     // with the readable frame (question, takeaway, analysis, data).
     const html = storedVisualizationDocument(bundle, context);
@@ -486,10 +486,10 @@ export class VisualizationService {
   // ---------------------------------------------------------------- internals
 
   private findSourceAnswer(
-    project: ProjectDoc,
+    session: SessionDoc,
     sourceMessageAt: string | undefined,
   ): ChatMessage {
-    const candidates = project.messages.filter(
+    const candidates = session.messages.filter(
       (m) =>
         m.role === 'assistant' && !m.clarification && m.content.trim().length,
     );
@@ -503,23 +503,23 @@ export class VisualizationService {
   }
 
   private findQuestion(
-    project: ProjectDoc,
+    session: SessionDoc,
     answer: ChatMessage,
   ): ChatMessage | undefined {
-    const index = project.messages.indexOf(answer);
-    return project.messages
+    const index = session.messages.indexOf(answer);
+    return session.messages
       .slice(0, index < 0 ? undefined : index)
       .reverse()
       .find((m) => m.role === 'user');
   }
 
-  private async workspaceFor(project: ProjectDoc) {
-    const workspace = await this.mastra.ensureProjectWorkspace(
-      project.id,
-      project.name,
+  private async workspaceFor(session: SessionDoc) {
+    const workspace = await this.mastra.ensureSessionWorkspace(
+      session.id,
+      session.name,
     );
     const filesystem = workspace.filesystem;
-    if (!filesystem) throw new Error('project workspace has no filesystem');
+    if (!filesystem) throw new Error('session workspace has no filesystem');
     return { workspace, filesystem: filesystem as WorkspaceFilesystem };
   }
 
@@ -536,7 +536,7 @@ export class VisualizationService {
    * preserve bespoke markup the instruction did not ask to change.
    */
   private async design(
-    workspace: Awaited<ReturnType<MastraService['ensureProjectWorkspace']>>,
+    workspace: Awaited<ReturnType<MastraService['ensureSessionWorkspace']>>,
     filesystem: WorkspaceFilesystem,
     context: DesignContext,
   ): Promise<Bundle> {
@@ -545,7 +545,7 @@ export class VisualizationService {
       '.agents/skills/interactive-visuals/SKILL.md',
     );
     const requestContext = new RequestContext();
-    requestContext.set(PROJECT_WORKSPACE_CONTEXT_KEY, workspace.id);
+    requestContext.set(SESSION_WORKSPACE_CONTEXT_KEY, workspace.id);
 
     const toolData = effectiveData(context);
     const records = toolData?.length ? visualizationData(toolData).records : [];
@@ -861,7 +861,7 @@ export class VisualizationService {
   }
 
   /**
-   * The analysis behind a visual, resolved from the project transcript. When
+   * The analysis behind a visual, resolved from the session transcript. When
    * the version directory carries a `data.json` (written by `writeVersion` or
    * a later `refreshData`), it wins over the source answer's captured data —
    * a refresh must show up in the frame's provenance and in `window.qti.data`
@@ -869,16 +869,16 @@ export class VisualizationService {
    */
   private async contextFor(
     filesystem: WorkspaceFilesystem,
-    project: ProjectDoc,
-    meta: ProjectVisualization,
+    session: SessionDoc,
+    meta: SessionVisualization,
     version: number,
     generatedAt?: string,
     overrideData?: ToolDataRecord[],
   ): Promise<VisualContext> {
-    const answer = project.messages.find(
+    const answer = session.messages.find(
       (m) => m.role === 'assistant' && m.at === meta.sourceMessageAt,
     );
-    const question = answer ? this.findQuestion(project, answer) : undefined;
+    const question = answer ? this.findQuestion(session, answer) : undefined;
     const entry = meta.versions?.find((v) => v.version === version);
     const data =
       overrideData ??
@@ -902,7 +902,7 @@ export class VisualizationService {
       chartData: block?.records,
       entities: answer?.entities,
       ...(reasoning.length ? { reasoning } : {}),
-      projectName: project.name,
+      sessionName: session.name,
       version,
       generatedAt: generatedAt ?? entry?.refreshedAt ?? entry?.createdAt ?? meta.createdAt,
       ...(block?.truncatedFrom
@@ -919,7 +919,7 @@ export class VisualizationService {
   /** Version's stored data.json, when one has been written; undefined otherwise. */
   private async readVersionData(
     filesystem: WorkspaceFilesystem,
-    meta: ProjectVisualization,
+    meta: SessionVisualization,
     version: number,
   ): Promise<ToolDataRecord[] | undefined> {
     try {
@@ -941,14 +941,14 @@ export class VisualizationService {
    * error instead of aborting the rest.
    */
   async refreshData(
-    project: ProjectDoc,
+    session: SessionDoc,
     visualId: string,
-  ): Promise<{ metadata: ProjectVisualization; bundle: Bundle }> {
-    const meta = this.find(project, visualId);
+  ): Promise<{ metadata: SessionVisualization; bundle: Bundle }> {
+    const meta = this.find(session, visualId);
     const version = this.currentVersion(meta);
-    const { filesystem } = await this.workspaceFor(project);
+    const { filesystem } = await this.workspaceFor(session);
     const dir = await this.resolveVersionDir(filesystem, meta, version);
-    const answer = project.messages.find(
+    const answer = session.messages.find(
       (m) => m.role === 'assistant' && m.at === meta.sourceMessageAt,
     );
     const existing =
@@ -957,7 +957,7 @@ export class VisualizationService {
       [];
 
     const sandboxes = await getSandboxToolServices().getSandboxes(
-      project.sandboxes,
+      session.sandboxes,
     );
     const datasourceIds = new Set(
       sandboxes
@@ -966,9 +966,9 @@ export class VisualizationService {
     );
     const datasourceError =
       datasourceIds.size === 0
-        ? "No datasource is bound to this project's sandboxes"
+        ? "No datasource is bound to this session's sandboxes"
         : datasourceIds.size > 1
-          ? 'Several datasources are in scope for this project; refresh is not supported'
+          ? 'Several datasources are in scope for this session; refresh is not supported'
           : undefined;
     const datasourceId = datasourceError
       ? undefined
@@ -996,7 +996,7 @@ export class VisualizationService {
             datasourceId,
             record.input,
             REFRESH_ROW_LIMIT,
-            project.sandboxes,
+            session.sandboxes,
           );
           const rows = result.rows ?? [];
           const columns = result.columns?.length
@@ -1029,7 +1029,7 @@ export class VisualizationService {
     );
 
     const bundle = await this.readBundle(filesystem, meta, version);
-    const question = answer ? this.findQuestion(project, answer) : undefined;
+    const question = answer ? this.findQuestion(session, answer) : undefined;
     const generatedAt = new Date().toISOString();
     const block = refreshed.length ? visualizationData(refreshed) : undefined;
     // Same fallback as contextFor: the reasoning trail explains how the answer
@@ -1044,7 +1044,7 @@ export class VisualizationService {
       chartData: block?.records,
       entities: answer?.entities,
       ...(reasoning.length ? { reasoning } : {}),
-      projectName: project.name,
+      sessionName: session.name,
       version,
       generatedAt,
       ...(block?.truncatedFrom
@@ -1069,7 +1069,7 @@ export class VisualizationService {
             sourceMessageAt: meta.sourceMessageAt,
           },
         ];
-    const metadata: ProjectVisualization = {
+    const metadata: SessionVisualization = {
       ...meta,
       versions: history.map((v) =>
         v.version === version ? { ...v, refreshedAt: generatedAt } : v,
@@ -1082,7 +1082,7 @@ export class VisualizationService {
     filesystem: WorkspaceFilesystem,
     dir: string,
     bundle: Bundle,
-    metadata: ProjectVisualization,
+    metadata: SessionVisualization,
     version: number,
     context: VisualContext,
   ): Promise<void> {
@@ -1147,7 +1147,7 @@ export class VisualizationService {
 
   private async readBundle(
     filesystem: WorkspaceFilesystem,
-    meta: ProjectVisualization,
+    meta: SessionVisualization,
     version: number,
   ): Promise<Bundle> {
     const dir = await this.resolveVersionDir(filesystem, meta, version);
@@ -1174,7 +1174,7 @@ export class VisualizationService {
       title = manifest.title ?? title;
       description = manifest.description ?? description;
     } catch {
-      // Fall back to project metadata.
+      // Fall back to session metadata.
     }
     const spec = await this.readSpec(filesystem, dir);
     // One shape for both renderers: a spec version reports the synthetic body,
@@ -1372,7 +1372,7 @@ function answerMarkdown(
     });
   }
   const meta = [
-    context.projectName ? `Project: ${context.projectName}` : '',
+    context.sessionName ? `Session: ${context.sessionName}` : '',
     context.version ? `Version ${context.version}` : '',
     context.generatedAt ? `Generated ${context.generatedAt}` : '',
   ].filter(Boolean);

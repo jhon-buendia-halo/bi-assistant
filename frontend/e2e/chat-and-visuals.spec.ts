@@ -1,7 +1,7 @@
 import { Page } from '@playwright/test';
 import { test, expect } from './fixtures/electron.fixture';
 import {
-  WORLD_CUP_PROJECT,
+  WORLD_CUP_SESSION,
   WORLD_CUP_SANDBOX,
   createWorldCupWorkspace,
 } from './helpers/app-actions';
@@ -10,10 +10,10 @@ const assistantMessageAt = '2026-09-15T12:00:01.000Z';
 
 async function installDeterministicChatStream(
   page: Page,
-  projectId: string,
+  sessionId: string,
 ): Promise<void> {
   await page.evaluate(
-    ({ id, projectName, sandboxName, answerAt }) => {
+    ({ id, sessionName, sandboxName, answerAt }) => {
       const originalFetch = window.fetch.bind(window);
       window.fetch = async (input, init) => {
         const url =
@@ -22,7 +22,7 @@ async function installDeterministicChatStream(
             : input instanceof URL
               ? input.href
               : input.url;
-        if (!url.endsWith(`/projects/${id}/messages/stream`)) {
+        if (!url.endsWith(`/sessions/${id}/messages/stream`)) {
           return originalFetch(input, init);
         }
 
@@ -73,9 +73,9 @@ async function installDeterministicChatStream(
                   encoder.encode(
                     `data: ${JSON.stringify({
                       type: 'done',
-                      project: {
+                      session: {
                         id,
-                        name: projectName,
+                        name: sessionName,
                         sandboxes: [sandboxName],
                         messages: [
                           {
@@ -130,8 +130,8 @@ async function installDeterministicChatStream(
       };
     },
     {
-      id: projectId,
-      projectName: WORLD_CUP_PROJECT,
+      id: sessionId,
+      sessionName: WORLD_CUP_SESSION,
       sandboxName: WORLD_CUP_SANDBOX,
       answerAt: assistantMessageAt,
     },
@@ -141,8 +141,8 @@ async function installDeterministicChatStream(
 test('renders streamed reasoning, tool activity, final Markdown, and supports stopping', async ({
   page,
 }) => {
-  const projectId = await createWorldCupWorkspace(page);
-  await installDeterministicChatStream(page, projectId);
+  const sessionId = await createWorldCupWorkspace(page);
+  await installDeterministicChatStream(page, sessionId);
 
   const input = page.getByPlaceholder('Ask a follow-up question…');
   await input.fill('Who won the last two tournaments?');
@@ -170,8 +170,8 @@ test('renders streamed reasoning, tool activity, final Markdown, and supports st
 test('renders a deterministic interactive visualization and its version controls', async ({
   page,
 }) => {
-  const projectId = await createWorldCupWorkspace(page);
-  await installDeterministicChatStream(page, projectId);
+  const sessionId = await createWorldCupWorkspace(page);
+  await installDeterministicChatStream(page, sessionId);
 
   await page
     .getByPlaceholder('Ask a follow-up question…')
@@ -180,7 +180,7 @@ test('renders a deterministic interactive visualization and its version controls
   await expect(page.getByText('France won in 2018.')).toBeVisible();
 
   const visualDocument = `<!doctype html><html><body style="background:#171717;color:white"><h1>World Cup champions</h1><div id="chart">2018 France · 2022 Argentina</div></body></html>`;
-  await page.route(/\/projects\/[^/]+\/visualizations$/, async (route) => {
+  await page.route(/\/sessions\/[^/]+\/visualizations$/, async (route) => {
     const createdAt = '2026-09-15T12:01:00.000Z';
     const metadata = {
       id: 'champions-visual',
@@ -205,9 +205,9 @@ test('renders a deterministic interactive visualization and its version controls
       body: JSON.stringify({
         ok: true,
         message: 'Interactive visual generated',
-        project: {
-          id: projectId,
-          name: WORLD_CUP_PROJECT,
+        session: {
+          id: sessionId,
+          name: WORLD_CUP_SESSION,
           sandboxes: [WORLD_CUP_SANDBOX],
           messages: [],
           visualizations: [metadata],

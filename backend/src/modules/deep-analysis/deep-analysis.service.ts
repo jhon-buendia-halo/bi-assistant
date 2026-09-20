@@ -7,8 +7,8 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { MastraService } from '../../mastra/mastra.service';
-import { ProjectsService } from '../projects/projects.service';
-import type { ProjectDoc } from '../projects/entities/project.entity';
+import { SessionsService } from '../sessions/sessions.service';
+import type { SessionDoc } from '../sessions/entities/session.entity';
 import {
   analysisPlanSchema,
   analysisReportSchema,
@@ -23,10 +23,10 @@ import {
 } from './entities/deep-analysis-job.entity';
 
 type WorkspaceFilesystem = NonNullable<
-  Awaited<ReturnType<MastraService['ensureProjectWorkspace']>>['filesystem']
+  Awaited<ReturnType<MastraService['ensureSessionWorkspace']>>['filesystem']
 >;
 
-/** Directory reports live in, inside the project's Mastra workspace. */
+/** Directory reports live in, inside the session's Mastra workspace. */
 const REPORTS_DIR = 'reports';
 /** Hard ceiling on the plan, whatever the model proposes. */
 const MAX_ANGLES = 5;
@@ -40,12 +40,12 @@ export class DeepAnalysisService implements OnModuleDestroy {
   private readonly logger = new Logger(DeepAnalysisService.name);
   /** Every job this process has seen, by job id. */
   private readonly jobs = new Map<string, DeepAnalysisJob>();
-  /** One running job per project — the guard behind `ok: false`. */
+  /** One running job per session — the guard behind `ok: false`. */
   private readonly running = new Map<string, string>();
   private readonly aborts = new Map<string, AbortController>();
 
   constructor(
-    private readonly projects: ProjectsService,
+    private readonly sessions: SessionsService,
     private readonly mastra: MastraService,
   ) {}
 
@@ -58,34 +58,34 @@ export class DeepAnalysisService implements OnModuleDestroy {
    * reports through `status`, then through a chat message when it finishes.
    */
   async start(
-    projectId: string,
+    sessionId: string,
     question: string,
   ): Promise<{ jobId: string } | { conflictWith: string }> {
     const trimmed = (question ?? '').trim();
     if (!trimmed) throw new BadRequestException('question is required');
-    // Throws 404 for an unknown project before anything is scheduled.
-    const project = await this.projects.get(projectId);
+    // Throws 404 for an unknown session before anything is scheduled.
+    const session = await this.sessions.get(sessionId);
 
-    const existing = this.running.get(projectId);
+    const existing = this.running.get(sessionId);
     if (existing) return { conflictWith: existing };
 
     const job: DeepAnalysisJob = {
       id: randomUUID(),
-      projectId,
+      sessionId,
       question: trimmed,
       status: 'planning',
       progress: 'Planning the investigation',
       startedAt: new Date().toISOString(),
     };
     this.jobs.set(job.id, job);
-    this.running.set(projectId, job.id);
+    this.running.set(sessionId, job.id);
     this.prune();
 
     const abort = new AbortController();
     this.aborts.set(job.id, abort);
     // Deliberately not awaited: the HTTP call returns while the job runs.
-    void this.run(job, project, abort.signal).finally(() => {
-      this.running.delete(projectId);
+    void this.run(job, session, abort.signal).finally(() => {
+      this.running.delete(sessionId);
       this.aborts.delete(job.id);
       job.finishedAt = new Date().toISOString();
     });
@@ -93,9 +93,9 @@ export class DeepAnalysisService implements OnModuleDestroy {
   }
 
   /** Poll one job. */
-  status(projectId: string, jobId: string): DeepAnalysisView {
+  status(sessionId: string, jobId: string): DeepAnalysisView {
     const job = this.jobs.get(jobId);
-    if (!job || job.projectId !== projectId) {
+    if (!job || job.sessionId !== sessionId) {
       throw new NotFoundException(`Deep analysis ${jobId} not found`);
     }
     return {
@@ -115,14 +115,14 @@ export class DeepAnalysisService implements OnModuleDestroy {
    * backend restarts.
    */
   async download(
-    projectId: string,
+    sessionId: string,
     jobId: string,
   ): Promise<{ filename: string; markdown: string }> {
     if (!/^[a-zA-Z0-9-]+$/.test(jobId)) {
       throw new BadRequestException('invalid deep analysis id');
     }
-    const project = await this.projects.get(projectId);
-    const filesystem = await this.filesystemFor(project);
+    const session = await this.sessions.get(sessionId);
+    const filesystem = await this.filesystemFor(session);
     let markdown: string;
     try {
       const value = await filesystem.readFile(reportPath(jobId), {
@@ -145,11 +145,11 @@ export class DeepAnalysisService implements OnModuleDestroy {
 
   private async run(
     job: DeepAnalysisJob,
-    project: ProjectDoc,
+    session: SessionDoc,
     abortSignal: AbortSignal,
   ): Promise<void> {
     try {
-      const plan = await this.plan(project, job.question, abortSignal);
+      const plan = await this.plan(session, job.question, abortSignal);
       const angles = plan.angles.slice(0, MAX_ANGLES);
       if (!angles.length) throw new Error('the planner returned no angles');
       job.title = plan.title.trim() || job.question.slice(0, 80);
@@ -163,7 +163,7 @@ export class DeepAnalysisService implements OnModuleDestroy {
         job.progress = `Investigating angle ${index + 1} of ${angles.length}: ${angle.title}`;
         findings.push(
           await this.investigate(
-            project,
+            session,
             job.question,
             angle,
             index,
@@ -178,7 +178,7 @@ export class DeepAnalysisService implements OnModuleDestroy {
       job.step = angles.length;
       job.progress = 'Writing the report';
       const written = await this.synthesize(
-        project,
+        session,
         job.question,
         findings,
         abortSignal,
@@ -192,15 +192,15 @@ export class DeepAnalysisService implements OnModuleDestroy {
         executiveSummary: written.executiveSummary.trim(),
         body: written.report.trim(),
         findings,
-        projectName: project.name,
+        sessionName: session.name,
         generatedAt,
         jobId: job.id,
       });
-      const filesystem = await this.filesystemFor(project);
+      const filesystem = await this.filesystemFor(session);
       await filesystem.writeFile(reportPath(job.id), markdown);
       job.path = reportPath(job.id);
 
-      await this.projects.appendAssistantMessage(project.id, {
+      await this.sessions.appendAssistantMessage(session.id, {
         content: written.executiveSummary.trim(),
         report: {
           jobId: job.id,
@@ -219,7 +219,7 @@ export class DeepAnalysisService implements OnModuleDestroy {
       job.error = detail;
       job.progress = 'Deep analysis failed';
       try {
-        await this.projects.appendAssistantMessage(project.id, {
+        await this.sessions.appendAssistantMessage(session.id, {
           content: `Deep analysis of "${job.question}" could not be completed — ${detail}`,
         });
       } catch (append: unknown) {
@@ -234,12 +234,12 @@ export class DeepAnalysisService implements OnModuleDestroy {
 
   /** Step 1: 3-5 distinct angles, one structured call, no tools. */
   private async plan(
-    project: ProjectDoc,
+    session: SessionDoc,
     question: string,
     abortSignal: AbortSignal,
   ): Promise<AnalysisPlan> {
-    const options = await this.projects.backgroundAgentOptions(
-      project,
+    const options = await this.sessions.backgroundAgentOptions(
+      session,
       question,
       abortSignal,
     );
@@ -249,7 +249,7 @@ export class DeepAnalysisService implements OnModuleDestroy {
         [
           'Plan a deep analysis of the question below.',
           'Produce between 3 and 5 investigation angles: distinct, answerable',
-          'sub-questions over the entities listed in the project context —',
+          'sub-questions over the entities listed in the session context —',
           'different dimensions, comparisons, time windows or drivers, never',
           'restatements of one another.',
           'Plan only: run no queries, ask no clarifying questions.',
@@ -279,15 +279,15 @@ export class DeepAnalysisService implements OnModuleDestroy {
 
   /** Step 2: one tool-enabled turn per angle, sequential. */
   private async investigate(
-    project: ProjectDoc,
+    session: SessionDoc,
     question: string,
     angle: AnalysisAngle,
     index: number,
     total: number,
     abortSignal: AbortSignal,
   ): Promise<AngleFinding> {
-    const options = await this.projects.backgroundAgentOptions(
-      project,
+    const options = await this.sessions.backgroundAgentOptions(
+      session,
       angle.question,
       abortSignal,
     );
@@ -298,7 +298,7 @@ export class DeepAnalysisService implements OnModuleDestroy {
           [
             `Deep analysis — angle ${index + 1} of ${total}: ${angle.title}`,
             '',
-            'Investigate this angle with SQL over the project entities and',
+            'Investigate this angle with SQL over the session entities and',
             'report what you found. This is one section of a longer report, so',
             'stay on this angle.',
             '',
@@ -345,13 +345,13 @@ export class DeepAnalysisService implements OnModuleDestroy {
 
   /** Step 3: one structured, tool-free call that writes the report. */
   private async synthesize(
-    project: ProjectDoc,
+    session: SessionDoc,
     question: string,
     findings: AngleFinding[],
     abortSignal: AbortSignal,
   ): Promise<AnalysisReportOutput> {
-    const options = await this.projects.backgroundAgentOptions(
-      project,
+    const options = await this.sessions.backgroundAgentOptions(
+      session,
       question,
       abortSignal,
     );
@@ -406,14 +406,14 @@ export class DeepAnalysisService implements OnModuleDestroy {
   }
 
   private async filesystemFor(
-    project: ProjectDoc,
+    session: SessionDoc,
   ): Promise<WorkspaceFilesystem> {
-    const workspace = await this.mastra.ensureProjectWorkspace(
-      project.id,
-      project.name,
+    const workspace = await this.mastra.ensureSessionWorkspace(
+      session.id,
+      session.name,
     );
     const filesystem = workspace.filesystem;
-    if (!filesystem) throw new Error('project workspace has no filesystem');
+    if (!filesystem) throw new Error('session workspace has no filesystem');
     return filesystem;
   }
 
@@ -421,7 +421,7 @@ export class DeepAnalysisService implements OnModuleDestroy {
   private prune(): void {
     if (this.jobs.size <= RETAINED_JOBS) return;
     const finished = [...this.jobs.values()]
-      .filter((job) => this.running.get(job.projectId) !== job.id)
+      .filter((job) => this.running.get(job.sessionId) !== job.id)
       .sort((a, b) => a.startedAt.localeCompare(b.startedAt));
     for (const job of finished.slice(0, this.jobs.size - RETAINED_JOBS)) {
       this.jobs.delete(job.id);
@@ -452,7 +452,7 @@ export function reportMarkdown(input: {
   executiveSummary: string;
   body: string;
   findings: AngleFinding[];
-  projectName?: string;
+  sessionName?: string;
   generatedAt: string;
   jobId: string;
 }): string {
@@ -463,7 +463,7 @@ export function reportMarkdown(input: {
     '',
     [
       'Deep analysis',
-      input.projectName ? `project: ${input.projectName}` : '',
+      input.sessionName ? `session: ${input.sessionName}` : '',
       `${input.findings.length} angle${input.findings.length === 1 ? '' : 's'}`,
       `generated ${input.generatedAt}`,
     ]

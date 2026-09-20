@@ -5,10 +5,10 @@ import { DuckDBStore } from '@mastra/duckdb';
 import { LibSQLStore } from '@mastra/libsql';
 
 // Mastra Studio changes process.cwd() to its public directory after bundling,
-// while PWD/INIT_CWD still point at the project the CLI was launched from.
-const projectDir = process.env.INIT_CWD ?? process.env.PWD ?? process.cwd();
+// while PWD/INIT_CWD still point at the directory the CLI was launched from.
+const launchDir = process.env.INIT_CWD ?? process.env.PWD ?? process.cwd();
 export const mastraDataDir =
-  process.env.APP_DATA_DIR ?? join(projectDir, 'data');
+  process.env.APP_DATA_DIR ?? join(launchDir, 'data');
 mkdirSync(mastraDataDir, { recursive: true });
 
 const runtimeStorage = new LibSQLStore({

@@ -8,26 +8,26 @@ import {
   Query,
   Res,
 } from '@nestjs/common';
-import { ProjectsService } from './projects.service';
-import type { ProjectDoc } from './entities/project.entity';
+import { SessionsService } from './sessions.service';
+import type { SessionDoc } from './entities/session.entity';
 import type {
   InteractiveVisualization,
   MessageFeedback,
-} from './entities/project.entity';
+} from './entities/session.entity';
 import type { Response } from 'express';
 
-@Controller('projects')
-export class ProjectsController {
-  constructor(private readonly projectsService: ProjectsService) {}
+@Controller('sessions')
+export class SessionsController {
+  constructor(private readonly sessionsService: SessionsService) {}
 
   @Get()
-  async list(): Promise<{ projects: ProjectDoc[] }> {
-    return { projects: await this.projectsService.list() };
+  async list(): Promise<{ sessions: SessionDoc[] }> {
+    return { sessions: await this.sessionsService.list() };
   }
 
   @Get(':id')
-  get(@Param('id') id: string): Promise<ProjectDoc> {
-    return this.projectsService.get(id);
+  get(@Param('id') id: string): Promise<SessionDoc> {
+    return this.sessionsService.get(id);
   }
 
   @Get(':id/visualizations/:visualizationId')
@@ -36,7 +36,7 @@ export class ProjectsController {
     @Param('visualizationId') visualizationId: string,
     @Query('version') version?: string,
   ): Promise<InteractiveVisualization> {
-    return this.projectsService.getVisualization(
+    return this.sessionsService.getVisualization(
       id,
       visualizationId,
       parseVersion(version),
@@ -51,11 +51,11 @@ export class ProjectsController {
   ): Promise<{
     ok: boolean;
     message: string;
-    project?: ProjectDoc;
+    session?: SessionDoc;
     visualization?: InteractiveVisualization;
   }> {
     try {
-      const result = await this.projectsService.revertVisualization(
+      const result = await this.sessionsService.revertVisualization(
         id,
         visualizationId,
         Number(body?.version),
@@ -79,11 +79,11 @@ export class ProjectsController {
   ): Promise<{
     ok: boolean;
     message: string;
-    project?: ProjectDoc;
+    session?: SessionDoc;
     visualization?: InteractiveVisualization;
   }> {
     try {
-      const result = await this.projectsService.repairVisualization(
+      const result = await this.sessionsService.repairVisualization(
         id,
         visualizationId,
         body?.error ?? '',
@@ -108,11 +108,11 @@ export class ProjectsController {
   ): Promise<{
     ok: boolean;
     message: string;
-    project?: ProjectDoc;
+    session?: SessionDoc;
     visualization?: InteractiveVisualization;
   }> {
     try {
-      const result = await this.projectsService.tailorVisualization(
+      const result = await this.sessionsService.tailorVisualization(
         id,
         visualizationId,
         body?.instruction ?? '',
@@ -135,11 +135,11 @@ export class ProjectsController {
   ): Promise<{
     ok: boolean;
     message: string;
-    project?: ProjectDoc;
+    session?: SessionDoc;
     visualization?: InteractiveVisualization;
   }> {
     try {
-      const result = await this.projectsService.refreshVisualizationData(
+      const result = await this.sessionsService.refreshVisualizationData(
         id,
         visualizationId,
       );
@@ -162,7 +162,7 @@ export class ProjectsController {
     @Query('version') version?: string,
   ): Promise<void> {
     const { filename, archive } =
-      await this.projectsService.downloadVisualization(
+      await this.sessionsService.downloadVisualization(
         id,
         visualizationId,
         parseVersion(version),
@@ -181,8 +181,8 @@ export class ProjectsController {
     @Param('id') id: string,
   ): Promise<{ ok: boolean; message: string }> {
     try {
-      const project = await this.projectsService.delete(id);
-      return { ok: true, message: `Project "${project.name}" deleted` };
+      const session = await this.sessionsService.delete(id);
+      return { ok: true, message: `Session "${session.name}" deleted` };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return { ok: false, message };
@@ -192,16 +192,16 @@ export class ProjectsController {
   @Post()
   async create(
     @Body() body: { name?: string; sandboxes?: string[] },
-  ): Promise<{ ok: boolean; message: string; project?: ProjectDoc }> {
+  ): Promise<{ ok: boolean; message: string; session?: SessionDoc }> {
     try {
-      const project = await this.projectsService.create(
+      const session = await this.sessionsService.create(
         body?.name ?? '',
         body?.sandboxes ?? [],
       );
       return {
         ok: true,
-        message: `Project "${project.name}" created`,
-        project,
+        message: `Session "${session.name}" created`,
+        session,
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -216,11 +216,11 @@ export class ProjectsController {
   ): Promise<{
     ok: boolean;
     message: string;
-    project?: ProjectDoc;
+    session?: SessionDoc;
     visualization?: InteractiveVisualization;
   }> {
     try {
-      const result = await this.projectsService.generateVisualization(
+      const result = await this.sessionsService.generateVisualization(
         id,
         body?.sourceMessageAt ?? '',
       );
@@ -236,7 +236,7 @@ export class ProjectsController {
   }
 
   // Server-sent events: reasoning/text deltas while the agent thinks, then
-  // `done` with the persisted project.
+  // `done` with the persisted session.
   @Post(':id/messages/stream')
   async streamMessage(
     @Param('id') id: string,
@@ -259,7 +259,7 @@ export class ProjectsController {
     const abort = () => controller.abort();
     res.once('close', abort);
     try {
-      await this.projectsService.streamMessage(
+      await this.sessionsService.streamMessage(
         id,
         body?.content ?? '',
         send,
@@ -283,9 +283,9 @@ export class ProjectsController {
   async rateMessage(
     @Param('id') id: string,
     @Body() body: { messageAt?: string; rating?: string },
-  ): Promise<{ ok: boolean; message: string; project?: ProjectDoc }> {
+  ): Promise<{ ok: boolean; message: string; session?: SessionDoc }> {
     try {
-      const project = await this.projectsService.recordFeedback(
+      const session = await this.sessionsService.recordFeedback(
         id,
         body?.messageAt ?? '',
         body?.rating as MessageFeedback,
@@ -296,7 +296,7 @@ export class ProjectsController {
           body?.rating === 'up'
             ? 'Answer saved as a verified query'
             : 'Answer marked as wrong',
-        project,
+        session,
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -308,13 +308,13 @@ export class ProjectsController {
   async sendMessage(
     @Param('id') id: string,
     @Body() body: { content?: string },
-  ): Promise<{ ok: boolean; message: string; project?: ProjectDoc }> {
+  ): Promise<{ ok: boolean; message: string; session?: SessionDoc }> {
     try {
-      const project = await this.projectsService.sendMessage(
+      const session = await this.sessionsService.sendMessage(
         id,
         body?.content ?? '',
       );
-      return { ok: true, message: 'Message sent', project };
+      return { ok: true, message: 'Message sent', session };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return { ok: false, message };

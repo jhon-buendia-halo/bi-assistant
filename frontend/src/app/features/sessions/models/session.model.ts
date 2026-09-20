@@ -134,7 +134,7 @@ export interface VisualizationVersion {
   refreshedAt?: string;
 }
 
-export interface ProjectVisualization {
+export interface SessionVisualization {
   id: string;
   title: string;
   description: string;
@@ -145,25 +145,25 @@ export interface ProjectVisualization {
   versions?: VisualizationVersion[];
 }
 
-export interface InteractiveVisualization extends ProjectVisualization {
+export interface InteractiveVisualization extends SessionVisualization {
   document: string;
   version: number;
 }
 
-export interface Project {
+export interface Session {
   id: string;
   name: string;
   workspaceId?: string;
   sandboxes: string[];
   messages: ChatMessage[];
-  visualizations?: ProjectVisualization[];
+  visualizations?: SessionVisualization[];
   createdAt?: string;
   updatedAt?: string;
 }
 
-export interface ProjectActionResult {
+export interface SessionActionResult {
   ok: boolean;
   message: string;
-  project?: Project;
+  session?: Session;
   visualization?: InteractiveVisualization;
 }

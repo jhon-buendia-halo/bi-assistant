@@ -1,6 +1,6 @@
 import { marked } from 'marked';
 import sanitizeHtml from 'sanitize-html';
-import type { ReasoningStep, ToolDataRecord } from './entities/project.entity';
+import type { ReasoningStep, ToolDataRecord } from './entities/session.entity';
 import {
   SPEC_BODY_HTML,
   SPEC_BOOTSTRAP_SCRIPT,
@@ -48,7 +48,7 @@ export interface VisualContext {
    * never claim a query that never ran.
    */
   reasoning?: ReasoningStep[];
-  projectName?: string;
+  sessionName?: string;
   version?: number;
   generatedAt?: string;
   /**
@@ -320,7 +320,7 @@ function renderFrame(
     : undefined;
   const footer = [
     entities.length ? `Source: ${entities.map(escapeHtml).join(', ')}` : '',
-    context.projectName ? `Project: ${escapeHtml(context.projectName)}` : '',
+    context.sessionName ? `Session: ${escapeHtml(context.sessionName)}` : '',
     context.version ? `Version ${context.version}` : '',
     generated ? `Generated ${escapeHtml(generated)}` : '',
   ]

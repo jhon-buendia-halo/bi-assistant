@@ -141,7 +141,7 @@ export interface VisualizationVersion {
   refreshedAt?: string;
 }
 
-export interface ProjectVisualization {
+export interface SessionVisualization {
   id: string;
   title: string;
   description: string;
@@ -157,22 +157,22 @@ export interface ProjectVisualization {
   versions?: VisualizationVersion[];
 }
 
-export interface InteractiveVisualization extends ProjectVisualization {
+export interface InteractiveVisualization extends SessionVisualization {
   /** Sandboxed, self-contained document assembled from the stored bundle. */
   document: string;
   /** Version the document was assembled from. */
   version: number;
 }
 
-export interface ProjectDoc {
+export interface SessionDoc {
   id: string;
   name: string;
-  /** Mastra workspace associated one-to-one with this project. */
+  /** Mastra workspace associated one-to-one with this session. */
   workspaceId?: string;
-  /** Names of the sandboxes this project works over. */
+  /** Names of the sandboxes this session works over. */
   sandboxes: string[];
   messages: ChatMessage[];
-  visualizations?: ProjectVisualization[];
+  visualizations?: SessionVisualization[];
   createdAt?: string;
   updatedAt?: string;
 }

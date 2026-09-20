@@ -18,11 +18,11 @@ describe('App', () => {
     expect(app).toBeTruthy();
   });
 
-  it('should render the projects navigation', () => {
+  it('should render the sessions navigation', () => {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.textContent).toContain('Projects');
+    expect(compiled.textContent).toContain('Sessions');
     expect(
       compiled.querySelector('[aria-label="Open system logs"]'),
     ).toBeTruthy();
@@ -79,17 +79,17 @@ describe('App', () => {
     expect(app.rightPanelWidth()).toBe(initialWidth - 24);
   });
 
-  it('should show the active project datasource in the header', () => {
+  it('should show the active session datasource in the header', () => {
     const fixture = TestBed.createComponent(App);
     const app = fixture.componentInstance;
-    app.activeProject.set({
-      id: 'project-1',
+    app.activeSession.set({
+      id: 'session-1',
       name: 'World Cup analysis',
       sandboxes: ['Futbol DB'],
       messages: [],
     });
-    app.mainView.set('project-chat');
-    app.activeProjectDatasources.set([
+    app.mainView.set('session-chat');
+    app.activeSessionDatasources.set([
       {
         id: 'postgres-1',
         name: 'futbol local',

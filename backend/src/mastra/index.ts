@@ -6,7 +6,7 @@ import { sqlFixerAgent } from './agents/sql-fixer.agent';
 import { sqlVerifierAgent } from './agents/sql-verifier.agent';
 import { visualizationAgent } from './agents/visualization.agent';
 import { mastraStorage } from './storage';
-import { watchProjectWorkspaceRegistry } from './project-workspaces';
+import { watchSessionWorkspaceRegistry } from './session-workspaces';
 
 // Canonical Mastra entry point — the backbone of the agentic harness. Agents
 // (and later tools/workflows) are registered here; the NestJS MastraService
@@ -35,5 +35,5 @@ export const mastra = new Mastra({
 });
 
 // The app backend and Studio are separate Mastra processes. Keep each
-// registry aligned with the shared filesystem as projects come and go.
-export const projectWorkspaceWatcher = watchProjectWorkspaceRegistry(mastra);
+// registry aligned with the shared filesystem as sessions come and go.
+export const sessionWorkspaceWatcher = watchSessionWorkspaceRegistry(mastra);

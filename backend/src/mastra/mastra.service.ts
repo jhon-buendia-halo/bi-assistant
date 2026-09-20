@@ -3,11 +3,11 @@ import type { Agent } from '@mastra/core/agent';
 import { mastra } from './index';
 import type { Workspace } from '@mastra/core/workspace';
 import {
-  createProjectWorkspace,
-  deleteProjectWorkspaceDirectory,
-  initializeProjectWorkspace,
-  projectWorkspaceId,
-} from './project-workspaces';
+  createSessionWorkspace,
+  deleteSessionWorkspaceDirectory,
+  initializeSessionWorkspace,
+  sessionWorkspaceId,
+} from './session-workspaces';
 
 // Thin DI wrapper around the standalone Mastra instance. Keeps the rest of
 // the backend Mastra-agnostic and localises the blast radius of a breaking
@@ -22,27 +22,27 @@ export class MastraService {
     return this.mastra.getAgent(id as Parameters<typeof mastra.getAgent>[0]);
   }
 
-  /** Create or restore a project-scoped workspace and register it with Mastra. */
-  async ensureProjectWorkspace(
-    projectId: string,
-    projectName?: string,
+  /** Create or restore a session-scoped workspace and register it with Mastra. */
+  async ensureSessionWorkspace(
+    sessionId: string,
+    sessionName?: string,
   ): Promise<Workspace> {
-    const workspaceId = projectWorkspaceId(projectId);
+    const workspaceId = sessionWorkspaceId(sessionId);
     const registered = this.mastra.listWorkspaces()[workspaceId]?.workspace;
-    if (registered) return initializeProjectWorkspace(registered);
+    if (registered) return initializeSessionWorkspace(registered);
 
-    const workspace = createProjectWorkspace(projectId, projectName);
+    const workspace = createSessionWorkspace(sessionId, sessionName);
     this.mastra.addWorkspace(workspace);
-    return initializeProjectWorkspace(workspace);
+    return initializeSessionWorkspace(workspace);
   }
 
-  /** Remove the project's agent memory, registry entry, and workspace files. */
-  async deleteProjectResources(projectId: string): Promise<void> {
+  /** Remove the session's agent memory, registry entry, and workspace files. */
+  async deleteSessionResources(sessionId: string): Promise<void> {
     const memory = await this.getAgent('assistant').getMemory();
-    await memory?.deleteThread(projectId);
+    await memory?.deleteThread(sessionId);
 
-    const workspaceId = projectWorkspaceId(projectId);
+    const workspaceId = sessionWorkspaceId(sessionId);
     await this.mastra.removeWorkspace(workspaceId, { destroy: true });
-    await deleteProjectWorkspaceDirectory(projectId);
+    await deleteSessionWorkspaceDirectory(sessionId);
   }
 }

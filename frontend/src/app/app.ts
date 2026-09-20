@@ -48,24 +48,24 @@ import {
   SandboxApiService,
 } from './features/data-sandbox/services/sandbox-api.service';
 import { LlmApiService } from './features/llm/services/llm-api.service';
-import { ProjectsApiService } from './features/projects/services/projects-api.service';
-import { ProjectChat } from './features/projects/components/project-chat/project-chat';
-import { InteractiveVisualPanel } from './features/projects/components/interactive-visual-panel/interactive-visual-panel';
+import { SessionsApiService } from './features/sessions/services/sessions-api.service';
+import { SessionChat } from './features/sessions/components/session-chat/session-chat';
+import { InteractiveVisualPanel } from './features/sessions/components/interactive-visual-panel/interactive-visual-panel';
 import {
   ChatMessage,
   DataPointSelection,
   InteractiveVisualization,
-  Project,
-  ProjectActionResult,
-  ProjectVisualization,
+  Session,
+  SessionActionResult,
+  SessionVisualization,
   VisualEvent,
-} from './features/projects/models/project.model';
+} from './features/sessions/models/session.model';
 import { ReasoningEffort } from './features/llm/models/llm.model';
 import { ToastService } from './core/toast/toast.service';
 
 type SettingsSection = 'datasources' | 'llm' | null;
 type MainView =
-  'home' | 'sandbox' | 'sandbox-new' | 'conversation-new' | 'project-chat';
+  'home' | 'sandbox' | 'sandbox-new' | 'conversation-new' | 'session-chat';
 
 const DEFAULT_RIGHT_PANEL_WIDTH = 572;
 const MIN_RIGHT_PANEL_WIDTH = 360;
@@ -86,7 +86,7 @@ const RIGHT_PANEL_WIDTH_STORAGE_KEY = 'questions-to-insights:right-panel-width';
     EntityDetails,
     ToastContainer,
     SystemLogsPanel,
-    ProjectChat,
+    SessionChat,
     InteractiveVisualPanel,
   ],
   templateUrl: './app.html',
@@ -121,8 +121,8 @@ export class App {
   readonly rightPanelWidth = signal(this.readRightPanelWidth());
   readonly rightPanelMinWidth = MIN_RIGHT_PANEL_WIDTH;
   readonly systemLogsOpen = signal(false);
-  readonly activeProjectDatasources = signal<Datasource[]>([]);
-  readonly loadingProjectDatasources = signal(false);
+  readonly activeSessionDatasources = signal<Datasource[]>([]);
+  readonly loadingSessionDatasources = signal(false);
   readonly datasourceKindLabel = kindLabel;
   readonly mainView = signal<MainView>('home');
   /** Sandbox being edited in the catalog browser; null = creating a new one. */
@@ -145,17 +145,17 @@ export class App {
   readonly effortMenuOpen = signal(false);
   readonly reasoningEfforts: ReasoningEffort[] = ['low', 'medium', 'high'];
 
-  /** Sandboxes offered in the composer; the project needs at least one. */
+  /** Sandboxes offered in the composer; the session needs at least one. */
   readonly composerSandboxes = signal<Sandbox[]>([]);
   readonly selectedSandboxes = signal<Set<string>>(new Set());
   readonly composerName = signal('');
-  readonly creatingProject = signal(false);
+  readonly creatingSession = signal(false);
 
-  readonly projects = signal<Project[]>([]);
-  readonly activeProject = signal<Project | null>(null);
-  readonly projectMenuOpen = signal<string | null>(null);
-  readonly deletingProject = signal<string | null>(null);
-  readonly generatingVisualProject = signal<string | null>(null);
+  readonly sessions = signal<Session[]>([]);
+  readonly activeSession = signal<Session | null>(null);
+  readonly sessionMenuOpen = signal<string | null>(null);
+  readonly deletingSession = signal<string | null>(null);
+  readonly generatingVisualSession = signal<string | null>(null);
   readonly downloadingVisualization = signal<string | null>(null);
   readonly activeVisualization = signal<InteractiveVisualization | null>(null);
   readonly visualizationError = signal<string | null>(null);
@@ -164,7 +164,7 @@ export class App {
 
   private readonly sandboxApi = inject(SandboxApiService);
   private readonly datasourcesApi = inject(DatasourcesApiService);
-  private readonly projectsApi = inject(ProjectsApiService);
+  private readonly sessionsApi = inject(SessionsApiService);
   private rightPanelResizeStart:
     { pointerId: number; x: number; width: number } | undefined;
   private rightPanelResizeHandle: HTMLElement | undefined;
@@ -283,8 +283,8 @@ export class App {
     );
   }
 
-  loadProjects(): void {
-    this.projectsApi
+  loadSessions(): void {
+    this.sessionsApi
       .list()
       .pipe(
         retry({
@@ -294,68 +294,68 @@ export class App {
         }),
       )
       .subscribe({
-        next: (res) => this.projects.set(res.projects),
-        // Preserve already-loaded projects if the backend is briefly offline.
-        error: () => this.toast.error('Could not load projects'),
+        next: (res) => this.sessions.set(res.sessions),
+        // Preserve already-loaded sessions if the backend is briefly offline.
+        error: () => this.toast.error('Could not load sessions'),
       });
   }
 
-  openProject(project: Project): void {
-    this.projectMenuOpen.set(null);
+  openSession(session: Session): void {
+    this.sessionMenuOpen.set(null);
     this.selectedDataPoint.set(null);
-    this.activeProject.set(project);
-    this.mainView.set('project-chat');
-    this.loadActiveProjectDatasources(project);
-    this.loadLatestVisualization(project);
+    this.activeSession.set(session);
+    this.mainView.set('session-chat');
+    this.loadActiveSessionDatasources(session);
+    this.loadLatestVisualization(session);
   }
 
-  private loadActiveProjectDatasources(project: Project): void {
-    this.activeProjectDatasources.set([]);
-    this.loadingProjectDatasources.set(true);
+  private loadActiveSessionDatasources(session: Session): void {
+    this.activeSessionDatasources.set([]);
+    this.loadingSessionDatasources.set(true);
     forkJoin({
       sandboxes: this.sandboxApi.getSandboxes(),
       datasources: this.datasourcesApi.list(),
     }).subscribe({
       next: ({ sandboxes, datasources }) => {
-        if (this.activeProject()?.id !== project.id) return;
+        if (this.activeSession()?.id !== session.id) return;
         const defaultDatasource =
           datasources.datasources.find((item) => item.kind === 'databricks') ??
           datasources.datasources[0];
         const datasourceIds = new Set(
           sandboxes.sandboxes
-            .filter((sandbox) => project.sandboxes.includes(sandbox.name))
+            .filter((sandbox) => session.sandboxes.includes(sandbox.name))
             .map((sandbox) => sandbox.datasourceId ?? defaultDatasource?.id)
             .filter((id): id is string => Boolean(id)),
         );
-        this.activeProjectDatasources.set(
+        this.activeSessionDatasources.set(
           datasources.datasources.filter((item) => datasourceIds.has(item.id)),
         );
-        this.loadingProjectDatasources.set(false);
+        this.loadingSessionDatasources.set(false);
       },
       error: () => {
-        if (this.activeProject()?.id !== project.id) return;
-        this.loadingProjectDatasources.set(false);
+        if (this.activeSession()?.id !== session.id) return;
+        this.loadingSessionDatasources.set(false);
       },
     });
   }
 
-  private loadLatestVisualization(project: Project): void {
+  private loadLatestVisualization(session: Session): void {
     this.activeVisualization.set(null);
     this.visualizationError.set(null);
-    const latest = project.visualizations?.at(-1);
+    const latest = session.visualizations?.at(-1);
     if (!latest) return;
 
-    this.projectsApi.getVisualization(project.id, latest.id).subscribe({
+    this.sessionsApi.getVisualization(session.id, latest.id).subscribe({
       next: (visualization) => {
         if (
-          this.activeProject()?.id === project.id &&
-          this.generatingVisualProject() !== project.id
+          this.activeSession()?.id === session.id &&
+          this.generatingVisualSession() !== session.id
         ) {
           this.activeVisualization.set(visualization);
         }
       },
       error: (err) => {
-        if (this.activeProject()?.id === project.id) {
+        if (this.activeSession()?.id === session.id) {
           this.visualizationError.set(
             err?.error?.message ?? 'Could not load the saved visual',
           );
@@ -364,18 +364,18 @@ export class App {
     });
   }
 
-  /** Re-read the active project so visuals metadata (versions) is fresh. */
-  private refreshActiveProject(then?: (project: Project) => void): void {
-    const current = this.activeProject();
+  /** Re-read the active session so visuals metadata (versions) is fresh. */
+  private refreshActiveSession(then?: (session: Session) => void): void {
+    const current = this.activeSession();
     if (!current) return;
-    this.projectsApi.get(current.id).subscribe({
-      next: (project) => {
-        this.projects.update((projects) =>
-          projects.map((item) => (item.id === project.id ? project : item)),
+    this.sessionsApi.get(current.id).subscribe({
+      next: (session) => {
+        this.sessions.update((sessions) =>
+          sessions.map((item) => (item.id === session.id ? session : item)),
         );
-        if (this.activeProject()?.id === project.id) {
-          this.activeProject.set(project);
-          then?.(project);
+        if (this.activeSession()?.id === session.id) {
+          this.activeSession.set(session);
+          then?.(session);
         }
       },
       error: () => {
@@ -385,22 +385,22 @@ export class App {
   }
 
   /**
-   * The chat persisted the project out of band (answer feedback). Refresh the
+   * The chat persisted the session out of band (answer feedback). Refresh the
    * cached copies; the chat guards same-id refreshes, so streams are safe.
    */
-  onProjectUpdated(project: Project): void {
-    this.projects.update((projects) =>
-      projects.map((item) => (item.id === project.id ? project : item)),
+  onSessionUpdated(session: Session): void {
+    this.sessions.update((sessions) =>
+      sessions.map((item) => (item.id === session.id ? session : item)),
     );
-    if (this.activeProject()?.id === project.id) {
-      this.activeProject.set(project);
+    if (this.activeSession()?.id === session.id) {
+      this.activeSession.set(session);
     }
   }
 
   /** A chat turn created/updated a visual — show the new version live. */
   onVisualUpdated(event: VisualEvent): void {
-    this.refreshActiveProject((project) => {
-      const meta = project.visualizations?.find((v) => v.id === event.visualId);
+    this.refreshActiveSession((session) => {
+      const meta = session.visualizations?.find((v) => v.id === event.visualId);
       if (meta) this.showVisualization(meta, event.version);
     });
   }
@@ -412,11 +412,11 @@ export class App {
   }
 
   revertVisualVersion(version: number): void {
-    const project = this.activeProject();
+    const session = this.activeSession();
     const visual = this.activeVisualization();
-    if (!project || !visual) return;
-    this.projectsApi
-      .revertVisualization(project.id, visual.id, version)
+    if (!session || !visual) return;
+    this.sessionsApi
+      .revertVisualization(session.id, visual.id, version)
       .subscribe({
         next: (result) => {
           if (!this.applyVisualResult(result)) {
@@ -434,24 +434,24 @@ export class App {
    * The panel repaired or tailored the open visual and already has the fresh
    * payload — same refresh path as revert (no SSE event to wait for).
    */
-  onVisualRefreshed(result: ProjectActionResult): void {
+  onVisualRefreshed(result: SessionActionResult): void {
     if (this.applyVisualResult(result)) {
       this.toast.success(result.message);
     }
   }
 
   /**
-   * Adopt a `{project, visualization}` payload into the cached copies. Returns
+   * Adopt a `{session, visualization}` payload into the cached copies. Returns
    * false when the call did not succeed, so callers can report it.
    */
-  private applyVisualResult(result: ProjectActionResult): boolean {
-    if (!result.ok || !result.project || !result.visualization) return false;
-    const project = result.project;
-    this.projects.update((projects) =>
-      projects.map((item) => (item.id === project.id ? project : item)),
+  private applyVisualResult(result: SessionActionResult): boolean {
+    if (!result.ok || !result.session || !result.visualization) return false;
+    const session = result.session;
+    this.sessions.update((sessions) =>
+      sessions.map((item) => (item.id === session.id ? session : item)),
     );
-    if (this.activeProject()?.id === project.id) {
-      this.activeProject.set(project);
+    if (this.activeSession()?.id === session.id) {
+      this.activeSession.set(session);
       this.activeVisualization.set(result.visualization);
     }
     return true;
@@ -463,25 +463,25 @@ export class App {
   }
 
   showVisualization(
-    visualization: ProjectVisualization | VisualEvent,
+    visualization: SessionVisualization | VisualEvent,
     version?: number,
   ): void {
-    const project = this.activeProject();
-    if (!project) return;
+    const session = this.activeSession();
+    if (!session) return;
     const id =
       'visualId' in visualization ? visualization.visualId : visualization.id;
     this.activeVisualization.set(null);
     this.visualizationError.set(null);
     this.selectedDataPoint.set(null);
     this.rightPanelOpen.set(true);
-    this.projectsApi.getVisualization(project.id, id, version).subscribe({
+    this.sessionsApi.getVisualization(session.id, id, version).subscribe({
       next: (loaded) => {
-        if (this.activeProject()?.id === project.id) {
+        if (this.activeSession()?.id === session.id) {
           this.activeVisualization.set(loaded);
         }
       },
       error: (err) => {
-        if (this.activeProject()?.id === project.id) {
+        if (this.activeSession()?.id === session.id) {
           this.visualizationError.set(
             err?.error?.message ?? 'Could not load the saved visual',
           );
@@ -491,11 +491,11 @@ export class App {
   }
 
   downloadVisualization(visualization: InteractiveVisualization): void {
-    const project = this.activeProject();
-    if (!project || this.downloadingVisualization()) return;
+    const session = this.activeSession();
+    if (!session || this.downloadingVisualization()) return;
     this.downloadingVisualization.set(visualization.id);
-    this.projectsApi
-      .downloadVisualization(project.id, visualization.id)
+    this.sessionsApi
+      .downloadVisualization(session.id, visualization.id)
       .subscribe({
         next: (archive) => {
           this.downloadingVisualization.set(null);
@@ -523,39 +523,39 @@ export class App {
   }
 
   generateInteractiveVisual(message: ChatMessage): void {
-    const project = this.activeProject();
-    if (!project || this.generatingVisualProject()) return;
+    const session = this.activeSession();
+    if (!session || this.generatingVisualSession()) return;
 
-    this.generatingVisualProject.set(project.id);
+    this.generatingVisualSession.set(session.id);
     this.activeVisualization.set(null);
     this.visualizationError.set(null);
     this.rightPanelOpen.set(true);
-    this.projectsApi.generateVisualization(project.id, message.at).subscribe({
+    this.sessionsApi.generateVisualization(session.id, message.at).subscribe({
       next: (result) => {
-        this.generatingVisualProject.set(null);
-        if (!result.ok || !result.project || !result.visualization) {
+        this.generatingVisualSession.set(null);
+        if (!result.ok || !result.session || !result.visualization) {
           const error = result.message || 'Visual generation failed';
-          if (this.activeProject()?.id === project.id) {
+          if (this.activeSession()?.id === session.id) {
             this.visualizationError.set(error);
           }
           this.toast.error(error);
           return;
         }
-        this.projects.update((projects) =>
-          projects.map((item) =>
-            item.id === result.project!.id ? result.project! : item,
+        this.sessions.update((sessions) =>
+          sessions.map((item) =>
+            item.id === result.session!.id ? result.session! : item,
           ),
         );
-        if (this.activeProject()?.id === result.project.id) {
-          this.activeProject.set(result.project);
+        if (this.activeSession()?.id === result.session.id) {
+          this.activeSession.set(result.session);
           this.activeVisualization.set(result.visualization);
         }
         this.toast.success(result.message);
       },
       error: (err) => {
-        this.generatingVisualProject.set(null);
+        this.generatingVisualSession.set(null);
         const error = err?.error?.message ?? 'Backend unreachable';
-        if (this.activeProject()?.id === project.id) {
+        if (this.activeSession()?.id === session.id) {
           this.visualizationError.set(error);
         }
         this.toast.error(error);
@@ -563,30 +563,30 @@ export class App {
     });
   }
 
-  toggleProjectMenu(id: string): void {
-    this.projectMenuOpen.set(this.projectMenuOpen() === id ? null : id);
+  toggleSessionMenu(id: string): void {
+    this.sessionMenuOpen.set(this.sessionMenuOpen() === id ? null : id);
   }
 
-  deleteProject(project: Project): void {
-    this.projectMenuOpen.set(null);
+  deleteSession(session: Session): void {
+    this.sessionMenuOpen.set(null);
     const confirmed = window.confirm(
-      `Delete “${project.name}”?\n\nThis permanently removes its conversation, agent memory, and workspace files.`,
+      `Delete “${session.name}”?\n\nThis permanently removes its conversation, agent memory, and workspace files.`,
     );
     if (!confirmed) return;
 
-    this.deletingProject.set(project.id);
-    this.projectsApi.delete(project.id).subscribe({
+    this.deletingSession.set(session.id);
+    this.sessionsApi.delete(session.id).subscribe({
       next: (res) => {
-        this.deletingProject.set(null);
+        this.deletingSession.set(null);
         if (!res.ok) {
           this.toast.error(res.message);
           return;
         }
-        this.projects.update((projects) =>
-          projects.filter((item) => item.id !== project.id),
+        this.sessions.update((sessions) =>
+          sessions.filter((item) => item.id !== session.id),
         );
-        if (this.activeProject()?.id === project.id) {
-          this.activeProject.set(null);
+        if (this.activeSession()?.id === session.id) {
+          this.activeSession.set(null);
           this.activeVisualization.set(null);
           this.visualizationError.set(null);
           this.mainView.set('home');
@@ -594,33 +594,33 @@ export class App {
         this.toast.success(res.message);
       },
       error: (err) => {
-        this.deletingProject.set(null);
+        this.deletingSession.set(null);
         this.toast.error(err?.error?.message ?? 'Backend unreachable');
       },
     });
   }
 
-  createProject(): void {
-    if (this.creatingProject()) return;
+  createSession(): void {
+    if (this.creatingSession()) return;
     const name = this.composerName().trim();
     if (!name || this.selectedSandboxes().size === 0) return;
-    this.creatingProject.set(true);
-    this.projectsApi
+    this.creatingSession.set(true);
+    this.sessionsApi
       .create(name, Array.from(this.selectedSandboxes()))
       .subscribe({
         next: (res) => {
-          this.creatingProject.set(false);
-          if (res.ok && res.project) {
+          this.creatingSession.set(false);
+          if (res.ok && res.session) {
             this.toast.success(res.message);
             this.composerName.set('');
-            this.loadProjects();
-            this.openProject(res.project);
+            this.loadSessions();
+            this.openSession(res.session);
           } else {
             this.toast.error(res.message);
           }
         },
         error: (err) => {
-          this.creatingProject.set(false);
+          this.creatingSession.set(false);
           this.toast.error(err?.error?.message ?? 'Backend unreachable');
         },
       });
@@ -671,7 +671,7 @@ export class App {
     effect(() => {
       if (this.sandboxSelection.selection()) this.rightPanelOpen.set(true);
     });
-    this.loadProjects();
+    this.loadSessions();
   }
 
   selectSection(section: Exclude<SettingsSection, null>): void {

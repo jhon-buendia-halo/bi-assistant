@@ -1,5 +1,5 @@
 // DI bridge for Mastra tools, same pattern as model-resolver: tools are
-// constructed at module load with no Nest DI, so ProjectsService installs the
+// constructed at module load with no Nest DI, so SessionsService installs the
 // real implementations at boot.
 
 /** Column snapshot as stored on a sandbox (mirrors `SandboxEntitySnapshot`). */
@@ -52,7 +52,7 @@ export interface VisualToolResult {
 }
 
 /**
- * Mirrors `ToolDataRecord` (backend/src/modules/projects/entities) without
+ * Mirrors `ToolDataRecord` (backend/src/modules/sessions/entities) without
  * importing it — same pattern as `SandboxSnapshot`/`SqlRunResult`: this file
  * has no Nest DI and must stay decoupled from feature-module types.
  */
@@ -69,13 +69,13 @@ export interface SandboxToolTurnRecord {
 
 export interface SandboxToolServices {
   /**
-   * Create a visual for an answer in the project (latest answer if omitted).
+   * Create a visual for an answer in the session (latest answer if omitted).
    * `turnRecords`, when present, are the SQL/rows the current chat turn has
    * captured so far — appended to the visual's data alongside the source
    * answer's own records.
    */
   createVisual(
-    projectId: string,
+    sessionId: string,
     sourceMessageAt: string | undefined,
     instruction: string | undefined,
     turnRecords?: SandboxToolTurnRecord[],
@@ -86,7 +86,7 @@ export interface SandboxToolServices {
    * `createVisual`.
    */
   updateVisual(
-    projectId: string,
+    sessionId: string,
     visualId: string,
     instruction: string,
     turnRecords?: SandboxToolTurnRecord[],
