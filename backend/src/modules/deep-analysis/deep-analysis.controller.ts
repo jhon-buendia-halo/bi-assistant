@@ -3,11 +3,11 @@ import type { Response } from 'express';
 import { DeepAnalysisService } from './deep-analysis.service';
 import type { DeepAnalysisView } from './entities/deep-analysis-job.entity';
 
-@Controller('projects')
+@Controller('sessions')
 export class DeepAnalysisController {
   constructor(private readonly deepAnalysis: DeepAnalysisService) {}
 
-  /** Start the slow path. One running job per project. */
+  /** Start the slow path. One running job per session. */
   @Post(':id/deep-analysis')
   async start(
     @Param('id') id: string,
@@ -18,7 +18,7 @@ export class DeepAnalysisController {
       if ('conflictWith' in result) {
         return {
           ok: false,
-          message: 'A deep analysis is already running for this project',
+          message: 'A deep analysis is already running for this session',
           jobId: result.conflictWith,
         };
       }

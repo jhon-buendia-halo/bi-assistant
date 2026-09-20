@@ -19,14 +19,14 @@ SQL repair loop.
    (`NestFactory.createApplicationContext(AppModule)`) — no HTTP server.
 2. Fails fast if no LLM is configured, or if a case's sandbox / datasource is
    missing or unreachable (it runs `SELECT 1` as a smoke test).
-3. For each case: creates a **throwaway project** bound to the case's sandbox,
-   sends the question through `ProjectsService.streamMessage` with a no-op
+3. For each case: creates a **throwaway session** bound to the case's sandbox,
+   sends the question through `SessionsService.streamMessage` with a no-op
    emitter, and reads the persisted assistant message — its final text plus the
    last successful `run_readonly_sql` record.
 4. Runs the case's `expectedSql` through `DatasourcesService.runReadOnlySql` on
    the same datasource, replays the assistant's SQL under the same row limit,
    and compares the two result sets.
-5. Deletes the throwaway project (unless `--keep-projects`), prints a summary
+5. Deletes the throwaway session (unless `--keep-sessions`), prints a summary
    table, and exits `1` if anything failed or errored — so it can gate CI later.
 
 ### How result sets are compared
@@ -126,7 +126,7 @@ APP_DATA_DIR="$HOME/Library/Application Support/Questions to Insights" npm run e
 npm run eval -- --only denial-rate             # one case (substring match)
 npm run eval -- --file ../my-cases.json        # alternative case file
 npm run eval -- --verbose                      # Nest logs + the SQL that ran
-npm run eval -- --keep-projects                # leave the throwaway projects behind
+npm run eval -- --keep-sessions                # leave the throwaway sessions behind
 npm run eval -- --include-placeholders         # run the shipped placeholders (they will fail)
 npm run eval -- --help
 ```
@@ -150,7 +150,7 @@ Env: `EVAL_ROW_LIMIT` (default 500 — the connector cap), `EVAL_TIMEOUT_MS`
 | Field         | Notes                                                                                                                                  |
 | ------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | `name`        | Unique, hyphenated; shown in the summary and matched by `--only`.                                                                      |
-| `sandbox`     | Name of a saved sandbox — the throwaway project is bound to it.                                                                        |
+| `sandbox`     | Name of a saved sandbox — the throwaway session is bound to it.                                                                        |
 | `question`    | Exactly what a user would type. Keep it unambiguous, or the assistant will ask a clarifying question and the case fails with `no-sql`. |
 | `expectedSql` | Read-only `SELECT`/`WITH`, single statement, hand-verified against the data.                                                           |
 | `placeholder` | Optional. `true` → skipped by default (used by the shipped examples).                                                                  |

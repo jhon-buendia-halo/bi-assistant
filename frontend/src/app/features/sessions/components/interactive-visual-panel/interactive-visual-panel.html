@@ -80,7 +80,7 @@
             type="button"
             (click)="toggleTailorMenu()"
             [attr.aria-expanded]="tailorMenuOpen()"
-            [disabled]="viewingOldVersion() || !projectId()"
+            [disabled]="viewingOldVersion() || !sessionId()"
             [title]="
               viewingOldVersion()
                 ? 'Make this version current before tailoring'
@@ -216,7 +216,7 @@
               type="button"
               (click)="visualMenuOpen.set(!visualMenuOpen())"
               [attr.aria-expanded]="visualMenuOpen()"
-              title="Saved visuals in this project"
+              title="Saved visuals in this session"
               class="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-[12px] text-zinc-300 hover:border-white/20 hover:bg-white/[0.06]"
             >
               <lucide-angular [img]="GalleryVerticalEnd" [size]="13" />
@@ -270,7 +270,7 @@
           Designing the visual
         </p>
         <p class="mt-1 text-[12px] leading-5 text-zinc-500">
-          Building and saving HTML, CSS, and JavaScript in the project
+          Building and saving HTML, CSS, and JavaScript in the session
           workspace…
         </p>
       </div>

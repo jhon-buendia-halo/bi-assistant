@@ -8,29 +8,29 @@ import {
   tick,
 } from '@angular/core/testing';
 import { of } from 'rxjs';
-import { ChatMessage, Project } from '../../models/project.model';
-import { ProjectsApiService } from '../../services/projects-api.service';
-import { ProjectChat } from './project-chat';
+import { ChatMessage, Session } from '../../models/session.model';
+import { SessionsApiService } from '../../services/sessions-api.service';
+import { SessionChat } from './session-chat';
 
-function projectWith(message: ChatMessage): Project {
+function sessionWith(message: ChatMessage): Session {
   return {
-    id: 'project-1',
-    name: 'Project 1',
+    id: 'session-1',
+    name: 'Session 1',
     sandboxes: [],
     messages: [{ role: 'user', content: 'Ask', at: '2026-01-01T00:00:00.000Z' }, message],
   };
 }
 
-describe('ProjectChat trust UX', () => {
-  let fixture: ComponentFixture<ProjectChat>;
+describe('SessionChat trust UX', () => {
+  let fixture: ComponentFixture<SessionChat>;
 
   async function render(message: ChatMessage): Promise<HTMLElement> {
     await TestBed.configureTestingModule({
-      imports: [ProjectChat],
+      imports: [SessionChat],
       providers: [provideHttpClient(), provideHttpClientTesting()],
     }).compileComponents();
-    fixture = TestBed.createComponent(ProjectChat);
-    fixture.componentRef.setInput('project', projectWith(message));
+    fixture = TestBed.createComponent(SessionChat);
+    fixture.componentRef.setInput('session', sessionWith(message));
     fixture.detectChanges();
     return fixture.nativeElement as HTMLElement;
   }
@@ -82,11 +82,11 @@ describe('ProjectChat trust UX', () => {
 
   it('offers follow-up chips for a clicked data mark without sending', async () => {
     await TestBed.configureTestingModule({
-      imports: [ProjectChat],
+      imports: [SessionChat],
       providers: [provideHttpClient(), provideHttpClientTesting()],
     }).compileComponents();
-    fixture = TestBed.createComponent(ProjectChat);
-    fixture.componentRef.setInput('project', projectWith(answer));
+    fixture = TestBed.createComponent(SessionChat);
+    fixture.componentRef.setInput('session', sessionWith(answer));
     fixture.componentRef.setInput('activeVisualizationId', 'visual-1');
     fixture.componentRef.setInput('dataPointSelection', {
       value: 'Cardiology',
@@ -122,11 +122,11 @@ describe('ProjectChat trust UX', () => {
 
   it('hides follow-up chips when no visual is open', async () => {
     await TestBed.configureTestingModule({
-      imports: [ProjectChat],
+      imports: [SessionChat],
       providers: [provideHttpClient(), provideHttpClientTesting()],
     }).compileComponents();
-    fixture = TestBed.createComponent(ProjectChat);
-    fixture.componentRef.setInput('project', projectWith(answer));
+    fixture = TestBed.createComponent(SessionChat);
+    fixture.componentRef.setInput('session', sessionWith(answer));
     fixture.componentRef.setInput('dataPointSelection', { value: 'Cardiology' });
     fixture.detectChanges();
 
@@ -180,7 +180,7 @@ describe('ProjectChat trust UX', () => {
 
   it('sends careful mode only while the Careful chip is on', async () => {
     const el = await render(answer);
-    const api = TestBed.inject(ProjectsApiService);
+    const api = TestBed.inject(SessionsApiService);
     const stream = spyOn(api, 'streamMessage').and.resolveTo();
     const chip = el.querySelector<HTMLButtonElement>(
       '[aria-label="Careful mode"]',
@@ -259,7 +259,7 @@ describe('ProjectChat trust UX', () => {
 
   it('shows the rationale under the tool while the turn streams', async () => {
     const el = await render(answer);
-    const api = TestBed.inject(ProjectsApiService);
+    const api = TestBed.inject(SessionsApiService);
     spyOn(api, 'streamMessage').and.callFake((_id, _content, handlers) => {
       handlers.onTool?.({
         name: 'run_readonly_sql',
@@ -304,8 +304,8 @@ describe('ProjectChat trust UX', () => {
   });
 });
 
-describe('ProjectChat deep analysis', () => {
-  let fixture: ComponentFixture<ProjectChat>;
+describe('SessionChat deep analysis', () => {
+  let fixture: ComponentFixture<SessionChat>;
 
   const reportMessage: ChatMessage = {
     role: 'assistant',
@@ -321,20 +321,20 @@ describe('ProjectChat deep analysis', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [ProjectChat],
+      imports: [SessionChat],
       providers: [provideHttpClient(), provideHttpClientTesting()],
     }).compileComponents();
   });
 
   /** Mount the chat over a transcript and return its root element. */
   function mount(messages: ChatMessage[] = []): HTMLElement {
-    fixture = TestBed.createComponent(ProjectChat);
-    fixture.componentRef.setInput('project', {
-      id: 'project-1',
-      name: 'Project 1',
+    fixture = TestBed.createComponent(SessionChat);
+    fixture.componentRef.setInput('session', {
+      id: 'session-1',
+      name: 'Session 1',
       sandboxes: [],
       messages,
-    } satisfies Project);
+    } satisfies Session);
     fixture.detectChanges();
     return fixture.nativeElement as HTMLElement;
   }
@@ -355,7 +355,7 @@ describe('ProjectChat deep analysis', () => {
 
   it('downloads the report markdown', () => {
     const el = mount([reportMessage]);
-    const api = TestBed.inject(ProjectsApiService);
+    const api = TestBed.inject(SessionsApiService);
     const download = spyOn(api, 'downloadDeepAnalysis').and.returnValue(
       of(new Blob(['# report'], { type: 'text/markdown' })),
     );
@@ -364,12 +364,12 @@ describe('ProjectChat deep analysis', () => {
       '[aria-label="Download report"]',
     )!.click();
 
-    expect(download).toHaveBeenCalledWith('project-1', 'job-1');
+    expect(download).toHaveBeenCalledWith('session-1', 'job-1');
   });
 
   it('sends the draft as a job, polls it, and refreshes on completion', fakeAsync(() => {
     const el = mount();
-    const api = TestBed.inject(ProjectsApiService);
+    const api = TestBed.inject(SessionsApiService);
     const start = spyOn(api, 'startDeepAnalysis').and.returnValue(
       of({ ok: true, message: 'Deep analysis started', jobId: 'job-1' }),
     );
@@ -387,11 +387,11 @@ describe('ProjectChat deep analysis', () => {
     );
     const get = spyOn(api, 'get').and.returnValue(
       of({
-        id: 'project-1',
-        name: 'Project 1',
+        id: 'session-1',
+        name: 'Session 1',
         sandboxes: [],
         messages: [reportMessage],
-      } satisfies Project),
+      } satisfies Session),
     );
 
     fixture.componentInstance.draft.set('Why are denials rising?');
@@ -400,7 +400,7 @@ describe('ProjectChat deep analysis', () => {
     fixture.detectChanges();
 
     // A job, not a chat turn — and the composer is free again.
-    expect(start).toHaveBeenCalledWith('project-1', 'Why are denials rising?');
+    expect(start).toHaveBeenCalledWith('session-1', 'Why are denials rising?');
     expect(stream).not.toHaveBeenCalled();
     expect(fixture.componentInstance.draft()).toBe('');
     expect(fixture.componentInstance.sending()).toBeFalse();
@@ -413,8 +413,8 @@ describe('ProjectChat deep analysis', () => {
     tick(3000);
     fixture.detectChanges();
     expect(status).toHaveBeenCalledTimes(2);
-    expect(get).toHaveBeenCalledWith('project-1');
-    // Card cleared, report message rendered from the refreshed project.
+    expect(get).toHaveBeenCalledWith('session-1');
+    // Card cleared, report message rendered from the refreshed session.
     expect(el.querySelector('[aria-label="Deep analysis status"]')).toBeNull();
     expect(el.textContent).toContain('Denial drivers deep dive');
 
@@ -425,7 +425,7 @@ describe('ProjectChat deep analysis', () => {
 
   it('stops polling on a job error and shows the message', fakeAsync(() => {
     const el = mount();
-    const api = TestBed.inject(ProjectsApiService);
+    const api = TestBed.inject(SessionsApiService);
     spyOn(api, 'startDeepAnalysis').and.returnValue(
       of({ ok: true, message: 'Deep analysis started', jobId: 'job-1' }),
     );
@@ -460,11 +460,11 @@ describe('ProjectChat deep analysis', () => {
 
   it('gives the question back when the job is refused', () => {
     mount();
-    const api = TestBed.inject(ProjectsApiService);
+    const api = TestBed.inject(SessionsApiService);
     spyOn(api, 'startDeepAnalysis').and.returnValue(
       of({
         ok: false,
-        message: 'A deep analysis is already running for this project',
+        message: 'A deep analysis is already running for this session',
       }),
     );
 

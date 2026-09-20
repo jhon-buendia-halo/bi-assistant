@@ -34,7 +34,7 @@ import {
   Wrench,
   X,
 } from 'lucide-angular';
-import { ProjectsApiService } from '../../services/projects-api.service';
+import { SessionsApiService } from '../../services/sessions-api.service';
 import {
   AnalysisReport,
   ChatMessage,
@@ -42,11 +42,11 @@ import {
   DataPointSelection,
   DeepAnalysisStatus,
   MessageFeedback,
-  Project,
+  Session,
   ReasoningStep,
   ToolDataRecord,
   VisualEvent,
-} from '../../models/project.model';
+} from '../../models/session.model';
 import { ToastService } from '../../../../core/toast/toast.service';
 import { MarkdownPipe } from '../../../../shared/pipes/markdown.pipe';
 
@@ -110,12 +110,12 @@ export function deepAnalysisProgressLine(job: DeepAnalysisActivity): string {
 }
 
 @Component({
-  selector: 'app-project-chat',
+  selector: 'app-session-chat',
   imports: [LucideAngularModule, MarkdownPipe, NgTemplateOutlet],
-  templateUrl: './project-chat.html',
-  styleUrl: './project-chat.scss',
+  templateUrl: './session-chat.html',
+  styleUrl: './session-chat.scss',
 })
-export class ProjectChat implements OnDestroy {
+export class SessionChat implements OnDestroy {
   readonly ArrowUp = ArrowUp;
   readonly BadgeCheck = BadgeCheck;
   readonly BarChart3 = BarChart3;
@@ -136,10 +136,10 @@ export class ProjectChat implements OnDestroy {
   readonly Wrench = Wrench;
   readonly X = X;
 
-  private readonly api = inject(ProjectsApiService);
+  private readonly api = inject(SessionsApiService);
   private readonly toast = inject(ToastService);
 
-  readonly project = input.required<Project>();
+  readonly session = input.required<Session>();
   readonly visualGenerating = input(false);
   /** Visual open in the right panel — the default target for tailoring. */
   readonly activeVisualizationId = input<string | null>(null);
@@ -149,8 +149,8 @@ export class ProjectChat implements OnDestroy {
   /** A turn created/updated a visual; the host should refresh the panel. */
   readonly visualUpdated = output<VisualEvent>();
   readonly viewVisual = output<VisualEvent>();
-  /** The project was persisted out of band (answer feedback) — refresh copies. */
-  readonly projectUpdated = output<Project>();
+  /** The session was persisted out of band (answer feedback) — refresh copies. */
+  readonly sessionUpdated = output<Session>();
 
   readonly messages = signal<ChatMessage[]>([]);
   readonly draft = signal('');
@@ -158,7 +158,7 @@ export class ProjectChat implements OnDestroy {
   /**
    * Careful mode: every turn sent while this is on is cross-checked by an
    * independent query. Session-scoped — it lasts for this conversation, it is
-   * not stored with the project.
+   * not stored with the session.
    */
   readonly careful = signal(false);
   /** Tail of the model's reasoning stream, shown Conductor-style. */
@@ -195,7 +195,7 @@ export class ProjectChat implements OnDestroy {
   /** Consecutive unanswered status polls; too many and the card gives up. */
   private pollFailures = 0;
   private activeStream: AbortController | null = null;
-  private syncedProjectId: string | null = null;
+  private syncedSessionId: string | null = null;
 
   private readonly scroller = viewChild<ElementRef<HTMLDivElement>>('scroller');
   private readonly composer =
@@ -206,7 +206,7 @@ export class ProjectChat implements OnDestroy {
   /**
    * Selection currently offering follow-up chips. Derived, so a new click on a
    * mark always replaces the row and dismissing only silences that selection —
-   * no effect can race the project re-sync.
+   * no effect can race the session re-sync.
    */
   readonly followUpSelection = computed(() => {
     const selection = this.dataPointSelection();
@@ -223,18 +223,18 @@ export class ProjectChat implements OnDestroy {
 
   constructor() {
 
-    // Re-sync when the active project changes (component instance is reused).
+    // Re-sync when the active session changes (component instance is reused).
     effect(() => {
-      const project = this.project();
-      if (project.id === this.syncedProjectId) {
-        // Same project, refreshed metadata (e.g. a visual was versioned).
+      const session = this.session();
+      if (session.id === this.syncedSessionId) {
+        // Same session, refreshed metadata (e.g. a visual was versioned).
         // Never disturb an in-flight turn; `done` brings the final transcript.
         if (!untracked(() => this.sending())) {
-          this.messages.set(project.messages);
+          this.messages.set(session.messages);
         }
         return;
       }
-      this.syncedProjectId = project.id;
+      this.syncedSessionId = session.id;
       this.activeStream?.abort();
       this.activeStream = null;
       this.stopTimer();
@@ -243,10 +243,10 @@ export class ProjectChat implements OnDestroy {
       this.stopPolling();
       this.deepAnalysisJob.set(null);
       this.sending.set(false);
-      this.messages.set(project.messages);
+      this.messages.set(session.messages);
       this.feedbackPending.set(null);
       // Follow-up chips follow their input: the host drops the selection when
-      // it opens another project, so nothing to reset here.
+      // it opens another session, so nothing to reset here.
       this.draft.set('');
       // A new conversation starts a new session — careful mode is opt-in again.
       this.careful.set(false);
@@ -313,7 +313,7 @@ export class ProjectChat implements OnDestroy {
     this.activeStream = controller;
 
     void this.api.streamMessage(
-      this.project().id,
+      this.session().id,
       content,
       {
         onReasoning: (delta) => {
@@ -362,13 +362,13 @@ export class ProjectChat implements OnDestroy {
           if (this.activeStream !== controller) return;
           this.visualUpdated.emit(event);
         },
-        onDone: (project) => {
+        onDone: (session) => {
           if (this.activeStream !== controller) return;
           this.activeStream = null;
           this.stopTimer();
           this.sending.set(false);
           this.resetTurnState();
-          if (project) this.messages.set(project.messages);
+          if (session) this.messages.set(session.messages);
           this.scrollToBottom();
         },
         onError: (message) => {
@@ -453,7 +453,7 @@ export class ProjectChat implements OnDestroy {
       progress: 'Starting the deep analysis',
     });
 
-    this.api.startDeepAnalysis(this.project().id, question).subscribe({
+    this.api.startDeepAnalysis(this.session().id, question).subscribe({
       next: (result) => {
         if (!result.ok || !result.jobId) {
           this.deepAnalysisJob.set(null);
@@ -506,8 +506,8 @@ export class ProjectChat implements OnDestroy {
   }
 
   private pollDeepAnalysis(jobId: string): void {
-    const projectId = this.project().id;
-    this.api.deepAnalysisStatus(projectId, jobId).subscribe({
+    const sessionId = this.session().id;
+    this.api.deepAnalysisStatus(sessionId, jobId).subscribe({
       next: (view) => {
         const job = this.deepAnalysisJob();
         if (!job || job.jobId !== jobId) return;
@@ -525,7 +525,7 @@ export class ProjectChat implements OnDestroy {
         });
         if (view.status === 'done') {
           this.stopPolling();
-          this.completeDeepAnalysis(projectId, jobId);
+          this.completeDeepAnalysis(sessionId, jobId);
         } else if (view.status === 'error') {
           this.failDeepAnalysis(view.error || 'Deep analysis failed');
         }
@@ -550,14 +550,14 @@ export class ProjectChat implements OnDestroy {
   }
 
   /** The report is persisted — pull the transcript that now contains it. */
-  private completeDeepAnalysis(projectId: string, jobId: string): void {
-    this.api.get(projectId).subscribe({
-      next: (project) => {
+  private completeDeepAnalysis(sessionId: string, jobId: string): void {
+    this.api.get(sessionId).subscribe({
+      next: (session) => {
         const job = this.deepAnalysisJob();
         if (job?.jobId === jobId) this.deepAnalysisJob.set(null);
         // Never disturb an in-flight turn; its `done` brings the transcript.
-        if (!this.sending()) this.messages.set(project.messages);
-        this.projectUpdated.emit(project);
+        if (!this.sending()) this.messages.set(session.messages);
+        this.sessionUpdated.emit(session);
         this.scrollToBottom();
         this.toast.success('Deep analysis report ready');
       },
@@ -570,7 +570,7 @@ export class ProjectChat implements OnDestroy {
   downloadReport(report: AnalysisReport): void {
     if (this.reportDownloading()) return;
     this.reportDownloading.set(report.jobId);
-    this.api.downloadDeepAnalysis(this.project().id, report.jobId).subscribe({
+    this.api.downloadDeepAnalysis(this.session().id, report.jobId).subscribe({
       next: (blob) => {
         this.reportDownloading.set(null);
         const slug =
@@ -666,7 +666,7 @@ export class ProjectChat implements OnDestroy {
   /**
    * Rate an answer. Same rating twice is a no-op; the other rating switches.
    * The transcript is patched locally first so the click feels instant, then
-   * reconciled with the persisted project — never while a turn is streaming,
+   * reconciled with the persisted session — never while a turn is streaming,
    * because `done` brings the authoritative transcript.
    */
   rateMessage(message: ChatMessage, rating: MessageFeedback): void {
@@ -677,7 +677,7 @@ export class ProjectChat implements OnDestroy {
     this.patchFeedback(message.at, rating);
 
     this.api
-      .sendMessageFeedback(this.project().id, message.at, rating)
+      .sendMessageFeedback(this.session().id, message.at, rating)
       .subscribe({
         next: (result) => {
           this.feedbackPending.set(null);
@@ -686,9 +686,9 @@ export class ProjectChat implements OnDestroy {
             this.toast.error(result.message || 'Could not save feedback');
             return;
           }
-          if (result.project) {
-            if (!this.sending()) this.messages.set(result.project.messages);
-            this.projectUpdated.emit(result.project);
+          if (result.session) {
+            if (!this.sending()) this.messages.set(result.session.messages);
+            this.sessionUpdated.emit(result.session);
           }
           this.toast.success(result.message || 'Feedback saved');
         },

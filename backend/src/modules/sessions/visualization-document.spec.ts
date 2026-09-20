@@ -25,7 +25,7 @@ import {
 } from './visualization-document';
 import { VISUAL_RUNTIME_FILENAME } from './visual-runtime';
 import type { VisualSpec } from './visual-spec';
-import type { ReasoningStep } from './entities/project.entity';
+import type { ReasoningStep } from './entities/session.entity';
 
 const bundle = {
   title: 'Claims by payer',

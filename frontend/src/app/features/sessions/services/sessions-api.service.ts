@@ -6,11 +6,11 @@ import {
   DeepAnalysisResult,
   InteractiveVisualization,
   MessageFeedback,
-  Project,
-  ProjectActionResult,
+  Session,
+  SessionActionResult,
   ToolDataRecord,
   VisualEvent,
-} from '../models/project.model';
+} from '../models/session.model';
 
 /** A tool call announced mid-stream, with the assistant's reason for it. */
 export interface ToolCallEvent {
@@ -48,26 +48,26 @@ export function parseToolEvent(content: string): ToolCallEvent {
 }
 
 @Injectable({ providedIn: 'root' })
-export class ProjectsApiService {
+export class SessionsApiService {
   private readonly http = inject(HttpClient);
 
-  list(): Observable<{ projects: Project[] }> {
-    return this.http.get<{ projects: Project[] }>(`${API_BASE_URL}/projects`);
+  list(): Observable<{ sessions: Session[] }> {
+    return this.http.get<{ sessions: Session[] }>(`${API_BASE_URL}/sessions`);
   }
 
-  get(id: string): Observable<Project> {
-    return this.http.get<Project>(
-      `${API_BASE_URL}/projects/${encodeURIComponent(id)}`,
+  get(id: string): Observable<Session> {
+    return this.http.get<Session>(
+      `${API_BASE_URL}/sessions/${encodeURIComponent(id)}`,
     );
   }
 
   revertVisualization(
-    projectId: string,
+    sessionId: string,
     visualizationId: string,
     version: number,
-  ): Observable<ProjectActionResult> {
-    return this.http.post<ProjectActionResult>(
-      `${API_BASE_URL}/projects/${encodeURIComponent(projectId)}/visualizations/${encodeURIComponent(visualizationId)}/revert`,
+  ): Observable<SessionActionResult> {
+    return this.http.post<SessionActionResult>(
+      `${API_BASE_URL}/sessions/${encodeURIComponent(sessionId)}/visualizations/${encodeURIComponent(visualizationId)}/revert`,
       { version },
     );
   }
@@ -77,80 +77,80 @@ export class ProjectsApiService {
    * as feedback. The backend rejects stale versions and repairs of repairs.
    */
   repairVisualization(
-    projectId: string,
+    sessionId: string,
     visualizationId: string,
     error: string,
     version: number,
-  ): Observable<ProjectActionResult> {
-    return this.http.post<ProjectActionResult>(
-      `${API_BASE_URL}/projects/${encodeURIComponent(projectId)}/visualizations/${encodeURIComponent(visualizationId)}/repair`,
+  ): Observable<SessionActionResult> {
+    return this.http.post<SessionActionResult>(
+      `${API_BASE_URL}/sessions/${encodeURIComponent(sessionId)}/visualizations/${encodeURIComponent(visualizationId)}/repair`,
       { error, version },
     );
   }
 
   /** Tailor the open visual with a plain-English instruction (update path). */
   tailorVisualization(
-    projectId: string,
+    sessionId: string,
     visualizationId: string,
     instruction: string,
-  ): Observable<ProjectActionResult> {
-    return this.http.post<ProjectActionResult>(
-      `${API_BASE_URL}/projects/${encodeURIComponent(projectId)}/visualizations/${encodeURIComponent(visualizationId)}/tailor`,
+  ): Observable<SessionActionResult> {
+    return this.http.post<SessionActionResult>(
+      `${API_BASE_URL}/sessions/${encodeURIComponent(sessionId)}/visualizations/${encodeURIComponent(visualizationId)}/tailor`,
       { instruction },
     );
   }
 
   /** Re-run the stored SQL behind a visual and refresh its data in place. */
   refreshVisualizationData(
-    projectId: string,
+    sessionId: string,
     visualizationId: string,
-  ): Observable<ProjectActionResult> {
-    return this.http.post<ProjectActionResult>(
-      `${API_BASE_URL}/projects/${encodeURIComponent(projectId)}/visualizations/${encodeURIComponent(visualizationId)}/refresh`,
+  ): Observable<SessionActionResult> {
+    return this.http.post<SessionActionResult>(
+      `${API_BASE_URL}/sessions/${encodeURIComponent(sessionId)}/visualizations/${encodeURIComponent(visualizationId)}/refresh`,
       {},
     );
   }
 
-  create(name: string, sandboxes: string[]): Observable<ProjectActionResult> {
-    return this.http.post<ProjectActionResult>(`${API_BASE_URL}/projects`, {
+  create(name: string, sandboxes: string[]): Observable<SessionActionResult> {
+    return this.http.post<SessionActionResult>(`${API_BASE_URL}/sessions`, {
       name,
       sandboxes,
     });
   }
 
-  delete(id: string): Observable<ProjectActionResult> {
-    return this.http.delete<ProjectActionResult>(
-      `${API_BASE_URL}/projects/${encodeURIComponent(id)}`,
+  delete(id: string): Observable<SessionActionResult> {
+    return this.http.delete<SessionActionResult>(
+      `${API_BASE_URL}/sessions/${encodeURIComponent(id)}`,
     );
   }
 
   generateVisualization(
     id: string,
     sourceMessageAt: string,
-  ): Observable<ProjectActionResult> {
-    return this.http.post<ProjectActionResult>(
-      `${API_BASE_URL}/projects/${encodeURIComponent(id)}/visualizations`,
+  ): Observable<SessionActionResult> {
+    return this.http.post<SessionActionResult>(
+      `${API_BASE_URL}/sessions/${encodeURIComponent(id)}/visualizations`,
       { sourceMessageAt },
     );
   }
 
   getVisualization(
-    projectId: string,
+    sessionId: string,
     visualizationId: string,
     version?: number,
   ): Observable<InteractiveVisualization> {
     const query = version ? `?version=${version}` : '';
     return this.http.get<InteractiveVisualization>(
-      `${API_BASE_URL}/projects/${encodeURIComponent(projectId)}/visualizations/${encodeURIComponent(visualizationId)}${query}`,
+      `${API_BASE_URL}/sessions/${encodeURIComponent(sessionId)}/visualizations/${encodeURIComponent(visualizationId)}${query}`,
     );
   }
 
   downloadVisualization(
-    projectId: string,
+    sessionId: string,
     visualizationId: string,
   ): Observable<Blob> {
     return this.http.get(
-      `${API_BASE_URL}/projects/${encodeURIComponent(projectId)}/visualizations/${encodeURIComponent(visualizationId)}/download`,
+      `${API_BASE_URL}/sessions/${encodeURIComponent(sessionId)}/visualizations/${encodeURIComponent(visualizationId)}/download`,
       { responseType: 'blob' },
     );
   }
@@ -162,48 +162,48 @@ export class ProjectsApiService {
    * investigates each one and writes a report into the conversation.
    */
   startDeepAnalysis(
-    projectId: string,
+    sessionId: string,
     question: string,
   ): Observable<DeepAnalysisResult> {
     return this.http.post<DeepAnalysisResult>(
-      `${API_BASE_URL}/projects/${encodeURIComponent(projectId)}/deep-analysis`,
+      `${API_BASE_URL}/sessions/${encodeURIComponent(sessionId)}/deep-analysis`,
       { question },
     );
   }
 
   /** Poll one job: planning → investigating → writing → done/error. */
   deepAnalysisStatus(
-    projectId: string,
+    sessionId: string,
     jobId: string,
   ): Observable<DeepAnalysisResult> {
     return this.http.get<DeepAnalysisResult>(
-      `${API_BASE_URL}/projects/${encodeURIComponent(projectId)}/deep-analysis/${encodeURIComponent(jobId)}`,
+      `${API_BASE_URL}/sessions/${encodeURIComponent(sessionId)}/deep-analysis/${encodeURIComponent(jobId)}`,
     );
   }
 
   /** The finished report as markdown. */
-  downloadDeepAnalysis(projectId: string, jobId: string): Observable<Blob> {
+  downloadDeepAnalysis(sessionId: string, jobId: string): Observable<Blob> {
     return this.http.get(
-      `${API_BASE_URL}/projects/${encodeURIComponent(projectId)}/deep-analysis/${encodeURIComponent(jobId)}/download`,
+      `${API_BASE_URL}/sessions/${encodeURIComponent(sessionId)}/deep-analysis/${encodeURIComponent(jobId)}/download`,
       { responseType: 'blob' },
     );
   }
 
-  sendMessage(id: string, content: string): Observable<ProjectActionResult> {
-    return this.http.post<ProjectActionResult>(
-      `${API_BASE_URL}/projects/${encodeURIComponent(id)}/messages`,
+  sendMessage(id: string, content: string): Observable<SessionActionResult> {
+    return this.http.post<SessionActionResult>(
+      `${API_BASE_URL}/sessions/${encodeURIComponent(id)}/messages`,
       { content },
     );
   }
 
   /** Rate an assistant answer; `up` saves it to the verified query library. */
   sendMessageFeedback(
-    projectId: string,
+    sessionId: string,
     messageAt: string,
     rating: MessageFeedback,
-  ): Observable<ProjectActionResult> {
-    return this.http.post<ProjectActionResult>(
-      `${API_BASE_URL}/projects/${encodeURIComponent(projectId)}/messages/feedback`,
+  ): Observable<SessionActionResult> {
+    return this.http.post<SessionActionResult>(
+      `${API_BASE_URL}/sessions/${encodeURIComponent(sessionId)}/messages/feedback`,
       { messageAt, rating },
     );
   }
@@ -219,7 +219,7 @@ export class ProjectsApiService {
       /** Summary of one finished call, including why it was run. */
       onToolResult?: (summary: ToolDataRecord) => void;
       onVisualUpdated?: (event: VisualEvent) => void;
-      onDone?: (project: Project) => void;
+      onDone?: (session: Session) => void;
       onError?: (message: string) => void;
     },
     signal?: AbortSignal,
@@ -230,7 +230,7 @@ export class ProjectsApiService {
     let res: Response;
     try {
       res = await fetch(
-        `${API_BASE_URL}/projects/${encodeURIComponent(id)}/messages/stream`,
+        `${API_BASE_URL}/sessions/${encodeURIComponent(id)}/messages/stream`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -299,7 +299,7 @@ export class ProjectsApiService {
                 break;
               case 'done':
                 terminalEventReceived = true;
-                handlers.onDone?.(event.project);
+                handlers.onDone?.(event.session);
                 break;
               case 'error':
                 terminalEventReceived = true;

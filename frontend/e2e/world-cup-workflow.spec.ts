@@ -3,14 +3,14 @@ import { pathToFileURL } from 'node:url';
 import { test, expect } from './fixtures/electron.fixture';
 import {
   WORLD_CUP_DATASOURCE,
-  WORLD_CUP_PROJECT,
+  WORLD_CUP_SESSION,
   createWorldCupDatasource,
   createWorldCupSandbox,
   createWorldCupWorkspace,
   openDatasourceSettings,
 } from './helpers/app-actions';
 
-test('creates a PostgreSQL datasource, sandbox, and project using the real World Cup database', async ({
+test('creates a PostgreSQL datasource, sandbox, and session using the real World Cup database', async ({
   page,
 }) => {
   await createWorldCupWorkspace(page);
@@ -21,9 +21,9 @@ test('creates a PostgreSQL datasource, sandbox, and project using the real World
   await page.goto(entryUrl);
   await expect(page.getByLabel('Open system logs')).toBeVisible();
   await expect(
-    page.getByText(WORLD_CUP_PROJECT, { exact: true }),
+    page.getByText(WORLD_CUP_SESSION, { exact: true }),
   ).toBeVisible();
-  await page.getByText(WORLD_CUP_PROJECT, { exact: true }).click();
+  await page.getByText(WORLD_CUP_SESSION, { exact: true }).click();
   await expect(page.locator('header')).toContainText(WORLD_CUP_DATASOURCE);
   await expect(page.locator('header')).toContainText('PostgreSQL');
   await expect(

@@ -144,7 +144,7 @@
 
         <!-- Bottom section -->
         <nav
-          aria-label="Projects navigation"
+          aria-label="Sessions navigation"
           class="mt-3 flex flex-col gap-0.5 px-2"
         >
           <div
@@ -152,7 +152,7 @@
             [class.option-active]="mainView() === 'conversation-new'"
           >
             <lucide-angular [img]="FolderKanban" [size]="15" />
-            <span>Projects</span>
+            <span>Sessions</span>
             <button
               (click)="openComposer()"
               title="New conversation"
@@ -162,49 +162,49 @@
               <lucide-angular [img]="Plus" [size]="15" />
             </button>
           </div>
-          <!-- Project children -->
-          @for (project of projects(); track project.id) {
+          <!-- Session children -->
+          @for (session of sessions(); track session.id) {
             <div
-              [attr.data-testid]="'project-' + project.id"
+              [attr.data-testid]="'session-' + session.id"
               class="group relative ml-6 flex items-center rounded-md text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
               [class.option-active]="
-                mainView() === 'project-chat' &&
-                activeProject()?.id === project.id
+                mainView() === 'session-chat' &&
+                activeSession()?.id === session.id
               "
             >
               <button
-                (click)="openProject(project)"
-                [disabled]="deletingProject() === project.id"
+                (click)="openSession(session)"
+                [disabled]="deletingSession() === session.id"
                 class="min-w-0 flex-1 truncate px-2 py-1.5 text-left text-[12px] disabled:opacity-50"
               >
-                {{ project.name }}
+                {{ session.name }}
               </button>
               <button
                 type="button"
-                title="Project options"
-                [attr.aria-label]="'Options for ' + project.name"
-                (click)="toggleProjectMenu(project.id)"
-                [disabled]="deletingProject() === project.id"
+                title="Session options"
+                [attr.aria-label]="'Options for ' + session.name"
+                (click)="toggleSessionMenu(session.id)"
+                [disabled]="deletingSession() === session.id"
                 class="mr-1 rounded p-0.5 text-zinc-500 opacity-0 hover:bg-white/10 hover:text-zinc-200 group-hover:opacity-100 disabled:cursor-not-allowed"
-                [class.opacity-100]="projectMenuOpen() === project.id"
+                [class.opacity-100]="sessionMenuOpen() === session.id"
               >
                 <lucide-angular [img]="EllipsisVertical" [size]="14" />
               </button>
-              @if (projectMenuOpen() === project.id) {
+              @if (sessionMenuOpen() === session.id) {
                 <div
                   class="fixed inset-0 z-20"
-                  (click)="projectMenuOpen.set(null)"
+                  (click)="sessionMenuOpen.set(null)"
                 ></div>
                 <div
                   class="absolute top-full right-0 z-30 mt-1 w-44 rounded-lg border border-white/10 bg-[#2a2a2a] p-1 shadow-xl"
                 >
                   <button
                     type="button"
-                    (click)="deleteProject(project)"
+                    (click)="deleteSession(session)"
                     class="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] text-red-400 hover:bg-white/10"
                   >
                     <lucide-angular [img]="Trash2" [size]="14" />
-                    <span>Delete project</span>
+                    <span>Delete session</span>
                   </button>
                 </div>
               }
@@ -267,7 +267,7 @@
         </button>
         <app-logo [height]="12" class="ml-3 text-zinc-300" />
       }
-      @if (mainView() === "project-chat" && activeProject()) {
+      @if (mainView() === "session-chat" && activeSession()) {
         <div
           class="ml-3 flex min-w-0 items-center gap-2"
           [class.ml-0]="sidebarOpen()"
@@ -281,12 +281,12 @@
             class="shrink-0 text-[10px] font-medium tracking-[0.08em] text-zinc-600 uppercase"
             >Datasource</span
           >
-          @if (loadingProjectDatasources()) {
+          @if (loadingSessionDatasources()) {
             <span class="h-4 w-24 animate-pulse rounded bg-white/5"></span>
-          } @else if (activeProjectDatasources().length > 0) {
+          } @else if (activeSessionDatasources().length > 0) {
             <div class="flex min-w-0 items-center gap-1.5">
               @for (
-                datasource of activeProjectDatasources();
+                datasource of activeSessionDatasources();
                 track datasource.id
               ) {
                 <span
@@ -348,17 +348,17 @@
             (saved)="mainView.set('sandbox')"
           />
         </div>
-      } @else if (mainView() === "project-chat" && activeProject()) {
-        <app-project-chat
+      } @else if (mainView() === "session-chat" && activeSession()) {
+        <app-session-chat
           class="min-h-0 flex-1"
-          [project]="activeProject()!"
-          [visualGenerating]="generatingVisualProject() === activeProject()!.id"
+          [session]="activeSession()!"
+          [visualGenerating]="generatingVisualSession() === activeSession()!.id"
           [activeVisualizationId]="activeVisualization()?.id ?? null"
           [dataPointSelection]="selectedDataPoint()"
           (generateVisual)="generateInteractiveVisual($event)"
           (visualUpdated)="onVisualUpdated($event)"
           (viewVisual)="showVisualization($event, $event.version)"
-          (projectUpdated)="onProjectUpdated($event)"
+          (sessionUpdated)="onSessionUpdated($event)"
         />
       } @else if (mainView() === "conversation-new") {
         <!-- New conversation composer -->
@@ -370,11 +370,11 @@
           >
             <label class="flex flex-col gap-1.5">
               <span class="text-[11px] font-medium text-zinc-500"
-                >Project name</span
+                >Session name</span
               >
               <input
                 type="text"
-                placeholder="My new project"
+                placeholder="My new session"
                 [value]="composerName()"
                 (input)="composerName.set($any($event.target).value)"
                 class="rounded-md border border-white/10 bg-white/5 px-3 py-2 text-[14px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
@@ -423,16 +423,16 @@
               </div>
               <div class="flex items-center gap-3">
                 <button
-                  (click)="createProject()"
+                  (click)="createSession()"
                   [disabled]="
-                    creatingProject() ||
+                    creatingSession() ||
                     selectedSandboxes().size === 0 ||
                     composerName().trim() === ''
                   "
-                  title="Name the project and select at least one sandbox"
+                  title="Name the session and select at least one sandbox"
                   class="flex items-center gap-1.5 rounded-lg bg-zinc-200 px-3.5 py-2 text-[13px] font-medium text-zinc-900 hover:bg-white disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
                 >
-                  @if (creatingProject()) {
+                  @if (creatingSession()) {
                     <span>Creating…</span>
                   } @else {
                     <span>Create</span>
@@ -443,10 +443,10 @@
             </div>
           </div>
 
-          <!-- Sandbox selection: the project needs at least one -->
+          <!-- Sandbox selection: the session needs at least one -->
           <div class="mt-8 w-full max-w-[920px]">
             <p class="text-[12px] text-zinc-500">
-              Select at least one sandbox for this project
+              Select at least one sandbox for this session
             </p>
             @if (composerSandboxes().length === 0) {
               <p class="mt-3 text-[13px] text-zinc-500">
@@ -539,13 +539,13 @@
       </div>
 
       <!-- Panel body -->
-      @if (mainView() === "project-chat" && activeProject()) {
+      @if (mainView() === "session-chat" && activeSession()) {
         <app-interactive-visual-panel
           class="min-h-0 flex-1"
-          [projectId]="activeProject()!.id"
+          [sessionId]="activeSession()!.id"
           [visualization]="activeVisualization()"
-          [visualizations]="activeProject()!.visualizations ?? []"
-          [loading]="generatingVisualProject() === activeProject()!.id"
+          [visualizations]="activeSession()!.visualizations ?? []"
+          [loading]="generatingVisualSession() === activeSession()!.id"
           [error]="visualizationError()"
           [downloading]="
             downloadingVisualization() === activeVisualization()?.id

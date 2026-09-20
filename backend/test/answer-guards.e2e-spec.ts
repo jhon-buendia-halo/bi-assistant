@@ -19,8 +19,8 @@ import { WORLD_CUP_CONNECTION, worldCupPool, runSql } from './world-cup';
 import {
   inspectResult,
   type DataWarning,
-} from '../src/modules/projects/result-guards';
-import { compareResults } from '../src/modules/projects/result-compare';
+} from '../src/modules/sessions/result-guards';
+import { compareResults } from '../src/modules/sessions/result-compare';
 
 /**
  * `describe.skip` is decided while jest collects the file, long before any

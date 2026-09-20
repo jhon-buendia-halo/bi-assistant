@@ -3,6 +3,7 @@ import {
   existsSync,
   mkdirSync,
   readdirSync,
+  renameSync,
   watch,
   type FSWatcher,
 } from 'fs';
@@ -16,8 +17,8 @@ import {
 } from '@mastra/core/workspace';
 import { mastraDataDir } from './storage';
 
-export const PROJECT_WORKSPACE_CONTEXT_KEY = 'project-workspace-id';
-const WORKSPACE_PREFIX = 'project-';
+export const SESSION_WORKSPACE_CONTEXT_KEY = 'session-workspace-id';
+const WORKSPACE_PREFIX = 'session-';
 const workspacesDir = join(mastraDataDir, 'workspaces');
 const initialization = new Map<string, Promise<Workspace>>();
 const interactiveVisualSkillCandidates = [
@@ -45,35 +46,56 @@ const interactiveVisualSkillCandidates = [
 ];
 
 mkdirSync(workspacesDir, { recursive: true });
+renameLegacyWorkspaceDirectories();
 
-function assertProjectId(projectId: string): void {
-  if (!/^[a-zA-Z0-9_-]+$/.test(projectId)) {
-    throw new Error(`Invalid project workspace ID: ${projectId}`);
+/**
+ * Workspace directories created before the `projects` → `sessions` rename use
+ * the `project-` prefix. Without this the discovery scan below skips them and
+ * every existing session loses its visuals and reports.
+ */
+function renameLegacyWorkspaceDirectories(): void {
+  const legacyPrefix = 'project-';
+  for (const entry of readdirSync(workspacesDir, { withFileTypes: true })) {
+    if (!entry.isDirectory() || !entry.name.startsWith(legacyPrefix)) continue;
+    const renamed = `${WORKSPACE_PREFIX}${entry.name.slice(legacyPrefix.length)}`;
+    const target = join(workspacesDir, renamed);
+    if (existsSync(target)) continue;
+    try {
+      renameSync(join(workspacesDir, entry.name), target);
+    } catch (error) {
+      console.error(`[workspace] failed to migrate ${entry.name}`, error);
+    }
   }
 }
 
-export function projectWorkspaceId(projectId: string): string {
-  assertProjectId(projectId);
-  return `${WORKSPACE_PREFIX}${projectId}`;
+function assertSessionId(sessionId: string): void {
+  if (!/^[a-zA-Z0-9_-]+$/.test(sessionId)) {
+    throw new Error(`Invalid session workspace ID: ${sessionId}`);
+  }
 }
 
-export function projectWorkspacePath(projectId: string): string {
-  return join(workspacesDir, projectWorkspaceId(projectId));
+export function sessionWorkspaceId(sessionId: string): string {
+  assertSessionId(sessionId);
+  return `${WORKSPACE_PREFIX}${sessionId}`;
 }
 
-/** Create the persistent filesystem-backed Mastra workspace for a project. */
-export function createProjectWorkspace(
-  projectId: string,
-  projectName?: string,
+export function sessionWorkspacePath(sessionId: string): string {
+  return join(workspacesDir, sessionWorkspaceId(sessionId));
+}
+
+/** Create the persistent filesystem-backed Mastra workspace for a session. */
+export function createSessionWorkspace(
+  sessionId: string,
+  sessionName?: string,
 ): Workspace {
-  const id = projectWorkspaceId(projectId);
-  const basePath = projectWorkspacePath(projectId);
+  const id = sessionWorkspaceId(sessionId);
+  const basePath = sessionWorkspacePath(sessionId);
   mkdirSync(basePath, { recursive: true });
   seedInteractiveVisualSkill(basePath);
 
   return new Workspace({
     id,
-    name: projectName ? `${projectName} Workspace` : id,
+    name: sessionName ? `${sessionName} Workspace` : id,
     filesystem: new LocalFilesystem({
       id: `${id}-filesystem`,
       basePath,
@@ -81,14 +103,14 @@ export function createProjectWorkspace(
     }),
     skills: ['.agents/skills'],
     tools: {
-      // A project workspace is persistent; agents may create and edit artifacts,
+      // A session workspace is persistent; agents may create and edit artifacts,
       // but should not be able to remove them implicitly.
       [WORKSPACE_TOOLS.FILESYSTEM.DELETE]: { enabled: false },
     },
   });
 }
 
-/** Copy app-owned reusable skills into each persistent project workspace. */
+/** Copy app-owned reusable skills into each persistent session workspace. */
 function seedInteractiveVisualSkill(basePath: string): void {
   const source = interactiveVisualSkillCandidates.find(existsSync);
   if (!source) {
@@ -100,47 +122,47 @@ function seedInteractiveVisualSkill(basePath: string): void {
   copyFileSync(source, join(targetDir, 'SKILL.md'));
 }
 
-/** Permanently remove the contained filesystem owned by a deleted project. */
-export async function deleteProjectWorkspaceDirectory(
-  projectId: string,
+/** Permanently remove the contained filesystem owned by a deleted session. */
+export async function deleteSessionWorkspaceDirectory(
+  sessionId: string,
 ): Promise<void> {
-  await rm(projectWorkspacePath(projectId), { recursive: true, force: true });
+  await rm(sessionWorkspacePath(sessionId), { recursive: true, force: true });
 }
 
 /** Restore filesystem workspaces that were created by earlier app processes. */
-export function discoverProjectWorkspaces(): Workspace[] {
+export function discoverSessionWorkspaces(): Workspace[] {
   return readdirSync(workspacesDir, { withFileTypes: true })
     .filter(
       (entry) => entry.isDirectory() && entry.name.startsWith(WORKSPACE_PREFIX),
     )
     .map((entry) =>
-      createProjectWorkspace(entry.name.slice(WORKSPACE_PREFIX.length)),
+      createSessionWorkspace(entry.name.slice(WORKSPACE_PREFIX.length)),
     );
 }
 
 /**
  * Keep a Mastra process (the app backend or Studio) aligned with the shared
- * project workspace directory. Project creation/deletion can happen in the
+ * session workspace directory. Session creation/deletion can happen in the
  * other process, so a startup-only scan leaves Studio with stale entries.
  */
-export function syncProjectWorkspaceRegistry(mastra: Mastra): void {
-  const projectIds = readdirSync(workspacesDir, { withFileTypes: true })
+export function syncSessionWorkspaceRegistry(mastra: Mastra): void {
+  const sessionIds = readdirSync(workspacesDir, { withFileTypes: true })
     .filter(
       (entry) => entry.isDirectory() && entry.name.startsWith(WORKSPACE_PREFIX),
     )
     .map((entry) => entry.name.slice(WORKSPACE_PREFIX.length));
   const diskWorkspaceIds = new Set(
-    projectIds.map((projectId) => projectWorkspaceId(projectId)),
+    sessionIds.map((sessionId) => sessionWorkspaceId(sessionId)),
   );
   const registered = mastra.listWorkspaces();
 
-  for (const projectId of projectIds) {
-    const workspaceId = projectWorkspaceId(projectId);
+  for (const sessionId of sessionIds) {
+    const workspaceId = sessionWorkspaceId(sessionId);
     if (registered[workspaceId]) continue;
 
-    const workspace = createProjectWorkspace(projectId);
+    const workspace = createSessionWorkspace(sessionId);
     mastra.addWorkspace(workspace);
-    void initializeProjectWorkspace(workspace).catch((error: unknown) => {
+    void initializeSessionWorkspace(workspace).catch((error: unknown) => {
       console.error(`[workspace] failed to initialize ${workspace.id}`, error);
     });
   }
@@ -157,14 +179,14 @@ export function syncProjectWorkspaceRegistry(mastra: Mastra): void {
   }
 }
 
-/** Watch for projects created or deleted by another Mastra process. */
-export function watchProjectWorkspaceRegistry(mastra: Mastra): FSWatcher {
-  syncProjectWorkspaceRegistry(mastra);
+/** Watch for sessions created or deleted by another Mastra process. */
+export function watchSessionWorkspaceRegistry(mastra: Mastra): FSWatcher {
+  syncSessionWorkspaceRegistry(mastra);
 
   let debounce: ReturnType<typeof setTimeout> | undefined;
   const watcher = watch(workspacesDir, () => {
     if (debounce) clearTimeout(debounce);
-    debounce = setTimeout(() => syncProjectWorkspaceRegistry(mastra), 75);
+    debounce = setTimeout(() => syncSessionWorkspaceRegistry(mastra), 75);
   });
   watcher.on('error', (error) => {
     console.error('[workspace] directory watcher failed', error);
@@ -174,7 +196,7 @@ export function watchProjectWorkspaceRegistry(mastra: Mastra): FSWatcher {
 }
 
 /** Initialize each workspace once even when startup and a request overlap. */
-export async function initializeProjectWorkspace(
+export async function initializeSessionWorkspace(
   workspace: Workspace,
 ): Promise<Workspace> {
   if (workspace.status === 'ready') return workspace;

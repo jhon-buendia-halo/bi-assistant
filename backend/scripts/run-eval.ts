@@ -3,7 +3,7 @@
  *
  * Boots the backend as a Nest standalone application context (no HTTP), asks
  * the assistant each question in `eval/golden-set.json` inside a throwaway
- * project, and compares the result set of the SQL the assistant actually ran
+ * session, and compares the result set of the SQL the assistant actually ran
  * against the result set of the case's trusted `expectedSql`.
  *
  * Run with `npm run eval` from `backend/`. See `eval/README.md`.
@@ -16,18 +16,18 @@ import { AppModule } from '../src/app.module';
 import { DatasourcesService } from '../src/modules/datasources/datasources.service';
 import type { QueryResult } from '../src/modules/datasources/entities/datasource.entity';
 import { LlmService } from '../src/modules/llm/llm.service';
-import { ProjectsService } from '../src/modules/projects/projects.service';
+import { SessionsService } from '../src/modules/sessions/sessions.service';
 // Result-set equality lives with the app code: careful mode's cross-check and
 // this harness must judge "same answer" exactly the same way.
 import {
   compareResults,
   normalizeValue,
-} from '../src/modules/projects/result-compare';
+} from '../src/modules/sessions/result-compare';
 import type {
   ChatMessage,
-  ProjectDoc,
+  SessionDoc,
   ToolDataRecord,
-} from '../src/modules/projects/entities/project.entity';
+} from '../src/modules/sessions/entities/session.entity';
 import { SandboxRepository } from '../src/modules/sandbox/repositories/sandbox.repository';
 
 // Connectors clamp `runReadOnlySql` at 500 rows, so comparing more is moot.
@@ -40,7 +40,7 @@ interface GoldenCase {
   name: string;
   /** The question sent to the assistant, exactly as a user would type it. */
   question: string;
-  /** Saved sandbox name the throwaway project is bound to. */
+  /** Saved sandbox name the throwaway session is bound to. */
   sandbox: string;
   /** Trusted SQL whose live result set is the reference answer. */
   expectedSql: string;
@@ -69,7 +69,7 @@ interface Options {
   file: string;
   only?: string;
   includePlaceholders: boolean;
-  keepProjects: boolean;
+  keepSessions: boolean;
   verbose: boolean;
 }
 
@@ -77,7 +77,7 @@ function parseArgs(argv: string[]): Options {
   const options: Options = {
     file: DEFAULT_GOLDEN_SET,
     includePlaceholders: false,
-    keepProjects: false,
+    keepSessions: false,
     verbose: false,
   };
   for (let i = 0; i < argv.length; i++) {
@@ -92,8 +92,8 @@ function parseArgs(argv: string[]): Options {
       options.only = value;
     } else if (arg === '--include-placeholders') {
       options.includePlaceholders = true;
-    } else if (arg === '--keep-projects') {
-      options.keepProjects = true;
+    } else if (arg === '--keep-sessions') {
+      options.keepSessions = true;
     } else if (arg === '--verbose' || arg === '-v') {
       options.verbose = true;
     } else if (arg === '--help' || arg === '-h') {
@@ -114,7 +114,7 @@ function printUsage(): void {
       '  -f, --file <path>         golden set to run (default eval/golden-set.json)',
       '  -o, --only <substring>    run only cases whose name contains <substring>',
       '      --include-placeholders run cases still marked "placeholder": true',
-      '      --keep-projects       do not delete the throwaway projects',
+      '      --keep-sessions       do not delete the throwaway sessions',
       '  -v, --verbose             show Nest logs and per-case SQL',
       '',
       'Env: EVAL_ROW_LIMIT (default 500), EVAL_TIMEOUT_MS (default 300000),',
@@ -165,9 +165,9 @@ function loadGoldenSet(file: string): GoldenCase[] {
 
 // ------------------------------------------------------------- analysis
 
-function lastAssistantMessage(project: ProjectDoc): ChatMessage | undefined {
-  for (let i = project.messages.length - 1; i >= 0; i--) {
-    const message = project.messages[i];
+function lastAssistantMessage(session: SessionDoc): ChatMessage | undefined {
+  for (let i = session.messages.length - 1; i >= 0; i--) {
+    const message = session.messages[i];
     if (message.role === 'assistant') return message;
   }
   return undefined;
@@ -255,7 +255,7 @@ async function runCase(
   datasourceId: string,
   options: Options,
 ): Promise<CaseResult> {
-  const projects = app.get(ProjectsService);
+  const sessions = app.get(SessionsService);
   const datasources = app.get(DatasourcesService);
   const started = Date.now();
   const done = (
@@ -266,7 +266,7 @@ async function runCase(
     ...result,
   });
 
-  const project = await projects.create(
+  const session = await sessions.create(
     `eval ${testCase.name} ${new Date().toISOString()}`.slice(0, 64),
     [testCase.sandbox],
   );
@@ -274,8 +274,8 @@ async function runCase(
     const turn = new AbortController();
     const timer = setTimeout(() => turn.abort(), TURN_TIMEOUT_MS);
     try {
-      await projects.streamMessage(
-        project.id,
+      await sessions.streamMessage(
+        session.id,
         testCase.question,
         () => {},
         turn.signal,
@@ -291,7 +291,7 @@ async function runCase(
       });
     }
 
-    const answered = await projects.get(project.id);
+    const answered = await sessions.get(session.id);
     const answer = lastAssistantMessage(answered);
     const record = lastSuccessfulSql(answer);
     if (!record?.input) {
@@ -365,12 +365,12 @@ async function runCase(
       detail: message(error),
     });
   } finally {
-    if (!options.keepProjects) {
-      await projects
-        .delete(project.id)
+    if (!options.keepSessions) {
+      await sessions
+        .delete(session.id)
         .catch((error: unknown) =>
           console.warn(
-            `  ! could not delete throwaway project ${project.id} — ${message(error)}`,
+            `  ! could not delete throwaway session ${session.id} — ${message(error)}`,
           ),
         );
     }

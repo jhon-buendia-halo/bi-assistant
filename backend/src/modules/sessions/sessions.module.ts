@@ -5,9 +5,9 @@ import { DatasourcesModule } from '../datasources/datasources.module';
 import { LlmModule } from '../llm/llm.module';
 import { VerifiedQueriesModule } from '../verified-queries/verified-queries.module';
 import { MetricsModule } from '../metrics/metrics.module';
-import { ProjectsController } from './projects.controller';
-import { ProjectsService } from './projects.service';
-import { ProjectsRepository } from './repositories/projects.repository';
+import { SessionsController } from './sessions.controller';
+import { SessionsService } from './sessions.service';
+import { SessionsRepository } from './repositories/sessions.repository';
 import { VisualizationService } from './visualization.service';
 
 @Module({
@@ -19,8 +19,8 @@ import { VisualizationService } from './visualization.service';
     VerifiedQueriesModule,
     MetricsModule,
   ],
-  controllers: [ProjectsController],
-  providers: [ProjectsService, ProjectsRepository, VisualizationService],
-  exports: [ProjectsService],
+  controllers: [SessionsController],
+  providers: [SessionsService, SessionsRepository, VisualizationService],
+  exports: [SessionsService],
 })
-export class ProjectsModule {}
+export class SessionsModule {}

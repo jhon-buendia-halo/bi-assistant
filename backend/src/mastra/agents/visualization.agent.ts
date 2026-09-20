@@ -1,8 +1,8 @@
 import { Agent } from '@mastra/core/agent';
 import { z } from 'zod';
 import { resolveAgentModel } from '../model-resolver';
-import { PROJECT_WORKSPACE_CONTEXT_KEY } from '../project-workspaces';
-import { visualSpecSchema } from '../../modules/projects/visual-spec';
+import { SESSION_WORKSPACE_CONTEXT_KEY } from '../session-workspaces';
+import { visualSpecSchema } from '../../modules/sessions/visual-spec';
 
 /**
  * Visual design is a bounded transformation task: reasoning-heavy models add
@@ -75,7 +75,7 @@ export const visualizationAgent = new Agent({
   // the bounded code-transformation step.
   model: resolveVisualizationModel,
   workspace: ({ requestContext, mastra }) => {
-    const workspaceId = requestContext.get(PROJECT_WORKSPACE_CONTEXT_KEY);
+    const workspaceId = requestContext.get(SESSION_WORKSPACE_CONTEXT_KEY);
     if (typeof workspaceId !== 'string' || !mastra) return undefined;
     return mastra.listWorkspaces()[workspaceId]?.workspace;
   },

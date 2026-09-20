@@ -6,7 +6,7 @@ const pair = (id: string, question: string, sql: string): VerifiedQueryDoc => ({
   question,
   sql,
   entities: [],
-  sourceProjectId: 'project-1',
+  sourceSessionId: 'session-1',
   sourceMessageAt: `2024-01-01T00:00:0${id}.000Z`,
 });
 
@@ -146,7 +146,7 @@ describe('VerifiedQueriesService.save', () => {
     await service.save({
       question: '  How many claims?  ',
       sql: '  SELECT 1  ',
-      sourceProjectId: 'project-1',
+      sourceSessionId: 'session-1',
       sourceMessageAt: '2024-01-01T00:00:03.000Z',
     });
 
@@ -155,7 +155,7 @@ describe('VerifiedQueriesService.save', () => {
         question: 'How many claims?',
         sql: 'SELECT 1',
         entities: [],
-        sourceProjectId: 'project-1',
+        sourceSessionId: 'session-1',
         sourceMessageAt: '2024-01-01T00:00:03.000Z',
       }),
     );

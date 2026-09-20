@@ -5,7 +5,7 @@ import {
   CONNECTIONS_STORE,
   DATASOURCE_INVENTORIES_STORE,
   METRICS_STORE,
-  PROJECTS_STORE,
+  SESSIONS_STORE,
   SANDBOX_SELECTIONS_STORE,
   SETTINGS_STORE,
   VERIFIED_QUERIES_STORE,
@@ -27,7 +27,7 @@ const COLLECTIONS = [
   { token: CONNECTIONS_STORE, table: 'connections' },
   { token: SETTINGS_STORE, table: 'settings' },
   { token: SANDBOX_SELECTIONS_STORE, table: 'sandbox_selections' },
-  { token: PROJECTS_STORE, table: 'projects' },
+  { token: SESSIONS_STORE, table: 'sessions' },
   { token: DATASOURCE_INVENTORIES_STORE, table: 'datasource_inventories' },
   { token: VERIFIED_QUERIES_STORE, table: 'verified_queries' },
   { token: METRICS_STORE, table: 'metrics' },
@@ -40,9 +40,33 @@ const sqliteDbProvider: Provider = {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       require('better-sqlite3') as typeof import('better-sqlite3');
     mkdirSync(DATA_DIR, { recursive: true });
-    return new BetterSqlite3(join(DATA_DIR, 'app.sqlite'));
+    const db = new BetterSqlite3(join(DATA_DIR, 'app.sqlite'));
+    renameLegacyTables(db);
+    return db;
   },
 };
+
+/**
+ * Tables renamed after the `projects` → `sessions` rename. `SqliteDocStore`
+ * creates a table when missing, so without this an existing install would
+ * silently start over with an empty collection.
+ */
+const LEGACY_TABLE_NAMES: { from: string; to: string }[] = [
+  { from: 'projects', to: 'sessions' },
+];
+
+function renameLegacyTables(db: import('better-sqlite3').Database): void {
+  const exists = (table: string) =>
+    db
+      .prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?`)
+      .get(table) !== undefined;
+
+  for (const { from, to } of LEGACY_TABLE_NAMES) {
+    if (exists(from) && !exists(to)) {
+      db.prepare(`ALTER TABLE "${from}" RENAME TO "${to}"`).run();
+    }
+  }
+}
 
 const storeProviders: Provider[] = COLLECTIONS.map((c) => ({
   provide: c.token,

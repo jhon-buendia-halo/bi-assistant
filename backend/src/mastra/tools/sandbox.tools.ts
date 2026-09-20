@@ -1,13 +1,13 @@
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
-import { inspectResult } from '../../modules/projects/result-guards';
+import { inspectResult } from '../../modules/sessions/result-guards';
 import {
   getSandboxToolServices,
   SandboxColumnSnapshot,
   SandboxSnapshot,
 } from '../tool-services';
 
-/** requestContext key carrying the project's sandbox names. */
+/** requestContext key carrying the session's sandbox names. */
 export const SANDBOXES_CONTEXT_KEY = 'sandboxes';
 
 interface EntityAccess {
@@ -25,7 +25,7 @@ function sandboxNames(requestContext: {
   return Array.isArray(value) ? value.map((v) => String(v)) : [];
 }
 
-async function projectSandboxes(requestContext: {
+async function sessionSandboxes(requestContext: {
   get: (key: string) => unknown;
 }): Promise<SandboxSnapshot[]> {
   return getSandboxToolServices().getSandboxes(sandboxNames(requestContext));
@@ -61,8 +61,8 @@ function resolveEntity(
   if (matches.length === 0) {
     return {
       error: requestedDatasourceId
-        ? `Entity "${entity}" is not available from datasource "${requestedDatasourceId}" in this project`
-        : `Entity "${entity}" is not part of this project's sandboxes`,
+        ? `Entity "${entity}" is not available from datasource "${requestedDatasourceId}" in this session`
+        : `Entity "${entity}" is not part of this session's sandboxes`,
     };
   }
   const byDatasource = new Map(
@@ -90,12 +90,12 @@ function resolveDatasource(
   if (requested) {
     if (available.has(requested)) return { id: requested };
     return {
-      error: `Datasource "${requested}" is not used by this project's sandboxes`,
+      error: `Datasource "${requested}" is not used by this session's sandboxes`,
     };
   }
   if (available.size === 1) return { id: Array.from(available.keys())[0] };
   if (available.size === 0) {
-    return { error: "No datasource is bound to this project's sandboxes" };
+    return { error: "No datasource is bound to this session's sandboxes" };
   }
   return {
     error: `Several datasources are in scope — pass datasourceId. Options: ${Array.from(
@@ -119,10 +119,10 @@ const RATIONALE_DESCRIPTION = [
 export const listEntitiesTool = createTool({
   id: 'list_entities',
   description:
-    "List the entities (fully-qualified catalog.schema.table) available in this project's data sandboxes, with the datasource (id and kind: databricks or postgres) each one lives in.",
+    "List the entities (fully-qualified catalog.schema.table) available in this session's data sandboxes, with the datasource (id and kind: databricks or postgres) each one lives in.",
   inputSchema: z.object({}),
   execute: async (_input, { requestContext }) => {
-    const entities = allowedEntities(await projectSandboxes(requestContext));
+    const entities = allowedEntities(await sessionSandboxes(requestContext));
     return {
       entities: entities.map((access) => ({
         entity: access.entity,
@@ -144,7 +144,7 @@ export const describeEntityTool = createTool({
     datasourceId: z.string().optional().describe('Datasource containing it'),
   }),
   execute: async ({ entity, datasourceId }, { requestContext }) => {
-    const entities = allowedEntities(await projectSandboxes(requestContext));
+    const entities = allowedEntities(await sessionSandboxes(requestContext));
     const access = resolveEntity(entities, entity, datasourceId);
     if ('error' in access) return { error: access.error };
     if (!access.columns || access.columns.length === 0) {
@@ -176,7 +176,7 @@ export const sampleRowsTool = createTool({
     rationale: z.string().describe(RATIONALE_DESCRIPTION),
   }),
   execute: async ({ entity, datasourceId, limit }, { requestContext }) => {
-    const entities = allowedEntities(await projectSandboxes(requestContext));
+    const entities = allowedEntities(await sessionSandboxes(requestContext));
     const access = resolveEntity(entities, entity, datasourceId);
     if ('error' in access) return { error: access.error };
     if (!access.datasourceId) {
@@ -200,8 +200,8 @@ export const runReadOnlySqlTool = createTool({
     'PostgreSQL for postgres. Reference entities with fully-qualified',
     'catalog.schema.table names (on Postgres, the catalog is the database',
     'name; you may write schema.table). Only query entities from this',
-    "project's sandboxes. Write/DDL statements are rejected. datasourceId is",
-    'optional when the project uses a single datasource.',
+    "session's sandboxes. Write/DDL statements are rejected. datasourceId is",
+    'optional when the session uses a single datasource.',
   ].join(' '),
   inputSchema: z.object({
     sql: z.string().describe('A single SELECT or WITH statement'),
@@ -216,7 +216,7 @@ export const runReadOnlySqlTool = createTool({
     rationale: z.string().describe(RATIONALE_DESCRIPTION),
   }),
   execute: async ({ sql, datasourceId, limit }, { requestContext }) => {
-    const sandboxes = await projectSandboxes(requestContext);
+    const sandboxes = await sessionSandboxes(requestContext);
     const target = resolveDatasource(sandboxes, datasourceId);
     if ('error' in target) return { error: target.error };
     const rowLimit = limit ?? 100;

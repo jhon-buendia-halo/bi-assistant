@@ -12,11 +12,11 @@ jest.mock('../../mastra/tools/sandbox.tools', () => ({
 }));
 jest.mock('../../mastra/tools/visual.tools', () => ({
   ACTIVE_VISUAL_CONTEXT_KEY: 'active-visual',
-  PROJECT_ID_CONTEXT_KEY: 'project-id',
+  SESSION_ID_CONTEXT_KEY: 'session-id',
   TURN_RECORDS_CONTEXT_KEY: 'turn-records',
 }));
-jest.mock('../../mastra/project-workspaces', () => ({
-  PROJECT_WORKSPACE_CONTEXT_KEY: 'project-workspace',
+jest.mock('../../mastra/session-workspaces', () => ({
+  SESSION_WORKSPACE_CONTEXT_KEY: 'session-workspace',
 }));
 jest.mock('../sandbox/repositories/sandbox.repository', () => ({
   SandboxRepository: class {},
@@ -39,8 +39,8 @@ jest.mock('../../mastra/agents/sql-verifier.agent', () => {
   const { z } = require('zod') as typeof import('zod');
   return { sqlVerifyOutputSchema: z.object({ sql: z.string() }) };
 });
-jest.mock('./repositories/projects.repository', () => ({
-  ProjectsRepository: class {},
+jest.mock('./repositories/sessions.repository', () => ({
+  SessionsRepository: class {},
 }));
 jest.mock('./visualization.service', () => ({
   VisualizationService: class {},
@@ -55,10 +55,10 @@ import { setSandboxToolServices } from '../../mastra/tool-services';
 import type { SandboxToolServices } from '../../mastra/tool-services';
 import { TURN_RECORDS_CONTEXT_KEY } from '../../mastra/tools/visual.tools';
 import { sourceEntities } from './visualization-document';
-import { ProjectsService, StreamEvent } from './projects.service';
-import type { ProjectDoc } from './entities/project.entity';
+import { SessionsService, StreamEvent } from './sessions.service';
+import type { SessionDoc } from './entities/session.entity';
 
-describe('ProjectsService streaming', () => {
+describe('SessionsService streaming', () => {
   /** A service wired to one streamed turn, with everything else stubbed. */
   function buildStreaming(
     fullStream: AsyncGenerator<unknown>,
@@ -76,23 +76,23 @@ describe('ProjectsService streaming', () => {
       };
     } = {},
   ) {
-    const project: ProjectDoc = {
-      id: 'project-1',
+    const session: SessionDoc = {
+      id: 'session-1',
       name: 'World Cup analysis',
       sandboxes: ['football'],
       messages: [],
       visualizations: [],
     };
     const repository = {
-      get: jest.fn().mockResolvedValue(project),
+      get: jest.fn().mockResolvedValue(session),
       update: jest.fn().mockImplementation(async (_id, patch) => {
-        Object.assign(project, patch);
-        return project;
+        Object.assign(session, patch);
+        return session;
       }),
     };
     const agent = {
       getMemory: jest.fn().mockResolvedValue({
-        getThreadById: jest.fn().mockResolvedValue({ id: project.id }),
+        getThreadById: jest.fn().mockResolvedValue({ id: session.id }),
       }),
       stream: jest.fn().mockResolvedValue({
         fullStream,
@@ -127,7 +127,7 @@ describe('ProjectsService streaming', () => {
             .fn()
             .mockResolvedValue({ columns: ['n'], rows: check.rows ?? [] }),
     };
-    const service = new ProjectsService(
+    const service = new SessionsService(
       repository as never,
       {
         getAgent: jest
@@ -135,7 +135,7 @@ describe('ProjectsService streaming', () => {
           .mockImplementation((id: string) =>
             id === 'sql-verifier' ? verifier : agent,
           ),
-        ensureProjectWorkspace: jest
+        ensureSessionWorkspace: jest
           .fn()
           .mockResolvedValue({ id: 'workspace-1' }),
       } as never,
@@ -172,7 +172,7 @@ describe('ProjectsService streaming', () => {
     );
     return {
       service,
-      project,
+      session,
       agent,
       verifiedQueries,
       metrics,
@@ -186,11 +186,11 @@ describe('ProjectsService streaming', () => {
   });
 
   it('synthesizes a final answer after a tool-only turn', async () => {
-    const { service, project, agent } = buildStreaming(toolOnlyStream(15));
+    const { service, session, agent } = buildStreaming(toolOnlyStream(15));
     const events: StreamEvent[] = [];
 
     await service.streamMessage(
-      'project-1',
+      'session-1',
       'Why did Argentina win?',
       (event) => events.push(event),
     );
@@ -199,41 +199,41 @@ describe('ProjectsService streaming', () => {
       expect.stringContaining('Why did Argentina win?'),
       expect.objectContaining({ maxSteps: 1, toolChoice: 'none' }),
     );
-    expect(project.messages.at(-1)).toEqual(
+    expect(session.messages.at(-1)).toEqual(
       expect.objectContaining({
         role: 'assistant',
         content: 'Argentina won through superior chance creation.',
       }),
     );
-    expect(events.at(-1)).toEqual({ type: 'done', project });
+    expect(events.at(-1)).toEqual({ type: 'done', session });
   });
 
   it('builds the interpretation line from the queries that ran', async () => {
     (sourceEntities as jest.Mock).mockReturnValue(['main.football.matches']);
-    const { service, project } = buildStreaming(
+    const { service, session } = buildStreaming(
       answerStream([
         { sql: 'select 1', rows: [{ n: 1 }, { n: 2 }] },
         { sql: 'select 2', rows: [{ n: 3 }] },
       ]),
     );
 
-    await service.streamMessage('project-1', 'Why?', () => {});
+    await service.streamMessage('session-1', 'Why?', () => {});
 
-    expect(project.messages.at(-1)?.interpretation).toBe(
+    expect(session.messages.at(-1)?.interpretation).toBe(
       'Computed from 2 queries over main.football.matches — 3 rows analyzed.',
     );
   });
 
   it('omits the interpretation line when no SQL ran', async () => {
-    const { service, project } = buildStreaming(answerStream([]));
+    const { service, session } = buildStreaming(answerStream([]));
 
-    await service.streamMessage('project-1', 'Hello', () => {});
+    await service.streamMessage('session-1', 'Hello', () => {});
 
-    expect(project.messages.at(-1)?.interpretation).toBeUndefined();
+    expect(session.messages.at(-1)?.interpretation).toBeUndefined();
   });
 
   it('flags the answer verified when its final SQL matches the library', async () => {
-    const { service, project, verifiedQueries } = buildStreaming(
+    const { service, session, verifiedQueries } = buildStreaming(
       answerStream([
         { sql: 'select 1', rows: [{ n: 1 }] },
         { sql: 'select 2', rows: [{ n: 2 }] },
@@ -241,23 +241,23 @@ describe('ProjectsService streaming', () => {
       { verified: true },
     );
 
-    await service.streamMessage('project-1', 'Why?', () => {});
+    await service.streamMessage('session-1', 'Why?', () => {});
 
     expect(verifiedQueries.isVerifiedSql).toHaveBeenCalledWith(
       'select 2',
       'ds-1',
     );
-    expect(project.messages.at(-1)?.verified).toBe(true);
+    expect(session.messages.at(-1)?.verified).toBe(true);
   });
 
   it('leaves the answer unverified when nothing matches', async () => {
-    const { service, project } = buildStreaming(
+    const { service, session } = buildStreaming(
       answerStream([{ sql: 'select 1', rows: [{ n: 1 }] }]),
     );
 
-    await service.streamMessage('project-1', 'Why?', () => {});
+    await service.streamMessage('session-1', 'Why?', () => {});
 
-    expect(project.messages.at(-1)?.verified).toBeUndefined();
+    expect(session.messages.at(-1)?.verified).toBeUndefined();
   });
 
   it('grounds the turn in the curated metrics for the sandbox entities', async () => {
@@ -266,7 +266,7 @@ describe('ProjectsService streaming', () => {
       metricsBlock: 'Governed metric definitions (curated — …):\n- Win rate',
     });
 
-    await service.streamMessage('project-1', 'Win rate?', () => {});
+    await service.streamMessage('session-1', 'Win rate?', () => {});
 
     expect(metrics.definitionBlock).toHaveBeenCalledWith([
       'main.football.matches',
@@ -282,10 +282,10 @@ describe('ProjectsService streaming', () => {
     ).toBe(true);
   });
 
-  it('omits the metrics block when no curated metric covers the project', async () => {
+  it('omits the metrics block when no curated metric covers the session', async () => {
     const { service, agent } = buildStreaming(answerStream([]));
 
-    await service.streamMessage('project-1', 'Why?', () => {});
+    await service.streamMessage('session-1', 'Why?', () => {});
 
     const options = (agent.stream.mock.calls as unknown[][])[0][1] as {
       context: { content: string }[];
@@ -299,11 +299,11 @@ describe('ProjectsService streaming', () => {
 
   it('keeps the data collected before a clarification on the card', async () => {
     (sourceEntities as jest.Mock).mockReturnValue(['main.football.matches']);
-    const { service, project } = buildStreaming(clarificationStream());
+    const { service, session } = buildStreaming(clarificationStream());
 
-    await service.streamMessage('project-1', 'Which team?', () => {});
+    await service.streamMessage('session-1', 'Which team?', () => {});
 
-    const message = project.messages.at(-1)!;
+    const message = session.messages.at(-1)!;
     expect(message.clarification?.question).toBe('Which season?');
     expect(message.data).toEqual([
       expect.objectContaining({ tool: 'run_readonly_sql', input: 'select 1' }),
@@ -313,26 +313,26 @@ describe('ProjectsService streaming', () => {
 
   it('marks a record truncated when storage keeps fewer rows than returned', async () => {
     const rows = Array.from({ length: 250 }, (_, n) => ({ n }));
-    const { service, project } = buildStreaming(
+    const { service, session } = buildStreaming(
       answerStream([{ sql: 'select *', rows }]),
     );
 
-    await service.streamMessage('project-1', 'Everything?', () => {});
+    await service.streamMessage('session-1', 'Everything?', () => {});
 
-    const record = project.messages.at(-1)?.data?.[0];
+    const record = session.messages.at(-1)?.data?.[0];
     expect(record?.truncated).toBe(true);
     expect(record?.rowCount).toBe(250);
     expect(record?.rows).toHaveLength(200);
   });
 
   it('carries the bridge truncation flag onto the stored record', async () => {
-    const { service, project } = buildStreaming(
+    const { service, session } = buildStreaming(
       answerStream([{ sql: 'select *', rows: [{ n: 1 }], truncated: true }]),
     );
 
-    await service.streamMessage('project-1', 'Everything?', () => {});
+    await service.streamMessage('session-1', 'Everything?', () => {});
 
-    expect(project.messages.at(-1)?.data?.[0]?.truncated).toBe(true);
+    expect(session.messages.at(-1)?.data?.[0]?.truncated).toBe(true);
   });
 
   describe('reasoning trail', () => {
@@ -340,16 +340,16 @@ describe('ProjectsService streaming', () => {
     const SECOND = 'Now I total spend and divide it across the members found.';
 
     it('keeps each stated reason on its record and trails them in order', async () => {
-      const { service, project } = buildStreaming(
+      const { service, session } = buildStreaming(
         answerStream([
           { sql: 'select 1', rows: [{ n: 1 }], rationale: `  ${FIRST}  ` },
           { sql: 'select 2', rows: [{ n: 2 }, { n: 3 }], rationale: SECOND },
         ]),
       );
 
-      await service.streamMessage('project-1', 'Cost per member?', () => {});
+      await service.streamMessage('session-1', 'Cost per member?', () => {});
 
-      const message = project.messages.at(-1)!;
+      const message = session.messages.at(-1)!;
       expect(message.data?.map((record) => record.rationale)).toEqual([
         FIRST,
         SECOND,
@@ -373,7 +373,7 @@ describe('ProjectsService streaming', () => {
     });
 
     it('keeps the reason on a step whose query failed', async () => {
-      const { service, project } = buildStreaming(
+      const { service, session } = buildStreaming(
         answerStream([
           {
             sql: 'select bad',
@@ -384,9 +384,9 @@ describe('ProjectsService streaming', () => {
         ]),
       );
 
-      await service.streamMessage('project-1', 'Cost per member?', () => {});
+      await service.streamMessage('session-1', 'Cost per member?', () => {});
 
-      const message = project.messages.at(-1)!;
+      const message = session.messages.at(-1)!;
       expect(message.data?.[0]).toEqual(
         expect.objectContaining({
           error: 'Column bad cannot be resolved',
@@ -412,22 +412,22 @@ describe('ProjectsService streaming', () => {
     });
 
     it('omits the trail when no call explained itself', async () => {
-      const { service, project } = buildStreaming(
+      const { service, session } = buildStreaming(
         answerStream([{ sql: 'select 1', rows: [{ n: 1 }] }]),
       );
 
-      await service.streamMessage('project-1', 'Why?', () => {});
+      await service.streamMessage('session-1', 'Why?', () => {});
 
-      expect(project.messages.at(-1)?.data).toHaveLength(1);
-      expect(project.messages.at(-1)?.reasoning).toBeUndefined();
+      expect(session.messages.at(-1)?.data).toHaveLength(1);
+      expect(session.messages.at(-1)?.reasoning).toBeUndefined();
     });
 
     it('keeps the reasoning done before a clarification on the card', async () => {
-      const { service, project } = buildStreaming(clarificationStream());
+      const { service, session } = buildStreaming(clarificationStream());
 
-      await service.streamMessage('project-1', 'Which team?', () => {});
+      await service.streamMessage('session-1', 'Which team?', () => {});
 
-      expect(project.messages.at(-1)?.reasoning).toEqual([
+      expect(session.messages.at(-1)?.reasoning).toEqual([
         {
           step: 1,
           rationale: 'I check which seasons the data covers before narrowing.',
@@ -444,7 +444,7 @@ describe('ProjectsService streaming', () => {
       );
       const events: StreamEvent[] = [];
 
-      await service.streamMessage('project-1', 'Why?', (event) =>
+      await service.streamMessage('session-1', 'Why?', (event) =>
         events.push(event),
       );
 
@@ -462,12 +462,12 @@ describe('ProjectsService streaming', () => {
 
   describe('turn records exposed to the visual tools', () => {
     it('hands the visual tools a live reference to the records captured so far in the turn', async () => {
-      const { service, project, agent } = buildStreaming(
+      const { service, session, agent } = buildStreaming(
         answerStream([{ sql: 'select stage_1', rows: [{ stage: 1, n: 10 }] }]),
       );
 
       await service.streamMessage(
-        'project-1',
+        'session-1',
         'Drill into stage 1 and tailor the chart',
         () => {},
       );
@@ -489,7 +489,7 @@ describe('ProjectsService streaming', () => {
 
       // Same object, not a copy: it is the very array the answer's `data`
       // field ends up holding once the turn finishes.
-      expect(turnRecords).toBe(project.messages.at(-1)?.data);
+      expect(turnRecords).toBe(session.messages.at(-1)?.data);
       expect(turnRecords).toEqual([
         expect.objectContaining({
           tool: 'run_readonly_sql',
@@ -501,7 +501,7 @@ describe('ProjectsService streaming', () => {
     it('gives every turn its own empty array up front, before any tool has run', async () => {
       const { service, agent } = buildStreaming(answerStream([]));
 
-      await service.streamMessage('project-1', 'Hello', () => {});
+      await service.streamMessage('session-1', 'Hello', () => {});
 
       const options = (agent.stream.mock.calls as unknown[][])[0][1] as {
         requestContext: { set: jest.Mock };
@@ -542,9 +542,9 @@ describe('ProjectsService streaming', () => {
       );
     }
 
-    const run = (service: ProjectsService, careful: boolean) =>
+    const run = (service: SessionsService, careful: boolean) =>
       service.streamMessage(
-        'project-1',
+        'session-1',
         'How many matches were played?',
         () => {},
         undefined,
@@ -553,17 +553,17 @@ describe('ProjectsService streaming', () => {
       );
 
     it('does not cross-check a turn that was not flagged careful', async () => {
-      const { service, project, verifier, datasources } = carefulTurn({});
+      const { service, session, verifier, datasources } = carefulTurn({});
 
       await run(service, false);
 
       expect(verifier.generate).not.toHaveBeenCalled();
       expect(datasources.runReadOnlySql).not.toHaveBeenCalled();
-      expect(project.messages.at(-1)?.crossCheck).toBeUndefined();
+      expect(session.messages.at(-1)?.crossCheck).toBeUndefined();
     });
 
     it('agrees when the independent query returns the same results', async () => {
-      const { service, project, verifier, datasources } = carefulTurn({
+      const { service, session, verifier, datasources } = carefulTurn({
         sql: 'SELECT COUNT(1) AS total FROM main.football.matches',
         // Same fact, different column name and cell typing.
         rows: [{ total: '64' }],
@@ -576,7 +576,7 @@ describe('ProjectsService streaming', () => {
         'SELECT COUNT(1) AS total FROM main.football.matches',
         200,
       );
-      expect(project.messages.at(-1)?.crossCheck).toEqual({
+      expect(session.messages.at(-1)?.crossCheck).toEqual({
         status: 'agree',
         note: 'independent re-derivation returned the same results',
       });
@@ -594,40 +594,40 @@ describe('ProjectsService streaming', () => {
     });
 
     it('disagrees when the independent query returns something else', async () => {
-      const { service, project } = carefulTurn({ rows: [{ total: 63 }] });
+      const { service, session } = carefulTurn({ rows: [{ total: 63 }] });
 
       await run(service, true);
 
-      const crossCheck = project.messages.at(-1)?.crossCheck;
+      const crossCheck = session.messages.at(-1)?.crossCheck;
       expect(crossCheck?.status).toBe('disagree');
       expect(crossCheck?.note).toContain('results differ — treat with care');
     });
 
     it('reports an error when the verifier cannot produce a query', async () => {
-      const { service, project, datasources } = carefulTurn({
+      const { service, session, datasources } = carefulTurn({
         verifierFails: true,
       });
 
       await run(service, true);
 
       expect(datasources.runReadOnlySql).not.toHaveBeenCalled();
-      const crossCheck = project.messages.at(-1)?.crossCheck;
+      const crossCheck = session.messages.at(-1)?.crossCheck;
       expect(crossCheck?.status).toBe('error');
       expect(crossCheck?.note).toContain('verifier unavailable');
     });
 
     it('reports an error when the independent query fails to run', async () => {
-      const { service, project } = carefulTurn({ runFails: true });
+      const { service, session } = carefulTurn({ runFails: true });
 
       await run(service, true);
 
-      const crossCheck = project.messages.at(-1)?.crossCheck;
+      const crossCheck = session.messages.at(-1)?.crossCheck;
       expect(crossCheck?.status).toBe('error');
       expect(crossCheck?.note).toContain('table not found');
     });
 
     it('refuses to compare against a truncated result set', async () => {
-      const { service, project, verifier } = carefulTurn(
+      const { service, session, verifier } = carefulTurn(
         {},
         { truncated: true },
       );
@@ -635,26 +635,26 @@ describe('ProjectsService streaming', () => {
       await run(service, true);
 
       expect(verifier.generate).not.toHaveBeenCalled();
-      const crossCheck = project.messages.at(-1)?.crossCheck;
+      const crossCheck = session.messages.at(-1)?.crossCheck;
       expect(crossCheck?.status).toBe('error');
       expect(crossCheck?.note).toContain('row cap');
     });
 
     it('skips the cross-check when the turn ran no SQL', async () => {
-      const { service, project, verifier } = buildStreaming(answerStream([]), {
+      const { service, session, verifier } = buildStreaming(answerStream([]), {
         crossCheck: {},
       });
 
       await run(service, true);
 
       expect(verifier.generate).not.toHaveBeenCalled();
-      expect(project.messages.at(-1)?.crossCheck).toBeUndefined();
+      expect(session.messages.at(-1)?.crossCheck).toBeUndefined();
     });
   });
 });
 
-describe('ProjectsService SQL self-correction', () => {
-  /** The `run_readonly_sql` bridge ProjectsService installs for the tools. */
+describe('SessionsService SQL self-correction', () => {
+  /** The `run_readonly_sql` bridge SessionsService installs for the tools. */
   async function bridge(overrides: {
     runs: jest.Mock;
     fixerReplies?: ({ sql: string } | undefined)[];
@@ -675,11 +675,11 @@ describe('ProjectsService SQL self-correction', () => {
         },
       ],
     };
-    const service = new ProjectsService(
+    const service = new SessionsService(
       { list: jest.fn().mockResolvedValue([]) } as never,
       {
         getAgent: jest.fn().mockReturnValue(fixer),
-        ensureProjectWorkspace: jest.fn().mockResolvedValue({ id: 'w' }),
+        ensureSessionWorkspace: jest.fn().mockResolvedValue({ id: 'w' }),
       } as never,
       { getByNames: jest.fn().mockResolvedValue([sandbox]) } as never,
       { runReadOnlySql: overrides.runs } as never,
@@ -773,11 +773,11 @@ describe('ProjectsService SQL self-correction', () => {
   });
 });
 
-describe('ProjectsService visual tool bridge (turn records)', () => {
-  /** The `createVisual`/`updateVisual` bridge ProjectsService installs for the tools. */
+describe('SessionsService visual tool bridge (turn records)', () => {
+  /** The `createVisual`/`updateVisual` bridge SessionsService installs for the tools. */
   async function bridge() {
-    const project: ProjectDoc = {
-      id: 'project-1',
+    const session: SessionDoc = {
+      id: 'session-1',
       name: 'Claims',
       sandboxes: ['claims'],
       messages: [],
@@ -785,10 +785,10 @@ describe('ProjectsService visual tool bridge (turn records)', () => {
     };
     const repository = {
       list: jest.fn().mockResolvedValue([]),
-      get: jest.fn().mockResolvedValue(project),
+      get: jest.fn().mockResolvedValue(session),
       update: jest.fn().mockImplementation(async (_id, patch) => {
-        Object.assign(project, patch);
-        return project;
+        Object.assign(session, patch);
+        return session;
       }),
     };
     const meta = (currentVersion: number) => ({
@@ -809,10 +809,10 @@ describe('ProjectsService visual tool bridge (turn records)', () => {
           (m: { currentVersion?: number }) => m.currentVersion ?? 1,
         ),
     };
-    const service = new ProjectsService(
+    const service = new SessionsService(
       repository as never,
       {
-        ensureProjectWorkspace: jest.fn().mockResolvedValue({ id: 'w' }),
+        ensureSessionWorkspace: jest.fn().mockResolvedValue({ id: 'w' }),
       } as never,
       { getByNames: jest.fn().mockResolvedValue([]) } as never,
       {} as never,
@@ -835,7 +835,7 @@ describe('ProjectsService visual tool bridge (turn records)', () => {
     ];
 
     await installed.createVisual(
-      'project-1',
+      'session-1',
       undefined,
       'chart it',
       turnRecords,
@@ -856,7 +856,7 @@ describe('ProjectsService visual tool bridge (turn records)', () => {
     ];
 
     await installed.updateVisual(
-      'project-1',
+      'session-1',
       'visual-1',
       'break it down further',
       turnRecords,
@@ -873,8 +873,8 @@ describe('ProjectsService visual tool bridge (turn records)', () => {
   it('passes nothing through for a tool call outside a turn (REST tailoring parity)', async () => {
     const { installed, visuals } = await bridge();
 
-    await installed.createVisual('project-1', undefined, 'chart it');
-    await installed.updateVisual('project-1', 'visual-1', 'tweak it');
+    await installed.createVisual('session-1', undefined, 'chart it');
+    await installed.updateVisual('session-1', 'visual-1', 'tweak it');
 
     expect(visuals.create).toHaveBeenCalledWith(
       expect.anything(),
@@ -891,20 +891,20 @@ describe('ProjectsService visual tool bridge (turn records)', () => {
   });
 });
 
-describe('ProjectsService answer feedback', () => {
-  function build(project: ProjectDoc) {
+describe('SessionsService answer feedback', () => {
+  function build(session: SessionDoc) {
     const repository = {
-      get: jest.fn().mockResolvedValue(project),
+      get: jest.fn().mockResolvedValue(session),
       update: jest.fn().mockImplementation(async (_id, patch) => {
-        Object.assign(project, patch);
-        return project;
+        Object.assign(session, patch);
+        return session;
       }),
     };
     const verifiedQueries = {
       save: jest.fn().mockResolvedValue({}),
       removeForMessage: jest.fn().mockResolvedValue(1),
     };
-    const service = new ProjectsService(
+    const service = new SessionsService(
       repository as never,
       {} as never,
       {
@@ -923,8 +923,8 @@ describe('ProjectsService answer feedback', () => {
     return { service, verifiedQueries };
   }
 
-  const answered = (): ProjectDoc => ({
-    id: 'project-1',
+  const answered = (): SessionDoc => ({
+    id: 'session-1',
     name: 'Claims',
     sandboxes: ['claims'],
     visualizations: [],
@@ -958,11 +958,11 @@ describe('ProjectsService answer feedback', () => {
   });
 
   it('saves the preceding question with the last successful SQL on thumbs-up', async () => {
-    const project = answered();
-    const { service, verifiedQueries } = build(project);
+    const session = answered();
+    const { service, verifiedQueries } = build(session);
 
     const updated = await service.recordFeedback(
-      'project-1',
+      'session-1',
       '2024-01-01T00:00:03.000Z',
       'up',
     );
@@ -972,7 +972,7 @@ describe('ProjectsService answer feedback', () => {
       sql: 'SELECT count(*) FROM main.health.claims',
       datasourceId: 'ds-1',
       entities: ['main.health.claims'],
-      sourceProjectId: 'project-1',
+      sourceSessionId: 'session-1',
       sourceMessageAt: '2024-01-01T00:00:03.000Z',
     });
     expect(updated.messages.at(-1)?.feedback).toBe('up');
@@ -980,46 +980,46 @@ describe('ProjectsService answer feedback', () => {
   });
 
   it('clears the verified badge on thumbs-down', async () => {
-    const project = answered();
-    project.messages[3].verified = true;
-    const { service } = build(project);
+    const session = answered();
+    session.messages[3].verified = true;
+    const { service } = build(session);
 
     await service.recordFeedback(
-      'project-1',
+      'session-1',
       '2024-01-01T00:00:03.000Z',
       'down',
     );
 
-    expect(project.messages.at(-1)?.verified).toBeUndefined();
+    expect(session.messages.at(-1)?.verified).toBeUndefined();
   });
 
   it('removes the stored pair on thumbs-down', async () => {
-    const project = answered();
-    const { service, verifiedQueries } = build(project);
+    const session = answered();
+    const { service, verifiedQueries } = build(session);
 
     await service.recordFeedback(
-      'project-1',
+      'session-1',
       '2024-01-01T00:00:03.000Z',
       'down',
     );
 
     expect(verifiedQueries.removeForMessage).toHaveBeenCalledWith(
-      'project-1',
+      'session-1',
       '2024-01-01T00:00:03.000Z',
     );
     expect(verifiedQueries.save).not.toHaveBeenCalled();
-    expect(project.messages.at(-1)?.feedback).toBe('down');
+    expect(session.messages.at(-1)?.feedback).toBe('down');
   });
 
   it('records the rating but saves nothing when the answer ran no SQL', async () => {
-    const project = answered();
-    delete project.messages[3].data;
-    const { service, verifiedQueries } = build(project);
+    const session = answered();
+    delete session.messages[3].data;
+    const { service, verifiedQueries } = build(session);
 
-    await service.recordFeedback('project-1', '2024-01-01T00:00:03.000Z', 'up');
+    await service.recordFeedback('session-1', '2024-01-01T00:00:03.000Z', 'up');
 
     expect(verifiedQueries.save).not.toHaveBeenCalled();
-    expect(project.messages.at(-1)?.feedback).toBe('up');
+    expect(session.messages.at(-1)?.feedback).toBe('up');
   });
 });
 
@@ -1122,7 +1122,7 @@ async function* toolOnlyStream(count: number) {
   }
 }
 
-describe('ProjectsService visual tailoring and repair', () => {
+describe('SessionsService visual tailoring and repair', () => {
   const visual = (currentVersion: number) => ({
     id: 'visual-1',
     title: 'Claims by month',
@@ -1141,24 +1141,24 @@ describe('ProjectsService visual tailoring and repair', () => {
   });
 
   function build(currentVersion = 1) {
-    const project: ProjectDoc = {
-      id: 'project-1',
+    const session: SessionDoc = {
+      id: 'session-1',
       name: 'Claims',
       sandboxes: ['claims'],
       messages: [],
       visualizations: [visual(currentVersion)],
     };
     const repository = {
-      get: jest.fn().mockResolvedValue(project),
+      get: jest.fn().mockResolvedValue(session),
       update: jest.fn().mockImplementation(async (_id, patch) => {
-        Object.assign(project, patch);
-        return project;
+        Object.assign(session, patch);
+        return session;
       }),
     };
     const visuals = {
       find: jest
         .fn()
-        .mockImplementation((doc: ProjectDoc, id: string) =>
+        .mockImplementation((doc: SessionDoc, id: string) =>
           (doc.visualizations ?? []).find((v) => v.id === id),
         ),
       currentVersion: jest
@@ -1181,7 +1181,7 @@ describe('ProjectsService visual tailoring and repair', () => {
           document: '<html></html>',
         })),
     };
-    const service = new ProjectsService(
+    const service = new SessionsService(
       repository as never,
       {} as never,
       {} as never,
@@ -1191,14 +1191,14 @@ describe('ProjectsService visual tailoring and repair', () => {
       {} as never,
       {} as never,
     );
-    return { service, project, visuals };
+    return { service, session, visuals };
   }
 
   it('tailors a visual and records the updated event in the chat', async () => {
-    const { service, project, visuals } = build();
+    const { service, session, visuals } = build();
 
     const result = await service.tailorVisualization(
-      'project-1',
+      'session-1',
       'visual-1',
       '  Change the visual to a line chart.  ',
     );
@@ -1209,7 +1209,7 @@ describe('ProjectsService visual tailoring and repair', () => {
       'Change the visual to a line chart.',
     );
     expect(result.visualization.version).toBe(2);
-    const last = project.messages.at(-1);
+    const last = session.messages.at(-1);
     expect(last?.role).toBe('assistant');
     expect(last?.visual).toEqual({
       visualId: 'visual-1',
@@ -1224,16 +1224,16 @@ describe('ProjectsService visual tailoring and repair', () => {
     const { service, visuals } = build();
 
     await expect(
-      service.tailorVisualization('project-1', 'visual-1', '   '),
+      service.tailorVisualization('session-1', 'visual-1', '   '),
     ).rejects.toThrow(/instruction is required/);
     expect(visuals.update).not.toHaveBeenCalled();
   });
 
   it('repairs the current version without logging a chat event', async () => {
-    const { service, project, visuals } = build();
+    const { service, session, visuals } = build();
 
     const result = await service.repairVisualization(
-      'project-1',
+      'session-1',
       'visual-1',
       'visual rendered blank',
       1,
@@ -1245,15 +1245,15 @@ describe('ProjectsService visual tailoring and repair', () => {
       'visual rendered blank',
     );
     expect(result.visualization.version).toBe(2);
-    expect(project.messages).toHaveLength(0);
-    expect(project.visualizations?.[0].currentVersion).toBe(2);
+    expect(session.messages).toHaveLength(0);
+    expect(session.visualizations?.[0].currentVersion).toBe(2);
   });
 
   it('refuses to repair anything but the current version', async () => {
     const { service, visuals } = build(3);
 
     await expect(
-      service.repairVisualization('project-1', 'visual-1', 'boom', 2),
+      service.repairVisualization('session-1', 'visual-1', 'boom', 2),
     ).rejects.toThrow(/Only the current version can be repaired/);
     expect(visuals.repair).not.toHaveBeenCalled();
   });
@@ -1263,7 +1263,7 @@ describe('ProjectsService visual tailoring and repair', () => {
 
     await expect(
       service.repairVisualization(
-        'project-1',
+        'session-1',
         'visual-1',
         'boom',
         Number(undefined),

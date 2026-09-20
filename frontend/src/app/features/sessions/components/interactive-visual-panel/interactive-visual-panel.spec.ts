@@ -7,9 +7,9 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { API_BASE_URL } from '../../../../core/config/api.config';
 import {
   InteractiveVisualization,
-  Project,
-  ProjectActionResult,
-} from '../../models/project.model';
+  Session,
+  SessionActionResult,
+} from '../../models/session.model';
 import {
   InteractiveVisualPanel,
   buildTailorInstruction,
@@ -57,8 +57,8 @@ describe('buildTailorInstruction', () => {
   });
 });
 
-const project: Project = {
-  id: 'project-1',
+const session: Session = {
+  id: 'session-1',
   name: 'Analysis',
   sandboxes: [],
   messages: [],
@@ -94,7 +94,7 @@ function errorMessage(message: string): MessageEvent {
   return { data: { type: 'visual-error', message } } as MessageEvent;
 }
 
-const repairUrl = `${API_BASE_URL}/projects/project-1/visualizations/visual-1/repair`;
+const repairUrl = `${API_BASE_URL}/sessions/session-1/visualizations/visual-1/repair`;
 
 describe('InteractiveVisualPanel auto-repair', () => {
   let fixture: ComponentFixture<InteractiveVisualPanel>;
@@ -109,7 +109,7 @@ describe('InteractiveVisualPanel auto-repair', () => {
     fixture = TestBed.createComponent(InteractiveVisualPanel);
     panel = fixture.componentInstance;
     http = TestBed.inject(HttpTestingController);
-    fixture.componentRef.setInput('projectId', project.id);
+    fixture.componentRef.setInput('sessionId', session.id);
     fixture.componentRef.setInput('visualization', visual());
     fixture.detectChanges();
   });
@@ -117,7 +117,7 @@ describe('InteractiveVisualPanel auto-repair', () => {
   afterEach(() => http.verify());
 
   it('repairs the current version once and emits the refreshed payload', () => {
-    const refreshed: ProjectActionResult[] = [];
+    const refreshed: SessionActionResult[] = [];
     panel.visualRefreshed.subscribe((result) => refreshed.push(result));
 
     panel.onFrameMessage(errorMessage('x is not defined'));
@@ -130,10 +130,10 @@ describe('InteractiveVisualPanel auto-repair', () => {
       error: 'x is not defined',
       version: 2,
     });
-    const result: ProjectActionResult = {
+    const result: SessionActionResult = {
       ok: true,
       message: 'Visual repaired',
-      project,
+      session,
       visualization: visual({ version: 3, currentVersion: 3 }),
     };
     req.flush(result);
@@ -226,7 +226,7 @@ describe('InteractiveVisualPanel tailoring', () => {
     fixture = TestBed.createComponent(InteractiveVisualPanel);
     panel = fixture.componentInstance;
     http = TestBed.inject(HttpTestingController);
-    fixture.componentRef.setInput('projectId', project.id);
+    fixture.componentRef.setInput('sessionId', session.id);
     fixture.componentRef.setInput('visualization', visual());
     fixture.detectChanges();
   });
@@ -234,7 +234,7 @@ describe('InteractiveVisualPanel tailoring', () => {
   afterEach(() => http.verify());
 
   it('posts the built instruction and resets the form on success', () => {
-    const refreshed: ProjectActionResult[] = [];
+    const refreshed: SessionActionResult[] = [];
     panel.visualRefreshed.subscribe((result) => refreshed.push(result));
     panel.tailorChartType.set('bar');
     panel.tailorSort.set('desc');
@@ -243,17 +243,17 @@ describe('InteractiveVisualPanel tailoring', () => {
     panel.applyTailoring();
 
     const req = http.expectOne(
-      `${API_BASE_URL}/projects/project-1/visualizations/visual-1/tailor`,
+      `${API_BASE_URL}/sessions/session-1/visualizations/visual-1/tailor`,
     );
     expect(req.request.body).toEqual({
       instruction:
         'Change the visual to a bar chart. Sort descending by the main measure. ' +
         'Show only the top 10 items and group the rest as "Other".',
     });
-    const result: ProjectActionResult = {
+    const result: SessionActionResult = {
       ok: true,
       message: 'Visual updated',
-      project,
+      session,
       visualization: visual({ version: 3, currentVersion: 3 }),
     };
     req.flush(result);
@@ -268,7 +268,7 @@ describe('InteractiveVisualPanel tailoring', () => {
     expect(panel.tailorInstruction()).toBe('');
     panel.applyTailoring();
     http.expectNone(
-      `${API_BASE_URL}/projects/project-1/visualizations/visual-1/tailor`,
+      `${API_BASE_URL}/sessions/session-1/visualizations/visual-1/tailor`,
     );
     expect(panel.tailoring()).toBeFalse();
   });
@@ -278,7 +278,7 @@ describe('InteractiveVisualPanel tailoring', () => {
     panel.applyTailoring();
     http
       .expectOne(
-        `${API_BASE_URL}/projects/project-1/visualizations/visual-1/tailor`,
+        `${API_BASE_URL}/sessions/session-1/visualizations/visual-1/tailor`,
       )
       .flush({ ok: false, message: 'Instruction required' });
 
@@ -287,7 +287,7 @@ describe('InteractiveVisualPanel tailoring', () => {
   });
 });
 
-const refreshUrl = `${API_BASE_URL}/projects/project-1/visualizations/visual-1/refresh`;
+const refreshUrl = `${API_BASE_URL}/sessions/session-1/visualizations/visual-1/refresh`;
 
 describe('InteractiveVisualPanel data refresh', () => {
   let fixture: ComponentFixture<InteractiveVisualPanel>;
@@ -302,7 +302,7 @@ describe('InteractiveVisualPanel data refresh', () => {
     fixture = TestBed.createComponent(InteractiveVisualPanel);
     panel = fixture.componentInstance;
     http = TestBed.inject(HttpTestingController);
-    fixture.componentRef.setInput('projectId', project.id);
+    fixture.componentRef.setInput('sessionId', session.id);
     fixture.componentRef.setInput('visualization', visual());
     fixture.detectChanges();
   });
@@ -310,7 +310,7 @@ describe('InteractiveVisualPanel data refresh', () => {
   afterEach(() => http.verify());
 
   it('the refresh button posts to the refresh endpoint and emits the refreshed payload', () => {
-    const refreshed: ProjectActionResult[] = [];
+    const refreshed: SessionActionResult[] = [];
     panel.visualRefreshed.subscribe((result) => refreshed.push(result));
 
     const button: HTMLButtonElement = fixture.nativeElement.querySelector(
@@ -324,10 +324,10 @@ describe('InteractiveVisualPanel data refresh', () => {
     const req = http.expectOne(refreshUrl);
     expect(req.request.method).toBe('POST');
 
-    const result: ProjectActionResult = {
+    const result: SessionActionResult = {
       ok: true,
       message: 'Refreshed data for version 2',
-      project,
+      session,
       visualization: visual({ version: 2, currentVersion: 2 }),
     };
     req.flush(result);
@@ -338,7 +338,7 @@ describe('InteractiveVisualPanel data refresh', () => {
 
   it('does not clear the spinner state or emit on a failed refresh', () => {
     panel.refreshData();
-    const refreshed: ProjectActionResult[] = [];
+    const refreshed: SessionActionResult[] = [];
     panel.visualRefreshed.subscribe((result) => refreshed.push(result));
 
     http
@@ -370,7 +370,7 @@ describe('InteractiveVisualPanel data point selection', () => {
     fixture = TestBed.createComponent(InteractiveVisualPanel);
     panel = fixture.componentInstance;
     http = TestBed.inject(HttpTestingController);
-    fixture.componentRef.setInput('projectId', project.id);
+    fixture.componentRef.setInput('sessionId', session.id);
     fixture.componentRef.setInput('visualization', visual());
     fixture.detectChanges();
   });

@@ -15,7 +15,7 @@ const MAX_DIAGNOSTIC_FILE_BYTES = 5 * 1024 * 1024;
 const ANSI_ESCAPE = /\u001b\[[0-9;]*m/g;
 
 // Integration tests use an isolated profile so they never read or overwrite a
-// developer's saved datasources, projects, panel preferences, or diagnostics.
+// developer's saved datasources, sessions, panel preferences, or diagnostics.
 if (process.env.QUESTIONS_TO_INSIGHTS_USER_DATA_DIR) {
   app.setPath("userData", process.env.QUESTIONS_TO_INSIGHTS_USER_DATA_DIR);
 } else {
@@ -366,7 +366,7 @@ function backendIsReady() {
       {
         hostname: "127.0.0.1",
         port: BACKEND_PORT,
-        path: "/projects",
+        path: "/sessions",
         timeout: 500,
       },
       (response) => {

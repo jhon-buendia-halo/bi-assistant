@@ -26,7 +26,7 @@ Genie-style curated semantics, app-managed (no dependency on Unity Catalog Metri
   }
   ```
 - CRUD controller `GET/POST /metrics`, `PUT /metrics/:id`, `DELETE /metrics/:id` (validate: name slug-like + unique, entity + expression non-empty; response `{ok, message, metric?/metrics?}`).
-- **Prompt grounding**: in `ProjectsService.agentOptions`, load metrics whose `entity` is in the project's sandbox entities; when any exist, append a system block:
+- **Prompt grounding**: in `SessionsService.agentOptions`, load metrics whose `entity` is in the session's sandbox entities; when any exist, append a system block:
   `Governed metric definitions (curated — ALWAYS prefer these exact expressions when the question asks for the metric):` then per metric: `- <label> (<name>) on <entity>: <expression>; dimensions: <…>; <description>`. Cap ~4k chars.
 - **Promotion path**: `POST /metrics/from-verified/:verifiedQueryId` — creates a prefilled draft `MetricDoc` from a verified query (entity from its entities[0], expression left for the user to edit; return the draft WITHOUT saving? No — save with label "(review)" suffix? Keep simple: endpoint takes a full MetricDoc body plus the verified id for provenance and saves it; the prefill happens client-side from the verified query data).
   Simplification allowed: skip `/from-verified` endpoint; frontend prefills the create form from a verified query where visible. Implementer's choice — note the decision.
@@ -51,9 +51,9 @@ QuickSight-pattern composed answer inside the existing single-bundle pipeline �
 CHASE-SQL-style multi-candidate adapted to the agentic flow: opt-in per message; after the turn completes, an independent verifier re-derives the key SQL and compares results.
 
 ### Backend
-- `POST /projects/:id/messages/stream` body gains `careful?: boolean`; threaded into `streamMessage`.
-- After the answer persists (only when careful && at least one successful SQL ran): run verifier — new single-step Mastra agent `sql-verifier` (structured output `{sql}`) prompted with the question, the schema block (entities + columns + sample values), verified reference pairs, and NOT the original SQL (independence). Execute its SQL via the bridge (no repair loop needed — one shot). Compare result sets with the turn's primary result (reuse/extract the eval harness's normalize+multiset compare into a shared util — move it into `backend/src/modules/projects/result-compare.ts` and have `scripts/run-eval.ts` import it).
-- Persist on the message: `crossCheck?: { status: 'agree' | 'disagree' | 'error'; note?: string }` (note: short human line, e.g. "independent re-derivation returned the same results" / "results differ — treat with care"). Emit an SSE event `cross-check` with the same payload so the UI updates live after `done`? Simpler: run BEFORE emitting `done` so the persisted project already carries it; acceptable added latency since careful mode is opt-in.
+- `POST /sessions/:id/messages/stream` body gains `careful?: boolean`; threaded into `streamMessage`.
+- After the answer persists (only when careful && at least one successful SQL ran): run verifier — new single-step Mastra agent `sql-verifier` (structured output `{sql}`) prompted with the question, the schema block (entities + columns + sample values), verified reference pairs, and NOT the original SQL (independence). Execute its SQL via the bridge (no repair loop needed — one shot). Compare result sets with the turn's primary result (reuse/extract the eval harness's normalize+multiset compare into a shared util — move it into `backend/src/modules/sessions/result-compare.ts` and have `scripts/run-eval.ts` import it).
+- Persist on the message: `crossCheck?: { status: 'agree' | 'disagree' | 'error'; note?: string }` (note: short human line, e.g. "independent re-derivation returned the same results" / "results differ — treat with care"). Emit an SSE event `cross-check` with the same payload so the UI updates live after `done`? Simpler: run BEFORE emitting `done` so the persisted session already carries it; acceptable added latency since careful mode is opt-in.
 - Tests: agree/disagree/error paths (verifier mocked), only runs when flagged, compare util unit tests (reused from eval — keep eval's tests passing).
 
 ### Frontend
@@ -67,16 +67,16 @@ Dot/Hex pattern: deliberate slow path producing a report artifact. In-process as
 
 ### Backend
 - New feature module `backend/src/modules/deep-analysis/`:
-  - `POST /projects/:id/deep-analysis` `{question}` → `{ok, message, jobId}`; job runs async in-process.
-  - `GET /projects/:id/deep-analysis/:jobId` → `{status: 'planning'|'investigating'|'writing'|'done'|'error', progress?: string, step?: number, steps?: number}` for polling.
-  - Job pipeline (all through existing `assistant` agent generate calls with the project's requestContext/tools, NOT new tools): (1) plan — one structured call producing 3-5 investigation angles from the question + entity context; (2) investigate — for each angle sequentially, one `agent.generate` (maxSteps 15) instructed to answer that angle with SQL and return findings + the SQL used; abort-safe; (3) synthesize — one call combining findings into a markdown report: executive summary, per-angle findings with numbers, anomalies/drivers, recommendations, data appendix (SQL per angle).
-  - Persist: report file `reports/<jobId>.md` in the project workspace; chat message appended on completion: `content` = executive summary (markdown), plus new `ChatMessage.report?: { jobId, title, path, angles: number }`; on error, a chat message stating the failure.
-  - `GET /projects/:id/deep-analysis/:jobId/download` → the .md file.
-  - Guard: one running job per project; reject a second with `ok:false`.
+  - `POST /sessions/:id/deep-analysis` `{question}` → `{ok, message, jobId}`; job runs async in-process.
+  - `GET /sessions/:id/deep-analysis/:jobId` → `{status: 'planning'|'investigating'|'writing'|'done'|'error', progress?: string, step?: number, steps?: number}` for polling.
+  - Job pipeline (all through existing `assistant` agent generate calls with the session's requestContext/tools, NOT new tools): (1) plan — one structured call producing 3-5 investigation angles from the question + entity context; (2) investigate — for each angle sequentially, one `agent.generate` (maxSteps 15) instructed to answer that angle with SQL and return findings + the SQL used; abort-safe; (3) synthesize — one call combining findings into a markdown report: executive summary, per-angle findings with numbers, anomalies/drivers, recommendations, data appendix (SQL per angle).
+  - Persist: report file `reports/<jobId>.md` in the session workspace; chat message appended on completion: `content` = executive summary (markdown), plus new `ChatMessage.report?: { jobId, title, path, angles: number }`; on error, a chat message stating the failure.
+  - `GET /sessions/:id/deep-analysis/:jobId/download` → the .md file.
+  - Guard: one running job per session; reject a second with `ok:false`.
 - Tests: plan/investigate/synthesize orchestration with mocked agent, single-job guard, report persisted, chat message appended.
 
 ### Frontend
-- Composer: "Deep analysis" action (Telescope/FlaskConical icon) — sends the current draft as a deep-analysis job instead of a chat turn; chat shows a local pending card ("Deep analysis running — planning / investigating angle 2 of 4 …") driven by polling every ~3s; on done, refresh project (report message appears; card clears). Do not block normal chat while it runs.
+- Composer: "Deep analysis" action (Telescope/FlaskConical icon) — sends the current draft as a deep-analysis job instead of a chat turn; chat shows a local pending card ("Deep analysis running — planning / investigating angle 2 of 4 …") driven by polling every ~3s; on done, refresh session (report message appears; card clears). Do not block normal chat while it runs.
 - Report message rendering: title + executive summary via existing MarkdownPipe + a download button (report .md). `report` field mirrored in the model.
 
 ## Cross-wave contract additions to `ChatMessage`

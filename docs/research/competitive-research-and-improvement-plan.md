@@ -72,7 +72,7 @@ Ordered by impact-for-effort for this app (Electron + NestJS + Mastra over Datab
 
 13. **Databricks Metric Views / lightweight semantic layer**: define core demo metrics in Unity Catalog; assistant prefers metric queries, raw SQL only for the long tail. Biggest structural accuracy jump (~40%→~80% class), larger build.
 14. **Multi-candidate SQL generation + result-set voting** for hard questions (3 candidates, execution-filtered). 3–5× token cost — gate behind a "careful mode".
-15. **Deep Analysis mode (Dot/Hex pattern)**: async multi-step investigation producing a report artifact (plan → parallel queries → anomaly drill-down → recommendations). Natural fit for the Mastra workspace-per-project design; strong Product Owner story.
+15. **Deep Analysis mode (Dot/Hex pattern)**: async multi-step investigation producing a report artifact (plan → parallel queries → anomaly drill-down → recommendations). Natural fit for the Mastra workspace-per-session design; strong Product Owner story.
 16. **Multi-visual answers (QuickSight pattern)**: KPI tiles + main chart + detail table composed in the existing visual frame.
 
 ### Explicitly not recommended now

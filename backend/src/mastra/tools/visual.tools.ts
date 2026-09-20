@@ -4,15 +4,15 @@ import { getSandboxToolServices } from '../tool-services';
 import type { SandboxToolTurnRecord } from '../tool-services';
 
 /** requestContext keys for the visual tools. */
-export const PROJECT_ID_CONTEXT_KEY = 'project-id';
+export const SESSION_ID_CONTEXT_KEY = 'session-id';
 export const ACTIVE_VISUAL_CONTEXT_KEY = 'active-visual-id';
 /**
  * Holds a live reference to the current chat turn's captured SQL/rows
- * (`ToolDataRecord[]`), set once per turn in `ProjectsService.streamMessage`
+ * (`ToolDataRecord[]`), set once per turn in `SessionsService.streamMessage`
  * before the model starts and mutated in place as tool results arrive — so a
  * `create_visual`/`update_visual` call later in the same turn sees everything
  * gathered so far. A fresh object is created per turn, so there is no
- * leakage between turns or between projects.
+ * leakage between turns or between sessions.
  */
 export const TURN_RECORDS_CONTEXT_KEY = 'turn-data-records';
 
@@ -52,15 +52,15 @@ export const createVisualTool = createTool({
       .describe('Design guidance from the user, if any'),
   }),
   execute: async ({ sourceMessageAt, instruction }, { requestContext }) => {
-    const projectId = contextString(requestContext, PROJECT_ID_CONTEXT_KEY);
-    if (!projectId) return { error: 'No project in context' };
+    const sessionId = contextString(requestContext, SESSION_ID_CONTEXT_KEY);
+    if (!sessionId) return { error: 'No session in context' };
     const turnRecords = contextRecords(
       requestContext,
       TURN_RECORDS_CONTEXT_KEY,
     );
     try {
       return await getSandboxToolServices().createVisual(
-        projectId,
+        sessionId,
         sourceMessageAt,
         instruction,
         turnRecords,
@@ -77,7 +77,7 @@ export const updateVisualTool = createTool({
     'Tailor an existing interactive visual: change chart type, colours,',
     'labels, filters, which series or how many items are shown, etc. Produces',
     'a new version. Defaults to the visual currently open in the right panel;',
-    'pass visualId to target another one listed in the project context.',
+    'pass visualId to target another one listed in the session context.',
   ].join(' '),
   inputSchema: z.object({
     visualId: z.string().optional().describe('Visual to change'),
@@ -86,8 +86,8 @@ export const updateVisualTool = createTool({
       .describe('What to change, in the user\'s words plus any needed detail'),
   }),
   execute: async ({ visualId, instruction }, { requestContext }) => {
-    const projectId = contextString(requestContext, PROJECT_ID_CONTEXT_KEY);
-    if (!projectId) return { error: 'No project in context' };
+    const sessionId = contextString(requestContext, SESSION_ID_CONTEXT_KEY);
+    if (!sessionId) return { error: 'No session in context' };
     const target =
       visualId ?? contextString(requestContext, ACTIVE_VISUAL_CONTEXT_KEY);
     if (!target) {
@@ -102,7 +102,7 @@ export const updateVisualTool = createTool({
     );
     try {
       return await getSandboxToolServices().updateVisual(
-        projectId,
+        sessionId,
         target,
         instruction,
         turnRecords,

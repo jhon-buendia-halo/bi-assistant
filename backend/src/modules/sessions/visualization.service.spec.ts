@@ -4,8 +4,8 @@ jest.mock('@mastra/core/request-context', () => ({
   },
 }));
 jest.mock('../../mastra/mastra.service', () => ({ MastraService: class {} }));
-jest.mock('../../mastra/project-workspaces', () => ({
-  PROJECT_WORKSPACE_CONTEXT_KEY: 'project-workspace',
+jest.mock('../../mastra/session-workspaces', () => ({
+  SESSION_WORKSPACE_CONTEXT_KEY: 'session-workspace',
 }));
 jest.mock('../../mastra/agents/visualization.agent', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -57,10 +57,10 @@ import {
   visualizationData,
 } from './visualization.service';
 import type {
-  ProjectDoc,
+  SessionDoc,
   ReasoningStep,
   ToolDataRecord,
-} from './entities/project.entity';
+} from './entities/session.entity';
 
 const bundle = {
   title: 'Claims by month',
@@ -70,7 +70,7 @@ const bundle = {
   javascript: 'const x = 1;',
 };
 
-/** A valid spec-mode designer output for the rows `projectWithRows` carries. */
+/** A valid spec-mode designer output for the rows `sessionWithRows` carries. */
 const specOutput = {
   title: 'Claims by month',
   description: 'Volume climbs through the year.',
@@ -85,7 +85,7 @@ const specOutput = {
 };
 
 /** An answer whose stored rows exceed what the designer prompt may carry. */
-function projectWithRows(stored: number, rowCount: number): ProjectDoc {
+function sessionWithRows(stored: number, rowCount: number): SessionDoc {
   const record: ToolDataRecord = {
     tool: 'run_readonly_sql',
     input: 'SELECT month, n FROM main.health.claims',
@@ -95,7 +95,7 @@ function projectWithRows(stored: number, rowCount: number): ProjectDoc {
     ...(rowCount > stored ? { truncated: true } : {}),
   };
   return {
-    id: 'project-1',
+    id: 'session-1',
     name: 'Claims',
     sandboxes: ['claims'],
     visualizations: [],
@@ -127,7 +127,7 @@ function build() {
   const agent = { generate: jest.fn().mockResolvedValue({ object: bundle }) };
   const mastra = {
     getAgent: jest.fn().mockReturnValue(agent),
-    ensureProjectWorkspace: jest
+    ensureSessionWorkspace: jest
       .fn()
       .mockResolvedValue({ id: 'workspace-1', filesystem }),
   };
@@ -236,7 +236,7 @@ describe('VisualizationService truncation markers', () => {
   it('tells the designer how many of the rows it is seeing', async () => {
     const { service, agent } = build();
 
-    await service.create(projectWithRows(150, 250), undefined);
+    await service.create(sessionWithRows(150, 250), undefined);
 
     const prompt = (agent.generate.mock.calls as unknown[][])[0][0] as string;
     expect(prompt).toContain('showing first 100 of 250 rows');
@@ -245,7 +245,7 @@ describe('VisualizationService truncation markers', () => {
   it('says nothing about truncation when the designer saw every row', async () => {
     const { service, agent } = build();
 
-    await service.create(projectWithRows(20, 20), undefined);
+    await service.create(sessionWithRows(20, 20), undefined);
 
     const prompt = (agent.generate.mock.calls as unknown[][])[0][0] as string;
     expect(prompt).toContain('<data>');
@@ -255,7 +255,7 @@ describe('VisualizationService truncation markers', () => {
   it('threads the row counts into the readable frame', async () => {
     const { service } = build();
 
-    await service.create(projectWithRows(150, 250), undefined);
+    await service.create(sessionWithRows(150, 250), undefined);
 
     const calls = (storedVisualizationDocument as jest.Mock).mock
       .calls as unknown[][];
@@ -276,7 +276,7 @@ describe('VisualizationService contextFor reasoning', () => {
 
   it('uses the persisted reasoning field when present, ignoring per-record rationale', async () => {
     const { service } = build();
-    const project = projectWithRows(20, 20);
+    const session = sessionWithRows(20, 20);
     const persisted: ReasoningStep[] = [
       {
         step: 1,
@@ -285,10 +285,10 @@ describe('VisualizationService contextFor reasoning', () => {
         rowCount: 20,
       },
     ];
-    project.messages[1].reasoning = persisted;
-    project.messages[1].data![0].rationale = 'Should be ignored.';
+    session.messages[1].reasoning = persisted;
+    session.messages[1].data![0].rationale = 'Should be ignored.';
 
-    await service.create(project, undefined);
+    await service.create(session, undefined);
 
     const calls = (storedVisualizationDocument as jest.Mock).mock
       .calls as unknown[][];
@@ -297,8 +297,8 @@ describe('VisualizationService contextFor reasoning', () => {
 
   it('derives reasoning from data records carrying a rationale when the field is absent, in order', async () => {
     const { service } = build();
-    const project = projectWithRows(20, 20);
-    project.messages[1].data = [
+    const session = sessionWithRows(20, 20);
+    session.messages[1].data = [
       { tool: 'run_readonly_sql', input: 'SELECT 1' }, // no rationale: skipped
       {
         tool: 'run_readonly_sql',
@@ -314,7 +314,7 @@ describe('VisualizationService contextFor reasoning', () => {
       },
     ];
 
-    await service.create(project, undefined);
+    await service.create(session, undefined);
 
     const calls = (storedVisualizationDocument as jest.Mock).mock
       .calls as unknown[][];
@@ -341,7 +341,7 @@ describe('VisualizationService contextFor reasoning', () => {
   it('omits reasoning entirely when no records carry a rationale', async () => {
     const { service } = build();
 
-    await service.create(projectWithRows(20, 20), undefined);
+    await service.create(sessionWithRows(20, 20), undefined);
 
     const calls = (storedVisualizationDocument as jest.Mock).mock
       .calls as unknown[][];
@@ -356,8 +356,8 @@ describe('VisualizationService.download answer.md reasoning section', () => {
 
   it('lists the reasoning steps before the data-used section', async () => {
     const { service } = build();
-    const project = projectWithRows(20, 20);
-    project.messages[1].data = [
+    const session = sessionWithRows(20, 20);
+    session.messages[1].data = [
       {
         tool: 'run_readonly_sql',
         input: 'SELECT month, n FROM main.health.claims',
@@ -366,7 +366,7 @@ describe('VisualizationService.download answer.md reasoning section', () => {
       },
     ];
 
-    await service.download(withVisual(project), 'visual-1');
+    await service.download(withVisual(session), 'visual-1');
 
     const files = (createZip as jest.Mock).mock.calls[0][0] as {
       name: string;
@@ -385,7 +385,7 @@ describe('VisualizationService.download answer.md reasoning section', () => {
   it('omits the section when no step carries a rationale', async () => {
     const { service } = build();
 
-    await service.download(withVisual(projectWithRows(20, 20)), 'visual-1');
+    await service.download(withVisual(sessionWithRows(20, 20)), 'visual-1');
 
     const files = (createZip as jest.Mock).mock.calls[0][0] as {
       name: string;
@@ -403,7 +403,7 @@ describe('VisualizationService recommended form', () => {
   it('hands the designer a deterministic form recommendation on create', async () => {
     const { service, agent } = build();
 
-    await service.create(projectWithRows(20, 20), undefined);
+    await service.create(sessionWithRows(20, 20), undefined);
 
     const prompt = promptOf(agent);
     expect(prompt).toContain('<recommended-form>');
@@ -417,7 +417,7 @@ describe('VisualizationService recommended form', () => {
     const { service, agent } = build();
 
     await service.update(
-      withVisual(projectWithRows(20, 20)),
+      withVisual(sessionWithRows(20, 20)),
       'visual-1',
       'make it blue',
     );
@@ -427,19 +427,19 @@ describe('VisualizationService recommended form', () => {
 
   it('omits the block when the answer carries no rows', async () => {
     const { service, agent } = build();
-    const project = projectWithRows(20, 20);
-    delete project.messages[1].data;
+    const session = sessionWithRows(20, 20);
+    delete session.messages[1].data;
 
-    await service.create(project, undefined);
+    await service.create(session, undefined);
 
     expect(promptOf(agent)).not.toContain('<recommended-form>');
   });
 });
 
-/** The same project whose answer rests on rows rich enough to compose. */
-function projectWithComposableRows(): ProjectDoc {
-  const project = projectWithRows(20, 20);
-  project.messages[1].data = [
+/** The same session whose answer rests on rows rich enough to compose. */
+function sessionWithComposableRows(): SessionDoc {
+  const session = sessionWithRows(20, 20);
+  session.messages[1].data = [
     {
       tool: 'run_readonly_sql',
       input: 'SELECT month, claims, denials FROM main.health.claims',
@@ -452,7 +452,7 @@ function projectWithComposableRows(): ProjectDoc {
       rowCount: 12,
     },
   ];
-  return project;
+  return session;
 }
 
 /**
@@ -473,7 +473,7 @@ describe('VisualizationService composed budget', () => {
 
     // Below the composition floor (COMPOSED_MIN_ROWS = 4) so this stays a
     // single-form visual even with one measure.
-    await service.create(projectWithRows(3, 3), undefined);
+    await service.create(sessionWithRows(3, 3), undefined);
 
     const prompt = lastPrompt(agent);
     expect(prompt).toContain('below 14,000 characters');
@@ -484,7 +484,7 @@ describe('VisualizationService composed budget', () => {
   it('raises the budget only when the form is composed', async () => {
     const { service, agent } = build();
 
-    await service.create(projectWithComposableRows(), undefined);
+    await service.create(sessionWithComposableRows(), undefined);
 
     const prompt = lastPrompt(agent);
     expect(prompt).toContain('below 20,000 characters');
@@ -496,7 +496,7 @@ describe('VisualizationService composed budget', () => {
     const { service, agent } = build();
 
     await service.update(
-      withVisual(projectWithComposableRows()),
+      withVisual(sessionWithComposableRows()),
       'visual-1',
       'add a table',
     );
@@ -531,7 +531,7 @@ describe('VisualizationService spec pipeline', () => {
     agent.generate.mockResolvedValue({ object: specOutput });
 
     const { bundle: created } = await service.create(
-      projectWithRows(20, 20),
+      sessionWithRows(20, 20),
       undefined,
     );
 
@@ -585,7 +585,7 @@ describe('VisualizationService spec pipeline', () => {
       .mockResolvedValue({ object: bundle });
 
     const { bundle: created } = await service.create(
-      projectWithRows(20, 20),
+      sessionWithRows(20, 20),
       undefined,
     );
 
@@ -613,7 +613,7 @@ describe('VisualizationService spec pipeline', () => {
     const { service, agent } = build();
     // The stub agent returns the freeform bundle for every call, so both spec
     // attempts fail schema validation before any data check runs.
-    await service.create(projectWithRows(20, 20), undefined);
+    await service.create(sessionWithRows(20, 20), undefined);
 
     expect(agent.generate).toHaveBeenCalledTimes(3);
     expect(promptAt(agent, 2)).toContain('HTML, CSS, and JavaScript bundle below');
@@ -621,10 +621,10 @@ describe('VisualizationService spec pipeline', () => {
 
   it('skips the spec attempt entirely when the answer carries no rows', async () => {
     const { service, agent } = build();
-    const project = projectWithRows(20, 20);
-    delete project.messages[1].data;
+    const session = sessionWithRows(20, 20);
+    delete session.messages[1].data;
 
-    await service.create(project, undefined);
+    await service.create(session, undefined);
 
     expect(agent.generate).toHaveBeenCalledTimes(1);
     expect(promptAt(agent, 0)).toContain('HTML, CSS, and JavaScript bundle below');
@@ -656,7 +656,7 @@ describe('VisualizationService spec pipeline', () => {
       });
 
       const { metadata } = await service.update(
-        withVisual(projectWithRows(20, 20)),
+        withVisual(sessionWithRows(20, 20)),
         'visual-1',
         'make it a bar chart',
       );
@@ -684,7 +684,7 @@ describe('VisualizationService spec pipeline', () => {
       agent.generate.mockResolvedValue({ object: specOutput });
 
       await service.repair(
-        withVisual(projectWithRows(20, 20)),
+        withVisual(sessionWithRows(20, 20)),
         'visual-1',
         'boom',
       );
@@ -699,7 +699,7 @@ describe('VisualizationService spec pipeline', () => {
       const { service, agent } = build();
 
       await service.update(
-        withVisual(projectWithRows(20, 20)),
+        withVisual(sessionWithRows(20, 20)),
         'visual-1',
         'make it blue',
       );
@@ -730,7 +730,7 @@ describe('VisualizationService spec pipeline', () => {
       (storedVisualizationDocument as jest.Mock).mockClear();
 
       const { bundle: refreshed } = await service.refreshData(
-        withVisual(projectWithRows(20, 20)),
+        withVisual(sessionWithRows(20, 20)),
         'visual-1',
       );
 
@@ -754,7 +754,7 @@ describe('VisualizationService spec pipeline', () => {
       const { service } = buildWithStoredSpec();
       (createZip as jest.Mock).mockClear();
 
-      await service.download(withVisual(projectWithRows(20, 20)), 'visual-1');
+      await service.download(withVisual(sessionWithRows(20, 20)), 'visual-1');
 
       const files = (createZip as jest.Mock).mock.calls[0][0] as {
         name: string;
@@ -770,14 +770,14 @@ describe('VisualizationService spec pipeline', () => {
   });
 });
 
-/** The same project with one existing visual at the given current version. */
+/** The same session with one existing visual at the given current version. */
 function withVisual(
-  project: ProjectDoc,
+  session: SessionDoc,
   options: { currentVersion?: number; instruction?: string } = {},
-): ProjectDoc {
+): SessionDoc {
   const currentVersion = options.currentVersion ?? 1;
   return {
-    ...project,
+    ...session,
     visualizations: [
       {
         id: 'visual-1',
@@ -805,7 +805,7 @@ describe('VisualizationService.repair', () => {
     const { service, agent, filesystem } = build();
 
     const { metadata } = await service.repair(
-      withVisual(projectWithRows(20, 20)),
+      withVisual(sessionWithRows(20, 20)),
       'visual-1',
       "Cannot read properties of null (reading 'appendChild')",
     );
@@ -834,7 +834,7 @@ describe('VisualizationService.repair', () => {
     const { service } = build();
 
     const { metadata } = await service.repair(
-      withVisual(projectWithRows(20, 20)),
+      withVisual(sessionWithRows(20, 20)),
       'visual-1',
       'visual rendered blank',
     );
@@ -848,7 +848,7 @@ describe('VisualizationService.repair', () => {
     const { service } = build();
 
     const { metadata } = await service.repair(
-      withVisual(projectWithRows(20, 20)),
+      withVisual(sessionWithRows(20, 20)),
       'visual-1',
       'x'.repeat(500),
     );
@@ -863,7 +863,7 @@ describe('VisualizationService.repair', () => {
 
     await expect(
       service.repair(
-        withVisual(projectWithRows(20, 20), {
+        withVisual(sessionWithRows(20, 20), {
           currentVersion: 2,
           instruction: 'auto-repair: boom',
         }),
@@ -878,7 +878,7 @@ describe('VisualizationService.repair', () => {
     const { service } = build();
 
     const { metadata } = await service.repair(
-      withVisual(projectWithRows(20, 20), {
+      withVisual(sessionWithRows(20, 20), {
         currentVersion: 2,
         instruction: 'make it a bar chart',
       }),
@@ -893,7 +893,7 @@ describe('VisualizationService.repair', () => {
     const { service } = build();
 
     await expect(
-      service.repair(projectWithRows(20, 20), 'missing', 'boom'),
+      service.repair(sessionWithRows(20, 20), 'missing', 'boom'),
     ).rejects.toThrow(/not found/);
   });
 });
@@ -928,14 +928,14 @@ describe('VisualizationService.refreshData', () => {
       runReadOnlySql,
     });
 
-    const project = withVisual(projectWithRows(20, 20));
-    const { metadata } = await service.refreshData(project, 'visual-1');
+    const session = withVisual(sessionWithRows(20, 20));
+    const { metadata } = await service.refreshData(session, 'visual-1');
 
     expect(runReadOnlySql).toHaveBeenCalledWith(
       'ds-1',
       'SELECT month, n FROM main.health.claims',
       expect.any(Number),
-      project.sandboxes,
+      session.sandboxes,
     );
     // Same version, no new entry appended to the version history.
     expect(metadata.currentVersion).toBe(1);
@@ -971,8 +971,8 @@ describe('VisualizationService.refreshData', () => {
       runReadOnlySql,
     });
 
-    const project = withVisual(projectWithRows(20, 20));
-    await service.refreshData(project, 'visual-1');
+    const session = withVisual(sessionWithRows(20, 20));
+    await service.refreshData(session, 'visual-1');
 
     const dataWrite = (filesystem.writeFile as jest.Mock).mock.calls.find(
       (call) => call[0] === 'visuals/visual-1/v1/data.json',
@@ -991,20 +991,20 @@ describe('VisualizationService.refreshData', () => {
       runReadOnlySql,
     });
 
-    const project = withVisual(projectWithRows(20, 20));
+    const session = withVisual(sessionWithRows(20, 20));
     // sample_rows records carry no real SQL — nothing to re-run.
-    project.messages[1].data = [
+    session.messages[1].data = [
       { tool: 'sample_rows', input: 'main.health.claims', rows: [{ a: 1 }] },
     ];
 
-    await service.refreshData(project, 'visual-1');
+    await service.refreshData(session, 'visual-1');
 
     expect(runReadOnlySql).not.toHaveBeenCalled();
     const dataWrite = (filesystem.writeFile as jest.Mock).mock.calls.find(
       (call) => call[0] === 'visuals/visual-1/v1/data.json',
     );
     const written = JSON.parse(dataWrite![1] as string) as ToolDataRecord[];
-    expect(written).toEqual(project.messages[1].data);
+    expect(written).toEqual(session.messages[1].data);
   });
 
   it('load prefers the refreshed data.json over the original answer data', async () => {
@@ -1026,7 +1026,7 @@ describe('VisualizationService.refreshData', () => {
       },
     );
 
-    await service.load(withVisual(projectWithRows(20, 20)), 'visual-1', 1);
+    await service.load(withVisual(sessionWithRows(20, 20)), 'visual-1', 1);
 
     const calls = (sandboxedVisualizationDocument as jest.Mock).mock
       .calls as unknown[][];
@@ -1064,7 +1064,7 @@ describe('VisualizationService turnRecords merge', () => {
   describe('update()', () => {
     it('merges the turn\'s records onto the current version\'s stored data, deduping by SQL (fresh wins)', async () => {
       const { service, agent, filesystem } = build();
-      const project = withVisual(projectWithRows(20, 20));
+      const session = withVisual(sessionWithRows(20, 20));
       const turnRecords: ToolDataRecord[] = [
         {
           tool: 'run_readonly_sql',
@@ -1083,7 +1083,7 @@ describe('VisualizationService turnRecords merge', () => {
       ];
 
       await service.update(
-        project,
+        session,
         'visual-1',
         'break it down by stage',
         turnRecords,
@@ -1109,7 +1109,7 @@ describe('VisualizationService turnRecords merge', () => {
 
     it('keeps the last record when the turn re-runs the same SQL twice', async () => {
       const { service, filesystem } = build();
-      const project = withVisual(projectWithRows(20, 20));
+      const session = withVisual(sessionWithRows(20, 20));
       const turnRecords: ToolDataRecord[] = [
         {
           tool: 'run_readonly_sql',
@@ -1125,7 +1125,7 @@ describe('VisualizationService turnRecords merge', () => {
         },
       ];
 
-      await service.update(project, 'visual-1', 'retry the stage split', turnRecords);
+      await service.update(session, 'visual-1', 'retry the stage split', turnRecords);
 
       const written = writtenDataJson(filesystem, 'visuals/visual-1/v2/data.json');
       const matches = written!.filter((r) => r.input === STAGE_SQL);
@@ -1135,9 +1135,9 @@ describe('VisualizationService turnRecords merge', () => {
 
     it('behaves exactly as before when no turn records are given', async () => {
       const { service, agent, filesystem } = build();
-      const project = withVisual(projectWithRows(20, 20));
+      const session = withVisual(sessionWithRows(20, 20));
 
-      await service.update(project, 'visual-1', 'make it blue');
+      await service.update(session, 'visual-1', 'make it blue');
 
       const prompt = promptOf(agent);
       expect(prompt).toContain('"n": 19');
@@ -1150,7 +1150,7 @@ describe('VisualizationService turnRecords merge', () => {
   describe('create()', () => {
     it('merges turn records onto the source answer\'s data for a brand-new visual', async () => {
       const { service, agent, filesystem } = build();
-      const project = projectWithRows(20, 20);
+      const session = sessionWithRows(20, 20);
       const turnRecords: ToolDataRecord[] = [
         {
           tool: 'run_readonly_sql',
@@ -1160,7 +1160,7 @@ describe('VisualizationService turnRecords merge', () => {
         },
       ];
 
-      await service.create(project, undefined, 'chart it', turnRecords);
+      await service.create(session, undefined, 'chart it', turnRecords);
 
       const prompt = promptOf(agent);
       expect(prompt).toContain('"stage": "A"');
@@ -1174,7 +1174,7 @@ describe('VisualizationService turnRecords merge', () => {
     it('behaves exactly as before when no turn records are given', async () => {
       const { service, agent } = build();
 
-      await service.create(projectWithRows(20, 20), undefined);
+      await service.create(sessionWithRows(20, 20), undefined);
 
       const prompt = promptOf(agent);
       expect(prompt).toContain('"n": 19');

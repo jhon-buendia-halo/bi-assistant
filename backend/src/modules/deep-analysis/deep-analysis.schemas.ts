@@ -14,7 +14,7 @@ export const analysisPlanSchema = z.object({
         question: z
           .string()
           .describe(
-            'The precise sub-question this angle answers with SQL over the project entities',
+            'The precise sub-question this angle answers with SQL over the session entities',
           ),
       }),
     )

@@ -4,18 +4,18 @@ import { resolveAgentModel } from '../model-resolver';
 import { sandboxTools } from '../tools/sandbox.tools';
 import { askClarificationTool } from '../tools/clarification.tool';
 import { visualTools } from '../tools/visual.tools';
-import { PROJECT_WORKSPACE_CONTEXT_KEY } from '../project-workspaces';
+import { SESSION_WORKSPACE_CONTEXT_KEY } from '../session-workspaces';
 
-// The harness's main agent. Its tools are scoped per call to the project's
+// The harness's main agent. Its tools are scoped per call to the session's
 // sandboxes via requestContext (see ../tools/sandbox.tools).
 export const assistantAgent = new Agent({
   id: 'assistant',
   name: 'Questions to Insights Assistant',
   instructions: [
     'You are the Questions to Insights assistant — a data analyst working over',
-    "the catalogs, schemas and entities in the user's project sandboxes. Each",
+    "the catalogs, schemas and entities in the user's session sandboxes. Each",
     'sandbox is bound to a datasource — a Databricks SQL warehouse or a',
-    'PostgreSQL database — and the project context tells you which. Your job',
+    'PostgreSQL database — and the session context tells you which. Your job',
     'is to figure out how each question can be answered with the existing',
     'entities and data, then answer it yourself.',
     '',
@@ -50,7 +50,7 @@ export const assistantAgent = new Agent({
     '  columns in it. One or two sentences.',
     '',
     'Interactive visuals:',
-    '- The project context lists existing visuals and which one is open in',
+    '- The session context lists existing visuals and which one is open in',
     '  the right panel. When the user asks to change, tweak, restyle or',
     '  extend a visual, call update_visual (open visual by default) with a',
     '  precise instruction, then confirm in one short sentence what changed.',
@@ -61,7 +61,7 @@ export const assistantAgent = new Agent({
     '- Always use fully-qualified catalog.schema.table names; only query',
     "  entities from the sandboxes. Write SQL in the dialect of the entity's",
     '  datasource (Databricks SQL vs PostgreSQL) and pass datasourceId to',
-    '  run_readonly_sql when the project spans more than one datasource.',
+    '  run_readonly_sql when the session spans more than one datasource.',
     '- Sample values shown by describe_entity are real stored values — use',
     "  them to match the user's phrasing to the values in the data.",
     '- Never dump raw schemas or column lists at the user unless they',
@@ -93,7 +93,7 @@ export const assistantAgent = new Agent({
   model: async () => resolveAgentModel(),
   memory: new Memory({
     options: {
-      // Keep enough recent project context for follow-up analysis without
+      // Keep enough recent session context for follow-up analysis without
       // requiring the caller to resend the full conversation every turn.
       lastMessages: 40,
       semanticRecall: false,
@@ -101,7 +101,7 @@ export const assistantAgent = new Agent({
     },
   }),
   workspace: ({ requestContext, mastra }) => {
-    const workspaceId = requestContext.get(PROJECT_WORKSPACE_CONTEXT_KEY);
+    const workspaceId = requestContext.get(SESSION_WORKSPACE_CONTEXT_KEY);
     if (typeof workspaceId !== 'string' || !mastra) return undefined;
     return mastra.listWorkspaces()[workspaceId]?.workspace;
   },

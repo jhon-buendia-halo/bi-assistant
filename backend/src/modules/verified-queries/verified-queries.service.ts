@@ -72,7 +72,7 @@ export interface VerifiedQueryInput {
   sql: string;
   datasourceId?: string;
   entities?: string[];
-  sourceProjectId: string;
+  sourceSessionId: string;
   sourceMessageAt: string;
 }
 
@@ -96,14 +96,14 @@ export class VerifiedQueriesService {
       sql: input.sql.trim(),
       ...(input.datasourceId ? { datasourceId: input.datasourceId } : {}),
       entities: input.entities ?? [],
-      sourceProjectId: input.sourceProjectId,
+      sourceSessionId: input.sourceSessionId,
       sourceMessageAt: input.sourceMessageAt,
     });
   }
 
   /** Drop the pair for an answer — used when the user flips to thumbs-down. */
-  removeForMessage(projectId: string, messageAt: string): Promise<number> {
-    return this.repository.deleteForMessage(projectId, messageAt);
+  removeForMessage(sessionId: string, messageAt: string): Promise<number> {
+    return this.repository.deleteForMessage(sessionId, messageAt);
   }
 
   /**

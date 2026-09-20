@@ -19,16 +19,16 @@ import { sqlVerifyOutputSchema } from '../../mastra/agents/sql-verifier.agent';
 import { SANDBOXES_CONTEXT_KEY } from '../../mastra/tools/sandbox.tools';
 import {
   ACTIVE_VISUAL_CONTEXT_KEY,
-  PROJECT_ID_CONTEXT_KEY,
+  SESSION_ID_CONTEXT_KEY,
   TURN_RECORDS_CONTEXT_KEY,
 } from '../../mastra/tools/visual.tools';
-import { PROJECT_WORKSPACE_CONTEXT_KEY } from '../../mastra/project-workspaces';
+import { SESSION_WORKSPACE_CONTEXT_KEY } from '../../mastra/session-workspaces';
 import { SandboxRepository } from '../sandbox/repositories/sandbox.repository';
 import { DatasourcesService } from '../datasources/datasources.service';
 import { LlmService } from '../llm/llm.service';
 import { VerifiedQueriesService } from '../verified-queries/verified-queries.service';
 import { MetricsService } from '../metrics/metrics.service';
-import { ProjectsRepository } from './repositories/projects.repository';
+import { SessionsRepository } from './repositories/sessions.repository';
 import { VisualizationService } from './visualization.service';
 import { sourceEntities } from './visualization-document';
 import { compareResults } from './result-compare';
@@ -37,12 +37,12 @@ import {
   CrossCheck,
   InteractiveVisualization,
   MessageFeedback,
-  ProjectDoc,
-  ProjectVisualization,
+  SessionDoc,
+  SessionVisualization,
   ReasoningStep,
   ToolDataRecord,
   VisualEvent,
-} from './entities/project.entity';
+} from './entities/session.entity';
 
 const STORED_ROWS_CAP = 200;
 const SYNTHESIS_ROWS_CAP = 50;
@@ -82,15 +82,15 @@ export type StreamEvent = {
   type:
     'reasoning' | 'text' | 'tool' | 'tool-result' | 'visual-updated' | 'done';
   content?: string;
-  project?: ProjectDoc;
+  session?: SessionDoc;
 };
 
 @Injectable()
-export class ProjectsService implements OnModuleInit {
-  private readonly logger = new Logger(ProjectsService.name);
+export class SessionsService implements OnModuleInit {
+  private readonly logger = new Logger(SessionsService.name);
 
   constructor(
-    private readonly repository: ProjectsRepository,
+    private readonly repository: SessionsRepository,
     private readonly mastra: MastraService,
     private readonly sandboxRepository: SandboxRepository,
     private readonly datasourcesService: DatasourcesService,
@@ -109,45 +109,45 @@ export class ProjectsService implements OnModuleInit {
       runReadOnlySql: (datasourceId, sql, limit, sandboxes) =>
         this.runSqlWithRepair(datasourceId, sql, limit, sandboxes),
       createVisual: async (
-        projectId,
+        sessionId,
         sourceMessageAt,
         instruction,
         turnRecords,
       ) => {
-        const project = await this.get(projectId);
+        const session = await this.get(sessionId);
         const { metadata } = await this.visuals.create(
-          project,
+          session,
           sourceMessageAt,
           instruction,
           turnRecords,
         );
-        await this.saveVisualMetadata(project, metadata);
+        await this.saveVisualMetadata(session, metadata);
         return this.toolResult(metadata);
       },
-      updateVisual: async (projectId, visualId, instruction, turnRecords) => {
-        const project = await this.get(projectId);
+      updateVisual: async (sessionId, visualId, instruction, turnRecords) => {
+        const session = await this.get(sessionId);
         const { metadata } = await this.visuals.update(
-          project,
+          session,
           visualId,
           instruction,
           turnRecords,
         );
-        await this.saveVisualMetadata(project, metadata);
+        await this.saveVisualMetadata(session, metadata);
         return this.toolResult(metadata);
       },
     });
 
-    // Backfill workspaces for projects created before workspace support and
+    // Backfill workspaces for sessions created before workspace support and
     // restore their registrations after every process restart.
-    const projects = await this.repository.list();
+    const sessions = await this.repository.list();
     await Promise.all(
-      projects.map(async (project) => {
-        const workspace = await this.mastra.ensureProjectWorkspace(
-          project.id,
-          project.name,
+      sessions.map(async (session) => {
+        const workspace = await this.mastra.ensureSessionWorkspace(
+          session.id,
+          session.name,
         );
-        if (project.workspaceId !== workspace.id) {
-          await this.repository.update(project.id, {
+        if (session.workspaceId !== workspace.id) {
+          await this.repository.update(session.id, {
             workspaceId: workspace.id,
           });
         }
@@ -157,21 +157,21 @@ export class ProjectsService implements OnModuleInit {
 
   /**
    * Hybrid context: a cheap orientation block (sandbox names + entity keys,
-   * the project's visuals and which one is open), the curated metric
+   * the session's visuals and which one is open), the curated metric
    * definitions covering those entities, plus any user-approved question → SQL
    * pairs resembling `question`, in the system context, and requestContext
-   * scoping the tools to this project.
+   * scoping the tools to this session.
    *
-   * Memory-free on purpose — `agentOptions` adds the project's conversation
+   * Memory-free on purpose — `agentOptions` adds the session's conversation
    * thread, `backgroundAgentOptions` deliberately does not.
    */
   private async agentContext(
-    project: ProjectDoc,
+    session: SessionDoc,
     question?: string,
     abortSignal?: AbortSignal,
     activeVisualId?: string,
   ) {
-    const sandboxes = await this.boundSandboxes(project.sandboxes);
+    const sandboxes = await this.boundSandboxes(session.sandboxes);
     const entityLines = sandboxes.flatMap((s) =>
       s.tables.map(
         (t) =>
@@ -179,26 +179,26 @@ export class ProjectsService implements OnModuleInit {
       ),
     );
     const joinHints = joinHintBlock(sandboxes);
-    const visualLines = (project.visualizations ?? []).map(
+    const visualLines = (session.visualizations ?? []).map(
       (v) =>
         `- ${v.id} — "${v.title}" v${this.visuals.currentVersion(v)} (from the answer at ${v.sourceMessageAt})`,
     );
     const requestContext = new RequestContext();
-    requestContext.set(SANDBOXES_CONTEXT_KEY, project.sandboxes);
-    requestContext.set(PROJECT_ID_CONTEXT_KEY, project.id);
+    requestContext.set(SANDBOXES_CONTEXT_KEY, session.sandboxes);
+    requestContext.set(SESSION_ID_CONTEXT_KEY, session.id);
     if (activeVisualId) {
       requestContext.set(ACTIVE_VISUAL_CONTEXT_KEY, activeVisualId);
     }
-    const workspace = await this.mastra.ensureProjectWorkspace(
-      project.id,
-      project.name,
+    const workspace = await this.mastra.ensureSessionWorkspace(
+      session.id,
+      session.name,
     );
-    requestContext.set(PROJECT_WORKSPACE_CONTEXT_KEY, workspace.id);
+    requestContext.set(SESSION_WORKSPACE_CONTEXT_KEY, workspace.id);
     const { reasoningEffort } = await this.llmService.getView();
     const verified = question
       ? await this.verifiedQueries.referenceBlock(question)
       : undefined;
-    // Curated semantics for the entities this project can see — the one
+    // Curated semantics for the entities this session can see — the one
     // definition of each business number, never re-derived per turn.
     const metrics = await this.metrics.definitionBlock(
       sandboxes.flatMap((s) => s.tables ?? []),
@@ -212,7 +212,7 @@ export class ProjectsService implements OnModuleInit {
         {
           role: 'system' as const,
           content: [
-            `Data sandboxes for this project: ${project.sandboxes.join(', ')}.`,
+            `Data sandboxes for this session: ${session.sandboxes.join(', ')}.`,
             'Entities available (fully-qualified catalog.schema.table):',
             ...(entityLines.length
               ? entityLines
@@ -220,7 +220,7 @@ export class ProjectsService implements OnModuleInit {
             'Use describe_entity / sample_rows / run_readonly_sql to inspect and query them.',
             ...(joinHints ? ['', joinHints] : []),
             '',
-            'Interactive visuals in this project (id — title, current version):',
+            'Interactive visuals in this session (id — title, current version):',
             ...(visualLines.length ? visualLines : ['(none yet)']),
             activeVisualId
               ? `Visual currently open in the right panel: ${activeVisualId}.`
@@ -235,48 +235,48 @@ export class ProjectsService implements OnModuleInit {
     };
   }
 
-  /** Chat turns: the shared grounding plus this project's memory thread. */
+  /** Chat turns: the shared grounding plus this session's memory thread. */
   private async agentOptions(
-    project: ProjectDoc,
+    session: SessionDoc,
     question?: string,
     abortSignal?: AbortSignal,
     activeVisualId?: string,
   ) {
     return {
       ...(await this.agentContext(
-        project,
+        session,
         question,
         abortSignal,
         activeVisualId,
       )),
-      // Each project is an isolated, persistent Mastra conversation.
-      memory: { thread: project.id, resource: project.id },
+      // Each session is an isolated, persistent Mastra conversation.
+      memory: { thread: session.id, resource: session.id },
     };
   }
 
   /**
    * Same grounding for a background job (deep analysis) — tools scoped to the
-   * project, the same system blocks — but **without** the conversation memory
+   * session, the same system blocks — but **without** the conversation memory
    * thread. A job fires many internal sub-calls; writing them into the thread
    * would pollute the history the user's next chat question is answered from.
    */
   async backgroundAgentOptions(
-    project: ProjectDoc,
+    session: SessionDoc,
     question?: string,
     abortSignal?: AbortSignal,
   ) {
-    return this.agentContext(project, question, abortSignal);
+    return this.agentContext(session, question, abortSignal);
   }
 
   /**
    * Append one assistant message written outside a chat turn (a deep-analysis
-   * report). Re-reads the project first, so a job that finishes while the user
+   * report). Re-reads the session first, so a job that finishes while the user
    * keeps chatting never overwrites the turns persisted meanwhile.
    */
   async appendAssistantMessage(
     id: string,
     message: Omit<ChatMessage, 'role' | 'at'>,
-  ): Promise<ProjectDoc> {
+  ): Promise<SessionDoc> {
     const fresh = await this.get(id);
     const messages: ChatMessage[] = [
       ...fresh.messages,
@@ -406,7 +406,7 @@ export class ProjectsService implements OnModuleInit {
             `Dialect: ${context.dialect}`,
             '',
             '<available-entities>',
-            context.schema || '(no schema snapshot stored for this project)',
+            context.schema || '(no schema snapshot stored for this session)',
             '</available-entities>',
             '',
             '<failed-sql>',
@@ -454,7 +454,7 @@ export class ProjectsService implements OnModuleInit {
    * verify must not lose the answer it was verifying.
    */
   private async crossCheckAnswer(
-    project: ProjectDoc,
+    session: SessionDoc,
     question: string,
     data: ToolDataRecord[],
   ): Promise<CrossCheck | undefined> {
@@ -469,12 +469,12 @@ export class ProjectsService implements OnModuleInit {
           "the answer's result set hit the row cap — a partial result cannot be compared",
         );
       }
-      const context = await this.verifierContext(project);
+      const context = await this.verifierContext(session);
       if (!context) {
         this.logger.warn('Cross-check skipped: no datasource bound');
         return crossCheck(
           'error',
-          'no datasource is bound to this project, so the query could not be re-run',
+          'no datasource is bound to this session, so the query could not be re-run',
         );
       }
       const sql = await this.deriveIndependentSql(question, context);
@@ -523,7 +523,7 @@ export class ProjectsService implements OnModuleInit {
   }
 
   /** Dialect, datasource and a sample-value bearing schema for the verifier. */
-  private async verifierContext(project: ProjectDoc): Promise<
+  private async verifierContext(session: SessionDoc): Promise<
     | {
         dialect: string;
         schema: string;
@@ -531,9 +531,9 @@ export class ProjectsService implements OnModuleInit {
       }
     | undefined
   > {
-    const sandboxes = await this.boundSandboxes(project.sandboxes);
+    const sandboxes = await this.boundSandboxes(session.sandboxes);
     const datasourceId =
-      (await this.soleDatasourceId(project)) ??
+      (await this.soleDatasourceId(session)) ??
       sandboxes.find((s) => s.datasourceId)?.datasourceId;
     if (!datasourceId) return undefined;
     const inScope = sandboxes.filter((s) => s.datasourceId === datasourceId);
@@ -568,7 +568,7 @@ export class ProjectsService implements OnModuleInit {
           `Dialect: ${context.dialect}`,
           '',
           '<available-entities>',
-          context.schema || '(no schema snapshot stored for this project)',
+          context.schema || '(no schema snapshot stored for this session)',
           '</available-entities>',
           ...(verified
             ? [
@@ -602,18 +602,18 @@ export class ProjectsService implements OnModuleInit {
   // --------------------------------------------------------------- internals
 
   /**
-   * Mastra stores new turns itself once a project thread exists. For projects
+   * Mastra stores new turns itself once a session thread exists. For sessions
    * created before memory was enabled, bootstrap the thread once from the
-   * already-persisted project transcript.
+   * already-persisted session transcript.
    */
   private async agentInput(
     agent: ReturnType<MastraService['getAgent']>,
-    project: ProjectDoc,
+    session: SessionDoc,
   ) {
     const memory = await agent.getMemory();
-    const thread = await memory?.getThreadById({ threadId: project.id });
-    const latest = project.messages.at(-1);
-    const previous = project.messages.at(-2);
+    const thread = await memory?.getThreadById({ threadId: session.id });
+    const latest = session.messages.at(-1);
+    const previous = session.messages.at(-2);
     if (thread && latest?.role === 'user') {
       // A clarification ends its turn before memory sees the question, so
       // replay it alongside the user's answer.
@@ -626,41 +626,41 @@ export class ProjectsService implements OnModuleInit {
       return latest.content;
     }
 
-    return project.messages.map((message) =>
+    return session.messages.map((message) =>
       message.role === 'user'
         ? { role: 'user' as const, content: message.content }
         : { role: 'assistant' as const, content: message.content },
     );
   }
 
-  list(): Promise<ProjectDoc[]> {
+  list(): Promise<SessionDoc[]> {
     return this.repository.list();
   }
 
-  async get(id: string): Promise<ProjectDoc> {
-    const project = await this.repository.get(id);
-    if (!project) throw new NotFoundException(`Project ${id} not found`);
-    return project;
+  async get(id: string): Promise<SessionDoc> {
+    const session = await this.repository.get(id);
+    if (!session) throw new NotFoundException(`Session ${id} not found`);
+    return session;
   }
 
-  /** Delete a project and all Mastra state owned exclusively by it. */
-  async delete(id: string): Promise<ProjectDoc> {
-    const project = await this.get(id);
-    await this.mastra.deleteProjectResources(id);
+  /** Delete a session and all Mastra state owned exclusively by it. */
+  async delete(id: string): Promise<SessionDoc> {
+    const session = await this.get(id);
+    await this.mastra.deleteSessionResources(id);
     const removed = await this.repository.delete(id);
-    if (removed === 0) throw new NotFoundException(`Project ${id} not found`);
-    return project;
+    if (removed === 0) throw new NotFoundException(`Session ${id} not found`);
+    return session;
   }
 
-  /** Create a named project; the conversation starts empty in the chat view. */
-  async create(name: string, sandboxes: string[]): Promise<ProjectDoc> {
+  /** Create a named session; the conversation starts empty in the chat view. */
+  async create(name: string, sandboxes: string[]): Promise<SessionDoc> {
     const trimmed = (name ?? '').trim();
-    if (!trimmed) throw new BadRequestException('project name is required');
+    if (!trimmed) throw new BadRequestException('session name is required');
     if (!Array.isArray(sandboxes) || sandboxes.length === 0) {
       throw new BadRequestException('select at least one sandbox');
     }
     const id = randomUUID();
-    const workspace = await this.mastra.ensureProjectWorkspace(id, trimmed);
+    const workspace = await this.mastra.ensureSessionWorkspace(id, trimmed);
     return this.repository.insert({
       id,
       name: trimmed.slice(0, 64),
@@ -677,20 +677,20 @@ export class ProjectsService implements OnModuleInit {
   async generateVisualization(
     id: string,
     sourceMessageAt: string,
-  ): Promise<{ project: ProjectDoc; visualization: InteractiveVisualization }> {
-    const project = await this.get(id);
+  ): Promise<{ session: SessionDoc; visualization: InteractiveVisualization }> {
+    const session = await this.get(id);
     const { metadata } = await this.visuals.create(
-      project,
+      session,
       sourceMessageAt || undefined,
     );
-    const updated = await this.saveVisualMetadata(project, metadata, {
+    const updated = await this.saveVisualMetadata(session, metadata, {
       visualId: metadata.id,
       version: 1,
       title: metadata.title,
       action: 'created',
     });
     return {
-      project: updated,
+      session: updated,
       visualization: await this.visuals.load(updated, metadata.id, 1),
     };
   }
@@ -715,21 +715,21 @@ export class ProjectsService implements OnModuleInit {
     id: string,
     visualizationId: string,
     version: number,
-  ): Promise<{ project: ProjectDoc; visualization: InteractiveVisualization }> {
-    const project = await this.get(id);
+  ): Promise<{ session: SessionDoc; visualization: InteractiveVisualization }> {
+    const session = await this.get(id);
     const metadata = await this.visuals.revert(
-      project,
+      session,
       visualizationId,
       version,
     );
-    const updated = await this.saveVisualMetadata(project, metadata, {
+    const updated = await this.saveVisualMetadata(session, metadata, {
       visualId: metadata.id,
       version,
       title: metadata.title,
       action: 'reverted',
     });
     return {
-      project: updated,
+      session: updated,
       visualization: await this.visuals.load(updated, visualizationId, version),
     };
   }
@@ -743,24 +743,24 @@ export class ProjectsService implements OnModuleInit {
     id: string,
     visualizationId: string,
     instruction: string,
-  ): Promise<{ project: ProjectDoc; visualization: InteractiveVisualization }> {
+  ): Promise<{ session: SessionDoc; visualization: InteractiveVisualization }> {
     const trimmed = (instruction ?? '').trim();
     if (!trimmed) throw new BadRequestException('instruction is required');
-    const project = await this.get(id);
+    const session = await this.get(id);
     const { metadata } = await this.visuals.update(
-      project,
+      session,
       visualizationId,
       trimmed,
     );
     const version = this.visuals.currentVersion(metadata);
-    const updated = await this.saveVisualMetadata(project, metadata, {
+    const updated = await this.saveVisualMetadata(session, metadata, {
       visualId: metadata.id,
       version,
       title: metadata.title,
       action: 'updated',
     });
     return {
-      project: updated,
+      session: updated,
       visualization: await this.visuals.load(updated, visualizationId, version),
     };
   }
@@ -774,16 +774,16 @@ export class ProjectsService implements OnModuleInit {
   async refreshVisualizationData(
     id: string,
     visualizationId: string,
-  ): Promise<{ project: ProjectDoc; visualization: InteractiveVisualization }> {
-    const project = await this.get(id);
+  ): Promise<{ session: SessionDoc; visualization: InteractiveVisualization }> {
+    const session = await this.get(id);
     const { metadata } = await this.visuals.refreshData(
-      project,
+      session,
       visualizationId,
     );
     const version = this.visuals.currentVersion(metadata);
-    const updated = await this.saveVisualMetadata(project, metadata);
+    const updated = await this.saveVisualMetadata(session, metadata);
     return {
-      project: updated,
+      session: updated,
       visualization: await this.visuals.load(updated, visualizationId, version),
     };
   }
@@ -799,9 +799,9 @@ export class ProjectsService implements OnModuleInit {
     visualizationId: string,
     error: string,
     version: number,
-  ): Promise<{ project: ProjectDoc; visualization: InteractiveVisualization }> {
-    const project = await this.get(id);
-    const meta = this.visuals.find(project, visualizationId);
+  ): Promise<{ session: SessionDoc; visualization: InteractiveVisualization }> {
+    const session = await this.get(id);
+    const meta = this.visuals.find(session, visualizationId);
     const current = this.visuals.currentVersion(meta);
     if (version !== current) {
       throw new BadRequestException(
@@ -809,15 +809,15 @@ export class ProjectsService implements OnModuleInit {
       );
     }
     const { metadata } = await this.visuals.repair(
-      project,
+      session,
       visualizationId,
       error,
     );
     const repaired = this.visuals.currentVersion(metadata);
     // No chat event: an automatic fix is not a conversation turn.
-    const updated = await this.saveVisualMetadata(project, metadata);
+    const updated = await this.saveVisualMetadata(session, metadata);
     return {
-      project: updated,
+      session: updated,
       visualization: await this.visuals.load(
         updated,
         visualizationId,
@@ -826,17 +826,17 @@ export class ProjectsService implements OnModuleInit {
     };
   }
 
-  /** Upsert visual metadata on the project, optionally logging a chat event. */
+  /** Upsert visual metadata on the session, optionally logging a chat event. */
   private async saveVisualMetadata(
-    project: ProjectDoc,
-    metadata: ProjectVisualization,
+    session: SessionDoc,
+    metadata: SessionVisualization,
     event?: VisualEvent,
-  ): Promise<ProjectDoc> {
-    const fresh = await this.get(project.id);
+  ): Promise<SessionDoc> {
+    const fresh = await this.get(session.id);
     const others = (fresh.visualizations ?? []).filter(
       (v) => v.id !== metadata.id,
     );
-    const patch: Partial<ProjectDoc> = {
+    const patch: Partial<SessionDoc> = {
       visualizations: [...others, metadata],
     };
     if (event) {
@@ -856,10 +856,10 @@ export class ProjectsService implements OnModuleInit {
         },
       ];
     }
-    return (await this.repository.update(project.id, patch)) ?? fresh;
+    return (await this.repository.update(session.id, patch)) ?? fresh;
   }
 
-  private toolResult(metadata: ProjectVisualization) {
+  private toolResult(metadata: SessionVisualization) {
     return {
       visualId: metadata.id,
       version: this.visuals.currentVersion(metadata),
@@ -871,33 +871,33 @@ export class ProjectsService implements OnModuleInit {
   // ---------------------------------------------------------------- chat
 
   /** Append a user message, run the agent over the history, persist both. */
-  async sendMessage(id: string, content: string): Promise<ProjectDoc> {
+  async sendMessage(id: string, content: string): Promise<SessionDoc> {
     const trimmed = (content ?? '').trim();
     if (!trimmed) throw new BadRequestException('message is required');
-    const project = await this.get(id);
-    this.appendUserMessage(project, trimmed);
+    const session = await this.get(id);
+    this.appendUserMessage(session, trimmed);
     const agent = this.mastra.getAgent('assistant');
-    const input = await this.agentInput(agent, project);
+    const input = await this.agentInput(agent, session);
     const result = await agent.generate(
       input,
-      await this.agentOptions(project, trimmed),
+      await this.agentOptions(session, trimmed),
     );
     const reasoning = reasoningTrail(toolRecords(result));
-    project.messages.push({
+    session.messages.push({
       role: 'assistant',
       content: (result.text ?? '').trim(),
       at: new Date().toISOString(),
       ...(reasoning ? { reasoning } : {}),
     });
     const updated = await this.repository.update(id, {
-      messages: project.messages,
+      messages: session.messages,
     });
-    return updated ?? project;
+    return updated ?? session;
   }
 
   /**
    * Streamed chat turn: emits reasoning/text/tool deltas as they arrive,
-   * persists the exchange at the end, then emits `done` with the project.
+   * persists the exchange at the end, then emits `done` with the session.
    *
    * `careful` opts the turn into an independent cross-check of the answer's
    * SQL, run before `done` so the transcript the client receives already
@@ -913,21 +913,21 @@ export class ProjectsService implements OnModuleInit {
   ): Promise<void> {
     const trimmed = (content ?? '').trim();
     if (!trimmed) throw new BadRequestException('message is required');
-    const project = await this.get(id);
-    this.appendUserMessage(project, trimmed);
+    const session = await this.get(id);
+    this.appendUserMessage(session, trimmed);
     // Persist the prompt before model startup. A user can stop while the
     // provider is still connecting, and that turn should survive a reload.
-    await this.repository.update(id, { messages: project.messages });
+    await this.repository.update(id, { messages: session.messages });
 
     const agent = this.mastra.getAgent('assistant');
-    const input = await this.agentInput(agent, project);
+    const input = await this.agentInput(agent, session);
     // Own controller so a clarification can end the model turn without the
     // client having disconnected.
     const turn = new AbortController();
     const forwardAbort = () => turn.abort();
     abortSignal?.addEventListener('abort', forwardAbort, { once: true });
     const options = await this.agentOptions(
-      project,
+      session,
       trimmed,
       turn.signal,
       activeVisualId,
@@ -936,7 +936,7 @@ export class ProjectsService implements OnModuleInit {
     // tools via requestContext so create_visual/update_visual called later in
     // the same turn can see SQL the turn already ran (drill-down queries a
     // tailored visual needs but that never touched the source answer). Fresh
-    // RequestContext + array per call — no leakage across turns or projects.
+    // RequestContext + array per call — no leakage across turns or sessions.
     const data: ToolDataRecord[] = [];
     options.requestContext.set(TURN_RECORDS_CONTEXT_KEY, data);
     const stream = await agent.stream(input, options);
@@ -1098,7 +1098,7 @@ export class ProjectsService implements OnModuleInit {
       // Careful mode only, and only when there is a result set to corroborate.
       const crossChecked =
         careful && !turn.signal.aborted
-          ? await this.crossCheckAnswer(project, trimmed, data)
+          ? await this.crossCheckAnswer(session, trimmed, data)
           : undefined;
       messages.push({
         role: 'assistant',
@@ -1110,7 +1110,7 @@ export class ProjectsService implements OnModuleInit {
         ...(entities.length ? { entities } : {}),
         ...(interpretation ? { interpretation } : {}),
         ...(reasoning ? { reasoning } : {}),
-        ...((await this.matchesVerifiedQuery(project, data))
+        ...((await this.matchesVerifiedQuery(session, data))
           ? { verified: true }
           : {}),
         ...(visualEvent ? { visual: visualEvent } : {}),
@@ -1119,7 +1119,7 @@ export class ProjectsService implements OnModuleInit {
     }
     const updated = await this.repository.update(id, { messages });
     if (!turn.signal.aborted || clarification) {
-      emit({ type: 'done', project: updated ?? fresh });
+      emit({ type: 'done', session: updated ?? fresh });
     }
   }
 
@@ -1172,7 +1172,7 @@ export class ProjectsService implements OnModuleInit {
    * so a failing lookup just leaves the answer unbadged.
    */
   private async matchesVerifiedQuery(
-    project: ProjectDoc,
+    session: SessionDoc,
     data: ToolDataRecord[],
   ): Promise<boolean> {
     const sql = lastSuccessfulSql(data);
@@ -1180,7 +1180,7 @@ export class ProjectsService implements OnModuleInit {
     try {
       return await this.verifiedQueries.isVerifiedSql(
         sql,
-        await this.soleDatasourceId(project),
+        await this.soleDatasourceId(session),
       );
     } catch (error) {
       this.logger.warn(
@@ -1203,19 +1203,19 @@ export class ProjectsService implements OnModuleInit {
     id: string,
     messageAt: string,
     rating: MessageFeedback,
-  ): Promise<ProjectDoc> {
+  ): Promise<SessionDoc> {
     if (rating !== 'up' && rating !== 'down') {
       throw new BadRequestException("rating must be 'up' or 'down'");
     }
     if (!messageAt) throw new BadRequestException('messageAt is required');
-    const project = await this.get(id);
-    const index = project.messages.findIndex(
+    const session = await this.get(id);
+    const index = session.messages.findIndex(
       (m) => m.role === 'assistant' && m.at === messageAt,
     );
     if (index < 0) {
       throw new NotFoundException(`No assistant message at ${messageAt}`);
     }
-    const messages = [...project.messages];
+    const messages = [...session.messages];
     const answer: ChatMessage = { ...messages[index], feedback: rating };
     // The rating is the authority on the badge: approving an answer verifies
     // it, rejecting it takes the badge away even if the SQL is still stored.
@@ -1235,22 +1235,22 @@ export class ProjectsService implements OnModuleInit {
         await this.verifiedQueries.save({
           question: question.content,
           sql,
-          datasourceId: await this.soleDatasourceId(project),
+          datasourceId: await this.soleDatasourceId(session),
           entities: answer.entities ?? [],
-          sourceProjectId: id,
+          sourceSessionId: id,
           sourceMessageAt: messageAt,
         });
       }
     }
     const updated = await this.repository.update(id, { messages });
-    return updated ?? { ...project, messages };
+    return updated ?? { ...session, messages };
   }
 
-  /** The project's datasource when it is unambiguous — provenance only. */
+  /** The session's datasource when it is unambiguous — provenance only. */
   private async soleDatasourceId(
-    project: ProjectDoc,
+    session: SessionDoc,
   ): Promise<string | undefined> {
-    const sandboxes = await this.boundSandboxes(project.sandboxes);
+    const sandboxes = await this.boundSandboxes(session.sandboxes);
     const ids = new Set(
       sandboxes.map((s) => s.datasourceId).filter((id): id is string => !!id),
     );
@@ -1262,10 +1262,10 @@ export class ProjectsService implements OnModuleInit {
    * exact unanswered prompt (a retry after a failed turn), in which case reuse
    * it instead of duplicating the bubble.
    */
-  private appendUserMessage(project: ProjectDoc, content: string): void {
-    const latest = project.messages.at(-1);
+  private appendUserMessage(session: SessionDoc, content: string): void {
+    const latest = session.messages.at(-1);
     if (latest?.role === 'user' && latest.content === content) return;
-    project.messages.push({
+    session.messages.push({
       role: 'user',
       content,
       at: new Date().toISOString(),

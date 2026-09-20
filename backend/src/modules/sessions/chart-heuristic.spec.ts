@@ -3,7 +3,7 @@ import {
   recommendComposition,
   recommendedFormBlock,
 } from './chart-heuristic';
-import type { ToolDataRecord } from './entities/project.entity';
+import type { ToolDataRecord } from './entities/session.entity';
 
 /** One successful query result in the shape the assistant stores. */
 function record(
