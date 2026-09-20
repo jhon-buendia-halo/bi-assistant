@@ -13,7 +13,7 @@ import type { ChatMessage } from '../sessions/entities/session.entity';
 const SESSION = {
   id: 'session-1',
   name: 'Denials review',
-  sandboxes: ['claims'],
+  datasets: ['claims'],
   messages: [],
 };
 

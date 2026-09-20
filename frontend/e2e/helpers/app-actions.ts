@@ -1,7 +1,7 @@
 import { expect, Page } from '@playwright/test';
 
 export const WORLD_CUP_DATASOURCE = 'World Cup PostgreSQL';
-export const WORLD_CUP_SANDBOX = 'World Cup Core';
+export const WORLD_CUP_DATASET = 'World Cup Core';
 export const WORLD_CUP_SESSION = 'World Cup analysis';
 
 export async function openDatasourceSettings(page: Page): Promise<void> {
@@ -33,15 +33,15 @@ export async function createWorldCupDatasource(page: Page): Promise<void> {
   await expect(datasource).toContainText('PostgreSQL');
 }
 
-export async function createWorldCupSandbox(page: Page): Promise<void> {
+export async function createWorldCupDataset(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Back' }).click();
-  await page.getByRole('button', { name: 'Data Sandbox' }).click();
+  await page.getByRole('button', { name: 'Datasets' }).click();
   await expect(
-    page.getByRole('heading', { name: 'Data Sandbox' }),
+    page.getByRole('heading', { name: 'Datasets' }),
   ).toBeVisible();
-  await page.getByRole('button', { name: 'New sandbox' }).click();
+  await page.getByRole('button', { name: 'New dataset' }).click();
   await expect(
-    page.getByRole('heading', { name: 'New sandbox' }),
+    page.getByRole('heading', { name: 'New dataset' }),
   ).toBeVisible();
 
   await expect(page.getByTestId('catalog-world_cup')).toBeVisible();
@@ -51,9 +51,9 @@ export async function createWorldCupSandbox(page: Page): Promise<void> {
   await expect(page.getByText('match_number', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Include item', exact: true }).click();
 
-  await page.getByPlaceholder('Sandbox name').fill(WORLD_CUP_SANDBOX);
-  await page.getByRole('button', { name: 'Save sandbox (1)' }).click();
-  await expect(page.getByTestId(`sandbox-${WORLD_CUP_SANDBOX}`)).toBeVisible();
+  await page.getByPlaceholder('Dataset name').fill(WORLD_CUP_DATASET);
+  await page.getByRole('button', { name: 'Save dataset (1)' }).click();
+  await expect(page.getByTestId(`dataset-${WORLD_CUP_DATASET}`)).toBeVisible();
   await expect(page.getByText(/PostgreSQL · 1 entities/)).toBeVisible();
 }
 
@@ -62,7 +62,7 @@ export async function createWorldCupSession(page: Page): Promise<string> {
   await expect(page.getByPlaceholder('My new session')).toBeVisible();
   await page.getByPlaceholder('My new session').fill(WORLD_CUP_SESSION);
   await page
-    .getByRole('button', { name: new RegExp(WORLD_CUP_SANDBOX) })
+    .getByRole('button', { name: new RegExp(WORLD_CUP_DATASET) })
     .click();
   await page.getByRole('button', { name: /^Create$/ }).click();
 
@@ -82,6 +82,6 @@ export async function createWorldCupSession(page: Page): Promise<string> {
 
 export async function createWorldCupWorkspace(page: Page): Promise<string> {
   await createWorldCupDatasource(page);
-  await createWorldCupSandbox(page);
+  await createWorldCupDataset(page);
   return createWorldCupSession(page);
 }

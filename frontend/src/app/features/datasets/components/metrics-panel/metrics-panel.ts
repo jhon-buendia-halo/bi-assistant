@@ -25,7 +25,7 @@ import {
 import { ToastService } from '../../../../core/toast/toast.service';
 
 /**
- * Curated metric definitions for the entities included in the sandbox being
+ * Curated metric definitions for the entities included in the dataset being
  * edited. One definition per business number, reused verbatim by the
  * assistant, so "denial rate" means the same thing in every answer.
  */
@@ -47,7 +47,7 @@ export class MetricsPanel {
   private readonly api = inject(MetricsApiService);
   private readonly toast = inject(ToastService);
 
-  /** Fully-qualified entities currently included in the sandbox. */
+  /** Fully-qualified entities currently included in the dataset. */
   readonly entities = input<string[]>([]);
   readonly datasourceId = input<string | null>(null);
 
@@ -88,7 +88,7 @@ export class MetricsPanel {
   });
 
   constructor() {
-    // The sandbox selection drives the scope: re-read whenever it changes.
+    // The dataset selection drives the scope: re-read whenever it changes.
     effect(() => this.load(this.entities()));
   }
 

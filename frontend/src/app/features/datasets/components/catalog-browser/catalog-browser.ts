@@ -32,12 +32,12 @@ import {
   SchemaInfo,
   TableInfo,
 } from '../../../datasources/models/datasource.model';
-import { SandboxSelectionService } from '../../services/sandbox-selection.service';
+import { DatasetSelectionService } from '../../services/dataset-selection.service';
 import {
   InclusionState,
-  SandboxInclusionService,
-} from '../../services/sandbox-inclusion.service';
-import { Sandbox, SandboxApiService } from '../../services/sandbox-api.service';
+  DatasetInclusionService,
+} from '../../services/dataset-inclusion.service';
+import { Dataset, DatasetsApiService } from '../../services/datasets-api.service';
 import { MetricsPanel } from '../metrics-panel/metrics-panel';
 import { ToastService } from '../../../../core/toast/toast.service';
 
@@ -62,9 +62,9 @@ export class CatalogBrowser implements OnInit, OnDestroy {
   readonly X = X;
 
   private readonly api = inject(DatasourcesApiService);
-  private readonly selectionService = inject(SandboxSelectionService);
-  private readonly inclusionService = inject(SandboxInclusionService);
-  private readonly sandboxApi = inject(SandboxApiService);
+  private readonly selectionService = inject(DatasetSelectionService);
+  private readonly inclusionService = inject(DatasetInclusionService);
+  private readonly datasetApi = inject(DatasetsApiService);
   private readonly toast = inject(ToastService);
 
   readonly loading = signal(true);
@@ -117,10 +117,10 @@ export class CatalogBrowser implements OnInit, OnDestroy {
     return result;
   });
   readonly saving = signal(false);
-  readonly sandboxName = signal('');
+  readonly datasetName = signal('');
   readonly saved = output<void>();
-  /** When set, the browser opens in edit mode with this sandbox's data. */
-  readonly initial = input<Sandbox | null>(null);
+  /** When set, the browser opens in edit mode with this dataset's data. */
+  readonly initial = input<Dataset | null>(null);
   readonly selectedDatasource = computed(
     () => this.datasources().find((d) => d.id === this.datasourceId()) ?? null,
   );
@@ -150,10 +150,10 @@ export class CatalogBrowser implements OnInit, OnDestroy {
     const editing = this.initial();
     if (editing) {
       // Edit mode — prefill the name and the included entities.
-      this.sandboxName.set(editing.name);
+      this.datasetName.set(editing.name);
       this.inclusionService.included.set(new Set(editing.tables));
     } else {
-      // A new sandbox starts with a clean selection.
+      // A new dataset starts with a clean selection.
       this.inclusionService.included.set(new Set());
     }
     this.api.list().subscribe({
@@ -176,7 +176,7 @@ export class CatalogBrowser implements OnInit, OnDestroy {
           this.inclusionService.included.set(new Set());
           this.selectionService.clear();
           this.toast.error(
-            'The sandbox datasource is no longer available. Choose entities from another datasource.',
+            'The dataset datasource is no longer available. Choose entities from another datasource.',
           );
         }
         this.datasourceId.set(selected.id);
@@ -370,11 +370,11 @@ export class CatalogBrowser implements OnInit, OnDestroy {
     );
   }
 
-  saveSandbox(): void {
+  saveDataset(): void {
     if (this.saving()) return;
-    const name = this.sandboxName().trim();
+    const name = this.datasetName().trim();
     if (!name) {
-      this.toast.error('Give the sandbox a name first');
+      this.toast.error('Give the dataset a name first');
       return;
     }
     this.saving.set(true);
@@ -399,8 +399,8 @@ export class CatalogBrowser implements OnInit, OnDestroy {
       this.toast.error('Select a datasource first');
       return;
     }
-    this.sandboxApi
-      .createSandbox(name, Array.from(included), entities, {
+    this.datasetApi
+      .createDataset(name, Array.from(included), entities, {
         id: datasource.id,
         kind: datasource.kind,
       })

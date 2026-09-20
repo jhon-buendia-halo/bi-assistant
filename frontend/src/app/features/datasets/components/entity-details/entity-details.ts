@@ -7,8 +7,8 @@ import {
   FolderTree,
   Table2,
 } from 'lucide-angular';
-import { SandboxSelectionService } from '../../services/sandbox-selection.service';
-import { SandboxInclusionService } from '../../services/sandbox-inclusion.service';
+import { DatasetSelectionService } from '../../services/dataset-selection.service';
+import { DatasetInclusionService } from '../../services/dataset-inclusion.service';
 import { ToastService } from '../../../../core/toast/toast.service';
 
 @Component({
@@ -24,8 +24,8 @@ export class EntityDetails {
   readonly FolderTree = FolderTree;
   readonly Table2 = Table2;
 
-  private readonly selectionService = inject(SandboxSelectionService);
-  private readonly inclusionService = inject(SandboxInclusionService);
+  private readonly selectionService = inject(DatasetSelectionService);
+  private readonly inclusionService = inject(DatasetInclusionService);
   private readonly toast = inject(ToastService);
 
   readonly selection = this.selectionService.selection;

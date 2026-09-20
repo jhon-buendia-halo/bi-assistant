@@ -129,13 +129,13 @@
         >
           <button
             (click)="
-              mainView.set(mainView() === 'sandbox' ? 'home' : 'sandbox')
+              mainView.set(mainView() === 'dataset' ? 'home' : 'dataset')
             "
             class="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
-            [class.option-active]="mainView() === 'sandbox'"
+            [class.option-active]="mainView() === 'dataset'"
           >
             <lucide-angular [img]="FlaskConical" [size]="15" />
-            <span>Data Sandbox</span>
+            <span>Datasets</span>
           </button>
         </nav>
 
@@ -332,20 +332,20 @@
         <div class="flex flex-1 justify-center overflow-y-auto px-6 py-10">
           <app-llm-config class="w-full max-w-[480px]" />
         </div>
-      } @else if (mainView() === "sandbox") {
+      } @else if (mainView() === "dataset") {
         <div class="flex flex-1 justify-center overflow-y-auto px-8 py-10">
-          <app-sandbox-list
+          <app-dataset-list
             class="w-full max-w-[960px]"
-            (newSandbox)="openSandboxEditor(null)"
-            (openSandbox)="openSandboxEditor($event)"
+            (newDataset)="openDatasetEditor(null)"
+            (openDataset)="openDatasetEditor($event)"
           />
         </div>
-      } @else if (mainView() === "sandbox-new") {
+      } @else if (mainView() === "dataset-new") {
         <div class="flex flex-1 justify-center overflow-y-auto px-8 py-10">
           <app-catalog-browser
             class="w-full max-w-[960px]"
-            [initial]="editingSandbox()"
-            (saved)="mainView.set('sandbox')"
+            [initial]="editingDataset()"
+            (saved)="mainView.set('dataset')"
           />
         </div>
       } @else if (mainView() === "session-chat" && activeSession()) {
@@ -426,10 +426,10 @@
                   (click)="createSession()"
                   [disabled]="
                     creatingSession() ||
-                    selectedSandboxes().size === 0 ||
+                    selectedDatasets().size === 0 ||
                     composerName().trim() === ''
                   "
-                  title="Name the session and select at least one sandbox"
+                  title="Name the session and select at least one dataset"
                   class="flex items-center gap-1.5 rounded-lg bg-zinc-200 px-3.5 py-2 text-[13px] font-medium text-zinc-900 hover:bg-white disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
                 >
                   @if (creatingSession()) {
@@ -443,29 +443,29 @@
             </div>
           </div>
 
-          <!-- Sandbox selection: the session needs at least one -->
+          <!-- Dataset selection: the session needs at least one -->
           <div class="mt-8 w-full max-w-[920px]">
             <p class="text-[12px] text-zinc-500">
-              Select at least one sandbox for this session
+              Select at least one dataset for this session
             </p>
-            @if (composerSandboxes().length === 0) {
+            @if (composerDatasets().length === 0) {
               <p class="mt-3 text-[13px] text-zinc-500">
-                No sandboxes yet — create one in Data Sandbox first.
+                No datasets yet — create one in Datasets first.
               </p>
             } @else {
               <div class="mt-2 flex flex-col gap-1">
-                @for (sandbox of composerSandboxes(); track sandbox.name) {
+                @for (dataset of composerDatasets(); track dataset.name) {
                   <button
-                    (click)="toggleSandboxSelection(sandbox.name)"
+                    (click)="toggleDatasetSelection(dataset.name)"
                     class="flex items-center gap-3 rounded-xl border px-3 py-2.5 text-left hover:bg-white/5"
                     [class.border-emerald-500/40]="
-                      selectedSandboxes().has(sandbox.name)
+                      selectedDatasets().has(dataset.name)
                     "
                     [class.bg-emerald-500/5]="
-                      selectedSandboxes().has(sandbox.name)
+                      selectedDatasets().has(dataset.name)
                     "
                     [class.border-white/10]="
-                      !selectedSandboxes().has(sandbox.name)
+                      !selectedDatasets().has(dataset.name)
                     "
                   >
                     <span
@@ -474,12 +474,12 @@
                       <lucide-angular [img]="Workflow" [size]="15" />
                     </span>
                     <span class="truncate text-[13px] text-zinc-200">{{
-                      sandbox.name
+                      dataset.name
                     }}</span>
                     <span class="text-[12px] text-zinc-500"
-                      >{{ sandbox.tables.length }} entities</span
+                      >{{ dataset.tables.length }} entities</span
                     >
-                    @if (selectedSandboxes().has(sandbox.name)) {
+                    @if (selectedDatasets().has(dataset.name)) {
                       <lucide-angular
                         [img]="CircleCheck"
                         [size]="16"

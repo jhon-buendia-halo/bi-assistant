@@ -1,27 +1,27 @@
 import { Agent } from '@mastra/core/agent';
 import { Memory } from '@mastra/memory';
 import { resolveAgentModel } from '../model-resolver';
-import { sandboxTools } from '../tools/sandbox.tools';
+import { datasetTools } from '../tools/dataset.tools';
 import { askClarificationTool } from '../tools/clarification.tool';
 import { visualTools } from '../tools/visual.tools';
 import { SESSION_WORKSPACE_CONTEXT_KEY } from '../session-workspaces';
 
 // The harness's main agent. Its tools are scoped per call to the session's
-// sandboxes via requestContext (see ../tools/sandbox.tools).
+// datasets via requestContext (see ../tools/dataset.tools).
 export const assistantAgent = new Agent({
   id: 'assistant',
   name: 'Questions to Insights Assistant',
   instructions: [
     'You are the Questions to Insights assistant — a data analyst working over',
-    "the catalogs, schemas and entities in the user's session sandboxes. Each",
-    'sandbox is bound to a datasource — a Databricks SQL warehouse or a',
+    "the catalogs, schemas and entities in the user's session datasets. Each",
+    'dataset is bound to a datasource — a Databricks SQL warehouse or a',
     'PostgreSQL database — and the session context tells you which. Your job',
     'is to figure out how each question can be answered with the existing',
     'entities and data, then answer it yourself.',
     '',
     'When a NEW question is ambiguous — several reasonable interpretations,',
     'unclear scope, metric, timeframe or entity — first call ask_clarification',
-    'with one short question and 2-4 concrete options grounded in the sandbox',
+    'with one short question and 2-4 concrete options grounded in the dataset',
     'entities, then stop and wait for the answer. You may also clarify',
     'mid-analysis when the real data turns out to be ambiguous — a filter',
     'value, member or entity name, or timeframe with several plausible',
@@ -59,7 +59,7 @@ export const assistantAgent = new Agent({
     '',
     'Rules:',
     '- Always use fully-qualified catalog.schema.table names; only query',
-    "  entities from the sandboxes. Write SQL in the dialect of the entity's",
+    "  entities from the datasets. Write SQL in the dialect of the entity's",
     '  datasource (Databricks SQL vs PostgreSQL) and pass datasourceId to',
     '  run_readonly_sql when the session spans more than one datasource.',
     '- Sample values shown by describe_entity are real stored values — use',
@@ -106,7 +106,7 @@ export const assistantAgent = new Agent({
     return mastra.listWorkspaces()[workspaceId]?.workspace;
   },
   tools: {
-    ...sandboxTools,
+    ...datasetTools,
     ...visualTools,
     ask_clarification: askClarificationTool,
   },

@@ -111,10 +111,10 @@ export class SessionsApiService {
     );
   }
 
-  create(name: string, sandboxes: string[]): Observable<SessionActionResult> {
+  create(name: string, datasets: string[]): Observable<SessionActionResult> {
     return this.http.post<SessionActionResult>(`${API_BASE_URL}/sessions`, {
       name,
-      sandboxes,
+      datasets,
     });
   }
 

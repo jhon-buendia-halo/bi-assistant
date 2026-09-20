@@ -1,63 +1,63 @@
 [
   {
     "name": "pass-accuracy-by-team",
-    "sandbox": "World Cup",
+    "dataset": "World Cup",
     "notes": "Healthy ratio over two genuinely different measures. The regression this guards: an answer that divided a sum by itself reported a perfect rate for every row. A correct answer here must divide completed passes by ATTEMPTED passes, so the rates differ per team.",
     "question": "Which three teams completed the highest share of their attempted passes across all matches?",
     "expectedSql": "SELECT t.common_name, SUM(s.passes_completed)::numeric / SUM(s.passes_attempted) AS pass_accuracy FROM world_cup.match_team_statistics s JOIN world_cup.teams t ON t.id = s.team_id GROUP BY t.common_name ORDER BY pass_accuracy DESC, t.common_name LIMIT 3"
   },
   {
     "name": "shot-accuracy-by-team",
-    "sandbox": "World Cup",
+    "dataset": "World Cup",
     "notes": "Second two-measure ratio, on a different column pair, so a fix that special-cases passes does not pass this one.",
     "question": "Which three teams put the highest share of their shots on target?",
     "expectedSql": "SELECT t.common_name, SUM(s.shots_on_target)::numeric / SUM(s.shots) AS shot_accuracy FROM world_cup.match_team_statistics s JOIN world_cup.teams t ON t.id = s.team_id GROUP BY t.common_name ORDER BY shot_accuracy DESC, t.common_name LIMIT 3"
   },
   {
     "name": "top-scoring-team",
-    "sandbox": "World Cup",
+    "dataset": "World Cup",
     "notes": "Unambiguous ranking: France lead on 14 with no tie at the top, so a correct answer cannot be a coin toss.",
     "question": "Which team scored the most goals in total?",
     "expectedSql": "SELECT t.common_name, COUNT(*) AS goals FROM world_cup.goals g JOIN world_cup.teams t ON t.id = g.scoring_team_id GROUP BY t.common_name ORDER BY goals DESC, t.common_name LIMIT 1"
   },
   {
     "name": "teams-tied-on-four-goals",
-    "sandbox": "World Cup",
+    "dataset": "World Cup",
     "notes": "Ties are real here — Belgium and England both scored 4, and four more teams tie on 2. A 'top 5 scorers' answer would have to break that tie arbitrarily; asking for the tie explicitly makes the expected result deterministic.",
     "question": "Which teams scored exactly four goals in total?",
     "expectedSql": "SELECT t.common_name, COUNT(*) AS goals FROM world_cup.goals g JOIN world_cup.teams t ON t.id = g.scoring_team_id GROUP BY t.common_name HAVING COUNT(*) = 4 ORDER BY t.common_name"
   },
   {
     "name": "card-types-recorded",
-    "sandbox": "World Cup",
+    "dataset": "World Cup",
     "notes": "Every card in the data is a yellow, so any 'share that were yellow' metric is 1 on every row — the constant-metric trap. The honest answer states that only yellows were recorded rather than reporting a meaningless 100%.",
     "question": "What types of disciplinary cards were recorded, and how many of each?",
     "expectedSql": "SELECT card_type, COUNT(*) AS cards FROM world_cup.disciplinary_events GROUP BY card_type ORDER BY cards DESC, card_type"
   },
   {
     "name": "goals-with-recorded-assist",
-    "sandbox": "World Cup",
+    "dataset": "World Cup",
     "notes": "Assists are recorded on only 2 of 47 goals, so grouping by assisting player buries 45 goals under a blank key. A correct answer counts the goals that HAVE an assist rather than silently presenting the blank group as a finding.",
     "question": "How many goals have a recorded assisting player?",
     "expectedSql": "SELECT COUNT(*) AS goals_with_assist FROM world_cup.goals WHERE assist_player_id IS NOT NULL"
   },
   {
     "name": "goals-by-type",
-    "sandbox": "World Cup",
+    "dataset": "World Cup",
     "notes": "Categorical breakdown with no ratio and no nulls — a control. If this fails, the problem is schema linking, not the guards.",
     "question": "How many goals were scored of each goal type?",
     "expectedSql": "SELECT goal_type, COUNT(*) AS goals FROM world_cup.goals GROUP BY goal_type ORDER BY goals DESC, goal_type"
   },
   {
     "name": "attendance-by-tournament",
-    "sandbox": "World Cup",
+    "dataset": "World Cup",
     "notes": "Plain aggregate over a join — the healthy baseline. Guards must stay silent on this one.",
     "question": "What was the total match attendance for each tournament year?",
     "expectedSql": "SELECT tr.tournament_year, SUM(m.attendance) AS total_attendance FROM world_cup.matches m JOIN world_cup.tournaments tr ON tr.id = m.tournament_id GROUP BY tr.tournament_year ORDER BY tr.tournament_year"
   },
   {
     "name": "matches-by-stage",
-    "sandbox": "World Cup",
+    "dataset": "World Cup",
     "notes": "Ties at the bottom (final and third_place both 2) — a 'least common stage' phrasing would be ambiguous, so the question asks for the full breakdown.",
     "question": "How many matches were played at each stage of the tournaments?",
     "expectedSql": "SELECT stage, COUNT(*) AS matches FROM world_cup.matches GROUP BY stage ORDER BY matches DESC, stage"

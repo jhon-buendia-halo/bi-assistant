@@ -133,7 +133,7 @@ describe('PostgresConnector foreignKeys', () => {
     ]);
   });
 
-  it('drops edges whose other end is not in the sandbox', async () => {
+  it('drops edges whose other end is not in the dataset', async () => {
     respond = () => [
       fkRow('goals', 'match_id', 'matches'),
       fkRow('goals', 'scorer_player_id', 'players'),

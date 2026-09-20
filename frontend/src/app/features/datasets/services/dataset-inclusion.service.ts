@@ -3,17 +3,17 @@ import {
   CatalogInfo,
   SchemaInfo,
 } from '../../datasources/models/datasource.model';
-import { SandboxSelection } from './sandbox-selection.service';
+import { DatasetSelection } from './dataset-selection.service';
 
 export type InclusionState = 'none' | 'partial' | 'full';
 
 /**
- * Entities included in the sandbox, tracked as fully-qualified table keys
+ * Entities included in the dataset, tracked as fully-qualified table keys
  * (`catalog.schema.table`). Including a catalog/schema includes everything
  * underneath it; catalog/schema indicators are derived (full/partial/none).
  */
 @Injectable({ providedIn: 'root' })
-export class SandboxInclusionService {
+export class DatasetInclusionService {
   readonly included = signal<Set<string>>(new Set());
 
   tableKey(catalog: string, schema: string, table: string): string {
@@ -44,7 +44,7 @@ export class SandboxInclusionService {
     return states.some((s) => s !== 'none') ? 'partial' : 'none';
   }
 
-  selectionState(sel: SandboxSelection): InclusionState {
+  selectionState(sel: DatasetSelection): InclusionState {
     if (sel.kind === 'catalog') return this.catalogState(sel.catalog);
     if (sel.kind === 'schema')
       return this.schemaState(sel.catalogName, sel.schema);
@@ -53,16 +53,16 @@ export class SandboxInclusionService {
       : 'none';
   }
 
-  include(sel: SandboxSelection): void {
+  include(sel: DatasetSelection): void {
     this.mutate(sel, (set, key) => set.add(key));
   }
 
-  remove(sel: SandboxSelection): void {
+  remove(sel: DatasetSelection): void {
     this.mutate(sel, (set, key) => set.delete(key));
   }
 
   private mutate(
-    sel: SandboxSelection,
+    sel: DatasetSelection,
     apply: (set: Set<string>, key: string) => unknown,
   ): void {
     const next = new Set(this.included());

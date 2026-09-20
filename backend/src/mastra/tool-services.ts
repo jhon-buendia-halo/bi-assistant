@@ -2,15 +2,15 @@
 // constructed at module load with no Nest DI, so SessionsService installs the
 // real implementations at boot.
 
-/** Column snapshot as stored on a sandbox (mirrors `SandboxEntitySnapshot`). */
-export interface SandboxColumnSnapshot {
+/** Column snapshot as stored on a dataset (mirrors `DatasetEntitySnapshot`). */
+export interface DatasetColumnSnapshot {
   name: string;
   type: string;
   nullable: boolean;
   /** Real values observed at save time — schema linking / value matching. */
   sampleValues?: string[];
   description?: string;
-  /** Join target for a key column — see SandboxColumnSnapshot in the repository. */
+  /** Join target for a key column — see DatasetColumnSnapshot in the repository. */
   references?: {
     entity: string;
     column: string;
@@ -18,14 +18,14 @@ export interface SandboxColumnSnapshot {
   };
 }
 
-export interface SandboxSnapshot {
+export interface DatasetSnapshot {
   name: string;
   datasourceId?: string;
   datasourceKind?: 'databricks' | 'postgres';
   tables: string[];
   entities?: {
     key: string;
-    columns: SandboxColumnSnapshot[];
+    columns: DatasetColumnSnapshot[];
   }[];
 }
 
@@ -53,10 +53,10 @@ export interface VisualToolResult {
 
 /**
  * Mirrors `ToolDataRecord` (backend/src/modules/sessions/entities) without
- * importing it — same pattern as `SandboxSnapshot`/`SqlRunResult`: this file
+ * importing it — same pattern as `DatasetSnapshot`/`SqlRunResult`: this file
  * has no Nest DI and must stay decoupled from feature-module types.
  */
-export interface SandboxToolTurnRecord {
+export interface DatasetToolTurnRecord {
   tool: string;
   input?: string;
   columns?: string[];
@@ -67,7 +67,7 @@ export interface SandboxToolTurnRecord {
   rationale?: string;
 }
 
-export interface SandboxToolServices {
+export interface DatasetToolServices {
   /**
    * Create a visual for an answer in the session (latest answer if omitted).
    * `turnRecords`, when present, are the SQL/rows the current chat turn has
@@ -78,7 +78,7 @@ export interface SandboxToolServices {
     sessionId: string,
     sourceMessageAt: string | undefined,
     instruction: string | undefined,
-    turnRecords?: SandboxToolTurnRecord[],
+    turnRecords?: DatasetToolTurnRecord[],
   ): Promise<VisualToolResult>;
   /**
    * Produce a new version of an existing visual from a tailoring request.
@@ -89,35 +89,35 @@ export interface SandboxToolServices {
     sessionId: string,
     visualId: string,
     instruction: string,
-    turnRecords?: SandboxToolTurnRecord[],
+    turnRecords?: DatasetToolTurnRecord[],
   ): Promise<VisualToolResult>;
-  getSandboxes(names: string[]): Promise<SandboxSnapshot[]>;
+  getDatasets(names: string[]): Promise<DatasetSnapshot[]>;
   sampleRows(
     datasourceId: string,
     entity: string,
     limit: number,
   ): Promise<{ columns: string[]; rows: Record<string, unknown>[] }>;
   /**
-   * Runs the statement and repairs it on execution errors — `sandboxes` names
-   * the sandboxes whose schema the fixer may draw on.
+   * Runs the statement and repairs it on execution errors — `datasets` names
+   * the datasets whose schema the fixer may draw on.
    */
   runReadOnlySql(
     datasourceId: string,
     sql: string,
     limit: number,
-    sandboxes: string[],
+    datasets: string[],
   ): Promise<SqlRunResult>;
 }
 
-let services: SandboxToolServices | null = null;
+let services: DatasetToolServices | null = null;
 
-export function setSandboxToolServices(impl: SandboxToolServices): void {
+export function setDatasetToolServices(impl: DatasetToolServices): void {
   services = impl;
 }
 
-export function getSandboxToolServices(): SandboxToolServices {
+export function getDatasetToolServices(): DatasetToolServices {
   if (!services) {
-    throw new Error('Sandbox tool services not installed yet');
+    throw new Error('Dataset tool services not installed yet');
   }
   return services;
 }

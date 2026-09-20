@@ -121,7 +121,7 @@ describe('SessionsApiService streaming', () => {
     const session = {
       id: 'session-1',
       name: 'Analysis',
-      sandboxes: ['sandbox'],
+      datasets: ['dataset'],
       messages: [],
     };
     spyOn(globalThis, 'fetch').and.resolveTo(

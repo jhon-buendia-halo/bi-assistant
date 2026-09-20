@@ -175,7 +175,7 @@ export class PostgresConnector implements DatasourceConnector<PostgresConfig> {
         for (const row of result.rows) {
           const from = `${config.database}.${row.from_schema}.${row.from_table}`;
           const to = `${config.database}.${row.to_schema}.${row.to_table}`;
-          // Both ends must be in the sandbox, otherwise the hint points at a
+          // Both ends must be in the dataset, otherwise the hint points at a
           // table the model cannot query.
           if (!wanted.has(from.toLowerCase())) continue;
           if (!wanted.has(to.toLowerCase())) continue;

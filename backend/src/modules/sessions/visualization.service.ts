@@ -14,7 +14,7 @@ import {
   interactiveVisualOutputSchema,
   specVisualOutputSchema,
 } from '../../mastra/agents/visualization.agent';
-import { getSandboxToolServices } from '../../mastra/tool-services';
+import { getDatasetToolServices } from '../../mastra/tool-services';
 import {
   ChartDataRecord,
   FRAME_SCRIPT_FILENAME,
@@ -279,7 +279,7 @@ export class VisualizationService {
   }
 
   /**
-   * Regenerate the current version after it failed in the sandbox (thrown
+   * Regenerate the current version after it failed in the dataset (thrown
    * error or blank render) and store the fix as a new version. Silent: the
    * caller records no chat event, the version history carries the trail.
    *
@@ -726,8 +726,8 @@ export class VisualizationService {
               ? `Your previous spec was rejected: ${feedback.message}. Return a corrected spec that only names columns present in the <data> block.`
               : feedback.kind === 'runtime'
                 ? spec
-                  ? `The visual rendered from the current spec failed in the sandbox: ${feedback.message}. Return a corrected spec that shows the same thing.`
-                  : `Your previous code failed at runtime in the sandbox: ${feedback.message}. Return corrected, complete code that renders the same visual.`
+                  ? `The visual rendered from the current spec failed in the dataset: ${feedback.message}. Return a corrected spec that shows the same thing.`
+                  : `Your previous code failed at runtime in the dataset: ${feedback.message}. Return corrected, complete code that renders the same visual.`
                 : `Your previous JavaScript failed to parse: ${feedback.message}. Return corrected, complete code.`,
             '</previous-attempt-error>',
           ]
@@ -956,17 +956,17 @@ export class VisualizationService {
       answer?.data ??
       [];
 
-    const sandboxes = await getSandboxToolServices().getSandboxes(
-      session.sandboxes,
+    const datasets = await getDatasetToolServices().getDatasets(
+      session.datasets,
     );
     const datasourceIds = new Set(
-      sandboxes
+      datasets
         .map((s) => s.datasourceId)
         .filter((value): value is string => !!value),
     );
     const datasourceError =
       datasourceIds.size === 0
-        ? "No datasource is bound to this session's sandboxes"
+        ? "No datasource is bound to this session's datasets"
         : datasourceIds.size > 1
           ? 'Several datasources are in scope for this session; refresh is not supported'
           : undefined;
@@ -992,11 +992,11 @@ export class VisualizationService {
           };
         }
         try {
-          const result = await getSandboxToolServices().runReadOnlySql(
+          const result = await getDatasetToolServices().runReadOnlySql(
             datasourceId,
             record.input,
             REFRESH_ROW_LIMIT,
-            session.sandboxes,
+            session.datasets,
           );
           const rows = result.rows ?? [];
           const columns = result.columns?.length

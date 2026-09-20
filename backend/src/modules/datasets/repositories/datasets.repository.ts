@@ -1,21 +1,21 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { SANDBOX_SELECTIONS_STORE } from '../../../infrastructure/database/doc-store';
+import { DATASETS_STORE } from '../../../infrastructure/database/doc-store';
 import type { DocStore } from '../../../infrastructure/database/doc-store';
 
-export interface SandboxColumnSnapshot {
+export interface DatasetColumnSnapshot {
   name: string;
   type: string;
   nullable: boolean;
   /**
    * Distinct values observed in a save-time sample. Lets the assistant match
    * user phrasing to the values actually stored (the #1 NL2SQL error class)
-   * without a live round-trip. Absent on sandboxes saved before enrichment.
+   * without a live round-trip. Absent on datasets saved before enrichment.
    */
   sampleValues?: string[];
   /** Catalog comment for the column, when the datasource exposes one. */
   description?: string;
   /**
-   * Where this column joins, when it is a key into another sandbox entity.
+   * Where this column joins, when it is a key into another dataset entity.
    * The model is otherwise told which columns exist but never which one joins
    * to which, and guesses — writing `goals.team_id` for `goals.scoring_team_id`.
    * `declared` comes from the datasource's own constraints, `inferred` from
@@ -28,15 +28,15 @@ export interface SandboxColumnSnapshot {
   };
 }
 
-export interface SandboxEntitySnapshot {
+export interface DatasetEntitySnapshot {
   /** Fully-qualified `catalog.schema.table`. */
   key: string;
-  columns: SandboxColumnSnapshot[];
+  columns: DatasetColumnSnapshot[];
 }
 
-export interface SandboxDoc {
+export interface DatasetDoc {
   name: string;
-  /** Datasource the entities belong to (absent on pre-datasource sandboxes). */
+  /** Datasource the entities belong to (absent on pre-datasource datasets). */
   datasourceId?: string;
   datasourceKind?: 'databricks' | 'postgres';
   /** Fully-qualified included entities: `catalog.schema.table`. */
@@ -45,20 +45,20 @@ export interface SandboxDoc {
    * Schema snapshot taken at save time so agent context building and
    * describe_entity don't need a live datasource round-trip.
    */
-  entities?: SandboxEntitySnapshot[];
+  entities?: DatasetEntitySnapshot[];
   createdAt?: string;
   updatedAt?: string;
 }
 
-/** Named sandboxes, upserted by name. */
+/** Named datasets, upserted by name. */
 @Injectable()
-export class SandboxRepository {
+export class DatasetsRepository {
   constructor(
-    @Inject(SANDBOX_SELECTIONS_STORE)
-    private readonly store: DocStore<SandboxDoc>,
+    @Inject(DATASETS_STORE)
+    private readonly store: DocStore<DatasetDoc>,
   ) {}
 
-  list(): Promise<SandboxDoc[]> {
+  list(): Promise<DatasetDoc[]> {
     // `$exists` filter skips legacy single-selection docs in the same table.
     return this.store.find(
       { name: { $exists: true } },
@@ -69,9 +69,9 @@ export class SandboxRepository {
   save(
     name: string,
     tables: string[],
-    entities: SandboxEntitySnapshot[],
+    entities: DatasetEntitySnapshot[],
     datasource?: { id: string; kind: 'databricks' | 'postgres' },
-  ): Promise<SandboxDoc | null> {
+  ): Promise<DatasetDoc | null> {
     return this.store.update(
       { name },
       {
@@ -86,7 +86,7 @@ export class SandboxRepository {
     );
   }
 
-  getByNames(names: string[]): Promise<SandboxDoc[]> {
+  getByNames(names: string[]): Promise<DatasetDoc[]> {
     return this.list().then((all) => all.filter((s) => names.includes(s.name)));
   }
 

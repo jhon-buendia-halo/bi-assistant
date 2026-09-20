@@ -1,12 +1,12 @@
 import { inferRelationships } from './relationships';
 import type { ForeignKeyEdge } from './relationships';
-import type { SandboxEntitySnapshot } from './repositories/sandbox.repository';
+import type { DatasetEntitySnapshot } from './repositories/datasets.repository';
 
 /**
  * Column DSL: `name` is non-nullable, `name?` is nullable. Types are irrelevant
  * to inference (it reads names only) so they are left uniform.
  */
-function entity(table: string, ...columns: string[]): SandboxEntitySnapshot {
+function entity(table: string, ...columns: string[]): DatasetEntitySnapshot {
   return {
     key: `world_cup.world_cup.${table}`,
     columns: columns.map((spec) => ({
@@ -18,7 +18,7 @@ function entity(table: string, ...columns: string[]): SandboxEntitySnapshot {
 }
 
 /** Column order and nullability mirror `docker/postgres/init/001_world_cup.sql`. */
-const WORLD_CUP: SandboxEntitySnapshot[] = [
+const WORLD_CUP: DatasetEntitySnapshot[] = [
   entity('confederations', 'code', 'name'),
   entity('countries', 'code', 'name', 'confederation_code'),
   entity('teams', 'id', 'country_code', 'common_name', 'fifa_code'),
@@ -117,7 +117,7 @@ const WORLD_CUP: SandboxEntitySnapshot[] = [
   ),
 ];
 
-const byTable = (table: string): SandboxEntitySnapshot => {
+const byTable = (table: string): DatasetEntitySnapshot => {
   const found = WORLD_CUP.find((e) => e.key.endsWith(`.${table}`));
   if (!found) throw new Error(`fixture has no table ${table}`);
   return found;
@@ -129,7 +129,7 @@ const render = (edge: ForeignKeyEdge): string =>
     .split('.')
     .pop()}.${edge.to.column}`;
 
-const rendered = (entities: SandboxEntitySnapshot[]): string[] =>
+const rendered = (entities: DatasetEntitySnapshot[]): string[] =>
   inferRelationships(entities).map(render).sort();
 
 /**
@@ -259,8 +259,8 @@ describe('inferRelationships — no false positives', () => {
     expect(sources).not.toContain('expected_goals');
   });
 
-  it('emits nothing when the target tables are outside the sandbox', () => {
-    // A sandbox of one table has nothing to join to; hinting at `matches` the
+  it('emits nothing when the target tables are outside the dataset', () => {
+    // A dataset of one table has nothing to join to; hinting at `matches` the
     // user did not include would produce SQL against an inaccessible table.
     expect(inferRelationships([byTable('goals')])).toEqual([]);
   });
@@ -275,7 +275,7 @@ describe('inferRelationships — no false positives', () => {
   });
 
   it('drops a self-referential name instead of pointing a table at itself', () => {
-    const teams: SandboxEntitySnapshot = {
+    const teams: DatasetEntitySnapshot = {
       key: 'wc.wc.teams',
       columns: [
         { name: 'team_id', type: 'bigint', nullable: false },
@@ -287,7 +287,7 @@ describe('inferRelationships — no false positives', () => {
 
   it('drops an ambiguous table name', () => {
     // Two schemas expose `orders`; `order_id` cannot be resolved to either.
-    const entities: SandboxEntitySnapshot[] = [
+    const entities: DatasetEntitySnapshot[] = [
       {
         key: 'sales.public.orders',
         columns: [{ name: 'id', type: 'bigint', nullable: false }],
@@ -308,11 +308,11 @@ describe('inferRelationships — no false positives', () => {
   });
 
   it('emits nothing when the target table has no usable key column', () => {
-    const teams: SandboxEntitySnapshot = {
+    const teams: DatasetEntitySnapshot = {
       key: 'wc.wc.teams',
       columns: [], // snapshot captured before enrichment
     };
-    const goals: SandboxEntitySnapshot = {
+    const goals: DatasetEntitySnapshot = {
       key: 'wc.wc.goals',
       columns: [{ name: 'team_id', type: 'bigint', nullable: false }],
     };
@@ -322,14 +322,14 @@ describe('inferRelationships — no false positives', () => {
 
 describe('inferRelationships — shared column names', () => {
   /** `member_profiles` is keyed `member_id`; no table is called `members`. */
-  const memberProfiles: SandboxEntitySnapshot = {
+  const memberProfiles: DatasetEntitySnapshot = {
     key: 'lake.hr.member_profiles',
     columns: [
       { name: 'member_id', type: 'bigint', nullable: false },
       { name: 'full_name', type: 'string', nullable: false },
     ],
   };
-  const claims: SandboxEntitySnapshot = {
+  const claims: DatasetEntitySnapshot = {
     key: 'lake.hr.claims',
     columns: [
       { name: 'id', type: 'bigint', nullable: false },
@@ -345,7 +345,7 @@ describe('inferRelationships — shared column names', () => {
   });
 
   it('emits nothing when two tables are plausibly keyed by the same name', () => {
-    const memberAccounts: SandboxEntitySnapshot = {
+    const memberAccounts: DatasetEntitySnapshot = {
       key: 'lake.hr.member_accounts',
       columns: [
         { name: 'member_id', type: 'bigint', nullable: false },
@@ -358,7 +358,7 @@ describe('inferRelationships — shared column names', () => {
   });
 
   it('ignores a nullable same-named column as a key candidate', () => {
-    const nullableKey: SandboxEntitySnapshot = {
+    const nullableKey: DatasetEntitySnapshot = {
       key: 'lake.hr.member_notes',
       columns: [
         { name: 'member_id', type: 'bigint', nullable: true },
@@ -369,21 +369,21 @@ describe('inferRelationships — shared column names', () => {
   });
 
   it('lets the table-name rule win when the two rules disagree', () => {
-    const teams: SandboxEntitySnapshot = {
+    const teams: DatasetEntitySnapshot = {
       key: 'wc.wc.teams',
       columns: [
         { name: 'id', type: 'bigint', nullable: false },
         { name: 'name', type: 'text', nullable: false },
       ],
     };
-    const teamProfiles: SandboxEntitySnapshot = {
+    const teamProfiles: DatasetEntitySnapshot = {
       key: 'wc.wc.team_profiles',
       columns: [
         { name: 'team_id', type: 'bigint', nullable: false },
         { name: 'nickname', type: 'text', nullable: false },
       ],
     };
-    const goals: SandboxEntitySnapshot = {
+    const goals: DatasetEntitySnapshot = {
       key: 'wc.wc.goals',
       columns: [
         { name: 'id', type: 'bigint', nullable: false },
@@ -400,14 +400,14 @@ describe('inferRelationships — shared column names', () => {
 
 describe('inferRelationships — robustness', () => {
   it('matches case-insensitively and preserves the original casing', () => {
-    const members: SandboxEntitySnapshot = {
+    const members: DatasetEntitySnapshot = {
       key: 'WAREHOUSE.PUBLIC.Members',
       columns: [
         { name: 'ID', type: 'NUMBER', nullable: false },
         { name: 'FULL_NAME', type: 'VARCHAR', nullable: false },
       ],
     };
-    const claims: SandboxEntitySnapshot = {
+    const claims: DatasetEntitySnapshot = {
       key: 'WAREHOUSE.PUBLIC.Claims',
       columns: [
         { name: 'ID', type: 'NUMBER', nullable: false },
@@ -423,7 +423,7 @@ describe('inferRelationships — robustness', () => {
   });
 
   it('handles mixed-case irregular plurals', () => {
-    const entities: SandboxEntitySnapshot[] = [
+    const entities: DatasetEntitySnapshot[] = [
       {
         key: 'DW.Sport.Matches',
         columns: [{ name: 'Id', type: 'bigint', nullable: false }],
@@ -459,7 +459,7 @@ describe('inferRelationships — robustness', () => {
   });
 
   it('tolerates malformed entity keys without throwing', () => {
-    const entities: SandboxEntitySnapshot[] = [
+    const entities: DatasetEntitySnapshot[] = [
       { key: '', columns: [{ name: 'id', type: 'bigint', nullable: false }] },
       {
         key: 'a..b.',

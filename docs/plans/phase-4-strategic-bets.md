@@ -26,14 +26,14 @@ Genie-style curated semantics, app-managed (no dependency on Unity Catalog Metri
   }
   ```
 - CRUD controller `GET/POST /metrics`, `PUT /metrics/:id`, `DELETE /metrics/:id` (validate: name slug-like + unique, entity + expression non-empty; response `{ok, message, metric?/metrics?}`).
-- **Prompt grounding**: in `SessionsService.agentOptions`, load metrics whose `entity` is in the session's sandbox entities; when any exist, append a system block:
+- **Prompt grounding**: in `SessionsService.agentOptions`, load metrics whose `entity` is in the session's dataset entities; when any exist, append a system block:
   `Governed metric definitions (curated — ALWAYS prefer these exact expressions when the question asks for the metric):` then per metric: `- <label> (<name>) on <entity>: <expression>; dimensions: <…>; <description>`. Cap ~4k chars.
 - **Promotion path**: `POST /metrics/from-verified/:verifiedQueryId` — creates a prefilled draft `MetricDoc` from a verified query (entity from its entities[0], expression left for the user to edit; return the draft WITHOUT saving? No — save with label "(review)" suffix? Keep simple: endpoint takes a full MetricDoc body plus the verified id for provenance and saves it; the prefill happens client-side from the verified query data).
   Simplification allowed: skip `/from-verified` endpoint; frontend prefills the create form from a verified query where visible. Implementer's choice — note the decision.
-- Tests: repository/service CRUD + validation, agentOptions injection (metrics scoped to sandbox entities only).
+- Tests: repository/service CRUD + validation, agentOptions injection (metrics scoped to dataset entities only).
 
 ### Frontend
-- Metrics management UI inside the `data-sandbox` feature (agent: locate the sandbox page/components, match idiom): a "Metrics" section/panel listing metrics for the selected entities, create/edit form (label, name, entity select from sandbox entities, expression textarea, dimensions multi-input, description), delete with confirm. New `metrics-api.service.ts` + models in that feature.
+- Metrics management UI inside the `datasets` feature (agent: locate the dataset page/components, match idiom): a "Metrics" section/panel listing metrics for the selected entities, create/edit form (label, name, entity select from dataset entities, expression textarea, dimensions multi-input, description), delete with confirm. New `metrics-api.service.ts` + models in that feature.
 - Keep styling consistent (Tailwind v4, lucide, zinc/emerald idioms).
 
 ## Workstream D — Item 16: Multi-visual (composed) answers

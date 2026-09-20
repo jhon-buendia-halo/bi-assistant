@@ -17,9 +17,9 @@ SQL repair loop.
 
 1. Boots the backend as a Nest standalone application context
    (`NestFactory.createApplicationContext(AppModule)`) — no HTTP server.
-2. Fails fast if no LLM is configured, or if a case's sandbox / datasource is
+2. Fails fast if no LLM is configured, or if a case's dataset / datasource is
    missing or unreachable (it runs `SELECT 1` as a smoke test).
-3. For each case: creates a **throwaway session** bound to the case's sandbox,
+3. For each case: creates a **throwaway session** bound to the case's dataset,
    sends the question through `SessionsService.streamMessage` with a no-op
    emitter, and reads the persisted assistant message — its final text plus the
    last successful `run_readonly_sql` record.
@@ -75,8 +75,8 @@ docker compose up -d            # from the repo root; postgres on localhost:5543
 
 Then, in the app: add a PostgreSQL datasource (host `localhost`, port `55432`,
 database `world_cup`, user `world_cup`, password `world_cup_dev`), build a
-sandbox over the `world_cup` schema and save it as **`World Cup`** — the name
-every case's `sandbox` field expects.
+dataset over the `world_cup` schema and save it as **`World Cup`** — the name
+every case's `dataset` field expects.
 
 Each case exists to catch a specific way an answer goes wrong:
 
@@ -101,7 +101,7 @@ you something is wrong, not what.
 
 The harness reads the same SQLite datastore as the desktop app, so it needs a
 datastore that already contains an LLM configuration, a datasource and the
-sandbox each case names.
+dataset each case names.
 
 - **Datastore location**: `APP_DATA_DIR` (defaults to `backend/data`). The
   Electron app stores everything under its `userData` folder, so to evaluate
@@ -112,7 +112,7 @@ sandbox each case names.
 - **LLM**: settings saved in the app (Settings → LLM). Without saved settings the
   harness accepts an `OPENAI_API_KEY` env var and the `gpt-4o-mini` fallback;
   with neither, it stops with a clear message.
-- **Datasource / sandbox**: each case's `sandbox` must exist in that datastore
+- **Datasource / dataset**: each case's `dataset` must exist in that datastore
   and resolve to a reachable datasource.
 
 Every case spends real tokens and runs real warehouse queries — keep the set small.
@@ -141,7 +141,7 @@ Env: `EVAL_ROW_LIMIT` (default 500 — the connector cap), `EVAL_TIMEOUT_MS`
 ```json
 {
   "name": "denial-rate-by-plan",
-  "sandbox": "health-claims",
+  "dataset": "health-claims",
   "question": "What is the claim denial rate for each plan?",
   "expectedSql": "SELECT m.plan_name, COUNT_IF(c.claim_status = 'DENIED') / COUNT(*) AS denial_rate FROM main.health_claims.claims c JOIN main.health_claims.members m ON c.member_id = m.member_id GROUP BY m.plan_name"
 }
@@ -150,7 +150,7 @@ Env: `EVAL_ROW_LIMIT` (default 500 — the connector cap), `EVAL_TIMEOUT_MS`
 | Field         | Notes                                                                                                                                  |
 | ------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | `name`        | Unique, hyphenated; shown in the summary and matched by `--only`.                                                                      |
-| `sandbox`     | Name of a saved sandbox — the throwaway session is bound to it.                                                                        |
+| `dataset`     | Name of a saved dataset — the throwaway session is bound to it.                                                                        |
 | `question`    | Exactly what a user would type. Keep it unambiguous, or the assistant will ask a clarifying question and the case fails with `no-sql`. |
 | `expectedSql` | Read-only `SELECT`/`WITH`, single statement, hand-verified against the data.                                                           |
 | `placeholder` | Optional. `true` → skipped by default (used by the shipped examples).                                                                  |
@@ -168,6 +168,6 @@ Guidelines:
   exactly the same way — otherwise the case rots.
 
 The five entries shipped here are **placeholders** for the health-claims demo
-dataset (`"placeholder": true`, `REPLACE_WITH_SANDBOX_NAME`). Replace the
-sandbox name and SQL with your dataset's, drop the `placeholder` flag, and the
+dataset (`"placeholder": true`, `REPLACE_WITH_DATASET_NAME`). Replace the
+dataset name and SQL with your dataset's, drop the `placeholder` flag, and the
 case goes live.

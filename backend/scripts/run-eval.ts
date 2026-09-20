@@ -28,7 +28,7 @@ import type {
   SessionDoc,
   ToolDataRecord,
 } from '../src/modules/sessions/entities/session.entity';
-import { SandboxRepository } from '../src/modules/sandbox/repositories/sandbox.repository';
+import { DatasetsRepository } from '../src/modules/datasets/repositories/datasets.repository';
 
 // Connectors clamp `runReadOnlySql` at 500 rows, so comparing more is moot.
 const ROW_LIMIT = Number(process.env.EVAL_ROW_LIMIT ?? 500);
@@ -40,8 +40,8 @@ interface GoldenCase {
   name: string;
   /** The question sent to the assistant, exactly as a user would type it. */
   question: string;
-  /** Saved sandbox name the throwaway session is bound to. */
-  sandbox: string;
+  /** Saved dataset name the throwaway session is bound to. */
+  dataset: string;
   /** Trusted SQL whose live result set is the reference answer. */
   expectedSql: string;
   /** Seed entries ship as placeholders; they are skipped unless forced. */
@@ -150,7 +150,7 @@ function loadGoldenSet(file: string): GoldenCase[] {
     for (const field of [
       'name',
       'question',
-      'sandbox',
+      'dataset',
       'expectedSql',
     ] as const) {
       if (typeof value[field] !== 'string' || !value[field]!.trim()) {
@@ -190,25 +190,25 @@ function lastSuccessfulSql(
 // ------------------------------------------------------------- runtime
 
 async function resolveDatasourceId(
-  sandboxes: SandboxRepository,
+  datasets: DatasetsRepository,
   datasources: DatasourcesService,
   name: string,
 ): Promise<string> {
-  const [sandbox] = await sandboxes.getByNames([name]);
-  if (!sandbox) {
-    const saved = (await sandboxes.list()).map((s) => s.name);
+  const [dataset] = await datasets.getByNames([name]);
+  if (!dataset) {
+    const saved = (await datasets.list()).map((s) => s.name);
     throw new EvalSetupError(
-      `Sandbox "${name}" does not exist in this datastore. ` +
+      `Dataset "${name}" does not exist in this datastore. ` +
         (saved.length
-          ? `Saved sandboxes: ${saved.join(', ')}.`
-          : 'No sandboxes are saved — create one in the app first.'),
+          ? `Saved datasets: ${saved.join(', ')}.`
+          : 'No datasets are saved — create one in the app first.'),
     );
   }
   const datasourceId =
-    sandbox.datasourceId ?? (await datasources.defaultDatasource())?.id;
+    dataset.datasourceId ?? (await datasources.defaultDatasource())?.id;
   if (!datasourceId) {
     throw new EvalSetupError(
-      `Sandbox "${name}" has no datasource bound and no datasource is saved — ` +
+      `Dataset "${name}" has no datasource bound and no datasource is saved — ` +
         'configure a connection in the app first.',
     );
   }
@@ -228,12 +228,12 @@ async function preflight(
     );
   }
 
-  const sandboxes = app.get(SandboxRepository);
+  const datasets = app.get(DatasetsRepository);
   const datasources = app.get(DatasourcesService);
   const byName = new Map<string, string>();
-  for (const name of new Set(cases.map((c) => c.sandbox))) {
+  for (const name of new Set(cases.map((c) => c.dataset))) {
     const datasourceId = await resolveDatasourceId(
-      sandboxes,
+      datasets,
       datasources,
       name,
     );
@@ -241,7 +241,7 @@ async function preflight(
       await datasources.runReadOnlySql(datasourceId, 'SELECT 1', 1);
     } catch (error) {
       throw new EvalSetupError(
-        `Datasource for sandbox "${name}" is not reachable — ${message(error)}`,
+        `Datasource for dataset "${name}" is not reachable — ${message(error)}`,
       );
     }
     byName.set(name, datasourceId);
@@ -268,7 +268,7 @@ async function runCase(
 
   const session = await sessions.create(
     `eval ${testCase.name} ${new Date().toISOString()}`.slice(0, 64),
-    [testCase.sandbox],
+    [testCase.dataset],
   );
   try {
     const turn = new AbortController();
@@ -442,7 +442,7 @@ async function main(): Promise<number> {
   if (!runnable.length) {
     throw new EvalSetupError(
       `Every selected case in ${options.file} is still a placeholder. ` +
-        'Point the cases at a real sandbox, replace `expectedSql` with trusted ' +
+        'Point the cases at a real dataset, replace `expectedSql` with trusted ' +
         'SQL, drop the `"placeholder": true` flag (see eval/README.md), or pass ' +
         '--include-placeholders to run them anyway.',
     );
@@ -464,7 +464,7 @@ async function main(): Promise<number> {
       const result = await runCase(
         app,
         testCase,
-        datasourceIds.get(testCase.sandbox)!,
+        datasourceIds.get(testCase.dataset)!,
         options,
       );
       results.push(result);

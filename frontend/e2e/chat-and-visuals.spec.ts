@@ -2,7 +2,7 @@ import { Page } from '@playwright/test';
 import { test, expect } from './fixtures/electron.fixture';
 import {
   WORLD_CUP_SESSION,
-  WORLD_CUP_SANDBOX,
+  WORLD_CUP_DATASET,
   createWorldCupWorkspace,
 } from './helpers/app-actions';
 
@@ -13,7 +13,7 @@ async function installDeterministicChatStream(
   sessionId: string,
 ): Promise<void> {
   await page.evaluate(
-    ({ id, sessionName, sandboxName, answerAt }) => {
+    ({ id, sessionName, datasetName, answerAt }) => {
       const originalFetch = window.fetch.bind(window);
       window.fetch = async (input, init) => {
         const url =
@@ -76,7 +76,7 @@ async function installDeterministicChatStream(
                       session: {
                         id,
                         name: sessionName,
-                        sandboxes: [sandboxName],
+                        datasets: [datasetName],
                         messages: [
                           {
                             role: 'user',
@@ -132,7 +132,7 @@ async function installDeterministicChatStream(
     {
       id: sessionId,
       sessionName: WORLD_CUP_SESSION,
-      sandboxName: WORLD_CUP_SANDBOX,
+      datasetName: WORLD_CUP_DATASET,
       answerAt: assistantMessageAt,
     },
   );
@@ -208,7 +208,7 @@ test('renders a deterministic interactive visualization and its version controls
         session: {
           id: sessionId,
           name: WORLD_CUP_SESSION,
-          sandboxes: [WORLD_CUP_SANDBOX],
+          datasets: [WORLD_CUP_DATASET],
           messages: [],
           visualizations: [metadata],
         },

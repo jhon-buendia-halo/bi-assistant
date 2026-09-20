@@ -2,10 +2,10 @@ jest.mock('../datasources/datasources.service', () => ({
   DatasourcesService: class {},
 }));
 
-import { SandboxService, withSampleValues } from './sandbox.service';
-import type { SandboxEntitySnapshot } from './repositories/sandbox.repository';
+import { DatasetsService, withSampleValues } from './datasets.service';
+import type { DatasetEntitySnapshot } from './repositories/datasets.repository';
 
-const claims: SandboxEntitySnapshot = {
+const claims: DatasetEntitySnapshot = {
   key: 'main.health.claims',
   columns: [
     { name: 'status', type: 'string', nullable: false },
@@ -28,18 +28,18 @@ function build(sampleRows: jest.Mock) {
     sampleRows,
   };
   return {
-    service: new SandboxService(repository as never, datasources as never),
+    service: new DatasetsService(repository as never, datasources as never),
     repository,
     datasources,
   };
 }
 
-/** The snapshots handed to `SandboxRepository.save` on its first call. */
+/** The snapshots handed to `DatasetsRepository.save` on its first call. */
 function savedEntities(repository: {
   save: jest.Mock;
-}): SandboxEntitySnapshot[] {
+}): DatasetEntitySnapshot[] {
   const calls = repository.save.mock.calls as unknown[][];
-  return calls[0][2] as SandboxEntitySnapshot[];
+  return calls[0][2] as DatasetEntitySnapshot[];
 }
 
 describe('withSampleValues', () => {
@@ -84,7 +84,7 @@ describe('withSampleValues', () => {
   });
 });
 
-describe('SandboxService.save', () => {
+describe('DatasetsService.save', () => {
   it('enriches every included entity before persisting', async () => {
     const sampleRows = jest
       .fn()

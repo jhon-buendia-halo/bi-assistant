@@ -43,14 +43,14 @@ jest.mock('./visual-runtime', () => ({
 }));
 jest.mock('./zip-archive', () => ({ createZip: jest.fn() }));
 jest.mock('../../mastra/tool-services', () => ({
-  getSandboxToolServices: jest.fn(),
+  getDatasetToolServices: jest.fn(),
 }));
 
 import {
   sandboxedVisualizationDocument,
   storedVisualizationDocument,
 } from './visualization-document';
-import { getSandboxToolServices } from '../../mastra/tool-services';
+import { getDatasetToolServices } from '../../mastra/tool-services';
 import { createZip } from './zip-archive';
 import {
   VisualizationService,
@@ -97,7 +97,7 @@ function sessionWithRows(stored: number, rowCount: number): SessionDoc {
   return {
     id: 'session-1',
     name: 'Claims',
-    sandboxes: ['claims'],
+    datasets: ['claims'],
     visualizations: [],
     messages: [
       {
@@ -713,8 +713,8 @@ describe('VisualizationService spec pipeline', () => {
 
     it('refreshes data without a designer call, keeping the spec in the document', async () => {
       const { service, agent, filesystem } = buildWithStoredSpec();
-      (getSandboxToolServices as jest.Mock).mockReturnValue({
-        getSandboxes: jest.fn().mockResolvedValue([
+      (getDatasetToolServices as jest.Mock).mockReturnValue({
+        getDatasets: jest.fn().mockResolvedValue([
           {
             name: 'claims',
             datasourceId: 'ds-1',
@@ -813,7 +813,7 @@ describe('VisualizationService.repair', () => {
     const prompt = (agent.generate.mock.calls as unknown[][])[0][0] as string;
     expect(prompt).toContain('<previous-attempt-error>');
     expect(prompt).toContain(
-      'Your previous code failed at runtime in the sandbox',
+      'Your previous code failed at runtime in the dataset',
     );
     expect(prompt).toContain("reading 'appendChild'");
     expect(prompt).toContain('renders the same visual');
@@ -899,7 +899,7 @@ describe('VisualizationService.repair', () => {
 });
 
 describe('VisualizationService.refreshData', () => {
-  const sandbox = {
+  const dataset = {
     name: 'claims',
     datasourceId: 'ds-1',
     datasourceKind: 'databricks' as const,
@@ -914,7 +914,7 @@ describe('VisualizationService.refreshData', () => {
   beforeEach(() => {
     (storedVisualizationDocument as jest.Mock).mockClear();
     (sandboxedVisualizationDocument as jest.Mock).mockClear();
-    (getSandboxToolServices as jest.Mock).mockReset();
+    (getDatasetToolServices as jest.Mock).mockReset();
   });
 
   it('re-runs the stored SQL through the same executor the query tool uses', async () => {
@@ -923,8 +923,8 @@ describe('VisualizationService.refreshData', () => {
       columns: ['month', 'n'],
       rows: [{ month: 1, n: 111 }],
     });
-    (getSandboxToolServices as jest.Mock).mockReturnValue({
-      getSandboxes: jest.fn().mockResolvedValue([sandbox]),
+    (getDatasetToolServices as jest.Mock).mockReturnValue({
+      getDatasets: jest.fn().mockResolvedValue([dataset]),
       runReadOnlySql,
     });
 
@@ -935,7 +935,7 @@ describe('VisualizationService.refreshData', () => {
       'ds-1',
       'SELECT month, n FROM main.health.claims',
       expect.any(Number),
-      session.sandboxes,
+      session.datasets,
     );
     // Same version, no new entry appended to the version history.
     expect(metadata.currentVersion).toBe(1);
@@ -966,8 +966,8 @@ describe('VisualizationService.refreshData', () => {
   it('stores an error on a record whose re-run fails without aborting others', async () => {
     const { service, filesystem } = buildNoStoredData();
     const runReadOnlySql = jest.fn().mockRejectedValue(new Error('timed out'));
-    (getSandboxToolServices as jest.Mock).mockReturnValue({
-      getSandboxes: jest.fn().mockResolvedValue([sandbox]),
+    (getDatasetToolServices as jest.Mock).mockReturnValue({
+      getDatasets: jest.fn().mockResolvedValue([dataset]),
       runReadOnlySql,
     });
 
@@ -986,8 +986,8 @@ describe('VisualizationService.refreshData', () => {
   it('leaves records without a SQL statement untouched', async () => {
     const { service, filesystem } = buildNoStoredData();
     const runReadOnlySql = jest.fn();
-    (getSandboxToolServices as jest.Mock).mockReturnValue({
-      getSandboxes: jest.fn().mockResolvedValue([sandbox]),
+    (getDatasetToolServices as jest.Mock).mockReturnValue({
+      getDatasets: jest.fn().mockResolvedValue([dataset]),
       runReadOnlySql,
     });
 

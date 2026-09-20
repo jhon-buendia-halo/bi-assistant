@@ -5,12 +5,12 @@ import {
   WORLD_CUP_DATASOURCE,
   WORLD_CUP_SESSION,
   createWorldCupDatasource,
-  createWorldCupSandbox,
+  createWorldCupDataset,
   createWorldCupWorkspace,
   openDatasourceSettings,
 } from './helpers/app-actions';
 
-test('creates a PostgreSQL datasource, sandbox, and session using the real World Cup database', async ({
+test('creates a PostgreSQL datasource, dataset, and session using the real World Cup database', async ({
   page,
 }) => {
   await createWorldCupWorkspace(page);
@@ -86,13 +86,13 @@ test('surfaces a failed connection in both the form and system diagnostics', asy
   );
 });
 
-test('shows the real catalog schema and column metadata before a sandbox is saved', async ({
+test('shows the real catalog schema and column metadata before a dataset is saved', async ({
   page,
 }) => {
   await createWorldCupDatasource(page);
-  await createWorldCupSandbox(page);
+  await createWorldCupDataset(page);
 
-  await page.getByTestId('sandbox-World Cup Core').click();
+  await page.getByTestId('dataset-World Cup Core').click();
   await page.getByTestId('catalog-world_cup').click();
   await page.getByTestId('schema-world_cup-world_cup').click();
   await page.getByTestId('table-world_cup-world_cup-goals').click();
