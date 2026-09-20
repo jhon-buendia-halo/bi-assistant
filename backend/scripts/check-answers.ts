@@ -52,7 +52,7 @@ import { WORLD_CUP_CONNECTION, worldCupReachable } from '../test/world-cup';
 const TURN_TIMEOUT_MS = Number(process.env.CHECK_TIMEOUT_MS ?? 180_000);
 /** `run_readonly_sql` defaults to 100 rows; the guards judge truncation against the same cap. */
 const ROW_LIMIT = 100;
-const SANDBOX_NAME = 'World Cup';
+const DATASET_NAME = 'World Cup';
 /** The cheapest model that still routes tools — and the one the ratio bug shipped on. */
 const MODEL = process.env.CHECK_MODEL ?? 'gpt-4o-mini';
 /** Free-text label for the configuration under test, echoed so output is self-describing. */
@@ -267,7 +267,7 @@ const CHECKS: Check[] = [
 // ------------------------------------------------------------ provisioning
 
 /**
- * Write the LLM settings, the Postgres datasource and the sandbox into the
+ * Write the LLM settings, the Postgres datasource and the dataset into the
  * throwaway datastore. Nothing here may reach the developer's real app.sqlite,
  * which is why `main` redirects APP_DATA_DIR before the first Nest import.
  */
@@ -279,14 +279,14 @@ async function provision(
     require('../src/modules/llm/llm.service') as typeof import('../src/modules/llm/llm.service');
   const { DatasourcesService } =
     require('../src/modules/datasources/datasources.service') as typeof import('../src/modules/datasources/datasources.service');
-  const { SandboxService } =
-    require('../src/modules/sandbox/sandbox.service') as typeof import('../src/modules/sandbox/sandbox.service');
+  const { DatasetsService } =
+    require('../src/modules/datasets/datasets.service') as typeof import('../src/modules/datasets/datasets.service');
 
   await app.get(LlmService).save({ provider: 'openai', model: MODEL, apiKey });
 
   const datasources = app.get(DatasourcesService);
   const datasource = await datasources.save({
-    name: SANDBOX_NAME,
+    name: DATASET_NAME,
     kind: 'postgres',
     config: {
       host: WORLD_CUP_CONNECTION.host,
@@ -323,8 +323,8 @@ async function provision(
     );
   }
 
-  await app.get(SandboxService).save({
-    name: SANDBOX_NAME,
+  await app.get(DatasetsService).save({
+    name: DATASET_NAME,
     tables: entities.map((entity) => entity.key),
     entities,
     datasourceId: datasource.id,
@@ -347,7 +347,7 @@ async function ask(
   const sessions = app.get(SessionsService);
   const session = await sessions.create(
     `check-answers ${new Date().toISOString()}`.slice(0, 64),
-    [SANDBOX_NAME],
+    [DATASET_NAME],
   );
   try {
     const turn = new AbortController();
@@ -680,7 +680,7 @@ async function main(): Promise<number> {
   // they are first imported, so APP_DATA_DIR has to be redirected before the
   // first Nest import. Static imports are hoisted above this statement, hence
   // the deferred `require` below: without it these checks would write their LLM
-  // settings, datasource and sandbox into the developer's real app.sqlite.
+  // settings, datasource and dataset into the developer's real app.sqlite.
   const dataDir = mkdtempSync(join(tmpdir(), 'qti-llm-e2e-'));
   process.env.APP_DATA_DIR = dataDir;
   const { AppModule } =
@@ -692,7 +692,7 @@ async function main(): Promise<number> {
   const perTrial: CheckResult[][] = [];
   try {
     // Provisioned once and reused by every trial: the settings, datasource and
-    // sandbox are the arm under test, so re-creating them per trial would both
+    // dataset are the arm under test, so re-creating them per trial would both
     // waste inventory round-trips and let the arm drift mid-experiment.
     await provision(app, apiKey);
     console.log(

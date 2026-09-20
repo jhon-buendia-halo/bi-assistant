@@ -5,7 +5,7 @@ import {
   TableInfo,
 } from '../../datasources/models/datasource.model';
 
-export type SandboxSelection =
+export type DatasetSelection =
   | { kind: 'catalog'; catalog: CatalogInfo }
   | { kind: 'schema'; catalogName: string; schema: SchemaInfo }
   | {
@@ -17,10 +17,10 @@ export type SandboxSelection =
 
 /** Currently selected datasource element, shown in the right panel. */
 @Injectable({ providedIn: 'root' })
-export class SandboxSelectionService {
-  readonly selection = signal<SandboxSelection | null>(null);
+export class DatasetSelectionService {
+  readonly selection = signal<DatasetSelection | null>(null);
 
-  select(selection: SandboxSelection): void {
+  select(selection: DatasetSelection): void {
     this.selection.set(selection);
   }
 

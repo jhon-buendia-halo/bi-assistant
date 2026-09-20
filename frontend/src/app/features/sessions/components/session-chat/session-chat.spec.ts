@@ -16,7 +16,7 @@ function sessionWith(message: ChatMessage): Session {
   return {
     id: 'session-1',
     name: 'Session 1',
-    sandboxes: [],
+    datasets: [],
     messages: [{ role: 'user', content: 'Ask', at: '2026-01-01T00:00:00.000Z' }, message],
   };
 }
@@ -332,7 +332,7 @@ describe('SessionChat deep analysis', () => {
     fixture.componentRef.setInput('session', {
       id: 'session-1',
       name: 'Session 1',
-      sandboxes: [],
+      datasets: [],
       messages,
     } satisfies Session);
     fixture.detectChanges();
@@ -389,7 +389,7 @@ describe('SessionChat deep analysis', () => {
       of({
         id: 'session-1',
         name: 'Session 1',
-        sandboxes: [],
+        datasets: [],
         messages: [reportMessage],
       } satisfies Session),
     );

@@ -12,7 +12,7 @@ Today `run_readonly_sql` returns `{error}` and retrying is only a prompt suggest
 - In `SessionsService.onModuleInit` bridge (`sessions.service.ts:65-66`), wrap `runReadOnlySql`: on execution **error** (not on empty results), call the fixer with sql+error+dialect+schema of entities in scope, re-run, max 2 repair attempts. On success after repair, return `{ columns, rows, correctedSql, note: 'original query failed and was auto-corrected' }` so the agent cites the SQL that actually ran. On final failure return the last error.
 - Empty result set: return `{ columns, rows: [], note: 'query returned 0 rows — verify filters/values before concluding' }` (no LLM call).
 - `ToolDataRecord.input` must show the corrected SQL when repair happened (adjust `toolDataRecord` in `sessions.service.ts` if needed).
-- Schema context for the fixer: reuse `boundSandboxes` for the session — pass entity keys + columns (names/types only, cap the block ~4k chars).
+- Schema context for the fixer: reuse `boundDatasets` for the session — pass entity keys + columns (names/types only, cap the block ~4k chars).
 
 ### Item 2 (backend): Verified query library
 
@@ -42,11 +42,11 @@ Vanna pattern: store thumbs-up question→SQL pairs, retrieve top-k into the pro
 
 Attacks the #1 NL2SQL error class (schema linking / value matching — Genie value dictionaries pattern).
 
-- Extend `SandboxEntitySnapshot['columns']` items with `sampleValues?: string[]` and `description?: string` (`sandbox.repository.ts`; mirror in `SandboxSnapshot` in `mastra/tool-services.ts`).
-- Enrichment at sandbox save: in `SandboxController.create` (or a small `SandboxService` if cleaner), after validating the datasource, for each table fetch up to 50 rows via `DatasourcesService.sampleRows` and derive per column up to 5 distinct sample values (stringified, each truncated to 40 chars; skip columns that look high-cardinality-unique like ids — keep it simple: just take first 5 distincts). Best effort per table: enrichment failure must not fail the save (log + continue). Do tables concurrently with a small limit (e.g. 4 at a time).
+- Extend `DatasetEntitySnapshot['columns']` items with `sampleValues?: string[]` and `description?: string` (`datasets.repository.ts`; mirror in `DatasetSnapshot` in `mastra/tool-services.ts`).
+- Enrichment at dataset save: in `DatasetsController.create` (or a small `DatasetsService` if cleaner), after validating the datasource, for each table fetch up to 50 rows via `DatasourcesService.sampleRows` and derive per column up to 5 distinct sample values (stringified, each truncated to 40 chars; skip columns that look high-cardinality-unique like ids — keep it simple: just take first 5 distincts). Best effort per table: enrichment failure must not fail the save (log + continue). Do tables concurrently with a small limit (e.g. 4 at a time).
 - If the Databricks inventory cache already stores column comments (check `datasources.service.ts` / `databricks.connector.ts` / `inventory-cache.repository`), merge them into `description`. If not present, skip — do NOT add new catalog round-trips.
 - Surface: `describe_entity` returns the enriched columns (it already returns `access.columns` — just include new fields). Also add one line to the assistant instructions (`assistant.agent.ts`): sample values shown by describe_entity reflect real stored values — use them to match user phrasing to data values.
-- Existing sandboxes: no backfill; they enrich on next re-save. Note this in the PR description.
+- Existing datasets: no backfill; they enrich on next re-save. Note this in the PR description.
 
 ## Workstream B — Frontend feedback UI (item 2-frontend)
 
@@ -59,10 +59,10 @@ Contract fixed by Workstream A: `POST /sessions/:id/messages/feedback` `{ messag
 
 ## Workstream C — Golden-set eval harness (item 4)
 
-- `backend/eval/golden-set.json`: array of `{ name, question, sandbox, expectedSql }` — `expectedSql` is trusted SQL whose live result is the reference. Seed with 3-5 example entries marked clearly as placeholders for the demo dataset (health-claims style), plus a README (`backend/eval/README.md`) explaining how to add cases.
+- `backend/eval/golden-set.json`: array of `{ name, question, dataset, expectedSql }` — `expectedSql` is trusted SQL whose live result is the reference. Seed with 3-5 example entries marked clearly as placeholders for the demo dataset (health-claims style), plus a README (`backend/eval/README.md`) explaining how to add cases.
 - `backend/scripts/run-eval.ts` (`npm run eval`, script in `backend/package.json`, run with ts-node or compiled — match how other backend scripts run; if none exist, use `tsx`/`ts-node` dev dependency consistent with repo tooling): 
   1. Boots a Nest standalone application context (`NestFactory.createApplicationContext(AppModule)`) — no HTTP needed.
-  2. For each case: create a throwaway session bound to `sandbox`, call `SessionsService.streamMessage` with a no-op `send`, then read the persisted assistant message: final text + last successful `run_readonly_sql` record.
+  2. For each case: create a throwaway session bound to `dataset`, call `SessionsService.streamMessage` with a no-op `send`, then read the persisted assistant message: final text + last successful `run_readonly_sql` record.
   3. Run `expectedSql` via `DatasourcesService.runReadOnlySql` on the same datasource.
   4. Compare result sets: unordered row multiset compare after normalizing (numbers to 6 sig figs, strings trimmed, column order ignored by matching on values when column names differ). Verdicts: PASS / FAIL(result-mismatch) / FAIL(no-sql) / ERROR.
   5. Delete the throwaway session. Print a summary table + exit code 1 on any FAIL (so it can gate CI later).

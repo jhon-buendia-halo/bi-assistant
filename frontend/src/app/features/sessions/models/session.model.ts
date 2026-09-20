@@ -154,7 +154,7 @@ export interface Session {
   id: string;
   name: string;
   workspaceId?: string;
-  sandboxes: string[];
+  datasets: string[];
   messages: ChatMessage[];
   visualizations?: SessionVisualization[];
   createdAt?: string;

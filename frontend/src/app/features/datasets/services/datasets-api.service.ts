@@ -3,41 +3,41 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { API_BASE_URL } from '../../../core/config/api.config';
 
-export interface SandboxEntitySnapshot {
+export interface DatasetEntitySnapshot {
   key: string;
   columns: { name: string; type: string; nullable: boolean }[];
 }
 
-export interface Sandbox {
+export interface Dataset {
   name: string;
   datasourceId?: string;
   datasourceKind?: 'databricks' | 'postgres';
   tables: string[];
-  entities?: SandboxEntitySnapshot[];
+  entities?: DatasetEntitySnapshot[];
   createdAt?: string;
   updatedAt?: string;
 }
 
-export interface SandboxActionResult {
+export interface DatasetActionResult {
   ok: boolean;
   message: string;
 }
 
 @Injectable({ providedIn: 'root' })
-export class SandboxApiService {
+export class DatasetsApiService {
   private readonly http = inject(HttpClient);
 
-  getSandboxes(): Observable<{ sandboxes: Sandbox[] }> {
-    return this.http.get<{ sandboxes: Sandbox[] }>(`${API_BASE_URL}/sandbox`);
+  getDatasets(): Observable<{ datasets: Dataset[] }> {
+    return this.http.get<{ datasets: Dataset[] }>(`${API_BASE_URL}/datasets`);
   }
 
-  createSandbox(
+  createDataset(
     name: string,
     tables: string[],
-    entities: SandboxEntitySnapshot[],
+    entities: DatasetEntitySnapshot[],
     datasource: { id: string; kind: 'databricks' | 'postgres' },
-  ): Observable<SandboxActionResult> {
-    return this.http.post<SandboxActionResult>(`${API_BASE_URL}/sandbox`, {
+  ): Observable<DatasetActionResult> {
+    return this.http.post<DatasetActionResult>(`${API_BASE_URL}/datasets`, {
       name,
       tables,
       entities,
@@ -46,9 +46,9 @@ export class SandboxApiService {
     });
   }
 
-  deleteSandbox(name: string): Observable<SandboxActionResult> {
-    return this.http.delete<SandboxActionResult>(
-      `${API_BASE_URL}/sandbox/${encodeURIComponent(name)}`,
+  deleteDataset(name: string): Observable<DatasetActionResult> {
+    return this.http.delete<DatasetActionResult>(
+      `${API_BASE_URL}/datasets/${encodeURIComponent(name)}`,
     );
   }
 }

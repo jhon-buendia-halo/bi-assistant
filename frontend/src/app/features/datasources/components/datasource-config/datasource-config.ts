@@ -226,7 +226,7 @@ export class DatasourceConfig implements OnInit {
   remove(datasource: Datasource): void {
     if (this.deleting()) return;
     const confirmed = window.confirm(
-      `Delete datasource “${datasource.name}”?\n\nSandboxes bound to it will stop working until re-saved against another datasource.`,
+      `Delete datasource “${datasource.name}”?\n\nDatasets bound to it will stop working until re-saved against another datasource.`,
     );
     if (!confirmed) return;
     this.deleting.set(datasource.id);

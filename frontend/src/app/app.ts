@@ -35,18 +35,18 @@ import {
 } from './features/datasources/models/datasource.model';
 import { DatasourcesApiService } from './features/datasources/services/datasources-api.service';
 import { LlmConfig } from './features/llm/components/llm-config/llm-config';
-import { SandboxList } from './features/data-sandbox/components/sandbox-list/sandbox-list';
-import { CatalogBrowser } from './features/data-sandbox/components/catalog-browser/catalog-browser';
-import { EntityDetails } from './features/data-sandbox/components/entity-details/entity-details';
-import { SandboxSelectionService } from './features/data-sandbox/services/sandbox-selection.service';
+import { DatasetList } from './features/datasets/components/dataset-list/dataset-list';
+import { CatalogBrowser } from './features/datasets/components/catalog-browser/catalog-browser';
+import { EntityDetails } from './features/datasets/components/entity-details/entity-details';
+import { DatasetSelectionService } from './features/datasets/services/dataset-selection.service';
 import { AppLogo } from './shared/components/app-logo/app-logo';
 import { ToastContainer } from './shared/components/toast-container/toast-container';
 import { SystemLogsPanel } from './shared/components/system-logs-panel/system-logs-panel';
 import { DiagnosticsService } from './core/diagnostics/diagnostics.service';
 import {
-  Sandbox,
-  SandboxApiService,
-} from './features/data-sandbox/services/sandbox-api.service';
+  Dataset,
+  DatasetsApiService,
+} from './features/datasets/services/datasets-api.service';
 import { LlmApiService } from './features/llm/services/llm-api.service';
 import { SessionsApiService } from './features/sessions/services/sessions-api.service';
 import { SessionChat } from './features/sessions/components/session-chat/session-chat';
@@ -65,7 +65,7 @@ import { ToastService } from './core/toast/toast.service';
 
 type SettingsSection = 'datasources' | 'llm' | null;
 type MainView =
-  'home' | 'sandbox' | 'sandbox-new' | 'conversation-new' | 'session-chat';
+  'home' | 'dataset' | 'dataset-new' | 'conversation-new' | 'session-chat';
 
 const DEFAULT_RIGHT_PANEL_WIDTH = 572;
 const MIN_RIGHT_PANEL_WIDTH = 360;
@@ -81,7 +81,7 @@ const RIGHT_PANEL_WIDTH_STORAGE_KEY = 'questions-to-insights:right-panel-width';
     AppLogo,
     DatasourceConfig,
     LlmConfig,
-    SandboxList,
+    DatasetList,
     CatalogBrowser,
     EntityDetails,
     ToastContainer,
@@ -125,15 +125,15 @@ export class App {
   readonly loadingSessionDatasources = signal(false);
   readonly datasourceKindLabel = kindLabel;
   readonly mainView = signal<MainView>('home');
-  /** Sandbox being edited in the catalog browser; null = creating a new one. */
-  readonly editingSandbox = signal<Sandbox | null>(null);
+  /** Dataset being edited in the catalog browser; null = creating a new one. */
+  readonly editingDataset = signal<Dataset | null>(null);
 
-  openSandboxEditor(sandbox: Sandbox | null): void {
-    this.editingSandbox.set(sandbox);
-    this.mainView.set('sandbox-new');
+  openDatasetEditor(dataset: Dataset | null): void {
+    this.editingDataset.set(dataset);
+    this.mainView.set('dataset-new');
   }
 
-  private readonly sandboxSelection = inject(SandboxSelectionService);
+  private readonly datasetSelection = inject(DatasetSelectionService);
   private readonly llmApi = inject(LlmApiService);
 
   private readonly toast = inject(ToastService);
@@ -145,9 +145,9 @@ export class App {
   readonly effortMenuOpen = signal(false);
   readonly reasoningEfforts: ReasoningEffort[] = ['low', 'medium', 'high'];
 
-  /** Sandboxes offered in the composer; the session needs at least one. */
-  readonly composerSandboxes = signal<Sandbox[]>([]);
-  readonly selectedSandboxes = signal<Set<string>>(new Set());
+  /** Datasets offered in the composer; the session needs at least one. */
+  readonly composerDatasets = signal<Dataset[]>([]);
+  readonly selectedDatasets = signal<Set<string>>(new Set());
   readonly composerName = signal('');
   readonly creatingSession = signal(false);
 
@@ -162,7 +162,7 @@ export class App {
   /** Latest data mark clicked inside a visual; drives the chat follow-up chips. */
   readonly selectedDataPoint = signal<DataPointSelection | null>(null);
 
-  private readonly sandboxApi = inject(SandboxApiService);
+  private readonly datasetApi = inject(DatasetsApiService);
   private readonly datasourcesApi = inject(DatasourcesApiService);
   private readonly sessionsApi = inject(SessionsApiService);
   private rightPanelResizeStart:
@@ -313,18 +313,18 @@ export class App {
     this.activeSessionDatasources.set([]);
     this.loadingSessionDatasources.set(true);
     forkJoin({
-      sandboxes: this.sandboxApi.getSandboxes(),
+      datasets: this.datasetApi.getDatasets(),
       datasources: this.datasourcesApi.list(),
     }).subscribe({
-      next: ({ sandboxes, datasources }) => {
+      next: ({ datasets, datasources }) => {
         if (this.activeSession()?.id !== session.id) return;
         const defaultDatasource =
           datasources.datasources.find((item) => item.kind === 'databricks') ??
           datasources.datasources[0];
         const datasourceIds = new Set(
-          sandboxes.sandboxes
-            .filter((sandbox) => session.sandboxes.includes(sandbox.name))
-            .map((sandbox) => sandbox.datasourceId ?? defaultDatasource?.id)
+          datasets.datasets
+            .filter((dataset) => session.datasets.includes(dataset.name))
+            .map((dataset) => dataset.datasourceId ?? defaultDatasource?.id)
             .filter((id): id is string => Boolean(id)),
         );
         this.activeSessionDatasources.set(
@@ -603,10 +603,10 @@ export class App {
   createSession(): void {
     if (this.creatingSession()) return;
     const name = this.composerName().trim();
-    if (!name || this.selectedSandboxes().size === 0) return;
+    if (!name || this.selectedDatasets().size === 0) return;
     this.creatingSession.set(true);
     this.sessionsApi
-      .create(name, Array.from(this.selectedSandboxes()))
+      .create(name, Array.from(this.selectedDatasets()))
       .subscribe({
         next: (res) => {
           this.creatingSession.set(false);
@@ -628,7 +628,7 @@ export class App {
 
   openComposer(): void {
     this.mainView.set('conversation-new');
-    this.selectedSandboxes.set(new Set());
+    this.selectedDatasets.set(new Set());
     this.llmApi.getSettings().subscribe({
       next: (v) => {
         this.llmModel.set(v.configured ? v.model : null);
@@ -636,17 +636,17 @@ export class App {
       },
       error: () => this.llmModel.set(null),
     });
-    this.sandboxApi.getSandboxes().subscribe({
-      next: (res) => this.composerSandboxes.set(res.sandboxes),
-      error: () => this.composerSandboxes.set([]),
+    this.datasetApi.getDatasets().subscribe({
+      next: (res) => this.composerDatasets.set(res.datasets),
+      error: () => this.composerDatasets.set([]),
     });
   }
 
-  toggleSandboxSelection(name: string): void {
-    const next = new Set(this.selectedSandboxes());
+  toggleDatasetSelection(name: string): void {
+    const next = new Set(this.selectedDatasets());
     if (next.has(name)) next.delete(name);
     else next.add(name);
-    this.selectedSandboxes.set(next);
+    this.selectedDatasets.set(next);
   }
 
   setEffort(effort: ReasoningEffort): void {
@@ -669,7 +669,7 @@ export class App {
   constructor() {
     // Selecting a datasource element reveals its details in the right panel.
     effect(() => {
-      if (this.sandboxSelection.selection()) this.rightPanelOpen.set(true);
+      if (this.datasetSelection.selection()) this.rightPanelOpen.set(true);
     });
     this.loadSessions();
   }

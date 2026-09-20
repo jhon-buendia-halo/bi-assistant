@@ -2,12 +2,12 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { DatasourcesService } from '../datasources/datasources.service';
 import type { ForeignKeyEdge } from '../datasources/connectors/connector';
 import { applyReferences, inferRelationships } from './relationships';
-import { SandboxRepository } from './repositories/sandbox.repository';
+import { DatasetsRepository } from './repositories/datasets.repository';
 import type {
-  SandboxColumnSnapshot,
-  SandboxDoc,
-  SandboxEntitySnapshot,
-} from './repositories/sandbox.repository';
+  DatasetColumnSnapshot,
+  DatasetDoc,
+  DatasetEntitySnapshot,
+} from './repositories/datasets.repository';
 
 /** Rows read per table to derive sample values, and the per-column budget. */
 const SAMPLE_ROW_LIMIT = 50;
@@ -16,24 +16,24 @@ const SAMPLE_VALUE_CHARS = 40;
 /** Tables sampled at once — enough to be quick without hammering a warehouse. */
 const ENRICHMENT_CONCURRENCY = 4;
 
-export interface SaveSandboxInput {
+export interface SaveDatasetInput {
   name: string;
   tables: string[];
-  entities: SandboxEntitySnapshot[];
+  entities: DatasetEntitySnapshot[];
   datasourceId: string;
   datasourceKind?: unknown;
 }
 
 @Injectable()
-export class SandboxService {
-  private readonly logger = new Logger(SandboxService.name);
+export class DatasetsService {
+  private readonly logger = new Logger(DatasetsService.name);
 
   constructor(
-    private readonly repository: SandboxRepository,
+    private readonly repository: DatasetsRepository,
     private readonly datasources: DatasourcesService,
   ) {}
 
-  list(): Promise<SandboxDoc[]> {
+  list(): Promise<DatasetDoc[]> {
     return this.repository.list();
   }
 
@@ -43,11 +43,11 @@ export class SandboxService {
 
   /**
    * Validate the selection against its datasource, enrich the schema snapshot
-   * with real sample values, and upsert the sandbox by name.
+   * with real sample values, and upsert the dataset by name.
    */
-  async save(input: SaveSandboxInput): Promise<SandboxDoc | null> {
+  async save(input: SaveDatasetInput): Promise<DatasetDoc | null> {
     const name = (input.name ?? '').trim();
-    if (!name) throw new BadRequestException('Sandbox name is required');
+    if (!name) throw new BadRequestException('Dataset name is required');
     if (!input.tables.length) {
       throw new BadRequestException('Include at least one entity');
     }
@@ -77,19 +77,19 @@ export class SandboxService {
   /**
    * Add `sampleValues` to each column from a live sample, then attach the join
    * graph. Best effort per table: a sampling failure leaves that snapshot
-   * as-is, it never fails the save. Existing sandboxes are not backfilled —
+   * as-is, it never fails the save. Existing datasets are not backfilled —
    * they enrich on re-save.
    */
   private async enrich(
     datasourceId: string,
     tables: string[],
-    entities: SandboxEntitySnapshot[],
-  ): Promise<SandboxEntitySnapshot[]> {
+    entities: DatasetEntitySnapshot[],
+  ): Promise<DatasetEntitySnapshot[]> {
     const included = new Set(tables);
     const targets = entities.filter(
       (entity) => entity?.key && included.has(entity.key),
     );
-    const enriched = new Map<string, SandboxEntitySnapshot>();
+    const enriched = new Map<string, DatasetEntitySnapshot>();
     await mapWithConcurrency(
       targets,
       ENRICHMENT_CONCURRENCY,
@@ -127,8 +127,8 @@ export class SandboxService {
   private async withJoins(
     datasourceId: string,
     tables: string[],
-    entities: SandboxEntitySnapshot[],
-  ): Promise<SandboxEntitySnapshot[]> {
+    entities: DatasetEntitySnapshot[],
+  ): Promise<DatasetEntitySnapshot[]> {
     const inScope = entities.filter((entity) =>
       new Set(tables).has(entity?.key),
     );
@@ -154,9 +154,9 @@ export class SandboxService {
 
 /** Attach up to `MAX_SAMPLE_VALUES` distinct stored values per column. */
 export function withSampleValues(
-  columns: SandboxColumnSnapshot[],
+  columns: DatasetColumnSnapshot[],
   rows: Record<string, unknown>[],
-): SandboxColumnSnapshot[] {
+): DatasetColumnSnapshot[] {
   return columns.map((column) => {
     const sampleValues = distinctValues(rows, column.name);
     return sampleValues.length ? { ...column, sampleValues } : column;

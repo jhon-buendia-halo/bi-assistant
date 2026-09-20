@@ -47,7 +47,7 @@ export interface DocStore<T extends object = Record<string, unknown>> {
 /** One injection token per application collection. */
 export const CONNECTIONS_STORE = 'DOC_STORE_connections';
 export const SETTINGS_STORE = 'DOC_STORE_settings';
-export const SANDBOX_SELECTIONS_STORE = 'DOC_STORE_sandbox_selections';
+export const DATASETS_STORE = 'DOC_STORE_datasets';
 export const SESSIONS_STORE = 'DOC_STORE_sessions';
 export const DATASOURCE_INVENTORIES_STORE = 'DOC_STORE_datasource_inventories';
 export const VERIFIED_QUERIES_STORE = 'DOC_STORE_verified_queries';

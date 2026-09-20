@@ -5,10 +5,10 @@ jest.mock('@mastra/core/request-context', () => ({
 }));
 jest.mock('../../mastra/mastra.service', () => ({ MastraService: class {} }));
 jest.mock('../../mastra/tool-services', () => ({
-  setSandboxToolServices: jest.fn(),
+  setDatasetToolServices: jest.fn(),
 }));
-jest.mock('../../mastra/tools/sandbox.tools', () => ({
-  SANDBOXES_CONTEXT_KEY: 'sandboxes',
+jest.mock('../../mastra/tools/dataset.tools', () => ({
+  DATASETS_CONTEXT_KEY: 'datasets',
 }));
 jest.mock('../../mastra/tools/visual.tools', () => ({
   ACTIVE_VISUAL_CONTEXT_KEY: 'active-visual',
@@ -18,8 +18,8 @@ jest.mock('../../mastra/tools/visual.tools', () => ({
 jest.mock('../../mastra/session-workspaces', () => ({
   SESSION_WORKSPACE_CONTEXT_KEY: 'session-workspace',
 }));
-jest.mock('../sandbox/repositories/sandbox.repository', () => ({
-  SandboxRepository: class {},
+jest.mock('../datasets/repositories/datasets.repository', () => ({
+  DatasetsRepository: class {},
 }));
 jest.mock('../datasources/datasources.service', () => ({
   DatasourcesService: class {},
@@ -51,8 +51,8 @@ jest.mock('./visualization-document', () => ({
   sourceEntities: jest.fn().mockReturnValue([]),
 }));
 
-import { setSandboxToolServices } from '../../mastra/tool-services';
-import type { SandboxToolServices } from '../../mastra/tool-services';
+import { setDatasetToolServices } from '../../mastra/tool-services';
+import type { DatasetToolServices } from '../../mastra/tool-services';
 import { TURN_RECORDS_CONTEXT_KEY } from '../../mastra/tools/visual.tools';
 import { sourceEntities } from './visualization-document';
 import { SessionsService, StreamEvent } from './sessions.service';
@@ -79,7 +79,7 @@ describe('SessionsService streaming', () => {
     const session: SessionDoc = {
       id: 'session-1',
       name: 'World Cup analysis',
-      sandboxes: ['football'],
+      datasets: ['football'],
       messages: [],
       visualizations: [],
     };
@@ -260,7 +260,7 @@ describe('SessionsService streaming', () => {
     expect(session.messages.at(-1)?.verified).toBeUndefined();
   });
 
-  it('grounds the turn in the curated metrics for the sandbox entities', async () => {
+  it('grounds the turn in the curated metrics for the dataset entities', async () => {
     const { service, agent, metrics } = buildStreaming(answerStream([]), {
       tables: ['main.football.matches', 'main.football.players'],
       metricsBlock: 'Governed metric definitions (curated — …):\n- Win rate',
@@ -663,7 +663,7 @@ describe('SessionsService SQL self-correction', () => {
     for (const reply of overrides.fixerReplies ?? []) {
       fixer.generate.mockResolvedValueOnce({ object: reply });
     }
-    const sandbox = {
+    const dataset = {
       name: 'claims',
       datasourceId: 'ds-1',
       datasourceKind: 'databricks',
@@ -681,7 +681,7 @@ describe('SessionsService SQL self-correction', () => {
         getAgent: jest.fn().mockReturnValue(fixer),
         ensureSessionWorkspace: jest.fn().mockResolvedValue({ id: 'w' }),
       } as never,
-      { getByNames: jest.fn().mockResolvedValue([sandbox]) } as never,
+      { getByNames: jest.fn().mockResolvedValue([dataset]) } as never,
       { runReadOnlySql: overrides.runs } as never,
       {} as never,
       {} as never,
@@ -689,9 +689,9 @@ describe('SessionsService SQL self-correction', () => {
       {} as never,
     );
     await service.onModuleInit();
-    const calls = (setSandboxToolServices as jest.Mock).mock
+    const calls = (setDatasetToolServices as jest.Mock).mock
       .calls as unknown[][];
-    const installed = calls.at(-1)![0] as SandboxToolServices;
+    const installed = calls.at(-1)![0] as DatasetToolServices;
     return {
       run: (sql: string) =>
         installed.runReadOnlySql('ds-1', sql, 100, ['claims']),
@@ -779,7 +779,7 @@ describe('SessionsService visual tool bridge (turn records)', () => {
     const session: SessionDoc = {
       id: 'session-1',
       name: 'Claims',
-      sandboxes: ['claims'],
+      datasets: ['claims'],
       messages: [],
       visualizations: [],
     };
@@ -822,9 +822,9 @@ describe('SessionsService visual tool bridge (turn records)', () => {
       {} as never,
     );
     await service.onModuleInit();
-    const calls = (setSandboxToolServices as jest.Mock).mock
+    const calls = (setDatasetToolServices as jest.Mock).mock
       .calls as unknown[][];
-    const installed = calls.at(-1)![0] as SandboxToolServices;
+    const installed = calls.at(-1)![0] as DatasetToolServices;
     return { installed, visuals };
   }
 
@@ -926,7 +926,7 @@ describe('SessionsService answer feedback', () => {
   const answered = (): SessionDoc => ({
     id: 'session-1',
     name: 'Claims',
-    sandboxes: ['claims'],
+    datasets: ['claims'],
     visualizations: [],
     messages: [
       { role: 'user', content: 'ignore me', at: '2024-01-01T00:00:00.000Z' },
@@ -1144,7 +1144,7 @@ describe('SessionsService visual tailoring and repair', () => {
     const session: SessionDoc = {
       id: 'session-1',
       name: 'Claims',
-      sandboxes: ['claims'],
+      datasets: ['claims'],
       messages: [],
       visualizations: [visual(currentVersion)],
     };

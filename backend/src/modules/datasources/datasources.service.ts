@@ -56,7 +56,7 @@ export class DatasourcesService {
     return found;
   }
 
-  /** Preferred datasource — used to bind sandboxes created before datasources existed. */
+  /** Preferred datasource — used to bind datasets created before datasources existed. */
   async defaultDatasource(): Promise<
     Pick<Datasource, 'id' | 'kind'> | undefined
   > {

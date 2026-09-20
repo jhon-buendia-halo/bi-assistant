@@ -1,7 +1,7 @@
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
-import { getSandboxToolServices } from '../tool-services';
-import type { SandboxToolTurnRecord } from '../tool-services';
+import { getDatasetToolServices } from '../tool-services';
+import type { DatasetToolTurnRecord } from '../tool-services';
 
 /** requestContext keys for the visual tools. */
 export const SESSION_ID_CONTEXT_KEY = 'session-id';
@@ -27,9 +27,9 @@ function contextString(
 function contextRecords(
   requestContext: { get: (key: string) => unknown },
   key: string,
-): SandboxToolTurnRecord[] | undefined {
+): DatasetToolTurnRecord[] | undefined {
   const value = requestContext.get(key);
-  return Array.isArray(value) ? (value as SandboxToolTurnRecord[]) : undefined;
+  return Array.isArray(value) ? (value as DatasetToolTurnRecord[]) : undefined;
 }
 
 export const createVisualTool = createTool({
@@ -59,7 +59,7 @@ export const createVisualTool = createTool({
       TURN_RECORDS_CONTEXT_KEY,
     );
     try {
-      return await getSandboxToolServices().createVisual(
+      return await getDatasetToolServices().createVisual(
         sessionId,
         sourceMessageAt,
         instruction,
@@ -101,7 +101,7 @@ export const updateVisualTool = createTool({
       TURN_RECORDS_CONTEXT_KEY,
     );
     try {
-      return await getSandboxToolServices().updateVisual(
+      return await getDatasetToolServices().updateVisual(
         sessionId,
         target,
         instruction,

@@ -6,7 +6,7 @@ import {
   DATASOURCE_INVENTORIES_STORE,
   METRICS_STORE,
   SESSIONS_STORE,
-  SANDBOX_SELECTIONS_STORE,
+  DATASETS_STORE,
   SETTINGS_STORE,
   VERIFIED_QUERIES_STORE,
 } from './doc-store';
@@ -26,7 +26,7 @@ const SQLITE_DB = 'DATASTORE_SQLITE_DB';
 const COLLECTIONS = [
   { token: CONNECTIONS_STORE, table: 'connections' },
   { token: SETTINGS_STORE, table: 'settings' },
-  { token: SANDBOX_SELECTIONS_STORE, table: 'sandbox_selections' },
+  { token: DATASETS_STORE, table: 'datasets' },
   { token: SESSIONS_STORE, table: 'sessions' },
   { token: DATASOURCE_INVENTORIES_STORE, table: 'datasource_inventories' },
   { token: VERIFIED_QUERIES_STORE, table: 'verified_queries' },
@@ -42,29 +42,67 @@ const sqliteDbProvider: Provider = {
     mkdirSync(DATA_DIR, { recursive: true });
     const db = new BetterSqlite3(join(DATA_DIR, 'app.sqlite'));
     renameLegacyTables(db);
+    renameLegacyFields(db);
     return db;
   },
 };
 
 /**
- * Tables renamed after the `projects` → `sessions` rename. `SqliteDocStore`
- * creates a table when missing, so without this an existing install would
- * silently start over with an empty collection.
+ * Tables renamed after the `projects` → `sessions` and `sandbox` → `dataset`
+ * renames. `SqliteDocStore` creates a table when missing, so without this an
+ * existing install would silently start over with an empty collection.
  */
 const LEGACY_TABLE_NAMES: { from: string; to: string }[] = [
   { from: 'projects', to: 'sessions' },
+  { from: 'sandbox_selections', to: 'datasets' },
 ];
 
-function renameLegacyTables(db: import('better-sqlite3').Database): void {
-  const exists = (table: string) =>
+/**
+ * Persisted document keys renamed along with the collections. Rewritten in
+ * raw SQL rather than through a repository so the migration does not restamp
+ * `updatedAt` — the session list is sorted by it, and a repository-side
+ * rewrite would flatten every existing session to the same recency.
+ */
+const LEGACY_DOC_FIELDS: { table: string; from: string; to: string }[] = [
+  { table: 'sessions', from: 'sandboxes', to: 'datasets' },
+];
+
+function tableExists(
+  db: import('better-sqlite3').Database,
+  table: string,
+): boolean {
+  return (
     db
       .prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?`)
-      .get(table) !== undefined;
+      .get(table) !== undefined
+  );
+}
 
+export function renameLegacyTables(
+  db: import('better-sqlite3').Database,
+): void {
   for (const { from, to } of LEGACY_TABLE_NAMES) {
-    if (exists(from) && !exists(to)) {
+    if (tableExists(db, from) && !tableExists(db, to)) {
       db.prepare(`ALTER TABLE "${from}" RENAME TO "${to}"`).run();
     }
+  }
+}
+
+export function renameLegacyFields(
+  db: import('better-sqlite3').Database,
+): void {
+  for (const { table, from, to } of LEGACY_DOC_FIELDS) {
+    if (!tableExists(db, table)) continue;
+    // `json()` around the extracted value keeps arrays/objects structured —
+    // without it `json_set` would store the child as a JSON string.
+    db.prepare(
+      `UPDATE "${table}"
+          SET doc = json_remove(
+                      json_set(doc, '$.${to}', json(json_extract(doc, '$.${from}'))),
+                      '$.${from}')
+        WHERE json_extract(doc, '$.${from}') IS NOT NULL
+          AND json_extract(doc, '$.${to}') IS NULL`,
+    ).run();
   }
 }
 

@@ -169,8 +169,8 @@ export interface SessionDoc {
   name: string;
   /** Mastra workspace associated one-to-one with this session. */
   workspaceId?: string;
-  /** Names of the sandboxes this session works over. */
-  sandboxes: string[];
+  /** Names of the datasets this session works over. */
+  datasets: string[];
   messages: ChatMessage[];
   visualizations?: SessionVisualization[];
   createdAt?: string;

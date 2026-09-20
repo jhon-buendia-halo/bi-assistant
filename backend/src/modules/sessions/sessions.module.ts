@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { MastraModule } from '../../mastra/mastra.module';
-import { SandboxModule } from '../sandbox/sandbox.module';
+import { DatasetsModule } from '../datasets/datasets.module';
 import { DatasourcesModule } from '../datasources/datasources.module';
 import { LlmModule } from '../llm/llm.module';
 import { VerifiedQueriesModule } from '../verified-queries/verified-queries.module';
@@ -13,7 +13,7 @@ import { VisualizationService } from './visualization.service';
 @Module({
   imports: [
     MastraModule,
-    SandboxModule,
+    DatasetsModule,
     DatasourcesModule,
     LlmModule,
     VerifiedQueriesModule,

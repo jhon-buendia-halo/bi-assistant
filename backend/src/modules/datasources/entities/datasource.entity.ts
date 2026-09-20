@@ -19,7 +19,7 @@ export interface PostgresConfig {
 
 export type DatasourceConfig = DatabricksConfig | PostgresConfig;
 
-/** A saved connection to a data platform the sandboxes can draw from. */
+/** A saved connection to a data platform the datasets can draw from. */
 export interface Datasource {
   id: string;
   name: string;

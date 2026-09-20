@@ -15,7 +15,7 @@ interface LegacyDatabricksDoc {
   updatedAt?: string;
 }
 
-/** Stable id given to the migrated legacy connection so old sandboxes can bind to it. */
+/** Stable id given to the migrated legacy connection so old datasets can bind to it. */
 export const LEGACY_DATABRICKS_ID = 'legacy-databricks';
 
 @Injectable()

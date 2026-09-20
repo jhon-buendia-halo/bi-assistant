@@ -8,22 +8,22 @@ import {
 import { randomUUID } from 'crypto';
 import { RequestContext } from '@mastra/core/request-context';
 import { MastraService } from '../../mastra/mastra.service';
-import { setSandboxToolServices } from '../../mastra/tool-services';
+import { setDatasetToolServices } from '../../mastra/tool-services';
 import type {
-  SandboxColumnSnapshot,
-  SandboxSnapshot,
+  DatasetColumnSnapshot,
+  DatasetSnapshot,
   SqlRunResult,
 } from '../../mastra/tool-services';
 import { sqlFixOutputSchema } from '../../mastra/agents/sql-fixer.agent';
 import { sqlVerifyOutputSchema } from '../../mastra/agents/sql-verifier.agent';
-import { SANDBOXES_CONTEXT_KEY } from '../../mastra/tools/sandbox.tools';
+import { DATASETS_CONTEXT_KEY } from '../../mastra/tools/dataset.tools';
 import {
   ACTIVE_VISUAL_CONTEXT_KEY,
   SESSION_ID_CONTEXT_KEY,
   TURN_RECORDS_CONTEXT_KEY,
 } from '../../mastra/tools/visual.tools';
 import { SESSION_WORKSPACE_CONTEXT_KEY } from '../../mastra/session-workspaces';
-import { SandboxRepository } from '../sandbox/repositories/sandbox.repository';
+import { DatasetsRepository } from '../datasets/repositories/datasets.repository';
 import { DatasourcesService } from '../datasources/datasources.service';
 import { LlmService } from '../llm/llm.service';
 import { VerifiedQueriesService } from '../verified-queries/verified-queries.service';
@@ -61,7 +61,7 @@ const limitReachedNote = (limit: number) =>
 const FIXER_SCHEMA_CHARS = 4_000;
 /** Character budget for the richer (sample-value bearing) verifier schema. */
 const VERIFIER_SCHEMA_CHARS = 6_000;
-/** Join hints shown up front to the assistant — enough for a wide sandbox. */
+/** Join hints shown up front to the assistant — enough for a wide dataset. */
 const JOIN_HINT_CHARS = 1_500;
 /** Sample values shown per column to the verifier — value matching, not data. */
 const VERIFIER_SAMPLE_VALUES = 3;
@@ -92,7 +92,7 @@ export class SessionsService implements OnModuleInit {
   constructor(
     private readonly repository: SessionsRepository,
     private readonly mastra: MastraService,
-    private readonly sandboxRepository: SandboxRepository,
+    private readonly datasetsRepository: DatasetsRepository,
     private readonly datasourcesService: DatasourcesService,
     private readonly llmService: LlmService,
     private readonly visuals: VisualizationService,
@@ -102,12 +102,12 @@ export class SessionsService implements OnModuleInit {
 
   async onModuleInit(): Promise<void> {
     // Install the DI bridge the Mastra tools use (they load with no Nest DI).
-    setSandboxToolServices({
-      getSandboxes: (names) => this.boundSandboxes(names),
+    setDatasetToolServices({
+      getDatasets: (names) => this.boundDatasets(names),
       sampleRows: (datasourceId, entity, limit) =>
         this.datasourcesService.sampleRows(datasourceId, entity, limit),
-      runReadOnlySql: (datasourceId, sql, limit, sandboxes) =>
-        this.runSqlWithRepair(datasourceId, sql, limit, sandboxes),
+      runReadOnlySql: (datasourceId, sql, limit, datasets) =>
+        this.runSqlWithRepair(datasourceId, sql, limit, datasets),
       createVisual: async (
         sessionId,
         sourceMessageAt,
@@ -156,7 +156,7 @@ export class SessionsService implements OnModuleInit {
   }
 
   /**
-   * Hybrid context: a cheap orientation block (sandbox names + entity keys,
+   * Hybrid context: a cheap orientation block (dataset names + entity keys,
    * the session's visuals and which one is open), the curated metric
    * definitions covering those entities, plus any user-approved question → SQL
    * pairs resembling `question`, in the system context, and requestContext
@@ -171,20 +171,20 @@ export class SessionsService implements OnModuleInit {
     abortSignal?: AbortSignal,
     activeVisualId?: string,
   ) {
-    const sandboxes = await this.boundSandboxes(session.sandboxes);
-    const entityLines = sandboxes.flatMap((s) =>
+    const datasets = await this.boundDatasets(session.datasets);
+    const entityLines = datasets.flatMap((s) =>
       s.tables.map(
         (t) =>
-          `- ${t} (sandbox: ${s.name}; datasource: ${s.datasourceKind ?? 'unknown'} ${s.datasourceId ?? ''})`,
+          `- ${t} (dataset: ${s.name}; datasource: ${s.datasourceKind ?? 'unknown'} ${s.datasourceId ?? ''})`,
       ),
     );
-    const joinHints = joinHintBlock(sandboxes);
+    const joinHints = joinHintBlock(datasets);
     const visualLines = (session.visualizations ?? []).map(
       (v) =>
         `- ${v.id} — "${v.title}" v${this.visuals.currentVersion(v)} (from the answer at ${v.sourceMessageAt})`,
     );
     const requestContext = new RequestContext();
-    requestContext.set(SANDBOXES_CONTEXT_KEY, session.sandboxes);
+    requestContext.set(DATASETS_CONTEXT_KEY, session.datasets);
     requestContext.set(SESSION_ID_CONTEXT_KEY, session.id);
     if (activeVisualId) {
       requestContext.set(ACTIVE_VISUAL_CONTEXT_KEY, activeVisualId);
@@ -201,7 +201,7 @@ export class SessionsService implements OnModuleInit {
     // Curated semantics for the entities this session can see — the one
     // definition of each business number, never re-derived per turn.
     const metrics = await this.metrics.definitionBlock(
-      sandboxes.flatMap((s) => s.tables ?? []),
+      datasets.flatMap((s) => s.tables ?? []),
     );
     return {
       // Analysis often chains several schema + SQL tool calls per turn.
@@ -212,11 +212,11 @@ export class SessionsService implements OnModuleInit {
         {
           role: 'system' as const,
           content: [
-            `Data sandboxes for this session: ${session.sandboxes.join(', ')}.`,
+            `Datasets for this session: ${session.datasets.join(', ')}.`,
             'Entities available (fully-qualified catalog.schema.table):',
             ...(entityLines.length
               ? entityLines
-              : ['(none — the sandboxes are empty)']),
+              : ['(none — the datasets are empty)']),
             'Use describe_entity / sample_rows / run_readonly_sql to inspect and query them.',
             ...(joinHints ? ['', joinHints] : []),
             '',
@@ -288,14 +288,14 @@ export class SessionsService implements OnModuleInit {
   }
 
   /**
-   * Sandboxes created before datasources existed carry no binding — attach
+   * Datasets created before datasources existed carry no binding — attach
    * the preferred saved datasource so tools can still run.
    */
-  private async boundSandboxes(names: string[]) {
-    const sandboxes = await this.sandboxRepository.getByNames(names);
-    if (sandboxes.every((s) => s.datasourceId)) return sandboxes;
+  private async boundDatasets(names: string[]) {
+    const datasets = await this.datasetsRepository.getByNames(names);
+    if (datasets.every((s) => s.datasourceId)) return datasets;
     const fallback = await this.datasourcesService.defaultDatasource();
-    return sandboxes.map((s) =>
+    return datasets.map((s) =>
       s.datasourceId || !fallback
         ? s
         : {
@@ -319,7 +319,7 @@ export class SessionsService implements OnModuleInit {
     datasourceId: string,
     sql: string,
     limit: number,
-    sandboxNames: string[],
+    datasetNames: string[],
   ): Promise<SqlRunResult> {
     let statement = sql;
     let fixerContext: { dialect: string; schema: string } | undefined;
@@ -348,7 +348,7 @@ export class SessionsService implements OnModuleInit {
       } catch (error) {
         if (attempt >= SQL_REPAIR_ATTEMPTS) throw error;
         const message = error instanceof Error ? error.message : String(error);
-        fixerContext ??= await this.sqlFixerContext(sandboxNames, datasourceId);
+        fixerContext ??= await this.sqlFixerContext(datasetNames, datasourceId);
         const corrected = await this.repairSql(
           statement,
           message,
@@ -365,24 +365,24 @@ export class SessionsService implements OnModuleInit {
 
   /** Dialect + a capped `entity(column type, …)` block for the fixer prompt. */
   private async sqlFixerContext(
-    sandboxNames: string[],
+    datasetNames: string[],
     datasourceId: string,
   ): Promise<{ dialect: string; schema: string }> {
-    const sandboxes = await this.boundSandboxes(sandboxNames);
-    const onDatasource = sandboxes.filter(
+    const datasets = await this.boundDatasets(datasetNames);
+    const onDatasource = datasets.filter(
       (s) => s.datasourceId === datasourceId,
     );
-    const inScope: SandboxSnapshot[] = onDatasource.length
+    const inScope: DatasetSnapshot[] = onDatasource.length
       ? onDatasource
-      : sandboxes;
+      : datasets;
     const dialect =
       inScope.find((s) => s.datasourceKind)?.datasourceKind ?? 'databricks';
     const lines: string[] = [];
     let budget = FIXER_SCHEMA_CHARS;
-    for (const sandbox of inScope) {
-      for (const key of sandbox.tables) {
+    for (const dataset of inScope) {
+      for (const key of dataset.tables) {
         const columns =
-          sandbox.entities?.find((e) => e.key === key)?.columns ?? [];
+          dataset.entities?.find((e) => e.key === key)?.columns ?? [];
         const line = `${key}(${columns.map((c) => `${c.name} ${c.type}`).join(', ')})`;
         if (line.length > budget) return { dialect, schema: lines.join('\n') };
         budget -= line.length;
@@ -531,12 +531,12 @@ export class SessionsService implements OnModuleInit {
       }
     | undefined
   > {
-    const sandboxes = await this.boundSandboxes(session.sandboxes);
+    const datasets = await this.boundDatasets(session.datasets);
     const datasourceId =
       (await this.soleDatasourceId(session)) ??
-      sandboxes.find((s) => s.datasourceId)?.datasourceId;
+      datasets.find((s) => s.datasourceId)?.datasourceId;
     if (!datasourceId) return undefined;
-    const inScope = sandboxes.filter((s) => s.datasourceId === datasourceId);
+    const inScope = datasets.filter((s) => s.datasourceId === datasourceId);
     return {
       dialect:
         inScope.find((s) => s.datasourceKind)?.datasourceKind ?? 'databricks',
@@ -653,11 +653,11 @@ export class SessionsService implements OnModuleInit {
   }
 
   /** Create a named session; the conversation starts empty in the chat view. */
-  async create(name: string, sandboxes: string[]): Promise<SessionDoc> {
+  async create(name: string, datasets: string[]): Promise<SessionDoc> {
     const trimmed = (name ?? '').trim();
     if (!trimmed) throw new BadRequestException('session name is required');
-    if (!Array.isArray(sandboxes) || sandboxes.length === 0) {
-      throw new BadRequestException('select at least one sandbox');
+    if (!Array.isArray(datasets) || datasets.length === 0) {
+      throw new BadRequestException('select at least one dataset');
     }
     const id = randomUUID();
     const workspace = await this.mastra.ensureSessionWorkspace(id, trimmed);
@@ -665,7 +665,7 @@ export class SessionsService implements OnModuleInit {
       id,
       name: trimmed.slice(0, 64),
       workspaceId: workspace.id,
-      sandboxes,
+      datasets,
       messages: [],
       visualizations: [],
     });
@@ -789,7 +789,7 @@ export class SessionsService implements OnModuleInit {
   }
 
   /**
-   * Silent auto-repair of a visual that failed in the sandbox. Only the
+   * Silent auto-repair of a visual that failed in the dataset. Only the
    * current version may be repaired, and only once — the version guard here
    * repeats the client's check because the client is not trusted, and
    * `VisualizationService.repair` refuses to repair an auto-repair.
@@ -1250,9 +1250,9 @@ export class SessionsService implements OnModuleInit {
   private async soleDatasourceId(
     session: SessionDoc,
   ): Promise<string | undefined> {
-    const sandboxes = await this.boundSandboxes(session.sandboxes);
+    const datasets = await this.boundDatasets(session.datasets);
     const ids = new Set(
-      sandboxes.map((s) => s.datasourceId).filter((id): id is string => !!id),
+      datasets.map((s) => s.datasourceId).filter((id): id is string => !!id),
     );
     return ids.size === 1 ? Array.from(ids)[0] : undefined;
   }
@@ -1466,13 +1466,13 @@ function crossCheck(status: CrossCheck['status'], note: string): CrossCheck {
  * `entity(column type [e.g. a, b], …)` lines for the verifier. Richer than the
  * fixer's block: sample values let it match filter literals to real data.
  */
-function verifierSchema(sandboxes: SandboxSnapshot[]): string {
+function verifierSchema(datasets: DatasetSnapshot[]): string {
   const lines: string[] = [];
   let budget = VERIFIER_SCHEMA_CHARS;
-  for (const sandbox of sandboxes) {
-    for (const key of sandbox.tables) {
+  for (const dataset of datasets) {
+    for (const key of dataset.tables) {
       const columns =
-        sandbox.entities?.find((e) => e.key === key)?.columns ?? [];
+        dataset.entities?.find((e) => e.key === key)?.columns ?? [];
       const described = columns.map((column) => {
         const samples = (column.sampleValues ?? []).slice(
           0,
@@ -1495,7 +1495,7 @@ function verifierSchema(sandboxes: SandboxSnapshot[]): string {
  * `~>` marks an inferred edge: the model should trust it less than a declared
  * one and can confirm with describe_entity.
  */
-function referenceSuffix(column: SandboxColumnSnapshot): string {
+function referenceSuffix(column: DatasetColumnSnapshot): string {
   const reference = column.references;
   if (!reference?.entity || !reference?.column) return '';
   const arrow = reference.source === 'declared' ? '->' : '~>';
@@ -1508,12 +1508,12 @@ function referenceSuffix(column: SandboxColumnSnapshot): string {
  * `goals.team_id` where the column is `goals.scoring_team_id`, which fails the
  * query and ends in an answer naming a raw id instead of a team.
  */
-function joinHintBlock(sandboxes: SandboxSnapshot[]): string {
+function joinHintBlock(datasets: DatasetSnapshot[]): string {
   const lines: string[] = [];
   const seen = new Set<string>();
   let budget = JOIN_HINT_CHARS;
-  for (const sandbox of sandboxes) {
-    for (const entity of sandbox.entities ?? []) {
+  for (const dataset of datasets) {
+    for (const entity of dataset.entities ?? []) {
       for (const column of entity.columns ?? []) {
         const suffix = referenceSuffix(column);
         if (!suffix) continue;

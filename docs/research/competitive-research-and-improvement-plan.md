@@ -51,7 +51,7 @@ Ordered by impact-for-effort for this app (Electron + NestJS + Mastra over Datab
 
 1. **Execution-guided self-correction loop** in `run_readonly_sql`: on SQL error or empty result, auto-retry up to 2× with the structured error message in context (move retry from prompt suggestion to enforced tool loop). *Pattern: BIRD top systems, WrenAI, Fabi.*
 2. **Verified query library (Vanna pattern)**: new DocStore collection of `{question, sql, entities, thumbs}`; thumbs-up on an answer saves the pair; retrieval tool injects top-k similar pairs into the assistant prompt. Compounds accuracy with zero curation overhead.
-3. **Richer schema context**: enrich the sandbox schema snapshot with sample cell values per column (cheap query at sandbox save time) + optional column descriptions from Unity Catalog comments. Attacks the #1 error class (schema linking). *Pattern: Genie value dictionaries, ReFoRCE, Pinterest.*
+3. **Richer schema context**: enrich the dataset schema snapshot with sample cell values per column (cheap query at dataset save time) + optional column descriptions from Unity Catalog comments. Attacks the #1 error class (schema linking). *Pattern: Genie value dictionaries, ReFoRCE, Pinterest.*
 4. **Golden-set eval harness**: 30–50 question→expected-result pairs over the demo dataset; CI script runs them through the pipeline and compares result sets. Only Genie ships this as a feature — cheap regression safety before demo day.
 
 ### Phase 2 — Trust UX (demo-visible, persona-critical)

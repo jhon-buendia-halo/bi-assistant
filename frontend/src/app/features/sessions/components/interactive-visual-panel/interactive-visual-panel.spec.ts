@@ -60,7 +60,7 @@ describe('buildTailorInstruction', () => {
 const session: Session = {
   id: 'session-1',
   name: 'Analysis',
-  sandboxes: [],
+  datasets: [],
   messages: [],
 };
 

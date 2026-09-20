@@ -236,7 +236,7 @@ describe('DatabricksConnector foreignKeys', () => {
     expect(clients[0].closed).toBe(true);
   });
 
-  it('drops edges whose other end is not in the sandbox', async () => {
+  it('drops edges whose other end is not in the dataset', async () => {
     respond = (sql) =>
       sql.includes('referential_constraints') ? [fkRow] : [];
 

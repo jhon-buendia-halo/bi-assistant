@@ -351,7 +351,7 @@ export class DatabricksConnector implements DatasourceConnector<DatabricksConfig
     entities: string[],
   ): Promise<ForeignKeyEdge[]> {
     // Constraints live in the catalog of the referencing table, so only the
-    // catalogs actually present in the sandbox are worth querying.
+    // catalogs actually present in the dataset are worth querying.
     const wanted = new Set<string>();
     const catalogs = new Set<string>();
     for (const entity of entities ?? []) {
@@ -398,7 +398,7 @@ export class DatabricksConnector implements DatasourceConnector<DatabricksConfig
     for (const row of rows) {
       const from = `${toText(row['from_catalog'])}.${toText(row['from_schema'])}.${toText(row['from_table'])}`;
       const to = `${toText(row['to_catalog'])}.${toText(row['to_schema'])}.${toText(row['to_table'])}`;
-      // Both ends must be in the sandbox, otherwise the hint points at a table
+      // Both ends must be in the dataset, otherwise the hint points at a table
       // the model cannot query.
       if (!wanted.has(from.toLowerCase())) continue;
       if (!wanted.has(to.toLowerCase())) continue;

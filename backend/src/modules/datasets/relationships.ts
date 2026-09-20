@@ -15,11 +15,11 @@
  */
 
 import type {
-  SandboxColumnSnapshot,
-  SandboxEntitySnapshot,
-} from './repositories/sandbox.repository';
+  DatasetColumnSnapshot,
+  DatasetEntitySnapshot,
+} from './repositories/datasets.repository';
 
-/** A join edge between two sandbox entities. Entity keys are `catalog.schema.table`. */
+/** A join edge between two dataset entities. Entity keys are `catalog.schema.table`. */
 export interface ForeignKeyEdge {
   from: { entity: string; column: string };
   to: { entity: string; column: string };
@@ -84,9 +84,9 @@ function tableNameOf(key: string): string {
 }
 
 function findColumn(
-  entity: SandboxEntitySnapshot,
+  entity: DatasetEntitySnapshot,
   name: string,
-): SandboxColumnSnapshot | undefined {
+): DatasetColumnSnapshot | undefined {
   const wanted = name.toLowerCase();
   return entity.columns?.find((c) => c.name?.toLowerCase() === wanted);
 }
@@ -98,8 +98,8 @@ function findColumn(
  * Nullable columns are excluded — a nullable column is a reference, not a key.
  */
 function isPrimaryish(
-  entity: SandboxEntitySnapshot,
-  column: SandboxColumnSnapshot,
+  entity: DatasetEntitySnapshot,
+  column: DatasetColumnSnapshot,
 ): boolean {
   const parts = parseKeyColumn(column.name ?? '');
   if (!parts || column.nullable) return false;
@@ -115,10 +115,10 @@ function isPrimaryish(
  * `countries.id` would join a char(3) to a bigint and fail at runtime.
  */
 function resolveTargetColumn(
-  target: SandboxEntitySnapshot,
+  target: DatasetEntitySnapshot,
   matchedPrefix: string,
   suffix: KeySuffix,
-): SandboxColumnSnapshot | null {
+): DatasetColumnSnapshot | null {
   for (const name of [suffix, `${matchedPrefix}_${suffix}`]) {
     const hit = findColumn(target, name);
     if (hit) return hit;
@@ -137,17 +137,17 @@ function resolveTargetColumn(
  * are inside the given entity set are returned.
  */
 export function inferRelationships(
-  entities: SandboxEntitySnapshot[],
+  entities: DatasetEntitySnapshot[],
 ): ForeignKeyEdge[] {
   const snapshots = (entities ?? []).filter(
-    (entity): entity is SandboxEntitySnapshot =>
+    (entity): entity is DatasetEntitySnapshot =>
       !!entity && Array.isArray(entity.columns),
   );
 
   // Canonical table name → entity. A collision (`sales.orders` and
   // `finance.order`) makes every match through that name ambiguous, so the
   // name is withdrawn instead of resolved by arbitrary precedence.
-  const byName = new Map<string, SandboxEntitySnapshot | null>();
+  const byName = new Map<string, DatasetEntitySnapshot | null>();
   for (const entity of snapshots) {
     const name = canonical(tableNameOf(entity.key));
     if (!name) continue;
@@ -158,10 +158,10 @@ export function inferRelationships(
   const claimed = new Set<string>();
 
   const emit = (
-    from: SandboxEntitySnapshot,
-    column: SandboxColumnSnapshot,
-    to: SandboxEntitySnapshot,
-    target: SandboxColumnSnapshot,
+    from: DatasetEntitySnapshot,
+    column: DatasetColumnSnapshot,
+    to: DatasetEntitySnapshot,
+    target: DatasetColumnSnapshot,
   ): void => {
     // A self-edge is never a join, it is a naming coincidence
     // (`teams.team_id` is the key, not a reference to another row).
@@ -231,10 +231,10 @@ export function inferRelationships(
  * displaced by a guess.
  */
 export function applyReferences(
-  entities: SandboxEntitySnapshot[],
+  entities: DatasetEntitySnapshot[],
   declared: ForeignKeyEdge[],
   inferred: ForeignKeyEdge[],
-): SandboxEntitySnapshot[] {
+): DatasetEntitySnapshot[] {
   const byColumn = new Map<
     string,
     { entity: string; column: string; source: 'declared' | 'inferred' }

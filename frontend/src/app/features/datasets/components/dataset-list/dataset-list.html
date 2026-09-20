@@ -1,6 +1,6 @@
 <div class="flex flex-col">
   <h1 class="font-serif text-[28px] font-semibold text-zinc-100">
-    Data Sandbox
+    Datasets
   </h1>
 
   <!-- Filters + actions -->
@@ -28,11 +28,11 @@
         <lucide-angular [img]="LayoutGrid" [size]="16" />
       </button>
       <button
-        (click)="newSandbox.emit()"
+        (click)="newDataset.emit()"
         class="flex items-center gap-1.5 rounded-lg bg-zinc-200 px-3.5 py-2 text-[13px] font-medium text-zinc-900 hover:bg-white"
       >
         <lucide-angular [img]="Plus" [size]="14" />
-        <span>New sandbox</span>
+        <span>New dataset</span>
       </button>
     </div>
   </div>
@@ -40,7 +40,7 @@
   @if (loading()) {
     <div class="mt-10 flex items-center gap-2.5 text-zinc-400">
       <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
-      <span>Loading sandboxes…</span>
+      <span>Loading datasets…</span>
     </div>
   } @else if (error(); as err) {
     <p
@@ -50,7 +50,7 @@
     </p>
   } @else if (sections().length === 0) {
     <p class="mt-10 text-[13px] text-zinc-500">
-      No sandboxes yet — create one with “New sandbox”.
+      No datasets yet — create one with “New dataset”.
     </p>
   } @else {
     @for (section of sections(); track section.label) {
@@ -61,8 +61,8 @@
             class="group flex items-center gap-3.5 rounded-xl px-2 py-2.5 hover:bg-white/5"
           >
             <button
-              [attr.data-testid]="'sandbox-' + item.name"
-              (click)="openSandbox.emit(item)"
+              [attr.data-testid]="'dataset-' + item.name"
+              (click)="openDataset.emit(item)"
               class="flex min-w-0 flex-1 items-center gap-3.5 text-left"
             >
               <span
@@ -98,11 +98,11 @@
                   class="absolute top-full right-0 z-20 mt-1 w-44 rounded-lg border border-white/10 bg-[#2a2a2a] p-1 shadow-xl"
                 >
                   <button
-                    (click)="deleteSandbox(item)"
+                    (click)="deleteDataset(item)"
                     class="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] text-red-400 hover:bg-white/10"
                   >
                     <lucide-angular [img]="Trash2" [size]="14" />
-                    <span>Delete sandbox</span>
+                    <span>Delete dataset</span>
                   </button>
                 </div>
               }

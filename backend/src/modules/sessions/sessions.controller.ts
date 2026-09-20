@@ -191,12 +191,12 @@ export class SessionsController {
 
   @Post()
   async create(
-    @Body() body: { name?: string; sandboxes?: string[] },
+    @Body() body: { name?: string; datasets?: string[] },
   ): Promise<{ ok: boolean; message: string; session?: SessionDoc }> {
     try {
       const session = await this.sessionsService.create(
         body?.name ?? '',
-        body?.sandboxes ?? [],
+        body?.datasets ?? [],
       );
       return {
         ok: true,

@@ -85,7 +85,7 @@ describe('App', () => {
     app.activeSession.set({
       id: 'session-1',
       name: 'World Cup analysis',
-      sandboxes: ['Futbol DB'],
+      datasets: ['Futbol DB'],
       messages: [],
     });
     app.mainView.set('session-chat');
