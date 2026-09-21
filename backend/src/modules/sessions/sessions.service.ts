@@ -20,6 +20,7 @@ import {
   TURN_RECORDS_CONTEXT_KEY,
 } from '../../mastra/tools/visual.tools';
 import { SESSION_WORKSPACE_CONTEXT_KEY } from '../../mastra/session-workspaces';
+import type { KnowledgeUse } from '../knowledge/entities/knowledge-snippet.entity';
 import {
   entityOrientationLines,
   schemaSnapshotBlock,
@@ -55,6 +56,12 @@ import {
 } from './entities/session.entity';
 
 const VISUAL_TOOLS = new Set(['create_visual', 'update_visual']);
+/**
+ * requestContext key carrying the curated-knowledge snippets this turn's
+ * system block was built from, so the persist step can record them on the
+ * answer without re-reading (and possibly disagreeing with) the store.
+ */
+const KNOWLEDGE_USED_CONTEXT_KEY = 'knowledge-used';
 /** Repair attempts allowed per failed statement (3 executions at most). */
 const SQL_REPAIR_ATTEMPTS = 2;
 const SQL_REPAIRED_NOTE =
@@ -203,7 +210,10 @@ export class SessionsService implements OnModuleInit {
     // Curated, user-authored knowledge (glossary/instructions/default
     // filters) for this session's datasets — authoritative over anything
     // the model would otherwise infer from schema alone.
-    const knowledge = await this.knowledge.definitionBlock(session.datasets);
+    const knowledge = await this.knowledge.contextFor(session.datasets);
+    // Threaded on requestContext rather than returned alongside the options,
+    // because the options object is spread straight into the agent call.
+    requestContext.set(KNOWLEDGE_USED_CONTEXT_KEY, knowledge.used);
     return {
       // Analysis often chains several schema + SQL tool calls per turn.
       maxSteps: ASSISTANT_MAX_STEPS,
@@ -223,7 +233,9 @@ export class SessionsService implements OnModuleInit {
           ].join('\n'),
         },
         ...(metrics ? [{ role: 'system' as const, content: metrics }] : []),
-        ...(knowledge ? [{ role: 'system' as const, content: knowledge }] : []),
+        ...(knowledge.block
+          ? [{ role: 'system' as const, content: knowledge.block }]
+          : []),
         ...(verified ? [{ role: 'system' as const, content: verified }] : []),
       ],
       requestContext,
@@ -879,16 +891,16 @@ export class SessionsService implements OnModuleInit {
     this.appendUserMessage(session, trimmed);
     const agent = this.mastra.getAgent('assistant');
     const input = await this.agentInput(agent, session);
-    const result = await agent.generate(
-      input,
-      await this.agentOptions(session, trimmed),
-    );
+    const options = await this.agentOptions(session, trimmed);
+    const result = await agent.generate(input, options);
     const reasoning = reasoningTrail(toolRecords(result));
+    const knowledge = knowledgeUsed(options.requestContext);
     session.messages.push({
       role: 'assistant',
       content: (result.text ?? '').trim(),
       at: new Date().toISOString(),
       ...(reasoning ? { reasoning } : {}),
+      ...(knowledge ? { knowledge } : {}),
     });
     const updated = await this.repository.update(id, {
       messages: session.messages,
@@ -1116,6 +1128,7 @@ export class SessionsService implements OnModuleInit {
     const messages = fresh.messages;
     const entities = sourceEntities(data);
     const reasoning = reasoningTrail(data);
+    const knowledge = knowledgeUsed(options.requestContext);
     if (clarification) {
       // The turn stops here, but the schema/sample work done before the
       // question is real work — keep it on the card instead of dropping it.
@@ -1127,6 +1140,7 @@ export class SessionsService implements OnModuleInit {
         ...(data.length ? { data } : {}),
         ...(entities.length ? { entities } : {}),
         ...(reasoning ? { reasoning } : {}),
+        ...(knowledge ? { knowledge } : {}),
       });
     } else if (text.trim() || visualEvent) {
       const interpretation = interpretationLine(data, entities);
@@ -1145,6 +1159,7 @@ export class SessionsService implements OnModuleInit {
         ...(entities.length ? { entities } : {}),
         ...(interpretation ? { interpretation } : {}),
         ...(reasoning ? { reasoning } : {}),
+        ...(knowledge ? { knowledge } : {}),
         ...((await this.matchesVerifiedQuery(session, data))
           ? { verified: true }
           : {}),
@@ -1385,6 +1400,21 @@ function reasoningTrail(
     });
   }
   return steps.length ? steps : undefined;
+}
+
+/**
+ * The curated-knowledge snippets `agentContext` put in this turn's system
+ * block, read back off the same requestContext that carried them into the
+ * agent call. Nothing is re-derived here: an answer lists the knowledge it
+ * was actually given, even if the store changed while the turn ran.
+ */
+function knowledgeUsed(
+  requestContext: { get(key: string): unknown } | undefined,
+): KnowledgeUse[] | undefined {
+  const used = requestContext?.get(KNOWLEDGE_USED_CONTEXT_KEY);
+  return Array.isArray(used) && used.length
+    ? (used as KnowledgeUse[])
+    : undefined;
 }
 
 /**

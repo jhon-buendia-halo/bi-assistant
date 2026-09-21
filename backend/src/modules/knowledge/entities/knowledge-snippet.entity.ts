@@ -60,3 +60,19 @@ export interface KnowledgeSnippetDraft {
   synonyms?: string[];
   entities?: string[];
 }
+
+/**
+ * A snippet as it was handed to the assistant for one turn. Recorded at
+ * context-assembly time, not inferred afterwards: only snippets that actually
+ * fit inside the block's character budget are captured, so the trail can
+ * never claim knowledge the model never saw.
+ */
+export interface KnowledgeUse {
+  id: string;
+  kind: KnowledgeSnippetKind;
+  title: string;
+  /** The body exactly as it appeared in the block. */
+  body: string;
+  /** Dataset the snippet is scoped to; absent for a global snippet. */
+  datasetId?: string;
+}

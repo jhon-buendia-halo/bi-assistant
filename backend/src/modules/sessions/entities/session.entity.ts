@@ -1,3 +1,7 @@
+import type { KnowledgeUse } from '../../knowledge/entities/knowledge-snippet.entity';
+
+export type { KnowledgeUse };
+
 export interface ClarificationOption {
   label: string;
   description?: string;
@@ -95,6 +99,14 @@ export interface ChatMessage {
    * outcomes are ours, so the trail can never claim a query that never ran.
    */
   reasoning?: ReasoningStep[];
+  /**
+   * The curated knowledge snippets this answer's context carried, recorded
+   * when the block was assembled rather than reconstructed afterwards. Shown
+   * beside the reasoning trail so a reader can see the standing terms,
+   * instructions and default filters the assistant was working under — the
+   * list is what the model was *given*, not a claim about what it applied.
+   */
+  knowledge?: KnowledgeUse[];
   /**
    * Present when a deep-analysis job produced a report. The message content is
    * the report's executive summary; the full markdown lives in the workspace.

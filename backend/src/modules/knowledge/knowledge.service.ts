@@ -17,6 +17,7 @@ import {
   KnowledgeSnippetKind,
   KnowledgeSnippetScope,
   KnowledgeSnippetSource,
+  KnowledgeUse,
 } from './entities/knowledge-snippet.entity';
 
 /** Character budget the curated-knowledge system block may take per turn. */
@@ -110,6 +111,19 @@ export class KnowledgeService {
    * shape: budgeted, most-relevant-first.
    */
   async definitionBlock(datasetIds: string[]): Promise<string> {
+    return (await this.contextFor(datasetIds)).block;
+  }
+
+  /**
+   * `definitionBlock` plus the per-snippet record of what went into it, so a
+   * turn can show which curated knowledge the assistant was given. `used`
+   * lists only the snippets that survived the character budget and is in the
+   * same order as the block, so the two can never disagree.
+   */
+  async contextFor(
+    datasetIds: string[],
+  ): Promise<{ block: string; used: KnowledgeUse[] }> {
+    const empty = { block: '', used: [] as KnowledgeUse[] };
     const scope = new Set(datasetIds);
     const all = await this.repository.list(); // already updatedAt desc
     const applicable = all.filter(
@@ -119,7 +133,7 @@ export class KnowledgeService {
           (snippet.scope.datasetId !== undefined &&
             scope.has(snippet.scope.datasetId))),
     );
-    if (!applicable.length) return '';
+    if (!applicable.length) return empty;
     // Stable sort: dataset-scoped before global, `updatedAt desc` preserved
     // within each group since `all` already carries that order.
     const ordered = [...applicable].sort(
@@ -128,14 +142,16 @@ export class KnowledgeService {
     const lines = [
       'Curated dataset knowledge (user-authored — treat as authoritative over anything you infer from schema):',
     ];
+    const used: KnowledgeUse[] = [];
     let budget = KNOWLEDGE_BLOCK_CHARS;
     for (const snippet of ordered) {
       const entry = formatSnippet(snippet);
       if (entry.length > budget) break;
       budget -= entry.length;
       lines.push(entry);
+      used.push(toKnowledgeUse(snippet));
     }
-    return lines.length > 1 ? lines.join('\n') : '';
+    return used.length ? { block: lines.join('\n'), used } : empty;
   }
 
   /**
@@ -302,6 +318,19 @@ function matchesQuery(
     if (!scopedToDataset && !isGlobal) return false;
   }
   return true;
+}
+
+/** The turn-level record of a snippet the assistant was actually shown. */
+function toKnowledgeUse(snippet: KnowledgeSnippet): KnowledgeUse {
+  return {
+    id: snippet.id,
+    kind: snippet.kind,
+    title: snippet.title,
+    body: snippet.body,
+    ...(snippet.scope?.datasetId
+      ? { datasetId: snippet.scope.datasetId }
+      : {}),
+  };
 }
 
 /** One compact line per snippet: kind tag, title, body, then optional extras. */

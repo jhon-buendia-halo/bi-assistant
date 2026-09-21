@@ -19,6 +19,7 @@ import {
   KnowledgeSnippet,
   KnowledgeSnippetKind,
   kindAccentClass,
+  kindDescription,
   kindLabel,
 } from '../../models/knowledge.model';
 import {
@@ -49,6 +50,7 @@ export class KnowledgeList implements OnInit {
 
   readonly kinds = KNOWLEDGE_KINDS;
   readonly kindLabel = kindLabel;
+  readonly kindDescription = kindDescription;
   readonly kindAccentClass = kindAccentClass;
 
   private readonly api = inject(KnowledgeApiService);

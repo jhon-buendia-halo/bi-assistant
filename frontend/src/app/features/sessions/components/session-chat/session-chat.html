@@ -92,6 +92,10 @@
               [ngTemplateOutletContext]="{ $implicit: message }"
             />
             <ng-container
+              [ngTemplateOutlet]="knowledgeApplied"
+              [ngTemplateOutletContext]="{ $implicit: message }"
+            />
+            <ng-container
               [ngTemplateOutlet]="dataProvenance"
               [ngTemplateOutletContext]="{ $implicit: message }"
             />
@@ -229,6 +233,10 @@
             <div class="prose-dark" [innerHTML]="message.content | markdown"></div>
             <ng-container
               [ngTemplateOutlet]="reasoningTrail"
+              [ngTemplateOutletContext]="{ $implicit: message }"
+            />
+            <ng-container
+              [ngTemplateOutlet]="knowledgeApplied"
               [ngTemplateOutletContext]="{ $implicit: message }"
             />
             @if (message.interpretation) {
@@ -595,6 +603,50 @@
           </li>
         }
       </ol>
+    </details>
+  }
+</ng-template>
+
+<!--
+  The standing knowledge the answer was produced under. Deliberately separate
+  from the reasoning steps: those are things the assistant did, these are
+  things it was told before it did anything. Server-recorded at the moment the
+  system block was built, so it lists what the model was given — not a claim
+  about which snippet changed the SQL.
+-->
+<ng-template #knowledgeApplied let-message>
+  @if (message.knowledge?.length) {
+    <details
+      class="mt-2 rounded-lg border border-white/5 bg-white/[0.02] text-[12px]"
+    >
+      <summary
+        class="cursor-pointer px-3 py-1.5 text-zinc-500 select-none hover:text-zinc-300"
+      >
+        Knowledge in context ({{ message.knowledge.length }})
+      </summary>
+      <ul class="flex flex-col gap-2 border-t border-white/5 px-3 py-2">
+        @for (item of message.knowledge; track item.id) {
+          <li class="flex min-w-0 flex-col gap-0.5">
+            <span class="flex flex-wrap items-center gap-1.5">
+              <span
+                class="shrink-0 text-[11px] font-medium"
+                [class]="knowledgeAccentClass(item.kind)"
+                [title]="knowledgeDescription(item.kind)"
+                >{{ knowledgeKindLabel(item.kind) }}</span
+              >
+              <span class="text-zinc-300">{{ item.title }}</span>
+              <span class="text-[11px] text-zinc-600">{{
+                item.datasetId ?? "global"
+              }}</span>
+            </span>
+            <span class="leading-5 text-zinc-500">{{ item.body }}</span>
+          </li>
+        }
+      </ul>
+      <p class="border-t border-white/5 px-3 py-1.5 text-[11px] text-zinc-600">
+        Curated knowledge the assistant was given before answering. Edit it
+        under Knowledge; disabled snippets are never included.
+      </p>
     </details>
   }
 </ng-template>

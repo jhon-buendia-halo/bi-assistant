@@ -47,6 +47,11 @@ import {
   ToolDataRecord,
   VisualEvent,
 } from '../../models/session.model';
+import {
+  kindAccentClass,
+  kindDescription,
+  kindLabel,
+} from '../../../knowledge/models/knowledge.model';
 import { ToastService } from '../../../../core/toast/toast.service';
 import { MarkdownPipe } from '../../../../shared/pipes/markdown.pipe';
 
@@ -116,6 +121,12 @@ export function deepAnalysisProgressLine(job: DeepAnalysisActivity): string {
   styleUrl: './session-chat.scss',
 })
 export class SessionChat implements OnDestroy {
+  // Labels/colours for the knowledge snippets an answer was produced under —
+  // reused from the Knowledge feature so the chat and that screen never drift.
+  readonly knowledgeKindLabel = kindLabel;
+  readonly knowledgeDescription = kindDescription;
+  readonly knowledgeAccentClass = kindAccentClass;
+
   readonly ArrowUp = ArrowUp;
   readonly BadgeCheck = BadgeCheck;
   readonly BarChart3 = BarChart3;

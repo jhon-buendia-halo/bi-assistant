@@ -383,6 +383,68 @@ describe('KnowledgeService.definitionBlock', () => {
   });
 });
 
+describe('KnowledgeService.contextFor', () => {
+  it('records nothing when no snippet applies', async () => {
+    const { service } = build([snippet({ enabled: false })]);
+
+    await expect(service.contextFor(['World Cup'])).resolves.toEqual({
+      block: '',
+      used: [],
+    });
+  });
+
+  it('records id, kind, title, body and dataset scope of each snippet in the block', async () => {
+    const { service } = build([
+      snippet({
+        id: 'k1',
+        kind: 'term',
+        scope: { datasetId: 'World Cup' },
+        title: 'DNF',
+        body: 'Did not finish',
+      }),
+      snippet({ id: 'k2', kind: 'instruction', scope: null, title: 'Coverage', body: '2018 and 2022 only' }),
+    ]);
+
+    const { block, used } = await service.contextFor(['World Cup']);
+
+    expect(used).toEqual([
+      { id: 'k1', kind: 'term', title: 'DNF', body: 'Did not finish', datasetId: 'World Cup' },
+      { id: 'k2', kind: 'instruction', title: 'Coverage', body: '2018 and 2022 only' },
+    ]);
+    // Same order as the rendered block, so the two can never disagree.
+    expect(block.indexOf('DNF')).toBeLessThan(block.indexOf('Coverage'));
+  });
+
+  it('omits snippets the character budget dropped, so it never claims knowledge the model never saw', async () => {
+    const many = Array.from({ length: 100 }, (_, n) =>
+      snippet({
+        id: `s${n}`,
+        scope: null,
+        title: `Term ${n}`,
+        body: 'x'.repeat(200),
+      }),
+    );
+    const { service } = build(many);
+
+    const { block, used } = await service.contextFor([]);
+
+    expect(used.length).toBeLessThan(many.length);
+    for (const entry of used) expect(block).toContain(entry.title);
+  });
+
+  it('excludes disabled and out-of-scope snippets', async () => {
+    const { service } = build([
+      snippet({ id: 'off', enabled: false, scope: null, title: 'Disabled' }),
+      snippet({ id: 'other', scope: { datasetId: 'Other' }, title: 'Elsewhere' }),
+      snippet({ id: 'on', scope: { datasetId: 'World Cup' }, title: 'Applies' }),
+    ]);
+
+    const { used } = await service.contextFor(['World Cup']);
+
+    expect(used.map((u) => u.id)).toEqual(['on']);
+  });
+});
+
 describe('KnowledgeService.bootstrap', () => {
   const dataset = {
     name: 'World Cup',

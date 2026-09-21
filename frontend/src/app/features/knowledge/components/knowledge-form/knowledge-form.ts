@@ -14,6 +14,7 @@ import {
   KnowledgeSnippet,
   KnowledgeSnippetInput,
   KnowledgeSnippetKind,
+  kindDescription,
 } from '../../models/knowledge.model';
 import { Dataset } from '../../../datasets/services/datasets-api.service';
 import { ToastService } from '../../../../core/toast/toast.service';
@@ -34,6 +35,7 @@ export class KnowledgeForm {
   readonly Loader2 = Loader2;
   readonly X = X;
   readonly kinds = KNOWLEDGE_KINDS;
+  readonly kindDescription = kindDescription;
 
   private readonly api = inject(KnowledgeApiService);
   private readonly toast = inject(ToastService);
