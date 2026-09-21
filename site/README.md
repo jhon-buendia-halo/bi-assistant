@@ -13,8 +13,10 @@ public/
   halo-logo.svg       the Halo wordmark, lifted from the Labs site
   app-icon.png        the app's own icon (copied from frontend/build/icon.png)
   favicon.png, apple-touch-icon.png
+functions/          Pages Functions — the download routes (see Downloads below)
+lib/                shared Function code
 scripts/
-  dev.sh              serve locally on :4500
+  dev.sh              serve locally on :4500 via `wrangler pages dev`
   deploy.sh           publish to Cloudflare Pages
   domain.sh           attach bi-assistant.halo-powered-labs.com to the Pages project
   protect.sh          optional: lock it behind Cloudflare Access
@@ -44,21 +46,59 @@ export CLOUDFLARE_ACCOUNT_ID=...     # npx wrangler whoami
 
 Override the project or hostname with `CF_PAGES_PROJECT` / `CUSTOM_DOMAIN`.
 
-## Adding the download links
+## Downloads
 
-The three download buttons are deliberately inert until the installer URLs exist. In
-`public/index.html`, find the `DOWNLOAD LINKS` comment and, for each card:
-
-1. replace `href="#"` with the installer URL, and
-2. delete `aria-disabled="true"` on that same `<a>`.
-
-Installer filenames follow `Questions-to-Insights-<version>-<os>-<arch>.<dmg|exe>`, produced
-by the **Build desktop installers** workflow (`.github/workflows/build-desktop.yml`). If that
-run is published to a GitHub release, the URLs look like:
+The download buttons link to this site's own routes — `/download/mac-arm64`,
+`/download/mac-x64`, `/download/win-x64` — not to versioned GitHub URLs. **A new
+release needs no edit here**: the route resolves the newest published installer
+and redirects to it.
 
 ```
-https://github.com/jhon-buendia-halo/questions-to-insights/releases/download/v0.10.1/Questions-to-Insights-0.10.1-mac-arm64.dmg
+functions/download/[target].js   resolve a platform → 302 to the installer
+functions/api/latest.js          JSON the page uses for version + file sizes
+lib/github-release.js            shared resolution logic (outside functions/, so it isn't routed)
 ```
 
-Those release assets are private while the repo is private — for an external audience, upload
-the installers somewhere publicly readable (or an R2 bucket) and point the buttons there.
+### How it gets at a private repo's assets
+
+`questions-to-insights` is private, so `releases/download/…` returns 404 to the
+public. The GitHub API will still hand out a credential-free link: request an
+asset with `Accept: application/octet-stream` and it answers `302` with a
+short-lived `release-assets.githubusercontent.com` URL that needs no auth. The
+Function reads that `Location` and redirects the browser to it — the token never
+leaves the edge, and the installer streams from GitHub's CDN rather than through
+a Worker.
+
+Per platform it picks the newest release that actually carries that installer,
+so a Windows-only build (as v0.10.1 was) leaves the macOS buttons pointing at
+the last release that had them, instead of breaking. When a platform lags the
+headline release, its card names its own version.
+
+### The token
+
+One secret, `GITHUB_TOKEN` — a fine-grained PAT with **Contents: Read-only**,
+scoped to `questions-to-insights` alone:
+
+```bash
+npx wrangler@4 pages secret put GITHUB_TOKEN --project-name halo-bi-assistant
+```
+
+Without it both routes answer `503` and the page keeps its static copy, so the
+page never looks broken — the buttons just say *Unavailable*.
+
+Fine-grained PATs expire (a year at most). When it lapses, downloads stop until
+the secret is replaced; nothing else on the page is affected.
+
+### Local development
+
+```bash
+GITHUB_TOKEN=ghp_... ./scripts/dev.sh     # wrangler pages dev on :4500, Functions included
+```
+
+Omit the token to exercise the unconfigured path.
+
+## Filename note
+
+Installers are named `Questions-to-Insights-<version>-<os>-<arch>.<ext>` while
+the product is branded *Halo BI Assistant*. Change `build.artifactName` in
+`frontend/package.json` if the downloaded file should carry the product name.

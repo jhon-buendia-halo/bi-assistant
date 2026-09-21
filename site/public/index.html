@@ -249,29 +249,30 @@
           Installers are built per platform. Pick the one that matches your machine — on a Mac,
           Apple silicon is <em>arm64</em> and Intel is <em>x64</em>.
         </p>
+        <p class="dl-version" id="dl-version" hidden></p>
       </div>
 
       <!--
-        DOWNLOAD LINKS
-        Replace each href="#" below with the real installer URL, and delete the
-        aria-disabled="true" attribute on that link so it becomes clickable.
-        Filenames follow: Questions-to-Insights-<version>-<os>-<arch>.<dmg|exe>
+        The buttons below point at this site's own /download/<target> route, not
+        at a versioned GitHub URL. That route resolves the newest published
+        installer and redirects to it, so a new release needs no edit here.
+        /api/latest fills in the version and file sizes on load.
       -->
       <div class="dl-grid">
-        <div class="dl-card">
+        <div class="dl-card" data-target="mac-arm64">
           <div class="dl-os">macOS · Apple silicon</div>
           <p class="dl-meta">.dmg — M1 and newer</p>
-          <a class="btn btn-grad" href="#" aria-disabled="true">Link coming</a>
+          <a class="btn btn-grad" href="/download/mac-arm64">Download</a>
         </div>
-        <div class="dl-card">
+        <div class="dl-card" data-target="mac-x64">
           <div class="dl-os">macOS · Intel</div>
           <p class="dl-meta">.dmg — x64 Macs</p>
-          <a class="btn btn-grad" href="#" aria-disabled="true">Link coming</a>
+          <a class="btn btn-grad" href="/download/mac-x64">Download</a>
         </div>
-        <div class="dl-card">
+        <div class="dl-card" data-target="win-x64">
           <div class="dl-os">Windows</div>
           <p class="dl-meta">.exe installer — x64</p>
-          <a class="btn btn-grad" href="#" aria-disabled="true">Link coming</a>
+          <a class="btn btn-grad" href="/download/win-x64">Download</a>
         </div>
       </div>
 
@@ -362,6 +363,78 @@
 <script>
   document.getElementById('year-line').textContent =
     '© ' + new Date().getFullYear() + ' Halo Powered Labs';
+
+  // The download cards are rendered from /api/latest so the page always states
+  // the version it will actually hand you. The buttons work without this —
+  // /download/<target> resolves server-side — this only adds the detail.
+  (async () => {
+    const version = document.getElementById('dl-version');
+    const cards = [...document.querySelectorAll('.dl-card[data-target]')];
+
+    const mb = (bytes) => (bytes / 1024 / 1024).toFixed(0) + ' MB';
+    const day = (iso) =>
+      new Date(iso).toLocaleDateString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      });
+
+    const markUnavailable = (why) => {
+      for (const card of cards) {
+        card.querySelector('.dl-meta').textContent = why;
+        const btn = card.querySelector('.btn');
+        btn.textContent = 'Unavailable';
+        btn.setAttribute('aria-disabled', 'true');
+      }
+    };
+
+    let data;
+    try {
+      const res = await fetch('/api/latest');
+      data = await res.json();
+      // A route that reports itself unconfigured or broken means the download
+      // links cannot work either — say so rather than leave live-looking
+      // buttons that hand back an error page.
+      if (!res.ok || data?.error) {
+        markUnavailable(
+          data?.error === 'not-configured'
+            ? 'Downloads not configured yet'
+            : 'Temporarily unavailable',
+        );
+        return;
+      }
+    } catch {
+      // Could not reach our own API — the download route may still be fine, so
+      // leave the static copy alone rather than disable a working button.
+      return;
+    }
+
+    if (data.latest) {
+      version.textContent =
+        'Latest release ' + data.latest.tag + ' · ' + day(data.latest.publishedAt);
+      version.hidden = false;
+    }
+
+    for (const card of cards) {
+      const asset = data.targets?.[card.dataset.target];
+      const meta = card.querySelector('.dl-meta');
+      const btn = card.querySelector('.btn');
+
+      if (!asset) {
+        meta.textContent = 'Not published yet';
+        btn.textContent = 'Unavailable';
+        btn.setAttribute('aria-disabled', 'true');
+        continue;
+      }
+
+      const ext = asset.name.endsWith('.exe') ? '.exe' : '.dmg';
+      // Name the version per card when a platform lags the headline release.
+      const lagging =
+        data.latest && asset.tag !== data.latest.tag ? ' · ' + asset.tag : '';
+      meta.textContent = ext + ' · ' + mb(asset.size) + lagging;
+      btn.textContent = 'Download ' + asset.version;
+    }
+  })();
 </script>
 
 </body>

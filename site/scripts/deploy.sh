@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# Publish site/public to Cloudflare Pages.
+# Publish the site to Cloudflare Pages.
 #
-# The site is plain static files — there is no build step, so this uploads
-# ./public as-is. First run creates the Pages project.
+# `public/` is plain static files — no build step. `functions/` is picked up by
+# wrangler relative to its working directory, which is why this cd's to the
+# site root instead of passing an absolute path.
 #
 # Env:
 #   CLOUDFLARE_API_TOKEN   token with "Cloudflare Pages — Edit"   (or run `wrangler login`)
@@ -11,12 +12,14 @@
 set -euo pipefail
 PROJECT="${CF_PAGES_PROJECT:-halo-bi-assistant}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
 
-echo "▸ Deploying $ROOT/public to Pages project '$PROJECT'…"
-npx --yes wrangler@4 pages deploy "$ROOT/public" \
+echo "▸ Deploying $ROOT (public/ + functions/) to Pages project '$PROJECT'…"
+npx --yes wrangler@4 pages deploy public \
   --project-name "$PROJECT" \
   --branch main \
   --commit-dirty=true
 
 echo "✔ Deployed. Preview: https://$PROJECT.pages.dev"
-echo "  Next: attach the subdomain — ./scripts/domain.sh"
+echo "  The download routes need the GITHUB_TOKEN secret:"
+echo "    npx wrangler@4 pages secret put GITHUB_TOKEN --project-name $PROJECT"

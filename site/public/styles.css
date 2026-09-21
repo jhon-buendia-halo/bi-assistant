@@ -59,3 +59,4 @@ a{color:inherit;text-decoration:none}
 .flow-num{background:linear-gradient(120deg,#ed3e13 0%,#ff7014 55%,#feca1f 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
 /* the Labs header hides its CTA on phones; here the download button is the point */
 @media(max-width:720px){.header-cta{display:inline-flex}}
+.dl-version{margin-top:14px;color:var(--text-mute);font-size:15px}
