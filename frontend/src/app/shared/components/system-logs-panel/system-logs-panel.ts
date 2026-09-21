@@ -8,6 +8,7 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import {
   Download,
   RefreshCw,
@@ -19,13 +20,18 @@ import {
 } from 'lucide-angular';
 import { DiagnosticsService } from '../../../core/diagnostics/diagnostics.service';
 import { DiagnosticEntry } from '../../../core/diagnostics/diagnostics.types';
+import {
+  filterGrouped,
+  groupEntriesByRun,
+  type LogRun,
+} from '../../../core/diagnostics/log-runs';
 import { ToastService } from '../../../core/toast/toast.service';
 
 type LogFilter = 'all' | 'issues';
 
 @Component({
   selector: 'app-system-logs-panel',
-  imports: [LucideAngularModule],
+  imports: [LucideAngularModule, NgTemplateOutlet],
   templateUrl: './system-logs-panel.html',
 })
 export class SystemLogsPanel {
@@ -44,6 +50,7 @@ export class SystemLogsPanel {
   readonly filter = signal<LogFilter>('all');
   readonly query = signal('');
   readonly follow = signal(true);
+  readonly grouped = signal(true);
   readonly exporting = signal(false);
   readonly errorCount = computed(
     () =>
@@ -55,10 +62,15 @@ export class SystemLogsPanel {
       this.diagnostics.entries().filter((entry) => entry.level === 'warn')
         .length,
   );
-  readonly visibleEntries = computed(() => {
+  /** True when the level filter or search box is narrowing the stream. */
+  readonly filtering = computed(
+    () => this.filter() === 'issues' || this.query().trim().length > 0,
+  );
+  /** The level filter and search box, as one predicate both views share. */
+  private readonly matcher = computed(() => {
     const filter = this.filter();
     const query = this.query().trim().toLowerCase();
-    return this.diagnostics.entries().filter((entry) => {
+    return (entry: DiagnosticEntry): boolean => {
       if (
         filter === 'issues' &&
         entry.level !== 'error' &&
@@ -72,8 +84,22 @@ export class SystemLogsPanel {
           .toLowerCase()
           .includes(query)
       );
-    });
+    };
   });
+  readonly visibleEntries = computed(() =>
+    this.diagnostics.entries().filter(this.matcher()),
+  );
+  /**
+   * Grouped on the full stream and filtered inside each run — grouping the
+   * filtered list instead would hide the `[Nest]` lines the run boundaries are
+   * derived from.
+   */
+  readonly visibleGroups = computed(() =>
+    filterGrouped(
+      groupEntriesByRun(this.diagnostics.entries()),
+      this.matcher(),
+    ),
+  );
   readonly latestIssue = computed(() =>
     this.diagnostics
       .entries()
@@ -108,6 +134,22 @@ export class SystemLogsPanel {
     } finally {
       this.exporting.set(false);
     }
+  }
+
+  /**
+   * Newest run stays expanded and older ones collapse, so the panel opens on
+   * the run you are almost certainly here for. While filtering, every
+   * surviving run expands instead: a match you cannot see is worse than a
+   * long list, and a collapsed run would silently hide search hits.
+   */
+  isRunOpen(run: LogRun): boolean {
+    return this.filtering() || run === this.visibleGroups().runs.at(-1);
+  }
+
+  runSpan(run: LogRun): string {
+    const start = this.formatTime(run.startedAt);
+    const end = this.formatTime(run.endedAt);
+    return start === end ? start : `${start} – ${end}`;
   }
 
   levelClasses(entry: DiagnosticEntry): string {
