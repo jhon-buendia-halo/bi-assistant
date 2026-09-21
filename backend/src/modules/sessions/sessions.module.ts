@@ -5,6 +5,7 @@ import { DatasourcesModule } from '../datasources/datasources.module';
 import { LlmModule } from '../llm/llm.module';
 import { VerifiedQueriesModule } from '../verified-queries/verified-queries.module';
 import { MetricsModule } from '../metrics/metrics.module';
+import { KnowledgeModule } from '../knowledge/knowledge.module';
 import { SessionsController } from './sessions.controller';
 import { SessionsService } from './sessions.service';
 import { SessionsRepository } from './repositories/sessions.repository';
@@ -18,6 +19,7 @@ import { VisualizationService } from './visualization.service';
     LlmModule,
     VerifiedQueriesModule,
     MetricsModule,
+    KnowledgeModule,
   ],
   controllers: [SessionsController],
   providers: [SessionsService, SessionsRepository, VisualizationService],

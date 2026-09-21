@@ -9,11 +9,8 @@ import { randomUUID } from 'crypto';
 import { RequestContext } from '@mastra/core/request-context';
 import { MastraService } from '../../mastra/mastra.service';
 import { setDatasetToolServices } from '../../mastra/tool-services';
-import type {
-  DatasetColumnSnapshot,
-  DatasetSnapshot,
-  SqlRunResult,
-} from '../../mastra/tool-services';
+import type { DatasetSnapshot, SqlRunResult } from '../../mastra/tool-services';
+import { ASSISTANT_MAX_STEPS } from '../../mastra/agent-constants';
 import { sqlFixOutputSchema } from '../../mastra/agents/sql-fixer.agent';
 import { sqlVerifyOutputSchema } from '../../mastra/agents/sql-verifier.agent';
 import { DATASETS_CONTEXT_KEY } from '../../mastra/tools/dataset.tools';
@@ -23,15 +20,28 @@ import {
   TURN_RECORDS_CONTEXT_KEY,
 } from '../../mastra/tools/visual.tools';
 import { SESSION_WORKSPACE_CONTEXT_KEY } from '../../mastra/session-workspaces';
+import {
+  entityOrientationLines,
+  schemaSnapshotBlock,
+} from '../../mastra/context-blocks';
 import { DatasetsRepository } from '../datasets/repositories/datasets.repository';
 import { DatasourcesService } from '../datasources/datasources.service';
 import { LlmService } from '../llm/llm.service';
 import { VerifiedQueriesService } from '../verified-queries/verified-queries.service';
 import { MetricsService } from '../metrics/metrics.service';
+import { KnowledgeService } from '../knowledge/knowledge.service';
 import { SessionsRepository } from './repositories/sessions.repository';
 import { VisualizationService } from './visualization.service';
 import { sourceEntities } from './visualization-document';
 import { compareResults } from './result-compare';
+import {
+  STORED_ROWS_CAP,
+  groundingNudge,
+  statedRationale,
+  synthesizeToolOnlyTurn,
+  toolDataRecord,
+  toolRecords,
+} from './turn-data';
 import {
   ChatMessage,
   CrossCheck,
@@ -44,10 +54,6 @@ import {
   VisualEvent,
 } from './entities/session.entity';
 
-const STORED_ROWS_CAP = 200;
-const SYNTHESIS_ROWS_CAP = 50;
-const EMPTY_RESPONSE_FALLBACK =
-  'I completed the data analysis but could not produce a final response. Please retry your question.';
 const VISUAL_TOOLS = new Set(['create_visual', 'update_visual']);
 /** Repair attempts allowed per failed statement (3 executions at most). */
 const SQL_REPAIR_ATTEMPTS = 2;
@@ -61,8 +67,6 @@ const limitReachedNote = (limit: number) =>
 const FIXER_SCHEMA_CHARS = 4_000;
 /** Character budget for the richer (sample-value bearing) verifier schema. */
 const VERIFIER_SCHEMA_CHARS = 6_000;
-/** Join hints shown up front to the assistant — enough for a wide dataset. */
-const JOIN_HINT_CHARS = 1_500;
 /** Sample values shown per column to the verifier — value matching, not data. */
 const VERIFIER_SAMPLE_VALUES = 3;
 /** Longest cross-check note persisted on a message (tooltip-sized). */
@@ -75,8 +79,6 @@ const CROSS_CHECK_AGREE_SHAPE_NOTE =
 const CROSS_CHECK_DISAGREE_NOTE = 'results differ — treat with care';
 /** Rows the cross-check query may return — matches what the answer stored. */
 const CROSS_CHECK_ROW_LIMIT = STORED_ROWS_CAP;
-/** Longest rationale kept per step — a sentence or two, never an essay. */
-const RATIONALE_CHARS = 400;
 
 export type StreamEvent = {
   type:
@@ -98,6 +100,7 @@ export class SessionsService implements OnModuleInit {
     private readonly visuals: VisualizationService,
     private readonly verifiedQueries: VerifiedQueriesService,
     private readonly metrics: MetricsService,
+    private readonly knowledge: KnowledgeService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -158,9 +161,10 @@ export class SessionsService implements OnModuleInit {
   /**
    * Hybrid context: a cheap orientation block (dataset names + entity keys,
    * the session's visuals and which one is open), the curated metric
-   * definitions covering those entities, plus any user-approved question → SQL
-   * pairs resembling `question`, in the system context, and requestContext
-   * scoping the tools to this session.
+   * definitions covering those entities, the curated knowledge-store
+   * snippets covering this session's datasets, plus any user-approved
+   * question → SQL pairs resembling `question`, in the system context, and
+   * requestContext scoping the tools to this session.
    *
    * Memory-free on purpose — `agentOptions` adds the session's conversation
    * thread, `backgroundAgentOptions` deliberately does not.
@@ -172,13 +176,6 @@ export class SessionsService implements OnModuleInit {
     activeVisualId?: string,
   ) {
     const datasets = await this.boundDatasets(session.datasets);
-    const entityLines = datasets.flatMap((s) =>
-      s.tables.map(
-        (t) =>
-          `- ${t} (dataset: ${s.name}; datasource: ${s.datasourceKind ?? 'unknown'} ${s.datasourceId ?? ''})`,
-      ),
-    );
-    const joinHints = joinHintBlock(datasets);
     const visualLines = (session.visualizations ?? []).map(
       (v) =>
         `- ${v.id} — "${v.title}" v${this.visuals.currentVersion(v)} (from the answer at ${v.sourceMessageAt})`,
@@ -203,22 +200,20 @@ export class SessionsService implements OnModuleInit {
     const metrics = await this.metrics.definitionBlock(
       datasets.flatMap((s) => s.tables ?? []),
     );
+    // Curated, user-authored knowledge (glossary/instructions/default
+    // filters) for this session's datasets — authoritative over anything
+    // the model would otherwise infer from schema alone.
+    const knowledge = await this.knowledge.definitionBlock(session.datasets);
     return {
       // Analysis often chains several schema + SQL tool calls per turn.
-      maxSteps: 15,
+      maxSteps: ASSISTANT_MAX_STEPS,
       // The user-configured reasoning effort (Low/Medium/High chip).
       providerOptions: { openai: { reasoningEffort } },
       context: [
         {
           role: 'system' as const,
           content: [
-            `Datasets for this session: ${session.datasets.join(', ')}.`,
-            'Entities available (fully-qualified catalog.schema.table):',
-            ...(entityLines.length
-              ? entityLines
-              : ['(none — the datasets are empty)']),
-            'Use describe_entity / sample_rows / run_readonly_sql to inspect and query them.',
-            ...(joinHints ? ['', joinHints] : []),
+            ...entityOrientationLines(session.datasets, datasets),
             '',
             'Interactive visuals in this session (id — title, current version):',
             ...(visualLines.length ? visualLines : ['(none yet)']),
@@ -228,6 +223,7 @@ export class SessionsService implements OnModuleInit {
           ].join('\n'),
         },
         ...(metrics ? [{ role: 'system' as const, content: metrics }] : []),
+        ...(knowledge ? [{ role: 'system' as const, content: knowledge }] : []),
         ...(verified ? [{ role: 'system' as const, content: verified }] : []),
       ],
       requestContext,
@@ -479,7 +475,9 @@ export class SessionsService implements OnModuleInit {
       }
       const sql = await this.deriveIndependentSql(question, context);
       if (!sql) {
-        this.logger.warn('Cross-check skipped: verifier produced no usable query');
+        this.logger.warn(
+          'Cross-check skipped: verifier produced no usable query',
+        );
         return crossCheck(
           'error',
           'the independent check did not produce a usable query',
@@ -541,7 +539,10 @@ export class SessionsService implements OnModuleInit {
       dialect:
         inScope.find((s) => s.datasourceKind)?.datasourceKind ?? 'databricks',
       datasourceId,
-      schema: verifierSchema(inScope),
+      schema: schemaSnapshotBlock(inScope, {
+        budgetChars: VERIFIER_SCHEMA_CHARS,
+        sampleValues: VERIFIER_SAMPLE_VALUES,
+      }),
     };
   }
 
@@ -945,6 +946,9 @@ export class SessionsService implements OnModuleInit {
     let clarification: ChatMessage['clarification'] | null = null;
     let visualEvent: VisualEvent | undefined;
     const pendingCalls = new Map<string, Record<string, unknown>>();
+    // Every tool name the model actually invoked this turn — the zero-SQL-
+    // turn grounding guard below fires only when this stays empty.
+    const calledTools = new Set<string>();
     try {
       for await (const chunk of stream.fullStream) {
         if (chunk.type === 'reasoning-delta') {
@@ -962,6 +966,7 @@ export class SessionsService implements OnModuleInit {
             toolName?: string;
             args?: Record<string, unknown>;
           };
+          if (payload.toolName) calledTools.add(payload.toolName);
           if (payload.toolName === 'ask_clarification') {
             // Clarification ends the turn — the card renders in the UI and the
             // user's pick arrives as the next message. Abort so the model
@@ -1066,14 +1071,44 @@ export class SessionsService implements OnModuleInit {
       // A model can spend every allowed step on tools and finish without a
       // user-facing answer. Give it one tool-disabled pass to turn the data it
       // already collected into prose; never let a completed turn disappear.
-      text = await this.synthesizeToolOnlyTurn(
+      text = await synthesizeToolOnlyTurn(
         agent,
         trimmed,
         data,
         turn.signal,
+        (await this.llmService.getView()).reasoningEffort,
+        this.logger,
       );
       if (turn.signal.aborted) return;
       if (text) emit({ type: 'text', content: text });
+    }
+
+    // Zero-SQL-turn grounding guard: the system prompt already forbids
+    // answering data questions from parametric memory, but prompt-only
+    // enforcement missed cases in evals (e.g. "Who won the 2022 World Cup?"
+    // answered with no tool calls at all). This is the runtime backstop —
+    // one corrective pass, tools allowed, at most once per turn. Text is
+    // streamed to the client incrementally above, before this guard can
+    // even run, so there is nothing to "un-stream"; the client's source of
+    // truth is the persisted message delivered with `done` below (see
+    // `SessionChat` — it replaces its whole message list from that event,
+    // it does not keep the streamed deltas), so overwriting `text` here is
+    // enough to make the corrected answer the one the user ends up seeing.
+    if (
+      !turn.signal.aborted &&
+      !clarification &&
+      text.trim() &&
+      calledTools.size === 0
+    ) {
+      const corrected = await this.runGroundingGuard(
+        agent,
+        trimmed,
+        text,
+        options,
+        data,
+        turn.signal,
+      );
+      if (corrected) text = corrected;
     }
 
     // Visual tools persist metadata mid-turn; reload so this write keeps it.
@@ -1123,46 +1158,63 @@ export class SessionsService implements OnModuleInit {
     }
   }
 
-  private async synthesizeToolOnlyTurn(
+  /**
+   * Runtime backstop for the grounding rule in the system prompt: a turn
+   * that produced a non-empty answer without calling a single tool gets one
+   * corrective pass, tools allowed, before it is accepted. Called at most
+   * once per turn by `streamMessage`.
+   *
+   * Deliberately memory-free. `agentInput` shows that once a session has a
+   * memory thread, the turn's `input` is just the latest user message —
+   * memory itself replays the rest of the history. Calling `agent.generate`
+   * again with that same question string and the same `{ thread, resource }`
+   * would hand memory a second "new" user turn with identical content,
+   * duplicating the question in the persisted conversation. So this pass
+   * gets its own compact, self-contained context instead: the same per-turn
+   * system blocks already built for the turn (dataset orientation, curated
+   * metrics, verified-query references) plus the nudge below, which carries
+   * the model's own ungrounded answer so it has something concrete to keep,
+   * correct or retract — never the full thread.
+   *
+   * Tool calls made during the corrective pass are extracted from the
+   * `generate()` result (there is no stream to read chunks off of) and
+   * pushed onto the same live `data` array the turn already collects into,
+   * so a corrected answer's SQL still ends up in the persisted `data`,
+   * `entities`, `interpretation` and verified-badge logic below.
+   */
+  private async runGroundingGuard(
     agent: ReturnType<MastraService['getAgent']>,
     question: string,
+    originalAnswer: string,
+    turnOptions: {
+      context?: { role: 'system'; content: string }[];
+      memory?: unknown;
+      [key: string]: unknown;
+    },
     data: ToolDataRecord[],
     abortSignal: AbortSignal,
-  ): Promise<string> {
-    if (!data.length) return EMPTY_RESPONSE_FALLBACK;
-
-    const compactData = data.map((record) => ({
-      ...record,
-      rows: record.rows?.slice(0, SYNTHESIS_ROWS_CAP),
-    }));
+  ): Promise<string | undefined> {
+    const correctiveOptions: Record<string, unknown> = { ...turnOptions };
+    delete correctiveOptions['memory'];
+    correctiveOptions['context'] = [
+      ...(turnOptions.context ?? []),
+      {
+        role: 'system' as const,
+        content: groundingNudge(originalAnswer),
+      },
+    ];
     try {
-      const { reasoningEffort } = await this.llmService.getView();
-      const result = await agent.generate(
-        [
-          'Answer the original user question using only the tool results below.',
-          'Give concrete findings, comparisons, a short takeaway, and name the source entities from the SQL where possible.',
-          'Do not call tools and do not mention internal step limits.',
-          '',
-          `Original question: ${question}`,
-          '',
-          `Tool results: ${JSON.stringify(compactData)}`,
-        ].join('\n'),
-        {
-          instructions:
-            'You are a data analyst writing the final answer from completed query results.',
-          maxSteps: 1,
-          toolChoice: 'none',
-          abortSignal,
-          providerOptions: { openai: { reasoningEffort } },
-        },
-      );
-      return (result.text ?? '').trim() || EMPTY_RESPONSE_FALLBACK;
+      const result = await agent.generate(question, correctiveOptions);
+      const corrected = ((result as { text?: string }).text ?? '').trim();
+      if (!corrected) return undefined;
+      data.push(...toolRecords(result));
+      return corrected;
     } catch (error) {
-      if (abortSignal.aborted) return '';
+      if (abortSignal.aborted) return undefined;
       this.logger.warn(
-        `Final synthesis failed: ${error instanceof Error ? error.message : String(error)}`,
+        `Grounding guard corrective pass failed: ${error instanceof Error ? error.message : String(error)}`,
       );
-      return EMPTY_RESPONSE_FALLBACK;
+      return undefined;
     }
   }
 
@@ -1273,107 +1325,6 @@ export class SessionsService implements OnModuleInit {
   }
 }
 
-/** Turn a data-bearing tool result into a compact, storable record. */
-function toolDataRecord(
-  tool: string,
-  args: Record<string, unknown>,
-  result: unknown,
-): ToolDataRecord | null {
-  if (tool !== 'run_readonly_sql' && tool !== 'sample_rows') return null;
-  const value = (result ?? {}) as {
-    columns?: unknown;
-    rows?: unknown;
-    error?: unknown;
-    correctedSql?: unknown;
-    truncated?: unknown;
-    warnings?: unknown;
-  };
-  // Show the statement that actually ran, so the answer and any visual cite
-  // the repaired SQL rather than the one that failed.
-  const input =
-    typeof value.correctedSql === 'string'
-      ? value.correctedSql
-      : typeof args['sql'] === 'string'
-        ? args['sql']
-        : typeof args['entity'] === 'string'
-          ? args['entity']
-          : undefined;
-  const rationale = statedRationale(args['rationale']);
-  if (typeof value.error === 'string') {
-    // A step that failed still explained why it was attempted — keep it, the
-    // dead end is part of the route the assistant took.
-    return {
-      tool,
-      input,
-      error: value.error,
-      ...(rationale ? { rationale } : {}),
-    };
-  }
-  const rows = Array.isArray(value.rows)
-    ? (value.rows as Record<string, unknown>[])
-    : [];
-  const columns = Array.isArray(value.columns)
-    ? value.columns.map((c) => String(c))
-    : Object.keys(rows[0] ?? {});
-  // Clipped either by the query's own row limit (flagged by the bridge) or by
-  // what we keep in the transcript.
-  const truncated = value.truncated === true || rows.length > STORED_ROWS_CAP;
-  // The guards ran in the tool, against the full result — keep their verdict
-  // with the rows it judged.
-  const warnings = Array.isArray(value.warnings)
-    ? value.warnings.map((w) => String(w)).filter(Boolean)
-    : [];
-  return {
-    tool,
-    input,
-    columns,
-    rows: rows.slice(0, STORED_ROWS_CAP),
-    rowCount: rows.length,
-    ...(truncated ? { truncated: true } : {}),
-    ...(rationale ? { rationale } : {}),
-    ...(warnings.length ? { warnings } : {}),
-  };
-}
-
-/**
- * The reason the assistant gave for a call, as stored: flattened, trimmed and
- * clipped. Anything that is not usable prose becomes nothing at all.
- */
-function statedRationale(value: unknown): string | undefined {
-  if (typeof value !== 'string') return undefined;
-  const flat = value.replace(/\s+/g, ' ').trim();
-  if (!flat) return undefined;
-  return flat.length > RATIONALE_CHARS
-    ? `${flat.slice(0, RATIONALE_CHARS - 1)}\u2026`
-    : flat;
-}
-
-/**
- * Records captured from a non-streamed turn. The stream path reads tool
- * chunks one by one; `generate` hands them back in a batch, wrapped or flat
- * depending on the provider, so both shapes are accepted.
- */
-function toolRecords(result: unknown): ToolDataRecord[] {
-  const entries = (result as { toolResults?: unknown })?.toolResults;
-  if (!Array.isArray(entries)) return [];
-  const records: ToolDataRecord[] = [];
-  for (const entry of entries) {
-    const payload = ((entry as { payload?: unknown })?.payload ?? entry) as {
-      toolName?: string;
-      name?: string;
-      args?: Record<string, unknown>;
-      result?: unknown;
-    };
-    const record = toolDataRecord(
-      payload.toolName ?? payload.name ?? 'tool',
-      payload.args ?? {},
-      payload.result,
-    );
-    if (record) records.push(record);
-  }
-  return records;
-}
-
 /** Successful SQL runs behind an answer, oldest first. */
 function successfulSqlRuns(data: ToolDataRecord[] | undefined) {
   return (data ?? []).filter(
@@ -1460,82 +1411,6 @@ function crossCheck(status: CrossCheck['status'], note: string): CrossCheck {
         ? `${flat.slice(0, CROSS_CHECK_NOTE_CHARS - 1)}…`
         : flat,
   };
-}
-
-/**
- * `entity(column type [e.g. a, b], …)` lines for the verifier. Richer than the
- * fixer's block: sample values let it match filter literals to real data.
- */
-function verifierSchema(datasets: DatasetSnapshot[]): string {
-  const lines: string[] = [];
-  let budget = VERIFIER_SCHEMA_CHARS;
-  for (const dataset of datasets) {
-    for (const key of dataset.tables) {
-      const columns =
-        dataset.entities?.find((e) => e.key === key)?.columns ?? [];
-      const described = columns.map((column) => {
-        const samples = (column.sampleValues ?? []).slice(
-          0,
-          VERIFIER_SAMPLE_VALUES,
-        );
-        const shown = samples.length ? ` [e.g. ${samples.join(', ')}]` : '';
-        return `${column.name} ${column.type}${shown}${referenceSuffix(column)}`;
-      });
-      const line = `${key}(${described.join(', ')})`;
-      if (line.length > budget) return lines.join('\n');
-      budget -= line.length;
-      lines.push(line);
-    }
-  }
-  return lines.join('\n');
-}
-
-/**
- * ` -> teams.id` for a key column, so a schema line states where it joins.
- * `~>` marks an inferred edge: the model should trust it less than a declared
- * one and can confirm with describe_entity.
- */
-function referenceSuffix(column: DatasetColumnSnapshot): string {
-  const reference = column.references;
-  if (!reference?.entity || !reference?.column) return '';
-  const arrow = reference.source === 'declared' ? '->' : '~>';
-  return ` ${arrow} ${reference.entity}.${reference.column}`;
-}
-
-/**
- * The join graph, stated up front. Without it the assistant knows which
- * entities exist but not which column joins to which, so it guesses — writing
- * `goals.team_id` where the column is `goals.scoring_team_id`, which fails the
- * query and ends in an answer naming a raw id instead of a team.
- */
-function joinHintBlock(datasets: DatasetSnapshot[]): string {
-  const lines: string[] = [];
-  const seen = new Set<string>();
-  let budget = JOIN_HINT_CHARS;
-  for (const dataset of datasets) {
-    for (const entity of dataset.entities ?? []) {
-      for (const column of entity.columns ?? []) {
-        const suffix = referenceSuffix(column);
-        if (!suffix) continue;
-        const line = `- ${entity.key}.${column.name}${suffix}`;
-        if (seen.has(line)) continue;
-        if (line.length > budget) return joinHintHeader(lines);
-        budget -= line.length;
-        seen.add(line);
-        lines.push(line);
-      }
-    }
-  }
-  return joinHintHeader(lines);
-}
-
-function joinHintHeader(lines: string[]): string {
-  if (!lines.length) return '';
-  return [
-    'How these entities join (-> declared by the datasource, ~> inferred from',
-    'naming; join on these columns rather than guessing a key name):',
-    ...lines,
-  ].join('\n');
 }
 
 /** Parse a model's JSON reply, tolerating a markdown fence around it. */

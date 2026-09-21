@@ -1,0 +1,346 @@
+<div class="flex flex-col">
+  <div class="flex items-start justify-between gap-4">
+    <div>
+      <h1 class="font-serif text-[28px] font-semibold text-zinc-100">
+        Knowledge
+      </h1>
+      <p class="mt-1 max-w-xl text-[13px] text-zinc-500">
+        Instructions, glossary terms and default filters the assistant uses when
+        answering. Only enabled snippets are applied.
+      </p>
+    </div>
+    <div class="flex shrink-0 items-center gap-2">
+      <button
+        type="button"
+        (click)="openGenerate()"
+        class="flex items-center gap-1.5 rounded-lg border border-white/15 px-3.5 py-2 text-[13px] text-zinc-200 hover:bg-white/5"
+      >
+        <lucide-angular [img]="Wand2" [size]="14" />
+        <span>Generate suggestions</span>
+      </button>
+      <button
+        type="button"
+        data-testid="new-knowledge-snippet"
+        (click)="openNew()"
+        class="flex items-center gap-1.5 rounded-lg bg-zinc-200 px-3.5 py-2 text-[13px] font-medium text-zinc-900 hover:bg-white"
+      >
+        <lucide-angular [img]="Plus" [size]="14" />
+        <span>New snippet</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="mt-5 flex flex-wrap items-center gap-1.5">
+    <button
+      type="button"
+      (click)="setKindFilter('all')"
+      class="rounded-lg px-3 py-1.5 text-[13px] hover:text-zinc-200"
+      [class.bg-white/10]="!pendingOnly() && kindFilter() === 'all'"
+      [class.text-zinc-200]="!pendingOnly() && kindFilter() === 'all'"
+      [class.text-zinc-400]="pendingOnly() || kindFilter() !== 'all'"
+    >
+      All
+    </button>
+    @for (k of kinds; track k.value) {
+      <button
+        type="button"
+        (click)="setKindFilter(k.value)"
+        class="rounded-lg px-3 py-1.5 text-[13px] hover:text-zinc-200"
+        [class.bg-white/10]="!pendingOnly() && kindFilter() === k.value"
+        [class.text-zinc-200]="!pendingOnly() && kindFilter() === k.value"
+        [class.text-zinc-400]="pendingOnly() || kindFilter() !== k.value"
+      >
+        {{ k.label }}
+      </button>
+    }
+
+    <select
+      aria-label="Filter by dataset"
+      [value]="datasetFilter()"
+      (change)="setDatasetFilter($any($event.target).value)"
+      class="ml-1 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-300 outline-none focus:border-white/25"
+    >
+      <option value="all" class="bg-[#232323]">All datasets</option>
+      @for (dataset of datasets(); track dataset.name) {
+        <option [value]="dataset.name" class="bg-[#232323]">
+          {{ dataset.name }}
+        </option>
+      }
+    </select>
+
+    <div class="ml-auto flex items-center gap-2">
+      <button
+        type="button"
+        data-testid="pending-suggestions-filter"
+        (click)="togglePendingOnly()"
+        [attr.aria-pressed]="pendingOnly()"
+        class="flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px]"
+        [class]="
+          pendingOnly()
+            ? 'border-violet-400/30 bg-violet-400/10 text-violet-300'
+            : 'border-white/10 bg-white/[0.04] text-zinc-400 hover:border-white/20 hover:bg-white/[0.08] hover:text-zinc-200'
+        "
+      >
+        <lucide-angular [img]="Sparkles" [size]="12" class="shrink-0" />
+        <span>Pending suggestions</span>
+        @if (pendingCount() > 0) {
+          <span
+            class="flex h-4 min-w-4 items-center justify-center rounded-full bg-violet-400/20 px-1 text-[10px] font-semibold text-violet-200"
+            >{{ pendingCount() }}</span
+          >
+        }
+      </button>
+    </div>
+  </div>
+
+  @if (loading()) {
+    <div class="mt-10 flex items-center gap-2.5 text-zinc-400">
+      <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
+      <span>Loading knowledge…</span>
+    </div>
+  } @else if (error(); as err) {
+    <p
+      class="mt-8 rounded-md bg-red-500/10 px-3 py-2.5 text-[13px] text-red-400"
+    >
+      {{ err }}
+    </p>
+  } @else if (snippets().length === 0) {
+    <div
+      class="mt-8 flex flex-col items-start gap-3 rounded-xl border border-dashed border-white/10 px-6 py-8"
+    >
+      <span
+        class="flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 text-zinc-400"
+      >
+        <lucide-angular [img]="BookOpen" [size]="17" />
+      </span>
+      <p class="text-[13px] text-zinc-300">No knowledge yet</p>
+      <p class="max-w-md text-[12px] leading-relaxed text-zinc-500">
+        Snippets are plain-text instructions, glossary terms and default filters
+        the assistant applies when answering. Write one by hand, or generate
+        suggestions from a dataset and approve the ones worth keeping.
+      </p>
+      <div class="mt-1 flex items-center gap-2">
+        <button
+          type="button"
+          (click)="openNew()"
+          class="flex items-center gap-1.5 rounded-lg bg-zinc-200 px-3.5 py-2 text-[13px] font-medium text-zinc-900 hover:bg-white"
+        >
+          <lucide-angular [img]="Plus" [size]="14" />
+          <span>New snippet</span>
+        </button>
+        <button
+          type="button"
+          (click)="openGenerate()"
+          class="flex items-center gap-1.5 rounded-lg border border-white/15 px-3.5 py-2 text-[13px] text-zinc-200 hover:bg-white/5"
+        >
+          <lucide-angular [img]="Wand2" [size]="14" />
+          <span>Generate suggestions</span>
+        </button>
+      </div>
+    </div>
+  } @else if (filteredSnippets().length === 0) {
+    <p class="mt-10 text-[13px] text-zinc-500">
+      @if (pendingOnly()) {
+        No pending suggestions right now — generate some or check back later.
+      } @else {
+        No snippets match these filters.
+      }
+    </p>
+  } @else {
+    <div class="mt-6 flex flex-col gap-1.5">
+      @for (item of filteredSnippets(); track item.id) {
+        <div
+          [attr.data-testid]="'knowledge-' + item.id"
+          class="flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2.5"
+        >
+          <span
+            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/5"
+            [class]="kindAccentClass(item.kind)"
+          >
+            <lucide-angular [img]="kindIcon(item.kind)" [size]="15" />
+          </span>
+          <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span class="flex items-center gap-2">
+              <span class="truncate text-[13px] text-zinc-200">{{
+                item.title
+              }}</span>
+              <span
+                class="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-zinc-400"
+                >{{ kindLabel(item.kind) }}</span
+              >
+              @if (item.source === "mined") {
+                <span
+                  class="flex shrink-0 items-center gap-1 rounded-full border border-violet-400/30 bg-violet-400/10 px-1.5 py-0.5 text-[10px] text-violet-300"
+                >
+                  <lucide-angular [img]="Sparkles" [size]="10" />
+                  <span>Mined</span>
+                </span>
+              }
+            </span>
+            <span class="truncate text-[11px] text-zinc-500">{{
+              item.body
+            }}</span>
+            <span class="flex items-center gap-1.5 text-[11px] text-zinc-600">
+              <span>{{ scopeLabel(item) }}</span>
+              <span>·</span>
+              <span>Updated {{ updatedLabel(item) }}</span>
+            </span>
+          </span>
+
+          @if (pendingOnly()) {
+            <button
+              type="button"
+              data-testid="accept-suggestion"
+              (click)="toggleEnabled(item)"
+              [disabled]="togglingId() === item.id || deletingId() === item.id"
+              class="flex shrink-0 items-center gap-1.5 rounded-md bg-emerald-600 px-2.5 py-1.5 text-[12px] font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+            >
+              @if (togglingId() === item.id) {
+                <lucide-angular
+                  [img]="Loader2"
+                  [size]="13"
+                  class="animate-spin"
+                />
+              }
+              <span>Accept</span>
+            </button>
+            <button
+              type="button"
+              data-testid="reject-suggestion"
+              (click)="rejectSuggestion(item)"
+              [disabled]="togglingId() === item.id || deletingId() === item.id"
+              class="flex shrink-0 items-center gap-1.5 rounded-md border border-white/10 px-2.5 py-1.5 text-[12px] text-red-400 hover:bg-white/10 disabled:opacity-50"
+            >
+              @if (deletingId() === item.id) {
+                <lucide-angular
+                  [img]="Loader2"
+                  [size]="13"
+                  class="animate-spin"
+                />
+              }
+              <span>Reject</span>
+            </button>
+          } @else {
+            <label
+              class="flex shrink-0 items-center gap-1.5 text-[11px] text-zinc-500"
+            >
+              <input
+                type="checkbox"
+                [checked]="item.enabled"
+                [disabled]="togglingId() === item.id"
+                (change)="toggleEnabled(item)"
+                class="h-3.5 w-3.5 accent-emerald-500"
+              />
+              <span>{{ item.enabled ? "Enabled" : "Disabled" }}</span>
+            </label>
+            <button
+              type="button"
+              title="Edit"
+              (click)="openEdit(item)"
+              class="shrink-0 rounded p-1.5 text-zinc-500 hover:bg-white/10 hover:text-zinc-200"
+            >
+              <lucide-angular [img]="Pencil" [size]="14" />
+            </button>
+            <button
+              type="button"
+              title="Delete"
+              (click)="deleteSnippet(item)"
+              [disabled]="deletingId() === item.id"
+              class="shrink-0 rounded p-1.5 text-zinc-500 hover:bg-white/10 hover:text-red-400 disabled:opacity-50"
+            >
+              @if (deletingId() === item.id) {
+                <lucide-angular
+                  [img]="Loader2"
+                  [size]="14"
+                  class="animate-spin"
+                />
+              } @else {
+                <lucide-angular [img]="Trash2" [size]="14" />
+              }
+            </button>
+          }
+        </div>
+      }
+    </div>
+  }
+
+  @if (formOpen()) {
+    <div class="mt-6">
+      <app-knowledge-form
+        [snippet]="editingSnippet()"
+        [datasets]="datasets()"
+        (saved)="onSnippetSaved()"
+        (cancelled)="cancelForm()"
+      />
+    </div>
+  }
+
+  @if (generateOpen()) {
+    <div
+      class="mt-6 flex flex-col gap-3 rounded-xl border border-white/10 bg-[#232323] p-4"
+    >
+      <div class="flex items-center justify-between">
+        <p class="text-[13px] font-medium text-zinc-200">
+          Generate suggestions
+        </p>
+        <button
+          type="button"
+          title="Close"
+          (click)="cancelGenerate()"
+          class="rounded p-1 text-zinc-500 hover:bg-white/10 hover:text-zinc-200"
+        >
+          <lucide-angular [img]="X" [size]="14" />
+        </button>
+      </div>
+      <p class="text-[12px] text-zinc-500">
+        The assistant reviews the dataset and drafts instructions, terms and
+        default filters as pending suggestions — nothing is applied until you
+        approve it. This can take up to a minute.
+      </p>
+      <label class="flex flex-col gap-1">
+        <span class="text-[11px] font-medium text-zinc-500">Dataset</span>
+        <select
+          [value]="generateDatasetId()"
+          (change)="generateDatasetId.set($any($event.target).value)"
+          [disabled]="generating() || datasets().length === 0"
+          class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none focus:border-white/25 disabled:opacity-50"
+        >
+          @if (datasets().length === 0) {
+            <option value="" class="bg-[#232323]">No datasets yet</option>
+          }
+          @for (dataset of datasets(); track dataset.name) {
+            <option [value]="dataset.name" class="bg-[#232323]">
+              {{ dataset.name }}
+            </option>
+          }
+        </select>
+      </label>
+      <div class="mt-1 flex items-center gap-2 text-[13px]">
+        <button
+          type="button"
+          (click)="cancelGenerate()"
+          [disabled]="generating()"
+          class="flex flex-1 items-center justify-center rounded-md border border-white/10 px-3 py-1.5 font-medium text-zinc-300 hover:bg-white/5 disabled:opacity-50"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          data-testid="run-generate-suggestions"
+          (click)="generateSuggestions()"
+          [disabled]="generating() || !generateDatasetId()"
+          title="Pick a dataset first"
+          class="flex flex-1 items-center justify-center gap-2 rounded-md bg-emerald-600 px-3 py-1.5 font-medium text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+        >
+          @if (generating()) {
+            <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+            <span>Generating…</span>
+          } @else {
+            <span>Generate</span>
+          }
+        </button>
+      </div>
+    </div>
+  }
+</div>

@@ -1,4 +1,5 @@
 import type { EvalRunView } from './eval-runs.service';
+import type { EvalCaseDelta, EvalRegressionSummary } from './eval-regression';
 import type {
   AssistantEvalCaseResult,
   EvalToolCall,
@@ -65,6 +66,49 @@ function caseSection(result: AssistantEvalCaseResult, index: number): string {
   return lines.join('\n');
 }
 
+function deltaList(deltas: EvalCaseDelta[]): string[] {
+  return deltas.map(
+    (delta) => `- \`${delta.id}\` — ${delta.question.replace(/\|/g, '\\|')}`,
+  );
+}
+
+/**
+ * "Compared to previous run" section — regressions and improvements by case
+ * id/question, matched against the agent's most recent previous completed
+ * run. Callers omit this entirely when `run.comparison` is absent (no
+ * previous completed run to compare against, or an old record saved before
+ * regression tracking existed).
+ */
+function comparisonSection(comparison: EvalRegressionSummary): string[] {
+  const lines = [
+    '',
+    '## Compared to previous run',
+    '',
+    `_Compared to run \`${comparison.previousRunId}\`._`,
+  ];
+
+  if (comparison.regressions.length === 0 && comparison.improvements.length === 0) {
+    lines.push('', 'No change from the previous run.');
+    return lines;
+  }
+
+  if (comparison.regressions.length > 0) {
+    lines.push(
+      '',
+      '**Regressions** (passed before, now failing):',
+      ...deltaList(comparison.regressions),
+    );
+  }
+  if (comparison.improvements.length > 0) {
+    lines.push(
+      '',
+      '**Improvements** (failed before, now passing):',
+      ...deltaList(comparison.improvements),
+    );
+  }
+  return lines;
+}
+
 /** A self-contained Markdown report of one eval run, traces included. */
 export function renderEvalRunMarkdown(
   run: EvalRunView,
@@ -97,6 +141,10 @@ export function renderEvalRunMarkdown(
         result.passed ? '✅' : '❌'
       } | ${durationLabel(result.durationMs)} |`,
     );
+  }
+
+  if (run.comparison) {
+    lines.push(...comparisonSection(run.comparison));
   }
 
   if (failed.length > 0) {

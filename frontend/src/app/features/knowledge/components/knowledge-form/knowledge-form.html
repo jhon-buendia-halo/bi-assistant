@@ -1,0 +1,124 @@
+<div
+  class="flex flex-col gap-3 rounded-xl border border-white/10 bg-[#232323] p-4"
+>
+  <div class="flex items-center justify-between">
+    <p class="text-[13px] font-medium text-zinc-200">
+      {{ snippet() ? "Edit snippet" : "New snippet" }}
+    </p>
+    <button
+      type="button"
+      title="Close"
+      (click)="cancel()"
+      class="rounded p-1 text-zinc-500 hover:bg-white/10 hover:text-zinc-200"
+    >
+      <lucide-angular [img]="X" [size]="14" />
+    </button>
+  </div>
+
+  <div class="grid grid-cols-2 gap-3">
+    <label class="flex flex-col gap-1">
+      <span class="text-[11px] font-medium text-zinc-500">Kind</span>
+      <select
+        [value]="kind()"
+        (change)="kind.set($any($event.target).value)"
+        class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none focus:border-white/25"
+      >
+        @for (option of kinds; track option.value) {
+          <option [value]="option.value" class="bg-[#232323]">
+            {{ option.label }}
+          </option>
+        }
+      </select>
+    </label>
+    <label class="flex flex-col gap-1">
+      <span class="text-[11px] font-medium text-zinc-500">Scope</span>
+      <select
+        [value]="datasetScope()"
+        (change)="datasetScope.set($any($event.target).value)"
+        class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none focus:border-white/25"
+      >
+        <option value="" class="bg-[#232323]">Global</option>
+        @for (dataset of datasets(); track dataset.name) {
+          <option [value]="dataset.name" class="bg-[#232323]">
+            {{ dataset.name }}
+          </option>
+        }
+      </select>
+    </label>
+  </div>
+
+  <label class="flex flex-col gap-1">
+    <span class="text-[11px] font-medium text-zinc-500">Title</span>
+    <input
+      type="text"
+      placeholder="Always exclude test accounts"
+      [value]="title()"
+      (input)="title.set($any($event.target).value)"
+      class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+    />
+  </label>
+
+  <label class="flex flex-col gap-1">
+    <span class="text-[11px] font-medium text-zinc-500">Body</span>
+    <textarea
+      rows="4"
+      placeholder="Plain-text instruction, definition or default filter the assistant should apply."
+      [value]="body()"
+      (input)="body.set($any($event.target).value)"
+      class="resize-y rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+    ></textarea>
+  </label>
+
+  @if (kind() === "term") {
+    <label class="flex flex-col gap-1">
+      <span class="text-[11px] font-medium text-zinc-500"
+        >Synonyms (comma separated)</span
+      >
+      <input
+        type="text"
+        placeholder="churn, attrition, cancellation"
+        [value]="synonyms()"
+        (input)="synonyms.set($any($event.target).value)"
+        class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+      />
+    </label>
+  }
+
+  <label class="flex flex-col gap-1">
+    <span class="text-[11px] font-medium text-zinc-500"
+      >Entities (optional, comma separated)</span
+    >
+    <input
+      type="text"
+      placeholder="claims, members"
+      [value]="entities()"
+      (input)="entities.set($any($event.target).value)"
+      class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+    />
+  </label>
+
+  <div class="mt-1 flex items-center gap-2 text-[13px]">
+    <button
+      type="button"
+      (click)="cancel()"
+      class="flex flex-1 items-center justify-center rounded-md border border-white/10 px-3 py-1.5 font-medium text-zinc-300 hover:bg-white/5"
+    >
+      Cancel
+    </button>
+    <button
+      type="button"
+      data-testid="save-knowledge-snippet"
+      (click)="save()"
+      [disabled]="!canSave()"
+      title="Title and body are required"
+      class="flex flex-1 items-center justify-center gap-2 rounded-md bg-emerald-600 px-3 py-1.5 font-medium text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+    >
+      @if (saving()) {
+        <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+        <span>Saving…</span>
+      } @else {
+        <span>{{ snippet() ? "Save changes" : "Create snippet" }}</span>
+      }
+    </button>
+  </div>
+</div>

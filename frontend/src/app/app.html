@@ -147,6 +147,16 @@
             <lucide-angular [img]="Bot" [size]="15" />
             <span>Agents</span>
           </button>
+          <button
+            (click)="
+              mainView.set(mainView() === 'knowledge' ? 'home' : 'knowledge')
+            "
+            class="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
+            [class.option-active]="mainView() === 'knowledge'"
+          >
+            <lucide-angular [img]="BookOpen" [size]="15" />
+            <span>Knowledge</span>
+          </button>
         </nav>
 
         <!-- Divider -->
@@ -372,6 +382,10 @@
             [agentKey]="activeAgentKey()!"
             (back)="mainView.set('agents')"
           />
+        </div>
+      } @else if (mainView() === "knowledge") {
+        <div class="flex flex-1 justify-center overflow-y-auto px-8 py-10">
+          <app-knowledge-list class="w-full max-w-[960px]" />
         </div>
       } @else if (mainView() === "session-chat" && activeSession()) {
         <app-session-chat

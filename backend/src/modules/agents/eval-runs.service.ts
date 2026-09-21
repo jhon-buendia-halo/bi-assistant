@@ -2,10 +2,16 @@ import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { DatasetsRepository } from '../datasets/repositories/datasets.repository';
 import { DatasourcesService } from '../datasources/datasources.service';
+import { SessionsService } from '../sessions/sessions.service';
+import { KnowledgeService } from '../knowledge/knowledge.service';
 import { EvalRunsRepository } from './repositories/eval-runs.repository';
+import { computeRegressionDiff, EvalRegressionSummary } from './eval-regression';
 import {
   AssistantEvalCase,
   AssistantEvalCaseResult,
+  EvalSession,
+  cleanupEvalSession,
+  createEvalSession,
   runAssistantEvalCase,
   selectEvalCases,
 } from '../../mastra/evals/assistant.evals';
@@ -29,6 +35,14 @@ export interface EvalRunView {
   error?: string;
   startedAt: string;
   finishedAt?: string;
+  /**
+   * Regression comparison against the most recent previous completed run
+   * for this agent, computed once this run finishes. Absent when no
+   * previous completed run existed to compare against, and — since it was
+   * added after runs were already being persisted — on older records saved
+   * before this field existed; callers must treat it as optional.
+   */
+  comparison?: EvalRegressionSummary;
 }
 
 /**
@@ -47,6 +61,8 @@ export class EvalRunsService {
     private readonly datasets: DatasetsRepository,
     private readonly repository: EvalRunsRepository,
     private readonly datasources: DatasourcesService,
+    private readonly sessions: SessionsService,
+    private readonly knowledge: KnowledgeService,
   ) {}
 
   /** Display name for a datasource id, falling back to the id itself. */
@@ -132,10 +148,35 @@ export class EvalRunsService {
     view: EvalRunView,
     cases: AssistantEvalCase[],
   ): Promise<void> {
+    // A throwaway session so create_visual/update_visual behave the way they
+    // do in a real chat turn (see assistant.evals.ts). Best-effort: a run
+    // still measures the agent without one, just with visual-tool support
+    // degraded to "No session in context".
+    let evalSession: EvalSession | undefined;
+    try {
+      evalSession = await createEvalSession(this.sessions, view.datasets);
+    } catch (err) {
+      this.logger.warn(
+        `Could not create a throwaway session for eval run ${view.jobId}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+    // Same curated-knowledge block a real chat turn gets from
+    // SessionsService.agentContext, computed once per run — every case in
+    // the run shares the same datasets.
+    const knowledgeBlock = await this.knowledge.definitionBlock(
+      view.datasets,
+    );
     try {
       for (const [index, evalCase] of cases.entries()) {
         view.currentQuestion = evalCase.question;
-        const result = await runAssistantEvalCase(evalCase, view.datasets);
+        const result = await runAssistantEvalCase(
+          evalCase,
+          view.datasets,
+          evalSession?.id,
+          knowledgeBlock,
+        );
         view.results.push(result);
         view.currentQuestion = cases[index + 1]?.question;
         // Persist as we go so a crash mid-suite still leaves the finished
@@ -143,6 +184,7 @@ export class EvalRunsService {
         await this.repository.save(view);
       }
       view.status = 'completed';
+      await this.attachRegressionComparison(view);
     } catch (err) {
       view.status = 'failed';
       view.error = err instanceof Error ? err.message : String(err);
@@ -152,6 +194,32 @@ export class EvalRunsService {
       view.finishedAt = new Date().toISOString();
       this.active.delete(view.agentKey);
       await this.repository.save(view);
+      await cleanupEvalSession(this.sessions, evalSession);
+    }
+  }
+
+  /**
+   * Diff this run's per-case results against the agent's most recent
+   * previous completed run, and attach the outcome to `view.comparison` —
+   * best-effort, so a repository hiccup here degrades the report (no
+   * comparison section) rather than marking an otherwise-successful run
+   * failed.
+   */
+  private async attachRegressionComparison(view: EvalRunView): Promise<void> {
+    try {
+      const previous = await this.repository.mostRecentCompleted(
+        view.agentKey,
+        view.jobId,
+      );
+      if (!previous) return;
+      const diff = computeRegressionDiff(previous.results, view.results);
+      view.comparison = { previousRunId: previous.jobId, ...diff };
+    } catch (err) {
+      this.logger.warn(
+        `Could not compute regression comparison for eval run ${view.jobId}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
     }
   }
 }

@@ -6,6 +6,7 @@ import {
   DATASOURCE_INVENTORIES_STORE,
   METRICS_STORE,
   EVAL_RUNS_STORE,
+  KNOWLEDGE_STORE,
   SESSIONS_STORE,
   DATASETS_STORE,
   SETTINGS_STORE,
@@ -33,6 +34,7 @@ const COLLECTIONS = [
   { token: VERIFIED_QUERIES_STORE, table: 'verified_queries' },
   { token: METRICS_STORE, table: 'metrics' },
   { token: EVAL_RUNS_STORE, table: 'eval_runs' },
+  { token: KNOWLEDGE_STORE, table: 'knowledge_snippets' },
 ];
 
 const sqliteDbProvider: Provider = {

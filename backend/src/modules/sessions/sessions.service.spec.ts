@@ -29,6 +29,9 @@ jest.mock('../verified-queries/verified-queries.service', () => ({
   VerifiedQueriesService: class {},
 }));
 jest.mock('../metrics/metrics.service', () => ({ MetricsService: class {} }));
+jest.mock('../knowledge/knowledge.service', () => ({
+  KnowledgeService: class {},
+}));
 jest.mock('../../mastra/agents/sql-fixer.agent', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { z } = require('zod') as typeof import('zod');
@@ -66,6 +69,7 @@ describe('SessionsService streaming', () => {
       answer?: string;
       verified?: boolean;
       metricsBlock?: string;
+      knowledgeBlock?: string;
       tables?: string[];
       /** Careful mode: what the verifier replies and what its SQL returns. */
       crossCheck?: {
@@ -111,6 +115,11 @@ describe('SessionsService streaming', () => {
       definitionBlock: jest
         .fn()
         .mockResolvedValue(options.metricsBlock ?? undefined),
+    };
+    const knowledge = {
+      definitionBlock: jest
+        .fn()
+        .mockResolvedValue(options.knowledgeBlock ?? ''),
     };
     const check = options.crossCheck ?? {};
     const verifier = {
@@ -169,6 +178,7 @@ describe('SessionsService streaming', () => {
       {} as never,
       verifiedQueries as never,
       metrics as never,
+      knowledge as never,
     );
     return {
       service,
@@ -176,6 +186,7 @@ describe('SessionsService streaming', () => {
       agent,
       verifiedQueries,
       metrics,
+      knowledge,
       verifier,
       datasources,
     };
@@ -651,6 +662,69 @@ describe('SessionsService streaming', () => {
       expect(session.messages.at(-1)?.crossCheck).toBeUndefined();
     });
   });
+
+  describe('zero-SQL-turn grounding guard', () => {
+    it('runs one corrective pass and persists its answer when the turn made zero tool calls', async () => {
+      const { service, session, agent } = buildStreaming(answerStream([]), {
+        answer: 'According to the data, France won the 2022 tournament.',
+      });
+
+      await service.streamMessage(
+        'session-1',
+        'Who won the 2022 World Cup?',
+        () => {},
+      );
+
+      expect(agent.generate).toHaveBeenCalledTimes(1);
+      const [correctiveInput, correctiveOptions] = (
+        agent.generate.mock.calls as unknown[][]
+      )[0] as [string, Record<string, unknown>];
+      // Original question, not the streamed (ungrounded) answer.
+      expect(correctiveInput).toBe('Who won the 2022 World Cup?');
+      // Memory-free — see the comment on `runGroundingGuard`.
+      expect(correctiveOptions).not.toHaveProperty('memory');
+      expect(
+        (correctiveOptions.context as { content: string }[]).some((block) =>
+          block.content.includes('Grounding check'),
+        ),
+      ).toBe(true);
+      expect(session.messages.at(-1)?.content).toBe(
+        'According to the data, France won the 2022 tournament.',
+      );
+    });
+
+    it('does not run the guard when the turn already called a tool', async () => {
+      const { service, agent } = buildStreaming(
+        answerStream([{ sql: 'select 1', rows: [{ n: 1 }] }]),
+      );
+
+      await service.streamMessage('session-1', 'Why?', () => {});
+
+      expect(agent.generate).not.toHaveBeenCalled();
+    });
+
+    it('keeps the original answer when the corrective pass fails', async () => {
+      const { service, session, agent } = buildStreaming(answerStream([]));
+      agent.generate.mockRejectedValueOnce(new Error('provider unavailable'));
+
+      await service.streamMessage(
+        'session-1',
+        'Who won the 2022 World Cup?',
+        () => {},
+      );
+
+      expect(agent.generate).toHaveBeenCalledTimes(1);
+      expect(session.messages.at(-1)?.content).toBe('Here is the answer.');
+    });
+
+    it('skips the guard on a clarification turn', async () => {
+      const { service, agent } = buildStreaming(clarificationStream());
+
+      await service.streamMessage('session-1', 'Which team?', () => {});
+
+      expect(agent.generate).not.toHaveBeenCalled();
+    });
+  });
 });
 
 describe('SessionsService SQL self-correction', () => {
@@ -683,6 +757,7 @@ describe('SessionsService SQL self-correction', () => {
       } as never,
       { getByNames: jest.fn().mockResolvedValue([dataset]) } as never,
       { runReadOnlySql: overrides.runs } as never,
+      {} as never,
       {} as never,
       {} as never,
       {} as never,
@@ -820,6 +895,7 @@ describe('SessionsService visual tool bridge (turn records)', () => {
       visuals as never,
       {} as never,
       {} as never,
+      {} as never,
     );
     await service.onModuleInit();
     const calls = (setDatasetToolServices as jest.Mock).mock
@@ -918,6 +994,7 @@ describe('SessionsService answer feedback', () => {
       {} as never,
       {} as never,
       verifiedQueries as never,
+      {} as never,
       {} as never,
     );
     return { service, verifiedQueries };
@@ -1188,6 +1265,7 @@ describe('SessionsService visual tailoring and repair', () => {
       {} as never,
       {} as never,
       visuals as never,
+      {} as never,
       {} as never,
       {} as never,
     );

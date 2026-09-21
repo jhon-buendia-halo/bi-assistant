@@ -8,6 +8,7 @@ import { AgentsModule } from './modules/agents/agents.module';
 import { SessionsModule } from './modules/sessions/sessions.module';
 import { VerifiedQueriesModule } from './modules/verified-queries/verified-queries.module';
 import { MetricsModule } from './modules/metrics/metrics.module';
+import { KnowledgeModule } from './modules/knowledge/knowledge.module';
 import { DeepAnalysisModule } from './modules/deep-analysis/deep-analysis.module';
 
 @Module({
@@ -20,6 +21,7 @@ import { DeepAnalysisModule } from './modules/deep-analysis/deep-analysis.module
     AgentsModule,
     VerifiedQueriesModule,
     MetricsModule,
+    KnowledgeModule,
     SessionsModule,
     DeepAnalysisModule,
   ],
