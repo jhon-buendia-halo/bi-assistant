@@ -62,6 +62,8 @@ export const interactiveVisualOutputSchema = z.object({
 export const visualizationAgent = new Agent({
   id: 'interactive-visual-designer',
   name: 'Interactive Visual Designer',
+  description:
+    'Turns a completed analysis answer into an interactive visual, and tailors it on request.',
   instructions: [
     'You create compact interactive visuals from completed data-analysis answers.',
     'Follow the interactive-visuals skill supplied in the request context.',

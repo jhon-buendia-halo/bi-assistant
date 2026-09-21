@@ -22,6 +22,11 @@ export class MastraService {
     return this.mastra.getAgent(id as Parameters<typeof mastra.getAgent>[0]);
   }
 
+  /** Every registered agent, keyed by its registry name. */
+  listAgents(): Record<string, Agent> {
+    return this.mastra.listAgents() as unknown as Record<string, Agent>;
+  }
+
   /** Create or restore a session-scoped workspace and register it with Mastra. */
   async ensureSessionWorkspace(
     sessionId: string,

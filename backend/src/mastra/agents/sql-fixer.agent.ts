@@ -16,6 +16,8 @@ export const sqlFixOutputSchema = z.object({
 export const sqlFixerAgent = new Agent({
   id: 'sql-fixer',
   name: 'SQL Fixer',
+  description:
+    'Repairs a SQL statement that failed to execute, using the engine error as the signal.',
   instructions: [
     'You repair a single SQL statement that failed to execute.',
     'You receive the failed statement, the SQL dialect (databricks or',

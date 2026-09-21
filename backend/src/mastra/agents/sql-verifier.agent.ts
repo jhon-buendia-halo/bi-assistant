@@ -19,6 +19,8 @@ export const sqlVerifyOutputSchema = z.object({
 export const sqlVerifierAgent = new Agent({
   id: 'sql-verifier',
   name: 'SQL Verifier',
+  description:
+    "Careful mode's second opinion — re-derives the SQL for a question independently to corroborate the answer.",
   instructions: [
     'You independently derive the SQL that answers a business question.',
     'You receive the question, the SQL dialect (databricks or postgres), the',

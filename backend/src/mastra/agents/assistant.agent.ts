@@ -11,6 +11,8 @@ import { SESSION_WORKSPACE_CONTEXT_KEY } from '../session-workspaces';
 export const assistantAgent = new Agent({
   id: 'assistant',
   name: 'Questions to Insights Assistant',
+  description:
+    "Answers business questions over a session's datasets — plans the analysis, writes and runs the SQL, and explains the result.",
   instructions: [
     'You are the Questions to Insights assistant — a data analyst working over',
     "the catalogs, schemas and entities in the user's session datasets. Each",

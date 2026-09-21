@@ -1,0 +1,173 @@
+@if (selection(); as selection) {
+  <div class="flex flex-col gap-4 px-4 py-3">
+    <!-- Question -->
+    <div class="flex flex-col gap-1.5">
+      <p class="text-[11px] tracking-wider text-zinc-500 uppercase">Question</p>
+      <p class="text-[13px] text-zinc-200">{{ selection.evalCase.question }}</p>
+      <p class="text-[12px] leading-relaxed text-zinc-500">
+        {{ selection.evalCase.intent }}
+      </p>
+    </div>
+
+    @if (result(); as result) {
+      <!-- Verdict -->
+      <div class="flex items-center gap-2">
+        @if (result.passed) {
+          <span class="flex items-center gap-1.5 text-[13px] text-emerald-400">
+            <lucide-angular [img]="CircleCheck" [size]="15" />
+            <span>Passed</span>
+          </span>
+        } @else {
+          <span class="flex items-center gap-1.5 text-[13px] text-red-400">
+            <lucide-angular [img]="CircleX" [size]="15" />
+            <span>Failed</span>
+          </span>
+        }
+        <span class="flex items-center gap-1 text-[12px] text-zinc-500">
+          <lucide-angular [img]="Clock" [size]="12" />
+          <span>{{ durationLabel(result.durationMs) }}</span>
+        </span>
+      </div>
+
+      <!-- Why it failed -->
+      @if (result.error) {
+        <div class="flex flex-col gap-1.5">
+          <p class="text-[11px] tracking-wider text-zinc-500 uppercase">
+            Run error
+          </p>
+          <p
+            class="rounded-md bg-red-500/10 px-3 py-2.5 text-[12px] text-red-400"
+          >
+            {{ result.error }}
+          </p>
+        </div>
+      } @else if (failedChecks().length > 0) {
+        <div class="flex flex-col gap-1.5">
+          <p class="text-[11px] tracking-wider text-zinc-500 uppercase">
+            Why it failed
+          </p>
+          @for (check of failedChecks(); track check.id) {
+            <div class="rounded-md bg-red-500/10 px-3 py-2">
+              <p class="text-[12px] text-red-300">{{ check.description }}</p>
+              @if (check.reason) {
+                <p class="mt-1 text-[11px] text-red-400/80">
+                  {{ check.reason }}
+                </p>
+              }
+            </div>
+          }
+        </div>
+      }
+
+      <!-- Every check -->
+      <div class="flex flex-col gap-1.5">
+        <p class="text-[11px] tracking-wider text-zinc-500 uppercase">Checks</p>
+        @for (check of result.checkResults; track check.id) {
+          <div
+            class="flex items-start gap-2 rounded-md bg-white/5 px-2.5 py-1.5"
+          >
+            <lucide-angular
+              [img]="check.passed ? CircleCheck : CircleX"
+              [size]="13"
+              class="mt-0.5 shrink-0"
+              [class.text-emerald-400]="check.passed"
+              [class.text-red-400]="!check.passed"
+            />
+            <span class="min-w-0 flex-1 text-[12px] text-zinc-300">{{
+              check.description
+            }}</span>
+            <span class="shrink-0 font-mono text-[11px] text-zinc-500">{{
+              check.score
+            }}</span>
+          </div>
+        }
+      </div>
+
+      <!-- What the agent actually did -->
+      <div class="flex flex-col gap-1.5">
+        <p class="text-[11px] tracking-wider text-zinc-500 uppercase">
+          Executed steps
+        </p>
+        @if (result.toolCalls.length === 0) {
+          <p class="text-[12px] text-zinc-500">
+            The agent answered without calling any tool.
+          </p>
+        } @else {
+          @for (call of result.toolCalls; track $index) {
+            <div class="rounded-md bg-white/5 px-2.5 py-2">
+              <div class="flex items-center gap-1.5">
+                <lucide-angular
+                  [img]="Wrench"
+                  [size]="12"
+                  class="text-zinc-500"
+                />
+                <span class="font-mono text-[12px] text-zinc-200">{{
+                  call.name
+                }}</span>
+                <span class="ml-auto font-mono text-[11px] text-zinc-600"
+                  >#{{ $index + 1 }}</span
+                >
+              </div>
+              @if (call.input) {
+                <pre
+                  class="mt-1.5 overflow-x-auto font-mono text-[11px] whitespace-pre-wrap text-zinc-400"
+                  >{{ call.input }}</pre>
+              }
+              @if (call.error) {
+                <pre
+                  class="mt-1.5 overflow-x-auto rounded bg-red-500/10 px-2 py-1 font-mono text-[11px] whitespace-pre-wrap text-red-400"
+                  >{{ call.error }}</pre>
+              } @else if (call.output) {
+                <pre
+                  class="mt-1.5 max-h-40 overflow-auto font-mono text-[11px] whitespace-pre-wrap text-zinc-500"
+                  >{{ call.output }}</pre>
+              }
+            </div>
+          }
+        }
+      </div>
+
+      <!-- Final answer -->
+      <div class="flex flex-col gap-1.5">
+        <p class="text-[11px] tracking-wider text-zinc-500 uppercase">Answer</p>
+        @if (result.answer) {
+          <pre
+            class="overflow-x-auto rounded-md bg-white/5 px-3 py-2 text-[12px] leading-relaxed whitespace-pre-wrap text-zinc-300"
+            >{{ result.answer }}</pre>
+        } @else {
+          <p class="text-[12px] text-zinc-500">The agent returned no text.</p>
+        }
+      </div>
+    } @else {
+      <!-- Not run yet: show what it will be scored on -->
+      <div class="flex flex-col gap-1.5">
+        <p class="text-[11px] tracking-wider text-zinc-500 uppercase">
+          Checks it will be scored on
+        </p>
+        @for (check of selection.evalCase.checks; track check.id) {
+          <div
+            class="flex items-start gap-2 rounded-md bg-white/5 px-2.5 py-1.5"
+          >
+            <lucide-angular
+              [img]="Gauge"
+              [size]="12"
+              class="mt-0.5 shrink-0 text-zinc-500"
+            />
+            <span class="text-[12px] text-zinc-400">{{
+              check.description
+            }}</span>
+          </div>
+        }
+      </div>
+      <p class="text-[12px] text-zinc-500">
+        Run the evals to see the steps the agent executed for this question.
+      </p>
+    }
+  </div>
+} @else {
+  <div class="px-4 py-3">
+    <p class="text-[12px] text-zinc-500">
+      Select a question in the Evals tab to see how it ran.
+    </p>
+  </div>
+}
