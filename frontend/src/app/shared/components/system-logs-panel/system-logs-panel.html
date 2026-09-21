@@ -117,6 +117,18 @@
         class="min-w-0 flex-1 bg-transparent text-[11px] text-zinc-300 outline-none placeholder:text-zinc-600"
       />
     </label>
+    <label
+      class="flex items-center gap-1.5 text-[11px] text-zinc-500"
+      title="Group entries by backend process run"
+    >
+      <input
+        type="checkbox"
+        [checked]="grouped()"
+        (change)="grouped.set($any($event.target).checked)"
+        class="accent-zinc-400"
+      />
+      Group by run
+    </label>
     <label class="flex items-center gap-1.5 text-[11px] text-zinc-500">
       <input
         type="checkbox"
@@ -160,47 +172,109 @@
           New application events will appear here automatically.
         </p>
       </div>
-    } @else {
+    } @else if (!grouped()) {
       <div class="flex flex-col gap-1">
         @for (entry of visibleEntries(); track entry.id) {
-          <details
-            class="group rounded-lg border border-transparent px-2 py-1.5 hover:border-white/5 hover:bg-white/[0.025]"
-          >
-            <summary
-              class="flex cursor-pointer list-none items-start gap-2 text-[11px] leading-5"
-            >
-              <span class="w-[86px] shrink-0 text-zinc-600">{{
-                formatTime(entry.timestamp)
-              }}</span>
-              <span
-                class="w-[52px] shrink-0 rounded border px-1.5 text-center text-[9px] font-semibold leading-4"
-                [class]="levelClasses(entry)"
-                >{{ entry.level.toUpperCase() }}</span
-              >
-              <span
-                class="w-32 shrink-0 truncate text-zinc-500"
-                [title]="entry.source"
-                >{{ entry.source }}</span
-              >
-              <span class="min-w-0 flex-1 break-words text-zinc-300">{{
-                entry.message
-              }}</span>
-            </summary>
-            <div
-              class="ml-[230px] mt-1 border-l border-white/10 pl-3 font-sans text-[11px] text-zinc-500"
-            >
-              <p>{{ explainSource(entry.source) }}</p>
-              @if (entry.details !== undefined) {
-                <pre
-                  class="mt-2 max-h-56 overflow-auto rounded-lg bg-black/25 p-2.5 font-mono text-[10px] leading-4 whitespace-pre-wrap text-zinc-400"
-                  >{{ formatDetails(entry.details) }}</pre>
-              }
-            </div>
-          </details>
+          <ng-container
+            [ngTemplateOutlet]="row"
+            [ngTemplateOutletContext]="{ $implicit: entry }"
+          />
         }
       </div>
+    } @else {
+      <!-- Entries recorded before any backend process identified itself stay
+           in a flat timeline; there is no run to attribute them to. -->
+      @if (visibleGroups().ungrouped.length) {
+        <div class="flex flex-col gap-1">
+          @for (entry of visibleGroups().ungrouped; track entry.id) {
+            <ng-container
+              [ngTemplateOutlet]="row"
+              [ngTemplateOutletContext]="{ $implicit: entry }"
+            />
+          }
+        </div>
+      }
+      @for (run of visibleGroups().runs; track run.ordinal) {
+        <details
+          [open]="isRunOpen(run)"
+          class="mt-2 rounded-xl border border-white/[0.07] bg-white/[0.015] first:mt-0"
+        >
+          <summary
+            class="flex cursor-pointer list-none flex-wrap items-center gap-2 px-3 py-2 font-sans text-[11px] hover:bg-white/[0.03]"
+          >
+            <span class="font-medium text-zinc-300">Run {{ run.ordinal }}</span>
+            <span class="text-zinc-600">PID {{ run.pid }}</span>
+            <span class="text-zinc-500">{{ runSpan(run) }}</span>
+            <span class="text-zinc-600">{{ run.entries.length }} shown</span>
+            @if (run.errorCount) {
+              <span
+                class="rounded border border-red-500/25 bg-red-500/10 px-1.5 text-[10px] leading-4 text-red-300"
+                >{{ run.errorCount }} errors</span
+              >
+            }
+            @if (run.warningCount) {
+              <span
+                class="rounded border border-amber-500/25 bg-amber-500/10 px-1.5 text-[10px] leading-4 text-amber-300"
+                >{{ run.warningCount }} warnings</span
+              >
+            }
+            @if (!run.booted) {
+              <span
+                class="text-[10px] text-zinc-600"
+                title="This run's startup aged out of the retained entries"
+                >started before this window</span
+              >
+            }
+          </summary>
+          <div class="flex flex-col gap-1 border-t border-white/5 px-2 py-2">
+            @for (entry of run.entries; track entry.id) {
+              <ng-container
+                [ngTemplateOutlet]="row"
+                [ngTemplateOutletContext]="{ $implicit: entry }"
+              />
+            }
+          </div>
+        </details>
+      }
     }
   </div>
+
+  <ng-template #row let-entry>
+    <details
+      class="group rounded-lg border border-transparent px-2 py-1.5 hover:border-white/5 hover:bg-white/[0.025]"
+    >
+      <summary
+        class="flex cursor-pointer list-none items-start gap-2 text-[11px] leading-5"
+      >
+        <span class="w-[86px] shrink-0 text-zinc-600">{{
+          formatTime(entry.timestamp)
+        }}</span>
+        <span
+          class="w-[52px] shrink-0 rounded border px-1.5 text-center text-[9px] font-semibold leading-4"
+          [class]="levelClasses(entry)"
+          >{{ entry.level.toUpperCase() }}</span
+        >
+        <span
+          class="w-32 shrink-0 truncate text-zinc-500"
+          [title]="entry.source"
+          >{{ entry.source }}</span
+        >
+        <span class="min-w-0 flex-1 break-words text-zinc-300">{{
+          entry.message
+        }}</span>
+      </summary>
+      <div
+        class="ml-[230px] mt-1 border-l border-white/10 pl-3 font-sans text-[11px] text-zinc-500"
+      >
+        <p>{{ explainSource(entry.source) }}</p>
+        @if (entry.details !== undefined) {
+          <pre
+            class="mt-2 max-h-56 overflow-auto rounded-lg bg-black/25 p-2.5 font-mono text-[10px] leading-4 whitespace-pre-wrap text-zinc-400"
+            >{{ formatDetails(entry.details) }}</pre>
+        }
+      </div>
+    </details>
+  </ng-template>
 
   <footer
     class="flex shrink-0 items-center justify-between border-t border-white/5 px-4 py-2 text-[10px] text-zinc-600"

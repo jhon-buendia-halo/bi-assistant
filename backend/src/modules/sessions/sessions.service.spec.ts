@@ -10,6 +10,9 @@ jest.mock('@mastra/core/request-context', () => ({
   },
 }));
 jest.mock('../../mastra/mastra.service', () => ({ MastraService: class {} }));
+jest.mock('../../mastra/model-resolver', () => ({
+  resolveAgentModel: jest.fn().mockResolvedValue('openai/gpt-4.1-mini'),
+}));
 jest.mock('../../mastra/tool-services', () => ({
   setDatasetToolServices: jest.fn(),
 }));
@@ -60,6 +63,8 @@ jest.mock('./visualization-document', () => ({
   sourceEntities: jest.fn().mockReturnValue([]),
 }));
 
+import { BadRequestException, Logger } from '@nestjs/common';
+import { resolveAgentModel } from '../../mastra/model-resolver';
 import { setDatasetToolServices } from '../../mastra/tool-services';
 import type { DatasetToolServices } from '../../mastra/tool-services';
 import { TURN_RECORDS_CONTEXT_KEY } from '../../mastra/tools/visual.tools';
@@ -212,6 +217,32 @@ describe('SessionsService streaming', () => {
 
   beforeEach(() => {
     (sourceEntities as jest.Mock).mockReturnValue([]);
+    (resolveAgentModel as jest.Mock).mockResolvedValue('openai/gpt-4.1-mini');
+  });
+
+  // Mastra names an OpenAI-compatible client's provider-options bucket after
+  // the provider id, so the reasoning-effort chip was a silent no-op on every
+  // LenAI deployment while this key was hardcoded to `openai`.
+  it('files provider options under the bucket the configured model reads', async () => {
+    (resolveAgentModel as jest.Mock).mockResolvedValue({
+      id: 'lenai/mmc-tech-gpt-41-mini-1m-2025-04-14',
+      apiKey: 'len-key',
+      url: 'https://lenai.example.com/openai/v1/deployments/x',
+    });
+    const { service, agent } = buildStreaming(toolOnlyStream(15));
+
+    await service.streamMessage('session-1', 'Why did Argentina win?', () => {});
+
+    const options = (agent.generate as jest.Mock).mock.calls.map(
+      ([, opts]: [unknown, { providerOptions?: unknown }]) =>
+        opts?.providerOptions,
+    );
+    expect(options).not.toHaveLength(0);
+    for (const providerOptions of options) {
+      expect(providerOptions).toEqual({
+        lenai: { reasoningEffort: 'medium' },
+      });
+    }
   });
 
   it('synthesizes a final answer after a tool-only turn', async () => {
@@ -871,6 +902,91 @@ describe('SessionsService SQL self-correction', () => {
     );
     expect(runs).toHaveBeenCalledTimes(3);
     expect(fixer.generate).toHaveBeenCalledTimes(2);
+  });
+
+  it('logs the offending statement, flattened onto one line, with the repair warning', async () => {
+    const warn = jest
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    const runs = jest
+      .fn()
+      .mockRejectedValueOnce(new Error('Column claimid cannot be resolved'))
+      .mockResolvedValueOnce({ columns: ['n'], rows: [{ n: 3 }] });
+    const { run } = await bridge({
+      runs,
+      fixerReplies: [
+        { sql: 'SELECT count(claim_id) AS n FROM main.health.claims' },
+      ],
+    });
+
+    await run('SELECT\n  count(claimid) AS n\nFROM main.health.claims');
+
+    const warnings = warn.mock.calls.map((call) => call[0]);
+    expect(warnings).toEqual([
+      expect.stringContaining(
+        // Newlines collapsed so one failure stays one log line.
+        'SELECT count(claimid) AS n FROM main.health.claims',
+      ),
+    ]);
+    expect(warnings[0]).not.toContain('\n');
+  });
+
+  it('does not call the fixer on a guard rejection and rethrows immediately', async () => {
+    const runs = jest
+      .fn()
+      .mockRejectedValueOnce(
+        new BadRequestException(
+          'Only read-only SELECT / WITH queries can be run.',
+        ),
+      );
+    const { run, fixer } = await bridge({ runs });
+
+    await expect(run('DROP TABLE main.health.claims')).rejects.toThrow(
+      'Only read-only SELECT / WITH queries can be run.',
+    );
+    expect(runs).toHaveBeenCalledTimes(1);
+    expect(fixer.generate).not.toHaveBeenCalled();
+  });
+
+  it('does not call the fixer on a transport/auth failure and rethrows immediately', async () => {
+    const runs = jest
+      .fn()
+      .mockRejectedValueOnce(
+        new Error('Received a response with a bad HTTP status code: 403'),
+      );
+    const { run, fixer } = await bridge({ runs });
+
+    await expect(
+      run('SELECT count(claim_id) AS n FROM main.health.claims'),
+    ).rejects.toThrow('bad HTTP status code: 403');
+    expect(runs).toHaveBeenCalledTimes(1);
+    expect(fixer.generate).not.toHaveBeenCalled();
+  });
+
+  it('still calls the fixer for an engine parse/resolution error', async () => {
+    const runs = jest
+      .fn()
+      .mockRejectedValueOnce(
+        new Error(
+          '[CAST_INVALID_INPUT] The value cannot be cast to "INT" due to an overflow',
+        ),
+      )
+      .mockResolvedValueOnce({ columns: ['n'], rows: [{ n: 3 }] });
+    const { run, fixer } = await bridge({
+      runs,
+      fixerReplies: [
+        { sql: 'SELECT count(claim_id) AS n FROM main.health.claims' },
+      ],
+    });
+
+    const result = await run(
+      'SELECT count(claimid) AS n FROM main.health.claims',
+    );
+
+    expect(fixer.generate).toHaveBeenCalledTimes(1);
+    expect(result.correctedSql).toBe(
+      'SELECT count(claim_id) AS n FROM main.health.claims',
+    );
   });
 
   it('notes an empty result set without calling the fixer', async () => {

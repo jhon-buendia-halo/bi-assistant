@@ -9,6 +9,7 @@ import {
   setAgentModelResolver,
   type AgentModelConfig,
 } from '../../mastra/model-resolver';
+import { rejectsMaxTokens } from '../../mastra/model-compat';
 import { LlmSettingsRepository } from './repositories/llm-settings.repository';
 import {
   LlmProvider,
@@ -19,9 +20,29 @@ import {
   SUPPORTED_PROVIDERS,
 } from './llm.types';
 
-const TEST_PROMPT = 'Reply with the single word: ok';
+const TEST_PROMPT =
+  'Reply with JSON matching the schema, using the value "ok" for `status`.';
 const TEST_TIMEOUT_MS = 30_000;
 const OPENAI_BASE_URL = 'https://api.openai.com/v1';
+
+/**
+ * Every agent in this app asks for `structuredOutput`, so the probe has to
+ * prove the deployment honours a JSON schema — a model that only free-texts
+ * tests green today and then fails on the first real turn.
+ */
+const TEST_RESPONSE_FORMAT = {
+  type: 'json_schema',
+  json_schema: {
+    name: 'connection_probe',
+    strict: true,
+    schema: {
+      type: 'object',
+      properties: { status: { type: 'string' } },
+      required: ['status'],
+      additionalProperties: false,
+    },
+  },
+} as const;
 
 export interface LlmTestResult {
   provider: string;
@@ -48,6 +69,22 @@ export function lenaiModelConfig(settings: {
     apiKey: settings.apiKey,
     headers: { 'X-Api-Key': settings.apiKey },
   };
+}
+
+/** The probe's `status` value, or null when the reply does not match the schema. */
+function structuredReply(content: string): string | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return null;
+  }
+  const status = (parsed as { status?: unknown }).status;
+  if (typeof status !== 'string' || !status.trim()) return null;
+  return status.trim();
 }
 
 @Injectable()
@@ -135,7 +172,15 @@ export class LlmService implements OnModuleInit {
     return this.getView();
   }
 
-  /** Runs a fixed, cheap prompt through the provider to prove the wiring end-to-end. */
+  /**
+   * Runs a fixed, cheap prompt through the provider to prove the wiring
+   * end-to-end. The body mirrors what an agent turn really sends — same cap
+   * key, same structured-output request — so a green test means an agent call
+   * with these settings will work. It stays a hand-rolled `fetch` on purpose:
+   * the candidate settings are not persisted yet, and Mastra agents resolve
+   * their model from the repository, so going through Mastra would test the
+   * saved settings instead of the submitted ones.
+   */
   async testConnection(dto: SaveLlmSettingsDto): Promise<LlmTestResult> {
     const { provider, model, baseUrl } = this.validate(dto);
     const apiKey = await this.resolveApiKey(dto);
@@ -144,6 +189,16 @@ export class LlmService implements OnModuleInit {
         ? lenaiModelConfig({ model, baseUrl, apiKey })
         : null;
     const url = `${lenaiConfig?.url ?? OPENAI_BASE_URL}/chat/completions`;
+    // Same id the resolver builds, so `rejectsMaxTokens` judges the string it
+    // will see at generate time.
+    const modelId = lenaiConfig?.id ?? `openai/${model}`;
+    // Newer OpenAI families renamed `max_tokens` to `max_completion_tokens`
+    // and reject the old key; older deployments reject the new one. Mirror
+    // whichever the model takes. Generous cap: reasoning models spend
+    // completion tokens on thinking before emitting the reply.
+    const capKey = rejectsMaxTokens(modelId)
+      ? 'max_completion_tokens'
+      : 'max_tokens';
 
     this.logger.log(`[testConnection] ${provider}/${model} via ${url}`);
     const started = Date.now();
@@ -163,10 +218,8 @@ export class LlmService implements OnModuleInit {
         body: JSON.stringify({
           model,
           messages: [{ role: 'user', content: TEST_PROMPT }],
-          // Newer OpenAI models reject `max_tokens` (renamed to
-          // `max_completion_tokens`). Generous cap: reasoning models spend
-          // completion tokens on thinking before emitting the reply.
-          max_completion_tokens: 512,
+          response_format: TEST_RESPONSE_FORMAT,
+          [capKey]: 512,
         }),
       });
     } catch (err) {
@@ -191,7 +244,16 @@ export class LlmService implements OnModuleInit {
     const json = (await res.json()) as {
       choices?: Array<{ message?: { content?: string } }>;
     };
-    const reply = (json.choices?.[0]?.message?.content ?? '').trim();
+    const content = (json.choices?.[0]?.message?.content ?? '').trim();
+    // Distinct from the auth/status failures above: the credentials and the
+    // parameters are fine, the deployment just cannot produce the structured
+    // output every agent here depends on.
+    const reply = structuredReply(content);
+    if (reply === null) {
+      throw new Error(
+        `Model answered but could not produce structured JSON output, which every agent here requires — reply="${content.slice(0, 200)}"`,
+      );
+    }
     this.logger.log(`[testConnection] SUCCESS — reply="${reply}"`);
     return {
       provider,

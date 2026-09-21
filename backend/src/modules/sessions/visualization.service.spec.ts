@@ -7,6 +7,9 @@ jest.mock('../../mastra/mastra.service', () => ({ MastraService: class {} }));
 jest.mock('../../mastra/session-workspaces', () => ({
   SESSION_WORKSPACE_CONTEXT_KEY: 'session-workspace',
 }));
+// The real agent module is loaded on purpose in the model-resolution tests
+// below; @mastra/core/agent is ESM-only, so its Agent is stubbed away.
+jest.mock('@mastra/core/agent', () => ({ Agent: class {} }));
 jest.mock('../../mastra/agents/visualization.agent', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { z } = require('zod') as typeof import('zod');
@@ -16,6 +19,11 @@ jest.mock('../../mastra/agents/visualization.agent', () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     require('./visual-spec') as typeof import('./visual-spec');
   return {
+    // The designer's own model decides how the cap and the reasoning hint are
+    // filed; a plain router id is the default every other test assumes.
+    resolveVisualizationModel: jest.fn(() =>
+      Promise.resolve('openai/gpt-4.1-mini'),
+    ),
     interactiveVisualOutputSchema: z.object({
       title: z.string(),
       description: z.string(),
@@ -51,8 +59,12 @@ import {
   storedVisualizationDocument,
 } from './visualization-document';
 import { getDatasetToolServices } from '../../mastra/tool-services';
+import { resolveVisualizationModel } from '../../mastra/agents/visualization.agent';
+import { setAgentModelResolver } from '../../mastra/model-resolver';
 import { createZip } from './zip-archive';
 import {
+  isSchemaEnvelopeError,
+  unwrapSchemaEnvelope,
   VisualizationService,
   visualizationData,
 } from './visualization.service';
@@ -460,13 +472,17 @@ function sessionWithComposableRows(): SessionDoc {
  * which now runs last — after the spec attempts the stubbed agent fails. Both
  * helpers therefore read the final call, whatever preceded it.
  */
+/** A generate call's options, in the shape the tuning helper produces. */
+type GenerateOptions = {
+  modelSettings: { maxOutputTokens?: number };
+  providerOptions?: Record<string, Record<string, unknown>>;
+};
+
 describe('VisualizationService composed budget', () => {
   const lastPrompt = (agent: { generate: jest.Mock }) =>
     (agent.generate.mock.calls as unknown[][]).at(-1)![0] as string;
   const optionsOf = (agent: { generate: jest.Mock }) =>
-    (agent.generate.mock.calls as unknown[][]).at(-1)![1] as {
-      modelSettings: { maxOutputTokens: number };
-    };
+    (agent.generate.mock.calls as unknown[][]).at(-1)![1] as GenerateOptions;
 
   it('keeps the tight budget for a single-form visual', async () => {
     const { service, agent } = build();
@@ -504,6 +520,149 @@ describe('VisualizationService composed budget', () => {
     const prompt = lastPrompt(agent);
     expect(prompt).toContain('below 20,000 characters');
     expect(optionsOf(agent).modelSettings.maxOutputTokens).toBe(11_000);
+  });
+});
+
+describe('VisualizationService designer model tuning', () => {
+  const firstOptions = (agent: { generate: jest.Mock }) =>
+    (agent.generate.mock.calls as unknown[][])[0][1] as GenerateOptions;
+  /** What the designer's own model resolver returns for the next call. */
+  const useModel = (config: unknown) =>
+    (resolveVisualizationModel as jest.Mock).mockResolvedValue(config);
+
+  afterEach(() => useModel('openai/gpt-4.1-mini'));
+
+  it('files the reasoning hint under the bucket a router model reads', async () => {
+    const { service, agent } = build();
+    agent.generate.mockResolvedValue({ object: specOutput });
+
+    await service.create(sessionWithRows(20, 20), undefined);
+
+    expect(firstOptions(agent)).toEqual(
+      expect.objectContaining({
+        modelSettings: { maxOutputTokens: 2_500 },
+        providerOptions: { openai: { reasoningEffort: 'low' } },
+      }),
+    );
+  });
+
+  it('names the bucket after the provider for a gateway deployment', async () => {
+    const { service, agent } = build();
+    agent.generate.mockResolvedValue({ object: specOutput });
+    useModel({
+      id: 'lenai/mmc-tech-gpt-41-mini-1m-2025-04-14',
+      apiKey: 'k',
+      url: 'https://gateway.example/v1',
+    });
+
+    await service.create(sessionWithRows(20, 20), undefined);
+
+    // An `openai` bucket would be dropped: the compatible client names its
+    // bucket after the provider id.
+    expect(firstOptions(agent).providerOptions).toEqual({
+      lenai: { reasoningEffort: 'low' },
+    });
+    expect(firstOptions(agent).modelSettings.maxOutputTokens).toBe(2_500);
+  });
+
+  it('sends a LenAI gpt-5 deployment its cap as max_completion_tokens', async () => {
+    const { service, agent } = build();
+    agent.generate.mockResolvedValue({ object: specOutput });
+    useModel({
+      id: 'lenai/mmc-tech-gpt-5-mini-272k-2025-08-07',
+      apiKey: 'k',
+      url: 'https://gateway.example/v1',
+    });
+
+    await service.create(sessionWithRows(20, 20), undefined);
+
+    // `maxOutputTokens` would be serialized to the `max_tokens` this family
+    // rejects outright, so the cap travels as a passthrough instead.
+    expect(firstOptions(agent).modelSettings.maxOutputTokens).toBeUndefined();
+    expect(firstOptions(agent).providerOptions).toEqual({
+      lenai: { reasoningEffort: 'low', max_completion_tokens: 2_500 },
+    });
+  });
+
+  it('carries the freeform budget through the same tuning', async () => {
+    const { service, agent } = build();
+    useModel({
+      id: 'lenai/mmc-tech-gpt-5-mini-272k-2025-08-07',
+      apiKey: 'k',
+      url: 'https://gateway.example/v1',
+    });
+
+    // The stub agent never returns a spec, so the last call is freeform.
+    await service.create(sessionWithComposableRows(), undefined);
+
+    const last = (agent.generate.mock.calls as unknown[][]).at(
+      -1,
+    )![1] as GenerateOptions;
+    expect(last.providerOptions).toEqual({
+      lenai: { reasoningEffort: 'low', max_completion_tokens: 11_000 },
+    });
+  });
+});
+
+describe('resolveVisualizationModel', () => {
+  /**
+   * The real module, not the mock the service tests use: the nano guard is
+   * what is under test here. @mastra/core/agent is stubbed at the top of this
+   * file, so loading it is cheap.
+   */
+  const actual = jest.requireActual<
+    typeof import('../../mastra/agents/visualization.agent')
+  >('../../mastra/agents/visualization.agent');
+
+  const resolvedFrom = (configured: unknown) => {
+    setAgentModelResolver(() => Promise.resolve(configured as never));
+    return actual.resolveVisualizationModel();
+  };
+
+  it('upgrades a LenAI nano deployment to its mini sibling, keeping the gateway config', async () => {
+    await expect(
+      resolvedFrom({
+        id: 'lenai/mmc-tech-gpt-41-nano-1m-2025-04-14',
+        apiKey: 'k',
+        url: 'https://gateway.example/v1',
+        headers: { 'x-a': 'b' },
+      }),
+    ).resolves.toEqual({
+      id: 'lenai/mmc-tech-gpt-41-mini-1m-2025-04-14',
+      apiKey: 'k',
+      url: 'https://gateway.example/v1',
+      headers: { 'x-a': 'b' },
+    });
+  });
+
+  it('upgrades a nano router id too', async () => {
+    await expect(resolvedFrom('openai/gpt-4.1-nano')).resolves.toBe(
+      'openai/gpt-4.1-mini',
+    );
+  });
+
+  it('leaves a model whose name merely contains nano alone', async () => {
+    await expect(resolvedFrom('openai/nanotech-analyst')).resolves.toBe(
+      'openai/nanotech-analyst',
+    );
+  });
+
+  it('keeps a mini deployment as configured', async () => {
+    await expect(
+      resolvedFrom({
+        id: 'lenai/mmc-tech-gpt-41-mini-1m-2025-04-14',
+        apiKey: 'k',
+        url: 'https://gateway.example/v1',
+      }),
+    ).resolves.toMatchObject({
+      id: 'lenai/mmc-tech-gpt-41-mini-1m-2025-04-14',
+    });
+  });
+
+  it('swaps a gpt-5 router id for the mini fallback', async () => {
+    await expect(resolvedFrom('openai/gpt-5-mini')).resolves.toBe(
+      'openai/gpt-4.1-mini',
+    );
   });
 });
 
@@ -1179,5 +1338,144 @@ describe('VisualizationService turnRecords merge', () => {
       const prompt = promptOf(agent);
       expect(prompt).toContain('"n": 19');
     });
+  });
+});
+
+describe('schema-envelope responses', () => {
+  /** What weaker models answer with: the schema, values nested in `properties`. */
+  const envelope = {
+    $schema: 'http://json-schema.org/draft-07/schema#',
+    type: 'object',
+    properties: specOutput,
+  };
+  /** How Mastra reports it — every top-level field absent, payload quoted. */
+  const envelopeError = new Error(
+    'Structured output validation failed: title: expected string, received undefined; ' +
+      'description: expected string, received undefined; spec: expected object, received undefined. ' +
+      `Received: ${JSON.stringify(envelope)}`,
+  );
+  const promptAt = (agent: { generate: jest.Mock }, call: number) =>
+    (agent.generate.mock.calls as unknown[][])[call][0] as string;
+
+  it('unwraps an envelope returned as the structured object', async () => {
+    const { service, agent } = build();
+    agent.generate.mockResolvedValue({ object: envelope });
+
+    const { bundle: created } = await service.create(
+      sessionWithRows(20, 20),
+      undefined,
+    );
+
+    expect(agent.generate).toHaveBeenCalledTimes(1);
+    expect(created.spec).toEqual(specOutput.spec);
+    expect(created.title).toBe(specOutput.title);
+  });
+
+  it('unwraps an envelope returned as fenced text', async () => {
+    const { service, agent } = build();
+    agent.generate.mockResolvedValue({
+      text: `\`\`\`json\n${JSON.stringify(envelope)}\n\`\`\``,
+    });
+
+    const { bundle: created } = await service.create(
+      sessionWithRows(20, 20),
+      undefined,
+    );
+
+    expect(created.spec).toEqual(specOutput.spec);
+  });
+
+  it('unwraps even when the response also reports a validation error', async () => {
+    const { service, agent } = build();
+    agent.generate.mockResolvedValue({
+      object: envelope,
+      error: envelopeError,
+    });
+
+    const { bundle: created } = await service.create(
+      sessionWithRows(20, 20),
+      undefined,
+    );
+
+    expect(created.spec).toEqual(specOutput.spec);
+  });
+
+  it('still rethrows a response error when nothing usable came back', async () => {
+    const { service, agent } = build();
+    agent.generate.mockResolvedValue({ error: new Error('gateway exploded') });
+
+    await expect(
+      service.create(sessionWithRows(20, 20), undefined),
+    ).rejects.toThrow('gateway exploded');
+  });
+
+  it('corrects the shape on the retry instead of quoting the schema back', async () => {
+    const { service, agent } = build();
+    agent.generate
+      .mockRejectedValueOnce(envelopeError)
+      .mockResolvedValue({ object: specOutput });
+
+    const { bundle: created } = await service.create(
+      sessionWithRows(20, 20),
+      undefined,
+    );
+
+    expect(agent.generate).toHaveBeenCalledTimes(2);
+    const retry = promptAt(agent, 1);
+    expect(retry).toContain('returned the JSON Schema itself');
+    expect(retry).toContain('Return a bare JSON instance whose top-level keys');
+    expect(retry).toContain('`title`, `description` and `spec`');
+    // The rejected payload is described, never echoed — echoing it is what
+    // makes the designer repeat the same envelope.
+    expect(retry).not.toContain('json-schema.org');
+    expect(retry).not.toContain('Your previous spec was rejected');
+    expect(created.spec).toEqual(specOutput.spec);
+  });
+});
+
+describe('unwrapSchemaEnvelope', () => {
+  it('lifts the instance out of the schema envelope', () => {
+    expect(
+      unwrapSchemaEnvelope({
+        $schema: 'http://json-schema.org/draft-07/schema#',
+        type: 'object',
+        properties: { title: 'A', description: 'B' },
+      }),
+    ).toEqual({ title: 'A', description: 'B' });
+  });
+
+  it('leaves a real instance untouched, properties and all', () => {
+    const output = { title: 'A', description: 'B', properties: { x: 1 } };
+    expect(unwrapSchemaEnvelope(output)).toBe(output);
+  });
+
+  it('passes through anything that is not an object', () => {
+    expect(unwrapSchemaEnvelope(undefined)).toBeUndefined();
+    expect(unwrapSchemaEnvelope('text')).toBe('text');
+  });
+});
+
+describe('isSchemaEnvelopeError', () => {
+  it('recognizes every top-level field reported as absent at once', () => {
+    expect(
+      isSchemaEnvelopeError(
+        'title: expected string, received undefined; description: expected string, ' +
+          'received undefined; spec: expected object, received undefined',
+      ),
+    ).toBe(true);
+  });
+
+  it('recognizes the quoted schema itself', () => {
+    expect(
+      isSchemaEnvelopeError('Received: {"$schema":"…","type":"object"}'),
+    ).toBe(true);
+  });
+
+  it('does not flag a genuine spec problem', () => {
+    expect(
+      isSchemaEnvelopeError(
+        'chart.y: column "amount" is not in the selected result set',
+      ),
+    ).toBe(false);
   });
 });

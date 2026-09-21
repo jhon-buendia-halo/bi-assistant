@@ -145,6 +145,106 @@ describe('visualSpecSchema', () => {
       }).success,
     ).toBe(false);
   });
+
+  it('accepts an explicit null for series, x, y, format.y and table.columns and normalises to undefined', () => {
+    const parsed = visualSpecSchema.parse({
+      spec: 1,
+      chart: {
+        form: 'metric-cards',
+        select: ['payer'],
+        x: null,
+        y: null,
+        series: null,
+        format: { y: null },
+      },
+      table: { select: ['payer'], columns: null },
+    });
+
+    expect(parsed.chart.x).toBeUndefined();
+    expect(parsed.chart.y).toBeUndefined();
+    expect(parsed.chart.series).toBeUndefined();
+    expect(parsed.chart.format).toEqual({ y: undefined });
+    expect(parsed.table?.columns).toBeUndefined();
+  });
+
+  it('resolves sort.by given a measure column to "y"', () => {
+    const parsed = visualSpecSchema.parse({
+      spec: 1,
+      chart: {
+        form: 'bar',
+        select: ['payer', 'claims'],
+        x: 'payer',
+        y: 'claims',
+        sort: { by: 'claims', dir: 'desc' },
+      },
+    });
+
+    expect(parsed.chart.sort).toEqual({ by: 'y', dir: 'desc' });
+  });
+
+  it('resolves sort.by given a multi-measure column to "y"', () => {
+    const parsed = visualSpecSchema.parse({
+      spec: 1,
+      chart: {
+        form: 'line',
+        select: ['month', 'claims', 'denials'],
+        x: 'month',
+        y: ['claims', 'denials'],
+        sort: { by: 'denials', dir: 'asc' },
+      },
+    });
+
+    expect(parsed.chart.sort).toEqual({ by: 'y', dir: 'asc' });
+  });
+
+  it('resolves sort.by given the x column to "x"', () => {
+    const parsed = visualSpecSchema.parse({
+      spec: 1,
+      chart: {
+        form: 'bar',
+        select: ['payer', 'claims'],
+        x: 'payer',
+        y: 'claims',
+        sort: { by: 'payer', dir: 'asc' },
+      },
+    });
+
+    expect(parsed.chart.sort).toEqual({ by: 'x', dir: 'asc' });
+  });
+
+  it('leaves the "x"/"y" literals untouched', () => {
+    const parsed = visualSpecSchema.parse({
+      spec: 1,
+      chart: {
+        form: 'bar',
+        select: ['payer', 'claims'],
+        x: 'payer',
+        y: 'claims',
+        sort: { by: 'y', dir: 'desc' },
+      },
+    });
+
+    expect(parsed.chart.sort).toEqual({ by: 'y', dir: 'desc' });
+  });
+
+  it('leaves an unresolvable sort.by column name as-is instead of rejecting the spec', () => {
+    const parsed = visualSpecSchema.safeParse({
+      spec: 1,
+      chart: {
+        form: 'bar',
+        select: ['payer', 'claims'],
+        x: 'payer',
+        y: 'claims',
+        sort: { by: 'denial_rate', dir: 'desc' },
+      },
+    });
+
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && parsed.data.chart.sort).toEqual({
+      by: 'denial_rate',
+      dir: 'desc',
+    });
+  });
 });
 
 describe('selectRecord', () => {
@@ -428,5 +528,43 @@ describe('validateSpecAgainstData', () => {
     const problems = validateSpecAgainstData(spec(), []);
 
     expect(problems).toEqual([expect.stringContaining('(no result sets)')]);
+  });
+
+  it('reports a sort.by column that names neither the x column nor a y measure', () => {
+    const problems = validateSpecAgainstData(
+      spec({
+        chart: {
+          form: 'bar',
+          select: ['payer', 'claims'],
+          x: 'payer',
+          y: 'claims',
+          sort: { by: 'denial_rate', dir: 'desc' },
+        },
+      }),
+      [claims],
+    );
+
+    expect(problems).toEqual([
+      expect.stringContaining(
+        'chart.sort.by: "denial_rate" is not "x", "y"',
+      ),
+    ]);
+  });
+
+  it('does not flag a resolved sort.by ("x"/"y")', () => {
+    expect(
+      validateSpecAgainstData(
+        spec({
+          chart: {
+            form: 'bar',
+            select: ['payer', 'claims'],
+            x: 'payer',
+            y: 'claims',
+            sort: { by: 'y', dir: 'desc' },
+          },
+        }),
+        [claims],
+      ),
+    ).toEqual([]);
   });
 });

@@ -73,31 +73,111 @@ export const kpiSpecSchema = z.object({
   unit: z.string().max(16).optional().describe('Short unit suffix, e.g. "%"'),
 });
 
-export const chartSpecSchema = z.object({
-  form: z.enum(SPEC_CHART_FORMS),
-  select: selectColumns,
-  x: columnName.optional().describe('Category / time axis column'),
-  y: z
-    .union([columnName, z.array(columnName).min(1).max(8)])
-    .optional()
-    .describe('Measure column, or several for a multi-series chart'),
-  series: columnName
-    .optional()
-    .describe('Column that splits the data into series'),
-  sort: z
-    .object({ by: z.enum(['x', 'y']), dir: z.enum(['asc', 'desc']) })
-    .optional(),
-  topN: z.number().int().positive().max(200).optional(),
-  stacked: z.boolean().optional(),
-  labels: z.boolean().optional().describe('Draw value labels on the marks'),
-  format: z.object({ y: z.enum(SPEC_FORMATS).optional() }).optional(),
-  xLabel: z.string().max(120).optional(),
-  yLabel: z.string().max(120).optional(),
-});
+/**
+ * Explicit return type for the `chartSpecSchema` transform below. Without it
+ * TS would infer the shape from the object literal the transform returns,
+ * where `series`/`sort`/`format` are always-present (possibly `undefined`)
+ * keys — turning every optional field into a required one for every caller
+ * that builds a `ChartSpec` by hand (tests, `visualization-document.ts`).
+ */
+export interface ChartSpecShape {
+  form: (typeof SPEC_CHART_FORMS)[number];
+  select: string[];
+  x?: string;
+  y?: string | string[];
+  series?: string;
+  sort?: { by: 'x' | 'y' | string; dir: 'asc' | 'desc' };
+  topN?: number;
+  stacked?: boolean;
+  labels?: boolean;
+  format?: { y?: (typeof SPEC_FORMATS)[number] };
+  xLabel?: string;
+  yLabel?: string;
+}
+
+export const chartSpecSchema = z
+  .object({
+    form: z.enum(SPEC_CHART_FORMS),
+    select: selectColumns,
+    // `.nullable()`: models routinely send an explicit `null` — instead of
+    // just omitting the key — to say "not applicable to this form". Accepting
+    // it here and folding it to `undefined` in the transform below keeps
+    // every existing `if (chart.x)` / `if (chart.series)` reader unchanged.
+    x: columnName
+      .nullable()
+      .optional()
+      .describe('Category / time axis column, or null when not applicable'),
+    y: z
+      .union([columnName, z.array(columnName).min(1).max(8)])
+      .nullable()
+      .optional()
+      .describe(
+        'Measure column, or several for a multi-series chart, or null when not applicable',
+      ),
+    series: columnName
+      .nullable()
+      .optional()
+      .describe('Column that splits the data into series, or null when there is none'),
+    sort: z
+      .object({
+        by: z
+          .union([z.enum(['x', 'y']), columnName])
+          .describe(
+            '"x" or "y" to sort by that axis, or — since "by" reads as "by which column" — the exact column name being plotted; a measure column resolves to "y" and the x column resolves to "x"',
+          ),
+        dir: z.enum(['asc', 'desc']),
+      })
+      .optional(),
+    topN: z.number().int().positive().max(200).optional(),
+    stacked: z.boolean().optional(),
+    labels: z.boolean().optional().describe('Draw value labels on the marks'),
+    format: z
+      .object({
+        y: z
+          .enum(SPEC_FORMATS)
+          .nullable()
+          .optional()
+          .describe('Number format for the measure, or null for the default'),
+      })
+      .optional(),
+    xLabel: z.string().max(120).optional(),
+    yLabel: z.string().max(120).optional(),
+  })
+  .transform((chart): ChartSpecShape => {
+    const x = chart.x ?? undefined;
+    const y = chart.y ?? undefined;
+    const measures = y === undefined ? [] : Array.isArray(y) ? y : [y];
+    // `sort.by` is resolved here, at parse time, rather than left for
+    // `validateSpecAgainstData`: it only needs the chart's own `x`/`y`, so a
+    // column name that plainly means "the x axis" or "the y axis" is fixed up
+    // silently instead of costing a whole retry. A column that matches
+    // neither is left untouched — `validateSpecAgainstData` reports it in
+    // plain language, and the runtime never sees anything but "x"/"y".
+    let sort = chart.sort;
+    if (sort && sort.by !== 'x' && sort.by !== 'y') {
+      const by = sort.by === x ? 'x' : measures.includes(sort.by) ? 'y' : sort.by;
+      sort = { ...sort, by };
+    }
+    return {
+      ...chart,
+      x,
+      y,
+      series: chart.series ?? undefined,
+      sort,
+      format: chart.format ? { y: chart.format.y ?? undefined } : undefined,
+    };
+  });
 
 export const tableSpecSchema = z.object({
   select: selectColumns,
-  columns: z.array(columnName).min(1).max(40).optional(),
+  columns: z
+    .array(columnName)
+    .min(1)
+    .max(40)
+    .nullable()
+    .optional()
+    .transform((value) => value ?? undefined)
+    .describe('Columns to show, or null to show every column'),
   collapsed: z.boolean().optional(),
 });
 
@@ -246,6 +326,15 @@ export function validateSpecAgainstData(
   }
   if (chart.form === 'heatmap' && !chart.series) {
     problems.push('chart: a heatmap needs a series column for its second axis');
+  }
+  // The schema already resolves a `sort.by` column name that matches `x` or a
+  // plotted measure to "x"/"y" (see the `chartSpecSchema` transform); whatever
+  // is left here named neither the x column nor a y measure, so it is reported
+  // as a data problem instead of a parse-time rejection.
+  if (chart.sort && chart.sort.by !== 'x' && chart.sort.by !== 'y') {
+    problems.push(
+      `chart.sort.by: "${chart.sort.by}" is not "x", "y", the x column, or a plotted y column`,
+    );
   }
 
   const chartRecord = resolve(chart.select, 'chart');

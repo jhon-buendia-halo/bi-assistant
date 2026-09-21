@@ -4,6 +4,7 @@
 // duplicating the logic.
 import type { Logger } from '@nestjs/common';
 import type { Agent } from '@mastra/core/agent';
+import type { ProviderOptions } from '../../mastra/model-compat';
 import type { ToolDataRecord } from './entities/session.entity';
 
 /** Rows kept per captured tool result — enough for the transcript, the visual
@@ -146,7 +147,7 @@ export async function synthesizeToolOnlyTurn(
   question: string,
   data: ToolDataRecord[],
   abortSignal: AbortSignal,
-  reasoningEffort: string,
+  providerOptions: ProviderOptions,
   logger?: Logger,
 ): Promise<string> {
   if (!data.length) return EMPTY_RESPONSE_FALLBACK;
@@ -172,7 +173,7 @@ export async function synthesizeToolOnlyTurn(
         maxSteps: 1,
         toolChoice: 'none',
         abortSignal,
-        providerOptions: { openai: { reasoningEffort } },
+        providerOptions,
       },
     );
     return (result.text ?? '').trim() || EMPTY_RESPONSE_FALLBACK;

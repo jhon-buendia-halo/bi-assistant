@@ -567,6 +567,13 @@ export class DatabricksConnector implements DatasourceConnector<DatabricksConfig
         authType: 'access-token',
         token: config.token,
         socketTimeout: timeoutMs,
+        // One client per query means every one of them registers with the
+        // driver's process-wide TelemetryClient under a different auth
+        // provider, which logs a multi-tenant warning each time — 84 of them
+        // in one afternoon of the 2026-09-21 diagnostics report, drowning the
+        // entries that mattered. A desktop app has no use for driver
+        // telemetry, so opt out unconditionally.
+        telemetryEnabled: false,
       });
       return client;
     })();
