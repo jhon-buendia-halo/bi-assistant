@@ -19,19 +19,29 @@ export class EvalRunsRepository {
   }
 
   /**
-   * The most recently completed run for this agent, excluding `excludeJobId`
-   * — the baseline regression tracking (`EvalRunsService`) diffs a finishing
-   * run against. `null` when this is the first completed run for the agent.
+   * The most recently completed run for this agent and data scope, excluding
+   * `excludeJobId`. Regression tracking diffs a finishing run against this
+   * baseline. `null` when no comparable completed run exists.
    */
   async mostRecentCompleted(
     agentKey: string,
     excludeJobId: string,
+    datasourceId: string,
+    datasets: string[],
   ): Promise<EvalRunView | null> {
     const completed = await this.store.find(
-      { agentKey, status: 'completed' },
+      { agentKey, status: 'completed', datasourceId },
       { sort: { startedAt: -1 } },
     );
-    return completed.find((run) => run.jobId !== excludeJobId) ?? null;
+    const scope = new Set(datasets);
+    return (
+      completed.find(
+        (run) =>
+          run.jobId !== excludeJobId &&
+          new Set(run.datasets).size === scope.size &&
+          run.datasets.every((dataset) => scope.has(dataset)),
+      ) ?? null
+    );
   }
 
   insert(run: EvalRunView): Promise<EvalRunView> {

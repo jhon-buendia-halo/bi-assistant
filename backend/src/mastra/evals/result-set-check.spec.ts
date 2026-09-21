@@ -56,7 +56,12 @@ describe('runResultSetCheck', () => {
   });
 
   it('returns undefined when the case has no expectedSql', async () => {
-    const result = await runResultSetCheck(undefined, ['World Cup'], snapshot, []);
+    const result = await runResultSetCheck(
+      undefined,
+      ['World Cup'],
+      snapshot,
+      [],
+    );
     expect(result).toBeUndefined();
   });
 
@@ -154,5 +159,250 @@ describe('runResultSetCheck', () => {
     expect(result?.passed).toBe(false);
     expect(result?.reason).toMatch(/expectedSql failed to run/);
     expect(result?.reason).toMatch(/syntax error/);
+  });
+
+  function reference(rows: Record<string, unknown>[], truncated = false) {
+    const runReadOnlySql = jest.fn().mockResolvedValue({ rows, truncated });
+    setDatasetToolServices(stubServices({ runReadOnlySql }));
+    return runReadOnlySql;
+  }
+
+  function sql(
+    rows: Record<string, unknown>[],
+    input = 'SELECT answer',
+  ): ToolDataRecord {
+    return { tool: 'run_readonly_sql', input, rows };
+  }
+
+  it('uses the top-scorer answer even when a broader leaderboard follows it', async () => {
+    const query = reference([{ player: 'Lionel Messi', goals: 4 }]);
+    const result = await runResultSetCheck(
+      'SELECT reference',
+      ['World Cup'],
+      snapshot,
+      [
+        sql([{ full_name: 'Lionel Messi', goals: '4' }]),
+        sql([
+          { full_name: 'Lionel Messi', goals: '4' },
+          { full_name: 'Kylian Mbappe', goals: '3' },
+        ]),
+      ],
+    );
+    expect(result?.passed).toBe(true);
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses all four shootouts even when the last query only checks tournament coverage', async () => {
+    const shootouts = [
+      { year: 2018, home: 'Russia', away: 'Croatia', winner: 'Croatia' },
+      { year: 2022, home: 'Croatia', away: 'Brazil', winner: 'Croatia' },
+      {
+        year: 2022,
+        home: 'Netherlands',
+        away: 'Argentina',
+        winner: 'Argentina',
+      },
+      { year: 2022, home: 'Argentina', away: 'France', winner: 'Argentina' },
+    ];
+    reference(shootouts);
+    const result = await runResultSetCheck(
+      'SELECT reference',
+      ['World Cup'],
+      snapshot,
+      [
+        sql(
+          shootouts.map((row) => ({ ...row, stage: 'knockout', penalties: 4 })),
+        ),
+        sql([
+          { year: 2018, name: '2018 FIFA World Cup' },
+          { year: 2022, name: '2022 FIFA World Cup' },
+        ]),
+      ],
+    );
+    expect(result?.passed).toBe(true);
+  });
+
+  it('uses possession counts even when match-level examples follow them', async () => {
+    reference([
+      { higher_possession_team_won: '2', higher_possession_team_lost: '6' },
+    ]);
+    const result = await runResultSetCheck(
+      'SELECT reference',
+      ['World Cup'],
+      snapshot,
+      [
+        sql([
+          {
+            matches: '8',
+            winner_had_more_count: '2',
+            winner_had_less_count: '6',
+            tie_count: '0',
+            pct_winner_had_more: '25.0',
+          },
+        ]),
+        sql([
+          {
+            winner: 'Argentina',
+            loser: 'Netherlands',
+            winner_possession_pct: '52.00',
+            loser_possession_pct: '48.00',
+          },
+        ]),
+      ],
+    );
+    expect(result?.passed).toBe(true);
+  });
+
+  it('allows repeated venue facts only when the case explicitly uses distinct rows', async () => {
+    reference([{ venue: 'Lusail Stadium', attendance: 88966 }]);
+    const records = [
+      sql([
+        {
+          stadium: 'Lusail Stadium',
+          city: 'Lusail',
+          attendance: 88966,
+          match: 61,
+        },
+        {
+          stadium: 'Lusail Stadium',
+          city: 'Lusail',
+          attendance: 88966,
+          match: 64,
+        },
+      ]),
+    ];
+    expect(
+      (
+        await runResultSetCheck(
+          'SELECT reference',
+          ['World Cup'],
+          snapshot,
+          records,
+        )
+      )?.passed,
+    ).toBe(false);
+    expect(
+      (
+        await runResultSetCheck(
+          'SELECT reference',
+          ['World Cup'],
+          snapshot,
+          records,
+          { distinctRows: true },
+        )
+      )?.passed,
+    ).toBe(true);
+  });
+
+  it.each(
+    [
+      [
+        { stadium: 'Lusail Stadium', attendance: 88966 },
+        { stadium: 'Lusail Stadium', attendance: 88000 },
+      ],
+      [
+        { stadium: 'Lusail Stadium', attendance: 88966 },
+        { stadium: 'Other Stadium', attendance: 88966 },
+      ],
+      [{ stadium: 'Lusail Stadium' }],
+      [],
+    ].map((rows) => ({ rows })),
+  )('rejects incorrect or missing distinct facts: %p', async ({ rows }) => {
+    reference([{ venue: 'Lusail Stadium', attendance: 88966 }]);
+    const result = await runResultSetCheck(
+      'SELECT reference',
+      ['World Cup'],
+      snapshot,
+      [sql(rows)],
+      { distinctRows: true },
+    );
+    expect(result?.passed).toBe(false);
+  });
+
+  it('does not discard extra rows from a leaderboard to manufacture a match', async () => {
+    reference([{ player: 'Lionel Messi', goals: 4 }]);
+    const result = await runResultSetCheck(
+      'SELECT reference',
+      ['World Cup'],
+      snapshot,
+      [
+        sql([
+          { player: 'Lionel Messi', goals: 4 },
+          { player: 'Kylian Mbappe', goals: 3 },
+        ]),
+      ],
+    );
+    expect(result?.passed).toBe(false);
+  });
+
+  it('requires every reference fact, even when a narrower SQL result agrees', async () => {
+    reference([{ won: 2, lost: 6 }]);
+    expect(
+      (
+        await runResultSetCheck('SELECT reference', ['World Cup'], snapshot, [
+          sql([{ won: 2 }]),
+        ])
+      )?.passed,
+    ).toBe(false);
+  });
+
+  it('does not combine incomplete results from different queries', async () => {
+    reference([{ team: 'Argentina' }, { team: 'Croatia' }]);
+    expect(
+      (
+        await runResultSetCheck('SELECT reference', ['World Cup'], snapshot, [
+          sql([{ team: 'Argentina' }]),
+          sql([{ team: 'Croatia' }]),
+        ])
+      )?.passed,
+    ).toBe(false);
+  });
+
+  it.each([
+    { error: 'failed' },
+    { tool: 'sample_rows' },
+    { truncated: true },
+    { rowCount: 2 },
+    { rows: undefined },
+  ])('does not accept unusable evidence: %p', async (overrides) => {
+    reference([{ team: 'Argentina' }]);
+    expect(
+      (
+        await runResultSetCheck('SELECT reference', ['World Cup'], snapshot, [
+          { ...sql([{ team: 'Argentina' }]), ...overrides },
+          sql([{ team: 'France' }]),
+        ])
+      )?.passed,
+    ).toBe(false);
+  });
+
+  it('does not confuse missing rows with a verified empty result', async () => {
+    reference([]);
+    expect(
+      (
+        await runResultSetCheck('SELECT reference', ['World Cup'], snapshot, [
+          { tool: 'run_readonly_sql', input: 'SELECT answer' },
+        ])
+      )?.passed,
+    ).toBe(false);
+    expect(
+      (
+        await runResultSetCheck('SELECT reference', ['World Cup'], snapshot, [
+          sql([]),
+        ])
+      )?.passed,
+    ).toBe(true);
+  });
+
+  it('fails if the reference itself is truncated', async () => {
+    reference([{ team: 'Argentina' }], true);
+    const result = await runResultSetCheck(
+      'SELECT reference',
+      ['World Cup'],
+      snapshot,
+      [sql([{ team: 'Argentina' }])],
+    );
+    expect(result?.passed).toBe(false);
+    expect(result?.reason).toContain('reference result is truncated');
   });
 });

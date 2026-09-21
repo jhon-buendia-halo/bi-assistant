@@ -66,6 +66,26 @@ question asks for — no extra bookkeeping columns, no `ORDER BY` dependence.
 
 ## The World Cup set
 
+The separate **Agents → Evals** suite (`npm run evals:assistant`) also uses
+this fixture. Its ten questions and grading rules are fixed to World Cup data;
+selecting an F1 or other datasource does not adapt the questions. Save a dataset
+including the `world_cup` tables and views, then select that PostgreSQL datasource
+in the Evals tab. For the CLI, set `EVAL_DATASETS` to the saved dataset name(s).
+Both runners reject an incompatible saved data scope before making model calls.
+This preflight checks entity availability in the saved datasets; it does not
+verify that the live fixture's rows are unchanged. Regression comparisons only
+use previous runs with the same datasource and dataset names.
+
+The Agents suite compares reference SQL against **each complete successful SQL
+result** from the turn. A later coverage lookup, leaderboard, or list of examples
+does not replace the earlier answer query. One result must contain all reference
+facts; the grader does not combine partial queries, drop extra rows, accept
+missing reference values, or treat truncated rows as complete evidence. The
+stadium/attendance question explicitly compares distinct facts, so multiple
+matches tied at the same venue and attendance do not cause a false failure.
+Other questions retain duplicate-sensitive row comparison. These rules apply to
+the Agents suite; the separate golden-set CLI described below is unchanged.
+
 The shipped cases run against the World Cup Postgres fixture in this repo, so
 the whole set is reproducible without touching customer data.
 
