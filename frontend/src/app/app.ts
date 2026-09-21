@@ -36,6 +36,10 @@ import {
 import { DatasourcesApiService } from './features/datasources/services/datasources-api.service';
 import { LlmConfig } from './features/llm/components/llm-config/llm-config';
 import { DatasetList } from './features/datasets/components/dataset-list/dataset-list';
+import { AgentList } from './features/agents/components/agent-list/agent-list';
+import { AgentDetail } from './features/agents/components/agent-detail/agent-detail';
+import { EvalTrace } from './features/agents/components/eval-trace/eval-trace';
+import { Agent } from './features/agents/services/agents-api.service';
 import { CatalogBrowser } from './features/datasets/components/catalog-browser/catalog-browser';
 import { EntityDetails } from './features/datasets/components/entity-details/entity-details';
 import { DatasetSelectionService } from './features/datasets/services/dataset-selection.service';
@@ -65,7 +69,13 @@ import { ToastService } from './core/toast/toast.service';
 
 type SettingsSection = 'datasources' | 'llm' | null;
 type MainView =
-  'home' | 'dataset' | 'dataset-new' | 'conversation-new' | 'session-chat';
+  | 'home'
+  | 'dataset'
+  | 'dataset-new'
+  | 'agents'
+  | 'agent-detail'
+  | 'conversation-new'
+  | 'session-chat';
 
 const DEFAULT_RIGHT_PANEL_WIDTH = 572;
 const MIN_RIGHT_PANEL_WIDTH = 360;
@@ -82,6 +92,9 @@ const RIGHT_PANEL_WIDTH_STORAGE_KEY = 'questions-to-insights:right-panel-width';
     DatasourceConfig,
     LlmConfig,
     DatasetList,
+    AgentList,
+    AgentDetail,
+    EvalTrace,
     CatalogBrowser,
     EntityDetails,
     ToastContainer,
@@ -131,6 +144,14 @@ export class App {
   openDatasetEditor(dataset: Dataset | null): void {
     this.editingDataset.set(dataset);
     this.mainView.set('dataset-new');
+  }
+
+  /** Registry key of the agent open in the detail view. */
+  readonly activeAgentKey = signal<string | null>(null);
+
+  openAgent(agent: Agent): void {
+    this.activeAgentKey.set(agent.key);
+    this.mainView.set('agent-detail');
   }
 
   private readonly datasetSelection = inject(DatasetSelectionService);

@@ -137,6 +137,16 @@
             <lucide-angular [img]="FlaskConical" [size]="15" />
             <span>Datasets</span>
           </button>
+          <button
+            (click)="mainView.set(mainView() === 'agents' ? 'home' : 'agents')"
+            class="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
+            [class.option-active]="
+              mainView() === 'agents' || mainView() === 'agent-detail'
+            "
+          >
+            <lucide-angular [img]="Bot" [size]="15" />
+            <span>Agents</span>
+          </button>
         </nav>
 
         <!-- Divider -->
@@ -348,6 +358,21 @@
             (saved)="mainView.set('dataset')"
           />
         </div>
+      } @else if (mainView() === "agents") {
+        <div class="flex flex-1 justify-center overflow-y-auto px-8 py-10">
+          <app-agent-list
+            class="w-full max-w-[960px]"
+            (openAgent)="openAgent($event)"
+          />
+        </div>
+      } @else if (mainView() === "agent-detail" && activeAgentKey()) {
+        <div class="flex flex-1 justify-center overflow-y-auto px-8 py-10">
+          <app-agent-detail
+            class="w-full max-w-[960px]"
+            [agentKey]="activeAgentKey()!"
+            (back)="mainView.set('agents')"
+          />
+        </div>
       } @else if (mainView() === "session-chat" && activeSession()) {
         <app-session-chat
           class="min-h-0 flex-1"
@@ -557,6 +582,8 @@
           (visualRefreshed)="onVisualRefreshed($event)"
           (dataPointSelected)="onDataPointSelected($event)"
         />
+      } @else if (mainView() === "agent-detail") {
+        <app-eval-trace class="min-h-0 flex-1 overflow-y-auto" />
       } @else {
         <app-entity-details class="min-h-0 flex-1 overflow-y-auto" />
       }

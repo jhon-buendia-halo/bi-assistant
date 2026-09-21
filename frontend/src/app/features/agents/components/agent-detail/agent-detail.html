@@ -1,0 +1,560 @@
+<div class="flex flex-col">
+  <button
+    (click)="back.emit()"
+    class="flex w-fit items-center gap-1.5 rounded-md px-2 py-1 text-[13px] text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
+  >
+    <lucide-angular [img]="ArrowLeft" [size]="15" />
+    <span>All agents</span>
+  </button>
+
+  @if (loading()) {
+    <div class="mt-10 flex items-center gap-2.5 text-zinc-400">
+      <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
+      <span>Loading agent…</span>
+    </div>
+  } @else if (error(); as err) {
+    <p
+      class="mt-8 rounded-md bg-red-500/10 px-3 py-2.5 text-[13px] text-red-400"
+    >
+      {{ err }}
+    </p>
+  } @else if (agent(); as agent) {
+    <!-- Header -->
+    <div class="mt-4 flex items-start gap-3.5">
+      <span
+        class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/5 text-zinc-400"
+      >
+        <lucide-angular [img]="Bot" [size]="19" />
+      </span>
+      <div class="flex min-w-0 flex-col gap-1">
+        <h1 class="font-serif text-[26px] font-semibold text-zinc-100">
+          {{ agent.name }}
+        </h1>
+        <span class="font-mono text-[12px] text-zinc-500">{{ agent.id }}</span>
+      </div>
+    </div>
+    @if (agent.description) {
+      <p class="mt-3 max-w-[70ch] text-[13px] leading-relaxed text-zinc-400">
+        {{ agent.description }}
+      </p>
+    }
+
+    <!-- Tabs -->
+    <div class="mt-6 flex items-center gap-1 border-b border-white/10">
+      @for (tab of tabs(); track tab.id) {
+        <button
+          [attr.data-testid]="'agent-tab-' + tab.id"
+          (click)="activeTab.set(tab.id)"
+          class="-mb-px flex items-center gap-2 border-b-2 px-3 py-2 text-[13px]"
+          [class.border-zinc-200]="activeTab() === tab.id"
+          [class.text-zinc-100]="activeTab() === tab.id"
+          [class.border-transparent]="activeTab() !== tab.id"
+          [class.text-zinc-400]="activeTab() !== tab.id"
+          [class.hover:text-zinc-200]="activeTab() !== tab.id"
+        >
+          <lucide-angular [img]="tab.icon" [size]="14" />
+          <span>{{ tab.label }}</span>
+        </button>
+      }
+    </div>
+
+    <!-- Tab panels -->
+    <div class="mt-6">
+      @switch (activeTab()) {
+        @case ("prompt") {
+          @if (agent.instructions) {
+            <pre
+              class="max-w-full overflow-x-auto rounded-xl bg-white/5 p-4 font-mono text-[12px] leading-relaxed whitespace-pre-wrap text-zinc-300"
+              >{{ agent.instructions }}</pre>
+          } @else {
+            <p class="text-[13px] text-zinc-500">
+              This agent builds its prompt at request time, so there is no
+              static template to show.
+            </p>
+          }
+        }
+        @case ("tools") {
+          @if (agent.toolDetails.length === 0) {
+            <p class="text-[13px] text-zinc-500">
+              This agent runs in a single step with no tools.
+            </p>
+          } @else {
+            <div class="flex flex-col gap-2">
+              @for (tool of agent.toolDetails; track tool.name) {
+                <div class="rounded-xl bg-white/5 px-4 py-3">
+                  <div class="flex items-center gap-2">
+                    <lucide-angular
+                      [img]="Wrench"
+                      [size]="14"
+                      class="text-zinc-500"
+                    />
+                    <span class="font-mono text-[13px] text-zinc-200">{{
+                      tool.name
+                    }}</span>
+                  </div>
+                  @if (tool.description) {
+                    <p
+                      class="mt-2 max-w-[80ch] text-[12px] leading-relaxed text-zinc-400"
+                    >
+                      {{ tool.description }}
+                    </p>
+                  }
+                  @if (tool.inputs.length > 0) {
+                    <div class="mt-2.5 flex flex-wrap items-center gap-1.5">
+                      @for (input of tool.inputs; track input) {
+                        <span
+                          class="rounded-md bg-white/5 px-2 py-0.5 font-mono text-[11px] text-zinc-400"
+                          >{{ input }}</span
+                        >
+                      }
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+          }
+        }
+        @case ("memory") {
+          @if (agent.memory; as memory) {
+            <div class="flex max-w-[520px] flex-col gap-2.5 text-[13px]">
+              <div class="flex justify-between border-b border-white/5 pb-2.5">
+                <span class="text-zinc-500">Recent messages replayed</span>
+                <span class="text-zinc-200">{{
+                  lastMessagesLabel(memory.lastMessages)
+                }}</span>
+              </div>
+              <div class="flex justify-between border-b border-white/5 pb-2.5">
+                <span class="text-zinc-500">Semantic recall</span>
+                <span class="text-zinc-200">{{
+                  onOff(memory.semanticRecall)
+                }}</span>
+              </div>
+              <div class="flex justify-between border-b border-white/5 pb-2.5">
+                <span class="text-zinc-500">Working memory</span>
+                <span class="text-zinc-200">{{
+                  onOff(memory.workingMemory)
+                }}</span>
+              </div>
+              <div class="flex justify-between border-b border-white/5 pb-2.5">
+                <span class="text-zinc-500">Auto-generated titles</span>
+                <span class="text-zinc-200">{{
+                  onOff(memory.generateTitle)
+                }}</span>
+              </div>
+              @if (memory.storage) {
+                <div class="flex justify-between">
+                  <span class="text-zinc-500">Storage</span>
+                  <span class="font-mono text-zinc-200">{{
+                    memory.storage
+                  }}</span>
+                </div>
+              }
+            </div>
+          } @else {
+            <p class="text-[13px] text-zinc-500">
+              This agent is stateless — no memory is configured.
+            </p>
+          }
+        }
+        @case ("model") {
+          @if (agent.model; as model) {
+            <div class="flex max-w-[520px] flex-col gap-2.5 text-[13px]">
+              <div class="flex justify-between border-b border-white/5 pb-2.5">
+                <span class="text-zinc-500">Model</span>
+                <span class="font-mono text-zinc-200">{{ model.id }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-zinc-500">Provider</span>
+                <span class="font-mono text-zinc-200">{{
+                  model.provider
+                }}</span>
+              </div>
+            </div>
+          } @else {
+            <p class="text-[13px] text-zinc-500">
+              No model resolved — save an LLM configuration in Settings first.
+            </p>
+          }
+        }
+        @case ("evals") {
+          @if (evalCases().length > 0 || evalTab() === "runs") {
+            <!-- Sub-tabs: the suite, and what has been run -->
+            <div class="mb-5 flex items-center gap-1">
+              <button
+                data-testid="eval-subtab-questions"
+                (click)="selectEvalTab('questions')"
+                class="rounded-lg px-3 py-1.5 text-[13px]"
+                [class.bg-white/10]="evalTab() === 'questions'"
+                [class.text-zinc-200]="evalTab() === 'questions'"
+                [class.text-zinc-400]="evalTab() !== 'questions'"
+                [class.hover:text-zinc-200]="evalTab() !== 'questions'"
+              >
+                Questions
+              </button>
+              <button
+                data-testid="eval-subtab-runs"
+                (click)="selectEvalTab('runs')"
+                class="rounded-lg px-3 py-1.5 text-[13px]"
+                [class.bg-white/10]="evalTab() === 'runs'"
+                [class.text-zinc-200]="evalTab() === 'runs'"
+                [class.text-zinc-400]="evalTab() !== 'runs'"
+                [class.hover:text-zinc-200]="evalTab() !== 'runs'"
+              >
+                Executions
+              </button>
+            </div>
+          }
+
+          @if (evalTab() === "runs") {
+            @if (evalRunsLoading()) {
+              <div class="flex items-center gap-2.5 text-zinc-400">
+                <lucide-angular
+                  [img]="Loader2"
+                  [size]="16"
+                  class="animate-spin"
+                />
+                <span>Loading executions…</span>
+              </div>
+            } @else if (evalRuns().length === 0) {
+              <p class="text-[13px] text-zinc-500">
+                No eval runs yet — run the suite from the Questions tab.
+              </p>
+            } @else {
+              <div class="flex flex-col gap-2">
+                @for (run of evalRuns(); track run.jobId) {
+                  <div
+                    [attr.data-testid]="'eval-run-' + run.jobId"
+                    class="rounded-xl bg-white/5 px-4 py-3"
+                  >
+                    <div class="flex items-center gap-3">
+                      <button
+                        type="button"
+                        (click)="toggleRun(run.jobId)"
+                        class="flex min-w-0 flex-1 items-center gap-3 text-left"
+                      >
+                        @if (run.status === "running") {
+                          <lucide-angular
+                            [img]="Loader2"
+                            [size]="14"
+                            class="shrink-0 animate-spin text-zinc-400"
+                          />
+                        } @else if (passedIn(run) === run.totalCases) {
+                          <lucide-angular
+                            [img]="CircleCheck"
+                            [size]="14"
+                            class="shrink-0 text-emerald-400"
+                          />
+                        } @else {
+                          <lucide-angular
+                            [img]="CircleX"
+                            [size]="14"
+                            class="shrink-0 text-red-400"
+                          />
+                        }
+                        <span class="text-[13px] text-zinc-200"
+                          >{{ passedIn(run) }}/{{ run.totalCases }} passed</span
+                        >
+                        <span class="truncate text-[12px] text-zinc-500">
+                          {{ startedLabel(run) }} ·
+                          {{ datasourceName(run.datasourceId) }} ·
+                          {{ runDuration(run) }}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        [attr.data-testid]="'eval-run-download-' + run.jobId"
+                        [attr.aria-label]="
+                          'Download run ' + run.jobId + ' as Markdown'
+                        "
+                        title="Download as Markdown"
+                        (click)="downloadRun(run)"
+                        [disabled]="downloadingRunId() === run.jobId"
+                        class="shrink-0 rounded p-1 text-zinc-600 hover:bg-white/10 hover:text-zinc-300 disabled:opacity-50"
+                      >
+                        @if (downloadingRunId() === run.jobId) {
+                          <lucide-angular
+                            [img]="Loader2"
+                            [size]="14"
+                            class="animate-spin"
+                          />
+                        } @else {
+                          <lucide-angular [img]="Download" [size]="14" />
+                        }
+                      </button>
+                      @if (run.status !== "running") {
+                        <button
+                          type="button"
+                          [attr.aria-label]="'Delete run ' + run.jobId"
+                          (click)="deleteRun(run.jobId)"
+                          class="shrink-0 rounded p-1 text-zinc-600 hover:bg-white/10 hover:text-zinc-300"
+                        >
+                          <lucide-angular [img]="Trash2" [size]="14" />
+                        </button>
+                      }
+                    </div>
+
+                    @if (expandedRunId() === run.jobId) {
+                      <p class="mt-2 text-[12px] text-zinc-500">
+                        Scoped to {{ run.datasets.join(", ") }}
+                      </p>
+                      <div class="mt-2 flex flex-col gap-1">
+                        @for (result of run.results; track result.id) {
+                          <button
+                            type="button"
+                            [attr.data-testid]="
+                              'eval-run-result-' + run.jobId + '-' + result.id
+                            "
+                            (click)="selectRunResult(result)"
+                            class="flex items-start gap-2 rounded-md px-2 py-1.5 text-left hover:bg-white/5"
+                          >
+                            <lucide-angular
+                              [img]="result.passed ? CircleCheck : CircleX"
+                              [size]="12"
+                              class="mt-1 shrink-0"
+                              [class.text-emerald-400]="result.passed"
+                              [class.text-red-400]="!result.passed"
+                            />
+                            <span
+                              class="min-w-0 flex-1 text-[12px] text-zinc-300"
+                              >{{ result.question }}</span
+                            >
+                            <span
+                              class="shrink-0 font-mono text-[11px] text-zinc-600"
+                              >{{ result.durationMs }}ms</span
+                            >
+                          </button>
+                        }
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+            }
+          } @else if (evalsLoading()) {
+            <div class="flex items-center gap-2.5 text-zinc-400">
+              <lucide-angular
+                [img]="Loader2"
+                [size]="16"
+                class="animate-spin"
+              />
+              <span>Loading evals…</span>
+            </div>
+          } @else if (evalsError(); as err) {
+            <p
+              class="rounded-md bg-red-500/10 px-3 py-2.5 text-[13px] text-red-400"
+            >
+              {{ err }}
+            </p>
+          } @else if (evalCases().length === 0) {
+            <p class="text-[13px] text-zinc-500">
+              No evals configured for this agent yet.
+            </p>
+          } @else {
+            <p class="text-[12px] text-zinc-500">
+              {{ evalCases().length }} questions run against this agent. Each
+              check must score 1.0 for its question to pass.
+            </p>
+
+            <!-- Datasource picker + run -->
+            <div class="mt-4 flex flex-wrap items-center gap-2">
+              <select
+                data-testid="eval-datasource-select"
+                aria-label="Datasource to run the evals against"
+                [value]="selectedDatasourceId()"
+                (change)="onDatasourceChange($event)"
+                [disabled]="running() || runStarting()"
+                class="rounded-lg border border-white/15 bg-[#232323] px-3 py-2 text-[13px] text-zinc-200 disabled:opacity-50"
+              >
+                @if (datasources().length === 0) {
+                  <option value="">No datasources configured</option>
+                }
+                @for (datasource of datasources(); track datasource.id) {
+                  <option [value]="datasource.id">
+                    {{ datasource.name }} · {{ kindLabel(datasource.kind) }}
+                  </option>
+                }
+              </select>
+              <button
+                data-testid="eval-run"
+                (click)="startRun()"
+                [disabled]="
+                  running() ||
+                  runStarting() ||
+                  datasources().length === 0 ||
+                  selectedCaseIds().size === 0
+                "
+                class="flex items-center gap-1.5 rounded-lg bg-zinc-200 px-3.5 py-2 text-[13px] font-medium text-zinc-900 hover:bg-white disabled:opacity-50"
+              >
+                @if (running() || runStarting()) {
+                  <lucide-angular
+                    [img]="Loader2"
+                    [size]="14"
+                    class="animate-spin"
+                  />
+                  <span>Running…</span>
+                } @else {
+                  <lucide-angular [img]="Play" [size]="14" />
+                  <span>Run {{ selectedCaseIds().size }} selected</span>
+                }
+              </button>
+              @if (runStatus() !== "idle") {
+                <span class="text-[12px] text-zinc-500">
+                  {{ runResults().length }}/{{ evalCases().length }} done ·
+                  {{ passedCount() }} passed
+                </span>
+              }
+            </div>
+
+            @if (runDatasets().length > 0) {
+              <p class="mt-2 text-[12px] text-zinc-500">
+                Scoped to
+                <span class="text-zinc-400">{{
+                  runDatasets().join(", ")
+                }}</span>
+              </p>
+            }
+            @if (runError(); as err) {
+              <p
+                class="mt-3 rounded-md bg-red-500/10 px-3 py-2.5 text-[13px] text-red-400"
+              >
+                {{ err }}
+              </p>
+            }
+            <label
+              class="mt-5 flex w-fit cursor-pointer items-center gap-2 text-[12px] text-zinc-400"
+            >
+              <input
+                type="checkbox"
+                data-testid="eval-select-all"
+                [checked]="allCasesSelected()"
+                (change)="toggleAllCases()"
+                [disabled]="running() || runStarting()"
+                class="h-3.5 w-3.5 accent-zinc-300"
+              />
+              <span>Select all</span>
+            </label>
+
+            <div class="mt-2 flex flex-col gap-2">
+              @for (
+                evalCase of evalCases();
+                track evalCase.id;
+                let i = $index
+              ) {
+                <div
+                  class="flex items-start gap-2 rounded-xl border bg-white/5 px-3 py-3"
+                  [class.border-zinc-300]="selectedEvalCaseId() === evalCase.id"
+                  [class.border-transparent]="
+                    selectedEvalCaseId() !== evalCase.id
+                  "
+                >
+                  <input
+                    type="checkbox"
+                    [attr.data-testid]="'eval-select-' + evalCase.id"
+                    [attr.aria-label]="'Run: ' + evalCase.question"
+                    [checked]="isCaseSelected(evalCase.id)"
+                    (change)="toggleCase(evalCase.id)"
+                    [disabled]="running() || runStarting()"
+                    class="mt-1 h-3.5 w-3.5 shrink-0 accent-zinc-300"
+                  />
+                  <button
+                    type="button"
+                    [attr.data-testid]="'eval-case-' + evalCase.id"
+                    [attr.aria-pressed]="selectedEvalCaseId() === evalCase.id"
+                    (click)="selectEvalCase(evalCase)"
+                    class="min-w-0 flex-1 rounded-lg px-1 text-left hover:bg-white/5"
+                  >
+                    <div class="flex items-start gap-3">
+                      <span
+                        class="mt-0.5 w-5 shrink-0 text-right font-mono text-[12px] text-zinc-500"
+                        >{{ i + 1 }}</span
+                      >
+                      <div class="flex min-w-0 flex-col gap-1.5">
+                        <span class="flex items-center gap-2">
+                          <span class="text-[13px] text-zinc-200">{{
+                            evalCase.question
+                          }}</span>
+                          @if (resultFor(evalCase.id); as result) {
+                            @if (result.passed) {
+                              <span
+                                [attr.data-testid]="
+                                  'eval-result-' + evalCase.id
+                                "
+                                class="flex items-center gap-1 text-[11px] text-emerald-400"
+                              >
+                                <lucide-angular
+                                  [img]="CircleCheck"
+                                  [size]="12"
+                                />
+                                <span>passed</span>
+                              </span>
+                            } @else {
+                              <span
+                                [attr.data-testid]="
+                                  'eval-result-' + evalCase.id
+                                "
+                                class="flex items-center gap-1 text-[11px] text-red-400"
+                              >
+                                <lucide-angular [img]="CircleX" [size]="12" />
+                                <span>failed</span>
+                              </span>
+                            }
+                          } @else if (
+                            runCurrentQuestion() === evalCase.question
+                          ) {
+                            <span
+                              class="flex items-center gap-1 text-[11px] text-zinc-400"
+                            >
+                              <lucide-angular
+                                [img]="Loader2"
+                                [size]="12"
+                                class="animate-spin"
+                              />
+                              <span>running</span>
+                            </span>
+                          }
+                        </span>
+                        <span
+                          class="max-w-[80ch] text-[12px] leading-relaxed text-zinc-500"
+                          >{{ evalCase.intent }}</span
+                        >
+                        @if (resultFor(evalCase.id); as result) {
+                          @if (result.error) {
+                            <span class="text-[12px] text-red-400">{{
+                              result.error
+                            }}</span>
+                          }
+                        }
+                        <div class="mt-1 flex flex-wrap items-center gap-1.5">
+                          @for (check of evalCase.checks; track check.id) {
+                            <span
+                              [title]="check.description"
+                              class="flex items-center gap-1.5 rounded-md bg-white/5 px-2 py-0.5 text-[11px] text-zinc-400"
+                            >
+                              <lucide-angular [img]="Gauge" [size]="11" />
+                              <span>{{ check.description }}</span>
+                              @if (resultFor(evalCase.id); as result) {
+                                <span
+                                  [class.text-emerald-400]="
+                                    result.scores[check.id] === 1
+                                  "
+                                  [class.text-red-400]="
+                                    result.scores[check.id] !== 1
+                                  "
+                                  >{{ result.scores[check.id] ?? 0 }}</span
+                                >
+                              }
+                            </span>
+                          }
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                </div>
+              }
+            </div>
+          }
+        }
+      }
+    </div>
+  }
+</div>
