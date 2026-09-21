@@ -35,6 +35,20 @@ export interface ReasoningStep {
   error?: string;
 }
 
+/**
+ * A curated knowledge snippet the assistant's context carried for one answer.
+ * Recorded server-side when the block was assembled — the list is what the
+ * model was given, not a claim about what it applied.
+ */
+export interface KnowledgeUse {
+  id: string;
+  kind: 'instruction' | 'term' | 'default_filter';
+  title: string;
+  body: string;
+  /** Dataset the snippet is scoped to; absent for a global snippet. */
+  datasetId?: string;
+}
+
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
@@ -66,6 +80,8 @@ export interface ChatMessage {
   crossCheck?: CrossCheck;
   /** How the assistant worked its way from the question to this answer. */
   reasoning?: ReasoningStep[];
+  /** Curated knowledge snippets this answer's context carried. */
+  knowledge?: KnowledgeUse[];
   /**
    * Present when a deep-analysis job produced a report. The content is the
    * report's executive summary; the full markdown is downloadable.

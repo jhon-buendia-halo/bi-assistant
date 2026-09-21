@@ -1,6 +1,12 @@
 jest.mock('@mastra/core/request-context', () => ({
+  // Map-backed: the turn writes the knowledge record onto the context and
+  // reads it back at persist time, so `get` has to return what `set` stored.
   RequestContext: class {
-    set = jest.fn();
+    private readonly values = new Map<string, unknown>();
+    set = jest.fn((key: string, value: unknown) => {
+      this.values.set(key, value);
+    });
+    get = jest.fn((key: string) => this.values.get(key));
   },
 }));
 jest.mock('../../mastra/mastra.service', () => ({ MastraService: class {} }));
@@ -70,6 +76,14 @@ describe('SessionsService streaming', () => {
       verified?: boolean;
       metricsBlock?: string;
       knowledgeBlock?: string;
+      /** Snippets the curated-knowledge block was built from this turn. */
+      knowledgeUsed?: {
+        id: string;
+        kind: string;
+        title: string;
+        body: string;
+        datasetId?: string;
+      }[];
       tables?: string[];
       /** Careful mode: what the verifier replies and what its SQL returns. */
       crossCheck?: {
@@ -120,6 +134,10 @@ describe('SessionsService streaming', () => {
       definitionBlock: jest
         .fn()
         .mockResolvedValue(options.knowledgeBlock ?? ''),
+      contextFor: jest.fn().mockResolvedValue({
+        block: options.knowledgeBlock ?? '',
+        used: options.knowledgeUsed ?? [],
+      }),
     };
     const check = options.crossCheck ?? {};
     const verifier = {
@@ -233,6 +251,36 @@ describe('SessionsService streaming', () => {
     expect(session.messages.at(-1)?.interpretation).toBe(
       'Computed from 2 queries over main.football.matches — 3 rows analyzed.',
     );
+  });
+
+  it('records the curated knowledge the turn was given on the answer', async () => {
+    const used = [
+      {
+        id: 'k1',
+        kind: 'default_filter',
+        title: 'Exclude test rows',
+        body: 'Add is_test = false unless asked otherwise.',
+        datasetId: 'football',
+      },
+    ];
+    const { service, session } = buildStreaming(
+      answerStream([{ sql: 'select 1', rows: [{ n: 1 }] }]),
+      { knowledgeBlock: 'Curated dataset knowledge', knowledgeUsed: used },
+    );
+
+    await service.streamMessage('session-1', 'Why?', () => {});
+
+    expect(session.messages.at(-1)?.knowledge).toEqual(used);
+  });
+
+  it('omits the knowledge record when no snippet applied', async () => {
+    const { service, session } = buildStreaming(
+      answerStream([{ sql: 'select 1', rows: [{ n: 1 }] }]),
+    );
+
+    await service.streamMessage('session-1', 'Why?', () => {});
+
+    expect(session.messages.at(-1)?.knowledge).toBeUndefined();
   });
 
   it('omits the interpretation line when no SQL ran', async () => {
