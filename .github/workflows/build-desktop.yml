@@ -8,6 +8,13 @@ name: Build desktop installers
 # Each platform is an independent checkbox, so a run costs one runner per ticked
 # box. Separate runs accumulate on the same release: publishing uploads with
 # --clobber, so building macOS today and Windows tomorrow leaves both attached.
+#
+# Publishing never needs a tag to exist up front. When the ref is not a v* tag
+# the `prepare` job derives one from the version committed at that ref
+# (frontend/package.json, kept current by version-on-merge.yml) and walks the
+# patch level up until it finds a tag nobody has used yet. The release step
+# creates that tag at the built commit, and the build itself is stamped with the
+# matching version so the installer filename and the tag never disagree.
 on:
   workflow_dispatch:
     inputs:
@@ -50,8 +57,18 @@ jobs:
       matrix: ${{ steps.select.outputs.matrix }}
       ref: ${{ steps.select.outputs.ref }}
       tag: ${{ steps.select.outputs.tag }}
+      version: ${{ steps.select.outputs.version }}
+      sha: ${{ steps.select.outputs.sha }}
     steps:
-      - name: Resolve targets and ref
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          # Full history and tags: the tag is derived from the version committed
+          # at this ref and has to be compared against the tags already pushed.
+          fetch-depth: 0
+
+      - name: Resolve targets, ref and tag
         id: select
         env:
           WINDOWS_X64: ${{ inputs.windows_x64 }}
@@ -92,16 +109,43 @@ jobs:
           fi
 
           ref=${INPUT_REF:-$GITHUB_REF}
+          sha=$(git rev-parse HEAD)
+
+          # A v* ref publishes to exactly that tag. Anything else — a branch, a
+          # SHA, or an empty ref — derives the tag from the version this commit
+          # carries in frontend/package.json. If that tag already belongs to a
+          # different commit the patch level walks up until a free name is
+          # found, so repeated builds off a branch each get their own tag
+          # instead of clobbering a shipped release.
           case "$ref" in
-            refs/tags/*) tag=${ref#refs/tags/} ;;
-            v*)          tag=$ref ;;
-            *)           tag="" ;;
+            refs/tags/v*) tag=${ref#refs/tags/} ;;
+            v[0-9]*)      tag=$ref ;;
+            *)
+              version=$(jq -r .version frontend/package.json)
+              base=${version%%-*}
+              IFS=. read -r major minor patch <<<"$base"
+              major=${major:-0}
+              minor=${minor:-0}
+              patch=${patch:-0}
+              tag="v$major.$minor.$patch"
+              while true; do
+                taken=$(git rev-parse -q --verify "refs/tags/$tag^{commit}" || true)
+                if [ -z "$taken" ] || [ "$taken" = "$sha" ]; then
+                  break
+                fi
+                echo "$tag is taken by $taken — trying the next patch level"
+                patch=$((patch + 1))
+                tag="v$major.$minor.$patch"
+              done
+              ;;
           esac
 
-          echo "Building $(jq -r '[.[].id] | join(", ")' <<<"$selected") from $ref"
+          echo "Building $(jq -r '[.[].id] | join(", ")' <<<"$selected") from $ref ($sha) as $tag"
           echo "matrix={\"include\":$selected}" >> "$GITHUB_OUTPUT"
           echo "ref=$ref" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
   build:
     name: Build ${{ matrix.name }}
@@ -122,7 +166,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v7
         with:
-          ref: ${{ needs.prepare.outputs.ref }}
+          ref: ${{ needs.prepare.outputs.sha }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v7
@@ -132,6 +176,19 @@ jobs:
           cache-dependency-path: |
             backend/package-lock.json
             frontend/package-lock.json
+
+      # Only matters when prepare had to walk the patch level up: without this
+      # the installer filename would keep the committed version while the
+      # release carries the next tag.
+      - name: Stamp the resolved version
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          npm --prefix frontend version "$VERSION" --no-git-tag-version --allow-same-version >/dev/null
+          npm --prefix backend  version "$VERSION" --no-git-tag-version --allow-same-version >/dev/null
+          echo "Building version $VERSION"
 
       - name: Install backend dependencies
         working-directory: backend
@@ -161,12 +218,6 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Require a tag
-        if: needs.prepare.outputs.tag == ''
-        run: |
-          echo "Publishing needs a tag: build a v* tag (or pass one as 'ref')." >&2
-          exit 1
-
       - name: Download installers
         uses: actions/download-artifact@v7
         with:
@@ -177,6 +228,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.prepare.outputs.tag }}
+          TARGET: ${{ needs.prepare.outputs.sha }}
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
@@ -184,9 +236,12 @@ jobs:
 
           # Create the release empty first. Handing the assets to `gh release
           # create` means a single failed upload deletes the release it just
-          # made, so nothing survives a flaky transfer.
+          # made, so nothing survives a flaky transfer. --target creates the tag
+          # at the built commit when it does not exist yet, which is what makes
+          # publishing from a branch work without a hand-pushed tag.
           if ! gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
-            gh release create "$TAG" --repo "$REPO" --title "$TAG" --generate-notes
+            gh release create "$TAG" --repo "$REPO" --target "$TARGET" \
+              --title "$TAG" --generate-notes
           fi
 
           # Installers run to a few hundred MB and uploads.github.com rejects
@@ -209,3 +264,14 @@ jobs:
             failed=1
           done
           exit $failed
+
+      - name: Summary
+        env:
+          TAG: ${{ needs.prepare.outputs.tag }}
+          REPO: ${{ github.repository }}
+        run: |
+          {
+            echo "### Published $TAG"
+            echo
+            echo "<https://github.com/$REPO/releases/tag/$TAG>"
+          } >> "$GITHUB_STEP_SUMMARY"
