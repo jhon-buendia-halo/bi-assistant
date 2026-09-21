@@ -13,6 +13,8 @@ import {
 import { getDatasetToolServices } from '../tool-services';
 import { entityOrientationLines } from '../context-blocks';
 import { runResultSetCheck } from './result-set-check';
+import type { ResultSetCheckOptions } from './result-set-check';
+import { assistantEvalDatasetError } from './assistant-eval-datasets';
 import {
   synthesizeToolOnlyTurn,
   toolDataRecord,
@@ -45,11 +47,12 @@ export interface AssistantEvalCase {
   /**
    * Trusted SQL against the eval datasource whose live result set is the
    * reference answer. When present, `runAssistantEvalCase` compares it
-   * (via `runResultSetCheck`) against the agent's own last successful
-   * `run_readonly_sql` result and adds that as the case's primary
+   * (via `runResultSetCheck`) against the agent's successful
+   * `run_readonly_sql` results and adds that as the case's primary
    * correctness signal, on top of the text/tool `scorers` above.
    */
   expectedSql?: string;
+  resultSetOptions?: ResultSetCheckOptions;
   /**
    * A natural-language grading rubric for cases where a regex/text check on
    * the final answer would be too brittle (clarification quality, refusal
@@ -130,6 +133,9 @@ export const ASSISTANT_EVAL_CASES: AssistantEvalCase[] = [
   },
   {
     id: 'biggest-venue',
+    // Several matches can tie at the same venue and attendance. The question
+    // asks for the distinct venue/attendance fact, not the number of matches.
+    resultSetOptions: { distinctRows: true },
     question:
       'Which stadium hosted the best-attended match, and what was the attendance?',
     intent: 'Join matches to venues and order by a nullable measure.',
@@ -140,8 +146,8 @@ export const ASSISTANT_EVAL_CASES: AssistantEvalCase[] = [
       checks.noToolErrors(),
     ],
     expectedSql:
-      'SELECT venue, attendance FROM world_cup.v_match_results ' +
-      'ORDER BY attendance DESC, match_number LIMIT 1',
+      'SELECT DISTINCT venue, attendance FROM world_cup.v_match_results ' +
+      'WHERE attendance = (SELECT MAX(attendance) FROM world_cup.v_match_results)',
   },
   {
     id: 'schema-discovery',
@@ -195,7 +201,7 @@ export const ASSISTANT_EVAL_CASES: AssistantEvalCase[] = [
     // Per-match: did the team with the higher possession_pct also hold
     // winner_team_id? Counts corroborate a judgement answer without pinning
     // the agent to one exact query shape (widthTolerant comparison in
-    // runResultSetCheck forgives it selecting extra/fewer columns).
+    // runResultSetCheck allows extra supporting columns).
     expectedSql:
       'WITH team_matches AS (' +
       '  SELECT m.id AS match_id, mts.team_id, mts.possession_pct,' +
@@ -731,6 +737,7 @@ export async function runAssistantEvalCase(
       datasets,
       datasetSnapshots,
       turnRecords,
+      evalCase.resultSetOptions,
     );
     if (resultSetCheck) checkResults.push(resultSetCheck);
 
@@ -782,6 +789,11 @@ export async function runAssistantEvals(
   sessions?: SessionsService,
   knowledgeBlock?: string,
 ): Promise<AssistantEvalCaseResult[]> {
+  const datasetError = assistantEvalDatasetError(
+    datasets,
+    await getDatasetToolServices().getDatasets(datasets),
+  );
+  if (datasetError) throw new Error(datasetError);
   const evalSession = sessions
     ? await createEvalSession(sessions, datasets)
     : undefined;

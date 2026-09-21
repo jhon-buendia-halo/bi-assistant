@@ -5,6 +5,18 @@ import {
   createWorldCupDataset,
 } from './helpers/app-actions';
 
+const WORLD_CUP_EVAL_TABLES = [
+  'tournaments',
+  'teams',
+  'matches',
+  'venues',
+  'players',
+  'goals',
+  'match_team_statistics',
+  'v_match_results',
+  'v_player_goal_totals',
+];
+
 test('opens an agent from the Agents list and switches between its tabs', async ({
   page,
 }) => {
@@ -76,9 +88,9 @@ test('shows the stateless, no-tool agents accurately', async ({ page }) => {
 test('offers the configured datasources and starts a run from the evals tab', async ({
   page,
 }) => {
-  // A run needs a datasource with at least one dataset bound to it.
+  // A run needs the World Cup fixture tables and views in its saved scope.
   await createWorldCupDatasource(page);
-  await createWorldCupDataset(page);
+  await createWorldCupDataset(page, WORLD_CUP_EVAL_TABLES);
 
   await page.getByRole('button', { name: 'Agents' }).click();
   await page.getByTestId('agent-assistant').click();
@@ -141,6 +153,22 @@ test('refuses to run against a datasource with no datasets', async ({
   await expect(page.getByText(/has no datasets/)).toBeVisible();
 });
 
+test('explains an incomplete eval dataset without starting a run', async ({
+  page,
+}) => {
+  await createWorldCupDatasource(page);
+  await createWorldCupDataset(page);
+  await page.getByRole('button', { name: 'Agents' }).click();
+  await page.getByTestId('agent-assistant').click();
+  await page.getByTestId('agent-tab-evals').click();
+  await page.getByTestId('eval-run').click();
+  await expect(
+    page.getByText(/Missing entities: world_cup.tournaments/),
+  ).toBeVisible();
+  await page.getByTestId('eval-subtab-runs').click();
+  await expect(page.getByText(/No eval runs yet/)).toBeVisible();
+});
+
 test('opens a question in the right panel with what it is scored on', async ({
   page,
 }) => {
@@ -167,7 +195,7 @@ test('opens a question in the right panel with what it is scored on', async ({
 
 test('separates the question suite from past executions', async ({ page }) => {
   await createWorldCupDatasource(page);
-  await createWorldCupDataset(page);
+  await createWorldCupDataset(page, WORLD_CUP_EVAL_TABLES);
 
   await page.getByRole('button', { name: 'Agents' }).click();
   await page.getByTestId('agent-assistant').click();
@@ -185,9 +213,9 @@ test('separates the question suite from past executions', async ({ page }) => {
   await page.getByTestId('eval-subtab-questions').click();
   await page.getByTestId('eval-run').click();
   await page.getByTestId('eval-subtab-runs').click();
-  await expect(page.locator('[data-testid^="eval-run-"]').first()).toContainText(
-    '0/10 passed',
-  );
+  await expect(
+    page.locator('[data-testid^="eval-run-"]').first(),
+  ).toContainText('0/10 passed');
 
   await page.getByTestId('eval-subtab-questions').click();
   await expect(page.locator('[data-testid^="eval-case-"]')).toHaveCount(10);
@@ -195,7 +223,7 @@ test('separates the question suite from past executions', async ({ page }) => {
 
 test('downloads an execution as a Markdown report', async ({ page }) => {
   await createWorldCupDatasource(page);
-  await createWorldCupDataset(page);
+  await createWorldCupDataset(page, WORLD_CUP_EVAL_TABLES);
 
   await page.getByRole('button', { name: 'Agents' }).click();
   await page.getByTestId('agent-assistant').click();
@@ -210,7 +238,8 @@ test('downloads an execution as a Markdown report', async ({ page }) => {
   // assert the response that feeds the save instead.
   const [response] = await Promise.all([
     page.waitForResponse(
-      (res) => res.url().includes('/evals/runs/') && res.url().endsWith('/download'),
+      (res) =>
+        res.url().includes('/evals/runs/') && res.url().endsWith('/download'),
     ),
     download.click(),
   ]);

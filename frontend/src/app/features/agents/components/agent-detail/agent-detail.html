@@ -351,8 +351,10 @@
             </p>
           } @else {
             <p class="text-[12px] text-zinc-500">
-              {{ evalCases().length }} questions run against this agent. Each
-              check must score 1.0 for its question to pass.
+              {{ evalCases().length }} questions use the bundled World Cup sample
+              (2018 and 2022). Select its PostgreSQL datasource with a saved
+              dataset containing the world_cup tables and views. Each check must
+              score 1.0 for its question to pass.
             </p>
 
             <!-- Datasource picker + run -->

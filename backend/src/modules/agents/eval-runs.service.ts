@@ -6,6 +6,7 @@ import { SessionsService } from '../sessions/sessions.service';
 import { KnowledgeService } from '../knowledge/knowledge.service';
 import { EvalRunsRepository } from './repositories/eval-runs.repository';
 import { computeRegressionDiff, EvalRegressionSummary } from './eval-regression';
+import { assistantEvalDatasetError } from '../../mastra/evals/assistant-eval-datasets';
 import {
   AssistantEvalCase,
   AssistantEvalCaseResult,
@@ -37,7 +38,8 @@ export interface EvalRunView {
   finishedAt?: string;
   /**
    * Regression comparison against the most recent previous completed run
-   * for this agent, computed once this run finishes. Absent when no
+   * for this agent with the same datasource and datasets, computed once this
+   * run finishes. Absent when no
    * previous completed run existed to compare against, and — since it was
    * added after runs were already being persisted — on older records saved
    * before this field existed; callers must treat it as optional.
@@ -118,6 +120,12 @@ export class EvalRunsService {
     if (cases.length === 0) {
       return { error: 'Pick at least one question to run' };
     }
+
+    const datasetError = assistantEvalDatasetError(
+      bound.map((dataset) => dataset.name),
+      bound,
+    );
+    if (datasetError) return { error: datasetError };
 
     const jobId = randomUUID();
     const view: EvalRunView = {
@@ -200,7 +208,7 @@ export class EvalRunsService {
 
   /**
    * Diff this run's per-case results against the agent's most recent
-   * previous completed run, and attach the outcome to `view.comparison` —
+   * previous completed run with the same data scope, and attach the outcome to `view.comparison` —
    * best-effort, so a repository hiccup here degrades the report (no
    * comparison section) rather than marking an otherwise-successful run
    * failed.
@@ -210,6 +218,8 @@ export class EvalRunsService {
       const previous = await this.repository.mostRecentCompleted(
         view.agentKey,
         view.jobId,
+        view.datasourceId,
+        view.datasets,
       );
       if (!previous) return;
       const diff = computeRegressionDiff(previous.results, view.results);

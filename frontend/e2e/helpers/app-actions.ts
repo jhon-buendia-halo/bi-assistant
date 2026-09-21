@@ -33,12 +33,13 @@ export async function createWorldCupDatasource(page: Page): Promise<void> {
   await expect(datasource).toContainText('PostgreSQL');
 }
 
-export async function createWorldCupDataset(page: Page): Promise<void> {
+export async function createWorldCupDataset(
+  page: Page,
+  tables: string[] = ['matches'],
+): Promise<void> {
   await page.getByRole('button', { name: 'Back' }).click();
   await page.getByRole('button', { name: 'Datasets' }).click();
-  await expect(
-    page.getByRole('heading', { name: 'Datasets' }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Datasets' })).toBeVisible();
   await page.getByRole('button', { name: 'New dataset' }).click();
   await expect(
     page.getByRole('heading', { name: 'New dataset' }),
@@ -47,14 +48,26 @@ export async function createWorldCupDataset(page: Page): Promise<void> {
   await expect(page.getByTestId('catalog-world_cup')).toBeVisible();
   await page.getByTestId('catalog-world_cup').click();
   await page.getByTestId('schema-world_cup-world_cup').click();
-  await page.getByTestId('table-world_cup-world_cup-matches').click();
-  await expect(page.getByText('match_number', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Include item', exact: true }).click();
+  for (const table of tables) {
+    await page.getByTestId(`table-world_cup-world_cup-${table}`).click();
+    if (table === 'matches') {
+      await expect(
+        page.getByText('match_number', { exact: true }),
+      ).toBeVisible();
+    }
+    await page
+      .getByRole('button', { name: 'Include item', exact: true })
+      .click();
+  }
 
   await page.getByPlaceholder('Dataset name').fill(WORLD_CUP_DATASET);
-  await page.getByRole('button', { name: 'Save dataset (1)' }).click();
+  await page
+    .getByRole('button', { name: `Save dataset (${tables.length})` })
+    .click();
   await expect(page.getByTestId(`dataset-${WORLD_CUP_DATASET}`)).toBeVisible();
-  await expect(page.getByText(/PostgreSQL · 1 entities/)).toBeVisible();
+  await expect(
+    page.getByText(`PostgreSQL · ${tables.length} entities`),
+  ).toBeVisible();
 }
 
 export async function createWorldCupSession(page: Page): Promise<string> {
