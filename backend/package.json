@@ -19,12 +19,14 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "eval": "ts-node -T -P tsconfig.json scripts/run-eval.ts",
-    "check:answers": "ts-node -T -P tsconfig.json scripts/check-answers.ts"
+    "check:answers": "ts-node -T -P tsconfig.json scripts/check-answers.ts",
+    "evals:assistant": "nest build && node dist/mastra/evals/run-assistant-evals.js"
   },
   "dependencies": {
     "@databricks/sql": "2.1.0",
     "@mastra/core": "1.66.0",
     "@mastra/duckdb": "1.8.0",
+    "@mastra/evals": "1.10.2",
     "@mastra/libsql": "1.22.5",
     "@mastra/loggers": "1.3.1",
     "@mastra/memory": "1.29.0",
@@ -85,5 +87,12 @@
     ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node"
+  },
+  "allowScripts": {
+    "better-sqlite3@13.0.3": true,
+    "esbuild@0.28.2": true,
+    "fsevents@2.3.3": true,
+    "@parcel/watcher@2.6.0": true,
+    "unrs-resolver@1.12.2": true
   }
 }
