@@ -10,6 +10,7 @@ import {
   LucideAngularModule,
   ArrowLeft,
   Bot,
+  BookOpen,
   ChevronDown,
   CircleCheck,
   CornerDownLeft,
@@ -40,6 +41,7 @@ import { AgentList } from './features/agents/components/agent-list/agent-list';
 import { AgentDetail } from './features/agents/components/agent-detail/agent-detail';
 import { EvalTrace } from './features/agents/components/eval-trace/eval-trace';
 import { Agent } from './features/agents/services/agents-api.service';
+import { KnowledgeList } from './features/knowledge/components/knowledge-list/knowledge-list';
 import { CatalogBrowser } from './features/datasets/components/catalog-browser/catalog-browser';
 import { EntityDetails } from './features/datasets/components/entity-details/entity-details';
 import { DatasetSelectionService } from './features/datasets/services/dataset-selection.service';
@@ -74,6 +76,7 @@ type MainView =
   | 'dataset-new'
   | 'agents'
   | 'agent-detail'
+  | 'knowledge'
   | 'conversation-new'
   | 'session-chat';
 
@@ -95,6 +98,7 @@ const RIGHT_PANEL_WIDTH_STORAGE_KEY = 'questions-to-insights:right-panel-width';
     AgentList,
     AgentDetail,
     EvalTrace,
+    KnowledgeList,
     CatalogBrowser,
     EntityDetails,
     ToastContainer,
@@ -108,6 +112,7 @@ const RIGHT_PANEL_WIDTH_STORAGE_KEY = 'questions-to-insights:right-panel-width';
 export class App {
   readonly ArrowLeft = ArrowLeft;
   readonly Bot = Bot;
+  readonly BookOpen = BookOpen;
   readonly ChevronDown = ChevronDown;
   readonly CircleCheck = CircleCheck;
   readonly CornerDownLeft = CornerDownLeft;

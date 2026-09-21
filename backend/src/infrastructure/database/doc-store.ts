@@ -53,6 +53,7 @@ export const DATASOURCE_INVENTORIES_STORE = 'DOC_STORE_datasource_inventories';
 export const VERIFIED_QUERIES_STORE = 'DOC_STORE_verified_queries';
 export const METRICS_STORE = 'DOC_STORE_metrics';
 export const EVAL_RUNS_STORE = 'DOC_STORE_eval_runs';
+export const KNOWLEDGE_STORE = 'DOC_STORE_knowledge';
 
 export function isExistsCondition(v: FilterValue): v is ExistsCondition {
   return typeof v === 'object' && v !== null && '$exists' in v;
