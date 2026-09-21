@@ -34,9 +34,11 @@ class FakeSession {
 
 class FakeClient {
   readonly sessions: FakeSession[] = [];
+  readonly connectOptions: Record<string, unknown>[] = [];
   closed = false;
 
-  connect() {
+  connect(options: Record<string, unknown>) {
+    this.connectOptions.push(options);
     return Promise.resolve(this);
   }
 
@@ -192,6 +194,16 @@ describe('DatabricksConnector inventory', () => {
       statements().some((s) => s.includes("IN ('sales', 'archive')")),
     ).toBe(true);
     expect(result.map((c) => c.name)).toEqual(['archive', 'sales']);
+  });
+
+  it('opts every client out of driver telemetry', async () => {
+    respond = (sql) => (sql.includes('SHOW CATALOGS') ? [] : []);
+
+    await new DatabricksConnector().inventory(config);
+
+    const options = clients.flatMap((c) => c.connectOptions);
+    expect(options.length).toBeGreaterThan(0);
+    expect(options.every((o) => o.telemetryEnabled === false)).toBe(true);
   });
 });
 

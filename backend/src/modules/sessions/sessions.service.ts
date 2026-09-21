@@ -8,6 +8,12 @@ import {
 import { randomUUID } from 'crypto';
 import { RequestContext } from '@mastra/core/request-context';
 import { MastraService } from '../../mastra/mastra.service';
+import { resolveAgentModel } from '../../mastra/model-resolver';
+import {
+  providerOptionsFor,
+  type ProviderOptionValue,
+  type ProviderOptions,
+} from '../../mastra/model-compat';
 import { setDatasetToolServices } from '../../mastra/tool-services';
 import type { DatasetSnapshot, SqlRunResult } from '../../mastra/tool-services';
 import { ASSISTANT_MAX_STEPS } from '../../mastra/agent-constants';
@@ -72,6 +78,8 @@ const limitReachedNote = (limit: number) =>
   `row limit ${limit} reached — results may be incomplete; aggregate or narrow the query for exact totals`;
 /** Character budget for the schema block handed to the fixer. */
 const FIXER_SCHEMA_CHARS = 4_000;
+/** Character budget for a failed statement written into the warn log (ships in diagnostics reports). */
+const SQL_LOG_CHARS = 500;
 /** Character budget for the richer (sample-value bearing) verifier schema. */
 const VERIFIER_SCHEMA_CHARS = 6_000;
 /** Sample values shown per column to the verifier — value matching, not data. */
@@ -97,6 +105,19 @@ export type StreamEvent = {
 @Injectable()
 export class SessionsService implements OnModuleInit {
   private readonly logger = new Logger(SessionsService.name);
+
+  /**
+   * Provider options filed under the bucket the configured model actually
+   * reads. Mastra names an OpenAI-compatible client's bucket after the
+   * provider id, so a hardcoded `openai` key is silently discarded for every
+   * `lenai/…` deployment — which is how the reasoning-effort chip came to be
+   * a no-op there.
+   */
+  private async providerOptions(
+    bucket: Record<string, ProviderOptionValue>,
+  ): Promise<ProviderOptions> {
+    return providerOptionsFor(await resolveAgentModel(), bucket);
+  }
 
   constructor(
     private readonly repository: SessionsRepository,
@@ -218,7 +239,7 @@ export class SessionsService implements OnModuleInit {
       // Analysis often chains several schema + SQL tool calls per turn.
       maxSteps: ASSISTANT_MAX_STEPS,
       // The user-configured reasoning effort (Low/Medium/High chip).
-      providerOptions: { openai: { reasoningEffort } },
+      providerOptions: await this.providerOptions({ reasoningEffort }),
       context: [
         {
           role: 'system' as const,
@@ -355,6 +376,10 @@ export class SessionsService implements OnModuleInit {
         };
       } catch (error) {
         if (attempt >= SQL_REPAIR_ATTEMPTS) throw error;
+        // Guard rejections (statement never reached the engine) and
+        // transport/auth failures aren't a formatting problem a rewrite can
+        // fix — skip the fixer round trip and let the real error surface.
+        if (!isRepairableSqlError(error)) throw error;
         const message = error instanceof Error ? error.message : String(error);
         fixerContext ??= await this.sqlFixerContext(datasetNames, datasourceId);
         const corrected = await this.repairSql(
@@ -363,8 +388,11 @@ export class SessionsService implements OnModuleInit {
           fixerContext,
         );
         if (!corrected || corrected === statement) throw error;
+        // `statement`, not `sql`: attempt 2 is repairing the fixer's own
+        // rewrite from attempt 1. Flattened/capped — this ships in
+        // diagnostics reports and must stay one line per failure.
         this.logger.warn(
-          `Repairing failed SQL (attempt ${attempt + 1}): ${message}`,
+          `Repairing failed SQL (attempt ${attempt + 1}): ${message} — SQL: ${logSql(statement)}`,
         );
         statement = corrected;
       }
@@ -429,7 +457,9 @@ export class SessionsService implements OnModuleInit {
             maxSteps: 1,
             toolChoice: 'none',
             // A syntax/column fix does not benefit from hidden reasoning tokens.
-            providerOptions: { openai: { reasoningEffort: 'low' } },
+            providerOptions: await this.providerOptions({
+              reasoningEffort: 'low',
+            }),
             structuredOutput: {
               schema: sqlFixOutputSchema,
               jsonPromptInjection: 'inline',
@@ -599,7 +629,7 @@ export class SessionsService implements OnModuleInit {
         {
           maxSteps: 1,
           toolChoice: 'none',
-          providerOptions: { openai: { reasoningEffort } },
+          providerOptions: await this.providerOptions({ reasoningEffort }),
           structuredOutput: {
             schema: sqlVerifyOutputSchema,
             jsonPromptInjection: 'inline',
@@ -1088,7 +1118,9 @@ export class SessionsService implements OnModuleInit {
         trimmed,
         data,
         turn.signal,
-        (await this.llmService.getView()).reasoningEffort,
+        await this.providerOptions({
+          reasoningEffort: (await this.llmService.getView()).reasoningEffort,
+        }),
         this.logger,
       );
       if (turn.signal.aborted) return;
@@ -1415,6 +1447,41 @@ function knowledgeUsed(
   return Array.isArray(used) && used.length
     ? (used as KnowledgeUse[])
     : undefined;
+}
+
+/**
+ * Narrow, deliberately conservative match for transport/auth failures — the
+ * statement never reached the engine at all, so no rewrite touches these.
+ * Kept to specific markers (HTTP status wording, known Node connection error
+ * codes, timeouts) rather than bare numbers, so it doesn't accidentally
+ * swallow a genuine engine error that happens to mention a number.
+ */
+const TRANSPORT_OR_AUTH_ERROR =
+  /\bstatus code\b|ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|EPIPE|\bsocket hang up\b|\btimed? ?out\b|\bconnection (?:refused|reset|closed)\b/i;
+
+/**
+ * Whether a failed statement is worth another `sql-fixer` round trip.
+ * Repairable = the engine parsed and rejected the statement, so a rewrite
+ * can plausibly fix it. Not repairable: `assertReadOnlySql`'s
+ * `BadRequestException` (the statement never reached the engine — a rewrite
+ * doesn't change whether it's forbidden/malformed) or a transport/auth
+ * failure (HTTP status, connection, timeout). Anything unrecognised defaults
+ * to repairable: that matches today's behaviour (every error goes to the
+ * fixer), so an under-matched transport message costs one attempt at worst,
+ * while an over-matched one would silently skip a genuinely fixable error.
+ */
+function isRepairableSqlError(error: unknown): boolean {
+  if (error instanceof BadRequestException) return false;
+  const message = error instanceof Error ? error.message : String(error);
+  return !TRANSPORT_OR_AUTH_ERROR.test(message);
+}
+
+/** One-line, length-capped rendering of a SQL statement for warn-level logs. */
+function logSql(sql: string): string {
+  const flat = sql.replace(/\s+/g, ' ').trim();
+  return flat.length > SQL_LOG_CHARS
+    ? `${flat.slice(0, SQL_LOG_CHARS - 1)}…`
+    : flat;
 }
 
 /**

@@ -16,6 +16,43 @@ function serviceWith(opts?: {
   return new LlmService(repository, crypto);
 }
 
+/** Swaps in a fetch stub for one probe and hands back the request it saw. */
+async function probeWith(
+  dto: Parameters<LlmService['testConnection']>[0],
+  response: { ok?: boolean; status?: number; content?: string; text?: string },
+) {
+  const originalFetch = global.fetch;
+  const fetchMock = jest.fn().mockResolvedValue({
+    ok: response.ok ?? true,
+    status: response.status ?? 200,
+    json: jest.fn().mockResolvedValue({
+      choices: [
+        { message: { content: response.content ?? '{"status":"ok"}' } },
+      ],
+    }),
+    text: jest.fn().mockResolvedValue(response.text ?? ''),
+  });
+  global.fetch = fetchMock as typeof fetch;
+  try {
+    const result = await serviceWith()
+      .testConnection(dto)
+      .catch((err: Error) => err);
+    const [url, init] = (fetchMock.mock.calls[0] ?? []) as [
+      string,
+      RequestInit,
+    ];
+    return {
+      result,
+      url,
+      init,
+      body: JSON.parse(init.body as string) as Record<string, unknown>,
+      fetchMock,
+    };
+  } finally {
+    global.fetch = originalFetch;
+  }
+}
+
 describe('LenAI provider contract', () => {
   it('builds the same deployment URL and API-key header as data-readiness-agent', () => {
     expect(
@@ -33,37 +70,24 @@ describe('LenAI provider contract', () => {
   });
 
   it('tests LenAI through its deployment route with both authentication headers', async () => {
-    const originalFetch = global.fetch;
-    const fetchMock = jest.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: jest.fn().mockResolvedValue({
-        choices: [{ message: { content: 'ok' } }],
-      }),
-    });
-    global.fetch = fetchMock as typeof fetch;
-
-    try {
-      await serviceWith().testConnection({
+    const { url, init } = await probeWith(
+      {
         provider: 'lenai',
         model: 'gpt-5-deployment',
         baseUrl: 'https://lenai.example.com/',
         apiKey: 'len-key',
-      });
+      },
+      {},
+    );
 
-      expect(fetchMock).toHaveBeenCalledWith(
-        'https://lenai.example.com/openai/v1/deployments/gpt-5-deployment/chat/completions',
-        expect.objectContaining({
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: 'Bearer len-key',
-            'X-Api-Key': 'len-key',
-          },
-        }),
-      );
-    } finally {
-      global.fetch = originalFetch;
-    }
+    expect(url).toBe(
+      'https://lenai.example.com/openai/v1/deployments/gpt-5-deployment/chat/completions',
+    );
+    expect(init.headers).toEqual({
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer len-key',
+      'X-Api-Key': 'len-key',
+    });
   });
 
   it('uses the LenAI contract for runtime Mastra agent calls', async () => {
@@ -86,5 +110,109 @@ describe('LenAI provider contract', () => {
       apiKey: 'len-saved',
       headers: { 'X-Api-Key': 'len-saved' },
     });
+  });
+});
+
+describe('testConnection mirrors the agent request', () => {
+  it('sends the cap as max_completion_tokens for a gpt-5-class deployment', async () => {
+    const { body } = await probeWith(
+      {
+        provider: 'lenai',
+        model: 'mmc-tech-gpt-52-272k-2025-12-11',
+        baseUrl: 'https://lenai.example.com',
+        apiKey: 'len-key',
+      },
+      {},
+    );
+
+    expect(body.max_completion_tokens).toBe(512);
+    expect(body).not.toHaveProperty('max_tokens');
+  });
+
+  it('sends the cap as max_tokens for a gpt-4.1-class deployment', async () => {
+    const { body } = await probeWith(
+      {
+        provider: 'lenai',
+        model: 'mmc-tech-gpt-41-nano-1m-2025-04-14',
+        baseUrl: 'https://lenai.example.com',
+        apiKey: 'len-key',
+      },
+      {},
+    );
+
+    expect(body.max_tokens).toBe(512);
+    expect(body).not.toHaveProperty('max_completion_tokens');
+  });
+
+  it('asks for structured output so a model that cannot do it fails the test', async () => {
+    const { body } = await probeWith(
+      { provider: 'openai', model: 'gpt-4o-mini', apiKey: 'sk-key' },
+      {},
+    );
+
+    expect(body.response_format).toEqual({
+      type: 'json_schema',
+      json_schema: {
+        name: 'connection_probe',
+        strict: true,
+        schema: {
+          type: 'object',
+          properties: { status: { type: 'string' } },
+          required: ['status'],
+          additionalProperties: false,
+        },
+      },
+    });
+  });
+
+  it('reports the structured value as the reply on success', async () => {
+    const { result } = await probeWith(
+      { provider: 'openai', model: 'gpt-4o-mini', apiKey: 'sk-key' },
+      { content: '{"status":"ok"}' },
+    );
+
+    expect(result).toMatchObject({
+      provider: 'openai',
+      model: 'gpt-4o-mini',
+      reply: 'ok',
+    });
+  });
+
+  it('fails a green HTTP response whose reply is not schema-shaped JSON', async () => {
+    const { result } = await probeWith(
+      { provider: 'openai', model: 'gpt-4o-mini', apiKey: 'sk-key' },
+      { content: 'ok' },
+    );
+
+    expect(result).toBeInstanceOf(Error);
+    expect((result as Error).message).toMatch(/structured JSON output/);
+  });
+
+  it('fails a green HTTP response whose JSON misses the required property', async () => {
+    const { result } = await probeWith(
+      { provider: 'openai', model: 'gpt-4o-mini', apiKey: 'sk-key' },
+      { content: '{"answer":"ok"}' },
+    );
+
+    expect(result).toBeInstanceOf(Error);
+    expect((result as Error).message).toMatch(/structured JSON output/);
+  });
+
+  it('keeps the specific authentication and status failure messages', async () => {
+    const unauthorized = await probeWith(
+      { provider: 'openai', model: 'gpt-4o-mini', apiKey: 'sk-bad' },
+      { ok: false, status: 401, text: 'no' },
+    );
+    expect((unauthorized.result as Error).message).toMatch(
+      /Authentication failed \(401\)/,
+    );
+
+    const rejected = await probeWith(
+      { provider: 'openai', model: 'gpt-4o-mini', apiKey: 'sk-key' },
+      { ok: false, status: 400, text: "Unsupported parameter: 'max_tokens'" },
+    );
+    expect((rejected.result as Error).message).toBe(
+      "Provider request failed (400) — Unsupported parameter: 'max_tokens'",
+    );
   });
 });

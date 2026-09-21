@@ -68,9 +68,41 @@ export function clampRows(
 const FORBIDDEN_SQL =
   /\b(insert|update|delete|merge|drop|alter|truncate|create|grant|revoke|upsert|replace)\b/i;
 
+/**
+ * LLM-authored SQL often arrives wrapped in a markdown fence and/or prefixed
+ * with an explanatory comment (`-- ...` or a block comment). Peel those off
+ * — repeatedly, since they can stack and interleave with blank lines —
+ * before the SELECT/WITH prefix test below, so a cosmetic wrapper doesn't
+ * burn a repair round trip on otherwise-valid SQL.
+ *
+ * Only *leading* framing is removed, and each strip requires an actual
+ * match (an unterminated block comment never matches, so it is left in
+ * place and falls through to the prefix check like any other malformed
+ * statement). Nothing inside the remaining text is rewritten, so whatever
+ * the loop below checks next (single-statement, forbidden-keyword) is
+ * exactly what will be returned and executed — there is no way to smuggle a
+ * semicolon or a write keyword past those checks by hiding it "inside" a
+ * comment, because a hidden comment's contents are discarded entirely, not
+ * relocated into the statement that runs.
+ */
+function stripSqlFraming(sql: string): string {
+  let s = sql;
+  for (;;) {
+    const before = s;
+    s = s.replace(/^\s+/, '');
+    s = s.replace(/^--[^\n]*(\n|$)/, '');
+    s = s.replace(/^\/\*[\s\S]*?\*\//, '');
+    const fence = s.match(
+      /^```[ \t]*[\w-]*[ \t]*\r?\n([\s\S]*?)\r?\n?```[ \t]*$/,
+    );
+    if (fence) s = fence[1];
+    if (s === before) break;
+  }
+  return s;
+}
+
 export function assertReadOnlySql(sql: string): string {
-  const trimmed = (sql ?? '')
-    .trim()
+  const trimmed = stripSqlFraming((sql ?? '').trim())
     .replace(/;+\s*$/, '')
     .trim();
   if (!trimmed) throw new BadRequestException('Query is empty.');

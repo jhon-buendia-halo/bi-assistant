@@ -12,8 +12,10 @@ import { MastraService } from '../../mastra/mastra.service';
 import { SESSION_WORKSPACE_CONTEXT_KEY } from '../../mastra/session-workspaces';
 import {
   interactiveVisualOutputSchema,
+  resolveVisualizationModel,
   specVisualOutputSchema,
 } from '../../mastra/agents/visualization.agent';
+import { modelCallTuning } from '../../mastra/model-compat';
 import { getDatasetToolServices } from '../../mastra/tool-services';
 import {
   ChartDataRecord,
@@ -64,10 +66,12 @@ type SpecOutput = z.infer<typeof specVisualOutputSchema>;
  * What went wrong with the previous attempt, fed back to the designer. `parse`
  * comes from the compile-only check here; `spec` from validating a spec
  * against the rows it will render; `runtime` comes from the sandboxed frame
- * reporting a thrown error or a blank render.
+ * reporting a thrown error or a blank render; `envelope` is the model answering
+ * with the JSON Schema instead of an instance, which needs a shape correction
+ * rather than the rejected payload quoted back at it.
  */
 export interface DesignerFeedback {
-  kind: 'parse' | 'runtime' | 'spec';
+  kind: 'parse' | 'runtime' | 'spec' | 'envelope';
   message: string;
 }
 
@@ -592,7 +596,13 @@ export class VisualizationService {
         if (error instanceof RequestTimeoutException) throw error;
         const message = error instanceof Error ? error.message : String(error);
         this.logger.warn(`Visual spec attempt failed: ${message}`);
-        feedback = { kind: 'spec', message };
+        // Mastra's own structured-output validation throws before the response
+        // is ever returned here, so the schema-envelope answer only becomes
+        // correctable through the feedback the next attempt carries.
+        feedback = {
+          kind: isSchemaEnvelopeError(message) ? 'envelope' : 'spec',
+          message,
+        };
         continue;
       }
       const problems = validateSpecAgainstData(output.spec, records);
@@ -722,13 +732,22 @@ export class VisualizationService {
         ? [
             '',
             '<previous-attempt-error>',
-            feedback.kind === 'spec'
-              ? `Your previous spec was rejected: ${feedback.message}. Return a corrected spec that only names columns present in the <data> block.`
-              : feedback.kind === 'runtime'
-                ? spec
-                  ? `The visual rendered from the current spec failed in the dataset: ${feedback.message}. Return a corrected spec that shows the same thing.`
-                  : `Your previous code failed at runtime in the dataset: ${feedback.message}. Return corrected, complete code that renders the same visual.`
-                : `Your previous JavaScript failed to parse: ${feedback.message}. Return corrected, complete code.`,
+            // The envelope message quotes the schema-shaped payload back; that
+            // is exactly what the designer must stop emitting, so it is
+            // described rather than repeated.
+            feedback.kind === 'envelope'
+              ? `Your previous response returned the JSON Schema itself instead of an answer: the values sat under "properties", beside "$schema" and "type", so the required fields were missing. Return a bare JSON instance whose top-level keys are ${
+                  spec
+                    ? '`title`, `description` and `spec`'
+                    : '`title`, `description`, `html`, `css` and `javascript`'
+                } — no "$schema", no "type", no "properties" wrapper.`
+              : feedback.kind === 'spec'
+                ? `Your previous spec was rejected: ${feedback.message}. Return a corrected spec that only names columns present in the <data> block.`
+                : feedback.kind === 'runtime'
+                  ? spec
+                    ? `The visual rendered from the current spec failed in the dataset: ${feedback.message}. Return a corrected spec that shows the same thing.`
+                    : `Your previous code failed at runtime in the dataset: ${feedback.message}. Return corrected, complete code that renders the same visual.`
+                  : `Your previous JavaScript failed to parse: ${feedback.message}. Return corrected, complete code.`,
             '</previous-attempt-error>',
           ]
         : []),
@@ -777,6 +796,21 @@ export class VisualizationService {
       feedback,
     );
 
+    // Layout is a transformation task; high reasoning adds hidden-token delay
+    // without improving the supplied facts. Both the cap and the reasoning
+    // hint have to be filed the way the *designer's own* model reads them — a
+    // gateway deployment ignores an `openai` bucket, and a gpt-5-class one
+    // rejects `max_tokens` outright.
+    const tuning = modelCallTuning(await resolveVisualizationModel(), {
+      maxOutputTokens:
+        mode === 'spec'
+          ? SPEC_OUTPUT_TOKENS
+          : composed
+            ? COMPOSED_OUTPUT_TOKENS
+            : SINGLE_OUTPUT_TOKENS,
+      reasoningEffort: 'low',
+    });
+
     const abortController = new AbortController();
     const deadline = setTimeout(
       () => abortController.abort(),
@@ -789,17 +823,10 @@ export class VisualizationService {
         requestContext,
         abortSignal: abortController.signal,
         toolChoice: 'none',
-        // Layout is a transformation task; high reasoning adds hidden-token
-        // delay without improving the supplied facts.
-        providerOptions: { openai: { reasoningEffort: 'low' } },
-        modelSettings: {
-          maxOutputTokens:
-            mode === 'spec'
-              ? SPEC_OUTPUT_TOKENS
-              : composed
-                ? COMPOSED_OUTPUT_TOKENS
-                : SINGLE_OUTPUT_TOKENS,
-        },
+        modelSettings: tuning.modelSettings,
+        ...(Object.keys(tuning.providerOptions).length
+          ? { providerOptions: tuning.providerOptions }
+          : {}),
         context: [
           {
             role: 'system',
@@ -827,20 +854,23 @@ export class VisualizationService {
     } finally {
       clearTimeout(deadline);
     }
-    if (result.error) throw result.error;
-
-    let output: unknown = result.object;
+    let output: unknown = unwrapSchemaEnvelope(result.object);
     if (!output && result.text?.trim()) {
       const jsonText = result.text
         .trim()
         .replace(/^```(?:json)?\s*/i, '')
         .replace(/\s*```$/, '');
       try {
-        output = JSON.parse(jsonText);
+        output = unwrapSchemaEnvelope(JSON.parse(jsonText));
       } catch {
         // Schema validation below reports one consistent error.
       }
     }
+    // Rethrown only once the unwrap above has had its chance: a response that
+    // failed validation for wearing the schema envelope still carries a usable
+    // instance, and throwing first would discard it.
+    if (!output && result.error) throw result.error;
+
     const parsed = schema.safeParse(output);
     if (!parsed.success) {
       const issues = parsed.error.issues
@@ -1248,6 +1278,36 @@ export function mergeToolDataRecords(
     else merged.push(record);
   }
   return merged;
+}
+
+/** Fields the spec-mode envelope hides under `properties`. */
+const ENVELOPE_FIELDS = ['title', 'description', 'spec'];
+
+/**
+ * Weaker models answer an inline JSON-Schema prompt with the schema itself:
+ * the real values sit under `properties`, beside `$schema` and `type`. The
+ * payload is usable, so it is unwrapped rather than rejected for missing
+ * top-level fields.
+ */
+export function unwrapSchemaEnvelope(output: unknown): unknown {
+  if (!output || typeof output !== 'object') return output;
+  const record = output as Record<string, unknown>;
+  if ('title' in record) return output;
+  const properties = record.properties;
+  return properties && typeof properties === 'object' ? properties : output;
+}
+
+/**
+ * Whether a rejection is the schema-envelope answer above. Mastra validates
+ * structured output inside `generate`, so the only trace is the thrown
+ * message: every top-level field reported as absent at once.
+ */
+export function isSchemaEnvelopeError(message: string): boolean {
+  if (/\$schema|"properties"/.test(message)) return true;
+  return (
+    /undefined|required/i.test(message) &&
+    ENVELOPE_FIELDS.every((field) => new RegExp(`\\b${field}\\b`).test(message))
+  );
 }
 
 /** Compile-only check: `new Function` parses without executing. */
