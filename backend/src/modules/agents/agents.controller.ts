@@ -18,7 +18,7 @@ import { EvalRunsService } from './eval-runs.service';
 import type { EvalRunView } from './eval-runs.service';
 import type {
   AgentDetail,
-  AgentEvalCase,
+  AgentEvalSet,
   AgentSummary,
 } from './agents.service';
 
@@ -105,8 +105,8 @@ export class AgentsController {
 
   // Declared before ':key' so the more specific path wins.
   @Get(':key/evals')
-  evals(@Param('key') key: string): { cases: AgentEvalCase[] } {
-    return { cases: this.agents.evals(key) };
+  evals(@Param('key') key: string): { sets: AgentEvalSet[] } {
+    return { sets: this.agents.evalSets(key) };
   }
 
   @Get(':key')

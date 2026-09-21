@@ -8,6 +8,6 @@ import { DatasetsRepository } from './repositories/datasets.repository';
   imports: [DatasourcesModule],
   controllers: [DatasetsController],
   providers: [DatasetsService, DatasetsRepository],
-  exports: [DatasetsRepository],
+  exports: [DatasetsRepository, DatasetsService],
 })
 export class DatasetsModule {}

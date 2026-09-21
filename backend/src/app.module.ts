@@ -10,6 +10,7 @@ import { VerifiedQueriesModule } from './modules/verified-queries/verified-queri
 import { MetricsModule } from './modules/metrics/metrics.module';
 import { KnowledgeModule } from './modules/knowledge/knowledge.module';
 import { DeepAnalysisModule } from './modules/deep-analysis/deep-analysis.module';
+import { TestingDataModule } from './modules/testing-data/testing-data.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { DeepAnalysisModule } from './modules/deep-analysis/deep-analysis.module
     KnowledgeModule,
     SessionsModule,
     DeepAnalysisModule,
+    TestingDataModule,
   ],
   controllers: [],
   providers: [],

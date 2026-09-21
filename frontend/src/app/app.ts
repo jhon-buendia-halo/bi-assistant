@@ -26,6 +26,7 @@ import {
   Settings,
   Signal,
   Sparkle,
+  TestTube,
   Trash2,
   Workflow,
 } from 'lucide-angular';
@@ -36,6 +37,7 @@ import {
 } from './features/datasources/models/datasource.model';
 import { DatasourcesApiService } from './features/datasources/services/datasources-api.service';
 import { LlmConfig } from './features/llm/components/llm-config/llm-config';
+import { TestingDataConfig } from './features/testing-data/components/testing-data-config/testing-data-config';
 import { DatasetList } from './features/datasets/components/dataset-list/dataset-list';
 import { AgentList } from './features/agents/components/agent-list/agent-list';
 import { AgentDetail } from './features/agents/components/agent-detail/agent-detail';
@@ -69,7 +71,7 @@ import {
 import { ReasoningEffort } from './features/llm/models/llm.model';
 import { ToastService } from './core/toast/toast.service';
 
-type SettingsSection = 'datasources' | 'llm' | null;
+type SettingsSection = 'datasources' | 'llm' | 'testing-data' | null;
 type MainView =
   | 'home'
   | 'dataset'
@@ -94,6 +96,7 @@ const RIGHT_PANEL_WIDTH_STORAGE_KEY = 'questions-to-insights:right-panel-width';
     AppLogo,
     DatasourceConfig,
     LlmConfig,
+    TestingDataConfig,
     DatasetList,
     AgentList,
     AgentDetail,
@@ -128,6 +131,7 @@ export class App {
   readonly Settings = Settings;
   readonly Signal = Signal;
   readonly Sparkle = Sparkle;
+  readonly TestTube = TestTube;
   readonly Trash2 = Trash2;
   readonly Workflow = Workflow;
 

@@ -8,6 +8,10 @@
       {
         "include": "mastra/skills/**/*",
         "watchAssets": true
+      },
+      {
+        "include": "modules/testing-data/fixtures/**/*.sql*",
+        "watchAssets": true
       }
     ]
   }

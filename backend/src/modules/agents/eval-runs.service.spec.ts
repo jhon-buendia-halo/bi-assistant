@@ -16,6 +16,15 @@ jest.mock('../../mastra/evals/assistant.evals', () => ({
   runAssistantEvalCase: jest
     .fn()
     .mockResolvedValue({ id: 'champion-2022', passed: true }),
+  // The real helper resolves the set's fixture from the registry; keep the
+  // mock honest by handing back the same entry the World Cup set points at.
+  fixtureForCases: jest.fn(() =>
+    jest
+      .requireActual<typeof import('../testing-data/fixtures/registry')>(
+        '../testing-data/fixtures/registry',
+      )
+      .findFixture('world-cup'),
+  ),
 }));
 
 import { EvalRunsService } from './eval-runs.service';

@@ -1,31 +1,44 @@
 import type { DatasetSnapshot } from '../tool-services';
+import {
+  findFixture,
+  requiredEntities,
+  type SampleFixture,
+} from '../../modules/testing-data/fixtures/registry';
 
-/** The shipped suite is tied to docker/postgres/init, including its views. */
-const REQUIRED_ENTITIES = [
-  'tournaments',
-  'teams',
-  'matches',
-  'venues',
-  'players',
-  'goals',
-  'match_team_statistics',
-  'v_match_results',
-  'v_player_goal_totals',
-].map((table) => `world_cup.${table}`);
+/**
+ * Resolve the sample a question set is bound to. Throws rather than returning
+ * undefined: a set pointing at a fixture that no longer exists must fail the
+ * run loudly, not quietly validate the datasets against nothing.
+ */
+export function evalFixture(fixtureId: string): SampleFixture {
+  const fixture = findFixture(fixtureId);
+  if (!fixture) {
+    throw new Error(
+      `Unknown sample fixture "${fixtureId}" — the question set is bound to a ` +
+        'sample that is not in the fixture registry, so its data scope cannot be checked.',
+    );
+  }
+  return fixture;
+}
 
 /**
  * Validate the suite's data scope before creating a run or spending model
  * tokens. Names are user-defined; match schema-qualified tables instead.
  * This checks saved scope, not whether the live fixture's rows have drifted.
+ *
+ * The required entities come from the fixture registry — the same list the
+ * Testing Data loader provisions — so a new sample needs no change here.
  */
 export function assistantEvalDatasetError(
   names: string[],
   snapshots: DatasetSnapshot[],
+  fixture: SampleFixture | string,
 ): string | undefined {
+  const sample = typeof fixture === 'string' ? evalFixture(fixture) : fixture;
   const setup =
-    'These evals require the bundled World Cup sample (2018 and 2022). ' +
+    `These evals require the bundled ${sample.name} sample: ${sample.description} ` +
     'Select its PostgreSQL datasource and save a dataset containing the ' +
-    'world_cup tables and views. Setup: docker/postgres/README.md.';
+    `${sample.schema} tables and views. Setup: docker/postgres/README.md.`;
   const selected = snapshots.filter((dataset) => names.includes(dataset.name));
   const missingNames = names.filter(
     (name) => !selected.some((dataset) => dataset.name === name),
@@ -48,10 +61,14 @@ export function assistantEvalDatasetError(
   // have schema.table. Never accept a similarly named table in another schema.
   const entities = new Set(
     selected.flatMap((dataset) =>
-      dataset.tables.map((table) => table.split('.').slice(-2).join('.')),
+      dataset.tables.map((table) =>
+        table.toLowerCase().split('.').slice(-2).join('.'),
+      ),
     ),
   );
-  const missing = REQUIRED_ENTITIES.filter((entity) => !entities.has(entity));
+  const missing = requiredEntities(sample).filter(
+    (entity) => !entities.has(entity.toLowerCase()),
+  );
   if (missing.length > 0) {
     return `${setup} Selected datasets: ${names.join(', ')}. Missing entities: ${missing.join(', ')}.`;
   }

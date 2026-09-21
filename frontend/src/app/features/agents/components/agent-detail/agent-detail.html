@@ -177,7 +177,7 @@
           }
         }
         @case ("evals") {
-          @if (evalCases().length > 0 || evalTab() === "runs") {
+          @if (evalSets().length > 0 || evalTab() === "runs") {
             <!-- Sub-tabs: the suite, and what has been run -->
             <div class="mb-5 flex items-center gap-1">
               <button
@@ -345,16 +345,55 @@
             >
               {{ err }}
             </p>
-          } @else if (evalCases().length === 0) {
+          } @else if (evalSets().length === 0) {
             <p class="text-[13px] text-zinc-500">
               No evals configured for this agent yet.
             </p>
           } @else {
-            <p class="text-[12px] text-zinc-500">
-              {{ evalCases().length }} questions use the bundled World Cup sample
-              (2018 and 2022). Select its PostgreSQL datasource with a saved
-              dataset containing the world_cup tables and views. Each check must
-              score 1.0 for its question to pass.
+            <!-- Question sets: each one is a fixture with its own questions -->
+            <p class="text-[11px] font-medium tracking-wide text-zinc-500 uppercase">
+              Question sets
+            </p>
+            <div class="mt-2 flex flex-col gap-2">
+              @for (set of evalSets(); track set.id) {
+                <button
+                  type="button"
+                  [attr.data-testid]="'eval-set-' + set.id"
+                  [attr.aria-pressed]="selectedSetId() === set.id"
+                  (click)="selectSet(set.id)"
+                  [disabled]="running() || runStarting()"
+                  class="rounded-xl border px-3 py-2.5 text-left hover:bg-white/5 disabled:opacity-50"
+                  [class.border-zinc-300]="selectedSetId() === set.id"
+                  [class.bg-white/5]="selectedSetId() === set.id"
+                  [class.border-white/10]="selectedSetId() !== set.id"
+                >
+                  <span class="flex items-center gap-2">
+                    <lucide-angular
+                      [img]="ChevronRight"
+                      [size]="14"
+                      class="transition-transform"
+                      [class.rotate-90]="selectedSetId() === set.id"
+                    />
+                    <lucide-angular [img]="ListChecks" [size]="14" />
+                    <span class="text-[13px] text-zinc-200">{{ set.name }}</span>
+                    <span class="text-[11px] text-zinc-500"
+                      >{{ set.cases.length }} questions</span
+                    >
+                  </span>
+                  <span
+                    class="mt-1 block max-w-[80ch] text-[12px] leading-relaxed text-zinc-500"
+                    >{{ set.description }}</span
+                  >
+                </button>
+              }
+            </div>
+
+            <!-- Questions appear only once a set is opened -->
+            @if (selectedSet(); as openSet) {
+            <p class="mt-4 text-[12px] text-zinc-500">
+              {{ openSet.cases.length }} questions in
+              <span class="text-zinc-400">{{ openSet.name }}</span
+              >. Each check must score 1.0 for its question to pass.
             </p>
 
             <!-- Datasource picker + run -->
@@ -554,6 +593,7 @@
                 </div>
               }
             </div>
+            }
           }
         }
       }

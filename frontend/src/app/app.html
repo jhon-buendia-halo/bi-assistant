@@ -81,6 +81,18 @@
             <lucide-angular [img]="Bot" [size]="15" class="text-zinc-400" />
             <span>LLM Configuration</span>
           </button>
+          <button
+            (click)="selectSection('testing-data')"
+            class="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-zinc-200 hover:bg-white/10"
+            [class.option-active]="settingsSection() === 'testing-data'"
+          >
+            <lucide-angular
+              [img]="TestTube"
+              [size]="15"
+              class="text-zinc-400"
+            />
+            <span>Testing Data</span>
+          </button>
         </nav>
 
         <div class="flex-1"></div>
@@ -351,6 +363,10 @@
       } @else if (settingsOpen() && settingsSection() === "llm") {
         <div class="flex flex-1 justify-center overflow-y-auto px-6 py-10">
           <app-llm-config class="w-full max-w-[480px]" />
+        </div>
+      } @else if (settingsOpen() && settingsSection() === "testing-data") {
+        <div class="flex flex-1 justify-center overflow-y-auto px-6 py-10">
+          <app-testing-data-config class="w-full max-w-[560px]" />
         </div>
       } @else if (mainView() === "dataset") {
         <div class="flex flex-1 justify-center overflow-y-auto px-8 py-10">
