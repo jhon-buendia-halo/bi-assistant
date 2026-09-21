@@ -379,15 +379,35 @@
         day: 'numeric',
       });
 
+    const markUnavailable = (why) => {
+      for (const card of cards) {
+        card.querySelector('.dl-meta').textContent = why;
+        const btn = card.querySelector('.btn');
+        btn.textContent = 'Unavailable';
+        btn.setAttribute('aria-disabled', 'true');
+      }
+    };
+
     let data;
     try {
       const res = await fetch('/api/latest');
-      if (!res.ok) throw new Error(res.status);
       data = await res.json();
+      // A route that reports itself unconfigured or broken means the download
+      // links cannot work either — say so rather than leave live-looking
+      // buttons that hand back an error page.
+      if (!res.ok || data?.error) {
+        markUnavailable(
+          data?.error === 'not-configured'
+            ? 'Downloads not configured yet'
+            : 'Temporarily unavailable',
+        );
+        return;
+      }
     } catch {
-      return; // leave the static copy in place
+      // Could not reach our own API — the download route may still be fine, so
+      // leave the static copy alone rather than disable a working button.
+      return;
     }
-    if (!data || data.error) return;
 
     if (data.latest) {
       version.textContent =
