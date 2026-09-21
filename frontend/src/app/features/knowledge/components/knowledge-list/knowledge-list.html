@@ -34,6 +34,7 @@
   <div class="mt-5 flex flex-wrap items-center gap-1.5">
     <button
       type="button"
+      title="Every snippet, whatever its kind."
       (click)="setKindFilter('all')"
       class="rounded-lg px-3 py-1.5 text-[13px] hover:text-zinc-200"
       [class.bg-white/10]="!pendingOnly() && kindFilter() === 'all'"
@@ -45,6 +46,7 @@
     @for (k of kinds; track k.value) {
       <button
         type="button"
+        [title]="k.description"
         (click)="setKindFilter(k.value)"
         class="rounded-lg px-3 py-1.5 text-[13px] hover:text-zinc-200"
         [class.bg-white/10]="!pendingOnly() && kindFilter() === k.value"
@@ -166,6 +168,7 @@
                 item.title
               }}</span>
               <span
+                [title]="kindDescription(item.kind)"
                 class="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-zinc-400"
                 >{{ kindLabel(item.kind) }}</span
               >

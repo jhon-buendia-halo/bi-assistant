@@ -32,15 +32,37 @@ export interface KnowledgeSnippetInput {
   enabled?: boolean;
 }
 
-export const KNOWLEDGE_KINDS: { value: KnowledgeSnippetKind; label: string }[] =
-  [
-    { value: 'instruction', label: 'Instruction' },
-    { value: 'term', label: 'Term' },
-    { value: 'default_filter', label: 'Default filter' },
-  ];
+export const KNOWLEDGE_KINDS: {
+  value: KnowledgeSnippetKind;
+  label: string;
+  description: string;
+}[] = [
+  {
+    value: 'instruction',
+    label: 'Instruction',
+    description:
+      'A rule the assistant follows when answering — formatting conventions, data quirks (a column that is null instead of zero) or coverage facts such as which years or segments the data spans.',
+  },
+  {
+    value: 'term',
+    label: 'Term',
+    description:
+      'A business-glossary entry: what a piece of domain jargon or an enum-like column code means, so the assistant maps your words to the right columns and values.',
+  },
+  {
+    value: 'default_filter',
+    label: 'Default filter',
+    description:
+      'A SQL predicate applied by default to every query — e.g. excluding test accounts or soft-deleted rows — unless a question asks otherwise.',
+  },
+];
 
 export function kindLabel(kind: KnowledgeSnippetKind): string {
   return KNOWLEDGE_KINDS.find((k) => k.value === kind)?.label ?? kind;
+}
+
+export function kindDescription(kind: KnowledgeSnippetKind): string {
+  return KNOWLEDGE_KINDS.find((k) => k.value === kind)?.description ?? '';
 }
 
 /** Tailwind color accent per kind, echoing the catalog/schema/entity coding. */

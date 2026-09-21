@@ -20,15 +20,23 @@
       <span class="text-[11px] font-medium text-zinc-500">Kind</span>
       <select
         [value]="kind()"
+        [title]="kindDescription(kind())"
         (change)="kind.set($any($event.target).value)"
         class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none focus:border-white/25"
       >
         @for (option of kinds; track option.value) {
-          <option [value]="option.value" class="bg-[#232323]">
+          <option
+            [value]="option.value"
+            [title]="option.description"
+            class="bg-[#232323]"
+          >
             {{ option.label }}
           </option>
         }
       </select>
+      <span class="text-[11px] leading-snug text-zinc-500">{{
+        kindDescription(kind())
+      }}</span>
     </label>
     <label class="flex flex-col gap-1">
       <span class="text-[11px] font-medium text-zinc-500">Scope</span>
