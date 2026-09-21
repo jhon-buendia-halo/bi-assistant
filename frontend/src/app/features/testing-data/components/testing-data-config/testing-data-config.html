@@ -1,0 +1,381 @@
+<div class="flex flex-col gap-3">
+  <div class="mb-1">
+    <h1 class="text-[15px] font-semibold text-zinc-100">Testing Data</h1>
+    <p class="mt-1 text-[12px] text-zinc-500">
+      Bundled sample datasets you can load into a PostgreSQL database to
+      power local testing and evals.
+    </p>
+  </div>
+
+  @if (statusLoading() && fixtures().length === 0) {
+    <p class="flex items-center gap-2 text-[12px] text-zinc-500">
+      <lucide-angular [img]="Loader2" [size]="13" class="animate-spin" />
+      <span>Loading fixtures…</span>
+    </p>
+  } @else if (fixtures().length === 0) {
+    <p class="text-[13px] text-zinc-500">
+      No testing data fixtures are registered.
+    </p>
+  } @else {
+    <div class="flex flex-col gap-2">
+      @for (fixture of fixtures(); track fixture.id) {
+        <div
+          [attr.data-testid]="'testing-data-fixture-' + fixture.id"
+          class="rounded-xl border"
+          [class.border-zinc-300]="selectedFixtureId() === fixture.id"
+          [class.border-white/10]="selectedFixtureId() !== fixture.id"
+        >
+          <!-- Card header: click to expand/collapse, mirrors the "Question sets" list -->
+          <button
+            type="button"
+            (click)="selectFixture(fixture.id)"
+            class="flex w-full flex-col gap-1 rounded-xl px-3 py-2.5 text-left hover:bg-white/5"
+            [class.bg-white/5]="selectedFixtureId() === fixture.id"
+          >
+            <span class="flex items-center gap-2">
+              <lucide-angular
+                [img]="ChevronRight"
+                [size]="14"
+                class="shrink-0 transition-transform"
+                [class.rotate-90]="selectedFixtureId() === fixture.id"
+              />
+              <span class="text-[13px] font-medium text-zinc-200">{{
+                fixture.name
+              }}</span>
+              <span
+                [attr.data-testid]="'testing-data-status-' + fixture.id"
+                class="flex items-center gap-1 text-[11px]"
+                [class.text-emerald-400]="fixture.status.loaded"
+                [class.text-zinc-500]="!fixture.status.loaded"
+              >
+                <lucide-angular
+                  [img]="fixture.status.loaded ? CircleCheck : CircleX"
+                  [size]="12"
+                />
+                <span
+                  >{{ fixture.status.entityCount ?? 0 }}/{{
+                    fixture.status.requiredCount
+                  }}
+                  entities</span
+                >
+              </span>
+            </span>
+            <span class="ml-6 max-w-[80ch] text-[12px] text-zinc-500">{{
+              fixture.description
+            }}</span>
+            @if (fixture.status.loaded && fixture.status.connection; as c) {
+              <span class="ml-6 font-mono text-[11px] text-zinc-600"
+                >{{ c.host }}:{{ c.port }}/{{ c.database }}</span
+              >
+            }
+          </button>
+
+          <!-- Expanded contents: this fixture's own connection form + actions -->
+          @if (selectedFixtureId() === fixture.id) {
+            <div
+              class="flex flex-col gap-3 border-t border-white/10 bg-[#232323] p-4"
+            >
+              @if (errorFor(fixture.id); as error) {
+                <p
+                  [attr.data-testid]="'testing-data-error-' + fixture.id"
+                  class="whitespace-pre-wrap rounded-md bg-red-500/10 px-3 py-2.5 text-[12px] text-red-400"
+                >
+                  {{ error }}
+                </p>
+              }
+
+              <p class="text-[13px] font-medium text-zinc-200">Connection</p>
+
+              <div class="grid grid-cols-3 gap-3">
+                <label class="col-span-2 flex flex-col gap-1">
+                  <span class="text-[11px] font-medium text-zinc-500"
+                    >Host</span
+                  >
+                  <input
+                    type="text"
+                    [attr.data-testid]="'testing-data-host-' + fixture.id"
+                    placeholder="localhost"
+                    [value]="connectionFor(fixture.id).host"
+                    (input)="
+                      patch(fixture.id, { host: $any($event.target).value })
+                    "
+                    class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                  />
+                </label>
+                <label class="flex flex-col gap-1">
+                  <span class="text-[11px] font-medium text-zinc-500"
+                    >Port</span
+                  >
+                  <input
+                    type="number"
+                    [attr.data-testid]="'testing-data-port-' + fixture.id"
+                    placeholder="5432"
+                    [value]="connectionFor(fixture.id).port"
+                    (input)="
+                      patch(fixture.id, {
+                        port: +$any($event.target).value,
+                      })
+                    "
+                    class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                  />
+                </label>
+              </div>
+
+              <label class="flex flex-col gap-1">
+                <span class="text-[11px] font-medium text-zinc-500"
+                  >Database</span
+                >
+                <input
+                  type="text"
+                  [attr.data-testid]="'testing-data-database-' + fixture.id"
+                  [value]="connectionFor(fixture.id).database"
+                  (input)="
+                    patch(fixture.id, { database: $any($event.target).value })
+                  "
+                  class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                />
+              </label>
+
+              <div class="grid grid-cols-2 gap-3">
+                <label class="flex flex-col gap-1">
+                  <span class="text-[11px] font-medium text-zinc-500"
+                    >User</span
+                  >
+                  <input
+                    type="text"
+                    [attr.data-testid]="'testing-data-user-' + fixture.id"
+                    placeholder="postgres"
+                    [value]="connectionFor(fixture.id).user"
+                    (input)="
+                      patch(fixture.id, { user: $any($event.target).value })
+                    "
+                    class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                  />
+                </label>
+                <label class="flex flex-col gap-1">
+                  <span class="text-[11px] font-medium text-zinc-500"
+                    >Password</span
+                  >
+                  <input
+                    type="password"
+                    [attr.data-testid]="'testing-data-password-' + fixture.id"
+                    placeholder="••••••••"
+                    [value]="connectionFor(fixture.id).password"
+                    (input)="
+                      patch(fixture.id, {
+                        password: $any($event.target).value,
+                      })
+                    "
+                    class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                  />
+                </label>
+              </div>
+
+              <label class="flex items-center gap-2 text-[12px] text-zinc-400">
+                <input
+                  type="checkbox"
+                  [checked]="connectionFor(fixture.id).ssl"
+                  (change)="
+                    patch(fixture.id, { ssl: $any($event.target).checked })
+                  "
+                  class="h-3.5 w-3.5 accent-emerald-500"
+                />
+                <span>Use SSL</span>
+              </label>
+
+              @if (testResultFor(fixture.id); as result) {
+                <p
+                  class="whitespace-pre-wrap text-[12px]"
+                  [class.text-emerald-400]="result.ok"
+                  [class.text-red-400]="!result.ok"
+                >
+                  {{ result.message }}
+                </p>
+              }
+
+              <div class="mt-1 flex items-center gap-2">
+                <button
+                  type="button"
+                  [attr.data-testid]="'testing-data-test-' + fixture.id"
+                  (click)="testConnection(fixture.id)"
+                  [disabled]="
+                    busy(fixture.id) || !requiredFieldsFilled(fixture.id)
+                  "
+                  class="flex flex-1 items-center justify-center gap-2 rounded-md bg-zinc-200 px-3 py-1.5 font-medium text-zinc-900 hover:bg-white disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+                >
+                  @if (testingFor(fixture.id)) {
+                    <lucide-angular
+                      [img]="Loader2"
+                      [size]="14"
+                      class="animate-spin"
+                    />
+                    <span>Testing…</span>
+                  } @else {
+                    <lucide-angular [img]="PlugZap" [size]="14" />
+                    <span>Test connection</span>
+                  }
+                </button>
+                <button
+                  type="button"
+                  [attr.data-testid]="'testing-data-load-' + fixture.id"
+                  (click)="requestLoad(fixture.id)"
+                  [disabled]="
+                    busy(fixture.id) || !requiredFieldsFilled(fixture.id)
+                  "
+                  class="flex flex-1 items-center justify-center gap-2 rounded-md bg-emerald-600 px-3 py-1.5 font-medium text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+                >
+                  @if (loadingFor(fixture.id)) {
+                    <lucide-angular
+                      [img]="Loader2"
+                      [size]="14"
+                      class="animate-spin"
+                    />
+                    <span>{{
+                      fixture.seedable ? "Loading…" : "Registering…"
+                    }}</span>
+                  } @else {
+                    <span>{{
+                      fixture.seedable
+                        ? fixture.status.loaded
+                          ? "Recreate testing data"
+                          : "Load testing data"
+                        : "Register testing data"
+                    }}</span>
+                  }
+                </button>
+              </div>
+
+              <!-- Destructive confirmation: load/recreate/register -->
+              @if (confirmingLoadFor(fixture.id)) {
+                <div
+                  [attr.data-testid]="'testing-data-confirm-panel-' + fixture.id"
+                  class="flex flex-col gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-[12px] text-amber-200"
+                >
+                  <p class="flex items-start gap-2">
+                    <lucide-angular
+                      [img]="TriangleAlert"
+                      [size]="14"
+                      class="mt-0.5 shrink-0"
+                    />
+                    @if (fixture.seedable) {
+                      <span>
+                        This drops and recreates schema
+                        <code class="rounded bg-white/10 px-1 py-0.5">{{
+                          fixture.schema
+                        }}</code>
+                        on
+                        <span class="font-mono"
+                          >{{ connectionFor(fixture.id).host }}:{{
+                            connectionFor(fixture.id).port
+                          }}/{{
+                            connectionFor(fixture.id).database
+                          }}</span
+                        >. Everything in that schema will be lost.
+                      </span>
+                    } @else {
+                      <span>
+                        This registers "{{ fixture.name }}" as a datasource
+                        and dataset against the existing database at
+                        <span class="font-mono"
+                          >{{ connectionFor(fixture.id).host }}:{{
+                            connectionFor(fixture.id).port
+                          }}/{{
+                            connectionFor(fixture.id).database
+                          }}</span
+                        >. No schema changes are made.
+                      </span>
+                    }
+                  </p>
+                  <div class="flex items-center gap-2">
+                    <button
+                      type="button"
+                      [attr.data-testid]="'testing-data-confirm-' + fixture.id"
+                      (click)="confirmLoad(fixture.id)"
+                      class="rounded-md bg-amber-500 px-3 py-1.5 font-medium text-zinc-900 hover:bg-amber-400"
+                    >
+                      Confirm
+                    </button>
+                    <button
+                      type="button"
+                      (click)="cancelLoad(fixture.id)"
+                      class="rounded-md px-3 py-1.5 text-zinc-300 hover:bg-white/5"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              }
+            </div>
+
+            <!-- Remove -->
+            <div
+              class="flex flex-col gap-2 border-t border-white/10 bg-[#232323] p-4"
+            >
+              <p class="text-[13px] font-medium text-zinc-200">Remove</p>
+              <p class="text-[12px] text-zinc-500">
+                Deletes the "{{ fixture.name }}" datasource and dataset
+                records from the app only. It does not touch the database
+                itself.
+              </p>
+              <button
+                type="button"
+                [attr.data-testid]="'testing-data-remove-' + fixture.id"
+                (click)="requestRemove(fixture.id)"
+                [disabled]="busy(fixture.id) || !fixture.status.loaded"
+                class="flex w-fit items-center justify-center gap-2 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-1.5 font-medium text-red-400 hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                @if (removingFor(fixture.id)) {
+                  <lucide-angular
+                    [img]="Loader2"
+                    [size]="14"
+                    class="animate-spin"
+                  />
+                  <span>Removing…</span>
+                } @else {
+                  <lucide-angular [img]="Trash2" [size]="14" />
+                  <span>Remove</span>
+                }
+              </button>
+
+              @if (confirmingRemoveFor(fixture.id)) {
+                <div
+                  class="flex flex-col gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-[12px] text-amber-200"
+                >
+                  <p class="flex items-start gap-2">
+                    <lucide-angular
+                      [img]="TriangleAlert"
+                      [size]="14"
+                      class="mt-0.5 shrink-0"
+                    />
+                    <span>
+                      This removes the "{{ fixture.name }}" datasource and
+                      dataset records from the app. The database and its data
+                      are not touched.
+                    </span>
+                  </p>
+                  <div class="flex items-center gap-2">
+                    <button
+                      type="button"
+                      [attr.data-testid]="'testing-data-confirm-' + fixture.id"
+                      (click)="confirmRemove(fixture.id)"
+                      class="rounded-md bg-amber-500 px-3 py-1.5 font-medium text-zinc-900 hover:bg-amber-400"
+                    >
+                      Confirm
+                    </button>
+                    <button
+                      type="button"
+                      (click)="cancelRemove(fixture.id)"
+                      class="rounded-md px-3 py-1.5 text-zinc-300 hover:bg-white/5"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              }
+            </div>
+          }
+        </div>
+      }
+    </div>
+  }
+</div>

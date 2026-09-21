@@ -19,6 +19,8 @@ import {
   Trash2,
   Gauge,
   Loader2,
+  ListChecks,
+  ChevronRight,
   Download,
   Play,
   ScrollText,
@@ -28,6 +30,7 @@ import {
   AgentDetail as AgentDetailModel,
   AgentEvalCase,
   AgentEvalCaseResult,
+  AgentEvalSet,
   AgentsApiService,
   EvalRunView,
 } from '../../services/agents-api.service';
@@ -58,6 +61,8 @@ export class AgentDetail implements OnDestroy {
   readonly Cpu = Cpu;
   readonly Gauge = Gauge;
   readonly Loader2 = Loader2;
+  readonly ListChecks = ListChecks;
+  readonly ChevronRight = ChevronRight;
   readonly Download = Download;
   readonly Play = Play;
   readonly Trash2 = Trash2;
@@ -129,7 +134,8 @@ export class AgentDetail implements OnDestroy {
       this.error.set(null);
       this.activeTab.set('prompt');
       this.evalsRequested.set(false);
-      this.evalCases.set([]);
+      this.evalSets.set([]);
+      this.selectedSetId.set(null);
       this.selectedCaseIds.set(new Set());
       this.evalTab.set('questions');
       this.evalRuns.set([]);
@@ -148,8 +154,25 @@ export class AgentDetail implements OnDestroy {
     });
   }
 
-  /** Eval questions for this agent, loaded when the evals tab is opened. */
-  readonly evalCases = signal<AgentEvalCase[]>([]);
+  /** Question sets for this agent, loaded when the evals tab is opened. */
+  readonly evalSets = signal<AgentEvalSet[]>([]);
+  /** The set whose questions the tab is showing. */
+  readonly selectedSetId = signal<string | null>(null);
+
+  readonly selectedSet = computed(
+    () => this.evalSets().find((set) => set.id === this.selectedSetId()) ?? null,
+  );
+
+  /** Questions of the selected set — what the list renders and the run submits. */
+  readonly evalCases = computed(() => this.selectedSet()?.cases ?? []);
+
+  /**
+   * Every question across every set. A past run may hold results for a set
+   * other than the one on screen, so run results resolve against all of them.
+   */
+  private readonly allEvalCases = computed(() =>
+    this.evalSets().flatMap((set) => set.cases),
+  );
   readonly evalsLoading = signal(false);
   readonly evalsError = signal<string | null>(null);
   /** Set once the evals tab has triggered its one fetch for this agent. */
@@ -160,8 +183,11 @@ export class AgentDetail implements OnDestroy {
     this.evalsError.set(null);
     this.api.getAgentEvals(key).subscribe({
       next: (res) => {
-        this.evalCases.set(res.cases);
-        this.selectedCaseIds.set(new Set(res.cases.map((c) => c.id)));
+        this.evalSets.set(res.sets);
+        // No set is opened for you — the questions stay hidden until one is
+        // clicked, so the tab always starts on the set list.
+        this.selectedSetId.set(null);
+        this.selectedCaseIds.set(new Set());
         this.evalsLoading.set(false);
       },
       error: (err) => {
@@ -238,7 +264,7 @@ export class AgentDetail implements OnDestroy {
 
   /** Open a question from a past run in the right panel. */
   selectRunResult(result: AgentEvalCaseResult): void {
-    const evalCase = this.evalCases().find((c) => c.id === result.id);
+    const evalCase = this.allEvalCases().find((c) => c.id === result.id);
     if (!evalCase) return;
     this.evalSelection.select({ evalCase, result });
   }
@@ -260,6 +286,17 @@ export class AgentDetail implements OnDestroy {
 
   datasourceName(id: string): string {
     return this.datasources().find((d) => d.id === id)?.name ?? id;
+  }
+
+  /**
+   * Open a question set, revealing its questions; clicking the open set again
+   * closes it. Opening ticks all of that set's questions, so a selection is
+   * never left pointing at questions that are no longer on screen.
+   */
+  selectSet(setId: string | null): void {
+    const next = this.selectedSetId() === setId ? null : setId;
+    this.selectedSetId.set(next);
+    this.selectedCaseIds.set(new Set(this.evalCases().map((c) => c.id)));
   }
 
   /** Questions ticked to run; every question starts selected. */

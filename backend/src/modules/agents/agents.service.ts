@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { MastraService } from '../../mastra/mastra.service';
-import { ASSISTANT_EVAL_CASES } from '../../mastra/evals/assistant.evals';
+import { ASSISTANT_EVAL_SETS } from '../../mastra/evals/assistant.evals';
 
 export interface AgentSummary {
   /** Registry key the agent is registered under in the Mastra instance. */
@@ -44,6 +44,15 @@ export interface AgentEvalCase {
   /** What the question probes for. */
   intent: string;
   checks: AgentEvalCheck[];
+}
+
+/** A named group of eval questions sharing one fixture. */
+export interface AgentEvalSet {
+  id: string;
+  name: string;
+  /** What the set covers and what it needs to run. */
+  description: string;
+  cases: AgentEvalCase[];
 }
 
 export interface AgentDetail extends AgentSummary {
@@ -96,17 +105,22 @@ export class AgentsService {
     };
   }
 
-  /** The eval questions defined for an agent; empty when it has none. */
-  evals(key: string): AgentEvalCase[] {
+  /** The eval question sets defined for an agent; empty when it has none. */
+  evalSets(key: string): AgentEvalSet[] {
     if (key !== 'assistant') return [];
-    return ASSISTANT_EVAL_CASES.map((evalCase) => ({
-      id: evalCase.id,
-      question: evalCase.question,
-      intent: evalCase.intent,
-      checks: evalCase.scorers.map((scorer) => ({
-        id: String(scorer.id ?? ''),
-        name: String(scorer.name ?? ''),
-        description: String(scorer.description ?? ''),
+    return ASSISTANT_EVAL_SETS.map((set) => ({
+      id: set.id,
+      name: set.name,
+      description: set.description,
+      cases: set.cases.map((evalCase) => ({
+        id: evalCase.id,
+        question: evalCase.question,
+        intent: evalCase.intent,
+        checks: evalCase.scorers.map((scorer) => ({
+          id: String(scorer.id ?? ''),
+          name: String(scorer.name ?? ''),
+          description: String(scorer.description ?? ''),
+        })),
       })),
     }));
   }

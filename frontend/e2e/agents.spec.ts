@@ -1,9 +1,18 @@
+import type { Page } from '@playwright/test';
 import { test, expect } from './fixtures/electron.fixture';
 import {
   WORLD_CUP_DATASOURCE,
   createWorldCupDatasource,
   createWorldCupDataset,
 } from './helpers/app-actions';
+
+/**
+ * The questions tab opens on the set list — a set has to be clicked before its
+ * questions (and the run controls) are on screen.
+ */
+async function openWorldCupSet(page: Page): Promise<void> {
+  await page.getByTestId('eval-set-world-cup').click();
+}
 
 const WORLD_CUP_EVAL_TABLES = [
   'tournaments',
@@ -51,6 +60,14 @@ test('opens an agent from the Agents list and switches between its tabs', async 
   await expect(page.getByText('Provider')).toBeVisible();
 
   await page.getByTestId('agent-tab-evals').click();
+  // The tab opens on the set list, with every question still hidden.
+  await expect(page.getByTestId('eval-set-world-cup')).toContainText(
+    '10 questions',
+  );
+  await expect(page.locator('[data-testid^="eval-case-"]')).toHaveCount(0);
+  await expect(page.getByTestId('eval-run')).toBeHidden();
+
+  await openWorldCupSet(page);
   await expect(page.getByTestId('eval-case-champion-2022')).toContainText(
     'Who won the 2022 World Cup?',
   );
@@ -59,6 +76,10 @@ test('opens an agent from the Agents list and switches between its tabs', async 
     'Checks if output includes "Argentina"',
   );
   await expect(page.locator('[data-testid^="eval-case-"]')).toHaveCount(10);
+
+  // Clicking the open set again collapses it.
+  await page.getByTestId('eval-set-world-cup').click();
+  await expect(page.locator('[data-testid^="eval-case-"]')).toHaveCount(0);
 
   // Back returns to the list.
   await page.getByRole('button', { name: 'All agents' }).click();
@@ -95,6 +116,7 @@ test('offers the configured datasources and starts a run from the evals tab', as
   await page.getByRole('button', { name: 'Agents' }).click();
   await page.getByTestId('agent-assistant').click();
   await page.getByTestId('agent-tab-evals').click();
+  await openWorldCupSet(page);
 
   const picker = page.getByTestId('eval-datasource-select');
   await expect(picker).toContainText(WORLD_CUP_DATASOURCE);
@@ -119,6 +141,7 @@ test('runs only the ticked questions', async ({ page }) => {
   await page.getByRole('button', { name: 'Agents' }).click();
   await page.getByTestId('agent-assistant').click();
   await page.getByTestId('agent-tab-evals').click();
+  await openWorldCupSet(page);
 
   const run = page.getByTestId('eval-run');
   await expect(run).toContainText('Run 10 selected');
@@ -148,6 +171,7 @@ test('refuses to run against a datasource with no datasets', async ({
   await page.getByRole('button', { name: 'Agents' }).click();
   await page.getByTestId('agent-assistant').click();
   await page.getByTestId('agent-tab-evals').click();
+  await openWorldCupSet(page);
 
   await page.getByTestId('eval-run').click();
   await expect(page.getByText(/has no datasets/)).toBeVisible();
@@ -161,6 +185,7 @@ test('explains an incomplete eval dataset without starting a run', async ({
   await page.getByRole('button', { name: 'Agents' }).click();
   await page.getByTestId('agent-assistant').click();
   await page.getByTestId('agent-tab-evals').click();
+  await openWorldCupSet(page);
   await page.getByTestId('eval-run').click();
   await expect(
     page.getByText(/Missing entities: world_cup.tournaments/),
@@ -175,6 +200,7 @@ test('opens a question in the right panel with what it is scored on', async ({
   await page.getByRole('button', { name: 'Agents' }).click();
   await page.getByTestId('agent-assistant').click();
   await page.getByTestId('agent-tab-evals').click();
+  await openWorldCupSet(page);
 
   const panel = page.getByLabel('Details panel');
   await expect(panel).toContainText('Select a question in the Evals tab');
@@ -200,6 +226,7 @@ test('separates the question suite from past executions', async ({ page }) => {
   await page.getByRole('button', { name: 'Agents' }).click();
   await page.getByTestId('agent-assistant').click();
   await page.getByTestId('agent-tab-evals').click();
+  await openWorldCupSet(page);
 
   // Questions is the default sub-tab.
   await expect(page.locator('[data-testid^="eval-case-"]')).toHaveCount(10);
@@ -228,6 +255,7 @@ test('downloads an execution as a Markdown report', async ({ page }) => {
   await page.getByRole('button', { name: 'Agents' }).click();
   await page.getByTestId('agent-assistant').click();
   await page.getByTestId('agent-tab-evals').click();
+  await openWorldCupSet(page);
   await page.getByTestId('eval-run').click();
 
   await page.getByTestId('eval-subtab-runs').click();

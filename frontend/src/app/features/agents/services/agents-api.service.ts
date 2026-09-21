@@ -48,6 +48,15 @@ export interface AgentEvalCase {
   checks: AgentEvalCheck[];
 }
 
+/** A named group of eval questions sharing one fixture. */
+export interface AgentEvalSet {
+  id: string;
+  name: string;
+  /** What the set covers and what it needs to run. */
+  description: string;
+  cases: AgentEvalCase[];
+}
+
 export interface EvalToolCall {
   name: string;
   input?: string;
@@ -114,8 +123,8 @@ export class AgentsApiService {
     );
   }
 
-  getAgentEvals(key: string): Observable<{ cases: AgentEvalCase[] }> {
-    return this.http.get<{ cases: AgentEvalCase[] }>(
+  getAgentEvals(key: string): Observable<{ sets: AgentEvalSet[] }> {
+    return this.http.get<{ sets: AgentEvalSet[] }>(
       `${API_BASE_URL}/agents/${encodeURIComponent(key)}/evals`,
     );
   }

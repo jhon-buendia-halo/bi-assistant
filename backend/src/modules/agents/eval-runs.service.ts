@@ -13,9 +13,11 @@ import {
   EvalSession,
   cleanupEvalSession,
   createEvalSession,
+  fixtureForCases,
   runAssistantEvalCase,
   selectEvalCases,
 } from '../../mastra/evals/assistant.evals';
+import type { SampleFixture } from '../testing-data/fixtures/registry';
 
 export type EvalRunStatus = 'running' | 'completed' | 'failed';
 
@@ -121,9 +123,20 @@ export class EvalRunsService {
       return { error: 'Pick at least one question to run' };
     }
 
+    // Which sample the selected questions belong to — its registry entry owns
+    // the entity list the datasets are checked against. A set bound to a
+    // fixture the registry no longer has must fail the start, not run blind.
+    let fixture: SampleFixture;
+    try {
+      fixture = fixtureForCases(caseIds);
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
+
     const datasetError = assistantEvalDatasetError(
       bound.map((dataset) => dataset.name),
       bound,
+      fixture,
     );
     if (datasetError) return { error: datasetError };
 

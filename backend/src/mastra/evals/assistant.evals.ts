@@ -3,7 +3,10 @@ import { runEvals } from '@mastra/core/evals';
 import { RequestContext } from '@mastra/core/request-context';
 import type { MastraScorer } from '@mastra/core/evals';
 import { assistantAgent } from '../agents/assistant.agent';
-import { evalJudgeAgent, evalJudgeOutputSchema } from '../agents/eval-judge.agent';
+import {
+  evalJudgeAgent,
+  evalJudgeOutputSchema,
+} from '../agents/eval-judge.agent';
 import { ASSISTANT_MAX_STEPS } from '../agent-constants';
 import { DATASETS_CONTEXT_KEY } from '../tools/dataset.tools';
 import {
@@ -14,7 +17,11 @@ import { getDatasetToolServices } from '../tool-services';
 import { entityOrientationLines } from '../context-blocks';
 import { runResultSetCheck } from './result-set-check';
 import type { ResultSetCheckOptions } from './result-set-check';
-import { assistantEvalDatasetError } from './assistant-eval-datasets';
+import {
+  assistantEvalDatasetError,
+  evalFixture,
+} from './assistant-eval-datasets';
+import type { SampleFixture } from '../../modules/testing-data/fixtures/registry';
 import {
   synthesizeToolOnlyTurn,
   toolDataRecord,
@@ -25,9 +32,10 @@ import type { SessionsService } from '../../modules/sessions/sessions.service';
 /**
  * Eval suite for the Questions to Insights assistant.
  *
- * The questions are grounded in the World Cup fixture (docker/postgres/init),
- * so every expected substring below is a fact that is actually in the data —
- * a check failing means the agent got it wrong, not that the fixture drifted.
+ * The questions are grouped into sets, one per bundled sample (World Cup,
+ * Formula 1), and every expected substring below is a fact that is actually in
+ * that sample's data — a check failing means the agent got it wrong, not that
+ * the fixture drifted.
  *
  * The assistant resolves its entities from the session's datasets via
  * requestContext, so each case carries the dataset it is allowed to query.
@@ -63,7 +71,28 @@ export interface AssistantEvalCase {
   judgeRubric?: string;
 }
 
-export const ASSISTANT_EVAL_CASES: AssistantEvalCase[] = [
+/**
+ * A named group of eval questions that share one fixture. Sets exist so the
+ * suite can grow past the World Cup sample without the questions tab becoming
+ * one undifferentiated list — a future set brings its own schema and its own
+ * datasource, and the two must not be run against each other.
+ */
+export interface AssistantEvalSet {
+  /** Stable id, used by the API and the questions tab's selection. */
+  id: string;
+  name: string;
+  /** What the set covers and what it needs to run, shown above its questions. */
+  description: string;
+  /**
+   * The sample this set questions, by `SampleFixture.id`. The data preflight
+   * takes the entities the set requires from that registry entry, so the list
+   * lives in exactly one place for both the loader and the suite.
+   */
+  fixtureId: string;
+  cases: AssistantEvalCase[];
+}
+
+const WORLD_CUP_EVAL_CASES: AssistantEvalCase[] = [
   {
     id: 'champion-2022',
     question: 'Who won the 2022 World Cup?',
@@ -198,27 +227,25 @@ export const ASSISTANT_EVAL_CASES: AssistantEvalCase[] = [
       checks.matches(/\b(possession|%)\b/i),
       checks.noToolErrors(),
     ],
-    // Per-match: did the team with the higher possession_pct also hold
-    // winner_team_id? Counts corroborate a judgement answer without pinning
-    // the agent to one exact query shape (widthTolerant comparison in
-    // runResultSetCheck allows extra supporting columns).
-    expectedSql:
-      'WITH team_matches AS (' +
-      '  SELECT m.id AS match_id, mts.team_id, mts.possession_pct,' +
-      '         (mts.team_id = m.winner_team_id) AS team_won' +
-      '  FROM world_cup.matches m' +
-      '  JOIN world_cup.tournaments t ON t.id = m.tournament_id' +
-      '  JOIN world_cup.match_team_statistics mts ON mts.match_id = m.id' +
-      '  WHERE t.tournament_year = 2022' +
-      '), ranked AS (' +
-      '  SELECT match_id, team_won,' +
-      '         possession_pct = MAX(possession_pct) OVER (PARTITION BY match_id) AS has_more_possession' +
-      '  FROM team_matches' +
-      ')' +
-      'SELECT' +
-      '  COUNT(*) FILTER (WHERE team_won) AS higher_possession_team_won,' +
-      '  COUNT(*) FILTER (WHERE NOT team_won) AS higher_possession_team_lost' +
-      ' FROM ranked WHERE has_more_possession',
+    // No expectedSql: the reference answer here is two scalar counts, and
+    // `runResultSetCheck` compares row sets positionally, so it cannot tell
+    // that a wide reference row ({won: 2, lost: 6}) and the equivalent long
+    // aggregate ([{outcome, matches}, …]) state the same fact. A correct
+    // agent that grouped by outcome instead of pivoting scored 0 against a
+    // reference it actually agreed with. Both orientations answer the
+    // question, so the counts are graded in the rubric below instead.
+    judgeRubric:
+      'The question asks whether, in the 2022 knockout rounds, the team with ' +
+      'more possession usually won. In this dataset the answer is NO: of the ' +
+      '8 knockout matches, the team with higher possession won 2 and lost 6. ' +
+      'Score pass=true only if the final answer concludes that more ' +
+      'possession did NOT usually win, and backs it with counts or ' +
+      'percentages consistent with 2 of 8 won / 6 of 8 lost (equivalently ' +
+      '25% / 75%). Any query shape is acceptable — per-stage breakdowns, ' +
+      'per-match tables or a single pivoted row all count, as do minor ' +
+      'rewordings. Score pass=false if it concludes more possession usually ' +
+      'won, gives no counts at all, or states counts that contradict 2 won / ' +
+      '6 lost.',
   },
   {
     id: 'out-of-scope',
@@ -260,6 +287,267 @@ export const ASSISTANT_EVAL_CASES: AssistantEvalCase[] = [
       'this request.',
   },
 ];
+
+/**
+ * Grounded in the Formula 1 fixture (`formula1` schema, 1950-2026). Every
+ * figure below was run against that database before it was written down, so a
+ * failing check means the agent got it wrong rather than the fixture drifting.
+ *
+ * The `expectedSql` references are deliberately narrow — usually the single
+ * figure that settles the question. `runResultSetCheck` compares
+ * width-tolerantly, so a narrow reference matches any wider agent result that
+ * carries the same fact, which keeps the check from failing merely because the
+ * agent projected `driver.full_name` where the reference used `driver.name`.
+ */
+const FORMULA_1_EVAL_CASES: AssistantEvalCase[] = [
+  {
+    id: 'f1-champion-2023',
+    question:
+      "Who won the 2023 Formula 1 drivers' championship, and how many points " +
+      'did they finish on?',
+    intent:
+      'Single-hop lookup against the season standings — the simplest happy path.',
+    scorers: [
+      checks.includes('Verstappen'),
+      checks.matches(/575/),
+      checks.calledTool('run_readonly_sql'),
+      checks.noToolErrors(),
+    ],
+    // Reference is the points total alone: the champion's name lives in
+    // `driver` under both `name` and `full_name`, and either projection is a
+    // correct answer, so the points are what the comparison pins down.
+    expectedSql:
+      'SELECT standing.points ' +
+      'FROM formula1.season_driver_standing standing ' +
+      'WHERE standing.year = 2023 AND standing.position_number = 1',
+  },
+  {
+    id: 'f1-british-gp-2023',
+    question:
+      'At which circuit was the 2023 British Grand Prix held, and how many ' +
+      'laps did the race run to?',
+    intent:
+      'Filter a race by season and grand prix, which needs the race/grand_prix (and circuit) join rather than a single table.',
+    scorers: [
+      checks.includes('Silverstone'),
+      checks.matches(/\b52\b/),
+      checks.calledTool('run_readonly_sql'),
+      checks.noToolErrors(),
+    ],
+    expectedSql:
+      'SELECT race.laps ' +
+      'FROM formula1.race race ' +
+      'JOIN formula1.grand_prix grand_prix ON grand_prix.id = race.grand_prix_id ' +
+      "WHERE race.year = 2023 AND grand_prix.name = 'Great Britain'",
+  },
+  {
+    id: 'f1-most-race-wins',
+    question:
+      'Which driver has won the most Grands Prix in Formula 1 history, and ' +
+      'how many did they win?',
+    intent:
+      'A "most" question with a verifiable number — the answer is the same whether it is read off the driver totals or aggregated from race results.',
+    scorers: [
+      checks.includes('Hamilton'),
+      checks.matches(/\b106\b/),
+      checks.calledTool('run_readonly_sql'),
+      checks.noToolErrors(),
+    ],
+    expectedSql:
+      'SELECT driver.total_race_wins AS wins ' +
+      'FROM formula1.driver driver ' +
+      'ORDER BY driver.total_race_wins DESC LIMIT 1',
+  },
+  {
+    id: 'f1-most-titles-tie',
+    question:
+      "Which drivers have won the most Formula 1 drivers' championships, and " +
+      'how many each?',
+    intent:
+      'A genuine tie at the top (two drivers on seven titles) — a LIMIT 1 answer is wrong here, so this catches agents that rank instead of handling ties.',
+    scorers: [
+      checks.includes('Schumacher'),
+      checks.matches(/Hamilton/i),
+      checks.calledTool('run_readonly_sql'),
+      checks.noToolErrors(),
+    ],
+    expectedSql:
+      'SELECT driver.name AS driver, COUNT(*) AS championships ' +
+      'FROM formula1.season_driver_standing standing ' +
+      'JOIN formula1.driver driver ON driver.id = standing.driver_id ' +
+      'WHERE standing.position_number = 1 ' +
+      'GROUP BY driver.name ' +
+      'HAVING COUNT(*) = (SELECT MAX(title_count) FROM (' +
+      'SELECT COUNT(*) AS title_count FROM formula1.season_driver_standing ' +
+      'WHERE position_number = 1 GROUP BY driver_id) counts) ' +
+      'ORDER BY driver',
+  },
+  {
+    id: 'f1-monaco-2024-podium',
+    question: 'Who finished on the podium at the 2024 Monaco Grand Prix?',
+    intent:
+      'Needs the race_result view (or the `type` discriminator on race_data) rather than a base table — reading race_data without filtering its type returns every session, not the race.',
+    scorers: [
+      checks.includes('Leclerc'),
+      checks.matches(/Piastri/i),
+      checks.calledTool('run_readonly_sql'),
+      checks.noToolErrors(),
+    ],
+    expectedSql:
+      'SELECT driver.name AS driver ' +
+      'FROM formula1.race_result race_result ' +
+      'JOIN formula1.race race ON race.id = race_result.race_id ' +
+      'JOIN formula1.driver driver ON driver.id = race_result.driver_id ' +
+      "WHERE race.year = 2024 AND race.grand_prix_id = 'monaco' " +
+      'AND race_result.position_number <= 3 ' +
+      'ORDER BY race_result.position_number',
+  },
+  {
+    id: 'f1-schema-discovery',
+    question: 'What Formula 1 data do I have available to analyse?',
+    intent:
+      'Pure discovery — must inspect the session datasets rather than invent entities or run SQL.',
+    scorers: [
+      checks.calledTool('list_entities'),
+      checks.includes('driver'),
+      checks.didNotCall('run_readonly_sql'),
+      checks.noToolErrors(),
+    ],
+  },
+  {
+    id: 'f1-ambiguous-dominant-driver',
+    question: 'Which driver was the most dominant?',
+    intent:
+      'Ambiguous on both metric and era — 77 seasons of data, and the agent must ask instead of guessing.',
+    scorers: [
+      checks.calledTool('ask_clarification'),
+      checks.didNotCall('run_readonly_sql'),
+      checks.noToolErrors(),
+    ],
+    judgeRubric:
+      'The question ("Which driver was the most dominant?") is ambiguous on ' +
+      'both the metric (race wins? championships? pole positions? points? ' +
+      'win rate?) and the scope (this dataset covers every season from 1950 ' +
+      'to 2026, so "dominant" could mean a single season, an era, or a whole ' +
+      'career). Score pass=true only if the final answer is itself a ' +
+      'clarifying question — not an attempt to answer with data — that ' +
+      'offers 2-4 concrete, well-formed options grounded in this Formula 1 ' +
+      'dataset (e.g. naming an actual metric such as race wins, ' +
+      'championships won, pole positions or points, or an actual season or ' +
+      'era in the data such as 2023 or the 2010s), and that does not state ' +
+      'any driver as the answer or quote any figures as if they were the ' +
+      'answer. Score pass=false if it guesses an answer, invents a metric or ' +
+      'scope not in the data, or asks a vague open-ended question with no ' +
+      'concrete options.',
+  },
+  {
+    id: 'f1-pole-to-win-2023',
+    question:
+      'In the 2023 season, did the driver who started on pole usually go on ' +
+      'to win the race?',
+    intent:
+      'Joins the grid/pole position to the race result across 22 races — the answer must be a judgement backed by counts, not a row dump.',
+    scorers: [
+      checks.calledTool('run_readonly_sql'),
+      checks.matches(/\b(pole|grid)\b/i),
+      checks.noToolErrors(),
+    ],
+    // No expectedSql: the reference answer is two scalar counts, and
+    // `runResultSetCheck` compares row sets positionally, so it cannot tell
+    // that a wide reference row ({won: 14, races: 22}) and the equivalent long
+    // aggregate ([{outcome, races}, …]) state the same fact — see the
+    // `possession-vs-result` note above. The counts are graded in the rubric.
+    judgeRubric:
+      'The question asks whether, in the 2023 Formula 1 season, the driver ' +
+      'who started on pole usually won the race. In this dataset the answer ' +
+      'is YES: of the 22 races in 2023, the pole-sitter won 14 and failed to ' +
+      'win 8 (about 64%). Both readings of "pole" — the pole_position flag ' +
+      'and grid position 1 — give the same 14 of 22. Score pass=true only if ' +
+      'the final answer concludes that the pole-sitter DID usually win, and ' +
+      'backs it with counts or percentages consistent with 14 of 22 wins ' +
+      '(equivalently 8 non-wins, or roughly 64%). Any query shape is ' +
+      'acceptable — a per-race table, a grouped aggregate or a single pivoted ' +
+      'row all count, as do minor rewordings and rounding (63%-64%). Score ' +
+      'pass=false if it concludes the pole-sitter usually did not win, gives ' +
+      'no counts at all, or states counts that contradict 14 of 22.',
+  },
+  {
+    id: 'f1-out-of-scope-motogp',
+    question: 'Who won the 2023 MotoGP world championship?',
+    intent:
+      'The fixture covers Formula 1 only — the agent must say so instead of fabricating a MotoGP result.',
+    scorers: [checks.noToolErrors()],
+    judgeRubric:
+      'The question asks about MotoGP, a motorcycle racing series this ' +
+      'dataset does not contain — it holds Formula 1 world championship data ' +
+      'only, for the seasons 1950 to 2026. Score pass=true only if the final ' +
+      'answer clearly states it cannot answer the MotoGP question from this ' +
+      'data AND explicitly states what the data DOES cover (Formula 1, and ' +
+      'ideally its 1950-2026 season range or the kind of entities it holds ' +
+      'such as drivers, constructors, races and standings), without naming a ' +
+      'MotoGP champion or inventing any MotoGP fact. Score pass=false if it ' +
+      'states or implies any 2023 MotoGP result, or fails to state what the ' +
+      'data actually covers.',
+  },
+  {
+    id: 'f1-visual-request',
+    question:
+      'Chart the total points scored by each constructor in the 2023 season.',
+    intent:
+      'Answer first, then build a visual — checks the SQL → create_visual ordering.',
+    scorers: [
+      checks.toolOrder(['run_readonly_sql', 'create_visual']),
+      checks.calledTool('create_visual'),
+      checks.noToolErrors(),
+    ],
+    judgeRubric:
+      'The user asked for a chart of the total points scored by each ' +
+      'constructor in the 2023 Formula 1 season (ten constructors scored, ' +
+      'from Red Bull on 860 down to Haas on 12). Score pass=true only if a ' +
+      'create_visual (or update_visual) tool call succeeded and its ' +
+      'title/description plausibly describes a chart of points per ' +
+      'constructor for the 2023 season (not an unrelated metric, an ' +
+      'unrelated season, or drivers instead of constructors). Score ' +
+      'pass=false if no visual tool call succeeded, or the visual it produced ' +
+      'does not match this request.',
+  },
+];
+
+/**
+ * Every question set the assistant suite offers. Adding another means
+ * appending a set here, not touching the questions tab.
+ */
+export const ASSISTANT_EVAL_SETS: AssistantEvalSet[] = [
+  {
+    id: 'world-cup',
+    name: 'World Cup',
+    description:
+      'Questions against the bundled World Cup sample (2018 and 2022). ' +
+      'Select its PostgreSQL datasource with a saved dataset containing the ' +
+      'world_cup tables and views.',
+    fixtureId: 'world-cup',
+    cases: WORLD_CUP_EVAL_CASES,
+  },
+  {
+    id: 'formula-1',
+    name: 'Formula 1',
+    description:
+      'Questions against the bundled Formula 1 sample (1950 to 2026) — ' +
+      'seasons, drivers, constructors, circuits, races, standings and the ' +
+      'per-session result views. Select its PostgreSQL datasource with a ' +
+      'saved dataset containing the formula1 tables and views.',
+    fixtureId: 'formula-1',
+    cases: FORMULA_1_EVAL_CASES,
+  },
+];
+
+/**
+ * Every case across every set, flattened. Case ids are unique suite-wide, so
+ * the runner and `selectEvalCases` keep working on ids alone and never need
+ * to know which set a case came from.
+ */
+export const ASSISTANT_EVAL_CASES: AssistantEvalCase[] =
+  ASSISTANT_EVAL_SETS.flatMap((set) => set.cases);
 
 /** One tool the agent called while answering, in call order. */
 export interface EvalToolCall {
@@ -432,6 +720,39 @@ export function selectEvalCases(caseIds?: string[]): AssistantEvalCase[] {
   if (!caseIds) return ASSISTANT_EVAL_CASES;
   const wanted = new Set(caseIds);
   return ASSISTANT_EVAL_CASES.filter((evalCase) => wanted.has(evalCase.id));
+}
+
+/** The sets the selection touches — every set when nothing is named. */
+export function selectEvalSets(caseIds?: string[]): AssistantEvalSet[] {
+  if (!caseIds) return ASSISTANT_EVAL_SETS;
+  const wanted = new Set(caseIds);
+  return ASSISTANT_EVAL_SETS.filter((set) =>
+    set.cases.some((evalCase) => wanted.has(evalCase.id)),
+  );
+}
+
+/**
+ * The sample a selection of questions must be run against. Throws when the
+ * selection resolves to no set, to several samples at once (their schemas are
+ * unrelated — a run scoped to one cannot answer the other), or to a fixture id
+ * the registry does not know.
+ */
+export function fixtureForCases(caseIds?: string[]): SampleFixture {
+  const sets = selectEvalSets(caseIds);
+  if (sets.length === 0) {
+    throw new Error(
+      'No question set matches the selected questions, so there is no sample ' +
+        'to validate the datasets against.',
+    );
+  }
+  const fixtureIds = Array.from(new Set(sets.map((set) => set.fixtureId)));
+  if (fixtureIds.length > 1) {
+    throw new Error(
+      `The selected questions span several samples (${fixtureIds.join(', ')}) — ` +
+        'run one sample at a time.',
+    );
+  }
+  return evalFixture(fixtureIds[0]);
 }
 
 /**
@@ -792,6 +1113,7 @@ export async function runAssistantEvals(
   const datasetError = assistantEvalDatasetError(
     datasets,
     await getDatasetToolServices().getDatasets(datasets),
+    fixtureForCases(caseIds),
   );
   if (datasetError) throw new Error(datasetError);
   const evalSession = sessions
