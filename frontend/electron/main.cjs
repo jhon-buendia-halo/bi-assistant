@@ -1,5 +1,6 @@
 const { app, BrowserWindow, dialog, ipcMain } = require("electron");
 const { spawn } = require("child_process");
+const crypto = require("crypto");
 const fs = require("fs");
 const http = require("http");
 const path = require("path");
@@ -9,9 +10,22 @@ const APP_DISPLAY_NAME = "Halo BI Assistant";
 const LEGACY_APP_NAME = "Questions to Insights";
 const DEV_URL = process.env.ELECTRON_DEV_URL;
 const BACKEND_PORT = process.env.BACKEND_PORT || "3000";
-const BACKEND_READY_TIMEOUT_MS = 15_000;
+const BACKEND_READY_TIMEOUT_MS = 30_000;
 const MAX_DIAGNOSTIC_ENTRIES = 2_000;
 const MAX_DIAGNOSTIC_FILE_BYTES = 5 * 1024 * 1024;
+
+// Backend supervisor: exponential backoff for unexpected (non-quit) exits.
+const RESTART_BACKOFFS_MS = [1_000, 2_000, 4_000];
+const MAX_RESTART_ATTEMPTS = RESTART_BACKOFFS_MS.length;
+// A backend that stays up (ready) this long is considered healthy again, so a
+// later crash gets its own fresh backoff budget instead of inheriting one
+// from an old, unrelated failure streak.
+const STABLE_UPTIME_MS = 60_000;
+const LEGACY_DATA_MARKERS = ["app.sqlite", "mastra.sqlite", "workspaces"];
+const APP_SECRET_FILE_NAME = ".app-secret";
+const FILE_LOAD_RECOVERY_LIMIT = 3;
+const ERR_FILE_NOT_FOUND = -6;
+
 const ANSI_ESCAPE = /\u001b\[[0-9;]*m/g;
 
 // Integration tests use an isolated profile so they never read or overwrite a
@@ -39,6 +53,25 @@ let backendProcess = null;
 let diagnosticsLogPath = null;
 let diagnosticSequence = 0;
 let diagnosticEntries = [];
+
+// Backend supervisor state.
+let backendStatus = "starting"; // 'starting' | 'ready' | 'restarting' | 'down'
+let backendQuitting = false; // guards the 'exit' handler against restarting during app shutdown
+let restartAttempt = 0;
+let restartTimer = null;
+let stableTimer = null;
+let readinessPollGeneration = 0;
+let resolvedAppDataDir = null;
+let resolvedAppSecret = null;
+
+function setBackendStatus(status) {
+  backendStatus = status;
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (!window.isDestroyed()) {
+      window.webContents.send("backend-status", { status });
+    }
+  }
+}
 
 function redactDiagnosticText(value) {
   return String(value)
@@ -305,6 +338,134 @@ function safeMarkdownLogText(value) {
   return String(value).replace(/```/g, "~~~");
 }
 
+function migrateDataEntry(src, dest) {
+  try {
+    fs.renameSync(src, dest);
+  } catch (error) {
+    if (error && error.code === "EXDEV") {
+      // Cross-device (common when the roaming profile is redirected to a
+      // network share) — rename can't cross devices, so copy then remove.
+      fs.cpSync(src, dest, { recursive: true });
+      fs.rmSync(src, { recursive: true, force: true });
+    } else {
+      throw error;
+    }
+  }
+}
+
+// Windows roaming profiles (AppData\Roaming, which is what app.getPath
+// "userData" resolves to) are frequently synced by VDI/enterprise policy and
+// can end up locked or slow to write to. Redirect the backend's SQLite data
+// to the local, non-roaming profile (AppData\Local) instead. One-time
+// migration moves any existing data across; any failure logs a diagnostic
+// and keeps using the roaming directory so data is never lost.
+function computeAppDataDir() {
+  const roamingDir = app.getPath("userData");
+  // Integration tests pin an isolated profile dir; never redirect that one.
+  if (process.env.QUESTIONS_TO_INSIGHTS_USER_DATA_DIR) return roamingDir;
+  if (process.platform !== "win32") return roamingDir;
+  if (!process.env.LOCALAPPDATA) return roamingDir;
+
+  const localDir = path.join(process.env.LOCALAPPDATA, APP_DISPLAY_NAME);
+  if (fs.existsSync(localDir)) return localDir;
+
+  const hasLegacyData = LEGACY_DATA_MARKERS.some((name) =>
+    fs.existsSync(path.join(roamingDir, name)),
+  );
+  if (!hasLegacyData) {
+    try {
+      fs.mkdirSync(localDir, { recursive: true });
+      return localDir;
+    } catch (error) {
+      recordDiagnostic(
+        "error",
+        "electron",
+        "Could not create the local app data directory; using the roaming profile",
+        { message: error.message, stack: error.stack },
+      );
+      return roamingDir;
+    }
+  }
+
+  const migrated = [];
+  try {
+    fs.mkdirSync(localDir, { recursive: true });
+    for (const name of LEGACY_DATA_MARKERS) {
+      const src = path.join(roamingDir, name);
+      const dest = path.join(localDir, name);
+      if (!fs.existsSync(src)) continue;
+      migrateDataEntry(src, dest);
+      migrated.push(name);
+    }
+    recordDiagnostic(
+      "info",
+      "electron",
+      "Migrated backend data off the roaming profile to the local app data directory",
+      { from: roamingDir, to: localDir },
+    );
+    return localDir;
+  } catch (error) {
+    // Best-effort rollback of anything already moved so the roaming copy
+    // stays authoritative and we never end up with data split across both.
+    for (const name of migrated) {
+      const src = path.join(roamingDir, name);
+      const dest = path.join(localDir, name);
+      try {
+        if (fs.existsSync(dest) && !fs.existsSync(src)) {
+          fs.renameSync(dest, src);
+        }
+      } catch {
+        // Leave the partially migrated entry where it landed rather than
+        // risk deleting anything.
+      }
+    }
+    recordDiagnostic(
+      "error",
+      "electron",
+      "Backend data migration to the local app data directory failed; continuing on the roaming profile",
+      { message: error.message, stack: error.stack },
+    );
+    return roamingDir;
+  }
+}
+
+// The backend uses APP_SECRET to encrypt stored API keys, so it must stay
+// stable across launches. Generate it once and persist it alongside the
+// resolved backend data directory (so the secret and the data it protects
+// always travel together, including through the Windows migration above).
+function resolveAppSecret(dataDir) {
+  if (process.env.APP_SECRET) return process.env.APP_SECRET;
+
+  const secretPath = path.join(dataDir, APP_SECRET_FILE_NAME);
+  try {
+    if (fs.existsSync(secretPath)) {
+      const existing = fs.readFileSync(secretPath, "utf8").trim();
+      if (existing) return existing;
+    }
+  } catch (error) {
+    recordDiagnostic(
+      "warn",
+      "electron",
+      "Could not read the persisted APP_SECRET file; generating a new one",
+      { message: error.message },
+    );
+  }
+
+  const secret = crypto.randomBytes(32).toString("hex");
+  try {
+    fs.mkdirSync(dataDir, { recursive: true });
+    fs.writeFileSync(secretPath, secret, { mode: 0o600 });
+  } catch (error) {
+    recordDiagnostic(
+      "error",
+      "electron",
+      "Could not persist the APP_SECRET file; a new secret will be generated on next launch, invalidating previously encrypted data",
+      { message: error.message, stack: error.stack },
+    );
+  }
+  return secret;
+}
+
 function backendEntry() {
   if (app.isPackaged) {
     // Staged by scripts/stage-backend.sh and copied via electron-builder extraResources.
@@ -328,8 +489,10 @@ function startBackend() {
       ...process.env,
       ELECTRON_RUN_AS_NODE: "1",
       PORT: BACKEND_PORT,
-      // SQLite app database lives in the OS-standard per-user app folder.
-      APP_DATA_DIR: app.getPath("userData"),
+      // SQLite app database lives in the OS-standard per-user app folder
+      // (redirected off Windows roaming profiles — see computeAppDataDir).
+      APP_DATA_DIR: resolvedAppDataDir || app.getPath("userData"),
+      APP_SECRET: resolvedAppSecret,
     },
     cwd: path.dirname(entry),
     stdio: ["ignore", "pipe", "pipe"],
@@ -350,10 +513,82 @@ function startBackend() {
       `Backend process exited${code === null ? "" : ` with code ${code}`}`,
     );
     backendProcess = null;
+    clearTimeout(stableTimer);
+    stableTimer = null;
+    // A quit-initiated kill must not trigger a restart.
+    if (backendQuitting) return;
+    scheduleBackendRestart(code);
   });
 }
 
+// Once the backend has been ready for STABLE_UPTIME_MS without exiting, treat
+// it as healthy again: a later crash gets a fresh restart budget instead of
+// inheriting one from an old, unrelated failure streak.
+function armStableResetTimer() {
+  clearTimeout(stableTimer);
+  const processAtArmTime = backendProcess;
+  stableTimer = setTimeout(() => {
+    if (backendProcess === processAtArmTime && backendProcess) {
+      restartAttempt = 0;
+      recordDiagnostic(
+        "info",
+        "electron",
+        "Backend has been stable; restart budget reset",
+      );
+    }
+  }, STABLE_UPTIME_MS);
+}
+
+// Polls the existing readiness endpoint (works the same after a restart as
+// on first launch) and pushes 'ready' once it responds. Guarded by a
+// generation counter so a stale poll from an earlier restart can't clobber
+// the status set by a more recent one.
+async function pollUntilReadyThenNotify() {
+  const myGeneration = ++readinessPollGeneration;
+  const ready = await waitForBackend();
+  if (backendQuitting || myGeneration !== readinessPollGeneration) return;
+  if (ready) {
+    setBackendStatus("ready");
+    armStableResetTimer();
+  }
+}
+
+function scheduleBackendRestart(exitCode) {
+  if (restartAttempt >= MAX_RESTART_ATTEMPTS) {
+    setBackendStatus("down");
+    recordDiagnostic(
+      "error",
+      "electron",
+      "Backend restart budget exhausted after repeated rapid failures; giving up",
+      { attempts: restartAttempt, exitCode },
+    );
+    return;
+  }
+
+  const delay = RESTART_BACKOFFS_MS[restartAttempt];
+  restartAttempt += 1;
+  setBackendStatus("restarting");
+  recordDiagnostic(
+    "warn",
+    "electron",
+    `Restarting backend in ${delay}ms (attempt ${restartAttempt}/${MAX_RESTART_ATTEMPTS})`,
+    { exitCode },
+  );
+  clearTimeout(restartTimer);
+  restartTimer = setTimeout(() => {
+    restartTimer = null;
+    if (backendQuitting) return;
+    startBackend();
+    void pollUntilReadyThenNotify();
+  }, delay);
+}
+
 function stopBackend() {
+  backendQuitting = true;
+  clearTimeout(restartTimer);
+  restartTimer = null;
+  clearTimeout(stableTimer);
+  stableTimer = null;
   if (backendProcess) {
     backendProcess.kill();
     backendProcess = null;
@@ -418,6 +653,8 @@ function createWindow() {
     },
   });
 
+  let fileLoadRecoveries = 0;
+
   win.webContents.on("did-fail-load", (_event, code, description, url) => {
     recordDiagnostic(
       "error",
@@ -429,6 +666,39 @@ function createWindow() {
         url,
       },
     );
+    // A directory file:// URL (e.g. after an in-app reload lands on
+    // .../browser/ instead of .../browser/index.html) 404s as
+    // ERR_FILE_NOT_FOUND. Recover by reloading the real entry point, capped
+    // so a persistently broken bundle doesn't loop forever.
+    if (
+      typeof url === "string" &&
+      url.startsWith("file://") &&
+      code === ERR_FILE_NOT_FOUND
+    ) {
+      if (fileLoadRecoveries >= FILE_LOAD_RECOVERY_LIMIT) {
+        recordDiagnostic(
+          "error",
+          "electron:renderer",
+          "Exhausted file load recovery attempts; leaving the page as-is",
+          { url, attempts: fileLoadRecoveries },
+        );
+        return;
+      }
+      fileLoadRecoveries += 1;
+      recordDiagnostic(
+        "warn",
+        "electron:renderer",
+        "Recovering from a missing file:// load by reloading the app entry point",
+        { url, attempt: fileLoadRecoveries },
+      );
+      win.loadFile(path.join(__dirname, "../dist/frontend/browser/index.html"));
+    }
+  });
+  win.webContents.on("did-finish-load", () => {
+    fileLoadRecoveries = 0;
+    if (!win.isDestroyed()) {
+      win.webContents.send("backend-status", { status: backendStatus });
+    }
   });
   win.webContents.on("render-process-gone", (_event, details) => {
     recordDiagnostic(
@@ -461,8 +731,15 @@ app.whenReady().then(async () => {
     const icon = resolveAppIcon();
     if (icon) app.dock?.setIcon(icon);
   }
+  resolvedAppDataDir = computeAppDataDir();
+  resolvedAppSecret = resolveAppSecret(resolvedAppDataDir);
+
+  setBackendStatus("starting");
   startBackend();
-  if (!(await waitForBackend())) {
+  if (await waitForBackend()) {
+    setBackendStatus("ready");
+    armStableResetTimer();
+  } else {
     console.warn(
       `[backend] was not ready after ${BACKEND_READY_TIMEOUT_MS}ms; opening the window anyway`,
     );
@@ -474,6 +751,9 @@ app.whenReady().then(async () => {
         timeoutMs: BACKEND_READY_TIMEOUT_MS,
       },
     );
+    // The supervisor keeps polling and the backend-status banner keeps the
+    // user informed; open the window rather than block on it indefinitely.
+    void pollUntilReadyThenNotify();
   }
   createWindow();
 

@@ -51,6 +51,44 @@
               {{ message.content }}
             </p>
           </div>
+        } @else if (message.error) {
+          <!--
+            Error bubble: a question turn's stream failed (provider error,
+            dropped connection, backend crash mid-turn). Client-only — never
+            persisted, so a retry reuses the still-unanswered user question
+            instead of duplicating it.
+          -->
+          <div
+            class="flex items-start gap-3 rounded-2xl border border-red-400/20 bg-red-400/[0.06] p-4"
+            [id]="'msg-' + i"
+          >
+            <span
+              class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-red-400/10 text-red-400"
+            >
+              <lucide-angular [img]="TriangleAlert" [size]="15" />
+            </span>
+            <span class="flex min-w-0 flex-1 flex-col gap-1">
+              <span class="text-[13px] font-medium text-red-400"
+                >Something went wrong</span
+              >
+              <span
+                class="text-[13px] leading-6 whitespace-pre-wrap text-zinc-300"
+                >{{ message.content }}</span
+              >
+            </span>
+            @if (isLatest(i)) {
+              <button
+                type="button"
+                (click)="retryLastQuestion(i)"
+                [disabled]="sending()"
+                title="Retry"
+                aria-label="Retry"
+                class="shrink-0 rounded-lg border border-white/10 px-2.5 py-1 text-[12px] text-zinc-300 hover:border-white/20 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Retry
+              </button>
+            }
+          </div>
         } @else if (message.clarification; as clarification) {
           <!-- Clarification card, Claude-style -->
           <div class="rounded-2xl border border-white/10 bg-[#232323] p-4">

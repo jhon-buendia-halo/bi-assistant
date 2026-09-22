@@ -475,3 +475,88 @@ describe('SessionChat deep analysis', () => {
     expect(fixture.componentInstance.draft()).toBe('Why are denials rising?');
   });
 });
+
+describe('SessionChat stream errors', () => {
+  let fixture: ComponentFixture<SessionChat>;
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [SessionChat],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+  });
+
+  /** Mount the chat over a transcript and return its root element. */
+  function mount(messages: ChatMessage[] = []): HTMLElement {
+    fixture = TestBed.createComponent(SessionChat);
+    fixture.componentRef.setInput('session', {
+      id: 'session-1',
+      name: 'Session 1',
+      datasets: [],
+      messages,
+    } satisfies Session);
+    fixture.detectChanges();
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  it('renders a provider failure as an error bubble and clears the typing indicator', () => {
+    const el = mount();
+    const api = TestBed.inject(SessionsApiService);
+    spyOn(api, 'streamMessage').and.callFake((_id, _content, handlers) => {
+      handlers.onError?.('Provider request failed (404) — Resource not found');
+      return Promise.resolve();
+    });
+
+    fixture.componentInstance.draft.set('How many claims last quarter?');
+    fixture.componentInstance.send();
+    fixture.detectChanges();
+
+    expect(el.textContent).toContain('Something went wrong');
+    expect(el.textContent).toContain(
+      'Provider request failed (404) — Resource not found',
+    );
+    expect(fixture.componentInstance.sending()).toBeFalse();
+    // The "Thinking" block must be gone, not stuck spinning.
+    expect(el.textContent).not.toContain('Thinking');
+  });
+
+  it('keeps any text that had already streamed in before the error', () => {
+    const el = mount();
+    const api = TestBed.inject(SessionsApiService);
+    spyOn(api, 'streamMessage').and.callFake((_id, _content, handlers) => {
+      handlers.onText?.('Partial answer so far.');
+      handlers.onError?.('Stream disconnected');
+      return Promise.resolve();
+    });
+
+    fixture.componentInstance.draft.set('How many claims last quarter?');
+    fixture.componentInstance.send();
+    fixture.detectChanges();
+
+    expect(el.textContent).toContain('Partial answer so far.');
+    expect(el.textContent).toContain('Something went wrong');
+  });
+
+  it('retries by resending the question the error bubble followed', () => {
+    const el = mount();
+    const api = TestBed.inject(SessionsApiService);
+    const stream = spyOn(api, 'streamMessage').and.callFake(
+      (_id, _content, handlers) => {
+        handlers.onError?.('Stream ended before completion');
+        return Promise.resolve();
+      },
+    );
+
+    fixture.componentInstance.draft.set('How many claims last quarter?');
+    fixture.componentInstance.send();
+    fixture.detectChanges();
+
+    el.querySelector<HTMLButtonElement>('[aria-label="Retry"]')!.click();
+    fixture.detectChanges();
+
+    expect(stream.calls.count()).toBe(2);
+    expect(stream.calls.mostRecent().args[1]).toBe(
+      'How many claims last quarter?',
+    );
+  });
+});

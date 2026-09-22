@@ -804,6 +804,33 @@ describe('SessionsService streaming', () => {
       expect(agent.generate).not.toHaveBeenCalled();
     });
   });
+
+  describe('mid-turn errors', () => {
+    /**
+     * A real (non-abort) failure — a provider error, a dead connection, a
+     * rejected proxy request — must propagate instead of being swallowed, so
+     * the controller's catch can turn it into the SSE `error` event the chat
+     * renders. Nothing else gets appended to the transcript: the user's
+     * question (persisted before the agent ran) stays the last message,
+     * which is what lets a retry reuse it — see `appendUserMessage` — instead
+     * of the transcript accumulating duplicate questions.
+     */
+    it('propagates the provider failure and leaves the transcript retry-safe', async () => {
+      const { service, session } = buildStreaming(
+        failingStream(new Error('Provider request failed (404) — Resource not found')),
+      );
+
+      await expect(
+        service.streamMessage('session-1', 'Why did Argentina win?', () => {}),
+      ).rejects.toThrow('Provider request failed (404)');
+
+      expect(session.messages).toHaveLength(1);
+      expect(session.messages[0]).toMatchObject({
+        role: 'user',
+        content: 'Why did Argentina win?',
+      });
+    });
+  });
 });
 
 describe('SessionsService SQL self-correction', () => {
@@ -1361,6 +1388,12 @@ async function* toolOnlyStream(count: number) {
       },
     };
   }
+}
+
+/** A stream that fails outright — a provider error, a dead connection. */
+// eslint-disable-next-line @typescript-eslint/require-yield
+async function* failingStream(error: unknown) {
+  throw error;
 }
 
 describe('SessionsService visual tailoring and repair', () => {

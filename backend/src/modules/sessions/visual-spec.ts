@@ -127,7 +127,17 @@ export const chartSpecSchema = z
           ),
         dir: z.enum(['asc', 'desc']),
       })
-      .optional(),
+      .optional()
+      // `.catch(undefined)`: a malformed sort clause — `by` sent as `null` or
+      // some other non-string (VDI diagnostics showed models doing exactly
+      // this), `dir` outside "asc"/"desc", or `sort` itself sent as `null` —
+      // is dropped instead of failing the whole spec. Sorting is a nice-to-
+      // have the runtime works fine without, unlike `title`/`description`/
+      // `chart`, which stay required. Validation-side only: `.catch()` does
+      // not change the JSON schema shown to the model (confirmed against
+      // `z.toJSONSchema`), so the model still sees `by`/`dir` as required
+      // strings and only malformed responses take this path.
+      .catch(undefined),
     topN: z.number().int().positive().max(200).optional(),
     stacked: z.boolean().optional(),
     labels: z.boolean().optional().describe('Draw value labels on the marks'),

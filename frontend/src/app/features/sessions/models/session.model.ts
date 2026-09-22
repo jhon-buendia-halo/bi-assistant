@@ -87,6 +87,14 @@ export interface ChatMessage {
    * report's executive summary; the full markdown is downloadable.
    */
   report?: AnalysisReport;
+  /**
+   * Set on a client-only bubble rendered when a turn's stream failed
+   * (provider error, dropped connection, backend crash mid-turn). Never
+   * persisted server-side — the backend transcript still ends with the
+   * unanswered user question, so a retry reuses that question's bubble
+   * instead of duplicating it (see `SessionsService.appendUserMessage`).
+   */
+  error?: boolean;
 }
 
 export interface AnalysisReport {
