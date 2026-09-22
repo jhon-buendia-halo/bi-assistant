@@ -21,7 +21,7 @@ a{color:inherit;text-decoration:none}
 .hero-badges{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:26px}
 .badge{font-size:13px;font-weight:600;letter-spacing:.02em;color:var(--text-dim);border:1px solid var(--hairline);border-radius:999px;padding:6px 14px}
 .hero-shot{position:relative;z-index:1;max-width:var(--maxw);margin:56px auto 0;padding:0 24px}
-.shot-frame{border:1px solid var(--hairline);border-radius:var(--radius);background:var(--ink-2);overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.55)}
+.shot-frame{border:1px solid rgba(255,255,255,.16);border-radius:var(--radius);background:var(--ink-2);overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.55),0 0 0 6px rgba(255,255,255,.02)}
 .shot-frame img{display:block;width:100%;height:auto}
 .shot-placeholder{display:flex;align-items:center;justify-content:center;min-height:320px;color:var(--text-mute);font-size:15px;text-align:center;padding:40px;background:
   linear-gradient(var(--ink-2),var(--ink-2)) padding-box}
@@ -60,3 +60,20 @@ a{color:inherit;text-decoration:none}
 /* the Labs header hides its CTA on phones; here the download button is the point */
 @media(max-width:720px){.header-cta{display:inline-flex}}
 .dl-version{margin-top:14px;color:var(--text-mute);font-size:15px}
+
+/* ── walkthrough ────────────────────────────────────────────────────────────
+   The screenshot-driven steps. Each step is prose the width of a paragraph
+   followed by the shot at full column width, so the interface is legible
+   rather than decorative. */
+.walk{display:grid;gap:96px}
+.walk-step{display:grid;gap:30px}
+.walk-head{max-width:720px}
+.walk-num{display:inline-block;font-size:13px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;margin-bottom:14px}
+.walk-title{font-size:clamp(26px,3.2vw,36px);font-weight:700;margin-bottom:14px}
+.walk-body{color:var(--text-dim);font-size:18px}
+.walk-body + .walk-body{margin-top:14px}
+figure.shot{margin:0}
+figure.shot figcaption{margin-top:14px;color:var(--text-mute);font-size:14.5px;max-width:760px}
+.shot-frame{background:#1c1c1c}
+.hero-shot figcaption{margin-top:16px;text-align:center;color:var(--text-mute);font-size:14.5px}
+@media(max-width:720px){.walk{gap:64px}}

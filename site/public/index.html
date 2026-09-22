@@ -8,6 +8,11 @@
   <meta property="og:title" content="Halo BI Assistant — Halo Powered Labs">
   <meta property="og:description" content="Ask a business question. Get an answer grounded in SQL that was actually run, plus a visual you can tailor by conversation.">
   <meta property="og:type" content="website">
+  <!-- Link previews show the app itself; absolute URL so scrapers resolve it. -->
+  <meta property="og:image" content="https://bi-assistant.halo-powered-labs.com/shots/app.png">
+  <meta property="og:image:width" content="2360">
+  <meta property="og:image:height" content="1475">
+  <meta name="twitter:card" content="summary_large_image">
   <link rel="icon" type="image/png" href="favicon.png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -61,6 +66,21 @@
         <a href="#how" class="btn btn-ghost">See how it works</a>
       </div>
     </div>
+
+    <!--
+      Every screenshot on this page is the real app running against the demo
+      database that ships with it — no mockups, and no customer data.
+    -->
+    <figure class="hero-shot">
+      <div class="shot-frame">
+        <img src="shots/app.png" width="2360" height="1475"
+             alt="The Halo BI Assistant window: a question about which teams got the most out of their chances, the assistant's answer with a ranked table, and the chart it built from that answer in the right-hand panel.">
+      </div>
+      <figcaption>
+        One window: the conversation on the left, the visual it produced on the right.
+        Shown against the World Cup demo database that ships with the app.
+      </figcaption>
+    </figure>
   </section>
 
   <!-- ── Overview ──────────────────────────────────────────────────────── -->
@@ -108,51 +128,107 @@
         </p>
       </div>
 
-      <div class="flow">
-        <article class="flow-step">
-          <span class="flow-num grad-text">01</span>
-          <div>
-            <h3 class="flow-title">Point it at your data</h3>
-            <p class="flow-body">
-              Connect a Databricks SQL warehouse or a PostgreSQL database, browse the catalog,
-              and pick the entities that belong in a dataset. A session works over the datasets
-              you choose — nothing wider.
+      <div class="walk">
+
+        <article class="walk-step">
+          <div class="walk-head">
+            <span class="walk-num grad-text">Step 01</span>
+            <h3 class="walk-title">Point it at your data — and only the part that matters.</h3>
+            <p class="walk-body">
+              Connect a Databricks SQL warehouse or a PostgreSQL database and browse the
+              catalog as it really is: schemas, tables, column types, sample values. Tick the
+              entities that belong in a dataset, and a session works over those — nothing wider.
+            </p>
+            <p class="walk-body">
+              You can define a metric here too. Write <em>finishing quality</em> once as a SQL
+              expression and every answer that needs it reuses that expression instead of
+              re-deriving the number and drifting.
             </p>
           </div>
+          <figure class="shot">
+            <div class="shot-frame">
+              <img src="shots/catalog.png" width="1800" height="1125" loading="lazy"
+                   alt="The dataset editor: a catalog tree of World Cup tables on the left, and the selected table's eleven columns with their SQL types on the right.">
+            </div>
+            <figcaption>The catalog as the assistant sees it — every column, every type, nothing inferred.</figcaption>
+          </figure>
         </article>
-        <article class="flow-step">
-          <span class="flow-num grad-text">02</span>
-          <div>
-            <h3 class="flow-title">Ask in business language</h3>
-            <p class="flow-body">
-              The assistant resolves the question against real schemas and sample values. When the
-              metric itself is undefined — "best", "top", "performed well" — it asks one short
-              question with concrete options drawn from your data, rather than guessing.
+
+        <article class="walk-step">
+          <div class="walk-head">
+            <span class="walk-num grad-text">Step 02</span>
+            <h3 class="walk-title">Ask in business language. It asks back when the question is ambiguous.</h3>
+            <p class="walk-body">
+              "Which teams got the most out of their chances?" has three defensible answers in
+              this data, and they do not rank the same. So the assistant does what a good analyst
+              does: it puts the options in front of you — each one described in terms of the
+              columns it would actually use — and waits.
+            </p>
+            <p class="walk-body">
+              This is the difference between a tool that produces a number and a tool you can
+              quote. It will not pick a definition of "best" on your behalf.
             </p>
           </div>
+          <figure class="shot">
+            <div class="shot-frame">
+              <img src="shots/clarify.png" width="1800" height="1125" loading="lazy"
+                   alt="The assistant asking how finishing quality should be measured, offering three options drawn from the data, and then the answer once one is chosen.">
+            </div>
+            <figcaption>One short question, three concrete options, each tied to real columns.</figcaption>
+          </figure>
         </article>
-        <article class="flow-step">
-          <span class="flow-num grad-text">03</span>
-          <div>
-            <h3 class="flow-title">It writes and runs the SQL</h3>
-            <p class="flow-body">
-              Read-only queries, chained as far as the analysis needs, favouring aggregations so
-              results come back small and meaningful. You see the SQL, the row counts, and a
-              sample of the rows behind every answer.
+
+        <article class="walk-step">
+          <div class="walk-head">
+            <span class="walk-num grad-text">Step 03</span>
+            <h3 class="walk-title">It writes the SQL, runs it, and shows you both.</h3>
+            <p class="walk-body">
+              Read-only queries, chained as far as the analysis needs. The first one here checks
+              what the dataset actually covers before anything gets ranked; the second computes
+              the answer. Each carries the reason it was run, the statement itself, the row count
+              and the rows.
+            </p>
+            <p class="walk-body">
+              Nothing in the answer comes from what the model already believed. If you want to
+              check a number, the query that produced it is two clicks away — and it is the query
+              that ran, not a reconstruction.
             </p>
           </div>
+          <figure class="shot">
+            <div class="shot-frame">
+              <img src="shots/sql.png" width="1800" height="1125" loading="lazy"
+                   alt="The expanded data provenance panel showing two executed SQL statements, their stated rationale and their row counts.">
+            </div>
+            <figcaption>Every answer opens up into the SQL behind it, with the reasoning that led to each query.</figcaption>
+          </figure>
         </article>
-        <article class="flow-step">
-          <span class="flow-num grad-text">04</span>
-          <div>
-            <h3 class="flow-title">Answer, then visual</h3>
-            <p class="flow-body">
-              The reply carries the numbers, the ranking, the takeaway and the entities it used.
-              Ask for a chart and it builds one from that answer's own rows — then keeps tailoring
-              it as you talk, with every version kept.
+
+        <article class="walk-step">
+          <div class="walk-head">
+            <span class="walk-num grad-text">Step 04</span>
+            <h3 class="walk-title">The chart is part of the conversation, not the end of it.</h3>
+            <p class="walk-body">
+              Ask for a visual and it is built from that answer's own rows. Then keep talking:
+              <em>drop the one- and two-match teams, they're noise.</em> The chart changes, and the
+              old one is still there — every version kept, every version labelled with the
+              instruction that produced it, any of them one click from being restored.
+            </p>
+            <p class="walk-body">
+              Export it and you get a self-contained page: the question, the chart, the written
+              analysis, the SQL and the data. The kind of thing you can send to someone who was
+              not in the room.
             </p>
           </div>
+          <figure class="shot">
+            <div class="shot-frame">
+              <img src="shots/versions.png" width="1800" height="1125" loading="lazy"
+                   alt="The visual panel's version history open, listing version 2 as current and version 1 with the instruction that created it.">
+            </div>
+            <figcaption>Tailoring is versioned: every instruction is a version you can go back to.</figcaption>
+          </figure>
         </article>
+
+      </div>
       </div>
     </div>
   </section>
@@ -169,29 +245,61 @@
         </p>
       </div>
 
+      <div class="walk" style="margin-bottom:96px">
+
+        <article class="walk-step">
+          <div class="walk-head">
+            <span class="walk-num grad-text">Your rules</span>
+            <h3 class="walk-title">Teach it your vocabulary once. It applies it every time.</h3>
+            <p class="walk-body">
+              Your business words are not in your column names. Write down what
+              <em>finishing quality</em> means, which filter should apply unless someone says
+              otherwise, and the standing instruction that a ranking must always state its
+              sample size — and the assistant follows them, ahead of whatever it would have
+              guessed from a column name.
+            </p>
+            <p class="walk-body">
+              When a rule shapes an answer, the answer says which one. Turn a snippet off and
+              the next answer changes accordingly.
+            </p>
+          </div>
+          <figure class="shot">
+            <div class="shot-frame">
+              <img src="shots/knowledge.png" width="1800" height="1125" loading="lazy"
+                   alt="The Knowledge screen listing curated instructions, glossary terms and default filters, each individually enabled.">
+            </div>
+            <figcaption>Glossary terms, standing instructions and default filters — authored once, enforced per answer.</figcaption>
+          </figure>
+        </article>
+
+        <article class="walk-step">
+          <div class="walk-head">
+            <span class="walk-num grad-text">Under the hood</span>
+            <h3 class="walk-title">Not one prompt. A crew, each with one job.</h3>
+            <p class="walk-body">
+              The assistant plans and runs the analysis. A separate verifier re-derives the SQL
+              independently to corroborate the answer. A fixer repairs a statement the engine
+              rejected. A designer turns a finished answer into a visual and tailors it. A judge
+              grades eval runs so a prompt change that quietly breaks an answer shows up as a
+              regression rather than a surprise.
+            </p>
+            <p class="walk-body">
+              You never have to think about any of this. It is here because it is why the answers
+              hold up.
+            </p>
+          </div>
+          <figure class="shot">
+            <div class="shot-frame">
+              <img src="shots/agents.png" width="1800" height="1125" loading="lazy"
+                   alt="The Agents screen listing the six registered agents — assistant, SQL verifier, SQL fixer, visual designer, knowledge bootstrap and eval judge — with a one-line description each.">
+            </div>
+            <figcaption>Six specialised agents, each doing one thing the others are not trusted to do.</figcaption>
+          </figure>
+        </article>
+
+      </div>
+
       <div class="focus-grid">
-        <article class="focus-card">
-          <h3 class="focus-title">Curated knowledge</h3>
-          <p class="focus-body">
-            Glossary terms, standing instructions and default filters you author once. They
-            outrank whatever the model would infer from a column name, and the assistant names
-            which filters it applied.
-          </p>
-        </article>
-        <article class="focus-card">
-          <h3 class="focus-title">Interactive visuals</h3>
-          <p class="focus-body">
-            Charts you refine by conversation. Each visual is versioned, revertible, and exports
-            as a self-contained page with the question, the analysis, the SQL and the data.
-          </p>
-        </article>
-        <article class="focus-card">
-          <h3 class="focus-title">Data provenance</h3>
-          <p class="focus-body">
-            Every visual and answer carries the query that produced it, how many rows came back,
-            and the first rows themselves — collapsible, but always there.
-          </p>
-        </article>
         <article class="focus-card">
           <h3 class="focus-title">Deep analysis</h3>
           <p class="focus-body">
