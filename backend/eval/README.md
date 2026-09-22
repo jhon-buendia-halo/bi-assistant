@@ -6,7 +6,16 @@ trusted reference SQL. It is the guard rail for the SQL pipeline — run it befo
 and after any change to the agent instructions, tools, schema context or the
 SQL repair loop.
 
-- Cases live in `golden-set.json`.
+- Cases live in `golden-set.json` (World Cup), in the other `*-set.json` files
+  in this folder, or in a registered JSON suite under
+  `../src/mastra/evals/suites/` — `--suite <id>` runs one of those.
+- Every case can carry a **`category`**: the failure class it guards. Verdicts
+  are tallied per category, because "which failure class is failing" is what the
+  next change is steered by.
+- `npm run eval:validate` checks every reference query against the live fixture
+  with **zero model calls**. Run it after every edit to a case set; it is free.
+- Every run (unless `--no-log`) appends a token/cost record to the repo's
+  [`logs/`](../../logs/README.md) folder.
 - The runner is `../scripts/run-eval.ts`, wired as `npm run eval` (ts-node in
   transpile-only mode, so a run starts fast). `backend/tsconfig.build.json`
   excludes `scripts/` — the runner must stay out of the `nest build` program or
@@ -63,6 +72,24 @@ question asks for — no extra bookkeeping columns, no `ORDER BY` dependence.
 | `ERROR(timeout)`        | The turn exceeded `EVAL_TIMEOUT_MS`.                                     |
 | `ERROR(replay-failed)`  | The assistant's SQL could not be re-run and no stored rows existed.      |
 | `SKIP(placeholder)`     | Case still marked `"placeholder": true`.                                 |
+| `SKIP(no-expected-sql)` | A suite case graded in-app by checks or a judge — this harness compares result sets, so it does not guess a reference. |
+
+With `--repeat n` a case's verdict is `PASS` only when **every** repetition
+passed, and the table gains a `RUNS` column showing `k/n`. A model is
+non-deterministic, so one flip is noise — but a case that passes 4 times in 5 is
+not a case that passes, and `k/n` makes a flake read as a flake.
+
+### `--validate` statuses
+
+`--validate` answers a different question — "can this reference judge anything?"
+— so it has its own vocabulary:
+
+| Status     | Meaning                                                                                   | Exit |
+| ---------- | ----------------------------------------------------------------------------------------- | ---- |
+| `OK`       | The reference ran and returned a usable number of rows.                                    | 0    |
+| `EMPTY`    | 0 rows. A warning: a reference that returns nothing cannot tell a right answer from wrong. | 0    |
+| `TOO-MANY` | At or above the row cap (`EVAL_ROW_LIMIT`, default 500) — both sides truncate, so the comparison is untrustworthy. Aggregate it down. | 1 |
+| `ERROR`    | The query failed; the Postgres message is printed.                                          | 1    |
 
 ## The World Cup set
 
@@ -141,18 +168,52 @@ Every case spends real tokens and runs real warehouse queries — keep the set s
 
 ```bash
 cd backend
-npm run eval                                   # whole golden set
+npm run eval                                    # whole golden set
 APP_DATA_DIR="$HOME/Library/Application Support/Questions to Insights" npm run eval
-npm run eval -- --only denial-rate             # one case (substring match)
-npm run eval -- --file ../my-cases.json        # alternative case file
-npm run eval -- --verbose                      # Nest logs + the SQL that ran
-npm run eval -- --keep-sessions                # leave the throwaway sessions behind
-npm run eval -- --include-placeholders         # run the shipped placeholders (they will fail)
+npm run eval:validate                           # every reference SQL, zero model calls
+npm run eval -- --suite health-insurance        # a registered JSON suite
+npm run eval -- --only denial-rate              # one case (substring match)
+npm run eval -- --category ratio-trap           # one failure class
+npm run eval -- --repeat 5 --label baseline     # 5 runs per case, tagged in the log
+npm run eval -- --file ../my-cases.json         # alternative case file
+npm run eval -- --verbose                       # Nest logs + the SQL that ran
+npm run eval -- --keep-sessions                 # leave the throwaway sessions behind
+npm run eval -- --include-placeholders          # run cases marked "placeholder": true
+npm run eval -- --no-log                        # do not write a run log
 npm run eval -- --help
 ```
 
+### Every flag
+
+| Flag | Effect |
+| --- | --- |
+| `-f, --file <path>` | Case file to run. Default `eval/golden-set.json`. Mutually exclusive with `--suite`. |
+| `--suite <id>` | Run a registered JSON suite from `src/mastra/evals/suites/<id>.json`. Cases come from `suite.cases`; each one binds to `suite.datasets[0]`. Mutually exclusive with `--file`. |
+| `-o, --only <substring>` | Only cases whose **name** contains the substring. |
+| `-c, --category <substring>` | Only cases whose **category** contains the substring. Reports which categories exist when nothing matches. |
+| `--validate` | Run each case's `expectedSql` and stop. **Zero model calls**: no LLM preflight, no sessions, no agent. Exits non-zero on `ERROR` or `TOO-MANY`. Wired as `npm run eval:validate`. |
+| `--repeat <n>` | Run each case `n` times (default 1). The case passes only if every run passes; the table and the log carry `k/n`. |
+| `--label <text>` | Tag recorded in the run log, e.g. `baseline`, `iter-2-prompt-ratio`. It is what makes two runs comparable later. |
+| `--no-log` | Do not write a record into `logs/evals/`. |
+| `--include-placeholders` | Also run cases marked `"placeholder": true`. |
+| `--keep-sessions` | Do not delete the throwaway sessions (for inspecting a turn in the app). |
+| `-v, --verbose` | Nest logs plus the SQL each case actually ran. |
+| `-h, --help` | Usage. |
+
 Env: `EVAL_ROW_LIMIT` (default 500 — the connector cap), `EVAL_TIMEOUT_MS`
-(default 300000, per case).
+(default 300000, per case), `APP_DATA_DIR` (datastore location), `EVAL_LOG_DIR`
+(run-log folder; default `<repo>/logs`).
+
+### What a run prints
+
+1. One line per case as it finishes.
+2. The per-case table (`CASE | VERDICT | [RUNS] | ROWS exp/act | TIME | DETAIL`).
+3. The **per-category table** (`CATEGORY | PASSED/TOTAL | RATE`), sorted worst
+   rate first — the eye should land on the failing class without scanning.
+4. Token totals for the run, and the estimated cost when the model has a rate in
+   `logs/pricing.json`. Token counts are measured; costs are estimated. A model
+   with no configured rate prints `not priced` rather than a made-up number.
+5. Where the run log was written.
 
 ## Adding a case
 
@@ -173,7 +234,8 @@ Env: `EVAL_ROW_LIMIT` (default 500 — the connector cap), `EVAL_TIMEOUT_MS`
 | `dataset`     | Name of a saved dataset — the throwaway session is bound to it.                                                                        |
 | `question`    | Exactly what a user would type. Keep it unambiguous, or the assistant will ask a clarifying question and the case fails with `no-sql`. |
 | `expectedSql` | Read-only `SELECT`/`WITH`, single statement, hand-verified against the data.                                                           |
-| `placeholder` | Optional. `true` → skipped by default (used by the shipped examples).                                                                  |
+| `category`    | Optional but expected on new sets: the failure class this case guards (vocabulary below). Drives the per-category table and `--category`. |
+| `placeholder` | Optional. `true` → skipped unless `--include-placeholders`.                                                                             |
 | `notes`       | Optional, free text for humans.                                                                                                        |
 
 Guidelines:
@@ -187,7 +249,69 @@ Guidelines:
 - Avoid `CURRENT_DATE`-relative questions unless the reference SQL is relative in
   exactly the same way — otherwise the case rots.
 
-The five entries shipped here are **placeholders** for the health-claims demo
-dataset (`"placeholder": true`, `REPLACE_WITH_DATASET_NAME`). Replace the
-dataset name and SQL with your dataset's, drop the `placeholder` flag, and the
-case goes live.
+### The category vocabulary
+
+One of the failure classes the eval note is organised around. `control` is the
+healthy baseline: cases that must keep passing and on which the answer guards
+must stay silent.
+
+`ratio-trap`, `constant-column`, `empty-column`, `ties`, `value-vocabulary`,
+`out-of-scope`, `clarification`, `id-vs-name`, `metric-definition`,
+`default-filter`, `multi-step-join`, `discovery`, `unit-confusion`,
+`domain-semantics`, `quality-filter`, `control`.
+
+Use exactly these strings — the per-category table groups on them literally, and
+a typo silently creates a category of one. Cases with no `category` (the
+original World Cup set) are tallied as `uncategorised`.
+
+See `docs/evals/synthetic-domains.md` for what each class means and which
+planted trap exposes it.
+
+### The suite shape
+
+A case file may also be an object instead of a flat array — the same shape the
+in-app suites use, so one file can drive both runners:
+
+```jsonc
+{
+  "id": "health-insurance",
+  "name": "Health insurance",
+  "datasets": ["Health Insurance"],
+  "requiredEntities": ["health_insurance.claims", "health_insurance.members"],
+  "cases": [
+    {
+      "id": "denied-claims-2024",          // `id` here, `name` in a flat file
+      "category": "value-vocabulary",
+      "question": "How many claims were approved in 2024?",
+      "intent": "counts PAID only, not PENDING or REVERSED",
+      "expectedSql": "SELECT ..."
+    }
+  ]
+}
+```
+
+Differences from the flat array:
+
+- A case with no `dataset` of its own **inherits `datasets[0]`**.
+- `expectedSql` is optional: a case graded in-app by tool checks or a judge has
+  none, and this harness reports it as `SKIP(no-expected-sql)` rather than
+  guessing a reference. In a flat file a missing `expectedSql` is an error —
+  there it is almost always a typo.
+- Extra fields (`intent`, `checks`, `judgeRubric`, `resultSetOptions`) are the
+  in-app runner's; this harness ignores them.
+
+Registered suites (`src/mastra/evals/suites/<id>.json`) are run by id with
+`--suite <id>`; a file anywhere else is run with `--file <path>`.
+
+### Verifying a new case set
+
+Every reference query, checked against the live fixture, for free:
+
+```bash
+npm run eval:validate                      # golden-set.json
+npm run eval:validate -- --suite genomics  # a suite
+```
+
+Fix every `ERROR` and `TOO-MANY` before spending a token. Treat `EMPTY` as a
+case worth rewriting: a reference that returns no rows passes trivially against
+an assistant that also returns nothing.

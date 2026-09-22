@@ -2,6 +2,32 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { API_BASE_URL } from '../../../core/config/api.config';
+import type {
+  AgentEvalCatalog,
+  EvalRunStartResult,
+  EvalRunView,
+} from '../models/eval.model';
+
+// The eval models moved to `../models/eval.model` (matching the other
+// features' `models/` folders); they are re-exported here so existing import
+// paths keep working.
+export type {
+  AgentEvalCase,
+  AgentEvalCaseResult,
+  AgentEvalCatalog,
+  AgentEvalCheck,
+  AgentEvalSet,
+  CategoryRate,
+  CategoryTally,
+  EvalCaseDelta,
+  EvalCheckResult,
+  EvalCostState,
+  EvalRegressionSummary,
+  EvalRunStartResult,
+  EvalRunView,
+  EvalToolCall,
+  TokenUsage,
+} from '../models/eval.model';
 
 export interface Agent {
   /** Registry key the agent is registered under in the harness. */
@@ -34,81 +60,6 @@ export interface AgentDetail extends Agent {
   model: { id: string; provider: string } | null;
 }
 
-export interface AgentEvalCheck {
-  id: string;
-  name: string;
-  description: string;
-}
-
-export interface AgentEvalCase {
-  id: string;
-  question: string;
-  /** What the question probes for. */
-  intent: string;
-  checks: AgentEvalCheck[];
-}
-
-/** A named group of eval questions sharing one fixture. */
-export interface AgentEvalSet {
-  id: string;
-  name: string;
-  /** What the set covers and what it needs to run. */
-  description: string;
-  cases: AgentEvalCase[];
-}
-
-export interface EvalToolCall {
-  name: string;
-  input?: string;
-  output?: string;
-  error?: string;
-}
-
-export interface EvalCheckResult {
-  id: string;
-  description: string;
-  score: number;
-  passed: boolean;
-  /** Why the check failed, when the scorer reports it. */
-  reason?: string;
-}
-
-export interface AgentEvalCaseResult {
-  id: string;
-  question: string;
-  /** Score per scorer id, 0..1. */
-  scores: Record<string, number>;
-  checkResults: EvalCheckResult[];
-  /** The agent's final answer. */
-  answer: string;
-  /** The tool calls the agent made, in order. */
-  toolCalls: EvalToolCall[];
-  passed: boolean;
-  error?: string;
-  durationMs: number;
-}
-
-export interface EvalRunView {
-  jobId: string;
-  agentKey: string;
-  datasourceId: string;
-  datasets: string[];
-  caseIds: string[];
-  status: 'running' | 'completed' | 'failed';
-  results: AgentEvalCaseResult[];
-  totalCases: number;
-  currentQuestion?: string;
-  error?: string;
-  startedAt: string;
-  finishedAt?: string;
-}
-
-export interface EvalRunStartResult {
-  ok: boolean;
-  message: string;
-  jobId?: string;
-}
-
 @Injectable({ providedIn: 'root' })
 export class AgentsApiService {
   private readonly http = inject(HttpClient);
@@ -123,8 +74,9 @@ export class AgentsApiService {
     );
   }
 
-  getAgentEvals(key: string): Observable<{ sets: AgentEvalSet[] }> {
-    return this.http.get<{ sets: AgentEvalSet[] }>(
+  /** The agent's eval catalog: every question set with its questions. */
+  getAgentEvals(key: string): Observable<AgentEvalCatalog> {
+    return this.http.get<AgentEvalCatalog>(
       `${API_BASE_URL}/agents/${encodeURIComponent(key)}/evals`,
     );
   }
@@ -133,10 +85,11 @@ export class AgentsApiService {
     key: string,
     datasourceId: string,
     caseIds: string[],
+    suiteId?: string,
   ): Observable<EvalRunStartResult> {
     return this.http.post<EvalRunStartResult>(
       `${API_BASE_URL}/agents/${encodeURIComponent(key)}/evals/run`,
-      { datasourceId, caseIds },
+      suiteId ? { datasourceId, caseIds, suiteId } : { datasourceId, caseIds },
     );
   }
 

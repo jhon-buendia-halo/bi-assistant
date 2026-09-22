@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "runId": "aa918be2-7d0b-4ed9-8419-78d6d8240400",
+  "harness": "in-app",
+  "suite": "genomics",
+  "agentKey": "assistant",
+  "datasets": [
+    "Genomics"
+  ],
+  "model": "openai/gpt-4o-mini",
+  "startedAt": "2026-09-22T19:41:32.115Z",
+  "finishedAt": "2026-09-22T19:41:48.206Z",
+  "durationMs": 16091,
+  "totals": {
+    "cases": 1,
+    "passed": 0,
+    "failed": 1,
+    "errored": 0,
+    "skipped": 0
+  },
+  "categories": {
+    "constant-column": {
+      "total": 1,
+      "passed": 0
+    }
+  },
+  "usage": {
+    "inputTokens": 11051,
+    "outputTokens": 371,
+    "totalTokens": 11422,
+    "reasoningTokens": 0,
+    "cachedInputTokens": 0,
+    "calls": 2
+  },
+  "costIncomplete": true,
+  "cases": [
+    {
+      "id": "variants-by-assembly",
+      "category": "constant-column",
+      "verdict": "FAIL",
+      "reason": "result-set-match",
+      "durationMs": 16087,
+      "usage": {
+        "inputTokens": 11051,
+        "outputTokens": 371,
+        "totalTokens": 11422,
+        "reasoningTokens": 0,
+        "cachedInputTokens": 0,
+        "calls": 2
+      }
+    }
+  ]
+}

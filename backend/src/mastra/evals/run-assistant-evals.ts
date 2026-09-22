@@ -17,6 +17,8 @@ async function main(): Promise<void> {
     .split(',')
     .map((name) => name.trim())
     .filter(Boolean);
+  // Which suite to run; the shipped World Cup one when unset.
+  const suiteId = (process.env['EVAL_SUITE'] ?? '').trim() || undefined;
 
   if (datasets.length === 0) {
     console.error(
@@ -54,6 +56,7 @@ async function main(): Promise<void> {
       undefined,
       sessions,
       knowledgeBlock,
+      suiteId,
     );
     const passed = results.filter((result) => result.passed).length;
     console.log(`\n${passed}/${results.length} questions passed`);

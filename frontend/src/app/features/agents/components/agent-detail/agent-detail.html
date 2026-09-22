@@ -255,9 +255,18 @@
                           >{{ passedIn(run) }}/{{ run.totalCases }} passed</span
                         >
                         <span class="truncate text-[12px] text-zinc-500">
-                          {{ startedLabel(run) }} ·
+                          {{ startedLabel(run) }} · {{ runSuiteLabel(run) }} ·
                           {{ datasourceName(run.datasourceId) }} ·
                           {{ runDuration(run) }}
+                        </span>
+                        <span
+                          [attr.data-testid]="'eval-run-tokens-' + run.jobId"
+                          class="ml-auto flex shrink-0 items-center gap-1.5 font-mono text-[11px]"
+                          [class.text-zinc-400]="runHasUsage(run)"
+                          [class.text-zinc-600]="!runHasUsage(run)"
+                        >
+                          <lucide-angular [img]="Coins" [size]="11" />
+                          <span>{{ runTokensLabel(run) }}</span>
                         </span>
                       </button>
                       <button
@@ -295,9 +304,232 @@
 
                     @if (expandedRunId() === run.jobId) {
                       <p class="mt-2 text-[12px] text-zinc-500">
-                        Scoped to {{ run.datasets.join(", ") }}
+                        {{ runSuiteLabel(run) }} · scoped to
+                        {{ run.datasets.join(", ") }}
                       </p>
-                      <div class="mt-2 flex flex-col gap-1">
+
+                      <!-- What moved since the previous run -->
+                      @if (run.comparison; as comparison) {
+                        <div
+                          [attr.data-testid]="
+                            'eval-run-comparison-' + run.jobId
+                          "
+                          class="mt-3 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2.5"
+                        >
+                          <p
+                            class="flex items-center gap-1.5 text-[11px] tracking-wider text-zinc-500 uppercase"
+                          >
+                            <lucide-angular [img]="GitCompare" [size]="11" />
+                            <span>Compared to the previous run</span>
+                          </p>
+                          @if (comparisonUnmoved(run)) {
+                            <p class="mt-2 text-[12px] text-zinc-400">
+                              No change from the previous run
+                              <span class="text-zinc-600"
+                                >· {{ comparison.unchanged.length }} questions
+                                held their verdict</span
+                              >
+                            </p>
+                          } @else {
+                            <div class="mt-2 flex flex-col gap-2">
+                              @if (comparison.regressions.length > 0) {
+                                <div
+                                  class="rounded-md border border-red-400/20 bg-red-500/10 px-3 py-2"
+                                >
+                                  <p
+                                    class="flex items-center gap-1.5 text-[12px] font-medium text-red-400"
+                                  >
+                                    <lucide-angular
+                                      [img]="TrendingDown"
+                                      [size]="12"
+                                    />
+                                    <span
+                                      >Regressions ({{
+                                        comparison.regressions.length
+                                      }})</span
+                                    >
+                                  </p>
+                                  <div class="mt-1.5 flex flex-col gap-1">
+                                    @for (
+                                      delta of comparison.regressions;
+                                      track delta.id
+                                    ) {
+                                      <p class="flex items-start gap-2">
+                                        <span
+                                          class="shrink-0 font-mono text-[11px] text-red-400/70"
+                                          >{{ delta.id }}</span
+                                        >
+                                        <span class="text-[12px] text-zinc-300"
+                                          >— {{ delta.question }}</span
+                                        >
+                                      </p>
+                                    }
+                                  </div>
+                                </div>
+                              }
+                              @if (comparison.improvements.length > 0) {
+                                <div
+                                  class="rounded-md border border-emerald-400/20 bg-emerald-500/10 px-3 py-2"
+                                >
+                                  <p
+                                    class="flex items-center gap-1.5 text-[12px] font-medium text-emerald-400"
+                                  >
+                                    <lucide-angular
+                                      [img]="TrendingUp"
+                                      [size]="12"
+                                    />
+                                    <span
+                                      >Improvements ({{
+                                        comparison.improvements.length
+                                      }})</span
+                                    >
+                                  </p>
+                                  <div class="mt-1.5 flex flex-col gap-1">
+                                    @for (
+                                      delta of comparison.improvements;
+                                      track delta.id
+                                    ) {
+                                      <p class="flex items-start gap-2">
+                                        <span
+                                          class="shrink-0 font-mono text-[11px] text-emerald-400/70"
+                                          >{{ delta.id }}</span
+                                        >
+                                        <span class="text-[12px] text-zinc-300"
+                                          >— {{ delta.question }}</span
+                                        >
+                                      </p>
+                                    }
+                                  </div>
+                                </div>
+                              }
+                            </div>
+                          }
+                        </div>
+                      }
+
+                      <!-- Where the failures cluster, worst first -->
+                      @if (runCategoryRates(run); as rates) {
+                        @if (rates.length > 0) {
+                          <div
+                            class="mt-3 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2.5"
+                          >
+                            <p
+                              class="text-[11px] tracking-wider text-zinc-500 uppercase"
+                            >
+                              Pass rate by category
+                            </p>
+                            <div class="mt-1.5 flex flex-col">
+                              @for (rate of rates; track rate.category) {
+                                <div
+                                  [attr.data-testid]="
+                                    'eval-run-category-' +
+                                    run.jobId +
+                                    '-' +
+                                    rate.category
+                                  "
+                                  class="flex items-center gap-3 border-t border-white/5 py-1.5 first:border-t-0"
+                                >
+                                  <span
+                                    class="min-w-0 flex-1 truncate text-[12px] text-zinc-300"
+                                    >{{ rate.category }}</span
+                                  >
+                                  <span
+                                    class="shrink-0 font-mono text-[11px] text-zinc-500"
+                                    >{{ rate.passed }}/{{ rate.total }}</span
+                                  >
+                                  <span
+                                    class="w-10 shrink-0 text-right font-mono text-[12px]"
+                                    [class]="rateClass(rate.rate)"
+                                    >{{ rateLabel(rate.rate) }}</span
+                                  >
+                                </div>
+                              }
+                            </div>
+                          </div>
+                        }
+                      }
+
+                      <!-- What it spent -->
+                      <div
+                        [attr.data-testid]="'eval-run-usage-' + run.jobId"
+                        class="mt-3 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2.5"
+                      >
+                        <p
+                          class="flex items-center gap-1.5 text-[11px] tracking-wider text-zinc-500 uppercase"
+                        >
+                          <lucide-angular [img]="Coins" [size]="11" />
+                          <span>Tokens and cost</span>
+                        </p>
+                        <dl
+                          class="mt-2 grid grid-cols-[auto_1fr] gap-x-6 gap-y-1"
+                        >
+                          <dt class="text-[12px] text-zinc-500">Model</dt>
+                          <dd class="font-mono text-[12px] text-zinc-300">
+                            {{ run.model || "unknown" }}
+                          </dd>
+                          @if (runHasUsage(run) && run.usage; as usage) {
+                            <dt class="text-[12px] text-zinc-500">Input</dt>
+                            <dd class="font-mono text-[12px] text-zinc-300">
+                              {{ tokenCount(usage.inputTokens) }}
+                            </dd>
+                            <dt class="text-[12px] text-zinc-500">Output</dt>
+                            <dd class="font-mono text-[12px] text-zinc-300">
+                              {{ tokenCount(usage.outputTokens) }}
+                            </dd>
+                            <dt class="text-[12px] text-zinc-500">Total</dt>
+                            <dd class="font-mono text-[12px] text-zinc-200">
+                              {{ tokenCount(usage.totalTokens) }}
+                            </dd>
+                            <dt class="text-[12px] text-zinc-500">
+                              Model calls
+                            </dt>
+                            <dd class="font-mono text-[12px] text-zinc-300">
+                              {{ usage.calls }}
+                            </dd>
+                            @if (usage.cachedInputTokens > 0) {
+                              <dt class="text-[12px] text-zinc-500">
+                                Cached input
+                              </dt>
+                              <dd class="font-mono text-[12px] text-zinc-300">
+                                {{ tokenCount(usage.cachedInputTokens) }}
+                              </dd>
+                            }
+                            @if (usage.reasoningTokens > 0) {
+                              <dt class="text-[12px] text-zinc-500">
+                                Reasoning
+                              </dt>
+                              <dd class="font-mono text-[12px] text-zinc-300">
+                                {{ tokenCount(usage.reasoningTokens) }}
+                              </dd>
+                            }
+                          } @else {
+                            <dt class="text-[12px] text-zinc-500">Tokens</dt>
+                            <dd class="text-[12px] text-zinc-500">
+                              not measured
+                            </dd>
+                          }
+                          @if (runCost(run); as cost) {
+                            <dt class="text-[12px] text-zinc-500">
+                              Estimated cost
+                            </dt>
+                            <dd
+                              class="text-[12px]"
+                              [class.font-mono]="cost.kind === 'priced'"
+                              [class.text-zinc-200]="cost.kind === 'priced'"
+                              [class.text-amber-400]="
+                                cost.kind === 'not-priced'
+                              "
+                              [class.text-zinc-500]="
+                                cost.kind === 'not-measured'
+                              "
+                            >
+                              {{ cost.label }}
+                            </dd>
+                          }
+                        </dl>
+                      </div>
+
+                      <div class="mt-3 flex flex-col gap-1">
                         @for (result of run.results; track result.id) {
                           <button
                             type="button"
@@ -446,11 +678,11 @@
               }
             </div>
 
-            @if (runDatasets().length > 0) {
+            @if (scopeDatasets().length > 0) {
               <p class="mt-2 text-[12px] text-zinc-500">
                 Scoped to
                 <span class="text-zinc-400">{{
-                  runDatasets().join(", ")
+                  scopeDatasets().join(", ")
                 }}</span>
               </p>
             }
@@ -461,23 +693,56 @@
                 {{ err }}
               </p>
             }
-            <label
-              class="mt-5 flex w-fit cursor-pointer items-center gap-2 text-[12px] text-zinc-400"
-            >
-              <input
-                type="checkbox"
-                data-testid="eval-select-all"
-                [checked]="allCasesSelected()"
-                (change)="toggleAllCases()"
-                [disabled]="running() || runStarting()"
-                class="h-3.5 w-3.5 accent-zinc-300"
-              />
-              <span>Select all</span>
-            </label>
+            <div class="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2">
+              <label
+                class="flex w-fit cursor-pointer items-center gap-2 text-[12px] text-zinc-400"
+              >
+                <input
+                  type="checkbox"
+                  data-testid="eval-select-all"
+                  [checked]="allCasesSelected()"
+                  (change)="toggleAllCases()"
+                  [disabled]="running() || runStarting()"
+                  class="h-3.5 w-3.5 accent-zinc-300"
+                />
+                <span>Select all{{ categoryFilter() ? " shown" : "" }}</span>
+              </label>
+              @if (evalCategories().length > 0) {
+                <select
+                  data-testid="eval-category-filter"
+                  aria-label="Filter questions by category"
+                  [value]="categoryFilter()"
+                  (change)="onCategoryFilterChange($event)"
+                  class="rounded-lg border border-white/15 bg-[#232323] px-2.5 py-1.5 text-[12px] text-zinc-200"
+                >
+                  <option value="">
+                    All categories ({{ evalCases().length }})
+                  </option>
+                  @for (entry of evalCategories(); track entry.category) {
+                    <option [value]="entry.category">
+                      {{ entry.category }} ({{ entry.count }})
+                    </option>
+                  }
+                </select>
+              }
+              <span class="text-[12px] text-zinc-500">
+                {{ selectedCaseIds().size }} of
+                {{ evalCases().length }} selected
+                @if (categoryFilter()) {
+                  · showing {{ visibleCases().length }}
+                }
+              </span>
+            </div>
+
+            @if (visibleCases().length === 0) {
+              <p class="mt-3 text-[13px] text-zinc-500">
+                No questions in this category.
+              </p>
+            }
 
             <div class="mt-2 flex flex-col gap-2">
               @for (
-                evalCase of evalCases();
+                evalCase of visibleCases();
                 track evalCase.id;
                 let i = $index
               ) {
@@ -510,10 +775,20 @@
                         >{{ i + 1 }}</span
                       >
                       <div class="flex min-w-0 flex-col gap-1.5">
-                        <span class="flex items-center gap-2">
+                        <span class="flex flex-wrap items-center gap-2">
                           <span class="text-[13px] text-zinc-200">{{
                             evalCase.question
                           }}</span>
+                          @if (evalCase.category) {
+                            <span
+                              [attr.data-testid]="
+                                'eval-case-category-' + evalCase.id
+                              "
+                              title="Failure class this question probes"
+                              class="rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-zinc-400"
+                              >{{ evalCase.category }}</span
+                            >
+                          }
                           @if (resultFor(evalCase.id); as result) {
                             @if (result.passed) {
                               <span

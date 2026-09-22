@@ -38,12 +38,14 @@ export class AgentsController {
   @Post(':key/evals/run')
   async runEvals(
     @Param('key') key: string,
-    @Body() body: { datasourceId?: string; caseIds?: string[] },
+    @Body()
+    body: { datasourceId?: string; caseIds?: string[]; suiteId?: string },
   ): Promise<{ ok: boolean; message: string; jobId?: string }> {
     const result = await this.evalRuns.start(
       key,
       body?.datasourceId ?? '',
       Array.isArray(body?.caseIds) ? body.caseIds.map(String) : undefined,
+      body?.suiteId ? String(body.suiteId) : undefined,
     );
     if ('error' in result) return { ok: false, message: result.error };
     if ('conflictWith' in result) {
@@ -103,7 +105,12 @@ export class AgentsController {
       : { ok: false, message: 'Cannot delete a run that is still going' };
   }
 
-  // Declared before ':key' so the more specific path wins.
+  /**
+   * The agent's eval catalog: every question set (one per suite file) with
+   * its questions.
+   *
+   * Declared before ':key' so the more specific path wins.
+   */
   @Get(':key/evals')
   evals(@Param('key') key: string): { sets: AgentEvalSet[] } {
     return { sets: this.agents.evalSets(key) };

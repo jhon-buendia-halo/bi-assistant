@@ -1,0 +1,503 @@
+{
+  "id": "health-insurance",
+  "name": "Health Insurance",
+  "description": "These evals require the bundled synthetic health-insurance fixture (schema health_insurance). Select its PostgreSQL datasource and save a dataset named Health Insurance containing the health_insurance tables and views. Setup: docker/postgres/README.md.",
+  "datasets": ["Health Insurance"],
+  "requiredEntities": [
+    "health_insurance.countries",
+    "health_insurance.states",
+    "health_insurance.regions",
+    "health_insurance.plans",
+    "health_insurance.members",
+    "health_insurance.providers",
+    "health_insurance.claims",
+    "health_insurance.claim_lines",
+    "health_insurance.denial_reasons",
+    "health_insurance.claim_denials",
+    "health_insurance.v_claim_financials",
+    "health_insurance.v_member_claim_totals"
+  ],
+  "cases": [
+    {
+      "id": "paid-share-by-specialty",
+      "category": "ratio-trap",
+      "question": "Which specialties are we paying the highest share of what they bill?",
+      "intent": "Divide paid by billed — two genuinely different money columns — instead of dividing one amount column by itself.",
+      "notes": "billed_amount_cents, allowed_amount_cents and paid_amount_cents all read like \"the amount\", so billed/billed or allowed/allowed is one keystroke away and returns 1.0000 for every specialty, turning the ranking into alphabetical noise. Paid over billed across the 1164 non-test claims — the reference obeys the dataset's default filter and drops is_test claims — gives Family Medicine 0.4847, Dermatology 0.4309, Oncology 0.3843, Cardiology 0.3216, Behavioral Health 0.2840, Radiology 0.2442, Orthopedics 0.1895, Emergency Medicine 0.1409 — the smallest gap between adjacent specialties is 0.038, so the ordering is not a rounding artefact. Guards against the degenerate-ratio regression where the engine picks two names for the same column.",
+      "checks": [
+        {
+          "type": "includes",
+          "value": "Family Medicine"
+        },
+        {
+          "type": "matches",
+          "pattern": "0\\.48[45]|48\\.[45]"
+        },
+        {
+          "type": "calledTool",
+          "tool": "run_readonly_sql"
+        },
+        {
+          "type": "noToolErrors"
+        }
+      ],
+      "expectedSql": "SELECT provider.specialty, ROUND(SUM(claim.paid_amount_cents)::numeric / SUM(claim.billed_amount_cents), 4) AS paid_share_of_billed FROM health_insurance.claims claim JOIN health_insurance.providers provider ON provider.id = claim.provider_id WHERE claim.is_test = false GROUP BY provider.specialty ORDER BY paid_share_of_billed DESC, provider.specialty"
+    },
+    {
+      "id": "plan-share-of-allowed-by-tier",
+      "category": "ratio-trap",
+      "question": "On the claims we paid, what share of the allowed amount did the plan cover rather than the member, by plan tier?",
+      "intent": "The second ratio pair: paid over ALLOWED, not paid over billed and not allowed over allowed.",
+      "notes": "On the 785 non-test PAID claims allowed = paid + member_responsibility, so paid/allowed is the plan's share and it tracks the tier's coinsurance: PLATINUM 0.8664, GOLD 0.8500, SILVER 0.8039, BRONZE 0.7392 — the reference obeys the dataset's default filter and drops is_test claims. Two wrong denominators are equally available: allowed/allowed gives a flat 1.0000, and billed instead of allowed gives GOLD 0.4317, BRONZE 0.3826, SILVER 0.3715, PLATINUM 0.3646 — which inverts the ranking and would report BRONZE members as better covered than PLATINUM ones. Guards against an answer that is plausible, ordered and wrong because the denominator came from the wrong column.",
+      "checks": [
+        {
+          "type": "includes",
+          "value": "PLATINUM"
+        },
+        {
+          "type": "matches",
+          "pattern": "0\\.86[56]|86\\.[56]"
+        },
+        {
+          "type": "calledTool",
+          "tool": "run_readonly_sql"
+        },
+        {
+          "type": "noToolErrors"
+        }
+      ],
+      "expectedSql": "SELECT plan.tier, ROUND(SUM(claim.paid_amount_cents)::numeric / SUM(claim.allowed_amount_cents), 4) AS plan_share_of_allowed FROM health_insurance.claims claim JOIN health_insurance.plans plan ON plan.id = claim.plan_id WHERE claim.status = 'PAID' AND claim.is_test = false GROUP BY plan.tier ORDER BY plan_share_of_allowed DESC, plan.tier"
+    },
+    {
+      "id": "claims-by-currency",
+      "category": "constant-column",
+      "question": "How do our claims break down by currency?",
+      "intent": "Group by a column that holds exactly one value — the answer has to say so instead of presenting 100% as a finding.",
+      "notes": "currency is 'USD' on all 1200 claims and a CHECK constraint allows nothing else; the reference obeys the dataset's default filter, so its single row covers the 1164 non-test claims. The breakdown is one row either way, and the useful answer states that every claim is in a single currency rather than dressing a constant up as a distribution or implying an FX comparison the data cannot support. Guards against reporting a one-row group-by as if it were a comparison.",
+      "checks": [
+        {
+          "type": "includes",
+          "value": "USD"
+        },
+        {
+          "type": "calledTool",
+          "tool": "run_readonly_sql"
+        },
+        {
+          "type": "noToolErrors"
+        }
+      ],
+      "expectedSql": "SELECT claim.currency, COUNT(*) AS claims FROM health_insurance.claims claim WHERE claim.is_test = false GROUP BY claim.currency ORDER BY claim.currency",
+      "judgeRubric": "The fixture stores only one currency: every claim is USD, 1164 of them once the dataset's default filter excludes test claims. Score pass=true only if the final answer states that every claim is in a single currency (USD) and therefore that there is no breakdown to compare — reporting the count (1164, or 1200 if test claims were kept) or \"100%\" is fine as long as the answer says the column is constant. Score pass=false if it presents the single value as a meaningful distribution, invents a second currency (e.g. CAD, even though some members are Canadian), or implies a currency comparison the data cannot support."
+    },
+    {
+      "id": "claims-with-preauth",
+      "category": "empty-column",
+      "question": "How many claims had a prior authorization on file?",
+      "intent": "Count the populated rows of a mostly-null column instead of grouping by it.",
+      "notes": "preauth_code is non-null on only 57 of the 1164 non-test claims the dataset's default filter keeps (95.10% null) and every populated value is distinct (format PA-<year>-<6 digits>), so grouping by preauth_code returns 58 near-useless groups with 1107 claims hidden under a blank key. The answer must be the count of claims that HAVE an authorization. Guards against the engine presenting the null group as a finding, or reading the blank key as \"no authorization required\".",
+      "checks": [
+        {
+          "type": "includes",
+          "value": "57"
+        },
+        {
+          "type": "calledTool",
+          "tool": "run_readonly_sql"
+        },
+        {
+          "type": "noToolErrors"
+        }
+      ],
+      "expectedSql": "SELECT COUNT(*) AS claims_with_preauth FROM health_insurance.claims claim WHERE claim.preauth_code IS NOT NULL AND claim.is_test = false"
+    },
+    {
+      "id": "specialties-with-48-claims",
+      "category": "ties",
+      "question": "Which specialties submitted exactly 48 claims?",
+      "intent": "A HAVING-style question whose answer is a tie, so no arbitrary tie-break can hide.",
+      "notes": "Oncology and Emergency Medicine each submitted exactly 48 claims; the next smallest specialty is Radiology at 133, so the tie is isolated and it holds whether or not test claims are excluded (both are 48 either way) — the reference still obeys the dataset's default filter rather than modelling the looser form. A \"which specialty submitted the fewest claims\" phrasing would let a LIMIT 1 silently drop one of the tied specialties, so the question asks for the tie explicitly and both names must appear. Guards against answers that report one arbitrary winner from a tied group.",
+      "checks": [
+        {
+          "type": "includes",
+          "value": "Oncology"
+        },
+        {
+          "type": "matches",
+          "pattern": "\\bEmergency Medicine\\b"
+        },
+        {
+          "type": "calledTool",
+          "tool": "run_readonly_sql"
+        },
+        {
+          "type": "noToolErrors"
+        }
+      ],
+      "expectedSql": "SELECT provider.specialty, COUNT(*) AS claims FROM health_insurance.claims claim JOIN health_insurance.providers provider ON provider.id = claim.provider_id WHERE claim.is_test = false GROUP BY provider.specialty HAVING COUNT(*) = 48 ORDER BY provider.specialty"
+    },
+    {
+      "id": "approved-claims-2024",
+      "category": "value-vocabulary",
+      "question": "How many claims were approved in 2024?",
+      "intent": "Map an adjudicator's word onto the enum the status column actually stores.",
+      "notes": "There is no 'APPROVED' status. Across the 1164 non-test claims the dataset's default filter keeps, status is PAID (785), DENIED (206), PENDING (125) or REVERSED (48); in 2024 alone it is PAID 395, DENIED 104, PENDING 70, REVERSED 23. Filtering on the literal word returns 0 rows, and counting every 2024 claim returns 592. The reference obeys the default filter and counts claims whose final status is PAID (395) — REVERSED claims were approved and then unwound, which the answer may mention but must not silently fold in. Guards against both the empty-filter failure and a status vocabulary invented from the question's wording.",
+      "checks": [
+        {
+          "type": "includes",
+          "value": "395"
+        },
+        {
+          "type": "matches",
+          "pattern": "PAID"
+        },
+        {
+          "type": "calledTool",
+          "tool": "run_readonly_sql"
+        },
+        {
+          "type": "noToolErrors"
+        }
+      ],
+      "expectedSql": "SELECT COUNT(*) AS approved_claims FROM health_insurance.claims claim WHERE claim.status = 'PAID' AND claim.is_test = false AND claim.service_date >= DATE '2024-01-01' AND claim.service_date < DATE '2025-01-01'"
+    },
+    {
+      "id": "payouts-2019",
+      "category": "out-of-scope",
+      "question": "What did we pay out in claims in 2019?",
+      "intent": "The fixture covers 2024 and 2025 only — the agent must say so instead of returning a confident zero or inventing a figure.",
+      "notes": "service_date runs 2024-01-01 to 2025-12-31 (619 claims in 2024, 581 in 2025; 592 and 572 once the dataset's default filter drops test claims) and a CHECK constraint forbids anything else, so a 2019 query returns an empty aggregate, not a small one. A bare '$0.00' is technically true, reads like a finding and is the failure this case exists to catch; the honest answer names the covered window. Member dates of birth (1948-2005) are the only earlier dates in the schema and must not be mistaken for claim history. Guards against silently answering outside the fixture's coverage.",
+      "checks": [
+        {
+          "type": "noToolErrors"
+        }
+      ],
+      "judgeRubric": "The question asks about 2019, a year this dataset does not cover: every claim has a service date in calendar 2024 or 2025. Score pass=true only if the final answer makes clear there is no 2019 claim data AND explicitly states the period the data DOES cover (2024 and/or 2025), without inventing any 2019 payout, claim count or trend. Score pass=false if it reports a 2019 figure as if it were a real measurement, presents a bare '0' or '$0' with no statement of what the data covers, or fabricates any claim about 2019 activity."
+    },
+    {
+      "id": "most-expensive-member",
+      "category": "clarification",
+      "question": "Who is our most expensive member?",
+      "intent": "\"Expensive\" is undefined on this schema — billed, paid and member responsibility name three different members, so the agent must ask.",
+      "notes": "Three defensible answers sit in the data: Naomi Sedgewick bills the most (13,426,400 cents), Graham Thistlewood costs the plan the most in payments (3,375,050) and Camille Fontaine carries the most member responsibility (924,034). Whichever the agent picks unasked looks authoritative and is unfalsifiable to the reader, so the pass condition is that it asks which cost measure is meant. Guards against confident single-metric guesses on an under-specified money question.",
+      "checks": [
+        {
+          "type": "calledTool",
+          "tool": "ask_clarification"
+        },
+        {
+          "type": "didNotCall",
+          "tool": "run_readonly_sql"
+        },
+        {
+          "type": "noToolErrors"
+        }
+      ],
+      "judgeRubric": "The question (\"Who is our most expensive member?\") is ambiguous: \"expensive\" could mean the amount billed by providers, the amount the plan allowed, the amount the plan actually paid, or the amount the member owed — and these pick different members in this data. Score pass=true only if the final answer is itself a clarifying question that offers 2-4 concrete, well-formed options grounded in this claims dataset (naming real notions such as billed amount, allowed amount, paid amount, member responsibility or claim count), and that does not name a member or state any figure as if it were the answer. Score pass=false if it picks a member, invents a cost measure the data does not hold (e.g. premiums paid by the plan), or asks a vague open-ended question with no concrete options."
+    },
+    {
+      "id": "member-with-most-claims",
+      "category": "id-vs-name",
+      "question": "Which member filed the most claims, and how many?",
+      "intent": "claims carries member_id only — the answer has to join through to full_name instead of handing back a surrogate key.",
+      "notes": "The path is claims.member_id -> members.full_name. Naomi Sedgewick filed 42 claims, ahead of Graham Thistlewood on 38, so the maximum is unique and LIMIT 1 with a name tie-break is deterministic; the reference obeys the dataset's default filter, which happens to move neither figure because neither member has a test claim. Grouping on member_id alone answers the question numerically (\"member 7\") and is useless to a claims analyst, and member_number (M-1000NN) is only marginally better. Guards against answers that hand the reader opaque keys instead of member names.",
+      "checks": [
+        {
+          "type": "includes",
+          "value": "Naomi Sedgewick"
+        },
+        {
+          "type": "matches",
+          "pattern": "\\b42\\b"
+        },
+        {
+          "type": "calledTool",
+          "tool": "run_readonly_sql"
+        },
+        {
+          "type": "noToolErrors"
+        }
+      ],
+      "expectedSql": "SELECT member.full_name AS member, COUNT(*) AS claims FROM health_insurance.claims claim JOIN health_insurance.members member ON member.id = claim.member_id WHERE claim.is_test = false GROUP BY member.full_name ORDER BY claims DESC, member.full_name LIMIT 1"
+    },
+    {
+      "id": "net-paid-by-region-2024",
+      "category": "metric-definition",
+      "question": "What was our net paid by region in 2024?",
+      "intent": "Net paid is a defined metric — gross payments minus reversals — not a plain SUM of paid_amount_cents.",
+      "notes": "The 48 non-test REVERSED claims carry a POSITIVE paid_amount_cents (5,339 to 1,201,981 cents), so summing the column adds money back that was clawed out. Net paid by region in 2024, with the dataset's default filter excluding test claims, is Gulf Coast Texas 6,318,595, Southern California 5,998,841, North Texas 4,087,904, Hudson Valley 3,560,707, Ohio Valley 3,162,873, Northern California 3,133,870, Lower Mainland 1,897,657, Greater Toronto 966,560 cents; the gross figure differs in all eight regions and re-orders them (gross puts Hudson Valley 3rd at 6,374,595 and Ohio Valley 4th, net drops them to 4th and 5th). Region comes from the MEMBER's region_id, not the provider's. Guards against the named metric quietly degrading into SUM(paid_amount_cents).",
+      "checks": [
+        {
+          "type": "includes",
+          "value": "Gulf Coast Texas"
+        },
+        {
+          "type": "matches",
+          "pattern": "6[,.]?318[,.]?595|63[,.]?185"
+        },
+        {
+          "type": "calledTool",
+          "tool": "run_readonly_sql"
+        },
+        {
+          "type": "noToolErrors"
+        }
+      ],
+      "expectedSql": "SELECT region.name AS region, SUM(CASE WHEN claim.status = 'REVERSED' THEN -claim.paid_amount_cents ELSE claim.paid_amount_cents END) AS net_paid_cents FROM health_insurance.claims claim JOIN health_insurance.members member ON member.id = claim.member_id JOIN health_insurance.regions region ON region.id = member.region_id WHERE claim.is_test = false AND claim.service_date >= DATE '2024-01-01' AND claim.service_date < DATE '2025-01-01' GROUP BY region.name ORDER BY net_paid_cents DESC, region.name"
+    },
+    {
+      "id": "net-paid-after-reversals-2024",
+      "category": "domain-semantics",
+      "question": "How much did we actually pay out in 2024 once reversals are taken off?",
+      "intent": "A reversed claim is money returned, not money spent — the sign of paid_amount_cents on REVERSED rows is the whole question.",
+      "notes": "The second half of the net-paid trap, stated as a single number so the sign error cannot hide inside a breakdown. In 2024, with the dataset's default filter excluding test claims, gross paid is 35,581,467 cents and the 23 reversed claims carry 3,227,230 cents of it, so net paid is 29,127,007 cents ($291,270.07): summing the column outright overstates the year by 6,454,460 cents, twice the reversed amount, because those payments are both added and never subtracted. Guards against an answer that treats REVERSED as merely another status to group by rather than as a negative payment.",
+      "checks": [
+        {
+          "type": "matches",
+          "pattern": "29[,.]?127[,.]?007|291[,.]?270"
+        },
+        {
+          "type": "matches",
+          "pattern": "revers",
+          "flags": "i"
+        },
+        {
+          "type": "calledTool",
+          "tool": "run_readonly_sql"
+        },
+        {
+          "type": "noToolErrors"
+        }
+      ],
+      "expectedSql": "SELECT SUM(CASE WHEN claim.status = 'REVERSED' THEN -claim.paid_amount_cents ELSE claim.paid_amount_cents END) AS net_paid_cents FROM health_insurance.claims claim WHERE claim.is_test = false AND claim.service_date >= DATE '2024-01-01' AND claim.service_date < DATE '2025-01-01'"
+    },
+    {
+      "id": "claims-march-2024",
+      "category": "default-filter",
+      "question": "How many claims do we have for March 2024 dates of service?",
+      "intent": "Synthetic test traffic is flagged and must come out of a reported volume without being asked for.",
+      "notes": "36 of the 1200 claims are is_test = true (3.00%), and the Health Insurance dataset carries a default-filter knowledge entry saying to exclude them from claims aggregates. March 2024 has 49 claims by service date and 35 once test traffic is dropped, so the two answers are far enough apart to be visible in a monthly volume report. Every claims reference in this suite obeys that entry; this is the case that makes it the question, so its wording must never pre-announce the filter — the agent has to apply it unprompted. Guards against test claims leaking into reported volumes.",
+      "checks": [
+        {
+          "type": "includes",
+          "value": "35"
+        },
+        {
+          "type": "matches",
+          "pattern": "test|synthetic",
+          "flags": "i"
+        },
+        {
+          "type": "calledTool",
+          "tool": "run_readonly_sql"
+        },
+        {
+          "type": "noToolErrors"
+        }
+      ],
+      "expectedSql": "SELECT COUNT(*) AS claims FROM health_insurance.claims claim WHERE claim.is_test = false AND claim.service_date >= DATE '2024-03-01' AND claim.service_date < DATE '2024-04-01'"
+    },
+    {
+      "id": "paid-by-country",
+      "category": "multi-step-join",
+      "question": "What have we paid out in each country?",
+      "intent": "Claims carry no country — the answer needs the member -> region -> state -> country hierarchy.",
+      "notes": "The path is claims.member_id -> members.region_id -> regions.state_id -> states.country_code -> countries.name. Stopping one join short reports 8 regions or 6 states at the wrong grain; the correct answer is 2 rows, United States 58,862,147 cents over 1044 claims and Canada 6,510,043 over 120, the reference obeying the dataset's default filter and dropping test claims. The provider's location is not modelled at all, so country can only mean the member's. Guards against answers that stop short of the requested grain and against inventing a country column on claims.",
+      "checks": [
+        {
+          "type": "includes",
+          "value": "Canada"
+        },
+        {
+          "type": "matches",
+          "pattern": "58[,.]?862[,.]?147|588[,.]?621"
+        },
+        {
+          "type": "calledTool",
+          "tool": "run_readonly_sql"
+        },
+        {
+          "type": "noToolErrors"
+        }
+      ],
+      "expectedSql": "SELECT country.name AS country, SUM(claim.paid_amount_cents) AS paid_cents FROM health_insurance.claims claim JOIN health_insurance.members member ON member.id = claim.member_id JOIN health_insurance.regions region ON region.id = member.region_id JOIN health_insurance.states state ON state.id = region.state_id JOIN health_insurance.countries country ON country.code = state.country_code WHERE claim.is_test = false GROUP BY country.name ORDER BY paid_cents DESC, country.name"
+    },
+    {
+      "id": "denial-data-discovery",
+      "category": "discovery",
+      "question": "What data do we have about denials?",
+      "intent": "Pure discovery — must inspect the session datasets rather than run SQL or invent entities.",
+      "notes": "A schema question answered by querying rows is a wrong process even when the prose happens to be right, so this case scores the tools. The honest answer names denial_reasons (10 reason codes, each with a category: ELIGIBILITY, AUTHORIZATION, CODING, COVERAGE, DUPLICATE, TIMELY_FILING) and claim_denials (246 rows linking a claim to a reason, with denied_on and an appeal_status of NONE/FILED/UPHELD/OVERTURNED). Guards against the engine reaching for run_readonly_sql on questions about what exists.",
+      "checks": [
+        {
+          "type": "calledTool",
+          "tool": "list_entities"
+        },
+        {
+          "type": "matches",
+          "pattern": "claim[ _]denials",
+          "flags": "i"
+        },
+        {
+          "type": "matches",
+          "pattern": "denial[ _]reasons",
+          "flags": "i"
+        },
+        {
+          "type": "didNotCall",
+          "tool": "run_readonly_sql"
+        },
+        {
+          "type": "noToolErrors"
+        }
+      ]
+    },
+    {
+      "id": "avg-paid-per-claim-dollars",
+      "category": "unit-confusion",
+      "question": "What was the average amount we paid per claim, in dollars?",
+      "intent": "Every amount column is integer cents — reporting the raw average as dollars is wrong by 100x.",
+      "notes": "AVG(paid_amount_cents) is 56,161.68, which as \"dollars\" reads as a $56,162 average payment on a book whose largest single claim payment is $12,019.81. Divided by 100 the answer is $561.62 across the 1164 non-test claims, the reference obeying the dataset's default filter. The question says dollars explicitly, so the conversion is not optional; the '_cents' suffix and the dataset's knowledge entry are both available. A defensible variant restricted to the 785 PAID claims gives $773.28 and should say which denominator it used. Guards against 100x unit errors in any money answer.",
+      "checks": [
+        {
+          "type": "includes",
+          "value": "561.62"
+        },
+        {
+          "type": "calledTool",
+          "tool": "run_readonly_sql"
+        },
+        {
+          "type": "noToolErrors"
+        }
+      ],
+      "expectedSql": "SELECT ROUND(AVG(claim.paid_amount_cents) / 100.0, 2) AS avg_paid_dollars FROM health_insurance.claims claim WHERE claim.is_test = false"
+    },
+    {
+      "id": "units-cut-by-procedure",
+      "category": "ratio-trap",
+      "question": "Which procedure codes had the most units cut on review? Show the top five.",
+      "intent": "The second column pair — units_billed against units_allowed on claim lines, not an amount column and not a single units column.",
+      "notes": "units_allowed <= units_billed on every line and 981 of the 2523 non-test lines (over 563 claims) were cut, so the cut is SUM(units_billed - units_allowed) and not a count of lines, a count of claims or anything derived from the amount columns; the reference joins back to claims so the dataset's default filter reaches the lines of test claims at their own grain. The top five are J9299 602, 17110 181, J1885 158, 97110 109 and 97140 91; the sixth is 90853 on 80, so the cut-off is unambiguous. Answers that subtract the wrong pair, or that rank by billed units alone, put the high-volume office codes on top instead. Guards against the units version of the degenerate-ratio failure.",
+      "checks": [
+        {
+          "type": "includes",
+          "value": "J9299"
+        },
+        {
+          "type": "matches",
+          "pattern": "\\b602\\b"
+        },
+        {
+          "type": "calledTool",
+          "tool": "run_readonly_sql"
+        },
+        {
+          "type": "noToolErrors"
+        }
+      ],
+      "expectedSql": "SELECT claim_line.procedure_code, SUM(claim_line.units_billed - claim_line.units_allowed) AS units_cut FROM health_insurance.claim_lines claim_line JOIN health_insurance.claims claim ON claim.id = claim_line.claim_id WHERE claim.is_test = false GROUP BY claim_line.procedure_code ORDER BY units_cut DESC, claim_line.procedure_code LIMIT 5"
+    },
+    {
+      "id": "denial-rate",
+      "category": "quality-filter",
+      "question": "What's our denial rate?",
+      "intent": "A rate is only meaningful over claims that have actually been adjudicated — the 130 pending ones belong in neither the numerator nor the denominator.",
+      "notes": "206 of the 1164 non-test claims are DENIED, but 125 are still PENDING (adjudicated_on is null by CHECK constraint), leaving 1039 adjudicated claims and a denial rate of 19.83%; the reference also obeys the dataset's default filter and drops is_test claims. Dividing by all 1164 gives 17.70%, which understates the rate by silently treating undecided claims as approvals; the gap widens the moment the pending backlog grows. Guards against rates computed over rows the business has not decided yet, and requires the exclusion to be stated rather than applied silently.",
+      "checks": [
+        {
+          "type": "includes",
+          "value": "19.8"
+        },
+        {
+          "type": "matches",
+          "pattern": "pending",
+          "flags": "i"
+        },
+        {
+          "type": "calledTool",
+          "tool": "run_readonly_sql"
+        },
+        {
+          "type": "noToolErrors"
+        }
+      ],
+      "expectedSql": "SELECT ROUND(100.0 * COUNT(*) FILTER (WHERE claim.status = 'DENIED') / COUNT(*), 2) AS denial_rate_pct FROM health_insurance.claims claim WHERE claim.status <> 'PENDING' AND claim.is_test = false"
+    },
+    {
+      "id": "active-members-by-region",
+      "category": "default-filter",
+      "question": "How many active members do we have in each region?",
+      "intent": "\"Active\" is a real filter on this membership file, not a formality — terminated members are still rows.",
+      "notes": "5 of the 60 members have a non-null terminated_on, so 55 are active. Counting the table gives 60 and inflates Northern California from 8 to 9, Hudson Valley from 6 to 8 and Southern California from 6 to 8 — exactly the denominators a per-member cost figure would then be divided by. The expected 8 rows are Gulf Coast Texas 10, North Texas 9, Northern California 8, Ohio Valley 8, Hudson Valley 6, Southern California 6, Greater Toronto 5, Lower Mainland 3. Guards against terminated members being counted as covered lives.",
+      "checks": [
+        {
+          "type": "includes",
+          "value": "Gulf Coast Texas"
+        },
+        {
+          "type": "matches",
+          "pattern": "\\b10\\b"
+        },
+        {
+          "type": "calledTool",
+          "tool": "run_readonly_sql"
+        },
+        {
+          "type": "noToolErrors"
+        }
+      ],
+      "expectedSql": "SELECT region.name AS region, COUNT(*) AS active_members FROM health_insurance.members member JOIN health_insurance.regions region ON region.id = member.region_id WHERE member.terminated_on IS NULL GROUP BY region.name ORDER BY active_members DESC, region.name"
+    },
+    {
+      "id": "members-per-plan-tier",
+      "category": "control",
+      "question": "How many members are enrolled on each plan tier?",
+      "intent": "One join, one GROUP BY, no trap — the healthy baseline for this fixture.",
+      "notes": "BRONZE 22, SILVER 20, GOLD 11, PLATINUM 7, totalling all 60 members. No ratio, no nulls, no cents, no claims table and therefore no default filter to apply: if this fails, the problem is schema linking rather than any planted trap, and no guard may fire on it.",
+      "checks": [
+        {
+          "type": "includes",
+          "value": "BRONZE"
+        },
+        {
+          "type": "matches",
+          "pattern": "\\b22\\b"
+        },
+        {
+          "type": "calledTool",
+          "tool": "run_readonly_sql"
+        },
+        {
+          "type": "noToolErrors"
+        }
+      ],
+      "expectedSql": "SELECT plan.tier, COUNT(*) AS members FROM health_insurance.members member JOIN health_insurance.plans plan ON plan.id = member.plan_id GROUP BY plan.tier ORDER BY members DESC, plan.tier"
+    },
+    {
+      "id": "providers-per-specialty",
+      "category": "control",
+      "question": "How many providers do we have in each specialty?",
+      "intent": "A single-table categorical breakdown with no filter implied by the question.",
+      "notes": "Family Medicine 5, Cardiology 4, then Behavioral Health, Dermatology, Orthopedics and Radiology on 3 each and Emergency Medicine and Oncology on 2 — 25 providers in 8 rows. The counterpart to specialties-with-48-claims and paid-share-by-specialty: this one counts PROVIDERS, not claims, so a fix that reflexively joins to claims or excludes out-of-network providers over-fires here. Guards against guards firing on an ordinary question.",
+      "checks": [
+        {
+          "type": "includes",
+          "value": "Family Medicine"
+        },
+        {
+          "type": "matches",
+          "pattern": "\\b5\\b"
+        },
+        {
+          "type": "calledTool",
+          "tool": "run_readonly_sql"
+        },
+        {
+          "type": "noToolErrors"
+        }
+      ],
+      "expectedSql": "SELECT provider.specialty, COUNT(*) AS providers FROM health_insurance.providers provider GROUP BY provider.specialty ORDER BY providers DESC, provider.specialty"
+    }
+  ]
+}

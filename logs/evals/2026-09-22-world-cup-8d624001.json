@@ -1,0 +1,117 @@
+{
+  "schemaVersion": 1,
+  "runId": "8d624001-106c-4cda-bc8c-232a7d2f054b",
+  "harness": "validate",
+  "suite": "world-cup",
+  "datasets": [
+    "World Cup"
+  ],
+  "startedAt": "2026-09-22T18:36:06.912Z",
+  "finishedAt": "2026-09-22T18:36:07.569Z",
+  "durationMs": 657,
+  "appVersion": "0.10.1",
+  "gitCommit": "5629494",
+  "totals": {
+    "cases": 10,
+    "passed": 6,
+    "failed": 0,
+    "errored": 0,
+    "skipped": 4
+  },
+  "categories": {
+    "control": {
+      "total": 1,
+      "passed": 1
+    },
+    "multi-step-join": {
+      "total": 2,
+      "passed": 2
+    },
+    "metric-definition": {
+      "total": 1,
+      "passed": 1
+    },
+    "domain-semantics": {
+      "total": 1,
+      "passed": 1
+    },
+    "ties": {
+      "total": 1,
+      "passed": 1
+    }
+  },
+  "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "totalTokens": 0,
+    "reasoningTokens": 0,
+    "cachedInputTokens": 0,
+    "calls": 0
+  },
+  "cases": [
+    {
+      "id": "champion-2022",
+      "category": "control",
+      "verdict": "PASS",
+      "durationMs": 10
+    },
+    {
+      "id": "final-score-2018",
+      "category": "multi-step-join",
+      "verdict": "PASS",
+      "durationMs": 6
+    },
+    {
+      "id": "top-scorer-2022",
+      "category": "metric-definition",
+      "verdict": "PASS",
+      "durationMs": 9
+    },
+    {
+      "id": "shootouts",
+      "category": "domain-semantics",
+      "verdict": "PASS",
+      "durationMs": 6
+    },
+    {
+      "id": "biggest-venue",
+      "category": "ties",
+      "verdict": "PASS",
+      "durationMs": 8
+    },
+    {
+      "id": "possession-vs-result",
+      "category": "multi-step-join",
+      "verdict": "PASS",
+      "durationMs": 6
+    },
+    {
+      "id": "schema-discovery",
+      "category": "discovery",
+      "verdict": "SKIP",
+      "reason": "no-expected-sql",
+      "durationMs": 0
+    },
+    {
+      "id": "ambiguous-best-team",
+      "category": "clarification",
+      "verdict": "SKIP",
+      "reason": "no-expected-sql",
+      "durationMs": 0
+    },
+    {
+      "id": "out-of-scope",
+      "category": "out-of-scope",
+      "verdict": "SKIP",
+      "reason": "no-expected-sql",
+      "durationMs": 0
+    },
+    {
+      "id": "visual-request",
+      "category": "control",
+      "verdict": "SKIP",
+      "reason": "no-expected-sql",
+      "durationMs": 0
+    }
+  ]
+}

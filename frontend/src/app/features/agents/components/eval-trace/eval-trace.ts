@@ -4,9 +4,15 @@ import {
   CircleCheck,
   CircleX,
   Clock,
+  Coins,
   Gauge,
   Wrench,
 } from 'lucide-angular';
+import {
+  formatTokenCount,
+  formatTokensCompact,
+  isUsageMeasured,
+} from '../../models/eval.model';
 import { EvalSelectionService } from '../../services/eval-selection.service';
 
 @Component({
@@ -19,6 +25,7 @@ export class EvalTrace {
   readonly CircleCheck = CircleCheck;
   readonly CircleX = CircleX;
   readonly Clock = Clock;
+  readonly Coins = Coins;
   readonly Gauge = Gauge;
   readonly Wrench = Wrench;
 
@@ -26,6 +33,18 @@ export class EvalTrace {
 
   readonly selection = this.selectionService.selection;
   readonly result = computed(() => this.selection()?.result ?? null);
+
+  /**
+   * Tokens this question spent, only when the provider actually reported
+   * them — a silent provider must not render as a free question.
+   */
+  readonly usage = computed(() => {
+    const usage = this.result()?.usage;
+    return isUsageMeasured(usage) ? (usage ?? null) : null;
+  });
+
+  readonly tokenCount = formatTokenCount;
+  readonly tokensCompact = formatTokensCompact;
 
   /** Checks that failed, which is what explains an overall failure. */
   readonly failedChecks = computed(

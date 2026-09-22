@@ -15,25 +15,40 @@ import {
   Brain,
   CircleCheck,
   CircleX,
+  Coins,
   Cpu,
   Trash2,
   Gauge,
+  GitCompare,
   Loader2,
   ListChecks,
   ChevronRight,
   Download,
   Play,
   ScrollText,
+  TrendingDown,
+  TrendingUp,
   Wrench,
 } from 'lucide-angular';
 import {
   AgentDetail as AgentDetailModel,
-  AgentEvalCase,
-  AgentEvalCaseResult,
   AgentEvalSet,
   AgentsApiService,
-  EvalRunView,
 } from '../../services/agents-api.service';
+import {
+  AgentEvalCase,
+  AgentEvalCaseResult,
+  CategoryRate,
+  EvalCostState,
+  EvalRunView,
+  categoryRateClass,
+  evalCostState,
+  formatRate,
+  formatTokenCount,
+  formatTokensCompact,
+  isUsageMeasured,
+  sortedCategoryRates,
+} from '../../models/eval.model';
 import { EvalSelectionService } from '../../services/eval-selection.service';
 import { ToastService } from '../../../../core/toast/toast.service';
 import {
@@ -58,8 +73,10 @@ export class AgentDetail implements OnDestroy {
   readonly Brain = Brain;
   readonly CircleCheck = CircleCheck;
   readonly CircleX = CircleX;
+  readonly Coins = Coins;
   readonly Cpu = Cpu;
   readonly Gauge = Gauge;
+  readonly GitCompare = GitCompare;
   readonly Loader2 = Loader2;
   readonly ListChecks = ListChecks;
   readonly ChevronRight = ChevronRight;
@@ -67,6 +84,8 @@ export class AgentDetail implements OnDestroy {
   readonly Play = Play;
   readonly Trash2 = Trash2;
   readonly ScrollText = ScrollText;
+  readonly TrendingDown = TrendingDown;
+  readonly TrendingUp = TrendingUp;
   readonly Wrench = Wrench;
 
   private readonly api = inject(AgentsApiService);
@@ -136,6 +155,7 @@ export class AgentDetail implements OnDestroy {
       this.evalsRequested.set(false);
       this.evalSets.set([]);
       this.selectedSetId.set(null);
+      this.categoryFilter.set('');
       this.selectedCaseIds.set(new Set());
       this.evalTab.set('questions');
       this.evalRuns.set([]);
@@ -187,6 +207,7 @@ export class AgentDetail implements OnDestroy {
         // No set is opened for you — the questions stay hidden until one is
         // clicked, so the tab always starts on the set list.
         this.selectedSetId.set(null);
+        this.categoryFilter.set('');
         this.selectedCaseIds.set(new Set());
         this.evalsLoading.set(false);
       },
@@ -196,6 +217,36 @@ export class AgentDetail implements OnDestroy {
       },
     });
   }
+
+  /**
+   * Open a question set, revealing its questions; clicking the open set again
+   * closes it. Opening ticks all of that set's questions, so a selection is
+   * never left pointing at questions that are no longer on screen. The last
+   * run's results belong to whichever set it ran, so they are cleared too.
+   */
+  selectSet(setId: string | null): void {
+    const next = this.selectedSetId() === setId ? null : setId;
+    if (next !== this.selectedSetId()) {
+      this.evalSelection.clear();
+      this.runResults.set([]);
+      this.runStatus.set('idle');
+      this.runCurrentQuestion.set(null);
+      this.runDatasets.set([]);
+    }
+    this.selectedSetId.set(next);
+    this.categoryFilter.set('');
+    this.selectedCaseIds.set(new Set(this.evalCases().map((c) => c.id)));
+  }
+
+  /**
+   * What the questions run against: the datasets the live run reported, or —
+   * before anything has run — the ones the open set is written for.
+   */
+  readonly scopeDatasets = computed(() => {
+    const fromRun = this.runDatasets();
+    if (fromRun.length > 0) return fromRun;
+    return this.selectedSet()?.datasets ?? [];
+  });
 
   readonly evalTab = signal<EvalTab>('questions');
 
@@ -248,7 +299,9 @@ export class AgentDetail implements OnDestroy {
       },
       error: (err) => {
         this.downloadingRunId.set(null);
-        this.toast.error(err?.error?.message ?? 'Could not download the report');
+        this.toast.error(
+          err?.error?.message ?? 'Could not download the report',
+        );
       },
     });
   }
@@ -288,23 +341,89 @@ export class AgentDetail implements OnDestroy {
     return this.datasources().find((d) => d.id === id)?.name ?? id;
   }
 
-  /**
-   * Open a question set, revealing its questions; clicking the open set again
-   * closes it. Opening ticks all of that set's questions, so a selection is
-   * never left pointing at questions that are no longer on screen.
-   */
-  selectSet(setId: string | null): void {
-    const next = this.selectedSetId() === setId ? null : setId;
-    this.selectedSetId.set(next);
-    this.selectedCaseIds.set(new Set(this.evalCases().map((c) => c.id)));
+  /* ---- Run telemetry ------------------------------------------------- */
+
+  /** Exact counts, grouped: `41,231`. */
+  readonly tokenCount = formatTokenCount;
+  readonly rateLabel = formatRate;
+  readonly rateClass = categoryRateClass;
+
+  /** Which suite the run covered; older records carry neither field. */
+  runSuiteLabel(run: EvalRunView): string {
+    return run.suiteName || run.suiteId || 'unknown suite';
+  }
+
+  /** True once the provider reported at least one call's worth of tokens. */
+  runHasUsage(run: EvalRunView): boolean {
+    return isUsageMeasured(run.usage);
+  }
+
+  /** Header meta: `41.2k tokens`, or nothing measured at all. */
+  runTokensLabel(run: EvalRunView): string {
+    const usage = run.usage;
+    if (!isUsageMeasured(usage) || !usage) return 'tokens not measured';
+    return `${formatTokensCompact(usage.totalTokens)} tokens`;
+  }
+
+  /** Never invents a number: see {@link evalCostState}. */
+  runCost(run: EvalRunView): EvalCostState {
+    return evalCostState(run.usage, run.estimatedCostUsd);
+  }
+
+  /** Per-category pass rates, worst first. */
+  runCategoryRates(run: EvalRunView): CategoryRate[] {
+    return sortedCategoryRates(run.categories);
+  }
+
+  /** True when the run was diffed against a previous one. */
+  hasComparison(run: EvalRunView): boolean {
+    return !!run.comparison;
+  }
+
+  /** A comparison with nothing moved either way. */
+  comparisonUnmoved(run: EvalRunView): boolean {
+    const comparison = run.comparison;
+    if (!comparison) return false;
+    return (
+      comparison.regressions.length === 0 &&
+      comparison.improvements.length === 0
+    );
   }
 
   /** Questions ticked to run; every question starts selected. */
   readonly selectedCaseIds = signal<Set<string>>(new Set());
 
-  readonly allCasesSelected = computed(() => {
+  /** Failure class the list is narrowed to; `''` shows every question. */
+  readonly categoryFilter = signal<string>('');
+
+  /** The categories present in the open set, alphabetically. */
+  readonly evalCategories = computed(() => {
+    const seen = new Map<string, number>();
+    for (const evalCase of this.evalCases()) {
+      if (!evalCase.category) continue;
+      seen.set(evalCase.category, (seen.get(evalCase.category) ?? 0) + 1);
+    }
+    return [...seen.entries()]
+      .map(([category, count]) => ({ category, count }))
+      .sort((a, b) => a.category.localeCompare(b.category));
+  });
+
+  /** Questions the filter lets through — what "Select all" operates on. */
+  readonly visibleCases = computed(() => {
+    const filter = this.categoryFilter();
     const cases = this.evalCases();
-    return cases.length > 0 && this.selectedCaseIds().size === cases.length;
+    return filter ? cases.filter((c) => c.category === filter) : cases;
+  });
+
+  onCategoryFilterChange(event: Event): void {
+    this.categoryFilter.set((event.target as HTMLSelectElement).value);
+  }
+
+  /** True when every *visible* question is ticked. */
+  readonly allCasesSelected = computed(() => {
+    const visible = this.visibleCases();
+    const selected = this.selectedCaseIds();
+    return visible.length > 0 && visible.every((c) => selected.has(c.id));
   });
 
   isCaseSelected(caseId: string): boolean {
@@ -318,12 +437,19 @@ export class AgentDetail implements OnDestroy {
     this.selectedCaseIds.set(next);
   }
 
+  /**
+   * Tick or untick the visible questions only, leaving whatever is hidden by
+   * the filter alone — otherwise filtering would silently drop a selection.
+   */
   toggleAllCases(): void {
-    this.selectedCaseIds.set(
-      this.allCasesSelected()
-        ? new Set()
-        : new Set(this.evalCases().map((evalCase) => evalCase.id)),
-    );
+    const next = new Set(this.selectedCaseIds());
+    const visible = this.visibleCases();
+    if (this.allCasesSelected()) {
+      for (const evalCase of visible) next.delete(evalCase.id);
+    } else {
+      for (const evalCase of visible) next.add(evalCase.id);
+    }
+    this.selectedCaseIds.set(next);
   }
 
   /** Datasources offered in the run dropdown. */
@@ -379,23 +505,26 @@ export class AgentDetail implements OnDestroy {
     this.runCurrentQuestion.set(null);
     this.syncSelection();
 
-    this.api.startEvalRun(this.agentKey(), datasourceId, caseIds).subscribe({
-      next: (res) => {
-        this.runStarting.set(false);
-        if (!res.ok || !res.jobId) {
-          this.runError.set(res.message);
+    const suiteId = this.selectedSetId() || undefined;
+    this.api
+      .startEvalRun(this.agentKey(), datasourceId, caseIds, suiteId)
+      .subscribe({
+        next: (res) => {
+          this.runStarting.set(false);
+          if (!res.ok || !res.jobId) {
+            this.runError.set(res.message);
+            this.runStatus.set('idle');
+            return;
+          }
+          this.runStatus.set('running');
+          this.pollRun(res.jobId);
+        },
+        error: (err) => {
+          this.runStarting.set(false);
           this.runStatus.set('idle');
-          return;
-        }
-        this.runStatus.set('running');
-        this.pollRun(res.jobId);
-      },
-      error: (err) => {
-        this.runStarting.set(false);
-        this.runStatus.set('idle');
-        this.runError.set(err?.error?.message ?? 'Backend unreachable');
-      },
-    });
+          this.runError.set(err?.error?.message ?? 'Backend unreachable');
+        },
+      });
   }
 
   /** Poll until the job leaves `running`; each question lands as it finishes. */

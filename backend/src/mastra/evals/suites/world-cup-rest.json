@@ -1,0 +1,17 @@
+{
+  "id": "world-cup-rest",
+  "name": "World Cup (REST API)",
+  "description": "The same World Cup questions against the sample served by a local REST API ('npm run worldcup:api'). Select its REST API datasource with a saved dataset containing the api.world_cup endpoints; reference SQL runs in SQLite over the fetched endpoints.",
+  "fixtureId": "world-cup-rest",
+  "variantOf": {
+    "suite": "world-cup",
+    "idPrefix": "rest-",
+    "expectedSql": {
+      "champion-2022": "SELECT champion.common_name AS champion FROM api.world_cup.tournaments tournament JOIN api.world_cup.teams champion ON champion.id = tournament.champion_team_id WHERE tournament.tournament_year = 2022",
+      "final-score-2018": "SELECT home.common_name AS home_team, away.common_name AS away_team, m.home_goals, m.away_goals FROM api.world_cup.matches m JOIN api.world_cup.tournaments tournament ON tournament.id = m.tournament_id JOIN api.world_cup.teams home ON home.id = m.home_team_id JOIN api.world_cup.teams away ON away.id = m.away_team_id WHERE tournament.tournament_year = 2018 AND m.stage = 'final'",
+      "top-scorer-2022": "SELECT player, goals FROM api.world_cup.v_player_goal_totals WHERE tournament_year = 2022 ORDER BY goals DESC, player LIMIT 1",
+      "shootouts": "SELECT tournament_year, home_team, away_team, winner FROM api.world_cup.v_match_results WHERE home_penalties IS NOT NULL ORDER BY tournament_year, match_number",
+      "biggest-venue": "SELECT DISTINCT venue, attendance FROM api.world_cup.v_match_results WHERE attendance = (SELECT MAX(attendance) FROM api.world_cup.v_match_results)"
+    }
+  }
+}

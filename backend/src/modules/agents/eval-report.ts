@@ -1,5 +1,7 @@
 import type { EvalRunView } from './eval-runs.service';
 import type { EvalCaseDelta, EvalRegressionSummary } from './eval-regression';
+import { tallyCategories } from './eval-telemetry';
+import type { CategoryTally } from './eval-telemetry';
 import type {
   AssistantEvalCaseResult,
   EvalToolCall,
@@ -37,6 +39,7 @@ function caseSection(result: AssistantEvalCaseResult, index: number): string {
     '',
     `- **Result:** ${verdict}`,
     `- **Id:** \`${result.id}\``,
+    ...(result.category ? [`- **Category:** ${result.category}`] : []),
     `- **Duration:** ${durationLabel(result.durationMs)}`,
   ];
 
@@ -64,6 +67,101 @@ function caseSection(result: AssistantEvalCaseResult, index: number): string {
   lines.push('', '#### Answer');
   lines.push('', result.answer ? result.answer : '_The agent returned no text._');
   return lines.join('\n');
+}
+
+/**
+ * Pass rate per failure class — the table the improvement loop actually reads.
+ * An overall "7/10 passed" says the engine got worse without saying at what,
+ * whereas "ratio-trap 0/2, control 4/4" points straight at the change to make.
+ *
+ * Prefers the tallies the run recorded, and recomputes from the case results
+ * otherwise, so a run stored before `categories` existed still gets the table
+ * as long as its cases carry a category.
+ */
+function categorySection(run: EvalRunView): string[] {
+  const tallies: Record<string, CategoryTally> =
+    run.categories ??
+    tallyCategories(
+      run.results.map((result) => ({
+        category: result.category,
+        verdict: result.error
+          ? ('ERROR' as const)
+          : result.passed
+            ? ('PASS' as const)
+            : ('FAIL' as const),
+      })),
+    );
+  const rows = Object.entries(tallies).sort(([a], [b]) => a.localeCompare(b));
+  // Nothing to say for a run whose cases predate categories entirely.
+  if (
+    rows.length === 0 ||
+    (rows.length === 1 && rows[0][0] === 'uncategorised')
+  ) {
+    return [];
+  }
+  const lines = [
+    '',
+    '## By category',
+    '',
+    '| Category | Passed | Cases | Pass rate |',
+    '| --- | --- | --- | --- |',
+  ];
+  for (const [category, tally] of rows) {
+    const rate = tally.total
+      ? `${Math.round((tally.passed / tally.total) * 100)}%`
+      : '—';
+    lines.push(`| ${category} | ${tally.passed} | ${tally.total} | ${rate} |`);
+  }
+  return lines;
+}
+
+/** Thousands separators: six-figure token counts are unreadable without them. */
+function tokens(value: number): string {
+  return value.toLocaleString('en-US');
+}
+
+/**
+ * What the run spent. Counts are measured and exact; the dollar figure is an
+ * estimate from `logs/pricing.json`, and is reported as missing rather than
+ * guessed when the model that ran has no rate configured — a wrong number in a
+ * cost report is worse than no number.
+ */
+function tokenSection(run: EvalRunView): string[] {
+  const usage = run.usage;
+  if (!usage) return [];
+  const lines = ['', '## Tokens and cost', ''];
+  if (run.model) lines.push(`- **Model:** \`${run.model}\``);
+  if (usage.calls === 0) {
+    lines.push(
+      '',
+      '_The provider reported no token usage for this run — that is "not ' +
+        'measured", not "free"._',
+    );
+    return lines;
+  }
+  lines.push(
+    '',
+    '| Input | Output | Total | Model calls |',
+    '| --- | --- | --- | --- |',
+    `| ${tokens(usage.inputTokens)} | ${tokens(usage.outputTokens)} | ${tokens(
+      usage.totalTokens,
+    )} | ${usage.calls} |`,
+  );
+  if (usage.cachedInputTokens > 0 || usage.reasoningTokens > 0) {
+    lines.push(
+      '',
+      `_Of which ${tokens(usage.cachedInputTokens)} cached input and ${tokens(
+        usage.reasoningTokens,
+      )} reasoning tokens._`,
+    );
+  }
+  lines.push(
+    '',
+    run.estimatedCostUsd === undefined
+      ? '**Estimated cost:** not priced — add the model to `logs/pricing.json`.'
+      : `**Estimated cost:** $${run.estimatedCostUsd.toFixed(4)}`,
+  );
+  return lines;
 }
 
 function deltaList(deltas: EvalCaseDelta[]): string[] {
@@ -126,6 +224,7 @@ export function renderEvalRunMarkdown(
     `- **Finished:** ${run.finishedAt ?? '—'}`,
     `- **Duration:** ${runDuration(run)}`,
     `- **Status:** ${run.status}`,
+    `- **Suite:** ${run.suiteName ?? run.suiteId ?? '—'}`,
     `- **Datasource:** ${datasourceName ?? run.datasourceId}`,
     `- **Datasets:** ${run.datasets.join(', ') || '—'}`,
     `- **Run id:** \`${run.jobId}\``,
@@ -142,6 +241,11 @@ export function renderEvalRunMarkdown(
       } | ${durationLabel(result.durationMs)} |`,
     );
   }
+
+  // Straight after the per-question summary: what kind of question failed
+  // matters more than which one, and the cost of finding out belongs with it.
+  lines.push(...categorySection(run));
+  lines.push(...tokenSection(run));
 
   if (run.comparison) {
     lines.push(...comparisonSection(run.comparison));

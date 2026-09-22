@@ -1,0 +1,12 @@
+{
+  "_comment": "Model rates in US DOLLARS PER MILLION TOKENS. Token counts in the run logs are measured (they come straight off the provider's usage object); money is estimated from this table. It ships EMPTY on purpose: this repo cannot know what your provider — OpenAI directly, or a LenAI deployment with negotiated rates — charges you today, and a stale guessed number would be logged as fact. Until a model has an entry here, runs report 'not priced' and the token counts carry the report.",
+  "_howToFill": "Copy the _example entry into \"models\", key it by the model id the run log records (the part after the provider slash is matched too, so \"gpt-4o-mini\" covers \"openai/gpt-4o-mini\" and \"lenai/gpt-4o-mini\"), and put your own rates in. cachedInputPerMillionUsd is optional; leave it out when your provider does not discount cached prompt tokens.",
+  "_example": {
+    "your-model-id": {
+      "inputPerMillionUsd": 0.0,
+      "outputPerMillionUsd": 0.0,
+      "cachedInputPerMillionUsd": 0.0
+    }
+  },
+  "models": {}
+}

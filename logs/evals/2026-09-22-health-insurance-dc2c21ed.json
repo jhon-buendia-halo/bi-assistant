@@ -1,0 +1,208 @@
+{
+  "schemaVersion": 1,
+  "runId": "dc2c21ed-6ee2-403b-aab3-f51ad10b8a0d",
+  "harness": "validate",
+  "suite": "health-insurance",
+  "datasets": [
+    "Health Insurance"
+  ],
+  "startedAt": "2026-09-22T18:36:07.774Z",
+  "finishedAt": "2026-09-22T18:36:08.480Z",
+  "durationMs": 706,
+  "appVersion": "0.10.1",
+  "gitCommit": "5629494",
+  "totals": {
+    "cases": 20,
+    "passed": 17,
+    "failed": 0,
+    "errored": 0,
+    "skipped": 3
+  },
+  "categories": {
+    "ratio-trap": {
+      "total": 3,
+      "passed": 3
+    },
+    "constant-column": {
+      "total": 1,
+      "passed": 1
+    },
+    "empty-column": {
+      "total": 1,
+      "passed": 1
+    },
+    "ties": {
+      "total": 1,
+      "passed": 1
+    },
+    "value-vocabulary": {
+      "total": 1,
+      "passed": 1
+    },
+    "id-vs-name": {
+      "total": 1,
+      "passed": 1
+    },
+    "metric-definition": {
+      "total": 1,
+      "passed": 1
+    },
+    "domain-semantics": {
+      "total": 1,
+      "passed": 1
+    },
+    "default-filter": {
+      "total": 2,
+      "passed": 2
+    },
+    "multi-step-join": {
+      "total": 1,
+      "passed": 1
+    },
+    "unit-confusion": {
+      "total": 1,
+      "passed": 1
+    },
+    "quality-filter": {
+      "total": 1,
+      "passed": 1
+    },
+    "control": {
+      "total": 2,
+      "passed": 2
+    }
+  },
+  "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "totalTokens": 0,
+    "reasoningTokens": 0,
+    "cachedInputTokens": 0,
+    "calls": 0
+  },
+  "cases": [
+    {
+      "id": "paid-share-by-specialty",
+      "category": "ratio-trap",
+      "verdict": "PASS",
+      "durationMs": 11
+    },
+    {
+      "id": "plan-share-of-allowed-by-tier",
+      "category": "ratio-trap",
+      "verdict": "PASS",
+      "durationMs": 8
+    },
+    {
+      "id": "claims-by-currency",
+      "category": "constant-column",
+      "verdict": "PASS",
+      "durationMs": 6
+    },
+    {
+      "id": "claims-with-preauth",
+      "category": "empty-column",
+      "verdict": "PASS",
+      "durationMs": 6
+    },
+    {
+      "id": "specialties-with-48-claims",
+      "category": "ties",
+      "verdict": "PASS",
+      "durationMs": 6
+    },
+    {
+      "id": "approved-claims-2024",
+      "category": "value-vocabulary",
+      "verdict": "PASS",
+      "durationMs": 5
+    },
+    {
+      "id": "member-with-most-claims",
+      "category": "id-vs-name",
+      "verdict": "PASS",
+      "durationMs": 6
+    },
+    {
+      "id": "net-paid-by-region-2024",
+      "category": "metric-definition",
+      "verdict": "PASS",
+      "durationMs": 6
+    },
+    {
+      "id": "net-paid-after-reversals-2024",
+      "category": "domain-semantics",
+      "verdict": "PASS",
+      "durationMs": 8
+    },
+    {
+      "id": "claims-march-2024",
+      "category": "default-filter",
+      "verdict": "PASS",
+      "durationMs": 5
+    },
+    {
+      "id": "paid-by-country",
+      "category": "multi-step-join",
+      "verdict": "PASS",
+      "durationMs": 6
+    },
+    {
+      "id": "avg-paid-per-claim-dollars",
+      "category": "unit-confusion",
+      "verdict": "PASS",
+      "durationMs": 5
+    },
+    {
+      "id": "units-cut-by-procedure",
+      "category": "ratio-trap",
+      "verdict": "PASS",
+      "durationMs": 6
+    },
+    {
+      "id": "denial-rate",
+      "category": "quality-filter",
+      "verdict": "PASS",
+      "durationMs": 4
+    },
+    {
+      "id": "active-members-by-region",
+      "category": "default-filter",
+      "verdict": "PASS",
+      "durationMs": 4
+    },
+    {
+      "id": "members-per-plan-tier",
+      "category": "control",
+      "verdict": "PASS",
+      "durationMs": 5
+    },
+    {
+      "id": "providers-per-specialty",
+      "category": "control",
+      "verdict": "PASS",
+      "durationMs": 5
+    },
+    {
+      "id": "payouts-2019",
+      "category": "out-of-scope",
+      "verdict": "SKIP",
+      "reason": "no-expected-sql",
+      "durationMs": 0
+    },
+    {
+      "id": "most-expensive-member",
+      "category": "clarification",
+      "verdict": "SKIP",
+      "reason": "no-expected-sql",
+      "durationMs": 0
+    },
+    {
+      "id": "denial-data-discovery",
+      "category": "discovery",
+      "verdict": "SKIP",
+      "reason": "no-expected-sql",
+      "durationMs": 0
+    }
+  ]
+}

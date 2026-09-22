@@ -27,6 +27,23 @@
           <lucide-angular [img]="Clock" [size]="12" />
           <span>{{ durationLabel(result.durationMs) }}</span>
         </span>
+        @if (usage(); as usage) {
+          <span
+            data-testid="eval-trace-usage"
+            [title]="
+              tokenCount(usage.inputTokens) +
+              ' in / ' +
+              tokenCount(usage.outputTokens) +
+              ' out over ' +
+              usage.calls +
+              ' model calls'
+            "
+            class="flex items-center gap-1 font-mono text-[11px] text-zinc-500"
+          >
+            <lucide-angular [img]="Coins" [size]="11" />
+            <span>{{ tokensCompact(usage.totalTokens) }} tokens</span>
+          </span>
+        }
       </div>
 
       <!-- Why it failed -->

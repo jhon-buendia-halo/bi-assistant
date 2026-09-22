@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { MastraService } from '../../mastra/mastra.service';
-import { ASSISTANT_EVAL_SETS } from '../../mastra/evals/assistant.evals';
+import { assistantEvalSets } from '../../mastra/evals/assistant.evals';
 
 export interface AgentSummary {
   /** Registry key the agent is registered under in the Mastra instance. */
@@ -40,18 +40,24 @@ export interface AgentEvalCheck {
 
 export interface AgentEvalCase {
   id: string;
+  /** Failure class the case probes, e.g. `ties` or `value-vocabulary`. */
+  category: string;
   question: string;
   /** What the question probes for. */
   intent: string;
   checks: AgentEvalCheck[];
 }
 
-/** A named group of eval questions sharing one fixture. */
+/** A named group of eval questions sharing one fixture (one suite file). */
 export interface AgentEvalSet {
   id: string;
   name: string;
   /** What the set covers and what it needs to run. */
   description: string;
+  /** The registry sample the set questions, when it is a bundled one. */
+  fixtureId?: string;
+  /** The dataset names the set is written against, as a default/hint. */
+  datasets: string[];
   cases: AgentEvalCase[];
 }
 
@@ -108,12 +114,18 @@ export class AgentsService {
   /** The eval question sets defined for an agent; empty when it has none. */
   evalSets(key: string): AgentEvalSet[] {
     if (key !== 'assistant') return [];
-    return ASSISTANT_EVAL_SETS.map((set) => ({
+    return assistantEvalSets().map((set) => ({
       id: set.id,
       name: set.name,
       description: set.description,
+      ...(set.fixtureId ? { fixtureId: set.fixtureId } : {}),
+      datasets: set.datasets,
+      // The scorer objects are built here purely to read their own
+      // descriptions ('Checks if output includes "Argentina"'), so the tab
+      // shows exactly what the run will assert.
       cases: set.cases.map((evalCase) => ({
         id: evalCase.id,
+        category: evalCase.category ?? '',
         question: evalCase.question,
         intent: evalCase.intent,
         checks: evalCase.scorers.map((scorer) => ({

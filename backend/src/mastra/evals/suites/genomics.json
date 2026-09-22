@@ -1,0 +1,289 @@
+{
+  "id": "genomics",
+  "name": "Genomics",
+  "description": "These evals require the bundled synthetic genomics cohort (schema genomics). Select its PostgreSQL datasource and save a dataset named Genomics containing the genomics tables and views. Setup: docker/postgres/README.md.",
+  "datasets": ["Genomics"],
+  "requiredEntities": [
+    "genomics.superpopulations",
+    "genomics.ancestry_groups",
+    "genomics.genes",
+    "genomics.subjects",
+    "genomics.samples",
+    "genomics.variants",
+    "genomics.variant_calls",
+    "genomics.gene_expression",
+    "genomics.v_variant_calls",
+    "genomics.v_sample_qc"
+  ],
+  "cases": [
+    {
+      "id": "allele-fraction-by-gene",
+      "category": "ratio-trap",
+      "question": "Which five genes show the highest average alternate-allele fraction?",
+      "intent": "Rank genes by alt_read_count / total_read_count — two genuinely different measures — rather than by a ratio of a column with its own duplicate.",
+      "notes": "read_depth equals total_read_count on all 5263 calls, so any fraction built from that pair is exactly 1.0000 for every gene and the ranking becomes alphabetical noise. A correct answer divides ALTERNATE reads by TOTAL reads; over the non-control samples the dataset's default filter keeps, all 40 gene means are still distinct, so the top five are unambiguous (MUTYH 0.5325, SCN5A 0.5068, SMAD4 0.5066, TSC2 0.4943, XIST 0.4921) with EGFR sixth on 0.4699 — SCN5A and SMAD4 sit 0.0002 apart but both are inside the five, and the symbol tie-break fixes their order. This guards the regression where the engine picked the similarly named column and reported a perfect fraction everywhere.",
+      "checks": [
+        { "type": "includes", "value": "MUTYH" },
+        { "type": "matches", "pattern": "0\\.53|53\\.2" },
+        { "type": "calledTool", "tool": "run_readonly_sql" },
+        { "type": "noToolErrors" }
+      ],
+      "expectedSql": "SELECT gene.hgnc_symbol AS gene, ROUND(AVG(call.alt_read_count::numeric / call.total_read_count), 4) AS mean_allele_fraction FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id JOIN genomics.variants variant ON variant.id = call.variant_id JOIN genomics.genes gene ON gene.id = variant.gene_id WHERE sample.is_control = false AND call.filter_status = 'PASS' AND call.total_read_count >= 20 GROUP BY gene.hgnc_symbol ORDER BY mean_allele_fraction DESC, gene.hgnc_symbol LIMIT 5"
+    },
+    {
+      "id": "variants-by-assembly",
+      "category": "constant-column",
+      "question": "How do our variants break down across genome assemblies?",
+      "intent": "Group by a column that has exactly one value — the answer has to say so instead of presenting 100% as a finding.",
+      "notes": "assembly is 'GRCh38' on all 450 variants (the CHECK constraint allows nothing else). The breakdown is one row, and the useful answer states that every variant is on a single assembly rather than dressing a constant up as a distribution. Guards against reporting a one-row group-by as if it were a comparison.",
+      "checks": [
+        { "type": "includes", "value": "GRCh38" },
+        { "type": "calledTool", "tool": "run_readonly_sql" },
+        { "type": "noToolErrors" }
+      ],
+      "expectedSql": "SELECT variant.assembly, COUNT(*) AS variants FROM genomics.variants variant GROUP BY variant.assembly ORDER BY variant.assembly",
+      "judgeRubric": "The fixture stores only one genome assembly: every one of the 450 variants is GRCh38. Score pass=true only if the final answer states that all variants are on a single assembly (GRCh38) and therefore that there is no breakdown to compare — reporting the count (450) or \"100%\" is fine as long as the answer says the column is constant. Score pass=false if it presents the single value as a meaningful distribution, invents a second assembly (e.g. GRCh37/hg19) or implies a comparison the data cannot support."
+    },
+    {
+      "id": "variants-with-rsid",
+      "category": "empty-column",
+      "question": "How many of our variants have a dbSNP rsID?",
+      "intent": "Count the populated rows of a mostly-null column instead of grouping by it.",
+      "notes": "rsid is non-null on only 46 of 450 variants (10.2%), so grouping by rsid buries 404 variants under a blank key and a per-rsid breakdown is 47 near-useless groups. The answer must be the count of variants that HAVE an identifier. Guards against the engine presenting the null group as a finding.",
+      "checks": [
+        { "type": "includes", "value": "46" },
+        { "type": "calledTool", "tool": "run_readonly_sql" },
+        { "type": "noToolErrors" }
+      ],
+      "expectedSql": "SELECT COUNT(*) AS variants_with_rsid FROM genomics.variants variant WHERE variant.rsid IS NOT NULL"
+    },
+    {
+      "id": "genes-with-seven-pathogenic",
+      "category": "ties",
+      "question": "Which genes carry exactly seven pathogenic variants?",
+      "intent": "A HAVING-style question whose answer is a tie, so no arbitrary tie-break can hide.",
+      "notes": "MLH1 and PTEN both carry exactly 7 PATHOGENIC variants; TP53 is the only gene above that, with 11. A 'top genes by pathogenic variants' phrasing would let a LIMIT 1 silently drop one of the tied genes, so the question asks for the tie explicitly and both symbols must appear. Guards against answers that report one arbitrary winner from a tied group.",
+      "checks": [
+        { "type": "includes", "value": "MLH1" },
+        { "type": "matches", "pattern": "\\bPTEN\\b" },
+        { "type": "calledTool", "tool": "run_readonly_sql" },
+        { "type": "noToolErrors" }
+      ],
+      "expectedSql": "SELECT gene.hgnc_symbol AS gene, COUNT(*) AS pathogenic_variants FROM genomics.variants variant JOIN genomics.genes gene ON gene.id = variant.gene_id WHERE variant.clinical_significance = 'PATHOGENIC' GROUP BY gene.hgnc_symbol HAVING COUNT(*) = 7 ORDER BY gene.hgnc_symbol"
+    },
+    {
+      "id": "damaging-variant-count",
+      "category": "value-vocabulary",
+      "question": "How many damaging variants did we find?",
+      "intent": "Map a clinician's word onto the enum the column actually stores.",
+      "notes": "There is no 'DAMAGING' value. clinical_significance is PATHOGENIC (96), LIKELY_PATHOGENIC (53), VUS (159), LIKELY_BENIGN (74) or BENIGN (68); 'damaging' is the ACMG pair PATHOGENIC + LIKELY_PATHOGENIC = 149. An answer that matches the literal word returns 0, and one that counts PATHOGENIC alone returns 96. Guards against both the empty-filter and the half-filter failures.",
+      "checks": [
+        { "type": "includes", "value": "149" },
+        { "type": "matches", "pattern": "likely[_ ]pathogenic", "flags": "i" },
+        { "type": "calledTool", "tool": "run_readonly_sql" },
+        { "type": "noToolErrors" }
+      ],
+      "expectedSql": "SELECT COUNT(*) AS damaging_variants FROM genomics.variants variant WHERE variant.clinical_significance IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')"
+    },
+    {
+      "id": "samples-sequenced-2015",
+      "category": "out-of-scope",
+      "question": "How many samples did we sequence in 2015?",
+      "intent": "The cohort was collected in 2023 and 2024 only — the agent must say so instead of returning a confident zero or inventing a figure.",
+      "notes": "samples.collected_on spans 2023-02-02 to 2024-12-11 (68 samples in 2023, 72 in 2024) and a CHECK constraint forbids anything else. A bare 'zero' is technically true but useless and reads like a finding; the honest answer names the covered window. Guards against silently answering outside the fixture's coverage.",
+      "checks": [{ "type": "noToolErrors" }],
+      "judgeRubric": "The question asks about 2015, a year this cohort does not cover: every sample was collected in 2023 or 2024. Score pass=true only if the final answer makes clear there is no 2015 data AND explicitly states the period the data DOES cover (2023 and/or 2024), without inventing any 2015 sample count, sequencing run or statistic. Score pass=false if it reports a 2015 figure as if it were a real measurement, presents a bare '0' with no statement of what the data covers, or fabricates any claim about sequencing done in 2015."
+    },
+    {
+      "id": "most-important-gene",
+      "category": "clarification",
+      "question": "Which gene matters most in this cohort?",
+      "intent": "Ambiguous on the metric — total variants, pathogenic variants and call volume each name a different gene, so the agent must ask.",
+      "notes": "Three defensible answers sit in the data: BRCA1 has the most variants (34), TP53 the most pathogenic ones (11), CFTR the most variant calls (566 across the non-control samples). Guessing one of the three looks authoritative and is unfalsifiable to the reader, so the pass condition is that the agent asks which sense of 'matters' is meant. Guards against confident single-metric guesses on an under-specified question.",
+      "checks": [
+        { "type": "calledTool", "tool": "ask_clarification" },
+        { "type": "didNotCall", "tool": "run_readonly_sql" },
+        { "type": "noToolErrors" }
+      ],
+      "judgeRubric": "The question (\"Which gene matters most in this cohort?\") is ambiguous: 'matters most' could mean the most variants, the most pathogenic variants, the most variant calls, the most carriers or the highest expression — and these pick different genes. Score pass=true only if the final answer is itself a clarifying question that offers 2-4 concrete, well-formed options grounded in this genomics dataset (naming real notions such as total variants, pathogenic variants, number of calls, number of carriers or expression level), and that does not name a winning gene or state any figures as if they were the answer. Score pass=false if it picks a gene, invents a metric the data does not hold, or asks a vague open-ended question with no concrete options."
+    },
+    {
+      "id": "most-called-genes",
+      "category": "id-vs-name",
+      "question": "Which genes were called most often across our samples? Show the top five.",
+      "intent": "variant_calls has no gene column, so the answer requires two hops and must be reported as HGNC symbols, not ids.",
+      "notes": "The path is variant_calls.variant_id -> variants.gene_id -> genes.hgnc_symbol; a one-hop answer can only report variant ids, and grouping on variant_calls alone answers a different question. Expected, with the dataset's default filter excluding control samples: CFTR 566, TP53 208, XIST 205, MUTYH 201, NF2 187; EGFR is sixth on 163, so the cut-off is not a tie. Guards against answers that hand the reader opaque numeric keys instead of gene symbols.",
+      "checks": [
+        { "type": "includes", "value": "CFTR" },
+        { "type": "matches", "pattern": "566" },
+        { "type": "calledTool", "tool": "run_readonly_sql" },
+        { "type": "noToolErrors" }
+      ],
+      "expectedSql": "SELECT gene.hgnc_symbol AS gene, COUNT(*) AS variant_calls FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id JOIN genomics.variants variant ON variant.id = call.variant_id JOIN genomics.genes gene ON gene.id = variant.gene_id WHERE sample.is_control = false GROUP BY gene.hgnc_symbol ORDER BY variant_calls DESC, gene.hgnc_symbol LIMIT 5"
+    },
+    {
+      "id": "mean-allele-fraction",
+      "category": "metric-definition",
+      "question": "What is our mean allele fraction, and how many calls is it based on?",
+      "intent": "Allele fraction is a defined metric — alt/total on PASS calls at depth 20 or better — not simply the average of a ratio over every row.",
+      "notes": "Applying the definition to the non-control samples the dataset's default filter keeps leaves 3640 of their 4675 calls eligible and gives 0.4158; averaging the ratio over all of those calls gives 0.3795, which looks equally plausible and is wrong. Asking for the denominator as well as the value forces the filter to be visible in the answer. Guards against the engine quietly dropping the PASS / depth >= 20 qualifiers from a named metric.",
+      "checks": [
+        { "type": "matches", "pattern": "0\\.4[12]|41\\.[56]" },
+        { "type": "calledTool", "tool": "run_readonly_sql" },
+        { "type": "noToolErrors" }
+      ],
+      "expectedSql": "SELECT COUNT(*) AS eligible_calls, ROUND(AVG(call.alt_read_count::numeric / call.total_read_count), 4) AS mean_allele_fraction FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id WHERE sample.is_control = false AND call.filter_status = 'PASS' AND call.total_read_count >= 20"
+    },
+    {
+      "id": "cohort-sample-count",
+      "category": "default-filter",
+      "question": "How many samples do we have in the cohort?",
+      "intent": "Control samples are not cohort samples — the default filter has to be applied without being asked for.",
+      "notes": "15 of the 140 samples are flagged is_control, leaving a cohort of 125. Counting the table gives 140, which is off by exactly the controls and is the number a reader would then divide every downstream rate by. The question deliberately says cohort without naming the flag, so the agent has to apply the knowledge entry unprompted. Guards against denominators that silently include process controls.",
+      "checks": [
+        { "type": "includes", "value": "125" },
+        { "type": "calledTool", "tool": "run_readonly_sql" },
+        { "type": "noToolErrors" }
+      ],
+      "expectedSql": "SELECT COUNT(*) AS cohort_samples FROM genomics.samples sample WHERE sample.is_control = false"
+    },
+    {
+      "id": "subjects-by-superpopulation",
+      "category": "multi-step-join",
+      "question": "How many subjects do we have in each superpopulation?",
+      "intent": "Subjects carry an ancestry group, not a superpopulation — the answer needs the two-hop hierarchy.",
+      "notes": "subjects -> ancestry_groups -> superpopulations. Grouping on ancestry_group_id gives 22 rows of the wrong grain; the correct answer is 8 rows totalling 120 subjects (AFR 36, AMR/EAS/EUR/SAS 16 each, OCE 10, MID 5, OTH 5). Guards against answers that stop one join short and report the finer grain as if it were the requested one.",
+      "checks": [
+        { "type": "includes", "value": "African" },
+        { "type": "matches", "pattern": "\\b36\\b" },
+        { "type": "calledTool", "tool": "run_readonly_sql" },
+        { "type": "noToolErrors" }
+      ],
+      "expectedSql": "SELECT superpop.code AS superpopulation_code, superpop.name AS superpopulation, COUNT(*) AS subjects FROM genomics.subjects subject JOIN genomics.ancestry_groups ancestry ON ancestry.id = subject.ancestry_group_id JOIN genomics.superpopulations superpop ON superpop.id = ancestry.superpopulation_id GROUP BY superpop.code, superpop.name ORDER BY subjects DESC, superpop.code"
+    },
+    {
+      "id": "expression-data-discovery",
+      "category": "discovery",
+      "question": "What expression data do we have?",
+      "intent": "Pure discovery — must inspect the session datasets rather than run SQL or invent entities.",
+      "notes": "A schema question answered by querying rows is a wrong process even when the prose happens to be right, so this case scores the tools. The honest answer names gene_expression (raw_count and tpm, one row per gene per sample). Guards against the engine reaching for run_readonly_sql on questions about what exists.",
+      "checks": [
+        { "type": "calledTool", "tool": "list_entities" },
+        { "type": "matches", "pattern": "gene[ _]expression", "flags": "i" },
+        { "type": "didNotCall", "tool": "run_readonly_sql" },
+        { "type": "noToolErrors" }
+      ]
+    },
+    {
+      "id": "pathogenic-carrier-samples",
+      "category": "domain-semantics",
+      "question": "How many samples carry a pathogenic variant?",
+      "intent": "A variant_calls row is a site that was genotyped, not a variant the sample carries — 0/0 is homozygous reference.",
+      "notes": "Of the non-control samples the dataset's default filter keeps, 97 have a call row at a pathogenic site; only 67 actually carry one (genotype 0/1 or 1/1). 0/0 is 1642 of their 4675 calls, so the wrong answer is 45% too high and reads like a plausible carrier burden. This is the single most important case in the suite: it is wrong not because the SQL is hard but because 'has a row' is not 'carries the variant'. Guards against counting genotyped sites as carriers.",
+      "checks": [
+        { "type": "includes", "value": "67" },
+        { "type": "calledTool", "tool": "run_readonly_sql" },
+        { "type": "noToolErrors" }
+      ],
+      "expectedSql": "SELECT COUNT(DISTINCT call.sample_id) AS carrier_samples FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id JOIN genomics.variants variant ON variant.id = call.variant_id WHERE sample.is_control = false AND variant.clinical_significance = 'PATHOGENIC' AND call.genotype IN ('0/1', '1/1')"
+    },
+    {
+      "id": "pathogenic-carriers-by-gene",
+      "category": "domain-semantics",
+      "question": "Which genes have the most subjects carrying a pathogenic variant? Show the top three.",
+      "intent": "The same 0/0 semantics, but on a ranking, so ignoring genotype changes the order and not only the totals.",
+      "notes": "Correct, once the dataset's default filter drops control samples: TP53 13, APC 11, MLH1 11, with PTEN fourth on 7, so the top three is not split by a tie. The question asks for three rather than five because excluding controls leaves BRCA1 and NF2 tied on 6 at fifth place, and a top five would have to cut that tie arbitrarily. Ignoring genotype gives TP53 22, MLH1 19, APC 15 — a different ranking with MLH1 promoted above APC, which is why a fix that only patches the cohort-wide count still fails here. Also needs the samples -> subjects hop so repeat samples from one person are not double counted.",
+      "checks": [
+        { "type": "includes", "value": "TP53" },
+        { "type": "matches", "pattern": "\\bAPC\\b" },
+        { "type": "calledTool", "tool": "run_readonly_sql" },
+        { "type": "noToolErrors" }
+      ],
+      "expectedSql": "SELECT gene.hgnc_symbol AS gene, COUNT(DISTINCT sample.subject_id) AS carrier_subjects FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id JOIN genomics.variants variant ON variant.id = call.variant_id JOIN genomics.genes gene ON gene.id = variant.gene_id WHERE sample.is_control = false AND variant.clinical_significance = 'PATHOGENIC' AND call.genotype IN ('0/1', '1/1') GROUP BY gene.hgnc_symbol ORDER BY carrier_subjects DESC, gene.hgnc_symbol LIMIT 3"
+    },
+    {
+      "id": "mean-expression-by-gene",
+      "category": "domain-semantics",
+      "question": "What is the average expression of BRCA1, TP53, ATM, EGFR and CFTR across our samples?",
+      "intent": "A TPM of 0 is a measured zero, not a missing value — dropping those rows inflates every mean.",
+      "notes": "1049 of the 2720 gene/sample measurements on non-control samples are exactly 0 and none are NULL (raw_count is 0 on exactly those rows), so a zero is real data. Averaging over all 68 samples the dataset's default filter keeps gives ATM 97.106, BRCA1 98.742, CFTR 195.585, EGFR 247.390, TP53 127.665; filtering tpm > 0 gives 183.42, 172.16, 260.78, 357.93 and 289.38 — every gene roughly doubled. Guards against the engine treating a zero measurement as missing data.",
+      "checks": [
+        { "type": "includes", "value": "ATM" },
+        { "type": "matches", "pattern": "97\\.1|\\b97\\b" },
+        { "type": "calledTool", "tool": "run_readonly_sql" },
+        { "type": "noToolErrors" }
+      ],
+      "expectedSql": "SELECT gene.hgnc_symbol AS gene, ROUND(AVG(expression.tpm), 3) AS mean_tpm FROM genomics.gene_expression expression JOIN genomics.samples sample ON sample.id = expression.sample_id JOIN genomics.genes gene ON gene.id = expression.gene_id WHERE sample.is_control = false AND gene.hgnc_symbol IN ('BRCA1', 'TP53', 'ATM', 'EGFR', 'CFTR') GROUP BY gene.hgnc_symbol ORDER BY gene.hgnc_symbol"
+    },
+    {
+      "id": "genes-silent-in-most-samples",
+      "category": "domain-semantics",
+      "question": "Which genes are silent in more than half of our samples?",
+      "intent": "Zero-inflation read the other way: the zeros are the answer, so an engine that treats them as missing returns nothing.",
+      "notes": "Nine genes have tpm = 0 in more than half of the 68 non-control samples they were measured in, the dataset's default filter having dropped the controls (RET 43, F8 42, MLH1 41, TSC2 40, TP53 38, KRAS 37, PMS2 37, NF2 36, NF1 35); MYBPC3 sits on the boundary at exactly 34 of 68, which is half and not more than half, so the question's wording keeps it out. An engine that reads tpm = 0 as missing filters the evidence away and reports no silent genes; one that uses IS NULL returns zero rows because tpm is NOT NULL. Guards the zero-is-data semantics from the opposite direction to mean-expression-by-gene.",
+      "checks": [
+        { "type": "includes", "value": "F8" },
+        { "type": "matches", "pattern": "\\bRET\\b" },
+        { "type": "calledTool", "tool": "run_readonly_sql" },
+        { "type": "noToolErrors" }
+      ],
+      "expectedSql": "SELECT gene.hgnc_symbol AS gene, COUNT(*) FILTER (WHERE expression.tpm = 0) AS silent_samples, COUNT(*) AS samples_measured FROM genomics.gene_expression expression JOIN genomics.samples sample ON sample.id = expression.sample_id JOIN genomics.genes gene ON gene.id = expression.gene_id WHERE sample.is_control = false GROUP BY gene.hgnc_symbol HAVING COUNT(*) FILTER (WHERE expression.tpm = 0) * 2 > COUNT(*) ORDER BY silent_samples DESC, gene.hgnc_symbol"
+    },
+    {
+      "id": "high-confidence-calls",
+      "category": "quality-filter",
+      "question": "How many of our variant calls are high-confidence?",
+      "intent": "Requires knowing that confidence lives in filter_status, and that LOW_QUAL calls are a real slice worth naming.",
+      "notes": "3943 of the 4675 calls on non-control samples are PASS (84.34%) and 732 are LOW_QUAL (15.66%); the reference obeys the dataset's default filter and leaves the control samples' 588 calls out. Counting the table gives 5263, and genotype_quality is a tempting but different column. Reporting both statuses keeps the excluded 15% visible instead of leaving the reader to assume the fixture is clean. Guards against quality filters being dropped or invented from the wrong column.",
+      "checks": [
+        { "type": "matches", "pattern": "3[,.]?943" },
+        { "type": "includes", "value": "PASS" },
+        { "type": "calledTool", "tool": "run_readonly_sql" },
+        { "type": "noToolErrors" }
+      ],
+      "expectedSql": "SELECT call.filter_status, COUNT(*) AS calls FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id WHERE sample.is_control = false GROUP BY call.filter_status ORDER BY calls DESC, call.filter_status"
+    },
+    {
+      "id": "coverage-by-assay",
+      "category": "unit-confusion",
+      "question": "What is the average sequencing coverage for each assay type?",
+      "intent": "mean_coverage is a per-sample fold-coverage figure, so it is averaged, never summed, and never reported as a count of anything.",
+      "notes": "samples.mean_coverage is numeric(6,1) and reads like a count: across the non-control samples the dataset's default filter keeps, PANEL samples run 192.3-586.4, WES 59.6-168.0, WGS 24.7-49.4. Averaging gives PANEL 408.4 (23 samples), WES 110.3 (55), WGS 35.8 (47); summing gives five-figure numbers that look like read counts and are meaningless. The ordering is also counter-intuitive — the deepest assay is the narrowest one — so an answer that reasons from assay names rather than the data gets it backwards. Guards against summing an average and against describing fold coverage as reads or samples.",
+      "checks": [
+        { "type": "includes", "value": "PANEL" },
+        { "type": "matches", "pattern": "408" },
+        { "type": "calledTool", "tool": "run_readonly_sql" },
+        { "type": "noToolErrors" }
+      ],
+      "expectedSql": "SELECT sample.assay, COUNT(*) AS samples, ROUND(AVG(sample.mean_coverage), 1) AS avg_mean_coverage FROM genomics.samples sample WHERE sample.is_control = false GROUP BY sample.assay ORDER BY sample.assay"
+    },
+    {
+      "id": "variants-by-type",
+      "category": "control",
+      "question": "How many variants of each type do we have?",
+      "intent": "Plain categorical breakdown over one table — the healthy baseline for this fixture.",
+      "notes": "SNV 371, DELETION 34, INSERTION 30, INDEL 15. No ratio, no nulls, no semantics: if this fails, the problem is schema linking rather than any planted trap, and no guard may fire on it.",
+      "checks": [
+        { "type": "includes", "value": "SNV" },
+        { "type": "matches", "pattern": "371" },
+        { "type": "calledTool", "tool": "run_readonly_sql" },
+        { "type": "noToolErrors" }
+      ],
+      "expectedSql": "SELECT variant.variant_type, COUNT(*) AS variants FROM genomics.variants variant GROUP BY variant.variant_type ORDER BY variants DESC, variant.variant_type"
+    },
+    {
+      "id": "samples-per-collection-year",
+      "category": "control",
+      "question": "How many samples did we collect in each year, counting every sample on record, controls included?",
+      "intent": "Healthy aggregate over a date column whose question explicitly asks for controls too, so the default filter must not fire.",
+      "notes": "2023: 68, 2024: 72 — all 140 samples, controls included, because the question explicitly asks for every sample on record, which is the escape hatch the dataset's default-filter knowledge entry names. The counterpart to cohort-sample-count and samples-sequenced-2015: the control filter must NOT be applied here and the coverage caveat must not be volunteered as a problem. Guards against a fix for the default-filter or out-of-scope cases over-firing on an ordinary question.",
+      "checks": [
+        { "type": "includes", "value": "2023" },
+        { "type": "matches", "pattern": "\\b68\\b" },
+        { "type": "calledTool", "tool": "run_readonly_sql" },
+        { "type": "noToolErrors" }
+      ],
+      "expectedSql": "SELECT EXTRACT(YEAR FROM sample.collected_on)::int AS collection_year, COUNT(*) AS samples FROM genomics.samples sample GROUP BY collection_year ORDER BY collection_year"
+    }
+  ]
+}

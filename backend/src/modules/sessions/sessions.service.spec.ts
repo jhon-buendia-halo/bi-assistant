@@ -90,6 +90,12 @@ describe('SessionsService streaming', () => {
         datasetId?: string;
       }[];
       tables?: string[];
+      /**
+       * Token counts as the model stream reports them. Left undefined, the
+       * stream carries neither field — a provider that reports nothing.
+       */
+      totalUsage?: Promise<unknown>;
+      usage?: Promise<unknown>;
       /** Careful mode: what the verifier replies and what its SQL returns. */
       crossCheck?: {
         sql?: string;
@@ -120,6 +126,8 @@ describe('SessionsService streaming', () => {
       stream: jest.fn().mockResolvedValue({
         fullStream,
         text: Promise.resolve(''),
+        ...(options.totalUsage ? { totalUsage: options.totalUsage } : {}),
+        ...(options.usage ? { usage: options.usage } : {}),
       }),
       generate: jest.fn().mockResolvedValue({
         text:
@@ -266,6 +274,67 @@ describe('SessionsService streaming', () => {
       }),
     );
     expect(events.at(-1)).toEqual({ type: 'done', session });
+  });
+
+  describe('token accounting', () => {
+    // Measured, never estimated: the harness reads these off the persisted
+    // answer, so what the provider reported has to survive the turn.
+    it("records the provider's token counts on the answer", async () => {
+      const { service, session } = buildStreaming(
+        answerStream([{ sql: 'select 1', rows: [{ n: 1 }] }]),
+        {
+          totalUsage: Promise.resolve({
+            inputTokens: 1200,
+            outputTokens: 340,
+            totalTokens: 1540,
+            reasoningTokens: 64,
+          }),
+        },
+      );
+
+      await service.streamMessage('session-1', 'Why?', () => {});
+
+      expect(session.messages.at(-1)?.usage).toEqual({
+        inputTokens: 1200,
+        outputTokens: 340,
+        totalTokens: 1540,
+        reasoningTokens: 64,
+        cachedInputTokens: 0,
+        calls: 1,
+      });
+    });
+
+    it('falls back to per-step usage when no total is reported', async () => {
+      const { service, session } = buildStreaming(
+        answerStream([{ sql: 'select 1', rows: [{ n: 1 }] }]),
+        {
+          totalUsage: Promise.resolve(undefined),
+          usage: Promise.resolve({ promptTokens: 10, completionTokens: 5 }),
+        },
+      );
+
+      await service.streamMessage('session-1', 'Why?', () => {});
+
+      expect(session.messages.at(-1)?.usage).toEqual(
+        expect.objectContaining({ inputTokens: 10, outputTokens: 5, calls: 1 }),
+      );
+    });
+
+    it('leaves usage off — not zeroed — when the provider reports nothing', async () => {
+      const { service, session } = buildStreaming(
+        answerStream([{ sql: 'select 1', rows: [{ n: 1 }] }]),
+        {
+          totalUsage: Promise.reject(new Error('no usage for this deployment')),
+        },
+      );
+
+      await service.streamMessage('session-1', 'Why?', () => {});
+
+      expect(session.messages.at(-1)).toEqual(
+        expect.objectContaining({ role: 'assistant' }),
+      );
+      expect(session.messages.at(-1)?.usage).toBeUndefined();
+    });
   });
 
   it('builds the interpretation line from the queries that ran', async () => {

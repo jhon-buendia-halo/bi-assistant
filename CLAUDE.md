@@ -167,6 +167,7 @@ How the app is built and works is in [specs/system/](specs/system/): [tech-stack
 - **Renaming a collection or a persisted field needs a migration**, or existing installs silently start empty: `LEGACY_TABLE_NAMES` for tables, `LEGACY_DOC_FIELDS` for fields on sorted collections (raw SQL, so `updatedAt` is not restamped), covered by `database.module.spec.ts`. Record it in [data-model.md](specs/system/data-model.md).
 - **New agent** = a file in `src/mastra/agents/` plus registration in `src/mastra/index.ts`, and an entry in [agents.md](specs/system/agents.md). Its `model` is `async () => resolveAgentModel()`; never hardcode a provider.
 - `APP_DATA_DIR` is read at import time by `database.module.ts` and `mastra/storage.ts`, so it must be set before the app module is imported (the CLI does this).
+- **Eval question sets are JSON suites** in `src/mastra/evals/suites/<id>.json`, copied into `dist` by the `nest-cli.json` assets. A case may use each check type at most once (`runEvals` keys scores by scorer id, so two `includes` collapse into one). A suite over a bundled sample names it with `fixtureId` and never repeats the registry's entity list. Run `npm run eval:validate -- --suite <id>` after editing reference SQL or regenerating a fixture. See [agents-evals](specs/capabilities/agents-evals/spec.md).
 
 ### Versioning
 

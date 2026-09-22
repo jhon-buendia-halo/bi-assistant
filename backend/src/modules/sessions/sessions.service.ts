@@ -27,6 +27,7 @@ import {
 } from '../../mastra/tools/visual.tools';
 import { SESSION_WORKSPACE_CONTEXT_KEY } from '../../mastra/session-workspaces';
 import type { KnowledgeUse } from '../knowledge/entities/knowledge-snippet.entity';
+import { extractUsage, type TokenUsage } from '../agents/eval-telemetry';
 import {
   entityOrientationLines,
   schemaSnapshotBlock,
@@ -94,6 +95,61 @@ const CROSS_CHECK_AGREE_SHAPE_NOTE =
 const CROSS_CHECK_DISAGREE_NOTE = 'results differ — treat with care';
 /** Rows the cross-check query may return — matches what the answer stored. */
 const CROSS_CHECK_ROW_LIMIT = STORED_ROWS_CAP;
+/** How long the turn waits for the provider's token counts before giving up. */
+const USAGE_WAIT_MS = 2_000;
+
+/**
+ * Token counts for one turn, read off the model stream.
+ *
+ * The smallest possible seam for cost accounting: the stream object already
+ * carries the provider's own numbers, so nothing has to wrap the model, count
+ * characters or guess. Two deliberate choices:
+ *
+ * - `totalUsage` first. It spans every step of a multi-step turn (the tool
+ *   loop included); `usage` can be the final step alone, so it is the
+ *   fallback, not the first choice.
+ * - Bounded wait. `totalUsage` settles when the model stream finishes, and a
+ *   turn that ended early — a clarification breaks the loop, the user stops
+ *   it — may never see that finish chunk. A turn must never hang on its own
+ *   bookkeeping, so an unresolved reading is simply "not observed" and the
+ *   message is persisted without a `usage` field.
+ */
+async function readTurnUsage(stream: {
+  totalUsage?: Promise<unknown>;
+  usage?: Promise<unknown>;
+}): Promise<TokenUsage | undefined> {
+  // One deadline for both readings, so a turn that reports nothing waits once.
+  const deadline = Date.now() + USAGE_WAIT_MS;
+  const settle = async (
+    pending: Promise<unknown> | undefined,
+  ): Promise<unknown> => {
+    if (!pending) return undefined;
+    // Swallow the rejection here, not in the race: a provider error that
+    // arrives after the timeout must not surface as an unhandled rejection.
+    const guarded = pending.then(
+      (value) => value,
+      () => undefined,
+    );
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      return await Promise.race([
+        guarded,
+        new Promise<undefined>((resolve) => {
+          timer = setTimeout(
+            () => resolve(undefined),
+            Math.max(0, deadline - Date.now()),
+          );
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  };
+  return (
+    extractUsage({ totalUsage: await settle(stream.totalUsage) }) ??
+    extractUsage({ usage: await settle(stream.usage) })
+  );
+}
 
 export type StreamEvent = {
   type:
@@ -1153,6 +1209,10 @@ export class SessionsService implements OnModuleInit {
       if (corrected) text = corrected;
     }
 
+    // What the turn cost, read once, before the answer is written. Kept on the
+    // message so a cost log never has to re-derive it — see `ChatMessage.usage`.
+    const usage = await readTurnUsage(stream);
+
     // Visual tools persist metadata mid-turn; reload so this write keeps it.
     const fresh = await this.get(id);
     const messages = fresh.messages;
@@ -1171,6 +1231,7 @@ export class SessionsService implements OnModuleInit {
         ...(entities.length ? { entities } : {}),
         ...(reasoning ? { reasoning } : {}),
         ...(knowledge ? { knowledge } : {}),
+        ...(usage ? { usage } : {}),
       });
     } else if (text.trim() || visualEvent) {
       const interpretation = interpretationLine(data, entities);
@@ -1195,6 +1256,7 @@ export class SessionsService implements OnModuleInit {
           : {}),
         ...(visualEvent ? { visual: visualEvent } : {}),
         ...(crossChecked ? { crossCheck: crossChecked } : {}),
+        ...(usage ? { usage } : {}),
       });
     }
     const updated = await this.repository.update(id, { messages });

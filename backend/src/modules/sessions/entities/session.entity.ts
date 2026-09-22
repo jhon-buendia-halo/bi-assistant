@@ -1,4 +1,5 @@
 import type { KnowledgeUse } from '../../knowledge/entities/knowledge-snippet.entity';
+import type { TokenUsage } from '../../agents/eval-telemetry';
 
 export type { KnowledgeUse };
 
@@ -112,6 +113,19 @@ export interface ChatMessage {
    * the report's executive summary; the full markdown lives in the workspace.
    */
   report?: AnalysisReport;
+  /**
+   * Tokens the provider reported for the turn that produced this answer, read
+   * off the model stream at persist time. **Measured, never estimated** —
+   * absent means the provider reported nothing, which is not the same as zero
+   * (see `modules/agents/eval-telemetry.ts`). It covers the turn's own agent
+   * run, every step of it; the side passes a turn can make — the grounding
+   * guard, the tool-only synthesis, careful mode's cross-check, the visual
+   * designer sub-calls — are separate agent calls and are not counted here.
+   *
+   * Written so an eval run can report what a turn cost without the harness
+   * having to wrap the provider.
+   */
+  usage?: TokenUsage;
 }
 
 export interface AnalysisReport {

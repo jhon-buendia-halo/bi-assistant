@@ -25,15 +25,37 @@ export type AgentModelConfig =
 export type AgentModelResolver = () => Promise<AgentModelConfig>;
 
 let resolver: AgentModelResolver | null = null;
+let lastModelId: string | undefined;
 
 export function setAgentModelResolver(fn: AgentModelResolver): void {
   resolver = fn;
 }
 
+/** The router id out of either config shape — never the key that goes with it. */
+export function agentModelId(config: AgentModelConfig): string {
+  return typeof config === 'string' ? config : config.id;
+}
+
+/**
+ * The model id the agents most recently ran on, or `undefined` before the
+ * first call. Recorded here because nothing else can answer the question
+ * truthfully: settings can change mid-run, and `LlmService` knows what is
+ * *configured*, not what a given run actually spent tokens on. Eval runs log
+ * this against their token counts, since a count without the model that
+ * produced it cannot be priced or compared.
+ */
+export function lastAgentModelId(): string | undefined {
+  return lastModelId;
+}
+
 export async function resolveAgentModel(): Promise<AgentModelConfig> {
   if (resolver) {
-    return resolver();
+    const config = await resolver();
+    lastModelId = agentModelId(config);
+    return config;
   }
   // Fallback: env-bound string router (OPENAI_API_KEY) when no settings exist.
-  return 'openai/gpt-4o-mini';
+  const fallback: AgentModelConfig = 'openai/gpt-4o-mini';
+  lastModelId = fallback;
+  return fallback;
 }
