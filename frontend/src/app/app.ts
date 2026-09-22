@@ -71,6 +71,7 @@ import {
 } from './features/sessions/models/session.model';
 import { ReasoningEffort } from './features/llm/models/llm.model';
 import { ToastService } from './core/toast/toast.service';
+import { APP_VERSION } from './core/config/app-version';
 
 type SettingsSection = 'datasources' | 'llm' | 'testing-data' | null;
 type MainView =
@@ -115,6 +116,9 @@ const RIGHT_PANEL_WIDTH_STORAGE_KEY = 'questions-to-insights:right-panel-width';
   styleUrl: './app.scss',
 })
 export class App {
+  /** Shown in the settings sidebar footer; matches the installer's version. */
+  readonly appVersion = APP_VERSION;
+
   readonly ArrowLeft = ArrowLeft;
   readonly Bot = Bot;
   readonly BookOpen = BookOpen;

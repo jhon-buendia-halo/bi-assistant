@@ -193,6 +193,23 @@ export class SessionChat implements OnDestroy {
   });
   /** Job id whose report is being downloaded right now. */
   readonly reportDownloading = signal<string | null>(null);
+  /**
+   * Opening message for a session nobody has asked anything in yet. Rendered
+   * client-side only — it never enters the transcript, so it costs the model
+   * no context and cannot be mistaken for something the assistant said.
+   */
+  readonly showWelcome = computed(
+    () => this.messages().length === 0 && !this.sending(),
+  );
+  /** Datasets wired to this session, named in the welcome block. */
+  readonly welcomeDatasets = computed(() => this.session().datasets ?? []);
+  /** Starter questions offered with the welcome block. */
+  readonly starterPrompts: readonly string[] = [
+    'What data is available here? Summarise the tables and the key metrics.',
+    'What stands out in this data right now? Give me the headline numbers.',
+    'How have the main metrics moved over the last 12 months?',
+  ];
+
   /** Chat-history navigator (Conductor-style tick strip). */
   readonly historyOpen = signal(false);
   readonly historyItems = computed(() =>
@@ -282,6 +299,17 @@ export class SessionChat implements OnDestroy {
   }
 
   /** Chip actions: prefill the composer, never send — the user decides. */
+  /** Put a starter question in the composer; the user sends it themselves. */
+  useStarterPrompt(prompt: string): void {
+    this.draft.set(prompt);
+    setTimeout(() => {
+      const el = this.composer()?.nativeElement;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+    });
+  }
+
   useDrillPrompt(): void {
     this.fillComposer(drillPrompt);
   }

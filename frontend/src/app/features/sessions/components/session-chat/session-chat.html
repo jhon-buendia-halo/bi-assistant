@@ -31,6 +31,53 @@
   <!-- Messages -->
   <div #scroller class="min-h-0 flex-1 overflow-y-auto px-6 py-6">
     <div class="mx-auto flex w-full max-w-[860px] flex-col gap-5">
+      @if (showWelcome()) {
+        <!--
+          Opening message for an empty session. Client-side only: it is never
+          persisted and never sent to the model.
+        -->
+        <div
+          data-testid="session-welcome"
+          class="flex flex-col gap-3 rounded-2xl border border-white/10 bg-[#232323] p-5"
+        >
+          <div class="flex items-center gap-2.5">
+            <span
+              class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/5 text-zinc-300"
+            >
+              <lucide-angular [img]="Sparkles" [size]="15" />
+            </span>
+            <span class="text-[14px] font-medium text-zinc-100">
+              {{ session().name }} is ready
+            </span>
+          </div>
+          <p class="text-[13px] leading-6 text-zinc-400">
+            Ask a question in plain English and I will query your data, explain
+            how I got the answer and turn it into an interactive visual.
+            @if (welcomeDatasets().length > 0) {
+              <span class="text-zinc-500">
+                Connected to
+                {{ welcomeDatasets().join(", ") }}.
+              </span>
+            }
+          </p>
+          <div class="flex flex-col gap-1.5">
+            <span class="text-[11px] font-medium tracking-wide text-zinc-500">
+              Try one of these:
+            </span>
+            <div class="flex flex-wrap gap-2">
+              @for (prompt of starterPrompts; track prompt) {
+                <button
+                  type="button"
+                  (click)="useStarterPrompt(prompt)"
+                  class="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-left text-[12px] text-zinc-300 hover:border-white/20 hover:bg-white/[0.08]"
+                >
+                  {{ prompt }}
+                </button>
+              }
+            </div>
+          </div>
+        </div>
+      }
       @for (
         message of messages();
         track message.at + message.role;

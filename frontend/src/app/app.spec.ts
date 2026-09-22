@@ -29,6 +29,21 @@ describe('App', () => {
     expect(compiled.querySelector('[title="Help"]')).toBeFalsy();
   });
 
+  it('should show the app version in the settings sidebar', () => {
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.querySelector('[data-testid="app-version"]')).toBeFalsy();
+
+    fixture.componentInstance.settingsOpen.set(true);
+    fixture.detectChanges();
+    const version = compiled.querySelector('[data-testid="app-version"]');
+    expect(version?.textContent).toContain(
+      `v${fixture.componentInstance.appVersion}`,
+    );
+    expect(fixture.componentInstance.appVersion).toMatch(/^\d+\.\d+\.\d+/);
+  });
+
   it('should resize and persist the right panel width', () => {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
