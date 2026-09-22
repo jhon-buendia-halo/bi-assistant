@@ -642,7 +642,10 @@
                   <option value="">No datasources configured</option>
                 }
                 @for (datasource of datasources(); track datasource.id) {
-                  <option [value]="datasource.id">
+                  <option
+                    [value]="datasource.id"
+                    [selected]="datasource.id === selectedDatasourceId()"
+                  >
                     {{ datasource.name }} · {{ kindLabel(datasource.kind) }}
                   </option>
                 }
@@ -678,7 +681,36 @@
               }
             </div>
 
-            @if (scopeDatasets().length > 0) {
+            <!-- Which database the questions run against -->
+            @if (datasetNames().length > 0) {
+              <div
+                data-testid="eval-dataset-scope"
+                class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5"
+              >
+                <span class="text-[12px] text-zinc-500">Evaluate against</span>
+                @for (name of datasetNames(); track name) {
+                  <label
+                    [attr.data-testid]="'eval-dataset-' + name"
+                    class="flex cursor-pointer items-center gap-1.5 text-[12px] text-zinc-400"
+                  >
+                    <input
+                      type="checkbox"
+                      [checked]="isDatasetSelected(name)"
+                      (change)="toggleDataset(name)"
+                      [disabled]="running() || runStarting()"
+                      class="h-3.5 w-3.5 accent-zinc-300"
+                    />
+                    {{ name }}
+                  </label>
+                }
+                @if (selectedDatasets().length === 0) {
+                  <span class="text-[11px] text-zinc-600"
+                    >set default —
+                    {{ scopeSelection().join(", ") || "none" }}</span
+                  >
+                }
+              </div>
+            } @else if (scopeDatasets().length > 0) {
               <p class="mt-2 text-[12px] text-zinc-500">
                 Scoped to
                 <span class="text-zinc-400">{{
@@ -715,11 +747,14 @@
                   (change)="onCategoryFilterChange($event)"
                   class="rounded-lg border border-white/15 bg-[#232323] px-2.5 py-1.5 text-[12px] text-zinc-200"
                 >
-                  <option value="">
+                  <option value="" [selected]="categoryFilter() === ''">
                     All categories ({{ evalCases().length }})
                   </option>
                   @for (entry of evalCategories(); track entry.category) {
-                    <option [value]="entry.category">
+                    <option
+                      [value]="entry.category"
+                      [selected]="entry.category === categoryFilter()"
+                    >
                       {{ entry.category }} ({{ entry.count }})
                     </option>
                   }

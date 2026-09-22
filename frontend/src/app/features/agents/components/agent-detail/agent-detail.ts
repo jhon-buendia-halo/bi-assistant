@@ -56,6 +56,7 @@ import {
   kindLabel,
 } from '../../../datasources/models/datasource.model';
 import { DatasourcesApiService } from '../../../datasources/services/datasources-api.service';
+import { DatasetsApiService } from '../../../datasets/services/datasets-api.service';
 
 type AgentTab = 'prompt' | 'tools' | 'memory' | 'model' | 'evals';
 /** Sub-tabs inside the evals tab. */
@@ -90,6 +91,7 @@ export class AgentDetail implements OnDestroy {
 
   private readonly api = inject(AgentsApiService);
   private readonly datasourcesApi = inject(DatasourcesApiService);
+  private readonly datasetsApi = inject(DatasetsApiService);
   private readonly evalSelection = inject(EvalSelectionService);
   private readonly toast = inject(ToastService);
 
@@ -144,6 +146,7 @@ export class AgentDetail implements OnDestroy {
       this.evalsRequested.set(true);
       this.loadEvals(this.agentKey());
       this.loadDatasources();
+      this.loadDatasets();
     });
 
     // Reload whenever the selected agent changes.
@@ -153,6 +156,8 @@ export class AgentDetail implements OnDestroy {
       this.error.set(null);
       this.activeTab.set('prompt');
       this.evalsRequested.set(false);
+      // Orphan any evals request still in flight for the previous agent.
+      this.evalsRequestId++;
       this.evalSets.set([]);
       this.selectedSetId.set(null);
       this.categoryFilter.set('');
@@ -198,11 +203,19 @@ export class AgentDetail implements OnDestroy {
   /** Set once the evals tab has triggered its one fetch for this agent. */
   private readonly evalsRequested = signal(false);
 
+  /**
+   * Bumped per request (and when the agent changes): a slow response for an
+   * agent the user has left must not overwrite the current one's sets.
+   */
+  private evalsRequestId = 0;
+
   private loadEvals(key: string): void {
+    const requestId = ++this.evalsRequestId;
     this.evalsLoading.set(true);
     this.evalsError.set(null);
     this.api.getAgentEvals(key).subscribe({
       next: (res) => {
+        if (requestId !== this.evalsRequestId) return;
         this.evalSets.set(res.sets);
         // No set is opened for you — the questions stay hidden until one is
         // clicked, so the tab always starts on the set list.
@@ -212,6 +225,7 @@ export class AgentDetail implements OnDestroy {
         this.evalsLoading.set(false);
       },
       error: (err) => {
+        if (requestId !== this.evalsRequestId) return;
         this.evalsError.set(err?.error?.message ?? 'Backend unreachable');
         this.evalsLoading.set(false);
       },
@@ -222,7 +236,8 @@ export class AgentDetail implements OnDestroy {
    * Open a question set, revealing its questions; clicking the open set again
    * closes it. Opening ticks all of that set's questions, so a selection is
    * never left pointing at questions that are no longer on screen. The last
-   * run's results belong to whichever set it ran, so they are cleared too.
+   * run's results belong to whichever set it ran, so they are cleared too, and
+   * so is an explicit dataset scope picked for the previous set.
    */
   selectSet(setId: string | null): void {
     const next = this.selectedSetId() === setId ? null : setId;
@@ -233,6 +248,7 @@ export class AgentDetail implements OnDestroy {
       this.runStatus.set('idle');
       this.runCurrentQuestion.set(null);
       this.runDatasets.set([]);
+      this.selectedDatasets.set([]);
     }
     this.selectedSetId.set(next);
     this.categoryFilter.set('');
@@ -456,6 +472,10 @@ export class AgentDetail implements OnDestroy {
   /** Datasources offered in the run dropdown. */
   readonly datasources = signal<Datasource[]>([]);
   readonly selectedDatasourceId = signal<string>('');
+  /** Every dataset name on the chosen datasource. */
+  readonly datasetNames = signal<string[]>([]);
+  /** Datasets the run is scoped to. Empty = the open set's own. */
+  readonly selectedDatasets = signal<string[]>([]);
 
   /** Live state of the current run. */
   readonly runStarting = signal(false);
@@ -478,6 +498,56 @@ export class AgentDetail implements OnDestroy {
     return this.runResults().find((result) => result.id === caseId);
   }
 
+  /** Dataset names on the chosen datasource, for the scope picker. */
+  private allDatasets = signal<{ name: string; datasourceId?: string }[]>([]);
+
+  private loadDatasets(): void {
+    this.datasetsApi.getDatasets().subscribe({
+      next: (res) => {
+        this.allDatasets.set(res.datasets ?? []);
+        this.syncDatasetNames();
+      },
+      error: () => this.allDatasets.set([]),
+    });
+  }
+
+  private syncDatasetNames(): void {
+    const id = this.selectedDatasourceId();
+    const names = this.allDatasets()
+      .filter((d) => !id || d.datasourceId === id)
+      .map((d) => d.name);
+    this.datasetNames.set(names);
+    this.selectedDatasets.update((chosen) =>
+      chosen.filter((name) => names.includes(name)),
+    );
+  }
+
+  /** Checked datasets, or the open set's own when nothing is checked. */
+  readonly scopeSelection = computed(() => {
+    const chosen = this.selectedDatasets();
+    return chosen.length ? chosen : (this.selectedSet()?.datasets ?? []);
+  });
+
+  /**
+   * Plain checkbox semantics over what is shown: the first click starts from
+   * the set's defaults that exist on this datasource, so ticking a second
+   * dataset adds it rather than replacing the default. Unticking everything
+   * falls back to the set's own datasets.
+   */
+  toggleDataset(name: string): void {
+    const names = this.datasetNames();
+    const current = this.scopeSelection().filter((n) => names.includes(n));
+    this.selectedDatasets.set(
+      current.includes(name)
+        ? current.filter((n) => n !== name)
+        : [...current, name],
+    );
+  }
+
+  isDatasetSelected(name: string): boolean {
+    return this.scopeSelection().includes(name);
+  }
+
   private loadDatasources(): void {
     this.datasourcesApi.list().subscribe({
       next: (res) => {
@@ -485,6 +555,7 @@ export class AgentDetail implements OnDestroy {
         if (!this.selectedDatasourceId() && res.datasources.length > 0) {
           this.selectedDatasourceId.set(res.datasources[0].id);
         }
+        this.syncDatasetNames();
       },
       error: () => this.datasources.set([]),
     });
@@ -492,6 +563,8 @@ export class AgentDetail implements OnDestroy {
 
   onDatasourceChange(event: Event): void {
     this.selectedDatasourceId.set((event.target as HTMLSelectElement).value);
+    this.selectedDatasets.set([]);
+    this.syncDatasetNames();
   }
 
   startRun(): void {
@@ -507,8 +580,12 @@ export class AgentDetail implements OnDestroy {
     this.syncSelection();
 
     const suiteId = this.selectedSetId() || undefined;
+    // Only an explicit choice is sent: with none, the backend scopes to the
+    // set's own datasets when the datasource has them and otherwise lets the
+    // set's required entities decide (a dataset saved under another name).
+    const datasets = this.selectedDatasets();
     this.api
-      .startEvalRun(this.agentKey(), datasourceId, caseIds, suiteId)
+      .startEvalRun(this.agentKey(), datasourceId, caseIds, suiteId, datasets)
       .subscribe({
         next: (res) => {
           this.runStarting.set(false);

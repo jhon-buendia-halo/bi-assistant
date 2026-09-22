@@ -86,10 +86,16 @@ export class AgentsApiService {
     datasourceId: string,
     caseIds: string[],
     suiteId?: string,
+    datasets?: string[],
   ): Observable<EvalRunStartResult> {
     return this.http.post<EvalRunStartResult>(
       `${API_BASE_URL}/agents/${encodeURIComponent(key)}/evals/run`,
-      suiteId ? { datasourceId, caseIds, suiteId } : { datasourceId, caseIds },
+      {
+        datasourceId,
+        caseIds,
+        ...(suiteId ? { suiteId } : {}),
+        ...(datasets?.length ? { datasets } : {}),
+      },
     );
   }
 

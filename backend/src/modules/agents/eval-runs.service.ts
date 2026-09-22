@@ -169,6 +169,8 @@ export class EvalRunsService {
      * the named questions belong to — case ids are unique across suites.
      */
     suiteId?: string,
+    /** Datasets to run against. Defaults to the suite's own. */
+    datasetNames?: string[],
   ): Promise<{ jobId: string } | { conflictWith: string } | { error: string }> {
     if (agentKey !== 'assistant') {
       return { error: `Agent "${agentKey}" has no evals to run` };
@@ -202,22 +204,27 @@ export class EvalRunsService {
       return { error: 'Pick at least one question to run' };
     }
 
-    // Scope the run to the datasets the suite declares, when the datasource
-    // actually has them. Handing the agent every dataset on the datasource —
-    // which is what this used to do — lets a genomics run see World Cup and
-    // health-insurance tables: extra schema for the model to wade through, and
-    // a question that should be out of scope quietly becoming answerable.
-    //
-    // The fallback matters: a suite names its datasets by the convention
-    // `fixtures:register` uses, but an operator may have saved the same tables
-    // under their own name. When not every declared dataset is present, fall
-    // back to the whole datasource and let `requiredEntities` decide — that is
-    // the check that actually guarantees the questions can run.
+    // Scope: the caller's explicit choice, else the suite's own datasets, else
+    // the whole datasource. Running a suite against every dataset on the
+    // datasource lets a genomics run see World Cup tables — extra schema, and
+    // out-of-scope questions quietly becoming answerable.
     const byName = new Map(bound.map((dataset) => [dataset.name, dataset]));
-    const declared = suite.datasets.map((name) => byName.get(name));
-    const scoped = declared.every(Boolean)
-      ? (declared as typeof bound)
-      : bound;
+    let scoped = bound;
+    if (datasetNames?.length) {
+      const missing = datasetNames.filter((name) => !byName.has(name));
+      if (missing.length) {
+        return {
+          error: `That datasource has no dataset named ${missing.join(', ')}`,
+        };
+      }
+      scoped = datasetNames.map((name) => byName.get(name)!);
+    } else {
+      // A suite names its datasets by the `fixtures:register` convention; an
+      // operator may have saved the same tables under another name, so fall
+      // back and let `requiredEntities` decide.
+      const declared = suite.datasets.map((name) => byName.get(name));
+      if (declared.every(Boolean)) scoped = declared as typeof bound;
+    }
 
     // Each suite declares the entities its questions cannot run without, so
     // this rejects a health-insurance run against the World Cup scope (and

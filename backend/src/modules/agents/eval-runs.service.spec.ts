@@ -196,6 +196,61 @@ describe('EvalRunsService dataset validation', () => {
     expect((await runner.status(result.jobId))?.datasets).toEqual(['World Cup']);
   });
 
+  describe('explicit dataset scope', () => {
+    const worldCupTables = [
+      'tournaments',
+      'teams',
+      'matches',
+      'venues',
+      'players',
+      'goals',
+      'match_team_statistics',
+      'v_match_results',
+      'v_player_goal_totals',
+    ].map((table) => `world_cup.world_cup.${table}`);
+    beforeEach(() =>
+      datasets.list.mockResolvedValue([
+        {
+          name: 'World Cup',
+          datasourceId: 'fixtures',
+          datasourceKind: 'postgres',
+          tables: ['world_cup.world_cup.matches'],
+        },
+        {
+          name: 'My World Cup',
+          datasourceId: 'fixtures',
+          datasourceKind: 'postgres',
+          tables: worldCupTables,
+        },
+      ]),
+    );
+
+    it('runs against the datasets the caller names, not the set default', async () => {
+      const runner = service();
+      const result = await runner.start(
+        'assistant',
+        'fixtures',
+        undefined,
+        undefined,
+        ['My World Cup'],
+      );
+      expect(result).toEqual({ jobId: expect.any(String) });
+      if (!('jobId' in result)) throw new Error('Run did not start');
+      expect((await runner.status(result.jobId))?.datasets).toEqual([
+        'My World Cup',
+      ]);
+    });
+
+    it('rejects a dataset name the datasource does not have', async () => {
+      expect(
+        await service().start('assistant', 'fixtures', undefined, undefined, [
+          'Nope',
+        ]),
+      ).toEqual({ error: 'That datasource has no dataset named Nope' });
+      expect(repository.insert).not.toHaveBeenCalled();
+    });
+  });
+
   it('rejects an unknown suite before touching the datasets', async () => {
     datasets.list.mockResolvedValue([]);
     expect(await service().start('assistant', 'wc', undefined, 'nope')).toEqual(

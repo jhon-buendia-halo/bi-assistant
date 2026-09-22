@@ -39,13 +39,19 @@ export class AgentsController {
   async runEvals(
     @Param('key') key: string,
     @Body()
-    body: { datasourceId?: string; caseIds?: string[]; suiteId?: string },
+    body: {
+      datasourceId?: string;
+      caseIds?: string[];
+      suiteId?: string;
+      datasets?: string[];
+    },
   ): Promise<{ ok: boolean; message: string; jobId?: string }> {
     const result = await this.evalRuns.start(
       key,
       body?.datasourceId ?? '',
       Array.isArray(body?.caseIds) ? body.caseIds.map(String) : undefined,
       body?.suiteId ? String(body.suiteId) : undefined,
+      Array.isArray(body?.datasets) ? body.datasets.map(String) : undefined,
     );
     if ('error' in result) return { ok: false, message: result.error };
     if ('conflictWith' in result) {

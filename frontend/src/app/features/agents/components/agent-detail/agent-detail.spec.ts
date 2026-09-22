@@ -213,6 +213,140 @@ describe('AgentDetail evals tab', () => {
     });
   });
 
+  describe('selects', () => {
+    // Options are created by @for in the same pass as the select's [value],
+    // so a plain value binding lands before they exist and the browser falls
+    // back to the first option. [selected] on each option keeps the display
+    // honest when the chosen value is not the first one.
+    it('displays the chosen datasource, not the first option', () => {
+      fixture.componentRef.setInput('agentKey', 'assistant');
+      fixture.detectChanges();
+      component.agent.set({
+        key: 'assistant',
+        id: 'assistant',
+        name: 'Assistant',
+        description: '',
+        tools: [],
+        toolDetails: [],
+      } as never);
+      component.loading.set(false);
+      // Skip the tab's own fetch; this test renders state set by hand.
+      (component as unknown as { evalsRequested: { set(v: boolean): void } })
+        .evalsRequested.set(true);
+      component.activeTab.set('evals');
+      component.evalSets.set([evalSet('world-cup', [evalCase('a', 'control')])]);
+      component.selectSet('world-cup');
+      component.datasources.set([
+        { id: 'ds-1', name: 'First', kind: 'postgres' },
+        { id: 'ds-2', name: 'Second', kind: 'postgres' },
+      ] as never);
+      component.selectedDatasourceId.set('ds-2');
+      component.evalsLoading.set(false);
+      fixture.detectChanges();
+
+      const select: HTMLSelectElement = fixture.nativeElement.querySelector(
+        '[data-testid="eval-datasource-select"]',
+      );
+      expect(select).toBeTruthy();
+      expect(select.value).toBe('ds-2');
+    });
+  });
+
+  describe('stale responses', () => {
+    function deferEvals(): Array<{ next(res: unknown): void }> {
+      const api = (component as any).api;
+      const handlers: any[] = [];
+      spyOn(api, 'getAgentEvals').and.callFake(
+        () => ({ subscribe: (h: any) => handlers.push(h) }) as any,
+      );
+      return handlers;
+    }
+
+    it('ignores a response that lands after a newer one', () => {
+      const handlers = deferEvals();
+      (component as any).loadEvals('assistant');
+      (component as any).loadEvals('assistant');
+
+      // Newest first, then the slow one.
+      handlers[1].next({ sets: [evalSet('genomics', [evalCase('g', 'ties')])] });
+      handlers[0].next({ sets: [evalSet('stale', [evalCase('s', 'ties')])] });
+
+      expect(component.evalSets().map((set) => set.id)).toEqual(['genomics']);
+    });
+
+    it('drops the previous agent\'s sets when the agent changes mid-request', () => {
+      fixture.componentRef.setInput('agentKey', 'assistant');
+      fixture.detectChanges();
+      const handlers = deferEvals();
+      (component as any).loadEvals('assistant');
+
+      fixture.componentRef.setInput('agentKey', 'visualization');
+      fixture.detectChanges();
+      handlers[0].next({ sets: [evalSet('world-cup', [evalCase('a', 'control')])] });
+
+      expect(component.evalSets()).toEqual([]);
+    });
+  });
+
+  describe('dataset scope', () => {
+    beforeEach(() => {
+      component.evalSets.set([
+        evalSet('genomics', [evalCase('g', 'ties')], { datasets: ['Genomics'] }),
+        evalSet('world-cup', [evalCase('a', 'control')], {
+          datasets: ['World Cup'],
+        }),
+      ]);
+      component.selectSet('genomics');
+      component.datasetNames.set(['Genomics', 'Health Insurance']);
+    });
+
+    it("defaults to the open set's own datasets", () => {
+      expect(component.scopeSelection()).toEqual(['Genomics']);
+      expect(component.isDatasetSelected('Genomics')).toBe(true);
+      expect(component.isDatasetSelected('Health Insurance')).toBe(false);
+    });
+
+    it('lets the operator pick the databases explicitly', () => {
+      component.toggleDataset('Health Insurance');
+      expect(component.scopeSelection()).toEqual([
+        'Genomics',
+        'Health Insurance',
+      ]);
+      component.toggleDataset('Genomics');
+      expect(component.scopeSelection()).toEqual(['Health Insurance']);
+      // Unticking the last one falls back to the set's own.
+      component.toggleDataset('Health Insurance');
+      expect(component.scopeSelection()).toEqual(['Genomics']);
+    });
+
+    it('forgets an explicit scope when another set is opened', () => {
+      component.toggleDataset('Health Insurance');
+      component.selectSet('world-cup');
+      expect(component.selectedDatasets()).toEqual([]);
+      expect(component.scopeSelection()).toEqual(['World Cup']);
+    });
+
+    it('sends only an explicit scope with the run', () => {
+      fixture.componentRef.setInput('agentKey', 'assistant');
+      const api = (component as any).api;
+      const start = spyOn(api, 'startEvalRun').and.returnValue({
+        subscribe: () => undefined,
+      } as any);
+      component.selectedDatasourceId.set('ds-1');
+
+      component.startRun();
+      expect(start.calls.mostRecent().args[4]).toEqual([]);
+
+      component.runStarting.set(false);
+      component.toggleDataset('Health Insurance');
+      component.startRun();
+      expect(start.calls.mostRecent().args[4]).toEqual([
+        'Genomics',
+        'Health Insurance',
+      ]);
+    });
+  });
+
   describe('set list', () => {
     beforeEach(() => {
       component.evalSets.set([
