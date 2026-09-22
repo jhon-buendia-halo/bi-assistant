@@ -48,6 +48,7 @@ import { CatalogBrowser } from './features/datasets/components/catalog-browser/c
 import { EntityDetails } from './features/datasets/components/entity-details/entity-details';
 import { DatasetSelectionService } from './features/datasets/services/dataset-selection.service';
 import { AppLogo } from './shared/components/app-logo/app-logo';
+import { BackendStatusBanner } from './shared/components/backend-status-banner/backend-status-banner';
 import { ToastContainer } from './shared/components/toast-container/toast-container';
 import { SystemLogsPanel } from './shared/components/system-logs-panel/system-logs-panel';
 import { DiagnosticsService } from './core/diagnostics/diagnostics.service';
@@ -94,6 +95,7 @@ const RIGHT_PANEL_WIDTH_STORAGE_KEY = 'questions-to-insights:right-panel-width';
   imports: [
     LucideAngularModule,
     AppLogo,
+    BackendStatusBanner,
     DatasourceConfig,
     LlmConfig,
     TestingDataConfig,

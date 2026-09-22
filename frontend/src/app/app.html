@@ -1,7 +1,10 @@
 <div
-  class="flex h-screen bg-[#1c1c1c] text-[13px] text-zinc-300 select-none"
+  class="flex h-screen flex-col bg-[#1c1c1c] text-[13px] text-zinc-300 select-none"
   [class.resizing-right-panel]="rightPanelResizing()"
 >
+  <app-backend-status-banner />
+
+  <div class="flex min-h-0 flex-1">
   @if (sidebarOpen()) {
     @if (settingsOpen()) {
       <!-- Settings panel -->
@@ -619,6 +622,7 @@
       }
     </aside>
   }
+  </div>
 
   @if (systemLogsOpen()) {
     <app-system-logs-panel (dismiss)="systemLogsOpen.set(false)" />

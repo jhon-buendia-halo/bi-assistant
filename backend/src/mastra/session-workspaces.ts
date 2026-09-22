@@ -3,7 +3,9 @@ import {
   existsSync,
   mkdirSync,
   readdirSync,
+  readFileSync,
   renameSync,
+  unlinkSync,
   watch,
   type FSWatcher,
 } from 'fs';
@@ -110,16 +112,70 @@ export function createSessionWorkspace(
   });
 }
 
-/** Copy app-owned reusable skills into each persistent session workspace. */
+/**
+ * Copy app-owned reusable skills into each persistent session workspace.
+ * Best-effort: this runs on every session load (including at module-load
+ * time, restoring workspaces from earlier processes), so a locked target —
+ * enterprise antivirus or roaming-profile sync holding SKILL.md — must never
+ * abort session creation.
+ */
 function seedInteractiveVisualSkill(basePath: string): void {
-  const source = interactiveVisualSkillCandidates.find(existsSync);
-  if (!source) {
-    console.warn('[workspace] interactive-visuals skill asset not found');
-    return;
+  try {
+    const source = interactiveVisualSkillCandidates.find(existsSync);
+    if (!source) {
+      console.warn('[workspace] interactive-visuals skill asset not found');
+      return;
+    }
+    const targetDir = join(
+      basePath,
+      '.agents',
+      'skills',
+      'interactive-visuals',
+    );
+    mkdirSync(targetDir, { recursive: true });
+    const target = join(targetDir, 'SKILL.md');
+
+    // Skip the rewrite when the file is already current: avoids re-touching
+    // (and re-locking) it on every startup for the common case.
+    if (
+      existsSync(target) &&
+      readFileSync(source).equals(readFileSync(target))
+    ) {
+      return;
+    }
+
+    copySkillFile(source, target);
+  } catch (error) {
+    console.warn('[workspace] failed to seed interactive-visuals skill', error);
   }
-  const targetDir = join(basePath, '.agents', 'skills', 'interactive-visuals');
-  mkdirSync(targetDir, { recursive: true });
-  copyFileSync(source, join(targetDir, 'SKILL.md'));
+}
+
+/**
+ * Copy via a temp file + rename so a reader never sees a half-written
+ * SKILL.md, retrying a few times since a lock from antivirus/roaming-profile
+ * sync is usually momentary. Runs at synchronous module load, so retries are
+ * immediate rather than backed off with an async sleep.
+ */
+function copySkillFile(source: string, target: string): void {
+  const tmpPath = `${target}.tmp-${process.pid}`;
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      copyFileSync(source, tmpPath);
+      renameSync(tmpPath, target);
+      return;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      const retryable =
+        code === 'EBUSY' || code === 'EPERM' || code === 'EACCES';
+      try {
+        unlinkSync(tmpPath);
+      } catch {
+        // Best-effort cleanup only; a leftover tmp file is harmless.
+      }
+      if (!retryable || attempt === maxAttempts) throw error;
+    }
+  }
 }
 
 /** Permanently remove the contained filesystem owned by a deleted session. */
@@ -135,9 +191,18 @@ export function discoverSessionWorkspaces(): Workspace[] {
     .filter(
       (entry) => entry.isDirectory() && entry.name.startsWith(WORKSPACE_PREFIX),
     )
-    .map((entry) =>
-      createSessionWorkspace(entry.name.slice(WORKSPACE_PREFIX.length)),
-    );
+    .flatMap((entry) => {
+      // One unreadable/corrupt workspace directory must not abort discovery
+      // for every other session.
+      try {
+        return [
+          createSessionWorkspace(entry.name.slice(WORKSPACE_PREFIX.length)),
+        ];
+      } catch (error) {
+        console.error(`[workspace] failed to restore ${entry.name}`, error);
+        return [];
+      }
+    });
 }
 
 /**

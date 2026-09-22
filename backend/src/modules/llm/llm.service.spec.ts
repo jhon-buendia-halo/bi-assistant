@@ -7,13 +7,37 @@ function serviceWith(opts?: {
   settings?: Awaited<ReturnType<LlmSettingsRepository['get']>>;
   decryptedKey?: string;
 }) {
+  const { service } = serviceWithMocks(opts);
+  return service;
+}
+
+/**
+ * Same as `serviceWith`, but also hands back the repository/crypto mocks for
+ * assertions. The repository mock is stateful (a plain in-memory doc) so a
+ * `save()` followed by `getView()` sees what was actually persisted.
+ */
+function serviceWithMocks(opts?: {
+  settings?: Awaited<ReturnType<LlmSettingsRepository['get']>>;
+  decryptedKey?: string;
+}) {
+  let doc = opts?.settings ?? null;
   const repository = {
-    get: jest.fn().mockResolvedValue(opts?.settings ?? null),
+    get: jest.fn().mockImplementation(() => Promise.resolve(doc)),
+    save: jest.fn().mockImplementation((patch) => {
+      doc = { key: 'llm', ...patch };
+      return Promise.resolve(doc);
+    }),
+    patch: jest.fn().mockImplementation((patch) => {
+      if (!doc) return Promise.resolve(null);
+      doc = { ...doc, ...patch };
+      return Promise.resolve(doc);
+    }),
   } as unknown as LlmSettingsRepository;
   const crypto = {
     decrypt: jest.fn().mockReturnValue(opts?.decryptedKey ?? 'len-key'),
+    encrypt: jest.fn().mockImplementation((v: string) => `enc(${v})`),
   } as unknown as CryptoService;
-  return new LlmService(repository, crypto);
+  return { service: new LlmService(repository, crypto), repository, crypto };
 }
 
 /** Swaps in a fetch stub for one probe and hands back the request it saw. */
@@ -214,5 +238,53 @@ describe('testConnection mirrors the agent request', () => {
     expect((rejected.result as Error).message).toBe(
       "Provider request failed (400) — Unsupported parameter: 'max_tokens'",
     );
+  });
+});
+
+describe('save() enforces test-before-save', () => {
+  const originalFetch = global.fetch;
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  it('rejects and never persists when the probe fails (e.g. a wrong deployment name)', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+      text: jest.fn().mockResolvedValue('Resource not found'),
+    }) as unknown as typeof fetch;
+    const { service, repository } = serviceWithMocks();
+
+    await expect(
+      service.save({
+        provider: 'lenai',
+        model: 'wrong-deployment',
+        baseUrl: 'https://lenai.example.com',
+        apiKey: 'len-key',
+      }),
+    ).rejects.toThrow('Provider request failed (404) — Resource not found');
+    expect(repository.save).not.toHaveBeenCalled();
+  });
+
+  it('persists once the same probe the test-connection endpoint runs succeeds', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: jest
+        .fn()
+        .mockResolvedValue({ choices: [{ message: { content: '{"status":"ok"}' } }] }),
+      text: jest.fn().mockResolvedValue(''),
+    }) as unknown as typeof fetch;
+    const { service, repository } = serviceWithMocks();
+
+    const view = await service.save({
+      provider: 'openai',
+      model: 'gpt-4o-mini',
+      apiKey: 'sk-key',
+    });
+
+    expect(view.configured).toBe(true);
+    expect(repository.save).toHaveBeenCalledTimes(1);
   });
 });

@@ -10,3 +10,11 @@ contextBridge.exposeInMainWorld("systemDiagnostics", {
     return () => ipcRenderer.removeListener("diagnostics:entry", handler);
   },
 });
+
+contextBridge.exposeInMainWorld("desktop", {
+  onBackendStatus: (listener) => {
+    const handler = (_event, payload) => listener(payload);
+    ipcRenderer.on("backend-status", handler);
+    return () => ipcRenderer.removeListener("backend-status", handler);
+  },
+});

@@ -245,6 +245,61 @@ describe('visualSpecSchema', () => {
       dir: 'desc',
     });
   });
+
+  it('drops the sort clause instead of failing when sort.by is null', () => {
+    const parsed = visualSpecSchema.safeParse({
+      spec: 1,
+      chart: {
+        form: 'bar',
+        select: ['payer', 'claims'],
+        x: 'payer',
+        y: 'claims',
+        sort: { by: null, dir: 'desc' },
+      },
+    });
+
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && parsed.data.chart.sort).toBeUndefined();
+  });
+
+  it('drops the sort clause instead of failing when sort itself is null', () => {
+    const parsed = visualSpecSchema.safeParse({
+      spec: 1,
+      chart: {
+        form: 'bar',
+        select: ['payer', 'claims'],
+        x: 'payer',
+        y: 'claims',
+        sort: null,
+      },
+    });
+
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && parsed.data.chart.sort).toBeUndefined();
+  });
+
+  it('drops the sort clause instead of failing when sort.dir is not "asc"/"desc"', () => {
+    const parsed = visualSpecSchema.safeParse({
+      spec: 1,
+      chart: {
+        form: 'bar',
+        select: ['payer', 'claims'],
+        x: 'payer',
+        y: 'claims',
+        sort: { by: 'payer', dir: 'ascending' },
+      },
+    });
+
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && parsed.data.chart.sort).toBeUndefined();
+  });
+
+  it('still rejects a spec missing the required chart/title-level fields', () => {
+    // The total-undefined case (model returned nothing parseable) must keep
+    // failing so the existing retry/fallback path still runs.
+    expect(visualSpecSchema.safeParse(undefined).success).toBe(false);
+    expect(visualSpecSchema.safeParse({ spec: 1 }).success).toBe(false);
+  });
 });
 
 describe('selectRecord', () => {

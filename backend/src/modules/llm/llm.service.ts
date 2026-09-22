@@ -10,6 +10,7 @@ import {
   type AgentModelConfig,
 } from '../../mastra/model-resolver';
 import { rejectsMaxTokens } from '../../mastra/model-compat';
+import { installRetryFetch } from './retry-fetch';
 import { LlmSettingsRepository } from './repositories/llm-settings.repository';
 import {
   LlmProvider,
@@ -100,6 +101,10 @@ export class LlmService implements OnModuleInit {
     // Install the Mastra agent-model resolver: agents call this at generate
     // time, so saved settings apply immediately without a restart.
     setAgentModelResolver(() => this.resolveAgentModel());
+    // Retry 429/5xx from the provider instead of failing an agent turn
+    // outright — see retry-fetch.ts for why this has to patch the process's
+    // global fetch rather than the agent model config.
+    installRetryFetch();
   }
 
   /** Mastra model config from the persisted settings (decrypted key). */
@@ -161,6 +166,13 @@ export class LlmService implements OnModuleInit {
   async save(dto: SaveLlmSettingsDto): Promise<LlmSettingsView> {
     const { provider, model, baseUrl } = this.validate(dto);
     const apiKey = await this.resolveApiKey(dto);
+    // Prove the settings actually work before persisting them — the Windows
+    // diagnostics case that motivated this was a wrong Azure/LenAI
+    // deployment name or baseUrl saved without ever having been tested,
+    // which only surfaced as a user-visible 404 on the next agent turn.
+    // testConnection throws with the same provider-error messages surfaced
+    // by the dedicated test-connection endpoint, so save fails the same way.
+    await this.testConnection({ provider, model, baseUrl, apiKey });
     const existing = await this.repository.get();
     await this.repository.save({
       provider,

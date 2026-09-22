@@ -387,8 +387,32 @@ export class SessionChat implements OnDestroy {
           this.activeStream = null;
           this.stopTimer();
           this.sending.set(false);
+          // Preserve whatever text had already streamed in — the same
+          // rescue `stop()` gives a manually-cancelled turn — before the
+          // error bubble that explains why the turn didn't finish.
+          const partial = this.streamingText().trim();
           this.resetTurnState();
+          const now = Date.now();
+          this.messages.set([
+            ...this.messages(),
+            ...(partial
+              ? [
+                  {
+                    role: 'assistant' as const,
+                    content: partial,
+                    at: new Date(now).toISOString(),
+                  },
+                ]
+              : []),
+            {
+              role: 'assistant' as const,
+              content: message,
+              at: new Date(now + 1).toISOString(),
+              error: true,
+            },
+          ]);
           this.toast.error(message);
+          this.scrollToBottom();
         },
       },
       controller.signal,
@@ -416,6 +440,23 @@ export class SessionChat implements OnDestroy {
     }
     this.resetTurnState();
     this.scrollToBottom();
+  }
+
+  /**
+   * Resend the question behind a failed turn (the error bubble's Retry
+   * action). The error bubble is never persisted, so the backend transcript
+   * still ends with that unanswered user question — `appendUserMessage`'s
+   * dedup reuses it there instead of stacking a duplicate.
+   */
+  retryLastQuestion(index: number): void {
+    if (this.sending()) return;
+    const previous = this.messages()
+      .slice(0, index)
+      .reverse()
+      .find((message) => message.role === 'user');
+    if (!previous) return;
+    this.draft.set(previous.content);
+    this.send();
   }
 
   private resetTurnState(): void {
