@@ -93,29 +93,95 @@ export function toolDataRecord(
 }
 
 /**
+ * One tool result, read across the shapes the SDK has used. The AI SDK
+ * renamed `args`/`result` to `input`/`output` and Mastra wraps each entry in
+ * a `{ type, payload }` chunk; reading only one spelling silently finds
+ * nothing (the same trap `extractToolCalls` in `assistant.evals.ts`
+ * documents), and a record with no rows is indistinguishable from a query
+ * that returned none. Both spellings, both nestings and a JSON-encoded
+ * result are accepted.
+ */
+export function toolResultRecord(entry: unknown): ToolDataRecord | null {
+  const payload = ((entry as { payload?: unknown })?.payload ?? entry) as {
+    toolName?: string;
+    name?: string;
+    args?: unknown;
+    input?: unknown;
+    result?: unknown;
+    output?: unknown;
+  };
+  if (!payload || typeof payload !== 'object') return null;
+  return toolDataRecord(
+    String(payload.toolName ?? payload.name ?? 'tool'),
+    asArgs(payload.input) ?? asArgs(payload.args) ?? {},
+    unwrapToolOutput(payload.output ?? payload.result),
+  );
+}
+
+/** Every data-bearing record in one batch of `toolResults` entries. */
+export function toolResultRecords(entries: unknown): ToolDataRecord[] {
+  if (!Array.isArray(entries)) return [];
+  const records: ToolDataRecord[] = [];
+  for (const entry of entries) {
+    const record = toolResultRecord(entry);
+    if (record) records.push(record);
+  }
+  return records;
+}
+
+/** The call's arguments, or `undefined` when this field does not hold them. */
+function asArgs(value: unknown): Record<string, unknown> | undefined {
+  const parsed = parseJsonObject(value);
+  return parsed && !Array.isArray(parsed)
+    ? (parsed as Record<string, unknown>)
+    : undefined;
+}
+
+/**
+ * The tool's own return value: unwrapped from an AI-SDK output part
+ * (`{ type: 'json', value }`) and parsed when a transport JSON-encoded it.
+ */
+function unwrapToolOutput(value: unknown): unknown {
+  let current = parseJsonObject(value) ?? value;
+  // Bounded: each pass strips exactly one wrapper, and a real SQL result
+  // (which carries `rows`) is never treated as one.
+  for (let depth = 0; depth < 3; depth++) {
+    if (!current || typeof current !== 'object' || Array.isArray(current))
+      break;
+    const part = current as { type?: unknown; value?: unknown; rows?: unknown };
+    if (
+      typeof part.type !== 'string' ||
+      part.value === undefined ||
+      part.rows !== undefined
+    ) {
+      break;
+    }
+    current = parseJsonObject(part.value) ?? part.value;
+  }
+  return current;
+}
+
+/** The value as an object, parsing it first when it is JSON text. */
+function parseJsonObject(value: unknown): object | undefined {
+  if (value && typeof value === 'object') return value;
+  if (typeof value !== 'string') return undefined;
+  const text = value.trim();
+  if (!text.startsWith('{') && !text.startsWith('[')) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(text);
+    return parsed && typeof parsed === 'object' ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Records captured from a non-streamed turn. The stream path reads tool
  * chunks one by one as they arrive; `generate` hands them back in a batch,
  * wrapped or flat depending on the provider, so both shapes are accepted.
  */
 export function toolRecords(result: unknown): ToolDataRecord[] {
-  const entries = (result as { toolResults?: unknown })?.toolResults;
-  if (!Array.isArray(entries)) return [];
-  const records: ToolDataRecord[] = [];
-  for (const entry of entries) {
-    const payload = ((entry as { payload?: unknown })?.payload ?? entry) as {
-      toolName?: string;
-      name?: string;
-      args?: Record<string, unknown>;
-      result?: unknown;
-    };
-    const record = toolDataRecord(
-      payload.toolName ?? payload.name ?? 'tool',
-      payload.args ?? {},
-      payload.result,
-    );
-    if (record) records.push(record);
-  }
-  return records;
+  return toolResultRecords((result as { toolResults?: unknown })?.toolResults);
 }
 
 /**

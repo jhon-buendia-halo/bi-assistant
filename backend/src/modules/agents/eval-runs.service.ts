@@ -5,7 +5,10 @@ import { DatasourcesService } from '../datasources/datasources.service';
 import { SessionsService } from '../sessions/sessions.service';
 import { KnowledgeService } from '../knowledge/knowledge.service';
 import { EvalRunsRepository } from './repositories/eval-runs.repository';
-import { computeRegressionDiff, EvalRegressionSummary } from './eval-regression';
+import {
+  computeRegressionDiff,
+  EvalRegressionSummary,
+} from './eval-regression';
 import {
   DEFAULT_SUITE_ID,
   loadSuite,
@@ -39,6 +42,7 @@ import {
   selectSuiteCases,
   suiteForCases,
 } from '../../mastra/evals/assistant.evals';
+import { resetResultSetCheckWarnings } from '../../mastra/evals/result-set-check';
 
 export type EvalRunStatus = 'running' | 'completed' | 'failed';
 
@@ -268,6 +272,9 @@ export class EvalRunsService {
     cases: AssistantEvalCase[],
     suite: EvalSuite,
   ): Promise<void> {
+    // A measurement gap warns once per run, not once per case (see
+    // `runResultSetCheck`).
+    resetResultSetCheckWarnings();
     // A throwaway session so create_visual/update_visual behave the way they
     // do in a real chat turn (see assistant.evals.ts). Best-effort: a run
     // still measures the agent without one, just with visual-tool support
@@ -285,9 +292,7 @@ export class EvalRunsService {
     // Same curated-knowledge block a real chat turn gets from
     // SessionsService.agentContext, computed once per run — every case in
     // the run shares the same datasets.
-    const knowledgeBlock = await this.knowledge.definitionBlock(
-      view.datasets,
-    );
+    const knowledgeBlock = await this.knowledge.definitionBlock(view.datasets);
     try {
       for (const [index, evalCase] of cases.entries()) {
         view.currentQuestion = evalCase.question;

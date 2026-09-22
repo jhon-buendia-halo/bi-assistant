@@ -16,7 +16,10 @@ import {
 } from '../tools/visual.tools';
 import { getDatasetToolServices } from '../tool-services';
 import { entityOrientationLines } from '../context-blocks';
-import { runResultSetCheck } from './result-set-check';
+import {
+  resetResultSetCheckWarnings,
+  runResultSetCheck,
+} from './result-set-check';
 import type { ResultSetCheckOptions } from './result-set-check';
 import {
   DEFAULT_SUITE_ID,
@@ -33,7 +36,7 @@ import {
 import type { TokenUsage } from '../../modules/agents/eval-telemetry';
 import {
   synthesizeToolOnlyTurn,
-  toolDataRecord,
+  toolResultRecords,
 } from '../../modules/sessions/turn-data';
 import type { ToolDataRecord } from '../../modules/sessions/entities/session.entity';
 import type { SessionsService } from '../../modules/sessions/sessions.service';
@@ -435,24 +438,17 @@ function evalRequestContext(
  * `create_visual`/`update_visual` call later in the *same* run sees the SQL
  * earlier steps already captured, the same way production threads a live
  * records array through requestContext during `streamMessage`.
+ *
+ * Both now read the payload through the same `toolResultRecords`, so the
+ * eval harness cannot drift out of step with the SDK's tool-result shape
+ * while production still reads it (the `args`/`result` vs `input`/`output`
+ * trap `extractToolCalls` above documents).
  */
 function captureStepRecords(step: any, turnRecords: ToolDataRecord[]): void {
   const results: any[] = Array.isArray(step?.toolResults)
     ? step.toolResults
     : [];
-  for (const entry of results) {
-    const payload = (entry?.payload ?? entry) as {
-      toolName?: string;
-      args?: Record<string, unknown>;
-      result?: unknown;
-    };
-    const record = toolDataRecord(
-      payload.toolName ?? 'tool',
-      payload.args ?? {},
-      payload.result,
-    );
-    if (record) turnRecords.push(record);
-  }
+  for (const record of toolResultRecords(results)) turnRecords.push(record);
 }
 
 /** A throwaway session created purely to give `create_visual`/`update_visual`
@@ -831,6 +827,9 @@ export async function runAssistantEvals(
    */
   suiteId?: string,
 ): Promise<AssistantEvalCaseResult[]> {
+  // One warning per run when a case cannot be measured at all (see
+  // `runResultSetCheck`), not one per case.
+  resetResultSetCheckWarnings();
   const suite = suiteId
     ? loadSuite(suiteId)
     : caseIds

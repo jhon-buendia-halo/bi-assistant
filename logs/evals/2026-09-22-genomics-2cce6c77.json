@@ -1,0 +1,401 @@
+{
+  "schemaVersion": 1,
+  "runId": "2cce6c77-e7a7-4788-b179-2691fa1a93a0",
+  "harness": "in-app",
+  "suite": "genomics",
+  "agentKey": "assistant",
+  "datasets": [
+    "Genomics"
+  ],
+  "model": "openai/gpt-4o-mini",
+  "startedAt": "2026-09-22T20:00:33.081Z",
+  "finishedAt": "2026-09-22T20:04:50.974Z",
+  "durationMs": 257893,
+  "totals": {
+    "cases": 20,
+    "passed": 2,
+    "failed": 18,
+    "errored": 0,
+    "skipped": 0
+  },
+  "categories": {
+    "ratio-trap": {
+      "total": 1,
+      "passed": 0
+    },
+    "constant-column": {
+      "total": 1,
+      "passed": 1
+    },
+    "empty-column": {
+      "total": 1,
+      "passed": 0
+    },
+    "ties": {
+      "total": 1,
+      "passed": 0
+    },
+    "value-vocabulary": {
+      "total": 1,
+      "passed": 0
+    },
+    "out-of-scope": {
+      "total": 1,
+      "passed": 0
+    },
+    "clarification": {
+      "total": 1,
+      "passed": 0
+    },
+    "id-vs-name": {
+      "total": 1,
+      "passed": 0
+    },
+    "metric-definition": {
+      "total": 1,
+      "passed": 0
+    },
+    "default-filter": {
+      "total": 1,
+      "passed": 0
+    },
+    "multi-step-join": {
+      "total": 1,
+      "passed": 0
+    },
+    "discovery": {
+      "total": 1,
+      "passed": 0
+    },
+    "domain-semantics": {
+      "total": 4,
+      "passed": 0
+    },
+    "quality-filter": {
+      "total": 1,
+      "passed": 0
+    },
+    "unit-confusion": {
+      "total": 1,
+      "passed": 0
+    },
+    "control": {
+      "total": 2,
+      "passed": 1
+    }
+  },
+  "usage": {
+    "inputTokens": 204857,
+    "outputTokens": 7344,
+    "totalTokens": 212201,
+    "reasoningTokens": 0,
+    "cachedInputTokens": 68608,
+    "calls": 23
+  },
+  "costIncomplete": true,
+  "cases": [
+    {
+      "id": "allele-fraction-by-gene",
+      "category": "ratio-trap",
+      "verdict": "FAIL",
+      "reason": "check-includes",
+      "durationMs": 18268,
+      "usage": {
+        "inputTokens": 8144,
+        "outputTokens": 487,
+        "totalTokens": 8631,
+        "reasoningTokens": 0,
+        "cachedInputTokens": 0,
+        "calls": 1
+      }
+    },
+    {
+      "id": "variants-by-assembly",
+      "category": "constant-column",
+      "verdict": "PASS",
+      "durationMs": 13822,
+      "usage": {
+        "inputTokens": 15245,
+        "outputTokens": 404,
+        "totalTokens": 15649,
+        "reasoningTokens": 0,
+        "cachedInputTokens": 0,
+        "calls": 2
+      }
+    },
+    {
+      "id": "variants-with-rsid",
+      "category": "empty-column",
+      "verdict": "FAIL",
+      "reason": "result-set-match",
+      "durationMs": 6108,
+      "usage": {
+        "inputTokens": 7651,
+        "outputTokens": 174,
+        "totalTokens": 7825,
+        "reasoningTokens": 0,
+        "cachedInputTokens": 0,
+        "calls": 1
+      }
+    },
+    {
+      "id": "genes-with-seven-pathogenic",
+      "category": "ties",
+      "verdict": "FAIL",
+      "reason": "check-includes",
+      "durationMs": 13078,
+      "usage": {
+        "inputTokens": 7918,
+        "outputTokens": 390,
+        "totalTokens": 8308,
+        "reasoningTokens": 0,
+        "cachedInputTokens": 2816,
+        "calls": 1
+      }
+    },
+    {
+      "id": "damaging-variant-count",
+      "category": "value-vocabulary",
+      "verdict": "FAIL",
+      "reason": "check-includes",
+      "durationMs": 11051,
+      "usage": {
+        "inputTokens": 11788,
+        "outputTokens": 299,
+        "totalTokens": 12087,
+        "reasoningTokens": 0,
+        "cachedInputTokens": 0,
+        "calls": 1
+      }
+    },
+    {
+      "id": "samples-sequenced-2015",
+      "category": "out-of-scope",
+      "verdict": "FAIL",
+      "reason": "llm-judge",
+      "durationMs": 10213,
+      "usage": {
+        "inputTokens": 8456,
+        "outputTokens": 270,
+        "totalTokens": 8726,
+        "reasoningTokens": 0,
+        "cachedInputTokens": 0,
+        "calls": 2
+      }
+    },
+    {
+      "id": "most-important-gene",
+      "category": "clarification",
+      "verdict": "FAIL",
+      "reason": "check-called-tool",
+      "durationMs": 13467,
+      "usage": {
+        "inputTokens": 18143,
+        "outputTokens": 657,
+        "totalTokens": 18800,
+        "reasoningTokens": 0,
+        "cachedInputTokens": 14592,
+        "calls": 2
+      }
+    },
+    {
+      "id": "most-called-genes",
+      "category": "id-vs-name",
+      "verdict": "FAIL",
+      "reason": "check-includes",
+      "durationMs": 16262,
+      "usage": {
+        "inputTokens": 12686,
+        "outputTokens": 540,
+        "totalTokens": 13226,
+        "reasoningTokens": 0,
+        "cachedInputTokens": 6400,
+        "calls": 1
+      }
+    },
+    {
+      "id": "mean-allele-fraction",
+      "category": "metric-definition",
+      "verdict": "FAIL",
+      "reason": "check-matches",
+      "durationMs": 20148,
+      "usage": {
+        "inputTokens": 16028,
+        "outputTokens": 500,
+        "totalTokens": 16528,
+        "reasoningTokens": 0,
+        "cachedInputTokens": 5632,
+        "calls": 1
+      }
+    },
+    {
+      "id": "cohort-sample-count",
+      "category": "default-filter",
+      "verdict": "FAIL",
+      "reason": "result-set-match",
+      "durationMs": 3990,
+      "usage": {
+        "inputTokens": 7590,
+        "outputTokens": 132,
+        "totalTokens": 7722,
+        "reasoningTokens": 0,
+        "cachedInputTokens": 2816,
+        "calls": 1
+      }
+    },
+    {
+      "id": "subjects-by-superpopulation",
+      "category": "multi-step-join",
+      "verdict": "FAIL",
+      "reason": "check-matches",
+      "durationMs": 9249,
+      "usage": {
+        "inputTokens": 8013,
+        "outputTokens": 397,
+        "totalTokens": 8410,
+        "reasoningTokens": 0,
+        "cachedInputTokens": 0,
+        "calls": 1
+      }
+    },
+    {
+      "id": "expression-data-discovery",
+      "category": "discovery",
+      "verdict": "FAIL",
+      "reason": "check-called-tool",
+      "durationMs": 4551,
+      "usage": {
+        "inputTokens": 7741,
+        "outputTokens": 210,
+        "totalTokens": 7951,
+        "reasoningTokens": 0,
+        "cachedInputTokens": 0,
+        "calls": 1
+      }
+    },
+    {
+      "id": "pathogenic-carrier-samples",
+      "category": "domain-semantics",
+      "verdict": "FAIL",
+      "reason": "check-includes",
+      "durationMs": 4039,
+      "usage": {
+        "inputTokens": 7595,
+        "outputTokens": 176,
+        "totalTokens": 7771,
+        "reasoningTokens": 0,
+        "cachedInputTokens": 3584,
+        "calls": 1
+      }
+    },
+    {
+      "id": "pathogenic-carriers-by-gene",
+      "category": "domain-semantics",
+      "verdict": "FAIL",
+      "reason": "check-includes",
+      "durationMs": 56855,
+      "usage": {
+        "inputTokens": 12606,
+        "outputTokens": 629,
+        "totalTokens": 13235,
+        "reasoningTokens": 0,
+        "cachedInputTokens": 6400,
+        "calls": 1
+      }
+    },
+    {
+      "id": "mean-expression-by-gene",
+      "category": "domain-semantics",
+      "verdict": "FAIL",
+      "reason": "check-matches",
+      "durationMs": 8283,
+      "usage": {
+        "inputTokens": 7838,
+        "outputTokens": 305,
+        "totalTokens": 8143,
+        "reasoningTokens": 0,
+        "cachedInputTokens": 2816,
+        "calls": 1
+      }
+    },
+    {
+      "id": "genes-silent-in-most-samples",
+      "category": "domain-semantics",
+      "verdict": "FAIL",
+      "reason": "check-includes",
+      "durationMs": 16769,
+      "usage": {
+        "inputTokens": 12325,
+        "outputTokens": 524,
+        "totalTokens": 12849,
+        "reasoningTokens": 0,
+        "cachedInputTokens": 6400,
+        "calls": 1
+      }
+    },
+    {
+      "id": "high-confidence-calls",
+      "category": "quality-filter",
+      "verdict": "FAIL",
+      "reason": "check-matches",
+      "durationMs": 8815,
+      "usage": {
+        "inputTokens": 11747,
+        "outputTokens": 312,
+        "totalTokens": 12059,
+        "reasoningTokens": 0,
+        "cachedInputTokens": 3584,
+        "calls": 1
+      }
+    },
+    {
+      "id": "coverage-by-assay",
+      "category": "unit-confusion",
+      "verdict": "FAIL",
+      "reason": "result-set-match",
+      "durationMs": 5755,
+      "usage": {
+        "inputTokens": 7704,
+        "outputTokens": 239,
+        "totalTokens": 7943,
+        "reasoningTokens": 0,
+        "cachedInputTokens": 6400,
+        "calls": 1
+      }
+    },
+    {
+      "id": "variants-by-type",
+      "category": "control",
+      "verdict": "FAIL",
+      "reason": "check-includes",
+      "durationMs": 9916,
+      "usage": {
+        "inputTokens": 7971,
+        "outputTokens": 512,
+        "totalTokens": 8483,
+        "reasoningTokens": 0,
+        "cachedInputTokens": 0,
+        "calls": 1
+      }
+    },
+    {
+      "id": "samples-per-collection-year",
+      "category": "control",
+      "verdict": "PASS",
+      "durationMs": 7206,
+      "usage": {
+        "inputTokens": 7668,
+        "outputTokens": 187,
+        "totalTokens": 7855,
+        "reasoningTokens": 0,
+        "cachedInputTokens": 7168,
+        "calls": 1
+      }
+    }
+  ],
+  "comparedToRunId": "aa918be2-7d0b-4ed9-8419-78d6d8240400",
+  "regressions": [],
+  "improvements": [
+    "variants-by-assembly"
+  ]
+}

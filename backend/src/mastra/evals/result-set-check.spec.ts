@@ -1,5 +1,7 @@
 import {
+  HARNESS_UNMEASURED_PREFIX,
   lastSuccessfulSqlRecord,
+  resetResultSetCheckWarnings,
   runResultSetCheck,
   RESULT_SET_CHECK_ID,
   RESULT_SET_ROW_LIMIT,
@@ -161,8 +163,41 @@ describe('runResultSetCheck', () => {
     expect(result?.reason).toMatch(/syntax error/);
   });
 
-  function reference(rows: Record<string, unknown>[], truncated = false) {
-    const runReadOnlySql = jest.fn().mockResolvedValue({ rows, truncated });
+  /** What a re-run of a candidate's own SQL returns, per statement. */
+  type Replay = Record<
+    string,
+    { rows: Record<string, unknown>[]; truncated?: boolean } | Error
+  >;
+
+  /** The bridge always answers with a `SqlRunResult`-shaped value. */
+  const runResult = (value: {
+    rows: Record<string, unknown>[];
+    truncated?: boolean;
+  }) => ({ columns: Object.keys(value.rows[0] ?? {}), ...value });
+
+  /**
+   * The bridge as the check sees it: the reference query answers with `rows`,
+   * and any other statement is a re-run of a captured call. A statement the
+   * test did not stub throws, so a test that expects a replay has to say so.
+   */
+  function reference(
+    rows: Record<string, unknown>[],
+    truncated = false,
+    replays: Replay = {},
+  ) {
+    const runReadOnlySql = jest.fn(
+      (_datasourceId: string, statement: string) => {
+        if (statement === 'SELECT reference') {
+          return Promise.resolve(runResult({ rows, truncated }));
+        }
+        const replay = replays[statement];
+        if (replay instanceof Error) return Promise.reject(replay);
+        if (replay) return Promise.resolve(runResult(replay));
+        return Promise.reject(
+          new Error(`no re-run stubbed for "${statement}"`),
+        );
+      },
+    );
     setDatasetToolServices(stubServices({ runReadOnlySql }));
     return runReadOnlySql;
   }
@@ -358,6 +393,9 @@ describe('runResultSetCheck', () => {
     ).toBe(false);
   });
 
+  // An unusable capture is never taken at face value: it is either re-run
+  // (see the re-run tests below) or reported as unmeasured — never compared
+  // as if it were the whole result.
   it.each([
     { error: 'failed' },
     { tool: 'sample_rows' },
@@ -392,6 +430,169 @@ describe('runResultSetCheck', () => {
         ])
       )?.passed,
     ).toBe(true);
+  });
+
+  /**
+   * The measurement bug this suite now pins down: `run_readonly_sql` reports
+   * `truncated` whenever a result fills the row limit the model itself asked
+   * for, so a `SELECT COUNT(*)` run with `limit: 1` came back "truncated"
+   * while being exactly complete — and the check refused to compare it. The
+   * real genomics `cohort-sample-count` capture, verbatim.
+   */
+  describe('captures the connector flagged as clipped', () => {
+    const counted = {
+      tool: 'run_readonly_sql',
+      input:
+        'SELECT COUNT(*) AS sample_count FROM world_cup.genomics.samples WHERE is_control = false',
+      columns: ['sample_count'],
+      rows: [{ sample_count: '125' }],
+      rowCount: 1,
+      truncated: true,
+    };
+
+    it('re-runs the statement and passes when the full result matches', async () => {
+      const query = reference([{ cohort_samples: 125 }], false, {
+        [counted.input]: { rows: [{ sample_count: '125' }] },
+      });
+      const result = await runResultSetCheck(
+        'SELECT reference',
+        ['World Cup'],
+        snapshot,
+        [counted],
+      );
+      expect(result?.passed).toBe(true);
+      expect(query).toHaveBeenNthCalledWith(
+        2,
+        'ds-1',
+        counted.input,
+        RESULT_SET_ROW_LIMIT,
+        ['World Cup'],
+      );
+    });
+
+    it('does not pass a clipped page whose full result has extra rows', async () => {
+      reference([{ team: 'Argentina' }], false, {
+        'SELECT answer': {
+          rows: [{ team: 'Argentina' }, { team: 'France' }],
+        },
+      });
+      const result = await runResultSetCheck(
+        'SELECT reference',
+        ['World Cup'],
+        snapshot,
+        [{ ...sql([{ team: 'Argentina' }]), truncated: true }],
+      );
+      expect(result?.passed).toBe(false);
+      expect(result?.reason).toContain('re-run of the captured SQL');
+      expect(result?.reason).not.toContain(HARNESS_UNMEASURED_PREFIX);
+    });
+
+    it('still refuses a result that is genuinely past the comparison cap', async () => {
+      reference([{ team: 'Argentina' }], false, {
+        'SELECT answer': { rows: [{ team: 'Argentina' }], truncated: true },
+      });
+      const result = await runResultSetCheck(
+        'SELECT reference',
+        ['World Cup'],
+        snapshot,
+        [{ ...sql([{ team: 'Argentina' }]), truncated: true }],
+      );
+      expect(result?.passed).toBe(false);
+      expect(result?.reason).toContain(HARNESS_UNMEASURED_PREFIX);
+      expect(result?.reason).toContain(`over ${RESULT_SET_ROW_LIMIT} rows`);
+    });
+
+    it('re-runs a capture the transcript cap clipped', async () => {
+      const rows = Array.from({ length: 200 }, (_, i) => ({ n: i }));
+      reference([{ n: 0 }], false, {
+        'SELECT answer': { rows: [{ n: 0 }] },
+      });
+      const result = await runResultSetCheck(
+        'SELECT reference',
+        ['World Cup'],
+        snapshot,
+        // 240 rows came back, 200 were stored: rowCount betrays the clip.
+        [{ ...sql(rows), rowCount: 240 }],
+      );
+      expect(result?.passed).toBe(true);
+    });
+  });
+
+  describe('measurement gaps are named as harness problems', () => {
+    it('says so when nothing could be compared', async () => {
+      reference([{ team: 'Argentina' }]);
+      const result = await runResultSetCheck(
+        'SELECT reference',
+        ['World Cup'],
+        snapshot,
+        [{ tool: 'run_readonly_sql', input: 'SELECT answer' }],
+      );
+      expect(result?.passed).toBe(false);
+      expect(result?.reason).toContain(HARNESS_UNMEASURED_PREFIX);
+      expect(result?.reason).toContain('no re-run stubbed');
+    });
+
+    it('says so when a call was captured with neither SQL nor rows', async () => {
+      reference([{ team: 'Argentina' }]);
+      const result = await runResultSetCheck(
+        'SELECT reference',
+        ['World Cup'],
+        snapshot,
+        [{ tool: 'run_readonly_sql' }],
+      );
+      expect(result?.passed).toBe(false);
+      expect(result?.reason).toContain(HARNESS_UNMEASURED_PREFIX);
+      expect(result?.reason).toContain('payload shape');
+    });
+
+    it('does not name the harness when the agent simply got it wrong', async () => {
+      reference([{ team: 'Argentina' }]);
+      const result = await runResultSetCheck(
+        'SELECT reference',
+        ['World Cup'],
+        snapshot,
+        [sql([{ team: 'France' }])],
+      );
+      expect(result?.reason).not.toContain(HARNESS_UNMEASURED_PREFIX);
+      expect(result?.reason).toContain('did not match');
+    });
+
+    it('warns once per run, not once per case', async () => {
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        resetResultSetCheckWarnings();
+        reference([{ team: 'Argentina' }]);
+        const unmeasurable = [{ tool: 'run_readonly_sql' }];
+        await runResultSetCheck(
+          'SELECT reference',
+          ['World Cup'],
+          snapshot,
+          unmeasurable,
+        );
+        await runResultSetCheck(
+          'SELECT reference',
+          ['World Cup'],
+          snapshot,
+          unmeasurable,
+        );
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(String(warn.mock.calls[0][0])).toContain(
+          HARNESS_UNMEASURED_PREFIX,
+        );
+        // A new run warns again.
+        resetResultSetCheckWarnings();
+        await runResultSetCheck(
+          'SELECT reference',
+          ['World Cup'],
+          snapshot,
+          unmeasurable,
+        );
+        expect(warn).toHaveBeenCalledTimes(2);
+      } finally {
+        warn.mockRestore();
+        resetResultSetCheckWarnings();
+      }
+    });
   });
 
   it('fails if the reference itself is truncated', async () => {
