@@ -560,3 +560,54 @@ describe('SessionChat stream errors', () => {
     );
   });
 });
+
+describe('SessionChat welcome message', () => {
+  let fixture: ComponentFixture<SessionChat>;
+
+  async function render(session: Session): Promise<HTMLElement> {
+    await TestBed.configureTestingModule({
+      imports: [SessionChat],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+    fixture = TestBed.createComponent(SessionChat);
+    fixture.componentRef.setInput('session', session);
+    fixture.detectChanges();
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  const emptySession: Session = {
+    id: 'session-empty',
+    name: 'Claims review',
+    datasets: ['Claims 2025'],
+    messages: [],
+  };
+
+  it('greets the user and names the session datasets when the transcript is empty', async () => {
+    const el = await render(emptySession);
+    const welcome = el.querySelector('[data-testid="session-welcome"]');
+    expect(welcome).toBeTruthy();
+    expect(welcome?.textContent).toContain('Claims review');
+    expect(welcome?.textContent).toContain('Claims 2025');
+  });
+
+  it('hides the welcome once the session has messages', async () => {
+    const el = await render({
+      ...emptySession,
+      messages: [{ role: 'user', content: 'Ask', at: '2026-01-01T00:00:00.000Z' }],
+    });
+    expect(el.querySelector('[data-testid="session-welcome"]')).toBeNull();
+  });
+
+  it('puts a starter question in the composer without sending it', fakeAsync(async () => {
+    const el = await render(emptySession);
+    const starter = el.querySelector(
+      '[data-testid="session-welcome"] button',
+    ) as HTMLButtonElement;
+    starter.click();
+    tick();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.draft()).toBe(starter.textContent!.trim());
+    expect(fixture.componentInstance.sending()).toBeFalse();
+    flush();
+  }));
+});
