@@ -441,13 +441,15 @@ export class VisualizationService {
     const bundle = await this.readBundle(filesystem, meta, target);
     const context = await this.contextFor(filesystem, session, meta, target);
     // Always assemble index.html from the bundle so legacy versions also ship
-    // with the readable frame (question, takeaway, analysis, data).
+    // with the readable frame (question, takeaway, analysis, data) — and, as
+    // of the inlined-script document, render on their own when a reader opens
+    // index.html straight out of the zip without extracting its siblings.
     const html = storedVisualizationDocument(bundle, context);
     const css = bundle.css;
     const javascript = bundle.javascript;
     const extras = [
-      // A spec visual is portable only with the runtime that renders it and
-      // the spec itself; index.html references both by filename.
+      // index.html carries the runtime inline; the spec and the runtime file
+      // ship alongside it as the readable, editable source of the chart.
       ...(bundle.spec
         ? [
             {
@@ -1134,14 +1136,15 @@ export class VisualizationService {
         : []),
       // Body fragment stored on its own so loading never re-parses index.html.
       filesystem.writeFile(`${dir}/body.html`, bundle.html),
-      // The stored document's CSP is `script-src 'self'`, so the frame bridge
-      // (window.qti.select + data-qti-value delegation) ships as a file.
+      // index.html inlines the frame bridge (window.qti.select +
+      // data-qti-value delegation); the file is kept beside it as the source
+      // a reader can edit.
       filesystem.writeFile(`${dir}/${FRAME_SCRIPT_FILENAME}`, FRAME_SELECT_SCRIPT),
       filesystem.writeFile(`${dir}/styles.css`, bundle.css),
       filesystem.writeFile(`${dir}/script.js`, bundle.javascript),
       // Spec visuals: the spec is the source of truth (everything else above
-      // is synthetic), and the fixed runtime ships beside the frame bridge
-      // because the stored document may not inline a script.
+      // is synthetic), and the fixed runtime ships beside the frame bridge as
+      // the editable source of what index.html inlines.
       ...(bundle.spec
         ? [
             filesystem.writeFile(

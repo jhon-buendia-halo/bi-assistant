@@ -100,16 +100,16 @@ describe('frame select bridge', () => {
     expect(FRAME_SELECT_SCRIPT).toContain("event.key !== 'Enter'");
   });
 
-  it('loads from a file in the stored document, which forbids inline script', () => {
+  it('is inlined in the stored document, which opens from file://', () => {
     const document = storedVisualizationDocument(bundle);
 
-    expect(document).toContain("script-src 'self'");
-    expect(document).toContain(
-      `<script src="${FRAME_SCRIPT_FILENAME}"></script>`,
-    );
-    expect(document).not.toContain('window.qti.select');
-    expect(document.indexOf(FRAME_SCRIPT_FILENAME)).toBeLessThan(
-      document.indexOf('script.js'),
+    // A linked script is blocked there: file:// has an opaque origin, so
+    // `script-src 'self'` matches no sibling file and the chart never draws.
+    expect(document).toContain("script-src 'unsafe-inline'");
+    expect(document).not.toContain('<script src=');
+    expect(document).toContain('window.qti.select');
+    expect(document.indexOf(FRAME_SELECT_SCRIPT)).toBeLessThan(
+      document.indexOf(bundle.javascript),
     );
   });
 
@@ -162,13 +162,13 @@ describe('injected qti-data block', () => {
     expect(document).toContain('"note":"<\\/script>alert(1)"');
   });
 
-  it('is also inlined (not blocked by CSP) in the stored, script-src self document', () => {
+  it('is also embedded ahead of the scripts in the stored document', () => {
     const document = storedVisualizationDocument(bundle, { chartData });
 
     expect(document).toContain('<script type="application/json" id="qti-data">');
     expect(document).toContain(JSON.stringify(chartData));
     expect(document.indexOf('id="qti-data"')).toBeLessThan(
-      document.indexOf(FRAME_SCRIPT_FILENAME),
+      document.indexOf(FRAME_SELECT_SCRIPT),
     );
   });
 });
@@ -215,20 +215,18 @@ describe('spec-rendered documents', () => {
     );
   });
 
-  it('references the runtime as a file in the stored, script-src self document', () => {
+  it('inlines the runtime in the stored document so it renders from file://', () => {
     const document = storedVisualizationDocument(specBundle, { chartData });
 
-    expect(document).toContain("script-src 'self'");
-    expect(document).toContain(`<script src="${VISUAL_RUNTIME_FILENAME}"></script>`);
+    expect(document).toContain("script-src 'unsafe-inline'");
     expect(document).toContain('id="qti-spec"');
-    // Never inlined there: the CSP would block it.
-    expect(document).not.toContain('/* runtime */');
-    // Frame bridge → runtime → bootstrap (script.js).
-    expect(document.indexOf(FRAME_SCRIPT_FILENAME)).toBeLessThan(
-      document.indexOf(VISUAL_RUNTIME_FILENAME),
+    expect(document).not.toContain('<script src=');
+    // Frame bridge → runtime → bootstrap.
+    expect(document.indexOf(FRAME_SELECT_SCRIPT)).toBeLessThan(
+      document.indexOf('/* runtime */'),
     );
-    expect(document.indexOf(VISUAL_RUNTIME_FILENAME)).toBeLessThan(
-      document.indexOf('script.js'),
+    expect(document.indexOf('/* runtime */')).toBeLessThan(
+      document.indexOf('window.qtiChart.mount();'),
     );
   });
 
@@ -249,9 +247,7 @@ describe('spec-rendered documents', () => {
     expect(sandboxedVisualizationDocument(bundle)).not.toContain('id="qti-spec"');
     expect(sandboxedVisualizationDocument(bundle)).not.toContain('/* runtime */');
     expect(storedVisualizationDocument(bundle)).not.toContain('id="qti-spec"');
-    expect(storedVisualizationDocument(bundle)).not.toContain(
-      `<script src="${VISUAL_RUNTIME_FILENAME}"></script>`,
-    );
+    expect(storedVisualizationDocument(bundle)).not.toContain('/* runtime */');
   });
 });
 
