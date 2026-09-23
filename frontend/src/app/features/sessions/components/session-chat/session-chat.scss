@@ -4,7 +4,13 @@
 }
 
 // Dark prose styles for rendered assistant markdown.
-.prose-dark {
+//
+// `::ng-deep`: the markdown arrives through `[innerHTML]`, so its elements are
+// created outside Angular's compilation and never carry the `_ngcontent`
+// attribute emulated encapsulation scopes descendant selectors with. Without
+// piercing, every rule below the `.prose-dark` host — tables, code, lists —
+// silently fell back to the browser default.
+:host ::ng-deep .prose-dark {
   font-size: 13px;
   line-height: 1.75;
   color: rgb(212 212 216);

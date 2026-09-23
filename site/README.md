@@ -97,6 +97,60 @@ GITHUB_TOKEN=ghp_... ./scripts/dev.sh     # wrangler pages dev on :4500, Functio
 
 Omit the token to exercise the unconfigured path.
 
+## Screenshots
+
+`public/shots/` holds the images the page walks through. They are the real app
+running against the **World Cup demo fixture that ships with it** — never a
+customer's data, and never a mockup. The hero caption says as much on the page.
+
+Re-shoot them whenever the interface moves:
+
+```bash
+# 1. a demo database (docker compose at the repo root) and a backend pointed at
+#    a scratch data directory, so nothing touches your own app data
+docker compose up -d postgres
+(cd backend && npm run build)
+APP_DATA_DIR="$PWD/.context/demo-data" node backend/dist/main.js &
+
+# 2. load the fixture: creates the connection and a dataset of 9 entities
+curl -sX POST localhost:3000/testing-data/world-cup/load -H 'content-type: application/json' \
+  -d '{"host":"127.0.0.1","port":55432,"database":"world_cup","user":"world_cup","password":"world_cup_dev","ssl":false}'
+curl -sX POST localhost:3000/sessions -H 'content-type: application/json' \
+  -d '{"name":"Finishing quality at the World Cup","datasets":["World Cup"]}'
+
+# 3. write the demo transcript, its two visual versions and the sibling sessions
+node site/scripts/screenshots/seed-demo.cjs
+
+# 4. drive the running app and capture (`npm start` in frontend/ first)
+node site/scripts/screenshots/capture.mjs            # every shot
+node site/scripts/screenshots/capture.mjs hero sql   # or just these
+
+# 5. downscale into the page — the hero at 2360px, the rest at 1800px
+sips --resampleWidth 2360 .context/shots/01-hero.png --out site/public/shots/app.png
+```
+
+`seed-demo.cjs` writes the session document straight into the scratch
+`app.sqlite` and the visual versions through the app's own spec renderer
+(`backend/dist/modules/sessions/…`), so the panel renders them exactly as it
+renders a generated one. **The SQL and every row in it were run against the
+demo database** — only the assistant's prose is authored, because seeding needs
+no model provider key. If you re-word an answer, re-run the query too.
+
+`export.png` is the odd one out: it is not a screen but the artefact the app
+produces. Serve any stored version directory over http and shoot it whole —
+`file://` will not do, because the exported document's CSP is `script-src 'self'`
+and the chart runtime ships as a sibling file:
+
+```bash
+(cd .context/demo-data/workspaces/session-*/visuals/*/v2 && python3 -m http.server 4610) &
+# then screenshot http://localhost:4610/index.html with fullPage: true
+```
+
+`capture.mjs` takes an optional list of shot names (`hero`, `clarify`,
+`provenance`, `sql`, `visual`, `versions`, `knowledge`, `datasets`, `settings`,
+`llm`, `agents`); with none it captures all of them. Output goes to
+`.context/shots/` unless `SHOTS_OUT` says otherwise.
+
 ## Filename note
 
 Installers are named `Questions-to-Insights-<version>-<os>-<arch>.<ext>` while
