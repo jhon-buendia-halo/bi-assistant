@@ -7,10 +7,7 @@ import {
   SPEC_SCRIPT_ID,
   type VisualSpec,
 } from './visual-spec';
-import {
-  VISUAL_RUNTIME_FILENAME,
-  VISUAL_RUNTIME_SCRIPT,
-} from './visual-runtime';
+import { VISUAL_RUNTIME_SCRIPT } from './visual-runtime';
 
 export interface InteractiveVisualBundle {
   title: string;
@@ -640,40 +637,29 @@ export const FRAME_SELECT_SCRIPT = `(function () {
   });
 })();`;
 
-/** Filename the stored document loads the frame bridge from (CSP: script-src 'self'). */
+/** Filename the frame bridge ships as beside index.html, for hand edits. */
 export const FRAME_SCRIPT_FILENAME = 'qti-frame.js';
 
 /**
- * Body scripts for the stored document (CSP `script-src 'self'`): everything
- * ships as a file next to index.html. A spec visual adds the inert spec block
- * and the runtime file ahead of the bootstrap in `script.js`.
+ * Every script of a visual, inlined: the inert data (and spec) blocks, the
+ * frame bridge, then either the fixed runtime plus its mount bootstrap (spec
+ * visuals) or the designer's own script.
+ *
+ * Both documents inline rather than link, for the same reason from opposite
+ * ends. The panel iframe has no file access at all; the stored document is
+ * opened from `file://`, where the origin is opaque and `script-src 'self'`
+ * matches no sibling file — linking `script.js` there rendered the frame with
+ * an empty chart. The sibling files still ship in the download for editing.
  */
-function storedScripts(
+function inlineScripts(
   bundle: InteractiveVisualBundle,
   context: VisualContext,
+  options: { errorHook: boolean },
 ): string {
   return [
     dataScriptTag(context.chartData),
     ...(bundle.spec ? [specScriptTag(bundle.spec)] : []),
-    `<script src="${FRAME_SCRIPT_FILENAME}"></script>`,
-    ...(bundle.spec ? [`<script src="${VISUAL_RUNTIME_FILENAME}"></script>`] : []),
-    '<script src="script.js"></script>',
-  ].join('\n  ');
-}
-
-/**
- * Body scripts for the sandboxed document (CSP `script-src 'unsafe-inline'`):
- * everything is inlined, including the runtime, so the panel iframe needs no
- * network or file access at all.
- */
-function sandboxedScripts(
-  bundle: InteractiveVisualBundle,
-  context: VisualContext,
-): string {
-  return [
-    dataScriptTag(context.chartData),
-    ...(bundle.spec ? [specScriptTag(bundle.spec)] : []),
-    `<script>${RUNTIME_ERROR_HOOK}</script>`,
+    ...(options.errorHook ? [`<script>${RUNTIME_ERROR_HOOK}</script>`] : []),
     `<script>${FRAME_SELECT_SCRIPT}</script>`,
     ...(bundle.spec
       ? [
@@ -694,7 +680,7 @@ export function storedVisualizationDocument(
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src data: blob:; font-src data:; connect-src 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'">
   <title>${escapeHtml(bundle.title)}</title>
   <style>${FRAME_CSS}</style>
   <!-- Inlined rather than linked so the designer's sheet arrives scoped. -->
@@ -702,7 +688,7 @@ export function storedVisualizationDocument(
 </head>
 <body>
 ${renderFrame(bundle, context)}
-  ${storedScripts(bundle, context)}
+  ${inlineScripts(bundle, context, { errorHook: false })}
 </body>
 </html>`;
 }
@@ -724,7 +710,7 @@ export function sandboxedVisualizationDocument(
 </head>
 <body>
 ${renderFrame(bundle, context)}
-  ${sandboxedScripts(bundle, context)}
+  ${inlineScripts(bundle, context, { errorHook: true })}
 </body>
 </html>`;
 }
