@@ -344,6 +344,35 @@
           }
         </button>
       </div>
+
+      @if (generating() || generateSteps().length > 0) {
+        <ol
+          data-testid="generate-progress"
+          aria-live="polite"
+          class="mt-1 flex flex-col gap-1.5 rounded-md border border-white/10 bg-white/[0.03] px-3 py-2.5"
+        >
+          @for (step of finishedSteps(); track step.key) {
+            <li class="flex items-center gap-2 text-[12px] text-zinc-500">
+              <lucide-angular
+                [img]="Check"
+                [size]="12"
+                class="shrink-0 text-emerald-500"
+              />
+              <span>{{ step.message }}</span>
+            </li>
+          }
+          @if (currentStep(); as step) {
+            <li class="flex items-center gap-2 text-[12px] text-zinc-300">
+              <lucide-angular
+                [img]="Loader2"
+                [size]="12"
+                class="shrink-0 animate-spin text-zinc-400"
+              />
+              <span>{{ step.message }}…</span>
+            </li>
+          }
+        </ol>
+      }
     </div>
   }
 </div>

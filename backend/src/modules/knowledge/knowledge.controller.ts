@@ -8,7 +8,9 @@ import {
   Patch,
   Post,
   Query,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { KnowledgeService } from './knowledge.service';
 import type { KnowledgeQuery } from './knowledge.service';
 import type {
@@ -61,6 +63,44 @@ export class KnowledgeController {
   ): Promise<{ created: KnowledgeSnippet[] }> {
     const datasetId = typeof dto?.datasetId === 'string' ? dto.datasetId : '';
     return { created: await this.knowledge.bootstrap(datasetId) };
+  }
+
+  /**
+   * Same run as `POST bootstrap`, streamed: a `progress` event per stage
+   * (opening the dataset, reading schema, sampling rows, drafting, saving)
+   * so the UI can say what is happening during the minute it takes, then a
+   * terminal `done` with the created snippets — or `error` with the reason.
+   */
+  @Post('bootstrap/stream')
+  async bootstrapStream(
+    @Body() dto: BootstrapKnowledgeDto,
+    @Res() res: Response,
+  ): Promise<void> {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+    const send = (data: unknown) =>
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    let closed = false;
+    const onClose = () => {
+      closed = true;
+    };
+    res.once('close', onClose);
+    const datasetId = typeof dto?.datasetId === 'string' ? dto.datasetId : '';
+    try {
+      const created = await this.knowledge.bootstrap(datasetId, (progress) => {
+        if (!closed) send({ type: 'progress', ...progress });
+      });
+      if (!closed) send({ type: 'done', created });
+    } catch (err) {
+      if (!closed) {
+        const message = err instanceof Error ? err.message : String(err);
+        send({ type: 'error', message });
+      }
+    }
+    res.off('close', onClose);
+    if (!res.writableEnded) res.end();
   }
 }
 

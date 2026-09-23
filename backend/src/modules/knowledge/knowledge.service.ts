@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { MastraService } from '../../mastra/mastra.service';
 import { schemaSnapshotBlock } from '../../mastra/context-blocks';
@@ -28,6 +32,20 @@ const BOOTSTRAP_SCHEMA_SAMPLE_VALUES = 5;
 /** Sample rows fetched per entity, and the total character budget for them. */
 const BOOTSTRAP_SAMPLE_ROW_LIMIT = 5;
 const BOOTSTRAP_SAMPLE_ROWS_CHARS = 4_000;
+
+/**
+ * One step of a bootstrap run, reported while it is still going. `key`
+ * identifies the stage so a caller can replace an evolving line (sampling
+ * table 2 of 5) instead of appending a new one per update.
+ */
+export interface KnowledgeBootstrapProgress {
+  key: 'dataset' | 'schema' | 'sample' | 'draft' | 'save';
+  message: string;
+}
+
+export type KnowledgeBootstrapProgressFn = (
+  progress: KnowledgeBootstrapProgress,
+) => void;
 
 export interface KnowledgeQuery {
   /** A dataset's `name` — matches that dataset's scope plus any global snippet. */
@@ -160,11 +178,20 @@ export class KnowledgeService {
    * (`source: 'mined'`) for a human to review. Never throws a raw error —
    * any failure (missing dataset, LLM error, malformed output) surfaces as
    * a `BadRequestException` with a clear message.
+   *
+   * `onProgress` (optional) is called as each stage starts, so a streaming
+   * caller can tell the user what the run is doing during the minute it takes.
    */
-  async bootstrap(datasetId: string): Promise<KnowledgeSnippet[]> {
+  async bootstrap(
+    datasetId: string,
+    onProgress?: KnowledgeBootstrapProgressFn,
+  ): Promise<KnowledgeSnippet[]> {
+    const report = (progress: KnowledgeBootstrapProgress) =>
+      onProgress?.(progress);
     const id = (datasetId ?? '').trim();
     if (!id) throw new BadRequestException('datasetId is required');
 
+    report({ key: 'dataset', message: `Opening dataset “${id}”` });
     const datasets = await this.boundDatasets([id]);
     if (!datasets.length) {
       throw new BadRequestException(`Dataset "${id}" not found`);
@@ -178,32 +205,48 @@ export class KnowledgeService {
       entities?: string[];
     }[];
     try {
+      const tableCount = datasets.reduce((n, d) => n + d.tables.length, 0);
+      report({
+        key: 'schema',
+        message: `Reading schema — ${tableCount} ${plural(tableCount, 'table')}`,
+      });
       const schema = schemaSnapshotBlock(datasets, {
         budgetChars: BOOTSTRAP_SCHEMA_CHARS,
         sampleValues: BOOTSTRAP_SCHEMA_SAMPLE_VALUES,
       });
-      const sampleRows = await this.gatherSampleRows(datasets);
-      const result = await this.mastra.getAgent('knowledge-bootstrap').generate(
-        [
-          'Draft knowledge snippets for the dataset below.',
-          '',
-          '<entity-schemas>',
-          schema || '(no schema snapshot stored for this dataset)',
-          '</entity-schemas>',
-          '',
-          '<sample-rows>',
-          sampleRows || '(no sample rows available)',
-          '</sample-rows>',
-        ].join('\n'),
-        {
-          maxSteps: 1,
-          toolChoice: 'none',
-          structuredOutput: {
-            schema: knowledgeBootstrapOutputSchema,
-            jsonPromptInjection: 'inline',
-          },
-        },
+      const sampleRows = await this.gatherSampleRows(datasets, (done, total) =>
+        report({
+          key: 'sample',
+          message: `Sampling rows — ${done} of ${total} ${plural(total, 'table')}`,
+        }),
       );
+      report({
+        key: 'draft',
+        message: 'Drafting instructions, terms and default filters',
+      });
+      const result = await this.mastra
+        .getAgent('knowledge-bootstrap')
+        .generate(
+          [
+            'Draft knowledge snippets for the dataset below.',
+            '',
+            '<entity-schemas>',
+            schema || '(no schema snapshot stored for this dataset)',
+            '</entity-schemas>',
+            '',
+            '<sample-rows>',
+            sampleRows || '(no sample rows available)',
+            '</sample-rows>',
+          ].join('\n'),
+          {
+            maxSteps: 1,
+            toolChoice: 'none',
+            structuredOutput: {
+              schema: knowledgeBootstrapOutputSchema,
+              jsonPromptInjection: 'inline',
+            },
+          },
+        );
       const parsed = knowledgeBootstrapOutputSchema.safeParse(
         (result as { object?: unknown }).object ??
           parseJsonObject((result as { text?: string }).text),
@@ -218,6 +261,11 @@ export class KnowledgeService {
       );
     }
 
+    const keepCount = Math.min(drafts.length, MAX_BOOTSTRAP_DRAFTS);
+    report({
+      key: 'save',
+      message: `Saving ${keepCount} ${plural(keepCount, 'draft')} for review`,
+    });
     const existing = await this.repository.list();
     const existingTitles = new Set(
       existing
@@ -272,12 +320,20 @@ export class KnowledgeService {
   }
 
   /** A few real rows per entity — best-effort; a sampling failure just means less context for that entity. */
-  private async gatherSampleRows(datasets: DatasetSnapshot[]): Promise<string> {
+  private async gatherSampleRows(
+    datasets: DatasetSnapshot[],
+    onTable?: (done: number, total: number) => void,
+  ): Promise<string> {
     const blocks: string[] = [];
     let budget = BOOTSTRAP_SAMPLE_ROWS_CHARS;
+    const total = datasets
+      .filter((d) => d.datasourceId)
+      .reduce((n, d) => n + d.tables.length, 0);
+    let done = 0;
     for (const dataset of datasets) {
       if (!dataset.datasourceId) continue;
       for (const key of dataset.tables) {
+        onTable?.(++done, total);
         try {
           const { rows } = await this.datasourcesService.sampleRows(
             dataset.datasourceId,
@@ -296,6 +352,11 @@ export class KnowledgeService {
     }
     return blocks.join('\n\n');
   }
+}
+
+/** `1 table` / `3 tables` — progress lines read badly without it. */
+function plural(count: number, noun: string): string {
+  return count === 1 ? noun : `${noun}s`;
 }
 
 /** 0 = dataset-scoped, 1 = global — dataset-scoped sorts first. */
@@ -327,9 +388,7 @@ function toKnowledgeUse(snippet: KnowledgeSnippet): KnowledgeUse {
     kind: snippet.kind,
     title: snippet.title,
     body: snippet.body,
-    ...(snippet.scope?.datasetId
-      ? { datasetId: snippet.scope.datasetId }
-      : {}),
+    ...(snippet.scope?.datasetId ? { datasetId: snippet.scope.datasetId } : {}),
   };
 }
 
@@ -370,13 +429,7 @@ function validateCreate(
   input: KnowledgeSnippetInput,
 ): Pick<
   KnowledgeSnippet,
-  | 'kind'
-  | 'scope'
-  | 'title'
-  | 'body'
-  | 'synonyms'
-  | 'entities'
-  | 'enabled'
+  'kind' | 'scope' | 'title' | 'body' | 'synonyms' | 'entities' | 'enabled'
 > {
   const kind = input?.kind;
   if (!KNOWLEDGE_SNIPPET_KINDS.includes(kind)) {
