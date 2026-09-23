@@ -7,13 +7,17 @@ import {
   Loader2,
   Pencil,
   Plus,
+  Check,
   Sparkles,
   Tag,
   Trash2,
   Wand2,
   X,
 } from 'lucide-angular';
-import { KnowledgeApiService } from '../../services/knowledge-api.service';
+import {
+  KnowledgeApiService,
+  KnowledgeBootstrapProgress,
+} from '../../services/knowledge-api.service';
 import {
   KNOWLEDGE_KINDS,
   KnowledgeSnippet,
@@ -39,6 +43,7 @@ type KindFilter = 'all' | KnowledgeSnippetKind;
 })
 export class KnowledgeList implements OnInit {
   readonly BookOpen = BookOpen;
+  readonly Check = Check;
   readonly Filter = Filter;
   readonly Loader2 = Loader2;
   readonly Pencil = Pencil;
@@ -72,6 +77,8 @@ export class KnowledgeList implements OnInit {
   readonly generateOpen = signal(false);
   readonly generateDatasetId = signal('');
   readonly generating = signal(false);
+  /** What the run is doing, oldest first — the last one is still in flight. */
+  readonly generateSteps = signal<KnowledgeBootstrapProgress[]>([]);
 
   readonly togglingId = signal<string | null>(null);
   readonly deletingId = signal<string | null>(null);
@@ -242,23 +249,47 @@ export class KnowledgeList implements OnInit {
   openGenerate(): void {
     this.formOpen.set(false);
     this.generateDatasetId.set(this.datasets()[0]?.name ?? '');
+    this.generateSteps.set([]);
     this.generateOpen.set(true);
   }
 
   cancelGenerate(): void {
     if (this.generating()) return;
     this.generateOpen.set(false);
+    this.generateSteps.set([]);
+  }
+
+  /**
+   * The step currently in flight — the last one reported. Falls back to a
+   * starting line so the panel never shows an empty box between the click
+   * and the backend's first progress event.
+   */
+  currentStep(): KnowledgeBootstrapProgress | null {
+    if (!this.generating()) return null;
+    const steps = this.generateSteps();
+    return steps.length
+      ? steps[steps.length - 1]
+      : { key: 'start', message: 'Starting' };
+  }
+
+  /** Steps already finished — everything before the one in flight. */
+  finishedSteps(): KnowledgeBootstrapProgress[] {
+    const steps = this.generateSteps();
+    return this.generating() ? steps.slice(0, -1) : steps;
   }
 
   generateSuggestions(): void {
     const datasetId = this.generateDatasetId();
     if (!datasetId || this.generating()) return;
     this.generating.set(true);
-    this.api.bootstrap(datasetId).subscribe({
-      next: (res) => {
+    this.generateSteps.set([]);
+    void this.api.bootstrapStream(datasetId, {
+      onProgress: (progress) => this.recordStep(progress),
+      onDone: (created) => {
         this.generating.set(false);
         this.generateOpen.set(false);
-        const count = res.created.length;
+        this.generateSteps.set([]);
+        const count = created.length;
         this.toast.success(
           count === 0
             ? 'No new suggestions this time'
@@ -267,13 +298,26 @@ export class KnowledgeList implements OnInit {
         this.pendingOnly.set(true);
         this.loadSnippets();
       },
-      error: (err) => {
+      onError: (message) => {
         this.generating.set(false);
+        this.generateSteps.set([]);
         this.toast.error(
-          err?.error?.message ??
-            'Could not generate suggestions — try again shortly',
+          message || 'Could not generate suggestions — try again shortly',
         );
       },
+    });
+  }
+
+  /**
+   * Append a step, or replace the last one when it is the same stage — a
+   * stage that counts up (sampling 2 of 5 tables) rewrites its own line.
+   */
+  private recordStep(progress: KnowledgeBootstrapProgress): void {
+    this.generateSteps.update((steps) => {
+      const last = steps[steps.length - 1];
+      return last?.key === progress.key
+        ? [...steps.slice(0, -1), progress]
+        : [...steps, progress];
     });
   }
 }

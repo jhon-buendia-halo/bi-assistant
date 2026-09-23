@@ -35,7 +35,9 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { KnowledgeService } from './knowledge.service';
 import type { KnowledgeSnippet } from './entities/knowledge-snippet.entity';
 
-const snippet = (overrides: Partial<KnowledgeSnippet> = {}): KnowledgeSnippet => ({
+const snippet = (
+  overrides: Partial<KnowledgeSnippet> = {},
+): KnowledgeSnippet => ({
   id: 'snippet-1',
   kind: 'term',
   scope: null,
@@ -75,21 +77,15 @@ function build(
       .fn()
       .mockImplementation((id: string, patch: Partial<KnowledgeSnippet>) => {
         const existing = docs.find((d) => d.id === id);
-        return Promise.resolve(
-          existing ? { ...existing, ...patch } : null,
-        );
+        return Promise.resolve(existing ? { ...existing, ...patch } : null);
       }),
     delete: jest.fn().mockResolvedValue(1),
   };
   const datasetsRepository = {
-    getByNames: jest
-      .fn()
-      .mockResolvedValue(options.datasets ?? []),
+    getByNames: jest.fn().mockResolvedValue(options.datasets ?? []),
   };
   const datasourcesService = {
-    defaultDatasource: jest
-      .fn()
-      .mockResolvedValue(options.defaultDatasource),
+    defaultDatasource: jest.fn().mockResolvedValue(options.defaultDatasource),
     sampleRows: jest
       .fn()
       .mockResolvedValue(options.sampleRows ?? { columns: [], rows: [] }),
@@ -103,7 +99,13 @@ function build(
     datasourcesService as never,
     mastra as never,
   );
-  return { service, repository, datasetsRepository, datasourcesService, mastra };
+  return {
+    service,
+    repository,
+    datasetsRepository,
+    datasourcesService,
+    mastra,
+  };
 }
 
 describe('KnowledgeService.list', () => {
@@ -144,15 +146,15 @@ describe('KnowledgeService.list', () => {
   it('filters by kind, source and enabled', async () => {
     const { service } = build(library);
 
-    expect(
-      (await service.list({ kind: 'term' })).map((s) => s.id),
-    ).toEqual(['scoped']);
-    expect(
-      (await service.list({ source: 'mined' })).map((s) => s.id),
-    ).toEqual(['scoped']);
-    expect(
-      (await service.list({ enabled: false })).map((s) => s.id),
-    ).toEqual(['scoped']);
+    expect((await service.list({ kind: 'term' })).map((s) => s.id)).toEqual([
+      'scoped',
+    ]);
+    expect((await service.list({ source: 'mined' })).map((s) => s.id)).toEqual([
+      'scoped',
+    ]);
+    expect((await service.list({ enabled: false })).map((s) => s.id)).toEqual([
+      'scoped',
+    ]);
   });
 });
 
@@ -189,7 +191,7 @@ describe('KnowledgeService.create', () => {
     await service.create({
       kind: 'default_filter',
       title: 'Exclude test rows',
-      body: "WHERE is_test = false",
+      body: 'WHERE is_test = false',
       scope: { datasetId: 'World Cup' },
       enabled: false,
     });
@@ -256,9 +258,9 @@ describe('KnowledgeService.update', () => {
   it('throws NotFoundException for an unknown id', async () => {
     const { service } = build();
 
-    await expect(
-      service.update('missing', { enabled: false }),
-    ).rejects.toThrow(NotFoundException);
+    await expect(service.update('missing', { enabled: false })).rejects.toThrow(
+      NotFoundException,
+    );
   });
 });
 
@@ -402,14 +404,31 @@ describe('KnowledgeService.contextFor', () => {
         title: 'DNF',
         body: 'Did not finish',
       }),
-      snippet({ id: 'k2', kind: 'instruction', scope: null, title: 'Coverage', body: '2018 and 2022 only' }),
+      snippet({
+        id: 'k2',
+        kind: 'instruction',
+        scope: null,
+        title: 'Coverage',
+        body: '2018 and 2022 only',
+      }),
     ]);
 
     const { block, used } = await service.contextFor(['World Cup']);
 
     expect(used).toEqual([
-      { id: 'k1', kind: 'term', title: 'DNF', body: 'Did not finish', datasetId: 'World Cup' },
-      { id: 'k2', kind: 'instruction', title: 'Coverage', body: '2018 and 2022 only' },
+      {
+        id: 'k1',
+        kind: 'term',
+        title: 'DNF',
+        body: 'Did not finish',
+        datasetId: 'World Cup',
+      },
+      {
+        id: 'k2',
+        kind: 'instruction',
+        title: 'Coverage',
+        body: '2018 and 2022 only',
+      },
     ]);
     // Same order as the rendered block, so the two can never disagree.
     expect(block.indexOf('DNF')).toBeLessThan(block.indexOf('Coverage'));
@@ -435,8 +454,16 @@ describe('KnowledgeService.contextFor', () => {
   it('excludes disabled and out-of-scope snippets', async () => {
     const { service } = build([
       snippet({ id: 'off', enabled: false, scope: null, title: 'Disabled' }),
-      snippet({ id: 'other', scope: { datasetId: 'Other' }, title: 'Elsewhere' }),
-      snippet({ id: 'on', scope: { datasetId: 'World Cup' }, title: 'Applies' }),
+      snippet({
+        id: 'other',
+        scope: { datasetId: 'Other' },
+        title: 'Elsewhere',
+      }),
+      snippet({
+        id: 'on',
+        scope: { datasetId: 'World Cup' },
+        title: 'Applies',
+      }),
     ]);
 
     const { used } = await service.contextFor(['World Cup']);
@@ -455,7 +482,12 @@ describe('KnowledgeService.bootstrap', () => {
       {
         key: 'world_cup.matches',
         columns: [
-          { name: 'stage', type: 'string', nullable: true, sampleValues: ['final', 'group'] },
+          {
+            name: 'stage',
+            type: 'string',
+            nullable: true,
+            sampleValues: ['final', 'group'],
+          },
         ],
       },
     ],
@@ -523,7 +555,9 @@ describe('KnowledgeService.bootstrap', () => {
   });
 
   it('wraps an agent failure in a BadRequestException instead of crashing', async () => {
-    const generate = jest.fn().mockRejectedValue(new Error('model unavailable'));
+    const generate = jest
+      .fn()
+      .mockRejectedValue(new Error('model unavailable'));
     const { service } = build([], { datasets: [dataset], generate });
 
     await expect(service.bootstrap('World Cup')).rejects.toThrow(
@@ -535,5 +569,35 @@ describe('KnowledgeService.bootstrap', () => {
     const { service } = build();
 
     await expect(service.bootstrap('')).rejects.toThrow(BadRequestException);
+  });
+
+  it('reports each stage through onProgress, in order', async () => {
+    const generate = jest.fn().mockResolvedValue({
+      object: {
+        drafts: [
+          { kind: 'term', title: 'Stage', body: 'Round of the tournament' },
+        ],
+      },
+    });
+    const { service } = build([], {
+      datasets: [dataset],
+      sampleRows: { columns: ['stage'], rows: [{ stage: 'final' }] },
+      generate,
+    });
+    const progress: { key: string; message: string }[] = [];
+
+    await service.bootstrap('World Cup', (p) => progress.push(p));
+
+    expect(progress.map((p) => p.key)).toEqual([
+      'dataset',
+      'schema',
+      'sample',
+      'draft',
+      'save',
+    ]);
+    expect(progress[0].message).toContain('World Cup');
+    expect(progress[1].message).toContain('1 table');
+    expect(progress[2].message).toContain('1 of 1 table');
+    expect(progress[4].message).toContain('1 draft');
   });
 });
