@@ -26,6 +26,24 @@ function build(sampleRows: jest.Mock) {
       .fn()
       .mockResolvedValue({ id: 'ds-1', kind: 'databricks', name: 'DBX' }),
     sampleRows,
+    // Mirrors DatasourcesService.sampleRowsMany's fallback: per-entity
+    // sampling with failures returned as Error values, never thrown.
+    sampleRowsMany: jest.fn(
+      async (id: string, entities: string[], limit: number) => {
+        const results = new Map<string, unknown>();
+        for (const entity of entities) {
+          try {
+            results.set(entity, await sampleRows(id, entity, limit));
+          } catch (err) {
+            results.set(
+              entity,
+              err instanceof Error ? err : new Error(String(err)),
+            );
+          }
+        }
+        return results;
+      },
+    ),
   };
   return {
     service: new DatasetsService(repository as never, datasources as never),

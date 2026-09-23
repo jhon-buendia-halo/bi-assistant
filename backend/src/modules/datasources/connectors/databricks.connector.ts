@@ -14,6 +14,7 @@ import {
   clampRows,
   DatasourceConnector,
   ForeignKeyEdge,
+  mapWithConcurrency,
   MASKED,
   splitEntity,
 } from './connector';
@@ -469,6 +470,69 @@ export class DatabricksConnector implements DatasourceConnector<DatabricksConfig
     return this.runReadOnlySql(config, `SELECT * FROM ${fq} LIMIT ${lim}`, lim);
   }
 
+  /**
+   * Sample many tables over one shared client. The TLS + thrift handshake
+   * dominates per-table cost on constrained networks (VDI proxies, TLS
+   * inspection), so a dataset save spanning dozens of tables must not
+   * reconnect for each one. One session per table, `concurrency` in flight;
+   * a table that refuses reports its own error and the rest continue.
+   */
+  async sampleRowsMany(
+    raw: DatabricksConfig,
+    entities: string[],
+    limit: number,
+    concurrency: number,
+  ): Promise<Map<string, QueryResult | Error>> {
+    const results = new Map<string, QueryResult | Error>();
+    if (!entities.length) return results;
+
+    let client: DBSQLClient;
+    try {
+      const config = this.validate(raw);
+      client = await this.connect(config, QUERY_TIMEOUT_MS);
+    } catch (err) {
+      const error = asError(err);
+      for (const entity of entities) results.set(entity, error);
+      return results;
+    }
+    try {
+      await mapWithConcurrency(entities, concurrency, async (entity) => {
+        try {
+          results.set(entity, await this.sampleOnClient(client, entity, limit));
+        } catch (err) {
+          results.set(entity, asError(err));
+        }
+      });
+    } finally {
+      await client.close().catch(() => undefined);
+    }
+    return results;
+  }
+
+  /** One table's sample on an already-connected client, in its own session. */
+  private async sampleOnClient(
+    client: DBSQLClient,
+    entity: string,
+    limit: number,
+  ): Promise<QueryResult> {
+    const [catalog, schema, table] = splitEntity(entity);
+    const fq = [catalog, schema, table]
+      .map((p) => `\`${qIdent(p)}\``)
+      .join('.');
+    const lim = clampRows(limit, 10, 100);
+    const session = await client.openSession();
+    try {
+      const op = await session.executeStatement(
+        `SELECT * FROM ${fq} LIMIT ${lim}`,
+      );
+      const res = await this.fetchWithTimeout(op, QUERY_TIMEOUT_MS);
+      const rows = res.slice(0, lim).map((r) => ({ ...r }));
+      return { columns: Object.keys(rows[0] ?? {}), rows };
+    } finally {
+      await session.close();
+    }
+  }
+
   async runReadOnlySql(
     raw: DatabricksConfig,
     sql: string,
@@ -627,6 +691,10 @@ export class DatabricksConnector implements DatasourceConnector<DatabricksConfig
 /** Backtick-escape a Unity Catalog identifier for interpolation. */
 function qIdent(ident: string): string {
   return ident.replace(/`/g, '``');
+}
+
+function asError(err: unknown): Error {
+  return err instanceof Error ? err : new Error(String(err));
 }
 
 /** Reject when `work` outlives `timeoutMs`; the timer never outlives the race. */

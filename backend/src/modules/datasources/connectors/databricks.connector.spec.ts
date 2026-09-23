@@ -221,8 +221,7 @@ describe('DatabricksConnector foreignKeys', () => {
   };
 
   it('queries information_schema per catalog and maps rows to edges', async () => {
-    respond = (sql) =>
-      sql.includes('referential_constraints') ? [fkRow] : [];
+    respond = (sql) => (sql.includes('referential_constraints') ? [fkRow] : []);
 
     const edges = await new DatabricksConnector().foreignKeys(config, [
       'sales.public.orders',
@@ -231,7 +230,9 @@ describe('DatabricksConnector foreignKeys', () => {
 
     const sql = statements();
     expect(sql).toHaveLength(1);
-    expect(sql[0]).toContain('`sales`.information_schema.referential_constraints');
+    expect(sql[0]).toContain(
+      '`sales`.information_schema.referential_constraints',
+    );
     expect(sql[0]).toContain('`sales`.information_schema.table_constraints');
     expect(sql[0]).toContain('`sales`.information_schema.key_column_usage');
     // Composite keys pair up column by column.
@@ -249,8 +250,7 @@ describe('DatabricksConnector foreignKeys', () => {
   });
 
   it('drops edges whose other end is not in the dataset', async () => {
-    respond = (sql) =>
-      sql.includes('referential_constraints') ? [fkRow] : [];
+    respond = (sql) => (sql.includes('referential_constraints') ? [fkRow] : []);
 
     const edges = await new DatabricksConnector().foreignKeys(config, [
       'sales.public.orders',
@@ -284,5 +284,81 @@ describe('DatabricksConnector foreignKeys', () => {
 
     expect(clients).toHaveLength(0);
     expect(edges).toEqual([]);
+  });
+});
+
+describe('DatabricksConnector sampleRowsMany', () => {
+  it('samples every table over one shared client and closes everything', async () => {
+    respond = (sql) =>
+      sql.includes('`orders`') ? [{ id: 1 }] : [{ name: 'a' }];
+
+    const results = await new DatabricksConnector().sampleRowsMany(
+      config,
+      ['sales.public.orders', 'sales.public.customers'],
+      50,
+      4,
+    );
+
+    expect(clients).toHaveLength(1);
+    expect(statements()).toEqual([
+      'SELECT * FROM `sales`.`public`.`orders` LIMIT 50',
+      'SELECT * FROM `sales`.`public`.`customers` LIMIT 50',
+    ]);
+    expect(results.get('sales.public.orders')).toEqual({
+      columns: ['id'],
+      rows: [{ id: 1 }],
+    });
+    expect(results.get('sales.public.customers')).toEqual({
+      columns: ['name'],
+      rows: [{ name: 'a' }],
+    });
+    expect(clients[0].sessions.every((s) => s.closed)).toBe(true);
+    expect(clients[0].closed).toBe(true);
+  });
+
+  it('reports a refused table as its own error and keeps sampling the rest', async () => {
+    respond = (sql) => {
+      if (sql.includes('`orders`')) throw new Error('PERMISSION_DENIED');
+      return [{ name: 'a' }];
+    };
+
+    const results = await new DatabricksConnector().sampleRowsMany(
+      config,
+      ['sales.public.orders', 'sales.public.customers'],
+      50,
+      1,
+    );
+
+    expect(results.get('sales.public.orders')).toBeInstanceOf(Error);
+    expect(results.get('sales.public.customers')).toEqual({
+      columns: ['name'],
+      rows: [{ name: 'a' }],
+    });
+    expect(clients[0].closed).toBe(true);
+  });
+
+  it('fails every entity without connecting per table when the connection is refused', async () => {
+    const results = await new DatabricksConnector().sampleRowsMany(
+      { ...config, host: 'not a host!' },
+      ['sales.public.orders', 'sales.public.customers'],
+      50,
+      4,
+    );
+
+    expect(clients).toHaveLength(0);
+    expect(results.get('sales.public.orders')).toBeInstanceOf(Error);
+    expect(results.get('sales.public.customers')).toBeInstanceOf(Error);
+  });
+
+  it('returns an empty map for an empty selection', async () => {
+    const results = await new DatabricksConnector().sampleRowsMany(
+      config,
+      [],
+      50,
+      4,
+    );
+
+    expect(clients).toHaveLength(0);
+    expect(results.size).toBe(0);
   });
 });

@@ -10,7 +10,7 @@ import type {
   DatasourceConnector,
   ForeignKeyEdge,
 } from './connectors/connector';
-import { MASKED } from './connectors/connector';
+import { mapWithConcurrency, MASKED } from './connectors/connector';
 import { DatasourcesRepository } from './repositories/datasources.repository';
 import { InventoryCacheRepository } from './repositories/inventory-cache.repository';
 import {
@@ -151,9 +151,7 @@ export class DatasourcesService {
    * is cached, so callers can offer a load instead of blocking on a cold
    * warehouse.
    */
-  async cachedInventory(
-    id: string,
-  ): Promise<{
+  async cachedInventory(id: string): Promise<{
     catalogs: CatalogInfo[];
     fetchedAt: string;
     cached: true;
@@ -175,6 +173,40 @@ export class DatasourcesService {
   ): Promise<QueryResult> {
     const ds = await this.get(id);
     return this.connector(ds.kind).sampleRows(ds.config, entity, limit);
+  }
+
+  /**
+   * Sample many entities in one call. Kinds with a batch implementation reuse
+   * a single connection; the rest fall back to per-entity sampling at the
+   * same concurrency. Per-entity failures come back as `Error` values so a
+   * refused table never fails the batch.
+   */
+  async sampleRowsMany(
+    id: string,
+    entities: string[],
+    limit: number,
+    concurrency: number,
+  ): Promise<Map<string, QueryResult | Error>> {
+    const ds = await this.get(id);
+    const connector = this.connector(ds.kind);
+    if (connector.sampleRowsMany) {
+      return connector.sampleRowsMany(ds.config, entities, limit, concurrency);
+    }
+    const results = new Map<string, QueryResult | Error>();
+    await mapWithConcurrency(entities, concurrency, async (entity) => {
+      try {
+        results.set(
+          entity,
+          await connector.sampleRows(ds.config, entity, limit),
+        );
+      } catch (err) {
+        results.set(
+          entity,
+          err instanceof Error ? err : new Error(String(err)),
+        );
+      }
+    });
+    return results;
   }
 
   async runReadOnlySql(
