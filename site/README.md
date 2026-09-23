@@ -136,6 +136,16 @@ renders a generated one. **The SQL and every row in it were run against the
 demo database** — only the assistant's prose is authored, because seeding needs
 no model provider key. If you re-word an answer, re-run the query too.
 
+`export.png` is the odd one out: it is not a screen but the artefact the app
+produces. Serve any stored version directory over http and shoot it whole —
+`file://` will not do, because the exported document's CSP is `script-src 'self'`
+and the chart runtime ships as a sibling file:
+
+```bash
+(cd .context/demo-data/workspaces/session-*/visuals/*/v2 && python3 -m http.server 4610) &
+# then screenshot http://localhost:4610/index.html with fullPage: true
+```
+
 `capture.mjs` takes an optional list of shot names (`hero`, `clarify`,
 `provenance`, `sql`, `visual`, `versions`, `knowledge`, `datasets`, `settings`,
 `llm`, `agents`); with none it captures all of them. Output goes to

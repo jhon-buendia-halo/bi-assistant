@@ -77,3 +77,11 @@ figure.shot figcaption{margin-top:14px;color:var(--text-mute);font-size:14.5px;m
 .shot-frame{background:#1c1c1c}
 .hero-shot figcaption{margin-top:16px;text-align:center;color:var(--text-mute);font-size:14.5px}
 @media(max-width:720px){.walk{gap:64px}}
+
+/* A step whose shot is a tall document rather than a wide window: the page it
+   produces reads as an artefact beside the prose, not as another screen. */
+.walk-step.is-split{grid-template-columns:1fr minmax(0,560px);gap:56px;align-items:start}
+.walk-step.is-split .walk-head{max-width:none;position:sticky;top:104px}
+@media(max-width:940px){.walk-step.is-split{grid-template-columns:1fr;gap:30px}.walk-step.is-split .walk-head{position:static}}
+/* The overview now carries two paragraphs; the Labs sheet only ever styled one. */
+.value-body + .value-body{margin-top:20px}
