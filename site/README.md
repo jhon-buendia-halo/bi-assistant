@@ -48,10 +48,15 @@ Override the project or hostname with `CF_PAGES_PROJECT` / `CUSTOM_DOMAIN`.
 
 ## Downloads
 
-The download buttons link to this site's own routes — `/download/mac-arm64`,
-`/download/mac-x64`, `/download/win-x64` — not to versioned GitHub URLs. **A new
-release needs no edit here**: the route resolves the newest published installer
-and redirects to it.
+The download button links to this site's own route — `/download/win-x64` — not
+to a versioned GitHub URL. **A new release needs no edit here**: the route
+resolves the newest published installer and redirects to it.
+
+The macOS cards are currently static "Coming soon" placeholders: they carry no
+`data-target`, so the page script leaves them alone. The `/download/mac-arm64`
+and `/download/mac-x64` routes still work — to put the buttons back, restore
+`data-target` and the `<a class="btn btn-grad" href="/download/…">` on those two
+cards in `public/index.html`.
 
 ```
 functions/download/[target].js   resolve a platform → 302 to the installer
