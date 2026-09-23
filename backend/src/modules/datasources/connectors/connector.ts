@@ -27,6 +27,19 @@ export interface DatasourceConnector<
     entity: string,
     limit: number,
   ): Promise<QueryResult>;
+  /**
+   * `sampleRows` over many entities, reusing one connection where the
+   * platform supports it — connection setup dominates per-table cost on
+   * constrained networks. Each entity maps to its rows or its own failure;
+   * one refused table never fails the batch. Optional: kinds without it are
+   * sampled entity-by-entity by the caller.
+   */
+  sampleRowsMany?(
+    config: TConfig,
+    entities: string[],
+    limit: number,
+    concurrency: number,
+  ): Promise<Map<string, QueryResult | Error>>;
   /** Guarded read-only SQL in the datasource's dialect. */
   runReadOnlySql(
     config: TConfig,
@@ -54,6 +67,24 @@ export function splitEntity(entity: string): [string, string, string] {
     );
   }
   return [parts[0].trim(), parts[1].trim(), parts[2].trim()];
+}
+
+/** Run `worker` over `items`, at most `limit` in flight. */
+export async function mapWithConcurrency<T>(
+  items: T[],
+  limit: number,
+  worker: (item: T) => Promise<void>,
+): Promise<void> {
+  let cursor = 0;
+  const runners = Array.from(
+    { length: Math.max(1, Math.min(limit, items.length)) },
+    async () => {
+      while (cursor < items.length) {
+        await worker(items[cursor++]);
+      }
+    },
+  );
+  await Promise.all(runners);
 }
 
 export function clampRows(

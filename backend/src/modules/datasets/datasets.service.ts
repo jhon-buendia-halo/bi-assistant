@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { DatasourcesService } from '../datasources/datasources.service';
 import type { ForeignKeyEdge } from '../datasources/connectors/connector';
+import type { QueryResult } from '../datasources/entities/datasource.entity';
 import { applyReferences, inferRelationships } from './relationships';
 import { DatasetsRepository } from './repositories/datasets.repository';
 import type {
@@ -13,7 +14,9 @@ import type {
 const SAMPLE_ROW_LIMIT = 50;
 const MAX_SAMPLE_VALUES = 5;
 const SAMPLE_VALUE_CHARS = 40;
-/** Tables sampled at once — enough to be quick without hammering a warehouse. */
+/** Sampling sessions in flight at once (over one shared connection where the
+ * datasource kind supports it) — enough to be quick without hammering a
+ * warehouse. */
 const ENRICHMENT_CONCURRENCY = 4;
 
 export interface SaveDatasetInput {
@@ -89,29 +92,32 @@ export class DatasetsService {
     const targets = entities.filter(
       (entity) => entity?.key && included.has(entity.key),
     );
+    let samples = new Map<string, QueryResult | Error>();
+    try {
+      samples = await this.datasources.sampleRowsMany(
+        datasourceId,
+        targets.map((entity) => entity.key),
+        SAMPLE_ROW_LIMIT,
+        ENRICHMENT_CONCURRENCY,
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`Sample-value enrichment skipped: ${message}`);
+    }
     const enriched = new Map<string, DatasetEntitySnapshot>();
-    await mapWithConcurrency(
-      targets,
-      ENRICHMENT_CONCURRENCY,
-      async (entity) => {
-        try {
-          const { rows } = await this.datasources.sampleRows(
-            datasourceId,
-            entity.key,
-            SAMPLE_ROW_LIMIT,
-          );
-          enriched.set(entity.key, {
-            ...entity,
-            columns: withSampleValues(entity.columns ?? [], rows),
-          });
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          this.logger.warn(
-            `Sample-value enrichment skipped for ${entity.key}: ${message}`,
-          );
-        }
-      },
-    );
+    for (const entity of targets) {
+      const result = samples.get(entity.key);
+      if (!result || result instanceof Error) {
+        this.logger.warn(
+          `Sample-value enrichment skipped for ${entity.key}: ${result?.message ?? 'no sample returned'}`,
+        );
+        continue;
+      }
+      enriched.set(entity.key, {
+        ...entity,
+        columns: withSampleValues(entity.columns ?? [], result.rows),
+      });
+    }
     const sampled = entities.map(
       (entity) => enriched.get(entity?.key) ?? entity,
     );
@@ -149,8 +155,6 @@ export class DatasetsService {
     return applyReferences(entities, declared, inferred);
   }
 }
-
-
 
 /** Attach up to `MAX_SAMPLE_VALUES` distinct stored values per column. */
 export function withSampleValues(
@@ -199,22 +203,4 @@ function stringifyValue(value: unknown): string {
     }
   }
   return '';
-}
-
-/** Run `worker` over `items`, at most `limit` in flight. */
-async function mapWithConcurrency<T>(
-  items: T[],
-  limit: number,
-  worker: (item: T) => Promise<void>,
-): Promise<void> {
-  let cursor = 0;
-  const runners = Array.from(
-    { length: Math.min(limit, items.length) },
-    async () => {
-      while (cursor < items.length) {
-        await worker(items[cursor++]);
-      }
-    },
-  );
-  await Promise.all(runners);
 }
