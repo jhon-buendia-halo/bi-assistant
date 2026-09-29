@@ -37,6 +37,16 @@ This is a **desktop application**: Electron shell with the Angular app as render
 - The default branch must allow pushes from `github-actions[bot]` (version commit + tag). Protected-branch rules need a bypass for it, otherwise the version job fails at push.
 - Tags pushed by `GITHUB_TOKEN` do not trigger other workflows — that is what keeps merge-time tagging from kicking off builds.
 
+### Web app via npm / npx
+
+Besides the Electron installers, the app ships as the npm package **`questions-to-insights`** (`backend/package.json` — the backend *is* the package; the Angular build is bundled into it). Developers run it with `npx questions-to-insights` or `npm i -g questions-to-insights && questions-to-insights`.
+
+- **CLI**: `backend/src/cli.ts` → `dist/cli.js` (`bin`). Flags: `--port` (default 3000, falls back to a free port when busy; an explicit busy port exits 1), `--host` (default `127.0.0.1`), `--data-dir` (default `$QTI_DATA_DIR`, `$APP_DATA_DIR`, else `~/.questions-to-insights` — deliberately separate from the Electron `userData` dir so both can run at once without SQLite lock fights), `--no-open`, `--help`, `--version`. It sets `APP_DATA_DIR` and `APP_SECRET` (read/created at `<data-dir>/.app-secret`, mode 0600, same semantics as `resolveAppSecret` in `electron/main.cjs`) *before* dynamically importing the app, because `database.module.ts` and `mastra/storage.ts` read `APP_DATA_DIR` at import time. CORS stays off in this mode (same-origin); `main.ts` (Electron path) still enables it.
+- **Bootstrap**: `backend/src/app-bootstrap.ts` `createApp()` is shared by `main.ts` and the CLI. When `<webRoot>/index.html` exists (`WEB_ROOT` env, else `backend/public/`) it serves static assets and a SPA fallback implemented as a `@Catch(NotFoundException)` filter — API controllers keep priority, only unmatched `GET` + `Accept: text/html` + no-extension paths get `index.html`. No `index.html` → API only, exactly as before (Electron-staged backend has no `public/`).
+- **Frontend**: `API_BASE_URL` (`core/config/api.config.ts`) is `''` (same origin) unless running from `file://` (Electron → `http://localhost:3000`). `npm run build:web` in `frontend/` builds with base href `/`; Electron builds keep `--base-href ./`.
+- **Build / pack**: in `backend/`, `npm run build:web` (frontend build + `scripts/copy-web.js` → `backend/public/`, gitignored), `npm run build:all`, `prepack` runs `build:all` so `npm pack` / `npm publish` always ship a fresh UI. `files` = `dist` + `public` (no `src/`, `test/`, tsbuildinfo). Test locally with `npm pack` then `npm i <tarball>` in a scratch dir and run the bin.
+- **Publishing is not wired yet.** Version is already bumped in lockstep by `version-on-merge.yml`; publishing needs an `npm publish` step (npm trusted publishing/OIDC or `NPM_TOKEN`) and a registry decision — public npm (`publishConfig.access: public` is set) vs. GitHub Packages, given the repo is private.
+
 ### Architecture: feature-based
 
 All frontend code follows this feature-based structure. Every feature gets its own folder under `src/app/features/` containing everything that belongs to it (pages, components, services, models, store, routes).

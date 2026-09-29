@@ -1,10 +1,27 @@
 {
-  "name": "backend",
+  "name": "questions-to-insights",
   "version": "0.17.0",
-  "description": "",
+  "description": "Ask questions of your data in plain language and get answers, SQL and interactive visuals. Runs locally: npx questions-to-insights",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jhon-buendia-halo/questions-to-insights.git",
+    "directory": "backend"
+  },
+  "bin": {
+    "questions-to-insights": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "!dist/**/*.tsbuildinfo",
+    "public"
+  ],
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "author": "",
-  "private": true,
-  "license": "UNLICENSED",
   "scripts": {
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
@@ -20,7 +37,11 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "eval": "ts-node -T -P tsconfig.json scripts/run-eval.ts",
     "check:answers": "ts-node -T -P tsconfig.json scripts/check-answers.ts",
-    "evals:assistant": "nest build && node dist/mastra/evals/run-assistant-evals.js"
+    "evals:assistant": "nest build && node dist/mastra/evals/run-assistant-evals.js",
+    "build:web": "npm --prefix ../frontend run build:web && node scripts/copy-web.js",
+    "build:all": "npm run build && npm run build:web",
+    "prepack": "npm run build:all",
+    "start:web": "node dist/cli.js"
   },
   "dependencies": {
     "@databricks/sql": "2.1.0",
