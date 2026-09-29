@@ -9,3 +9,4 @@
 *.duckdb.*
 *.log
 .DS_Store
+/public

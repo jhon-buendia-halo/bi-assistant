@@ -1,10 +1,10 @@
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
+import { createApp } from './app-bootstrap';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-  // Renderer runs from file:// inside Electron (Origin: null) — allow it.
-  app.enableCors();
-  await app.listen(process.env.PORT ?? 3000);
+  await createApp({
+    port: Number(process.env.PORT ?? 3000),
+    // Renderer runs from file:// inside Electron (Origin: null) — allow it.
+    cors: true,
+  });
 }
 bootstrap();

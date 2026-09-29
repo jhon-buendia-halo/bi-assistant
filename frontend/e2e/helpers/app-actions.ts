@@ -85,9 +85,12 @@ export async function createWorldCupSession(page: Page): Promise<string> {
   await expect(page.locator('header')).toContainText(WORLD_CUP_DATASOURCE);
   await expect(page.locator('header')).toContainText('PostgreSQL');
 
-  const session = page.locator('[data-testid^="session-"]').filter({
-    hasText: WORLD_CUP_SESSION,
-  });
+  // Scope to the sidebar: the chat pane's welcome card also carries a
+  // `session-*` test id and shows the session name.
+  const session = page
+    .getByRole('navigation', { name: 'Sessions navigation' })
+    .locator('[data-testid^="session-"]')
+    .filter({ hasText: WORLD_CUP_SESSION });
   const testId = await session.getAttribute('data-testid');
   if (!testId) throw new Error('Created session did not expose its id');
   return testId.slice('session-'.length);
