@@ -1,7 +1,8 @@
 {
-  "name": "questions-to-insights",
+  "name": "@jhon-buendia-halo/questions-to-insights",
   "version": "0.17.0",
-  "description": "Ask questions of your data in plain language and get answers, SQL and interactive visuals. Runs locally: npx questions-to-insights",
+  "description": "Ask questions of your data in plain language and get answers, SQL and interactive visuals. Runs locally: npx @jhon-buendia-halo/questions-to-insights",
+  "license": "UNLICENSED",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/jhon-buendia-halo/questions-to-insights.git",
@@ -19,7 +20,7 @@
     "node": ">=22.13.0"
   },
   "publishConfig": {
-    "access": "public"
+    "registry": "https://npm.pkg.github.com"
   },
   "author": "",
   "scripts": {

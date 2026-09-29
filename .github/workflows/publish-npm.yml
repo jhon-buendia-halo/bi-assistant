@@ -1,0 +1,157 @@
+name: Publish npm package
+
+# Publishes the web-app package (backend/, with the Angular UI bundled into
+# public/) to GitHub Packages: Actions → Publish npm package → Run workflow,
+# with the vX.Y.Z tag produced by version-on-merge.yml as "ref". It is manual
+# on purpose: version-on-merge pushes its tag with GITHUB_TOKEN, and tags pushed
+# by GITHUB_TOKEN never trigger other workflows, so there is no tag event to
+# hook onto — and a merge should not ship a package nobody asked for anyway.
+#
+# GitHub Packages only accepts npm packages whose scope equals the repository
+# owner (lowercase), hence @jhon-buendia-halo/questions-to-insights; the
+# `repository` field in backend/package.json links the package to this repo,
+# which is what lets this workflow's GITHUB_TOKEN (packages: write) publish it
+# without a personal token.
+#
+# The build is explicit (`npm run build:all`) and publish runs with
+# --ignore-scripts, so `prepack` does not rebuild a second time and the tarball
+# is exactly what the logged build step produced. GitHub Packages refuses to
+# re-publish an existing version (HTTP 409); a guard checks the registry first
+# and fails with a readable message instead. dry_run packs and prints the
+# tarball without uploading it.
+#
+# Consumers need a personal access token with read:packages in ~/.npmrc, even
+# for npx — GitHub Packages requires authentication for every npm install:
+#   @jhon-buendia-halo:registry=https://npm.pkg.github.com
+#   //npm.pkg.github.com/:_authToken=<PAT with read:packages>
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref to publish — the vX.Y.Z tag produced by version-on-merge, or any branch/SHA (empty = branch this run was started from)"
+        type: string
+        required: false
+        default: ""
+      dry_run:
+        description: Run npm publish --dry-run instead of publishing
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    name: Publish to GitHub Packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          registry-url: https://npm.pkg.github.com
+          scope: "@jhon-buendia-halo"
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+
+      - name: Resolve package name and version
+        id: pkg
+        working-directory: backend
+        run: |
+          set -euo pipefail
+          name=$(jq -r .name package.json)
+          version=$(jq -r .version package.json)
+          echo "Publishing $name@$version from ${{ inputs.ref || github.ref }} ($(git rev-parse HEAD))"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      # GitHub Packages rejects a version that already exists with a bare 409.
+      # `npm view` returns the version when it exists and E404 when it does not
+      # (package or version); any other failure (auth, network) is fatal.
+      - name: Refuse an already-published version
+        if: ${{ !inputs.dry_run }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NAME: ${{ steps.pkg.outputs.name }}
+          VERSION: ${{ steps.pkg.outputs.version }}
+        run: |
+          set -euo pipefail
+          if out=$(npm view "$NAME@$VERSION" version --registry https://npm.pkg.github.com 2>&1); then
+            if [ -n "$out" ]; then
+              echo "::error::$NAME@$VERSION is already published to GitHub Packages. Versions cannot be re-published — merge a change so version-on-merge bumps it, then publish the new tag."
+              exit 1
+            fi
+          elif ! grep -q E404 <<<"$out"; then
+            echo "$out" >&2
+            echo "::error::Could not query GitHub Packages for $NAME@$VERSION."
+            exit 1
+          fi
+          echo "$NAME@$VERSION is not published yet"
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci --legacy-peer-deps
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci --legacy-peer-deps
+
+      - name: Build backend and web UI
+        working-directory: backend
+        run: npm run build:all
+
+      - name: Publish
+        working-directory: backend
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          # --ignore-scripts: the build above already ran; skip prepack's rebuild.
+          if [ "$DRY_RUN" = "true" ]; then
+            npm publish --ignore-scripts --dry-run
+          else
+            npm publish --ignore-scripts
+          fi
+
+      - name: Summary
+        env:
+          NAME: ${{ steps.pkg.outputs.name }}
+          VERSION: ${{ steps.pkg.outputs.version }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.repository }}
+        run: |
+          {
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "### Dry run: $NAME@$VERSION (not published)"
+            else
+              echo "### Published $NAME@$VERSION"
+              echo
+              echo "<https://github.com/$REPO/pkgs/npm/${NAME#*/}>"
+            fi
+            echo
+            echo "Install — add to \`~/.npmrc\` (PAT with \`read:packages\`):"
+            echo
+            echo '```'
+            echo "@${OWNER,,}:registry=https://npm.pkg.github.com"
+            echo "//npm.pkg.github.com/:_authToken=<PAT with read:packages>"
+            echo '```'
+            echo
+            echo "Then run:"
+            echo
+            echo '```'
+            echo "npx $NAME@$VERSION"
+            echo "npm i -g $NAME@$VERSION && questions-to-insights"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
