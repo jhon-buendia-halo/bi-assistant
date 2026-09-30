@@ -9,10 +9,15 @@ import {
 } from '@nestjs/common';
 import { DatasourcesService } from './datasources.service';
 import type {
+  DiscoverRestEndpointsDto,
   SaveDatasourceDto,
   TestDatasourceDto,
 } from './dto/datasource.dto';
-import type { CatalogInfo, DatasourceView } from './entities/datasource.entity';
+import type {
+  CatalogInfo,
+  DatasourceView,
+  RestDiscovery,
+} from './entities/datasource.entity';
 
 @Controller('datasources')
 export class DatasourcesController {
@@ -30,6 +35,29 @@ export class DatasourcesController {
     try {
       await this.datasources.testConnection(dto.kind, dto.config, dto.id);
       return { ok: true, message: 'Connection successful' };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { ok: false, message };
+    }
+  }
+
+  @Post('rest/discover')
+  async discoverRestEndpoints(
+    @Body() dto: DiscoverRestEndpointsDto,
+  ): Promise<{ ok: boolean; message: string } & Partial<RestDiscovery>> {
+    try {
+      const result = await this.datasources.discoverRestEndpoints(
+        dto.config,
+        dto.specUrl,
+        dto.id,
+      );
+      const count = result.endpoints.length;
+      const source = result.title ? ` in "${result.title}"` : '';
+      return {
+        ok: true,
+        message: `Found ${count} endpoint${count === 1 ? '' : 's'}${source}`,
+        ...result,
+      };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return { ok: false, message };

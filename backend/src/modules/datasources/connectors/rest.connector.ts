@@ -4,6 +4,7 @@ import type {
   ColumnInfo,
   QueryResult,
   RestApiConfig,
+  RestDiscovery,
   RestEndpointDef,
   SchemaInfo,
   TableInfo,
@@ -16,6 +17,7 @@ import {
   MASKED,
   splitEntity,
 } from './connector';
+import { discoverFromOpenApi } from './openapi-discovery';
 
 const CATALOG = 'api';
 const REQUEST_TIMEOUT_MS = 20_000;
@@ -27,6 +29,16 @@ const INVENTORY_SAMPLE_ROWS = 50;
 const INVENTORY_CONCURRENCY = 4;
 const MAX_FLATTEN_DEPTH = 3;
 const ERROR_EXCERPT_CHARS = 200;
+const SPEC_TIMEOUT_MS = 10_000;
+const MAX_SPEC_BYTES = 20 * 1024 * 1024;
+/** Where specs usually live, tried in order when no spec URL is given. */
+const SPEC_PATHS = [
+  '/openapi.json',
+  '/swagger.json',
+  '/v3/api-docs',
+  '/api-docs',
+  '/swagger/v1/swagger.json',
+];
 
 type ColumnType = 'string' | 'number' | 'boolean' | 'json';
 type RawRow = Record<string, unknown>;
@@ -183,6 +195,102 @@ export class RestConnector implements DatasourceConnector<RestApiConfig> {
     }
   }
 
+  /**
+   * Reads an OpenAPI 3.x / Swagger 2.0 JSON spec (the given URL, or the usual
+   * locations under the base URL and its origin) and proposes endpoints.
+   */
+  async discover(
+    config: RestApiConfig,
+    specUrl?: string,
+  ): Promise<RestDiscovery> {
+    const baseUrl = (config.baseUrl ?? '').trim().replace(/\/+$/, '');
+    const explicit = !!specUrl?.trim();
+    const candidates = specCandidates(baseUrl, specUrl);
+    if (!candidates.length) {
+      throw new BadRequestException(
+        explicit
+          ? 'A relative spec URL needs a base URL'
+          : 'Enter a base URL or an OpenAPI spec URL',
+      );
+    }
+
+    const failures: string[] = [];
+    for (const url of candidates) {
+      let spec: unknown;
+      try {
+        spec = await this.fetchSpec(config, url);
+      } catch (err) {
+        // Unreachable host: every other candidate would fail the same way.
+        if (!(err instanceof SpecNotFoundError)) {
+          throw new BadRequestException(
+            `OpenAPI spec — ${url}: ${describeError(err)}`,
+          );
+        }
+        failures.push(`${url}: ${err.message}`);
+        continue;
+      }
+      try {
+        const found = discoverFromOpenApi(spec, url, baseUrl);
+        return {
+          specUrl: url,
+          title: found.title,
+          baseUrl: baseUrl || found.serverUrl,
+          endpoints: found.endpoints,
+          skipped: found.skipped,
+        };
+      } catch (err) {
+        failures.push(`${url}: ${describeError(err)}`);
+      }
+    }
+    throw new BadRequestException(
+      explicit
+        ? `OpenAPI spec — ${failures.join('; ')}`
+        : `No OpenAPI spec found (tried ${candidates.join(', ')}). Enter the spec URL.`,
+    );
+  }
+
+  private async fetchSpec(
+    config: RestApiConfig,
+    url: string,
+  ): Promise<unknown> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), SPEC_TIMEOUT_MS);
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: buildHeaders(config),
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        throw new SpecNotFoundError(`HTTP ${response.status}`);
+      }
+      const length = Number(response.headers.get('content-length'));
+      if (length > MAX_SPEC_BYTES) {
+        throw new SpecNotFoundError('spec is too large');
+      }
+      const text = await response.text();
+      if (text.length > MAX_SPEC_BYTES) {
+        throw new SpecNotFoundError('spec is too large');
+      }
+      try {
+        return JSON.parse(text) as unknown;
+      } catch {
+        throw new SpecNotFoundError(
+          'not JSON (YAML specs are not supported — use the JSON version)',
+        );
+      }
+    } catch (err) {
+      if (controller.signal.aborted) {
+        throw new Error(
+          `request timed out after ${Math.round(SPEC_TIMEOUT_MS / 1000)}s`,
+        );
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   private endpoints(config: RestApiConfig): ResolvedEndpoint[] {
     const seen = new Set<string>();
     const resolved: ResolvedEndpoint[] = [];
@@ -322,6 +430,30 @@ export class RestConnector implements DatasourceConnector<RestApiConfig> {
       clearTimeout(timer);
     }
   }
+}
+
+/** A response that is there but is not a usable spec; the next candidate may be. */
+class SpecNotFoundError extends Error {}
+
+function specCandidates(baseUrl: string, specUrl?: string): string[] {
+  const wanted = specUrl?.trim();
+  const roots: string[] = [];
+  if (baseUrl) {
+    roots.push(baseUrl);
+    try {
+      roots.push(new URL(baseUrl).origin);
+    } catch {
+      // Invalid base URL: fetch reports it for the first candidate.
+    }
+  }
+  const join = (root: string, path: string) =>
+    `${root.replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`;
+  const urls = wanted
+    ? /^https?:\/\//i.test(wanted)
+      ? [wanted]
+      : roots.map((root) => join(root, wanted))
+    : roots.flatMap((root) => SPEC_PATHS.map((path) => join(root, path)));
+  return Array.from(new Set(urls));
 }
 
 function describeError(err: unknown): string {

@@ -62,6 +62,9 @@ Response:
 
 ## Datasource settings in the app
 
+Enter the base URL and click **Discover** in the Endpoints section: the app reads
+`/openapi.json` and proposes all 14 endpoints with the settings below.
+
 | Setting          | Value                                   |
 | ---------------- | --------------------------------------- |
 | Base URL         | `http://127.0.0.1:55080`                |
