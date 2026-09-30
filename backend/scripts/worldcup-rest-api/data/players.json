@@ -1,0 +1,352 @@
+[
+  {
+    "id": 1,
+    "national_team_id": 1,
+    "full_name": "Angel Di Maria",
+    "position": "MF",
+    "date_of_birth": "1988-02-14"
+  },
+  {
+    "id": 2,
+    "national_team_id": 1,
+    "full_name": "Julian Alvarez",
+    "position": "FW",
+    "date_of_birth": "2000-01-31"
+  },
+  {
+    "id": 3,
+    "national_team_id": 1,
+    "full_name": "Lionel Messi",
+    "position": "FW",
+    "date_of_birth": "1987-06-24"
+  },
+  {
+    "id": 4,
+    "national_team_id": 1,
+    "full_name": "Nahuel Molina",
+    "position": "DF",
+    "date_of_birth": "1998-04-06"
+  },
+  {
+    "id": 5,
+    "national_team_id": 1,
+    "full_name": "Emiliano Martinez",
+    "position": "GK",
+    "date_of_birth": "1992-09-02"
+  },
+  {
+    "id": 6,
+    "national_team_id": 2,
+    "full_name": "Thomas Meunier",
+    "position": "DF",
+    "date_of_birth": "1991-09-12"
+  },
+  {
+    "id": 7,
+    "national_team_id": 2,
+    "full_name": "Eden Hazard",
+    "position": "FW",
+    "date_of_birth": "1991-01-07"
+  },
+  {
+    "id": 8,
+    "national_team_id": 2,
+    "full_name": "Kevin De Bruyne",
+    "position": "MF",
+    "date_of_birth": "1991-06-28"
+  },
+  {
+    "id": 9,
+    "national_team_id": 2,
+    "full_name": "Thibaut Courtois",
+    "position": "GK",
+    "date_of_birth": "1992-05-11"
+  },
+  {
+    "id": 10,
+    "national_team_id": 3,
+    "full_name": "Renato Augusto",
+    "position": "MF",
+    "date_of_birth": "1988-02-08"
+  },
+  {
+    "id": 11,
+    "national_team_id": 3,
+    "full_name": "Neymar",
+    "position": "FW",
+    "date_of_birth": "1992-02-05"
+  },
+  {
+    "id": 12,
+    "national_team_id": 3,
+    "full_name": "Fernandinho",
+    "position": "MF",
+    "date_of_birth": "1985-05-04"
+  },
+  {
+    "id": 13,
+    "national_team_id": 3,
+    "full_name": "Alisson Becker",
+    "position": "GK",
+    "date_of_birth": "1992-10-02"
+  },
+  {
+    "id": 14,
+    "national_team_id": 4,
+    "full_name": "Mislav Orsic",
+    "position": "FW",
+    "date_of_birth": "1992-12-29"
+  },
+  {
+    "id": 15,
+    "national_team_id": 4,
+    "full_name": "Josko Gvardiol",
+    "position": "DF",
+    "date_of_birth": "2002-01-23"
+  },
+  {
+    "id": 16,
+    "national_team_id": 4,
+    "full_name": "Bruno Petkovic",
+    "position": "FW",
+    "date_of_birth": "1994-09-16"
+  },
+  {
+    "id": 17,
+    "national_team_id": 4,
+    "full_name": "Mario Mandzukic",
+    "position": "FW",
+    "date_of_birth": "1986-05-21"
+  },
+  {
+    "id": 18,
+    "national_team_id": 4,
+    "full_name": "Ivan Perisic",
+    "position": "MF",
+    "date_of_birth": "1989-02-02"
+  },
+  {
+    "id": 19,
+    "national_team_id": 4,
+    "full_name": "Domagoj Vida",
+    "position": "DF",
+    "date_of_birth": "1989-04-29"
+  },
+  {
+    "id": 20,
+    "national_team_id": 4,
+    "full_name": "Andrej Kramaric",
+    "position": "FW",
+    "date_of_birth": "1991-06-19"
+  },
+  {
+    "id": 21,
+    "national_team_id": 4,
+    "full_name": "Luka Modric",
+    "position": "MF",
+    "date_of_birth": "1985-09-09"
+  },
+  {
+    "id": 22,
+    "national_team_id": 4,
+    "full_name": "Dominik Livakovic",
+    "position": "GK",
+    "date_of_birth": "1995-01-09"
+  },
+  {
+    "id": 23,
+    "national_team_id": 4,
+    "full_name": "Danijel Subasic",
+    "position": "GK",
+    "date_of_birth": "1984-10-27"
+  },
+  {
+    "id": 24,
+    "national_team_id": 5,
+    "full_name": "Harry Kane",
+    "position": "FW",
+    "date_of_birth": "1993-07-28"
+  },
+  {
+    "id": 25,
+    "national_team_id": 5,
+    "full_name": "Kieran Trippier",
+    "position": "DF",
+    "date_of_birth": "1990-09-19"
+  },
+  {
+    "id": 26,
+    "national_team_id": 5,
+    "full_name": "Dele Alli",
+    "position": "MF",
+    "date_of_birth": "1996-04-11"
+  },
+  {
+    "id": 27,
+    "national_team_id": 5,
+    "full_name": "Harry Maguire",
+    "position": "DF",
+    "date_of_birth": "1993-03-05"
+  },
+  {
+    "id": 28,
+    "national_team_id": 5,
+    "full_name": "Jordan Pickford",
+    "position": "GK",
+    "date_of_birth": "1994-03-07"
+  },
+  {
+    "id": 29,
+    "national_team_id": 6,
+    "full_name": "Randal Kolo Muani",
+    "position": "FW",
+    "date_of_birth": "1998-12-05"
+  },
+  {
+    "id": 30,
+    "national_team_id": 6,
+    "full_name": "Theo Hernandez",
+    "position": "DF",
+    "date_of_birth": "1997-10-06"
+  },
+  {
+    "id": 31,
+    "national_team_id": 6,
+    "full_name": "Olivier Giroud",
+    "position": "FW",
+    "date_of_birth": "1986-09-30"
+  },
+  {
+    "id": 32,
+    "national_team_id": 6,
+    "full_name": "Aurelien Tchouameni",
+    "position": "MF",
+    "date_of_birth": "2000-01-27"
+  },
+  {
+    "id": 33,
+    "national_team_id": 6,
+    "full_name": "Kylian Mbappe",
+    "position": "FW",
+    "date_of_birth": "1998-12-20"
+  },
+  {
+    "id": 34,
+    "national_team_id": 6,
+    "full_name": "Paul Pogba",
+    "position": "MF",
+    "date_of_birth": "1993-03-15"
+  },
+  {
+    "id": 35,
+    "national_team_id": 6,
+    "full_name": "Antoine Griezmann",
+    "position": "FW",
+    "date_of_birth": "1991-03-21"
+  },
+  {
+    "id": 36,
+    "national_team_id": 6,
+    "full_name": "Samuel Umtiti",
+    "position": "DF",
+    "date_of_birth": "1993-11-14"
+  },
+  {
+    "id": 37,
+    "national_team_id": 6,
+    "full_name": "Raphael Varane",
+    "position": "DF",
+    "date_of_birth": "1993-04-25"
+  },
+  {
+    "id": 38,
+    "national_team_id": 6,
+    "full_name": "Hugo Lloris",
+    "position": "GK",
+    "date_of_birth": "1986-12-26"
+  },
+  {
+    "id": 39,
+    "national_team_id": 7,
+    "full_name": "Achraf Dari",
+    "position": "DF",
+    "date_of_birth": "1999-05-06"
+  },
+  {
+    "id": 40,
+    "national_team_id": 7,
+    "full_name": "Youssef En-Nesyri",
+    "position": "FW",
+    "date_of_birth": "1997-06-01"
+  },
+  {
+    "id": 41,
+    "national_team_id": 7,
+    "full_name": "Yassine Bounou",
+    "position": "GK",
+    "date_of_birth": "1991-04-05"
+  },
+  {
+    "id": 42,
+    "national_team_id": 8,
+    "full_name": "Wout Weghorst",
+    "position": "FW",
+    "date_of_birth": "1992-08-07"
+  },
+  {
+    "id": 43,
+    "national_team_id": 8,
+    "full_name": "Andries Noppert",
+    "position": "GK",
+    "date_of_birth": "1994-04-07"
+  },
+  {
+    "id": 44,
+    "national_team_id": 9,
+    "full_name": "Cristiano Ronaldo",
+    "position": "FW",
+    "date_of_birth": "1985-02-05"
+  },
+  {
+    "id": 45,
+    "national_team_id": 9,
+    "full_name": "Diogo Costa",
+    "position": "GK",
+    "date_of_birth": "1999-09-19"
+  },
+  {
+    "id": 46,
+    "national_team_id": 10,
+    "full_name": "Mario Fernandes",
+    "position": "DF",
+    "date_of_birth": "1990-09-19"
+  },
+  {
+    "id": 47,
+    "national_team_id": 10,
+    "full_name": "Denis Cheryshev",
+    "position": "MF",
+    "date_of_birth": "1990-12-26"
+  },
+  {
+    "id": 48,
+    "national_team_id": 10,
+    "full_name": "Igor Akinfeev",
+    "position": "GK",
+    "date_of_birth": "1986-04-08"
+  },
+  {
+    "id": 49,
+    "national_team_id": 11,
+    "full_name": "Robin Olsen",
+    "position": "GK",
+    "date_of_birth": "1990-01-08"
+  },
+  {
+    "id": 50,
+    "national_team_id": 12,
+    "full_name": "Fernando Muslera",
+    "position": "GK",
+    "date_of_birth": "1986-06-16"
+  }
+]

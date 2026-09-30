@@ -182,6 +182,36 @@ describe('the fixture registry is the single source of required entities', () =>
     );
   });
 
+  it('requires a REST datasource for the REST fixture and matches api.* keys', () => {
+    const rest = evalFixture('world-cup-rest');
+    const restTables = rest.requiredTables.map(
+      (table) => `api.${rest.schema}.${table}`,
+    );
+
+    expect(
+      check(
+        ['Sample'],
+        [fixture({ datasourceKind: 'rest', tables: restTables })],
+        rest,
+      ),
+    ).toBeUndefined();
+    // A PostgreSQL datasource carrying the right tables is the wrong kind.
+    expect(check(['Sample'], [fixture()], rest)).toContain(
+      'must belong to one REST API datasource',
+    );
+    // And the other way round: REST datasets cannot satisfy the PostgreSQL set.
+    expect(
+      check(['Sample'], [fixture({ datasourceKind: 'rest' })], WORLD_CUP),
+    ).toContain('must belong to one PostgreSQL datasource');
+    expect(
+      check(
+        ['Sample'],
+        [fixture({ datasourceKind: 'rest', tables: restTables.slice(1) })],
+        rest,
+      ),
+    ).toContain(`Missing entities: ${rest.schema}.${rest.requiredTables[0]}`);
+  });
+
   it('fails loudly when a question set points at an unknown fixture', () => {
     expect(() => evalFixture('no-such-sample')).toThrow(
       'Unknown sample fixture "no-such-sample"',

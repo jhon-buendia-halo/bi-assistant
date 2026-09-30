@@ -1,0 +1,326 @@
+[
+  {
+    "tournament_year": 2018,
+    "player": "Andrej Kramaric",
+    "national_team": "Croatia",
+    "goals": 1,
+    "penalties": 0,
+    "own_goals": 0,
+    "first_goal_minute": 39
+  },
+  {
+    "tournament_year": 2018,
+    "player": "Antoine Griezmann",
+    "national_team": "France",
+    "goals": 2,
+    "penalties": 1,
+    "own_goals": 0,
+    "first_goal_minute": 38
+  },
+  {
+    "tournament_year": 2018,
+    "player": "Dele Alli",
+    "national_team": "England",
+    "goals": 1,
+    "penalties": 0,
+    "own_goals": 0,
+    "first_goal_minute": 58
+  },
+  {
+    "tournament_year": 2018,
+    "player": "Denis Cheryshev",
+    "national_team": "Russia",
+    "goals": 1,
+    "penalties": 0,
+    "own_goals": 0,
+    "first_goal_minute": 31
+  },
+  {
+    "tournament_year": 2018,
+    "player": "Domagoj Vida",
+    "national_team": "Croatia",
+    "goals": 1,
+    "penalties": 0,
+    "own_goals": 0,
+    "first_goal_minute": 101
+  },
+  {
+    "tournament_year": 2018,
+    "player": "Eden Hazard",
+    "national_team": "Belgium",
+    "goals": 1,
+    "penalties": 0,
+    "own_goals": 0,
+    "first_goal_minute": 82
+  },
+  {
+    "tournament_year": 2018,
+    "player": "Fernandinho",
+    "national_team": "Brazil",
+    "goals": 0,
+    "penalties": 0,
+    "own_goals": 1,
+    "first_goal_minute": null
+  },
+  {
+    "tournament_year": 2018,
+    "player": "Harry Maguire",
+    "national_team": "England",
+    "goals": 1,
+    "penalties": 0,
+    "own_goals": 0,
+    "first_goal_minute": 30
+  },
+  {
+    "tournament_year": 2018,
+    "player": "Ivan Perisic",
+    "national_team": "Croatia",
+    "goals": 2,
+    "penalties": 0,
+    "own_goals": 0,
+    "first_goal_minute": 28
+  },
+  {
+    "tournament_year": 2018,
+    "player": "Kevin De Bruyne",
+    "national_team": "Belgium",
+    "goals": 1,
+    "penalties": 0,
+    "own_goals": 0,
+    "first_goal_minute": 31
+  },
+  {
+    "tournament_year": 2018,
+    "player": "Kieran Trippier",
+    "national_team": "England",
+    "goals": 1,
+    "penalties": 0,
+    "own_goals": 0,
+    "first_goal_minute": 5
+  },
+  {
+    "tournament_year": 2018,
+    "player": "Kylian Mbappe",
+    "national_team": "France",
+    "goals": 1,
+    "penalties": 0,
+    "own_goals": 0,
+    "first_goal_minute": 65
+  },
+  {
+    "tournament_year": 2018,
+    "player": "Mario Fernandes",
+    "national_team": "Russia",
+    "goals": 1,
+    "penalties": 0,
+    "own_goals": 0,
+    "first_goal_minute": 115
+  },
+  {
+    "tournament_year": 2018,
+    "player": "Mario Mandzukic",
+    "national_team": "Croatia",
+    "goals": 2,
+    "penalties": 0,
+    "own_goals": 1,
+    "first_goal_minute": 69
+  },
+  {
+    "tournament_year": 2018,
+    "player": "Paul Pogba",
+    "national_team": "France",
+    "goals": 1,
+    "penalties": 0,
+    "own_goals": 0,
+    "first_goal_minute": 59
+  },
+  {
+    "tournament_year": 2018,
+    "player": "Raphael Varane",
+    "national_team": "France",
+    "goals": 1,
+    "penalties": 0,
+    "own_goals": 0,
+    "first_goal_minute": 40
+  },
+  {
+    "tournament_year": 2018,
+    "player": "Renato Augusto",
+    "national_team": "Brazil",
+    "goals": 1,
+    "penalties": 0,
+    "own_goals": 0,
+    "first_goal_minute": 76
+  },
+  {
+    "tournament_year": 2018,
+    "player": "Samuel Umtiti",
+    "national_team": "France",
+    "goals": 1,
+    "penalties": 0,
+    "own_goals": 0,
+    "first_goal_minute": 51
+  },
+  {
+    "tournament_year": 2018,
+    "player": "Thomas Meunier",
+    "national_team": "Belgium",
+    "goals": 1,
+    "penalties": 0,
+    "own_goals": 0,
+    "first_goal_minute": 4
+  },
+  {
+    "tournament_year": 2022,
+    "player": "Achraf Dari",
+    "national_team": "Morocco",
+    "goals": 1,
+    "penalties": 0,
+    "own_goals": 0,
+    "first_goal_minute": 9
+  },
+  {
+    "tournament_year": 2022,
+    "player": "Angel Di Maria",
+    "national_team": "Argentina",
+    "goals": 1,
+    "penalties": 0,
+    "own_goals": 0,
+    "first_goal_minute": 36
+  },
+  {
+    "tournament_year": 2022,
+    "player": "Aurelien Tchouameni",
+    "national_team": "France",
+    "goals": 1,
+    "penalties": 0,
+    "own_goals": 0,
+    "first_goal_minute": 17
+  },
+  {
+    "tournament_year": 2022,
+    "player": "Bruno Petkovic",
+    "national_team": "Croatia",
+    "goals": 1,
+    "penalties": 0,
+    "own_goals": 0,
+    "first_goal_minute": 117
+  },
+  {
+    "tournament_year": 2022,
+    "player": "Harry Kane",
+    "national_team": "England",
+    "goals": 1,
+    "penalties": 1,
+    "own_goals": 0,
+    "first_goal_minute": 54
+  },
+  {
+    "tournament_year": 2022,
+    "player": "Josko Gvardiol",
+    "national_team": "Croatia",
+    "goals": 1,
+    "penalties": 0,
+    "own_goals": 0,
+    "first_goal_minute": 7
+  },
+  {
+    "tournament_year": 2022,
+    "player": "Julian Alvarez",
+    "national_team": "Argentina",
+    "goals": 2,
+    "penalties": 0,
+    "own_goals": 0,
+    "first_goal_minute": 39
+  },
+  {
+    "tournament_year": 2022,
+    "player": "Kylian Mbappe",
+    "national_team": "France",
+    "goals": 3,
+    "penalties": 2,
+    "own_goals": 0,
+    "first_goal_minute": 80
+  },
+  {
+    "tournament_year": 2022,
+    "player": "Lionel Messi",
+    "national_team": "Argentina",
+    "goals": 4,
+    "penalties": 3,
+    "own_goals": 0,
+    "first_goal_minute": 23
+  },
+  {
+    "tournament_year": 2022,
+    "player": "Mislav Orsic",
+    "national_team": "Croatia",
+    "goals": 1,
+    "penalties": 0,
+    "own_goals": 0,
+    "first_goal_minute": 42
+  },
+  {
+    "tournament_year": 2022,
+    "player": "Nahuel Molina",
+    "national_team": "Argentina",
+    "goals": 1,
+    "penalties": 0,
+    "own_goals": 0,
+    "first_goal_minute": 35
+  },
+  {
+    "tournament_year": 2022,
+    "player": "Neymar",
+    "national_team": "Brazil",
+    "goals": 1,
+    "penalties": 0,
+    "own_goals": 0,
+    "first_goal_minute": 105
+  },
+  {
+    "tournament_year": 2022,
+    "player": "Olivier Giroud",
+    "national_team": "France",
+    "goals": 1,
+    "penalties": 0,
+    "own_goals": 0,
+    "first_goal_minute": 78
+  },
+  {
+    "tournament_year": 2022,
+    "player": "Randal Kolo Muani",
+    "national_team": "France",
+    "goals": 1,
+    "penalties": 0,
+    "own_goals": 0,
+    "first_goal_minute": 79
+  },
+  {
+    "tournament_year": 2022,
+    "player": "Theo Hernandez",
+    "national_team": "France",
+    "goals": 1,
+    "penalties": 0,
+    "own_goals": 0,
+    "first_goal_minute": 5
+  },
+  {
+    "tournament_year": 2022,
+    "player": "Wout Weghorst",
+    "national_team": "Netherlands",
+    "goals": 2,
+    "penalties": 0,
+    "own_goals": 0,
+    "first_goal_minute": 83
+  },
+  {
+    "tournament_year": 2022,
+    "player": "Youssef En-Nesyri",
+    "national_team": "Morocco",
+    "goals": 1,
+    "penalties": 0,
+    "own_goals": 0,
+    "first_goal_minute": 42
+  }
+]

@@ -1,0 +1,82 @@
+[
+  {
+    "id": 1,
+    "match_id": 3,
+    "team_id": 1,
+    "player_id": 3,
+    "minute": 90,
+    "stoppage_minute": 0,
+    "card_type": "yellow",
+    "reason": "Unsporting behaviour"
+  },
+  {
+    "id": 2,
+    "match_id": 1,
+    "team_id": 1,
+    "player_id": 5,
+    "minute": 116,
+    "stoppage_minute": 0,
+    "card_type": "yellow",
+    "reason": "Time wasting"
+  },
+  {
+    "id": 3,
+    "match_id": 9,
+    "team_id": 3,
+    "player_id": 11,
+    "minute": 68,
+    "stoppage_minute": 0,
+    "card_type": "yellow",
+    "reason": "Reckless challenge"
+  },
+  {
+    "id": 4,
+    "match_id": 5,
+    "team_id": 3,
+    "player_id": 12,
+    "minute": 47,
+    "stoppage_minute": 0,
+    "card_type": "yellow",
+    "reason": "Unsporting behaviour"
+  },
+  {
+    "id": 5,
+    "match_id": 8,
+    "team_id": 4,
+    "player_id": 19,
+    "minute": 38,
+    "stoppage_minute": 0,
+    "card_type": "yellow",
+    "reason": "Reckless challenge"
+  },
+  {
+    "id": 6,
+    "match_id": 7,
+    "team_id": 4,
+    "player_id": 17,
+    "minute": 48,
+    "stoppage_minute": 0,
+    "card_type": "yellow",
+    "reason": "Persistent infringement"
+  },
+  {
+    "id": 7,
+    "match_id": 12,
+    "team_id": 5,
+    "player_id": 27,
+    "minute": 90,
+    "stoppage_minute": 0,
+    "card_type": "yellow",
+    "reason": "Reckless challenge"
+  },
+  {
+    "id": 8,
+    "match_id": 3,
+    "team_id": 8,
+    "player_id": 42,
+    "minute": 45,
+    "stoppage_minute": 0,
+    "card_type": "yellow",
+    "reason": "Dissent"
+  }
+]

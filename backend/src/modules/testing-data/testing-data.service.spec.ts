@@ -198,6 +198,18 @@ describe('TestingDataService.load', () => {
     expect(datasets.save).not.toHaveBeenCalled();
   });
 
+  it('refuses a REST fixture before touching anything', async () => {
+    const { service, datasources, datasets } = build({});
+
+    const result = await service.load('world-cup-rest', DEFAULT_INPUT);
+
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain('scripts/setup-worldcup-rest.ts');
+    expect(clients).toHaveLength(0);
+    expect(datasources.save).not.toHaveBeenCalled();
+    expect(datasets.save).not.toHaveBeenCalled();
+  });
+
   it('rejects a bad connection before touching the network', async () => {
     const { service, datasources, datasets } = build({});
 
@@ -527,6 +539,7 @@ describe('a register-only fixture (no bundled SQL)', () => {
     expect(status.fixtures.map((fixture) => fixture.id)).toEqual([
       'world-cup',
       'formula-1',
+      'world-cup-rest',
       'register-only',
     ]);
     expect(viewOf(status, 'world-cup').seedable).toBe(true);

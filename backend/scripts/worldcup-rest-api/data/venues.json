@@ -1,0 +1,65 @@
+[
+  {
+    "id": 1,
+    "tournament_id": 1,
+    "name": "Nizhny Novgorod Stadium",
+    "city": "Nizhny Novgorod",
+    "capacity": 43319
+  },
+  {
+    "id": 2,
+    "tournament_id": 1,
+    "name": "Fisht Stadium",
+    "city": "Sochi",
+    "capacity": 44287
+  },
+  {
+    "id": 3,
+    "tournament_id": 1,
+    "name": "Saint Petersburg Stadium",
+    "city": "Saint Petersburg",
+    "capacity": 64468
+  },
+  {
+    "id": 4,
+    "tournament_id": 1,
+    "name": "Luzhniki Stadium",
+    "city": "Moscow",
+    "capacity": 78011
+  },
+  {
+    "id": 5,
+    "tournament_id": 2,
+    "name": "Khalifa International Stadium",
+    "city": "Al Rayyan",
+    "capacity": 45857
+  },
+  {
+    "id": 6,
+    "tournament_id": 2,
+    "name": "Al Thumama Stadium",
+    "city": "Doha",
+    "capacity": 44400
+  },
+  {
+    "id": 7,
+    "tournament_id": 2,
+    "name": "Education City Stadium",
+    "city": "Al Rayyan",
+    "capacity": 44667
+  },
+  {
+    "id": 8,
+    "tournament_id": 2,
+    "name": "Al Bayt Stadium",
+    "city": "Al Khor",
+    "capacity": 68895
+  },
+  {
+    "id": 9,
+    "tournament_id": 2,
+    "name": "Lusail Stadium",
+    "city": "Lusail",
+    "capacity": 88966
+  }
+]

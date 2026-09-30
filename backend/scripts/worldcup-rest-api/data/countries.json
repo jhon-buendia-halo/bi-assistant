@@ -1,0 +1,67 @@
+[
+  {
+    "code": "ARG",
+    "name": "Argentina",
+    "confederation_code": "CONMEBOL"
+  },
+  {
+    "code": "BEL",
+    "name": "Belgium",
+    "confederation_code": "UEFA"
+  },
+  {
+    "code": "BRA",
+    "name": "Brazil",
+    "confederation_code": "CONMEBOL"
+  },
+  {
+    "code": "CRO",
+    "name": "Croatia",
+    "confederation_code": "UEFA"
+  },
+  {
+    "code": "ENG",
+    "name": "England",
+    "confederation_code": "UEFA"
+  },
+  {
+    "code": "FRA",
+    "name": "France",
+    "confederation_code": "UEFA"
+  },
+  {
+    "code": "MAR",
+    "name": "Morocco",
+    "confederation_code": "CAF"
+  },
+  {
+    "code": "NED",
+    "name": "Netherlands",
+    "confederation_code": "UEFA"
+  },
+  {
+    "code": "POR",
+    "name": "Portugal",
+    "confederation_code": "UEFA"
+  },
+  {
+    "code": "QAT",
+    "name": "Qatar",
+    "confederation_code": "AFC"
+  },
+  {
+    "code": "RUS",
+    "name": "Russia",
+    "confederation_code": "UEFA"
+  },
+  {
+    "code": "SWE",
+    "name": "Sweden",
+    "confederation_code": "UEFA"
+  },
+  {
+    "code": "URU",
+    "name": "Uruguay",
+    "confederation_code": "CONMEBOL"
+  }
+]
