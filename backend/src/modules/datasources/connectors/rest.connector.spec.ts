@@ -530,3 +530,121 @@ describe('RestConnector mask and summary', () => {
     expect(summary).toBe('REST API · https://api.example.com/v1 · 2 endpoints');
   });
 });
+
+describe('RestConnector discover', () => {
+  const spec = {
+    openapi: '3.0.3',
+    info: { title: 'Shop' },
+    servers: [{ url: '/v1' }],
+    paths: {
+      '/customers': {
+        get: {
+          responses: {
+            '200': {
+              content: {
+                'application/json': {
+                  schema: { type: 'array', items: { type: 'object' } },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  };
+  const notFound = () => new Response('nope', { status: 404 });
+
+  it('tries the usual spec locations under the base URL, then its origin', async () => {
+    respond = (url) => (url.pathname === '/swagger.json' ? spec : notFound());
+
+    const result = await new RestConnector().discover(build([]));
+
+    expect(calls().map((c) => c.url.toString())).toEqual([
+      'https://api.example.com/v1/openapi.json',
+      'https://api.example.com/v1/swagger.json',
+      'https://api.example.com/v1/v3/api-docs',
+      'https://api.example.com/v1/api-docs',
+      'https://api.example.com/v1/swagger/v1/swagger.json',
+      'https://api.example.com/openapi.json',
+      'https://api.example.com/swagger.json',
+    ]);
+    expect(result.specUrl).toBe('https://api.example.com/swagger.json');
+    expect(result.title).toBe('Shop');
+    expect(result.baseUrl).toBe('https://api.example.com/v1');
+    expect(result.endpoints.map((e) => e.endpoint.path)).toEqual([
+      '/customers',
+    ]);
+  });
+
+  it('skips JSON that is not a spec during auto-detection', async () => {
+    respond = (url) =>
+      url.pathname === '/v1/openapi.json' ? { hello: 'world' } : spec;
+
+    const result = await new RestConnector().discover(build([]));
+
+    expect(result.specUrl).toBe('https://api.example.com/v1/swagger.json');
+  });
+
+  it('uses an explicit spec URL and sends the datasource auth', async () => {
+    respond = () => spec;
+
+    const result = await new RestConnector().discover(
+      build([], {
+        baseUrl: '',
+        auth: { type: 'bearer', token: 'tok' },
+      }),
+      'https://docs.example.com/shop/openapi.json',
+    );
+
+    expect(calls()).toHaveLength(1);
+    expect(headersOf(0)['Authorization']).toBe('Bearer tok');
+    // No base URL given: paths stay relative to the spec's server URL.
+    expect(result.baseUrl).toBe('https://docs.example.com/v1');
+    expect(result.endpoints[0].endpoint.path).toBe('/customers');
+  });
+
+  it('resolves a relative spec URL against the base URL', async () => {
+    respond = () => spec;
+
+    const result = await new RestConnector().discover(build([]), 'docs.json');
+
+    expect(result.specUrl).toBe('https://api.example.com/v1/docs.json');
+  });
+
+  it('explains what it tried when no spec is found', async () => {
+    respond = notFound;
+
+    await expect(new RestConnector().discover(build([]))).rejects.toThrow(
+      /^No OpenAPI spec found \(tried https:\/\/api\.example\.com\/v1\/openapi\.json, .*\)\. Enter the spec URL\.$/,
+    );
+  });
+
+  it('reports why an explicit spec URL failed', async () => {
+    respond = () => new Response('openapi: 3.0.0', { status: 200 });
+
+    await expect(
+      new RestConnector().discover(
+        build([]),
+        'https://api.example.com/openapi.yaml',
+      ),
+    ).rejects.toThrow('YAML specs are not supported');
+  });
+
+  it('stops at the first unreachable host', async () => {
+    fetchMock.mockRejectedValue(
+      new TypeError('fetch failed', { cause: new Error('ECONNREFUSED') }),
+    );
+
+    await expect(new RestConnector().discover(build([]))).rejects.toThrow(
+      'OpenAPI spec — https://api.example.com/v1/openapi.json: fetch failed — ECONNREFUSED',
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('needs a base URL or a spec URL', async () => {
+    await expect(
+      new RestConnector().discover(build([], { baseUrl: '' })),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});

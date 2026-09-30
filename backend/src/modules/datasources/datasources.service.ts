@@ -25,6 +25,7 @@ import {
   PostgresConfig,
   QueryResult,
   RestApiConfig,
+  RestDiscovery,
 } from './entities/datasource.entity';
 
 /** Kind-agnostic entry point: resolves a datasource and dispatches to its connector. */
@@ -85,6 +86,19 @@ export class DatasourcesService {
     await this.connector(kind).testConnection(
       await this.withSecrets(kind, config, id),
     );
+  }
+
+  async discoverRestEndpoints(
+    config: RestApiConfig,
+    specUrl?: string,
+    id?: string,
+  ): Promise<RestDiscovery> {
+    const withSecrets = (await this.withSecrets(
+      'rest',
+      config,
+      id,
+    )) as RestApiConfig;
+    return this.rest.discover(withSecrets, specUrl);
   }
 
   async save(input: {

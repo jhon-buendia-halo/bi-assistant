@@ -255,7 +255,11 @@
             class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none focus:border-white/25"
           >
             @for (a of authTypes; track a.value) {
-              <option [value]="a.value" class="bg-[#232323]">
+              <option
+                [value]="a.value"
+                [selected]="a.value === rest().auth.type"
+                class="bg-[#232323]"
+              >
                 {{ a.label }}
               </option>
             }
@@ -347,6 +351,185 @@
               <span>Add endpoint</span>
             </button>
           </div>
+
+          <!-- Discover from an OpenAPI / Swagger spec -->
+          <div class="flex items-center gap-2">
+            <input
+              type="text"
+              aria-label="OpenAPI spec URL (optional)"
+              placeholder="OpenAPI spec URL (optional) — auto-detect: /openapi.json, /swagger.json…"
+              [value]="specUrl()"
+              (input)="specUrl.set($any($event.target).value)"
+              (keydown.enter)="discover()"
+              class="min-w-0 flex-1 rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+            />
+            <button
+              type="button"
+              (click)="discover()"
+              [disabled]="!canDiscover()"
+              title="Read endpoints from the API's OpenAPI / Swagger spec"
+              class="flex shrink-0 items-center gap-1.5 rounded-md bg-white/10 px-3 py-1.5 text-[13px] font-medium text-zinc-200 hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              @if (discovering()) {
+                <lucide-angular
+                  [img]="Loader2"
+                  [size]="14"
+                  class="animate-spin"
+                />
+                <span>Discovering…</span>
+              } @else {
+                <lucide-angular [img]="Search" [size]="14" />
+                <span>Discover</span>
+              }
+            </button>
+          </div>
+
+          @if (discovery(); as review) {
+            <div
+              class="flex flex-col gap-2 rounded-lg border border-white/10 bg-white/[0.02] p-3"
+            >
+              <div class="flex items-center justify-between gap-3">
+                <span class="min-w-0 truncate text-[12px] text-zinc-300">
+                  {{ review.endpoints.length }}
+                  {{ review.endpoints.length === 1 ? "endpoint" : "endpoints" }}
+                  found{{ review.title ? " in " + review.title : "" }}
+                </span>
+                <span class="flex shrink-0 items-center gap-2 text-[11px]">
+                  <button
+                    type="button"
+                    (click)="selectAllDiscovered()"
+                    class="text-zinc-400 hover:text-zinc-200"
+                  >
+                    Select all
+                  </button>
+                  <span class="text-zinc-700">·</span>
+                  <button
+                    type="button"
+                    (click)="selectNoneDiscovered()"
+                    class="text-zinc-400 hover:text-zinc-200"
+                  >
+                    Select none
+                  </button>
+                </span>
+              </div>
+
+              <div class="flex max-h-72 flex-col overflow-y-auto">
+                @for (d of review.endpoints; track $index; let i = $index) {
+                  <label
+                    class="flex items-start gap-2.5 rounded px-1.5 py-1.5 hover:bg-white/5"
+                    [class.opacity-50]="isDiscoveredAdded(d)"
+                    [class.cursor-pointer]="!isDiscoveredAdded(d)"
+                  >
+                    <input
+                      type="checkbox"
+                      [checked]="
+                        !isDiscoveredAdded(d) && discoverySelected().has(i)
+                      "
+                      [disabled]="isDiscoveredAdded(d)"
+                      (change)="toggleDiscovered(i)"
+                      class="mt-0.5 h-3.5 w-3.5 shrink-0 accent-emerald-500"
+                    />
+                    <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <span class="flex items-center gap-2">
+                        <span
+                          class="shrink-0 font-mono text-[12px] text-zinc-200"
+                          >{{ d.endpoint.name }}</span
+                        >
+                        @if (d.endpoint.group) {
+                          <span
+                            class="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-zinc-400"
+                            >{{ d.endpoint.group }}</span
+                          >
+                        }
+                        @if (
+                          d.endpoint.pagination?.style &&
+                          d.endpoint.pagination?.style !== "none"
+                        ) {
+                          <span
+                            class="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-zinc-400"
+                            >{{ d.endpoint.pagination?.style }}</span
+                          >
+                        }
+                        @if (d.fields !== undefined) {
+                          <span class="shrink-0 text-[10px] text-zinc-500"
+                            >{{ d.fields }}
+                            {{ d.fields === 1 ? "field" : "fields" }}</span
+                          >
+                        }
+                        @if (isDiscoveredAdded(d)) {
+                          <span class="shrink-0 text-[10px] text-zinc-500"
+                            >already added</span
+                          >
+                        } @else if (!d.listResponse) {
+                          <span class="shrink-0 text-[10px] text-amber-500/80"
+                            >not a list</span
+                          >
+                        }
+                      </span>
+                      <span
+                        class="truncate font-mono text-[11px] text-zinc-500"
+                        [title]="d.method + ' ' + d.endpoint.path"
+                        >{{ d.endpoint.path }}</span
+                      >
+                      @if (d.summary) {
+                        <span class="truncate text-[11px] text-zinc-500">{{
+                          d.summary
+                        }}</span>
+                      }
+                    </span>
+                  </label>
+                }
+              </div>
+
+              @if (review.skipped.length > 0) {
+                <details class="text-[11px] text-zinc-500">
+                  <summary
+                    class="cursor-pointer hover:text-zinc-300"
+                    [title]="skippedTooltip(review.skipped)"
+                  >
+                    {{ review.skipped.length }}
+                    {{
+                      review.skipped.length === 1 ? "operation" : "operations"
+                    }}
+                    skipped
+                  </summary>
+                  <ul
+                    class="mt-1 flex max-h-32 flex-col gap-0.5 overflow-y-auto"
+                  >
+                    @for (s of review.skipped; track $index) {
+                      <li class="truncate">
+                        <span class="font-mono text-zinc-400">{{
+                          s.path
+                        }}</span>
+                        — {{ s.reason }}
+                      </li>
+                    }
+                  </ul>
+                </details>
+              }
+
+              <div class="flex items-center gap-2">
+                <button
+                  type="button"
+                  (click)="addDiscovered()"
+                  [disabled]="discoverySelectedCount() === 0"
+                  class="rounded-md bg-zinc-200 px-3 py-1.5 text-[13px] font-medium text-zinc-900 hover:bg-white disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+                >
+                  Add {{ discoverySelectedCount() }}
+                  {{
+                    discoverySelectedCount() === 1 ? "endpoint" : "endpoints"
+                  }}
+                </button>
+                <button
+                  type="button"
+                  (click)="closeDiscovery()"
+                  class="rounded-md px-3 py-1.5 text-[13px] text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          }
           @for (ep of rest().endpoints; track $index; let i = $index) {
             <div
               class="flex flex-col gap-2.5 rounded-lg border border-white/10 bg-white/[0.02] p-3"
@@ -439,7 +622,11 @@
                   class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none focus:border-white/25"
                 >
                   @for (p of paginationStyles; track p.value) {
-                    <option [value]="p.value" class="bg-[#232323]">
+                    <option
+                      [value]="p.value"
+                      [selected]="p.value === (ep.pagination?.style ?? 'none')"
+                      class="bg-[#232323]"
+                    >
                       {{ p.label }}
                     </option>
                   }

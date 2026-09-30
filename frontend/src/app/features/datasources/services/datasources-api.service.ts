@@ -8,6 +8,8 @@ import {
   DatasourceConfig,
   DatasourceKind,
   InventoryResult,
+  RestApiConfig,
+  RestDiscoveryResult,
 } from '../models/datasource.model';
 
 @Injectable({ providedIn: 'root' })
@@ -28,6 +30,18 @@ export class DatasourcesApiService {
     return this.http.post<DatasourceActionResult>(
       `${API_BASE_URL}/datasources/test-connection`,
       { kind, config, id },
+    );
+  }
+
+  /** Reads an OpenAPI/Swagger spec and proposes endpoint definitions. Always answers 200; failures come back as `ok: false`. */
+  discoverRestEndpoints(
+    config: RestApiConfig,
+    specUrl?: string,
+    id?: string,
+  ): Observable<RestDiscoveryResult> {
+    return this.http.post<RestDiscoveryResult>(
+      `${API_BASE_URL}/datasources/rest/discover`,
+      { config, specUrl, id },
     );
   }
 

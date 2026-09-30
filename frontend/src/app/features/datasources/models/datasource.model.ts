@@ -53,6 +53,33 @@ export interface RestApiConfig {
   endpoints: RestEndpointDef[];
 }
 
+export interface DiscoveredEndpoint {
+  /** Ready-to-use definition: name, path, group?, rowsPointer?, pagination? */
+  endpoint: RestEndpointDef;
+  /** HTTP method of the operation, e.g. 'GET'. */
+  method: string;
+  /** Operation summary from the spec. */
+  summary?: string;
+  /** True when the response schema is a list of rows; false = single object or unknown shape (still importable, not preselected). */
+  listResponse: boolean;
+  /** Number of row fields declared in the spec, when known. */
+  fields?: number;
+}
+
+export interface RestDiscoveryResult {
+  ok: boolean;
+  /** e.g. 'Found 14 endpoints in "World Cup Test API"' or the error. */
+  message: string;
+  /** Spec URL actually used. */
+  specUrl?: string;
+  /** Spec info.title. */
+  title?: string;
+  /** Server URL the endpoint paths are relative to — set when the request had no baseUrl. */
+  baseUrl?: string;
+  endpoints?: DiscoveredEndpoint[];
+  skipped?: { path: string; reason: string }[];
+}
+
 export type DatasourceConfig =
   DatabricksConfig | PostgresConfig | RestApiConfig;
 

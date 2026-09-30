@@ -5,6 +5,7 @@ import {
   Loader2,
   Pencil,
   Plus,
+  Search,
   Trash2,
 } from 'lucide-angular';
 import { DatasourcesApiService } from '../../services/datasources-api.service';
@@ -14,9 +15,11 @@ import {
   Datasource,
   DatasourceConfig as DatasourceConnectionConfig,
   DatasourceKind,
+  DiscoveredEndpoint,
   PostgresConfig,
   RestApiConfig,
   RestAuthConfig,
+  RestDiscoveryResult,
   RestEndpointDef,
   kindLabel,
 } from '../../models/datasource.model';
@@ -48,6 +51,13 @@ const AUTH_TYPES: { value: RestAuthConfig['type']; label: string }[] = [
   { value: 'basic', label: 'Basic' },
 ];
 
+/** Endpoints proposed by an OpenAPI spec, waiting for the user to pick which to import. */
+interface DiscoveryReview {
+  title?: string;
+  endpoints: DiscoveredEndpoint[];
+  skipped: NonNullable<RestDiscoveryResult['skipped']>;
+}
+
 type PaginationStyle = NonNullable<RestEndpointDef['pagination']>['style'];
 const PAGINATION_STYLES: { value: PaginationStyle; label: string }[] = [
   { value: 'none', label: 'None' },
@@ -67,6 +77,7 @@ export class DatasourceConfig implements OnInit {
   readonly Loader2 = Loader2;
   readonly Pencil = Pencil;
   readonly Plus = Plus;
+  readonly Search = Search;
   readonly Trash2 = Trash2;
   readonly authTypes = AUTH_TYPES;
   readonly paginationStyles = PAGINATION_STYLES;
@@ -93,6 +104,41 @@ export class DatasourceConfig implements OnInit {
   readonly saving = signal(false);
   // Only a configuration whose test passed can be saved.
   readonly testedOk = signal(false);
+
+  /** Transient OpenAPI discovery state — never part of the saved config. */
+  readonly specUrl = signal('');
+  readonly discovering = signal(false);
+  readonly discovery = signal<DiscoveryReview | null>(null);
+  /** Indexes into `discovery().endpoints` ticked for import. */
+  readonly discoverySelected = signal<ReadonlySet<number>>(new Set());
+  private discoverySeq = 0;
+
+  readonly canDiscover = computed(() => {
+    if (this.discovering()) return false;
+    return !!(this.rest().baseUrl.trim() || this.specUrl().trim());
+  });
+
+  /** Paths already present in the form, so discovered duplicates can be flagged. */
+  private readonly existingPaths = computed(
+    () =>
+      new Set(
+        this.rest()
+          .endpoints.map((e) => e.path.trim())
+          .filter((p) => !!p),
+      ),
+  );
+
+  readonly discoverySelectedCount = computed(() => {
+    const review = this.discovery();
+    if (!review) return 0;
+    const existing = this.existingPaths();
+    let count = 0;
+    for (const i of this.discoverySelected()) {
+      const found = review.endpoints[i];
+      if (found && !existing.has(found.endpoint.path.trim())) count++;
+    }
+    return count;
+  });
 
   readonly canTest = computed(() => {
     if (this.testing()) return false;
@@ -139,6 +185,7 @@ export class DatasourceConfig implements OnInit {
     this.databricks.set({ ...EMPTY_DATABRICKS });
     this.postgres.set({ ...EMPTY_POSTGRES });
     this.rest.set(emptyRest());
+    this.resetDiscovery();
     this.testedOk.set(false);
     this.formOpen.set(true);
   }
@@ -167,6 +214,7 @@ export class DatasourceConfig implements OnInit {
           : [{ name: '', path: '' }],
       });
     }
+    this.resetDiscovery();
     this.testedOk.set(false);
     this.formOpen.set(true);
   }
@@ -174,10 +222,12 @@ export class DatasourceConfig implements OnInit {
   cancel(): void {
     this.formOpen.set(false);
     this.editingId.set(null);
+    this.resetDiscovery();
   }
 
   setKind(kind: DatasourceKind): void {
     this.kind.set(kind);
+    this.resetDiscovery();
     this.onFieldChange();
   }
 
@@ -239,6 +289,133 @@ export class DatasourceConfig implements OnInit {
       style: 'none' as const,
     };
     this.patchEndpoint(index, { pagination: { ...current, ...patch } });
+  }
+
+  private resetDiscovery(): void {
+    // Bumping the sequence drops the answer of any request still in flight.
+    this.discoverySeq++;
+    this.specUrl.set('');
+    this.discovering.set(false);
+    this.discovery.set(null);
+    this.discoverySelected.set(new Set());
+  }
+
+  discover(): void {
+    if (!this.canDiscover()) return;
+    const seq = ++this.discoverySeq;
+    this.discovering.set(true);
+    this.api
+      .discoverRestEndpoints(
+        this.restConfig(),
+        this.specUrl().trim() || undefined,
+        this.editingId() ?? undefined,
+      )
+      .subscribe({
+        next: (res) => {
+          if (seq !== this.discoverySeq) return;
+          this.discovering.set(false);
+          if (!res.ok) {
+            this.toast.error(res.message);
+            return;
+          }
+          const endpoints = res.endpoints ?? [];
+          if (endpoints.length === 0) {
+            this.toast.error(res.message || 'No endpoints found in the spec');
+            return;
+          }
+          if (!this.rest().baseUrl.trim() && res.baseUrl) {
+            this.patchRest({ baseUrl: res.baseUrl });
+          }
+          const existing = this.existingPaths();
+          this.discoverySelected.set(
+            new Set(
+              endpoints
+                .map((d, i) => ({ d, i }))
+                .filter(
+                  ({ d }) =>
+                    d.listResponse && !existing.has(d.endpoint.path.trim()),
+                )
+                .map(({ i }) => i),
+            ),
+          );
+          this.discovery.set({
+            title: res.title,
+            endpoints,
+            skipped: res.skipped ?? [],
+          });
+        },
+        error: (err) => {
+          if (seq !== this.discoverySeq) return;
+          this.toast.error(err?.error?.message ?? 'Backend unreachable');
+          this.discovering.set(false);
+        },
+      });
+  }
+
+  isDiscoveredAdded(found: DiscoveredEndpoint): boolean {
+    return this.existingPaths().has(found.endpoint.path.trim());
+  }
+
+  toggleDiscovered(index: number): void {
+    const next = new Set(this.discoverySelected());
+    if (next.has(index)) next.delete(index);
+    else next.add(index);
+    this.discoverySelected.set(next);
+  }
+
+  selectAllDiscovered(): void {
+    const review = this.discovery();
+    if (!review) return;
+    this.discoverySelected.set(
+      new Set(
+        review.endpoints
+          .map((d, i) => ({ d, i }))
+          .filter(({ d }) => !this.isDiscoveredAdded(d))
+          .map(({ i }) => i),
+      ),
+    );
+  }
+
+  selectNoneDiscovered(): void {
+    this.discoverySelected.set(new Set());
+  }
+
+  closeDiscovery(): void {
+    this.discovery.set(null);
+    this.discoverySelected.set(new Set());
+  }
+
+  addDiscovered(): void {
+    const review = this.discovery();
+    if (!review) return;
+    const selected = this.discoverySelected();
+    const chosen = review.endpoints.filter(
+      (d, i) => selected.has(i) && !this.isDiscoveredAdded(d),
+    );
+    if (chosen.length === 0) return;
+    const rest = this.rest();
+    this.rest.set({
+      ...rest,
+      endpoints: [
+        // Drop the untouched blank row(s) the form starts with.
+        ...rest.endpoints.filter((e) => e.name.trim() || e.path.trim()),
+        ...chosen.map((d) => ({
+          ...d.endpoint,
+          pagination: d.endpoint.pagination
+            ? { ...d.endpoint.pagination }
+            : undefined,
+        })),
+      ],
+    });
+    this.onFieldChange();
+    this.closeDiscovery();
+    this.toast.success(
+      `Added ${chosen.length} endpoint${chosen.length === 1 ? '' : 's'}`,
+    );
+  }
+
+  skippedTooltip(skipped: { path: string; reason: string }[]): string {
+    return skipped.map((s) => `${s.path} — ${s.reason}`).join('\n');
   }
 
   onFieldChange(): void {

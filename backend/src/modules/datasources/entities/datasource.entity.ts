@@ -53,6 +53,26 @@ export interface RestApiConfig {
   endpoints: RestEndpointDef[];
 }
 
+/** One endpoint proposed by reading an OpenAPI / Swagger spec. */
+export interface DiscoveredEndpoint {
+  endpoint: RestEndpointDef;
+  method: string;
+  summary?: string;
+  /** True when the response schema is a list of rows. */
+  listResponse: boolean;
+  /** Number of row fields the spec declares, when known. */
+  fields?: number;
+}
+
+export interface RestDiscovery {
+  specUrl: string;
+  title?: string;
+  /** Server URL the endpoint paths are relative to. */
+  baseUrl: string;
+  endpoints: DiscoveredEndpoint[];
+  skipped: { path: string; reason: string }[];
+}
+
 export type DatasourceConfig =
   DatabricksConfig | PostgresConfig | RestApiConfig;
 
