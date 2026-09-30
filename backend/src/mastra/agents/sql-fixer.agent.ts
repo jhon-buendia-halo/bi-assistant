@@ -20,8 +20,8 @@ export const sqlFixerAgent = new Agent({
     'Repairs a SQL statement that failed to execute, using the engine error as the signal.',
   instructions: [
     'You repair a single SQL statement that failed to execute.',
-    'You receive the failed statement, the SQL dialect (databricks or',
-    'postgres), the engine error message, and the entities and columns',
+    'You receive the failed statement, the SQL dialect (databricks,',
+    'postgres or sqlite), the engine error message, and the entities and columns',
     'available to the query.',
     '',
     'Rules:',

@@ -1,0 +1,74 @@
+[
+  {
+    "id": 1,
+    "country_code": "ARG",
+    "common_name": "Argentina",
+    "fifa_code": "ARG"
+  },
+  {
+    "id": 2,
+    "country_code": "BEL",
+    "common_name": "Belgium",
+    "fifa_code": "BEL"
+  },
+  {
+    "id": 3,
+    "country_code": "BRA",
+    "common_name": "Brazil",
+    "fifa_code": "BRA"
+  },
+  {
+    "id": 4,
+    "country_code": "CRO",
+    "common_name": "Croatia",
+    "fifa_code": "CRO"
+  },
+  {
+    "id": 5,
+    "country_code": "ENG",
+    "common_name": "England",
+    "fifa_code": "ENG"
+  },
+  {
+    "id": 6,
+    "country_code": "FRA",
+    "common_name": "France",
+    "fifa_code": "FRA"
+  },
+  {
+    "id": 7,
+    "country_code": "MAR",
+    "common_name": "Morocco",
+    "fifa_code": "MAR"
+  },
+  {
+    "id": 8,
+    "country_code": "NED",
+    "common_name": "Netherlands",
+    "fifa_code": "NED"
+  },
+  {
+    "id": 9,
+    "country_code": "POR",
+    "common_name": "Portugal",
+    "fifa_code": "POR"
+  },
+  {
+    "id": 10,
+    "country_code": "RUS",
+    "common_name": "Russia",
+    "fifa_code": "RUS"
+  },
+  {
+    "id": 11,
+    "country_code": "SWE",
+    "common_name": "Sweden",
+    "fifa_code": "SWE"
+  },
+  {
+    "id": 12,
+    "country_code": "URU",
+    "common_name": "Uruguay",
+    "fifa_code": "URU"
+  }
+]

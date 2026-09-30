@@ -1,3 +1,5 @@
+import type { DatasourceKind } from '../modules/datasources/entities/datasource.entity';
+
 // DI bridge for Mastra tools, same pattern as model-resolver: tools are
 // constructed at module load with no Nest DI, so SessionsService installs the
 // real implementations at boot.
@@ -21,7 +23,7 @@ export interface DatasetColumnSnapshot {
 export interface DatasetSnapshot {
   name: string;
   datasourceId?: string;
-  datasourceKind?: 'databricks' | 'postgres';
+  datasourceKind?: DatasourceKind;
   tables: string[];
   entities?: {
     key: string;

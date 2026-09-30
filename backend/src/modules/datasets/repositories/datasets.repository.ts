@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { DATASETS_STORE } from '../../../infrastructure/database/doc-store';
 import type { DocStore } from '../../../infrastructure/database/doc-store';
+import type { DatasourceKind } from '../../datasources/entities/datasource.entity';
 
 export interface DatasetColumnSnapshot {
   name: string;
@@ -38,7 +39,7 @@ export interface DatasetDoc {
   name: string;
   /** Datasource the entities belong to (absent on pre-datasource datasets). */
   datasourceId?: string;
-  datasourceKind?: 'databricks' | 'postgres';
+  datasourceKind?: DatasourceKind;
   /** Fully-qualified included entities: `catalog.schema.table`. */
   tables: string[];
   /**
@@ -70,7 +71,7 @@ export class DatasetsRepository {
     name: string,
     tables: string[],
     entities: DatasetEntitySnapshot[],
-    datasource?: { id: string; kind: 'databricks' | 'postgres' },
+    datasource?: { id: string; kind: DatasourceKind },
   ): Promise<DatasetDoc | null> {
     return this.store.update(
       { name },

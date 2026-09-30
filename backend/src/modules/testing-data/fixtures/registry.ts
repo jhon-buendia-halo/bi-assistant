@@ -41,6 +41,14 @@ export interface SampleFixture {
   datasetName: string;
   /** Unqualified table/view names the sample must expose. THE single source. */
   requiredTables: string[];
+  /**
+   * The kind of datasource the sample lives behind; absent = `'postgres'`.
+   * `'rest'` fixtures are register-only for the eval suite: the loader cannot
+   * provision them (their datasource is created by
+   * `scripts/setup-worldcup-rest.ts`), and their entities are keyed
+   * `api.<schema>.<table>`.
+   */
+  datasourceKind?: 'postgres' | 'rest';
 }
 
 const WORLD_CUP: SampleFixture = {
@@ -162,8 +170,39 @@ const FORMULA_1: SampleFixture = {
   ],
 };
 
+/**
+ * The World Cup data again, served by a local REST API instead of PostgreSQL.
+ * Same tables and views, exposed as endpoints `world_cup/<table>` and so keyed
+ * `api.world_cup.<table>`. Register-only: nothing here is ever seeded or
+ * connected to by the Testing Data loader, so `defaults` are placeholders.
+ */
+const WORLD_CUP_REST: SampleFixture = {
+  id: 'world-cup-rest',
+  name: 'World Cup (REST API)',
+  description:
+    'The World Cup sample over a local REST API ' +
+    "('npm run worldcup:api' serves it on http://127.0.0.1:55080).",
+  datasourceKind: 'rest',
+  schema: 'world_cup',
+  defaults: {
+    host: '127.0.0.1',
+    port: 55080,
+    database: '',
+    user: '',
+    password: '',
+    ssl: false,
+  },
+  datasourceName: 'World Cup REST API',
+  datasetName: 'World Cup (REST)',
+  requiredTables: WORLD_CUP.requiredTables,
+};
+
 /** Every sample the app knows how to provision, in panel order. */
-export const SAMPLE_FIXTURES: SampleFixture[] = [WORLD_CUP, FORMULA_1];
+export const SAMPLE_FIXTURES: SampleFixture[] = [
+  WORLD_CUP,
+  FORMULA_1,
+  WORLD_CUP_REST,
+];
 
 export function findFixture(id: string): SampleFixture | undefined {
   return SAMPLE_FIXTURES.find((fixture) => fixture.id === id);

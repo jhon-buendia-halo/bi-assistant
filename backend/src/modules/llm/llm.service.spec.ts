@@ -1,3 +1,10 @@
+const mockGenerate = jest.fn();
+jest.mock('@mastra/core/agent', () => ({
+  Agent: class {
+    generate = mockGenerate;
+  },
+}));
+
 import { resolveAgentModel } from '../../mastra/model-resolver';
 import { CryptoService } from '../../infrastructure/crypto/crypto.service';
 import { LlmService, lenaiModelConfig } from './llm.service';
@@ -43,7 +50,13 @@ function serviceWithMocks(opts?: {
 /** Swaps in a fetch stub for one probe and hands back the request it saw. */
 async function probeWith(
   dto: Parameters<LlmService['testConnection']>[0],
-  response: { ok?: boolean; status?: number; content?: string; text?: string },
+  response: {
+    ok?: boolean;
+    status?: number;
+    content?: string;
+    text?: string;
+    finishReason?: string;
+  },
 ) {
   const originalFetch = global.fetch;
   const fetchMock = jest.fn().mockResolvedValue({
@@ -51,7 +64,10 @@ async function probeWith(
     status: response.status ?? 200,
     json: jest.fn().mockResolvedValue({
       choices: [
-        { message: { content: response.content ?? '{"status":"ok"}' } },
+        {
+          finish_reason: response.finishReason ?? 'stop',
+          message: { content: response.content ?? '{"status":"ok"}' },
+        },
       ],
     }),
     text: jest.fn().mockResolvedValue(response.text ?? ''),
@@ -149,7 +165,7 @@ describe('testConnection mirrors the agent request', () => {
       {},
     );
 
-    expect(body.max_completion_tokens).toBe(512);
+    expect(body.max_completion_tokens).toBe(4096);
     expect(body).not.toHaveProperty('max_tokens');
   });
 
@@ -271,9 +287,9 @@ describe('save() enforces test-before-save', () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: jest
-        .fn()
-        .mockResolvedValue({ choices: [{ message: { content: '{"status":"ok"}' } }] }),
+      json: jest.fn().mockResolvedValue({
+        choices: [{ message: { content: '{"status":"ok"}' } }],
+      }),
       text: jest.fn().mockResolvedValue(''),
     }) as unknown as typeof fetch;
     const { service, repository } = serviceWithMocks();
@@ -286,5 +302,93 @@ describe('save() enforces test-before-save', () => {
 
     expect(view.configured).toBe(true);
     expect(repository.save).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('Anthropic provider', () => {
+  afterEach(() => mockGenerate.mockReset());
+
+  it('resolves runtime agent calls to the native anthropic router id', async () => {
+    const service = serviceWith({
+      settings: {
+        key: 'llm',
+        provider: 'anthropic',
+        model: 'claude-sonnet-5-5',
+        baseUrl: '',
+        apiKeyCiphertext: 'encrypted',
+      },
+      decryptedKey: 'sk-ant-saved',
+    });
+
+    service.onModuleInit();
+
+    await expect(resolveAgentModel()).resolves.toEqual({
+      id: 'anthropic/claude-sonnet-5-5',
+      apiKey: 'sk-ant-saved',
+    });
+  });
+
+  it('probes through a Mastra agent with structured output and reports the value', async () => {
+    mockGenerate.mockResolvedValue({ object: { status: 'ok' } });
+
+    const result = await serviceWith().testConnection({
+      provider: 'anthropic',
+      model: 'claude-sonnet-5-5',
+      apiKey: 'sk-ant-key',
+    });
+
+    expect(result).toMatchObject({
+      provider: 'anthropic',
+      model: 'claude-sonnet-5-5',
+      reply: 'ok',
+    });
+    const [, options] = mockGenerate.mock.calls[0] as [
+      unknown,
+      { structuredOutput?: unknown },
+    ];
+    expect(options.structuredOutput).toBeDefined();
+  });
+
+  it('fails when the model answers without the structured value', async () => {
+    mockGenerate.mockResolvedValue({ object: undefined });
+
+    await expect(
+      serviceWith().testConnection({
+        provider: 'anthropic',
+        model: 'claude-sonnet-5-5',
+        apiKey: 'sk-ant-key',
+      }),
+    ).rejects.toThrow(/could not produce structured JSON output/);
+  });
+
+  it('maps a 401 anywhere in the cause chain to the authentication message', async () => {
+    mockGenerate.mockRejectedValue(
+      Object.assign(new Error('Failed'), {
+        cause: Object.assign(new Error('invalid x-api-key'), {
+          statusCode: 401,
+        }),
+      }),
+    );
+
+    await expect(
+      serviceWith().testConnection({
+        provider: 'anthropic',
+        model: 'claude-sonnet-5-5',
+        apiKey: 'sk-ant-bad',
+      }),
+    ).rejects.toThrow(/Authentication failed \(401\)/);
+  });
+});
+
+describe('testConnection on reasoning models', () => {
+  it('reports the token limit, not a structured-output failure, when reasoning eats the cap', async () => {
+    const { result } = await probeWith(
+      { provider: 'openai', model: 'gpt-5', apiKey: 'sk-key' },
+      { content: '', finishReason: 'length' },
+    );
+
+    expect((result as Error).message).toMatch(
+      /hit the 4096-token limit before replying/,
+    );
   });
 });

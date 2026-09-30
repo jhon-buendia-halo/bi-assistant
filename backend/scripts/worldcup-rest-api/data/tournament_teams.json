@@ -1,0 +1,130 @@
+[
+  {
+    "id": 1,
+    "tournament_id": 2,
+    "team_id": 1,
+    "group_letter": "C",
+    "final_rank": 1,
+    "qualified_for_knockout": true
+  },
+  {
+    "id": 2,
+    "tournament_id": 1,
+    "team_id": 2,
+    "group_letter": "G",
+    "final_rank": 3,
+    "qualified_for_knockout": true
+  },
+  {
+    "id": 3,
+    "tournament_id": 2,
+    "team_id": 3,
+    "group_letter": "G",
+    "final_rank": 7,
+    "qualified_for_knockout": true
+  },
+  {
+    "id": 4,
+    "tournament_id": 1,
+    "team_id": 3,
+    "group_letter": "E",
+    "final_rank": 6,
+    "qualified_for_knockout": true
+  },
+  {
+    "id": 5,
+    "tournament_id": 2,
+    "team_id": 4,
+    "group_letter": "F",
+    "final_rank": 3,
+    "qualified_for_knockout": true
+  },
+  {
+    "id": 6,
+    "tournament_id": 1,
+    "team_id": 4,
+    "group_letter": "D",
+    "final_rank": 2,
+    "qualified_for_knockout": true
+  },
+  {
+    "id": 7,
+    "tournament_id": 2,
+    "team_id": 5,
+    "group_letter": "B",
+    "final_rank": 6,
+    "qualified_for_knockout": true
+  },
+  {
+    "id": 8,
+    "tournament_id": 1,
+    "team_id": 5,
+    "group_letter": "G",
+    "final_rank": 4,
+    "qualified_for_knockout": true
+  },
+  {
+    "id": 9,
+    "tournament_id": 2,
+    "team_id": 6,
+    "group_letter": "D",
+    "final_rank": 2,
+    "qualified_for_knockout": true
+  },
+  {
+    "id": 10,
+    "tournament_id": 1,
+    "team_id": 6,
+    "group_letter": "C",
+    "final_rank": 1,
+    "qualified_for_knockout": true
+  },
+  {
+    "id": 11,
+    "tournament_id": 2,
+    "team_id": 7,
+    "group_letter": "F",
+    "final_rank": 4,
+    "qualified_for_knockout": true
+  },
+  {
+    "id": 12,
+    "tournament_id": 2,
+    "team_id": 8,
+    "group_letter": "A",
+    "final_rank": 5,
+    "qualified_for_knockout": true
+  },
+  {
+    "id": 13,
+    "tournament_id": 2,
+    "team_id": 9,
+    "group_letter": "H",
+    "final_rank": 8,
+    "qualified_for_knockout": true
+  },
+  {
+    "id": 14,
+    "tournament_id": 1,
+    "team_id": 10,
+    "group_letter": "A",
+    "final_rank": 8,
+    "qualified_for_knockout": true
+  },
+  {
+    "id": 15,
+    "tournament_id": 1,
+    "team_id": 11,
+    "group_letter": "F",
+    "final_rank": 7,
+    "qualified_for_knockout": true
+  },
+  {
+    "id": 16,
+    "tournament_id": 1,
+    "team_id": 12,
+    "group_letter": "A",
+    "final_rank": 5,
+    "qualified_for_knockout": true
+  }
+]

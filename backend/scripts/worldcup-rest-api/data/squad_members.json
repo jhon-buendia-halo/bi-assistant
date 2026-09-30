@@ -1,0 +1,476 @@
+[
+  {
+    "tournament_team_id": 1,
+    "player_id": 1,
+    "shirt_number": 3,
+    "squad_position": "MF"
+  },
+  {
+    "tournament_team_id": 1,
+    "player_id": 2,
+    "shirt_number": 4,
+    "squad_position": "FW"
+  },
+  {
+    "tournament_team_id": 1,
+    "player_id": 3,
+    "shirt_number": 5,
+    "squad_position": "FW"
+  },
+  {
+    "tournament_team_id": 1,
+    "player_id": 4,
+    "shirt_number": 2,
+    "squad_position": "DF"
+  },
+  {
+    "tournament_team_id": 1,
+    "player_id": 5,
+    "shirt_number": 1,
+    "squad_position": "GK"
+  },
+  {
+    "tournament_team_id": 2,
+    "player_id": 6,
+    "shirt_number": 2,
+    "squad_position": "DF"
+  },
+  {
+    "tournament_team_id": 2,
+    "player_id": 7,
+    "shirt_number": 4,
+    "squad_position": "FW"
+  },
+  {
+    "tournament_team_id": 2,
+    "player_id": 8,
+    "shirt_number": 3,
+    "squad_position": "MF"
+  },
+  {
+    "tournament_team_id": 2,
+    "player_id": 9,
+    "shirt_number": 1,
+    "squad_position": "GK"
+  },
+  {
+    "tournament_team_id": 3,
+    "player_id": 10,
+    "shirt_number": 3,
+    "squad_position": "MF"
+  },
+  {
+    "tournament_team_id": 3,
+    "player_id": 11,
+    "shirt_number": 4,
+    "squad_position": "FW"
+  },
+  {
+    "tournament_team_id": 3,
+    "player_id": 12,
+    "shirt_number": 2,
+    "squad_position": "MF"
+  },
+  {
+    "tournament_team_id": 3,
+    "player_id": 13,
+    "shirt_number": 1,
+    "squad_position": "GK"
+  },
+  {
+    "tournament_team_id": 4,
+    "player_id": 10,
+    "shirt_number": 3,
+    "squad_position": "MF"
+  },
+  {
+    "tournament_team_id": 4,
+    "player_id": 11,
+    "shirt_number": 4,
+    "squad_position": "FW"
+  },
+  {
+    "tournament_team_id": 4,
+    "player_id": 12,
+    "shirt_number": 2,
+    "squad_position": "MF"
+  },
+  {
+    "tournament_team_id": 4,
+    "player_id": 13,
+    "shirt_number": 1,
+    "squad_position": "GK"
+  },
+  {
+    "tournament_team_id": 5,
+    "player_id": 14,
+    "shirt_number": 10,
+    "squad_position": "FW"
+  },
+  {
+    "tournament_team_id": 5,
+    "player_id": 15,
+    "shirt_number": 4,
+    "squad_position": "DF"
+  },
+  {
+    "tournament_team_id": 5,
+    "player_id": 16,
+    "shirt_number": 8,
+    "squad_position": "FW"
+  },
+  {
+    "tournament_team_id": 5,
+    "player_id": 17,
+    "shirt_number": 9,
+    "squad_position": "FW"
+  },
+  {
+    "tournament_team_id": 5,
+    "player_id": 18,
+    "shirt_number": 5,
+    "squad_position": "MF"
+  },
+  {
+    "tournament_team_id": 5,
+    "player_id": 19,
+    "shirt_number": 3,
+    "squad_position": "DF"
+  },
+  {
+    "tournament_team_id": 5,
+    "player_id": 20,
+    "shirt_number": 7,
+    "squad_position": "FW"
+  },
+  {
+    "tournament_team_id": 5,
+    "player_id": 21,
+    "shirt_number": 6,
+    "squad_position": "MF"
+  },
+  {
+    "tournament_team_id": 5,
+    "player_id": 22,
+    "shirt_number": 2,
+    "squad_position": "GK"
+  },
+  {
+    "tournament_team_id": 5,
+    "player_id": 23,
+    "shirt_number": 1,
+    "squad_position": "GK"
+  },
+  {
+    "tournament_team_id": 6,
+    "player_id": 14,
+    "shirt_number": 10,
+    "squad_position": "FW"
+  },
+  {
+    "tournament_team_id": 6,
+    "player_id": 15,
+    "shirt_number": 4,
+    "squad_position": "DF"
+  },
+  {
+    "tournament_team_id": 6,
+    "player_id": 16,
+    "shirt_number": 8,
+    "squad_position": "FW"
+  },
+  {
+    "tournament_team_id": 6,
+    "player_id": 17,
+    "shirt_number": 9,
+    "squad_position": "FW"
+  },
+  {
+    "tournament_team_id": 6,
+    "player_id": 18,
+    "shirt_number": 5,
+    "squad_position": "MF"
+  },
+  {
+    "tournament_team_id": 6,
+    "player_id": 19,
+    "shirt_number": 3,
+    "squad_position": "DF"
+  },
+  {
+    "tournament_team_id": 6,
+    "player_id": 20,
+    "shirt_number": 7,
+    "squad_position": "FW"
+  },
+  {
+    "tournament_team_id": 6,
+    "player_id": 21,
+    "shirt_number": 6,
+    "squad_position": "MF"
+  },
+  {
+    "tournament_team_id": 6,
+    "player_id": 22,
+    "shirt_number": 2,
+    "squad_position": "GK"
+  },
+  {
+    "tournament_team_id": 6,
+    "player_id": 23,
+    "shirt_number": 1,
+    "squad_position": "GK"
+  },
+  {
+    "tournament_team_id": 7,
+    "player_id": 24,
+    "shirt_number": 5,
+    "squad_position": "FW"
+  },
+  {
+    "tournament_team_id": 7,
+    "player_id": 25,
+    "shirt_number": 3,
+    "squad_position": "DF"
+  },
+  {
+    "tournament_team_id": 7,
+    "player_id": 26,
+    "shirt_number": 4,
+    "squad_position": "MF"
+  },
+  {
+    "tournament_team_id": 7,
+    "player_id": 27,
+    "shirt_number": 2,
+    "squad_position": "DF"
+  },
+  {
+    "tournament_team_id": 7,
+    "player_id": 28,
+    "shirt_number": 1,
+    "squad_position": "GK"
+  },
+  {
+    "tournament_team_id": 8,
+    "player_id": 24,
+    "shirt_number": 5,
+    "squad_position": "FW"
+  },
+  {
+    "tournament_team_id": 8,
+    "player_id": 25,
+    "shirt_number": 3,
+    "squad_position": "DF"
+  },
+  {
+    "tournament_team_id": 8,
+    "player_id": 26,
+    "shirt_number": 4,
+    "squad_position": "MF"
+  },
+  {
+    "tournament_team_id": 8,
+    "player_id": 27,
+    "shirt_number": 2,
+    "squad_position": "DF"
+  },
+  {
+    "tournament_team_id": 8,
+    "player_id": 28,
+    "shirt_number": 1,
+    "squad_position": "GK"
+  },
+  {
+    "tournament_team_id": 9,
+    "player_id": 29,
+    "shirt_number": 10,
+    "squad_position": "FW"
+  },
+  {
+    "tournament_team_id": 9,
+    "player_id": 30,
+    "shirt_number": 4,
+    "squad_position": "DF"
+  },
+  {
+    "tournament_team_id": 9,
+    "player_id": 31,
+    "shirt_number": 9,
+    "squad_position": "FW"
+  },
+  {
+    "tournament_team_id": 9,
+    "player_id": 32,
+    "shirt_number": 5,
+    "squad_position": "MF"
+  },
+  {
+    "tournament_team_id": 9,
+    "player_id": 33,
+    "shirt_number": 8,
+    "squad_position": "FW"
+  },
+  {
+    "tournament_team_id": 9,
+    "player_id": 34,
+    "shirt_number": 6,
+    "squad_position": "MF"
+  },
+  {
+    "tournament_team_id": 9,
+    "player_id": 35,
+    "shirt_number": 7,
+    "squad_position": "FW"
+  },
+  {
+    "tournament_team_id": 9,
+    "player_id": 36,
+    "shirt_number": 3,
+    "squad_position": "DF"
+  },
+  {
+    "tournament_team_id": 9,
+    "player_id": 37,
+    "shirt_number": 2,
+    "squad_position": "DF"
+  },
+  {
+    "tournament_team_id": 9,
+    "player_id": 38,
+    "shirt_number": 1,
+    "squad_position": "GK"
+  },
+  {
+    "tournament_team_id": 10,
+    "player_id": 29,
+    "shirt_number": 10,
+    "squad_position": "FW"
+  },
+  {
+    "tournament_team_id": 10,
+    "player_id": 30,
+    "shirt_number": 4,
+    "squad_position": "DF"
+  },
+  {
+    "tournament_team_id": 10,
+    "player_id": 31,
+    "shirt_number": 9,
+    "squad_position": "FW"
+  },
+  {
+    "tournament_team_id": 10,
+    "player_id": 32,
+    "shirt_number": 5,
+    "squad_position": "MF"
+  },
+  {
+    "tournament_team_id": 10,
+    "player_id": 33,
+    "shirt_number": 8,
+    "squad_position": "FW"
+  },
+  {
+    "tournament_team_id": 10,
+    "player_id": 34,
+    "shirt_number": 6,
+    "squad_position": "MF"
+  },
+  {
+    "tournament_team_id": 10,
+    "player_id": 35,
+    "shirt_number": 7,
+    "squad_position": "FW"
+  },
+  {
+    "tournament_team_id": 10,
+    "player_id": 36,
+    "shirt_number": 3,
+    "squad_position": "DF"
+  },
+  {
+    "tournament_team_id": 10,
+    "player_id": 37,
+    "shirt_number": 2,
+    "squad_position": "DF"
+  },
+  {
+    "tournament_team_id": 10,
+    "player_id": 38,
+    "shirt_number": 1,
+    "squad_position": "GK"
+  },
+  {
+    "tournament_team_id": 11,
+    "player_id": 39,
+    "shirt_number": 2,
+    "squad_position": "DF"
+  },
+  {
+    "tournament_team_id": 11,
+    "player_id": 40,
+    "shirt_number": 3,
+    "squad_position": "FW"
+  },
+  {
+    "tournament_team_id": 11,
+    "player_id": 41,
+    "shirt_number": 1,
+    "squad_position": "GK"
+  },
+  {
+    "tournament_team_id": 12,
+    "player_id": 42,
+    "shirt_number": 2,
+    "squad_position": "FW"
+  },
+  {
+    "tournament_team_id": 12,
+    "player_id": 43,
+    "shirt_number": 1,
+    "squad_position": "GK"
+  },
+  {
+    "tournament_team_id": 13,
+    "player_id": 44,
+    "shirt_number": 2,
+    "squad_position": "FW"
+  },
+  {
+    "tournament_team_id": 13,
+    "player_id": 45,
+    "shirt_number": 1,
+    "squad_position": "GK"
+  },
+  {
+    "tournament_team_id": 14,
+    "player_id": 46,
+    "shirt_number": 2,
+    "squad_position": "DF"
+  },
+  {
+    "tournament_team_id": 14,
+    "player_id": 47,
+    "shirt_number": 3,
+    "squad_position": "MF"
+  },
+  {
+    "tournament_team_id": 14,
+    "player_id": 48,
+    "shirt_number": 1,
+    "squad_position": "GK"
+  },
+  {
+    "tournament_team_id": 15,
+    "player_id": 49,
+    "shirt_number": 1,
+    "squad_position": "GK"
+  },
+  {
+    "tournament_team_id": 16,
+    "player_id": 50,
+    "shirt_number": 1,
+    "squad_position": "GK"
+  }
+]

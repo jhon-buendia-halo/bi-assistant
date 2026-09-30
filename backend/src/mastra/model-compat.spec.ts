@@ -73,10 +73,13 @@ describe('modelCallTuning', () => {
 
   it('keeps maxOutputTokens for native OpenAI, which renames the key itself', () => {
     expect(
-      modelCallTuning({ id: 'openai/gpt-5', apiKey: 'k' }, {
-        maxOutputTokens: 2_500,
-        reasoningEffort: 'low',
-      }),
+      modelCallTuning(
+        { id: 'openai/gpt-5', apiKey: 'k' },
+        {
+          maxOutputTokens: 2_500,
+          reasoningEffort: 'low',
+        },
+      ),
     ).toEqual({
       modelSettings: { maxOutputTokens: 2_500 },
       providerOptions: { openai: { reasoningEffort: 'low' } },
@@ -106,9 +109,52 @@ describe('providerOptionsFor', () => {
 
   it('still uses the openai bucket for OpenAI models', () => {
     expect(
-      providerOptionsFor({ id: 'openai/gpt-4.1-mini', apiKey: 'k' }, {
-        reasoningEffort: 'high',
-      }),
+      providerOptionsFor(
+        { id: 'openai/gpt-4.1-mini', apiKey: 'k' },
+        {
+          reasoningEffort: 'high',
+        },
+      ),
     ).toEqual({ openai: { reasoningEffort: 'high' } });
+  });
+});
+
+describe('providerOptionsFor on Anthropic', () => {
+  it('translates reasoningEffort to the effort key the provider reads', () => {
+    expect(
+      providerOptionsFor(
+        { id: 'anthropic/claude-sonnet-5-5', apiKey: 'k' },
+        {
+          reasoningEffort: 'medium',
+        },
+      ),
+    ).toEqual({ anthropic: { effort: 'medium' } });
+  });
+
+  it('drops effort for models that reject it and OpenAI-only passthroughs', () => {
+    expect(
+      providerOptionsFor(
+        { id: 'anthropic/claude-haiku-4-5', apiKey: 'k' },
+        {
+          reasoningEffort: 'low',
+          max_completion_tokens: 512,
+        },
+      ),
+    ).toEqual({ anthropic: {} });
+  });
+
+  it('keeps maxOutputTokens in modelSettings, which the native provider maps itself', () => {
+    expect(
+      modelCallTuning(
+        { id: 'anthropic/claude-opus-5-5', apiKey: 'k' },
+        {
+          maxOutputTokens: 4096,
+          reasoningEffort: 'high',
+        },
+      ),
+    ).toEqual({
+      modelSettings: { maxOutputTokens: 4096 },
+      providerOptions: { anthropic: { effort: 'high' } },
+    });
   });
 });

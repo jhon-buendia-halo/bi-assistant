@@ -1,0 +1,20 @@
+{
+  "dumpedAt": "2026-09-29T17:23:10.569Z",
+  "source": "postgres://world_cup@127.0.0.1:55432/world_cup?schema=world_cup",
+  "tables": {
+    "confederations": 5,
+    "countries": 13,
+    "teams": 12,
+    "tournaments": 2,
+    "tournament_teams": 16,
+    "venues": 9,
+    "players": 50,
+    "squad_members": 79,
+    "matches": 16,
+    "match_team_statistics": 32,
+    "goals": 47,
+    "disciplinary_events": 8,
+    "v_match_results": 16,
+    "v_player_goal_totals": 36
+  }
+}

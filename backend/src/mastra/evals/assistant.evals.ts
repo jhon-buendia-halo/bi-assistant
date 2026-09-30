@@ -291,6 +291,79 @@ const WORLD_CUP_EVAL_CASES: AssistantEvalCase[] = [
 ];
 
 /**
+ * The same World Cup data behind a REST API. The connector materialises the
+ * endpoints a statement references into in-memory SQLite tables named by their
+ * dotted key, so the reference SQL below is SQLite reading `api.world_cup.*`
+ * (not PostgreSQL reading `world_cup.*`). Only `expectedSql` differs from the
+ * PostgreSQL cases: questions, scorers and rubrics are shared, so the two sets
+ * grade the same behaviour over two datasource kinds.
+ *
+ * The `match` alias becomes `m` (MATCH is a SQLite operator keyword) and the
+ * views arrive precomputed from the API, so nothing here needs PostgreSQL-only
+ * syntax (`::` casts, `ILIKE`, `FILTER`). Semantics match the originals.
+ */
+const WORLD_CUP_REST_SQL: Record<string, string> = {
+  'champion-2022':
+    'SELECT champion.common_name AS champion ' +
+    'FROM api.world_cup.tournaments tournament ' +
+    'JOIN api.world_cup.teams champion ON champion.id = tournament.champion_team_id ' +
+    'WHERE tournament.tournament_year = 2022',
+  'final-score-2018':
+    'SELECT home.common_name AS home_team, away.common_name AS away_team, ' +
+    'm.home_goals, m.away_goals ' +
+    'FROM api.world_cup.matches m ' +
+    'JOIN api.world_cup.tournaments tournament ON tournament.id = m.tournament_id ' +
+    'JOIN api.world_cup.teams home ON home.id = m.home_team_id ' +
+    'JOIN api.world_cup.teams away ON away.id = m.away_team_id ' +
+    "WHERE tournament.tournament_year = 2018 AND m.stage = 'final'",
+  'top-scorer-2022':
+    'SELECT player, goals FROM api.world_cup.v_player_goal_totals ' +
+    'WHERE tournament_year = 2022 ORDER BY goals DESC, player LIMIT 1',
+  shootouts:
+    'SELECT tournament_year, home_team, away_team, winner ' +
+    'FROM api.world_cup.v_match_results WHERE home_penalties IS NOT NULL ' +
+    'ORDER BY tournament_year, match_number',
+  'biggest-venue':
+    'SELECT DISTINCT venue, attendance FROM api.world_cup.v_match_results ' +
+    'WHERE attendance = (SELECT MAX(attendance) FROM api.world_cup.v_match_results)',
+};
+
+/**
+ * Derive the REST variant of each base case: `rest-` id prefix, and the
+ * `expectedSql` swapped for its SQLite port. A case with no port must have had
+ * no reference SQL to begin with — the check throws otherwise, so a new
+ * PostgreSQL reference cannot silently go ungraded here.
+ */
+function restVariants(
+  base: AssistantEvalCase[],
+  sql: Record<string, string>,
+): AssistantEvalCase[] {
+  const unknown = Object.keys(sql).filter(
+    (id) => !base.some((evalCase) => evalCase.id === id),
+  );
+  if (unknown.length > 0) {
+    throw new Error(
+      `REST SQL overrides for unknown cases: ${unknown.join(', ')}`,
+    );
+  }
+  return base.map(({ id, expectedSql, ...evalCase }) => {
+    if (expectedSql && !sql[id]) {
+      throw new Error(`Case "${id}" has expectedSql but no REST port`);
+    }
+    return {
+      ...evalCase,
+      id: `rest-${id}`,
+      ...(expectedSql ? { expectedSql: sql[id] } : {}),
+    };
+  });
+}
+
+const WORLD_CUP_REST_EVAL_CASES: AssistantEvalCase[] = restVariants(
+  WORLD_CUP_EVAL_CASES,
+  WORLD_CUP_REST_SQL,
+);
+
+/**
  * Grounded in the Formula 1 fixture (`formula1` schema, 1950-2026). Every
  * figure below was run against that database before it was written down, so a
  * failing check means the agent got it wrong rather than the fixture drifting.
@@ -529,6 +602,17 @@ export const ASSISTANT_EVAL_SETS: AssistantEvalSet[] = [
       'world_cup tables and views.',
     fixtureId: 'world-cup',
     cases: WORLD_CUP_EVAL_CASES,
+  },
+  {
+    id: 'world-cup-rest',
+    name: 'World Cup (REST API)',
+    description:
+      'The same World Cup questions against the sample served by a local ' +
+      "REST API ('npm run worldcup:api'). Select its REST API datasource " +
+      'with a saved dataset containing the api.world_cup endpoints; reference ' +
+      'SQL runs in SQLite over the fetched endpoints.',
+    fixtureId: 'world-cup-rest',
+    cases: WORLD_CUP_REST_EVAL_CASES,
   },
   {
     id: 'formula-1',

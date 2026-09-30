@@ -35,10 +35,16 @@ export function assistantEvalDatasetError(
   fixture: SampleFixture | string,
 ): string | undefined {
   const sample = typeof fixture === 'string' ? evalFixture(fixture) : fixture;
+  const kind = sample.datasourceKind ?? 'postgres';
+  const kindLabel = kind === 'rest' ? 'REST API' : 'PostgreSQL';
+  const setupDoc =
+    kind === 'rest'
+      ? 'scripts/setup-worldcup-rest.ts'
+      : 'docker/postgres/README.md';
   const setup =
     `These evals require the bundled ${sample.name} sample: ${sample.description} ` +
-    'Select its PostgreSQL datasource and save a dataset containing the ' +
-    `${sample.schema} tables and views. Setup: docker/postgres/README.md.`;
+    `Select its ${kindLabel} datasource and save a dataset containing the ` +
+    `${sample.schema} tables and views. Setup: ${setupDoc}.`;
   const selected = snapshots.filter((dataset) => names.includes(dataset.name));
   const missingNames = names.filter(
     (name) => !selected.some((dataset) => dataset.name === name),
@@ -53,12 +59,13 @@ export function assistantEvalDatasetError(
     datasourceIds.size !== 1 ||
     datasourceIds.has(undefined) ||
     datasourceIds.has('') ||
-    selected.some((dataset) => dataset.datasourceKind !== 'postgres')
+    selected.some((dataset) => dataset.datasourceKind !== kind)
   ) {
-    return `${setup} The selected datasets must belong to one PostgreSQL datasource.`;
+    return `${setup} The selected datasets must belong to one ${kindLabel} datasource.`;
   }
-  // Postgres inventory keys are catalog.schema.table; older snapshots may
-  // have schema.table. Never accept a similarly named table in another schema.
+  // Inventory keys are catalog.schema.table (`api.schema.table` for REST);
+  // older snapshots may have schema.table. Never accept a similarly named
+  // table in another schema.
   const entities = new Set(
     selected.flatMap((dataset) =>
       dataset.tables.map((table) =>

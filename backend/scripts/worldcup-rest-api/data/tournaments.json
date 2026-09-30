@@ -1,0 +1,22 @@
+[
+  {
+    "id": 1,
+    "name": "2018 FIFA World Cup",
+    "tournament_year": 2018,
+    "host_country_code": "RUS",
+    "starts_on": "2018-06-14",
+    "ends_on": "2018-07-15",
+    "champion_team_id": 6,
+    "runner_up_team_id": 4
+  },
+  {
+    "id": 2,
+    "name": "2022 FIFA World Cup",
+    "tournament_year": 2022,
+    "host_country_code": "QAT",
+    "starts_on": "2022-11-20",
+    "ends_on": "2022-12-18",
+    "champion_team_id": 1,
+    "runner_up_team_id": 6
+  }
+]

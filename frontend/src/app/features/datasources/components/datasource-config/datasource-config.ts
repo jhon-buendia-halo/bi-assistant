@@ -15,6 +15,9 @@ import {
   DatasourceConfig as DatasourceConnectionConfig,
   DatasourceKind,
   PostgresConfig,
+  RestApiConfig,
+  RestAuthConfig,
+  RestEndpointDef,
   kindLabel,
 } from '../../models/datasource.model';
 import { ToastService } from '../../../../core/toast/toast.service';
@@ -32,6 +35,26 @@ const EMPTY_POSTGRES: PostgresConfig = {
   password: '',
   ssl: false,
 };
+const emptyRest = (): RestApiConfig => ({
+  baseUrl: '',
+  auth: { type: 'none' },
+  endpoints: [{ name: '', path: '' }],
+});
+
+const AUTH_TYPES: { value: RestAuthConfig['type']; label: string }[] = [
+  { value: 'none', label: 'No auth' },
+  { value: 'bearer', label: 'Bearer token' },
+  { value: 'api-key-header', label: 'API key header' },
+  { value: 'basic', label: 'Basic' },
+];
+
+type PaginationStyle = NonNullable<RestEndpointDef['pagination']>['style'];
+const PAGINATION_STYLES: { value: PaginationStyle; label: string }[] = [
+  { value: 'none', label: 'None' },
+  { value: 'page', label: 'Page' },
+  { value: 'offset', label: 'Offset' },
+  { value: 'cursor', label: 'Cursor' },
+];
 
 @Component({
   selector: 'app-datasource-config',
@@ -45,6 +68,8 @@ export class DatasourceConfig implements OnInit {
   readonly Pencil = Pencil;
   readonly Plus = Plus;
   readonly Trash2 = Trash2;
+  readonly authTypes = AUTH_TYPES;
+  readonly paginationStyles = PAGINATION_STYLES;
   readonly kinds = DATASOURCE_KINDS;
   readonly kindLabel = kindLabel;
 
@@ -63,6 +88,7 @@ export class DatasourceConfig implements OnInit {
   readonly kind = signal<DatasourceKind>('databricks');
   readonly databricks = signal<DatabricksConfig>({ ...EMPTY_DATABRICKS });
   readonly postgres = signal<PostgresConfig>({ ...EMPTY_POSTGRES });
+  readonly rest = signal<RestApiConfig>(emptyRest());
   readonly testing = signal(false);
   readonly saving = signal(false);
   // Only a configuration whose test passed can be saved.
@@ -73,6 +99,13 @@ export class DatasourceConfig implements OnInit {
     if (this.kind() === 'databricks') {
       const c = this.databricks();
       return !!(c.host.trim() && c.token.trim() && c.warehouseId.trim());
+    }
+    if (this.kind() === 'rest') {
+      const c = this.rest();
+      return (
+        !!c.baseUrl.trim() &&
+        c.endpoints.some((e) => e.name.trim() && e.path.trim())
+      );
     }
     const c = this.postgres();
     return !!(c.host.trim() && c.database.trim() && c.user.trim());
@@ -105,6 +138,7 @@ export class DatasourceConfig implements OnInit {
     this.kind.set('databricks');
     this.databricks.set({ ...EMPTY_DATABRICKS });
     this.postgres.set({ ...EMPTY_POSTGRES });
+    this.rest.set(emptyRest());
     this.testedOk.set(false);
     this.formOpen.set(true);
   }
@@ -113,12 +147,25 @@ export class DatasourceConfig implements OnInit {
     this.editingId.set(datasource.id);
     this.name.set(datasource.name);
     this.kind.set(datasource.kind);
+    this.databricks.set({ ...EMPTY_DATABRICKS });
+    this.postgres.set({ ...EMPTY_POSTGRES });
+    this.rest.set(emptyRest());
     if (datasource.kind === 'databricks') {
       this.databricks.set({ ...(datasource.config as DatabricksConfig) });
-      this.postgres.set({ ...EMPTY_POSTGRES });
-    } else {
+    } else if (datasource.kind === 'postgres') {
       this.postgres.set({ ...(datasource.config as PostgresConfig) });
-      this.databricks.set({ ...EMPTY_DATABRICKS });
+    } else {
+      const c = datasource.config as RestApiConfig;
+      this.rest.set({
+        ...c,
+        auth: { ...c.auth },
+        endpoints: c.endpoints.length
+          ? c.endpoints.map((e) => ({
+              ...e,
+              pagination: e.pagination ? { ...e.pagination } : undefined,
+            }))
+          : [{ name: '', path: '' }],
+      });
     }
     this.testedOk.set(false);
     this.formOpen.set(true);
@@ -144,6 +191,56 @@ export class DatasourceConfig implements OnInit {
     this.onFieldChange();
   }
 
+  patchRest(patch: Partial<Omit<RestApiConfig, 'auth' | 'endpoints'>>): void {
+    this.rest.set({ ...this.rest(), ...patch });
+    this.onFieldChange();
+  }
+
+  patchRestAuth(patch: Partial<RestAuthConfig>): void {
+    const rest = this.rest();
+    this.rest.set({ ...rest, auth: { ...rest.auth, ...patch } });
+    this.onFieldChange();
+  }
+
+  addEndpoint(): void {
+    const rest = this.rest();
+    this.rest.set({
+      ...rest,
+      endpoints: [...rest.endpoints, { name: '', path: '' }],
+    });
+    this.onFieldChange();
+  }
+
+  removeEndpoint(index: number): void {
+    const rest = this.rest();
+    this.rest.set({
+      ...rest,
+      endpoints: rest.endpoints.filter((_, i) => i !== index),
+    });
+    this.onFieldChange();
+  }
+
+  patchEndpoint(index: number, patch: Partial<RestEndpointDef>): void {
+    const rest = this.rest();
+    this.rest.set({
+      ...rest,
+      endpoints: rest.endpoints.map((e, i) =>
+        i === index ? { ...e, ...patch } : e,
+      ),
+    });
+    this.onFieldChange();
+  }
+
+  patchPagination(
+    index: number,
+    patch: Partial<NonNullable<RestEndpointDef['pagination']>>,
+  ): void {
+    const current = this.rest().endpoints[index]?.pagination ?? {
+      style: 'none' as const,
+    };
+    this.patchEndpoint(index, { pagination: { ...current, ...patch } });
+  }
+
   onFieldChange(): void {
     // Editing invalidates the previous successful test.
     this.testedOk.set(false);
@@ -158,6 +255,7 @@ export class DatasourceConfig implements OnInit {
         warehouseId: c.warehouseId.trim(),
       };
     }
+    if (this.kind() === 'rest') return this.restConfig();
     const c = this.postgres();
     return {
       host: c.host.trim(),
@@ -167,6 +265,62 @@ export class DatasourceConfig implements OnInit {
       password: c.password,
       ssl: !!c.ssl,
     };
+  }
+
+  /** Trimmed REST config; empty optionals dropped, secrets sent back unchanged (masked ones stay masked). */
+  private restConfig(): RestApiConfig {
+    const c = this.rest();
+    const opt = (v: string | undefined) => v?.trim() || undefined;
+    const a = c.auth;
+    const auth: RestAuthConfig = { type: a.type };
+    if (a.type === 'bearer') auth.token = a.token ?? '';
+    if (a.type === 'api-key-header') {
+      auth.headerName = (a.headerName ?? '').trim();
+      auth.token = a.token ?? '';
+    }
+    if (a.type === 'basic') {
+      auth.username = (a.username ?? '').trim();
+      auth.password = a.password ?? '';
+    }
+    const endpoints: RestEndpointDef[] = c.endpoints
+      .filter((e) => e.name.trim() || e.path.trim())
+      .map((e) => {
+        const out: RestEndpointDef = {
+          name: e.name.trim(),
+          path: e.path.trim(),
+        };
+        const group = opt(e.group);
+        if (group) out.group = group;
+        const rowsPointer = opt(e.rowsPointer);
+        if (rowsPointer) out.rowsPointer = rowsPointer;
+        if (e.maxRows) out.maxRows = e.maxRows;
+        const p = e.pagination;
+        if (p && p.style !== 'none') {
+          const pagination: NonNullable<RestEndpointDef['pagination']> = {
+            style: p.style,
+          };
+          const keys =
+            p.style === 'page'
+              ? (['pageParam', 'sizeParam'] as const)
+              : p.style === 'offset'
+                ? (['offsetParam', 'sizeParam'] as const)
+                : (['cursorParam', 'cursorPointer'] as const);
+          for (const k of keys) {
+            const v = opt(p[k]);
+            if (v) pagination[k] = v;
+          }
+          if (p.pageSize) pagination.pageSize = p.pageSize;
+          out.pagination = pagination;
+        }
+        return out;
+      });
+    const config: RestApiConfig = {
+      baseUrl: c.baseUrl.trim(),
+      auth,
+      endpoints,
+    };
+    if (c.headers && Object.keys(c.headers).length) config.headers = c.headers;
+    return config;
   }
 
   testConnection(): void {

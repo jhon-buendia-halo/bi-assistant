@@ -197,7 +197,7 @@ export const runReadOnlySqlTool = createTool({
   description: [
     'Run a single read-only SELECT/WITH statement (live) against one datasource.',
     'Use the SQL dialect of that datasource: Databricks SQL for databricks,',
-    'PostgreSQL for postgres. Reference entities with fully-qualified',
+    'PostgreSQL for postgres, SQLite for rest. Reference entities with fully-qualified',
     'catalog.schema.table names (on Postgres, the catalog is the database',
     'name; you may write schema.table). Only query entities from this',
     "session's datasets. Write/DDL statements are rejected. datasourceId is",

@@ -1,0 +1,22 @@
+[
+  {
+    "code": "AFC",
+    "name": "Asian Football Confederation"
+  },
+  {
+    "code": "CAF",
+    "name": "Confederation of African Football"
+  },
+  {
+    "code": "CONCACAF",
+    "name": "Confederation of North, Central America and Caribbean Association Football"
+  },
+  {
+    "code": "CONMEBOL",
+    "name": "South American Football Confederation"
+  },
+  {
+    "code": "UEFA",
+    "name": "Union of European Football Associations"
+  }
+]

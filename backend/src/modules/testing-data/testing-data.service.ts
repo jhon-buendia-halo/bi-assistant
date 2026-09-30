@@ -191,6 +191,14 @@ export class TestingDataService {
     if (!fixture) {
       return { ok: false, message: `Unknown sample fixture "${fixtureId}"` };
     }
+    if (fixture.datasourceKind === 'rest') {
+      return {
+        ok: false,
+        message:
+          `The ${fixture.name} sample is registered for evals only — create its ` +
+          'datasource with scripts/setup-worldcup-rest.ts instead of loading it here.',
+      };
+    }
     const parsed = parseConnection(input);
     if ('message' in parsed) return { ok: false, message: parsed.message };
     const config = parsed.config;

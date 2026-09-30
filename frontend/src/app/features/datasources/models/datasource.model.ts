@@ -1,8 +1,9 @@
-export type DatasourceKind = 'databricks' | 'postgres';
+export type DatasourceKind = 'databricks' | 'postgres' | 'rest';
 
 export const DATASOURCE_KINDS: { value: DatasourceKind; label: string }[] = [
   { value: 'databricks', label: 'Databricks' },
   { value: 'postgres', label: 'PostgreSQL' },
+  { value: 'rest', label: 'REST API' },
 ];
 
 export interface DatabricksConfig {
@@ -20,7 +21,40 @@ export interface PostgresConfig {
   ssl: boolean;
 }
 
-export type DatasourceConfig = DatabricksConfig | PostgresConfig;
+export interface RestAuthConfig {
+  type: 'none' | 'bearer' | 'api-key-header' | 'basic';
+  token?: string;
+  headerName?: string;
+  username?: string;
+  password?: string;
+}
+
+export interface RestEndpointDef {
+  name: string;
+  group?: string;
+  path: string;
+  rowsPointer?: string;
+  pagination?: {
+    style: 'none' | 'page' | 'offset' | 'cursor';
+    pageParam?: string;
+    sizeParam?: string;
+    offsetParam?: string;
+    cursorParam?: string;
+    cursorPointer?: string;
+    pageSize?: number;
+  };
+  maxRows?: number;
+}
+
+export interface RestApiConfig {
+  baseUrl: string;
+  auth: RestAuthConfig;
+  headers?: Record<string, string>;
+  endpoints: RestEndpointDef[];
+}
+
+export type DatasourceConfig =
+  DatabricksConfig | PostgresConfig | RestApiConfig;
 
 export interface Datasource {
   id: string;

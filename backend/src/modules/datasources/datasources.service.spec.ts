@@ -4,6 +4,9 @@ jest.mock('./connectors/databricks.connector', () => ({
 jest.mock('./connectors/postgres.connector', () => ({
   PostgresConnector: class {},
 }));
+jest.mock('./connectors/rest.connector', () => ({
+  RestConnector: class {},
+}));
 
 import { DatasourcesService } from './datasources.service';
 import type { CatalogInfo, Datasource } from './entities/datasource.entity';
@@ -42,6 +45,7 @@ function build(cached: { catalogs: CatalogInfo[]; fetchedAt: string } | null) {
     repository as never,
     inventoryCache as never,
     databricks as never,
+    {} as never,
     {} as never,
   );
   return { service, repository, inventoryCache, databricks };

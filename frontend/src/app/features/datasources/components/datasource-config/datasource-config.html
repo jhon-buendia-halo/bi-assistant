@@ -6,7 +6,7 @@
       </h1>
       <p class="mt-1 text-[12px] text-zinc-500">
         Connect the data platforms your datasets draw from — Databricks SQL
-        warehouses or PostgreSQL databases.
+        warehouses, PostgreSQL databases or REST APIs.
       </p>
     </div>
     @if (!formOpen()) {
@@ -169,7 +169,7 @@
             class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
           />
         </label>
-      } @else {
+      } @else if (kind() === "postgres") {
         <div class="grid grid-cols-3 gap-3">
           <label class="col-span-2 flex flex-col gap-1">
             <span class="text-[11px] font-medium text-zinc-500">Host</span>
@@ -233,6 +233,379 @@
           />
           <span>Use SSL</span>
         </label>
+      } @else {
+        <label class="flex flex-col gap-1">
+          <span class="text-[11px] font-medium text-zinc-500">Base URL</span>
+          <input
+            type="text"
+            placeholder="https://api.example.com"
+            [value]="rest().baseUrl"
+            (input)="patchRest({ baseUrl: $any($event.target).value })"
+            class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+          />
+        </label>
+
+        <label class="flex flex-col gap-1">
+          <span class="text-[11px] font-medium text-zinc-500"
+            >Authentication</span
+          >
+          <select
+            [value]="rest().auth.type"
+            (change)="patchRestAuth({ type: $any($event.target).value })"
+            class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none focus:border-white/25"
+          >
+            @for (a of authTypes; track a.value) {
+              <option [value]="a.value" class="bg-[#232323]">
+                {{ a.label }}
+              </option>
+            }
+          </select>
+        </label>
+        @switch (rest().auth.type) {
+          @case ("bearer") {
+            <label class="flex flex-col gap-1">
+              <span class="text-[11px] font-medium text-zinc-500">Token</span>
+              <input
+                type="password"
+                placeholder="Bearer token"
+                [value]="rest().auth.token ?? ''"
+                (input)="patchRestAuth({ token: $any($event.target).value })"
+                class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+              />
+            </label>
+          }
+          @case ("api-key-header") {
+            <div class="grid grid-cols-2 gap-3">
+              <label class="flex flex-col gap-1">
+                <span class="text-[11px] font-medium text-zinc-500"
+                  >Header name</span
+                >
+                <input
+                  type="text"
+                  placeholder="X-API-Key"
+                  [value]="rest().auth.headerName ?? ''"
+                  (input)="
+                    patchRestAuth({ headerName: $any($event.target).value })
+                  "
+                  class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                />
+              </label>
+              <label class="flex flex-col gap-1">
+                <span class="text-[11px] font-medium text-zinc-500">Key</span>
+                <input
+                  type="password"
+                  placeholder="API key"
+                  [value]="rest().auth.token ?? ''"
+                  (input)="patchRestAuth({ token: $any($event.target).value })"
+                  class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                />
+              </label>
+            </div>
+          }
+          @case ("basic") {
+            <div class="grid grid-cols-2 gap-3">
+              <label class="flex flex-col gap-1">
+                <span class="text-[11px] font-medium text-zinc-500"
+                  >Username</span
+                >
+                <input
+                  type="text"
+                  [value]="rest().auth.username ?? ''"
+                  (input)="
+                    patchRestAuth({ username: $any($event.target).value })
+                  "
+                  class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                />
+              </label>
+              <label class="flex flex-col gap-1">
+                <span class="text-[11px] font-medium text-zinc-500"
+                  >Password</span
+                >
+                <input
+                  type="password"
+                  placeholder="••••••••"
+                  [value]="rest().auth.password ?? ''"
+                  (input)="
+                    patchRestAuth({ password: $any($event.target).value })
+                  "
+                  class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                />
+              </label>
+            </div>
+          }
+        }
+
+        <div class="flex flex-col gap-2">
+          <div class="flex items-center justify-between">
+            <span class="text-[11px] font-medium text-zinc-500">Endpoints</span>
+            <button
+              type="button"
+              (click)="addEndpoint()"
+              class="flex items-center gap-1 rounded px-2 py-1 text-[12px] text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
+            >
+              <lucide-angular [img]="Plus" [size]="12" />
+              <span>Add endpoint</span>
+            </button>
+          </div>
+          @for (ep of rest().endpoints; track $index; let i = $index) {
+            <div
+              class="flex flex-col gap-2.5 rounded-lg border border-white/10 bg-white/[0.02] p-3"
+            >
+              <div class="flex items-start gap-3">
+                <div class="grid flex-1 grid-cols-3 gap-3">
+                  <label class="flex flex-col gap-1">
+                    <span class="text-[11px] font-medium text-zinc-500"
+                      >Name</span
+                    >
+                    <input
+                      type="text"
+                      placeholder="customers"
+                      [value]="ep.name"
+                      (input)="
+                        patchEndpoint(i, { name: $any($event.target).value })
+                      "
+                      class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                    />
+                  </label>
+                  <label class="flex flex-col gap-1 col-span-2">
+                    <span class="text-[11px] font-medium text-zinc-500"
+                      >Path</span
+                    >
+                    <input
+                      type="text"
+                      placeholder="/v1/customers"
+                      [value]="ep.path"
+                      (input)="
+                        patchEndpoint(i, { path: $any($event.target).value })
+                      "
+                      class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                    />
+                  </label>
+                </div>
+                <button
+                  type="button"
+                  title="Remove endpoint"
+                  (click)="removeEndpoint(i)"
+                  class="mt-5 rounded p-1.5 text-zinc-500 hover:bg-white/10 hover:text-red-400"
+                >
+                  <lucide-angular [img]="Trash2" [size]="14" />
+                </button>
+              </div>
+              <div class="grid grid-cols-3 gap-3">
+                <label class="flex flex-col gap-1">
+                  <span class="text-[11px] font-medium text-zinc-500"
+                    >Group (optional)</span
+                  >
+                  <input
+                    type="text"
+                    placeholder="default"
+                    [value]="ep.group ?? ''"
+                    (input)="
+                      patchEndpoint(i, { group: $any($event.target).value })
+                    "
+                    class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                  />
+                </label>
+                <label class="flex flex-col gap-1 col-span-2">
+                  <span class="text-[11px] font-medium text-zinc-500"
+                    >Rows pointer (optional)</span
+                  >
+                  <input
+                    type="text"
+                    placeholder="/data/items"
+                    [value]="ep.rowsPointer ?? ''"
+                    (input)="
+                      patchEndpoint(i, {
+                        rowsPointer: $any($event.target).value,
+                      })
+                    "
+                    class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                  />
+                </label>
+              </div>
+              <p class="-mt-1 text-[11px] text-zinc-600">
+                Rows pointer: JSON pointer to the array of rows; leave empty if
+                the response is the array.
+              </p>
+              <label class="flex flex-col gap-1">
+                <span class="text-[11px] font-medium text-zinc-500"
+                  >Pagination</span
+                >
+                <select
+                  [value]="ep.pagination?.style ?? 'none'"
+                  (change)="
+                    patchPagination(i, { style: $any($event.target).value })
+                  "
+                  class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none focus:border-white/25"
+                >
+                  @for (p of paginationStyles; track p.value) {
+                    <option [value]="p.value" class="bg-[#232323]">
+                      {{ p.label }}
+                    </option>
+                  }
+                </select>
+              </label>
+              @switch (ep.pagination?.style) {
+                @case ("page") {
+                  <div class="grid grid-cols-3 gap-3">
+                    <label class="flex flex-col gap-1">
+                      <span class="text-[11px] font-medium text-zinc-500"
+                        >Page param</span
+                      >
+                      <input
+                        type="text"
+                        placeholder="page"
+                        [value]="ep.pagination?.pageParam ?? ''"
+                        (input)="
+                          patchPagination(i, {
+                            pageParam: $any($event.target).value,
+                          })
+                        "
+                        class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                      />
+                    </label>
+                    <label class="flex flex-col gap-1">
+                      <span class="text-[11px] font-medium text-zinc-500"
+                        >Size param</span
+                      >
+                      <input
+                        type="text"
+                        placeholder="per_page"
+                        [value]="ep.pagination?.sizeParam ?? ''"
+                        (input)="
+                          patchPagination(i, {
+                            sizeParam: $any($event.target).value,
+                          })
+                        "
+                        class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                      />
+                    </label>
+                    <label class="flex flex-col gap-1">
+                      <span class="text-[11px] font-medium text-zinc-500"
+                        >Page size</span
+                      >
+                      <input
+                        type="number"
+                        placeholder="100"
+                        [value]="ep.pagination?.pageSize ?? ''"
+                        (input)="
+                          patchPagination(i, {
+                            pageSize: +$any($event.target).value || undefined,
+                          })
+                        "
+                        class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                      />
+                    </label>
+                  </div>
+                }
+                @case ("offset") {
+                  <div class="grid grid-cols-3 gap-3">
+                    <label class="flex flex-col gap-1">
+                      <span class="text-[11px] font-medium text-zinc-500"
+                        >Offset param</span
+                      >
+                      <input
+                        type="text"
+                        placeholder="offset"
+                        [value]="ep.pagination?.offsetParam ?? ''"
+                        (input)="
+                          patchPagination(i, {
+                            offsetParam: $any($event.target).value,
+                          })
+                        "
+                        class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                      />
+                    </label>
+                    <label class="flex flex-col gap-1">
+                      <span class="text-[11px] font-medium text-zinc-500"
+                        >Size param</span
+                      >
+                      <input
+                        type="text"
+                        placeholder="limit"
+                        [value]="ep.pagination?.sizeParam ?? ''"
+                        (input)="
+                          patchPagination(i, {
+                            sizeParam: $any($event.target).value,
+                          })
+                        "
+                        class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                      />
+                    </label>
+                    <label class="flex flex-col gap-1">
+                      <span class="text-[11px] font-medium text-zinc-500"
+                        >Page size</span
+                      >
+                      <input
+                        type="number"
+                        placeholder="100"
+                        [value]="ep.pagination?.pageSize ?? ''"
+                        (input)="
+                          patchPagination(i, {
+                            pageSize: +$any($event.target).value || undefined,
+                          })
+                        "
+                        class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                      />
+                    </label>
+                  </div>
+                }
+                @case ("cursor") {
+                  <div class="grid grid-cols-3 gap-3">
+                    <label class="flex flex-col gap-1">
+                      <span class="text-[11px] font-medium text-zinc-500"
+                        >Cursor param</span
+                      >
+                      <input
+                        type="text"
+                        placeholder="cursor"
+                        [value]="ep.pagination?.cursorParam ?? ''"
+                        (input)="
+                          patchPagination(i, {
+                            cursorParam: $any($event.target).value,
+                          })
+                        "
+                        class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                      />
+                    </label>
+                    <label class="flex flex-col gap-1">
+                      <span class="text-[11px] font-medium text-zinc-500"
+                        >Cursor pointer</span
+                      >
+                      <input
+                        type="text"
+                        placeholder="/next_cursor"
+                        [value]="ep.pagination?.cursorPointer ?? ''"
+                        (input)="
+                          patchPagination(i, {
+                            cursorPointer: $any($event.target).value,
+                          })
+                        "
+                        class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                      />
+                    </label>
+                    <label class="flex flex-col gap-1">
+                      <span class="text-[11px] font-medium text-zinc-500"
+                        >Page size</span
+                      >
+                      <input
+                        type="number"
+                        placeholder="100"
+                        [value]="ep.pagination?.pageSize ?? ''"
+                        (input)="
+                          patchPagination(i, {
+                            pageSize: +$any($event.target).value || undefined,
+                          })
+                        "
+                        class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                      />
+                    </label>
+                  </div>
+                }
+              }
+            </div>
+          }
+        </div>
       }
 
       <div class="mt-1 flex items-center gap-2">
