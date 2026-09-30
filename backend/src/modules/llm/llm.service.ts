@@ -4,6 +4,8 @@ import {
   Logger,
   OnModuleInit,
 } from '@nestjs/common';
+import { Agent } from '@mastra/core/agent';
+import { z } from 'zod';
 import { CryptoService } from '../../infrastructure/crypto/crypto.service';
 import {
   setAgentModelResolver,
@@ -24,6 +26,13 @@ import {
 const TEST_PROMPT =
   'Reply with JSON matching the schema, using the value "ok" for `status`.';
 const TEST_TIMEOUT_MS = 30_000;
+const TEST_MAX_TOKENS = 512;
+/**
+ * gpt-5 / o-series count hidden reasoning against the same cap, and a
+ * JSON-schema probe can spend well over 512 tokens thinking before it writes
+ * a single visible character — OpenAI then returns 200 with empty content.
+ */
+const TEST_REASONING_MAX_TOKENS = 4096;
 const OPENAI_BASE_URL = 'https://api.openai.com/v1';
 
 /**
@@ -70,6 +79,19 @@ export function lenaiModelConfig(settings: {
     apiKey: settings.apiKey,
     headers: { 'X-Api-Key': settings.apiKey },
   };
+}
+
+const ANTHROPIC_PROBE_SCHEMA = z.object({ status: z.string() });
+
+/** HTTP status of a provider failure, looked up through the `cause` chain. */
+function providerStatusCode(err: unknown): number | undefined {
+  let current: unknown = err;
+  for (let depth = 0; current && depth < 5; depth++) {
+    const code = (current as { statusCode?: unknown }).statusCode;
+    if (typeof code === 'number') return code;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return undefined;
 }
 
 /** The probe's `status` value, or null when the reply does not match the schema. */
@@ -121,6 +143,9 @@ export class LlmService implements OnModuleInit {
         baseUrl: doc.baseUrl,
         apiKey,
       });
+    }
+    if (doc.provider === 'anthropic') {
+      return { id: `anthropic/${doc.model}`, apiKey };
     }
     return { id: `openai/${doc.model}`, apiKey };
   }
@@ -196,6 +221,9 @@ export class LlmService implements OnModuleInit {
   async testConnection(dto: SaveLlmSettingsDto): Promise<LlmTestResult> {
     const { provider, model, baseUrl } = this.validate(dto);
     const apiKey = await this.resolveApiKey(dto);
+    if (provider === 'anthropic') {
+      return this.testAnthropicConnection(model, apiKey);
+    }
     const lenaiConfig =
       provider === 'lenai'
         ? lenaiModelConfig({ model, baseUrl, apiKey })
@@ -206,11 +234,11 @@ export class LlmService implements OnModuleInit {
     const modelId = lenaiConfig?.id ?? `openai/${model}`;
     // Newer OpenAI families renamed `max_tokens` to `max_completion_tokens`
     // and reject the old key; older deployments reject the new one. Mirror
-    // whichever the model takes. Generous cap: reasoning models spend
-    // completion tokens on thinking before emitting the reply.
-    const capKey = rejectsMaxTokens(modelId)
-      ? 'max_completion_tokens'
-      : 'max_tokens';
+    // whichever the model takes. The renamed families are the reasoning ones,
+    // so they also get the larger cap.
+    const reasoning = rejectsMaxTokens(modelId);
+    const capKey = reasoning ? 'max_completion_tokens' : 'max_tokens';
+    const cap = reasoning ? TEST_REASONING_MAX_TOKENS : TEST_MAX_TOKENS;
 
     this.logger.log(`[testConnection] ${provider}/${model} via ${url}`);
     const started = Date.now();
@@ -231,7 +259,7 @@ export class LlmService implements OnModuleInit {
           model,
           messages: [{ role: 'user', content: TEST_PROMPT }],
           response_format: TEST_RESPONSE_FORMAT,
-          [capKey]: 512,
+          [capKey]: cap,
         }),
       });
     } catch (err) {
@@ -254,9 +282,23 @@ export class LlmService implements OnModuleInit {
     }
 
     const json = (await res.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
+      choices?: Array<{
+        finish_reason?: string;
+        message?: { content?: string | null; refusal?: string | null };
+      }>;
     };
-    const content = (json.choices?.[0]?.message?.content ?? '').trim();
+    const choice = json.choices?.[0];
+    const content = (choice?.message?.content ?? '').trim();
+    if (!content && choice?.finish_reason === 'length') {
+      throw new Error(
+        `Model hit the ${cap}-token limit before replying — reasoning models spend that budget thinking first; try a lower reasoning effort or a non-reasoning model`,
+      );
+    }
+    if (!content && choice?.message?.refusal) {
+      throw new Error(
+        `Model refused the connection probe — ${choice.message.refusal.slice(0, 200)}`,
+      );
+    }
     // Distinct from the auth/status failures above: the credentials and the
     // parameters are fine, the deployment just cannot produce the structured
     // output every agent here depends on.
@@ -272,6 +314,70 @@ export class LlmService implements OnModuleInit {
       model,
       latencyMs: Date.now() - started,
       reply,
+    };
+  }
+
+  /**
+   * Anthropic's probe goes through a throwaway Mastra agent built on the
+   * submitted model config, not a hand-rolled request: the Anthropic provider
+   * decides per model how structured output is sent (native `output_config`
+   * vs. a JSON tool) and which sampling parameters it strips, so only the
+   * provider itself can prove an agent turn will work.
+   */
+  private async testAnthropicConnection(
+    model: string,
+    apiKey: string,
+  ): Promise<LlmTestResult> {
+    const modelId = `anthropic/${model}` as const;
+    this.logger.log(`[testConnection] ${modelId}`);
+    const probe = new Agent({
+      id: 'llm-connection-probe',
+      name: 'LLM connection probe',
+      instructions: 'You answer connection probes exactly as asked.',
+      model: { id: modelId, apiKey },
+    });
+    const started = Date.now();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TEST_TIMEOUT_MS);
+    let status: unknown;
+    try {
+      const result = await probe.generate(TEST_PROMPT, {
+        structuredOutput: { schema: ANTHROPIC_PROBE_SCHEMA },
+        modelSettings: { maxOutputTokens: 512 },
+        abortSignal: controller.signal,
+      });
+      status = (result.object as { status?: unknown } | undefined)?.status;
+    } catch (err) {
+      if (controller.signal.aborted) {
+        throw new Error(
+          `LLM request timed out after ${TEST_TIMEOUT_MS / 1000}s`,
+        );
+      }
+      const statusCode = providerStatusCode(err);
+      if (statusCode === 401) {
+        throw new Error(`Authentication failed (401) — check the API key`);
+      }
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new Error(
+        statusCode
+          ? `Provider request failed (${statusCode}) — ${msg.slice(0, 300)}`
+          : `Provider unreachable — ${msg.slice(0, 300)}`,
+      );
+    } finally {
+      clearTimeout(timer);
+    }
+
+    if (typeof status !== 'string' || !status.trim()) {
+      throw new Error(
+        'Model answered but could not produce structured JSON output, which every agent here requires',
+      );
+    }
+    this.logger.log(`[testConnection] SUCCESS — reply="${status.trim()}"`);
+    return {
+      provider: 'anthropic',
+      model,
+      latencyMs: Date.now() - started,
+      reply: status.trim(),
     };
   }
 

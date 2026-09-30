@@ -64,7 +64,38 @@ export function providerOptionsFor(
   config: AgentModelConfig,
   bucket: Record<string, ProviderOptionValue>,
 ): ProviderOptions {
-  return { [providerOptionsKey(modelIdOf(config))]: bucket };
+  const modelId = modelIdOf(config);
+  const key = providerOptionsKey(modelId);
+  return {
+    [key]: key === 'anthropic' ? anthropicBucket(modelId, bucket) : bucket,
+  };
+}
+
+/**
+ * Claude models that reject `output_config.effort` with a 400: Haiku, the
+ * Claude 3 line, and the Sonnet 4 / 4.5 and Opus 4 / 4.1 generation.
+ */
+const REJECTS_EFFORT =
+  /claude-(?:haiku-|3|sonnet-4-5|sonnet-4-\d{8}|opus-4-1|opus-4-\d{8})/i;
+
+/**
+ * The Anthropic provider reads `effort`, not `reasoningEffort`, and ignores
+ * OpenAI-only passthroughs such as `max_completion_tokens` — so the
+ * user-configured effort would otherwise be a silent no-op on Claude.
+ */
+function anthropicBucket(
+  modelId: string,
+  bucket: Record<string, ProviderOptionValue>,
+): Record<string, ProviderOptionValue> {
+  const out: Record<string, ProviderOptionValue> = {};
+  for (const [name, value] of Object.entries(bucket)) {
+    if (name === 'reasoningEffort') {
+      if (!REJECTS_EFFORT.test(modelId)) out.effort = value;
+    } else if (name !== 'max_completion_tokens') {
+      out[name] = value;
+    }
+  }
+  return out;
 }
 
 /**
@@ -92,7 +123,8 @@ export function modelCallTuning(
   if (needsRename) bucket.max_completion_tokens = cap;
 
   return {
-    modelSettings: needsRename || cap === undefined ? {} : { maxOutputTokens: cap },
+    modelSettings:
+      needsRename || cap === undefined ? {} : { maxOutputTokens: cap },
     providerOptions: Object.keys(bucket).length
       ? providerOptionsFor(config, bucket)
       : {},

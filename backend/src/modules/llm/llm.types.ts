@@ -1,10 +1,14 @@
 // LLM provider settings, mirrored from data-readiness-agent (its Feature
-// 1.5.3 / ADR-0026). OpenAI and LenAI (Halo's internal OpenAI-compatible
-// gateway) are wired; adding another provider later is a new union member +
-// a branch in the test service, not a restructure.
-export type LlmProvider = 'openai' | 'lenai';
+// 1.5.3 / ADR-0026). OpenAI, Anthropic and LenAI (Halo's internal
+// OpenAI-compatible gateway) are wired; adding another provider later is a new
+// union member + a branch in the test service, not a restructure.
+export type LlmProvider = 'openai' | 'anthropic' | 'lenai';
 
-export const SUPPORTED_PROVIDERS: LlmProvider[] = ['openai', 'lenai'];
+export const SUPPORTED_PROVIDERS: LlmProvider[] = [
+  'openai',
+  'anthropic',
+  'lenai',
+];
 
 export type ReasoningEffort = 'low' | 'medium' | 'high';
 
