@@ -5,6 +5,7 @@ import { DatasourcesRepository } from './repositories/datasources.repository';
 import { InventoryCacheRepository } from './repositories/inventory-cache.repository';
 import { DatabricksConnector } from './connectors/databricks.connector';
 import { PostgresConnector } from './connectors/postgres.connector';
+import { RestConnector } from './connectors/rest.connector';
 
 @Module({
   controllers: [DatasourcesController],
@@ -14,6 +15,7 @@ import { PostgresConnector } from './connectors/postgres.connector';
     InventoryCacheRepository,
     DatabricksConnector,
     PostgresConnector,
+    RestConnector,
   ],
   exports: [DatasourcesService],
 })

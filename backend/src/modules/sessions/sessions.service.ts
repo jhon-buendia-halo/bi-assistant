@@ -411,8 +411,7 @@ export class SessionsService implements OnModuleInit {
     const inScope: DatasetSnapshot[] = onDatasource.length
       ? onDatasource
       : datasets;
-    const dialect =
-      inScope.find((s) => s.datasourceKind)?.datasourceKind ?? 'databricks';
+    const dialect = sqlDialectOf(inScope);
     const lines: string[] = [];
     let budget = FIXER_SCHEMA_CHARS;
     for (const dataset of inScope) {
@@ -578,8 +577,7 @@ export class SessionsService implements OnModuleInit {
     if (!datasourceId) return undefined;
     const inScope = datasets.filter((s) => s.datasourceId === datasourceId);
     return {
-      dialect:
-        inScope.find((s) => s.datasourceKind)?.datasourceKind ?? 'databricks',
+      dialect: sqlDialectOf(inScope),
       datasourceId,
       schema: schemaSnapshotBlock(inScope, {
         budgetChars: VERIFIER_SCHEMA_CHARS,
@@ -1373,6 +1371,13 @@ export class SessionsService implements OnModuleInit {
 }
 
 /** Successful SQL runs behind an answer, oldest first. */
+/** SQL dialect for prompts: REST datasources are queried as SQLite. */
+function sqlDialectOf(datasets: DatasetSnapshot[]): string {
+  const kind = datasets.find((s) => s.datasourceKind)?.datasourceKind;
+  if (kind === 'rest') return 'sqlite';
+  return kind ?? 'databricks';
+}
+
 function successfulSqlRuns(data: ToolDataRecord[] | undefined) {
   return (data ?? []).filter(
     (record) =>

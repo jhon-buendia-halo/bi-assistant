@@ -2,6 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { API_BASE_URL } from '../../../core/config/api.config';
+import { DatasourceKind } from '../../datasources/models/datasource.model';
 
 export interface DatasetEntitySnapshot {
   key: string;
@@ -11,7 +12,7 @@ export interface DatasetEntitySnapshot {
 export interface Dataset {
   name: string;
   datasourceId?: string;
-  datasourceKind?: 'databricks' | 'postgres';
+  datasourceKind?: DatasourceKind;
   tables: string[];
   entities?: DatasetEntitySnapshot[];
   createdAt?: string;
@@ -35,7 +36,7 @@ export class DatasetsApiService {
     name: string,
     tables: string[],
     entities: DatasetEntitySnapshot[],
-    datasource: { id: string; kind: 'databricks' | 'postgres' },
+    datasource: { id: string; kind: DatasourceKind },
   ): Observable<DatasetActionResult> {
     return this.http.post<DatasetActionResult>(`${API_BASE_URL}/datasets`, {
       name,

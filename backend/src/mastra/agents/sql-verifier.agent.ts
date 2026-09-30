@@ -23,7 +23,7 @@ export const sqlVerifierAgent = new Agent({
     "Careful mode's second opinion — re-derives the SQL for a question independently to corroborate the answer.",
   instructions: [
     'You independently derive the SQL that answers a business question.',
-    'You receive the question, the SQL dialect (databricks or postgres), the',
+    'You receive the question, the SQL dialect (databricks, postgres or sqlite), the',
     'entities, columns and sample values available, and optionally queries a',
     'user approved for similar questions.',
     '',

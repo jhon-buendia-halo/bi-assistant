@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { DatabricksConnector } from './connectors/databricks.connector';
 import { PostgresConnector } from './connectors/postgres.connector';
+import { RestConnector } from './connectors/rest.connector';
 import type {
   DatasourceConnector,
   ForeignKeyEdge,
@@ -23,6 +24,7 @@ import {
   DATASOURCE_KINDS,
   PostgresConfig,
   QueryResult,
+  RestApiConfig,
 } from './entities/datasource.entity';
 
 /** Kind-agnostic entry point: resolves a datasource and dispatches to its connector. */
@@ -35,6 +37,7 @@ export class DatasourcesService {
     private readonly inventoryCache: InventoryCacheRepository,
     private readonly databricks: DatabricksConnector,
     private readonly postgres: PostgresConnector,
+    private readonly rest: RestConnector,
   ) {}
 
   connector(kind: DatasourceKind): DatasourceConnector {
@@ -43,7 +46,14 @@ export class DatasourcesService {
         `kind must be one of: ${DATASOURCE_KINDS.join(', ')}`,
       );
     }
-    return kind === 'postgres' ? this.postgres : this.databricks;
+    switch (kind) {
+      case 'postgres':
+        return this.postgres;
+      case 'rest':
+        return this.rest;
+      default:
+        return this.databricks;
+    }
   }
 
   async list(): Promise<DatasourceView[]> {
@@ -253,6 +263,18 @@ export class DatasourcesService {
             ? stored.token
             : incoming.token,
       };
+    }
+    if (kind === 'rest') {
+      const incoming = config as RestApiConfig;
+      const stored = saved.config as RestApiConfig;
+      const auth = { ...incoming.auth };
+      if (!auth.token || auth.token === MASKED) {
+        if (stored.auth?.token) auth.token = stored.auth.token;
+      }
+      if (!auth.password || auth.password === MASKED) {
+        if (stored.auth?.password) auth.password = stored.auth.password;
+      }
+      return { ...incoming, auth };
     }
     const incoming = config as PostgresConfig;
     const stored = saved.config as PostgresConfig;
