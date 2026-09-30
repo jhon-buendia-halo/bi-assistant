@@ -264,6 +264,12 @@ export class SessionsApiService {
     careful = false,
     /** Business expert mode: the answer comes back with a reasoning trace. */
     expert = false,
+    /**
+     * Answer pinning/replay opts in by default server-side; `false` asks the
+     * backend to never replay and never write a pin for this turn. Omitted
+     * (the default) leaves the backend's own default in place.
+     */
+    pin?: boolean,
   ): Promise<void> {
     let res: Response;
     try {
@@ -277,6 +283,7 @@ export class SessionsApiService {
             activeVisualizationId,
             ...(careful ? { careful: true } : {}),
             ...(expert ? { expert: true } : {}),
+            ...(pin === false ? { pin: false } : {}),
           }),
           signal,
         },

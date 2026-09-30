@@ -16,6 +16,7 @@ import type {
 } from './entities/session.entity';
 import type { Response } from 'express';
 import type { BlockFeedbackDto } from '../expert-mode/dto/block-feedback.dto';
+import type { LearnedLesson } from '../learning/learning.service';
 
 @Controller('sessions')
 export class SessionsController {
@@ -252,6 +253,12 @@ export class SessionsController {
        * the answer; progress arrives as `expert-status` events.
        */
       expert?: boolean;
+      /**
+       * Answer pinning (default on): replay a pinned answer whose SQL still
+       * returns the same rows, and pin an eligible fresh one. `false` opts
+       * the turn out — never replay, never write a pin.
+       */
+      pin?: boolean;
     },
     @Res() res: Response,
   ): Promise<void> {
@@ -275,6 +282,7 @@ export class SessionsController {
           : undefined,
         body?.careful === true,
         body?.expert === true,
+        body?.pin !== false,
       );
     } catch (err) {
       if (!controller.signal.aborted) {
@@ -314,19 +322,32 @@ export class SessionsController {
   /**
    * Rate one block of an answer's reasoning trace (business expert mode).
    * PATCH semantics: only the fields sent change, `vote: null` clears the
-   * vote. Returns the session with the rating mirrored onto the message.
+   * vote. Returns the session with the rating mirrored onto the message, and
+   * — when a changed comment was learned from — the lessons it taught, whose
+   * titles also go into `message` for the toast.
    */
   @Post(':id/expert/feedback')
   async rateReasoningBlock(
     @Param('id') id: string,
     @Body() body: BlockFeedbackDto,
-  ): Promise<{ ok: boolean; message: string; session?: SessionDoc }> {
+  ): Promise<{
+    ok: boolean;
+    message: string;
+    session?: SessionDoc;
+    lessons?: LearnedLesson[];
+  }> {
     try {
-      const session = await this.sessionsService.recordBlockFeedback(
-        id,
-        body ?? {},
-      );
-      return { ok: true, message: 'Feedback saved', session };
+      const { session, lessons } =
+        await this.sessionsService.recordBlockFeedback(id, body ?? {});
+      const titles = (lessons ?? []).map((lesson) => lesson.title);
+      return {
+        ok: true,
+        message: titles.length
+          ? `Feedback saved — learned: ${titles.join(', ')}`
+          : 'Feedback saved',
+        session,
+        ...(lessons ? { lessons } : {}),
+      };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return { ok: false, message };

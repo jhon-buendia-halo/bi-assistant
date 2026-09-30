@@ -7,6 +7,8 @@ import { VerifiedQueriesModule } from '../verified-queries/verified-queries.modu
 import { MetricsModule } from '../metrics/metrics.module';
 import { KnowledgeModule } from '../knowledge/knowledge.module';
 import { ExpertModeModule } from '../expert-mode/expert-mode.module';
+import { AnswerPinsModule } from '../answer-pins/answer-pins.module';
+import { LearningModule } from '../learning/learning.module';
 import { SessionsController } from './sessions.controller';
 import { SessionsService } from './sessions.service';
 import { SessionsRepository } from './repositories/sessions.repository';
@@ -22,6 +24,8 @@ import { VisualizationService } from './visualization.service';
     MetricsModule,
     KnowledgeModule,
     ExpertModeModule,
+    AnswerPinsModule,
+    LearningModule,
   ],
   controllers: [SessionsController],
   providers: [SessionsService, SessionsRepository, VisualizationService],

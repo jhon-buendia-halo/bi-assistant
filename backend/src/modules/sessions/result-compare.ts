@@ -118,6 +118,31 @@ export interface CompareOptions {
    * with `shapeDiffers` set; anything else still reports the value difference.
    */
   widthTolerant?: boolean;
+  /**
+   * Careful mode's cross-check only: a result with fewer rows matches when
+   * each of its rows is contained in the other result's row at the same
+   * position — the verifier answered "which category sold the most" with the
+   * winner while the answer listed the whole ranking (or the reverse). Before
+   * this, a correct top-1 answer was capped at low confidence for "the
+   * figures differ". Never used by eval grading, which holds row counts.
+   */
+  leadingRows?: boolean;
+}
+
+/**
+ * Does `short` (fewer rows) reproduce the first `short.length` rows of `long`,
+ * row by row, with the narrower row of each pair a projection of the wider?
+ */
+function matchesLeadingRows(
+  long: Record<string, unknown>[],
+  short: Record<string, unknown>[],
+): boolean {
+  if (!short.length || short.length >= long.length) return false;
+  return short.every((row, index) => {
+    const a = rowValues(row);
+    const b = rowValues(long[index]);
+    return a.length <= b.length ? rowContains(b, a) : rowContains(a, b);
+  });
 }
 
 export function compareResults(
@@ -127,6 +152,13 @@ export function compareResults(
 ): ResultComparison {
   const expectedWidth = Object.keys(expected[0] ?? {}).length;
   const actualWidth = Object.keys(actual[0] ?? {}).length;
+  if (options.leadingRows && expected.length !== actual.length) {
+    const [long, short] =
+      expected.length > actual.length ? [expected, actual] : [actual, expected];
+    if (matchesLeadingRows(long, short)) {
+      return { match: true, reason: '', shapeDiffers: true };
+    }
+  }
   if (expected.length && actual.length && expectedWidth !== actualWidth) {
     if (!options.widthTolerant) {
       return {

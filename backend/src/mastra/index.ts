@@ -4,6 +4,7 @@ import { MastraStorageExporter, Observability } from '@mastra/observability';
 import { assistantAgent } from './agents/assistant.agent';
 import { businessExpertAgent } from './agents/business-expert.agent';
 import { evalJudgeAgent } from './agents/eval-judge.agent';
+import { feedbackLearnerAgent } from './agents/feedback-learner.agent';
 import { knowledgeBootstrapAgent } from './agents/knowledge-bootstrap.agent';
 import { sqlFixerAgent } from './agents/sql-fixer.agent';
 import { sqlVerifierAgent } from './agents/sql-verifier.agent';
@@ -23,6 +24,7 @@ export const mastra = new Mastra({
     'assistant-eval-judge': evalJudgeAgent,
     'knowledge-bootstrap': knowledgeBootstrapAgent,
     'business-expert': businessExpertAgent,
+    'feedback-learner': feedbackLearnerAgent,
   },
   storage: mastraStorage,
   logger: new PinoLogger({ name: 'Mastra', level: 'info' }),

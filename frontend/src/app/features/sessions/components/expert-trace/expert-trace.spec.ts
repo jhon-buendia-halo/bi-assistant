@@ -455,12 +455,45 @@ describe('ExpertTrace', () => {
       block: 'sql',
       comment: 'Should exclude people who left before 31 December.',
     });
-    // Optimistic: the note shows before the server answers.
+    // While the save is in flight the editor stays open (learning runs
+    // synchronously on comment save) and the button says so.
+    const saveBtn = button('Save note on Annotated SQL');
+    expect(saveBtn.textContent?.trim()).toContain('Save & teach');
+    expect(saveBtn.disabled).toBeTrue();
+    expect(
+      el.querySelector('[aria-label="Note on Annotated SQL"]'),
+    ).toBeTruthy();
+
+    req.flush({ ok: true, message: 'Note saved' });
+    fixture.detectChanges();
+    expect(saved.length).toBe(1);
+    // Saved: the editor closes and the comment shows as persisted.
+    expect(el.querySelector('[aria-label="Note on Annotated SQL"]')).toBeNull();
     expect(el.textContent).toContain(
       '“Should exclude people who left before 31 December.”',
     );
-    req.flush({ ok: true, message: 'Note saved' });
-    expect(saved.length).toBe(1);
+  });
+
+  it('shows a "Learned from your note" chip on a basis chip matching a learned title', () => {
+    fixture.componentRef.setInput('learnedTitles', ['Tech employees']);
+    fixture.detectChanges();
+    // The interpretation term "tech employees" carries sourceRef "Tech
+    // employees" — a case-insensitive match.
+    const chip = el.querySelector('[title="Learned from your feedback note"]');
+    expect(chip).toBeTruthy();
+    expect(chip?.textContent).toContain('Learned from your note');
+
+    // The convention-basis term has no sourceRef, so no chip for it.
+    const conventionChips = Array.from(
+      el.querySelectorAll('[title="Learned from your feedback note"]'),
+    );
+    expect(conventionChips.length).toBe(1);
+  });
+
+  it('shows no "Learned from your note" chip when learnedTitles is empty', () => {
+    expect(
+      el.querySelector('[title="Learned from your feedback note"]'),
+    ).toBeNull();
   });
 
   it('re-seeds feedback from a refreshed trace', () => {

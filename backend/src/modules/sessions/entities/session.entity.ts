@@ -55,6 +55,28 @@ export interface ReasoningStep {
   error?: string;
 }
 
+/**
+ * How a pinned answer's lineage was handled on replay or re-derivation (see
+ * `modules/answer-pins`). Absent on a message pinning never touched (mode
+ * off, ineligible turn, first-ever answer for its lineage).
+ */
+export interface AnswerConsistency {
+  /**
+   * `replay` — the stored answer was returned unchanged after re-running its
+   * SQL against live data; `kept` — a fresh derivation matched the pinned
+   * rows, so the old wording was kept; `updated` — the numbers changed after
+   * the context changed, so a new answer was persisted.
+   */
+  kind: 'replay' | 'kept' | 'updated';
+  /** `sourceMessageAt` of the pin the decision was made against. */
+  pinnedAt: string;
+  sourceSessionId?: string;
+  /** `replay` only: when the SQL was re-run to confirm the rows still match. */
+  verifiedAt?: string;
+  /** `updated` only: titles of the feedback lessons learned since the pin. */
+  lessons?: string[];
+}
+
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
@@ -135,6 +157,13 @@ export interface ChatMessage {
    * could not be built (the answer is never blocked by its explanation).
    */
   expertTrace?: ReasoningTrace;
+  /**
+   * Answer-pinning outcome for this turn's lineage (question + datasets +
+   * prior-turn chain + mode) — see `modules/answer-pins`. Absent when the
+   * turn was never pin-eligible (a clarification, a visual turn, `pin:
+   * false`) or pinning produced the answer on its first pass.
+   */
+  consistency?: AnswerConsistency;
 }
 
 export interface AnalysisReport {

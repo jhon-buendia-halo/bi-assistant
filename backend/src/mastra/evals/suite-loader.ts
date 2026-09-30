@@ -11,8 +11,40 @@ import {
   significantWords,
   type ExpectedReasoning,
 } from '../../modules/expert-mode/expert-metrics';
+// Pure entity module (types and constants only): the block kinds a scripted
+// reviewer note may target are exactly the ones the feedback endpoint accepts.
+import {
+  REASONING_BLOCK_KINDS,
+  type BlockVote,
+  type ConfidenceBand,
+  type ReasoningBlockKind,
+} from '../../modules/expert-mode/entities/reasoning-trace.entity';
 
 export type { ExpectedReasoning };
+
+/** One scripted reviewer note: what a reviewer writes on one reasoning block. */
+export interface LearningComment {
+  block: ReasoningBlockKind;
+  vote?: BlockVote;
+  comment: string;
+}
+
+/**
+ * A learning-from-feedback scenario on a trap case: the reviewer notes that
+ * should teach the engine the missing facts, the other cases in the suite
+ * those facts must also fix (with no notes of their own), and the confidence
+ * band expected before and after. Read by the learning demo
+ * (`npm run learning:demo`); `run-eval` reports the bands but never enforces
+ * them, and the in-app runner ignores the field.
+ */
+export interface LearningScenario {
+  /** At least one; posted in order on the first answer's reasoning trace. */
+  comments: LearningComment[];
+  /** Case ids in the same suite that must pass after these comments. */
+  generalisesTo?: string[];
+  before?: { band: ConfidenceBand };
+  after?: { band: ConfidenceBand };
+}
 
 /**
  * Eval suites, loaded from JSON instead of hard-coded TypeScript.
@@ -120,6 +152,12 @@ export interface EvalSuiteCase {
    * `--expert` runs (coverage columns); it never affects the verdict.
    */
   expectedReasoning?: ExpectedReasoning;
+  /**
+   * The reviewer notes that should turn this case from FAIL to PASS, and the
+   * cases they must generalise to. Only a trap case carries one; see
+   * `LearningScenario`.
+   */
+  learningScenario?: LearningScenario;
 }
 
 /** The kinds of datasource a suite can be run against. */
@@ -385,6 +423,142 @@ export function parseExpectedReasoning(
   return parsed;
 }
 
+/** Keys each part of a `learningScenario` may carry — anything else is a typo. */
+const LEARNING_SCENARIO_KEYS = ['comments', 'generalisesTo', 'before', 'after'];
+const LEARNING_COMMENT_KEYS = ['block', 'vote', 'comment'];
+const BAND_EXPECTATION_KEYS = ['band'];
+const BLOCK_VOTES: BlockVote[] = ['up', 'down'];
+const CONFIDENCE_BAND_NAMES: ConfidenceBand[] = ['high', 'medium', 'low'];
+
+/** A plain JSON object whose keys are all in `known`; fails naming the strays. */
+function strictObject(
+  value: unknown,
+  known: string[],
+  file: string,
+  label: string,
+): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    fail(file, `${label} must be an object`);
+  }
+  const raw = value as Record<string, unknown>;
+  const unknown = Object.keys(raw).filter((key) => !known.includes(key));
+  if (unknown.length) {
+    fail(
+      file,
+      `${label} has unknown field(s) ${unknown.map((key) => `"${key}"`).join(', ')} — known fields: ${known.join(', ')}`,
+    );
+  }
+  return raw;
+}
+
+function parseBandExpectation(
+  value: unknown,
+  file: string,
+  label: string,
+): { band: ConfidenceBand } {
+  const raw = strictObject(value, BAND_EXPECTATION_KEYS, file, label);
+  const band = raw.band as ConfidenceBand;
+  if (!CONFIDENCE_BAND_NAMES.includes(band)) {
+    fail(
+      file,
+      `${label}.band must be one of ${CONFIDENCE_BAND_NAMES.join(', ')}, got ${JSON.stringify(raw.band)}`,
+    );
+  }
+  return { band };
+}
+
+/**
+ * Validate a case's `learningScenario` shape. Strict for the same reason as
+ * `expectedReasoning`: a misspelt `vote` or block kind would not fail a run —
+ * the demo would post a note the feedback endpoint rejects, or teach nothing,
+ * and report the engine as unable to learn. Whether `generalisesTo` names
+ * real cases is checked by `parseSuite`, once every case id is known.
+ */
+function parseLearningScenario(
+  value: unknown,
+  file: string,
+  where: string,
+): LearningScenario {
+  const label = `${where}.learningScenario`;
+  const raw = strictObject(value, LEARNING_SCENARIO_KEYS, file, label);
+  if (!Array.isArray(raw.comments) || raw.comments.length === 0) {
+    fail(file, `${label}.comments must be a non-empty array`);
+  }
+  const comments = (raw.comments as unknown[]).map(
+    (entry, index): LearningComment => {
+      const at = `${label}.comments[${index}]`;
+      const comment = strictObject(entry, LEARNING_COMMENT_KEYS, file, at);
+      const block = comment.block as ReasoningBlockKind;
+      if (!REASONING_BLOCK_KINDS.includes(block)) {
+        fail(
+          file,
+          `${at}.block must be one of ${REASONING_BLOCK_KINDS.join(', ')}, got ${JSON.stringify(comment.block)}`,
+        );
+      }
+      const parsed: LearningComment = {
+        block,
+        comment: requiredString(comment.comment, file, `${at}.comment`),
+      };
+      if (comment.vote !== undefined) {
+        if (!BLOCK_VOTES.includes(comment.vote as BlockVote)) {
+          fail(
+            file,
+            `${at}.vote must be one of ${BLOCK_VOTES.join(', ')}, got ${JSON.stringify(comment.vote)}`,
+          );
+        }
+        parsed.vote = comment.vote as BlockVote;
+      }
+      return parsed;
+    },
+  );
+  const scenario: LearningScenario = { comments };
+  if (raw.generalisesTo !== undefined) {
+    const ids = stringArray(raw.generalisesTo, file, `${label}.generalisesTo`);
+    const duplicate = ids.find((id, index) => ids.indexOf(id) !== index);
+    if (duplicate !== undefined) {
+      fail(file, `${label}.generalisesTo lists "${duplicate}" twice`);
+    }
+    scenario.generalisesTo = ids;
+  }
+  if (raw.before !== undefined) {
+    scenario.before = parseBandExpectation(raw.before, file, `${label}.before`);
+  }
+  if (raw.after !== undefined) {
+    scenario.after = parseBandExpectation(raw.after, file, `${label}.after`);
+  }
+  return scenario;
+}
+
+/**
+ * `generalisesTo` must name other cases of the same suite, and those cases
+ * must carry no notes of their own — a case that is taught directly proves
+ * nothing about generalisation.
+ */
+function checkLearningTargets(suite: EvalSuite, file: string): void {
+  const byId = new Map(suite.cases.map((evalCase) => [evalCase.id, evalCase]));
+  for (const evalCase of suite.cases) {
+    const label = `case "${evalCase.id}".learningScenario.generalisesTo`;
+    for (const id of evalCase.learningScenario?.generalisesTo ?? []) {
+      const target = byId.get(id);
+      if (!target) {
+        fail(
+          file,
+          `${label} names "${id}", which is not a case in this suite — known ids: ${[...byId.keys()].join(', ')}`,
+        );
+      }
+      if (id === evalCase.id) {
+        fail(file, `${label} names the case itself`);
+      }
+      if (target.learningScenario) {
+        fail(
+          file,
+          `${label} names "${id}", which carries a learningScenario of its own — a generalisation case must pass with no notes of its own`,
+        );
+      }
+    }
+  }
+}
+
 function validateCase(
   value: unknown,
   file: string,
@@ -460,6 +634,13 @@ function validateCase(
   if (raw.expectedReasoning !== undefined) {
     parsed.expectedReasoning = parseExpectedReasoning(
       raw.expectedReasoning,
+      file,
+      where,
+    );
+  }
+  if (raw.learningScenario !== undefined) {
+    parsed.learningScenario = parseLearningScenario(
+      raw.learningScenario,
       file,
       where,
     );
@@ -619,6 +800,7 @@ export function parseSuite(
     }
     seen.add(evalCase.id);
   }
+  checkLearningTargets(suite, file);
   return suite;
 }
 

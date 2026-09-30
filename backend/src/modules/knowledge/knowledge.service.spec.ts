@@ -32,8 +32,13 @@ jest.mock('../../mastra/agents/knowledge-bootstrap.agent', () => {
 });
 
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { matchesFilter } from '../../infrastructure/database/doc-store';
+import type { DocFilter } from '../../infrastructure/database/doc-store';
 import { KnowledgeService } from './knowledge.service';
-import type { KnowledgeSnippet } from './entities/knowledge-snippet.entity';
+import type {
+  KnowledgeSnippet,
+  LessonProvenance,
+} from './entities/knowledge-snippet.entity';
 
 const snippet = (
   overrides: Partial<KnowledgeSnippet> = {},
@@ -48,6 +53,18 @@ const snippet = (
   createdAt: '2024-01-01T00:00:00.000Z',
   updatedAt: '2024-01-01T00:00:00.000Z',
   ...overrides,
+});
+
+const provenanceFor = (feedbackId: string): LessonProvenance => ({
+  feedbackId,
+  sessionId: 'session-1',
+  messageAt: '2026-09-30T00:00:00.000Z',
+  block: 'sql',
+  question: 'What was our net revenue in fiscal year 2025?',
+  comment: 'Our fiscal year runs 1 Feb to 31 Jan.',
+  vote: 'down',
+  learnedAt: '2026-09-30T00:05:00.000Z',
+  method: 'agent',
 });
 
 function build(
@@ -80,6 +97,19 @@ function build(
         return Promise.resolve(existing ? { ...existing, ...patch } : null);
       }),
     delete: jest.fn().mockResolvedValue(1),
+    // Real `matchesFilter` (not a stub) so `deleteLearnedFor`'s dotted-path
+    // filter is exercised the same way the sqlite adapter would evaluate it,
+    // and mutates the shared `docs` array so a subsequent `list()` reflects it.
+    deleteMany: jest.fn().mockImplementation((filter: DocFilter) => {
+      const matches = docs.filter((d) =>
+        matchesFilter(d as unknown as Record<string, unknown>, filter),
+      );
+      for (const match of matches) {
+        const idx = docs.indexOf(match);
+        if (idx >= 0) docs.splice(idx, 1);
+      }
+      return Promise.resolve(matches.length);
+    }),
   };
   const datasetsRepository = {
     getByNames: jest.fn().mockResolvedValue(options.datasets ?? []),
@@ -262,6 +292,22 @@ describe('KnowledgeService.update', () => {
       NotFoundException,
     );
   });
+
+  it('ignores source and provenance even when a client sends them', async () => {
+    const { service, repository } = build([
+      snippet({ source: 'feedback', provenance: provenanceFor('fb-1') }),
+    ]);
+
+    await service.update('snippet-1', {
+      enabled: false,
+      source: 'user',
+      provenance: undefined,
+    } as never);
+
+    expect(repository.update).toHaveBeenCalledWith('snippet-1', {
+      enabled: false,
+    });
+  });
 });
 
 describe('KnowledgeService.delete', () => {
@@ -367,21 +413,20 @@ describe('KnowledgeService.definitionBlock', () => {
     expect(block).toContain('entities: world_cup.matches');
   });
 
-  it('stops at the character budget', async () => {
-    const many = Array.from({ length: 100 }, (_, n) =>
-      snippet({
-        id: `s${n}`,
-        scope: null,
-        title: `Term ${n}`,
-        body: 'x'.repeat(200),
-      }),
-    );
-    const { service } = build(many);
+  it('skips an entry that does not fit and keeps filling', async () => {
+    // A single oversized entry sits between two small ones — the old
+    // `break` would have stopped at it and silently dropped "Fits 2" too.
+    const { service } = build([
+      snippet({ id: 'fits-1', scope: null, title: 'Fits 1', body: 'x'.repeat(100) }),
+      snippet({ id: 'too-big', scope: null, title: 'Too big', body: 'y'.repeat(9_000) }),
+      snippet({ id: 'fits-2', scope: null, title: 'Fits 2', body: 'z'.repeat(100) }),
+    ]);
 
     const block = await service.definitionBlock([]);
 
-    expect(block!.length).toBeLessThanOrEqual(2_200);
-    expect(block).toContain('Term 0');
+    expect(block).toContain('Fits 1');
+    expect(block).toContain('Fits 2');
+    expect(block).not.toContain('Too big');
   });
 });
 
@@ -421,6 +466,7 @@ describe('KnowledgeService.contextFor', () => {
         kind: 'term',
         title: 'DNF',
         body: 'Did not finish',
+        source: 'user',
         datasetId: 'World Cup',
       },
       {
@@ -428,6 +474,7 @@ describe('KnowledgeService.contextFor', () => {
         kind: 'instruction',
         title: 'Coverage',
         body: '2018 and 2022 only',
+        source: 'user',
       },
     ]);
     // Same order as the rendered block, so the two can never disagree.
@@ -469,6 +516,184 @@ describe('KnowledgeService.contextFor', () => {
     const { used } = await service.contextFor(['World Cup']);
 
     expect(used.map((u) => u.id)).toEqual(['on']);
+  });
+
+  it('pins default_filter snippets first, ahead of everything else', async () => {
+    const { service } = build([
+      snippet({ id: 'term', kind: 'term', scope: null, title: 'Term rule' }),
+      snippet({
+        id: 'learned',
+        kind: 'instruction',
+        source: 'feedback',
+        scope: { datasetId: 'Retail' },
+        title: 'Fiscal year',
+        provenance: provenanceFor('fb-1'),
+      }),
+      snippet({
+        id: 'filter',
+        kind: 'default_filter',
+        scope: { datasetId: 'Retail' },
+        title: 'Completed orders only',
+      }),
+    ]);
+
+    const { used } = await service.contextFor(['Retail']);
+
+    expect(used.map((u) => u.id)).toEqual(['filter', 'learned', 'term']);
+  });
+
+  it('orders feedback-sourced lessons before user/mined snippets of the same kind', async () => {
+    const { service } = build([
+      snippet({ id: 'mined', kind: 'term', source: 'mined', scope: null, title: 'Mined term' }),
+      snippet({ id: 'user', kind: 'term', source: 'user', scope: null, title: 'User term' }),
+      snippet({
+        id: 'learned',
+        kind: 'term',
+        source: 'feedback',
+        scope: null,
+        title: 'Learned term',
+        provenance: provenanceFor('fb-1'),
+      }),
+    ]);
+
+    const { used } = await service.contextFor([]);
+
+    expect(used.map((u) => u.id)).toEqual(['learned', 'mined', 'user']);
+  });
+});
+
+describe('KnowledgeService.createLearned', () => {
+  const provenance = provenanceFor('fb-1');
+
+  it('stores the snippet with source feedback and the given provenance, reusing create validation', async () => {
+    const { service, repository } = build();
+
+    const saved = await service.createLearned(
+      {
+        kind: 'term',
+        title: '  Fiscal year  ',
+        body: '  Runs 1 Feb to 31 Jan  ',
+        scope: { datasetId: 'Retail' },
+      },
+      provenance,
+    );
+
+    expect(repository.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'term',
+        title: 'Fiscal year',
+        body: 'Runs 1 Feb to 31 Jan',
+        scope: { datasetId: 'Retail' },
+        source: 'feedback',
+        provenance,
+        enabled: true,
+      }),
+    );
+    expect(saved.provenance).toEqual(provenance);
+    expect(saved.source).toBe('feedback');
+  });
+
+  it('rejects an invalid snippet the same way create does', async () => {
+    const { service, repository } = build();
+
+    await expect(
+      service.createLearned(
+        { kind: 'term', title: '', body: 'x' } as never,
+        provenance,
+      ),
+    ).rejects.toThrow(/title is required/);
+    expect(repository.insert).not.toHaveBeenCalled();
+  });
+
+  it('surfaces the source on contextFor\'s used list', async () => {
+    const learned = snippet({
+      id: 'learned',
+      kind: 'term',
+      source: 'feedback',
+      scope: { datasetId: 'Retail' },
+      title: 'Fiscal year',
+      provenance,
+    });
+    const { service } = build([learned]);
+
+    const { used } = await service.contextFor(['Retail']);
+
+    expect(used).toEqual([
+      expect.objectContaining({ id: 'learned', source: 'feedback' }),
+    ]);
+  });
+});
+
+describe('KnowledgeService.deleteLearnedFor', () => {
+  it('removes only the lessons learned from the given feedback doc', async () => {
+    const learnedA = snippet({
+      id: 'a',
+      source: 'feedback',
+      provenance: provenanceFor('fb-1'),
+    });
+    const learnedB = snippet({
+      id: 'b',
+      source: 'feedback',
+      provenance: provenanceFor('fb-1'),
+    });
+    const otherFeedback = snippet({
+      id: 'c',
+      source: 'feedback',
+      provenance: provenanceFor('fb-2'),
+    });
+    const userSnippet = snippet({ id: 'd', source: 'user' });
+    const { service, repository } = build([
+      learnedA,
+      learnedB,
+      otherFeedback,
+      userSnippet,
+    ]);
+
+    const count = await service.deleteLearnedFor('fb-1');
+
+    expect(count).toBe(2);
+    expect(repository.deleteMany).toHaveBeenCalledWith({
+      'provenance.feedbackId': 'fb-1',
+    });
+    const remaining = await service.list();
+    expect(remaining.map((s) => s.id)).toEqual(['c', 'd']);
+  });
+
+  it('is a no-op when nothing was learned from that feedback', async () => {
+    const { service } = build([snippet({ id: 'a', source: 'user' })]);
+
+    await expect(service.deleteLearnedFor('missing')).resolves.toBe(0);
+  });
+});
+
+describe('KnowledgeService.listLearned', () => {
+  it('returns only enabled feedback lessons in scope of the given datasets', async () => {
+    const { service } = build([
+      snippet({
+        id: 'learned-retail',
+        source: 'feedback',
+        scope: { datasetId: 'Retail' },
+        provenance: provenanceFor('fb-1'),
+      }),
+      snippet({
+        id: 'learned-disabled',
+        source: 'feedback',
+        scope: { datasetId: 'Retail' },
+        enabled: false,
+        provenance: provenanceFor('fb-2'),
+      }),
+      snippet({
+        id: 'learned-other-dataset',
+        source: 'feedback',
+        scope: { datasetId: 'World Cup' },
+        provenance: provenanceFor('fb-3'),
+      }),
+      snippet({ id: 'user-snippet', source: 'user', scope: { datasetId: 'Retail' } }),
+    ]);
+
+    const learned = await service.listLearned(['Retail']);
+
+    expect(learned.map((s) => s.id)).toEqual(['learned-retail']);
   });
 });
 

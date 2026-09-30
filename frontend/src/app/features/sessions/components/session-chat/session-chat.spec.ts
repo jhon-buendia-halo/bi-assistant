@@ -183,6 +183,89 @@ describe('SessionChat trust UX', () => {
     expect(el.textContent).not.toContain('Cross-check');
   });
 
+  it('renders a replay badge with the pinned date and a re-verified tooltip', async () => {
+    const el = await render({
+      ...answer,
+      consistency: {
+        kind: 'replay',
+        // Noon UTC so the local-time formatted date can't roll to a
+        // different day under any reasonable test-runner timezone.
+        pinnedAt: '2026-01-05T12:00:00.000Z',
+        verifiedAt: '2026-01-10T12:00:00.000Z',
+      },
+    });
+    const chip = el.querySelector(
+      '[title="This exact question was answered before under the same knowledge; its query was re-run just now and returned the same data."]',
+    );
+    expect(chip?.textContent?.trim()).toBe('Same answer as Jan 5 · re-verified');
+  });
+
+  it('renders a kept badge when the fresh derivation matched the pinned rows', async () => {
+    const el = await render({
+      ...answer,
+      consistency: { kind: 'kept', pinnedAt: '2026-01-05T00:00:00.000Z' },
+    });
+    const chip = Array.from(el.querySelectorAll('span')).find(
+      (span) => span.textContent?.trim() === 'Same numbers · wording kept',
+    );
+    expect(chip).toBeTruthy();
+    expect(chip?.getAttribute('title')).toContain('re-derived');
+  });
+
+  it('renders an amber updated badge listing the new lesson titles', async () => {
+    const el = await render({
+      ...answer,
+      consistency: {
+        kind: 'updated',
+        pinnedAt: '2026-01-05T00:00:00.000Z',
+        lessons: ['Fiscal year', 'Net revenue'],
+      },
+    });
+    const chip = el.querySelector(
+      '[title="Updated after learning: Fiscal year, Net revenue"]',
+    );
+    expect(chip?.textContent?.trim()).toBe('Updated after learning');
+    expect(chip?.className).toContain('text-amber-400');
+  });
+
+  it('shows no consistency badge on an answer that was never pinned', async () => {
+    const el = await render(answer);
+    expect(el.textContent).not.toContain('Same answer as');
+    expect(el.textContent).not.toContain('Same numbers');
+    expect(el.textContent).not.toContain('Updated after learning');
+  });
+
+  it('tags feedback-learned knowledge in the "Knowledge in context" list', async () => {
+    const el = await render({
+      ...answer,
+      knowledge: [
+        {
+          id: 'k1',
+          kind: 'term',
+          title: 'Fiscal year',
+          body: 'FY runs Feb–Jan.',
+          datasetId: 'Retail',
+          source: 'feedback',
+        },
+        {
+          id: 'k2',
+          kind: 'instruction',
+          title: 'Coverage',
+          body: 'Data runs 2024–2026.',
+          datasetId: 'Retail',
+          source: 'user',
+        },
+      ],
+    });
+    el.querySelector<HTMLElement>('summary')!.click();
+    fixture.detectChanges();
+    const learnedTags = Array.from(
+      el.querySelectorAll('[title="Learned from a reviewer\'s feedback note"]'),
+    );
+    expect(learnedTags.length).toBe(1);
+    expect(learnedTags[0].textContent).toContain('Learned');
+  });
+
   it('sends careful mode only while the Careful chip is on', async () => {
     const el = await render(answer);
     const api = TestBed.inject(SessionsApiService);

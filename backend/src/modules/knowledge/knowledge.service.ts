@@ -22,10 +22,19 @@ import {
   KnowledgeSnippetScope,
   KnowledgeSnippetSource,
   KnowledgeUse,
+  LessonProvenance,
 } from './entities/knowledge-snippet.entity';
 
-/** Character budget the curated-knowledge system block may take per turn. */
-const KNOWLEDGE_BLOCK_CHARS = 2_000;
+/**
+ * Character budget the curated-knowledge system block may take per turn.
+ * It was 2 000 until 2026-09-28: the genomics fixture's full seed (12
+ * snippets, ~5 100 chars) then lost its default filter, its value
+ * vocabulary and its coverage facts on every turn — the block stopped at
+ * the first snippet that did not fit — and the suite fell from 61% to
+ * 43%. 8 000 chars is small next to the model's context and next to what
+ * a dropped default filter, or a learned lesson, costs.
+ */
+const KNOWLEDGE_BLOCK_CHARS = 8_000;
 /** Schema block budget/sample-value depth handed to the bootstrap agent. */
 const BOOTSTRAP_SCHEMA_CHARS = 6_000;
 const BOOTSTRAP_SCHEMA_SAMPLE_VALUES = 5;
@@ -123,6 +132,52 @@ export class KnowledgeService {
   }
 
   /**
+   * Insert a learned lesson (`source: 'feedback'`) — reuses `create`'s
+   * validation (kind/title/body required, scope/synonyms/entities
+   * normalized); only the recorded source and provenance differ from a
+   * user-authored snippet.
+   */
+  async createLearned(
+    input: KnowledgeSnippetInput,
+    provenance: LessonProvenance,
+  ): Promise<KnowledgeSnippet> {
+    const clean = validateCreate(input);
+    const now = new Date().toISOString();
+    return this.repository.insert({
+      id: randomUUID(),
+      ...clean,
+      source: 'feedback',
+      provenance,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+
+  /**
+   * Delete every lesson learned from one feedback doc (re-learn / a cleared
+   * comment). Returns the count removed.
+   */
+  async deleteLearnedFor(feedbackId: string): Promise<number> {
+    return this.repository.deleteMany({ 'provenance.feedbackId': feedbackId });
+  }
+
+  /**
+   * Enabled `source: 'feedback'` lessons in scope of `datasetIds` (dataset-
+   * scoped plus any global), newest first — the "Learned" list in the
+   * Knowledge tab.
+   */
+  async listLearned(datasetIds: string[]): Promise<KnowledgeSnippet[]> {
+    const scope = new Set(datasetIds);
+    const all = await this.repository.list(); // already updatedAt desc
+    return all.filter(
+      (snippet) =>
+        snippet.source === 'feedback' &&
+        snippet.enabled &&
+        inScope(snippet, scope),
+    );
+  }
+
+  /**
    * The system block appended to the analysis prompt: curated knowledge
    * covering `datasetIds` (scoped) plus anything global, or `''` when
    * nothing enabled applies. Mirrors `MetricsService.definitionBlock`'s
@@ -145,17 +200,16 @@ export class KnowledgeService {
     const scope = new Set(datasetIds);
     const all = await this.repository.list(); // already updatedAt desc
     const applicable = all.filter(
-      (snippet) =>
-        snippet.enabled &&
-        (snippet.scope == null ||
-          (snippet.scope.datasetId !== undefined &&
-            scope.has(snippet.scope.datasetId))),
+      (snippet) => snippet.enabled && inScope(snippet, scope),
     );
     if (!applicable.length) return empty;
-    // Stable sort: dataset-scoped before global, `updatedAt desc` preserved
-    // within each group since `all` already carries that order.
+    // Stable sort: `default_filter` first (it can never be crowded out),
+    // then learned lessons (`source: 'feedback'`, so a lesson can never be
+    // crowded out by older user/mined snippets), then everything else;
+    // dataset-scoped before global within each tier; `updatedAt desc`
+    // preserved on ties since `all` already carries that order.
     const ordered = [...applicable].sort(
-      (a, b) => rank(a.scope) - rank(b.scope),
+      (a, b) => tier(a) - tier(b) || rank(a.scope) - rank(b.scope),
     );
     const lines = [
       'Curated dataset knowledge (user-authored — treat as authoritative over anything you infer from schema):',
@@ -164,7 +218,9 @@ export class KnowledgeService {
     let budget = KNOWLEDGE_BLOCK_CHARS;
     for (const snippet of ordered) {
       const entry = formatSnippet(snippet);
-      if (entry.length > budget) break;
+      // Skip, never stop: a lower-priority entry further down the list may
+      // still be small enough to fit even when this one was not.
+      if (entry.length > budget) continue;
       budget -= entry.length;
       lines.push(entry);
       used.push(toKnowledgeUse(snippet));
@@ -364,6 +420,25 @@ function rank(scope: KnowledgeSnippetScope | null): number {
   return scope?.datasetId ? 0 : 1;
 }
 
+/**
+ * `contextFor` priority tier: `default_filter` snippets first regardless of
+ * source, then learned lessons, then everything else.
+ */
+function tier(snippet: KnowledgeSnippet): number {
+  if (snippet.kind === 'default_filter') return 0;
+  if (snippet.source === 'feedback') return 1;
+  return 2;
+}
+
+/** True when a snippet's scope applies to one of `datasetIds` — dataset-scoped to one of them, or global. */
+function inScope(snippet: KnowledgeSnippet, scope: Set<string>): boolean {
+  return (
+    snippet.scope == null ||
+    (snippet.scope.datasetId !== undefined &&
+      scope.has(snippet.scope.datasetId))
+  );
+}
+
 function matchesQuery(
   snippet: KnowledgeSnippet,
   query: KnowledgeQuery,
@@ -388,7 +463,10 @@ function toKnowledgeUse(snippet: KnowledgeSnippet): KnowledgeUse {
     kind: snippet.kind,
     title: snippet.title,
     body: snippet.body,
-    ...(snippet.scope?.datasetId ? { datasetId: snippet.scope.datasetId } : {}),
+    source: snippet.source,
+    ...(snippet.scope?.datasetId
+      ? { datasetId: snippet.scope.datasetId }
+      : {}),
   };
 }
 

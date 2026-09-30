@@ -9,6 +9,11 @@ import {
 
 /** requestContext key carrying the session's dataset names. */
 export const DATASETS_CONTEXT_KEY = 'datasets';
+/**
+ * Rows `run_readonly_sql` returns when the model passes no `limit`. Answer
+ * pinning records it on a pin and re-runs pinned SQL with at least this limit.
+ */
+export const DEFAULT_SQL_ROW_LIMIT = 100;
 
 interface EntityAccess {
   entity: string;
@@ -212,14 +217,14 @@ export const runReadOnlySqlTool = createTool({
       .min(1)
       .max(500)
       .optional()
-      .describe('Max rows returned (default 100)'),
+      .describe(`Max rows returned (default ${DEFAULT_SQL_ROW_LIMIT})`),
     rationale: z.string().describe(RATIONALE_DESCRIPTION),
   }),
   execute: async ({ sql, datasourceId, limit }, { requestContext }) => {
     const datasets = await sessionDatasets(requestContext);
     const target = resolveDatasource(datasets, datasourceId);
     if ('error' in target) return { error: target.error };
-    const rowLimit = limit ?? 100;
+    const rowLimit = limit ?? DEFAULT_SQL_ROW_LIMIT;
     try {
       const result = await getDatasetToolServices().runReadOnlySql(
         target.id,

@@ -11,11 +11,12 @@
  *   1. Register (or reuse) a Postgres datasource pointed at the dev
  *      `docker compose` database (see `docker-compose.yml`, port 55432).
  *   2. Save one dataset per fixture schema (`world_cup`, `health_insurance`,
- *      `genomics`, `hr`), discovering the entity list from the datasource's
- *      own inventory rather than hard-coding table names.
+ *      `genomics`, `hr`, `retail`), discovering the entity list from the
+ *      datasource's own inventory rather than hard-coding table names.
  *   3. Seed the curated knowledge/metric entries that traps H9/H10 (health
  *      insurance), G9/G10 (genomics) and HR1-HR10 (hr) explicitly depend on
- *      existing.
+ *      existing, and the retail glossary — which deliberately leaves out the
+ *      two facts the learning demo teaches (see `retailKnowledge`).
  *
  * Run with `npm run fixtures:register` from `backend/`.
  *
@@ -64,6 +65,7 @@ const FIXTURE_DATASETS: FixtureDataset[] = [
   { name: 'Health Insurance', schema: 'health_insurance' },
   { name: 'Genomics', schema: 'genomics' },
   { name: 'HR', schema: 'hr' },
+  { name: 'Retail', schema: 'retail' },
 ];
 
 // ------------------------------------------------------- HR curated context
@@ -76,10 +78,10 @@ const HR_DATASET = 'HR';
  * docs/evals/synthetic-domains.md). Facts about the data and the company's
  * definitions only — never a hint that answers one eval question.
  *
- * Budget: `KnowledgeService.contextFor` gives the whole knowledge block 2,000
- * chars and stops at the first entry that does not fit, so these seven lines
- * are kept to ~1,150 chars as formatted (`- [kind] title: body; synonyms: …;
- * entities: …`). Check the total before adding an eighth.
+ * Budget: `KnowledgeService.contextFor` gives the whole knowledge block 8,000
+ * chars (default filters first, then learned lessons) and skips an entry that
+ * does not fit; these seven lines are ~1,150 chars as formatted (`- [kind]
+ * title: body; synonyms: …; entities: …`), well inside it.
  */
 function hrKnowledge(db: string): KnowledgeSnippetInput[] {
   const scope = { datasetId: HR_DATASET };
@@ -184,6 +186,63 @@ function hrMetrics(db: string): Omit<MetricInput, 'datasourceId'>[] {
       entity: `${db}.hr.salary_history`,
       expression:
         '(salary_history.annual_base_amount + COALESCE(fy_bonus.amount, 0)) * exchange_rates.rate_to_usd',
+    },
+  ];
+}
+
+// --------------------------------------------------- Retail curated context
+
+/** Saved dataset name the Retail knowledge is scoped to (`scope.datasetId`). */
+const RETAIL_DATASET = 'Retail';
+
+/**
+ * The Retail fixture's glossary: facts about the data only. It deliberately
+ * says nothing about the fiscal calendar or what "net revenue" means, and no
+ * metric is seeded — those two facts are the tribal knowledge the learning
+ * demo's reviewer notes teach (`learningScenario` on `net-revenue-fy2025` in
+ * `suites/retail.json`). Seeding either would answer the trap question before
+ * anyone taught it, which is the overfitting rule's failure in reverse.
+ */
+function retailKnowledge(db: string): KnowledgeSnippetInput[] {
+  const scope = { datasetId: RETAIL_DATASET };
+  return [
+    {
+      kind: 'default_filter',
+      scope,
+      title: 'Completed orders only',
+      body:
+        "Revenue, order counts and units cover orders with status = 'completed'; " +
+        'cancelled orders never count unless the question is about cancellations.',
+      entities: [`${db}.retail.orders`],
+    },
+    {
+      kind: 'term',
+      scope,
+      title: 'Order date',
+      body:
+        'ordered_at is the date the order was placed — the only date on an ' +
+        'order and the one every period question uses.',
+    },
+    {
+      kind: 'term',
+      scope,
+      title: 'Units',
+      body: 'order_lines.quantity; an order has one line per product.',
+      entities: [`${db}.retail.order_lines`],
+    },
+    {
+      kind: 'term',
+      scope,
+      title: 'Line discount',
+      body:
+        'order_lines.discount_amount is the money taken off that line at ' +
+        'checkout, 0 when none.',
+    },
+    {
+      kind: 'instruction',
+      scope,
+      title: 'Coverage',
+      body: 'Orders run from 2024-01-01 to 2026-03-31; every amount is in USD.',
     },
   ];
 }
@@ -422,7 +481,8 @@ async function ensureEntry(
 /**
  * Seed the curated knowledge/metrics the health-insurance, genomics and HR
  * trap catalogues (H9/H10, G9/G10, HR1-HR10 in
- * docs/evals/synthetic-domains.md) explicitly depend on. Column names are taken from that design doc: at the time this
+ * docs/evals/synthetic-domains.md) explicitly depend on, plus the Retail
+ * glossary (facts only — see `retailKnowledge`). Column names are taken from that design doc: at the time this
  * script was written, `docker/postgres/init/002_health_insurance.sql` and
  * `003_genomics.sql` did not exist yet (a parallel unit generates them), so
  * these names should be re-checked against the real init scripts once they
@@ -433,7 +493,12 @@ async function seedCuratedContext(
   metrics: MetricsService,
   datasourceId: string,
   db: string,
-  datasetReady: { healthInsurance: boolean; genomics: boolean; hr: boolean },
+  datasetReady: {
+    healthInsurance: boolean;
+    genomics: boolean;
+    hr: boolean;
+    retail: boolean;
+  },
   options: Options,
 ): Promise<KnowledgeSummary[]> {
   const [existingKnowledge, existingMetrics] = await Promise.all([
@@ -605,6 +670,21 @@ async function seedCuratedContext(
         },
       }),
     ),
+    // --- Retail (facts only; the fiscal year and net revenue are taught) ---
+    ...retailKnowledge(db).map(
+      (input): CuratedEntry => ({
+        label: `knowledge: ${input.title.toLowerCase()} (Retail)`,
+        pool: 'knowledge',
+        datasetReady: datasetReady.retail,
+        matches: (e) =>
+          e.kind === input.kind &&
+          e.title === input.title &&
+          sameScope(e.scope as { datasetId?: string }, RETAIL_DATASET),
+        create: async () => {
+          await knowledge.create(input);
+        },
+      }),
+    ),
   ];
 
   const results: KnowledgeSummary[] = [];
@@ -712,6 +792,9 @@ async function main(): Promise<number> {
         'skipped',
       hr:
         datasetSummaries.find((d) => d.name === HR_DATASET)?.status !==
+        'skipped',
+      retail:
+        datasetSummaries.find((d) => d.name === RETAIL_DATASET)?.status !==
         'skipped',
     };
 

@@ -322,6 +322,7 @@
                 [trace]="trace"
                 [sessionId]="session().id"
                 [messageAt]="message.at"
+                [learnedTitles]="learnedTitlesFor(message)"
                 (feedbackSaved)="onExpertFeedbackSaved($event)"
               />
             }
@@ -367,6 +368,17 @@
                 >
                   <lucide-angular [img]="crossCheckIcon(check)" [size]="12" />
                   {{ crossCheckLabel(check) }}
+                </span>
+              }
+              @if (message.consistency; as consistency) {
+                <!-- Answer pinning: replayed, kept or updated after learning -->
+                <span
+                  [title]="consistencyTitle(consistency)"
+                  class="mr-1 flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium"
+                  [class]="consistencyClass(consistency)"
+                >
+                  <lucide-angular [img]="consistencyIcon(consistency)" [size]="12" />
+                  {{ consistencyLabel(consistency) }}
                 </span>
               }
               <button
@@ -766,6 +778,15 @@
                 >{{ knowledgeKindLabel(item.kind) }}</span
               >
               <span class="text-zinc-300">{{ item.title }}</span>
+              @if (item.source === "feedback") {
+                <span
+                  title="Learned from a reviewer's feedback note"
+                  class="flex shrink-0 items-center gap-1 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-1.5 py-0.5 text-[10px] text-emerald-400"
+                >
+                  <lucide-angular [img]="GraduationCap" [size]="10" />
+                  <span>Learned</span>
+                </span>
+              }
               <span class="text-[11px] text-zinc-600">{{
                 item.datasetId ?? "global"
               }}</span>

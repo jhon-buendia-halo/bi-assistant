@@ -15,6 +15,7 @@ import {
   Gauge,
   GraduationCap,
   Lightbulb,
+  Loader2,
   LucideAngularModule,
   LucideIconData,
   MessageSquareText,
@@ -182,6 +183,7 @@ export class ExpertTrace {
   readonly ChevronRight = ChevronRight;
   readonly Gauge = Gauge;
   readonly GraduationCap = GraduationCap;
+  readonly Loader2 = Loader2;
   readonly NotebookPen = NotebookPen;
   readonly ThumbsDown = ThumbsDown;
   readonly ThumbsUp = ThumbsUp;
@@ -196,6 +198,13 @@ export class ExpertTrace {
   readonly sessionId = input.required<string>();
   /** `at` of the assistant message the trace belongs to — the feedback key. */
   readonly messageAt = input.required<string>();
+  /**
+   * Titles of this answer's `source: 'feedback'` knowledge — lessons learned
+   * from a reviewer's note. A basis chip whose `sourceRef` matches one of
+   * them (case-insensitive substring, either direction) gets a small
+   * "Learned from your note" chip alongside it.
+   */
+  readonly learnedTitles = input<string[]>([]);
   /** A block rating was persisted; carries the refreshed session. */
   readonly feedbackSaved = output<SessionActionResult>();
 
@@ -283,6 +292,20 @@ export class ExpertTrace {
     return sourceRef?.trim() ? `${description}: ${sourceRef.trim()}` : description;
   }
 
+  /**
+   * Whether a basis chip's `sourceRef` names a lesson learned from feedback —
+   * matched loosely (case-insensitive, either side containing the other)
+   * since a `sourceRef` and a knowledge title are not always spelled alike.
+   */
+  isLearned(sourceRef?: string): boolean {
+    const ref = sourceRef?.trim().toLowerCase();
+    if (!ref) return false;
+    return this.learnedTitles().some((title) => {
+      const t = title.trim().toLowerCase();
+      return !!t && (ref.includes(t) || t.includes(ref));
+    });
+  }
+
   isLocated(index: number): boolean {
     return !!this.annotationRanges()[index];
   }
@@ -328,13 +351,19 @@ export class ExpertTrace {
     }
   }
 
-  /** An empty note clears a saved one; an unchanged note just closes. */
+  /**
+   * An empty note clears a saved one; an unchanged note just closes. The
+   * editor stays open (button reading "Save & teach") while the comment is
+   * actually being persisted, since saving it also triggers learning.
+   */
   saveNote(kind: ReasoningBlockKind): void {
     const comment = this.noteDraft().trim();
     const current = this.feedback()[kind];
-    this.noteOpen.set(null);
-    if (comment === (current?.comment ?? '')) return;
-    this.save(kind, { comment }, this.merge(current, { comment }), comment);
+    if (comment === (current?.comment ?? '')) {
+      this.noteOpen.set(null);
+      return;
+    }
+    this.save(kind, { comment }, this.merge(current, { comment }), comment, true);
   }
 
   private merge(
@@ -357,6 +386,7 @@ export class ExpertTrace {
     patch: Pick<BlockFeedbackInput, 'vote' | 'comment'>,
     optimistic: BlockFeedback | undefined,
     draft?: string,
+    closeNoteOnSuccess = false,
   ): void {
     if (this.isPending(kind)) return;
     const previous = this.feedback()[kind];
@@ -386,6 +416,7 @@ export class ExpertTrace {
             return;
           }
           this.setPending(kind, false);
+          if (closeNoteOnSuccess) this.noteOpen.set(null);
           this.feedbackSaved.emit(result);
           this.toast.success(result.message || 'Feedback saved');
         },

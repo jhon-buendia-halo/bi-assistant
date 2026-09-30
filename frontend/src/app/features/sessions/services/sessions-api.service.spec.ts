@@ -275,6 +275,41 @@ describe('SessionsApiService streaming', () => {
     expect(requestBody(fetchSpy)).toEqual({ content: 'question', expert: true });
   });
 
+  it('sends pin:false only when asked, omitting it otherwise', async () => {
+    const fetchSpy = spyOn(globalThis, 'fetch').and.callFake(() =>
+      Promise.resolve(sseResponse({ type: 'done' })),
+    );
+
+    // Omitted pin argument — the backend's own default (replay on) applies.
+    await service.streamMessage('session-1', 'question', {});
+    expect(requestBody(fetchSpy)).toEqual({ content: 'question' });
+
+    // pin: true is never sent explicitly — it is the implicit default.
+    await service.streamMessage(
+      'session-1',
+      'question',
+      {},
+      undefined,
+      undefined,
+      false,
+      false,
+      true,
+    );
+    expect(requestBody(fetchSpy)).toEqual({ content: 'question' });
+
+    await service.streamMessage(
+      'session-1',
+      'question',
+      {},
+      undefined,
+      undefined,
+      false,
+      false,
+      false,
+    );
+    expect(requestBody(fetchSpy)).toEqual({ content: 'question', pin: false });
+  });
+
   it('reports expert-status frames and ignores unknown statuses', async () => {
     spyOn(globalThis, 'fetch').and.resolveTo(
       sseResponse(

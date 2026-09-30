@@ -18,6 +18,7 @@ jest.mock('../../mastra/tool-services', () => ({
 }));
 jest.mock('../../mastra/tools/dataset.tools', () => ({
   DATASETS_CONTEXT_KEY: 'datasets',
+  DEFAULT_SQL_ROW_LIMIT: 100,
 }));
 jest.mock('../../mastra/tools/visual.tools', () => ({
   ACTIVE_VISUAL_CONTEXT_KEY: 'active-visual',
@@ -56,6 +57,11 @@ jest.mock('../../mastra/agents/sql-verifier.agent', () => {
 jest.mock('../expert-mode/expert-mode.service', () => ({
   ExpertModeService: class {},
 }));
+// The learning service loads the feedback-learner agent (ESM-only Mastra
+// core) — stub the module; the feedback tests hand in their own double.
+jest.mock('../learning/learning.service', () => ({
+  LearningService: class {},
+}));
 jest.mock('./repositories/sessions.repository', () => ({
   SessionsRepository: class {},
 }));
@@ -75,7 +81,10 @@ import type { DatasetToolServices } from '../../mastra/tool-services';
 import { TURN_RECORDS_CONTEXT_KEY } from '../../mastra/tools/visual.tools';
 import { sourceEntities } from './visualization-document';
 import { SessionsService, StreamEvent } from './sessions.service';
-import type { SessionDoc } from './entities/session.entity';
+import type { ChatMessage, SessionDoc } from './entities/session.entity';
+import type { AnswerPinDoc } from '../answer-pins/entities/answer-pin.entity';
+import { fingerprintFor, lineageKeyFor } from '../answer-pins/pin-key';
+import { stripForPin } from '../answer-pins/answer-pins.service';
 
 describe('SessionsService streaming', () => {
   /** A service wired to one streamed turn, with everything else stubbed. */
@@ -111,6 +120,8 @@ describe('SessionsService streaming', () => {
       /** Business expert mode: what `buildTrace` resolves to (or throws). */
       expertTrace?: unknown;
       expertThrows?: boolean;
+      /** Answer pins, keyed by lineage — share one map across builds. */
+      pinStore?: Map<string, AnswerPinDoc>;
     } = {},
   ) {
     const session: SessionDoc = {
@@ -145,6 +156,8 @@ describe('SessionsService streaming', () => {
     const verifiedQueries = {
       referenceBlock: jest.fn().mockResolvedValue(undefined),
       isVerifiedSql: jest.fn().mockResolvedValue(options.verified ?? false),
+      save: jest.fn().mockResolvedValue({}),
+      removeForMessage: jest.fn().mockResolvedValue(1),
     };
     const metrics = {
       definitionBlock: jest
@@ -179,6 +192,11 @@ describe('SessionsService streaming', () => {
       buildTrace: options.expertThrows
         ? jest.fn().mockRejectedValue(new Error('explainer crashed'))
         : jest.fn().mockResolvedValue(options.expertTrace),
+    };
+    const pins = pinsDouble(options.pinStore);
+    const learning = {
+      learnFromComment: jest.fn(),
+      forget: jest.fn(),
     };
     const service = new SessionsService(
       repository as never,
@@ -224,6 +242,8 @@ describe('SessionsService streaming', () => {
       metrics as never,
       knowledge as never,
       expertMode as never,
+      pins as never,
+      learning as never,
     );
     return {
       service,
@@ -235,6 +255,7 @@ describe('SessionsService streaming', () => {
       verifier,
       datasources,
       expertMode,
+      pins,
     };
   }
 
@@ -469,6 +490,32 @@ describe('SessionsService streaming', () => {
         block.content.includes('Governed metric definitions'),
       ),
     ).toBe(false);
+  });
+
+  it('tells an expert-mode turn to answer under a stated convention instead of asking', async () => {
+    const reviewMode = (options: { context: { content: string }[] }) =>
+      options.context.some((block) =>
+        block.content.includes('Business expert mode is on for this turn'),
+      );
+    const plain = buildStreaming(answerStream([]));
+    await plain.service.streamMessage('session-1', 'FY2025 revenue?', () => {});
+    const expert = buildStreaming(answerStream([]));
+    await expert.service.streamMessage(
+      'session-1',
+      'FY2025 revenue?',
+      () => {},
+      undefined,
+      undefined,
+      false,
+      true,
+    );
+
+    const optionsOf = (agent: typeof plain.agent) =>
+      (agent.stream.mock.calls as unknown[][])[0][1] as {
+        context: { content: string }[];
+      };
+    expect(reviewMode(optionsOf(plain.agent))).toBe(false);
+    expect(reviewMode(optionsOf(expert.agent))).toBe(true);
   });
 
   it('keeps the data collected before a clarification on the card', async () => {
@@ -1121,6 +1168,719 @@ describe('SessionsService streaming', () => {
       });
     });
   });
+
+  describe('answer pinning', () => {
+    const QUESTION = 'What was net revenue in fiscal year 2025?';
+    const SQL = 'SELECT sum(amount) AS n FROM main.football.matches';
+    const SQL_BLOCK = {
+      kind: 'sql' as const,
+      sql: SQL,
+      annotations: [],
+      confidence: { score: 0.6, band: 'medium' as const, signals: [] },
+    };
+    const TRACE = {
+      id: 'trace-1',
+      version: 1 as const,
+      blocks: [SQL_BLOCK],
+      overall: { score: 0.6, band: 'medium' as const, signals: [] },
+      generatedAt: '2026-09-30T00:00:00.000Z',
+    };
+    const USER_TERM = {
+      id: 'k-user',
+      kind: 'term',
+      title: 'Match',
+      body: 'A played game.',
+      source: 'user' as const,
+    };
+    const lesson = (id: string, title: string) => ({
+      id,
+      kind: 'term',
+      title,
+      body: `${title} is defined by the reviewer.`,
+      datasetId: 'football',
+      source: 'feedback' as const,
+    });
+
+    /** A pinning-ready harness whose first turn answers with one SQL run. */
+    const pinningTurn = (
+      options: Parameters<typeof buildStreaming>[1] = {},
+      first: AsyncGenerator<unknown> = answerStream([
+        { sql: SQL, rows: [{ n: 64 }] },
+      ]),
+    ) =>
+      buildStreaming(first, { tables: ['main.football.matches'], ...options });
+
+    const ask = (
+      service: SessionsService,
+      events: StreamEvent[] = [],
+      flags: {
+        careful?: boolean;
+        expert?: boolean;
+        pin?: boolean;
+        activeVisualId?: string;
+      } = {},
+    ) =>
+      service.streamMessage(
+        'session-1',
+        QUESTION,
+        (event) => events.push(event),
+        undefined,
+        flags.activeVisualId,
+        flags.careful ?? false,
+        flags.expert ?? false,
+        flags.pin ?? true,
+      );
+
+    /** The same question from a brand-new session — the same lineage. */
+    const freshSession = (session: SessionDoc) => {
+      session.messages = [];
+    };
+
+    /** The model stream the next derived turn reads. */
+    const nextStream = (
+      agent: { stream: jest.Mock },
+      fullStream: AsyncGenerator<unknown>,
+    ) =>
+      agent.stream.mockResolvedValueOnce({
+        fullStream,
+        text: Promise.resolve(''),
+      });
+
+    const lineage = (mode: 'plain' | 'careful' | 'expert' = 'plain') =>
+      lineageKeyFor({
+        question: QUESTION,
+        datasets: ['football'],
+        chain: [],
+        mode,
+      });
+
+    it('pins an eligible answer under its lineage', async () => {
+      const { service, session, pins } = pinningTurn({
+        knowledgeUsed: [USER_TERM],
+        totalUsage: Promise.resolve({ inputTokens: 10, outputTokens: 5 }),
+      });
+
+      await ask(service);
+
+      const message = session.messages.at(-1)!;
+      expect(message.consistency).toBeUndefined();
+      expect(pins.save).toHaveBeenCalledTimes(1);
+      const doc = (pins.save.mock.calls as unknown[][])[0][0] as AnswerPinDoc;
+      expect(doc).toEqual(
+        expect.objectContaining({
+          lineageKey: lineage(),
+          question: QUESTION,
+          normalizedQuestion: 'what was net revenue in fiscal year 2025',
+          datasets: ['football'],
+          chain: [],
+          mode: 'plain',
+          datasourceId: 'ds-1',
+          sql: SQL,
+          columns: ['n'],
+          rows: [{ n: 64 }],
+          rowCount: 1,
+          rowLimit: 100,
+          knowledgeIds: ['k-user'],
+          sourceSessionId: 'session-1',
+          sourceMessageAt: message.at,
+          replays: 0,
+        }),
+      );
+      expect(doc.fingerprint).toMatch(/^[0-9a-f]{64}$/);
+      expect(doc.fingerprintParts.v).toBe(1);
+      // The message minus the per-turn fields a replay must not carry over.
+      expect(doc.message).toEqual(
+        expect.objectContaining({
+          role: 'assistant',
+          content: 'Here is the answer.',
+        }),
+      );
+      expect(doc.message).not.toHaveProperty('at');
+      expect(doc.message).not.toHaveProperty('usage');
+    });
+
+    it('replays a pinned answer whose SQL returns the same rows, with no model call', async () => {
+      const { service, session, agent, pins, datasources } = pinningTurn({
+        totalUsage: Promise.resolve({ inputTokens: 10, outputTokens: 5 }),
+      });
+      await ask(service);
+      const pinned = session.messages.at(-1)!;
+      freshSession(session);
+      // Same fact, connector-typed differently.
+      datasources.runReadOnlySql.mockResolvedValueOnce({
+        columns: ['n'],
+        rows: [{ n: '64' }],
+      });
+      const events: StreamEvent[] = [];
+
+      await ask(service, events);
+
+      expect(agent.stream).toHaveBeenCalledTimes(1);
+      expect(agent.generate).not.toHaveBeenCalled();
+      // max(rowCount + 1, rowLimit): growth past the pinned rows shows up.
+      expect(datasources.runReadOnlySql).toHaveBeenCalledWith('ds-1', SQL, 100);
+      expect(events.map((e) => e.type)).toEqual(['text', 'done']);
+      expect(events[0].content).toBe(pinned.content);
+      expect(session.messages).toHaveLength(2);
+      const replayed = session.messages.at(-1)!;
+      expect(replayed.content).toBe(pinned.content);
+      expect(replayed.data).toEqual(pinned.data);
+      expect(replayed.consistency).toEqual({
+        kind: 'replay',
+        pinnedAt: pinned.at,
+        sourceSessionId: 'session-1',
+        verifiedAt: replayed.at,
+      });
+      expect(replayed.usage).toBeUndefined();
+      expect(pins.touchReplay).toHaveBeenCalledWith(lineage(), replayed.at);
+      expect(pins.save).toHaveBeenCalledTimes(1);
+      expect(events.at(-1)).toEqual({ type: 'done', session });
+    });
+
+    it('replays an expert answer with its trace and none of the expert passes', async () => {
+      const { service, session, agent, expertMode, verifier } = pinningTurn({
+        expertTrace: TRACE,
+        crossCheck: { sql: SQL, rows: [{ n: 64 }] },
+      });
+      await ask(service, [], { expert: true });
+      freshSession(session);
+      const events: StreamEvent[] = [];
+
+      await ask(service, events, { expert: true });
+
+      expect(agent.stream).toHaveBeenCalledTimes(1);
+      expect(expertMode.buildTrace).toHaveBeenCalledTimes(1);
+      expect(verifier.generate).toHaveBeenCalledTimes(1);
+      expect(events.some((e) => e.type === 'expert-status')).toBe(false);
+      const replayed = session.messages.at(-1)!;
+      expect(replayed.consistency?.kind).toBe('replay');
+      expect(replayed.expertTrace).toEqual(TRACE);
+      expect(replayed.crossCheck?.status).toBe('agree');
+    });
+
+    it('never replays an expert pin for a plain ask of the same question', async () => {
+      const { service, session, agent } = pinningTurn({
+        expertTrace: TRACE,
+        crossCheck: { sql: SQL, rows: [{ n: 64 }] },
+      });
+      await ask(service, [], { expert: true });
+      freshSession(session);
+      nextStream(agent, answerStream([{ sql: SQL, rows: [{ n: 64 }] }]));
+
+      await ask(service);
+
+      expect(agent.stream).toHaveBeenCalledTimes(2);
+      expect(session.messages.at(-1)?.consistency).toBeUndefined();
+    });
+
+    it('derives afresh and re-pins when the pinned SQL returns different rows', async () => {
+      const { service, session, agent, pins, datasources } = pinningTurn();
+      await ask(service);
+      const first = session.messages.at(-1)!;
+      freshSession(session);
+      datasources.runReadOnlySql.mockResolvedValueOnce({
+        columns: ['n'],
+        rows: [{ n: 65 }],
+      });
+      nextStream(
+        agent,
+        answerStream([{ sql: SQL, rows: [{ n: 65 }] }], 'Revenue was 65.'),
+      );
+
+      await ask(service);
+
+      expect(agent.stream).toHaveBeenCalledTimes(2);
+      const message = session.messages.at(-1)!;
+      expect(message.content).toBe('Revenue was 65.');
+      expect(message.consistency).toEqual({
+        kind: 'updated',
+        pinnedAt: first.at,
+        sourceSessionId: 'session-1',
+      });
+      expect(pins.save).toHaveBeenCalledTimes(2);
+      const pin = pins.store.get(lineage())!;
+      expect(pin.rows).toEqual([{ n: 65 }]);
+      expect(pin.message.content).toBe('Revenue was 65.');
+      expect(pin.sourceMessageAt).toBe(message.at);
+    });
+
+    it('keeps the pinned wording when the context moved but the rows did not', async () => {
+      const { service, session, agent, pins, knowledge, datasources } =
+        pinningTurn();
+      await ask(service);
+      const first = session.messages.at(-1)!;
+      const before = pins.store.get(lineage())!.fingerprint;
+      const learned = lesson('lesson-1', 'Fiscal year');
+      knowledge.contextFor.mockResolvedValue({
+        block: 'Curated dataset knowledge:\n- Fiscal year',
+        used: [learned],
+      });
+      freshSession(session);
+      const rewritten =
+        'SELECT sum(amount) AS total FROM main.football.matches';
+      nextStream(
+        agent,
+        answerStream([{ sql: rewritten, rows: [{ total: 64 }] }], 'It was 64.'),
+      );
+
+      await ask(service);
+
+      // The fingerprint moved, so the pinned SQL is not even re-run.
+      expect(datasources.runReadOnlySql).not.toHaveBeenCalled();
+      expect(agent.stream).toHaveBeenCalledTimes(2);
+      const message = session.messages.at(-1)!;
+      expect(message.content).toBe(first.content);
+      expect(message.consistency).toEqual({
+        kind: 'kept',
+        pinnedAt: first.at,
+        sourceSessionId: 'session-1',
+      });
+      // Everything but the wording is this turn's fresh derivation.
+      expect(message.knowledge).toEqual([learned]);
+      expect(message.data?.[0]?.input).toBe(rewritten);
+      const pin = pins.store.get(lineage())!;
+      expect(pin.fingerprint).not.toBe(before);
+      expect(pin.sql).toBe(rewritten);
+      expect(pin.message.content).toBe(first.content);
+      expect(pin.knowledgeIds).toEqual(['lesson-1']);
+    });
+
+    it('marks the answer updated, naming only the lessons new since the pin', async () => {
+      const older = lesson('lesson-0', 'Order date');
+      const { service, session, agent, knowledge } = pinningTurn({
+        knowledgeUsed: [USER_TERM, older],
+      });
+      await ask(service);
+      const first = session.messages.at(-1)!;
+      knowledge.contextFor.mockResolvedValue({
+        block: 'Curated dataset knowledge: …',
+        used: [
+          USER_TERM,
+          older,
+          lesson('lesson-1', 'Fiscal year'),
+          lesson('lesson-2', 'Net revenue'),
+        ],
+      });
+      freshSession(session);
+      nextStream(
+        agent,
+        answerStream([{ sql: SQL, rows: [{ n: 70 }] }], 'Net revenue was 70.'),
+      );
+
+      await ask(service);
+
+      const message = session.messages.at(-1)!;
+      expect(message.content).toBe('Net revenue was 70.');
+      expect(message.consistency).toEqual({
+        kind: 'updated',
+        pinnedAt: first.at,
+        sourceSessionId: 'session-1',
+        lessons: ['Fiscal year', 'Net revenue'],
+      });
+    });
+
+    describe('never pins an ineligible turn', () => {
+      it.each([
+        ['a clarification', () => clarificationStream()],
+        [
+          'a truncated result',
+          () =>
+            answerStream([{ sql: SQL, rows: [{ n: 64 }], truncated: true }]),
+        ],
+        [
+          'a result-guard warning',
+          () =>
+            answerStream([
+              { sql: SQL, rows: [{ n: 64 }], warnings: ['join fan-out'] },
+            ]),
+        ],
+        ['a failed query', () => answerStream([{ sql: SQL, error: 'boom' }])],
+        ['an empty result', () => answerStream([{ sql: SQL, rows: [] }])],
+        ['no SQL at all', () => answerStream([])],
+        ['a visual tool turn', () => visualStream(SQL)],
+      ])('%s', async (_label, stream) => {
+        const { service, pins } = pinningTurn({}, stream());
+
+        await ask(service);
+
+        expect(pins.save).not.toHaveBeenCalled();
+      });
+
+      it('an expert answer whose trace could not be built', async () => {
+        const { service, pins } = pinningTurn({ expertTrace: undefined });
+
+        await ask(service, [], { expert: true });
+
+        expect(pins.save).not.toHaveBeenCalled();
+      });
+
+      it.each([
+        ['pin: false', { pin: false }],
+        ['an open visual', { activeVisualId: 'visual-1' }],
+      ])('%s — no lookup either', async (_label, flags) => {
+        const { service, pins } = pinningTurn();
+
+        await ask(service, [], flags);
+
+        expect(pins.lookup).not.toHaveBeenCalled();
+        expect(pins.save).not.toHaveBeenCalled();
+      });
+
+      it('the answer to a pending clarification — no lookup either', async () => {
+        const { service, session, pins } = pinningTurn();
+        session.messages = [
+          { role: 'user', content: 'Revenue?', at: '2026-09-30T09:00:00.000Z' },
+          {
+            role: 'assistant',
+            content: 'Which year?',
+            at: '2026-09-30T09:00:01.000Z',
+            clarification: { question: 'Which year?', options: [] },
+          },
+        ];
+
+        await ask(service);
+
+        expect(pins.lookup).not.toHaveBeenCalled();
+        expect(pins.save).not.toHaveBeenCalled();
+      });
+    });
+
+    it('answers normally when the pin lookup fails', async () => {
+      const { service, session, agent, pins } = pinningTurn();
+      pins.lookup.mockRejectedValueOnce(new Error('database is locked'));
+      const events: StreamEvent[] = [];
+
+      await ask(service, events);
+
+      expect(agent.stream).toHaveBeenCalledTimes(1);
+      expect(session.messages.at(-1)?.content).toBe('Here is the answer.');
+      expect(session.messages.at(-1)?.consistency).toBeUndefined();
+      expect(pins.save).not.toHaveBeenCalled();
+      expect(events.at(-1)?.type).toBe('done');
+    });
+
+    it('derives afresh when re-running the pinned SQL fails', async () => {
+      const { service, session, agent, datasources } = pinningTurn();
+      await ask(service);
+      freshSession(session);
+      datasources.runReadOnlySql.mockRejectedValueOnce(
+        new Error('connection refused'),
+      );
+      nextStream(agent, answerStream([{ sql: SQL, rows: [{ n: 64 }] }]));
+
+      await ask(service);
+
+      expect(agent.stream).toHaveBeenCalledTimes(2);
+      expect(session.messages.at(-1)?.consistency?.kind).toBe('kept');
+    });
+
+    it('never fails a turn because its pin could not be saved', async () => {
+      const { service, session, pins } = pinningTurn();
+      pins.save.mockRejectedValueOnce(new Error('disk full'));
+      const events: StreamEvent[] = [];
+
+      await ask(service, events);
+
+      expect(session.messages.at(-1)?.content).toBe('Here is the answer.');
+      expect(events.at(-1)?.type).toBe('done');
+    });
+
+    describe('feedback', () => {
+      it('approves the pin on 👍 — re-keyed, verified, rescored — and the next ask replays it', async () => {
+        const { service, session, agent, pins, verifiedQueries } = pinningTurn({
+          expertTrace: TRACE,
+          crossCheck: { sql: SQL, rows: [{ n: 64 }] },
+        });
+        await ask(service, [], { expert: true });
+        const answer = session.messages.at(-1)!;
+        const before = pins.store.get(lineage('expert'))!.fingerprint;
+        const beforeParts = pins.store.get(lineage('expert'))!.fingerprintParts;
+        // The 👍 adds this pair to the verified library, so the verified block
+        // this question gets from now on changes.
+        verifiedQueries.referenceBlock.mockResolvedValue(
+          `Verified reference queries:\n- ${QUESTION} → ${SQL}`,
+        );
+
+        await service.recordFeedback('session-1', answer.at, 'up');
+
+        expect(verifiedQueries.save).toHaveBeenCalledTimes(1);
+        expect(pins.approve).toHaveBeenCalledTimes(1);
+        const [key, patch] = (pins.approve.mock.calls as unknown[][])[0] as [
+          string,
+          {
+            fingerprint: string;
+            fingerprintParts: AnswerPinDoc['fingerprintParts'];
+            message: ChatMessage;
+          },
+        ];
+        expect(key).toBe(lineage('expert'));
+        expect(patch.fingerprint).not.toBe(before);
+        // Only the verified part moved, and the stored parts hash to the key.
+        expect(patch.fingerprintParts.verified).not.toBe(beforeParts.verified);
+        expect(patch.fingerprintParts.knowledge).toBe(beforeParts.knowledge);
+        expect(fingerprintFor(patch.fingerprintParts)).toBe(patch.fingerprint);
+        expect(patch.message.verified).toBe(true);
+        expect(patch.message.expertTrace?.overall.score).toBeGreaterThanOrEqual(
+          0.85,
+        );
+        expect(
+          patch.message.expertTrace?.overall.signals.map((s) => s.id),
+        ).toContain('verified_match');
+        const rated = session.messages.at(-1)!;
+        expect(rated.verified).toBe(true);
+        expect(rated.feedback).toBe('up');
+        expect(rated.expertTrace?.overall.band).toBe('high');
+
+        // The recomputed key is exactly the one the next ask computes.
+        freshSession(session);
+        await ask(service, [], { expert: true });
+
+        expect(agent.stream).toHaveBeenCalledTimes(1);
+        const replayed = session.messages.at(-1)!;
+        expect(replayed.consistency?.kind).toBe('replay');
+        expect(replayed.verified).toBe(true);
+        expect(replayed.expertTrace?.overall.band).toBe('high');
+      });
+
+      it('recomputes the same fingerprint the turn keyed when nothing moved', async () => {
+        const { service, session, pins } = pinningTurn({
+          knowledgeUsed: [USER_TERM],
+          metricsBlock: 'Governed metric definitions (curated — …):\n- Revenue',
+        });
+        await ask(service);
+        const pinned = pins.store.get(lineage())!;
+
+        await service.recordFeedback(
+          'session-1',
+          session.messages.at(-1)!.at,
+          'up',
+        );
+
+        const patch = (pins.approve.mock.calls as unknown[][])[0][1] as {
+          fingerprint: string;
+        };
+        expect(patch.fingerprint).toBe(pinned.fingerprint);
+      });
+
+      it('does not let a 👍 on an older answer vouch for a newer pin', async () => {
+        const { service, session, pins } = pinningTurn();
+        await ask(service);
+        pins.store.get(lineage())!.message.content = 'A newer answer.';
+
+        await service.recordFeedback(
+          'session-1',
+          session.messages.at(-1)!.at,
+          'up',
+        );
+
+        expect(pins.approve).not.toHaveBeenCalled();
+      });
+
+      it('marks the pin rejected — not deleted — and withdraws the verified pair on 👎', async () => {
+        const { service, session, pins, verifiedQueries } = pinningTurn();
+        await ask(service);
+        const answer = session.messages.at(-1)!;
+
+        await service.recordFeedback('session-1', answer.at, 'down');
+
+        expect(pins.reject).toHaveBeenCalledWith(
+          lineage(),
+          expect.any(String),
+          undefined,
+        );
+        const pin = pins.store.get(lineage())!;
+        expect(pin.rejectedAt).toEqual(expect.any(String));
+        expect(pin.sql).toBe(SQL);
+        expect(verifiedQueries.removeForMessage).toHaveBeenCalledWith(
+          'session-1',
+          answer.at,
+        );
+        expect(session.messages.at(-1)?.verified).toBeUndefined();
+      });
+
+      it('lifts a rejection on a later 👍, storing the recomputed fingerprint parts', async () => {
+        const { service, session, pins } = pinningTurn();
+        await ask(service);
+        const answer = session.messages.at(-1)!;
+        const saved = pins.store.get(lineage())!;
+        await service.recordFeedback('session-1', answer.at, 'down');
+
+        await service.recordFeedback('session-1', answer.at, 'up');
+
+        const patch = (pins.approve.mock.calls as unknown[][])[0][1] as {
+          fingerprintParts: AnswerPinDoc['fingerprintParts'];
+        };
+        expect(patch.fingerprintParts).toEqual(saved.fingerprintParts);
+        const pin = pins.store.get(lineage())!;
+        expect(pin).not.toHaveProperty('rejectedAt');
+        expect(pin.message.verified).toBe(true);
+      });
+    });
+
+    describe('a rejected pin', () => {
+      /** One answered turn whose pin a reviewer then rejected. */
+      async function rejectedTurn(
+        options: Parameters<typeof buildStreaming>[1] = {},
+      ) {
+        const built = pinningTurn(options);
+        await ask(built.service);
+        const rejected = built.session.messages.at(-1)!;
+        await built.service.recordFeedback('session-1', rejected.at, 'down');
+        freshSession(built.session);
+        return { ...built, rejected };
+      }
+
+      it('is never replayed, even under the same fingerprint with identical rows', async () => {
+        const { service, agent, pins, datasources } = await rejectedTurn();
+        // Were the SQL re-run, it would match the pin exactly.
+        datasources.runReadOnlySql.mockResolvedValue({
+          columns: ['n'],
+          rows: [{ n: 64 }],
+        });
+        nextStream(agent, answerStream([{ sql: SQL, rows: [{ n: 70 }] }]));
+        const events: StreamEvent[] = [];
+
+        await ask(service, events);
+
+        // Not even re-run: a rejected pin is never a replay candidate.
+        expect(datasources.runReadOnlySql).not.toHaveBeenCalled();
+        expect(agent.stream).toHaveBeenCalledTimes(2);
+        expect(pins.touchReplay).not.toHaveBeenCalled();
+        expect(events.at(-1)?.type).toBe('done');
+      });
+
+      it('an answer with different rows is updated, naming the lessons learned since', async () => {
+        const { service, session, agent, pins, knowledge, rejected } =
+          await rejectedTurn({ knowledgeUsed: [USER_TERM] });
+        knowledge.contextFor.mockResolvedValue({
+          block: 'Curated dataset knowledge: …',
+          used: [USER_TERM, lesson('lesson-1', 'Fiscal year')],
+        });
+        nextStream(
+          agent,
+          answerStream(
+            [{ sql: SQL, rows: [{ n: 70 }] }],
+            'Net revenue was 70.',
+          ),
+        );
+
+        await ask(service);
+
+        const message = session.messages.at(-1)!;
+        expect(message.content).toBe('Net revenue was 70.');
+        expect(message.consistency).toEqual({
+          kind: 'updated',
+          pinnedAt: rejected.at,
+          sourceSessionId: 'session-1',
+          lessons: ['Fiscal year'],
+        });
+        // The fresh derivation replaces the rejected pin, un-rejected.
+        const pin = pins.store.get(lineage())!;
+        expect(pin).not.toHaveProperty('rejectedAt');
+        expect(pin.rows).toEqual([{ n: 70 }]);
+        expect(pin.message.content).toBe('Net revenue was 70.');
+      });
+
+      it('an answer reproducing the rejected rows claims no continuity and keeps its own wording', async () => {
+        const { service, session, agent, pins } = await rejectedTurn();
+        nextStream(
+          agent,
+          answerStream([{ sql: SQL, rows: [{ n: 64 }] }], 'It was 64 again.'),
+        );
+
+        await ask(service);
+
+        const message = session.messages.at(-1)!;
+        expect(message.content).toBe('It was 64 again.');
+        expect(message).not.toHaveProperty('consistency');
+        const pin = pins.store.get(lineage())!;
+        expect(pin).not.toHaveProperty('rejectedAt');
+        expect(pin.message.content).toBe('It was 64 again.');
+      });
+
+      it('replays normally again once its replacement is pinned', async () => {
+        const { service, session, agent, datasources } = await rejectedTurn();
+        nextStream(agent, answerStream([{ sql: SQL, rows: [{ n: 64 }] }]));
+        await ask(service);
+        freshSession(session);
+        datasources.runReadOnlySql.mockResolvedValueOnce({
+          columns: ['n'],
+          rows: [{ n: 64 }],
+        });
+
+        await ask(service);
+
+        expect(agent.stream).toHaveBeenCalledTimes(2);
+        expect(session.messages.at(-1)?.consistency?.kind).toBe('replay');
+      });
+    });
+  });
+
+  describe('memory catch-up after replays', () => {
+    const at = (n: number) => `2026-09-30T10:00:0${n}.000Z`;
+    const replay = { kind: 'replay' as const, pinnedAt: at(0) };
+
+    it('prepends the replayed exchanges, stopping at the last real answer', async () => {
+      const { service, session, agent } = buildStreaming(answerStream([]));
+      session.messages = [
+        { role: 'user', content: 'Q0', at: at(0) },
+        { role: 'assistant', content: 'A0', at: at(1) },
+        { role: 'user', content: 'Q1', at: at(2) },
+        { role: 'assistant', content: 'A1', at: at(3), consistency: replay },
+        { role: 'user', content: 'Q2', at: at(4) },
+        { role: 'assistant', content: 'A2', at: at(5), consistency: replay },
+      ];
+
+      await service.streamMessage('session-1', 'Q3', () => {});
+
+      expect((agent.stream.mock.calls as unknown[][])[0][0]).toEqual([
+        { role: 'user', content: 'Q1' },
+        { role: 'assistant', content: 'A1' },
+        { role: 'user', content: 'Q2' },
+        { role: 'assistant', content: 'A2' },
+        { role: 'user', content: 'Q3' },
+      ]);
+    });
+
+    it('sends just the question after a real derivation, kept or updated included', async () => {
+      const { service, session, agent } = buildStreaming(answerStream([]));
+      session.messages = [
+        { role: 'user', content: 'Q1', at: at(0) },
+        { role: 'assistant', content: 'A1', at: at(1), consistency: replay },
+        { role: 'user', content: 'Q2', at: at(2) },
+        {
+          role: 'assistant',
+          content: 'A2',
+          at: at(3),
+          consistency: { kind: 'kept', pinnedAt: at(0) },
+        },
+      ];
+
+      await service.streamMessage('session-1', 'Q3', () => {});
+
+      expect((agent.stream.mock.calls as unknown[][])[0][0]).toBe('Q3');
+    });
+
+    it('keeps the clarification catch-up exactly as before', async () => {
+      const { service, session, agent } = buildStreaming(answerStream([]));
+      session.messages = [
+        { role: 'user', content: 'Revenue?', at: at(0) },
+        {
+          role: 'assistant',
+          content: 'Which year?',
+          at: at(1),
+          clarification: { question: 'Which year?', options: [] },
+        },
+      ];
+
+      await service.streamMessage('session-1', '2025', () => {});
+
+      expect((agent.stream.mock.calls as unknown[][])[0][0]).toEqual([
+        { role: 'assistant', content: 'Which year?' },
+        { role: 'user', content: '2025' },
+      ]);
+    });
+  });
 });
 
 describe('SessionsService SQL self-correction', () => {
@@ -1153,6 +1913,8 @@ describe('SessionsService SQL self-correction', () => {
       } as never,
       { getByNames: jest.fn().mockResolvedValue([dataset]) } as never,
       { runReadOnlySql: overrides.runs } as never,
+      {} as never,
+      {} as never,
       {} as never,
       {} as never,
       {} as never,
@@ -1379,6 +2141,8 @@ describe('SessionsService visual tool bridge (turn records)', () => {
       {} as never,
       {} as never,
       {} as never,
+      {} as never,
+      {} as never,
     );
     await service.onModuleInit();
     const calls = (setDatasetToolServices as jest.Mock).mock
@@ -1463,6 +2227,7 @@ describe('SessionsService answer feedback', () => {
       save: jest.fn().mockResolvedValue({}),
       removeForMessage: jest.fn().mockResolvedValue(1),
     };
+    const pins = pinsDouble();
     const service = new SessionsService(
       repository as never,
       {} as never,
@@ -1480,8 +2245,10 @@ describe('SessionsService answer feedback', () => {
       {} as never,
       {} as never,
       {} as never,
+      pins as never,
+      {} as never,
     );
-    return { service, verifiedQueries };
+    return { service, verifiedQueries, pins };
   }
 
   const answered = (): SessionDoc => ({
@@ -1572,6 +2339,30 @@ describe('SessionsService answer feedback', () => {
     expect(session.messages.at(-1)?.feedback).toBe('down');
   });
 
+  it('rejects the pin of the rated answer’s lineage on thumbs-down', async () => {
+    const session = answered();
+    const { service, pins } = build(session);
+
+    await service.recordFeedback(
+      'session-1',
+      '2024-01-01T00:00:03.000Z',
+      'down',
+    );
+
+    // The question it answered, every user message before it, plain mode —
+    // the key the chat turn computed when it pinned this answer.
+    expect(pins.reject).toHaveBeenCalledWith(
+      lineageKeyFor({
+        question: 'How many claims were denied last year?',
+        datasets: ['claims'],
+        chain: ['ignore me'],
+        mode: 'plain',
+      }),
+      expect.any(String),
+      undefined,
+    );
+  });
+
   it('records the rating but saves nothing when the answer ran no SQL', async () => {
     const session = answered();
     delete session.messages[3].data;
@@ -1593,6 +2384,17 @@ describe('SessionsService reasoning-block feedback', () => {
     confidence: { score: 0.9, band: 'high' as const, signals: [] },
   };
 
+  const FINAL_SQL = 'SELECT avg(salary) AS avg_salary FROM main.hr.employees';
+  const LESSONS = [
+    {
+      id: 'lesson-1',
+      kind: 'term' as const,
+      title: 'Fiscal year',
+      body: 'Runs 1 February to 31 January.',
+      method: 'agent' as const,
+    },
+  ];
+
   function build(withTrace = true) {
     const session: SessionDoc = {
       id: 'session-1',
@@ -1609,6 +2411,17 @@ describe('SessionsService reasoning-block feedback', () => {
           role: 'assistant',
           content: '$132,400.',
           at: AT,
+          verified: true,
+          entities: ['main.hr.employees'],
+          data: [
+            {
+              tool: 'run_readonly_sql',
+              input: FINAL_SQL,
+              columns: ['avg_salary'],
+              rows: [{ avg_salary: 132400 }],
+              rowCount: 1,
+            },
+          ],
           ...(withTrace
             ? {
                 expertTrace: {
@@ -1656,19 +2469,63 @@ describe('SessionsService reasoning-block feedback', () => {
           },
         ),
     };
+    const entities = [
+      {
+        key: 'main.hr.employees',
+        columns: [{ name: 'salary', type: 'double', nullable: false }],
+      },
+    ];
+    const verifiedQueries = {
+      save: jest.fn().mockResolvedValue({}),
+      removeForMessage: jest.fn().mockResolvedValue(1),
+      referenceBlock: jest.fn().mockResolvedValue(undefined),
+    };
+    const knowledge = {
+      list: jest.fn().mockResolvedValue([{ title: 'Tech department' }]),
+      contextFor: jest.fn().mockResolvedValue({ block: '', used: [] }),
+    };
+    const learning = {
+      learnFromComment: jest
+        .fn()
+        .mockResolvedValue({ lessons: LESSONS, superseded: 0 }),
+      forget: jest.fn().mockResolvedValue(1),
+    };
+    const pins = pinsDouble();
     const service = new SessionsService(
       repository as never,
       {} as never,
+      {
+        getByNames: jest.fn().mockResolvedValue([
+          {
+            name: 'hr',
+            datasourceId: 'ds-1',
+            tables: ['main.hr.employees'],
+            entities,
+          },
+        ]),
+      } as never,
       {} as never,
+      {
+        getView: jest.fn().mockResolvedValue({ reasoningEffort: 'medium' }),
+      } as never,
       {} as never,
-      {} as never,
-      {} as never,
-      {} as never,
-      {} as never,
-      {} as never,
+      verifiedQueries as never,
+      { definitionBlock: jest.fn().mockResolvedValue(undefined) } as never,
+      knowledge as never,
       expertMode as never,
+      pins as never,
+      learning as never,
     );
-    return { service, session, expertMode };
+    return {
+      service,
+      session,
+      expertMode,
+      learning,
+      pins,
+      verifiedQueries,
+      knowledge,
+      entities,
+    };
   }
 
   it('stores the rating with the question and block, and mirrors it onto the trace', async () => {
@@ -1690,7 +2547,7 @@ describe('SessionsService reasoning-block feedback', () => {
       },
       { vote: 'down', comment: 'Should use the 31 December rate' },
     );
-    expect(updated.messages[1].expertTrace?.feedback).toEqual({
+    expect(updated.session.messages[1].expertTrace?.feedback).toEqual({
       sql: {
         vote: 'down',
         comment: 'Should use the 31 December rate',
@@ -1716,7 +2573,7 @@ describe('SessionsService reasoning-block feedback', () => {
     expect((expertMode.saveFeedback.mock.calls as unknown[][])[1][2]).toEqual({
       comment: 'Good',
     });
-    expect(commented.messages[1].expertTrace?.feedback?.sql).toEqual(
+    expect(commented.session.messages[1].expertTrace?.feedback?.sql).toEqual(
       expect.objectContaining({ vote: 'up', comment: 'Good' }),
     );
 
@@ -1730,7 +2587,179 @@ describe('SessionsService reasoning-block feedback', () => {
       block: 'sql',
       comment: null,
     });
-    expect(cleared.messages[1].expertTrace?.feedback).toEqual({});
+    expect(cleared.session.messages[1].expertTrace?.feedback).toEqual({});
+  });
+
+  describe('learning and pinning', () => {
+    const lineage = lineageKeyFor({
+      question: 'Average tech salary in 2025?',
+      datasets: ['hr'],
+      chain: [],
+      mode: 'expert',
+    });
+
+    it('learns from a new comment once and returns the lessons', async () => {
+      const { service, learning, entities } = build();
+
+      const result = await service.recordBlockFeedback('session-1', {
+        messageAt: AT,
+        block: 'sql',
+        comment: 'Tech means department = Engineering',
+      });
+
+      expect(learning.learnFromComment).toHaveBeenCalledTimes(1);
+      expect(learning.learnFromComment).toHaveBeenCalledWith({
+        sessionId: 'session-1',
+        messageAt: AT,
+        feedbackId: 'f-1',
+        datasets: ['hr'],
+        question: 'Average tech salary in 2025?',
+        answer: '$132,400.',
+        block: 'sql',
+        comment: 'Tech means department = Engineering',
+        blockSnapshot: SQL_BLOCK,
+        finalSql: FINAL_SQL,
+        entities,
+        existingTitles: ['Tech department'],
+      });
+      expect(result.lessons).toEqual(LESSONS);
+      expect(learning.forget).not.toHaveBeenCalled();
+    });
+
+    it('does not re-learn when the comment did not change', async () => {
+      const { service, learning } = build();
+      await service.recordBlockFeedback('session-1', {
+        messageAt: AT,
+        block: 'sql',
+        comment: 'Tech means department = Engineering',
+      });
+
+      const again = await service.recordBlockFeedback('session-1', {
+        messageAt: AT,
+        block: 'sql',
+        comment: 'Tech means department = Engineering',
+      });
+      const voteOnly = await service.recordBlockFeedback('session-1', {
+        messageAt: AT,
+        block: 'sql',
+        vote: 'down',
+      });
+
+      expect(learning.learnFromComment).toHaveBeenCalledTimes(1);
+      expect(again.lessons).toBeUndefined();
+      expect(voteOnly.lessons).toBeUndefined();
+    });
+
+    it('re-learns an edited comment and forgets a cleared one', async () => {
+      const { service, learning } = build();
+      await service.recordBlockFeedback('session-1', {
+        messageAt: AT,
+        block: 'sql',
+        comment: 'first note',
+      });
+      await service.recordBlockFeedback('session-1', {
+        messageAt: AT,
+        block: 'sql',
+        comment: 'edited note',
+      });
+      expect(learning.learnFromComment).toHaveBeenCalledTimes(2);
+
+      const cleared = await service.recordBlockFeedback('session-1', {
+        messageAt: AT,
+        block: 'sql',
+        comment: null,
+      });
+
+      expect(learning.forget).toHaveBeenCalledWith('f-1');
+      expect(cleared.lessons).toBeUndefined();
+    });
+
+    it('still saves the rating when learning fails', async () => {
+      const { service, learning, session } = build();
+      learning.learnFromComment.mockRejectedValueOnce(new Error('db locked'));
+
+      const result = await service.recordBlockFeedback('session-1', {
+        messageAt: AT,
+        block: 'sql',
+        comment: 'Tech means Engineering',
+      });
+
+      expect(result.lessons).toBeUndefined();
+      expect(session.messages[1].expertTrace?.feedback?.sql?.comment).toBe(
+        'Tech means Engineering',
+      );
+    });
+
+    it('a 👎 on a block marks the pin rejected by that block, removes the verified pair and clears the badge', async () => {
+      const { service, session, pins, verifiedQueries } = build();
+
+      await service.recordBlockFeedback('session-1', {
+        messageAt: AT,
+        block: 'sql',
+        vote: 'down',
+      });
+
+      expect(pins.reject).toHaveBeenCalledWith(lineage, expect.any(String), {
+        block: 'sql',
+      });
+      expect(verifiedQueries.removeForMessage).toHaveBeenCalledWith(
+        'session-1',
+        AT,
+      );
+      expect(session.messages[1].verified).toBeUndefined();
+    });
+
+    it('a 👍 on the SQL block approves the answer like a whole-answer 👍', async () => {
+      const { service, session, pins, verifiedQueries } = build();
+      delete session.messages[1].verified;
+      pins.store.set(lineage, {
+        lineageKey: lineage,
+        fingerprint: 'stale',
+        message: stripForPin(session.messages[1]),
+      } as AnswerPinDoc);
+
+      await service.recordBlockFeedback('session-1', {
+        messageAt: AT,
+        block: 'sql',
+        vote: 'up',
+      });
+
+      expect(verifiedQueries.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          question: 'Average tech salary in 2025?',
+          sql: FINAL_SQL,
+          sourceMessageAt: AT,
+        }),
+      );
+      const approved = pins.store.get(lineage)!;
+      expect(approved.fingerprint).toMatch(/^[0-9a-f]{64}$/);
+      expect(approved.message.verified).toBe(true);
+      const message = session.messages[1];
+      expect(message.verified).toBe(true);
+      expect(
+        message.expertTrace?.overall.signals.map((signal) => signal.id),
+      ).toContain('verified_match');
+      // The block rating is still mirrored on the rescored trace.
+      expect(message.expertTrace?.feedback?.sql?.vote).toBe('up');
+    });
+
+    it('a 👍 on another block records the rating only', async () => {
+      const { service, pins, verifiedQueries, session } = build();
+      session.messages[1].expertTrace!.blocks.push({
+        kind: 'metric',
+        confidence: { score: 0.9, band: 'high', signals: [] },
+      } as never);
+
+      await service.recordBlockFeedback('session-1', {
+        messageAt: AT,
+        block: 'metric',
+        vote: 'up',
+      });
+
+      expect(verifiedQueries.save).not.toHaveBeenCalled();
+      expect(pins.lookup).not.toHaveBeenCalled();
+      expect(pins.reject).not.toHaveBeenCalled();
+    });
   });
 
   it('rejects bad bodies before touching the session', async () => {
@@ -1796,7 +2825,10 @@ async function* answerStream(
     error?: string;
     /** The statement the SQL fixer ran instead of the one written. */
     correctedSql?: string;
+    /** Result-guard verdicts the tool attached to the result. */
+    warnings?: string[];
   }[],
+  answer = 'Here is the answer.',
 ) {
   for (const [index, run] of runs.entries()) {
     const toolCallId = `call-${index}`;
@@ -1823,11 +2855,78 @@ async function* answerStream(
               rows: run.rows ?? [],
               ...(run.truncated ? { truncated: true } : {}),
               ...(run.correctedSql ? { correctedSql: run.correctedSql } : {}),
+              ...(run.warnings ? { warnings: run.warnings } : {}),
             },
       },
     };
   }
-  yield { type: 'text-delta', payload: { text: 'Here is the answer.' } };
+  yield { type: 'text-delta', payload: { text: answer } };
+}
+
+/** One SQL run, then the model builds an interactive visual from it. */
+async function* visualStream(sql: string) {
+  yield* answerStream([{ sql, rows: [{ n: 64 }] }], '');
+  yield {
+    type: 'tool-call',
+    payload: {
+      toolCallId: 'call-visual',
+      toolName: 'create_visual',
+      args: { instruction: 'chart it' },
+    },
+  };
+  yield {
+    type: 'tool-result',
+    payload: {
+      toolCallId: 'call-visual',
+      toolName: 'create_visual',
+      result: { visualId: 'visual-1', version: 1, title: 'Revenue' },
+    },
+  };
+  yield { type: 'text-delta', payload: { text: 'Here is the chart.' } };
+}
+
+/** An in-memory `AnswerPinsService`, keyed by lineage like the real one. */
+function pinsDouble(store = new Map<string, AnswerPinDoc>()) {
+  return {
+    store,
+    lookup: jest.fn((key: string) => Promise.resolve(store.get(key) ?? null)),
+    save: jest.fn((doc: AnswerPinDoc) => {
+      store.set(doc.lineageKey, doc);
+      return Promise.resolve(doc);
+    }),
+    approve: jest.fn((key: string, patch: Partial<AnswerPinDoc>) => {
+      const pin = store.get(key);
+      if (!pin) return Promise.resolve(null);
+      // Approval lifts a rejection, like the real service.
+      const { rejectedAt, rejectedBy, ...rest } = { ...pin, ...patch };
+      void rejectedAt;
+      void rejectedBy;
+      store.set(key, rest);
+      return Promise.resolve(rest);
+    }),
+    reject: jest.fn((key: string, at: string, by?: { block?: string }) => {
+      const pin = store.get(key);
+      if (!pin) return Promise.resolve(0);
+      const { rejectedBy, ...rest } = pin;
+      void rejectedBy;
+      store.set(key, {
+        ...rest,
+        rejectedAt: at,
+        ...(by ? { rejectedBy: by } : {}),
+      });
+      return Promise.resolve(1);
+    }),
+    remove: jest.fn((key: string) =>
+      Promise.resolve(store.delete(key) ? 1 : 0),
+    ),
+    touchReplay: jest.fn((key: string, at: string) => {
+      const pin = store.get(key);
+      if (!pin) return Promise.resolve(null);
+      const next = { ...pin, replays: pin.replays + 1, lastReplayedAt: at };
+      store.set(key, next);
+      return Promise.resolve(next);
+    }),
+  };
 }
 
 /** One SQL run, then the model asks for a clarification and the turn ends. */
@@ -1958,6 +3057,8 @@ describe('SessionsService visual tailoring and repair', () => {
       {} as never,
       {} as never,
       visuals as never,
+      {} as never,
+      {} as never,
       {} as never,
       {} as never,
       {} as never,

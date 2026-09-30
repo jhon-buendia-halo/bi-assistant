@@ -20,10 +20,13 @@ import {
   Brain,
   Copy,
   Download,
+  Equal,
   GraduationCap,
+  History,
   Info,
   Lightbulb,
   Loader2,
+  LucideIconData,
   ShieldAlert,
   ShieldCheck,
   ShieldOff,
@@ -39,6 +42,7 @@ import {
 import { SessionsApiService } from '../../services/sessions-api.service';
 import {
   AnalysisReport,
+  AnswerConsistency,
   ChatMessage,
   CrossCheck,
   DataPointSelection,
@@ -170,7 +174,9 @@ export class SessionChat implements OnDestroy {
   readonly Brain = Brain;
   readonly Copy = Copy;
   readonly Download = Download;
+  readonly Equal = Equal;
   readonly GraduationCap = GraduationCap;
+  readonly History = History;
   readonly Info = Info;
   readonly Lightbulb = Lightbulb;
   readonly Loader2 = Loader2;
@@ -782,6 +788,65 @@ export class SessionChat implements OnDestroy {
   /** Tooltip: the backend's note, or the verdict when it sent none. */
   crossCheckTitle(check: CrossCheck): string {
     return check.note?.trim() || this.crossCheckLabel(check);
+  }
+
+  // ------------------------------------------------------- answer pinning
+
+  /** Titles of this answer's feedback-learned knowledge, for the trace's chips. */
+  learnedTitlesFor(message: ChatMessage): string[] {
+    return (message.knowledge ?? [])
+      .filter((item) => item.source === 'feedback')
+      .map((item) => item.title);
+  }
+
+  /** "Same answer as <date> · re-verified" / "Same numbers · wording kept" / "Updated after learning". */
+  consistencyLabel(consistency: AnswerConsistency): string {
+    switch (consistency.kind) {
+      case 'replay':
+        return `Same answer as ${this.consistencyDate(consistency.pinnedAt)} · re-verified`;
+      case 'kept':
+        return 'Same numbers · wording kept';
+      case 'updated':
+        return 'Updated after learning';
+    }
+  }
+
+  consistencyIcon(consistency: AnswerConsistency): LucideIconData {
+    switch (consistency.kind) {
+      case 'replay':
+        return this.History;
+      case 'kept':
+        return this.Equal;
+      case 'updated':
+        return this.GraduationCap;
+    }
+  }
+
+  /** Amber for `updated` (numbers moved, worth a second look); muted otherwise. */
+  consistencyClass(consistency: AnswerConsistency): string {
+    return consistency.kind === 'updated'
+      ? 'border-amber-400/20 bg-amber-400/10 text-amber-400'
+      : 'border-white/10 bg-white/[0.04] text-zinc-400';
+  }
+
+  consistencyTitle(consistency: AnswerConsistency): string {
+    switch (consistency.kind) {
+      case 'replay':
+        return 'This exact question was answered before under the same knowledge; its query was re-run just now and returned the same data.';
+      case 'kept':
+        return 'The context behind this answer changed, so the query was re-derived — it returned the same numbers as before, so the earlier wording was kept.';
+      case 'updated':
+        return consistency.lessons?.length
+          ? `Updated after learning: ${consistency.lessons.join(', ')}`
+          : 'Updated after learning.';
+    }
+  }
+
+  private consistencyDate(iso: string): string {
+    const date = new Date(iso);
+    return isNaN(date.getTime())
+      ? ''
+      : date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   }
 
   /**

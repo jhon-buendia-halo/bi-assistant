@@ -271,25 +271,31 @@
               [attr.aria-label]="'Note on ' + title(block.kind)"
               placeholder="What is off, or what should it have used?"
               [value]="noteDraft()"
+              [disabled]="isPending(block.kind)"
               (input)="noteDraft.set($any($event.target).value)"
               (keydown)="onNoteKeydown($event, block.kind)"
-              class="w-full resize-y rounded-lg border border-white/10 bg-black/20 px-2.5 py-1.5 text-[12px] leading-5 text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+              class="w-full resize-y rounded-lg border border-white/10 bg-black/20 px-2.5 py-1.5 text-[12px] leading-5 text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25 disabled:opacity-60"
             ></textarea>
             <div class="flex items-center justify-end gap-2">
               <button
                 type="button"
                 (click)="noteOpen.set(null)"
-                class="rounded-lg px-2.5 py-1 text-[12px] text-zinc-500 hover:bg-white/5 hover:text-zinc-300"
+                [disabled]="isPending(block.kind)"
+                class="rounded-lg px-2.5 py-1 text-[12px] text-zinc-500 hover:bg-white/5 hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 (click)="saveNote(block.kind)"
+                [disabled]="isPending(block.kind)"
                 [attr.aria-label]="'Save note on ' + title(block.kind)"
-                class="rounded-lg bg-zinc-200 px-2.5 py-1 text-[12px] font-medium text-zinc-900 hover:bg-white"
+                class="flex items-center gap-1.5 rounded-lg bg-zinc-200 px-2.5 py-1 text-[12px] font-medium text-zinc-900 hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Save
+                @if (isPending(block.kind)) {
+                  <lucide-angular [img]="Loader2" [size]="12" class="animate-spin" />
+                }
+                {{ isPending(block.kind) ? "Save & teach" : "Save" }}
               </button>
             </div>
           </div>
@@ -352,4 +358,13 @@
   >
     {{ basisLabel(basis) }}
   </span>
+  @if (isLearned(sourceRef)) {
+    <span
+      title="Learned from your feedback note"
+      class="flex shrink-0 items-center gap-1 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2 py-0.5 text-[11px] leading-4 font-medium text-emerald-400"
+    >
+      <lucide-angular [img]="GraduationCap" [size]="10" />
+      Learned from your note
+    </span>
+  }
 </ng-template>

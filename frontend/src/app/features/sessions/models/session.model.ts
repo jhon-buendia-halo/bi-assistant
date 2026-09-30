@@ -1,4 +1,8 @@
 import { ReasoningTrace } from './expert-trace.model';
+import {
+  KnowledgeSnippetKind,
+  KnowledgeSnippetSource,
+} from '../../knowledge/models/knowledge.model';
 
 export interface ClarificationOption {
   label: string;
@@ -49,6 +53,37 @@ export interface KnowledgeUse {
   body: string;
   /** Dataset the snippet is scoped to; absent for a global snippet. */
   datasetId?: string;
+  /** Set by `toKnowledgeUse`; `'feedback'` marks a lesson learned from a note. */
+  source?: KnowledgeSnippetSource;
+}
+
+/**
+ * Whether — and how — a repeated or context-shifted question was reconciled
+ * against a previously pinned answer.
+ */
+export interface AnswerConsistency {
+  /**
+   * `replay`: stored answer returned after re-running its SQL against live
+   * data; `kept`: fresh derivation matched the pinned rows, wording kept;
+   * `updated`: numbers changed after the context changed.
+   */
+  kind: 'replay' | 'kept' | 'updated';
+  /** `sourceMessageAt` of the pin the decision was made against. */
+  pinnedAt: string;
+  sourceSessionId?: string;
+  /** replay only: when the SQL was re-run. */
+  verifiedAt?: string;
+  /** updated only: titles of the feedback lessons new since the pin. */
+  lessons?: string[];
+}
+
+/** One lesson learned from a block-feedback comment (`SessionActionResult.lessons`). */
+export interface LearnedLessonSummary {
+  id: string;
+  kind: KnowledgeSnippetKind;
+  title: string;
+  body: string;
+  method: 'agent' | 'verbatim';
 }
 
 export interface ChatMessage {
@@ -103,6 +138,8 @@ export interface ChatMessage {
    * measured confidence and the user's per-block feedback.
    */
   expertTrace?: ReasoningTrace;
+  /** Present when this answer was reconciled against a previously pinned one. */
+  consistency?: AnswerConsistency;
 }
 
 export interface AnalysisReport {
@@ -198,4 +235,6 @@ export interface SessionActionResult {
   message: string;
   session?: Session;
   visualization?: InteractiveVisualization;
+  /** Present when block feedback with a note distilled 0..n new lessons. */
+  lessons?: LearnedLessonSummary[];
 }
