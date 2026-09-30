@@ -5,6 +5,14 @@ import type { AssistantEvalCase } from './assistant.evals';
 import type { DatasetSnapshot } from '../tool-services';
 import { findFixture, requiredEntities } from '../../modules/testing-data/fixtures/registry';
 import { assistantEvalDatasetError } from './assistant-eval-datasets';
+// Pure module: the same word rule that scores a trace decides here whether an
+// expected phrase could ever be scored at all.
+import {
+  significantWords,
+  type ExpectedReasoning,
+} from '../../modules/expert-mode/expert-metrics';
+
+export type { ExpectedReasoning };
 
 /**
  * Eval suites, loaded from JSON instead of hard-coded TypeScript.
@@ -96,9 +104,22 @@ export interface EvalSuiteCase {
   checks?: EvalCheckSpec[];
   /** Trusted SQL whose live result set is the reference answer. */
   expectedSql?: string;
-  resultSetOptions?: { distinctRows?: boolean };
+  /**
+   * `distinctRows`: compare distinct rows only (in-app result-set check).
+   * `percentEquivalent`: a ratio may be reported as a fraction or a
+   * percentage — the CLI also accepts the assistant's numbers scaled by 100
+   * either way (use on rate questions; the reference must not round).
+   */
+  resultSetOptions?: { distinctRows?: boolean; percentEquivalent?: boolean };
   /** Grading rubric for cases a regex on the final answer would judge badly. */
   judgeRubric?: string;
+  /**
+   * What a correct business-expert trace should explain for this question:
+   * the `schema.table` entities it must choose, short phrases its assumptions
+   * must cover, and the metric it must define. Read only by the CLI's
+   * `--expert` runs (coverage columns); it never affects the verdict.
+   */
+  expectedReasoning?: ExpectedReasoning;
 }
 
 /** The kinds of datasource a suite can be run against. */
@@ -290,6 +311,80 @@ function validateCheck(
   return spec;
 }
 
+/** Keys `expectedReasoning` may carry — anything else is a typo. */
+const EXPECTED_REASONING_KEYS = ['tables', 'assumptions', 'metric'];
+
+/** Exactly two dot-separated segments: `hr.employees`, not `employees` or `db.hr.employees`. */
+const SCHEMA_TABLE = /^[^.\s]+\.[^.\s]+$/;
+
+/**
+ * Validate a case's `expectedReasoning`. Exported so the CLI can hold a case
+ * file given by path to the same rules as a registered suite.
+ *
+ * Strict on purpose: an unknown key (`table` for `tables`) or a phrase with no
+ * word of four or more letters would not fail a run — it would silently make
+ * a coverage column read 100% (or never move), which is worse.
+ */
+export function parseExpectedReasoning(
+  value: unknown,
+  file: string,
+  where: string,
+): ExpectedReasoning {
+  const label = `${where}.expectedReasoning`;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    fail(file, `${label} must be an object`);
+  }
+  const raw = value as Record<string, unknown>;
+  const unknown = Object.keys(raw).filter(
+    (key) => !EXPECTED_REASONING_KEYS.includes(key),
+  );
+  if (unknown.length) {
+    fail(
+      file,
+      `${label} has unknown field(s) ${unknown.map((key) => `"${key}"`).join(', ')} — known fields: ${EXPECTED_REASONING_KEYS.join(', ')}`,
+    );
+  }
+  const parsed: ExpectedReasoning = {};
+  if (raw.tables !== undefined) {
+    const tables = stringArray(raw.tables, file, `${label}.tables`);
+    tables.forEach((table, index) => {
+      if (!SCHEMA_TABLE.test(table)) {
+        fail(
+          file,
+          `${label}.tables[${index}] "${table}" must be schema.table (e.g. hr.employees)`,
+        );
+      }
+    });
+    parsed.tables = tables;
+  }
+  if (raw.assumptions !== undefined) {
+    const assumptions = stringArray(
+      raw.assumptions,
+      file,
+      `${label}.assumptions`,
+    );
+    assumptions.forEach((phrase, index) => {
+      if (!significantWords(phrase).length) {
+        fail(
+          file,
+          `${label}.assumptions[${index}] "${phrase}" has no word of four or more letters, so no trace could ever be scored against it`,
+        );
+      }
+    });
+    parsed.assumptions = assumptions;
+  }
+  if (raw.metric !== undefined) {
+    parsed.metric = requiredString(raw.metric, file, `${label}.metric`);
+  }
+  if (!parsed.tables && !parsed.assumptions && parsed.metric === undefined) {
+    fail(
+      file,
+      `${label} must carry at least one of ${EXPECTED_REASONING_KEYS.join(', ')}`,
+    );
+  }
+  return parsed;
+}
+
 function validateCase(
   value: unknown,
   file: string,
@@ -325,14 +420,21 @@ function validateCase(
     );
   }
   if (raw.resultSetOptions !== undefined) {
-    const options = raw.resultSetOptions as { distinctRows?: unknown };
+    const options = raw.resultSetOptions as {
+      distinctRows?: unknown;
+      percentEquivalent?: unknown;
+    };
     if (!options || typeof options !== 'object') {
       fail(file, `${where}.resultSetOptions must be an object`);
     }
-    parsed.resultSetOptions =
-      options.distinctRows === undefined
+    parsed.resultSetOptions = {
+      ...(options.distinctRows === undefined
         ? {}
-        : { distinctRows: Boolean(options.distinctRows) };
+        : { distinctRows: Boolean(options.distinctRows) }),
+      ...(options.percentEquivalent === undefined
+        ? {}
+        : { percentEquivalent: Boolean(options.percentEquivalent) }),
+    };
   }
   if (raw.checks !== undefined) {
     if (!Array.isArray(raw.checks)) {
@@ -354,6 +456,13 @@ function validateCase(
       }
       seenTypes.add(check.type);
     }
+  }
+  if (raw.expectedReasoning !== undefined) {
+    parsed.expectedReasoning = parseExpectedReasoning(
+      raw.expectedReasoning,
+      file,
+      where,
+    );
   }
   return parsed;
 }

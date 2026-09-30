@@ -11,10 +11,11 @@
  *   1. Register (or reuse) a Postgres datasource pointed at the dev
  *      `docker compose` database (see `docker-compose.yml`, port 55432).
  *   2. Save one dataset per fixture schema (`world_cup`, `health_insurance`,
- *      `genomics`), discovering the entity list from the datasource's own
- *      inventory rather than hard-coding table names.
+ *      `genomics`, `hr`), discovering the entity list from the datasource's
+ *      own inventory rather than hard-coding table names.
  *   3. Seed the curated knowledge/metric entries that traps H9/H10 (health
- *      insurance) and G9/G10 (genomics) explicitly depend on existing.
+ *      insurance), G9/G10 (genomics) and HR1-HR10 (hr) explicitly depend on
+ *      existing.
  *
  * Run with `npm run fixtures:register` from `backend/`.
  *
@@ -62,7 +63,130 @@ const FIXTURE_DATASETS: FixtureDataset[] = [
   { name: 'World Cup', schema: 'world_cup' },
   { name: 'Health Insurance', schema: 'health_insurance' },
   { name: 'Genomics', schema: 'genomics' },
+  { name: 'HR', schema: 'hr' },
 ];
+
+// ------------------------------------------------------- HR curated context
+
+/** Saved dataset name the HR knowledge is scoped to (`scope.datasetId`). */
+const HR_DATASET = 'HR';
+
+/**
+ * The HR fixture's business glossary (traps HR1-HR10 in
+ * docs/evals/synthetic-domains.md). Facts about the data and the company's
+ * definitions only — never a hint that answers one eval question.
+ *
+ * Budget: `KnowledgeService.contextFor` gives the whole knowledge block 2,000
+ * chars and stops at the first entry that does not fit, so these seven lines
+ * are kept to ~1,150 chars as formatted (`- [kind] title: body; synonyms: …;
+ * entities: …`). Check the total before adding an eighth.
+ */
+function hrKnowledge(db: string): KnowledgeSnippetInput[] {
+  const scope = { datasetId: HR_DATASET };
+  return [
+    {
+      kind: 'default_filter',
+      scope,
+      title: 'Employees only',
+      body:
+        "Headcount and pay figures cover employment_type = 'employee'; " +
+        'exclude contractor and intern rows unless asked.',
+      entities: [`${db}.hr.employees`],
+    },
+    {
+      kind: 'default_filter',
+      scope,
+      title: 'Active as of a date',
+      body:
+        'Headcount at a date = hired_on <= date AND (terminated_on IS NULL ' +
+        'OR terminated_on > date).',
+      entities: [`${db}.hr.employees`],
+    },
+    {
+      kind: 'term',
+      scope,
+      title: 'Tech employees',
+      body:
+        'Employees whose department is in the Technology division ' +
+        '(Engineering, Data Platform, IT & Security); job family does not ' +
+        'define it.',
+      synonyms: ['tech', 'technology'],
+    },
+    {
+      kind: 'term',
+      scope,
+      title: 'Salary',
+      body:
+        'Annual base pay from salary_history only, bonuses excluded. A ' +
+        "year's salary is the row effective on 31 December: effective_from " +
+        '<= date AND (effective_to IS NULL OR effective_to > date).',
+      entities: [`${db}.hr.salary_history`],
+    },
+    {
+      kind: 'term',
+      scope,
+      title: 'Local currency',
+      body:
+        "Amounts are in the employee's location currency; convert with " +
+        "exchange_rates.rate_to_usd for the same year (a bonus's " +
+        'fiscal_year) to report USD.',
+      entities: [`${db}.hr.exchange_rates`],
+    },
+    {
+      kind: 'term',
+      scope,
+      title: 'Top performer',
+      body: 'Performance rating 4 or 5 on the 1-5 scale (5 is best).',
+    },
+    {
+      kind: 'term',
+      scope,
+      title: 'Total compensation',
+      body: 'Base salary for the year plus bonuses paid for that fiscal year.',
+    },
+  ];
+}
+
+/** The HR fixture's governed metrics; `datasourceId` is filled in at seed time. */
+function hrMetrics(db: string): Omit<MetricInput, 'datasourceId'>[] {
+  return [
+    {
+      name: 'avg_base_salary_usd',
+      label: 'Average base salary (USD)',
+      description:
+        'One salary_history row per employee: the row effective on ' +
+        '31 December of the year, joined to exchange_rates on currency and ' +
+        'that year. Bonuses excluded.',
+      entity: `${db}.hr.salary_history`,
+      expression:
+        'AVG(salary_history.annual_base_amount * exchange_rates.rate_to_usd)',
+    },
+    {
+      name: 'attrition_rate',
+      label: 'Attrition rate',
+      description:
+        'Employees terminated during the year divided by active headcount ' +
+        'on 1 January of that year (:year_start). A ratio; multiply by 100 ' +
+        'for a percentage.',
+      entity: `${db}.hr.employees`,
+      expression:
+        'COUNT(*) FILTER (WHERE terminated_on >= :year_start AND terminated_on < :next_year_start)::numeric / ' +
+        'NULLIF(COUNT(*) FILTER (WHERE hired_on <= :year_start AND (terminated_on IS NULL OR terminated_on > :year_start)), 0)',
+    },
+    {
+      name: 'total_compensation_usd',
+      label: 'Total compensation (USD)',
+      description:
+        'Per employee and year: the salary_history row effective on ' +
+        '31 December plus fy_bonus.amount = SUM(bonus_payments.amount) for ' +
+        "that fiscal_year, converted at exchange_rates for the employee's " +
+        'currency and that year. Aggregate with AVG or SUM as asked.',
+      entity: `${db}.hr.salary_history`,
+      expression:
+        '(salary_history.annual_base_amount + COALESCE(fy_bonus.amount, 0)) * exchange_rates.rate_to_usd',
+    },
+  ];
+}
 
 // ------------------------------------------------------------------ cli
 
@@ -296,9 +420,9 @@ async function ensureEntry(
 }
 
 /**
- * Seed the curated knowledge/metrics the health-insurance and genomics trap
- * catalogues (H9/H10, G9/G10 in docs/evals/synthetic-domains.md) explicitly
- * depend on. Column names are taken from that design doc: at the time this
+ * Seed the curated knowledge/metrics the health-insurance, genomics and HR
+ * trap catalogues (H9/H10, G9/G10, HR1-HR10 in
+ * docs/evals/synthetic-domains.md) explicitly depend on. Column names are taken from that design doc: at the time this
  * script was written, `docker/postgres/init/002_health_insurance.sql` and
  * `003_genomics.sql` did not exist yet (a parallel unit generates them), so
  * these names should be re-checked against the real init scripts once they
@@ -309,7 +433,7 @@ async function seedCuratedContext(
   metrics: MetricsService,
   datasourceId: string,
   db: string,
-  datasetReady: { healthInsurance: boolean; genomics: boolean },
+  datasetReady: { healthInsurance: boolean; genomics: boolean; hr: boolean },
   options: Options,
 ): Promise<KnowledgeSummary[]> {
   const [existingKnowledge, existingMetrics] = await Promise.all([
@@ -454,6 +578,33 @@ async function seedCuratedContext(
         await knowledge.create(input);
       },
     },
+    // --- HR (HR1-HR10: division vs job family, the 31 December salary row,
+    // employees-only and active-at-date filters, currency conversion) ---
+    ...hrKnowledge(db).map(
+      (input): CuratedEntry => ({
+        label: `knowledge: ${input.title.toLowerCase()} (HR)`,
+        pool: 'knowledge',
+        datasetReady: datasetReady.hr,
+        matches: (e) =>
+          e.kind === input.kind &&
+          e.title === input.title &&
+          sameScope(e.scope as { datasetId?: string }, HR_DATASET),
+        create: async () => {
+          await knowledge.create(input);
+        },
+      }),
+    ),
+    ...hrMetrics(db).map(
+      (input): CuratedEntry => ({
+        label: `metric: ${input.name} (HR)`,
+        pool: 'metric',
+        datasetReady: datasetReady.hr,
+        matches: (e) => e.kind === 'metric' && e.title === input.name,
+        create: async () => {
+          await metrics.create({ ...input, datasourceId });
+        },
+      }),
+    ),
   ];
 
   const results: KnowledgeSummary[] = [];
@@ -558,6 +709,9 @@ async function main(): Promise<number> {
           ?.status !== 'skipped',
       genomics:
         datasetSummaries.find((d) => d.name === 'Genomics')?.status !==
+        'skipped',
+      hr:
+        datasetSummaries.find((d) => d.name === HR_DATASET)?.status !==
         'skipped',
     };
 

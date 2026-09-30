@@ -1,3 +1,5 @@
+import { ReasoningTrace } from './expert-trace.model';
+
 export interface ClarificationOption {
   label: string;
   description?: string;
@@ -95,6 +97,12 @@ export interface ChatMessage {
    * instead of duplicating it (see `SessionsService.appendUserMessage`).
    */
   error?: boolean;
+  /**
+   * Business expert mode only: how the answer was reasoned — interpretation,
+   * data selection, assumptions, metric and annotated SQL — each block with a
+   * measured confidence and the user's per-block feedback.
+   */
+  expertTrace?: ReasoningTrace;
 }
 
 export interface AnalysisReport {

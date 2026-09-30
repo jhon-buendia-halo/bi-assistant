@@ -1,0 +1,355 @@
+@let t = trace();
+<section
+  class="mt-3 rounded-2xl border border-white/10 bg-[#232323] p-4"
+  aria-label="Reasoning trace"
+>
+  <!-- Overall confidence strip -->
+  <div class="flex items-center gap-2.5">
+    <lucide-angular [img]="GraduationCap" [size]="15" class="shrink-0 text-zinc-400" />
+    <span class="shrink-0 text-[13px] font-medium text-zinc-200">Reasoning</span>
+    <div
+      class="h-1.5 min-w-12 flex-1 overflow-hidden rounded-full bg-white/10"
+      role="meter"
+      aria-label="Overall confidence"
+      aria-valuemin="0"
+      aria-valuemax="100"
+      [attr.aria-valuenow]="round100(t.overall.score)"
+    >
+      <div
+        class="h-full rounded-full"
+        [class]="barClass(t.overall.score)"
+        [style.width]="percent(t.overall.score)"
+      ></div>
+    </div>
+    <ng-container
+      [ngTemplateOutlet]="badge"
+      [ngTemplateOutletContext]="{ key: 'overall', confidence: t.overall, label: 'overall confidence' }"
+    />
+    <button
+      type="button"
+      (click)="expanded.set(!expanded())"
+      [attr.aria-expanded]="expanded()"
+      [attr.aria-label]="expanded() ? 'Hide reasoning' : 'Show reasoning'"
+      [title]="expanded() ? 'Hide reasoning' : 'Show reasoning'"
+      class="shrink-0 rounded p-1 text-zinc-500 hover:bg-white/10 hover:text-zinc-300"
+    >
+      <lucide-angular [img]="expanded() ? ChevronDown : ChevronRight" [size]="14" />
+    </button>
+  </div>
+  <p class="mt-1.5 text-[11px] leading-5 text-zinc-500">
+    Measured from the checks behind each block — schema, joins, knowledge,
+    execution and cross-checks — not the model's own opinion.
+    @if (t.model) {
+      <span class="text-zinc-600">· {{ t.model }}</span>
+    }
+  </p>
+  @if (signalsOpen("overall")) {
+    <ng-container
+      [ngTemplateOutlet]="signalList"
+      [ngTemplateOutletContext]="{ $implicit: t.overall }"
+    />
+  }
+
+  @if (expanded()) {
+    @for (block of blocks(); track block.kind) {
+      <div class="mt-3 border-t border-white/5 pt-3" [attr.data-block]="block.kind">
+        <!-- Block header: icon, title, confidence badge -->
+        <div class="flex items-center gap-2">
+          <lucide-angular [img]="icon(block.kind)" [size]="14" class="shrink-0 text-zinc-400" />
+          <h4 class="text-[13px] font-medium text-zinc-200">{{ title(block.kind) }}</h4>
+          <span class="ml-auto"></span>
+          <ng-container
+            [ngTemplateOutlet]="badge"
+            [ngTemplateOutletContext]="{ key: block.kind, confidence: block.confidence, label: title(block.kind) }"
+          />
+        </div>
+        @if (signalsOpen(block.kind)) {
+          <ng-container
+            [ngTemplateOutlet]="signalList"
+            [ngTemplateOutletContext]="{ $implicit: block.confidence }"
+          />
+        }
+
+        <div class="mt-2 text-[12.5px] leading-6 text-zinc-300">
+          @if (block.kind === "interpretation") {
+            <p class="text-zinc-200">{{ block.restatement }}</p>
+            @if (block.terms.length) {
+              <ul class="mt-2 flex flex-col gap-1.5">
+                @for (term of block.terms; track $index) {
+                  <li class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                    <span class="text-zinc-200">“{{ term.term }}”</span>
+                    <span class="text-zinc-600" aria-hidden="true">→</span>
+                    <span>{{ term.mappedTo }}</span>
+                    <ng-container
+                      [ngTemplateOutlet]="basisChip"
+                      [ngTemplateOutletContext]="{ basis: term.basis, sourceRef: term.sourceRef }"
+                    />
+                    @if (term.sourceRef) {
+                      <span class="w-full text-[11px] leading-4 text-zinc-500">Source: {{ term.sourceRef }}</span>
+                    }
+                  </li>
+                }
+              </ul>
+            }
+            @if (block.ambiguities.length) {
+              <p class="mt-2 text-[11px] font-medium tracking-wide text-zinc-500 uppercase">
+                Also considered
+              </p>
+              <ul class="mt-0.5 list-disc pl-5 text-zinc-400">
+                @for (reading of block.ambiguities; track $index) {
+                  <li>{{ reading }}</li>
+                }
+              </ul>
+            }
+          } @else if (block.kind === "data-selection") {
+            <div class="rounded-lg border border-white/5 bg-black/20 p-2">
+              <app-table-join-diagram
+                [tables]="block.tables"
+                [joins]="block.joins"
+                [rejected]="block.rejected"
+              />
+            </div>
+            @if (block.joins.length) {
+              <p class="mt-1 text-[11px] text-zinc-500">
+                Solid joins are declared in the schema; dashed ones come from
+                knowledge, the data, convention or a guess.
+              </p>
+            }
+            @if (block.tables.length) {
+              <p class="mt-2 text-[11px] font-medium tracking-wide text-zinc-500 uppercase">
+                Why these tables
+              </p>
+              <ul class="mt-0.5 flex flex-col gap-1">
+                @for (table of block.tables; track $index) {
+                  <li>
+                    <span class="font-mono text-[11.5px] text-zinc-200" [title]="table.entity">{{
+                      shortEntityName(table.entity)
+                    }}</span>
+                    <span class="text-zinc-500"> ({{ table.role }})</span>
+                    — {{ table.reason }}
+                  </li>
+                }
+              </ul>
+            }
+            @if (block.rejected.length) {
+              <p class="mt-2 text-[11px] font-medium tracking-wide text-zinc-500 uppercase">
+                Not used
+              </p>
+              <ul class="mt-0.5 flex flex-col gap-1 text-zinc-400">
+                @for (item of block.rejected; track $index) {
+                  <li>
+                    <span class="font-mono text-[11.5px] text-zinc-400" [title]="item.entity">{{
+                      shortEntityName(item.entity)
+                    }}</span>
+                    — {{ item.reason }}
+                  </li>
+                }
+              </ul>
+            }
+          } @else if (block.kind === "assumptions") {
+            @if (block.items.length) {
+              <ol class="flex flex-col gap-2.5">
+                @for (item of block.items; track item.id; let n = $index) {
+                  <li class="flex gap-2.5">
+                    <span class="shrink-0 font-mono text-[11px] leading-6 text-zinc-600">{{ n + 1 }}.</span>
+                    <span class="flex min-w-0 flex-1 flex-col gap-1">
+                      <span class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span class="text-zinc-200">{{ item.statement }}</span>
+                        <ng-container
+                          [ngTemplateOutlet]="basisChip"
+                          [ngTemplateOutletContext]="{ basis: item.basis, sourceRef: item.sourceRef }"
+                        />
+                        <span class="rounded bg-white/5 px-1.5 font-mono text-[10px] text-zinc-500">{{ item.id }}</span>
+                      </span>
+                      @if (item.sqlFragment) {
+                        <code class="rounded bg-black/30 px-2.5 py-1.5 font-mono text-[11px] leading-5 whitespace-pre-wrap text-zinc-400">{{ item.sqlFragment }}</code>
+                      }
+                      @if (item.alternative) {
+                        <span class="text-[11.5px] leading-5 text-zinc-500">If wrong: {{ item.alternative }}</span>
+                      }
+                    </span>
+                  </li>
+                }
+              </ol>
+            } @else {
+              <p class="text-zinc-500">No assumptions beyond what the question states.</p>
+            }
+          } @else if (block.kind === "metric") {
+            <p class="flex flex-wrap items-center gap-2">
+              <span class="font-medium text-zinc-200">{{ block.name }}</span>
+              <ng-container
+                [ngTemplateOutlet]="basisChip"
+                [ngTemplateOutletContext]="{ basis: block.basis, sourceRef: block.sourceRef }"
+              />
+            </p>
+            <code class="mt-1.5 block rounded bg-black/30 px-2.5 py-1.5 font-mono text-[11px] leading-5 whitespace-pre-wrap text-zinc-400">{{ block.formula }}</code>
+            <p class="mt-1.5 text-zinc-400"><span class="text-zinc-500">Grain:</span> {{ block.grain }}</p>
+            @if (block.sourceRef) {
+              <p class="text-[11px] text-zinc-500">Source: {{ block.sourceRef }}</p>
+            }
+          } @else if (block.kind === "sql") {
+            <pre
+              class="max-h-80 overflow-auto rounded bg-black/30 px-2.5 py-1.5 font-mono text-[11px] leading-5 whitespace-pre-wrap text-zinc-400"
+              aria-label="Final SQL"
+            >@for (part of sqlParts(); track $index) {@if (part.highlight) {<mark class="qti-sql-hl">{{ part.text }}</mark>} @else {<span>{{ part.text }}</span>}}</pre>
+            @if (block.rowCount !== undefined) {
+              <p class="mt-1 text-[11px] text-zinc-500">
+                Returned {{ block.rowCount | number }} {{ block.rowCount === 1 ? "row" : "rows" }}
+              </p>
+            }
+            @if (block.annotations.length) {
+              <ul class="mt-2 flex flex-col gap-1" aria-label="SQL annotations">
+                @for (note of block.annotations; track $index; let n = $index) {
+                  <li
+                    tabindex="0"
+                    (mouseenter)="hoveredAnnotation.set(n)"
+                    (mouseleave)="hoveredAnnotation.set(null)"
+                    (focus)="hoveredAnnotation.set(n)"
+                    (blur)="hoveredAnnotation.set(null)"
+                    [attr.data-located]="isLocated(n)"
+                    class="rounded-lg border px-2.5 py-1.5 outline-none"
+                    [class]="hoveredAnnotation() === n ? 'border-sky-400/30 bg-sky-400/5' : 'border-white/5 hover:border-white/10'"
+                  >
+                    <span class="flex flex-wrap items-center gap-1.5">
+                      <code class="max-w-full truncate font-mono text-[11px] text-sky-300/90">{{ note.clause }}</code>
+                      @for (id of note.assumptionIds; track id) {
+                        <span class="rounded bg-white/5 px-1.5 font-mono text-[10px] text-zinc-500" [title]="'Implements assumption ' + id">{{ id }}</span>
+                      }
+                    </span>
+                    <span class="block text-[12px] leading-5 text-zinc-400">{{ note.explanation }}</span>
+                  </li>
+                }
+              </ul>
+            }
+          }
+        </div>
+
+        <!-- Per-block rating: thumbs + an optional note -->
+        @let fb = feedback()[block.kind];
+        <div class="mt-2 flex items-center gap-1">
+          <span class="mr-1 text-[11px] text-zinc-600">Is this right?</span>
+          <button
+            type="button"
+            (click)="vote(block.kind, 'up')"
+            [disabled]="isPending(block.kind)"
+            [attr.aria-pressed]="fb?.vote === 'up'"
+            [attr.aria-label]="'Mark ' + title(block.kind) + ' as right'"
+            [title]="fb?.vote === 'up' ? 'Marked as right — click to clear' : 'Looks right'"
+            class="rounded p-1 disabled:cursor-not-allowed disabled:opacity-40"
+            [class]="fb?.vote === 'up' ? 'qti-rating-on bg-emerald-400/10 text-emerald-400' : 'text-zinc-500 hover:bg-white/10 hover:text-zinc-300'"
+          >
+            <lucide-angular [img]="ThumbsUp" [size]="13" />
+          </button>
+          <button
+            type="button"
+            (click)="vote(block.kind, 'down')"
+            [disabled]="isPending(block.kind)"
+            [attr.aria-pressed]="fb?.vote === 'down'"
+            [attr.aria-label]="'Mark ' + title(block.kind) + ' as wrong'"
+            [title]="fb?.vote === 'down' ? 'Marked as wrong — click to clear' : 'Looks wrong'"
+            class="rounded p-1 disabled:cursor-not-allowed disabled:opacity-40"
+            [class]="fb?.vote === 'down' ? 'qti-rating-on bg-red-400/10 text-red-400' : 'text-zinc-500 hover:bg-white/10 hover:text-zinc-300'"
+          >
+            <lucide-angular [img]="ThumbsDown" [size]="13" />
+          </button>
+          <button
+            type="button"
+            (click)="toggleNote(block.kind)"
+            [disabled]="isPending(block.kind)"
+            [attr.aria-expanded]="noteOpen() === block.kind"
+            [attr.aria-label]="(fb?.comment ? 'Edit note on ' : 'Add note on ') + title(block.kind)"
+            class="ml-1 flex items-center gap-1 rounded px-1.5 py-1 text-[11px] text-zinc-500 hover:bg-white/10 hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <lucide-angular [img]="NotebookPen" [size]="12" />
+            {{ fb?.comment ? "Edit note" : "Add note" }}
+          </button>
+        </div>
+        @if (noteOpen() === block.kind) {
+          <div class="mt-1.5 flex flex-col gap-1.5">
+            <textarea
+              rows="2"
+              [attr.aria-label]="'Note on ' + title(block.kind)"
+              placeholder="What is off, or what should it have used?"
+              [value]="noteDraft()"
+              (input)="noteDraft.set($any($event.target).value)"
+              (keydown)="onNoteKeydown($event, block.kind)"
+              class="w-full resize-y rounded-lg border border-white/10 bg-black/20 px-2.5 py-1.5 text-[12px] leading-5 text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+            ></textarea>
+            <div class="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                (click)="noteOpen.set(null)"
+                class="rounded-lg px-2.5 py-1 text-[12px] text-zinc-500 hover:bg-white/5 hover:text-zinc-300"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                (click)="saveNote(block.kind)"
+                [attr.aria-label]="'Save note on ' + title(block.kind)"
+                class="rounded-lg bg-zinc-200 px-2.5 py-1 text-[12px] font-medium text-zinc-900 hover:bg-white"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        } @else if (fb?.comment) {
+          <p class="mt-1 text-[11.5px] leading-5 text-zinc-500 italic">“{{ fb?.comment }}”</p>
+        }
+      </div>
+    }
+  }
+</section>
+
+<!-- Confidence badge: band + score; toggles the signals behind it -->
+<ng-template #badge let-key="key" let-confidence="confidence" let-label="label">
+  <button
+    type="button"
+    (click)="toggleSignals(key)"
+    [attr.aria-expanded]="signalsOpen(key)"
+    [attr.aria-label]="'Confidence details for ' + label"
+    title="Show how this confidence was measured"
+    class="flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium"
+    [class]="badgeClass(confidence.band)"
+  >
+    <lucide-angular [img]="Gauge" [size]="11" />
+    {{ confidenceText(confidence) }}
+  </button>
+</ng-template>
+
+<!-- The named signals behind one confidence: label, value bar, weight, note -->
+<ng-template #signalList let-confidence>
+  <ul
+    class="mt-2 flex flex-col gap-2 rounded-lg border border-white/5 bg-black/20 px-3 py-2.5"
+    aria-label="Confidence signals"
+  >
+    @for (item of confidence.signals; track item.id) {
+      <li class="flex flex-col gap-0.5" [attr.data-signal]="item.id">
+        <span class="flex items-center gap-2.5 text-[11.5px]">
+          <span class="min-w-0 flex-1 truncate text-zinc-300">{{ item.label }}</span>
+          <span class="h-1 w-20 shrink-0 overflow-hidden rounded-full bg-white/10">
+            <span class="block h-full rounded-full" [class]="barClass(item.value)" [style.width]="percent(item.value)"></span>
+          </span>
+          <span class="w-9 shrink-0 text-right font-mono text-[11px] text-zinc-400">{{ percent(item.value) }}</span>
+          <span class="w-20 shrink-0 text-right font-mono text-[10.5px] whitespace-nowrap text-zinc-600" title="Weight in this score">weight {{ item.weight | number: "1.2-2" }}</span>
+        </span>
+        @if (item.note) {
+          <span class="text-[11px] leading-4 text-zinc-500">{{ item.note }}</span>
+        }
+      </li>
+    } @empty {
+      <li class="text-[11px] text-zinc-500">No signals could be measured.</li>
+    }
+  </ul>
+</ng-template>
+
+<!-- Where a claim comes from; the backing source as tooltip -->
+<ng-template #basisChip let-basis="basis" let-sourceRef="sourceRef">
+  <span
+    class="shrink-0 rounded-full border px-2 py-0.5 text-[11px] leading-4 font-medium"
+    [class]="basisClass(basis)"
+    [title]="basisTitle(basis, sourceRef)"
+  >
+    {{ basisLabel(basis) }}
+  </span>
+</ng-template>

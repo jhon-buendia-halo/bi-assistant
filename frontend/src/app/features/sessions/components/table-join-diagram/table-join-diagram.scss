@@ -1,0 +1,10 @@
+:host {
+  display: block;
+}
+
+// Text inside the diagram is decoration for the lists below it; keep clicks
+// and selection on the page, not the SVG glyphs.
+text {
+  pointer-events: none;
+  user-select: none;
+}

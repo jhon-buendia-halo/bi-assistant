@@ -316,6 +316,15 @@
         } @else {
           <div class="group">
             <div class="prose-dark" [innerHTML]="message.content | markdown"></div>
+            @if (message.expertTrace; as trace) {
+              <!-- Business expert mode: the reasoning behind this answer -->
+              <app-expert-trace
+                [trace]="trace"
+                [sessionId]="session().id"
+                [messageAt]="message.at"
+                (feedbackSaved)="onExpertFeedbackSaved($event)"
+              />
+            }
             <ng-container
               [ngTemplateOutlet]="reasoningTrail"
               [ngTemplateOutletContext]="{ $implicit: message }"
@@ -482,6 +491,22 @@
           @if (streamingText()) {
             <div class="prose-dark" [innerHTML]="streamingText() | markdown"></div>
           }
+          @if (expertStatus(); as status) {
+            <!-- Business expert mode: cross-check / explanation pass -->
+            <div
+              class="ml-0.5 flex items-center gap-2.5 text-[12px]"
+              [class]="status === 'failed' ? 'text-amber-400/90' : 'text-zinc-400'"
+              aria-live="polite"
+              data-expert-status
+            >
+              <lucide-angular
+                [img]="status === 'failed' ? TriangleAlert : status === 'cross-check' ? ShieldCheck : Lightbulb"
+                [size]="13"
+                class="shrink-0"
+              />
+              <span>{{ expertStatusLine(status) }}</span>
+            </div>
+          }
           <div class="flex items-center gap-2 text-zinc-500">
             <lucide-angular [img]="Loader2" [size]="13" class="animate-spin" />
             <span class="font-mono text-[12px]"
@@ -608,6 +633,27 @@
         >
           <lucide-angular [img]="ShieldCheck" [size]="12" class="shrink-0" />
           Careful
+        </button>
+        <!-- Business expert mode: answers come with a rated reasoning trace -->
+        <button
+          type="button"
+          (click)="toggleExpert()"
+          [attr.aria-pressed]="expert()"
+          aria-label="Business expert mode"
+          [attr.data-tip]="
+            expert()
+              ? 'Business expert mode is on: every answer shows how the question was read, which tables and joins, the assumptions, the metric and the annotated SQL — each with a measured confidence you can rate. Includes the Careful cross-check. Slower per answer.'
+              : 'Business expert mode: show the reasoning behind each answer — interpretation, tables and joins, assumptions, metric and annotated SQL — each with a measured confidence you can rate. Includes the Careful cross-check. Slower per answer.'
+          "
+          class="qti-tip flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px]"
+          [class]="
+            expert()
+              ? 'border-sky-400/30 bg-sky-400/10 text-sky-400'
+              : 'border-white/10 bg-white/[0.04] text-zinc-400 hover:border-white/20 hover:bg-white/[0.08] hover:text-zinc-200'
+          "
+        >
+          <lucide-angular [img]="GraduationCap" [size]="12" class="shrink-0" />
+          Expert
         </button>
         <!-- Deep analysis: the draft becomes a background job, not a turn -->
         <button

@@ -59,12 +59,31 @@ Unordered **multiset** comparison, so row order never matters:
 Practical consequence: write `expectedSql` so it returns exactly the facts the
 question asks for — no extra bookkeeping columns, no `ORDER BY` dependence.
 
+**Which of the assistant's queries is graded.** Not simply the last successful
+`run_readonly_sql`: the assistant often runs a supporting query *after* the
+one that produced the figure (a `COUNT(*)` to say "over 38 employees"), and
+grading that one marks a correct answer as a mismatch. The harness first grades
+the query whose result values the answer text quotes (`pickAnswerRecord` in
+`src/modules/expert-mode/answer-record.ts` — the query behind the answer's
+first figure wins, then the most-quoted one), and when that does not match it
+tries the answer's other complete, successful queries and reports
+`PASS(alternate-query)` if one of them does. The in-app suite applies the same
+rule ("one complete successful result must contain all reference facts").
+
+**Ratios.** A rate question may be answered as a fraction (`0.1154`) or a
+percentage (`11.54`). Mark such a case `"resultSetOptions": { "percentEquivalent": true }`
+and the harness also accepts the assistant's numbers scaled by 100 either way.
+The reference must then **not** round (`100.0 * a / b`, not `ROUND(…, 2)`):
+rounding to two decimals breaks the 6-significant-figure match against an
+unrounded fraction.
+
 ### Verdicts
 
 | Verdict                 | Meaning                                                                  |
 | ----------------------- | ------------------------------------------------------------------------ |
 | `PASS`                  | Result sets match.                                                       |
 | `PASS(extra-columns)`   | The facts match; the assistant projected more columns than the reference. |
+| `PASS(alternate-query)` | The facts match one of the answer's other complete queries, not the one its text quotes most (a headline total plus a breakdown, a rate plus its parts). |
 | `FAIL(result-mismatch)` | The assistant ran SQL, but the rows differ from the reference.           |
 | `FAIL(no-sql)`          | The answer ran no successful `run_readonly_sql` (often a clarification). |
 | `ERROR(expected-sql)`   | The case's own `expectedSql` failed to run — fix the case.               |
@@ -197,6 +216,7 @@ npm run eval -- --help
 | `--no-log` | Do not write a record into `logs/evals/`. |
 | `--include-placeholders` | Also run cases marked `"placeholder": true`. |
 | `--keep-sessions` | Do not delete the throwaway sessions (for inspecting a turn in the app). |
+| `--expert` | Run every turn in **business expert mode** (the answer also carries a reasoning trace with confidence). Grading is unchanged; the table gains `CONF`, `BAND`, `TABLES`, `ASSUMPTIONS`, `METRIC` columns from each case's optional `expectedReasoning`, and the summary reports the headline **AUROC of overall confidence vs PASS** plus the **high-band accuracy** constraint (target ≥ 90 %). Cases without `expectedSql` are still run once as probes (trace presence only). Not combinable with `--validate`. |
 | `-v, --verbose` | Nest logs plus the SQL each case actually ran. |
 | `-h, --help` | Usage. |
 
@@ -214,6 +234,8 @@ Env: `EVAL_ROW_LIMIT` (default 500 — the connector cap), `EVAL_TIMEOUT_MS`
    `logs/pricing.json`. Token counts are measured; costs are estimated. A model
    with no configured rate prints `not priced` rather than a made-up number.
 5. Where the run log was written.
+6. With `--expert`: the per-case expert table and the expert summary (AUROC,
+   band accuracies, coverage means, probes). See `docs/plans/business-expert-mode-engineering.md`.
 
 ## Adding a case
 
@@ -297,8 +319,15 @@ Differences from the flat array:
   none, and this harness reports it as `SKIP(no-expected-sql)` rather than
   guessing a reference. In a flat file a missing `expectedSql` is an error —
   there it is almost always a typo.
-- Extra fields (`intent`, `checks`, `judgeRubric`, `resultSetOptions`) are the
-  in-app runner's; this harness ignores them.
+- Extra fields (`intent`, `checks`, `judgeRubric`) are the in-app runner's;
+  this harness ignores them. `resultSetOptions.distinctRows` is in-app only;
+  `resultSetOptions.percentEquivalent` is honoured here (see "Ratios" above).
+- `expectedReasoning` (optional; `{ tables?: ["schema.table", …], assumptions?: [phrase, …], metric?: name }`)
+  describes what a correct business-expert trace should explain. It feeds the
+  `--expert` coverage columns only and never changes a verdict. An assumption
+  phrase is covered when every word of four or more letters appears in the
+  trace's assumptions, term mappings or metric block, so write phrases with
+  the words a trace would naturally use.
 
 Registered suites (`src/mastra/evals/suites/<id>.json`) are run by id with
 `--suite <id>`; a file anywhere else is run with `--file <path>`.

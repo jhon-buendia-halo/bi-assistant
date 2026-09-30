@@ -1,6 +1,6 @@
-# Synthetic eval domains: health insurance and genomics
+# Synthetic eval domains: health insurance, genomics and HR
 
-Design document for the second and third eval fixtures. It is the single source
+Design document for the second, third and fourth eval fixtures. It is the single source
 of truth for the generators (`docker/postgres/generate/`), the case sets
 (`backend/eval/*-set.json`) and the in-app suites
 (`backend/src/mastra/evals/suites/`).
@@ -29,14 +29,14 @@ additional schemas. No new connector, no new format.
 
 ## Shared rules
 
-- One schema per domain: `health_insurance`, `genomics`.
+- One schema per domain: `health_insurance`, `genomics`, `hr`.
 - Fixed random seed, so the data is byte-identical on every regeneration and
   every hand-verified answer stays valid.
 - Small enough that aggregates come back as a handful of rows, never near the
   500-row cap.
 - Real primary and foreign keys, `CHECK` constraints on every status column.
-- Two years of data only, ending well before today, so no answer depends on the
-  current date.
+- Two years of data only (HR: seven, see below), ending well before today, so
+  no answer depends on the current date.
 - Analytics views (`v_*`) mirroring the World Cup fixture's convention, so a
   reference query can be readable without a five-table join.
 
@@ -160,6 +160,121 @@ analogue in the World Cup or health-insurance sets.
 
 ---
 
+# Domain 3 — `hr`
+
+A mid-size software company's HR records, 2019–2025: 174 workers (145
+employees, 16 contractors, 13 interns) in 11 departments across four divisions,
+paid from five offices in three currencies. Built for business expert mode: the
+user's own example — "What is the average salary of tech employees in 2025?" —
+has one right answer here and at least five plausible wrong ones, so the
+reasoning trace (which tables, which assumptions, which metric) can be graded
+against a known truth, not just the final number.
+
+Generator: `docker/postgres/generate/hr.ts` (seed `20260929`) →
+`docker/postgres/init/004_hr.sql`. Dataset name in the app: **HR**. Unlike the
+two domains above it spans seven years, because pay history is the point; the
+data still ends on 2025-12-31 and nothing is future-dated, so no answer depends
+on the current date.
+
+## Tables
+
+| Table | Grain | Notes |
+| --- | --- | --- |
+| `departments` | one department | `division` ∈ Technology/Commercial/Operations/Corporate, `cost_center` |
+| `locations` | one office | Austin and New York (USD), London (GBP), Berlin and Lisbon (EUR) |
+| `job_titles` | one title | `family` ∈ Engineering/Data/IT/Sales/Marketing/Support/Finance/People/Legal/Operations, `level` 1–6 |
+| `employees` | one worker | → `departments`, `locations`, `job_titles`; `manager_id` → `employees`; `employment_type` ∈ employee/contractor/intern; `terminated_on` null while employed |
+| `salary_history` | one pay interval | → `employees`; contiguous, non-overlapping `effective_from`/`effective_to` (exclusive); `annual_base_amount` in local currency; `reason` ∈ hire/merit/promotion/adjustment/market |
+| `bonus_payments` | one bonus | → `employees`; `fiscal_year` (the year earned for), `paid_on`, `bonus_type` ∈ annual/spot/retention |
+| `performance_reviews` | one rating per employee per year | `rating` 1–5 (5 best), `reviewer_id` = the manager; employees only |
+| `time_off_requests` | one request | `kind` ∈ vacation/sick/parental, `days`, `status` ∈ approved/rejected/pending |
+| `exchange_rates` | one currency-year | `rate_to_usd`, USD = 1 by CHECK |
+| `v_salary_by_year` | one worker per year | the row effective on 31 December of that year, that year's rate, `annual_base_usd` |
+| `v_current_employees` | one worker employed at 2025-12-31 | salary in force, converted at the latest year's rate; **all** worker types |
+
+Money is `numeric(12,2)` in the employee's location currency; nobody changes
+office, so an employee's salary rows share one currency. Annual bonuses for a
+year are paid on 14 March of the next, which puts FY2025's outside the data.
+
+## Planted traps
+
+| # | Planted in the data | Failure class | Question that exposes it | Check |
+| --- | --- | --- | --- | --- |
+| HR1 | "Tech" is the Technology **division**; four Data-family analysts sit in Finance and Marketing | Domain semantics | What is the average salary of tech employees in 2025? | Result set |
+| HR2 | A year's salary is the row effective on 31 December; 23 employees have 2+ rows starting in 2025 | Domain semantics | (same case) | Result set |
+| HR3 | Contractors (paid a premium) and interns have salary rows in every division | Default filter | (every average — the tech figure moves from $127,520.61 to $129,799.29) | Result set |
+| HR4 | Technology is paid in USD, EUR and GBP; London (GBP) tops the USD averages, New York tops the raw ones | Unit confusion | Which location had the highest average salary in 2025? | Result set |
+| HR5 | Engineering and Sales tie on exactly 22 active employees at the end of 2025 | Ties | Which department had the most active employees at the end of 2025? | Result set |
+| HR6 | 39 employees have left, 12 of them in 2025 (one hired and gone inside the year) | Metric definition | What was our attrition rate in 2025? | Result set |
+| HR7 | Bonus ≠ salary, and a bonus's `fiscal_year` ≠ the year it was paid | Unit confusion / metric definition | How much did we pay out in bonuses for fiscal year 2024, in USD? · What was the average total compensation for Sales employees in 2024? | Result set |
+| HR8 | 12 promotions in 2025, each preceded by an April 2025 merit row | Multi-step join | What was the average raise from promotions in 2025? | Result set |
+| HR9 | Helena Voss (CTO): 4 direct reports, 37 in her line, 3 levels deep | Asking, or not asking | How many people report to Helena Voss? | Tool check + judge |
+| HR10 | Top performer = rating 4 or 5; 7 in Engineering for 2025, one of them a 5 | Domain semantics | Who were the top performers in Engineering in 2025? | Result set |
+
+The generator asserts every one of these and throws if a regeneration drifts:
+the exact 22/22 tie and that it breaks under every looser count (contractors
+in, all worker types, terminations ignored), that a salary row exists at a
+year end exactly when the worker is employed, the division-vs-family and
+converted-vs-unconverted gaps (≥ 1% and ≥ 2%), the location winner flipping
+without conversion, and the three-level reporting line.
+
+## Deliberate distractors
+
+- Engineering and Sales job families coincide exactly with their departments,
+  so "Engineering" (HR10) and "Sales" (HR7) are unambiguous — the only
+  family/department mismatch is the Data family (HR1).
+- `v_current_employees` is right for 2025 and wrong for any other year (the
+  salary in force at the end of the data, the latest year's rate), and it keeps
+  contractors and interns.
+- Former Principal Engineer Hana Pereira (left 2023-03-31) still has
+  `manager_id` = Helena Voss, so a direct-report count without the active
+  filter says 5, not 4.
+- 2020 was a pay freeze: there are no merit rows that year.
+
+## Curated context
+
+`npm run fixtures:register` seeds, scoped to the HR dataset (seven snippets,
+about 1,150 characters as formatted, well inside the 2,000-character knowledge
+block):
+
+| Kind | Title | Says |
+| --- | --- | --- |
+| default_filter | Employees only | Headcount and pay figures cover `employment_type = 'employee'` |
+| default_filter | Active as of a date | `hired_on <= date AND (terminated_on IS NULL OR terminated_on > date)` |
+| term | Tech employees | The Technology division's departments; job family does not define it |
+| term | Salary | Base pay from `salary_history`, bonuses excluded; a year's salary is the row effective on 31 December |
+| term | Local currency | Convert with `exchange_rates.rate_to_usd` for the same year (a bonus's `fiscal_year`) |
+| term | Top performer | Rating 4 or 5 on the 1–5 scale |
+| term | Total compensation | Base salary for the year plus bonuses for that fiscal year |
+
+and three governed metrics: `avg_base_salary_usd` and
+`total_compensation_usd` on `hr.salary_history`, `attrition_rate` on
+`hr.employees` (terminated during the year ÷ active headcount on 1 January).
+These state facts about the data and the company's definitions — none of them
+names a figure or an answer.
+
+## The suite
+
+`backend/src/mastra/evals/suites/hr.json` — ten cases, one per question in
+the table above, every `expectedSql` hand-verified against the fixture and
+every case's `notes` carrying the exact expected figure *and* the figure each
+trap produces. Each case also carries `expectedReasoning` (the tables, short
+assumption phrases and the metric a correct reasoning trace should show),
+which business expert mode is graded against:
+
+```jsonc
+"expectedReasoning": {
+  "tables": ["hr.employees", "hr.departments", "hr.salary_history", "hr.exchange_rates"],
+  "assumptions": ["Technology division", "not contractors or interns", "salary row effective on 31 December", "USD via exchange rate"],
+  "metric": "avg_base_salary_usd"
+}
+```
+
+Assumption phrases are kept to a few words each, because a phrase counts as
+covered only when each of its significant words appears in the trace.
+
+---
+
 # Case-set conventions
 
 Both sets live in `backend/eval/` and extend the golden-set format with one
@@ -186,5 +301,5 @@ field:
 `control` marks the healthy baseline cases that must keep passing and on which
 the guards must stay silent.
 
-Twenty cases per domain, each tagged, every `expectedSql` verified against the
-live fixture with `npm run eval:validate` — zero model calls.
+Twenty cases per domain (ten for HR), each tagged, every `expectedSql` verified
+against the live fixture with `npm run eval:validate` — zero model calls.

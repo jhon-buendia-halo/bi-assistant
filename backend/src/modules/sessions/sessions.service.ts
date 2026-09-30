@@ -15,7 +15,11 @@ import {
   type ProviderOptions,
 } from '../../mastra/model-compat';
 import { setDatasetToolServices } from '../../mastra/tool-services';
-import type { DatasetSnapshot, SqlRunResult } from '../../mastra/tool-services';
+import type {
+  DatasetColumnSnapshot,
+  DatasetSnapshot,
+  SqlRunResult,
+} from '../../mastra/tool-services';
 import { ASSISTANT_MAX_STEPS } from '../../mastra/agent-constants';
 import { sqlFixOutputSchema } from '../../mastra/agents/sql-fixer.agent';
 import { sqlVerifyOutputSchema } from '../../mastra/agents/sql-verifier.agent';
@@ -38,6 +42,19 @@ import { LlmService } from '../llm/llm.service';
 import { VerifiedQueriesService } from '../verified-queries/verified-queries.service';
 import { MetricsService } from '../metrics/metrics.service';
 import { KnowledgeService } from '../knowledge/knowledge.service';
+import {
+  ExpertModeService,
+  type TraceInput,
+} from '../expert-mode/expert-mode.service';
+import { pickAnswerRecord } from '../expert-mode/answer-record';
+import {
+  validateBlockFeedback,
+  type BlockFeedbackDto,
+} from '../expert-mode/dto/block-feedback.dto';
+import type {
+  BlockFeedback,
+  ReasoningTrace,
+} from '../expert-mode/entities/reasoning-trace.entity';
 import { SessionsRepository } from './repositories/sessions.repository';
 import { VisualizationService } from './visualization.service';
 import { sourceEntities } from './visualization-document';
@@ -69,6 +86,13 @@ const VISUAL_TOOLS = new Set(['create_visual', 'update_visual']);
  * answer without re-reading (and possibly disagreeing with) the store.
  */
 const KNOWLEDGE_USED_CONTEXT_KEY = 'knowledge-used';
+/**
+ * requestContext keys carrying the governed-metrics and verified-reference
+ * blocks this turn's context was built from — read back by business expert
+ * mode, whose trace may only cite sources the turn was actually given.
+ */
+const METRICS_BLOCK_CONTEXT_KEY = 'metrics-block';
+const VERIFIED_BLOCK_CONTEXT_KEY = 'verified-block';
 /** Repair attempts allowed per failed statement (3 executions at most). */
 const SQL_REPAIR_ATTEMPTS = 2;
 const SQL_REPAIRED_NOTE =
@@ -153,10 +177,20 @@ async function readTurnUsage(stream: {
 
 export type StreamEvent = {
   type:
-    'reasoning' | 'text' | 'tool' | 'tool-result' | 'visual-updated' | 'done';
+    | 'reasoning'
+    | 'text'
+    | 'tool'
+    | 'tool-result'
+    | 'visual-updated'
+    /** Business expert mode progress — content is an `ExpertStatus`. */
+    | 'expert-status'
+    | 'done';
   content?: string;
   session?: SessionDoc;
 };
+
+/** Progress of business expert mode's extra passes, streamed as `expert-status`. */
+export type ExpertStatus = 'cross-check' | 'explaining' | 'failed';
 
 @Injectable()
 export class SessionsService implements OnModuleInit {
@@ -185,6 +219,7 @@ export class SessionsService implements OnModuleInit {
     private readonly verifiedQueries: VerifiedQueriesService,
     private readonly metrics: MetricsService,
     private readonly knowledge: KnowledgeService,
+    private readonly expertMode: ExpertModeService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -291,6 +326,8 @@ export class SessionsService implements OnModuleInit {
     // Threaded on requestContext rather than returned alongside the options,
     // because the options object is spread straight into the agent call.
     requestContext.set(KNOWLEDGE_USED_CONTEXT_KEY, knowledge.used);
+    if (metrics) requestContext.set(METRICS_BLOCK_CONTEXT_KEY, metrics);
+    if (verified) requestContext.set(VERIFIED_BLOCK_CONTEXT_KEY, verified);
     return {
       // Analysis often chains several schema + SQL tool calls per turn.
       maxSteps: ASSISTANT_MAX_STEPS,
@@ -550,8 +587,11 @@ export class SessionsService implements OnModuleInit {
     session: SessionDoc,
     question: string,
     data: ToolDataRecord[],
+    answer?: string,
   ): Promise<CrossCheck | undefined> {
-    const record = successfulSqlRuns(data).at(-1);
+    // The query the answer actually quotes — a supporting count that ran
+    // after it must not be the one an independent derivation is compared to.
+    const record = pickAnswerRecord(data, answer);
     // Nothing was executed — there is no result set to corroborate.
     if (!record?.input?.trim()) return undefined;
     try {
@@ -623,6 +663,8 @@ export class SessionsService implements OnModuleInit {
         dialect: string;
         schema: string;
         datasourceId: string;
+        knowledge?: string;
+        metrics?: string;
       }
     | undefined
   > {
@@ -632,6 +674,22 @@ export class SessionsService implements OnModuleInit {
       datasets.find((s) => s.datasourceId)?.datasourceId;
     if (!datasourceId) return undefined;
     const inScope = datasets.filter((s) => s.datasourceId === datasourceId);
+    // The second opinion works under the same business rules as the answer:
+    // the curated knowledge (default filters, term definitions) and the
+    // governed metrics. Independence means never seeing the answer's SQL,
+    // not re-deriving without the semantic layer — a verifier that ignores
+    // "employees only" or "convert to USD" disagrees with every correct
+    // answer that applied them, which turns the cross-check into a measure
+    // of whether the knowledge was followed, inverted.
+    const [knowledge, metrics] = await Promise.all([
+      this.knowledge
+        .contextFor(session.datasets)
+        .then((k) => k.block || undefined)
+        .catch(() => undefined),
+      this.metrics
+        .definitionBlock(inScope.flatMap((s) => s.tables ?? []))
+        .catch(() => undefined),
+    ]);
     return {
       dialect: sqlDialectOf(inScope),
       datasourceId,
@@ -639,16 +697,24 @@ export class SessionsService implements OnModuleInit {
         budgetChars: VERIFIER_SCHEMA_CHARS,
         sampleValues: VERIFIER_SAMPLE_VALUES,
       }),
+      ...(knowledge ? { knowledge } : {}),
+      ...(metrics ? { metrics } : {}),
     };
   }
 
   /**
-   * One verifier pass. It gets the question, the schema with sample values and
+   * One verifier pass. It gets the question, the schema with sample values,
+   * the curated knowledge and metric definitions the answer worked under, and
    * the user-approved reference pairs — deliberately not the original SQL.
    */
   private async deriveIndependentSql(
     question: string,
-    context: { dialect: string; schema: string },
+    context: {
+      dialect: string;
+      schema: string;
+      knowledge?: string;
+      metrics?: string;
+    },
   ): Promise<string | undefined> {
     let verified: string | undefined;
     try {
@@ -667,6 +733,22 @@ export class SessionsService implements OnModuleInit {
           '<available-entities>',
           context.schema || '(no schema snapshot stored for this session)',
           '</available-entities>',
+          ...(context.knowledge
+            ? [
+                '',
+                '<curated-knowledge>',
+                context.knowledge,
+                '</curated-knowledge>',
+              ]
+            : []),
+          ...(context.metrics
+            ? [
+                '',
+                '<metric-definitions>',
+                context.metrics,
+                '</metric-definitions>',
+              ]
+            : []),
           ...(verified
             ? [
                 '',
@@ -999,6 +1081,12 @@ export class SessionsService implements OnModuleInit {
    * `careful` opts the turn into an independent cross-check of the answer's
    * SQL, run before `done` so the transcript the client receives already
    * carries the verdict.
+   *
+   * `expert` (business expert mode) runs the same cross-check and then one
+   * explainer pass that attaches a `ReasoningTrace` to the answer, streaming
+   * `expert-status` events while it works. The explanation never blocks the
+   * answer: when it cannot be built the turn emits `expert-status: failed`
+   * and saves the answer without a trace.
    */
   async streamMessage(
     id: string,
@@ -1007,6 +1095,7 @@ export class SessionsService implements OnModuleInit {
     abortSignal?: AbortSignal,
     activeVisualId?: string,
     careful = false,
+    expert = false,
   ): Promise<void> {
     const trimmed = (content ?? '').trim();
     if (!trimmed) throw new BadRequestException('message is required');
@@ -1042,6 +1131,9 @@ export class SessionsService implements OnModuleInit {
     let clarification: ChatMessage['clarification'] | null = null;
     let visualEvent: VisualEvent | undefined;
     const pendingCalls = new Map<string, Record<string, unknown>>();
+    // Statements the SQL fixer had to repair before they ran — the expert
+    // trace's execution signal counts a repair against the final query.
+    const repairedSql: string[] = [];
     // Every tool name the model actually invoked this turn — the zero-SQL-
     // turn grounding guard below fires only when this stays empty.
     const calledTools = new Set<string>();
@@ -1135,6 +1227,9 @@ export class SessionsService implements OnModuleInit {
             continue;
           }
           const record = toolDataRecord(toolName, args, payload.result);
+          const corrected = (payload.result as { correctedSql?: unknown })
+            ?.correctedSql;
+          if (typeof corrected === 'string') repairedSql.push(corrected);
           if (record) {
             data.push(record);
             emit({
@@ -1235,34 +1330,101 @@ export class SessionsService implements OnModuleInit {
       });
     } else if (text.trim() || visualEvent) {
       const interpretation = interpretationLine(data, entities);
-      // Careful mode only, and only when there is a result set to corroborate.
-      const crossChecked =
-        careful && !turn.signal.aborted
-          ? await this.crossCheckAnswer(session, trimmed, data)
+      // Careful and expert mode only, and only when there is a result set to
+      // corroborate.
+      let crossChecked: CrossCheck | undefined;
+      if ((careful || expert) && !turn.signal.aborted) {
+        if (expert && lastSuccessfulSql(data)) {
+          emit({ type: 'expert-status', content: 'cross-check' });
+        }
+        crossChecked = await this.crossCheckAnswer(
+          session,
+          trimmed,
+          data,
+          text,
+        );
+      }
+      const verified = await this.matchesVerifiedQuery(session, data);
+      const answer =
+        text.trim() ||
+        `${visualEvent!.action === 'created' ? 'Created' : 'Updated'} interactive visual "${visualEvent!.title}" (v${visualEvent!.version}).`;
+      const expertTrace =
+        expert && !turn.signal.aborted
+          ? await this.explainAnswer(
+              {
+                sessionId: id,
+                question: trimmed,
+                answer,
+                data,
+                knowledgeUsed: knowledge ?? [],
+                metricsBlock: contextString(
+                  options.requestContext,
+                  METRICS_BLOCK_CONTEXT_KEY,
+                ),
+                verifiedBlock: contextString(
+                  options.requestContext,
+                  VERIFIED_BLOCK_CONTEXT_KEY,
+                ),
+                verified,
+                crossCheck: crossChecked,
+                repairedSql,
+                abortSignal: turn.signal,
+              },
+              session,
+              emit,
+            )
           : undefined;
       messages.push({
         role: 'assistant',
-        content:
-          text.trim() ||
-          `${visualEvent!.action === 'created' ? 'Created' : 'Updated'} interactive visual "${visualEvent!.title}" (v${visualEvent!.version}).`,
+        content: answer,
         at: new Date().toISOString(),
         ...(data.length ? { data } : {}),
         ...(entities.length ? { entities } : {}),
         ...(interpretation ? { interpretation } : {}),
         ...(reasoning ? { reasoning } : {}),
         ...(knowledge ? { knowledge } : {}),
-        ...((await this.matchesVerifiedQuery(session, data))
-          ? { verified: true }
-          : {}),
+        ...(verified ? { verified: true } : {}),
         ...(visualEvent ? { visual: visualEvent } : {}),
         ...(crossChecked ? { crossCheck: crossChecked } : {}),
         ...(usage ? { usage } : {}),
+        ...(expertTrace ? { expertTrace } : {}),
       });
     }
     const updated = await this.repository.update(id, { messages });
     if (!turn.signal.aborted || clarification) {
       emit({ type: 'done', session: updated ?? fresh });
     }
+  }
+
+  /**
+   * Business expert mode's explainer pass over a finished answer. Never
+   * throws and never blocks the answer: a trace that cannot be built is
+   * reported as `expert-status: failed` and the answer is saved without one.
+   */
+  private async explainAnswer(
+    input: Omit<TraceInput, 'entities'>,
+    session: SessionDoc,
+    emit: (event: StreamEvent) => void,
+  ): Promise<ReasoningTrace | undefined> {
+    emit({ type: 'expert-status', content: 'explaining' });
+    let trace: ReasoningTrace | undefined;
+    try {
+      const datasets = await this.boundDatasets(session.datasets);
+      trace = await this.expertMode.buildTrace({
+        ...input,
+        entities: boundEntities(datasets),
+      });
+    } catch (error) {
+      if (!input.abortSignal?.aborted) {
+        this.logger.warn(
+          `Reasoning trace failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+    if (!trace && !input.abortSignal?.aborted) {
+      emit({ type: 'expert-status', content: 'failed' });
+    }
+    return trace;
   }
 
   /**
@@ -1405,6 +1567,64 @@ export class SessionsService implements OnModuleInit {
     return updated ?? { ...session, messages };
   }
 
+  /**
+   * Rate one block of an answer's reasoning trace (business expert mode):
+   * thumbs up/down and/or a comment, PATCH semantics (`vote: null` clears the
+   * vote). The rating is stored in the `reasoning_feedback` collection — with
+   * the question and a snapshot of the rated block, for the improvement loop —
+   * and mirrored onto the message so the transcript renders it.
+   */
+  async recordBlockFeedback(
+    id: string,
+    body: BlockFeedbackDto,
+  ): Promise<SessionDoc> {
+    const { messageAt, block, patch } = validateBlockFeedback(body);
+    const session = await this.get(id);
+    const index = session.messages.findIndex(
+      (m) => m.role === 'assistant' && m.at === messageAt,
+    );
+    if (index < 0) {
+      throw new NotFoundException(`No assistant message at ${messageAt}`);
+    }
+    const answer = session.messages[index];
+    const trace = answer.expertTrace;
+    if (!trace) {
+      throw new BadRequestException('This answer has no reasoning trace');
+    }
+    const snapshot = trace.blocks.find((b) => b.kind === block);
+    if (!snapshot) {
+      throw new BadRequestException(
+        `This reasoning trace has no ${block} block`,
+      );
+    }
+    const question = session.messages
+      .slice(0, index)
+      .reverse()
+      .find((m) => m.role === 'user');
+    const saved = await this.expertMode.saveFeedback(
+      { sessionId: id, messageAt, block },
+      {
+        traceId: trace.id,
+        question: question?.content ?? '',
+        blockSnapshot: snapshot,
+      },
+      patch,
+    );
+    const mirrored: BlockFeedback = {
+      ...(saved.vote ? { vote: saved.vote } : {}),
+      ...(saved.comment ? { comment: saved.comment } : {}),
+      at: saved.updatedAt ?? new Date().toISOString(),
+    };
+    const feedback = { ...(trace.feedback ?? {}) };
+    // A rating cleared of both vote and comment leaves nothing to render.
+    if (mirrored.vote || mirrored.comment) feedback[block] = mirrored;
+    else delete feedback[block];
+    const messages = [...session.messages];
+    messages[index] = { ...answer, expertTrace: { ...trace, feedback } };
+    const updated = await this.repository.update(id, { messages });
+    return updated ?? { ...session, messages };
+  }
+
   /** The session's datasource when it is unambiguous — provenance only. */
   private async soleDatasourceId(
     session: SessionDoc,
@@ -1430,6 +1650,46 @@ export class SessionsService implements OnModuleInit {
       at: new Date().toISOString(),
     });
   }
+}
+
+/** A string value off a requestContext, or undefined. */
+function contextString(
+  requestContext: { get(key: string): unknown } | undefined,
+  key: string,
+): string | undefined {
+  const value = requestContext?.get(key);
+  return typeof value === 'string' && value ? value : undefined;
+}
+
+/**
+ * Every entity the session's datasets expose, deduplicated by key. A table
+ * listed without a schema snapshot is kept with no columns, so it still
+ * counts as bound when the expert trace checks the SQL against it.
+ */
+function boundEntities(
+  datasets: {
+    tables?: string[];
+    entities?: { key: string; columns: DatasetColumnSnapshot[] }[];
+  }[],
+): { key: string; columns: DatasetColumnSnapshot[] }[] {
+  const byKey = new Map<
+    string,
+    { key: string; columns: DatasetColumnSnapshot[] }
+  >();
+  for (const dataset of datasets) {
+    for (const entity of dataset.entities ?? []) {
+      if (entity?.key && !byKey.has(entity.key)) {
+        byKey.set(entity.key, {
+          key: entity.key,
+          columns: entity.columns ?? [],
+        });
+      }
+    }
+    for (const key of dataset.tables ?? []) {
+      if (key && !byKey.has(key)) byKey.set(key, { key, columns: [] });
+    }
+  }
+  return Array.from(byKey.values());
 }
 
 /** Successful SQL runs behind an answer, oldest first. */

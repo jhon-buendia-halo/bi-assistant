@@ -3,6 +3,11 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { API_BASE_URL } from '../../../core/config/api.config';
 import {
+  BlockFeedbackInput,
+  EXPERT_STATUSES,
+  ExpertStatus,
+} from '../models/expert-trace.model';
+import {
   DeepAnalysisResult,
   InteractiveVisualization,
   MessageFeedback,
@@ -45,6 +50,14 @@ export function parseToolEvent(content: string): ToolCallEvent {
     // Not JSON — the old contract, a plain tool name.
   }
   return { name: raw };
+}
+
+/** An `expert-status` frame's content, or null when it is not one we know. */
+export function parseExpertStatus(content: unknown): ExpertStatus | null {
+  const status = typeof content === 'string' ? content.trim() : '';
+  return (EXPERT_STATUSES as readonly string[]).includes(status)
+    ? (status as ExpertStatus)
+    : null;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -208,6 +221,27 @@ export class SessionsApiService {
     );
   }
 
+  /**
+   * Rate one block of an answer's reasoning trace (business expert mode).
+   * Only the fields present are sent — the backend patches, so a vote does
+   * not wipe a note and `vote: null` clears the vote.
+   */
+  sendBlockFeedback(
+    sessionId: string,
+    input: BlockFeedbackInput,
+  ): Observable<SessionActionResult> {
+    const body: BlockFeedbackInput = {
+      messageAt: input.messageAt,
+      block: input.block,
+      ...(input.vote !== undefined ? { vote: input.vote } : {}),
+      ...(input.comment !== undefined ? { comment: input.comment } : {}),
+    };
+    return this.http.post<SessionActionResult>(
+      `${API_BASE_URL}/sessions/${encodeURIComponent(sessionId)}/expert/feedback`,
+      body,
+    );
+  }
+
   /** SSE stream: reasoning/text/tool deltas while the agent thinks. */
   async streamMessage(
     id: string,
@@ -219,6 +253,8 @@ export class SessionsApiService {
       /** Summary of one finished call, including why it was run. */
       onToolResult?: (summary: ToolDataRecord) => void;
       onVisualUpdated?: (event: VisualEvent) => void;
+      /** Business expert mode: the cross-check / explanation pass started or failed. */
+      onExpertStatus?: (status: ExpertStatus) => void;
       onDone?: (session: Session) => void;
       onError?: (message: string) => void;
     },
@@ -226,6 +262,8 @@ export class SessionsApiService {
     activeVisualizationId?: string,
     /** Careful mode: the backend cross-checks the answer before `done`. */
     careful = false,
+    /** Business expert mode: the answer comes back with a reasoning trace. */
+    expert = false,
   ): Promise<void> {
     let res: Response;
     try {
@@ -238,6 +276,7 @@ export class SessionsApiService {
             content,
             activeVisualizationId,
             ...(careful ? { careful: true } : {}),
+            ...(expert ? { expert: true } : {}),
           }),
           signal,
         },
@@ -297,6 +336,11 @@ export class SessionsApiService {
                   // Malformed event — ignore.
                 }
                 break;
+              case 'expert-status': {
+                const status = parseExpertStatus(event.content);
+                if (status) handlers.onExpertStatus?.(status);
+                break;
+              }
               case 'done':
                 terminalEventReceived = true;
                 handlers.onDone?.(event.session);

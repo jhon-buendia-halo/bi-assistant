@@ -18,6 +18,12 @@
  * the Nest app can import it, and it unit-tests without a database.
  */
 
+import type {
+  ExpertCaseRecord,
+  ExpertRunSummary,
+} from '../expert-mode/expert-metrics';
+import type { ConfidenceBand } from '../expert-mode/entities/reasoning-trace.entity';
+
 /** Token counts for one or more model calls. */
 export interface TokenUsage {
   inputTokens: number;
@@ -214,6 +220,25 @@ export interface EvalRunLogCase {
   durationMs: number;
   usage?: TokenUsage;
   estimatedCostUsd?: number;
+  /** Business expert mode measurements — CLI `--expert` runs only. */
+  expert?: EvalRunLogExpertCase;
+}
+
+/**
+ * One case's reasoning-trace measurements (`expert-metrics.ts`). With
+ * `--repeat`, the top-level fields describe the attempt the verdict reports
+ * and `attempts` keeps every attempt's (verdict, confidence) pair — the pairs
+ * the run's AUROC is computed over.
+ */
+export interface EvalRunLogExpertCase extends ExpertCaseRecord {
+  /** Ungraded cases (no reference SQL) only: the turn asked a clarifying question. */
+  clarified?: boolean;
+  attempts?: {
+    verdict: EvalRunLogCase['verdict'];
+    traced: boolean;
+    confidence?: number;
+    band?: ConfidenceBand;
+  }[];
 }
 
 /**
@@ -254,6 +279,12 @@ export interface EvalRunLogRecord {
   comparedToRunId?: string;
   regressions?: string[];
   improvements?: string[];
+  /**
+   * Business expert mode (CLI `--expert`): AUROC of overall confidence vs
+   * PASS, selective accuracy per band and the coverage means. Optional, so
+   * `schemaVersion` stays 1 and older readers ignore it.
+   */
+  expert?: ExpertRunSummary;
 }
 
 /** Per-category tallies from case-level verdicts. SKIPs are not counted. */

@@ -40,6 +40,7 @@
     "eval:validate": "ts-node -T -P tsconfig.json scripts/run-eval.ts --validate",
     "fixtures:health-insurance": "ts-node -T -P tsconfig.json ../docker/postgres/generate/health-insurance.ts",
     "fixtures:genomics": "ts-node -T -P tsconfig.json ../docker/postgres/generate/genomics.ts",
+    "fixtures:hr": "ts-node -T -P tsconfig.json ../docker/postgres/generate/hr.ts",
     "fixtures:register": "ts-node -T -P tsconfig.json scripts/bootstrap-fixtures.ts",
     "check:answers": "ts-node -T -P tsconfig.json scripts/check-answers.ts",
     "worldcup:api:dump": "ts-node -T -P tsconfig.json scripts/worldcup-rest-api/dump.ts",

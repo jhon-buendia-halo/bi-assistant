@@ -1,5 +1,6 @@
 import type { KnowledgeUse } from '../../knowledge/entities/knowledge-snippet.entity';
 import type { TokenUsage } from '../../agents/eval-telemetry';
+import type { ReasoningTrace } from '../../expert-mode/entities/reasoning-trace.entity';
 
 export type { KnowledgeUse };
 
@@ -126,6 +127,14 @@ export interface ChatMessage {
    * having to wrap the provider.
    */
   usage?: TokenUsage;
+  /**
+   * Business expert mode only: how the answer was reached — interpretation,
+   * tables and joins, assumptions, metric definition and annotated SQL —
+   * each block with a measured confidence and the reader's latest rating.
+   * Never on a clarification. Absent when the mode was off or the trace
+   * could not be built (the answer is never blocked by its explanation).
+   */
+  expertTrace?: ReasoningTrace;
 }
 
 export interface AnalysisReport {

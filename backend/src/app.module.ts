@@ -11,6 +11,7 @@ import { MetricsModule } from './modules/metrics/metrics.module';
 import { KnowledgeModule } from './modules/knowledge/knowledge.module';
 import { DeepAnalysisModule } from './modules/deep-analysis/deep-analysis.module';
 import { TestingDataModule } from './modules/testing-data/testing-data.module';
+import { ExpertModeModule } from './modules/expert-mode/expert-mode.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { TestingDataModule } from './modules/testing-data/testing-data.module';
     VerifiedQueriesModule,
     MetricsModule,
     KnowledgeModule,
+    ExpertModeModule,
     SessionsModule,
     DeepAnalysisModule,
     TestingDataModule,

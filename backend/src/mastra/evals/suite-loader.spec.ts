@@ -196,6 +196,120 @@ describe('suite validation', () => {
   });
 });
 
+describe('expectedReasoning', () => {
+  const withReasoning = (expectedReasoning: unknown): unknown =>
+    suiteJson({
+      cases: [
+        {
+          id: 'first',
+          category: 'domain-semantics',
+          question: 'What is the average salary of tech employees in 2025?',
+          intent: 'Technology division, salary on 31 December, USD.',
+          expectedReasoning,
+        },
+      ],
+    });
+
+  it('is optional, and carried through trimmed when present', () => {
+    expect(parseSuite(suiteJson(), 'demo.json').cases[0]).not.toHaveProperty(
+      'expectedReasoning',
+    );
+    const suite = parseSuite(
+      withReasoning({
+        tables: ['hr.v_salary_by_year', ' hr.departments '],
+        assumptions: ['employees only, no contractors'],
+        metric: ' avg_base_salary_usd ',
+      }),
+      'demo.json',
+    );
+    expect(suite.cases[0].expectedReasoning).toEqual({
+      tables: ['hr.v_salary_by_year', 'hr.departments'],
+      assumptions: ['employees only, no contractors'],
+      metric: 'avg_base_salary_usd',
+    });
+  });
+
+  it('accepts any one of the three fields on its own', () => {
+    for (const reasoning of [
+      { tables: ['hr.employees'] },
+      { assumptions: ['salary effective on 31 December'] },
+      { metric: 'attrition_rate' },
+    ]) {
+      expect(
+        parseSuite(withReasoning(reasoning), 'demo.json').cases[0]
+          .expectedReasoning,
+      ).toEqual(reasoning);
+    }
+  });
+
+  it.each([
+    [
+      'not an object',
+      ['hr.employees'],
+      /case "first"\.expectedReasoning must be an object/,
+    ],
+    [
+      'empty',
+      {},
+      /expectedReasoning must carry at least one of tables, assumptions, metric/,
+    ],
+    [
+      'a typo in a key',
+      { table: ['hr.employees'] },
+      /unknown field\(s\) "table".*known fields: tables/,
+    ],
+    [
+      'empty tables',
+      { tables: [] },
+      /expectedReasoning\.tables must be a non-empty array/,
+    ],
+    [
+      'a blank table',
+      { tables: [' '] },
+      /expectedReasoning\.tables\[0\] must be a non-empty string/,
+    ],
+    [
+      'a bare table name',
+      { tables: ['employees'] },
+      /tables\[0\] "employees" must be schema\.table/,
+    ],
+    [
+      'a catalog-qualified table',
+      { tables: ['world_cup.hr.employees'] },
+      /must be schema\.table/,
+    ],
+    [
+      'empty assumptions',
+      { assumptions: [] },
+      /expectedReasoning\.assumptions must be a non-empty array/,
+    ],
+    [
+      'an unscorable phrase',
+      { assumptions: ['in USD'] },
+      /assumptions\[0\] "in USD" has no word of four or more letters/,
+    ],
+    [
+      'a blank metric',
+      { metric: '  ' },
+      /expectedReasoning\.metric must be a non-empty string/,
+    ],
+  ])('rejects %s', (_label, reasoning, expected) => {
+    expect(() => parseSuite(withReasoning(reasoning), 'demo.json')).toThrow(
+      expected,
+    );
+  });
+
+  it('leaves the in-app case shape untouched — only the CLI reads it', () => {
+    const suite = parseSuite(
+      withReasoning({ tables: ['hr.employees'] }),
+      'demo.json',
+    );
+    expect(toAssistantEvalCase(suite.cases[0])).not.toHaveProperty(
+      'expectedReasoning',
+    );
+  });
+});
+
 describe('check mapping', () => {
   it('builds one scorer per spec, in declaration order', () => {
     const evalCase = toAssistantEvalCase({

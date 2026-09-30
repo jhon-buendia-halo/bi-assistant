@@ -15,6 +15,7 @@ import type {
   MessageFeedback,
 } from './entities/session.entity';
 import type { Response } from 'express';
+import type { BlockFeedbackDto } from '../expert-mode/dto/block-feedback.dto';
 
 @Controller('sessions')
 export class SessionsController {
@@ -246,6 +247,11 @@ export class SessionsController {
       activeVisualizationId?: string;
       /** Careful mode: cross-check the answer before finishing the turn. */
       careful?: boolean;
+      /**
+       * Business expert mode: cross-check, then attach a reasoning trace to
+       * the answer; progress arrives as `expert-status` events.
+       */
+      expert?: boolean;
     },
     @Res() res: Response,
   ): Promise<void> {
@@ -268,6 +274,7 @@ export class SessionsController {
           ? body.activeVisualizationId
           : undefined,
         body?.careful === true,
+        body?.expert === true,
       );
     } catch (err) {
       if (!controller.signal.aborted) {
@@ -298,6 +305,28 @@ export class SessionsController {
             : 'Answer marked as wrong',
         session,
       };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { ok: false, message };
+    }
+  }
+
+  /**
+   * Rate one block of an answer's reasoning trace (business expert mode).
+   * PATCH semantics: only the fields sent change, `vote: null` clears the
+   * vote. Returns the session with the rating mirrored onto the message.
+   */
+  @Post(':id/expert/feedback')
+  async rateReasoningBlock(
+    @Param('id') id: string,
+    @Body() body: BlockFeedbackDto,
+  ): Promise<{ ok: boolean; message: string; session?: SessionDoc }> {
+    try {
+      const session = await this.sessionsService.recordBlockFeedback(
+        id,
+        body ?? {},
+      );
+      return { ok: true, message: 'Feedback saved', session };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return { ok: false, message };

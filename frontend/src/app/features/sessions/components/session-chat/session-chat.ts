@@ -20,7 +20,9 @@ import {
   Brain,
   Copy,
   Download,
+  GraduationCap,
   Info,
+  Lightbulb,
   Loader2,
   ShieldAlert,
   ShieldCheck,
@@ -43,10 +45,13 @@ import {
   DeepAnalysisStatus,
   MessageFeedback,
   Session,
+  SessionActionResult,
   ReasoningStep,
   ToolDataRecord,
   VisualEvent,
 } from '../../models/session.model';
+import { ExpertStatus } from '../../models/expert-trace.model';
+import { ExpertTrace } from '../expert-trace/expert-trace';
 import {
   kindAccentClass,
   kindDescription,
@@ -67,6 +72,38 @@ export function drillPrompt(selection: DataPointSelection): string {
 
 export function whyPrompt(selection: DataPointSelection): string {
   return `Why does "${selection.value}" stand out? Explain the drivers.`;
+}
+
+/** Where the Expert chip's on/off state is remembered between sessions. */
+export const EXPERT_MODE_STORAGE_KEY = 'qti.expertMode';
+
+/** Stored Expert preference; off when storage is empty or unavailable. */
+export function readExpertPreference(): boolean {
+  try {
+    return globalThis.localStorage?.getItem(EXPERT_MODE_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function writeExpertPreference(on: boolean): void {
+  try {
+    globalThis.localStorage?.setItem(EXPERT_MODE_STORAGE_KEY, on ? '1' : '0');
+  } catch {
+    // Private window / blocked storage: the chip still works for this run.
+  }
+}
+
+/** Thinking-block line for one business-expert progress notice. */
+export function expertStatusLine(status: ExpertStatus): string {
+  switch (status) {
+    case 'cross-check':
+      return 'Cross-checking with an independent query…';
+    case 'explaining':
+      return 'Explaining the reasoning…';
+    case 'failed':
+      return 'Could not build the reasoning trace';
+  }
 }
 
 /** One tool call shown in the Thinking block, enriched when its result lands. */
@@ -116,7 +153,7 @@ export function deepAnalysisProgressLine(job: DeepAnalysisActivity): string {
 
 @Component({
   selector: 'app-session-chat',
-  imports: [LucideAngularModule, MarkdownPipe, NgTemplateOutlet],
+  imports: [ExpertTrace, LucideAngularModule, MarkdownPipe, NgTemplateOutlet],
   templateUrl: './session-chat.html',
   styleUrl: './session-chat.scss',
 })
@@ -133,7 +170,9 @@ export class SessionChat implements OnDestroy {
   readonly Brain = Brain;
   readonly Copy = Copy;
   readonly Download = Download;
+  readonly GraduationCap = GraduationCap;
   readonly Info = Info;
+  readonly Lightbulb = Lightbulb;
   readonly Loader2 = Loader2;
   readonly ShieldAlert = ShieldAlert;
   readonly ShieldCheck = ShieldCheck;
@@ -172,6 +211,14 @@ export class SessionChat implements OnDestroy {
    * not stored with the session.
    */
   readonly careful = signal(false);
+  /**
+   * Business expert mode: answers come back with a reasoning trace (and a
+   * cross-check). A standing preference — remembered across sessions and app
+   * restarts, unlike Careful.
+   */
+  readonly expert = signal(readExpertPreference());
+  /** Latest progress notice of the expert pass for the in-flight turn. */
+  readonly expertStatus = signal<ExpertStatus | null>(null);
   /** Tail of the model's reasoning stream, shown Conductor-style. */
   readonly reasoning = signal('');
   /** Tools invoked during the current turn, with result summaries. */
@@ -277,6 +324,7 @@ export class SessionChat implements OnDestroy {
       // it opens another session, so nothing to reset here.
       this.draft.set('');
       // A new conversation starts a new session — careful mode is opt-in again.
+      // Expert mode is a standing preference and deliberately survives.
       this.careful.set(false);
       this.customAnswer.set('');
       this.customAnswerOpen.set(false);
@@ -401,12 +449,22 @@ export class SessionChat implements OnDestroy {
           if (this.activeStream !== controller) return;
           this.visualUpdated.emit(event);
         },
+        onExpertStatus: (status) => {
+          if (this.activeStream !== controller) return;
+          this.expertStatus.set(status);
+          this.scrollToBottom();
+        },
         onDone: (session) => {
           if (this.activeStream !== controller) return;
+          const traceFailed = this.expertStatus() === 'failed';
           this.activeStream = null;
           this.stopTimer();
           this.sending.set(false);
           this.resetTurnState();
+          // The thinking block is about to disappear with its status line.
+          if (traceFailed) {
+            this.toast.info('Answer saved without its reasoning trace');
+          }
           if (session) this.messages.set(session.messages);
           this.scrollToBottom();
         },
@@ -446,11 +504,29 @@ export class SessionChat implements OnDestroy {
       controller.signal,
       this.activeVisualizationId() ?? undefined,
       this.careful(),
+      this.expert(),
     );
   }
 
   toggleCareful(): void {
     this.careful.update((on) => !on);
+  }
+
+  toggleExpert(): void {
+    const on = !this.expert();
+    this.expert.set(on);
+    writeExpertPreference(on);
+  }
+
+  expertStatusLine(status: ExpertStatus): string {
+    return expertStatusLine(status);
+  }
+
+  /** A reasoning-block rating was saved: adopt the persisted transcript. */
+  onExpertFeedbackSaved(result: SessionActionResult): void {
+    if (!result.session) return;
+    if (!this.sending()) this.messages.set(result.session.messages);
+    this.sessionUpdated.emit(result.session);
   }
 
   stop(): void {
@@ -491,6 +567,7 @@ export class SessionChat implements OnDestroy {
     this.reasoning.set('');
     this.toolCalls.set([]);
     this.streamingText.set('');
+    this.expertStatus.set(null);
     this.elapsed.set(0);
   }
 

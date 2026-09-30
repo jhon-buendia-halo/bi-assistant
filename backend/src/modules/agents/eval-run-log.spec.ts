@@ -80,6 +80,34 @@ describe('writeRunLog / readRunLog', () => {
     });
   });
 
+  it('carries the expert headline and constraint onto the index line, only for expert runs', () => {
+    writeRunLog(record({ runId: 'aaaaaaaa-0000-0000-0000-000000000000' }), dir);
+    writeRunLog(
+      record({
+        runId: 'bbbbbbbb-0000-0000-0000-000000000000',
+        expert: {
+          graded: 10,
+          traced: 9,
+          tracedPassed: 6,
+          tracedFailed: 3,
+          auroc: 0.8333,
+          bands: {
+            high: { band: 'high', n: 5, correct: 5, accuracy: 1, coverage: 0.5556 },
+            medium: { band: 'medium', n: 3, correct: 1, accuracy: 0.3333, coverage: 0.3333 },
+            low: { band: 'low', n: 1, correct: 0, accuracy: 0, coverage: 0.1111 },
+          },
+          highBandTarget: 0.9,
+          meetsHighBandTarget: true,
+          coverage: {},
+        },
+      }),
+      dir,
+    );
+    const [plain, expert] = readRunLogIndex(dir);
+    expect(plain).not.toHaveProperty('expertAuroc');
+    expect(expert).toMatchObject({ expertAuroc: 0.8333, expertHighBandAccuracy: 1 });
+  });
+
   it('appends rather than replacing, so the index is a history', () => {
     writeRunLog(record({ runId: 'aaaaaaaa-0000-0000-0000-000000000000', label: 'baseline' }), dir);
     writeRunLog(record({ runId: 'bbbbbbbb-0000-0000-0000-000000000000', label: 'iter-1' }), dir);

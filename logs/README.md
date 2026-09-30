@@ -78,6 +78,7 @@ One JSON file per run, `schemaVersion: 1`. Fields, in the order they appear:
 | `estimatedCostUsd` | number? | Run total in US dollars, or absent when the model has no rate. |
 | `costIncomplete` | boolean? | See above — the cost is a floor. |
 | `cases` | array | Per case: `id`, `category?`, `verdict` (`PASS`/`FAIL`/`ERROR`/`SKIP`), `reason?` (`result-mismatch`, `no-sql`, `timeout`, `sql-error`, …), `durationMs`, `usage?`, `estimatedCostUsd?`. With `--repeat n` the CLI also writes `runs` and `passes`, so a 4/5 case reads as a flake rather than a flat fail. |
+| `expert` | object? | `--expert` runs only: `{ graded, traced, tracedPassed, tracedFailed, auroc?, bands: { high|medium|low: { n, correct, accuracy?, coverage? } }, highBandTarget, meetsHighBandTarget?, coverage: { tables?, assumptions?, metric? }, probes? }`. `auroc` is the headline (overall confidence vs PASS, Mann–Whitney with ties); absent when a class is empty. Per case, `cases[].expert` carries `{ traced, confidence?, band?, tablesCoverage?, assumptionsCoverage?, metricMatched?, blocks }`. The index line gains `expertAuroc` and `expertHighBandAccuracy`. |
 | `comparedToRunId` | string? | Set when the run was diffed against an earlier one. |
 | `regressions` / `improvements` | string[]? | Case ids that flipped, relative to `comparedToRunId`. |
 

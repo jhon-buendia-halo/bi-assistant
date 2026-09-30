@@ -155,6 +155,13 @@ export function writeRunLog(
       outputTokens: record.usage.outputTokens,
       totalTokens: record.usage.totalTokens,
       estimatedCostUsd: record.estimatedCostUsd,
+      // Expert runs: the headline and the constraint belong on the trend line.
+      ...(record.expert
+        ? {
+            expertAuroc: record.expert.auroc,
+            expertHighBandAccuracy: record.expert.bands.high.accuracy,
+          }
+        : {}),
       file: runLogFilename(record),
     };
     appendFileSync(indexFile, `${JSON.stringify(summary)}\n`, 'utf8');

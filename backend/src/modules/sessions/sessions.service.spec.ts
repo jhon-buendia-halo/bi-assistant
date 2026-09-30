@@ -51,6 +51,11 @@ jest.mock('../../mastra/agents/sql-verifier.agent', () => {
   const { z } = require('zod') as typeof import('zod');
   return { sqlVerifyOutputSchema: z.object({ sql: z.string() }) };
 });
+// Business expert mode's service loads the Mastra agent — stub the module;
+// the streaming tests hand SessionsService their own `buildTrace` double.
+jest.mock('../expert-mode/expert-mode.service', () => ({
+  ExpertModeService: class {},
+}));
 jest.mock('./repositories/sessions.repository', () => ({
   SessionsRepository: class {},
 }));
@@ -103,6 +108,9 @@ describe('SessionsService streaming', () => {
         rows?: Record<string, unknown>[];
         runFails?: boolean;
       };
+      /** Business expert mode: what `buildTrace` resolves to (or throws). */
+      expertTrace?: unknown;
+      expertThrows?: boolean;
     } = {},
   ) {
     const session: SessionDoc = {
@@ -167,6 +175,11 @@ describe('SessionsService streaming', () => {
             .fn()
             .mockResolvedValue({ columns: ['n'], rows: check.rows ?? [] }),
     };
+    const expertMode = {
+      buildTrace: options.expertThrows
+        ? jest.fn().mockRejectedValue(new Error('explainer crashed'))
+        : jest.fn().mockResolvedValue(options.expertTrace),
+    };
     const service = new SessionsService(
       repository as never,
       {
@@ -210,6 +223,7 @@ describe('SessionsService streaming', () => {
       verifiedQueries as never,
       metrics as never,
       knowledge as never,
+      expertMode as never,
     );
     return {
       service,
@@ -220,6 +234,7 @@ describe('SessionsService streaming', () => {
       knowledge,
       verifier,
       datasources,
+      expertMode,
     };
   }
 
@@ -752,6 +767,32 @@ describe('SessionsService streaming', () => {
       expect(prompt).not.toContain(PRIMARY);
     });
 
+    it('hands the verifier the curated knowledge the answer worked under', async () => {
+      const { service, verifier } = buildStreaming(
+        answerStream([{ sql: PRIMARY, rows: [{ n: 64 }] }]),
+        {
+          crossCheck: {
+            sql: 'SELECT COUNT(1) AS total FROM main.football.matches',
+            rows: [{ total: 64 }],
+          },
+          tables: ['main.football.matches'],
+          knowledgeBlock:
+            'Curated dataset knowledge:\n- [default_filter] Finals only: count knockout matches only.',
+        },
+      );
+
+      await run(service, true);
+
+      // Same business rules as the answer — a verifier without them disagrees
+      // with every correct answer that applied a default filter.
+      const prompt = (
+        verifier.generate.mock.calls as unknown[][]
+      )[0][0] as string;
+      expect(prompt).toContain('<curated-knowledge>');
+      expect(prompt).toContain('[default_filter] Finals only');
+      expect(prompt).not.toContain(PRIMARY);
+    });
+
     it('disagrees when the independent query returns something else', async () => {
       const { service, session } = carefulTurn({ rows: [{ total: 63 }] });
 
@@ -808,6 +849,186 @@ describe('SessionsService streaming', () => {
 
       expect(verifier.generate).not.toHaveBeenCalled();
       expect(session.messages.at(-1)?.crossCheck).toBeUndefined();
+    });
+  });
+
+  describe('business expert mode', () => {
+    const PRIMARY = 'SELECT count(*) AS n FROM main.football.matches';
+    const TRACE = {
+      id: 'trace-1',
+      version: 1,
+      blocks: [],
+      overall: { score: 0.9, band: 'high', signals: [] },
+      generatedAt: '2026-09-29T00:00:00.000Z',
+    };
+
+    const expertTurn = (
+      options: Parameters<typeof buildStreaming>[1] = {},
+      stream: AsyncGenerator<unknown> = answerStream([
+        { sql: PRIMARY, rows: [{ n: 64 }] },
+      ]),
+    ) =>
+      buildStreaming(stream, {
+        tables: ['main.football.matches'],
+        crossCheck: { sql: PRIMARY, rows: [{ n: 64 }] },
+        ...options,
+      });
+
+    const run = (
+      service: SessionsService,
+      events: StreamEvent[],
+      flags: { careful?: boolean; expert?: boolean } = {},
+    ) =>
+      service.streamMessage(
+        'session-1',
+        'How many matches were played?',
+        (event) => events.push(event),
+        undefined,
+        undefined,
+        flags.careful ?? false,
+        flags.expert ?? false,
+      );
+
+    it('leaves a turn without the flag untouched: no pass, no status events', async () => {
+      const { service, session, expertMode, verifier } = expertTurn({
+        expertTrace: TRACE,
+      });
+      const events: StreamEvent[] = [];
+
+      await run(service, events);
+
+      expect(expertMode.buildTrace).not.toHaveBeenCalled();
+      expect(verifier.generate).not.toHaveBeenCalled();
+      expect(events.some((e) => e.type === 'expert-status')).toBe(false);
+      expect(session.messages.at(-1)).not.toHaveProperty('expertTrace');
+    });
+
+    it('cross-checks, explains and persists the trace on the answer', async () => {
+      const { service, session, expertMode, verifier } = expertTurn({
+        expertTrace: TRACE,
+        verified: true,
+        knowledgeUsed: [
+          { id: 'k1', kind: 'term', title: 'Match', body: 'A played game.' },
+        ],
+        metricsBlock:
+          'Governed metric definitions (curated — …):\n- Matches (match_count) on main.football.matches: COUNT(*)',
+      });
+      const events: StreamEvent[] = [];
+
+      await run(service, events, { expert: true });
+
+      // Expert implies the careful-mode cross-check.
+      expect(verifier.generate).toHaveBeenCalledTimes(1);
+      expect(
+        events.filter((e) => e.type === 'expert-status').map((e) => e.content),
+      ).toEqual(['cross-check', 'explaining']);
+      expect(events.at(-1)?.type).toBe('done');
+
+      const input = (expertMode.buildTrace.mock.calls as unknown[][])[0][0] as {
+        [key: string]: unknown;
+      };
+      expect(input).toEqual(
+        expect.objectContaining({
+          sessionId: 'session-1',
+          question: 'How many matches were played?',
+          answer: 'Here is the answer.',
+          verified: true,
+          crossCheck: expect.objectContaining({ status: 'agree' }),
+          knowledgeUsed: [expect.objectContaining({ title: 'Match' })],
+          metricsBlock: expect.stringContaining('Matches (match_count)'),
+          repairedSql: [],
+        }),
+      );
+      expect(input.data).toEqual([
+        expect.objectContaining({ tool: 'run_readonly_sql', input: PRIMARY }),
+      ]);
+      expect(input.entities).toEqual([
+        expect.objectContaining({ key: 'main.football.matches' }),
+      ]);
+      const message = session.messages.at(-1)!;
+      expect(message.expertTrace).toEqual(TRACE);
+      expect(message.crossCheck?.status).toBe('agree');
+      expect(message.verified).toBe(true);
+    });
+
+    it('skips the cross-check status when the turn ran no SQL', async () => {
+      const { service, expertMode } = expertTurn(
+        { expertTrace: TRACE },
+        answerStream([]),
+      );
+      const events: StreamEvent[] = [];
+
+      await run(service, events, { expert: true });
+
+      expect(
+        events.filter((e) => e.type === 'expert-status').map((e) => e.content),
+      ).toEqual(['explaining']);
+      expect(expertMode.buildTrace).toHaveBeenCalledTimes(1);
+    });
+
+    it('saves the answer without a trace and reports failure when none could be built', async () => {
+      const { service, session } = expertTurn({ expertTrace: undefined });
+      const events: StreamEvent[] = [];
+
+      await run(service, events, { expert: true });
+
+      expect(
+        events.filter((e) => e.type === 'expert-status').map((e) => e.content),
+      ).toEqual(['cross-check', 'explaining', 'failed']);
+      const message = session.messages.at(-1)!;
+      expect(message.content).toBe('Here is the answer.');
+      expect(message).not.toHaveProperty('expertTrace');
+      expect(events.at(-1)?.type).toBe('done');
+    });
+
+    it('never lets a crashing explainer lose the answer', async () => {
+      const { service, session } = expertTurn({ expertThrows: true });
+      const events: StreamEvent[] = [];
+
+      await run(service, events, { expert: true });
+
+      expect(events.at(-1)?.type).toBe('done');
+      expect(session.messages.at(-1)?.content).toBe('Here is the answer.');
+      expect(
+        events.some(
+          (e) => e.type === 'expert-status' && e.content === 'failed',
+        ),
+      ).toBe(true);
+    });
+
+    it('gives a clarification no trace', async () => {
+      const { service, session, expertMode } = expertTurn(
+        { expertTrace: TRACE },
+        clarificationStream(),
+      );
+      const events: StreamEvent[] = [];
+
+      await run(service, events, { expert: true });
+
+      expect(expertMode.buildTrace).not.toHaveBeenCalled();
+      expect(events.some((e) => e.type === 'expert-status')).toBe(false);
+      expect(session.messages.at(-1)?.clarification).toBeDefined();
+      expect(session.messages.at(-1)).not.toHaveProperty('expertTrace');
+    });
+
+    it('tells the trace which statements the fixer repaired', async () => {
+      const { service, expertMode } = expertTurn(
+        { expertTrace: TRACE },
+        answerStream([
+          {
+            sql: 'SELECT cnt FROM main.football.matches',
+            rows: [{ n: 64 }],
+            correctedSql: PRIMARY,
+          },
+        ]),
+      );
+
+      await run(service, [], { expert: true });
+
+      const input = (expertMode.buildTrace.mock.calls as unknown[][])[0][0] as {
+        repairedSql: string[];
+      };
+      expect(input.repairedSql).toEqual([PRIMARY]);
     });
   });
 
@@ -932,6 +1153,7 @@ describe('SessionsService SQL self-correction', () => {
       } as never,
       { getByNames: jest.fn().mockResolvedValue([dataset]) } as never,
       { runReadOnlySql: overrides.runs } as never,
+      {} as never,
       {} as never,
       {} as never,
       {} as never,
@@ -1156,6 +1378,7 @@ describe('SessionsService visual tool bridge (turn records)', () => {
       {} as never,
       {} as never,
       {} as never,
+      {} as never,
     );
     await service.onModuleInit();
     const calls = (setDatasetToolServices as jest.Mock).mock
@@ -1254,6 +1477,7 @@ describe('SessionsService answer feedback', () => {
       {} as never,
       {} as never,
       verifiedQueries as never,
+      {} as never,
       {} as never,
       {} as never,
     );
@@ -1360,6 +1584,206 @@ describe('SessionsService answer feedback', () => {
   });
 });
 
+describe('SessionsService reasoning-block feedback', () => {
+  const AT = '2026-09-29T10:00:03.000Z';
+  const SQL_BLOCK = {
+    kind: 'sql' as const,
+    sql: 'SELECT 1',
+    annotations: [],
+    confidence: { score: 0.9, band: 'high' as const, signals: [] },
+  };
+
+  function build(withTrace = true) {
+    const session: SessionDoc = {
+      id: 'session-1',
+      name: 'HR',
+      datasets: ['hr'],
+      visualizations: [],
+      messages: [
+        {
+          role: 'user',
+          content: 'Average tech salary in 2025?',
+          at: '2026-09-29T10:00:00.000Z',
+        },
+        {
+          role: 'assistant',
+          content: '$132,400.',
+          at: AT,
+          ...(withTrace
+            ? {
+                expertTrace: {
+                  id: 'trace-1',
+                  version: 1 as const,
+                  blocks: [SQL_BLOCK],
+                  overall: { score: 0.9, band: 'high' as const, signals: [] },
+                  generatedAt: AT,
+                },
+              }
+            : {}),
+        },
+      ],
+    };
+    const repository = {
+      get: jest.fn().mockResolvedValue(session),
+      update: jest.fn().mockImplementation(async (_id, patch) => {
+        Object.assign(session, patch);
+        return session;
+      }),
+    };
+    const stored: Record<string, unknown> = {};
+    const expertMode = {
+      saveFeedback: jest
+        .fn()
+        .mockImplementation(
+          (
+            key: Record<string, unknown>,
+            context: Record<string, unknown>,
+            patch: { vote?: string | null; comment?: string | null },
+          ) => {
+            if (patch.vote === null) delete stored.vote;
+            else if (patch.vote) stored.vote = patch.vote;
+            if (patch.comment === null || patch.comment === '') {
+              delete stored.comment;
+            } else if (patch.comment) stored.comment = patch.comment;
+            return Promise.resolve({
+              id: 'f-1',
+              ...key,
+              ...context,
+              ...stored,
+              createdAt: '2026-09-29T11:00:00.000Z',
+              updatedAt: '2026-09-29T11:00:00.000Z',
+            });
+          },
+        ),
+    };
+    const service = new SessionsService(
+      repository as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      expertMode as never,
+    );
+    return { service, session, expertMode };
+  }
+
+  it('stores the rating with the question and block, and mirrors it onto the trace', async () => {
+    const { service, session, expertMode } = build();
+
+    const updated = await service.recordBlockFeedback('session-1', {
+      messageAt: AT,
+      block: 'sql',
+      vote: 'down',
+      comment: 'Should use the 31 December rate',
+    });
+
+    expect(expertMode.saveFeedback).toHaveBeenCalledWith(
+      { sessionId: 'session-1', messageAt: AT, block: 'sql' },
+      {
+        traceId: 'trace-1',
+        question: 'Average tech salary in 2025?',
+        blockSnapshot: SQL_BLOCK,
+      },
+      { vote: 'down', comment: 'Should use the 31 December rate' },
+    );
+    expect(updated.messages[1].expertTrace?.feedback).toEqual({
+      sql: {
+        vote: 'down',
+        comment: 'Should use the 31 December rate',
+        at: '2026-09-29T11:00:00.000Z',
+      },
+    });
+    expect(session.messages[1].expertTrace?.blocks).toEqual([SQL_BLOCK]);
+  });
+
+  it('applies PATCH semantics and drops the mirror once both fields are cleared', async () => {
+    const { service, expertMode } = build();
+    await service.recordBlockFeedback('session-1', {
+      messageAt: AT,
+      block: 'sql',
+      vote: 'up',
+    });
+
+    const commented = await service.recordBlockFeedback('session-1', {
+      messageAt: AT,
+      block: 'sql',
+      comment: 'Good',
+    });
+    expect((expertMode.saveFeedback.mock.calls as unknown[][])[1][2]).toEqual({
+      comment: 'Good',
+    });
+    expect(commented.messages[1].expertTrace?.feedback?.sql).toEqual(
+      expect.objectContaining({ vote: 'up', comment: 'Good' }),
+    );
+
+    await service.recordBlockFeedback('session-1', {
+      messageAt: AT,
+      block: 'sql',
+      vote: null,
+    });
+    const cleared = await service.recordBlockFeedback('session-1', {
+      messageAt: AT,
+      block: 'sql',
+      comment: null,
+    });
+    expect(cleared.messages[1].expertTrace?.feedback).toEqual({});
+  });
+
+  it('rejects bad bodies before touching the session', async () => {
+    const { service, expertMode } = build();
+
+    await expect(
+      service.recordBlockFeedback('session-1', { block: 'sql', vote: 'up' }),
+    ).rejects.toThrow('messageAt is required');
+    await expect(
+      service.recordBlockFeedback('session-1', {
+        messageAt: AT,
+        block: 'nope' as never,
+        vote: 'up',
+      }),
+    ).rejects.toThrow('block must be one of');
+    await expect(
+      service.recordBlockFeedback('session-1', {
+        messageAt: AT,
+        block: 'sql',
+        vote: 'sideways' as never,
+      }),
+    ).rejects.toThrow("vote must be 'up', 'down' or null");
+    await expect(
+      service.recordBlockFeedback('session-1', { messageAt: AT, block: 'sql' }),
+    ).rejects.toThrow('send a vote, a comment, or both');
+    expect(expertMode.saveFeedback).not.toHaveBeenCalled();
+  });
+
+  it('refuses an answer without a trace, a missing block or an unknown message', async () => {
+    await expect(
+      build(false).service.recordBlockFeedback('session-1', {
+        messageAt: AT,
+        block: 'sql',
+        vote: 'up',
+      }),
+    ).rejects.toThrow('no reasoning trace');
+    await expect(
+      build().service.recordBlockFeedback('session-1', {
+        messageAt: AT,
+        block: 'metric',
+        vote: 'up',
+      }),
+    ).rejects.toThrow('no metric block');
+    await expect(
+      build().service.recordBlockFeedback('session-1', {
+        messageAt: '1999-01-01T00:00:00.000Z',
+        block: 'sql',
+        vote: 'up',
+      }),
+    ).rejects.toThrow('No assistant message');
+  });
+});
+
 /** SQL runs followed by a written answer — the ordinary completed turn. */
 async function* answerStream(
   runs: {
@@ -1370,6 +1794,8 @@ async function* answerStream(
     rationale?: string;
     /** Set instead of rows when the query came back as a failure. */
     error?: string;
+    /** The statement the SQL fixer ran instead of the one written. */
+    correctedSql?: string;
   }[],
 ) {
   for (const [index, run] of runs.entries()) {
@@ -1396,6 +1822,7 @@ async function* answerStream(
               columns: ['n'],
               rows: run.rows ?? [],
               ...(run.truncated ? { truncated: true } : {}),
+              ...(run.correctedSql ? { correctedSql: run.correctedSql } : {}),
             },
       },
     };
@@ -1531,6 +1958,7 @@ describe('SessionsService visual tailoring and repair', () => {
       {} as never,
       {} as never,
       visuals as never,
+      {} as never,
       {} as never,
       {} as never,
       {} as never,
