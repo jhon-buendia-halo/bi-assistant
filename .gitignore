@@ -6,3 +6,4 @@ dist
 .mastra
 .DS_Store
 .context
+.env
