@@ -7,7 +7,7 @@
 // token stays on the edge and the browser downloads straight from GitHub's CDN
 // — no multi-hundred-megabyte proxying through a Worker.
 
-export const REPO = 'jhon-buendia-halo/questions-to-insights';
+export const REPO = 'jhon-buendia-halo/bi-assistant';
 
 /** Download targets, keyed by the URL segment the page links to. */
 export const TARGETS = {

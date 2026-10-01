@@ -61,7 +61,7 @@ lib/github-release.js            shared resolution logic (outside functions/, so
 
 ### How it gets at a private repo's assets
 
-`questions-to-insights` is private, so `releases/download/…` returns 404 to the
+`bi-assistant` is private, so `releases/download/…` returns 404 to the
 public. The GitHub API will still hand out a credential-free link: request an
 asset with `Accept: application/octet-stream` and it answers `302` with a
 short-lived `release-assets.githubusercontent.com` URL that needs no auth. The
@@ -77,7 +77,7 @@ headline release, its card names its own version.
 ### The token
 
 One secret, `GITHUB_TOKEN` — a fine-grained PAT with **Contents: Read-only**,
-scoped to `questions-to-insights` alone:
+scoped to `bi-assistant` alone:
 
 ```bash
 npx wrangler@4 pages secret put GITHUB_TOKEN --project-name halo-bi-assistant
