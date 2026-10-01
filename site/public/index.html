@@ -58,7 +58,7 @@
       <div class="hero-badges">
         <span class="badge">Databricks SQL</span>
         <span class="badge">PostgreSQL</span>
-        <span class="badge">macOS &amp; Windows</span>
+        <span class="badge">Windows · macOS soon</span>
         <span class="badge">Runs on your machine</span>
       </div>
       <div class="hero-actions">
@@ -390,40 +390,48 @@
         <p class="eyebrow">Get the app</p>
         <h2 class="section-title">Download Halo BI Assistant.</h2>
         <p class="section-intro">
-          Installers are built per platform. Pick the one that matches your machine — on a Mac,
-          Apple silicon is <em>arm64</em> and Intel is <em>x64</em>.
+          Windows x64 is the platform shipping today. The macOS builds are on the way — the
+          cards below will go live as soon as they are published.
         </p>
         <p class="dl-version" id="dl-version" hidden></p>
       </div>
 
       <!--
-        The buttons below point at this site's own /download/<target> route, not
-        at a versioned GitHub URL. That route resolves the newest published
+        The Windows button points at this site's own /download/win-x64 route,
+        not at a versioned GitHub URL. That route resolves the newest published
         installer and redirects to it, so a new release needs no edit here.
-        /api/latest fills in the version and file sizes on load.
+        /api/latest fills in the version and file size on load.
+
+        The macOS cards are deliberately static: they carry no data-target, so
+        the script below never turns them into live buttons. Give them one back
+        when macOS builds ship again.
       -->
       <div class="dl-grid">
-        <div class="dl-card" data-target="mac-arm64">
-          <div class="dl-os">macOS · Apple silicon</div>
-          <p class="dl-meta">.dmg — M1 and newer</p>
-          <a class="btn btn-grad" href="/download/mac-arm64">Download</a>
-        </div>
-        <div class="dl-card" data-target="mac-x64">
-          <div class="dl-os">macOS · Intel</div>
-          <p class="dl-meta">.dmg — x64 Macs</p>
-          <a class="btn btn-grad" href="/download/mac-x64">Download</a>
-        </div>
         <div class="dl-card" data-target="win-x64">
           <div class="dl-os">Windows</div>
           <p class="dl-meta">.exe installer — x64</p>
           <a class="btn btn-grad" href="/download/win-x64">Download</a>
         </div>
+        <div class="dl-card dl-card-soon">
+          <span class="dl-soon">Coming soon</span>
+          <div class="dl-os">macOS · Apple silicon</div>
+          <p class="dl-meta">.dmg — M1 and newer</p>
+          <span class="btn btn-ghost" aria-disabled="true">Coming soon</span>
+        </div>
+        <div class="dl-card dl-card-soon">
+          <span class="dl-soon">Coming soon</span>
+          <div class="dl-os">macOS · Intel</div>
+          <p class="dl-meta">.dmg — x64 Macs</p>
+          <span class="btn btn-ghost" aria-disabled="true">Coming soon</span>
+        </div>
       </div>
 
       <p class="dl-note">
         On first launch, open <strong>Settings</strong> and add your model provider key and a data
-        connection. macOS builds are not notarised yet — if Gatekeeper blocks the app, open it once
-        via <em>right-click → Open</em>.
+        connection. Windows SmartScreen may warn on an unsigned installer — choose
+        <em>More info → Run anyway</em>. macOS builds are coming soon;
+        <a href="mailto:info@halopowered.com?subject=Halo%20BI%20Assistant%20for%20macOS">tell us</a>
+        if you want one and we will let you know when it lands.
       </p>
     </div>
   </section>
@@ -459,7 +467,7 @@
         </div>
         <div class="spec-row">
           <div class="spec-key">Platforms</div>
-          <p class="spec-val">macOS (Apple silicon and Intel) and Windows x64.</p>
+          <p class="spec-val">Windows x64 today. macOS (Apple silicon and Intel) coming soon.</p>
         </div>
         <div class="spec-row">
           <div class="spec-key">Status</div>
