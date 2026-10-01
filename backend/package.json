@@ -5,7 +5,7 @@
   "license": "UNLICENSED",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/jhon-buendia-halo/questions-to-insights.git",
+    "url": "git+https://github.com/jhon-buendia-halo/bi-assistant.git",
     "directory": "backend"
   },
   "bin": {

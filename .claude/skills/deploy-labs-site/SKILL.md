@@ -112,7 +112,7 @@ serves fine over a valid cert; ignore it if HTTPS works.
 
 ## Wiring downloads from a private repo
 
-`questions-to-insights` is private, so `releases/download/…` and `releases/latest` both answer
+`bi-assistant` is private, so `releases/download/…` and `releases/latest` both answer
 `404` to the public — a versioned GitHub URL on the page cannot work.
 
 The mechanism that does work: ask the API for an asset with `Accept: application/octet-stream`

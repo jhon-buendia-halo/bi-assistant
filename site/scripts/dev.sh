@@ -6,7 +6,7 @@
 # back to its static copy.
 #
 # Env:
-#   GITHUB_TOKEN   fine-grained PAT, Contents: Read-only on questions-to-insights
+#   GITHUB_TOKEN   fine-grained PAT, Contents: Read-only on bi-assistant
 #   PORT           default 4500
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
