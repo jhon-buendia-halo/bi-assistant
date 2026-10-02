@@ -15,10 +15,15 @@ import {
   type ProviderOptions,
 } from '../../mastra/model-compat';
 import { setDatasetToolServices } from '../../mastra/tool-services';
-import type { DatasetSnapshot, SqlRunResult } from '../../mastra/tool-services';
+import type {
+  DatasetSnapshot,
+  LogicalQueryRunResult,
+  SqlRunResult,
+} from '../../mastra/tool-services';
 import { ASSISTANT_MAX_STEPS } from '../../mastra/agent-constants';
 import { sqlFixOutputSchema } from '../../mastra/agents/sql-fixer.agent';
-import { sqlVerifyOutputSchema } from '../../mastra/agents/sql-verifier.agent';
+import { queryFixOutputSchema } from '../../mastra/agents/query-fixer.agent';
+import { queryVerifyOutputSchema } from '../../mastra/agents/query-verifier.agent';
 import { DATASETS_CONTEXT_KEY } from '../../mastra/tools/dataset.tools';
 import {
   ACTIVE_VISUAL_CONTEXT_KEY,
@@ -27,21 +32,39 @@ import {
 } from '../../mastra/tools/visual.tools';
 import { SESSION_WORKSPACE_CONTEXT_KEY } from '../../mastra/session-workspaces';
 import type { KnowledgeUse } from '../knowledge/entities/knowledge-snippet.entity';
-import {
-  entityOrientationLines,
-  schemaSnapshotBlock,
-} from '../../mastra/context-blocks';
 import { DatasetsRepository } from '../datasets/repositories/datasets.repository';
 import { DatasourcesService } from '../datasources/datasources.service';
 import { LlmService } from '../llm/llm.service';
 import { VerifiedQueriesService } from '../verified-queries/verified-queries.service';
-import { MetricsService } from '../metrics/metrics.service';
 import { KnowledgeService } from '../knowledge/knowledge.service';
+import { DataModelsService } from '../data-models/data-models.service';
+import {
+  composeSessionModel,
+  renderModelBlock,
+  type SessionEntity,
+  type SessionModel,
+} from '../data-models/session-model';
+import {
+  compileLogicalQuery,
+  LogicalQueryError,
+  type SqlDialect,
+} from '../data-models/query/compile-sql';
+import {
+  parseLogicalQuery,
+  type LogicalQuery,
+} from '../data-models/query/logical-query';
+import {
+  dialectForDatasourceKind,
+  isRepairableSqlError,
+  readOnlyStatement,
+  setSqlFixerBridge,
+} from '../data-models/query/sql-repair';
 import { SessionsRepository } from './repositories/sessions.repository';
 import { VisualizationService } from './visualization.service';
 import { sourceEntities } from './visualization-document';
 import { compareResults } from './result-compare';
 import {
+  SQL_RUN_TOOLS,
   STORED_ROWS_CAP,
   groundingNudge,
   statedRationale,
@@ -68,6 +91,21 @@ const VISUAL_TOOLS = new Set(['create_visual', 'update_visual']);
  * answer without re-reading (and possibly disagreeing with) the store.
  */
 const KNOWLEDGE_USED_CONTEXT_KEY = 'knowledge-used';
+/**
+ * requestContext key carrying the session model versions `agentContext`
+ * composed the turn's rendered model block from (ADR-0007) — read back at
+ * persist time the same way `KNOWLEDGE_USED_CONTEXT_KEY` is, so an answer
+ * records exactly the model the assistant actually saw.
+ */
+const MODEL_VERSIONS_CONTEXT_KEY = 'model-versions';
+/** Issue codes a logical query is worth one automatic `query-fixer` retry
+ * for — a mistaken reference, not a structural/dialect problem a rewrite
+ * cannot fix (ADR-0007 §6). */
+const FIXABLE_QUERY_ISSUE_CODES = new Set([
+  'unknown_attribute',
+  'unknown_metric',
+  'ambiguous_path',
+]);
 /** Repair attempts allowed per failed statement (3 executions at most). */
 const SQL_REPAIR_ATTEMPTS = 2;
 const SQL_REPAIRED_NOTE =
@@ -127,11 +165,20 @@ export class SessionsService implements OnModuleInit {
     private readonly llmService: LlmService,
     private readonly visuals: VisualizationService,
     private readonly verifiedQueries: VerifiedQueriesService,
-    private readonly metrics: MetricsService,
     private readonly knowledge: KnowledgeService,
+    private readonly dataModels: DataModelsService,
   ) {}
 
   async onModuleInit(): Promise<void> {
+    // Runtime bridge for `DataModelsController` (`POST /model/query`):
+    // `DataModelsModule` deliberately never imports `MastraModule` (see its
+    // header comment) — this is the only place with a real `MastraService`,
+    // so the sql-fixer pass crosses the module boundary as a plain callback
+    // instead, mirroring `setDatasetToolServices` below.
+    setSqlFixerBridge({
+      repair: (sql, errorMessage, dialect, schema) =>
+        this.repairSql(sql, errorMessage, { dialect, schema }),
+    });
     // Install the DI bridge the Mastra tools use (they load with no Nest DI).
     setDatasetToolServices({
       getDatasets: (names) => this.boundDatasets(names),
@@ -139,6 +186,10 @@ export class SessionsService implements OnModuleInit {
         this.datasourcesService.sampleRows(datasourceId, entity, limit),
       runReadOnlySql: (datasourceId, sql, limit, datasets) =>
         this.runSqlWithRepair(datasourceId, sql, limit, datasets),
+      getSessionModel: (datasetNames) =>
+        this.composedSessionModel(datasetNames),
+      runLogicalQuery: (sessionModel, query) =>
+        this.runLogicalQuery(sessionModel, query),
       createVisual: async (
         sessionId,
         sourceMessageAt,
@@ -203,7 +254,6 @@ export class SessionsService implements OnModuleInit {
     abortSignal?: AbortSignal,
     activeVisualId?: string,
   ) {
-    const datasets = await this.boundDatasets(session.datasets);
     const visualLines = (session.visualizations ?? []).map(
       (v) =>
         `- ${v.id} — "${v.title}" v${this.visuals.currentVersion(v)} (from the answer at ${v.sourceMessageAt})`,
@@ -223,11 +273,20 @@ export class SessionsService implements OnModuleInit {
     const verified = question
       ? await this.verifiedQueries.referenceBlock(question)
       : undefined;
-    // Curated semantics for the entities this session can see — the one
-    // definition of each business number, never re-derived per turn.
-    const metrics = await this.metrics.definitionBlock(
-      datasets.flatMap((s) => s.tables ?? []),
+    // ADR-0007: one rendered model block replaces the old dataset/entity
+    // orientation, join-hint and curated-metrics blocks — the assistant's
+    // only view of "what data exists" is the logical model, never a
+    // physical table name, datasource id/kind or dialect word.
+    const modelPairs = await this.dataModels.getCurrentModels(
+      session.datasets,
     );
+    const sessionModel = composeSessionModel(modelPairs);
+    const modelBlock = renderModelBlock(sessionModel);
+    const modelVersions = modelPairs.map((p) => ({
+      dataset: p.dataset,
+      version: p.model.version,
+    }));
+    requestContext.set(MODEL_VERSIONS_CONTEXT_KEY, modelVersions);
     // Curated, user-authored knowledge (glossary/instructions/default
     // filters) for this session's datasets — authoritative over anything
     // the model would otherwise infer from schema alone.
@@ -244,7 +303,7 @@ export class SessionsService implements OnModuleInit {
         {
           role: 'system' as const,
           content: [
-            ...entityOrientationLines(session.datasets, datasets),
+            modelBlock,
             '',
             'Interactive visuals in this session (id — title, current version):',
             ...(visualLines.length ? visualLines : ['(none yet)']),
@@ -253,7 +312,6 @@ export class SessionsService implements OnModuleInit {
               : 'No visual is open in the right panel.',
           ].join('\n'),
         },
-        ...(metrics ? [{ role: 'system' as const, content: metrics }] : []),
         ...(knowledge.block
           ? [{ role: 'system' as const, content: knowledge.block }]
           : []),
@@ -333,6 +391,187 @@ export class SessionsService implements OnModuleInit {
             datasourceKind: fallback.kind,
           },
     );
+  }
+
+  // ------------------------------------------------- logical query layer
+
+  /** The session's composed model (ADR-0007) — the `DatasetToolServices`
+   * bridge's `getSessionModel`, and `agentContext`'s own source for the
+   * rendered block (built inline there so it can also keep the per-dataset
+   * versions for provenance). */
+  private async composedSessionModel(
+    datasetNames: string[],
+  ): Promise<SessionModel> {
+    const pairs = await this.dataModels.getCurrentModels(datasetNames);
+    return composeSessionModel(pairs);
+  }
+
+  /** Resolves the `'default'` placeholder a dataset created before
+   * datasources existed carries (`bootstrap.ts`'s bootstrapped bindings use
+   * the literal string `'default'` as `datasource` when none was on
+   * record) — the same fallback `boundDatasets` already applies to a
+   * dataset's own `datasourceId`, needed again here because an entity's
+   * `datasourceId` (`session-model.ts`) comes from a binding, which can
+   * carry the same placeholder untouched. */
+  private async resolveDatasourceId(datasourceId: string): Promise<string> {
+    if (datasourceId !== 'default') return datasourceId;
+    const fallback = await this.datasourcesService.defaultDatasource();
+    return fallback?.id ?? datasourceId;
+  }
+
+  /** `sql` bindings compile for the datasource's actual kind (postgres or
+   * databricks); `rest` always compiles as sqlite, matching the
+   * materialise-to-SQLite path (ADR-0007 §4). */
+  private async dialectForEntity(entity: SessionEntity): Promise<SqlDialect> {
+    if (entity.kind === 'rest') return 'sqlite';
+    try {
+      const id = await this.resolveDatasourceId(entity.datasourceId);
+      const datasource = await this.datasourcesService.get(id);
+      return dialectForDatasourceKind(datasource.kind);
+    } catch {
+      // Falls through to the default below — an unresolvable datasource
+      // fails clearly at execution instead of here.
+      return 'postgres';
+    }
+  }
+
+  /**
+   * Compiles `query` against `sessionModel` and runs it through the same
+   * execution-guided repair path as raw SQL — a *runtime* error from the
+   * compiled statement is still `sql-fixer`'s job. Throws `LogicalQueryError`
+   * (no database call made) when the query does not compile.
+   */
+  private async compileAndRunLogicalQuery(
+    sessionModel: SessionModel,
+    query: LogicalQuery,
+  ): Promise<LogicalQueryRunResult> {
+    const rootEntity = sessionModel.entities.find(
+      (e) => e.name.toLowerCase() === query.from.toLowerCase(),
+    );
+    const dialect = rootEntity
+      ? await this.dialectForEntity(rootEntity)
+      : 'postgres';
+    const compiled = compileLogicalQuery(sessionModel, query, dialect);
+    const datasourceId = await this.resolveDatasourceId(compiled.datasourceId);
+    const touchedDatasets = Array.from(
+      new Set(
+        compiled.entities.flatMap(
+          (name) =>
+            sessionModel.entities.find((e) => e.name === name)?.datasets ??
+            [],
+        ),
+      ),
+    );
+    const result = await this.runSqlWithRepair(
+      datasourceId,
+      compiled.sql,
+      query.limit,
+      touchedDatasets,
+    );
+    return { ...result, entities: compiled.entities, sql: compiled.sql };
+  }
+
+  /**
+   * `query_entities`'s implementation (ADR-0007 §4/§6): compiles and runs
+   * `query`, and — only for a reference mistake a fixer can plausibly
+   * correct (`unknown_attribute`/`unknown_metric`/`ambiguous_path`) — tries
+   * exactly once to repair the query before giving up, so the assistant
+   * only sees a structured error after a genuine second opinion failed too.
+   */
+  private async runLogicalQuery(
+    sessionModel: SessionModel,
+    query: LogicalQuery,
+  ): Promise<LogicalQueryRunResult> {
+    try {
+      return await this.compileAndRunLogicalQuery(sessionModel, query);
+    } catch (error) {
+      if (
+        !(error instanceof LogicalQueryError) ||
+        !isFixableQueryError(error)
+      ) {
+        throw error;
+      }
+      const corrected = await this.repairLogicalQuery(
+        sessionModel,
+        query,
+        error,
+      );
+      if (!corrected) throw error;
+      try {
+        const result = await this.compileAndRunLogicalQuery(
+          sessionModel,
+          corrected,
+        );
+        const correctionNote = `query auto-corrected (${error.issues[0]?.code}: ${error.issues[0]?.message})`;
+        return {
+          ...result,
+          note: [correctionNote, result.note].filter(Boolean).join('; '),
+        };
+      } catch (fixedError) {
+        // The fixer's rewrite did not compile/run either — the original
+        // issue is still the one a human (or the model) can act on, but the
+        // fixed query's own failure reason is worth keeping in the logs
+        // rather than silently dropped; a future repair attempt that keeps
+        // producing the same dead end is otherwise invisible.
+        const detail =
+          fixedError instanceof Error ? fixedError.message : String(fixedError);
+        this.logger.warn(
+          `query_entities repair produced a query that also failed: ${detail}`,
+        );
+        throw error;
+      }
+    }
+  }
+
+  /** One `query-fixer` pass; returns undefined when it produced nothing
+   * usable (a bad JSON reply, or a query that fails to parse). */
+  private async repairLogicalQuery(
+    sessionModel: SessionModel,
+    query: LogicalQuery,
+    error: LogicalQueryError,
+  ): Promise<LogicalQuery | undefined> {
+    try {
+      const modelBlock = renderModelBlock(sessionModel, {
+        budgetChars: FIXER_SCHEMA_CHARS,
+      });
+      const result = await this.mastra.getAgent('query-fixer').generate(
+        [
+          '<model>',
+          modelBlock,
+          '</model>',
+          '',
+          '<failed-query>',
+          JSON.stringify(query),
+          '</failed-query>',
+          '',
+          '<issues>',
+          JSON.stringify(error.issues),
+          '</issues>',
+        ].join('\n'),
+        {
+          maxSteps: 1,
+          toolChoice: 'none',
+          // A reference fix does not benefit from hidden reasoning tokens.
+          providerOptions: await this.providerOptions({
+            reasoningEffort: 'low',
+          }),
+          structuredOutput: {
+            schema: queryFixOutputSchema,
+            jsonPromptInjection: 'inline',
+          },
+        },
+      );
+      const parsed = queryFixOutputSchema.safeParse(
+        result.object ?? parseJsonObject(result.text),
+      );
+      if (!parsed.success) return undefined;
+      return parseLogicalQuery(parsed.data.query);
+    } catch (err) {
+      this.logger.warn(
+        `Query repair attempt failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return undefined;
+    }
   }
 
   // ----------------------------------------------------- SQL self-correction
@@ -482,13 +721,14 @@ export class SessionsService implements OnModuleInit {
   // ------------------------------------------------------- careful mode
 
   /**
-   * Careful mode's cross-check: a second agent re-derives the question's SQL
-   * without ever seeing the statement the analysis agent ran, that statement is
-   * executed once, and the two result sets are compared as multisets. Agreement
-   * is therefore corroboration, not an echo of the first answer.
+   * Careful mode's cross-check (ADR-0007 §6, moved to the logical level): a
+   * second agent re-derives the question's *logical query* without ever
+   * seeing the one the analysis agent ran, it is compiled and executed once,
+   * and the two result sets are compared as multisets. Agreement is
+   * therefore corroboration, not an echo of the first answer.
    *
-   * Never throws — a check that cannot run reports `error`, because failing to
-   * verify must not lose the answer it was verifying.
+   * Never throws — a check that cannot run reports `error`, because failing
+   * to verify must not lose the answer it was verifying.
    */
   private async crossCheckAnswer(
     session: SessionDoc,
@@ -506,16 +746,16 @@ export class SessionsService implements OnModuleInit {
           "the answer's result set hit the row cap — a partial result cannot be compared",
         );
       }
-      const context = await this.verifierContext(session);
-      if (!context) {
-        this.logger.warn('Cross-check skipped: no datasource bound');
+      const sessionModel = await this.composedSessionModel(session.datasets);
+      if (!sessionModel.entities.length) {
+        this.logger.warn('Cross-check skipped: no data model bound');
         return crossCheck(
           'error',
-          'no datasource is bound to this session, so the query could not be re-run',
+          'no data model is bound to this session, so the query could not be re-run',
         );
       }
-      const sql = await this.deriveIndependentSql(question, context);
-      if (!sql) {
+      const query = await this.deriveIndependentQuery(question, sessionModel);
+      if (!query) {
         this.logger.warn(
           'Cross-check skipped: verifier produced no usable query',
         );
@@ -524,11 +764,10 @@ export class SessionsService implements OnModuleInit {
           'the independent check did not produce a usable query',
         );
       }
-      const result = await this.datasourcesService.runReadOnlySql(
-        context.datasourceId,
-        sql,
-        CROSS_CHECK_ROW_LIMIT,
-      );
+      const result = await this.compileAndRunLogicalQuery(sessionModel, {
+        ...query,
+        limit: CROSS_CHECK_ROW_LIMIT,
+      });
       // Width tolerance matters here: the verifier is told to project nothing
       // beyond the question while the analysis agent selects the figures its
       // answer needs, so equal facts routinely arrive at different widths.
@@ -561,56 +800,38 @@ export class SessionsService implements OnModuleInit {
     }
   }
 
-  /** Dialect, datasource and a sample-value bearing schema for the verifier. */
-  private async verifierContext(session: SessionDoc): Promise<
-    | {
-        dialect: string;
-        schema: string;
-        datasourceId: string;
-      }
-    | undefined
-  > {
-    const datasets = await this.boundDatasets(session.datasets);
-    const datasourceId =
-      (await this.soleDatasourceId(session)) ??
-      datasets.find((s) => s.datasourceId)?.datasourceId;
-    if (!datasourceId) return undefined;
-    const inScope = datasets.filter((s) => s.datasourceId === datasourceId);
-    return {
-      dialect: sqlDialectOf(inScope),
-      datasourceId,
-      schema: schemaSnapshotBlock(inScope, {
-        budgetChars: VERIFIER_SCHEMA_CHARS,
-        sampleValues: VERIFIER_SAMPLE_VALUES,
-      }),
-    };
-  }
-
   /**
-   * One verifier pass. It gets the question, the schema with sample values and
-   * the user-approved reference pairs — deliberately not the original SQL.
+   * One `query-verifier` pass. It gets the question, the rendered model
+   * block (with sample values) and the user-approved reference pairs —
+   * deliberately never the original query or its compiled SQL.
    */
-  private async deriveIndependentSql(
+  private async deriveIndependentQuery(
     question: string,
-    context: { dialect: string; schema: string },
-  ): Promise<string | undefined> {
+    sessionModel: SessionModel,
+  ): Promise<LogicalQuery | undefined> {
     let verified: string | undefined;
     try {
-      verified = await this.verifiedQueries.referenceBlock(question);
+      // The verifier's own pass: unlike the assistant's reference block, a
+      // SQL-only legacy pair is still useful here as a bare reference
+      // question (phrasing/scope), it is just never shown the SQL text
+      // itself — the verifier always derives its own logical query.
+      verified = await this.verifiedQueries.verifierReferenceBlock(question);
     } catch {
       verified = undefined;
     }
+    const modelBlock = renderModelBlock(sessionModel, {
+      budgetChars: VERIFIER_SCHEMA_CHARS,
+      samples: VERIFIER_SAMPLE_VALUES,
+    });
     // A second opinion should think as hard as the answer it is checking.
     const { reasoningEffort } = await this.llmService.getView();
     const result = await this.mastra
-      .getAgent('sql-verifier')
+      .getAgent('query-verifier')
       .generate(
         [
-          `Dialect: ${context.dialect}`,
-          '',
-          '<available-entities>',
-          context.schema || '(no schema snapshot stored for this session)',
-          '</available-entities>',
+          '<model>',
+          modelBlock,
+          '</model>',
           ...(verified
             ? [
                 '',
@@ -629,15 +850,20 @@ export class SessionsService implements OnModuleInit {
           toolChoice: 'none',
           providerOptions: await this.providerOptions({ reasoningEffort }),
           structuredOutput: {
-            schema: sqlVerifyOutputSchema,
+            schema: queryVerifyOutputSchema,
             jsonPromptInjection: 'inline',
           },
         },
       );
-    const parsed = sqlVerifyOutputSchema.safeParse(
+    const parsed = queryVerifyOutputSchema.safeParse(
       result.object ?? parseJsonObject(result.text),
     );
-    return parsed.success ? readOnlyStatement(parsed.data.sql) : undefined;
+    if (!parsed.success) return undefined;
+    try {
+      return parseLogicalQuery(parsed.data.query);
+    } catch {
+      return undefined;
+    }
   }
 
   // --------------------------------------------------------------- internals
@@ -923,12 +1149,15 @@ export class SessionsService implements OnModuleInit {
     const result = await agent.generate(input, options);
     const reasoning = reasoningTrail(toolRecords(result));
     const knowledge = knowledgeUsed(options.requestContext);
+    const modelVersions = modelVersionsUsed(options.requestContext);
     session.messages.push({
       role: 'assistant',
       content: (result.text ?? '').trim(),
       at: new Date().toISOString(),
       ...(reasoning ? { reasoning } : {}),
       ...(knowledge ? { knowledge } : {}),
+      ...(modelVersions ? { modelVersions } : {}),
+      ...(outsideModelFlag(toolRecords(result)) ? { outsideModel: true } : {}),
     });
     const updated = await this.repository.update(id, {
       messages: session.messages,
@@ -1159,6 +1388,8 @@ export class SessionsService implements OnModuleInit {
     const entities = sourceEntities(data);
     const reasoning = reasoningTrail(data);
     const knowledge = knowledgeUsed(options.requestContext);
+    const modelVersions = modelVersionsUsed(options.requestContext);
+    const outsideModel = outsideModelFlag(data);
     if (clarification) {
       // The turn stops here, but the schema/sample work done before the
       // question is real work — keep it on the card instead of dropping it.
@@ -1171,6 +1402,8 @@ export class SessionsService implements OnModuleInit {
         ...(entities.length ? { entities } : {}),
         ...(reasoning ? { reasoning } : {}),
         ...(knowledge ? { knowledge } : {}),
+        ...(modelVersions ? { modelVersions } : {}),
+        ...(outsideModel ? { outsideModel } : {}),
       });
     } else if (text.trim() || visualEvent) {
       const interpretation = interpretationLine(data, entities);
@@ -1190,6 +1423,8 @@ export class SessionsService implements OnModuleInit {
         ...(interpretation ? { interpretation } : {}),
         ...(reasoning ? { reasoning } : {}),
         ...(knowledge ? { knowledge } : {}),
+        ...(modelVersions ? { modelVersions } : {}),
+        ...(outsideModel ? { outsideModel } : {}),
         ...((await this.matchesVerifiedQuery(session, data))
           ? { verified: true }
           : {}),
@@ -1245,7 +1480,10 @@ export class SessionsService implements OnModuleInit {
       ...(turnOptions.context ?? []),
       {
         role: 'system' as const,
-        content: groundingNudge(originalAnswer),
+        // Always the model path here — `SessionsService` only ever runs the
+        // current `assistant` agent; `assistant-legacy` exists solely for
+        // the eval harness's side-by-side comparison.
+        content: groundingNudge(originalAnswer, 'model'),
       },
     ];
     try {
@@ -1329,9 +1567,11 @@ export class SessionsService implements OnModuleInit {
         .reverse()
         .find((m) => m.role === 'user');
       if (sql && question?.content.trim()) {
+        const logicalQuery = lastSuccessfulLogicalQuery(answer.data);
         await this.verifiedQueries.save({
           question: question.content,
           sql,
+          ...(logicalQuery ? { logicalQuery } : {}),
           datasourceId: await this.soleDatasourceId(session),
           entities: answer.entities ?? [],
           sourceSessionId: id,
@@ -1381,9 +1621,7 @@ function sqlDialectOf(datasets: DatasetSnapshot[]): string {
 function successfulSqlRuns(data: ToolDataRecord[] | undefined) {
   return (data ?? []).filter(
     (record) =>
-      record.tool === 'run_readonly_sql' &&
-      !record.error &&
-      record.input?.trim(),
+      SQL_RUN_TOOLS.has(record.tool) && !record.error && record.input?.trim(),
   );
 }
 
@@ -1392,6 +1630,18 @@ function lastSuccessfulSql(
   data: ToolDataRecord[] | undefined,
 ): string | undefined {
   return successfulSqlRuns(data).at(-1)?.input?.trim();
+}
+
+/** The logical query behind an answer, when its last successful SQL-running
+ * step was `query_entities` — undefined for a `run_readonly_sql`/
+ * `run_raw_sql` step, which never has one (`turn-data.ts`'s `toolDataRecord`
+ * only sets `logicalQuery` for `query_entities`). Drives whether a verified
+ * query is shown to the assistant at all (ADR-0007 §4 — SQL-only legacy
+ * pairs are omitted from its reference block). */
+function lastSuccessfulLogicalQuery(
+  data: ToolDataRecord[] | undefined,
+): string | undefined {
+  return successfulSqlRuns(data).at(-1)?.logicalQuery;
 }
 
 /**
@@ -1454,31 +1704,31 @@ function knowledgeUsed(
     : undefined;
 }
 
-/**
- * Narrow, deliberately conservative match for transport/auth failures — the
- * statement never reached the engine at all, so no rewrite touches these.
- * Kept to specific markers (HTTP status wording, known Node connection error
- * codes, timeouts) rather than bare numbers, so it doesn't accidentally
- * swallow a genuine engine error that happens to mention a number.
- */
-const TRANSPORT_OR_AUTH_ERROR =
-  /\bstatus code\b|ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|EPIPE|\bsocket hang up\b|\btimed? ?out\b|\bconnection (?:refused|reset|closed)\b/i;
+/** `agentContext`'s model-version provenance, read back the same way as
+ * `knowledgeUsed` (ADR-0007). */
+function modelVersionsUsed(
+  requestContext: { get(key: string): unknown } | undefined,
+): { dataset: string; version: number }[] | undefined {
+  const versions = requestContext?.get(MODEL_VERSIONS_CONTEXT_KEY);
+  return Array.isArray(versions) && versions.length
+    ? (versions as { dataset: string; version: number }[])
+    : undefined;
+}
 
-/**
- * Whether a failed statement is worth another `sql-fixer` round trip.
- * Repairable = the engine parsed and rejected the statement, so a rewrite
- * can plausibly fix it. Not repairable: `assertReadOnlySql`'s
- * `BadRequestException` (the statement never reached the engine — a rewrite
- * doesn't change whether it's forbidden/malformed) or a transport/auth
- * failure (HTTP status, connection, timeout). Anything unrecognised defaults
- * to repairable: that matches today's behaviour (every error goes to the
- * fixer), so an under-matched transport message costs one attempt at worst,
- * while an over-matched one would silently skip a genuinely fixable error.
- */
-function isRepairableSqlError(error: unknown): boolean {
-  if (error instanceof BadRequestException) return false;
-  const message = error instanceof Error ? error.message : String(error);
-  return !TRANSPORT_OR_AUTH_ERROR.test(message);
+/** True when any captured record this turn came from `run_raw_sql` — the
+ * whole answer is then "outside the data model" (ADR-0007 §4), even if other
+ * tool calls in the same turn stayed on the logical path. */
+function outsideModelFlag(data: ToolDataRecord[]): true | undefined {
+  return data.some((record) => record.outsideModel) ? true : undefined;
+}
+
+/** Whether a `LogicalQueryError` is worth one `query-fixer` round trip
+ * (ADR-0007 §6) — a reference mistake, not a structural one (e.g.
+ * `mixed_datasources`, `invalid_order_by`) a rewrite is unlikely to fix. */
+function isFixableQueryError(error: LogicalQueryError): boolean {
+  return error.issues.some((issue) =>
+    FIXABLE_QUERY_ISSUE_CODES.has(issue.code),
+  );
 }
 
 /** One-line, length-capped rendering of a SQL statement for warn-level logs. */
@@ -1487,20 +1737,6 @@ function logSql(sql: string): string {
   return flat.length > SQL_LOG_CHARS
     ? `${flat.slice(0, SQL_LOG_CHARS - 1)}…`
     : flat;
-}
-
-/**
- * Strip fences/semicolons off a model-authored statement and keep it only if
- * it is a read-only query. Shared by the fixer and the verifier.
- */
-function readOnlyStatement(sql: string): string | undefined {
-  const cleaned = sql
-    .trim()
-    .replace(/^```(?:sql)?\s*/i, '')
-    .replace(/\s*```$/, '')
-    .replace(/;+\s*$/, '')
-    .trim();
-  return /^(select|with)\b/i.test(cleaned) ? cleaned : undefined;
 }
 
 /** A cross-check verdict with its note clipped to tooltip length. */

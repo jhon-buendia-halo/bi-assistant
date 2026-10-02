@@ -1,0 +1,102 @@
+=== RENDERED MODEL BLOCK (World Cup fixture) ===
+
+Entities in this session (logical names; query them with query_entities):
+- teams (dataset "World Cup Core")
+    key: team_id
+    attributes: team_id key integer; name dimension string; fifa_code dimension string
+- matches (dataset "World Cup Core")
+    key: match_id
+    attributes: match_id key integer; home_team_id key integer via matches.home_team_id->teams.team_id (many_to_one, named "matches_home_team"); away_team_id key integer; winner_team_id key integer; stage dimension string; attendance measure integer [e.g. 64000, 72000, 45000]
+    metrics: avg_attendance (Average attendance) = avg(attendance); home_win_rate (Home win rate) = (custom expression)
+
+
+=== GOLDEN SQL — postgres ===
+
+-- Plain select
+SELECT "matches"."stage" AS "stage", "matches"."attendance" AS "attendance" FROM "public"."matches" AS "matches" LIMIT 10;
+
+-- A model metric
+SELECT AVG("matches"."attendance") AS "avg_attendance" FROM "public"."matches" AS "matches" LIMIT 100;
+
+-- Ad-hoc aggregation with a where
+SELECT "matches"."stage" AS "stage", AVG(CASE WHEN "matches"."stage" = 'Final' THEN "matches"."attendance" END) AS "final_avg_attendance" FROM "public"."matches" AS "matches" GROUP BY "matches"."stage" LIMIT 100;
+
+-- Join via an explicit relationship
+SELECT "home_team"."common_name" AS "home_team_name", "matches"."stage" AS "stage" FROM "public"."matches" AS "matches" JOIN "public"."teams" AS "home_team" ON "matches"."home_team_id" = "home_team"."id" LIMIT 50;
+
+-- Auto-path join (no explicit joins[])
+SELECT "teams"."common_name" AS "team_name" FROM "public"."matches" AS "matches" JOIN "public"."teams" AS "teams" ON "matches"."home_team_id" = "teams"."id" LIMIT 50;
+
+-- Bucket kickoff_date by year
+SELECT EXTRACT(YEAR FROM "matches"."kickoff_date")::int AS "kickoff_year" FROM "public"."matches" AS "matches" LIMIT 10;
+
+-- Bucket kickoff_date by quarter (year-qualified)
+SELECT date_trunc('quarter', "matches"."kickoff_date")::date AS "kickoff_quarter" FROM "public"."matches" AS "matches" LIMIT 10;
+
+-- Bucket kickoff_date by week
+SELECT date_trunc('week', "matches"."kickoff_date")::date AS "kickoff_week" FROM "public"."matches" AS "matches" LIMIT 10;
+
+-- Month bucket with metric (group_by auto-filled from the bucket expression)
+SELECT date_trunc('month', "matches"."kickoff_date")::date AS "month", AVG("matches"."attendance") AS "avg_attendance" FROM "public"."matches" AS "matches" GROUP BY date_trunc('month', "matches"."kickoff_date")::date LIMIT 10;
+
+
+=== GOLDEN SQL — databricks ===
+
+-- Plain select
+SELECT `matches`.`stage` AS `stage`, `matches`.`attendance` AS `attendance` FROM `main`.`public`.`matches` AS `matches` LIMIT 10;
+
+-- A model metric
+SELECT AVG(`matches`.`attendance`) AS `avg_attendance` FROM `main`.`public`.`matches` AS `matches` LIMIT 100;
+
+-- Ad-hoc aggregation with a where
+SELECT `matches`.`stage` AS `stage`, AVG(CASE WHEN `matches`.`stage` = 'Final' THEN `matches`.`attendance` END) AS `final_avg_attendance` FROM `main`.`public`.`matches` AS `matches` GROUP BY `matches`.`stage` LIMIT 100;
+
+-- Join via an explicit relationship
+SELECT `home_team`.`common_name` AS `home_team_name`, `matches`.`stage` AS `stage` FROM `main`.`public`.`matches` AS `matches` JOIN `main`.`public`.`teams` AS `home_team` ON `matches`.`home_team_id` = `home_team`.`id` LIMIT 50;
+
+-- Auto-path join (no explicit joins[])
+SELECT `teams`.`common_name` AS `team_name` FROM `main`.`public`.`matches` AS `matches` JOIN `main`.`public`.`teams` AS `teams` ON `matches`.`home_team_id` = `teams`.`id` LIMIT 50;
+
+-- Bucket kickoff_date by year
+SELECT year(`matches`.`kickoff_date`) AS `kickoff_year` FROM `main`.`public`.`matches` AS `matches` LIMIT 10;
+
+-- Bucket kickoff_date by quarter (year-qualified)
+SELECT date_trunc('QUARTER', `matches`.`kickoff_date`) AS `kickoff_quarter` FROM `main`.`public`.`matches` AS `matches` LIMIT 10;
+
+-- Bucket kickoff_date by week
+SELECT date_trunc('WEEK', `matches`.`kickoff_date`) AS `kickoff_week` FROM `main`.`public`.`matches` AS `matches` LIMIT 10;
+
+-- Month bucket with metric (group_by auto-filled from the bucket expression)
+SELECT date_trunc('MONTH', `matches`.`kickoff_date`) AS `month`, AVG(`matches`.`attendance`) AS `avg_attendance` FROM `main`.`public`.`matches` AS `matches` GROUP BY date_trunc('MONTH', `matches`.`kickoff_date`) LIMIT 10;
+
+
+=== GOLDEN SQL — sqlite ===
+
+-- Plain select
+SELECT "matches"."stage" AS "stage", "matches"."attendance" AS "attendance" FROM "main.public.matches" AS "matches" LIMIT 10;
+
+-- A model metric
+SELECT AVG("matches"."attendance") AS "avg_attendance" FROM "main.public.matches" AS "matches" LIMIT 100;
+
+-- Ad-hoc aggregation with a where
+SELECT "matches"."stage" AS "stage", AVG(CASE WHEN "matches"."stage" = 'Final' THEN "matches"."attendance" END) AS "final_avg_attendance" FROM "main.public.matches" AS "matches" GROUP BY "matches"."stage" LIMIT 100;
+
+-- Join via an explicit relationship
+SELECT "home_team"."common_name" AS "home_team_name", "matches"."stage" AS "stage" FROM "main.public.matches" AS "matches" JOIN "main.public.teams" AS "home_team" ON "matches"."home_team_id" = "home_team"."id" LIMIT 50;
+
+-- Auto-path join (no explicit joins[])
+SELECT "teams"."common_name" AS "team_name" FROM "main.public.matches" AS "matches" JOIN "main.public.teams" AS "teams" ON "matches"."home_team_id" = "teams"."id" LIMIT 50;
+
+-- Bucket kickoff_date by year
+SELECT CAST(strftime('%Y', "matches"."kickoff_date") AS INTEGER) AS "kickoff_year" FROM "main.public.matches" AS "matches" LIMIT 10;
+
+-- Bucket kickoff_date by quarter (year-qualified)
+SELECT (strftime('%Y', "matches"."kickoff_date") || '-Q' || ((CAST(strftime('%m', "matches"."kickoff_date") AS INTEGER) + 2) / 3)) AS "kickoff_quarter" FROM "main.public.matches" AS "matches" LIMIT 10;
+
+-- Bucket kickoff_date by week
+SELECT date("matches"."kickoff_date", 'weekday 0', '-6 days') AS "kickoff_week" FROM "main.public.matches" AS "matches" LIMIT 10;
+
+-- Month bucket with metric (group_by auto-filled from the bucket expression)
+SELECT strftime('%Y-%m-01', "matches"."kickoff_date") AS "month", AVG("matches"."attendance") AS "avg_attendance" FROM "main.public.matches" AS "matches" GROUP BY strftime('%Y-%m-01', "matches"."kickoff_date") LIMIT 10;
+
+

@@ -19,6 +19,21 @@ export interface ResultSetCheckOptions {
   distinctRows?: boolean;
 }
 
+/** The data-query tool each eval path actually has: `run_readonly_sql` on
+ * `legacy`, `query_entities` on `model` (ADR-0007) — a check that only ever
+ * recognised `run_readonly_sql` silently found nothing to compare on the
+ * `model` path (every result-set check "passed" by reporting "the agent ran
+ * no successful run_readonly_sql", which a path-blind reading of the report
+ * could mistake for 0/0 rather than a miss). Defined here (not
+ * `assistant.evals.ts`, which imports `@mastra/core/agent` transitively via
+ * the real agents) so this file's own Jest-safety guarantee — see the header
+ * comment — still holds for whichever side imports the other. */
+export const dataQueryTools = ['run_readonly_sql', 'query_entities'] as const;
+
+function isDataQueryRecord(record: ToolDataRecord): boolean {
+  return (dataQueryTools as readonly string[]).includes(record.tool);
+}
+
 type Row = Record<string, unknown>;
 
 /** A candidate must contain every reference value, never just a subset. */
@@ -80,7 +95,7 @@ export function lastSuccessfulSqlRecord(
 ): ToolDataRecord | undefined {
   for (let i = records.length - 1; i >= 0; i--) {
     const record = records[i];
-    if (record.tool === 'run_readonly_sql' && !record.error && record.input) {
+    if (isDataQueryRecord(record) && !record.error && record.input) {
       return record;
     }
   }
@@ -117,7 +132,7 @@ export async function runResultSetCheck(
       description,
       score: 0,
       passed: false,
-      reason: 'the agent ran no successful run_readonly_sql to compare',
+      reason: 'the agent ran no successful data query to compare',
     };
   }
 
@@ -148,9 +163,7 @@ export async function runResultSetCheck(
     }
     const candidates = turnRecords.filter(
       (candidate) =>
-        candidate.tool === 'run_readonly_sql' &&
-        !candidate.error &&
-        candidate.input,
+        isDataQueryRecord(candidate) && !candidate.error && candidate.input,
     );
     let reason = '';
     for (const candidate of candidates) {

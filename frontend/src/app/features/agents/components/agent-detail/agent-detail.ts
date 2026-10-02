@@ -284,6 +284,14 @@ export class AgentDetail implements OnDestroy {
     return new Date(run.startedAt).toLocaleString();
   }
 
+  /** `model` (ADR-0007's logical-query-layer assistant, the default) or
+   * `legacy` (the pre-change SQL-writing assistant) — absent on a run
+   * persisted before this field existed, which ran the (then only) path
+   * `model` now names. */
+  pathLabel(run: EvalRunView): string {
+    return run.path === 'legacy' ? 'legacy path' : 'model path';
+  }
+
   datasourceName(id: string): string {
     return this.datasources().find((d) => d.id === id)?.name ?? id;
   }

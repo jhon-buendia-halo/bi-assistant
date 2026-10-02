@@ -1,0 +1,108 @@
+{
+  "description": "BA-86 code review item 1 (BLOCKER) live proof: POST /datasets/:name/model/query against a real World Cup Postgres datasource via the CLI (node dist/cli.js --port 3100 --data-dir /tmp/qti-ba86 --no-open). Proves compile-sql.ts's quoteTableRef fix: the 'world_cup.world_cup.matches' binding key compiles to FROM \"world_cup\".\"matches\" (catalog segment dropped, schema.table quoted per-segment) and Postgres accepts it directly -- the pre-fix bug quoted the whole dotted key as one identifier (FROM \"world_cup.world_cup.matches\"), which Postgres rejected as an unknown relation.",
+  "endpoint": "POST /datasets/world-cup-ba86/model/query",
+  "request": {
+    "query": {
+      "from": "matches",
+      "joins": [
+        {
+          "via": "matches.home_team_id->teams.id",
+          "as": "home_team"
+        }
+      ],
+      "select": [
+        {
+          "attr": "home_team.common_name",
+          "alias": "home_team_name"
+        },
+        {
+          "attr": "kicked_off_at",
+          "bucket": "month",
+          "alias": "month"
+        },
+        {
+          "metric": "avg_attendance"
+        }
+      ],
+      "limit": 20
+    }
+  },
+  "response": {
+    "columns": [
+      "home_team_name",
+      "month",
+      "avg_attendance"
+    ],
+    "rows": [
+      {
+        "home_team_name": "Argentina",
+        "month": "2022-12-01T05:00:00.000Z",
+        "avg_attendance": "88966.000000000000"
+      },
+      {
+        "home_team_name": "Belgium",
+        "month": "2018-07-01T05:00:00.000Z",
+        "avg_attendance": "64406.000000000000"
+      },
+      {
+        "home_team_name": "Brazil",
+        "month": "2018-07-01T05:00:00.000Z",
+        "avg_attendance": "64406.000000000000"
+      },
+      {
+        "home_team_name": "Croatia",
+        "month": "2018-07-01T05:00:00.000Z",
+        "avg_attendance": "78011.000000000000"
+      },
+      {
+        "home_team_name": "Croatia",
+        "month": "2022-12-01T05:00:00.000Z",
+        "avg_attendance": "44015.000000000000"
+      },
+      {
+        "home_team_name": "England",
+        "month": "2022-12-01T05:00:00.000Z",
+        "avg_attendance": "68895.000000000000"
+      },
+      {
+        "home_team_name": "France",
+        "month": "2018-07-01T05:00:00.000Z",
+        "avg_attendance": "71148.500000000000"
+      },
+      {
+        "home_team_name": "France",
+        "month": "2022-12-01T05:00:00.000Z",
+        "avg_attendance": "68294.000000000000"
+      },
+      {
+        "home_team_name": "Morocco",
+        "month": "2022-12-01T05:00:00.000Z",
+        "avg_attendance": "44198.000000000000"
+      },
+      {
+        "home_team_name": "Netherlands",
+        "month": "2022-12-01T05:00:00.000Z",
+        "avg_attendance": "88235.000000000000"
+      },
+      {
+        "home_team_name": "Russia",
+        "month": "2018-07-01T05:00:00.000Z",
+        "avg_attendance": "44287.000000000000"
+      },
+      {
+        "home_team_name": "Sweden",
+        "month": "2018-07-01T05:00:00.000Z",
+        "avg_attendance": "39991.000000000000"
+      },
+      {
+        "home_team_name": "Uruguay",
+        "month": "2018-07-01T05:00:00.000Z",
+        "avg_attendance": "43319.000000000000"
+      }
+    ],
+    "sql": "SELECT \"home_team\".\"common_name\" AS \"home_team_name\", date_trunc('month', \"matches\".\"kicked_off_at\")::date AS \"month\", AVG(\"matches\".\"attendance\") AS \"avg_attendance\" FROM \"world_cup\".\"matches\" AS \"matches\" JOIN \"world_cup\".\"teams\" AS \"home_team\" ON \"matches\".\"home_team_id\" = \"home_team\".\"id\" GROUP BY \"home_team\".\"common_name\", date_trunc('month', \"matches\".\"kicked_off_at\")::date LIMIT 20",
+    "notes": [
+      "group_by inferred from the selected attributes: home_team_name, month"
+    ]
+  }
+}

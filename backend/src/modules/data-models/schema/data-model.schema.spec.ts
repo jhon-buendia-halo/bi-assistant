@@ -264,6 +264,42 @@ describe('validateDataModel — metric semantics', () => {
     expect(result.issues).toEqual([]);
   });
 
+  it('rejects a ratio cycle running through two other metrics', () => {
+    const model = fixture();
+    model.metrics.push(
+      {
+        name: 'ratio_a',
+        label: 'Ratio A',
+        entity: 'matches',
+        agg: 'ratio',
+        numerator: 'avg_attendance',
+        denominator: 'ratio_b',
+      },
+      {
+        name: 'ratio_b',
+        label: 'Ratio B',
+        entity: 'matches',
+        agg: 'ratio',
+        numerator: 'ratio_a',
+        denominator: 'avg_attendance',
+      },
+    );
+    const result = validateDataModel(model);
+    const issues: ModelIssue[] = result.issues;
+    // Reported once, against the first metric in the cycle found — the
+    // message names every metric on the cycle so a fixer does not need a
+    // second issue per participant.
+    expect(
+      issues.some(
+        (i) =>
+          i.path === 'metrics[2].numerator' &&
+          i.message.includes('ratio cycle detected') &&
+          i.message.includes('ratio_a') &&
+          i.message.includes('ratio_b'),
+      ),
+    ).toBe(true);
+  });
+
   it('requires agg or expressions.sql', () => {
     const model = fixture();
     delete model.metrics[1].expressions;

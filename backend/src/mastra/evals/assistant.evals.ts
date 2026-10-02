@@ -3,6 +3,7 @@ import { runEvals } from '@mastra/core/evals';
 import { RequestContext } from '@mastra/core/request-context';
 import type { MastraScorer } from '@mastra/core/evals';
 import { assistantAgent } from '../agents/assistant.agent';
+import { assistantLegacyAgent } from '../agents/assistant-legacy.agent';
 import { resolveAgentModel } from '../model-resolver';
 import { providerOptionsFor } from '../model-compat';
 import {
@@ -17,6 +18,7 @@ import {
 } from '../tools/visual.tools';
 import { getDatasetToolServices } from '../tool-services';
 import { entityOrientationLines } from '../context-blocks';
+import { renderModelBlock } from '../../modules/data-models/session-model';
 import { runResultSetCheck } from './result-set-check';
 import type { ResultSetCheckOptions } from './result-set-check';
 import {
@@ -53,7 +55,15 @@ export interface AssistantEvalCase {
   question: string;
   /** What the question is probing for, for the run report. */
   intent: string;
-  scorers: MastraScorer<any, any, any, any>[];
+  /**
+   * A function of the path, not a fixed array: `model` answers data
+   * questions with `query_entities`, `legacy` with `run_readonly_sql` — a
+   * scorer hardcoded to one tool name silently never fires (and
+   * `didNotCall` silently always "passes") on whichever path does not use
+   * that name. `dataQueryTools`/`calledDataTool`/`didNotCallDataTool`/
+   * `dataToolThenVisual` below pick the right name per path.
+   */
+  scorers: (path: AssistantEvalPath) => MastraScorer<any, any, any, any>[];
   /**
    * Trusted SQL against the eval datasource whose live result set is the
    * reference answer. When present, `runAssistantEvalCase` compares it
@@ -94,14 +104,48 @@ export interface AssistantEvalSet {
   cases: AssistantEvalCase[];
 }
 
+/** The data-query tool each path actually has: `query_entities` on `model`
+ * (ADR-0007), `run_readonly_sql` on `legacy`. `result-set-check.ts` exports
+ * its own copy of the same pair (`dataQueryTools`) rather than this file
+ * exporting one here — that file's whole reason to exist is staying
+ * importable without `@mastra/core/agent`'s ESM-only transitive deps, which
+ * this file (the real agents) does pull in; importing a value from here
+ * into there would defeat that. */
+function dataToolName(path: AssistantEvalPath): string {
+  return path === 'legacy' ? 'run_readonly_sql' : 'query_entities';
+}
+
+/** `checks.calledTool`/`didNotCall`/`toolOrder` all take one literal tool
+ * name (no "any of these" support) — these three pick the name that
+ * actually exists on `path` so a case's scorers mean the same thing on both
+ * paths, rather than hardcoding `run_readonly_sql` and silently never
+ * firing (or silently always "passing" `didNotCall`) on `model`. */
+function calledDataTool(
+  path: AssistantEvalPath,
+): MastraScorer<any, any, any, any> {
+  return checks.calledTool(dataToolName(path));
+}
+
+function didNotCallDataTool(
+  path: AssistantEvalPath,
+): MastraScorer<any, any, any, any> {
+  return checks.didNotCall(dataToolName(path));
+}
+
+function dataToolThenVisual(
+  path: AssistantEvalPath,
+): MastraScorer<any, any, any, any> {
+  return checks.toolOrder([dataToolName(path), 'create_visual']);
+}
+
 const WORLD_CUP_EVAL_CASES: AssistantEvalCase[] = [
   {
     id: 'champion-2022',
     question: 'Who won the 2022 World Cup?',
     intent: 'Single-hop lookup against tournaments — the simplest happy path.',
-    scorers: [
+    scorers: (path) => [
       checks.includes('Argentina'),
-      checks.calledTool('run_readonly_sql'),
+      calledDataTool(path),
       checks.noToolErrors(),
     ],
     expectedSql:
@@ -115,10 +159,10 @@ const WORLD_CUP_EVAL_CASES: AssistantEvalCase[] = [
     question: 'What was the score of the 2018 World Cup final?',
     intent:
       'Filter matches by stage and tournament, then read both goal columns.',
-    scorers: [
+    scorers: (path) => [
       checks.matches(/4\s*[-–:]\s*2/),
       checks.includes('France'),
-      checks.calledTool('run_readonly_sql'),
+      calledDataTool(path),
       checks.noToolErrors(),
     ],
     expectedSql:
@@ -135,10 +179,10 @@ const WORLD_CUP_EVAL_CASES: AssistantEvalCase[] = [
     question: 'Who scored the most goals in the 2022 World Cup, and how many?',
     intent:
       'Aggregate over goals joined to players, excluding own goals — the classic GROUP BY question.',
-    scorers: [
+    scorers: (path) => [
       checks.includes('Messi'),
       checks.matches(/\b4\b/),
-      checks.calledTool('run_readonly_sql'),
+      calledDataTool(path),
       checks.noToolErrors(),
     ],
     expectedSql:
@@ -151,10 +195,10 @@ const WORLD_CUP_EVAL_CASES: AssistantEvalCase[] = [
       'Which knockout matches went to a penalty shootout, and who advanced?',
     intent:
       'Requires noticing that shootouts are encoded as non-null penalty columns, not a flag.',
-    scorers: [
+    scorers: (path) => [
       checks.includes('Croatia'),
       checks.matches(/Argentina/i),
-      checks.calledTool('run_readonly_sql'),
+      calledDataTool(path),
       checks.noToolErrors(),
     ],
     expectedSql:
@@ -170,10 +214,10 @@ const WORLD_CUP_EVAL_CASES: AssistantEvalCase[] = [
     question:
       'Which stadium hosted the best-attended match, and what was the attendance?',
     intent: 'Join matches to venues and order by a nullable measure.',
-    scorers: [
+    scorers: (path) => [
       checks.includes('Lusail'),
       checks.matches(/88[,.]?966/),
-      checks.calledTool('run_readonly_sql'),
+      calledDataTool(path),
       checks.noToolErrors(),
     ],
     expectedSql:
@@ -185,10 +229,10 @@ const WORLD_CUP_EVAL_CASES: AssistantEvalCase[] = [
     question: 'What data do I have available to analyse?',
     intent:
       'Pure discovery — must inspect the session datasets rather than invent entities or run SQL.',
-    scorers: [
+    scorers: (path) => [
       checks.calledTool('list_entities'),
       checks.includes('matches'),
-      checks.didNotCall('run_readonly_sql'),
+      didNotCallDataTool(path),
       checks.noToolErrors(),
     ],
   },
@@ -197,9 +241,9 @@ const WORLD_CUP_EVAL_CASES: AssistantEvalCase[] = [
     question: 'Which team performed best?',
     intent:
       'Ambiguous on both metric and tournament — the agent must ask instead of guessing.',
-    scorers: [
+    scorers: (path) => [
       checks.calledTool('ask_clarification'),
-      checks.didNotCall('run_readonly_sql'),
+      didNotCallDataTool(path),
       checks.noToolErrors(),
     ],
     // Regex can confirm ask_clarification fired; it cannot judge whether the
@@ -224,8 +268,8 @@ const WORLD_CUP_EVAL_CASES: AssistantEvalCase[] = [
       'In the 2022 knockout rounds, did the team with more possession usually win?',
     intent:
       'Two-table reasoning over match_team_statistics — the answer must be a judgement backed by counts, not a row dump.',
-    scorers: [
-      checks.calledTool('run_readonly_sql'),
+    scorers: (path) => [
+      calledDataTool(path),
       checks.matches(/\b(possession|%)\b/i),
       checks.noToolErrors(),
     ],
@@ -258,7 +302,7 @@ const WORLD_CUP_EVAL_CASES: AssistantEvalCase[] = [
     // refusal phrased without any of the listed words would fail, and a
     // fabricated answer that avoided the exact phrase "Pelé scored 4" would
     // pass) — a judge reads the actual claim instead of matching words.
-    scorers: [checks.noToolErrors()],
+    scorers: () => [checks.noToolErrors()],
     judgeRubric:
       'The question asks about 1970, a year this dataset does not cover (it ' +
       'only has 2018 and 2022). Score pass=true only if the final answer ' +
@@ -273,8 +317,8 @@ const WORLD_CUP_EVAL_CASES: AssistantEvalCase[] = [
     question: 'Chart the goals scored by each team in the 2022 knockout stage.',
     intent:
       'Answer first, then build a visual — checks the SQL → create_visual ordering.',
-    scorers: [
-      checks.toolOrder(['run_readonly_sql', 'create_visual']),
+    scorers: (path) => [
+      dataToolThenVisual(path),
       checks.calledTool('create_visual'),
       checks.noToolErrors(),
     ],
@@ -382,10 +426,10 @@ const FORMULA_1_EVAL_CASES: AssistantEvalCase[] = [
       'did they finish on?',
     intent:
       'Single-hop lookup against the season standings — the simplest happy path.',
-    scorers: [
+    scorers: (path) => [
       checks.includes('Verstappen'),
       checks.matches(/575/),
-      checks.calledTool('run_readonly_sql'),
+      calledDataTool(path),
       checks.noToolErrors(),
     ],
     // Reference is the points total alone: the champion's name lives in
@@ -403,10 +447,10 @@ const FORMULA_1_EVAL_CASES: AssistantEvalCase[] = [
       'laps did the race run to?',
     intent:
       'Filter a race by season and grand prix, which needs the race/grand_prix (and circuit) join rather than a single table.',
-    scorers: [
+    scorers: (path) => [
       checks.includes('Silverstone'),
       checks.matches(/\b52\b/),
-      checks.calledTool('run_readonly_sql'),
+      calledDataTool(path),
       checks.noToolErrors(),
     ],
     expectedSql:
@@ -422,10 +466,10 @@ const FORMULA_1_EVAL_CASES: AssistantEvalCase[] = [
       'how many did they win?',
     intent:
       'A "most" question with a verifiable number — the answer is the same whether it is read off the driver totals or aggregated from race results.',
-    scorers: [
+    scorers: (path) => [
       checks.includes('Hamilton'),
       checks.matches(/\b106\b/),
-      checks.calledTool('run_readonly_sql'),
+      calledDataTool(path),
       checks.noToolErrors(),
     ],
     expectedSql:
@@ -440,10 +484,10 @@ const FORMULA_1_EVAL_CASES: AssistantEvalCase[] = [
       'how many each?',
     intent:
       'A genuine tie at the top (two drivers on seven titles) — a LIMIT 1 answer is wrong here, so this catches agents that rank instead of handling ties.',
-    scorers: [
+    scorers: (path) => [
       checks.includes('Schumacher'),
       checks.matches(/Hamilton/i),
-      checks.calledTool('run_readonly_sql'),
+      calledDataTool(path),
       checks.noToolErrors(),
     ],
     expectedSql:
@@ -462,10 +506,10 @@ const FORMULA_1_EVAL_CASES: AssistantEvalCase[] = [
     question: 'Who finished on the podium at the 2024 Monaco Grand Prix?',
     intent:
       'Needs the race_result view (or the `type` discriminator on race_data) rather than a base table — reading race_data without filtering its type returns every session, not the race.',
-    scorers: [
+    scorers: (path) => [
       checks.includes('Leclerc'),
       checks.matches(/Piastri/i),
-      checks.calledTool('run_readonly_sql'),
+      calledDataTool(path),
       checks.noToolErrors(),
     ],
     expectedSql:
@@ -482,10 +526,10 @@ const FORMULA_1_EVAL_CASES: AssistantEvalCase[] = [
     question: 'What Formula 1 data do I have available to analyse?',
     intent:
       'Pure discovery — must inspect the session datasets rather than invent entities or run SQL.',
-    scorers: [
+    scorers: (path) => [
       checks.calledTool('list_entities'),
       checks.includes('driver'),
-      checks.didNotCall('run_readonly_sql'),
+      didNotCallDataTool(path),
       checks.noToolErrors(),
     ],
   },
@@ -494,9 +538,9 @@ const FORMULA_1_EVAL_CASES: AssistantEvalCase[] = [
     question: 'Which driver was the most dominant?',
     intent:
       'Ambiguous on both metric and era — 77 seasons of data, and the agent must ask instead of guessing.',
-    scorers: [
+    scorers: (path) => [
       checks.calledTool('ask_clarification'),
-      checks.didNotCall('run_readonly_sql'),
+      didNotCallDataTool(path),
       checks.noToolErrors(),
     ],
     judgeRubric:
@@ -522,8 +566,8 @@ const FORMULA_1_EVAL_CASES: AssistantEvalCase[] = [
       'to win the race?',
     intent:
       'Joins the grid/pole position to the race result across 22 races — the answer must be a judgement backed by counts, not a row dump.',
-    scorers: [
-      checks.calledTool('run_readonly_sql'),
+    scorers: (path) => [
+      calledDataTool(path),
       checks.matches(/\b(pole|grid)\b/i),
       checks.noToolErrors(),
     ],
@@ -551,7 +595,7 @@ const FORMULA_1_EVAL_CASES: AssistantEvalCase[] = [
     question: 'Who won the 2023 MotoGP world championship?',
     intent:
       'The fixture covers Formula 1 only — the agent must say so instead of fabricating a MotoGP result.',
-    scorers: [checks.noToolErrors()],
+    scorers: () => [checks.noToolErrors()],
     judgeRubric:
       'The question asks about MotoGP, a motorcycle racing series this ' +
       'dataset does not contain — it holds Formula 1 world championship data ' +
@@ -570,8 +614,8 @@ const FORMULA_1_EVAL_CASES: AssistantEvalCase[] = [
       'Chart the total points scored by each constructor in the 2023 season.',
     intent:
       'Answer first, then build a visual — checks the SQL → create_visual ordering.',
-    scorers: [
-      checks.toolOrder(['run_readonly_sql', 'create_visual']),
+    scorers: (path) => [
+      dataToolThenVisual(path),
       checks.calledTool('create_visual'),
       checks.noToolErrors(),
     ],
@@ -657,6 +701,11 @@ export interface EvalCheckResult {
 }
 
 /** Outcome of one question. */
+/** Which agent/context a case ran through (ADR-0007 §7): `model` is the
+ * current, logical-query-layer assistant (default); `legacy` is the
+ * pre-change SQL-writing assistant, run for comparison only. */
+export type AssistantEvalPath = 'model' | 'legacy';
+
 export interface AssistantEvalCaseResult {
   id: string;
   question: string;
@@ -674,6 +723,12 @@ export interface AssistantEvalCaseResult {
   error?: string;
   /** Wall time for the question, in milliseconds. */
   durationMs: number;
+  /** Which path this case ran through. */
+  path: AssistantEvalPath;
+  /** True when the run called `run_raw_sql` — the question could not be
+   * expressed as a logical query (always false on the `legacy` path, which
+   * has no such tool). */
+  outsideModel: boolean;
 }
 
 /** Tool payloads can be whole result sets; keep the trace readable. */
@@ -1054,7 +1109,16 @@ export async function runAssistantEvalCase(
    * omitted (or empty) when neither wires one in.
    */
   knowledgeBlock?: string,
+  /**
+   * ADR-0007 §7: `path` picks which agent/context the case runs through —
+   * `model` (default) is the current logical-query-layer assistant, built
+   * from `renderModelBlock`; `legacy` is the pre-change assistant, built
+   * from `entityOrientationLines` + `metricsBlock`, run for comparison only.
+   */
+  options: { path?: AssistantEvalPath; metricsBlock?: string } = {},
 ): Promise<AssistantEvalCaseResult> {
+  const path = options.path ?? 'model';
+  const target = path === 'legacy' ? assistantLegacyAgent : assistantAgent;
   const startedAt = Date.now();
   // Captured from the per-item callback: the run itself only reports numbers.
   let answer = '';
@@ -1067,9 +1131,31 @@ export async function runAssistantEvalCase(
   try {
     const datasetSnapshots =
       await getDatasetToolServices().getDatasets(datasets);
-    const orientation = entityOrientationLines(datasets, datasetSnapshots).join(
-      '\n',
-    );
+    // `legacy` rebuilds the pre-change blocks (orientation + metrics);
+    // `model` builds the one rendered model block ADR-0007 replaces them
+    // with — each path's own system context, never mixed.
+    const systemBlocks: { role: 'system'; content: string }[] =
+      path === 'legacy'
+        ? [
+            {
+              role: 'system',
+              content: entityOrientationLines(
+                datasets,
+                datasetSnapshots,
+              ).join('\n'),
+            },
+            ...(options.metricsBlock
+              ? [{ role: 'system' as const, content: options.metricsBlock }]
+              : []),
+          ]
+        : [
+            {
+              role: 'system',
+              content: renderModelBlock(
+                await getDatasetToolServices().getSessionModel(datasets),
+              ),
+            },
+          ];
 
     const result = await runEvals({
       data: [
@@ -1078,8 +1164,8 @@ export async function runAssistantEvalCase(
           requestContext: evalRequestContext(datasets, sessionId, turnRecords),
         },
       ],
-      scorers: evalCase.scorers,
-      target: assistantAgent,
+      scorers: evalCase.scorers(path),
+      target,
       // Same step budget and dataset/entity + join-hint grounding a real chat
       // turn gets from SessionsService.agentContext — without this the model
       // used to run out of steps mid-analysis (the AI-SDK default cap is 5)
@@ -1087,7 +1173,7 @@ export async function runAssistantEvalCase(
       targetOptions: {
         maxSteps: ASSISTANT_MAX_STEPS,
         context: [
-          { role: 'system', content: orientation },
+          ...systemBlocks,
           ...(knowledgeBlock
             ? [{ role: 'system' as const, content: knowledgeBlock }]
             : []),
@@ -1113,7 +1199,7 @@ export async function runAssistantEvalCase(
     // model routinely finishing without prose.
     if (!answer.trim() && toolCalls.length > 0) {
       answer = await synthesizeToolOnlyTurn(
-        assistantAgent,
+        target,
         evalCase.question,
         turnRecords,
         new AbortController().signal,
@@ -1128,18 +1214,20 @@ export async function runAssistantEvalCase(
       scores[id] = typeof value === 'number' ? value : Number(value ?? 0);
     }
 
-    const checkResults: EvalCheckResult[] = evalCase.scorers.map((scorer) => {
-      const id = String(scorer.id ?? '');
-      const score = scores[id] ?? 0;
-      const passed = score === 1;
-      return {
-        id,
-        description: String(scorer.description ?? scorer.name ?? id),
-        score,
-        passed,
-        reason: passed ? undefined : checkReason(scorerPayloads[id]),
-      };
-    });
+    const checkResults: EvalCheckResult[] = evalCase
+      .scorers(path)
+      .map((scorer) => {
+        const id = String(scorer.id ?? '');
+        const score = scores[id] ?? 0;
+        const passed = score === 1;
+        return {
+          id,
+          description: String(scorer.description ?? scorer.name ?? id),
+          score,
+          passed,
+          reason: passed ? undefined : checkReason(scorerPayloads[id]),
+        };
+      });
 
     // Result-set comparison (Feature 1) — primary correctness signal for
     // cases with expectedSql, on top of the text/tool scorers above.
@@ -1167,6 +1255,8 @@ export async function runAssistantEvalCase(
       passed:
         checkResults.length > 0 && checkResults.every((check) => check.passed),
       durationMs: Date.now() - startedAt,
+      path,
+      outsideModel: toolCalls.some((call) => call.name === 'run_raw_sql'),
     };
   } catch (err) {
     return {
@@ -1179,6 +1269,8 @@ export async function runAssistantEvalCase(
       passed: false,
       error: err instanceof Error ? err.message : String(err),
       durationMs: Date.now() - startedAt,
+      path,
+      outsideModel: toolCalls.some((call) => call.name === 'run_raw_sql'),
     };
   }
 }
@@ -1199,6 +1291,7 @@ export async function runAssistantEvals(
   caseIds?: string[],
   sessions?: SessionsService,
   knowledgeBlock?: string,
+  options: { path?: AssistantEvalPath; metricsBlock?: string } = {},
 ): Promise<AssistantEvalCaseResult[]> {
   const datasetError = assistantEvalDatasetError(
     datasets,
@@ -1217,6 +1310,7 @@ export async function runAssistantEvals(
         datasets,
         evalSession?.id,
         knowledgeBlock,
+        options,
       );
       results.push(result);
       onCaseComplete?.(result);

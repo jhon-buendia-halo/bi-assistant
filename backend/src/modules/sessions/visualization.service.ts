@@ -40,6 +40,7 @@ import {
 } from './visual-runtime';
 import { recommendedFormBlock } from './chart-heuristic';
 import { createZip } from './zip-archive';
+import { SQL_RUN_TOOLS } from './turn-data';
 import {
   ChatMessage,
   InteractiveVisualization,
@@ -1009,7 +1010,11 @@ export class VisualizationService {
     const refreshed = await Promise.all(
       existing.map(async (record): Promise<ToolDataRecord> => {
         if (
-          record.tool !== 'run_readonly_sql' ||
+          // `run_readonly_sql` (legacy path) and `query_entities`/
+          // `run_raw_sql` (ADR-0007) all leave re-runnable SQL in `input` —
+          // `query_entities`'s `input` is already the *compiled* statement,
+          // so re-running it needs no session model, just the datasource.
+          !SQL_RUN_TOOLS.has(record.tool) ||
           record.error ||
           !record.input?.trim()
         ) {

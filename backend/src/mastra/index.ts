@@ -2,10 +2,12 @@ import { Mastra } from '@mastra/core';
 import { PinoLogger } from '@mastra/loggers';
 import { MastraStorageExporter, Observability } from '@mastra/observability';
 import { assistantAgent } from './agents/assistant.agent';
+import { assistantLegacyAgent } from './agents/assistant-legacy.agent';
 import { evalJudgeAgent } from './agents/eval-judge.agent';
 import { knowledgeBootstrapAgent } from './agents/knowledge-bootstrap.agent';
 import { sqlFixerAgent } from './agents/sql-fixer.agent';
-import { sqlVerifierAgent } from './agents/sql-verifier.agent';
+import { queryFixerAgent } from './agents/query-fixer.agent';
+import { queryVerifierAgent } from './agents/query-verifier.agent';
 import { visualizationAgent } from './agents/visualization.agent';
 import { mastraStorage } from './storage';
 import { watchSessionWorkspaceRegistry } from './session-workspaces';
@@ -16,9 +18,20 @@ import { watchSessionWorkspaceRegistry } from './session-workspaces';
 export const mastra = new Mastra({
   agents: {
     assistant: assistantAgent,
+    // Pre-ADR-0007 assistant, kept only for the eval harness's `legacy` vs
+    // `model` comparison (roadmap 1.2.2 §7) — never exposed on a user-facing
+    // surface.
+    'assistant-legacy': assistantLegacyAgent,
     visualization: visualizationAgent,
+    // Runtime repair of a *compiled* statement that fails to execute — still
+    // needed as a safety net under the logical query layer (ADR-0007 §6).
     'sql-fixer': sqlFixerAgent,
-    'sql-verifier': sqlVerifierAgent,
+    // Compile/semantic repair at the logical level — replaces `sql-verifier`
+    // (removed; nothing else depended on it) for `query_entities`'s one
+    // automatic retry.
+    'query-fixer': queryFixerAgent,
+    // Careful mode's independent second opinion, now at the logical level.
+    'query-verifier': queryVerifierAgent,
     'assistant-eval-judge': evalJudgeAgent,
     'knowledge-bootstrap': knowledgeBootstrapAgent,
   },

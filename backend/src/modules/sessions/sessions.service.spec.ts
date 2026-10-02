@@ -37,7 +37,6 @@ jest.mock('../llm/llm.service', () => ({ LlmService: class {} }));
 jest.mock('../verified-queries/verified-queries.service', () => ({
   VerifiedQueriesService: class {},
 }));
-jest.mock('../metrics/metrics.service', () => ({ MetricsService: class {} }));
 jest.mock('../knowledge/knowledge.service', () => ({
   KnowledgeService: class {},
 }));
@@ -46,11 +45,31 @@ jest.mock('../../mastra/agents/sql-fixer.agent', () => {
   const { z } = require('zod') as typeof import('zod');
   return { sqlFixOutputSchema: z.object({ sql: z.string() }) };
 });
-jest.mock('../../mastra/agents/sql-verifier.agent', () => {
+// Replace `sql-verifier` (ADR-0007 §6): both new agents still import the real
+// `logicalQuerySchema` (pure, safe under Jest) but also `@mastra/core/agent`
+// via `new Agent(...)` at module scope — mocked here the same way
+// `sql-fixer.agent` is, so that ESM-only transitive dependency never loads.
+jest.mock('../../mastra/agents/query-fixer.agent', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { z } = require('zod') as typeof import('zod');
-  return { sqlVerifyOutputSchema: z.object({ sql: z.string() }) };
+  return {
+    queryFixOutputSchema: z.object({
+      query: z.record(z.string(), z.unknown()),
+    }),
+  };
 });
+jest.mock('../../mastra/agents/query-verifier.agent', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { z } = require('zod') as typeof import('zod');
+  return {
+    queryVerifyOutputSchema: z.object({
+      query: z.record(z.string(), z.unknown()),
+    }),
+  };
+});
+jest.mock('../data-models/data-models.service', () => ({
+  DataModelsService: class {},
+}));
 jest.mock('./repositories/sessions.repository', () => ({
   SessionsRepository: class {},
 }));
@@ -63,7 +82,7 @@ jest.mock('./visualization-document', () => ({
   sourceEntities: jest.fn().mockReturnValue([]),
 }));
 
-import { BadRequestException, Logger } from '@nestjs/common';
+import { BadRequestException, Logger, NotFoundException } from '@nestjs/common';
 import { resolveAgentModel } from '../../mastra/model-resolver';
 import { setDatasetToolServices } from '../../mastra/tool-services';
 import type { DatasetToolServices } from '../../mastra/tool-services';
@@ -71,6 +90,58 @@ import { TURN_RECORDS_CONTEXT_KEY } from '../../mastra/tools/visual.tools';
 import { sourceEntities } from './visualization-document';
 import { SessionsService, StreamEvent } from './sessions.service';
 import type { SessionDoc } from './entities/session.entity';
+import type { DataModel } from '../data-models/entities/data-model.entity';
+
+/**
+ * The composed session model `agentContext`/`crossCheckAnswer` now build the
+ * rendered block / cross-check query from (ADR-0007), standing in for the
+ * old physical `datasets.getByNames` snapshot these tests used to ground
+ * `entityOrientationLines` — same dataset ("football"), same entity
+ * ("matches"), same `winner` attribute/samples, so the independence
+ * assertions below still have something concrete to check against.
+ */
+function defaultDataModelPairs(): { dataset: string; model: DataModel }[] {
+  return [
+    {
+      dataset: 'football',
+      model: {
+        model: 'football',
+        version: 3,
+        entities: [
+          {
+            name: 'matches',
+            key: ['match_id'],
+            bindings: [
+              {
+                kind: 'sql',
+                datasource: 'ds-1',
+                table: 'main.football.matches',
+              },
+            ],
+            attributes: [
+              { name: 'match_id', type: 'integer', role: 'key' },
+              {
+                name: 'winner',
+                type: 'string',
+                role: 'dimension',
+                samples: ['Argentina', 'France'],
+              },
+            ],
+          },
+        ],
+        relationships: [],
+        metrics: [
+          {
+            name: 'win_rate',
+            label: 'Win rate',
+            entity: 'matches',
+            agg: 'count',
+          },
+        ],
+      },
+    },
+  ];
+}
 
 describe('SessionsService streaming', () => {
   /** A service wired to one streamed turn, with everything else stubbed. */
@@ -79,7 +150,6 @@ describe('SessionsService streaming', () => {
     options: {
       answer?: string;
       verified?: boolean;
-      metricsBlock?: string;
       knowledgeBlock?: string;
       /** Snippets the curated-knowledge block was built from this turn. */
       knowledgeUsed?: {
@@ -90,9 +160,12 @@ describe('SessionsService streaming', () => {
         datasetId?: string;
       }[];
       tables?: string[];
-      /** Careful mode: what the verifier replies and what its SQL returns. */
+      /** Overrides `defaultDataModelPairs()` — the session model
+       * `agentContext`/`crossCheckAnswer` compose from (ADR-0007). */
+      dataModelPairs?: { dataset: string; model: DataModel }[];
+      /** Careful mode: what the verifier replies and what its query returns. */
       crossCheck?: {
-        sql?: string;
+        query?: { from: string; select: unknown[] };
         verifierFails?: boolean;
         rows?: Record<string, unknown>[];
         runFails?: boolean;
@@ -130,11 +203,6 @@ describe('SessionsService streaming', () => {
       referenceBlock: jest.fn().mockResolvedValue(undefined),
       isVerifiedSql: jest.fn().mockResolvedValue(options.verified ?? false),
     };
-    const metrics = {
-      definitionBlock: jest
-        .fn()
-        .mockResolvedValue(options.metricsBlock ?? undefined),
-    };
     const knowledge = {
       definitionBlock: jest
         .fn()
@@ -145,12 +213,18 @@ describe('SessionsService streaming', () => {
       }),
     };
     const check = options.crossCheck ?? {};
+    // A logical query equivalent to the old hand-written `check.sql` — the
+    // verifier now replies with a `LogicalQuery`, compiled against the
+    // dataModels mock's "matches" entity (see `defaultDataModelPairs`), not
+    // raw text.
+    const verifierQuery = check.query ?? {
+      from: 'matches',
+      select: [{ agg: 'count', alias: 'total' }],
+    };
     const verifier = {
       generate: check.verifierFails
         ? jest.fn().mockRejectedValue(new Error('verifier unavailable'))
-        : jest.fn().mockResolvedValue({
-            object: { sql: check.sql ?? 'SELECT count(*) FROM other.table' },
-          }),
+        : jest.fn().mockResolvedValue({ object: { query: verifierQuery } }),
     };
     const datasources = {
       runReadOnlySql: check.runFails
@@ -159,13 +233,18 @@ describe('SessionsService streaming', () => {
             .fn()
             .mockResolvedValue({ columns: ['n'], rows: check.rows ?? [] }),
     };
+    const dataModels = {
+      getCurrentModels: jest
+        .fn()
+        .mockResolvedValue(options.dataModelPairs ?? defaultDataModelPairs()),
+    };
     const service = new SessionsService(
       repository as never,
       {
         getAgent: jest
           .fn()
           .mockImplementation((id: string) =>
-            id === 'sql-verifier' ? verifier : agent,
+            id === 'query-verifier' ? verifier : agent,
           ),
         ensureSessionWorkspace: jest
           .fn()
@@ -200,18 +279,18 @@ describe('SessionsService streaming', () => {
       } as never,
       {} as never,
       verifiedQueries as never,
-      metrics as never,
       knowledge as never,
+      dataModels as never,
     );
     return {
       service,
       session,
       agent,
       verifiedQueries,
-      metrics,
       knowledge,
       verifier,
       datasources,
+      dataModels,
     };
   }
 
@@ -350,41 +429,33 @@ describe('SessionsService streaming', () => {
     expect(session.messages.at(-1)?.verified).toBeUndefined();
   });
 
-  it('grounds the turn in the curated metrics for the dataset entities', async () => {
-    const { service, agent, metrics } = buildStreaming(answerStream([]), {
-      tables: ['main.football.matches', 'main.football.players'],
-      metricsBlock: 'Governed metric definitions (curated — …):\n- Win rate',
-    });
+  it('grounds the turn in the rendered model block — entities, attributes and metrics (ADR-0007)', async () => {
+    const { service, agent, dataModels } = buildStreaming(answerStream([]));
 
     await service.streamMessage('session-1', 'Win rate?', () => {});
 
-    expect(metrics.definitionBlock).toHaveBeenCalledWith([
-      'main.football.matches',
-      'main.football.players',
-    ]);
+    expect(dataModels.getCurrentModels).toHaveBeenCalledWith(['football']);
     const options = (agent.stream.mock.calls as unknown[][])[0][1] as {
       context: { content: string }[];
     };
-    expect(
-      options.context.some((block) =>
-        block.content.includes('Governed metric definitions'),
-      ),
-    ).toBe(true);
+    const modelBlock = options.context[0].content;
+    // The one rendered model block replaces the old orientation + join-hint +
+    // metrics blocks — logical names and metric labels, never a physical
+    // table key or a dialect word.
+    expect(modelBlock).toContain('matches (dataset "football")');
+    expect(modelBlock).toContain('win_rate (Win rate)');
+    expect(modelBlock).not.toContain('main.football.matches');
+    expect(modelBlock).not.toContain('databricks');
   });
 
-  it('omits the metrics block when no curated metric covers the session', async () => {
-    const { service, agent } = buildStreaming(answerStream([]));
+  it('records the model versions the turn was given, for provenance', async () => {
+    const { service, session } = buildStreaming(answerStream([]));
 
     await service.streamMessage('session-1', 'Why?', () => {});
 
-    const options = (agent.stream.mock.calls as unknown[][])[0][1] as {
-      context: { content: string }[];
-    };
-    expect(
-      options.context.some((block) =>
-        block.content.includes('Governed metric definitions'),
-      ),
-    ).toBe(false);
+    expect(session.messages.at(-1)?.modelVersions).toEqual([
+      { dataset: 'football', version: 3 },
+    ]);
   });
 
   it('keeps the data collected before a clarification on the card', async () => {
@@ -654,8 +725,9 @@ describe('SessionsService streaming', () => {
 
     it('agrees when the independent query returns the same results', async () => {
       const { service, session, verifier, datasources } = carefulTurn({
-        sql: 'SELECT COUNT(1) AS total FROM main.football.matches',
-        // Same fact, different column name and cell typing.
+        // Same fact, different column name and cell typing — the default
+        // verifier query (`count(*) as total`) compiles against the
+        // dataModels mock's "matches" entity.
         rows: [{ total: '64' }],
       });
 
@@ -663,23 +735,24 @@ describe('SessionsService streaming', () => {
 
       expect(datasources.runReadOnlySql).toHaveBeenCalledWith(
         'ds-1',
-        'SELECT COUNT(1) AS total FROM main.football.matches',
+        'SELECT COUNT(*) AS "total" FROM "football"."matches" AS "matches" LIMIT 200',
         200,
       );
       expect(session.messages.at(-1)?.crossCheck).toEqual({
         status: 'agree',
         note: 'independent re-derivation returned the same results',
       });
-      // Independence: the verifier sees the question and the schema with its
-      // sample values, never the statement the analysis agent ran.
+      // Independence: the verifier sees the question and the rendered model
+      // block with its sample values, never the statement the analysis agent
+      // ran, and never a physical table key or a dialect word (ADR-0007).
       const prompt = (
         verifier.generate.mock.calls as unknown[][]
       )[0][0] as string;
       expect(prompt).toContain('How many matches were played?');
-      expect(prompt).toContain(
-        'main.football.matches(winner string [e.g. Argentina, France])',
-      );
-      expect(prompt).toContain('Dialect: databricks');
+      expect(prompt).toContain('matches (dataset "football")');
+      expect(prompt).toContain('[e.g. Argentina, France]');
+      expect(prompt).not.toContain('main.football.matches');
+      expect(prompt).not.toContain('databricks');
       expect(prompt).not.toContain(PRIMARY);
     });
 
@@ -1036,6 +1109,117 @@ describe('SessionsService SQL self-correction', () => {
 
     expect(result.truncated).toBe(true);
     expect(result.note).toContain('row limit 100 reached');
+  });
+});
+
+describe('SessionsService logical query layer — datasource resolution', () => {
+  function modelWithDefaultDatasource(): DataModel {
+    return {
+      model: 'claims',
+      version: 1,
+      entities: [
+        {
+          name: 'claims',
+          key: ['claim_id'],
+          bindings: [
+            {
+              kind: 'sql',
+              datasource: 'default',
+              table: 'main.health.claims',
+            },
+          ],
+          attributes: [{ name: 'claim_id', type: 'integer', role: 'key' }],
+        },
+      ],
+      relationships: [],
+      metrics: [],
+    };
+  }
+
+  async function bridge(opts: {
+    get: jest.Mock;
+    defaultDatasource: jest.Mock;
+    runReadOnlySql: jest.Mock;
+  }) {
+    const service = new SessionsService(
+      { list: jest.fn().mockResolvedValue([]) } as never,
+      {
+        getAgent: jest.fn(),
+        ensureSessionWorkspace: jest.fn().mockResolvedValue({ id: 'w' }),
+      } as never,
+      { getByNames: jest.fn().mockResolvedValue([]) } as never,
+      {
+        get: opts.get,
+        defaultDatasource: opts.defaultDatasource,
+        runReadOnlySql: opts.runReadOnlySql,
+      } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {
+        getCurrentModels: jest
+          .fn()
+          .mockResolvedValue([
+            { dataset: 'claims', model: modelWithDefaultDatasource() },
+          ]),
+      } as never,
+    );
+    await service.onModuleInit();
+    const calls = (setDatasetToolServices as jest.Mock).mock
+      .calls as unknown[][];
+    return calls.at(-1)![0] as DatasetToolServices;
+  }
+
+  it('resolves the "default" datasourceId placeholder (bootstrap.ts) through DatasourcesService.defaultDatasource, for both dialect lookup and execution', async () => {
+    const get = jest
+      .fn()
+      .mockResolvedValue({ id: 'ds-real', kind: 'databricks' });
+    const defaultDatasource = jest
+      .fn()
+      .mockResolvedValue({ id: 'ds-real', kind: 'databricks' });
+    const runReadOnlySql = jest
+      .fn()
+      .mockResolvedValue({ columns: ['n'], rows: [{ n: 1 }] });
+    const installed = await bridge({ get, defaultDatasource, runReadOnlySql });
+    const sessionModel = await installed.getSessionModel(['claims']);
+
+    await installed.runLogicalQuery(sessionModel, {
+      from: 'claims',
+      select: [{ agg: 'count', alias: 'n' }],
+      limit: 10,
+    });
+
+    expect(defaultDatasource).toHaveBeenCalled();
+    expect(get).toHaveBeenCalledWith('ds-real');
+    expect(runReadOnlySql).toHaveBeenCalledWith(
+      'ds-real',
+      expect.any(String),
+      10,
+    );
+  });
+
+  it('treats "Datasource ... not found" as non-repairable — no sql-fixer round trip', async () => {
+    const get = jest
+      .fn()
+      .mockRejectedValue(new NotFoundException('Datasource ds-real not found'));
+    const defaultDatasource = jest
+      .fn()
+      .mockResolvedValue({ id: 'ds-real', kind: 'databricks' });
+    const runReadOnlySql = jest
+      .fn()
+      .mockRejectedValue(new NotFoundException('Datasource ds-real not found'));
+    const installed = await bridge({ get, defaultDatasource, runReadOnlySql });
+    const sessionModel = await installed.getSessionModel(['claims']);
+
+    await expect(
+      installed.runLogicalQuery(sessionModel, {
+        from: 'claims',
+        select: [{ agg: 'count', alias: 'n' }],
+        limit: 10,
+      }),
+    ).rejects.toThrow('not found');
+    expect(runReadOnlySql).toHaveBeenCalledTimes(1);
   });
 });
 

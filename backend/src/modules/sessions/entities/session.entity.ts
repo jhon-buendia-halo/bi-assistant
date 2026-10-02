@@ -35,6 +35,18 @@ export interface ToolDataRecord {
    * anyone reads the SQL.
    */
   warnings?: string[];
+  /**
+   * The `query_entities` call's own input, as JSON — kept alongside the
+   * compiled SQL in `input` so provenance can show both the logical
+   * question asked and the statement it became (ADR-0007).
+   */
+  logicalQuery?: string;
+  /**
+   * This record came from `run_raw_sql`, the flagged last resort — the
+   * answer it contributed to is "outside the data model" (ADR-0007 §4),
+   * regardless of whether the statement itself succeeded.
+   */
+  outsideModel?: boolean;
 }
 
 /** One step of the assistant's plain-language route from question to answer. */
@@ -112,6 +124,18 @@ export interface ChatMessage {
    * the report's executive summary; the full markdown lives in the workspace.
    */
   report?: AnalysisReport;
+  /**
+   * The data model version(s) `agentContext` composed this turn's rendered
+   * model block from (ADR-0007) — provenance for "what the assistant could
+   * see", independent of which entities it actually queried.
+   */
+  modelVersions?: { dataset: string; version: number }[];
+  /**
+   * True when this turn ran `run_raw_sql` — the question could not be
+   * expressed as a logical query, so the answer is flagged "outside the
+   * data model" (ADR-0007 §4) regardless of whether the raw SQL succeeded.
+   */
+  outsideModel?: boolean;
 }
 
 export interface AnalysisReport {

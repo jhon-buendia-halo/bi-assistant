@@ -156,13 +156,14 @@ flowchart LR
     mastrasvc["MastraService<br/>(getAgent, ensureSessionWorkspace)"]
     toolsvc["tool-services<br/>(setDatasetToolServices bridge)"]
     resolver["model-resolver<br/>(setAgentModelResolver)"]
-    assistant["assistant agent"]
+    assistant["assistant agent<br/>(model vocabulary, ADR-0007)"]
+    legacyassistant["assistant-legacy agent<br/>(eval comparison only)"]
     designer["visualization agent"]
-    sqlagents["sql-fixer, sql-verifier agents"]
+    sqlagents["sql-fixer (runtime repair),<br/>query-fixer, query-verifier agents"]
     bootstrap["knowledge-bootstrap agent"]
-    tools["tools/<br/>(dataset, create/update_visual, ask_clarification)"]
+    tools["tools/<br/>(model.tools — list/describe_entity,<br/>query_entities, sample_records, run_raw_sql;<br/>dataset.tools for assistant-legacy;<br/>create/update_visual, ask_clarification)"]
     skills["skills/interactive-visuals<br/>(copied into session workspaces)"]
-    evals["evals/<br/>(assistant evals, eval-judge agent)"]
+    evals["evals/<br/>(assistant evals, eval-judge agent,<br/>model/legacy path selection)"]
   end
 
   sessions --> visualization
@@ -172,7 +173,8 @@ flowchart LR
   sessions --> verified
   sessions --> metrics
   sessions --> knowledge
-  sessions -->|"assistant, sql-fixer, sql-verifier"| mastrasvc
+  sessions --> datamodels
+  sessions -->|"assistant, sql-fixer, query-fixer, query-verifier"| mastrasvc
   sessions -->|"installs on init"| toolsvc
   visualization -->|"visualization agent, workspace fs"| mastrasvc
   agentsmod --> sessions
@@ -202,6 +204,7 @@ flowchart LR
   assistant -.->|"workspace skills"| skills
   tools -->|"getDatasetToolServices()"| toolsvc
   evals --> assistant
+  evals -->|"legacy path"| legacyassistant
   assistant -.->|"model: async resolveAgentModel()"| resolver
 ```
 
@@ -295,11 +298,11 @@ flowchart LR
 - **Consequences:** The DSL holds structure, the Knowledge Store holds meaning (synonyms, default filters as portable predicates over DSL attributes). The physical snapshot remains the bootstrap input and drift reference. The metrics API keeps its contract; two metric stores coexist until 1.2.3, with the shared store authoritative for panel-managed metrics and the model authoritative for YAML-only ones. Non-SQL kinds need only a new adapter, not a model change. A new validation surface (YAML, Zod, semantic checks) is ours to maintain.
 
 #### ADR-0007 — The assistant reasons over abstract entities through a logical query layer
-- **Status:** Proposed (implemented by roadmap 1.2.2 / BA-86)
+- **Status:** Accepted
 - **Date:** 2026-10-01
 - **Context:** With ADR-0006 the model is storage-neutral, but the assistant still wrote dialect SQL against physical tables, which ties reasoning to the datasource and lets metric and join logic drift per turn. Compiler-based systems report 98–100% accuracy on modelled questions and 0% outside the model; direct SQL keeps coverage but fails silently.
-- **Decision:** The assistant's prompt and tools speak only the model's vocabulary: `describe_entity`, `query_entities` (a JSON-schema-constrained logical query: from, select, portable predicates, group_by, order_by, limit, traverse along declared relationships) and `sample_records`. One adapter per binding kind compiles the logical query: the `sql` adapter targets Postgres, Databricks SQL and SQLite in one place; `rest` reuses the materialise-to-SQLite path. Raw SQL remains only as an internal fallback when the compiler rejects a query, and every such answer is flagged "outside the model" so evals and trust signals count it. `sql-fixer` and `sql-verifier` move to the logical level.
-- **Consequences:** Metrics and joins are correct by construction; dialect differences live in one compiler; a new query grammar without pretraining must stay close to SELECT / WHERE / GROUP BY semantics and be schema-constrained; the compiler is the critical path and ships with the `sql` adapter first.
+- **Decision:** The assistant's prompt and tools speak only the model's vocabulary: `describe_entity`, `query_entities` (a JSON-schema-constrained logical query: from, select, portable predicates, group_by, order_by, limit, traverse along declared relationships) and `sample_records`. One adapter per binding kind compiles the logical query: the `sql` adapter targets Postgres, Databricks SQL and SQLite in one place; `rest` reuses the materialise-to-SQLite path. Raw SQL remains only as an internal fallback when the compiler rejects a query, and every such answer is flagged "outside the model" so evals and trust signals count it. `sql-fixer` keeps repairing runtime errors on already-compiled SQL; `query-fixer` (compile/semantic errors, one automatic retry inside `query_entities`) and `query-verifier` (careful mode's independent second opinion) replace `sql-verifier` at the logical level.
+- **Consequences:** Metrics and joins are correct by construction; dialect differences live in one compiler; a new query grammar without pretraining must stay close to SELECT / WHERE / GROUP BY semantics and be schema-constrained; the compiler is the critical path and ships with the `sql` adapter first. Implemented by roadmap 1.2.2 / BA-86: `backend/src/modules/data-models/session-model.ts` (composition + rendered block), `query/logical-query.ts` (schema + resolution), `query/compile-sql.ts` (the three-dialect compiler), `mastra/tools/model.tools.ts`, and `mastra/agents/{query-fixer,query-verifier}.agent.ts`.
 
 ## Level 4 — Code
 

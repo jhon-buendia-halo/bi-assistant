@@ -16,6 +16,8 @@ function caseResult(
     toolCalls: [],
     passed,
     durationMs: 10,
+    path: 'model',
+    outsideModel: false,
   };
 }
 
@@ -34,6 +36,29 @@ function baseRun(overrides: Partial<EvalRunView> = {}): EvalRunView {
     ...overrides,
   };
 }
+
+describe('renderEvalRunMarkdown — path and outside-the-model count (ADR-0007)', () => {
+  it('reports the path and the outside-the-model count', () => {
+    const markdown = renderEvalRunMarkdown(
+      baseRun({
+        path: 'legacy',
+        outsideModelCount: 2,
+        totalCases: 5,
+      }),
+    );
+    expect(markdown).toContain('**Path:** legacy');
+    expect(markdown).toContain('**Outside the data model:** 2/5');
+  });
+
+  it('defaults to "model" and 0 for a run persisted before this field existed', () => {
+    const run = baseRun();
+    delete run.path;
+    delete run.outsideModelCount;
+    const markdown = renderEvalRunMarkdown(run);
+    expect(markdown).toContain('**Path:** model');
+    expect(markdown).toContain('**Outside the data model:** 0/1');
+  });
+});
 
 describe('renderEvalRunMarkdown — comparison section', () => {
   it('omits the section entirely when there is no previous run', () => {

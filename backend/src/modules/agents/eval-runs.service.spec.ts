@@ -41,6 +41,7 @@ describe('EvalRunsService dataset validation', () => {
     mostRecentCompleted: jest.fn(),
   };
   const knowledge = { definitionBlock: jest.fn().mockResolvedValue('') };
+  const metrics = { definitionBlock: jest.fn().mockResolvedValue(undefined) };
   const service = () =>
     new EvalRunsService(
       datasets as any,
@@ -48,6 +49,7 @@ describe('EvalRunsService dataset validation', () => {
       {} as any,
       {} as any,
       knowledge as any,
+      metrics as any,
     );
 
   beforeEach(() => jest.clearAllMocks());
@@ -104,6 +106,7 @@ describe('EvalRunsService dataset validation', () => {
       ['Sample'],
       'session',
       '',
+      { path: 'model', metricsBlock: undefined },
     );
     if (!('jobId' in result)) throw new Error('Run did not start');
     expect((await runner.status(result.jobId))?.status).toBe('completed');

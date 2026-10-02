@@ -118,6 +118,32 @@ export class DataModelsService implements OnModuleInit {
     return this.repository.findByDataset(datasetName);
   }
 
+  /**
+   * The current version's `DataModel` for every dataset named, paired with
+   * its dataset — exactly the shape `composeSessionModel` (ADR-0007) takes.
+   * A dataset with no model yet (should not happen post-bootstrap, but a
+   * session can still name a since-deleted dataset) is silently skipped
+   * rather than failing the whole session's context.
+   */
+  async getCurrentModels(
+    datasetNames: string[],
+  ): Promise<{ dataset: string; model: DataModel }[]> {
+    const docs = await Promise.all(
+      datasetNames.map((name) => this.repository.findByDataset(name)),
+    );
+    const pairs: { dataset: string; model: DataModel }[] = [];
+    docs.forEach((doc, i) => {
+      if (!doc) return;
+      const current = doc.versions.find(
+        (v) => v.version === doc.currentVersion,
+      );
+      if (current) {
+        pairs.push({ dataset: datasetNames[i], model: current.model });
+      }
+    });
+    return pairs;
+  }
+
   async getVersion(
     datasetName: string,
     version: number,

@@ -257,7 +257,12 @@
                         <span class="truncate text-[12px] text-zinc-500">
                           {{ startedLabel(run) }} ·
                           {{ datasourceName(run.datasourceId) }} ·
-                          {{ runDuration(run) }}
+                          {{ runDuration(run) }} ·
+                          {{ pathLabel(run) }}
+                          @if ((run.outsideModelCount ?? 0) > 0) {
+                            · {{ run.outsideModelCount }}/{{ run.totalCases }}
+                            outside model
+                          }
                         </span>
                       </button>
                       <button

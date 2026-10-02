@@ -4,8 +4,8 @@ import { DatasetsModule } from '../datasets/datasets.module';
 import { DatasourcesModule } from '../datasources/datasources.module';
 import { LlmModule } from '../llm/llm.module';
 import { VerifiedQueriesModule } from '../verified-queries/verified-queries.module';
-import { MetricsModule } from '../metrics/metrics.module';
 import { KnowledgeModule } from '../knowledge/knowledge.module';
+import { DataModelsModule } from '../data-models/data-models.module';
 import { SessionsController } from './sessions.controller';
 import { SessionsService } from './sessions.service';
 import { SessionsRepository } from './repositories/sessions.repository';
@@ -18,8 +18,8 @@ import { VisualizationService } from './visualization.service';
     DatasourcesModule,
     LlmModule,
     VerifiedQueriesModule,
-    MetricsModule,
     KnowledgeModule,
+    DataModelsModule,
   ],
   controllers: [SessionsController],
   providers: [SessionsService, SessionsRepository, VisualizationService],

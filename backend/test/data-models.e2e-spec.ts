@@ -779,6 +779,94 @@ describe('Data model API (e2e)', () => {
     });
   });
 
+  describe('Scenario: Compiling a logical query returns dialect SQL without touching the database', () => {
+    it('compiles a plain select to valid SQL for the requested dialect', async () => {
+      const name = 'World Cup Core - compile';
+      await saveDataset(app, name, datasourceId);
+
+      const res = await typed<{
+        sql: string;
+        entities: string[];
+        notes: string[];
+      }>(
+        request(app.getHttpServer())
+          .post(`${modelPath(name)}/compile`)
+          .send({
+            query: {
+              from: 'matches',
+              select: [{ attr: 'match_date' }, { attr: 'attendance' }],
+              limit: 10,
+            },
+            dialect: 'postgres',
+          }),
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.sql).toContain('SELECT');
+      expect(res.body.sql).toContain('LIMIT 10');
+      // The *compiled SQL* legitimately names the physical table (the
+      // compiler's whole job) — what ADR-0007 forbids is the assistant ever
+      // writing or seeing that name itself, proven by `entities` reporting
+      // only the logical name back.
+      expect(res.body.entities).toEqual(['matches']);
+
+      const databricksRes = await typed<{ sql: string }>(
+        request(app.getHttpServer())
+          .post(`${modelPath(name)}/compile`)
+          .send({
+            query: {
+              from: 'matches',
+              select: [{ attr: 'match_date' }],
+              limit: 5,
+            },
+            dialect: 'databricks',
+          }),
+      );
+      expect(databricksRes.status).toBe(200);
+      expect(databricksRes.body.sql).toContain('`');
+    });
+  });
+
+  describe('Scenario: A logical query naming an unknown attribute or an undeclared relationship is rejected before any database call', () => {
+    it('rejects an unknown attribute with a structured issue', async () => {
+      const name = 'World Cup Core - reject unknown attribute';
+      await saveDataset(app, name, datasourceId);
+
+      const res = await typed<{
+        ok: boolean;
+        errors: { code: string; path: string }[];
+      }>(
+        request(app.getHttpServer())
+          .post(`${modelPath(name)}/compile`)
+          .send({
+            query: { from: 'matches', select: [{ attr: 'nope' }], limit: 10 },
+          }),
+      );
+      expect(res.status).toBe(400);
+      expect(res.body.ok).toBe(false);
+      expect(res.body.errors[0].code).toBe('unknown_attribute');
+    });
+
+    it('rejects a reference to an entity with no declared relationship path', async () => {
+      const name = 'World Cup Core - reject no path';
+      await saveDataset(app, name, datasourceId);
+
+      const res = await typed<{ ok: boolean; errors: { code: string }[] }>(
+        request(app.getHttpServer())
+          .post(`${modelPath(name)}/compile`)
+          .send({
+            query: {
+              from: 'teams',
+              select: [{ attr: 'nonexistent_entity.x' }],
+              limit: 10,
+            },
+          }),
+      );
+      expect(res.status).toBe(400);
+      expect(res.body.ok).toBe(false);
+      expect(res.body.errors[0].code).toBe('unknown_attribute');
+    });
+  });
+
   describe('Scenario: The JSON Schema of the DSL is published', () => {
     it('publishes a JSON Schema with entities, relationships, metrics and a binding definition', async () => {
       const res = await getSchema(app);

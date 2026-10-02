@@ -19,7 +19,7 @@ Feature: Agents
     Then I see the heading "Questions to Insights Assistant"
     And the Prompt tab is shown, containing "You are the Questions to Insights assistant"
     When I open the Tools tab
-    Then I see "run_readonly_sql" and "ask_clarification"
+    Then I see "query_entities" and "ask_clarification"
     When I open the Memory tab
     Then I see "Recent messages replayed" and "40 messages"
     When I open the Model tab
@@ -35,7 +35,7 @@ Feature: Agents
     When I click the open "world-cup" set again
     Then no questions are listed
     When I click "All agents"
-    Then I see the "sql-verifier" agent in the list
+    Then I see the "query-verifier" agent in the list
 
   Scenario: Shows the stateless, no-tool agents accurately
     When I click "Agents"
@@ -363,4 +363,16 @@ Feature: Data model
   Scenario: The JSON Schema of the DSL is published
     When I GET /data-models/schema.json
     Then the response is a JSON Schema with a definition for entities, relationships, metrics and bindings
+
+  Scenario: Compiling a logical query returns dialect SQL without touching the database
+    Given the dataset "World Cup Core" has a bootstrapped model with entities "matches" and "teams"
+    When I POST /datasets/World Cup Core/model/compile with a query selecting "match_date" and "attendance" from "matches"
+    Then the response is dialect SQL naming only the logical entity "matches", for the requested dialect (postgres or databricks)
+    And no database call was made
+
+  Scenario: A logical query naming an unknown attribute or an undeclared relationship is rejected before any database call
+    When I POST /datasets/World Cup Core/model/compile with a query selecting an attribute "matches" has no such name
+    Then the response is 400 with a structured issue coded "unknown_attribute"
+    When I POST /datasets/World Cup Core/model/compile with a query naming an entity no declared relationship reaches
+    Then the response is 400 and no database call was made
 ```

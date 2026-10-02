@@ -49,7 +49,9 @@ test('opens an agent from the Agents list and switches between its tabs', async 
   );
 
   await page.getByTestId('agent-tab-tools').click();
-  await expect(page.getByText('run_readonly_sql')).toBeVisible();
+  // ADR-0007 / roadmap 1.2.2: the assistant speaks the model vocabulary —
+  // `query_entities`, not the old `run_readonly_sql`.
+  await expect(page.getByText('query_entities')).toBeVisible();
   await expect(page.getByText('ask_clarification')).toBeVisible();
 
   await page.getByTestId('agent-tab-memory').click();
@@ -83,7 +85,8 @@ test('opens an agent from the Agents list and switches between its tabs', async 
 
   // Back returns to the list.
   await page.getByRole('button', { name: 'All agents' }).click();
-  await expect(page.getByTestId('agent-sql-verifier')).toBeVisible();
+  // `query-verifier` replaces `sql-verifier` at the logical level (ADR-0007 §6).
+  await expect(page.getByTestId('agent-query-verifier')).toBeVisible();
 });
 
 test('shows the stateless, no-tool agents accurately', async ({ page }) => {

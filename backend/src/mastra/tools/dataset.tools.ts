@@ -18,7 +18,13 @@ interface EntityAccess {
   dataset: string;
 }
 
-function datasetNames(requestContext: {
+/**
+ * Exported for `model.tools.ts` (ADR-0007): `run_raw_sql`'s fallback needs
+ * the same session-dataset-names and single-datasource resolution as the
+ * legacy `run_readonly_sql` below, so it reuses these instead of a second
+ * copy that could drift from this one.
+ */
+export function datasetNames(requestContext: {
   get: (key: string) => unknown;
 }): string[] {
   const value = requestContext.get(DATASETS_CONTEXT_KEY);
@@ -78,8 +84,9 @@ function resolveEntity(
   };
 }
 
-/** Pick the datasource for a SQL call: explicit id, else the only one in scope. */
-function resolveDatasource(
+/** Pick the datasource for a SQL call: explicit id, else the only one in scope.
+ * Exported for `model.tools.ts`'s `run_raw_sql` — see `datasetNames` above. */
+export function resolveDatasource(
   datasets: DatasetSnapshot[],
   requested?: string,
 ): { id: string } | { error: string } {
@@ -110,7 +117,9 @@ function resolveDatasource(
  * Every data-gathering call states, in the assistant's own words, why it is
  * being made — so an answer can show the route it took, not just the SQL.
  */
-const RATIONALE_DESCRIPTION = [
+/** Exported for `model.tools.ts` — every data-gathering tool on both the
+ * current and legacy assistant shares this one rationale prompt. */
+export const RATIONALE_DESCRIPTION = [
   'One or two sentences of plain business English saying what this step',
   "checks and why it moves toward answering the user's question. No SQL",
   'jargon, no restating the statement.',

@@ -10,6 +10,7 @@ import { assistantEvalDatasetError } from '../../mastra/evals/assistant-eval-dat
 import {
   AssistantEvalCase,
   AssistantEvalCaseResult,
+  AssistantEvalPath,
   EvalSession,
   cleanupEvalSession,
   createEvalSession,
@@ -17,6 +18,7 @@ import {
   runAssistantEvalCase,
   selectEvalCases,
 } from '../../mastra/evals/assistant.evals';
+import { MetricsService } from '../metrics/metrics.service';
 import type { SampleFixture } from '../testing-data/fixtures/registry';
 
 export type EvalRunStatus = 'running' | 'completed' | 'failed';
@@ -38,6 +40,17 @@ export interface EvalRunView {
   error?: string;
   startedAt: string;
   finishedAt?: string;
+  /**
+   * Which path this run exercised (ADR-0007 §7, roadmap 1.2.2): `model`
+   * (default) is the current logical-query-layer assistant, `legacy` is the
+   * pre-change SQL-writing assistant, for side-by-side comparison. Optional
+   * for backward compatibility with runs persisted before this field
+   * existed — treat a missing value as `model`.
+   */
+  path?: AssistantEvalPath;
+  /** How many finished cases called `run_raw_sql` (always 0 on `legacy`,
+   * which has no such tool) — recomputed from `results` on every save. */
+  outsideModelCount?: number;
   /**
    * Regression comparison against the most recent previous completed run
    * for this agent with the same datasource and datasets, computed once this
@@ -67,7 +80,21 @@ export class EvalRunsService {
     private readonly datasources: DatasourcesService,
     private readonly sessions: SessionsService,
     private readonly knowledge: KnowledgeService,
+    private readonly metrics: MetricsService,
   ) {}
+
+  /** The curated-metrics block the pre-ADR-0007 `legacy` eval path builds
+   * its context from, same source `SessionsService.agentContext` used to
+   * read before the logical query layer replaced it with the rendered model
+   * block. */
+  private async legacyMetricsBlock(
+    datasetNames: string[],
+  ): Promise<string | undefined> {
+    const datasets = await this.datasets.getByNames(datasetNames);
+    return this.metrics.definitionBlock(
+      datasets.flatMap((d) => d.tables ?? []),
+    );
+  }
 
   /** Display name for a datasource id, falling back to the id itself. */
   async datasourceName(id: string): Promise<string> {
@@ -100,6 +127,7 @@ export class EvalRunsService {
     agentKey: string,
     datasourceId: string,
     caseIds?: string[],
+    path: AssistantEvalPath = 'model',
   ): Promise<{ jobId: string } | { conflictWith: string } | { error: string }> {
     if (agentKey !== 'assistant') {
       return { error: `Agent "${agentKey}" has no evals to run` };
@@ -152,6 +180,8 @@ export class EvalRunsService {
       totalCases: cases.length,
       currentQuestion: cases[0]?.question,
       startedAt: new Date().toISOString(),
+      path,
+      outsideModelCount: 0,
     };
     this.runs.set(jobId, view);
     this.active.set(agentKey, jobId);
@@ -189,6 +219,12 @@ export class EvalRunsService {
     const knowledgeBlock = await this.knowledge.definitionBlock(
       view.datasets,
     );
+    // Only the `legacy` path needs the pre-ADR-0007 curated-metrics block —
+    // the `model` path gets metrics from the rendered model block instead.
+    const metricsBlock =
+      view.path === 'legacy'
+        ? await this.legacyMetricsBlock(view.datasets)
+        : undefined;
     try {
       for (const [index, evalCase] of cases.entries()) {
         view.currentQuestion = evalCase.question;
@@ -197,8 +233,12 @@ export class EvalRunsService {
           view.datasets,
           evalSession?.id,
           knowledgeBlock,
+          { path: view.path, metricsBlock },
         );
         view.results.push(result);
+        view.outsideModelCount = view.results.filter(
+          (r) => r.outsideModel,
+        ).length;
         view.currentQuestion = cases[index + 1]?.question;
         // Persist as we go so a crash mid-suite still leaves the finished
         // questions on the run.

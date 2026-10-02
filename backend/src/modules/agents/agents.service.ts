@@ -116,7 +116,10 @@ export class AgentsService {
         id: evalCase.id,
         question: evalCase.question,
         intent: evalCase.intent,
-        checks: evalCase.scorers.map((scorer) => ({
+        // The questions tab shows one static check list per case — 'model'
+        // (the default/primary path) is representative; the two paths only
+        // differ in which single tool name a data-query check names.
+        checks: evalCase.scorers('model').map((scorer) => ({
           id: String(scorer.id ?? ''),
           name: String(scorer.name ?? ''),
           description: String(scorer.description ?? ''),

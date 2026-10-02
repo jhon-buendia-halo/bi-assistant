@@ -131,7 +131,10 @@ const relationshipSchema = z
   })
   .meta({ id: 'Relationship' });
 
-const predicateOpSchema = z.enum([
+/** Exported for `query/logical-query.ts` — the logical query layer's `where`
+ * and metrics' `where` share this exact operator set (ADR-0007: a portable
+ * predicate dialect-neutral enough to compile to any binding kind). */
+export const predicateOpSchema = z.enum([
   'eq',
   'ne',
   'gt',
@@ -152,7 +155,8 @@ const predicateOpSchema = z.enum([
  * (rather than one object with every key optional) so e.g. `{ and, attr }`
  * on the same node is rejected instead of silently picking one.
  */
-const predicateSchema: z.ZodType = z
+/** Exported for `query/logical-query.ts` — see `predicateOpSchema`. */
+export const predicateSchema: z.ZodType = z
   .lazy(() =>
     z.union([
       z.strictObject({ and: z.array(predicateSchema) }),
@@ -167,7 +171,9 @@ const predicateSchema: z.ZodType = z
   )
   .meta({ id: 'Predicate' });
 
-const aggregationSchema = z.enum([
+/** Exported for `query/logical-query.ts` — the logical query layer's ad-hoc
+ * `agg` select items and a metric's `agg` share this one closed set. */
+export const aggregationSchema = z.enum([
   'sum',
   'count',
   'count_distinct',
@@ -175,6 +181,19 @@ const aggregationSchema = z.enum([
   'min',
   'max',
   'ratio',
+]);
+
+/** Same closed set minus `ratio`: a logical query's ad-hoc `{agg: ...}`
+ * select item has no `numerator`/`denominator` slot, so `ratio` there would
+ * silently mean "divide by nothing" — ratios only exist as named metrics
+ * (`query/logical-query.ts`'s `selectAggItemSchema`). */
+export const adHocAggregationSchema = z.enum([
+  'sum',
+  'count',
+  'count_distinct',
+  'avg',
+  'min',
+  'max',
 ]);
 
 /** `name` is the handle used in prompts and other metrics' ratio operands. */
@@ -546,6 +565,44 @@ function checkSemantics(model: DataModel): ModelIssue[] {
         message: `metric "${metric.name}" needs "agg" or "expressions.sql"`,
       });
     }
+  });
+
+  // Ratio cycles: A's numerator/denominator is B, B's (transitively) is A —
+  // each self-reference was already caught above, but a cycle through two or
+  // more metrics compiles into infinite recursion in `metricExpr`
+  // (compile-sql.ts), so it must be caught here instead. DFS both operand
+  // branches independently (a cycle may run through either one).
+  const ratioCycleReported = new Set<string>();
+  function findRatioCycle(
+    metric: DataModel['metrics'][number],
+    visiting: string[],
+  ): string[] | undefined {
+    if (metric.agg !== 'ratio') return undefined;
+    for (const field of ['numerator', 'denominator'] as const) {
+      const operand = metric[field];
+      if (!operand) continue;
+      const operandKey = lower(operand);
+      const cycleStart = visiting.findIndex(
+        (name) => lower(name) === operandKey,
+      );
+      if (cycleStart >= 0) return [...visiting.slice(cycleStart), operand];
+      const next = metricByName.get(operandKey);
+      if (!next || next.agg !== 'ratio') continue;
+      const found = findRatioCycle(next, [...visiting, operand]);
+      if (found) return found;
+    }
+    return undefined;
+  }
+  model.metrics.forEach((metric, i) => {
+    if (metric.agg !== 'ratio') return;
+    if (ratioCycleReported.has(lower(metric.name))) return;
+    const cycle = findRatioCycle(metric, [metric.name]);
+    if (!cycle) return;
+    for (const name of cycle) ratioCycleReported.add(lower(name));
+    issues.push({
+      path: `metrics[${i}].numerator`,
+      message: `ratio cycle detected: ${cycle.join(' -> ')}`,
+    });
   });
 
   return issues;

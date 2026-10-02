@@ -1,10 +1,16 @@
 import { VerifiedQueriesService } from './verified-queries.service';
 import type { VerifiedQueryDoc } from './entities/verified-query.entity';
 
-const pair = (id: string, question: string, sql: string): VerifiedQueryDoc => ({
+const pair = (
+  id: string,
+  question: string,
+  sql: string,
+  logicalQuery?: string,
+): VerifiedQueryDoc => ({
   id,
   question,
   sql,
+  ...(logicalQuery ? { logicalQuery } : {}),
   entities: [],
   sourceSessionId: 'session-1',
   sourceMessageAt: `2024-01-01T00:00:0${id}.000Z`,
@@ -67,14 +73,33 @@ describe('VerifiedQueriesService.findSimilar', () => {
 });
 
 describe('VerifiedQueriesService.referenceBlock', () => {
-  it('renders Q/SQL pairs when something similar exists', async () => {
-    const { service } = build();
+  it('renders Q/Query pairs (never SQL text) when something similar has a logicalQuery', async () => {
+    const { service } = build([
+      pair(
+        '1',
+        'How many claims were denied last year?',
+        'SELECT 1',
+        '{"from":"claims","select":[{"agg":"count","alias":"n"}]}',
+      ),
+      ...stored.slice(1),
+    ]);
 
     const block = await service.referenceBlock('claims denied last year');
 
     expect(block).toContain('Verified reference queries');
     expect(block).toContain('Q: How many claims were denied last year?');
-    expect(block).toContain('SQL: SELECT 1');
+    expect(block).toContain(
+      'Query: {"from":"claims","select":[{"agg":"count","alias":"n"}]}',
+    );
+    expect(block).not.toContain('SELECT 1');
+  });
+
+  it('omits a SQL-only legacy pair entirely (ADR-0007 §4 — no SQL reaches the assistant)', async () => {
+    const { service } = build(); // none of `stored` has a logicalQuery
+
+    const block = await service.referenceBlock('claims denied last year');
+
+    expect(block).toBeUndefined();
   });
 
   it('is undefined when nothing matches', async () => {
@@ -83,6 +108,47 @@ describe('VerifiedQueriesService.referenceBlock', () => {
     expect(await service.referenceBlock('unrelated trivia topic')).toBe(
       undefined,
     );
+  });
+});
+
+describe('VerifiedQueriesService.verifierReferenceBlock', () => {
+  it('includes a SQL-only legacy pair as a bare reference question, never its SQL', async () => {
+    const { service } = build();
+
+    const block = await service.verifierReferenceBlock(
+      'claims denied last year',
+    );
+
+    expect(block).toContain('Q: How many claims were denied last year?');
+    expect(block).not.toContain('SELECT 1');
+  });
+
+  it('shows the logical query for a pair that has one', async () => {
+    const { service } = build([
+      pair(
+        '1',
+        'How many claims were denied last year?',
+        'SELECT 1',
+        '{"from":"claims","select":[{"agg":"count","alias":"n"}]}',
+      ),
+      ...stored.slice(1),
+    ]);
+
+    const block = await service.verifierReferenceBlock(
+      'claims denied last year',
+    );
+
+    expect(block).toContain(
+      'Query: {"from":"claims","select":[{"agg":"count","alias":"n"}]}',
+    );
+  });
+
+  it('is undefined when nothing matches', async () => {
+    const { service } = build();
+
+    expect(
+      await service.verifierReferenceBlock('unrelated trivia topic'),
+    ).toBeUndefined();
   });
 });
 
