@@ -87,9 +87,9 @@ The measurement baseline. Every change to the DSL, knowledge store or connectors
 
 ### Milestone 1.2 — Data Model DSL ([BA-2](https://halo-powered.atlassian.net/browse/BA-2))
 
-The structure the assistant reasons over, as a single, versionable source of truth. Decision record and alternatives: [docs/plans/ba-2-data-model-dsl-alternatives.md](docs/plans/ba-2-data-model-dsl-alternatives.md) (decided 2026-10-01: a storage-neutral DSL with per-datasource bindings, a logical query layer so the assistant reasons over abstract entities, and the Knowledge Store mapping question vocabulary onto DSL references). Beta datasources: Postgres, Databricks, REST API. ADR-0006 and ADR-0007 in [architecture.md](architecture.md). Assignee: Jhon Buendia.
+The structure the assistant reasons over, as a single, versionable source of truth. Decision record and alternatives: [docs/plans/ba-2-data-model-dsl-alternatives.md](docs/plans/ba-2-data-model-dsl-alternatives.md) (decided 2026-10-01: a storage-neutral DSL with per-datasource bindings, a logical query layer so the assistant reasons over abstract entities, and the Knowledge Store mapping question vocabulary onto DSL references). Beta datasources: Postgres, Databricks, REST API. Delivered on the single BA-2 epic branch (2026-10-02 strategy change: one branch per epic; the former stories BA-85/86/87 were deleted and their work is described in the epic). ADR-0006 and ADR-0007 in [architecture.md](architecture.md). Assignee: Jhon Buendia.
 
-#### 1.2.1 — Data model DSL: schema, bindings, bootstrap and metrics migration ([BA-85](https://halo-powered.atlassian.net/browse/BA-85))  `✅ Done`
+#### 1.2.1 — Data model DSL: schema, bindings, bootstrap and metrics migration  `✅ Done`
 - **Intent:** every dataset has one versioned, validated data model (entities, attributes, relationships, metrics, bindings) that exists without user work and that the assistant and the Knowledge Store can address.
 - **Scope:**
   - `DataModel` types and Zod schema (JSON Schema exported); portable attribute types, roles, relationship cardinality, metrics in the portable aggregation core with a dialect-tagged `expressions.sql` escape hatch; bindings per datasource kind (`sql`, `rest` executable in the beta; `mongo`, `file` accepted by the schema, no adapter).
@@ -108,14 +108,14 @@ The structure the assistant reasons over, as a single, versionable source of tru
   - A changed snapshot yields a drift report without altering the current model version.
 - **Notes:** backend-only; API-level flows live in `backend/test/data-models.e2e-spec.ts` (see [gherkin.md](gherkin.md) *Feature: Data model*). Must ship before 1.3.2 migrates knowledge snippets.
 
-#### 1.2.2 — Logical query layer: the assistant reasons over abstract entities, measured by evals ([BA-86](https://halo-powered.atlassian.net/browse/BA-86))  `✅ Done`
+#### 1.2.2 — Logical query layer: the assistant reasons over abstract entities, measured by evals  `✅ Done`
 - **Intent:** answers are built from one definition of each entity, relationship and metric, regardless of where the data lives; the assistant never sees table names or SQL dialects.
 - **Scope:** logical query spec (from, select, portable filters, group_by, order_by, limit, traverse along declared relationships) constrained by JSON Schema; one SQL compiler for Postgres, Databricks SQL and SQLite with dialect differences in one place; REST entities through the existing materialise-to-SQLite path; `describe_entity`, `query_entities`, `sample_records` tools replace the table-level tools; one rendered model block replaces the orientation, join-hint and metrics blocks; raw SQL demoted to an internal fallback that flags the answer as outside the model; `sql-fixer` stays for runtime repair of compiled SQL, `query-fixer` / `query-verifier` replace `sql-verifier` at the logical level; eval run on both paths.
 - **Out of scope:** non-SQL adapters; editing UI.
 - **Acceptance:** no `catalog.schema.table` or dialect names in the prompt or tool calls; logical queries compile to valid SQL on Postgres, Databricks and the REST materialisation; unknown attributes or undeclared relationships are rejected before any database call; metrics are computed by the compiler; the eval report shows per-question results for both paths and the raw-SQL fallback count.
 - **Notes:** depends on 1.2.1 and, for the golden set, 1.1.1 (World Cup / F1 eval sets as stopgap). ADR-0007 (now Accepted). No LLM key is available in this environment — the dual-path eval plumbing (path selection, agent selection, counters, report fields) is unit-tested with a stubbed agent; the two real comparison runs are documented in [evidence/1.2.2/README.md](evidence/1.2.2/README.md) for the team to run once a key is configured.
 
-#### 1.2.3 — Data model editing, versioning and export ([BA-87](https://halo-powered.atlassian.net/browse/BA-87))  `✅ Done`
+#### 1.2.3 — Data model editing, versioning and export  `✅ Done`
 - **Intent:** analysts curate the model, see its history and move it as a file.
 - **Scope:** Gherkin + E2E first; raw YAML editor with line/column errors; version list, diff and revert; export / import `.yaml`; structured forms for entities, attributes, relationships and metrics; the metrics panel reads and writes the model.
 - **Out of scope:** Ossie / Databricks Metric Views import (Backlog).
