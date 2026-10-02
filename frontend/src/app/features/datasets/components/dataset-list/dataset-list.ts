@@ -5,6 +5,7 @@ import {
   LayoutGrid,
   Loader2,
   Lock,
+  Network,
   Plus,
   Search,
   Trash2,
@@ -29,6 +30,7 @@ export class DatasetList implements OnInit {
   readonly LayoutGrid = LayoutGrid;
   readonly Loader2 = Loader2;
   readonly Lock = Lock;
+  readonly Network = Network;
   readonly Plus = Plus;
   readonly Search = Search;
   readonly Trash2 = Trash2;
@@ -41,6 +43,7 @@ export class DatasetList implements OnInit {
   readonly activeFilter = signal('All');
   readonly newDataset = output<void>();
   readonly openDataset = output<Dataset>();
+  readonly openDataModel = output<Dataset>();
 
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);

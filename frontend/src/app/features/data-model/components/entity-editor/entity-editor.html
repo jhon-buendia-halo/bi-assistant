@@ -1,0 +1,225 @@
+<div class="flex min-h-0 flex-1 gap-4">
+  <!-- Entity list -->
+  <div class="flex w-48 shrink-0 flex-col gap-1 overflow-y-auto">
+    @for (entity of entities(); track entity.name) {
+      <button
+        type="button"
+        [attr.data-testid]="'entity-' + entity.name"
+        (click)="selectEntity(entity.name)"
+        class="rounded-md px-2.5 py-1.5 text-left text-[13px] hover:bg-white/5"
+        [class.bg-white/10]="selectedEntityName() === entity.name"
+        [class.text-zinc-200]="selectedEntityName() === entity.name"
+        [class.text-zinc-400]="selectedEntityName() !== entity.name"
+      >
+        {{ entity.label || entity.name }}
+        <span class="ml-1 text-[11px] text-zinc-600"
+          >({{ entity.attributes.length }})</span
+        >
+      </button>
+    }
+  </div>
+
+  <!-- Detail form -->
+  <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
+    @if (selectedEntity(); as entity) {
+      <div class="flex items-center justify-between">
+        <h3 class="text-[14px] font-semibold text-zinc-100">
+          {{ entity.label || entity.name }}
+        </h3>
+        <button
+          type="button"
+          data-testid="save-entity"
+          (click)="save()"
+          [disabled]="!canSave()"
+          title="No changes to save"
+          class="flex items-center gap-1.5 rounded-md bg-zinc-200 px-3 py-1.5 text-[13px] font-medium text-zinc-900 hover:bg-white disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+        >
+          @if (saving()) {
+            <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+            <span>Saving…</span>
+          } @else {
+            <lucide-angular [img]="Save" [size]="14" />
+            <span>Save as new version</span>
+          }
+        </button>
+      </div>
+
+      @if (errors().length > 0) {
+        <div
+          data-testid="entity-errors"
+          class="flex flex-col gap-1 rounded-md border border-red-500/30 bg-red-500/10 p-2.5 text-[12px] text-red-300"
+        >
+          @for (issue of errors(); track $index) {
+            <span
+              ><span class="font-mono text-red-400">{{ issue.path }}</span> —
+              {{ issue.message }}</span
+            >
+          }
+        </div>
+      }
+
+      <div class="grid grid-cols-2 gap-3">
+        <label class="flex flex-col gap-1">
+          <span class="text-[11px] font-medium text-zinc-500">Label</span>
+          <input
+            type="text"
+            [value]="entity.label ?? ''"
+            (input)="updateEntityLabel($any($event.target).value)"
+            class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none focus:border-white/25"
+          />
+        </label>
+        <label class="flex flex-col gap-1">
+          <span class="text-[11px] font-medium text-zinc-500"
+            >Key attributes (comma separated)</span
+          >
+          <input
+            type="text"
+            [value]="(entity.key ?? []).join(', ')"
+            (input)="updateEntityKey($any($event.target).value)"
+            class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 font-mono text-[13px] text-zinc-200 outline-none focus:border-white/25"
+          />
+        </label>
+      </div>
+
+      <label class="flex flex-col gap-1">
+        <span class="text-[11px] font-medium text-zinc-500">Description</span>
+        <textarea
+          rows="2"
+          [value]="entity.description ?? ''"
+          (input)="updateEntityDescription($any($event.target).value)"
+          class="resize-y rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[12px] text-zinc-200 outline-none focus:border-white/25"
+        ></textarea>
+      </label>
+
+      <!-- Attributes -->
+      <div class="flex flex-col gap-1.5">
+        <p class="text-[12px] font-medium text-zinc-400">Attributes</p>
+        @for (attribute of entity.attributes; track attribute.name; let i = $index) {
+          <div
+            class="grid grid-cols-[1fr_120px_120px_1fr] items-center gap-2 rounded-md border border-white/10 bg-white/[0.02] px-2.5 py-1.5"
+          >
+            <span class="truncate font-mono text-[12px] text-zinc-300">{{
+              attribute.name
+            }}</span>
+            <select
+              [attr.data-testid]="'attribute-type-' + i"
+              [value]="attribute.type"
+              (change)="updateAttributeType(i, $any($event.target).value)"
+              class="rounded border border-white/10 bg-white/5 px-1.5 py-1 text-[11px] text-zinc-200 outline-none"
+            >
+              @for (type of attributeTypes; track type) {
+                <option
+                  [value]="type"
+                  [selected]="type === attribute.type"
+                  class="bg-[#232323]"
+                >
+                  {{ type }}
+                </option>
+              }
+            </select>
+            <select
+              [attr.data-testid]="'attribute-role-' + i"
+              [value]="attribute.role ?? ''"
+              (change)="updateAttributeRole(i, $any($event.target).value)"
+              class="rounded border border-white/10 bg-white/5 px-1.5 py-1 text-[11px] text-zinc-200 outline-none"
+            >
+              <option value="" [selected]="!attribute.role" class="bg-[#232323]">
+                (none)
+              </option>
+              @for (role of attributeRoles; track role) {
+                <option
+                  [value]="role"
+                  [selected]="role === attribute.role"
+                  class="bg-[#232323]"
+                >
+                  {{ role }}
+                </option>
+              }
+            </select>
+            <input
+              type="text"
+              placeholder="Description"
+              [value]="attribute.description ?? ''"
+              (input)="updateAttributeDescription(i, $any($event.target).value)"
+              class="rounded border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-zinc-300 outline-none placeholder:text-zinc-600"
+            />
+          </div>
+        }
+      </div>
+
+      <!-- Relationships -->
+      <div class="flex flex-col gap-1.5">
+        <div class="flex items-center justify-between">
+          <p class="text-[12px] font-medium text-zinc-400">Relationships</p>
+          @if (otherEntityNames().length > 0) {
+            <select
+              data-testid="add-relationship"
+              (change)="
+                addRelationship($any($event.target).value);
+                $any($event.target).value = ''
+              "
+              class="rounded border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-zinc-300 outline-none"
+            >
+              <option value="" class="bg-[#232323]">+ Relate to…</option>
+              @for (name of otherEntityNames(); track name) {
+                <option [value]="name" class="bg-[#232323]">{{ name }}</option>
+              }
+            </select>
+          }
+        </div>
+        @for (item of entityRelationships(); track item.index) {
+          <div
+            [attr.data-testid]="'relationship-' + item.index"
+            class="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.02] px-2.5 py-1.5"
+          >
+            <lucide-angular [img]="Link2" [size]="13" class="shrink-0 text-zinc-500" />
+            <span class="min-w-0 flex-1 truncate font-mono text-[11px] text-zinc-400"
+              >{{ item.relationship.from }} → {{ item.relationship.to }}</span
+            >
+            <select
+              [attr.data-testid]="'relationship-cardinality-' + item.index"
+              [value]="item.relationship.cardinality"
+              (change)="
+                updateRelationshipCardinality(item.index, $any($event.target).value)
+              "
+              class="rounded border border-white/10 bg-white/5 px-1.5 py-1 text-[11px] text-zinc-200 outline-none"
+            >
+              @for (c of cardinalities; track c) {
+                <option
+                  [value]="c"
+                  [selected]="c === item.relationship.cardinality"
+                  class="bg-[#232323]"
+                >
+                  {{ c }}
+                </option>
+              }
+            </select>
+            <input
+              type="text"
+              placeholder="Description"
+              [value]="item.relationship.description ?? ''"
+              (input)="
+                updateRelationshipDescription(item.index, $any($event.target).value)
+              "
+              class="w-28 shrink-0 rounded border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-zinc-300 outline-none placeholder:text-zinc-600"
+            />
+            <button
+              type="button"
+              title="Remove"
+              (click)="removeRelationship(item.index)"
+              class="rounded p-1 text-zinc-500 hover:bg-white/10 hover:text-red-400"
+            >
+              <lucide-angular [img]="Trash2" [size]="13" />
+            </button>
+          </div>
+        } @empty {
+          <p class="text-[11px] text-zinc-600">
+            No relationships involve this entity yet.
+          </p>
+        }
+      </div>
+    } @else {
+      <p class="text-[13px] text-zinc-500">No entities in this model yet.</p>
+    }
+  </div>
+</div>

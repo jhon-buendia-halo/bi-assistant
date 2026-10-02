@@ -43,11 +43,17 @@ import type {
   QueryResult,
 } from '../src/modules/datasources/entities/datasource.entity';
 import type { ForeignKeyEdge } from '../src/modules/datasets/relationships';
-import type { ModelIssue } from '../src/modules/data-models/entities/data-model.entity';
+import type {
+  Metric,
+  ModelIssue,
+} from '../src/modules/data-models/entities/data-model.entity';
 import type { DataModelVersion } from '../src/modules/data-models/repositories/data-models.repository';
 import type { ResolveResult } from '../src/modules/data-models/data-models.service';
 import type { DriftReport } from '../src/modules/data-models/drift';
-import type { MetricDoc } from '../src/modules/metrics/entities/metric.entity';
+import type {
+  MetricCandidate,
+  MetricDoc,
+} from '../src/modules/metrics/entities/metric.entity';
 
 /**
  * Response shapes for the endpoints this spec drives, reused from the
@@ -409,6 +415,11 @@ const getModelVersion = (
     request(app.getHttpServer()).get(`${modelPath(name)}/versions/${version}`),
   );
 
+const listModelVersions = (app: INestApplication<App>, name: string) =>
+  typed<{ versions: DataModelVersion[] }>(
+    request(app.getHttpServer()).get(`${modelPath(name)}/versions`),
+  );
+
 const putModel = (app: INestApplication<App>, name: string, yaml: string) =>
   typed<PutModelResponse>(
     request(app.getHttpServer()).put(modelPath(name)).send({ yaml }),
@@ -423,6 +434,11 @@ const revertModel = (
     request(app.getHttpServer())
       .post(`${modelPath(name)}/revert`)
       .send({ version }),
+  );
+
+const bootstrapModel = (app: INestApplication<App>, name: string) =>
+  typed<SaveResponse>(
+    request(app.getHttpServer()).post(`${modelPath(name)}/bootstrap`),
   );
 
 const getDrift = (app: INestApplication<App>, name: string) =>
@@ -440,6 +456,99 @@ const resolveRefs = (
     request(app.getHttpServer())
       .post(`${modelPath(name)}/resolve`)
       .send({ refs, ...(version !== undefined ? { version } : {}) }),
+  );
+
+/** `GET /datasets/:name/model/export[?version=N]` — a raw YAML file, not
+ * JSON, so the headers matter as much as the body. */
+async function exportModel(
+  app: INestApplication<App>,
+  name: string,
+  version?: number,
+): Promise<{
+  status: number;
+  text: string;
+  contentType: string | undefined;
+  contentDisposition: string | undefined;
+}> {
+  let req = request(app.getHttpServer()).get(`${modelPath(name)}/export`);
+  if (version !== undefined) req = req.query({ version });
+  const res = await req;
+  return {
+    status: res.status,
+    text: res.text,
+    contentType: res.headers['content-type'],
+    contentDisposition: res.headers['content-disposition'],
+  };
+}
+
+const importModel = (app: INestApplication<App>, name: string, yaml: string) =>
+  typed<PutModelResponse>(
+    request(app.getHttpServer())
+      .post(`${modelPath(name)}/import`)
+      .send({ yaml }),
+  );
+
+const serializeModel = (
+  app: INestApplication<App>,
+  name: string,
+  model: unknown,
+) =>
+  typed<{ yaml: string }>(
+    request(app.getHttpServer())
+      .post(`${modelPath(name)}/serialize`)
+      .send({ model }),
+  );
+
+/** `{ ok, version }` on success, `{ ok: false, errors }` on a 400 — the
+ * model-metrics write endpoints' shared response shape. */
+interface ModelMetricSaveResponse {
+  ok?: boolean;
+  version?: number;
+  errors?: ModelIssue[];
+}
+
+const listModelMetrics = (app: INestApplication<App>, name: string) =>
+  typed<{ metrics: Metric[] }>(
+    request(app.getHttpServer()).get(`${modelPath(name)}/metrics`),
+  );
+
+const createModelMetric = (
+  app: INestApplication<App>,
+  name: string,
+  metric: Partial<Metric>,
+) =>
+  typed<ModelMetricSaveResponse>(
+    request(app.getHttpServer())
+      .post(`${modelPath(name)}/metrics`)
+      .send(metric),
+  );
+
+const updateModelMetric = (
+  app: INestApplication<App>,
+  name: string,
+  metricName: string,
+  metric: Partial<Metric>,
+) =>
+  typed<ModelMetricSaveResponse>(
+    request(app.getHttpServer())
+      .put(`${modelPath(name)}/metrics/${encodeURIComponent(metricName)}`)
+      .send(metric),
+  );
+
+const deleteModelMetric = (
+  app: INestApplication<App>,
+  name: string,
+  metricName: string,
+) =>
+  typed<ModelMetricSaveResponse>(
+    request(app.getHttpServer()).delete(
+      `${modelPath(name)}/metrics/${encodeURIComponent(metricName)}`,
+    ),
+  );
+
+const modelMetricCandidates = (app: INestApplication<App>, name: string) =>
+  typed<{ candidates: MetricCandidate[] }>(
+    request(app.getHttpServer()).get(`${modelPath(name)}/metrics/candidates`),
   );
 
 /**
@@ -788,6 +897,326 @@ describe('Data model API (e2e)', () => {
       expect(res.body.properties?.metrics).toBeDefined();
       const definitions = res.body.definitions ?? res.body.$defs ?? {};
       expect(definitions.binding ?? definitions.Binding).toBeDefined();
+    });
+  });
+
+  // --- roadmap 1.2.3 / BA-87: export, import, structured-form serialize,
+  // and the model-scoped metrics panel. ---
+
+  describe('Scenario: Listing every version for the Versions tab', () => {
+    it('returns every stored version, current marked by the separate currentVersion field', async () => {
+      const name = 'World Cup Core - list versions';
+      await saveDataset(app, name, datasourceId);
+      const v1 = await getModel(app, name);
+      const yamlV2 = addEntityDescription(
+        v1.body.version.yaml,
+        'matches',
+        'One played match',
+      );
+      await putModel(app, name, yamlV2);
+
+      const res = await listModelVersions(app, name);
+      expect(res.status).toBe(200);
+      expect(res.body.versions.map((v) => v.version)).toEqual([1, 2]);
+      expect(res.body.versions[1].source).toBe('user');
+      expect(res.body.versions[1].yaml).toContain('One played match');
+    });
+  });
+
+  describe('Scenario: Exporting a model version downloads its YAML', () => {
+    it('exports the current version with a yaml content type and a versioned filename, and any other version on request', async () => {
+      const name = 'World Cup Core - export';
+      await saveDataset(app, name, datasourceId);
+      const v1 = await getModel(app, name);
+      const yamlV2 = addEntityDescription(
+        v1.body.version.yaml,
+        'matches',
+        'One played match',
+      );
+      const saved = await putModel(app, name, yamlV2);
+      expect(saved.body.version).toBe(2);
+
+      const current = await exportModel(app, name);
+      expect(current.status).toBe(200);
+      expect(current.contentType).toContain('text/yaml');
+      expect(current.contentDisposition).toContain('attachment');
+      expect(current.contentDisposition?.toLowerCase()).toContain(
+        '.model.v2.yaml',
+      );
+      expect(current.text).toContain('One played match');
+
+      const original = await exportModel(app, name, 1);
+      expect(original.status).toBe(200);
+      expect(original.contentDisposition?.toLowerCase()).toContain(
+        '.model.v1.yaml',
+      );
+      expect(original.text).not.toContain('One played match');
+    });
+  });
+
+  describe('Scenario: Importing a model as YAML creates a new "import" version', () => {
+    it('imports a valid file as a new version, and rejects an invalid one without changing the current version', async () => {
+      const name = 'World Cup Core - import';
+      await saveDataset(app, name, datasourceId);
+      const before = await getModel(app, name);
+
+      const yaml = addEntityDescription(
+        before.body.version.yaml,
+        'matches',
+        'Imported description',
+      );
+      const imported = await importModel(app, name, yaml);
+      expect(imported.status).toBe(200);
+      expect(imported.body.version).toBe(2);
+
+      const v2 = await getModelVersion(app, name, 2);
+      expect(v2.body.yaml).toContain('Imported description');
+
+      const invalidYaml = breakColumnBinding(
+        before.body.version.yaml,
+        'matches',
+        'attendance',
+        'nope',
+      );
+      const rejected = await importModel(app, name, invalidYaml);
+      expect(rejected.status).toBe(400);
+      expect(rejected.body.ok).toBe(false);
+
+      const current = await getModel(app, name);
+      expect(current.body.currentVersion).toBe(2);
+    });
+
+    it('re-imports an exported model into an equivalent model (export/import round trip)', async () => {
+      const name = 'World Cup Core - round trip';
+      await saveDataset(app, name, datasourceId);
+
+      const exported = await exportModel(app, name);
+      expect(exported.status).toBe(200);
+
+      const imported = await importModel(app, name, exported.text);
+      expect(imported.status).toBe(200);
+      expect(imported.body.version).toBe(2);
+
+      const original = await getModelVersion(app, name, 1);
+      const reimported = await getModelVersion(app, name, 2);
+      // The version number is doc-level truth, not part of the comparison —
+      // everything else (entities, relationships, metrics) must match.
+      expect(reimported.body.model.entities).toEqual(
+        original.body.model.entities,
+      );
+      expect(reimported.body.model.relationships).toEqual(
+        original.body.model.relationships,
+      );
+      expect(reimported.body.model.metrics).toEqual(
+        original.body.model.metrics,
+      );
+      expect(reimported.body.source).toBe('import');
+    });
+  });
+
+  describe('Scenario: Structured edits serialize through the one YAML writer', () => {
+    it('serializes a plain model object the same way saveYaml/export would', async () => {
+      const name = 'World Cup Core - serialize';
+      await saveDataset(app, name, datasourceId);
+      const current = await getModel(app, name);
+
+      const res = await serializeModel(app, name, current.body.version.model);
+      expect(res.status).toBe(200);
+      expect(res.body.yaml).toContain('entities:');
+      expect(res.body.yaml).toContain('name: matches');
+    });
+
+    it('rejects a malformed body with 400 instead of silently coercing it (review finding 12)', async () => {
+      const name = 'World Cup Core - serialize invalid';
+      await saveDataset(app, name, datasourceId);
+
+      const res = await serializeModel(app, name, {
+        model: 'not a real model',
+      });
+      expect(res.status).toBe(400);
+    });
+  });
+
+  describe('Scenario: The metrics panel reads and writes the model directly', () => {
+    it('creates, lists, updates and deletes a model-scoped metric, each as a new "user" version', async () => {
+      const name = 'World Cup Core - model metrics';
+      await saveDataset(app, name, datasourceId);
+
+      const created = await createModelMetric(app, name, {
+        name: 'goals_per_match',
+        label: 'Goals per match',
+        entity: 'matches',
+        agg: 'count',
+      });
+      expect(created.status).toBe(201);
+      expect(created.body.ok).toBe(true);
+      expect(created.body.version).toBe(2);
+
+      const listed = await listModelMetrics(app, name);
+      expect(listed.body.metrics.map((m) => m.name)).toContain(
+        'goals_per_match',
+      );
+      const v2 = await getModelVersion(app, name, 2);
+      expect(v2.body.source).toBe('user');
+
+      const updated = await updateModelMetric(app, name, 'goals_per_match', {
+        name: 'total_goals',
+        label: 'Total goals',
+        entity: 'matches',
+        agg: 'count',
+      });
+      expect(updated.status).toBe(200);
+      expect(updated.body.version).toBe(3);
+
+      const afterUpdate = await listModelMetrics(app, name);
+      expect(afterUpdate.body.metrics.map((m) => m.name)).toEqual(
+        expect.arrayContaining(['total_goals']),
+      );
+      expect(afterUpdate.body.metrics.map((m) => m.name)).not.toContain(
+        'goals_per_match',
+      );
+
+      const deleted = await deleteModelMetric(app, name, 'total_goals');
+      expect(deleted.status).toBe(200);
+      expect(deleted.body.version).toBe(4);
+
+      const afterDelete = await listModelMetrics(app, name);
+      expect(
+        afterDelete.body.metrics.some((m) => m.name === 'total_goals'),
+      ).toBe(false);
+    });
+
+    it('rejects a model metric referencing an unknown entity, leaving the current version untouched', async () => {
+      const name = 'World Cup Core - model metrics invalid';
+      await saveDataset(app, name, datasourceId);
+
+      const res = await createModelMetric(app, name, {
+        name: 'bad_metric',
+        label: 'Bad metric',
+        entity: 'nope',
+        agg: 'count',
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.ok).toBe(false);
+      expect(res.body.errors?.length).toBeGreaterThan(0);
+
+      const current = await getModel(app, name);
+      expect(current.body.currentVersion).toBe(1);
+    });
+
+    it('a model-authored metric survives a later legacy metrics-panel write of the same name (the model wins)', async () => {
+      const name = 'World Cup Core - model wins';
+      await saveDataset(app, name, datasourceId);
+      const created = await createModelMetric(app, name, {
+        name: 'goals_per_match',
+        label: 'Goals per match (model-authored)',
+        entity: 'matches',
+        agg: 'count',
+      });
+      expect(created.body.version).toBe(2);
+
+      // A legacy /metrics write of the SAME name, bound to a different table.
+      const legacy = await createMetric(app, {
+        name: 'goals_per_match',
+        label: 'Goals per match (legacy)',
+        entity: TEAMS_KEY,
+        expression: 'count(*)',
+      });
+      expect(legacy.body.ok).toBe(true);
+
+      const current = await getModel(app, name);
+      expect(current.body.currentVersion).toBe(2); // unchanged by the legacy write
+      const metric = current.body.version.model.metrics.find(
+        (m) => m.name === 'goals_per_match',
+      );
+      expect(metric?.label).toBe('Goals per match (model-authored)');
+    });
+
+    it('offers verified-query candidates scoped to the dataset, addressed by logical entity name', async () => {
+      const name = 'World Cup Core - model metric candidates';
+      await saveDataset(app, name, datasourceId);
+      await createMetric(app, {
+        name: 'match_attendance_avg_candidates',
+        label: 'Average attendance (candidates)',
+        entity: MATCHES_KEY,
+        expression: 'avg(attendance)',
+      });
+
+      const res = await modelMetricCandidates(app, name);
+      expect(res.status).toBe(200);
+      // Candidates come from *approved* verified queries, not plain metrics —
+      // none exist in this focused e2e module, so the scoped list is simply
+      // well-formed and entity-addressed, never a raw physical table name.
+      for (const candidate of res.body.candidates) {
+        expect(candidate.entity).not.toContain('.');
+      }
+    });
+
+    it('a deleted metric does not come back after "Bootstrap from snapshot" (review finding 6)', async () => {
+      const name = 'World Cup Core - delete tombstone';
+      await saveDataset(app, name, datasourceId);
+      const created = await createModelMetric(app, name, {
+        name: 'tombstone_test_metric',
+        label: 'Tombstone test metric',
+        entity: 'matches',
+        agg: 'count',
+      });
+      expect(created.body.ok).toBe(true);
+
+      const deleted = await deleteModelMetric(
+        app,
+        name,
+        'tombstone_test_metric',
+      );
+      expect(deleted.status).toBe(200);
+      const afterDelete = await listModelMetrics(app, name);
+      expect(
+        afterDelete.body.metrics.some(
+          (m) => m.name === 'tombstone_test_metric',
+        ),
+      ).toBe(false);
+
+      const rebootstrapped = await bootstrapModel(app, name);
+      expect(rebootstrapped.body.ok).toBe(true);
+
+      const afterBootstrap = await listModelMetrics(app, name);
+      expect(
+        afterBootstrap.body.metrics.some(
+          (m) => m.name === 'tombstone_test_metric',
+        ),
+      ).toBe(false);
+    });
+
+    it("rejects deleting a metric another metric's ratio still references (review finding 5)", async () => {
+      const name = 'World Cup Core - delete validation';
+      await saveDataset(app, name, datasourceId);
+      await createModelMetric(app, name, {
+        name: 'wins',
+        label: 'Wins',
+        entity: 'matches',
+        agg: 'count',
+      });
+      await createModelMetric(app, name, {
+        name: 'losses',
+        label: 'Losses',
+        entity: 'matches',
+        agg: 'count',
+      });
+      await createModelMetric(app, name, {
+        name: 'win_rate',
+        label: 'Win rate',
+        entity: 'matches',
+        agg: 'ratio',
+        numerator: 'wins',
+        denominator: 'losses',
+      });
+
+      const rejected = await deleteModelMetric(app, name, 'wins');
+      expect(rejected.status).toBe(400);
+      expect(rejected.body.ok).toBe(false);
+
+      const metrics = await listModelMetrics(app, name);
+      expect(metrics.body.metrics.some((m) => m.name === 'wins')).toBe(true);
     });
   });
 });

@@ -1,0 +1,129 @@
+
+> @jhon-buendia-halo/questions-to-insights@0.20.3 test
+> jest
+
+[32m[Nest] 87291  - [39m10/02/2026, 9:35:40 AM [32m    LOG[39m [38;5;3m[TestingDataService] [39m[32mSeeding world_cup on 127.0.0.1:55432/world_cup as "world_cup" (database created)[39m
+[32m[Nest] 87291  - [39m10/02/2026, 9:35:40 AM [32m    LOG[39m [38;5;3m[TestingDataService] [39m[32mSeeding world_cup on 127.0.0.1:55432/world_cup as "world_cup"[39m
+[32m[Nest] 87291  - [39m10/02/2026, 9:35:40 AM [32m    LOG[39m [38;5;3m[TestingDataService] [39m[32mSeeding world_cup on 127.0.0.1:55432/world_cup as "world_cup"[39m
+[32m[Nest] 87291  - [39m10/02/2026, 9:35:40 AM [32m    LOG[39m [38;5;3m[TestingDataService] [39m[32mSeeding world_cup on 127.0.0.1:55432/world_cup as "world_cup"[39m
+[33m[Nest] 87291  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[TestingDataService] [39m[33mWorld Cup seeding finished but the inventory is incomplete: world_cup.world_cup.v_player_goal_totals[39m
+[32m[Nest] 87291  - [39m10/02/2026, 9:35:40 AM [32m    LOG[39m [38;5;3m[TestingDataService] [39m[32mSeeding world_cup on 127.0.0.1:55432/wc_demo as "world_cup"[39m
+[32m[Nest] 87291  - [39m10/02/2026, 9:35:40 AM [32m    LOG[39m [38;5;3m[TestingDataService] [39m[32mRegistering Register Only on db.internal:5432/huge as "reader" without seeding (no bundled SQL)[39m
+[33m[Nest] 87288  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[data-models/bootstrap] [39m[33mDropping dimension "region": no matching attribute[39m
+[32m[Nest] 87285  - [39m10/02/2026, 9:35:40 AM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] lenai/gpt-5-deployment via https://lenai.example.com/openai/v1/deployments/gpt-5-deployment/chat/completions[39m
+[32m[Nest] 87285  - [39m10/02/2026, 9:35:40 AM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] SUCCESS — reply="ok"[39m
+[32m[Nest] 87285  - [39m10/02/2026, 9:35:40 AM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] lenai/mmc-tech-gpt-52-272k-2025-12-11 via https://lenai.example.com/openai/v1/deployments/mmc-tech-gpt-52-272k-2025-12-11/chat/completions[39m
+[32m[Nest] 87285  - [39m10/02/2026, 9:35:40 AM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] SUCCESS — reply="ok"[39m
+[32m[Nest] 87285  - [39m10/02/2026, 9:35:40 AM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] lenai/mmc-tech-gpt-41-nano-1m-2025-04-14 via https://lenai.example.com/openai/v1/deployments/mmc-tech-gpt-41-nano-1m-2025-04-14/chat/completions[39m
+[32m[Nest] 87285  - [39m10/02/2026, 9:35:40 AM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] SUCCESS — reply="ok"[39m
+[32m[Nest] 87285  - [39m10/02/2026, 9:35:40 AM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] openai/gpt-4o-mini via https://api.openai.com/v1/chat/completions[39m
+[32m[Nest] 87285  - [39m10/02/2026, 9:35:40 AM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] SUCCESS — reply="ok"[39m
+[32m[Nest] 87285  - [39m10/02/2026, 9:35:40 AM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] openai/gpt-4o-mini via https://api.openai.com/v1/chat/completions[39m
+[32m[Nest] 87285  - [39m10/02/2026, 9:35:40 AM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] SUCCESS — reply="ok"[39m
+[32m[Nest] 87285  - [39m10/02/2026, 9:35:40 AM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] openai/gpt-4o-mini via https://api.openai.com/v1/chat/completions[39m
+[32m[Nest] 87285  - [39m10/02/2026, 9:35:40 AM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] openai/gpt-4o-mini via https://api.openai.com/v1/chat/completions[39m
+[32m[Nest] 87285  - [39m10/02/2026, 9:35:40 AM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] openai/gpt-4o-mini via https://api.openai.com/v1/chat/completions[39m
+[32m[Nest] 87285  - [39m10/02/2026, 9:35:40 AM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] openai/gpt-4o-mini via https://api.openai.com/v1/chat/completions[39m
+[32m[Nest] 87285  - [39m10/02/2026, 9:35:40 AM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] lenai/wrong-deployment via https://lenai.example.com/openai/v1/deployments/wrong-deployment/chat/completions[39m
+[33m[Nest] 87288  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[data-models/bootstrap] [39m[33mDropping dimension "unmatched_dimension" on metric "avg_attendance": no matching attribute[39m
+[33m[Nest] 87289  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[DeepAnalysisService] [39m[33mDeep analysis 1c52eb67-6db8-44b3-ae79-a16a21f9a6b3 failed: the planner returned no usable investigation plan[39m
+[32m[Nest] 87283  - [39m10/02/2026, 9:35:40 AM [32m    LOG[39m [38;5;3m[SessionsService] [39m[32mCross-check agree[39m
+[33m[Nest] 87289  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[DeepAnalysisService] [39m[33mDeep analysis 3436aeb6-5741-4d41-830d-631ebaba7934 failed: no model[39m
+[32m[Nest] 87283  - [39m10/02/2026, 9:35:40 AM [32m    LOG[39m [38;5;3m[SessionsService] [39m[32mCross-check disagree: missing [64]; unexpected [63][39m
+[33m[Nest] 87289  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[DeepAnalysisService] [39m[33mDeep analysis angle "By payer" failed: warehouse timeout[39m
+[32m[Nest] 87285  - [39m10/02/2026, 9:35:40 AM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] openai/gpt-4o-mini via https://api.openai.com/v1/chat/completions[39m
+[32m[Nest] 87285  - [39m10/02/2026, 9:35:40 AM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] SUCCESS — reply="ok"[39m
+[33m[Nest] 87283  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[SessionsService] [39m[33mCross-check failed: verifier unavailable[39m
+[33m[Nest] 87283  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[SessionsService] [39m[33mCross-check failed: table not found[39m
+[33m[Nest] 87283  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[SessionsService] [39m[33mCross-check skipped: answer hit the row cap[39m
+[32m[Nest] 87281  - [39m10/02/2026, 9:35:40 AM [32m    LOG[39m [38;5;3m[DataModelsService] [39m[32mBootstrapped 2 data models[39m
+[32m[Nest] 87285  - [39m10/02/2026, 9:35:40 AM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] anthropic/claude-sonnet-5-5[39m
+[33m[Nest] 87283  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[SessionsService] [39m[33mGrounding guard corrective pass failed: provider unavailable[39m
+[32m[Nest] 87285  - [39m10/02/2026, 9:35:40 AM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] SUCCESS — reply="ok"[39m
+[32m[Nest] 87285  - [39m10/02/2026, 9:35:40 AM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] anthropic/claude-sonnet-5-5[39m
+[32m[Nest] 87285  - [39m10/02/2026, 9:35:40 AM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] anthropic/claude-sonnet-5-5[39m
+[32m[Nest] 87285  - [39m10/02/2026, 9:35:40 AM [32m    LOG[39m [38;5;3m[LlmService] [39m[32m[testConnection] openai/gpt-5 via https://api.openai.com/v1/chat/completions[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mSpec attempts failed; falling back to the freeform HTML/CSS/JS designer[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mSpec attempts failed; falling back to the freeform HTML/CSS/JS designer[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mSpec attempts failed; falling back to the freeform HTML/CSS/JS designer[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 87284  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[DatasetsService] [39m[33mDeclared foreign keys unavailable: this.datasources.foreignKeys is not a function[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mSpec attempts failed; falling back to the freeform HTML/CSS/JS designer[39m
+[33m[Nest] 87283  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[SessionsService] [39m[33mRepairing failed SQL (attempt 1): Column claimid cannot be resolved — SQL: SELECT count(claimid) AS n FROM main.health.claims[39m
+[33m[Nest] 87283  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[SessionsService] [39m[33mRepairing failed SQL (attempt 1): first — SQL: SELECT bad FROM main.health.claims[39m
+[33m[Nest] 87283  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[SessionsService] [39m[33mRepairing failed SQL (attempt 2): second — SQL: SELECT 1 FROM main.health.claims[39m
+[33m[Nest] 87284  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[DatasetsService] [39m[33mSample-value enrichment skipped for main.health.claims: no access[39m
+[33m[Nest] 87284  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[DatasetsService] [39m[33mDeclared foreign keys unavailable: this.datasources.foreignKeys is not a function[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mSpec attempts failed; falling back to the freeform HTML/CSS/JS designer[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mSpec attempts failed; falling back to the freeform HTML/CSS/JS designer[39m
+[33m[Nest] 87284  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[DatasetsService] [39m[33mSample-value enrichment skipped for main.health.claims: no sample returned[39m
+[33m[Nest] 87284  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[DatasetsService] [39m[33mDeclared foreign keys unavailable: this.datasources.foreignKeys is not a function[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mSpec attempts failed; falling back to the freeform HTML/CSS/JS designer[39m
+[33m[Nest] 87284  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[DatasetsService] [39m[33mSample-value enrichment skipped for main.health.claims: no sample returned[39m
+[33m[Nest] 87284  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[DatasetsService] [39m[33mDeclared foreign keys unavailable: this.datasources.foreignKeys is not a function[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mSpec attempts failed; falling back to the freeform HTML/CSS/JS designer[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mSpec attempts failed; falling back to the freeform HTML/CSS/JS designer[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec does not match the data: chart.y: column "amount" is not in the selected result set [month, n][39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec does not match the data: chart.y: column "amount" is not in the selected result set [month, n][39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mSpec attempts failed; falling back to the freeform HTML/CSS/JS designer[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mSpec attempts failed; falling back to the freeform HTML/CSS/JS designer[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mRefresh failed for a query: timed out[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mSpec attempts failed; falling back to the freeform HTML/CSS/JS designer[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisualization spec output validation failed: spec: Invalid input: expected object, received undefined[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: visualization agent returned an invalid spec (spec: Invalid input: expected object, received undefined)[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mSpec attempts failed; falling back to the freeform HTML/CSS/JS designer[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: gateway exploded[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: gateway exploded[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mSpec attempts failed; falling back to the freeform HTML/CSS/JS designer[39m
+[33m[Nest] 87282  - [39m10/02/2026, 9:35:40 AM [33m   WARN[39m [38;5;3m[VisualizationService] [39m[33mVisual spec attempt failed: Structured output validation failed: title: expected string, received undefined; description: expected string, received undefined; spec: expected object, received undefined. Received: {"$schema":"http://json-schema.org/draft-07/schema#","type":"object","properties":{"title":"Claims by month","description":"Volume climbs through the year.","spec":{"spec":1,"kpis":[{"label":"Total claims","select":["month","n"],"column":"n","agg":"sum"}],"chart":{"form":"line","select":["month","n"],"x":"month","y":"n"},"table":{"select":["month","n"],"columns":["month","n"],"collapsed":true}}}}[39m
+
+Test Suites: 39 passed, 39 total
+Tests:       864 passed, 864 total
+Snapshots:   0 total
+Time:        0.965 s, estimated 1 s
+Ran all test suites.

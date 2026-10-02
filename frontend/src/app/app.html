@@ -385,6 +385,7 @@
             class="w-full max-w-[960px]"
             (newDataset)="openDatasetEditor(null)"
             (openDataset)="openDatasetEditor($event)"
+            (openDataModel)="openDataModel($event)"
           />
         </div>
       } @else if (mainView() === "dataset-new") {
@@ -393,6 +394,14 @@
             class="w-full max-w-[960px]"
             [initial]="editingDataset()"
             (saved)="mainView.set('dataset')"
+          />
+        </div>
+      } @else if (mainView() === "dataset-model" && dataModelDataset()) {
+        <div class="flex flex-1 justify-center overflow-y-auto px-8 py-10">
+          <app-data-model-view
+            class="flex w-full max-w-[960px] min-h-0 flex-1 flex-col"
+            [datasetName]="dataModelDataset()!.name"
+            (back)="mainView.set('dataset')"
           />
         </div>
       } @else if (mainView() === "agents") {

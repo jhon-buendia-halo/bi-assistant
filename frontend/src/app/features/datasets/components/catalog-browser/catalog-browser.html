@@ -313,11 +313,10 @@
     }
   }
 
-  <!-- Curated metrics over the included entities -->
+  <!-- Metrics now live on the dataset's data model (roadmap 1.2.3) -->
   <div class="mt-8 border-t border-white/10 pt-6">
-    <app-metrics-panel
-      [entities]="includedEntities()"
-      [datasourceId]="datasourceId() || null"
-    />
+    <p class="rounded-md border border-dashed border-white/10 px-3 py-4 text-center text-[12px] text-zinc-500">
+      Metrics are defined in the dataset's data model after saving.
+    </p>
   </div>
 </div>

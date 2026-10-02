@@ -81,6 +81,16 @@
                 <span>{{ editedLabel(item) }}</span>
               </span>
             </button>
+            <button
+              type="button"
+              [attr.data-testid]="'dataset-model-' + item.name"
+              (click)="openDataModel.emit(item)"
+              title="Data model"
+              aria-label="Data model"
+              class="rounded-md p-1.5 text-zinc-500 opacity-0 group-hover:opacity-100 hover:bg-white/10 hover:text-zinc-200"
+            >
+              <lucide-angular [img]="Network" [size]="15" />
+            </button>
             <div class="relative">
               <button
                 (click)="toggleMenu(item.name)"

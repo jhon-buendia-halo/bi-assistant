@@ -39,6 +39,7 @@ import { DatasourcesApiService } from './features/datasources/services/datasourc
 import { LlmConfig } from './features/llm/components/llm-config/llm-config';
 import { TestingDataConfig } from './features/testing-data/components/testing-data-config/testing-data-config';
 import { DatasetList } from './features/datasets/components/dataset-list/dataset-list';
+import { DataModelView } from './features/data-model/components/data-model-view/data-model-view';
 import { AgentList } from './features/agents/components/agent-list/agent-list';
 import { AgentDetail } from './features/agents/components/agent-detail/agent-detail';
 import { EvalTrace } from './features/agents/components/eval-trace/eval-trace';
@@ -78,6 +79,7 @@ type MainView =
   | 'home'
   | 'dataset'
   | 'dataset-new'
+  | 'dataset-model'
   | 'agents'
   | 'agent-detail'
   | 'knowledge'
@@ -101,6 +103,7 @@ const RIGHT_PANEL_WIDTH_STORAGE_KEY = 'questions-to-insights:right-panel-width';
     LlmConfig,
     TestingDataConfig,
     DatasetList,
+    DataModelView,
     AgentList,
     AgentDetail,
     EvalTrace,
@@ -159,6 +162,14 @@ export class App {
   openDatasetEditor(dataset: Dataset | null): void {
     this.editingDataset.set(dataset);
     this.mainView.set('dataset-new');
+  }
+
+  /** Dataset whose data model is open in `app-data-model-view` (roadmap 1.2.3). */
+  readonly dataModelDataset = signal<Dataset | null>(null);
+
+  openDataModel(dataset: Dataset): void {
+    this.dataModelDataset.set(dataset);
+    this.mainView.set('dataset-model');
   }
 
   /** Registry key of the agent open in the detail view. */

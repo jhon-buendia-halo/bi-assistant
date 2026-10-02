@@ -1,0 +1,229 @@
+<div class="flex min-h-0 flex-1 flex-col gap-4" data-testid="data-model-view">
+  <!-- Header -->
+  <div class="flex items-center gap-3">
+    <button
+      type="button"
+      (click)="back.emit()"
+      class="flex items-center gap-1.5 rounded-md px-2 py-1 text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
+    >
+      <lucide-angular [img]="ArrowLeft" [size]="15" />
+      <span>Back</span>
+    </button>
+    <h1 class="truncate font-serif text-[22px] font-semibold text-zinc-100">
+      {{ datasetName() }}
+    </h1>
+    @if (currentVersion() > 0) {
+      <span
+        data-testid="model-version-badge"
+        class="shrink-0 rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-medium text-zinc-300"
+        >v{{ currentVersion() }} · {{ versionSource() }}</span
+      >
+    }
+    @if (driftCount() > 0) {
+      <span
+        data-testid="drift-pill"
+        title="A re-saved snapshot differs from this version"
+        class="flex shrink-0 items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-400"
+      >
+        <lucide-angular [img]="FileWarning" [size]="12" />
+        Drift: {{ driftCount() }}
+      </span>
+    }
+
+    <div class="ml-auto flex items-center gap-2">
+      <button
+        type="button"
+        data-testid="bootstrap-model"
+        (click)="bootstrapFromSnapshot()"
+        [disabled]="bootstrapping()"
+        title="Rebuild from the dataset's current snapshot, keeping metrics"
+        class="flex items-center gap-1.5 rounded-md border border-white/10 px-2.5 py-1.5 text-[12px] text-zinc-300 hover:bg-white/5 disabled:opacity-50"
+      >
+        @if (bootstrapping()) {
+          <lucide-angular [img]="Loader2" [size]="13" class="animate-spin" />
+        } @else {
+          <lucide-angular [img]="RefreshCw" [size]="13" />
+        }
+        Bootstrap from snapshot
+      </button>
+      <button
+        type="button"
+        data-testid="export-model"
+        (click)="export()"
+        [disabled]="exporting()"
+        class="flex items-center gap-1.5 rounded-md border border-white/10 px-2.5 py-1.5 text-[12px] text-zinc-300 hover:bg-white/5 disabled:opacity-50"
+      >
+        <lucide-angular [img]="Download" [size]="13" />
+        Export
+      </button>
+      <button
+        type="button"
+        data-testid="import-model"
+        (click)="triggerImport()"
+        [disabled]="importing()"
+        class="flex items-center gap-1.5 rounded-md border border-white/10 px-2.5 py-1.5 text-[12px] text-zinc-300 hover:bg-white/5 disabled:opacity-50"
+      >
+        <lucide-angular [img]="Upload" [size]="13" />
+        Import
+      </button>
+      <input
+        #importInput
+        type="file"
+        data-testid="import-file-input"
+        accept=".yaml,.yml"
+        class="hidden"
+        (change)="onImportFileSelected($any($event.target))"
+      />
+    </div>
+  </div>
+
+  @if (loading()) {
+    <div class="flex items-center gap-2 text-[13px] text-zinc-500">
+      <lucide-angular [img]="Loader2" [size]="15" class="animate-spin" />
+      <span>Loading data model…</span>
+    </div>
+  } @else if (loadError(); as error) {
+    <p class="rounded-md bg-red-500/10 px-3 py-2.5 text-[13px] text-red-400">
+      {{ error }}
+    </p>
+  } @else if (model(); as model) {
+    <!-- Tabs -->
+    <div class="flex items-center gap-1 border-b border-white/5">
+      @for (t of ["overview", "yaml", "versions", "metrics"]; track t) {
+        <button
+          type="button"
+          [attr.data-testid]="'tab-' + t"
+          (click)="setTab($any(t))"
+          class="border-b-2 px-3 py-2 text-[13px] capitalize"
+          [class.border-zinc-200]="tab() === t"
+          [class.text-zinc-100]="tab() === t"
+          [class.border-transparent]="tab() !== t"
+          [class.text-zinc-500]="tab() !== t"
+        >
+          {{ t }}
+        </button>
+      }
+    </div>
+
+    <div class="flex min-h-0 flex-1 flex-col">
+      @switch (tab()) {
+        @case ("overview") {
+          <div class="flex flex-col gap-5 overflow-y-auto">
+            <div>
+              <p class="mb-2 text-[12px] font-medium text-zinc-400">
+                Entities ({{ model.entities.length }})
+              </p>
+              <div class="flex flex-col gap-1.5">
+                @for (entity of model.entities; track entity.name) {
+                  <button
+                    type="button"
+                    [attr.data-testid]="'overview-entity-' + entity.name"
+                    (click)="openEntity(entity.name)"
+                    class="flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2.5 text-left hover:bg-white/5"
+                  >
+                    <span class="min-w-0 flex-1 truncate text-[13px] text-zinc-200">{{
+                      entity.label || entity.name
+                    }}</span>
+                    <span class="shrink-0 text-[11px] text-zinc-500"
+                      >{{ entity.attributes.length }} attributes</span
+                    >
+                    <lucide-angular
+                      [img]="ChevronRight"
+                      [size]="14"
+                      class="shrink-0 text-zinc-600"
+                    />
+                  </button>
+                }
+              </div>
+            </div>
+            <div>
+              <p class="mb-2 text-[12px] font-medium text-zinc-400">
+                Relationships ({{ model.relationships.length }})
+              </p>
+              <div class="flex flex-col gap-1.5" data-testid="overview-relationships">
+                @for (rel of model.relationships; track $index) {
+                  <div
+                    [attr.data-testid]="'overview-relationship-' + $index"
+                    class="flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-[12px]"
+                  >
+                    <span class="min-w-0 flex-1 truncate font-mono text-zinc-300"
+                      >{{ rel.from }} → {{ rel.to }}</span
+                    >
+                    <span
+                      [attr.data-testid]="'overview-relationship-cardinality-' + $index"
+                      class="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[11px] text-zinc-400"
+                      >{{ rel.cardinality }}</span
+                    >
+                  </div>
+                } @empty {
+                  <p class="text-[11px] text-zinc-600">No relationships yet.</p>
+                }
+              </div>
+            </div>
+            <div>
+              <p class="mb-2 text-[12px] font-medium text-zinc-400">
+                Metrics ({{ model.metrics.length }})
+              </p>
+              <div class="flex flex-wrap gap-1.5" data-testid="overview-metrics">
+                @for (metric of model.metrics; track metric.name) {
+                  <span
+                    [attr.data-testid]="'overview-metric-' + metric.name"
+                    class="rounded-full border border-white/10 px-2.5 py-1 text-[11px] text-zinc-300"
+                    >{{ metric.label }}</span
+                  >
+                } @empty {
+                  <p class="text-[11px] text-zinc-600">No metrics yet.</p>
+                }
+              </div>
+            </div>
+          </div>
+        }
+        @case ("entity") {
+          <div class="flex min-h-0 flex-1 flex-col gap-2">
+            <button
+              type="button"
+              (click)="setTab('overview')"
+              class="self-start text-[12px] text-zinc-500 hover:text-zinc-300"
+            >
+              ← Back to overview
+            </button>
+            <app-entity-editor
+              class="min-h-0 flex-1"
+              [datasetName]="datasetName()"
+              [model]="model"
+              [focusEntityName]="focusEntityName()"
+              (saved)="onVersionChanged()"
+            />
+          </div>
+        }
+        @case ("yaml") {
+          <app-model-yaml-editor
+            class="flex min-h-0 flex-1"
+            [datasetName]="datasetName()"
+            [yaml]="response()!.version.yaml"
+            (saved)="onVersionChanged()"
+          />
+        }
+        @case ("versions") {
+          <div class="overflow-y-auto">
+            <app-model-versions
+              [datasetName]="datasetName()"
+              [versions]="versions()"
+              [currentVersion]="currentVersion()"
+              (reverted)="onVersionChanged()"
+            />
+          </div>
+        }
+        @case ("metrics") {
+          <div class="overflow-y-auto">
+            <app-model-metrics-panel
+              [datasetName]="datasetName()"
+              [entities]="model.entities"
+              (saved)="onVersionChanged()"
+            />
+          </div>
+        }
+      }
+    </div>
+  }
+</div>

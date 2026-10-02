@@ -29,6 +29,25 @@ export interface DataModelDoc {
   currentVersion: number;
   versions: DataModelVersion[];
   lastDrift?: DriftReport;
+  /**
+   * Metric names authored directly through the model-metrics API (roadmap
+   * 1.2.3), lowercase. This is what lets `DataModelsService.syncMetric` /
+   * `removeMetric` (the legacy metrics-panel mirror, ADR-0006) tell "a name
+   * this model now manages itself" from "a name only the legacy `metrics`
+   * store ever wrote" — the model wins for the former; the mirror still
+   * applies for the latter. Doc-level (not per-version) because it is
+   * mutable mirror bookkeeping, the same shape as `lastDrift`.
+   */
+  localMetricNames?: string[];
+  /**
+   * Metric names explicitly removed through the model-metrics API
+   * (lowercase) — a tombstone (review finding 6) so `rebootstrap`,
+   * `mergeSnapshot` and `syncMetric` never reintroduce a copy sourced from
+   * the legacy `metrics` store just because a name the model deleted still
+   * exists there. Cleared for a name when `createModelMetric`/
+   * `updateModelMetric` brings it back under model management.
+   */
+  deletedMetricNames?: string[];
   createdAt: string;
   updatedAt: string;
 }
