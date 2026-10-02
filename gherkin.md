@@ -293,3 +293,74 @@ Feature: Datasources, datasets, and sessions (World Cup database)
     Then I see the column "scorer_player_id"
     And I see a "bigint" column type
 ```
+
+## Feature: Data model
+
+Spec: [backend/test/data-models.e2e-spec.ts](backend/test/data-models.e2e-spec.ts) (API-level; no UI surface until roadmap 1.2.3)
+
+```gherkin
+Feature: Data model
+  The versioned, storage-neutral data model every dataset owns (roadmap 1.2.1, BA-85).
+
+  Background:
+    Given the backend is running with an empty data directory
+    And a datasource "World Cup" of kind postgres exists
+
+  Scenario: A saved dataset gets a bootstrapped data model
+    When I save the dataset "World Cup Core" with the entities "world_cup.world_cup.matches" and "world_cup.world_cup.teams"
+    Then GET /datasets/World Cup Core/model returns version 1
+    And the model has the entities "matches" and "teams" bound to their tables
+    And the "matches" attributes carry the snapshot's types and sample values
+    And the relationship "matches.home_team_id -> teams.team_id" has cardinality many_to_one and source "inferred" or "declared"
+
+  Scenario: Existing datasets are bootstrapped on startup
+    Given a dataset saved before data models existed
+    When the backend starts
+    Then GET /datasets/<name>/model returns version 1 with source "bootstrap"
+
+  Scenario: Metrics created before the change appear in the model and keep working
+    Given a legacy "metrics" row for "avg_attendance" on "world_cup.world_cup.matches" and its dataset doc were seeded directly into SQLite before the app started (predating ADR-0006)
+    When the backend starts and bootstraps the dataset's model
+    Then the model lists the metric "avg_attendance" on entity "matches" with its SQL expression
+    And GET /metrics?entities=world_cup.world_cup.matches still returns "avg_attendance" with its original UUID id
+    When I create the metric "goals_per_match" through POST /metrics
+    Then a new model version lists "goals_per_match"
+
+  Scenario: Re-saving with a new table merges it into a new version
+    Given the dataset "World Cup Core" was saved with only "world_cup.world_cup.matches"
+    When I re-save it including "world_cup.world_cup.teams" too
+    Then a new version adds the "teams" entity, leaving "matches" and its existing metrics untouched
+    And GET /datasets/World Cup Core/model/drift still lists "matches.attendance" as removed and "matches.spectators" as added when those columns also changed
+
+  Scenario: Saving a new model version through YAML
+    When I PUT /datasets/World Cup Core/model with YAML that adds the description "One played match" to entity "matches"
+    Then the response is version 2 with source "user"
+    And GET /datasets/World Cup Core/model/versions/1 is unchanged
+
+  Scenario: An invalid model is rejected with a line and column
+    When I PUT /datasets/World Cup Core/model with YAML whose "matches" binding maps attribute "attendance" to a column "spectators" that does not exist
+    Then the response is 400
+    And the errors name the path "entities[0].bindings[0].columns.attendance" with a line and a column
+    And the current model version is still 1
+
+  Scenario: Reverting moves the current pointer
+    Given the model has versions 1 and 2
+    When I POST /datasets/World Cup Core/model/revert with version 1
+    Then GET /datasets/World Cup Core/model returns version 1
+    And version 2 still exists
+
+  Scenario: A changed snapshot yields a drift report, not a new version
+    Given the model v1 was bootstrapped from a snapshot with the column "attendance"
+    When I re-save the dataset with a snapshot where "attendance" is gone and "spectators" is new
+    Then GET /datasets/World Cup Core/model/drift lists "matches.attendance" as removed and "matches.spectators" as added
+    And GET /datasets/World Cup Core/model still returns version 1
+
+  Scenario: Logical references resolve against a model version
+    When I POST /datasets/World Cup Core/model/resolve with the references "matches", "matches.attendance", "metric:avg_attendance", "rel:matches.home_team_id->teams.team_id" and "matches.nope"
+    Then the first four resolve to their kind and target
+    And "matches.nope" is reported as unresolved
+
+  Scenario: The JSON Schema of the DSL is published
+    When I GET /data-models/schema.json
+    Then the response is a JSON Schema with a definition for entities, relationships, metrics and bindings
+```

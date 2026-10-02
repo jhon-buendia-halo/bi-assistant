@@ -138,6 +138,7 @@ flowchart LR
     agentsmod["AgentsModule<br/>(AgentsService, EvalRunsService)"]
     deep["DeepAnalysisModule"]
     knowledge["KnowledgeModule"]
+    datamodels["DataModelsModule<br/>(DSL schema, versions, bootstrap, refs)"]
     datasets["DatasetsModule"]
     datasources["DatasourcesModule<br/>(postgres, databricks, rest connectors)"]
     testing["TestingDataModule"]
@@ -285,6 +286,20 @@ flowchart LR
 - **Context:** Users tailor visuals iteratively from the chat.
 - **Decision:** `create_visual` / `update_visual` tools drive a designer sub-agent; each edit writes a new `v<N>` directory; revert moves a pointer; a fixed, transcript-derived frame provides readable context.
 - **Consequences:** Readability does not depend on designer-model output; storage grows per version.
+
+#### ADR-0006 — A storage-neutral data model DSL as the source of truth the assistant reasons over
+- **Status:** Accepted
+- **Date:** 2026-10-01
+- **Context:** The assistant learned the data model from a physical snapshot (`DatasetDoc.entities[]`), a separate metrics table and knowledge snippets bound to `catalog.schema.table`, rendered as four prompt blocks with independent budgets; nothing was versioned or diffable, and non-SQL datasources (REST today, MongoDB / CSV / JSON later) do not fit a table-shaped model. Evidence and alternatives (Ossie-shaped YAML, Malloy, typed JSON) are in [docs/plans/ba-2-data-model-dsl-alternatives.md](docs/plans/ba-2-data-model-dsl-alternatives.md).
+- **Decision:** One `DataModel` document per dataset, in our own YAML, validated by a Zod schema (JSON Schema exported) and stored in the `data_models` collection as immutable versions with a current pointer. The model is logical: entities with attributes (typed, with roles and nested paths), relationships with explicit cardinality and provenance, and metrics in a portable aggregation core with a dialect-tagged escape hatch. A `bindings` section maps each entity to its physical store per datasource kind (`sql`, `rest`; `mongo` and `file` accepted but without adapters in the beta). v1 is bootstrapped from the physical snapshot automatically; later snapshots produce a drift report, never an overwrite. Every element has a stable logical reference (`entity`, `entity.attribute`, `metric:name`, `rel:from->to`) resolved by `resolveRef`, which is the Knowledge Store's mapping target (ADR for 1.3.1 to adopt). Metrics live in the model, but until the editing UI (1.2.3) moves the metrics panel onto it, the shared `metrics` store remains the panel's editor of record and is mirrored into every model that binds the table on each write and dataset save. Ossie-shaped YAML is an export/import profile, not the canonical form.
+- **Consequences:** The DSL holds structure, the Knowledge Store holds meaning (synonyms, default filters as portable predicates over DSL attributes). The physical snapshot remains the bootstrap input and drift reference. The metrics API keeps its contract; two metric stores coexist until 1.2.3, with the shared store authoritative for panel-managed metrics and the model authoritative for YAML-only ones. Non-SQL kinds need only a new adapter, not a model change. A new validation surface (YAML, Zod, semantic checks) is ours to maintain.
+
+#### ADR-0007 — The assistant reasons over abstract entities through a logical query layer
+- **Status:** Proposed (implemented by roadmap 1.2.2 / BA-86)
+- **Date:** 2026-10-01
+- **Context:** With ADR-0006 the model is storage-neutral, but the assistant still wrote dialect SQL against physical tables, which ties reasoning to the datasource and lets metric and join logic drift per turn. Compiler-based systems report 98–100% accuracy on modelled questions and 0% outside the model; direct SQL keeps coverage but fails silently.
+- **Decision:** The assistant's prompt and tools speak only the model's vocabulary: `describe_entity`, `query_entities` (a JSON-schema-constrained logical query: from, select, portable predicates, group_by, order_by, limit, traverse along declared relationships) and `sample_records`. One adapter per binding kind compiles the logical query: the `sql` adapter targets Postgres, Databricks SQL and SQLite in one place; `rest` reuses the materialise-to-SQLite path. Raw SQL remains only as an internal fallback when the compiler rejects a query, and every such answer is flagged "outside the model" so evals and trust signals count it. `sql-fixer` and `sql-verifier` move to the logical level.
+- **Consequences:** Metrics and joins are correct by construction; dialect differences live in one compiler; a new query grammar without pretraining must stay close to SELECT / WHERE / GROUP BY semantics and be schema-constrained; the compiler is the critical path and ships with the `sql` adapter first.
 
 ## Level 4 — Code
 

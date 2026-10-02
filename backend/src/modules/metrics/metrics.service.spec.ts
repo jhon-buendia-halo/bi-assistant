@@ -41,16 +41,29 @@ function build(
     delete: jest.fn().mockResolvedValue(1),
   };
   const verifiedQueries = { list: jest.fn().mockResolvedValue(pairs) };
+  // `DataModelsService`'s metrics-panel sync — a plain fake here (this spec
+  // is about the legacy-store-backed public API, not the model-sync
+  // behaviour, which is covered by `data-models.service.spec.ts`); every
+  // test just asserts the right bridge call happened.
+  const dataModels = {
+    syncMetric: jest.fn().mockResolvedValue([]),
+    removeMetric: jest.fn().mockResolvedValue([]),
+  };
   return {
-    service: new MetricsService(repository as never, verifiedQueries as never),
+    service: new MetricsService(
+      repository as never,
+      verifiedQueries as never,
+      dataModels as never,
+    ),
     repository,
     verifiedQueries,
+    dataModels,
   };
 }
 
 describe('MetricsService.create', () => {
   it('normalizes and stores a valid definition', async () => {
-    const { service, repository } = build();
+    const { service, repository, dataModels } = build();
 
     const saved = await service.create({
       name: '  Denial_Rate  ',
@@ -72,6 +85,7 @@ describe('MetricsService.create', () => {
       }),
     );
     expect(saved.id).toEqual(expect.any(String));
+    expect(dataModels.syncMetric).toHaveBeenCalledWith(saved);
   });
 
   it.each([
@@ -82,7 +96,7 @@ describe('MetricsService.create', () => {
     ['expression', { expression: ' ' }, /expression is required/],
     ['statement chain', { expression: 'COUNT(*); DROP TABLE x' }, /semicolons/],
   ])('rejects an invalid %s', async (_case, overrides, expected) => {
-    const { service, repository } = build();
+    const { service, repository, dataModels } = build();
 
     await expect(
       service.create({
@@ -94,6 +108,7 @@ describe('MetricsService.create', () => {
       }),
     ).rejects.toThrow(expected);
     expect(repository.insert).not.toHaveBeenCalled();
+    expect(dataModels.syncMetric).not.toHaveBeenCalled();
   });
 
   it('rejects a duplicate name', async () => {
@@ -111,8 +126,8 @@ describe('MetricsService.create', () => {
 });
 
 describe('MetricsService.update', () => {
-  it('keeps its own name and clears dropped optional fields', async () => {
-    const { service, repository } = build([
+  it('keeps its own name, clears dropped optional fields and syncs (no remove)', async () => {
+    const { service, repository, dataModels } = build([
       metric({ description: 'old', dimensions: ['month'] }),
     ]);
 
@@ -127,6 +142,26 @@ describe('MetricsService.update', () => {
       'metric-1',
       expect.objectContaining({ expression: 'COUNT(*)' }),
       expect.arrayContaining(['description', 'dimensions']),
+    );
+    expect(dataModels.removeMetric).not.toHaveBeenCalled();
+    expect(dataModels.syncMetric).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'denial_rate', expression: 'COUNT(*)' }),
+    );
+  });
+
+  it('removes the old name first when the metric is renamed', async () => {
+    const { service, dataModels } = build([metric({ name: 'denial_rate' })]);
+
+    await service.update('metric-1', {
+      name: 'denial_ratio',
+      label: 'Denial ratio',
+      entity: 'main.health.claims',
+      expression: 'COUNT(*)',
+    });
+
+    expect(dataModels.removeMetric).toHaveBeenCalledWith('denial_rate');
+    expect(dataModels.syncMetric).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'denial_ratio' }),
     );
   });
 
@@ -161,11 +196,12 @@ describe('MetricsService.update', () => {
 });
 
 describe('MetricsService.delete', () => {
-  it('returns the removed definition', async () => {
-    const { service, repository } = build([metric()]);
+  it('returns the removed definition and removes it from the model', async () => {
+    const { service, repository, dataModels } = build([metric()]);
 
     expect((await service.delete('metric-1')).label).toBe('Denial rate');
     expect(repository.delete).toHaveBeenCalledWith('metric-1');
+    expect(dataModels.removeMetric).toHaveBeenCalledWith('denial_rate');
   });
 
   it('rejects an unknown metric', async () => {

@@ -3,6 +3,7 @@ import { DatabaseModule } from './infrastructure/database/database.module';
 import { DatasourcesModule } from './modules/datasources/datasources.module';
 import { LlmModule } from './modules/llm/llm.module';
 import { DatasetsModule } from './modules/datasets/datasets.module';
+import { DataModelsModule } from './modules/data-models/data-models.module';
 import { MastraModule } from './mastra/mastra.module';
 import { AgentsModule } from './modules/agents/agents.module';
 import { SessionsModule } from './modules/sessions/sessions.module';
@@ -18,6 +19,7 @@ import { TestingDataModule } from './modules/testing-data/testing-data.module';
     DatasourcesModule,
     LlmModule,
     DatasetsModule,
+    DataModelsModule,
     MastraModule,
     AgentsModule,
     VerifiedQueriesModule,

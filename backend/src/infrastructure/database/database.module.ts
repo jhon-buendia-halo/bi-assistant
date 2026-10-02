@@ -9,6 +9,7 @@ import {
   KNOWLEDGE_STORE,
   SESSIONS_STORE,
   DATASETS_STORE,
+  DATA_MODELS_STORE,
   SETTINGS_STORE,
   VERIFIED_QUERIES_STORE,
 } from './doc-store';
@@ -35,6 +36,7 @@ const COLLECTIONS = [
   { token: METRICS_STORE, table: 'metrics' },
   { token: EVAL_RUNS_STORE, table: 'eval_runs' },
   { token: KNOWLEDGE_STORE, table: 'knowledge_snippets' },
+  { token: DATA_MODELS_STORE, table: 'data_models' },
 ];
 
 const sqliteDbProvider: Provider = {

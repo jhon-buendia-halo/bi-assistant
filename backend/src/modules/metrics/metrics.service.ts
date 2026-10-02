@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { VerifiedQueriesService } from '../verified-queries/verified-queries.service';
+import { DataModelsService } from '../data-models/data-models.service';
 import { MetricsRepository } from './repositories/metrics.repository';
 import type {
   MetricCandidate,
@@ -20,12 +21,24 @@ const MAX_NAME_CHARS = 64;
  * Lightweight semantic layer: curated metric definitions the assistant must
  * reuse verbatim. App-managed on purpose — no dependency on Unity Catalog
  * Metric Views existing in the user's workspace.
+ *
+ * The `metrics` collection (`MetricsRepository`) is the *editor of record*
+ * for this feature's public API and HTTP contract — every read/write here
+ * goes straight through it, exactly as before ADR-0006 — until roadmap
+ * 1.2.3 moves the panel onto the data model directly. What ADR-0006 adds is
+ * a one-way mirror: every successful write calls `DataModelsService`'s
+ * `syncMetric`/`removeMetric` so the metric also shows up (and stays
+ * current) on every data model that binds its physical entity, which is
+ * what the assistant and the Knowledge Store actually read from. The
+ * mirror is fire-and-forget from this file's perspective — `DataModelsService`
+ * never calls back in here, so there is no cycle.
  */
 @Injectable()
 export class MetricsService {
   constructor(
     private readonly repository: MetricsRepository,
     private readonly verifiedQueries: VerifiedQueriesService,
+    private readonly dataModels: DataModelsService,
   ) {}
 
   list(): Promise<MetricDoc[]> {
@@ -42,7 +55,9 @@ export class MetricsService {
 
   async create(input: MetricInput): Promise<MetricDoc> {
     const clean = await this.validate(input);
-    return this.repository.insert({ id: randomUUID(), ...clean });
+    const saved = await this.repository.insert({ id: randomUUID(), ...clean });
+    await this.dataModels.syncMetric(saved);
+    return saved;
   }
 
   async update(id: string, input: MetricInput): Promise<MetricDoc> {
@@ -58,6 +73,13 @@ export class MetricsService {
     const cleared = optional.filter((field) => !(field in clean));
     const saved = await this.repository.update(id, clean, cleared);
     if (!saved) throw new BadRequestException(`Metric ${id} not found`);
+    // A renamed metric leaves a stale copy under its old name on every
+    // model that had it — `syncMetric` only strips the *new* name, so the
+    // old one needs its own pass first.
+    if (existing.name !== saved.name) {
+      await this.dataModels.removeMetric(existing.name);
+    }
+    await this.dataModels.syncMetric(saved);
     return saved;
   }
 
@@ -65,6 +87,7 @@ export class MetricsService {
     const existing = await this.repository.get(id);
     if (!existing) throw new BadRequestException(`Metric ${id} not found`);
     await this.repository.delete(id);
+    await this.dataModels.removeMetric(existing.name);
     return existing;
   }
 
