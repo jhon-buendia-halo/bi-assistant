@@ -4,6 +4,10 @@ Running log of every meaningful change, newest first. See *Logging convention* a
 
 ## 2026-10-01
 
+### Changed
+- Roadmap 0.2.1 ([BA-84](https://halo-powered.atlassian.net/browse/BA-84)) is now `✅ Done`. The delivery workflow, beta roadmap and branching convention shipped in **v0.20.3** via [jhon-buendia-halo/bi-assistant#43](https://github.com/jhon-buendia-halo/bi-assistant/pull/43).
+- Evidence: docs-only change. The PR, its merge commit `04f0c0a` and the `v0.20.3` tag are the record, and no E2E run was needed.
+
 ### Added
 - Adopted the eleven-step delivery workflow in [CLAUDE.md](CLAUDE.md) (retrospective-first, roadmap → ADR → Gherkin → E2E impact analysis → tests-first → implement → green → changelog + evidence → retrospective) and seeded [roadmap.md](roadmap.md), [architecture.md](architecture.md), [gherkin.md](gherkin.md), [retrospective.md](retrospective.md), [evidence/](evidence/).
 - Filled in the harness resources that were still missing: C4 Mermaid diagrams for all four levels in [architecture.md](architecture.md) (system context, containers, backend + frontend components, visual tailoring loop); Given/When/Then steps for all 20 scenarios in [gherkin.md](gherkin.md).

@@ -42,7 +42,7 @@ Electron shell, backend spawning, and renderer↔backend wiring: the app must be
 
 How work is planned, built, verified and traced. It covers the repo's process documents and conventions, not product behaviour.
 
-#### 0.2.1 — Adopt the delivery workflow, beta roadmap and branching convention ([BA-84](https://halo-powered.atlassian.net/browse/BA-84))  `🚧 In progress`
+#### 0.2.1 — Adopt the delivery workflow, beta roadmap and branching convention ([BA-84](https://halo-powered.atlassian.net/browse/BA-84))  `✅ Done`
 - **Intent:** every change follows the same plan → spec → test → implement → evidence → retrospective loop and traces back to a Jira issue.
 - **Scope:**
   - The eleven-step workflow and its conventions in CLAUDE.md, including the branching convention.
@@ -55,6 +55,7 @@ How work is planned, built, verified and traced. It covers the repo's process do
   - Every process file it references exists.
   - The roadmap mirrors the BA 1.0 Beta epics and stories.
   - The work is merged through a PR from `docs/BA-84-claude-harness`.
+- **Notes:** shipped in v0.20.3 via [jhon-buendia-halo/bi-assistant#43](https://github.com/jhon-buendia-halo/bi-assistant/pull/43).
 
 ## Release 1 — 1.0 Beta  (target 2026-10-31)
 
