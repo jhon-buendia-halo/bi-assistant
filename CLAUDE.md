@@ -7,6 +7,119 @@ frontend/   Angular app (Electron renderer) + Electron main process
 backend/    NestJS API
 ```
 
+Process documents at the repo root (see **Workflow** below):
+
+- [roadmap.md](roadmap.md) — pre-implementation plan for all work. See **Planning convention**. Longer-form phase plans live in [docs/plans/](docs/plans/); roadmap features link to them rather than duplicating them.
+- [changelog.md](changelog.md) — running log of every change. See **Logging convention**.
+- [architecture.md](architecture.md) — architectural decisions, recorded against the C4 model. See **Architecture convention**.
+- [gherkin.md](gherkin.md) — every user-facing flow in Gherkin. See **Gherkin convention**.
+- [retrospective.md](retrospective.md) — what went well and wrong on each completed change. See **Retrospective convention**.
+- [evidence/](evidence/) — verifiable artifacts for each shipped change, linked from the changelog. See **Evidence convention**.
+
+## Workflow — order of operations
+
+> **MANDATORY FIRST ACTION — read [retrospective.md](retrospective.md) before doing anything else.** Before you restate the goal, ask a question, run a command, or touch a file — on *every* task, not just large ones — open [retrospective.md](retrospective.md) and read the lessons. They are recorded specifically so past mistakes are not repeated. This precedes step 1.
+
+Every meaningful change follows this eleven-step workflow, in order. Do not skip a step. Steps are sequential gates; *within* a step, independent units still fan out to parallel subagents per **Model usage** above.
+
+1. **Understand the goal** — restate the request in your own words before touching anything. What user-observable outcome are we after? What's the success criterion? Apply any lesson from [retrospective.md](retrospective.md) that bears on this task.
+2. **Ask clarifying questions until the goal is 100% understood** — scope, behaviour, edge cases, acceptance criteria. Do not proceed to step 3 with unresolved questions.
+3. **Update roadmap** — find or add the feature in [roadmap.md](roadmap.md) with `Intent`, `Scope`, `Acceptance` filled in; set status to `🚧 In progress`. See **Planning convention**. Before any file changes, create the feature branch and its git worktree for the matching user story. See **Branching convention**.
+4. **Update architecture** — if the change involves an architectural decision, record it as an ADR in [architecture.md](architecture.md) under the relevant C4 level *before* any code is written.
+5. **Update gherkin** — if the change adds, alters, or removes a user-facing flow, update [gherkin.md](gherkin.md) first: it is the executable spec the implementation is measured against.
+6. **Component impact-based analysis on E2E** — for every component / page / service / backend module touched, enumerate the Gherkin scenarios that exercise it and decide per scenario: *add / update / delete / re-run-as-is*. Produce the explicit list before writing any test or implementation code.
+7. **Implement / update / delete E2E** — apply the step-6 decisions to [frontend/e2e/](frontend/e2e/) (and backend `test/*.e2e-spec.ts` where the flow is API-level) *first*. Run them and confirm they fail for the right reason.
+8. **Implement changes** — only now is production code touched, built against the Acceptance criteria and the step-7 specs.
+9. **Run E2E and fix until green** — `npm run test:e2e` in [frontend/](frontend/) (builds backend + Angular, then drives the real Electron app via `e2e/fixtures/electron.fixture`; `world-cup-workflow.spec.ts` needs `docker compose up -d postgres` from the repo root), plus `npm test` / `npm run lint` / `npm run build` in [backend/](backend/) and `npm test` / `npm run build` in [frontend/](frontend/). Diagnose root causes; fix the test if the test was wrong, the implementation if it was wrong. Repeat until every spec is green.
+10. **Update changelog with evidence** — only after step 9 is green, add a dated entry to [changelog.md](changelog.md) and capture the evidence under [evidence/](evidence/) (E2E summary, screenshots of the running app, exports). Mark the roadmap entry `✅ Done`. See **Logging convention** and **Evidence convention**.
+11. **Retrospective** — add a dated entry to [retrospective.md](retrospective.md): what went well, what went wrong, what to do differently. Step 1 of the *next* change reads it.
+
+Versioning stays automatic (see **Versioning and releases**): the changelog is the human-readable record of *what* shipped, Conventional Commit subjects still drive the version bump.
+
+## Planning convention — read before building
+
+**Every feature must be defined in [roadmap.md](roadmap.md) before any code is written for it.** The roadmap uses a strict **Release → Milestone → Feature** hierarchy with numeric IDs (`R`, `R.M`, `R.M.F`) and a status legend (`📋 Planned`, `🚧 In progress`, `✅ Done`, `🚫 Cut`). A feature is only ready to start when its Intent, Scope, and Acceptance fields are filled in.
+
+1. Find or add the entry in [roadmap.md](roadmap.md) first.
+2. Confirm Intent / Scope / Acceptance are present before touching code.
+3. Update status to `🚧 In progress`, then `✅ Done` when merged and verified.
+4. If something gets cut, leave the entry with status `🚫 Cut` and a one-line reason.
+
+Items in the **Backlog** section are not yet sequenced into a release. Promote them into a Milestone before starting work.
+
+### Find the right feature — don't just append
+
+When a new requirement arrives, the first move is a classification step, not "append at the bottom":
+
+1. **Identify the milestone** the work belongs to — read each milestone's description; they exist for this.
+2. **Decide add / extend / split:** extend an existing feature's `Scope` / `Acceptance` / `Notes` if the work fits it; otherwise add a new feature under the *right* milestone, slotted in dependency order; if no milestone fits cleanly, propose a new milestone or restate boundaries *before* adding the feature.
+3. **Then write the entry** with Intent / Scope / Out-of-scope / Acceptance / Notes, and update cross-references in features that touch it.
+
+The roadmap is read top-to-bottom; ordering and grouping carry meaning.
+
+## Logging convention — record every change
+
+**Every meaningful change must be logged in [changelog.md](changelog.md), as the *final* implementation step (step 10).** Reverse-chronological dated sections (`## YYYY-MM-DD`) with categorized subsections (`### Added`, `### Changed`, `### Removed`, `### Cut`, `### Fixed`). Bundle related edits from one session into one bullet; reference the affected file or roadmap feature ID. Never rewrite past entries — fix forward with a new dated entry. Roadmap status transitions get a matching changelog entry at the same time. **Every entry links to its evidence.**
+
+## Evidence convention — every shipped change is independently verifiable
+
+**Every change logged in [changelog.md](changelog.md) must be backed by artifacts in [evidence/](evidence/), linked from the entry**, so the user can confirm the work without re-running anything.
+
+Layout: one folder per shipped change, keyed by roadmap feature ID — `evidence/<feature-id>/` (e.g. `evidence/1.2.3/`). Store:
+
+- **E2E results** — the `npm run test:e2e` summary (`e2e-results.txt`) and/or the Playwright HTML report / trace (`frontend/playwright-report/`, `frontend/test-results/`) for the specs exercising the change, naming the spec files so evidence maps back to Gherkin scenarios.
+- **Screenshots** — of the running Electron app (Playwright `page.screenshot` in the Electron fixture works), named for what they show (`visual-panel-revert.png`, not `screenshot1.png`), capturing the actual claimed state.
+- **Other artifacts** — exported visuals (`index.html`, `answer.md`, `data.json`), sample API responses, diagnostics reports, short recordings.
+
+Link with a relative path: `Evidence: [evidence/1.2.3/](evidence/1.2.3/)`. Keep artifacts lightweight. If a change genuinely produces no observable artifact, say so explicitly — *"Evidence: existing E2E suite green, no UI change"*.
+
+## Architecture convention — record every architectural decision
+
+**Every architectural decision is documented in [architecture.md](architecture.md) using the C4 model** (System Context → Containers → Components → Code), as short ADRs with `ID`, `Title`, `Status`, `Date`, `Context`, `Decision`, `Consequences`. Never edit a prior ADR's substance — supersede it with a new ADR and mark the old one `Superseded by ADR-NNNN`.
+
+Architectural: choosing or replacing a framework, splitting/merging containers (Electron main, renderer, NestJS backend, npm CLI), introducing an external system (LLM provider, datasource type), changing data-flow direction, new integration boundaries, persistence-shape changes that need migrations. Not architectural: file moves, renames, day-to-day feature work (roadmap + changelog). The detailed operational notes further down this file stay authoritative for *how* things work; ADRs record *why*.
+
+## Gherkin convention — keep user flows current
+
+**Every user-facing flow in the app must be documented in [gherkin.md](gherkin.md), updated as part of any change that affects a flow.** Each surface lives under a `Feature:` heading with `Scenario:`s in standard Gherkin (`Given / When / Then / And`). Applies to navigation, dialogs, panels, toasts, form submits, chat/stream behaviour, visual tailoring — not to purely visual tweaks or internal refactors. Write from the user's point of view (`When I click "New session"`), not the implementation's.
+
+## E2E test convention — every flow change triggers an impact analysis on Playwright
+
+**Playwright specs in [frontend/e2e/](frontend/e2e/) are the executable mirror of [gherkin.md](gherkin.md)** — one spec file per Gherkin `Feature:`. Whenever step 5 touches a scenario, perform the step-6 analysis and decide per scenario: **Add**, **Update**, **Delete**, or **Re-run as-is**. Test edits (step 7) land before the implementation (step 8); don't ship a flow change without the matching E2E change, nor with any impacted spec red.
+
+Scope: Playwright covers end-to-end behaviour in the real Electron app. Unit tests stay beside their source (`*.spec.ts` — Jest in backend, `ng test` in frontend) and are not governed by this rule. Visual baselines (`*-snapshots/`) are updated only with `npm run test:e2e:update` and only when the visual change is intended.
+
+## Retrospective convention — capture lessons so the next run is better
+
+**Every completed change closes with an entry in [retrospective.md](retrospective.md) (step 11), and reading that file is the mandatory first action of the next task.** Reverse-chronological dated sections (`## YYYY-MM-DD`), one per shipped change, referencing the roadmap feature ID, with three subsections:
+
+- **What went well** — specific decisions, tests, or conventions worth repeating, and why.
+- **What went wrong** — misread goals, regressions, skipped or out-of-order steps, lost time. An entry with no `What went wrong` means you didn't look hard enough.
+- **What to do differently** — a concrete instruction your future self can follow ("before renaming a persisted field, add it to `LEGACY_DOC_FIELDS`"), not "be more careful".
+
+Skip only for trivial, zero-risk edits. Never rewrite a past entry. When a recurring lesson hardens into a rule, promote it into the relevant convention (or CLAUDE.md proper) and note the promotion.
+
+## Branching convention — one Jira issue, one feature branch, one worktree
+
+**Every new PR must be developed in its own feature branch, checked out in its own git worktree, and tied to an existing Jira issue: a user story, or a bug for `fix/` branches.** No work goes directly on `main` or the default branch, and no branch is created without a Jira issue behind it.
+
+- **Branch name:** `<type>/<US-ID>-<short-description>`
+  - `<type>` is a Conventional Commit type: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `perf`, `ci` or `build`. It should match the PR's main commit type, because `version-on-merge.yml` derives the version bump from it.
+  - `<US-ID>` is the key of an **existing** Jira issue in project BA (a Story, or a Bug for `fix/` work such as `fix/BA-83-empty-session-thread`), uppercase as Jira shows it (e.g. `BA-79`). Check that it exists with `.claude/skills/jira/scripts/jira.sh issue <US-ID>` before creating the branch. If there is no issue yet, stop and ask the user to create one (or create it with the `jira` skill, with confirmation). Never invent an ID.
+  - `<short-description>` is lowercase kebab-case, a few words, ASCII only.
+  - Example: `feat/BA-79-ontology-bootstrap`.
+- **Worktree:** one per branch, under `.claude/worktrees/`, named after the branch without the type:
+  ```bash
+  git worktree add .claude/worktrees/BA-79-ontology-bootstrap -b feat/BA-79-ontology-bootstrap main
+  ```
+  When the Claude desktop app creates the worktree for the session, rename its branch to the convention (`git branch -m <type>/<US-ID>-<short-description>`) before the first commit.
+- **Traceability:** the user story's ID also appears in the matching [roadmap.md](roadmap.md) feature, the PR title (`feat(BA-79): …` or `feat: … (BA-79)`) and the PR description (link to the Jira issue). One PR covers one issue; split work that spans several.
+- **Cleanup:** after the PR merges, remove the worktree (`git worktree remove …`) and delete the branch.
+
+## Worktree deploy convention — always ask which target
+
+**When work happens in a git worktree (any path under `.claude/worktrees/`), do not silently run against shared state.** Before starting the app or the Postgres compose stack from a worktree, ask: *run against the shared data dir / main compose stack, or an isolated one for this worktree?* The Electron app and the `npx` CLI default to shared data dirs (`userData`, `~/.questions-to-insights`) and backend port 3000; the compose Postgres uses project name `questions-to-insights-world-cup` and port 55432 — a second instance collides unless isolated (`--data-dir`, `BACKEND_PORT`/`--port`, `docker compose -p <name>` with `WORLD_CUP_DB_PORT`). Skip the question only when the user has already named the target in the same turn. Merging the worktree back goes through `sync_with_base_branch` / a PR, never a silent push.
+
 ## Model usage: plan vs. execute
 
 For planning purposes, Fable creates the plan.
@@ -20,7 +133,7 @@ Execute by fanning out: split the plan into independent units of work and dispat
 This is a **desktop application**: Electron shell with the Angular app as renderer.
 
 - Electron main process: `frontend/electron/main.cjs` (`titleBarStyle: 'hiddenInset'`, no nodeIntegration, contextIsolation on).
-- **Single-app delivery**: the main process spawns the NestJS backend as a child process on startup (`ELECTRON_RUN_AS_NODE=1` + Electron's own binary, so packaged apps need no system Node) and kills it on quit. Backend listens on port 3000 (`BACKEND_PORT` env overrides); renderer reads `API_BASE_URL` from `src/app/core/config/api.config.ts`.
+- **Single-app delivery**: the main process spawns the NestJS backend as a child process on startup (`ELECTRON_RUN_AS_NODE=1` + Electron's own binary, so packaged apps need no system Node) and kills it on quit. Backend listens on port 3000 (`BACKEND_PORT` env overrides it for the backend and the main process's `GET /sessions` readiness probe); renderer reads `API_BASE_URL` from `src/app/core/config/api.config.ts`. **Known gap:** under `file://` the renderer hardcodes `http://localhost:3000` and the preload bridge does not expose the port, so a non-default `BACKEND_PORT` breaks the Electron renderer — tracked as roadmap 0.1.1.
 - `npm run electron` — production-style: builds backend + Angular (`--base-href ./` — required, absolute `/` base breaks asset loading over `file://`) and opens the app.
 - `npm run electron:dev` — points the window at `ng serve` on http://localhost:4200 for live reload (run `npm start` first; backend spawns from `backend/dist` if built).
 - `npm run electron:dist` — full package via electron-builder: stages backend (`scripts/stage-backend.sh` → `backend/release-staging` with dist + prod-only node_modules), bundles it as `extraResources`, output in `frontend/release/`. Note: `extraResources` needs the explicit second `node_modules` mapping in `package.json` — electron-builder silently drops node_modules otherwise.
@@ -106,6 +219,7 @@ frontend/src/
 - **New feature = new folder in `src/app/features/<feature>/`** with `pages/`, `components/`, `services/`, `models/`, `store/` as needed and a `<feature>.routes.ts` lazy-loaded from `app.routes.ts`.
 - **Pages vs components**: `pages/` are routed views; `components/` are feature-internal building blocks. Each lives in its own folder with `.ts` / `.html` / `.scss` files.
 - **`core/`**: app-wide singletons — auth, guards, interceptors, API clients, config. Loaded once, never imported by other features' templates.
+- **Current state vs. the target above**: the app is not routed yet — `app.routes.ts` is empty and the shell (`app.ts`) imports each feature's components directly. Features (`agents`, `datasets`, `datasources`, `knowledge`, `llm`, `sessions`, `testing-data`) have `components/`, `services/`, `models/` but no `pages/`, `store/` or `<feature>.routes.ts`. Populated `core/` folders are `config`, `backend-status`, `diagnostics`, `toast`; `core/api`, `auth`, `guards`, `interceptors` are empty placeholders. The metrics UI (`metrics-panel`, `metrics-api.service`) lives inside `features/datasets`. Electron IPC goes through `frontend/electron/preload.cjs` (`contextBridge`, currently diagnostics export). When the first routed view is introduced, adopt the `pages/` + lazy `<feature>.routes.ts` convention for it.
 - **`shared/`**: reusable presentational components, directives, pipes, utils. No feature logic, no services with state.
 - Standalone components + signals (no NgModules). Styling with Tailwind CSS (v4 via `@tailwindcss/postcss`); icons via `lucide-angular`.
 
@@ -122,15 +236,17 @@ Mirrored from data-readiness-agent (its ADR-0027 pattern): a small `DocStore<T>`
 
 ### Agentic harness (Mastra)
 
-`backend/src/mastra/` is the backbone (mirrored from data-readiness-agent's ADR-0007/0010 pattern): `index.ts` builds the standalone Mastra instance (agents registered there), `mastra.service.ts` is a thin DI wrapper (`MastraService.getAgent(id)`) that keeps the rest of the backend Mastra-agnostic, and `model-resolver.ts` bridges DI-less agents to persisted LLM settings — each agent's `model` is `async () => resolveAgentModel()`, and `LlmService.onModuleInit` installs the real resolver (decrypted key; LenAI → OpenAI-compatible config with `url`; Anthropic → native `anthropic/<model>` router id, API key only — Claude subscription logins are not a supported provider). `providerOptionsFor` (`mastra/model-compat.ts`) translates the user's `reasoningEffort` to Anthropic's `effort` and drops it for models that reject it (Haiku, Sonnet 4.5 and older). No settings saved → falls back to `openai/gpt-4o-mini` via env `OPENAI_API_KEY`. New agent = file in `mastra/agents/` + registration in `index.ts`. Agent memory uses `@mastra/memory` with persistent LibSQL storage at `<APP_DATA_DIR>/mastra.sqlite` (falling back to `<cwd>/data/mastra.sqlite` outside Electron). Each session ID is an isolated memory thread/resource, and existing session transcripts are bootstrapped on their first post-migration turn. Every session also owns a contained, filesystem-backed Mastra workspace under `<APP_DATA_DIR>/workspaces/session-<session-id>`; workspaces are registered on creation and rediscovered when the backend or Mastra Studio restarts.
+`backend/src/mastra/` is the backbone (mirrored from data-readiness-agent's ADR-0007/0010 pattern): `index.ts` builds the standalone Mastra instance (agents registered there), `mastra.service.ts` is a thin DI wrapper (`MastraService.getAgent(id)`) that keeps the rest of the backend Mastra-agnostic, and `model-resolver.ts` bridges DI-less agents to persisted LLM settings — each agent's `model` is `async () => resolveAgentModel()`, and `LlmService.onModuleInit` installs the real resolver (decrypted key; LenAI → OpenAI-compatible config with `url`; Anthropic → native `anthropic/<model>` router id, API key only — Claude subscription logins are not a supported provider). `providerOptionsFor` (`mastra/model-compat.ts`) translates the user's `reasoningEffort` to Anthropic's `effort` and drops it for models that reject it (Haiku, Sonnet 4.5 and older). No settings saved → falls back to `openai/gpt-4o-mini` via env `OPENAI_API_KEY`. New agent = file in `mastra/agents/` + registration in `index.ts`. Registered agents: `assistant` (chat), `interactive-visual-designer` (`visualization.agent.ts`, see below), `sql-fixer` (execution-guided repair of failing SQL, `SessionsService`, up to `SQL_REPAIR_ATTEMPTS`), `sql-verifier` (independent second-opinion query that cross-checks an answer's result), `knowledge-bootstrap` (`KnowledgeService`, drafts knowledge entries from data, persisted disabled), `assistant-eval-judge` (`mastra/evals/`). Mastra storage (`mastra/storage.ts`) is a composite store: agent memory uses `@mastra/memory` with persistent LibSQL storage at `<APP_DATA_DIR>/mastra.sqlite` (falling back to `<cwd>/data/mastra.sqlite` outside Electron), and observability (traces, metrics, logs) goes to DuckDB at `<APP_DATA_DIR>/observability.duckdb`. API keys are encrypted at rest by `infrastructure/crypto` (`CryptoService`, keyed by `APP_SECRET`), imported by `LlmModule`. Each session ID is an isolated memory thread/resource, and existing session transcripts are bootstrapped on their first post-migration turn. Every session also owns a contained, filesystem-backed Mastra workspace under `<APP_DATA_DIR>/workspaces/session-<session-id>`; workspaces are registered on creation and rediscovered when the backend or Mastra Studio restarts.
 
 ### Interactive visuals (tailoring loop)
 
 Visuals are conversation participants, not side artifacts. `backend/src/modules/sessions/visualization.service.ts` owns create/update/revert/load/download; `SessionsService` orchestrates and persists metadata + chat events.
 
-- **Tools on the assistant**: `create_visual` (from an answer, latest by default) and `update_visual` (tailor the visual open in the right panel, or a given `visualId`). Both run the `visualization` designer agent as a sub-call with the current bundle + the answer's captured `data` rows + the instruction, and return `{visualId, version, title}`. requestContext carries `session-id` and `active-visual-id`; the per-turn system block lists every visual (id, title, current version) and which one is open.
-- **Versioning**: files live at `visuals/<id>/v<N>/` (`index.html`, `body.html`, `styles.css`, `script.js`, `manifest.json`). Visuals created before versioning keep v1 at `visuals/<id>/` — `resolveVersionDir` handles that. `SessionVisualization.currentVersion` + `versions[]`; revert only moves the pointer (`POST /sessions/:id/visualizations/:vid/revert`). `GET …/visualizations/:vid?version=N` loads any version.
-- **Chat events**: turns that create/update/revert a visual persist an assistant message with a `visual` field (rendered as a card); the SSE stream emits `visual-updated` so the panel refreshes live.
+- **Tools on the assistant**: `create_visual` (from an answer, latest by default) and `update_visual` (tailor the visual open in the right panel, or a given `visualId`). Both run the `interactive-visual-designer` agent (`visualization.agent.ts`) as a sub-call with the current bundle + the answer's captured `data` rows + the instruction, and return `{visualId, version, title}`. requestContext carries `session-id`, `active-visual-id` and `turn-data-records`; the per-turn system block lists every visual (id, title, current version) and which one is open.
+- **Spec first, freeform fallback**: the designer first emits a small JSON chart spec (`visual-spec.ts`) rendered by a fixed runtime (`visual-runtime.ts`, shipped as `qti-chart.js`); after `SPEC_ATTEMPTS` (2) failed spec attempts — or when there are no rows to select from — the legacy freeform HTML/CSS/JS pipeline takes over. Tailoring a freeform visual stays freeform.
+- **Versioning**: files live in the session's Mastra workspace (`workspaces/session-<id>/visuals/<visualId>/v<N>/`): `index.html`, `body.html`, `styles.css`, `script.js`, `qti-frame.js` (frame bridge), `description.md`, `manifest.json`, plus `answer.md` / `data.json` when present and `spec.json` + `qti-chart.js` for spec visuals. Visuals created before versioning keep v1 at `visuals/<id>/` — `resolveVersionDir` handles that. `SessionVisualization.currentVersion` + `versions[]`; revert only moves the pointer (`POST /sessions/:id/visualizations/:vid/revert`). `GET …/visualizations/:vid?version=N` loads any version.
+- **Panel endpoints** (`sessions.controller.ts`, besides create/load/revert/download): `POST …/:vid/tailor` (tailor from a plain-English instruction — same pipeline as `update_visual`, logs an `updated` chat event), `POST …/:vid/refresh` (re-run the SQL behind the current version and rewrite only `data.json` + `index.html` in place — no new version, no designer call, no chat event), `POST …/:vid/repair` (silent one-shot auto-repair of the current version after a runtime error; never repairs an auto-repair).
+- **Chat events**: turns that create/update/revert a visual persist an assistant message with a `visual` field (rendered as a card); the stream emits `visual-updated` so the panel refreshes live. The chat stream is `POST /sessions/:id/messages/stream` returning `text/event-stream`, read with `fetch` + `getReader()` (not `EventSource`).
 - **Readable frame**: `visualization-document.ts` wraps the agent's visual in a fixed, `qti-`-namespaced frame — title → question → visual → takeaway (designer description) → analysis (assistant answer, markdown via `marked` + `sanitize-html`) → collapsible data provenance (SQL, row counts, first 10 rows) → footer (source entities, session, version, date). The context comes from the session transcript (`contextFor`), never from the designer model, so readability does not depend on LLM output. Panel iframe and exported `index.html` share the frame; exports also ship `answer.md` and `data.json`.
 - **Validation**: generated JavaScript is parse-checked (`new Function`, compile only) and retried once with the error; the sandboxed iframe reports runtime errors to the host via `postMessage` (`visual-error`) and the panel shows a banner.
 - **Model**: `VISUAL_MODEL` env forces the designer model; otherwise gpt-5/o-series configured models are swapped for `openai/gpt-4.1-mini` (LenAI deployments are kept).
