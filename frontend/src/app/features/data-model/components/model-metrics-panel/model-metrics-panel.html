@@ -1,0 +1,450 @@
+<div class="flex flex-col gap-3">
+  <div class="flex items-start justify-between gap-4">
+    <div>
+      <h2 class="text-[15px] font-semibold text-zinc-100">Metrics</h2>
+      <p class="mt-1 text-[12px] text-zinc-500">
+        Curated definitions, stored directly in the data model. Answers reuse
+        these expressions verbatim instead of re-deriving the number each turn.
+      </p>
+    </div>
+    @if (!formOpen()) {
+      <button
+        type="button"
+        data-testid="new-model-metric"
+        (click)="startNew()"
+        [disabled]="entityOptions().length === 0"
+        title="This model has no entities yet"
+        class="flex shrink-0 items-center gap-1.5 rounded-md bg-zinc-200 px-3 py-1.5 text-[13px] font-medium text-zinc-900 hover:bg-white disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+      >
+        <lucide-angular [img]="Plus" [size]="14" />
+        <span>New metric</span>
+      </button>
+    }
+  </div>
+
+  @if (loading()) {
+    <div class="flex items-center gap-2 text-[12px] text-zinc-500">
+      <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+      <span>Loading metrics…</span>
+    </div>
+  } @else if (loadError(); as error) {
+    <p class="rounded-md bg-red-500/10 px-3 py-2.5 text-[12px] text-red-400">
+      {{ error }}
+    </p>
+  } @else if (metrics().length === 0) {
+    <p
+      class="rounded-md border border-dashed border-white/10 px-3 py-4 text-center text-[12px] text-zinc-500"
+    >
+      No metrics yet — define one so “denial rate” always means the same thing.
+    </p>
+  } @else {
+    <div class="flex flex-col gap-1.5">
+      @for (metric of metrics(); track metric.name) {
+        <div
+          [attr.data-testid]="'model-metric-' + metric.name"
+          class="flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2.5"
+          [class.border-white/25]="editingName() === metric.name"
+        >
+          <span
+            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/5 text-emerald-400"
+          >
+            <lucide-angular [img]="Gauge" [size]="15" />
+          </span>
+          <span class="flex min-w-0 flex-1 flex-col">
+            <span class="flex items-center gap-2">
+              <span class="truncate text-[13px] text-zinc-200">{{
+                metric.label
+              }}</span>
+              <span
+                class="shrink-0 rounded bg-white/10 px-1.5 py-0.5 font-mono text-[10px] text-zinc-400"
+                >{{ metric.name }}</span
+              >
+              <span class="shrink-0 text-[11px] text-zinc-500">{{
+                metric.entity
+              }}</span>
+            </span>
+            <span class="truncate font-mono text-[11px] text-zinc-500">
+              @if (metric.agg) {
+                {{ metric.agg }}@if (metric.of) {
+                  ({{ metric.of }})
+                }
+              } @else {
+                {{ metric.expressions?.sql }}
+              }
+            </span>
+            @if (metric.dimensions?.length) {
+              <span class="truncate text-[11px] text-zinc-600"
+                >by {{ metric.dimensions!.join(", ") }}</span
+              >
+            }
+          </span>
+          <button
+            type="button"
+            title="Edit"
+            (click)="startEdit(metric)"
+            class="rounded p-1.5 text-zinc-500 hover:bg-white/10 hover:text-zinc-200"
+          >
+            <lucide-angular [img]="Pencil" [size]="14" />
+          </button>
+          <button
+            type="button"
+            title="Delete"
+            (click)="remove(metric)"
+            [disabled]="deleting() === metric.name"
+            class="rounded p-1.5 text-zinc-500 hover:bg-white/10 hover:text-red-400 disabled:opacity-50"
+          >
+            @if (deleting() === metric.name) {
+              <lucide-angular
+                [img]="Loader2"
+                [size]="14"
+                class="animate-spin"
+              />
+            } @else {
+              <lucide-angular [img]="Trash2" [size]="14" />
+            }
+          </button>
+        </div>
+      }
+    </div>
+  }
+
+  @if (!formOpen() && candidates().length > 0) {
+    <div class="flex flex-col gap-1.5">
+      <p class="text-[11px] font-medium text-zinc-500">
+        Promote a verified answer
+      </p>
+      <div class="flex flex-wrap gap-1.5">
+        @for (candidate of candidates(); track candidate.verifiedQueryId) {
+          <button
+            type="button"
+            [title]="candidate.sql"
+            (click)="startFromCandidate(candidate)"
+            class="flex max-w-full items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[12px] text-zinc-300 hover:border-white/25 hover:text-zinc-100"
+          >
+            <lucide-angular
+              [img]="Sparkles"
+              [size]="12"
+              class="shrink-0 text-emerald-400"
+            />
+            <span class="truncate">{{ candidate.label }}</span>
+          </button>
+        }
+      </div>
+    </div>
+  }
+
+  @if (formOpen()) {
+    <div
+      class="flex flex-col gap-3 rounded-xl border border-white/10 bg-[#232323] p-4"
+    >
+      <div class="flex items-center justify-between">
+        <p class="text-[13px] font-medium text-zinc-200">
+          {{ editingName() ? "Edit metric" : "New metric" }}
+        </p>
+        <button
+          type="button"
+          title="Close"
+          (click)="cancel()"
+          class="rounded p-1 text-zinc-500 hover:bg-white/10 hover:text-zinc-200"
+        >
+          <lucide-angular [img]="X" [size]="14" />
+        </button>
+      </div>
+
+      @if (errors().length > 0) {
+        <div
+          data-testid="model-metric-errors"
+          class="flex flex-col gap-1 rounded-md border border-red-500/30 bg-red-500/10 p-2.5 text-[12px] text-red-300"
+        >
+          @for (issue of errors(); track $index) {
+            <span
+              ><span class="font-mono text-red-400">{{ issue.path }}</span> —
+              {{ issue.message }}</span
+            >
+          }
+        </div>
+      }
+
+      @if (readOnlyMetric()) {
+        <p
+          data-testid="model-metric-readonly-note"
+          class="rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-2 text-[12px] text-amber-300"
+        >
+          Advanced definition — edit in the YAML tab. This form cannot fully
+          represent a compound filter or a metric using both an aggregation
+          and a SQL expression, so it opens read-only rather than risk
+          dropping part of it on save.
+        </p>
+      }
+
+      <fieldset [disabled]="readOnlyMetric()" class="contents">
+      <div class="grid grid-cols-2 gap-3">
+        <label class="flex flex-col gap-1">
+          <span class="text-[11px] font-medium text-zinc-500">Label</span>
+          <input
+            type="text"
+            placeholder="Goals per match"
+            [value]="label()"
+            (input)="label.set($any($event.target).value)"
+            class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+          />
+        </label>
+        <label class="flex flex-col gap-1">
+          <span class="text-[11px] font-medium text-zinc-500">Name</span>
+          <input
+            type="text"
+            placeholder="goals_per_match"
+            [value]="name()"
+            (input)="name.set($any($event.target).value)"
+            class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 font-mono text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+          />
+        </label>
+      </div>
+
+      <label class="flex flex-col gap-1">
+        <span class="text-[11px] font-medium text-zinc-500">Entity</span>
+        <select
+          data-testid="metric-entity"
+          [value]="entity()"
+          (change)="entity.set($any($event.target).value)"
+          class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 font-mono text-[13px] text-zinc-200 outline-none focus:border-white/25"
+        >
+          @if (entityOptions().length === 0) {
+            <option value="" class="bg-[#232323]">No entities in model</option>
+          }
+          @for (option of entityOptions(); track option) {
+            <option
+              [value]="option"
+              [selected]="option === entity()"
+              class="bg-[#232323]"
+            >
+              {{ option }}
+            </option>
+          }
+        </select>
+      </label>
+
+      <!-- Aggregation / SQL mode toggle -->
+      <div class="flex items-center gap-1 rounded-md bg-white/5 p-0.5 text-[12px]">
+        <button
+          type="button"
+          (click)="mode.set('agg')"
+          class="flex-1 rounded px-2 py-1"
+          [class.bg-white/10]="mode() === 'agg'"
+          [class.text-zinc-200]="mode() === 'agg'"
+          [class.text-zinc-500]="mode() !== 'agg'"
+        >
+          Aggregation
+        </button>
+        <button
+          type="button"
+          (click)="mode.set('sql')"
+          class="flex-1 rounded px-2 py-1"
+          [class.bg-white/10]="mode() === 'sql'"
+          [class.text-zinc-200]="mode() === 'sql'"
+          [class.text-zinc-500]="mode() !== 'sql'"
+        >
+          SQL expression
+        </button>
+      </div>
+
+      @if (mode() === "agg") {
+        <div class="grid grid-cols-2 gap-3">
+          <label class="flex flex-col gap-1">
+            <span class="text-[11px] font-medium text-zinc-500">Aggregation</span>
+            <select
+              data-testid="metric-agg"
+              [value]="agg()"
+              (change)="agg.set($any($event.target).value)"
+              class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none focus:border-white/25"
+            >
+              @for (a of aggregations; track a) {
+                <option [value]="a" [selected]="a === agg()" class="bg-[#232323]">
+                  {{ a }}
+                </option>
+              }
+            </select>
+          </label>
+          @if (needsOf()) {
+            <label class="flex flex-col gap-1">
+              <span class="text-[11px] font-medium text-zinc-500">Attribute</span>
+              <select
+                data-testid="metric-of"
+                [value]="of()"
+                (change)="of.set($any($event.target).value)"
+                class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 font-mono text-[13px] text-zinc-200 outline-none focus:border-white/25"
+              >
+                <option value="" [selected]="!of()" class="bg-[#232323]">
+                  Select…
+                </option>
+                @for (a of selectedEntityAttributes(); track a.name) {
+                  <option
+                    [value]="a.name"
+                    [selected]="a.name === of()"
+                    class="bg-[#232323]"
+                  >
+                    {{ a.name }}
+                  </option>
+                }
+              </select>
+            </label>
+          }
+        </div>
+        @if (needsRatioOperands()) {
+          <div class="grid grid-cols-2 gap-3">
+            <label class="flex flex-col gap-1">
+              <span class="text-[11px] font-medium text-zinc-500"
+                >Numerator metric</span
+              >
+              <input
+                type="text"
+                placeholder="metric name"
+                [value]="numerator()"
+                (input)="numerator.set($any($event.target).value)"
+                class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 font-mono text-[13px] text-zinc-200 outline-none focus:border-white/25"
+              />
+            </label>
+            <label class="flex flex-col gap-1">
+              <span class="text-[11px] font-medium text-zinc-500"
+                >Denominator metric</span
+              >
+              <input
+                type="text"
+                placeholder="metric name"
+                [value]="denominator()"
+                (input)="denominator.set($any($event.target).value)"
+                class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 font-mono text-[13px] text-zinc-200 outline-none focus:border-white/25"
+              />
+            </label>
+          </div>
+        }
+      } @else {
+        <label class="flex flex-col gap-1">
+          <span class="text-[11px] font-medium text-zinc-500">SQL expression</span>
+          <textarea
+            rows="2"
+            placeholder="avg(attendance)"
+            [value]="sql()"
+            (input)="sql.set($any($event.target).value)"
+            class="resize-y rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 font-mono text-[12px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+          ></textarea>
+        </label>
+      }
+
+      <!-- Dimensions -->
+      @if (selectedEntityAttributes().length > 0) {
+        <div class="flex flex-col gap-1.5">
+          <span class="text-[11px] font-medium text-zinc-500">Dimensions</span>
+          <div class="flex flex-wrap gap-1.5">
+            @for (a of selectedEntityAttributes(); track a.name) {
+              <button
+                type="button"
+                (click)="toggleDimension(a.name)"
+                class="rounded-full border px-2.5 py-1 text-[11px]"
+                [class.border-emerald-500/50]="dimensions().has(a.name)"
+                [class.bg-emerald-500/10]="dimensions().has(a.name)"
+                [class.text-emerald-300]="dimensions().has(a.name)"
+                [class.border-white/10]="!dimensions().has(a.name)"
+                [class.text-zinc-400]="!dimensions().has(a.name)"
+              >
+                {{ a.name }}
+              </button>
+            }
+          </div>
+        </div>
+      }
+
+      <!-- Where (single condition) -->
+      <div class="flex flex-col gap-1.5">
+        <label class="flex items-center gap-2 text-[11px] font-medium text-zinc-500">
+          <input
+            type="checkbox"
+            [checked]="whereEnabled()"
+            (change)="whereEnabled.set($any($event.target).checked)"
+          />
+          Filter (where)
+        </label>
+        @if (whereEnabled()) {
+          <div class="grid grid-cols-3 gap-2">
+            <select
+              data-testid="metric-where-attr"
+              [value]="whereAttr()"
+              (change)="whereAttr.set($any($event.target).value)"
+              class="rounded-md border border-white/10 bg-white/5 px-2 py-1.5 font-mono text-[12px] text-zinc-200 outline-none"
+            >
+              <option value="" [selected]="!whereAttr()" class="bg-[#232323]">
+                attribute…
+              </option>
+              @for (a of selectedEntityAttributes(); track a.name) {
+                <option
+                  [value]="a.name"
+                  [selected]="a.name === whereAttr()"
+                  class="bg-[#232323]"
+                >
+                  {{ a.name }}
+                </option>
+              }
+            </select>
+            <select
+              data-testid="metric-where-op"
+              [value]="whereOp()"
+              (change)="whereOp.set($any($event.target).value)"
+              class="rounded-md border border-white/10 bg-white/5 px-2 py-1.5 text-[12px] text-zinc-200 outline-none"
+            >
+              @for (op of predicateOps; track op) {
+                <option [value]="op" [selected]="op === whereOp()" class="bg-[#232323]">
+                  {{ op }}
+                </option>
+              }
+            </select>
+            @if (whereNeedsValue()) {
+              <input
+                type="text"
+                placeholder="value"
+                [value]="whereValue()"
+                (input)="whereValue.set($any($event.target).value)"
+                class="rounded-md border border-white/10 bg-white/5 px-2 py-1.5 text-[12px] text-zinc-200 outline-none placeholder:text-zinc-600"
+              />
+            }
+          </div>
+        }
+      </div>
+
+      <label class="flex flex-col gap-1">
+        <span class="text-[11px] font-medium text-zinc-500">Description</span>
+        <textarea
+          rows="2"
+          placeholder="Share of submitted claims denied in the period."
+          [value]="description()"
+          (input)="description.set($any($event.target).value)"
+          class="resize-y rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[12px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+        ></textarea>
+      </label>
+      </fieldset>
+
+      <div class="mt-1 flex items-center gap-2 text-[13px]">
+        <button
+          type="button"
+          (click)="cancel()"
+          class="flex flex-1 items-center justify-center rounded-md border border-white/10 px-3 py-1.5 font-medium text-zinc-300 hover:bg-white/5"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          data-testid="save-model-metric"
+          (click)="save()"
+          [disabled]="!canSave()"
+          class="flex flex-1 items-center justify-center gap-2 rounded-md bg-emerald-600 px-3 py-1.5 font-medium text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+        >
+          @if (saving()) {
+            <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+            <span>Saving…</span>
+          } @else {
+            <span>{{ editingName() ? "Save changes" : "Create metric" }}</span>
+          }
+        </button>
+      </div>
+    </div>
+  }
+</div>

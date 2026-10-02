@@ -99,21 +99,22 @@ Scope: Playwright covers end-to-end behaviour in the real Electron app. Unit tes
 
 Skip only for trivial, zero-risk edits. Never rewrite a past entry. When a recurring lesson hardens into a rule, promote it into the relevant convention (or CLAUDE.md proper) and note the promotion.
 
-## Branching convention — one Jira issue, one feature branch, one worktree
+## Branching convention — one Jira epic, one feature branch, one worktree
 
-**Every new PR must be developed in its own feature branch, checked out in its own git worktree, and tied to an existing Jira issue: a user story, or a bug for `fix/` branches.** No work goes directly on `main` or the default branch, and no branch is created without a Jira issue behind it.
+**Every PR is developed in its own feature branch, checked out in its own git worktree, and tied to an existing Jira epic** (or a Bug for `fix/` branches). No work goes directly on `main` or the default branch, and no branch is created without a Jira issue behind it. Adopted 2026-10-02 for BA-2: epics are not split into one branch per user story any more — the epic is the unit of delivery, and the description of all the work done lives in the epic (Jira description + the matching roadmap milestone and changelog entries). Stories under an epic, when they exist, are planning aids and map to roadmap features, not to branches.
 
-- **Branch name:** `<type>/<US-ID>-<short-description>`
+- **Branch name:** `<type>/<EPIC-ID>-<short-description>`
   - `<type>` is a Conventional Commit type: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `perf`, `ci` or `build`. It should match the PR's main commit type, because `version-on-merge.yml` derives the version bump from it.
-  - `<US-ID>` is the key of an **existing** Jira issue in project BA (a Story, or a Bug for `fix/` work such as `fix/BA-83-empty-session-thread`), uppercase as Jira shows it (e.g. `BA-79`). Check that it exists with `.claude/skills/jira/scripts/jira.sh issue <US-ID>` before creating the branch. If there is no issue yet, stop and ask the user to create one (or create it with the `jira` skill, with confirmation). Never invent an ID.
+  - `<EPIC-ID>` is the key of an **existing** Jira Epic in project BA (or a Bug for `fix/` work such as `fix/BA-83-empty-session-thread`), uppercase as Jira shows it (e.g. `BA-2`). Check that it exists with `.claude/skills/jira/scripts/jira.sh issue <EPIC-ID>` before creating the branch. If there is no issue yet, stop and ask the user to create one (or create it with the `jira` skill, with confirmation). Never invent an ID.
   - `<short-description>` is lowercase kebab-case, a few words, ASCII only.
-  - Example: `feat/BA-79-ontology-bootstrap`.
+  - Example: `feat/BA-2-data-model-dsl`.
 - **Worktree:** one per branch, under `.claude/worktrees/`, named after the branch without the type:
   ```bash
-  git worktree add .claude/worktrees/BA-79-ontology-bootstrap -b feat/BA-79-ontology-bootstrap main
+  git worktree add .claude/worktrees/BA-2-data-model-dsl -b feat/BA-2-data-model-dsl main
   ```
-  When the Claude desktop app creates the worktree for the session, rename its branch to the convention (`git branch -m <type>/<US-ID>-<short-description>`) before the first commit.
-- **Traceability:** the user story's ID also appears in the matching [roadmap.md](roadmap.md) feature, the PR title (`feat(BA-79): …` or `feat: … (BA-79)`) and the PR description (link to the Jira issue). One PR covers one issue; split work that spans several.
+  When the Claude desktop app or Conductor creates the worktree for the session, rename its branch to the convention (`git branch -m <type>/<EPIC-ID>-<short-description>`) before the first commit, unless the tool forbids renaming — then keep its name and carry the epic key in the PR title.
+- **Commits inside the branch:** one commit per completed roadmap feature (`feat(BA-2): <feature title>`), so the epic branch's history still tells the story feature by feature.
+- **Traceability:** the epic's key appears in the matching [roadmap.md](roadmap.md) milestone, the PR title (`feat(BA-2): …` or `feat: … (BA-2)`) and the PR description (link to the Jira epic). One PR covers one epic. When the PR merges, paste the changelog entries for the epic into the epic's Jira description (with the `jira` skill, with confirmation).
 - **Cleanup:** after the PR merges, remove the worktree (`git worktree remove …`) and delete the branch.
 
 ## Worktree deploy convention — always ask which target
@@ -219,7 +220,7 @@ frontend/src/
 - **New feature = new folder in `src/app/features/<feature>/`** with `pages/`, `components/`, `services/`, `models/`, `store/` as needed and a `<feature>.routes.ts` lazy-loaded from `app.routes.ts`.
 - **Pages vs components**: `pages/` are routed views; `components/` are feature-internal building blocks. Each lives in its own folder with `.ts` / `.html` / `.scss` files.
 - **`core/`**: app-wide singletons — auth, guards, interceptors, API clients, config. Loaded once, never imported by other features' templates.
-- **Current state vs. the target above**: the app is not routed yet — `app.routes.ts` is empty and the shell (`app.ts`) imports each feature's components directly. Features (`agents`, `datasets`, `datasources`, `knowledge`, `llm`, `sessions`, `testing-data`) have `components/`, `services/`, `models/` but no `pages/`, `store/` or `<feature>.routes.ts`. Populated `core/` folders are `config`, `backend-status`, `diagnostics`, `toast`; `core/api`, `auth`, `guards`, `interceptors` are empty placeholders. The metrics UI (`metrics-panel`, `metrics-api.service`) lives inside `features/datasets`. Electron IPC goes through `frontend/electron/preload.cjs` (`contextBridge`, currently diagnostics export). When the first routed view is introduced, adopt the `pages/` + lazy `<feature>.routes.ts` convention for it.
+- **Current state vs. the target above**: the app is not routed yet — `app.routes.ts` is empty and the shell (`app.ts`) imports each feature's components directly. Features (`agents`, `data-model`, `datasets`, `datasources`, `knowledge`, `llm`, `sessions`, `testing-data`) have `components/`, `services/`, `models/` but no `pages/`, `store/` or `<feature>.routes.ts`. Populated `core/` folders are `config`, `backend-status`, `diagnostics`, `toast`; `core/api`, `auth`, `guards`, `interceptors` are empty placeholders. The metrics UI lives in `features/data-model` (`model-metrics-panel`, `data-model-api.service`) and is the metrics panel's editor of record (roadmap 1.2.3) — it reads and writes the dataset's data model directly, not the legacy `metrics` store; the former `features/datasets/components/metrics-panel` was deleted. Electron IPC goes through `frontend/electron/preload.cjs` (`contextBridge`, currently diagnostics export). When the first routed view is introduced, adopt the `pages/` + lazy `<feature>.routes.ts` convention for it.
 - **`shared/`**: reusable presentational components, directives, pipes, utils. No feature logic, no services with state.
 - Standalone components + signals (no NgModules). Styling with Tailwind CSS (v4 via `@tailwindcss/postcss`); icons via `lucide-angular`.
 

@@ -78,6 +78,30 @@ export class MetricsController {
   }
 }
 
+/**
+ * roadmap 1.2.3 — the model-metrics panel's promotion path,
+ * `GET /datasets/:name/model/metrics/candidates`, scoped to one dataset's
+ * model and addressed by logical entity names. A separate, unprefixed
+ * controller (not a method on `MetricsController` above, which carries the
+ * `@Controller('metrics')` prefix every route there shares, and not on
+ * `DataModelsController`, which would need `MetricsService` injected back
+ * into `DataModelsModule` — a circular import, since `MetricsModule` already
+ * depends on `DataModelsModule`): this one route reuses
+ * `MetricsService.candidatesForDataset()` directly, so it has to live where
+ * `MetricsService` is already provided, under a path with no prefix.
+ */
+@Controller()
+export class ModelMetricCandidatesController {
+  constructor(private readonly metrics: MetricsService) {}
+
+  @Get('datasets/:name/model/metrics/candidates')
+  async candidatesForModel(
+    @Param('name') name: string,
+  ): Promise<{ candidates: MetricCandidate[] }> {
+    return { candidates: await this.metrics.candidatesForDataset(name) };
+  }
+}
+
 /** `?entities=a.b.c,d.e.f` — the caller's scope, empty when absent. */
 function splitEntities(entities?: string): string[] {
   return (entities ?? '')

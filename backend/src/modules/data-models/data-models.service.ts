@@ -44,12 +44,16 @@ import {
   serializeDataModel,
 } from './dsl/yaml';
 import { resolveRef } from './dsl/references';
-import { validateAgainstSnapshot } from './schema/data-model.schema';
+import {
+  validateAgainstSnapshot,
+  validateDataModel,
+} from './schema/data-model.schema';
 import type { SnapshotTable } from './schema/data-model.schema';
 import type {
   Attribute,
   DataModel,
   Entity,
+  Metric,
   ModelIssue,
   Relationship,
 } from './entities/data-model.entity';
@@ -303,6 +307,7 @@ export class DataModelsService implements OnModuleInit {
         ),
       )
       .filter((m) => !existingMetricNames.has(m.name.toLowerCase()))
+      .filter((m) => !hasMetricName(doc.deletedMetricNames, m.name))
       .map((m) => {
         const name = nameByTableLower.get((m.entity ?? '').toLowerCase())!;
         const attributes = attributesByEntityName.get(name) ?? [];
@@ -327,7 +332,11 @@ export class DataModelsService implements OnModuleInit {
   /**
    * A fresh v+1 bootstrapped from the dataset's current snapshot, carrying
    * over the current version's metrics (union by name, current model wins)
-   * so metrics a user added by hand survive a rebootstrap.
+   * so metrics a user added by hand survive a rebootstrap. A name the user
+   * explicitly deleted through the model-metrics API (`deletedMetricNames`)
+   * is removed again even though the legacy-store-derived `fresh` bootstrap
+   * would otherwise re-include it — review finding 6: a rebootstrap must not
+   * resurrect a metric the model has tombstoned.
    */
   async rebootstrap(datasetName: string): Promise<DataModelDoc> {
     const dataset = await this.datasetsStore.findOne({ name: datasetName });
@@ -347,6 +356,9 @@ export class DataModelsService implements OnModuleInit {
     for (const metric of current.model.metrics) {
       metricsByName.set(metric.name, metric);
     }
+    for (const deletedName of doc.deletedMetricNames ?? []) {
+      metricsByName.delete(deletedName);
+    }
 
     return this.appendVersion(
       doc,
@@ -365,7 +377,35 @@ export class DataModelsService implements OnModuleInit {
     yaml: string,
   ): Promise<{ version: number }> {
     const doc = await this.requireDoc(datasetName);
+    const model = await this.validateYamlForDataset(datasetName, yaml);
+    const saved = await this.appendVersion(doc, model, 'user');
+    return { version: saved.currentVersion };
+  }
 
+  /**
+   * roadmap 1.2.3 — `POST /datasets/:name/model/import`: the same
+   * validation path as `saveYaml` (one write path, one validator per
+   * ADR-0006), but recorded as its own `source: 'import'` so the version
+   * history can tell "typed/pasted in the editor" from "brought in from a
+   * file" apart.
+   */
+  async importYaml(
+    datasetName: string,
+    yaml: string,
+  ): Promise<{ version: number }> {
+    const doc = await this.requireDoc(datasetName);
+    const model = await this.validateYamlForDataset(datasetName, yaml);
+    const saved = await this.appendVersion(doc, model, 'import');
+    return { version: saved.currentVersion };
+  }
+
+  /** Shared by `saveYaml`/`importYaml`: parse, structural+semantic
+   * validate, then validate against the dataset's live snapshot — the one
+   * place both write paths can diverge from is their `source` tag. */
+  private async validateYamlForDataset(
+    datasetName: string,
+    yaml: string,
+  ): Promise<DataModel> {
     const parsed = parseDataModelYaml(yaml);
     if (!('model' in parsed)) {
       throw new BadRequestException({ ok: false, errors: parsed.issues });
@@ -380,9 +420,233 @@ export class DataModelsService implements OnModuleInit {
         errors: attachPositions(yaml, snapshotIssues),
       });
     }
+    return parsed.model;
+  }
 
-    const saved = await this.appendVersion(doc, parsed.model, 'user');
+  /**
+   * roadmap 1.2.3 — `GET /datasets/:name/model/export`: hands back the
+   * requested (or current) version's already-serialized YAML verbatim, so
+   * the exported file is byte-identical to what `GET .../versions/:version`
+   * would show, not a re-serialization that could drift from it.
+   */
+  async exportYaml(
+    datasetName: string,
+    version?: number,
+  ): Promise<{ yaml: string; version: number }> {
+    const doc = await this.requireDoc(datasetName);
+    const chosen =
+      version !== undefined
+        ? doc.versions.find((v) => v.version === version)
+        : this.currentVersionOf(doc);
+    if (!chosen) {
+      throw new NotFoundException(
+        `Version ${version} not found for dataset "${datasetName}"`,
+      );
+    }
+    return { yaml: chosen.yaml, version: chosen.version };
+  }
+
+  /**
+   * roadmap 1.2.3 — `POST /datasets/:name/model/serialize`: the frontend's
+   * structured forms build a plain `DataModel` object and need the exact
+   * same YAML shape/key-order `saveYaml`/`exportYaml` produce (so a
+   * structured edit's diff against the previous version stays small); this
+   * is that one writer, exposed so the client never grows its own. Pure —
+   * no dataset lookup, no persistence — but still runs the full structural
+   * + semantic validation (review finding 12) so a malformed body fails
+   * fast with the same `ModelIssue[]` shape every other write endpoint
+   * uses, rather than silently coercing missing fields into an empty,
+   * misleading YAML document the caller might mistake for a real one.
+   */
+  serializeModel(model: unknown): string {
+    const validated = validateDataModel(model);
+    if (!validated.model) {
+      throw new BadRequestException({ ok: false, errors: validated.issues });
+    }
+    return serializeDataModel(validated.model);
+  }
+
+  // --- Model-scoped metrics (roadmap 1.2.3): the metrics panel's new
+  // editor of record. Every write here goes straight into the model as a
+  // `source: 'user'` version — no legacy `metrics` store involved — and
+  // registers the metric's name in `localMetricNames` so a later legacy-panel
+  // write (`syncMetric`/`removeMetric`, below) never stomps it. A delete
+  // additionally tombstones the name in `deletedMetricNames` (review finding
+  // 6) so `rebootstrap`/`mergeSnapshot`/`syncMetric` never resurrect a
+  // metric the model explicitly removed just because the legacy store still
+  // has one under that name. ---
+
+  async listModelMetrics(datasetName: string): Promise<Metric[]> {
+    const doc = await this.requireDoc(datasetName);
+    return this.currentVersionOf(doc).model.metrics;
+  }
+
+  /**
+   * All current-version metrics bound to any of `physicalEntities`
+   * (`catalog.schema.table` / REST endpoint addresses), keyed by the
+   * physical address — `MetricsService.definitionBlock` (review finding 1)
+   * uses this so the governed-metrics prompt block reads the model, not the
+   * legacy store, for any table a model has adopted. An address present in
+   * the returned map (even with an empty array) means "a model binds this
+   * table" — the caller should not also consult the legacy store for it.
+   */
+  async metricsBoundToEntities(
+    physicalEntities: string[],
+  ): Promise<Map<string, Metric[]>> {
+    const result = new Map<string, Metric[]>();
+    const wanted = new Set(physicalEntities.map((e) => e.toLowerCase()));
+    if (wanted.size === 0) return result;
+
+    const docs = await this.repository.list();
+    for (const doc of docs) {
+      const current = this.findCurrentVersion(doc);
+      if (!current) continue;
+      for (const entity of current.model.entities) {
+        const binding = entity.bindings[0];
+        const address = binding ? bindingAddress(binding) : null;
+        if (!address || !wanted.has(address.toLowerCase())) continue;
+        const metrics = current.model.metrics.filter(
+          (m) => m.entity.toLowerCase() === entity.name.toLowerCase(),
+        );
+        result.set(address, [...(result.get(address) ?? []), ...metrics]);
+      }
+    }
+    return result;
+  }
+
+  /** Every `sourceVerifiedQueryId` carried by a current-version model
+   * metric, across every dataset — `MetricsService.candidates`/
+   * `candidatesForDataset` (review finding 8) treat these as already
+   * promoted regardless of which dataset's panel did the promoting. */
+  async promotedVerifiedQueryIds(): Promise<Set<string>> {
+    const docs = await this.repository.list();
+    const ids = new Set<string>();
+    for (const doc of docs) {
+      const current = this.findCurrentVersion(doc);
+      if (!current) continue;
+      for (const metric of current.model.metrics) {
+        if (metric.sourceVerifiedQueryId) ids.add(metric.sourceVerifiedQueryId);
+      }
+    }
+    return ids;
+  }
+
+  async createModelMetric(
+    datasetName: string,
+    metric: Metric,
+  ): Promise<{ version: number }> {
+    const doc = await this.requireDoc(datasetName);
+    const current = this.currentVersionOf(doc);
+    const draft: DataModel = {
+      ...current.model,
+      metrics: [...current.model.metrics, metric],
+    };
+    const validated = this.validateMetricDraft(draft);
+    const withLocal: DataModelDoc = {
+      ...doc,
+      localMetricNames: withMetricName(doc.localMetricNames, metric.name),
+      // Recreating a previously-deleted name must not stay tombstoned —
+      // the user just asked for it to exist again.
+      deletedMetricNames: withoutMetricName(
+        doc.deletedMetricNames,
+        metric.name,
+      ),
+    };
+    const saved = await this.appendVersion(
+      withLocal,
+      validated,
+      'user',
+      `metric ${metric.name} added`,
+    );
     return { version: saved.currentVersion };
+  }
+
+  async updateModelMetric(
+    datasetName: string,
+    metricName: string,
+    metric: Metric,
+  ): Promise<{ version: number }> {
+    const doc = await this.requireDoc(datasetName);
+    const current = this.currentVersionOf(doc);
+    const index = current.model.metrics.findIndex(
+      (m) => m.name.toLowerCase() === metricName.toLowerCase(),
+    );
+    if (index === -1) {
+      throw new NotFoundException(
+        `Metric "${metricName}" not found on dataset "${datasetName}"`,
+      );
+    }
+    const metrics = [...current.model.metrics];
+    metrics[index] = metric;
+    const draft: DataModel = { ...current.model, metrics };
+    const validated = this.validateMetricDraft(draft);
+    const withoutOldName = withoutMetricName(doc.localMetricNames, metricName);
+    const withLocal: DataModelDoc = {
+      ...doc,
+      localMetricNames: withMetricName(withoutOldName, metric.name),
+      deletedMetricNames: withoutMetricName(
+        doc.deletedMetricNames,
+        metric.name,
+      ),
+    };
+    const saved = await this.appendVersion(
+      withLocal,
+      validated,
+      'user',
+      `metric ${metricName} updated`,
+    );
+    return { version: saved.currentVersion };
+  }
+
+  async deleteModelMetric(
+    datasetName: string,
+    metricName: string,
+  ): Promise<{ version: number }> {
+    const doc = await this.requireDoc(datasetName);
+    const current = this.currentVersionOf(doc);
+    if (
+      !current.model.metrics.some(
+        (m) => m.name.toLowerCase() === metricName.toLowerCase(),
+      )
+    ) {
+      throw new NotFoundException(
+        `Metric "${metricName}" not found on dataset "${datasetName}"`,
+      );
+    }
+    const metrics = current.model.metrics.filter(
+      (m) => m.name.toLowerCase() !== metricName.toLowerCase(),
+    );
+    const draft: DataModel = { ...current.model, metrics };
+    // Validate like create/update (review finding 5) — deleting a metric
+    // another metric's `ratio` numerator/denominator still points at must
+    // be rejected with a clear error, not silently leave a dangling
+    // reference.
+    const validated = this.validateMetricDraft(draft);
+    const withLocal: DataModelDoc = {
+      ...doc,
+      localMetricNames: withoutMetricName(doc.localMetricNames, metricName),
+      deletedMetricNames: withMetricName(doc.deletedMetricNames, metricName),
+    };
+    const saved = await this.appendVersion(
+      withLocal,
+      validated,
+      'user',
+      `metric ${metricName} removed`,
+    );
+    return { version: saved.currentVersion };
+  }
+
+  /** Full-model structural+semantic validation (unique name, entity/of/
+   * dimensions/where resolve, agg rules) for a metrics-panel write — reuses
+   * the exact same checks a YAML save goes through, just without a source
+   * text to attach a line/col to (the panel maps `path` back to a form
+   * field instead). */
+  private validateMetricDraft(draft: DataModel): DataModel {
+    const validated = validateDataModel(draft);
+    if (!validated.model) {
+      throw new BadRequestException({ ok: false, errors: validated.issues });
+    }
+    return validated.model;
   }
 
   async revert(
@@ -428,11 +692,20 @@ export class DataModelsService implements OnModuleInit {
   }
 
   // --- Metrics-panel sync (called by `MetricsService` after every
-  // create/update/delete against the legacy `metrics` store, which stays
-  // the panel's editor of record until roadmap 1.2.3 — see that file's
-  // header). One-directional: `DataModelsService` never reads the legacy
-  // store except at bootstrap/merge time, and never calls back into
-  // `MetricsService`. ---
+  // create/update/delete against the legacy `metrics` store — the shared
+  // store's write path, kept only for backward compatibility now that
+  // roadmap 1.2.3 moves the panel onto the model directly; see that
+  // module's header). One-directional: `DataModelsService` never reads the
+  // legacy store except at bootstrap/merge time, and never calls back into
+  // `MetricsService`.
+  //
+  // The merge rule as of 1.2.3: the model wins for any metric name it
+  // manages itself (`localMetricNames`, written by the model-metrics API
+  // above) — a legacy write of the same name is skipped on that model
+  // entirely, rather than overwriting or deleting the model's own
+  // definition. For every other name (nothing the model authored directly),
+  // the legacy store stays authoritative and the mirror behaves exactly as
+  // it did under ADR-0006/1.2.1. ---
 
   /**
    * Mirrors a metrics-panel write into every current model: first removes
@@ -443,7 +716,11 @@ export class DataModelsService implements OnModuleInit {
    * version, not one per removal and one per add — the two steps are
    * computed together before anything is persisted. No model binds the
    * table -> nothing to do, no error (a metric can exist before any dataset
-   * includes its table).
+   * includes its table). A model that manages this name itself
+   * (`localMetricNames`) is skipped entirely — see the merge-rule note
+   * above — and so is a model that has explicitly deleted this name
+   * (`deletedMetricNames`, review finding 6): a legacy write must not
+   * resurrect a metric the model's own panel removed.
    */
   async syncMetric(metric: MetricDoc): Promise<string[]> {
     const docs = await this.repository.list();
@@ -454,6 +731,8 @@ export class DataModelsService implements OnModuleInit {
     for (const doc of docs) {
       const current = this.findCurrentVersion(doc);
       if (!current) continue;
+      if (hasMetricName(doc.localMetricNames, metric.name)) continue;
+      if (hasMetricName(doc.deletedMetricNames, metric.name)) continue;
 
       const withoutStale = current.model.metrics.filter(
         (m) => m.name.toLowerCase() !== nameLower,
@@ -483,7 +762,10 @@ export class DataModelsService implements OnModuleInit {
   }
 
   /** Mirrors a metrics-panel delete: removes `name` from every current
-   * model that has it, one new version per model touched. */
+   * model that has it, one new version per model touched. A model that
+   * manages this name itself (`localMetricNames`) is skipped — deleting an
+   * unrelated legacy metric that happens to share a name must not take the
+   * model's own definition down with it. */
   async removeMetric(name: string): Promise<string[]> {
     const docs = await this.repository.list();
     const touched: string[] = [];
@@ -492,6 +774,7 @@ export class DataModelsService implements OnModuleInit {
     for (const doc of docs) {
       const current = this.findCurrentVersion(doc);
       if (!current) continue;
+      if (hasMetricName(doc.localMetricNames, name)) continue;
       if (
         !current.model.metrics.some((m) => m.name.toLowerCase() === nameLower)
       ) {
@@ -606,4 +889,28 @@ function sameMetricNames(
     const prior = beforeByName.get(m.name);
     return prior !== undefined && JSON.stringify(prior) === JSON.stringify(m);
   });
+}
+
+/** Name-list lookup/mutation helpers shared by `localMetricNames` and
+ * `deletedMetricNames` (roadmap 1.2.3's merge-rule flip and delete
+ * tombstone, see `syncMetric`/`removeMetric`/the model-metrics methods
+ * above) — case-insensitive, same as every other name comparison in this
+ * module. Generic over which field they operate on: the two lists are the
+ * same shape (a set of lowercase names) with different meanings. */
+function hasMetricName(names: string[] | undefined, name: string): boolean {
+  const wanted = name.toLowerCase();
+  return (names ?? []).some((n) => n.toLowerCase() === wanted);
+}
+
+function withMetricName(names: string[] | undefined, name: string): string[] {
+  const without = withoutMetricName(names, name);
+  return [...without, name.toLowerCase()];
+}
+
+function withoutMetricName(
+  names: string[] | undefined,
+  name: string,
+): string[] {
+  const wanted = name.toLowerCase();
+  return (names ?? []).filter((n) => n.toLowerCase() !== wanted);
 }

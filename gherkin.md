@@ -296,11 +296,11 @@ Feature: Datasources, datasets, and sessions (World Cup database)
 
 ## Feature: Data model
 
-Spec: [backend/test/data-models.e2e-spec.ts](backend/test/data-models.e2e-spec.ts) (API-level; no UI surface until roadmap 1.2.3)
+Spec: [backend/test/data-models.e2e-spec.ts](backend/test/data-models.e2e-spec.ts) (API-level; the UI surface built on these endpoints is *Feature: Data model editing* below, roadmap 1.2.3)
 
 ```gherkin
 Feature: Data model
-  The versioned, storage-neutral data model every dataset owns (roadmap 1.2.1, BA-85).
+  The versioned, storage-neutral data model every dataset owns (roadmap 1.2.1, BA-85), plus export/import, structured serialization and model-scoped metrics (roadmap 1.2.3, BA-87).
 
   Background:
     Given the backend is running with an empty data directory
@@ -375,4 +375,106 @@ Feature: Data model
     Then the response is 400 with a structured issue coded "unknown_attribute"
     When I POST /datasets/World Cup Core/model/compile with a query naming an entity no declared relationship reaches
     Then the response is 400 and no database call was made
+  Scenario: Listing every version for the Versions tab
+    When I GET /datasets/World Cup Core/model/versions
+    Then the response lists every stored version (version, source, note, createdAt, yaml), not just the current one
+
+  Scenario: Exporting a model version downloads its YAML
+    When I GET /datasets/World Cup Core/model/export
+    Then the response is text/yaml with a Content-Disposition attachment named "<dataset-slug>.model.v<current>.yaml"
+    When I GET /datasets/World Cup Core/model/export?version=1
+    Then the response is version 1's YAML, named "...v1.yaml"
+
+  Scenario: Importing a model as YAML creates a new "import" version
+    When I POST /datasets/World Cup Core/model/import with a valid YAML file's contents
+    Then a new version is created with source "import"
+    When I POST /datasets/World Cup Core/model/import with YAML whose binding maps an attribute to a missing column
+    Then the response is 400 with located errors and the current version is unchanged
+    And exporting the current version and importing it back produces an equivalent model (same entities, relationships and metrics)
+
+  Scenario: Structured edits serialize through the one YAML writer
+    When I POST /datasets/World Cup Core/model/serialize with a plain model object
+    Then the response is the same YAML shape saveYaml/export would produce, with no persistence side effect
+
+  Scenario: The metrics panel reads and writes the model directly
+    When I POST /datasets/World Cup Core/model/metrics with a new metric
+    Then the response is ok with a new "user" version, and GET /datasets/World Cup Core/model/metrics lists it
+    When I PUT /datasets/World Cup Core/model/metrics/<name> renaming it
+    Then a new version reflects the rename
+    When I DELETE /datasets/World Cup Core/model/metrics/<name>
+    Then a new version no longer lists it
+    When I POST /datasets/World Cup Core/model/metrics with a metric referencing an unknown entity
+    Then the response is 400 and the current version is unchanged
+    And GET /datasets/World Cup Core/model/metrics/candidates offers verified-query drafts scoped to the dataset, addressed by logical entity name
+
+  Scenario: A model-authored metric survives a later legacy metrics-panel write of the same name
+    Given a metric "goals_per_match" was created through POST /datasets/World Cup Core/model/metrics
+    When a legacy POST /metrics write defines a different metric also named "goals_per_match"
+    Then the model's own "goals_per_match" definition is unchanged — the model wins for names it manages itself
 ```
+
+## Feature: Data model editing
+
+Spec: [frontend/e2e/data-model-editing.spec.ts](frontend/e2e/data-model-editing.spec.ts) (roadmap 1.2.3, BA-87)
+
+```gherkin
+Feature: Data model editing
+  Analysts curate each dataset's data model inside the app: raw YAML with
+  line-level errors, structured entity/relationship forms, a version
+  history with diff and revert, export/import as a file, and a metrics
+  panel that reads and writes the model directly.
+
+  Background:
+    Given the seeded World Cup PostgreSQL database is running
+    And I have created the "World Cup PostgreSQL" datasource and the "World Cup Core" dataset
+
+  Scenario: Opens a dataset's data model and sees its bootstrapped entities, relationships and metrics
+    When I click "Data model" on the "World Cup Core" dataset
+    Then I see the version badge "v1 · bootstrap"
+    And I see the "matches" and "teams" entities in the Overview tab
+    And I see at least one relationship and the dataset's metrics
+
+  Scenario: Edits the YAML, saves, and the version badge advances
+    Given I am on the "YAML" tab of the "World Cup Core" data model
+    When I add a description to the "matches" entity and click "Save as new version"
+    Then I see the version badge "v2 · user"
+    When I open the "Versions" tab
+    Then I still see version 1 listed
+
+  Scenario: An invalid YAML edit is rejected with its line highlighted
+    Given I am on the "YAML" tab of the "World Cup Core" data model
+    When I map the "attendance" attribute to a column that does not exist and click "Save as new version"
+    Then I see an error naming the offending path with a line and column
+    And clicking the error highlights that line in the editor
+    And the version badge still reads "v1"
+
+  Scenario: Reverts to version 1 from the Versions tab
+    Given the "World Cup Core" data model has versions 1 and 2
+    When I open the "Versions" tab and click "Revert" on version 1
+    Then the version badge reads "v1"
+    And version 2 is still listed
+    When I compare version 1 and version 2
+    Then I see the changed line highlighted in the diff
+
+  Scenario: Changes a relationship's cardinality in the entity form and saves
+    Given I am on the "Overview" tab of the "World Cup Core" data model
+    When I click the "matches" entity
+    And I change a relationship's cardinality and click "Save as new version"
+    Then the version badge advances
+    And the Overview tab shows the new cardinality
+
+  Scenario: Defines a metric in the Metrics tab
+    Given I am on the "Metrics" tab of the "World Cup Core" data model
+    When I create a metric named "goals_per_match" on entity "matches"
+    Then I see it in the metrics list
+    And the YAML tab shows it under "metrics:"
+
+  Scenario: Exports the model and re-imports it
+    Given I am on the "World Cup Core" data model
+    When I click "Export"
+    Then a ".yaml" file downloads
+    When I click "Import" and choose the downloaded file
+    Then a new "import" version is created, identical to the exported file apart from the version header
+```
+
+Step-6 impact analysis (workflow step 6) for this change, and the per-scenario add/update/re-run decisions for *Feature: Datasources, datasets, and sessions*, are recorded in [docs/plans/ba-87-model-editing.md](docs/plans/ba-87-model-editing.md).
