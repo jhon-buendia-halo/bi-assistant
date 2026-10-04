@@ -1,0 +1,29 @@
+name: Spec checks
+
+# Fails when specs/ drifts from the code: a new backend route, collection,
+# agent, Playwright spec, capability or roadmap epic without its spec, or a
+# broken link. See "Spec convention" in CLAUDE.md and specs/README.md.
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: spec-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  specs:
+    name: Specs match the code
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check specs
+        run: python3 scripts/check-specs.py

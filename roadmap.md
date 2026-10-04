@@ -63,11 +63,13 @@ How work is planned, specified, built, verified and traced. It covers the repo's
   - Restructure: `architecture.md` moves to `specs/system/`, the Gherkin Features in `gherkin.md` move verbatim into the capability specs, and the how-it-works sections of CLAUDE.md move into `specs/system/`. CLAUDE.md keeps the rules and links.
   - Backfill the current system from the code, and draft an epic spec for every BA epic.
   - CLAUDE.md conventions: the Epic gate (no Jira epic, no code change), the Spec convention, and workflow steps 4–5 and 10 pointing at `specs/`.
+  - A CI check (`.github/workflows/spec-checks.yml` running `scripts/check-specs.py`) that fails a PR when the specs drift from the code.
 - **Out of scope:** product code changes; new E2E specs for the `E2E: none yet` Features; confirming the draft epic specs (each epic owner confirms theirs).
 - **Acceptance:**
   - Every file listed in `specs/README.md` exists and every relative link in `specs/`, CLAUDE.md and roadmap.md resolves.
   - Every Gherkin scenario that was in `gherkin.md` is in exactly one capability spec, unchanged.
   - Every HTTP route in the backend controllers appears in `specs/system/api.md`; every collection in `database.module.ts` appears in `specs/system/data-model.md`; every registered agent appears in `specs/system/agents.md`.
+  - The spec-checks workflow runs on pull requests, passes on this branch, and fails when drift is injected.
   - The work is merged through a PR from `docs/BA-90-rebuildable-specs`.
 - **Notes:** evidence and the backfill's findings (likely bugs, security gaps, drift) in [evidence/0.2.2/](evidence/0.2.2/). `docs/plans/` and `docs/research/` stay where they are. They are plans and research, not specs of the shipped system, and the epic specs link to them.
 

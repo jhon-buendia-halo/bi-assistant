@@ -103,7 +103,7 @@ Links to the endpoints in system/api.md, the collections in system/data-model.md
 Where it lives in the shell (link to system/ui.md), its screens and states: empty, loading, error, populated.
 
 ## Flows
-Gherkin, one `Feature:` per Playwright spec. Each Feature names its spec file, or says "E2E: none yet".
+Gherkin, one `Feature:` per Playwright spec. Each Feature starts with a line `E2E: \`frontend/e2e/<file>.spec.ts\`` naming its spec file, or `E2E: none yet`. Mentions of another capability's spec file elsewhere in the text are cross-references only.
 
 ```gherkin
 Feature: …

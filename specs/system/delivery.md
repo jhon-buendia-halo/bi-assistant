@@ -181,7 +181,7 @@ First run needs an LLM provider in Settings (or `OPENAI_API_KEY` in the environm
 
 `frontend/package.json` `version` is the single source of truth. `backend/package.json` is kept in lockstep, and both lockfiles are committed with each bump. electron-builder reads the frontend version, the installers carry it through `artifactName`, and the app shows it (`APP_VERSION`). **Versioning is automatic; building is manual.**
 
-All workflows run on Node 22 and live in `.github/workflows/`.
+All release workflows run on Node 22 and live in `.github/workflows/`. The one pull-request check, `spec-checks.yml`, is described after them.
 
 ### `version-on-merge.yml` — Version on merge
 
@@ -229,6 +229,23 @@ Manual only: Actions → Publish npm package → Run workflow. There is no tag e
 | `dry_run` | false | `npm publish --dry-run`, nothing uploaded |
 
 Steps: check out the ref; Node 22 with the GitHub Packages registry and scope; read `name@version` from `backend/package.json`; **refuse an already-published version** (`npm view`; success means it exists → fail with a readable message, `E404` means free, any other failure is fatal; skipped on dry runs, because GitHub Packages answers a re-publish with a bare 409); `npm ci --legacy-peer-deps` in `frontend/` and `backend/`; explicit `npm run build:all`; `npm publish --ignore-scripts` (so `prepack` does not rebuild and the tarball is exactly the logged build). Auth is `GITHUB_TOKEN` (`packages: write`); the `repository` field in `backend/package.json` links the package to this repo, so no personal token is needed. The run summary prints `name@version` and the `.npmrc` + `npx` install commands.
+
+### `spec-checks.yml` — Spec checks
+
+Runs on every pull request, on every push to `main`, and on manual dispatch. It is the only pull-request check. It checks out the repo and runs `python3 scripts/check-specs.py` (standard library only, no install step, about one second). It fails the run when `specs/` drifts from the code:
+
+| Check | Fails when |
+|---|---|
+| Layout | a product or system spec is missing, or the capability or epic tables in `specs/README.md` don't match the folders on disk |
+| Links | a relative link in `CLAUDE.md`, `README.md`, `roadmap.md` or any spec doesn't resolve. `changelog.md` and `retrospective.md` are skipped, because their past entries are never rewritten. |
+| Capability format | a capability spec lacks one of the required sections |
+| E2E mirror | a `frontend/e2e/*.spec.ts` file is not the `E2E:` line of exactly one capability spec, or an `E2E:` line names a missing file |
+| API | a backend controller route is not written as `` `METHOD /path` `` in `system/api.md` |
+| Data model | a collection in `database.module.ts` is not in `system/data-model.md` |
+| Agents | an agent registered in `mastra/index.ts` is not in `system/agents.md` |
+| Epic gate | a roadmap milestone's epic has no spec, or an epic spec has no `Status` |
+
+The checks prove coverage, not correctness. Reviewers still check that the spec text is right. Run the same check locally with `python3 scripts/check-specs.py`.
 
 ## 6. Docker Compose: the World Cup sample database
 
