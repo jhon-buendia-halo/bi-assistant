@@ -1,6 +1,6 @@
 {
   "name": "@jhon-buendia-halo/questions-to-insights",
-  "version": "0.20.3",
+  "version": "0.20.4",
   "description": "Ask questions of your data in plain language and get answers, SQL and interactive visuals. Runs locally: npx @jhon-buendia-halo/questions-to-insights",
   "license": "UNLICENSED",
   "repository": {
