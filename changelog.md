@@ -5,6 +5,11 @@ Running log of every meaningful change, newest first. See *Logging convention* a
 ## 2026-10-04
 
 ### Added
+- **The spec check is now required on `main`** (roadmap 0.2.3, [BA-108](https://halo-powered.atlassian.net/browse/BA-108)):
+  - A repository ruleset requires "Specs match the code" before a PR can merge. Direct pushes without that status are rejected.
+  - [`version-on-merge.yml`](.github/workflows/version-on-merge.yml) still pushes its release commit straight to `main`. Before pushing, it runs `scripts/check-specs.py` on the bump commit, stages the commit on `release-staging/<sha>` and reports the status itself.
+  - Documented under *Branch ruleset on `main`* in [specs/system/delivery.md](specs/system/delivery.md).
+  - Evidence: [evidence/0.2.3/](evidence/0.2.3/).
 - **Rebuildable system specs** (roadmap 0.2.2, [BA-90](https://halo-powered.atlassian.net/browse/BA-90), epic [BA-89](https://halo-powered.atlassian.net/browse/BA-89)). New [specs/](specs/README.md) tree, written so an LLM given only that folder can rebuild the app:
   - product specs: vision, glossary, non-functional requirements;
   - system specs: architecture, tech stack, data model, API (all 52 routes, the chat stream, IPC, CLI), agents (every prompt, tool and model rule), UI and delivery;

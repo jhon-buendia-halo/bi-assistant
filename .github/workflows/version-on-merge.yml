@@ -14,6 +14,8 @@ on:
 
 permissions:
   contents: write
+  # Report the required "Specs match the code" status on the bump commit (see below).
+  statuses: write
 
 # Serialize releases so two quick merges cannot race on the version commit.
 concurrency:
@@ -81,8 +83,25 @@ jobs:
                   backend/package.json backend/package-lock.json
           git commit -m "chore(release): ${{ steps.bump.outputs.tag }}"
           git tag -a "${{ steps.bump.outputs.tag }}" -m "${{ steps.bump.outputs.tag }}"
+
+          # The default branch requires the "Specs match the code" check, and
+          # GitHub Actions cannot bypass a ruleset in a personal-account repo.
+          # Run the check on the bump commit, stage the commit so GitHub knows
+          # it, report the status, then push. A failing check pushes nothing.
+          sha=$(git rev-parse HEAD)
+          python3 scripts/check-specs.py
+          staging="release-staging/$sha"
+          git push origin "HEAD:refs/heads/$staging"
+          trap 'git push origin --delete "$staging" || true' EXIT
+          gh api "repos/${{ github.repository }}/statuses/$sha" \
+            -f state=success -f context="Specs match the code" \
+            -f description="scripts/check-specs.py passed on the release commit" \
+            -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" >/dev/null
+
           git push origin "HEAD:${{ github.ref_name }}"
           git push origin "${{ steps.bump.outputs.tag }}"
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: Summary
         run: |

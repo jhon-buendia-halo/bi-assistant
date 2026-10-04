@@ -73,6 +73,18 @@ How work is planned, specified, built, verified and traced. It covers the repo's
   - The work is merged through a PR from `docs/BA-90-rebuildable-specs`.
 - **Notes:** evidence and the backfill's findings (likely bugs, security gaps, drift) in [evidence/0.2.2/](evidence/0.2.2/). `docs/plans/` and `docs/research/` stay where they are. They are plans and research, not specs of the shipped system, and the epic specs link to them.
 
+#### 0.2.3 — Require the spec check before merging to `main` ([BA-108](https://halo-powered.atlassian.net/browse/BA-108))  `✅ Done`
+- **Intent:** `main` rejects changes whose specs drift from the code, so the specs stay a complete description of the shipped app.
+- **Scope:**
+  - A repository ruleset on the default branch that requires the "Specs match the code" check.
+  - The release workflow (`version-on-merge.yml`) pushes its bump commit straight to `main`, and a personal-account repo can't put GitHub Actions on a ruleset bypass list. So the workflow runs `scripts/check-specs.py` on the bump commit, stages it on a temporary branch, reports the "Specs match the code" status itself, and only then pushes to `main`.
+- **Out of scope:** requiring reviews or other checks; changing how versions are computed.
+- **Acceptance:**
+  - A PR whose spec check fails cannot be merged, and a direct push to `main` is rejected.
+  - After this PR merges, the release workflow still bumps the version and pushes the tag with the ruleset active.
+  - `specs/system/delivery.md` describes the ruleset and the release workflow's status step.
+- **Notes:** follows 0.2.2. Evidence: [evidence/0.2.3/](evidence/0.2.3/).
+
 ## Release 1 — 1.0 Beta  (target 2026-10-31)
 
 Source of truth for scope and dates: Jira project **BA**, version *1.0 Beta* ([timeline](https://halo-powered.atlassian.net/jira/software/projects/BA/boards/2688/timeline)). Each milestone mirrors one Jira epic and each feature mirrors one story, so IDs map 1:1. Imported 2026-10-01. Status changes are made in both places.

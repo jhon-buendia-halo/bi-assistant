@@ -1,0 +1,13 @@
+Ruleset probe, 2026-10-04: a temporary ruleset (id 24455051) targeting refs/heads/ruleset-test with the same rule as main
+(required status check "Specs match the code", any source, no bypass). Branch, ruleset and staging branch deleted afterwards.
+
+1. Direct push of a new commit with no status:
+   remote: error: GH013: Repository rule violations found for refs/heads/ruleset-test.
+   remote: - Required status check "Specs match the code" is expected.
+   ! [remote rejected] HEAD -> ruleset-test (push declined due to repository rule violations)
+
+2. Same commit (06145d67daeec9b6cf3b4e6ecfad5d893ae1f964) pushed to release-staging/<sha>, then a success status
+   "Specs match the code" reported on it (POST /repos/{repo}/statuses/{sha}), then pushed again:
+   95662c9..06145d6  HEAD -> ruleset-test      (accepted)
+
+This is the sequence version-on-merge.yml now uses for its release commit.
