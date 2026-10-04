@@ -14,7 +14,7 @@ Platforms, storage, security, privacy, limits, accessibility, reliability and ob
 
 Open question: Linux is not built or documented, although nothing in the product is Linux-specific. Confirm that it is out of scope.
 
-Open question: setting a non-default backend port breaks the desktop renderer (roadmap 0.1.1). Until fixed, the desktop app SHALL be treated as fixed to port 3000.
+Open question: setting a non-default backend port breaks the desktop renderer (roadmap 1.7.20, BA-109). Until fixed, the desktop app SHALL be treated as fixed to port 3000.
 
 Build, packaging and versioning detail is in [../system/delivery.md](../system/delivery.md).
 

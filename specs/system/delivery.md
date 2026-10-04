@@ -19,7 +19,7 @@ The desktop app is one installable unit. The Electron main process (`frontend/el
 | Supervisor | An unexpected backend exit restarts it with backoff 1 s, 2 s, 4 s (three attempts, status `restarting`); after that status is `down`. A backend that stays ready for 60 s resets the restart budget. |
 | Quit | `before-quit` marks the app as quitting (so the exit handler does not restart), clears timers and kills the backend. On Windows and Linux closing the last window quits the app; on macOS it does not. |
 | Window | 1440x900, minimum 960x600, `titleBarStyle: 'hiddenInset'`, `contextIsolation: true`, `nodeIntegration: false`, preload `electron/preload.cjs`. Loads `dist/frontend/browser/index.html`, or `ELECTRON_DEV_URL` when set. A `file://` `ERR_FILE_NOT_FOUND` load failure is retried by reloading the real entry file, at most 3 times. |
-| Renderer to backend | `API_BASE_URL` is hardcoded to `http://localhost:3000` under `file://`. **Known gap (roadmap 0.1.1):** the preload bridge does not expose the port, so a non-default `BACKEND_PORT` makes the readiness probe and the backend use the new port while the renderer still calls 3000, which breaks the app. |
+| Renderer to backend | `API_BASE_URL` is hardcoded to `http://localhost:3000` under `file://`. **Known gap (roadmap 1.7.20, BA-109):** the preload bridge does not expose the port, so a non-default `BACKEND_PORT` makes the readiness probe and the backend use the new port while the renderer still calls 3000, which breaks the app. |
 
 ### Why `--base-href ./`
 
@@ -279,7 +279,7 @@ Defaults are shared state: the desktop app uses Electron's `userData` directory 
 | Resource | Default | Isolation knob |
 |---|---|---|
 | Desktop data dir | Electron `userData` | `QUESTIONS_TO_INSIGHTS_USER_DATA_DIR=<dir>` |
-| Desktop backend port | 3000 | `BACKEND_PORT` for the main process and backend, but the renderer is hardcoded to 3000 (known gap, roadmap 0.1.1), so two desktop instances cannot run side by side yet |
+| Desktop backend port | 3000 | `BACKEND_PORT` for the main process and backend, but the renderer is hardcoded to 3000 (known gap, roadmap 1.7.20, BA-109), so two desktop instances cannot run side by side yet |
 | Web (CLI) data dir | `~/.questions-to-insights` | `--data-dir`, `QTI_DATA_DIR` or `APP_DATA_DIR` |
 | Web (CLI) port | 3000 (falls back to a free port) | `--port` |
 | Bare backend (`start:dev`) data dir and port | `<cwd>/data`, `PORT` or 3000 | `APP_DATA_DIR`, `PORT` |

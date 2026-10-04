@@ -137,7 +137,7 @@ Skip only for trivial, zero-risk edits. Never rewrite a past entry. When a recur
 
 ## Worktree deploy convention — always ask which target
 
-**When work happens in a git worktree (any path under `.claude/worktrees/`), do not silently run against shared state.** Before starting the app or the Postgres compose stack from a worktree, ask: *run against the shared data dir / main compose stack, or an isolated one for this worktree?* The Electron app and the `npx` CLI default to shared data dirs (`userData`, `~/.questions-to-insights`) and backend port 3000; the compose Postgres uses project name `questions-to-insights-world-cup` and port 55432 — a second instance collides unless isolated (CLI `--data-dir` and `--port`; desktop `QUESTIONS_TO_INSIGHTS_USER_DATA_DIR`; `docker compose -p <name>` with `WORLD_CUP_DB_PORT`). A second *desktop* instance can't run on another port until roadmap 0.1.1 lands, so use the CLI for side-by-side runs. Details: [specs/system/delivery.md](specs/system/delivery.md). Skip the question only when the user has already named the target in the same turn. Merging the worktree back goes through `sync_with_base_branch` / a PR, never a silent push.
+**When work happens in a git worktree (any path under `.claude/worktrees/`), do not silently run against shared state.** Before starting the app or the Postgres compose stack from a worktree, ask: *run against the shared data dir / main compose stack, or an isolated one for this worktree?* The Electron app and the `npx` CLI default to shared data dirs (`userData`, `~/.questions-to-insights`) and backend port 3000; the compose Postgres uses project name `questions-to-insights-world-cup` and port 55432 — a second instance collides unless isolated (CLI `--data-dir` and `--port`; desktop `QUESTIONS_TO_INSIGHTS_USER_DATA_DIR`; `docker compose -p <name>` with `WORLD_CUP_DB_PORT`). A second *desktop* instance can't run on another port until roadmap 1.7.20 (BA-109) lands, so use the CLI for side-by-side runs. Details: [specs/system/delivery.md](specs/system/delivery.md). Skip the question only when the user has already named the target in the same turn. Merging the worktree back goes through `sync_with_base_branch` / a PR, never a silent push.
 
 ## Model usage: plan vs. execute
 
@@ -158,7 +158,7 @@ How the app is built and works is in [specs/system/](specs/system/): [tech-stack
 - Electron builds use `--base-href ./`. An absolute `/` base breaks asset loading over `file://`.
 - Electron IPC goes only through `frontend/electron/preload.cjs` (`contextBridge`); keep `contextIsolation` on and `nodeIntegration` off.
 - `SessionChat` re-syncs from its `session` input only when the session **id** changes. Same-id refreshes (visual metadata) must not abort an in-flight stream.
-- **Known gap:** under `file://` the renderer hardcodes `http://localhost:3000`, so a non-default `BACKEND_PORT` breaks the desktop renderer. Tracked as roadmap 0.1.1.
+- **Known gap:** under `file://` the renderer hardcodes `http://localhost:3000`, so a non-default `BACKEND_PORT` breaks the desktop renderer. Tracked as roadmap 1.7.20 ([BA-109](https://halo-powered.atlassian.net/browse/BA-109)).
 
 ### Backend (NestJS)
 
