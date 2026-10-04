@@ -192,7 +192,8 @@ All release workflows run on Node 22 and live in `.github/workflows/`. The one p
 | Concurrency | Group `version-on-merge`, no cancellation, so quick back-to-back merges queue. |
 | Bump level | From commits since the last `v*` tag: `BREAKING CHANGE` / `BREAKING-CHANGE` in any body, or a subject `type!:` → **major**; any subject `feat:` / `feat(scope):` → **minor**; otherwise **patch**. |
 | Effects | `npm version <level> --no-git-tag-version` in `frontend/`, then the same version in `backend/`; commits both `package.json` and `package-lock.json` pairs as `chore(release): vX.Y.Z` as `github-actions[bot]`; creates annotated tag `vX.Y.Z`; pushes the branch and the tag. Builds nothing. The run summary says which tag to build. |
-| Requirement | The default branch must allow pushes from `github-actions[bot]`; with protected-branch rules, give it a bypass or the push step fails. |
+| Spec check | The default branch has a ruleset that requires the "Specs match the code" check (see *Branch ruleset* below). The bump commit is pushed straight to `main`, and GitHub Actions can't be put on the bypass list in a personal-account repo. So before pushing, the job runs `scripts/check-specs.py` on the bump commit. It then pushes the commit to a temporary `release-staging/<sha>` branch so GitHub knows the commit, and reports a successful `Specs match the code` commit status on it. Only then does it push to `main`, push the tag, and delete the staging branch. If the check fails, nothing is pushed. |
+| Permissions | `contents: write` (commit, tag, staging branch), `statuses: write` (the spec-check status) |
 | Chaining | Tags pushed with `GITHUB_TOKEN` do not trigger other workflows, which is what keeps merge-time tagging from starting builds. |
 
 Conventional Commit subjects therefore drive the bump, which is why a branch's type should match its PR's main commit type (see *Branching convention* in [CLAUDE.md](../../CLAUDE.md)).
@@ -246,6 +247,14 @@ Runs on every pull request, on every push to `main`, and on manual dispatch. It 
 | Epic gate | a roadmap milestone's epic has no spec, or an epic spec has no `Status` |
 
 The checks prove coverage, not correctness. Reviewers still check that the spec text is right. Run the same check locally with `python3 scripts/check-specs.py`.
+
+### Branch ruleset on `main`
+
+Repository ruleset **"main: specs match the code"**, enforcement *active*, target `~DEFAULT_BRANCH`. It has one rule: the required status check `Specs match the code`, from any source and without requiring the branch to be up to date. It has no bypass actors.
+
+- **Pull requests** can merge only once `spec-checks.yml` has passed on their head commit.
+- **Direct pushes to `main`** are rejected unless the pushed commit already carries a successful `Specs match the code` status. Only the release workflow does this (see *Spec check* in `version-on-merge.yml` above). Everyone else goes through a PR.
+- **Inspect or change the rule:** Settings → Rules → Rulesets, or `gh api repos/<owner>/<repo>/rulesets`.
 
 ## 6. Docker Compose: the World Cup sample database
 

@@ -14,6 +14,22 @@ Entry template:
 
 ---
 
+## 2026-10-04 — 0.2.3 Require the spec check on main (BA-108)
+
+### What went well
+- Testing the ruleset on a throwaway branch before touching `main` paid off. A temporary ruleset on `ruleset-test` confirmed both behaviours in two pushes: a push without the status is rejected, and a staged push with a reported status is accepted. The release workflow was designed around that confirmed behaviour, not a guess from the docs.
+- actionlint caught nothing, but it ran on both workflows before the PR, using the release binary instead of a stalled Docker pull.
+
+### What went wrong
+- The obvious design failed: adding GitHub Actions as a ruleset bypass actor is rejected for personal-account repos with "Actor GitHub Actions integration must be part of the ruleset source or owner organization". That cost a round trip.
+- I ran `git checkout origin/main -- .` to read a file. It overwrote the working tree with `main`'s version files. Nothing was lost only because the tree was clean and the diff was just the release bump.
+- The release path with the ruleset active can only be proven by a real merge. The probe covers the push semantics but not the workflow itself.
+
+### What to do differently
+- To read a file from another ref, use `git show <ref>:<path>`, never `git checkout <ref> -- .`.
+- Before designing around a GitHub bypass list, check the repo owner type (`gh api repos/<r> -q .owner.type`). Personal-account repos can't add GitHub Actions or other apps to bypass lists, so plan for the "stage, report status, push" pattern.
+- After merging a change to a release workflow, watch the next release run to completion and record it in the evidence.
+
 ## 2026-10-04 — 0.2.2 Rebuildable system specs (BA-90)
 
 ### What went well
