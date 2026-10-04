@@ -1,6 +1,6 @@
 # Architecture
 
-Architectural decisions recorded against the [C4 model](https://c4model.com/) (System Context → Containers → Components → Code). See *Architecture convention* in [CLAUDE.md](CLAUDE.md). ADRs are never edited in substance — supersede them with a new ADR.
+Architectural decisions recorded against the [C4 model](https://c4model.com/) (System Context → Containers → Components → Code). See *Architecture convention* in [CLAUDE.md](../../CLAUDE.md). This file describes the current implementation; see *Stack neutrality* in [specs/README.md](../README.md). ADRs are never edited in substance — supersede them with a new ADR.
 
 ADR template:
 
@@ -13,7 +13,7 @@ ADR template:
 - **Consequences:**
 ```
 
-The ADRs below marked *retroactive* document decisions already in place when this file was created; their operational detail lives in [CLAUDE.md](CLAUDE.md).
+The ADRs below marked *retroactive* document decisions already in place when this file was created. Their operational detail lives in the other system specs: [tech-stack.md](tech-stack.md), [delivery.md](delivery.md), [data-model.md](data-model.md), [agents.md](agents.md) and [api.md](api.md).
 
 ## Level 1 — System Context
 

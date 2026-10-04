@@ -62,7 +62,7 @@ If no LLM settings are saved, the backend falls back to `openai/gpt-4o-mini` usi
 
 ## Desktop app
 
-The Electron desktop app (Halo BI Assistant) is built for macOS (arm64, x64) and Windows (x64). Installers are produced by the "Build desktop installers" GitHub Actions workflow (`.github/workflows/build-desktop.yml`) and attached to GitHub releases. See `CLAUDE.md` for the packaging details.
+The Electron desktop app (Halo BI Assistant) is built for macOS (arm64, x64) and Windows (x64). Installers are produced by the "Build desktop installers" GitHub Actions workflow (`.github/workflows/build-desktop.yml`) and attached to GitHub releases. See [specs/system/delivery.md](specs/system/delivery.md) for the packaging details.
 
 ## Development
 
@@ -111,4 +111,4 @@ Versioning is automatic and building is manual.
 
 ## Architecture
 
-An Angular renderer (inside Electron, or served by the backend in web mode) talks to a NestJS API. The API uses a Mastra agent harness for the assistant and visual designer agents, and a SQLite document store for application data. The npm package is the backend with the built Angular app bundled in. Details on modules, versioning, the datastore, and the agent harness are in [`CLAUDE.md`](CLAUDE.md).
+An Angular renderer (inside Electron, or served by the backend in web mode) talks to a NestJS API. The API uses a Mastra agent harness for the assistant and visual designer agents, and a SQLite document store for application data. The npm package is the backend with the built Angular app bundled in. The full specification (modules, data model, API, agents, UI, versioning and release) is in [`specs/`](specs/README.md).

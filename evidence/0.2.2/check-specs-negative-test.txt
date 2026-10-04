@@ -1,0 +1,21 @@
+PASS every product and system spec exists
+FAIL specs/README.md lists exactly the capability specs on disk
+     unlisted: ['routines']
+     listed but missing: []
+PASS specs/README.md lists exactly the epic specs on disk
+FAIL relative links in 37 files resolve
+     specs/capabilities/routines/spec.md -> ../../system/nope.md
+FAIL every capability spec has the required sections
+     routines: ['## Concepts', '## Edge cases and errors', '## Contracts', '## UI', '## Flows', '## Acceptance']
+FAIL 6 Playwright specs each mirror a Feature in exactly one capability spec
+     frontend/e2e/routines.spec.ts is the E2E reference of 0 capability specs [] (expected 1)
+FAIL 53 backend routes appear in specs/system/api.md
+     GET /llm/models
+FAIL 10 collections appear in specs/system/data-model.md
+     routines
+FAIL 7 registered agents appear in specs/system/agents.md
+     routine-runner
+PASS 8 roadmap milestone epics have a spec in specs/epics/
+PASS every epic spec has a Status of Draft or Confirmed
+
+7 CHECK(S) FAILED
