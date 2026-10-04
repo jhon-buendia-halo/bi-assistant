@@ -11,7 +11,7 @@ Feature template:
 - **Intent:** why this exists / the user-observable outcome.
 - **Scope:** what is in.
 - **Out of scope:** what is explicitly not.
-- **Acceptance:** verifiable criteria (map to gherkin.md scenarios).
+- **Acceptance:** verifiable criteria (map to Gherkin scenarios in the capability specs under specs/capabilities/).
 - **Notes:** links (docs/plans, ADRs, evidence), dependencies.
 ```
 
@@ -36,13 +36,13 @@ Electron shell, backend spawning, and renderer↔backend wiring: the app must be
   - With no `BACKEND_PORT`, behaviour is unchanged.
   - A Playwright scenario in `frontend/e2e/` launches Electron with a non-default `BACKEND_PORT` and asserts the shell loads data (new Gherkin scenario under *Layout and accessibility* or a new *Desktop runtime* feature).
   - The `API_BASE_URL` sentence in CLAUDE.md ("Known gap") is updated.
-- **Notes:** found while drawing the C4 container diagram ([architecture.md](architecture.md), Level 2). Related to ADR-0001.
+- **Notes:** found while drawing the C4 container diagram ([specs/system/architecture.md](specs/system/architecture.md), Level 2). Related to ADR-0001.
 
-### Milestone 0.2 — Delivery process
+### Milestone 0.2 — Delivery process ([BA-89](https://halo-powered.atlassian.net/browse/BA-89))
 
-How work is planned, built, verified and traced. It covers the repo's process documents and conventions, not product behaviour.
+How work is planned, specified, built, verified and traced. It covers the repo's process documents, conventions and specs, not product behaviour. Epic spec: [specs/epics/BA-89/spec.md](specs/epics/BA-89/spec.md).
 
-#### 0.2.1 — Adopt the delivery workflow, beta roadmap and branching convention ([BA-84](https://halo-powered.atlassian.net/browse/BA-84))  `🚧 In progress`
+#### 0.2.1 — Adopt the delivery workflow, beta roadmap and branching convention ([BA-84](https://halo-powered.atlassian.net/browse/BA-84))  `✅ Done`
 - **Intent:** every change follows the same plan → spec → test → implement → evidence → retrospective loop and traces back to a Jira issue.
 - **Scope:**
   - The eleven-step workflow and its conventions in CLAUDE.md, including the branching convention.
@@ -55,6 +55,21 @@ How work is planned, built, verified and traced. It covers the repo's process do
   - Every process file it references exists.
   - The roadmap mirrors the BA 1.0 Beta epics and stories.
   - The work is merged through a PR from `docs/BA-84-claude-harness`.
+
+#### 0.2.2 — Rebuildable system specs ([BA-90](https://halo-powered.atlassian.net/browse/BA-90))  `✅ Done`
+- **Intent:** an LLM given only [specs/](specs/) can rebuild the app from scratch, and every change is specified there before it is built.
+- **Scope:**
+  - A `specs/` tree: product (vision, glossary, non-functional), system (architecture and ADRs, tech stack, data model, API, agents, UI, delivery), one spec per capability and one per Jira epic. Format, lifecycle and the rebuild prompt in [specs/README.md](specs/README.md).
+  - Restructure: `architecture.md` moves to `specs/system/`, the Gherkin Features in `gherkin.md` move verbatim into the capability specs, and the how-it-works sections of CLAUDE.md move into `specs/system/`. CLAUDE.md keeps the rules and links.
+  - Backfill the current system from the code, and draft an epic spec for every BA epic.
+  - CLAUDE.md conventions: the Epic gate (no Jira epic, no code change), the Spec convention, and workflow steps 4–5 and 10 pointing at `specs/`.
+- **Out of scope:** product code changes; new E2E specs for the `E2E: none yet` Features; confirming the draft epic specs (each epic owner confirms theirs).
+- **Acceptance:**
+  - Every file listed in `specs/README.md` exists and every relative link in `specs/`, CLAUDE.md and roadmap.md resolves.
+  - Every Gherkin scenario that was in `gherkin.md` is in exactly one capability spec, unchanged.
+  - Every HTTP route in the backend controllers appears in `specs/system/api.md`; every collection in `database.module.ts` appears in `specs/system/data-model.md`; every registered agent appears in `specs/system/agents.md`.
+  - The work is merged through a PR from `docs/BA-90-rebuildable-specs`.
+- **Notes:** evidence and the backfill's findings (likely bugs, security gaps, drift) in [evidence/0.2.2/](evidence/0.2.2/). `docs/plans/` and `docs/research/` stay where they are. They are plans and research, not specs of the shipped system, and the epic specs link to them.
 
 ## Release 1 — 1.0 Beta  (target 2026-10-31)
 
@@ -94,7 +109,7 @@ The structure the assistant reasons over, as a single, versionable source of tru
 - **Scope:** a domain-specific language describing entities, columns, relationships and business metrics; versionable; used to ground SQL generation.
 - **Out of scope:** business meaning (synonyms, concepts). That belongs to the Knowledge Store, per the boundary set in 1.3.1.
 - **Acceptance:** *to be defined.* The Jira epic has only a description. Agree the acceptance criteria before starting.
-- **Notes:** architectural, so it needs an ADR in [architecture.md](architecture.md) before code. Overlaps the existing dataset metrics UI and the "semantic metrics layer" in [docs/plans/phase-4-strategic-bets.md](docs/plans/phase-4-strategic-bets.md) (item 13); reconcile the two. Assignee: Jhon Buendia.
+- **Notes:** architectural, so it needs an ADR in [specs/system/architecture.md](specs/system/architecture.md) before code. Overlaps the existing dataset metrics UI and the "semantic metrics layer" in [docs/plans/phase-4-strategic-bets.md](docs/plans/phase-4-strategic-bets.md) (item 13); reconcile the two. Assignee: Jhon Buendia.
 
 ### Milestone 1.3 — Knowledge Store ([BA-4](https://halo-powered.atlassian.net/browse/BA-4))
 
@@ -108,7 +123,7 @@ Curated knowledge the assistant treats as authoritative: glossary terms, standin
   - Set the boundary with 1.2: the DSL holds structure, the knowledge store holds meaning.
   - Plan the snippet migration: terms become concepts, default filters become concept constraints, instructions are kept.
 - **Out of scope:** implementation.
-- **Acceptance:** the decision record is merged in `docs/` (as an ADR in [architecture.md](architecture.md)) and the model is agreed.
+- **Acceptance:** the decision record is merged in `docs/` (as an ADR in [specs/system/architecture.md](specs/system/architecture.md)) and the model is agreed.
 
 #### 1.3.2 — Ontology model, knowledge graph and bootstrap ([BA-79](https://halo-powered.atlassian.net/browse/BA-79))  `📋 Planned`
 - **Intent:** business concepts and their relations live in one graph and are drafted automatically, so setup takes minutes.
@@ -174,7 +189,7 @@ Connect to the sources beta users actually have. Each connector needs reliable c
 - **Intent:** beta users can query PostgreSQL.
 - **Scope:** connect with host, port, database and credentials (with SSL); discover schemas, tables and columns; run read-only SQL.
 - **Out of scope:** write access.
-- **Acceptance:** *drafted from the epic; confirm in Jira.* SSL connections work, discovery is complete, and only read-only statements run. The existing *Datasources, datasets, and sessions (World Cup database)* scenarios in [gherkin.md](gherkin.md) stay green.
+- **Acceptance:** *drafted from the epic; confirm in Jira.* SSL connections work, discovery is complete, and only read-only statements run. The existing *Datasources, datasets, and sessions (World Cup database)* scenarios in [specs/capabilities/datasources/spec.md](specs/capabilities/datasources/spec.md) stay green.
 
 #### 1.5.3 — REST API ([BA-8](https://halo-powered.atlassian.net/browse/BA-8))  `📋 Planned`
 - **Intent:** beta users can query HTTP APIs as datasets.
@@ -210,6 +225,93 @@ Fix the bugs and blockers from user testing and the golden-dataset evals, and st
 - **Intent:** a shippable 1.0 Beta on 2026-10-31.
 - **Scope:** blockers from 1.6 and 1.1; full E2E suite green; installers built for all platforms and published to the release.
 - **Acceptance:** release tagged and installers attached; no open blocker bugs in BA.
+
+Bugs found by the spec backfill (0.2.2), security first. Details: [evidence/0.2.2/findings.md](evidence/0.2.2/findings.md).
+
+#### 1.7.3 — Datasource credentials stored in plaintext ([BA-101](https://halo-powered.atlassian.net/browse/BA-101))  `📋 Planned`
+- **Intent:** datasource secrets are encrypted at rest like the LLM key.
+- **Scope:** see the Jira bug and the Open question in [system/data-model.md](specs/system/data-model.md).
+- **Acceptance:** Passwords, tokens and REST credentials/headers are encrypted and masked; existing installs are migrated.
+
+#### 1.7.4 — Desktop backend reachable from the network ([BA-102](https://halo-powered.atlassian.net/browse/BA-102))  `📋 Planned`
+- **Intent:** only the local machine can reach the desktop backend.
+- **Scope:** see the Jira bug and the Open question in [system/api.md](specs/system/api.md).
+- **Acceptance:** The desktop backend binds `127.0.0.1`.
+
+#### 1.7.5 — Bearer tokens survive diagnostics redaction ([BA-91](https://halo-powered.atlassian.net/browse/BA-91))  `📋 Planned`
+- **Intent:** no credential reaches the logs or an exported report.
+- **Scope:** see the Jira bug and the Open question in [capabilities/diagnostics/spec.md](specs/capabilities/diagnostics/spec.md).
+- **Acceptance:** `Authorization: Bearer <token>` and the missing key names (`pwd`, `passwd`, `access_key`, `private_key`) are fully redacted; a unit test covers each pattern.
+
+#### 1.7.6 — Assistant SQL not limited to session datasets ([BA-103](https://halo-powered.atlassian.net/browse/BA-103))  `📋 Planned`
+- **Intent:** the assistant can only query the session's datasets.
+- **Scope:** see the Jira bug and the Open question in [capabilities/datasources/spec.md](specs/capabilities/datasources/spec.md).
+- **Acceptance:** Statements naming entities outside the session's datasets are rejected with a clear message.
+
+#### 1.7.7 — Read-only SQL guard is a keyword blacklist ([BA-104](https://halo-powered.atlassian.net/browse/BA-104))  `📋 Planned`
+- **Intent:** read-only enforcement is correct and does not reject harmless queries.
+- **Scope:** see the Jira bug and the Open question in [capabilities/datasources/spec.md](specs/capabilities/datasources/spec.md).
+- **Acceptance:** A parser-based guard; `replace(...)` and `;` inside literals pass; Databricks writes are still rejected.
+
+#### 1.7.8 — PostgreSQL SSL skips certificate checks ([BA-105](https://halo-powered.atlassian.net/browse/BA-105))  `📋 Planned`
+- **Intent:** SSL connections are verified by default.
+- **Scope:** see the Jira bug and the Open question in [capabilities/datasources/spec.md](specs/capabilities/datasources/spec.md).
+- **Acceptance:** Certificates are verified unless the user opts out; a CA field exists.
+
+#### 1.7.9 — Fixed default APP_SECRET fallback ([BA-106](https://halo-powered.atlassian.net/browse/BA-106))  `📋 Planned`
+- **Intent:** encrypted keys are never protected by a known secret.
+- **Scope:** see the Jira bug and the Open question in [product/non-functional.md](specs/product/non-functional.md).
+- **Acceptance:** With no `APP_SECRET`, a random secret is generated and persisted, or the backend refuses to start.
+
+#### 1.7.10 — Web-mode diagnostics export not redacted ([BA-107](https://halo-powered.atlassian.net/browse/BA-107))  `📋 Planned`
+- **Intent:** redaction is the same in desktop and browser modes.
+- **Scope:** see the Jira bug and the Open question in [capabilities/diagnostics/spec.md](specs/capabilities/diagnostics/spec.md).
+- **Acceptance:** The browser-mode log buffer and export are redacted.
+
+#### 1.7.11 — Tailoring after a revert overwrites a version ([BA-92](https://halo-powered.atlassian.net/browse/BA-92))  `📋 Planned`
+- **Intent:** every visual version is immutable once written.
+- **Scope:** see the Jira bug and the Open question in [capabilities/visuals/spec.md](specs/capabilities/visuals/spec.md).
+- **Acceptance:** After revert v3 → v1 and a tailor, the new version is v4 and v1–v3 are unchanged.
+
+#### 1.7.12 — Interrupted eval runs stay running ([BA-93](https://halo-powered.atlassian.net/browse/BA-93))  `📋 Planned`
+- **Intent:** an interrupted eval run never blocks the agent or the UI.
+- **Scope:** see the Jira bug and the Open question in [capabilities/agents-evals/spec.md](specs/capabilities/agents-evals/spec.md).
+- **Acceptance:** On startup, runs left `running` are marked interrupted and can be deleted.
+
+#### 1.7.13 — Auto-repair rebuilds from stale data ([BA-94](https://halo-powered.atlassian.net/browse/BA-94))  `📋 Planned`
+- **Intent:** repairing a visual never loses its data.
+- **Scope:** see the Jira bug and the Open question in [capabilities/visuals/spec.md](specs/capabilities/visuals/spec.md).
+- **Acceptance:** Auto-repair uses the current version's `data.json`.
+
+#### 1.7.14 — Verified query id rotates on re-approval ([BA-95](https://halo-powered.atlassian.net/browse/BA-95))  `📋 Planned`
+- **Intent:** promoted metrics keep their source link.
+- **Scope:** see the Jira bug and the Open question in [capabilities/verified-queries/spec.md](specs/capabilities/verified-queries/spec.md).
+- **Acceptance:** Re-approving an answer keeps the verified query id.
+
+#### 1.7.15 — Testing data clobbers same-name datasources ([BA-96](https://halo-powered.atlassian.net/browse/BA-96))  `📋 Planned`
+- **Intent:** loading or removing sample data never touches user records.
+- **Scope:** see the Jira bug and the Open question in [capabilities/testing-data/spec.md](specs/capabilities/testing-data/spec.md).
+- **Acceptance:** Load and Remove affect only records the fixture created.
+
+#### 1.7.16 — Dataset rename duplicates; delete unconfirmed ([BA-97](https://halo-powered.atlassian.net/browse/BA-97))  `📋 Planned`
+- **Intent:** dataset edits and deletes are predictable.
+- **Scope:** see the Jira bug and the Open question in [capabilities/datasets/spec.md](specs/capabilities/datasets/spec.md).
+- **Acceptance:** Rename updates in place; delete asks for confirmation and names the sessions that use the dataset.
+
+#### 1.7.17 — Datasource-scoped knowledge is never used ([BA-98](https://halo-powered.atlassian.net/browse/BA-98))  `📋 Planned`
+- **Intent:** every saved knowledge entry can reach the assistant.
+- **Scope:** see the Jira bug and the Open question in [capabilities/knowledge/spec.md](specs/capabilities/knowledge/spec.md).
+- **Acceptance:** Datasource-scoped entries are injected for sessions on that datasource, or the scope is removed.
+
+#### 1.7.18 — Stale application-shell visual baseline ([BA-99](https://halo-powered.atlassian.net/browse/BA-99))  `📋 Planned`
+- **Intent:** the visual baseline matches the current shell.
+- **Scope:** see the Jira bug and the Open question in [system/ui.md](specs/system/ui.md).
+- **Acceptance:** The baseline shows the current sidebar and the visual test passes.
+
+#### 1.7.19 — Sidebar session order goes stale ([BA-100](https://halo-powered.atlassian.net/browse/BA-100))  `📋 Planned`
+- **Intent:** the most recently used session is on top.
+- **Scope:** see the Jira bug and the Open question in [capabilities/sessions-chat/spec.md](specs/capabilities/sessions-chat/spec.md).
+- **Acceptance:** After a chat turn the session moves to the top without a reload.
 
 ## Backlog
 

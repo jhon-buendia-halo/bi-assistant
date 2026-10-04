@@ -1,0 +1,12 @@
+# Evidence — 0.2.2 Rebuildable system specs (BA-90)
+
+Process and docs change only: no product code or test changed, so the E2E suite was not re-run.
+
+- [spec-checks.py](spec-checks.py) is the acceptance check from roadmap 0.2.2. Run it from anywhere in the repo with `python3 evidence/0.2.2/spec-checks.py`. It checks that:
+  - every file listed in `specs/README.md` exists;
+  - every relative link in `specs/`, CLAUDE.md and roadmap.md resolves;
+  - every Gherkin Feature from the old `gherkin.md` (read from `origin/main`) sits verbatim in exactly one capability spec;
+  - every backend route appears in `system/api.md`, every collection in `system/data-model.md` and every registered agent in `system/agents.md`;
+  - every capability spec has the required sections.
+- [spec-checks.txt](spec-checks.txt) is its output on this branch: all checks passed.
+- [findings.md](findings.md) lists the bugs, security gaps and drift the backfill found. None were fixed.

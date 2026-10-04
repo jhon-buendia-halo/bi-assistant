@@ -1,0 +1,26 @@
+PASS specs/README.md lists 35 files; missing: []
+PASS relative links in 35 files resolve
+PASS Feature 'Agents' moved verbatim into exactly one capability spec: ['specs/capabilities/agents-evals/spec.md']
+PASS Feature 'Chat and visuals' moved verbatim into exactly one capability spec: ['specs/capabilities/sessions-chat/spec.md']
+PASS Feature 'Diagnostics' moved verbatim into exactly one capability spec: ['specs/capabilities/diagnostics/spec.md']
+PASS Feature 'Layout and accessibility' moved verbatim into exactly one capability spec: ['specs/capabilities/app-shell/spec.md']
+PASS Feature 'Datasources, datasets, and sessions (World Cup database)' moved verbatim into exactly one capability spec: ['specs/capabilities/datasources/spec.md']
+PASS gherkin.md removed from the repo root
+PASS 52 backend routes appear in system/api.md; absent: []
+PASS 9 collections appear in system/data-model.md; absent: []
+PASS 6 registered agents appear in system/agents.md; absent: []
+PASS specs/capabilities/agents-evals/spec.md has all capability sections; missing: []
+PASS specs/capabilities/app-shell/spec.md has all capability sections; missing: []
+PASS specs/capabilities/datasets/spec.md has all capability sections; missing: []
+PASS specs/capabilities/datasources/spec.md has all capability sections; missing: []
+PASS specs/capabilities/deep-analysis/spec.md has all capability sections; missing: []
+PASS specs/capabilities/diagnostics/spec.md has all capability sections; missing: []
+PASS specs/capabilities/knowledge/spec.md has all capability sections; missing: []
+PASS specs/capabilities/llm-settings/spec.md has all capability sections; missing: []
+PASS specs/capabilities/metrics/spec.md has all capability sections; missing: []
+PASS specs/capabilities/sessions-chat/spec.md has all capability sections; missing: []
+PASS specs/capabilities/testing-data/spec.md has all capability sections; missing: []
+PASS specs/capabilities/verified-queries/spec.md has all capability sections; missing: []
+PASS specs/capabilities/visuals/spec.md has all capability sections; missing: []
+
+ALL CHECKS PASSED
