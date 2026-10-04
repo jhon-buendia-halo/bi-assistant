@@ -34,6 +34,7 @@ Fix the bugs and blockers found during user testing ([BA-10](../BA-10/spec.md)) 
 | [BA-98](https://halo-powered.atlassian.net/browse/BA-98) | Datasource-scoped knowledge is never used (Bug) | 1.7.17 |
 | [BA-99](https://halo-powered.atlassian.net/browse/BA-99) | Stale application-shell visual baseline (Bug) | 1.7.18 |
 | [BA-100](https://halo-powered.atlassian.net/browse/BA-100) | Sidebar session order goes stale (Bug) | 1.7.19 |
+| [BA-109](https://halo-powered.atlassian.net/browse/BA-109) | Desktop renderer ignores a non-default `BACKEND_PORT` (Bug; moved from roadmap 0.1.1) | 1.7.20 |
 
 ## Specs touched
 Decided per bug. Known so far: [sessions-chat](../../capabilities/sessions-chat/spec.md) for BA-83 (history shown on return, same-id refresh must not abort a stream); [delivery](../../system/delivery.md) for release stabilization. The spec-backfill bugs (BA-91 to BA-107) each name their spec in Jira and in [evidence/0.2.2/findings.md](../../../evidence/0.2.2/findings.md).

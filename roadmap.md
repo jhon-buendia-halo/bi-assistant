@@ -25,18 +25,12 @@ Correctness fixes to the shipped app that don't belong to a product phase.
 
 ### Milestone 0.1 — Desktop runtime correctness
 
+*No Jira epic. New desktop-runtime bugs go under Milestone 1.7 Bug Fixes (BA-11).*
+
 Electron shell, backend spawning, and renderer↔backend wiring: the app must behave the same however it is launched or configured.
 
-#### 0.1.1 — Renderer honours a non-default `BACKEND_PORT`  `📋 Planned`
-- **Intent:** setting `BACKEND_PORT` must move the whole desktop app to that port, not just the backend. Today the main process spawns the backend and runs its readiness probe on `BACKEND_PORT` (`frontend/electron/main.cjs`), but under `file://` the renderer hardcodes `http://localhost:3000` (`frontend/src/app/core/config/api.config.ts`), and the preload bridge doesn't expose the port. With `BACKEND_PORT=3123` the window opens and every API call fails, or it quietly reaches whatever else is listening on 3000.
-- **Scope:** pass the resolved port from the main process to the renderer before Angular boots: through `preload.cjs` (`contextBridge`, e.g. `window.qti.backendPort`) or a query parameter on the `loadFile` / dev URL. Make `API_BASE_URL` read it and fall back to 3000. Cover `npm run electron`, `electron:dev` and packaged builds.
-- **Out of scope:** automatic free-port fallback in Electron (the CLI already has one); the web / `npx` mode, which is same-origin and unaffected.
-- **Acceptance:**
-  - With `BACKEND_PORT=3123`, the packaged and `npm run electron` apps load sessions, datasources and chat against port 3123, and nothing requests `:3000`.
-  - With no `BACKEND_PORT`, behaviour is unchanged.
-  - A Playwright scenario in `frontend/e2e/` launches Electron with a non-default `BACKEND_PORT` and asserts the shell loads data (new Gherkin scenario under *Layout and accessibility* or a new *Desktop runtime* feature).
-  - The `API_BASE_URL` sentence in CLAUDE.md ("Known gap") is updated.
-- **Notes:** found while drawing the C4 container diagram ([specs/system/architecture.md](specs/system/architecture.md), Level 2). Related to ADR-0001.
+#### 0.1.1 — Renderer honours a non-default `BACKEND_PORT`  `🚫 Cut`
+- Moved to 1.7.20 (Milestone 1.7 Bug Fixes) as Jira bug [BA-109](https://halo-powered.atlassian.net/browse/BA-109) under Bug Fixes (BA-11). This milestone has no Jira epic, so the Epic gate would block work here.
 
 ### Milestone 0.2 — Delivery process ([BA-89](https://halo-powered.atlassian.net/browse/BA-89))
 
@@ -49,7 +43,7 @@ How work is planned, specified, built, verified and traced. It covers the repo's
   - Seeded process documents at the repo root: roadmap, architecture (C4 diagrams and ADRs), gherkin, changelog, retrospective and evidence.
   - The 1.0 Beta plan imported from Jira.
   - CLAUDE.md corrected where it had drifted from the code.
-- **Out of scope:** product code changes. The port bug is tracked separately as 0.1.1.
+- **Out of scope:** product code changes. The port bug is tracked separately as 1.7.20 (BA-109).
 - **Acceptance:**
   - CLAUDE.md describes the workflow and conventions.
   - Every process file it references exists.
@@ -326,6 +320,17 @@ Bugs found by the spec backfill (0.2.2), security first. Details: [evidence/0.2.
 - **Intent:** the most recently used session is on top.
 - **Scope:** see the Jira bug and the Open question in [capabilities/sessions-chat/spec.md](specs/capabilities/sessions-chat/spec.md).
 - **Acceptance:** After a chat turn the session moves to the top without a reload.
+
+#### 1.7.20 — Renderer honours a non-default `BACKEND_PORT` ([BA-109](https://halo-powered.atlassian.net/browse/BA-109))  `📋 Planned`
+- **Intent:** setting `BACKEND_PORT` must move the whole desktop app to that port, not just the backend. Today the main process spawns the backend and runs its readiness probe on `BACKEND_PORT` (`frontend/electron/main.cjs`), but under `file://` the renderer hardcodes `http://localhost:3000` (`frontend/src/app/core/config/api.config.ts`), and the preload bridge doesn't expose the port. With `BACKEND_PORT=3123` the window opens and every API call fails, or it quietly reaches whatever else is listening on 3000.
+- **Scope:** pass the resolved port from the main process to the renderer before Angular boots: through `preload.cjs` (`contextBridge`, e.g. `window.qti.backendPort`) or a query parameter on the `loadFile` / dev URL. Make `API_BASE_URL` read it and fall back to 3000. Cover `npm run electron`, `electron:dev` and packaged builds.
+- **Out of scope:** automatic free-port fallback in Electron (the CLI already has one); the web / `npx` mode, which is same-origin and unaffected.
+- **Acceptance:**
+  - With `BACKEND_PORT=3123`, the packaged and `npm run electron` apps load sessions, datasources and chat against port 3123, and nothing requests `:3000`.
+  - With no `BACKEND_PORT`, behaviour is unchanged.
+  - A Playwright scenario in `frontend/e2e/` launches Electron with a non-default `BACKEND_PORT` and asserts the shell loads data (new Gherkin scenario in [specs/capabilities/app-shell/spec.md](specs/capabilities/app-shell/spec.md)).
+  - The `API_BASE_URL` sentence in CLAUDE.md ("Known gap") is updated.
+- **Notes:** moved from 0.1.1 on 2026-10-04 so the bug sits under a Jira epic (BA-11). Found while drawing the C4 container diagram ([specs/system/architecture.md](specs/system/architecture.md), Level 2). Related to ADR-0001.
 
 ## Backlog
 

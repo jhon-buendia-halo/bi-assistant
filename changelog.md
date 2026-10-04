@@ -4,6 +4,9 @@ Running log of every meaningful change, newest first. See *Logging convention* a
 
 ## 2026-10-04
 
+### Changed
+- Roadmap 0.1.1 (the renderer ignoring a non-default `BACKEND_PORT`) is now **1.7.20** under Bug Fixes. It is tracked as Jira bug [BA-109](https://halo-powered.atlassian.net/browse/BA-109) under epic BA-11, because Milestone 0.1 has no epic and the Epic gate would block it. 0.1.1 is marked `🚫 Cut` with a pointer to the new entry. References in CLAUDE.md, the BA-11 epic spec and the specs (`non-functional.md`, `delivery.md`, `api.md`) are updated. Evidence: docs only; `python3 scripts/check-specs.py` passes and the spec check is green on the PR.
+
 ### Added
 - **The spec check is now required on `main`** (roadmap 0.2.3, [BA-108](https://halo-powered.atlassian.net/browse/BA-108)):
   - A repository ruleset requires "Specs match the code" before a PR can merge. Direct pushes without that status are rejected.
