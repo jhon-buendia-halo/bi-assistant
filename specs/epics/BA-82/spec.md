@@ -1,6 +1,6 @@
 # BA-82 — Agent Routines
 
-- **Jira:** [BA-82](https://halo-powered.atlassian.net/browse/BA-82) · **Roadmap:** Backlog · **Status:** Draft (to be confirmed by the user)
+- **Jira:** [BA-82](https://halo-powered.atlassian.net/browse/BA-82) · **Roadmap:** Backlog · **Status:** Draft — confirmation waived by the user on 2026-10-04 (one-time exception); work on its stories may start
 
 ## Goal
 To be agreed. The Jira epic has an empty description, no dates, no fix version, no stories and no assignee. The title suggests agents running repeatable, possibly scheduled, tasks, but this is an inference, not a decision.

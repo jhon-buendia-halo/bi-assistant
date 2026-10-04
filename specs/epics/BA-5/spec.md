@@ -1,6 +1,6 @@
 # BA-5 — Data Connectors
 
-- **Jira:** [BA-5](https://halo-powered.atlassian.net/browse/BA-5) · **Roadmap:** Milestone 1.5 · **Status:** Draft (to be confirmed by the user)
+- **Jira:** [BA-5](https://halo-powered.atlassian.net/browse/BA-5) · **Roadmap:** Milestone 1.5 · **Status:** Draft — confirmation waived by the user on 2026-10-04 (one-time exception); work on its stories may start
 
 ## Goal
 Beta users can connect to the sources they actually have. Each connector gives reliable connection setup, schema discovery and read-only querying.

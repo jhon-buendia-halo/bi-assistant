@@ -1,6 +1,6 @@
 # BA-12 — Response Reliability Signals
 
-- **Jira:** [BA-12](https://halo-powered.atlassian.net/browse/BA-12) · **Roadmap:** Milestone 1.4 · **Status:** Draft (to be confirmed by the user)
+- **Jira:** [BA-12](https://halo-powered.atlassian.net/browse/BA-12) · **Roadmap:** Milestone 1.4 · **Status:** Draft — confirmation waived by the user on 2026-10-04 (one-time exception); work on its stories may start
 
 ## Goal
 Show users how much to trust each answer, so beta users can tell a solid answer from one that needs checking. Signals: whether the SQL was verified or auto-corrected, a match with a verified query, empty or suspicious results, and the knowledge and data the answer relied on.

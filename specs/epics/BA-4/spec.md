@@ -1,6 +1,6 @@
 # BA-4 — Knowledge Store
 
-- **Jira:** [BA-4](https://halo-powered.atlassian.net/browse/BA-4) · **Roadmap:** Milestone 1.3 · **Status:** Draft (to be confirmed by the user)
+- **Jira:** [BA-4](https://halo-powered.atlassian.net/browse/BA-4) · **Roadmap:** Milestone 1.3 · **Status:** Draft — confirmation waived by the user on 2026-10-04 (one-time exception); work on its stories may start
 
 ## Goal
 Curated knowledge the assistant treats as authoritative: business-glossary terms, standing instructions and default filters, scoped to a datasource or dataset. Analysts author and curate it, suggestions are mined from past sessions, and the relevant knowledge is injected into each turn, so terms like "revenue" always mean the same thing.

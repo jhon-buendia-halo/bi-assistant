@@ -1,6 +1,6 @@
 # BA-2 — Data Model DSL
 
-- **Jira:** [BA-2](https://halo-powered.atlassian.net/browse/BA-2) · **Roadmap:** Milestone 1.2 · **Status:** Draft (to be confirmed by the user)
+- **Jira:** [BA-2](https://halo-powered.atlassian.net/browse/BA-2) · **Roadmap:** Milestone 1.2 · **Status:** Draft — confirmation waived by the user on 2026-10-04 (one-time exception); work on its stories may start
 
 ## Goal
 Every dataset has one versioned, storage-neutral description of the data the assistant reasons over: entities, attributes, relationships and business metrics. It is the single source of truth that grounds SQL generation, so answers stop depending on what the model infers from raw schema alone.

@@ -1,6 +1,6 @@
 # BA-11 — Bug Fixes
 
-- **Jira:** [BA-11](https://halo-powered.atlassian.net/browse/BA-11) · **Roadmap:** Milestone 1.7 · **Status:** Draft (to be confirmed by the user)
+- **Jira:** [BA-11](https://halo-powered.atlassian.net/browse/BA-11) · **Roadmap:** Milestone 1.7 · **Status:** Draft — confirmation waived by the user on 2026-10-04 (one-time exception); work on its stories may start
 
 ## Goal
 Fix the bugs and blockers found during user testing ([BA-10](../BA-10/spec.md)) and the golden-dataset evals ([BA-9](../BA-9/spec.md)), and stabilize the build for the 1.0 Beta release on 2026-10-31.

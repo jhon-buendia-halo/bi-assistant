@@ -1,6 +1,6 @@
 # BA-10 — User Testing
 
-- **Jira:** [BA-10](https://halo-powered.atlassian.net/browse/BA-10) · **Roadmap:** Milestone 1.6 · **Status:** Draft (to be confirmed by the user)
+- **Jira:** [BA-10](https://halo-powered.atlassian.net/browse/BA-10) · **Roadmap:** Milestone 1.6 · **Status:** Draft — confirmation waived by the user on 2026-10-04 (one-time exception); work on its stories may start
 
 ## Goal
 Find what breaks or confuses real users before release: they install the beta build, connect a source, ask questions and build visuals. Issues, confusing flows and wrong answers are captured as bugs or feedback to feed the Bug Fixes week ([BA-11](../BA-11/spec.md)).

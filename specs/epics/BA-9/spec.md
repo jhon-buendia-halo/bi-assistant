@@ -1,6 +1,6 @@
 # BA-9 — Golden Dataset and Evals
 
-- **Jira:** [BA-9](https://halo-powered.atlassian.net/browse/BA-9) · **Roadmap:** Milestone 1.1 · **Status:** Draft (to be confirmed by the user)
+- **Jira:** [BA-9](https://halo-powered.atlassian.net/browse/BA-9) · **Roadmap:** Milestone 1.1 · **Status:** Draft — confirmation waived by the user on 2026-10-04 (one-time exception); work on its stories may start
 
 ## Goal
 Know, with numbers, whether a change made answers better or worse. A golden dataset of representative questions with known-correct answers on the sample fixtures, and an eval suite (LLM judge plus SQL and result checks) that runs against it. It runs throughout October so every change to the DSL, knowledge store or connectors is measured before the beta ships.
