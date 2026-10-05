@@ -1,0 +1,2206 @@
+{
+  "schemaVersion": 2,
+  "runId": "a8a5fbd5-5925-4a7e-a10a-a42a121cd834",
+  "label": "iter4-final-repeat3",
+  "harness": "in-app",
+  "suite": "genomics",
+  "agentKey": "assistant",
+  "datasets": [
+    "Genomics"
+  ],
+  "datasourceKind": "postgres",
+  "dialect": "postgres",
+  "model": "openai/gpt-5",
+  "reasoningEffort": "high",
+  "judgeModel": "openai/gpt-5",
+  "repeat": 3,
+  "arm": "baseline",
+  "engine": {
+    "careful": "off",
+    "answerReview": false,
+    "sqlRepair": true,
+    "repairIntentGuard": true,
+    "context": "curated",
+    "columnProfiles": false,
+    "inlineKnowledge": false,
+    "rankedKnowledge": false,
+    "lookupTools": false,
+    "sqlPrecheck": false,
+    "descriptiveErrors": false,
+    "extendedGuards": false,
+    "staticFirstContext": false,
+    "promptAblation": []
+  },
+  "configHash": "84fab82d4506",
+  "startedAt": "2026-09-28T19:27:58.993Z",
+  "finishedAt": "2026-09-28T19:44:54.399Z",
+  "durationMs": 1015406,
+  "appVersion": "0.10.1",
+  "gitCommit": "f04defd",
+  "totals": {
+    "cases": 17,
+    "passed": 0,
+    "failed": 16,
+    "errored": 1,
+    "gaps": 0,
+    "skipped": 0
+  },
+  "summary": {
+    "passK": 0,
+    "passKRate": 0,
+    "scored": 17,
+    "meanPassRate": 0,
+    "flaky": 0,
+    "gaps": 0,
+    "answeredEveryTime": 17,
+    "answeredObserved": 17,
+    "behaviourPassK": 0,
+    "behaviourTotal": 3,
+    "byCategory": {
+      "ratio-trap": {
+        "total": 1,
+        "passK": 0,
+        "meanPassRate": 0
+      },
+      "constant-column": {
+        "total": 1,
+        "passK": 0,
+        "meanPassRate": 0
+      },
+      "empty-column": {
+        "total": 1,
+        "passK": 0,
+        "meanPassRate": 0
+      },
+      "ties": {
+        "total": 1,
+        "passK": 0,
+        "meanPassRate": 0
+      },
+      "value-vocabulary": {
+        "total": 1,
+        "passK": 0,
+        "meanPassRate": 0
+      },
+      "out-of-scope": {
+        "total": 1,
+        "passK": 0,
+        "meanPassRate": 0
+      },
+      "clarification": {
+        "total": 1,
+        "passK": 0,
+        "meanPassRate": 0
+      },
+      "id-vs-name": {
+        "total": 1,
+        "passK": 0,
+        "meanPassRate": 0
+      },
+      "metric-definition": {
+        "total": 1,
+        "passK": 0,
+        "meanPassRate": 0
+      },
+      "default-filter": {
+        "total": 1,
+        "passK": 0,
+        "meanPassRate": 0
+      },
+      "multi-step-join": {
+        "total": 1,
+        "passK": 0,
+        "meanPassRate": 0
+      },
+      "discovery": {
+        "total": 1,
+        "passK": 0,
+        "meanPassRate": 0
+      },
+      "domain-semantics": {
+        "total": 2,
+        "passK": 0,
+        "meanPassRate": 0
+      },
+      "quality-filter": {
+        "total": 1,
+        "passK": 0,
+        "meanPassRate": 0
+      },
+      "unit-confusion": {
+        "total": 1,
+        "passK": 0,
+        "meanPassRate": 0
+      },
+      "control": {
+        "total": 1,
+        "passK": 0,
+        "meanPassRate": 0
+      }
+    },
+    "byDifficulty": {
+      "hard": {
+        "total": 7,
+        "passK": 0
+      },
+      "easy": {
+        "total": 4,
+        "passK": 0
+      },
+      "medium": {
+        "total": 6,
+        "passK": 0
+      }
+    },
+    "tokensPerCase": 13978
+  },
+  "categories": {
+    "ratio-trap": {
+      "total": 1,
+      "passed": 0
+    },
+    "constant-column": {
+      "total": 1,
+      "passed": 0
+    },
+    "empty-column": {
+      "total": 1,
+      "passed": 0
+    },
+    "ties": {
+      "total": 1,
+      "passed": 0
+    },
+    "value-vocabulary": {
+      "total": 1,
+      "passed": 0
+    },
+    "out-of-scope": {
+      "total": 1,
+      "passed": 0
+    },
+    "clarification": {
+      "total": 1,
+      "passed": 0
+    },
+    "id-vs-name": {
+      "total": 1,
+      "passed": 0
+    },
+    "metric-definition": {
+      "total": 1,
+      "passed": 0
+    },
+    "default-filter": {
+      "total": 1,
+      "passed": 0
+    },
+    "multi-step-join": {
+      "total": 1,
+      "passed": 0
+    },
+    "discovery": {
+      "total": 1,
+      "passed": 0
+    },
+    "domain-semantics": {
+      "total": 2,
+      "passed": 0
+    },
+    "quality-filter": {
+      "total": 1,
+      "passed": 0
+    },
+    "unit-confusion": {
+      "total": 1,
+      "passed": 0
+    },
+    "control": {
+      "total": 1,
+      "passed": 0
+    }
+  },
+  "usage": {
+    "inputTokens": 35054,
+    "outputTokens": 6879,
+    "totalTokens": 41933,
+    "reasoningTokens": 6336,
+    "cachedInputTokens": 28544,
+    "calls": 4
+  },
+  "costIncomplete": true,
+  "cases": [
+    {
+      "id": "allele-fraction-by-gene",
+      "category": "ratio-trap",
+      "question": "Which five genes show the highest average alternate-allele fraction?",
+      "difficulty": "hard",
+      "verdict": "FAIL",
+      "runs": 3,
+      "passes": 0,
+      "flaky": false,
+      "failureLabel": "no-sql",
+      "reason": "check-includes",
+      "durationMs": 72043,
+      "usage": {
+        "inputTokens": 26086,
+        "outputTokens": 4660,
+        "totalTokens": 30746,
+        "reasoningTokens": 4416,
+        "cachedInputTokens": 20608,
+        "calls": 2
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-includes",
+              "passed": false,
+              "reason": "expected \"MUTYH\" in the answer — answer was \"I completed the data analysis but could not produce a final response. Please retry your question.\""
+            },
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"run_readonly_sql\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": false,
+              "reason": "the agent never ran a SQL query"
+            },
+            {
+              "id": "result-set-match",
+              "passed": false,
+              "reason": "the agent ran no successful run_readonly_sql to compare"
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 2,
+          "calledTools": [
+            "describe_entity",
+            "describe_entity"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "no-sql",
+          "durationMs": 19324,
+          "usage": {
+            "inputTokens": 17821,
+            "outputTokens": 989,
+            "totalTokens": 18810,
+            "reasoningTokens": 832,
+            "cachedInputTokens": 12672,
+            "calls": 1
+          }
+        },
+        {
+          "attempt": 2,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-includes",
+              "passed": false,
+              "reason": "expected \"MUTYH\" in the answer — answer was \"I completed the data analysis but could not produce a final response. Please retry your question.\""
+            },
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"run_readonly_sql\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": false,
+              "reason": "the agent never ran a SQL query"
+            },
+            {
+              "id": "result-set-match",
+              "passed": false,
+              "reason": "the agent ran no successful run_readonly_sql to compare"
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 1,
+          "calledTools": [
+            "describe_entity"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "no-sql",
+          "durationMs": 49749,
+          "usage": {
+            "inputTokens": 8265,
+            "outputTokens": 3671,
+            "totalTokens": 11936,
+            "reasoningTokens": 3584,
+            "cachedInputTokens": 7936,
+            "calls": 1
+          }
+        },
+        {
+          "attempt": 3,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-includes",
+              "passed": false,
+              "reason": "expected \"MUTYH\" in the answer — answer was \"I completed the data analysis but could not produce a final response. Please retry your question.\""
+            },
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"run_readonly_sql\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": false,
+              "reason": "the agent never ran a SQL query"
+            },
+            {
+              "id": "result-set-match",
+              "passed": false,
+              "reason": "the agent ran no successful run_readonly_sql to compare"
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "no-sql",
+          "durationMs": 2970
+        }
+      ]
+    },
+    {
+      "id": "variants-by-assembly",
+      "category": "constant-column",
+      "question": "How do our variants break down across genome assemblies?",
+      "difficulty": "easy",
+      "verdict": "FAIL",
+      "runs": 3,
+      "passes": 0,
+      "flaky": false,
+      "failureLabel": "no-sql",
+      "reason": "check-includes",
+      "durationMs": 10948,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-includes",
+              "passed": false,
+              "reason": "expected \"GRCh38\" in the answer — answer was \"I completed the data analysis but could not produce a final response. Please retry your question.\""
+            },
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"run_readonly_sql\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": false,
+              "reason": "the agent never ran a SQL query"
+            },
+            {
+              "id": "result-set-match",
+              "passed": false,
+              "reason": "the agent ran no successful run_readonly_sql to compare"
+            },
+            {
+              "id": "llm-judge",
+              "passed": false,
+              "reason": "MEASUREMENT GAP (eval harness, not the agent): judge error (twice) — You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.",
+              "gap": true
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "no-sql",
+          "durationMs": 4095
+        },
+        {
+          "attempt": 2,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-includes",
+              "passed": false,
+              "reason": "expected \"GRCh38\" in the answer — answer was \"I completed the data analysis but could not produce a final response. Please retry your question.\""
+            },
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"run_readonly_sql\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": false,
+              "reason": "the agent never ran a SQL query"
+            },
+            {
+              "id": "result-set-match",
+              "passed": false,
+              "reason": "the agent ran no successful run_readonly_sql to compare"
+            },
+            {
+              "id": "llm-judge",
+              "passed": false,
+              "reason": "MEASUREMENT GAP (eval harness, not the agent): judge error (twice) — You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.",
+              "gap": true
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "no-sql",
+          "durationMs": 3887
+        },
+        {
+          "attempt": 3,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-includes",
+              "passed": false,
+              "reason": "expected \"GRCh38\" in the answer — answer was \"I completed the data analysis but could not produce a final response. Please retry your question.\""
+            },
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"run_readonly_sql\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": false,
+              "reason": "the agent never ran a SQL query"
+            },
+            {
+              "id": "result-set-match",
+              "passed": false,
+              "reason": "the agent ran no successful run_readonly_sql to compare"
+            },
+            {
+              "id": "llm-judge",
+              "passed": false,
+              "reason": "MEASUREMENT GAP (eval harness, not the agent): judge error (twice) — You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.",
+              "gap": true
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "no-sql",
+          "durationMs": 2966
+        }
+      ]
+    },
+    {
+      "id": "variants-with-rsid",
+      "category": "empty-column",
+      "question": "How many of our variants have a dbSNP rsID?",
+      "difficulty": "easy",
+      "verdict": "FAIL",
+      "runs": 3,
+      "passes": 0,
+      "flaky": false,
+      "failureLabel": "no-sql",
+      "reason": "check-called-tool",
+      "durationMs": 42085,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"run_readonly_sql\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": false,
+              "reason": "the agent never ran a SQL query"
+            },
+            {
+              "id": "result-set-match",
+              "passed": false,
+              "reason": "the agent ran no successful run_readonly_sql to compare"
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "no-sql",
+          "durationMs": 20374
+        },
+        {
+          "attempt": 2,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"run_readonly_sql\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": false,
+              "reason": "the agent never ran a SQL query"
+            },
+            {
+              "id": "result-set-match",
+              "passed": false,
+              "reason": "the agent ran no successful run_readonly_sql to compare"
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "no-sql",
+          "durationMs": 1432
+        },
+        {
+          "attempt": 3,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"run_readonly_sql\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": false,
+              "reason": "the agent never ran a SQL query"
+            },
+            {
+              "id": "result-set-match",
+              "passed": false,
+              "reason": "the agent ran no successful run_readonly_sql to compare"
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "no-sql",
+          "durationMs": 20279
+        }
+      ]
+    },
+    {
+      "id": "genes-with-seven-pathogenic",
+      "category": "ties",
+      "question": "Which genes carry exactly seven pathogenic variants?",
+      "difficulty": "medium",
+      "verdict": "FAIL",
+      "runs": 3,
+      "passes": 0,
+      "flaky": false,
+      "failureLabel": "no-sql",
+      "reason": "check-includes",
+      "durationMs": 14298,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-includes",
+              "passed": false,
+              "reason": "expected \"MLH1\" in the answer — answer was \"I completed the data analysis but could not produce a final response. Please retry your question.\""
+            },
+            {
+              "id": "check-matches",
+              "passed": false,
+              "reason": "expected the answer to match /\\bPTEN\\b/i — answer was \"I completed the data analysis but could not produce a final response. Please retry your question.\""
+            },
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"run_readonly_sql\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": false,
+              "reason": "the agent never ran a SQL query"
+            },
+            {
+              "id": "result-set-match",
+              "passed": false,
+              "reason": "the agent ran no successful run_readonly_sql to compare"
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "no-sql",
+          "durationMs": 10974
+        },
+        {
+          "attempt": 2,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-includes",
+              "passed": false,
+              "reason": "expected \"MLH1\" in the answer — answer was \"I completed the data analysis but could not produce a final response. Please retry your question.\""
+            },
+            {
+              "id": "check-matches",
+              "passed": false,
+              "reason": "expected the answer to match /\\bPTEN\\b/i — answer was \"I completed the data analysis but could not produce a final response. Please retry your question.\""
+            },
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"run_readonly_sql\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": false,
+              "reason": "the agent never ran a SQL query"
+            },
+            {
+              "id": "result-set-match",
+              "passed": false,
+              "reason": "the agent ran no successful run_readonly_sql to compare"
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "no-sql",
+          "durationMs": 1414
+        },
+        {
+          "attempt": 3,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-includes",
+              "passed": false,
+              "reason": "expected \"MLH1\" in the answer — answer was \"I completed the data analysis but could not produce a final response. Please retry your question.\""
+            },
+            {
+              "id": "check-matches",
+              "passed": false,
+              "reason": "expected the answer to match /\\bPTEN\\b/i — answer was \"I completed the data analysis but could not produce a final response. Please retry your question.\""
+            },
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"run_readonly_sql\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": false,
+              "reason": "the agent never ran a SQL query"
+            },
+            {
+              "id": "result-set-match",
+              "passed": false,
+              "reason": "the agent ran no successful run_readonly_sql to compare"
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "no-sql",
+          "durationMs": 1910
+        }
+      ]
+    },
+    {
+      "id": "damaging-variant-count",
+      "category": "value-vocabulary",
+      "question": "How many damaging variants did we find?",
+      "difficulty": "medium",
+      "verdict": "FAIL",
+      "runs": 3,
+      "passes": 0,
+      "flaky": false,
+      "failureLabel": "format-only",
+      "reason": "check-matches",
+      "durationMs": 36710,
+      "usage": {
+        "inputTokens": 8263,
+        "outputTokens": 1747,
+        "totalTokens": 10010,
+        "reasoningTokens": 1536,
+        "cachedInputTokens": 7936,
+        "calls": 1
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-matches",
+              "passed": false,
+              "reason": "expected the answer to match /likely[_ ]pathogenic/i — answer was \"I completed the data analysis but could not produce a final response. Please retry your question.\""
+            },
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": true
+            },
+            {
+              "id": "result-set-match",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT\n  COUNT(*) AS damaging_variants,\n  SUM(CASE WHEN clinical_significance = 'PATHOGENIC' THEN 1 ELSE 0 END) AS pathogenic_variants,\n  SUM(CASE WHEN clinical_significance = 'LIKELY_PATHOGENIC' THEN 1 ELSE 0 END) AS likely_pathogenic_variants\nFROM world_cup.genomics.variants\nWHERE clinical_significance IN ('PATHOGENIC','LIKELY_PATHOGENIC');",
+          "sql": [
+            {
+              "sql": "SELECT\n  COUNT(*) AS damaging_variants,\n  SUM(CASE WHEN clinical_significance = 'PATHOGENIC' THEN 1 ELSE 0 END) AS pathogenic_variants,\n  SUM(CASE WHEN clinical_significance = 'LIKELY_PATHOGENIC' THEN 1 ELSE 0 END) AS likely_pathogenic_variants\nFROM world_cup.genomics.variants\nWHERE clinical_significance IN ('PATHOGENIC','LIKELY_PATHOGENIC');",
+              "ok": true,
+              "rowCount": 1
+            }
+          ],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 1,
+          "calledTools": [
+            "run_readonly_sql"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "format-only",
+          "durationMs": 32019,
+          "usage": {
+            "inputTokens": 8263,
+            "outputTokens": 1747,
+            "totalTokens": 10010,
+            "reasoningTokens": 1536,
+            "cachedInputTokens": 7936,
+            "calls": 1
+          }
+        },
+        {
+          "attempt": 2,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-matches",
+              "passed": false,
+              "reason": "expected the answer to match /likely[_ ]pathogenic/i — answer was \"I completed the data analysis but could not produce a final response. Please retry your question.\""
+            },
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"run_readonly_sql\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": false,
+              "reason": "the agent never ran a SQL query"
+            },
+            {
+              "id": "result-set-match",
+              "passed": false,
+              "reason": "the agent ran no successful run_readonly_sql to compare"
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "no-sql",
+          "durationMs": 3022
+        },
+        {
+          "attempt": 3,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-matches",
+              "passed": false,
+              "reason": "expected the answer to match /likely[_ ]pathogenic/i — answer was \"I completed the data analysis but could not produce a final response. Please retry your question.\""
+            },
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"run_readonly_sql\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": false,
+              "reason": "the agent never ran a SQL query"
+            },
+            {
+              "id": "result-set-match",
+              "passed": false,
+              "reason": "the agent ran no successful run_readonly_sql to compare"
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "no-sql",
+          "durationMs": 1669
+        }
+      ]
+    },
+    {
+      "id": "samples-sequenced-2015",
+      "category": "out-of-scope",
+      "question": "How many samples did we sequence in 2015?",
+      "difficulty": "medium",
+      "verdict": "FAIL",
+      "runs": 1,
+      "passes": 0,
+      "flaky": false,
+      "failureLabel": "judge",
+      "reason": "llm-judge",
+      "durationMs": 18378,
+      "usage": {
+        "inputTokens": 705,
+        "outputTokens": 472,
+        "totalTokens": 1177,
+        "reasoningTokens": 384,
+        "cachedInputTokens": 0,
+        "calls": 1
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "GAP",
+          "checks": [
+            {
+              "id": "check-did-not-call",
+              "passed": true
+            },
+            {
+              "id": "llm-judge",
+              "passed": false,
+              "reason": "MEASUREMENT GAP (eval harness, not the agent): judge error (twice) — You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.",
+              "gap": true
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 3458
+        },
+        {
+          "attempt": 2,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-did-not-call",
+              "passed": true
+            },
+            {
+              "id": "llm-judge",
+              "passed": false,
+              "reason": "The answer did not address the question: it failed to state that there are no 2015 samples and did not specify the covered period (2023–2024). (second opinion after a low-confidence or failed first grading)"
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "judge",
+          "durationMs": 9893,
+          "usage": {
+            "inputTokens": 705,
+            "outputTokens": 472,
+            "totalTokens": 1177,
+            "reasoningTokens": 384,
+            "cachedInputTokens": 0,
+            "calls": 1
+          }
+        },
+        {
+          "attempt": 3,
+          "verdict": "GAP",
+          "checks": [
+            {
+              "id": "check-did-not-call",
+              "passed": true
+            },
+            {
+              "id": "llm-judge",
+              "passed": false,
+              "reason": "MEASUREMENT GAP (eval harness, not the agent): judge error (twice) — You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.",
+              "gap": true
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 5027
+        }
+      ]
+    },
+    {
+      "id": "most-important-gene",
+      "category": "clarification",
+      "question": "Which gene matters most in this cohort?",
+      "difficulty": "medium",
+      "verdict": "FAIL",
+      "runs": 3,
+      "passes": 0,
+      "flaky": false,
+      "failureLabel": "unknown",
+      "reason": "check-called-tool",
+      "durationMs": 9720,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"ask_clarification\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-did-not-call",
+              "passed": true
+            },
+            {
+              "id": "llm-judge",
+              "passed": false,
+              "reason": "MEASUREMENT GAP (eval harness, not the agent): judge error (twice) — You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.",
+              "gap": true
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "unknown",
+          "durationMs": 2902
+        },
+        {
+          "attempt": 2,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"ask_clarification\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-did-not-call",
+              "passed": true
+            },
+            {
+              "id": "llm-judge",
+              "passed": false,
+              "reason": "MEASUREMENT GAP (eval harness, not the agent): judge error (twice) — You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.",
+              "gap": true
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "unknown",
+          "durationMs": 2764
+        },
+        {
+          "attempt": 3,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"ask_clarification\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-did-not-call",
+              "passed": true
+            },
+            {
+              "id": "llm-judge",
+              "passed": false,
+              "reason": "MEASUREMENT GAP (eval harness, not the agent): judge error (twice) — You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.",
+              "gap": true
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "unknown",
+          "durationMs": 4054
+        }
+      ]
+    },
+    {
+      "id": "most-called-genes",
+      "category": "id-vs-name",
+      "question": "Which genes were called most often across our samples? Show the top five.",
+      "difficulty": "hard",
+      "verdict": "FAIL",
+      "runs": 3,
+      "passes": 0,
+      "flaky": false,
+      "failureLabel": "no-sql",
+      "reason": "check-includes",
+      "durationMs": 8714,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-includes",
+              "passed": false,
+              "reason": "expected \"CFTR\" in the answer — answer was \"I completed the data analysis but could not produce a final response. Please retry your question.\""
+            },
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"run_readonly_sql\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": false,
+              "reason": "the agent never ran a SQL query"
+            },
+            {
+              "id": "result-set-match",
+              "passed": false,
+              "reason": "the agent ran no successful run_readonly_sql to compare"
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "no-sql",
+          "durationMs": 2884
+        },
+        {
+          "attempt": 2,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-includes",
+              "passed": false,
+              "reason": "expected \"CFTR\" in the answer — answer was \"I completed the data analysis but could not produce a final response. Please retry your question.\""
+            },
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"run_readonly_sql\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": false,
+              "reason": "the agent never ran a SQL query"
+            },
+            {
+              "id": "result-set-match",
+              "passed": false,
+              "reason": "the agent ran no successful run_readonly_sql to compare"
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "no-sql",
+          "durationMs": 2552
+        },
+        {
+          "attempt": 3,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-includes",
+              "passed": false,
+              "reason": "expected \"CFTR\" in the answer — answer was \"I completed the data analysis but could not produce a final response. Please retry your question.\""
+            },
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"run_readonly_sql\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": false,
+              "reason": "the agent never ran a SQL query"
+            },
+            {
+              "id": "result-set-match",
+              "passed": false,
+              "reason": "the agent ran no successful run_readonly_sql to compare"
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "no-sql",
+          "durationMs": 3278
+        }
+      ]
+    },
+    {
+      "id": "mean-allele-fraction",
+      "category": "metric-definition",
+      "question": "What is our mean allele fraction, and how many calls is it based on?",
+      "difficulty": "hard",
+      "verdict": "FAIL",
+      "runs": 3,
+      "passes": 0,
+      "flaky": false,
+      "failureLabel": "no-sql",
+      "reason": "check-called-tool",
+      "durationMs": 6916,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"run_readonly_sql\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": false,
+              "reason": "the agent never ran a SQL query"
+            },
+            {
+              "id": "result-set-match",
+              "passed": false,
+              "reason": "the agent ran no successful run_readonly_sql to compare"
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "no-sql",
+          "durationMs": 1748
+        },
+        {
+          "attempt": 2,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"run_readonly_sql\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": false,
+              "reason": "the agent never ran a SQL query"
+            },
+            {
+              "id": "result-set-match",
+              "passed": false,
+              "reason": "the agent ran no successful run_readonly_sql to compare"
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "no-sql",
+          "durationMs": 1953
+        },
+        {
+          "attempt": 3,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"run_readonly_sql\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": false,
+              "reason": "the agent never ran a SQL query"
+            },
+            {
+              "id": "result-set-match",
+              "passed": false,
+              "reason": "the agent ran no successful run_readonly_sql to compare"
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "no-sql",
+          "durationMs": 3215
+        }
+      ]
+    },
+    {
+      "id": "cohort-sample-count",
+      "category": "default-filter",
+      "question": "How many samples do we have in the cohort?",
+      "difficulty": "medium",
+      "verdict": "ERROR",
+      "runs": 3,
+      "passes": 0,
+      "flaky": false,
+      "failureLabel": "no-sql",
+      "reason": "check-called-tool",
+      "durationMs": 743570,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"run_readonly_sql\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": false,
+              "reason": "the agent never ran a SQL query"
+            },
+            {
+              "id": "result-set-match",
+              "passed": false,
+              "reason": "the agent ran no successful run_readonly_sql to compare"
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "no-sql",
+          "durationMs": 1961
+        },
+        {
+          "attempt": 2,
+          "verdict": "ERROR",
+          "checks": [],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "timeout",
+          "error": "timeout after 300s",
+          "durationMs": 703600
+        },
+        {
+          "attempt": 3,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"run_readonly_sql\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": false,
+              "reason": "the agent never ran a SQL query"
+            },
+            {
+              "id": "result-set-match",
+              "passed": false,
+              "reason": "the agent ran no successful run_readonly_sql to compare"
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "no-sql",
+          "durationMs": 38009
+        }
+      ]
+    },
+    {
+      "id": "subjects-by-superpopulation",
+      "category": "multi-step-join",
+      "question": "How many subjects do we have in each superpopulation?",
+      "difficulty": "hard",
+      "verdict": "FAIL",
+      "runs": 3,
+      "passes": 0,
+      "flaky": false,
+      "failureLabel": "no-sql",
+      "reason": "check-includes",
+      "durationMs": 8413,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-includes",
+              "passed": false,
+              "reason": "expected \"African\" in the answer — answer was \"I completed the data analysis but could not produce a final response. Please retry your question.\""
+            },
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"run_readonly_sql\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": false,
+              "reason": "the agent never ran a SQL query"
+            },
+            {
+              "id": "result-set-match",
+              "passed": false,
+              "reason": "the agent ran no successful run_readonly_sql to compare"
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "no-sql",
+          "durationMs": 3057
+        },
+        {
+          "attempt": 2,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-includes",
+              "passed": false,
+              "reason": "expected \"African\" in the answer — answer was \"I completed the data analysis but could not produce a final response. Please retry your question.\""
+            },
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"run_readonly_sql\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": false,
+              "reason": "the agent never ran a SQL query"
+            },
+            {
+              "id": "result-set-match",
+              "passed": false,
+              "reason": "the agent ran no successful run_readonly_sql to compare"
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "no-sql",
+          "durationMs": 2808
+        },
+        {
+          "attempt": 3,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-includes",
+              "passed": false,
+              "reason": "expected \"African\" in the answer — answer was \"I completed the data analysis but could not produce a final response. Please retry your question.\""
+            },
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"run_readonly_sql\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": false,
+              "reason": "the agent never ran a SQL query"
+            },
+            {
+              "id": "result-set-match",
+              "passed": false,
+              "reason": "the agent ran no successful run_readonly_sql to compare"
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "no-sql",
+          "durationMs": 2548
+        }
+      ]
+    },
+    {
+      "id": "expression-data-discovery",
+      "category": "discovery",
+      "question": "What expression data do we have?",
+      "difficulty": "easy",
+      "verdict": "FAIL",
+      "runs": 3,
+      "passes": 0,
+      "flaky": false,
+      "failureLabel": "unknown",
+      "reason": "check-matches",
+      "durationMs": 9947,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-matches",
+              "passed": false,
+              "reason": "expected the answer to match /^(?=[\\s\\S]*gene[ _]expression)(?=[\\s\\S]*\\b(?:samples?|genes)\\b)/i — answer was \"I completed the data analysis but could not produce a final response. Please retry your question.\""
+            },
+            {
+              "id": "check-did-not-call",
+              "passed": true
+            },
+            {
+              "id": "llm-judge",
+              "passed": false,
+              "reason": "MEASUREMENT GAP (eval harness, not the agent): judge error (twice) — You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.",
+              "gap": true
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "unknown",
+          "durationMs": 4053
+        },
+        {
+          "attempt": 2,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-matches",
+              "passed": false,
+              "reason": "expected the answer to match /^(?=[\\s\\S]*gene[ _]expression)(?=[\\s\\S]*\\b(?:samples?|genes)\\b)/i — answer was \"I completed the data analysis but could not produce a final response. Please retry your question.\""
+            },
+            {
+              "id": "check-did-not-call",
+              "passed": true
+            },
+            {
+              "id": "llm-judge",
+              "passed": false,
+              "reason": "MEASUREMENT GAP (eval harness, not the agent): judge error (twice) — You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.",
+              "gap": true
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "unknown",
+          "durationMs": 2988
+        },
+        {
+          "attempt": 3,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-matches",
+              "passed": false,
+              "reason": "expected the answer to match /^(?=[\\s\\S]*gene[ _]expression)(?=[\\s\\S]*\\b(?:samples?|genes)\\b)/i — answer was \"I completed the data analysis but could not produce a final response. Please retry your question.\""
+            },
+            {
+              "id": "check-did-not-call",
+              "passed": true
+            },
+            {
+              "id": "llm-judge",
+              "passed": false,
+              "reason": "MEASUREMENT GAP (eval harness, not the agent): judge error (twice) — You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.",
+              "gap": true
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "unknown",
+          "durationMs": 2906
+        }
+      ]
+    },
+    {
+      "id": "pathogenic-carrier-samples",
+      "category": "domain-semantics",
+      "question": "How many samples carry a pathogenic variant?",
+      "difficulty": "hard",
+      "verdict": "FAIL",
+      "runs": 3,
+      "passes": 0,
+      "flaky": false,
+      "failureLabel": "no-sql",
+      "reason": "check-called-tool",
+      "durationMs": 4796,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"run_readonly_sql\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": false,
+              "reason": "the agent never ran a SQL query"
+            },
+            {
+              "id": "result-set-match",
+              "passed": false,
+              "reason": "the agent ran no successful run_readonly_sql to compare"
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "no-sql",
+          "durationMs": 1667
+        },
+        {
+          "attempt": 2,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"run_readonly_sql\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": false,
+              "reason": "the agent never ran a SQL query"
+            },
+            {
+              "id": "result-set-match",
+              "passed": false,
+              "reason": "the agent ran no successful run_readonly_sql to compare"
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "no-sql",
+          "durationMs": 1555
+        },
+        {
+          "attempt": 3,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"run_readonly_sql\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": false,
+              "reason": "the agent never ran a SQL query"
+            },
+            {
+              "id": "result-set-match",
+              "passed": false,
+              "reason": "the agent ran no successful run_readonly_sql to compare"
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "no-sql",
+          "durationMs": 1574
+        }
+      ]
+    },
+    {
+      "id": "genes-silent-in-most-samples",
+      "category": "domain-semantics",
+      "question": "Which genes are silent in more than half of our samples?",
+      "difficulty": "hard",
+      "verdict": "FAIL",
+      "runs": 3,
+      "passes": 0,
+      "flaky": false,
+      "failureLabel": "no-sql",
+      "reason": "check-includes",
+      "durationMs": 8375,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-includes",
+              "passed": false,
+              "reason": "expected \"F8\" in the answer — answer was \"I completed the data analysis but could not produce a final response. Please retry your question.\""
+            },
+            {
+              "id": "check-matches",
+              "passed": false,
+              "reason": "expected the answer to match /\\bRET\\b/i — answer was \"I completed the data analysis but could not produce a final response. Please retry your question.\""
+            },
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"run_readonly_sql\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": false,
+              "reason": "the agent never ran a SQL query"
+            },
+            {
+              "id": "result-set-match",
+              "passed": false,
+              "reason": "the agent ran no successful run_readonly_sql to compare"
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "no-sql",
+          "durationMs": 4373
+        },
+        {
+          "attempt": 2,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-includes",
+              "passed": false,
+              "reason": "expected \"F8\" in the answer — answer was \"I completed the data analysis but could not produce a final response. Please retry your question.\""
+            },
+            {
+              "id": "check-matches",
+              "passed": false,
+              "reason": "expected the answer to match /\\bRET\\b/i — answer was \"I completed the data analysis but could not produce a final response. Please retry your question.\""
+            },
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"run_readonly_sql\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": false,
+              "reason": "the agent never ran a SQL query"
+            },
+            {
+              "id": "result-set-match",
+              "passed": false,
+              "reason": "the agent ran no successful run_readonly_sql to compare"
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "no-sql",
+          "durationMs": 1653
+        },
+        {
+          "attempt": 3,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-includes",
+              "passed": false,
+              "reason": "expected \"F8\" in the answer — answer was \"I completed the data analysis but could not produce a final response. Please retry your question.\""
+            },
+            {
+              "id": "check-matches",
+              "passed": false,
+              "reason": "expected the answer to match /\\bRET\\b/i — answer was \"I completed the data analysis but could not produce a final response. Please retry your question.\""
+            },
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"run_readonly_sql\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": false,
+              "reason": "the agent never ran a SQL query"
+            },
+            {
+              "id": "result-set-match",
+              "passed": false,
+              "reason": "the agent ran no successful run_readonly_sql to compare"
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "no-sql",
+          "durationMs": 2349
+        }
+      ]
+    },
+    {
+      "id": "high-confidence-calls-by-gene",
+      "category": "quality-filter",
+      "question": "Which five genes have the most high-confidence variant calls?",
+      "difficulty": "hard",
+      "verdict": "FAIL",
+      "runs": 3,
+      "passes": 0,
+      "flaky": false,
+      "failureLabel": "no-sql",
+      "reason": "check-includes",
+      "durationMs": 7365,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-includes",
+              "passed": false,
+              "reason": "expected \"CFTR\" in the answer — answer was \"I completed the data analysis but could not produce a final response. Please retry your question.\""
+            },
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"run_readonly_sql\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": false,
+              "reason": "the agent never ran a SQL query"
+            },
+            {
+              "id": "result-set-match",
+              "passed": false,
+              "reason": "the agent ran no successful run_readonly_sql to compare"
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "no-sql",
+          "durationMs": 2311
+        },
+        {
+          "attempt": 2,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-includes",
+              "passed": false,
+              "reason": "expected \"CFTR\" in the answer — answer was \"I completed the data analysis but could not produce a final response. Please retry your question.\""
+            },
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"run_readonly_sql\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": false,
+              "reason": "the agent never ran a SQL query"
+            },
+            {
+              "id": "result-set-match",
+              "passed": false,
+              "reason": "the agent ran no successful run_readonly_sql to compare"
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "no-sql",
+          "durationMs": 2543
+        },
+        {
+          "attempt": 3,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-includes",
+              "passed": false,
+              "reason": "expected \"CFTR\" in the answer — answer was \"I completed the data analysis but could not produce a final response. Please retry your question.\""
+            },
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"run_readonly_sql\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": false,
+              "reason": "the agent never ran a SQL query"
+            },
+            {
+              "id": "result-set-match",
+              "passed": false,
+              "reason": "the agent ran no successful run_readonly_sql to compare"
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "no-sql",
+          "durationMs": 2511
+        }
+      ]
+    },
+    {
+      "id": "canonical-transcript-length-kb",
+      "category": "unit-confusion",
+      "question": "What is the average length of a canonical transcript, in kilobases to one decimal place?",
+      "difficulty": "medium",
+      "verdict": "FAIL",
+      "runs": 3,
+      "passes": 0,
+      "flaky": false,
+      "failureLabel": "no-sql",
+      "reason": "check-called-tool",
+      "durationMs": 7548,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"run_readonly_sql\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": false,
+              "reason": "the agent never ran a SQL query"
+            },
+            {
+              "id": "result-set-match",
+              "passed": false,
+              "reason": "the agent ran no successful run_readonly_sql to compare"
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "no-sql",
+          "durationMs": 2771
+        },
+        {
+          "attempt": 2,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"run_readonly_sql\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": false,
+              "reason": "the agent never ran a SQL query"
+            },
+            {
+              "id": "result-set-match",
+              "passed": false,
+              "reason": "the agent ran no successful run_readonly_sql to compare"
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "no-sql",
+          "durationMs": 2148
+        },
+        {
+          "attempt": 3,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"run_readonly_sql\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": false,
+              "reason": "the agent never ran a SQL query"
+            },
+            {
+              "id": "result-set-match",
+              "passed": false,
+              "reason": "the agent ran no successful run_readonly_sql to compare"
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "no-sql",
+          "durationMs": 2629
+        }
+      ]
+    },
+    {
+      "id": "genes-by-biotype",
+      "category": "control",
+      "question": "How many genes of each gene type (such as protein-coding) do we track?",
+      "difficulty": "easy",
+      "verdict": "FAIL",
+      "runs": 3,
+      "passes": 0,
+      "flaky": false,
+      "failureLabel": "no-sql",
+      "reason": "check-matches",
+      "durationMs": 5427,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-matches",
+              "passed": false,
+              "reason": "expected the answer to match /lncRNA|long non-coding/i — answer was \"I completed the data analysis but could not produce a final response. Please retry your question.\""
+            },
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"run_readonly_sql\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-no-tool-errors",
+              "passed": true
+            },
+            {
+              "id": "result-set-match",
+              "passed": false,
+              "reason": "the agent ran no successful run_readonly_sql to compare"
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "no-sql",
+          "durationMs": 2177
+        },
+        {
+          "attempt": 2,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-matches",
+              "passed": false,
+              "reason": "expected the answer to match /lncRNA|long non-coding/i — answer was \"I completed the data analysis but could not produce a final response. Please retry your question.\""
+            },
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"run_readonly_sql\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-no-tool-errors",
+              "passed": true
+            },
+            {
+              "id": "result-set-match",
+              "passed": false,
+              "reason": "the agent ran no successful run_readonly_sql to compare"
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "no-sql",
+          "durationMs": 1801
+        },
+        {
+          "attempt": 3,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-matches",
+              "passed": false,
+              "reason": "expected the answer to match /lncRNA|long non-coding/i — answer was \"I completed the data analysis but could not produce a final response. Please retry your question.\""
+            },
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"run_readonly_sql\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-no-tool-errors",
+              "passed": true
+            },
+            {
+              "id": "result-set-match",
+              "passed": false,
+              "reason": "the agent ran no successful run_readonly_sql to compare"
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "no-sql",
+          "durationMs": 1449
+        }
+      ]
+    }
+  ],
+  "comparedToRunId": "8f8b9dd1-5286-4965-b3cf-3c6ae63e9122",
+  "regressions": [
+    "allele-fraction-by-gene",
+    "variants-with-rsid",
+    "genes-with-seven-pathogenic",
+    "damaging-variant-count",
+    "samples-sequenced-2015",
+    "most-important-gene",
+    "mean-allele-fraction",
+    "cohort-sample-count",
+    "subjects-by-superpopulation",
+    "genes-silent-in-most-samples",
+    "canonical-transcript-length-kb",
+    "genes-by-biotype"
+  ],
+  "improvements": [],
+  "flakyChanges": [
+    "variants-by-assembly",
+    "most-called-genes",
+    "expression-data-discovery",
+    "pathogenic-carrier-samples",
+    "high-confidence-calls-by-gene"
+  ],
+  "status": "completed"
+}

@@ -1,0 +1,2013 @@
+{
+  "schemaVersion": 2,
+  "runId": "725b0d27-be76-4d8d-b4f0-7607a69dd917",
+  "harness": "validate",
+  "suite": "genomics",
+  "datasets": [
+    "Genomics"
+  ],
+  "datasourceKind": "postgres",
+  "dialect": "postgres",
+  "repeat": 1,
+  "engine": {
+    "careful": "off",
+    "answerReview": false,
+    "sqlRepair": true,
+    "repairIntentGuard": true,
+    "context": "curated",
+    "columnProfiles": false,
+    "inlineKnowledge": false,
+    "rankedKnowledge": false,
+    "lookupTools": false,
+    "sqlPrecheck": false,
+    "descriptiveErrors": false,
+    "extendedGuards": false,
+    "staticFirstContext": false,
+    "promptAblation": []
+  },
+  "configHash": "validate",
+  "startedAt": "2026-09-28T17:48:27.281Z",
+  "finishedAt": "2026-09-28T17:48:27.750Z",
+  "durationMs": 469,
+  "appVersion": "0.10.1",
+  "gitCommit": "f04defd",
+  "totals": {
+    "cases": 49,
+    "passed": 40,
+    "failed": 0,
+    "errored": 0,
+    "gaps": 0,
+    "skipped": 9
+  },
+  "summary": {
+    "passK": 40,
+    "passKRate": 1,
+    "scored": 40,
+    "meanPassRate": 1,
+    "flaky": 0,
+    "gaps": 0,
+    "answeredEveryTime": 0,
+    "answeredObserved": 40,
+    "byCategory": {
+      "ratio-trap": {
+        "total": 3,
+        "passK": 3,
+        "meanPassRate": 1
+      },
+      "constant-column": {
+        "total": 3,
+        "passK": 3,
+        "meanPassRate": 1
+      },
+      "empty-column": {
+        "total": 3,
+        "passK": 3,
+        "meanPassRate": 1
+      },
+      "ties": {
+        "total": 3,
+        "passK": 3,
+        "meanPassRate": 1
+      },
+      "value-vocabulary": {
+        "total": 3,
+        "passK": 3,
+        "meanPassRate": 1
+      },
+      "id-vs-name": {
+        "total": 3,
+        "passK": 3,
+        "meanPassRate": 1
+      },
+      "metric-definition": {
+        "total": 3,
+        "passK": 3,
+        "meanPassRate": 1
+      },
+      "default-filter": {
+        "total": 3,
+        "passK": 3,
+        "meanPassRate": 1
+      },
+      "multi-step-join": {
+        "total": 3,
+        "passK": 3,
+        "meanPassRate": 1
+      },
+      "domain-semantics": {
+        "total": 4,
+        "passK": 4,
+        "meanPassRate": 1
+      },
+      "quality-filter": {
+        "total": 3,
+        "passK": 3,
+        "meanPassRate": 1
+      },
+      "unit-confusion": {
+        "total": 3,
+        "passK": 3,
+        "meanPassRate": 1
+      },
+      "control": {
+        "total": 3,
+        "passK": 3,
+        "meanPassRate": 1
+      }
+    },
+    "byDifficulty": {
+      "unrated": {
+        "total": 40,
+        "passK": 40
+      }
+    }
+  },
+  "categories": {
+    "ratio-trap": {
+      "total": 3,
+      "passed": 3
+    },
+    "constant-column": {
+      "total": 3,
+      "passed": 3
+    },
+    "empty-column": {
+      "total": 3,
+      "passed": 3
+    },
+    "ties": {
+      "total": 3,
+      "passed": 3
+    },
+    "value-vocabulary": {
+      "total": 3,
+      "passed": 3
+    },
+    "id-vs-name": {
+      "total": 3,
+      "passed": 3
+    },
+    "metric-definition": {
+      "total": 3,
+      "passed": 3
+    },
+    "default-filter": {
+      "total": 3,
+      "passed": 3
+    },
+    "multi-step-join": {
+      "total": 3,
+      "passed": 3
+    },
+    "domain-semantics": {
+      "total": 4,
+      "passed": 4
+    },
+    "quality-filter": {
+      "total": 3,
+      "passed": 3
+    },
+    "unit-confusion": {
+      "total": 3,
+      "passed": 3
+    },
+    "control": {
+      "total": 3,
+      "passed": 3
+    }
+  },
+  "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "totalTokens": 0,
+    "reasoningTokens": 0,
+    "cachedInputTokens": 0,
+    "calls": 0
+  },
+  "cases": [
+    {
+      "id": "allele-fraction-by-gene",
+      "category": "ratio-trap",
+      "question": "Which five genes show the highest average alternate-allele fraction?",
+      "verdict": "PASS",
+      "runs": 1,
+      "passes": 1,
+      "flaky": false,
+      "durationMs": 23,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "reference-sql",
+              "passed": true
+            },
+            {
+              "id": "trap-sql",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT gene.hgnc_symbol AS gene, ROUND(AVG(call.alt_read_count::numeric / call.total_read_count), 4) AS mean_allele_fraction FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id JOIN genomics.variants variant ON variant.id = call.variant_id JOIN genomics.genes gene ON gene.id = variant.gene_id WHERE sample.is_control = false AND call.filter_status = 'PASS' AND call.total_read_count >= 20 GROUP BY gene.hgnc_symbol ORDER BY mean_allele_fraction DESC, gene.hgnc_symbol LIMIT 5",
+          "sql": [
+            {
+              "sql": "SELECT gene.hgnc_symbol AS gene, ROUND(AVG(call.alt_read_count::numeric / call.total_read_count), 4) AS mean_allele_fraction FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id JOIN genomics.variants variant ON variant.id = call.variant_id JOIN genomics.genes gene ON gene.id = variant.gene_id WHERE sample.is_control = false AND call.filter_status = 'PASS' AND call.total_read_count >= 20 GROUP BY gene.hgnc_symbol ORDER BY mean_allele_fraction DESC, gene.hgnc_symbol LIMIT 5",
+              "ok": true,
+              "rowCount": 5
+            },
+            {
+              "sql": "SELECT gene.hgnc_symbol AS gene, ROUND(AVG(call.read_depth * 1.0 / call.total_read_count), 4) AS mean_allele_fraction FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id JOIN genomics.variants variant ON variant.id = call.variant_id JOIN genomics.genes gene ON gene.id = variant.gene_id WHERE sample.is_control = false AND call.filter_status = 'PASS' AND call.total_read_count >= 20 GROUP BY gene.hgnc_symbol ORDER BY mean_allele_fraction DESC, gene.hgnc_symbol LIMIT 5",
+              "ok": true,
+              "rowCount": 5
+            }
+          ],
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 23
+        }
+      ]
+    },
+    {
+      "id": "allele-fraction-by-genotype",
+      "category": "ratio-trap",
+      "question": "Across high-confidence calls with at least 20 reads, what is the average alternate-allele fraction for each genotype, to three decimal places?",
+      "verdict": "PASS",
+      "runs": 1,
+      "passes": 1,
+      "flaky": false,
+      "durationMs": 14,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "reference-sql",
+              "passed": true
+            },
+            {
+              "id": "trap-sql",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT call.genotype, ROUND(AVG(call.alt_read_count * 1.0 / call.total_read_count), 3) AS mean_allele_fraction FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id WHERE sample.is_control = false AND call.filter_status = 'PASS' AND call.total_read_count >= 20 GROUP BY call.genotype ORDER BY call.genotype",
+          "sql": [
+            {
+              "sql": "SELECT call.genotype, ROUND(AVG(call.alt_read_count * 1.0 / call.total_read_count), 3) AS mean_allele_fraction FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id WHERE sample.is_control = false AND call.filter_status = 'PASS' AND call.total_read_count >= 20 GROUP BY call.genotype ORDER BY call.genotype",
+              "ok": true,
+              "rowCount": 3
+            },
+            {
+              "sql": "SELECT call.genotype, ROUND(AVG(call.read_depth * 1.0 / call.total_read_count), 3) AS mean_allele_fraction FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id WHERE sample.is_control = false AND call.filter_status = 'PASS' AND call.total_read_count >= 20 GROUP BY call.genotype ORDER BY call.genotype",
+              "ok": true,
+              "rowCount": 3
+            }
+          ],
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 14
+        }
+      ]
+    },
+    {
+      "id": "allele-fraction-by-significance",
+      "category": "ratio-trap",
+      "question": "What is the average alternate-allele fraction for each pathogenicity class, to three decimal places?",
+      "verdict": "PASS",
+      "runs": 1,
+      "passes": 1,
+      "flaky": false,
+      "durationMs": 17,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "reference-sql",
+              "passed": true
+            },
+            {
+              "id": "trap-sql",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT variant.clinical_significance, ROUND(AVG(call.alt_read_count * 1.0 / call.total_read_count), 3) AS mean_allele_fraction FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id JOIN genomics.variants variant ON variant.id = call.variant_id WHERE sample.is_control = false AND call.filter_status = 'PASS' AND call.total_read_count >= 20 GROUP BY variant.clinical_significance ORDER BY variant.clinical_significance",
+          "sql": [
+            {
+              "sql": "SELECT variant.clinical_significance, ROUND(AVG(call.alt_read_count * 1.0 / call.total_read_count), 3) AS mean_allele_fraction FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id JOIN genomics.variants variant ON variant.id = call.variant_id WHERE sample.is_control = false AND call.filter_status = 'PASS' AND call.total_read_count >= 20 GROUP BY variant.clinical_significance ORDER BY variant.clinical_significance",
+              "ok": true,
+              "rowCount": 5
+            },
+            {
+              "sql": "SELECT variant.clinical_significance, ROUND(AVG(call.read_depth * 1.0 / call.total_read_count), 3) AS mean_allele_fraction FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id JOIN genomics.variants variant ON variant.id = call.variant_id WHERE sample.is_control = false AND call.filter_status = 'PASS' AND call.total_read_count >= 20 GROUP BY variant.clinical_significance ORDER BY variant.clinical_significance",
+              "ok": true,
+              "rowCount": 5
+            }
+          ],
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 17
+        }
+      ]
+    },
+    {
+      "id": "variants-by-assembly",
+      "category": "constant-column",
+      "question": "How do our variants break down across genome assemblies?",
+      "verdict": "PASS",
+      "runs": 1,
+      "passes": 1,
+      "flaky": false,
+      "durationMs": 5,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "reference-sql",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT variant.assembly, COUNT(*) AS variants FROM genomics.variants variant GROUP BY variant.assembly ORDER BY variant.assembly",
+          "sql": [
+            {
+              "sql": "SELECT variant.assembly, COUNT(*) AS variants FROM genomics.variants variant GROUP BY variant.assembly ORDER BY variant.assembly",
+              "ok": true,
+              "rowCount": 1
+            }
+          ],
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 5
+        }
+      ]
+    },
+    {
+      "id": "pathogenic-variants-by-assembly",
+      "category": "constant-column",
+      "question": "How are our pathogenic variants split across genome builds?",
+      "verdict": "PASS",
+      "runs": 1,
+      "passes": 1,
+      "flaky": false,
+      "durationMs": 6,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "reference-sql",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT COUNT(*) AS pathogenic_variants FROM genomics.variants variant WHERE variant.clinical_significance = 'PATHOGENIC'",
+          "sql": [
+            {
+              "sql": "SELECT COUNT(*) AS pathogenic_variants FROM genomics.variants variant WHERE variant.clinical_significance = 'PATHOGENIC'",
+              "ok": true,
+              "rowCount": 1
+            }
+          ],
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 6
+        }
+      ]
+    },
+    {
+      "id": "pathogenic-share-by-assembly",
+      "category": "constant-column",
+      "question": "Does the share of variants classified as pathogenic differ between genome assemblies? Give the percentage for each assembly to one decimal place.",
+      "verdict": "PASS",
+      "runs": 1,
+      "passes": 1,
+      "flaky": false,
+      "durationMs": 5,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "reference-sql",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT ROUND(100.0 * COUNT(CASE WHEN variant.clinical_significance = 'PATHOGENIC' THEN 1 END) / COUNT(*), 1) AS pathogenic_pct FROM genomics.variants variant",
+          "sql": [
+            {
+              "sql": "SELECT ROUND(100.0 * COUNT(CASE WHEN variant.clinical_significance = 'PATHOGENIC' THEN 1 END) / COUNT(*), 1) AS pathogenic_pct FROM genomics.variants variant",
+              "ok": true,
+              "rowCount": 1
+            }
+          ],
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 5
+        }
+      ]
+    },
+    {
+      "id": "variants-with-rsid",
+      "category": "empty-column",
+      "question": "How many of our variants have a dbSNP rsID?",
+      "verdict": "PASS",
+      "runs": 1,
+      "passes": 1,
+      "flaky": false,
+      "durationMs": 12,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "reference-sql",
+              "passed": true
+            },
+            {
+              "id": "trap-sql",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT COUNT(*) AS variants_with_rsid FROM genomics.variants variant WHERE variant.rsid IS NOT NULL",
+          "sql": [
+            {
+              "sql": "SELECT COUNT(*) AS variants_with_rsid FROM genomics.variants variant WHERE variant.rsid IS NOT NULL",
+              "ok": true,
+              "rowCount": 1
+            },
+            {
+              "sql": "SELECT variant.rsid, COUNT(*) AS variants FROM genomics.variants variant GROUP BY variant.rsid ORDER BY variants DESC, variant.rsid",
+              "ok": true,
+              "rowCount": 47
+            }
+          ],
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 12
+        }
+      ]
+    },
+    {
+      "id": "rsid-share-by-significance",
+      "category": "empty-column",
+      "question": "Within each pathogenicity class, what percentage of variants have a dbSNP rsID, to one decimal place?",
+      "verdict": "PASS",
+      "runs": 1,
+      "passes": 1,
+      "flaky": false,
+      "durationMs": 12,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "reference-sql",
+              "passed": true
+            },
+            {
+              "id": "trap-sql",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT variant.clinical_significance, ROUND(100.0 * COUNT(variant.rsid) / COUNT(*), 1) AS pct_with_rsid FROM genomics.variants variant GROUP BY variant.clinical_significance ORDER BY variant.clinical_significance",
+          "sql": [
+            {
+              "sql": "SELECT variant.clinical_significance, ROUND(100.0 * COUNT(variant.rsid) / COUNT(*), 1) AS pct_with_rsid FROM genomics.variants variant GROUP BY variant.clinical_significance ORDER BY variant.clinical_significance",
+              "ok": true,
+              "rowCount": 5
+            },
+            {
+              "sql": "SELECT variant.clinical_significance, ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 1) AS pct_with_rsid FROM genomics.variants variant WHERE variant.rsid IS NOT NULL GROUP BY variant.clinical_significance ORDER BY variant.clinical_significance",
+              "ok": true,
+              "rowCount": 5
+            }
+          ],
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 12
+        }
+      ]
+    },
+    {
+      "id": "genes-most-rsid-variants",
+      "category": "empty-column",
+      "question": "Which three genes have the most variants with a dbSNP identifier?",
+      "verdict": "PASS",
+      "runs": 1,
+      "passes": 1,
+      "flaky": false,
+      "durationMs": 12,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "reference-sql",
+              "passed": true
+            },
+            {
+              "id": "trap-sql",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT gene.hgnc_symbol AS gene, COUNT(variant.rsid) AS variants_with_rsid FROM genomics.variants variant JOIN genomics.genes gene ON gene.id = variant.gene_id GROUP BY gene.hgnc_symbol ORDER BY variants_with_rsid DESC, gene.hgnc_symbol LIMIT 3",
+          "sql": [
+            {
+              "sql": "SELECT gene.hgnc_symbol AS gene, COUNT(variant.rsid) AS variants_with_rsid FROM genomics.variants variant JOIN genomics.genes gene ON gene.id = variant.gene_id GROUP BY gene.hgnc_symbol ORDER BY variants_with_rsid DESC, gene.hgnc_symbol LIMIT 3",
+              "ok": true,
+              "rowCount": 3
+            },
+            {
+              "sql": "SELECT gene.hgnc_symbol AS gene, COUNT(*) AS variants_with_rsid FROM genomics.variants variant JOIN genomics.genes gene ON gene.id = variant.gene_id GROUP BY gene.hgnc_symbol ORDER BY variants_with_rsid DESC, gene.hgnc_symbol LIMIT 3",
+              "ok": true,
+              "rowCount": 3
+            }
+          ],
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 12
+        }
+      ]
+    },
+    {
+      "id": "genes-with-seven-pathogenic",
+      "category": "ties",
+      "question": "Which genes carry exactly seven pathogenic variants?",
+      "verdict": "PASS",
+      "runs": 1,
+      "passes": 1,
+      "flaky": false,
+      "durationMs": 13,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "reference-sql",
+              "passed": true
+            },
+            {
+              "id": "trap-sql",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT gene.hgnc_symbol AS gene, COUNT(*) AS pathogenic_variants FROM genomics.variants variant JOIN genomics.genes gene ON gene.id = variant.gene_id WHERE variant.clinical_significance = 'PATHOGENIC' GROUP BY gene.hgnc_symbol HAVING COUNT(*) = 7 ORDER BY gene.hgnc_symbol",
+          "sql": [
+            {
+              "sql": "SELECT gene.hgnc_symbol AS gene, COUNT(*) AS pathogenic_variants FROM genomics.variants variant JOIN genomics.genes gene ON gene.id = variant.gene_id WHERE variant.clinical_significance = 'PATHOGENIC' GROUP BY gene.hgnc_symbol HAVING COUNT(*) = 7 ORDER BY gene.hgnc_symbol",
+              "ok": true,
+              "rowCount": 2
+            },
+            {
+              "sql": "SELECT gene.hgnc_symbol AS gene, COUNT(*) AS pathogenic_variants FROM genomics.variants variant JOIN genomics.genes gene ON gene.id = variant.gene_id WHERE variant.clinical_significance = 'PATHOGENIC' GROUP BY gene.hgnc_symbol HAVING COUNT(*) = 7 ORDER BY pathogenic_variants DESC, gene.hgnc_symbol LIMIT 1",
+              "ok": true,
+              "rowCount": 1
+            }
+          ],
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 13
+        }
+      ]
+    },
+    {
+      "id": "largest-ancestry-group",
+      "category": "ties",
+      "question": "Which ancestry group has the most subjects?",
+      "verdict": "PASS",
+      "runs": 1,
+      "passes": 1,
+      "flaky": false,
+      "durationMs": 11,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "reference-sql",
+              "passed": true
+            },
+            {
+              "id": "trap-sql",
+              "passed": true
+            }
+          ],
+          "finalSql": "WITH per_group AS (SELECT subject.ancestry_group_id, COUNT(*) AS subjects FROM genomics.subjects subject GROUP BY subject.ancestry_group_id) SELECT per_group.subjects FROM per_group WHERE per_group.subjects = (SELECT MAX(subjects) FROM per_group)",
+          "sql": [
+            {
+              "sql": "WITH per_group AS (SELECT subject.ancestry_group_id, COUNT(*) AS subjects FROM genomics.subjects subject GROUP BY subject.ancestry_group_id) SELECT per_group.subjects FROM per_group WHERE per_group.subjects = (SELECT MAX(subjects) FROM per_group)",
+              "ok": true,
+              "rowCount": 3
+            },
+            {
+              "sql": "SELECT ancestry.name AS ancestry_group, COUNT(*) AS subjects FROM genomics.subjects subject JOIN genomics.ancestry_groups ancestry ON ancestry.id = subject.ancestry_group_id GROUP BY ancestry.name ORDER BY subjects DESC LIMIT 1",
+              "ok": true,
+              "rowCount": 1
+            }
+          ],
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 11
+        }
+      ]
+    },
+    {
+      "id": "rarest-phenotypes",
+      "category": "ties",
+      "question": "Which phenotype is recorded for the fewest subjects?",
+      "verdict": "PASS",
+      "runs": 1,
+      "passes": 1,
+      "flaky": false,
+      "durationMs": 11,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "reference-sql",
+              "passed": true
+            },
+            {
+              "id": "trap-sql",
+              "passed": true
+            }
+          ],
+          "finalSql": "WITH per_phenotype AS (SELECT subject_phenotype.phenotype_id, COUNT(DISTINCT subject_phenotype.subject_id) AS subjects FROM genomics.subject_phenotypes subject_phenotype GROUP BY subject_phenotype.phenotype_id) SELECT per_phenotype.subjects FROM per_phenotype WHERE per_phenotype.subjects = (SELECT MIN(subjects) FROM per_phenotype)",
+          "sql": [
+            {
+              "sql": "WITH per_phenotype AS (SELECT subject_phenotype.phenotype_id, COUNT(DISTINCT subject_phenotype.subject_id) AS subjects FROM genomics.subject_phenotypes subject_phenotype GROUP BY subject_phenotype.phenotype_id) SELECT per_phenotype.subjects FROM per_phenotype WHERE per_phenotype.subjects = (SELECT MIN(subjects) FROM per_phenotype)",
+              "ok": true,
+              "rowCount": 4
+            },
+            {
+              "sql": "SELECT phenotype.name AS phenotype, COUNT(*) AS subjects FROM genomics.subject_phenotypes subject_phenotype JOIN genomics.phenotypes phenotype ON phenotype.id = subject_phenotype.phenotype_id GROUP BY phenotype.name ORDER BY subjects ASC LIMIT 1",
+              "ok": true,
+              "rowCount": 1
+            }
+          ],
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 11
+        }
+      ]
+    },
+    {
+      "id": "damaging-variant-count",
+      "category": "value-vocabulary",
+      "question": "How many damaging variants did we find?",
+      "verdict": "PASS",
+      "runs": 1,
+      "passes": 1,
+      "flaky": false,
+      "durationMs": 13,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "reference-sql",
+              "passed": true
+            },
+            {
+              "id": "trap-sql",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT COUNT(*) AS damaging_variants FROM genomics.variants variant WHERE variant.clinical_significance IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')",
+          "sql": [
+            {
+              "sql": "SELECT COUNT(*) AS damaging_variants FROM genomics.variants variant WHERE variant.clinical_significance IN ('PATHOGENIC', 'LIKELY_PATHOGENIC')",
+              "ok": true,
+              "rowCount": 1
+            },
+            {
+              "sql": "SELECT COUNT(*) AS damaging_variants FROM genomics.variants variant WHERE variant.clinical_significance = 'PATHOGENIC'",
+              "ok": true,
+              "rowCount": 1
+            }
+          ],
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 13
+        }
+      ]
+    },
+    {
+      "id": "tumour-sample-count",
+      "category": "value-vocabulary",
+      "question": "How many tumour samples do we have?",
+      "verdict": "PASS",
+      "runs": 1,
+      "passes": 1,
+      "flaky": false,
+      "durationMs": 10,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "reference-sql",
+              "passed": true
+            },
+            {
+              "id": "trap-sql",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT COUNT(*) AS tumour_samples FROM genomics.samples sample WHERE sample.is_control = false AND sample.tissue = 'TUMOR'",
+          "sql": [
+            {
+              "sql": "SELECT COUNT(*) AS tumour_samples FROM genomics.samples sample WHERE sample.is_control = false AND sample.tissue = 'TUMOR'",
+              "ok": true,
+              "rowCount": 1
+            },
+            {
+              "sql": "SELECT COUNT(*) AS tumour_samples FROM genomics.samples sample WHERE sample.is_control = false AND sample.tissue = 'TUMOUR'",
+              "ok": true,
+              "rowCount": 1
+            }
+          ],
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 10
+        }
+      ]
+    },
+    {
+      "id": "loss-of-function-variant-count",
+      "category": "value-vocabulary",
+      "question": "How many predicted loss-of-function variants do we have?",
+      "verdict": "PASS",
+      "runs": 1,
+      "passes": 1,
+      "flaky": false,
+      "durationMs": 11,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "reference-sql",
+              "passed": true
+            },
+            {
+              "id": "trap-sql",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT COUNT(*) AS loss_of_function_variants FROM genomics.variants variant WHERE variant.consequence IN ('stop_gained', 'frameshift_variant', 'splice_donor_variant', 'splice_acceptor_variant')",
+          "sql": [
+            {
+              "sql": "SELECT COUNT(*) AS loss_of_function_variants FROM genomics.variants variant WHERE variant.consequence IN ('stop_gained', 'frameshift_variant', 'splice_donor_variant', 'splice_acceptor_variant')",
+              "ok": true,
+              "rowCount": 1
+            },
+            {
+              "sql": "SELECT COUNT(*) AS loss_of_function_variants FROM genomics.variants variant WHERE variant.consequence IN ('stop_gained', 'frameshift_variant')",
+              "ok": true,
+              "rowCount": 1
+            }
+          ],
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 11
+        }
+      ]
+    },
+    {
+      "id": "most-called-genes",
+      "category": "id-vs-name",
+      "question": "Which genes were called most often across our samples? Show the top five.",
+      "verdict": "PASS",
+      "runs": 1,
+      "passes": 1,
+      "flaky": false,
+      "durationMs": 15,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "reference-sql",
+              "passed": true
+            },
+            {
+              "id": "trap-sql",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT gene.hgnc_symbol AS gene, COUNT(*) AS variant_calls FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id JOIN genomics.variants variant ON variant.id = call.variant_id JOIN genomics.genes gene ON gene.id = variant.gene_id WHERE sample.is_control = false GROUP BY gene.hgnc_symbol ORDER BY variant_calls DESC, gene.hgnc_symbol LIMIT 5",
+          "sql": [
+            {
+              "sql": "SELECT gene.hgnc_symbol AS gene, COUNT(*) AS variant_calls FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id JOIN genomics.variants variant ON variant.id = call.variant_id JOIN genomics.genes gene ON gene.id = variant.gene_id WHERE sample.is_control = false GROUP BY gene.hgnc_symbol ORDER BY variant_calls DESC, gene.hgnc_symbol LIMIT 5",
+              "ok": true,
+              "rowCount": 5
+            },
+            {
+              "sql": "SELECT variant.gene_id, COUNT(*) AS variant_calls FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id JOIN genomics.variants variant ON variant.id = call.variant_id WHERE sample.is_control = false GROUP BY variant.gene_id ORDER BY variant_calls DESC, variant.gene_id LIMIT 5",
+              "ok": true,
+              "rowCount": 5
+            }
+          ],
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 15
+        }
+      ]
+    },
+    {
+      "id": "most-common-phenotypes",
+      "category": "id-vs-name",
+      "question": "Which three phenotypes are recorded for the most subjects?",
+      "verdict": "PASS",
+      "runs": 1,
+      "passes": 1,
+      "flaky": false,
+      "durationMs": 10,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "reference-sql",
+              "passed": true
+            },
+            {
+              "id": "trap-sql",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT phenotype.name AS phenotype, COUNT(*) AS subjects FROM genomics.subject_phenotypes subject_phenotype JOIN genomics.phenotypes phenotype ON phenotype.id = subject_phenotype.phenotype_id GROUP BY phenotype.name ORDER BY subjects DESC, phenotype.name LIMIT 3",
+          "sql": [
+            {
+              "sql": "SELECT phenotype.name AS phenotype, COUNT(*) AS subjects FROM genomics.subject_phenotypes subject_phenotype JOIN genomics.phenotypes phenotype ON phenotype.id = subject_phenotype.phenotype_id GROUP BY phenotype.name ORDER BY subjects DESC, phenotype.name LIMIT 3",
+              "ok": true,
+              "rowCount": 3
+            },
+            {
+              "sql": "SELECT subject_phenotype.phenotype_id, COUNT(*) AS subjects FROM genomics.subject_phenotypes subject_phenotype GROUP BY subject_phenotype.phenotype_id ORDER BY subjects DESC, subject_phenotype.phenotype_id LIMIT 3",
+              "ok": true,
+              "rowCount": 3
+            }
+          ],
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 10
+        }
+      ]
+    },
+    {
+      "id": "genes-longest-canonical-transcripts",
+      "category": "id-vs-name",
+      "question": "Which three genes have the longest canonical transcripts, in base pairs?",
+      "verdict": "PASS",
+      "runs": 1,
+      "passes": 1,
+      "flaky": false,
+      "durationMs": 11,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "reference-sql",
+              "passed": true
+            },
+            {
+              "id": "trap-sql",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT gene.hgnc_symbol AS gene, transcript.length_bp FROM genomics.transcripts transcript JOIN genomics.genes gene ON gene.id = transcript.gene_id WHERE transcript.is_canonical = true ORDER BY transcript.length_bp DESC, gene.hgnc_symbol LIMIT 3",
+          "sql": [
+            {
+              "sql": "SELECT gene.hgnc_symbol AS gene, transcript.length_bp FROM genomics.transcripts transcript JOIN genomics.genes gene ON gene.id = transcript.gene_id WHERE transcript.is_canonical = true ORDER BY transcript.length_bp DESC, gene.hgnc_symbol LIMIT 3",
+              "ok": true,
+              "rowCount": 3
+            },
+            {
+              "sql": "SELECT transcript.gene_id, transcript.length_bp FROM genomics.transcripts transcript WHERE transcript.is_canonical = true ORDER BY transcript.length_bp DESC, transcript.gene_id LIMIT 3",
+              "ok": true,
+              "rowCount": 3
+            }
+          ],
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 11
+        }
+      ]
+    },
+    {
+      "id": "mean-allele-fraction",
+      "category": "metric-definition",
+      "question": "What is our mean allele fraction, and how many calls is it based on?",
+      "verdict": "PASS",
+      "runs": 1,
+      "passes": 1,
+      "flaky": false,
+      "durationMs": 14,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "reference-sql",
+              "passed": true
+            },
+            {
+              "id": "trap-sql",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT COUNT(*) AS eligible_calls, ROUND(AVG(call.alt_read_count::numeric / call.total_read_count), 4) AS mean_allele_fraction FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id WHERE sample.is_control = false AND call.filter_status = 'PASS' AND call.total_read_count >= 20",
+          "sql": [
+            {
+              "sql": "SELECT COUNT(*) AS eligible_calls, ROUND(AVG(call.alt_read_count::numeric / call.total_read_count), 4) AS mean_allele_fraction FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id WHERE sample.is_control = false AND call.filter_status = 'PASS' AND call.total_read_count >= 20",
+              "ok": true,
+              "rowCount": 1
+            },
+            {
+              "sql": "SELECT COUNT(*) AS eligible_calls, ROUND(AVG(call.alt_read_count * 1.0 / call.total_read_count), 4) AS mean_allele_fraction FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id WHERE sample.is_control = false",
+              "ok": true,
+              "rowCount": 1
+            }
+          ],
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 14
+        }
+      ]
+    },
+    {
+      "id": "high-confidence-rate-by-sequencer",
+      "category": "metric-definition",
+      "question": "What is the high-confidence call rate for each sequencing instrument, as a percentage to two decimal places?",
+      "verdict": "PASS",
+      "runs": 1,
+      "passes": 1,
+      "flaky": false,
+      "durationMs": 13,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "reference-sql",
+              "passed": true
+            },
+            {
+              "id": "trap-sql",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT sample.sequencer, ROUND(100.0 * COUNT(CASE WHEN call.filter_status = 'PASS' THEN 1 END) / COUNT(*), 2) AS high_confidence_pct FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id WHERE sample.is_control = false GROUP BY sample.sequencer ORDER BY sample.sequencer",
+          "sql": [
+            {
+              "sql": "SELECT sample.sequencer, ROUND(100.0 * COUNT(CASE WHEN call.filter_status = 'PASS' THEN 1 END) / COUNT(*), 2) AS high_confidence_pct FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id WHERE sample.is_control = false GROUP BY sample.sequencer ORDER BY sample.sequencer",
+              "ok": true,
+              "rowCount": 4
+            },
+            {
+              "sql": "SELECT sample.sequencer, ROUND(100.0 * COUNT(CASE WHEN call.genotype_quality >= 20 THEN 1 END) / COUNT(*), 2) AS high_confidence_pct FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id WHERE sample.is_control = false GROUP BY sample.sequencer ORDER BY sample.sequencer",
+              "ok": true,
+              "rowCount": 4
+            }
+          ],
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 13
+        }
+      ]
+    },
+    {
+      "id": "allele-fraction-by-tissue",
+      "category": "metric-definition",
+      "question": "What is the mean allele fraction in each tissue type, to three decimal places?",
+      "verdict": "PASS",
+      "runs": 1,
+      "passes": 1,
+      "flaky": false,
+      "durationMs": 14,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "reference-sql",
+              "passed": true
+            },
+            {
+              "id": "trap-sql",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT sample.tissue, ROUND(AVG(call.alt_read_count * 1.0 / call.total_read_count), 3) AS mean_allele_fraction FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id WHERE sample.is_control = false AND call.filter_status = 'PASS' AND call.total_read_count >= 20 GROUP BY sample.tissue ORDER BY sample.tissue",
+          "sql": [
+            {
+              "sql": "SELECT sample.tissue, ROUND(AVG(call.alt_read_count * 1.0 / call.total_read_count), 3) AS mean_allele_fraction FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id WHERE sample.is_control = false AND call.filter_status = 'PASS' AND call.total_read_count >= 20 GROUP BY sample.tissue ORDER BY sample.tissue",
+              "ok": true,
+              "rowCount": 4
+            },
+            {
+              "sql": "SELECT sample.tissue, ROUND(AVG(call.alt_read_count * 1.0 / call.total_read_count), 3) AS mean_allele_fraction FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id WHERE sample.is_control = false GROUP BY sample.tissue ORDER BY sample.tissue",
+              "ok": true,
+              "rowCount": 4
+            }
+          ],
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 14
+        }
+      ]
+    },
+    {
+      "id": "cohort-sample-count",
+      "category": "default-filter",
+      "question": "How many samples do we have in the cohort?",
+      "verdict": "PASS",
+      "runs": 1,
+      "passes": 1,
+      "flaky": false,
+      "durationMs": 9,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "reference-sql",
+              "passed": true
+            },
+            {
+              "id": "trap-sql",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT COUNT(*) AS cohort_samples FROM genomics.samples sample WHERE sample.is_control = false",
+          "sql": [
+            {
+              "sql": "SELECT COUNT(*) AS cohort_samples FROM genomics.samples sample WHERE sample.is_control = false",
+              "ok": true,
+              "rowCount": 1
+            },
+            {
+              "sql": "SELECT COUNT(*) AS cohort_samples FROM genomics.samples sample",
+              "ok": true,
+              "rowCount": 1
+            }
+          ],
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 9
+        }
+      ]
+    },
+    {
+      "id": "cohort-variant-call-total",
+      "category": "default-filter",
+      "question": "How many variant calls do we have?",
+      "verdict": "PASS",
+      "runs": 1,
+      "passes": 1,
+      "flaky": false,
+      "durationMs": 10,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "reference-sql",
+              "passed": true
+            },
+            {
+              "id": "trap-sql",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT COUNT(*) AS variant_calls FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id WHERE sample.is_control = false",
+          "sql": [
+            {
+              "sql": "SELECT COUNT(*) AS variant_calls FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id WHERE sample.is_control = false",
+              "ok": true,
+              "rowCount": 1
+            },
+            {
+              "sql": "SELECT COUNT(*) AS variant_calls FROM genomics.variant_calls call",
+              "ok": true,
+              "rowCount": 1
+            }
+          ],
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 10
+        }
+      ]
+    },
+    {
+      "id": "samples-collected-2024",
+      "category": "default-filter",
+      "question": "How many samples did we collect in 2024?",
+      "verdict": "PASS",
+      "runs": 1,
+      "passes": 1,
+      "flaky": false,
+      "durationMs": 10,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "reference-sql",
+              "passed": true
+            },
+            {
+              "id": "trap-sql",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT COUNT(*) AS samples FROM genomics.samples sample WHERE sample.is_control = false AND sample.collected_on >= DATE '2024-01-01' AND sample.collected_on < DATE '2025-01-01'",
+          "sql": [
+            {
+              "sql": "SELECT COUNT(*) AS samples FROM genomics.samples sample WHERE sample.is_control = false AND sample.collected_on >= DATE '2024-01-01' AND sample.collected_on < DATE '2025-01-01'",
+              "ok": true,
+              "rowCount": 1
+            },
+            {
+              "sql": "SELECT COUNT(*) AS samples FROM genomics.samples sample WHERE sample.collected_on >= DATE '2024-01-01' AND sample.collected_on < DATE '2025-01-01'",
+              "ok": true,
+              "rowCount": 1
+            }
+          ],
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 10
+        }
+      ]
+    },
+    {
+      "id": "subjects-by-superpopulation",
+      "category": "multi-step-join",
+      "question": "How many subjects do we have in each superpopulation?",
+      "verdict": "PASS",
+      "runs": 1,
+      "passes": 1,
+      "flaky": false,
+      "durationMs": 10,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "reference-sql",
+              "passed": true
+            },
+            {
+              "id": "trap-sql",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT superpop.code AS superpopulation_code, superpop.name AS superpopulation, COUNT(*) AS subjects FROM genomics.subjects subject JOIN genomics.ancestry_groups ancestry ON ancestry.id = subject.ancestry_group_id JOIN genomics.superpopulations superpop ON superpop.id = ancestry.superpopulation_id GROUP BY superpop.code, superpop.name ORDER BY subjects DESC, superpop.code",
+          "sql": [
+            {
+              "sql": "SELECT superpop.code AS superpopulation_code, superpop.name AS superpopulation, COUNT(*) AS subjects FROM genomics.subjects subject JOIN genomics.ancestry_groups ancestry ON ancestry.id = subject.ancestry_group_id JOIN genomics.superpopulations superpop ON superpop.id = ancestry.superpopulation_id GROUP BY superpop.code, superpop.name ORDER BY subjects DESC, superpop.code",
+              "ok": true,
+              "rowCount": 8
+            },
+            {
+              "sql": "SELECT ancestry.code AS ancestry_code, ancestry.name AS ancestry_group, COUNT(*) AS subjects FROM genomics.subjects subject JOIN genomics.ancestry_groups ancestry ON ancestry.id = subject.ancestry_group_id GROUP BY ancestry.code, ancestry.name ORDER BY subjects DESC, ancestry.code",
+              "ok": true,
+              "rowCount": 22
+            }
+          ],
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 10
+        }
+      ]
+    },
+    {
+      "id": "samples-by-superpopulation",
+      "category": "multi-step-join",
+      "question": "How many samples do we have from each superpopulation?",
+      "verdict": "PASS",
+      "runs": 1,
+      "passes": 1,
+      "flaky": false,
+      "durationMs": 11,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "reference-sql",
+              "passed": true
+            },
+            {
+              "id": "trap-sql",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT COUNT(*) AS samples FROM genomics.samples sample JOIN genomics.subjects subject ON subject.id = sample.subject_id JOIN genomics.ancestry_groups ancestry ON ancestry.id = subject.ancestry_group_id JOIN genomics.superpopulations superpop ON superpop.id = ancestry.superpopulation_id WHERE sample.is_control = false GROUP BY superpop.id",
+          "sql": [
+            {
+              "sql": "SELECT COUNT(*) AS samples FROM genomics.samples sample JOIN genomics.subjects subject ON subject.id = sample.subject_id JOIN genomics.ancestry_groups ancestry ON ancestry.id = subject.ancestry_group_id JOIN genomics.superpopulations superpop ON superpop.id = ancestry.superpopulation_id WHERE sample.is_control = false GROUP BY superpop.id",
+              "ok": true,
+              "rowCount": 8
+            },
+            {
+              "sql": "SELECT ancestry.name AS ancestry_group, COUNT(*) AS samples FROM genomics.samples sample JOIN genomics.subjects subject ON subject.id = sample.subject_id JOIN genomics.ancestry_groups ancestry ON ancestry.id = subject.ancestry_group_id WHERE sample.is_control = false GROUP BY ancestry.name",
+              "ok": true,
+              "rowCount": 22
+            }
+          ],
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 11
+        }
+      ]
+    },
+    {
+      "id": "neoplasm-subject-samples",
+      "category": "multi-step-join",
+      "question": "How many of our samples come from subjects with any kind of neoplasm among their recorded phenotypes?",
+      "verdict": "PASS",
+      "runs": 1,
+      "passes": 1,
+      "flaky": false,
+      "durationMs": 10,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "reference-sql",
+              "passed": true
+            },
+            {
+              "id": "trap-sql",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT COUNT(DISTINCT sample.id) AS samples FROM genomics.samples sample JOIN genomics.subject_phenotypes subject_phenotype ON subject_phenotype.subject_id = sample.subject_id JOIN genomics.phenotypes phenotype ON phenotype.id = subject_phenotype.phenotype_id WHERE sample.is_control = false AND phenotype.category = 'NEOPLASM'",
+          "sql": [
+            {
+              "sql": "SELECT COUNT(DISTINCT sample.id) AS samples FROM genomics.samples sample JOIN genomics.subject_phenotypes subject_phenotype ON subject_phenotype.subject_id = sample.subject_id JOIN genomics.phenotypes phenotype ON phenotype.id = subject_phenotype.phenotype_id WHERE sample.is_control = false AND phenotype.category = 'NEOPLASM'",
+              "ok": true,
+              "rowCount": 1
+            },
+            {
+              "sql": "SELECT COUNT(*) AS samples FROM genomics.samples sample JOIN genomics.subject_phenotypes subject_phenotype ON subject_phenotype.subject_id = sample.subject_id JOIN genomics.phenotypes phenotype ON phenotype.id = subject_phenotype.phenotype_id WHERE sample.is_control = false AND phenotype.category = 'NEOPLASM'",
+              "ok": true,
+              "rowCount": 1
+            }
+          ],
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 10
+        }
+      ]
+    },
+    {
+      "id": "pathogenic-carrier-samples",
+      "category": "domain-semantics",
+      "question": "How many samples carry a pathogenic variant?",
+      "verdict": "PASS",
+      "runs": 1,
+      "passes": 1,
+      "flaky": false,
+      "durationMs": 12,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "reference-sql",
+              "passed": true
+            },
+            {
+              "id": "trap-sql",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT COUNT(DISTINCT call.sample_id) AS carrier_samples FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id JOIN genomics.variants variant ON variant.id = call.variant_id WHERE sample.is_control = false AND variant.clinical_significance = 'PATHOGENIC' AND call.genotype IN ('0/1', '1/1')",
+          "sql": [
+            {
+              "sql": "SELECT COUNT(DISTINCT call.sample_id) AS carrier_samples FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id JOIN genomics.variants variant ON variant.id = call.variant_id WHERE sample.is_control = false AND variant.clinical_significance = 'PATHOGENIC' AND call.genotype IN ('0/1', '1/1')",
+              "ok": true,
+              "rowCount": 1
+            },
+            {
+              "sql": "SELECT COUNT(DISTINCT call.sample_id) AS carrier_samples FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id JOIN genomics.variants variant ON variant.id = call.variant_id WHERE sample.is_control = false AND variant.clinical_significance = 'PATHOGENIC'",
+              "ok": true,
+              "rowCount": 1
+            }
+          ],
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 12
+        }
+      ]
+    },
+    {
+      "id": "pathogenic-carriers-by-gene",
+      "category": "domain-semantics",
+      "question": "Which genes have the most subjects carrying a pathogenic variant? Show the top three.",
+      "verdict": "PASS",
+      "runs": 1,
+      "passes": 1,
+      "flaky": false,
+      "durationMs": 12,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "reference-sql",
+              "passed": true
+            },
+            {
+              "id": "trap-sql",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT gene.hgnc_symbol AS gene, COUNT(DISTINCT sample.subject_id) AS carrier_subjects FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id JOIN genomics.variants variant ON variant.id = call.variant_id JOIN genomics.genes gene ON gene.id = variant.gene_id WHERE sample.is_control = false AND variant.clinical_significance = 'PATHOGENIC' AND call.genotype IN ('0/1', '1/1') GROUP BY gene.hgnc_symbol ORDER BY carrier_subjects DESC, gene.hgnc_symbol LIMIT 3",
+          "sql": [
+            {
+              "sql": "SELECT gene.hgnc_symbol AS gene, COUNT(DISTINCT sample.subject_id) AS carrier_subjects FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id JOIN genomics.variants variant ON variant.id = call.variant_id JOIN genomics.genes gene ON gene.id = variant.gene_id WHERE sample.is_control = false AND variant.clinical_significance = 'PATHOGENIC' AND call.genotype IN ('0/1', '1/1') GROUP BY gene.hgnc_symbol ORDER BY carrier_subjects DESC, gene.hgnc_symbol LIMIT 3",
+              "ok": true,
+              "rowCount": 3
+            },
+            {
+              "sql": "SELECT gene.hgnc_symbol AS gene, COUNT(DISTINCT sample.subject_id) AS carrier_subjects FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id JOIN genomics.variants variant ON variant.id = call.variant_id JOIN genomics.genes gene ON gene.id = variant.gene_id WHERE sample.is_control = false AND variant.clinical_significance = 'PATHOGENIC' GROUP BY gene.hgnc_symbol ORDER BY carrier_subjects DESC, gene.hgnc_symbol LIMIT 3",
+              "ok": true,
+              "rowCount": 3
+            }
+          ],
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 12
+        }
+      ]
+    },
+    {
+      "id": "mean-expression-by-gene",
+      "category": "domain-semantics",
+      "question": "What is the average expression of BRCA1, TP53, ATM, EGFR and CFTR across our samples?",
+      "verdict": "PASS",
+      "runs": 1,
+      "passes": 1,
+      "flaky": false,
+      "durationMs": 12,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "reference-sql",
+              "passed": true
+            },
+            {
+              "id": "trap-sql",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT gene.hgnc_symbol AS gene, ROUND(AVG(expression.tpm), 3) AS mean_tpm FROM genomics.gene_expression expression JOIN genomics.samples sample ON sample.id = expression.sample_id JOIN genomics.genes gene ON gene.id = expression.gene_id WHERE sample.is_control = false AND gene.hgnc_symbol IN ('BRCA1', 'TP53', 'ATM', 'EGFR', 'CFTR') GROUP BY gene.hgnc_symbol ORDER BY gene.hgnc_symbol",
+          "sql": [
+            {
+              "sql": "SELECT gene.hgnc_symbol AS gene, ROUND(AVG(expression.tpm), 3) AS mean_tpm FROM genomics.gene_expression expression JOIN genomics.samples sample ON sample.id = expression.sample_id JOIN genomics.genes gene ON gene.id = expression.gene_id WHERE sample.is_control = false AND gene.hgnc_symbol IN ('BRCA1', 'TP53', 'ATM', 'EGFR', 'CFTR') GROUP BY gene.hgnc_symbol ORDER BY gene.hgnc_symbol",
+              "ok": true,
+              "rowCount": 5
+            },
+            {
+              "sql": "SELECT gene.hgnc_symbol AS gene, ROUND(AVG(expression.tpm), 3) AS mean_tpm FROM genomics.gene_expression expression JOIN genomics.samples sample ON sample.id = expression.sample_id JOIN genomics.genes gene ON gene.id = expression.gene_id WHERE sample.is_control = false AND expression.tpm > 0 AND gene.hgnc_symbol IN ('BRCA1', 'TP53', 'ATM', 'EGFR', 'CFTR') GROUP BY gene.hgnc_symbol ORDER BY gene.hgnc_symbol",
+              "ok": true,
+              "rowCount": 5
+            }
+          ],
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 12
+        }
+      ]
+    },
+    {
+      "id": "genes-silent-in-most-samples",
+      "category": "domain-semantics",
+      "question": "Which genes are silent in more than half of our samples?",
+      "verdict": "PASS",
+      "runs": 1,
+      "passes": 1,
+      "flaky": false,
+      "durationMs": 12,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "reference-sql",
+              "passed": true
+            },
+            {
+              "id": "trap-sql",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT gene.hgnc_symbol AS gene, COUNT(*) FILTER (WHERE expression.tpm = 0) AS silent_samples, COUNT(*) AS samples_measured FROM genomics.gene_expression expression JOIN genomics.samples sample ON sample.id = expression.sample_id JOIN genomics.genes gene ON gene.id = expression.gene_id WHERE sample.is_control = false GROUP BY gene.hgnc_symbol HAVING COUNT(*) FILTER (WHERE expression.tpm = 0) * 2 > COUNT(*) ORDER BY silent_samples DESC, gene.hgnc_symbol",
+          "sql": [
+            {
+              "sql": "SELECT gene.hgnc_symbol AS gene, COUNT(*) FILTER (WHERE expression.tpm = 0) AS silent_samples, COUNT(*) AS samples_measured FROM genomics.gene_expression expression JOIN genomics.samples sample ON sample.id = expression.sample_id JOIN genomics.genes gene ON gene.id = expression.gene_id WHERE sample.is_control = false GROUP BY gene.hgnc_symbol HAVING COUNT(*) FILTER (WHERE expression.tpm = 0) * 2 > COUNT(*) ORDER BY silent_samples DESC, gene.hgnc_symbol",
+              "ok": true,
+              "rowCount": 9
+            },
+            {
+              "sql": "SELECT gene.hgnc_symbol AS gene, SUM(CASE WHEN expression.tpm IS NULL THEN 1 ELSE 0 END) AS silent_samples, COUNT(*) AS samples_measured FROM genomics.gene_expression expression JOIN genomics.samples sample ON sample.id = expression.sample_id JOIN genomics.genes gene ON gene.id = expression.gene_id WHERE sample.is_control = false GROUP BY gene.hgnc_symbol HAVING SUM(CASE WHEN expression.tpm IS NULL THEN 1 ELSE 0 END) * 2 > COUNT(*) ORDER BY silent_samples DESC, gene.hgnc_symbol",
+              "ok": true,
+              "rowCount": 0
+            }
+          ],
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 12
+        }
+      ]
+    },
+    {
+      "id": "high-confidence-calls",
+      "category": "quality-filter",
+      "question": "How many of our variant calls are high-confidence?",
+      "verdict": "PASS",
+      "runs": 1,
+      "passes": 1,
+      "flaky": false,
+      "durationMs": 18,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "reference-sql",
+              "passed": true
+            },
+            {
+              "id": "alternative-sql",
+              "passed": true
+            },
+            {
+              "id": "trap-sql",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT call.filter_status, COUNT(*) AS calls FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id WHERE sample.is_control = false GROUP BY call.filter_status ORDER BY calls DESC, call.filter_status",
+          "sql": [
+            {
+              "sql": "SELECT call.filter_status, COUNT(*) AS calls FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id WHERE sample.is_control = false GROUP BY call.filter_status ORDER BY calls DESC, call.filter_status",
+              "ok": true,
+              "rowCount": 2
+            },
+            {
+              "sql": "SELECT COUNT(*) AS high_confidence_calls FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id WHERE sample.is_control = false AND call.filter_status = 'PASS'",
+              "ok": true,
+              "rowCount": 1
+            },
+            {
+              "sql": "SELECT CASE WHEN call.genotype_quality >= 20 THEN 'high-confidence' ELSE 'low-confidence' END AS confidence, COUNT(*) AS calls FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id WHERE sample.is_control = false GROUP BY CASE WHEN call.genotype_quality >= 20 THEN 'high-confidence' ELSE 'low-confidence' END ORDER BY calls DESC",
+              "ok": true,
+              "rowCount": 2
+            }
+          ],
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 18
+        }
+      ]
+    },
+    {
+      "id": "high-confidence-calls-by-assay",
+      "category": "quality-filter",
+      "question": "How many high-confidence variant calls did each assay type produce?",
+      "verdict": "PASS",
+      "runs": 1,
+      "passes": 1,
+      "flaky": false,
+      "durationMs": 12,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "reference-sql",
+              "passed": true
+            },
+            {
+              "id": "trap-sql",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT sample.assay, COUNT(*) AS high_confidence_calls FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id WHERE sample.is_control = false AND call.filter_status = 'PASS' GROUP BY sample.assay ORDER BY sample.assay",
+          "sql": [
+            {
+              "sql": "SELECT sample.assay, COUNT(*) AS high_confidence_calls FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id WHERE sample.is_control = false AND call.filter_status = 'PASS' GROUP BY sample.assay ORDER BY sample.assay",
+              "ok": true,
+              "rowCount": 3
+            },
+            {
+              "sql": "SELECT sample.assay, COUNT(*) AS high_confidence_calls FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id WHERE sample.is_control = false GROUP BY sample.assay ORDER BY sample.assay",
+              "ok": true,
+              "rowCount": 3
+            }
+          ],
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 12
+        }
+      ]
+    },
+    {
+      "id": "high-confidence-calls-by-gene",
+      "category": "quality-filter",
+      "question": "Which five genes have the most high-confidence variant calls?",
+      "verdict": "PASS",
+      "runs": 1,
+      "passes": 1,
+      "flaky": false,
+      "durationMs": 13,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "reference-sql",
+              "passed": true
+            },
+            {
+              "id": "trap-sql",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT gene.hgnc_symbol AS gene, COUNT(*) AS high_confidence_calls FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id JOIN genomics.variants variant ON variant.id = call.variant_id JOIN genomics.genes gene ON gene.id = variant.gene_id WHERE sample.is_control = false AND call.filter_status = 'PASS' GROUP BY gene.hgnc_symbol ORDER BY high_confidence_calls DESC, gene.hgnc_symbol LIMIT 5",
+          "sql": [
+            {
+              "sql": "SELECT gene.hgnc_symbol AS gene, COUNT(*) AS high_confidence_calls FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id JOIN genomics.variants variant ON variant.id = call.variant_id JOIN genomics.genes gene ON gene.id = variant.gene_id WHERE sample.is_control = false AND call.filter_status = 'PASS' GROUP BY gene.hgnc_symbol ORDER BY high_confidence_calls DESC, gene.hgnc_symbol LIMIT 5",
+              "ok": true,
+              "rowCount": 5
+            },
+            {
+              "sql": "SELECT gene.hgnc_symbol AS gene, COUNT(*) AS high_confidence_calls FROM genomics.variant_calls call JOIN genomics.samples sample ON sample.id = call.sample_id JOIN genomics.variants variant ON variant.id = call.variant_id JOIN genomics.genes gene ON gene.id = variant.gene_id WHERE sample.is_control = false GROUP BY gene.hgnc_symbol ORDER BY high_confidence_calls DESC, gene.hgnc_symbol LIMIT 5",
+              "ok": true,
+              "rowCount": 5
+            }
+          ],
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 13
+        }
+      ]
+    },
+    {
+      "id": "coverage-by-assay",
+      "category": "unit-confusion",
+      "question": "What is the average sequencing coverage for each assay type?",
+      "verdict": "PASS",
+      "runs": 1,
+      "passes": 1,
+      "flaky": false,
+      "durationMs": 11,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "reference-sql",
+              "passed": true
+            },
+            {
+              "id": "trap-sql",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT sample.assay, COUNT(*) AS samples, ROUND(AVG(sample.mean_coverage), 1) AS avg_mean_coverage FROM genomics.samples sample WHERE sample.is_control = false GROUP BY sample.assay ORDER BY sample.assay",
+          "sql": [
+            {
+              "sql": "SELECT sample.assay, COUNT(*) AS samples, ROUND(AVG(sample.mean_coverage), 1) AS avg_mean_coverage FROM genomics.samples sample WHERE sample.is_control = false GROUP BY sample.assay ORDER BY sample.assay",
+              "ok": true,
+              "rowCount": 3
+            },
+            {
+              "sql": "SELECT sample.assay, COUNT(*) AS samples, ROUND(SUM(sample.mean_coverage), 1) AS avg_mean_coverage FROM genomics.samples sample WHERE sample.is_control = false GROUP BY sample.assay ORDER BY sample.assay",
+              "ok": true,
+              "rowCount": 3
+            }
+          ],
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 11
+        }
+      ]
+    },
+    {
+      "id": "dmd-gene-span-mb",
+      "category": "unit-confusion",
+      "question": "How many megabases does the DMD gene span, to two decimal places?",
+      "verdict": "PASS",
+      "runs": 1,
+      "passes": 1,
+      "flaky": false,
+      "durationMs": 9,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "reference-sql",
+              "passed": true
+            },
+            {
+              "id": "trap-sql",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT ROUND((gene.end_position - gene.start_position + 1) / 1000000.0, 2) AS span_mb FROM genomics.genes gene WHERE gene.hgnc_symbol = 'DMD'",
+          "sql": [
+            {
+              "sql": "SELECT ROUND((gene.end_position - gene.start_position + 1) / 1000000.0, 2) AS span_mb FROM genomics.genes gene WHERE gene.hgnc_symbol = 'DMD'",
+              "ok": true,
+              "rowCount": 1
+            },
+            {
+              "sql": "SELECT gene.end_position - gene.start_position + 1 AS span_mb FROM genomics.genes gene WHERE gene.hgnc_symbol = 'DMD'",
+              "ok": true,
+              "rowCount": 1
+            }
+          ],
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 9
+        }
+      ]
+    },
+    {
+      "id": "canonical-transcript-length-kb",
+      "category": "unit-confusion",
+      "question": "What is the average length of a canonical transcript, in kilobases to one decimal place?",
+      "verdict": "PASS",
+      "runs": 1,
+      "passes": 1,
+      "flaky": false,
+      "durationMs": 10,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "reference-sql",
+              "passed": true
+            },
+            {
+              "id": "trap-sql",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT ROUND(AVG(transcript.length_bp) / 1000.0, 1) AS mean_length_kb FROM genomics.transcripts transcript WHERE transcript.is_canonical = true",
+          "sql": [
+            {
+              "sql": "SELECT ROUND(AVG(transcript.length_bp) / 1000.0, 1) AS mean_length_kb FROM genomics.transcripts transcript WHERE transcript.is_canonical = true",
+              "ok": true,
+              "rowCount": 1
+            },
+            {
+              "sql": "SELECT ROUND(AVG(transcript.length_bp), 1) AS mean_length_kb FROM genomics.transcripts transcript WHERE transcript.is_canonical = true",
+              "ok": true,
+              "rowCount": 1
+            }
+          ],
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 10
+        }
+      ]
+    },
+    {
+      "id": "variants-by-type",
+      "category": "control",
+      "question": "How many variants of each type do we have?",
+      "verdict": "PASS",
+      "runs": 1,
+      "passes": 1,
+      "flaky": false,
+      "durationMs": 5,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "reference-sql",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT variant.variant_type, COUNT(*) AS variants FROM genomics.variants variant GROUP BY variant.variant_type ORDER BY variants DESC, variant.variant_type",
+          "sql": [
+            {
+              "sql": "SELECT variant.variant_type, COUNT(*) AS variants FROM genomics.variants variant GROUP BY variant.variant_type ORDER BY variants DESC, variant.variant_type",
+              "ok": true,
+              "rowCount": 4
+            }
+          ],
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 5
+        }
+      ]
+    },
+    {
+      "id": "samples-per-collection-year",
+      "category": "control",
+      "question": "How many samples did we collect in each year, counting every sample on record, controls included?",
+      "verdict": "PASS",
+      "runs": 1,
+      "passes": 1,
+      "flaky": false,
+      "durationMs": 5,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "reference-sql",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT EXTRACT(YEAR FROM sample.collected_on)::int AS collection_year, COUNT(*) AS samples FROM genomics.samples sample GROUP BY collection_year ORDER BY collection_year",
+          "sql": [
+            {
+              "sql": "SELECT EXTRACT(YEAR FROM sample.collected_on)::int AS collection_year, COUNT(*) AS samples FROM genomics.samples sample GROUP BY collection_year ORDER BY collection_year",
+              "ok": true,
+              "rowCount": 2
+            }
+          ],
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 5
+        }
+      ]
+    },
+    {
+      "id": "genes-by-biotype",
+      "category": "control",
+      "question": "How many genes of each gene type (such as protein-coding) do we track?",
+      "verdict": "PASS",
+      "runs": 1,
+      "passes": 1,
+      "flaky": false,
+      "durationMs": 7,
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "reference-sql",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT gene.biotype, COUNT(*) AS genes FROM genomics.genes gene GROUP BY gene.biotype ORDER BY genes DESC, gene.biotype",
+          "sql": [
+            {
+              "sql": "SELECT gene.biotype, COUNT(*) AS genes FROM genomics.genes gene GROUP BY gene.biotype ORDER BY genes DESC, gene.biotype",
+              "ok": true,
+              "rowCount": 2
+            }
+          ],
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 7
+        }
+      ]
+    },
+    {
+      "id": "samples-sequenced-2015",
+      "category": "out-of-scope",
+      "question": "How many samples did we sequence in 2015?",
+      "verdict": "SKIP",
+      "runs": 0,
+      "passes": 0,
+      "flaky": false,
+      "durationMs": 0,
+      "attempts": [],
+      "reason": "no-expected-sql"
+    },
+    {
+      "id": "methylation-by-gene",
+      "category": "out-of-scope",
+      "question": "What is the average DNA methylation level of BRCA1 across our samples?",
+      "verdict": "SKIP",
+      "runs": 0,
+      "passes": 0,
+      "flaky": false,
+      "durationMs": 0,
+      "attempts": [],
+      "reason": "no-expected-sql"
+    },
+    {
+      "id": "copy-number-variant-count",
+      "category": "out-of-scope",
+      "question": "How many copy-number variants did we detect?",
+      "verdict": "SKIP",
+      "runs": 0,
+      "passes": 0,
+      "flaky": false,
+      "durationMs": 0,
+      "attempts": [],
+      "reason": "no-expected-sql"
+    },
+    {
+      "id": "most-important-gene",
+      "category": "clarification",
+      "question": "Which gene matters most in this cohort?",
+      "verdict": "SKIP",
+      "runs": 0,
+      "passes": 0,
+      "flaky": false,
+      "durationMs": 0,
+      "attempts": [],
+      "reason": "no-expected-sql"
+    },
+    {
+      "id": "best-quality-sample",
+      "category": "clarification",
+      "question": "Which sample has the best sequencing quality?",
+      "verdict": "SKIP",
+      "runs": 0,
+      "passes": 0,
+      "flaky": false,
+      "durationMs": 0,
+      "attempts": [],
+      "reason": "no-expected-sql"
+    },
+    {
+      "id": "most-affected-superpopulation",
+      "category": "clarification",
+      "question": "Which superpopulation is most affected?",
+      "verdict": "SKIP",
+      "runs": 0,
+      "passes": 0,
+      "flaky": false,
+      "durationMs": 0,
+      "attempts": [],
+      "reason": "no-expected-sql"
+    },
+    {
+      "id": "expression-data-discovery",
+      "category": "discovery",
+      "question": "What expression data do we have?",
+      "verdict": "SKIP",
+      "runs": 0,
+      "passes": 0,
+      "flaky": false,
+      "durationMs": 0,
+      "attempts": [],
+      "reason": "no-expected-sql"
+    },
+    {
+      "id": "phenotype-data-discovery",
+      "category": "discovery",
+      "question": "What phenotype information do we have about our subjects?",
+      "verdict": "SKIP",
+      "runs": 0,
+      "passes": 0,
+      "flaky": false,
+      "durationMs": 0,
+      "attempts": [],
+      "reason": "no-expected-sql"
+    },
+    {
+      "id": "sequencing-quality-discovery",
+      "category": "discovery",
+      "question": "What information do we have about sequencing and call quality?",
+      "verdict": "SKIP",
+      "runs": 0,
+      "passes": 0,
+      "flaky": false,
+      "durationMs": 0,
+      "attempts": [],
+      "reason": "no-expected-sql"
+    }
+  ],
+  "status": "completed"
+}

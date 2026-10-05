@@ -8,5 +8,6 @@
       "cachedInputPerMillionUsd": 0.0
     }
   },
+  "_notes": "The run log records a model id of the form '<provider>/<model>' — 'openai/gpt-4o-mini', 'lenai/<deployment>', or 'databricks/<serving-endpoint-name>'. You can key an entry here by the full id or by just the part after the slash (loadPricing matches both, so \"gpt-4o-mini\" covers openai/gpt-4o-mini and lenai/gpt-4o-mini) — the full id is safer when a LenAI deployment name collides with an OpenAI model name that has a different rate. Databricks Model Serving bills in DBUs (Databricks Units), not directly in dollars per token; convert your workspace's DBU rate for that serving endpoint to an effective $/M input and $/M output tokens yourself before adding an entry here — this repo has no DBU-to-USD table. Until a model has an entry, every run involving it reports cost as 'not priced'; the token counts (which are exact) are reported regardless.",
   "models": {}
 }
