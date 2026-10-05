@@ -238,7 +238,7 @@ The set definitions shipped with the engine improvement loop are the data asset;
 
 ## Edge cases and errors
 
-- Starting with zero ticked questions is blocked in the UI (button disabled); a direct request with an explicit empty list SHALL NOT be read as "run everything": it is refused with "Pick at least one question to run" when it names a set, and with "No question set matches the selected questions, …" when it does not. A request that names a set but no list runs every question of that set; a request with neither fails with "The selected questions span several sets (formula-1, genomics, health-insurance, world-cup, world-cup-rest) — run one set at a time."
+- Starting with zero ticked questions is blocked in the UI (button disabled); a direct request with an explicit empty list SHALL NOT be read as "run everything": it is refused with "Pick at least one question to run" before the set is resolved (R53). A request that names a set but no list runs every question of that set; a request with neither runs every question of `world-cup` (R53).
 - A request naming a set that does not exist fails with `Unknown eval suite "<id>"…` before the datasource's datasets are read.
 - A run started while another is active for the agent is refused with the conflict message; the UI shows it under the run controls.
 - A dataset-less datasource: "has no datasets" message, no run recorded, Executions stays empty ("No eval runs yet").
