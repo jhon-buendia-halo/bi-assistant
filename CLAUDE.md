@@ -133,6 +133,7 @@ Skip only for trivial, zero-risk edits. Never rewrite a past entry. When a recur
   ```
   When the Claude desktop app creates the worktree for the session, rename its branch to the convention (`git branch -m <type>/<US-ID>-<short-description>`) before the first commit.
 - **Traceability:** the user story's ID also appears in the matching [roadmap.md](roadmap.md) feature, the PR title (`feat(BA-79): …` or `feat: … (BA-79)`) and the PR description (link to the Jira issue). One PR covers one issue; split work that spans several.
+- **Review:** a PR into `main` needs one approving review. Only the repo owner (the only admin) can merge without one, through the ruleset bypass; nobody can push straight to `main`. Details: *Branch rulesets on `main`* in [delivery.md](specs/system/delivery.md).
 - **Cleanup:** after the PR merges, remove the worktree (`git worktree remove …`) and delete the branch.
 
 ## Worktree deploy convention — always ask which target

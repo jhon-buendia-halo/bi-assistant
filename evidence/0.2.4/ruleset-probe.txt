@@ -1,0 +1,24 @@
+Ruleset probe, 2026-10-05: a temporary ruleset (id 24512015) targeting refs/heads/ruleset-test-ba110 with the rule
+planned for main: pull request required, 1 approving review, stale approvals dismissed on push.
+Bypass list: DeployKey (mode "always") and RepositoryRole 5 = Repository admin (mode "pull_request").
+A temporary write deploy key (id 165450466) was added for the probe. Ruleset, key, PR branch and test branch were
+deleted afterwards. The only repo admin is the owner, jhon-buendia-halo; the other collaborators have write.
+
+1. Direct push by the repo admin (owner's own SSH key):
+   remote: error: GH013: Repository rule violations found for refs/heads/ruleset-test-ba110.
+   remote: - Changes must be made through a pull request.
+   ! [remote rejected] 00c52c9 -> ruleset-test-ba110 (push declined due to repository rule violations)
+   => "pull_request" bypass mode does not let the admin push straight to the branch.
+
+2. Direct push authenticated with the deploy key only (ssh -F /dev/null -i <key> -o IdentitiesOnly=yes):
+   remote: - Changes must be made through a pull request.     (listed as bypassed)
+   8b2af9b..bbdcb55  bbdcb55 -> ruleset-test-ba110            (accepted)
+   => a deploy key on the bypass list can push, so the release workflow can push its bump commit.
+   Note: the first attempt kept the user's ~/.ssh/config key and authenticated as the user ("Hi jhon-buendia-halo!"),
+   which was rejected; only with -F /dev/null did ssh present the deploy key.
+
+3. PR #48 (ruleset-test-ba110-src -> ruleset-test-ba110), no reviews, opened by the admin:
+   reviewDecision: REVIEW_REQUIRED
+   gh pr merge --merge        -> "X Pull request #48 is not mergeable: the base branch policy prohibits the merge."
+   gh pr merge --merge --admin -> MERGED
+   => without an approval the PR is blocked for anyone without bypass; the admin can merge it with the bypass.

@@ -11,6 +11,7 @@ Every change to Questions to Insights is planned, specified, built, verified and
 - The delivery workflow and its conventions in [CLAUDE.md](../../../CLAUDE.md): roadmap, ADRs, specs, E2E impact analysis, evidence, retrospective, branching, Epic gate.
 - The process documents at the repo root: roadmap, changelog, retrospective and evidence.
 - The `specs/` tree: product, system, capability and epic specs, and their lifecycle.
+- The rules on `main` that enforce these conventions: the required spec check, and a reviewed PR for every merge.
 
 ## Out of scope
 
@@ -23,11 +24,14 @@ Every change to Questions to Insights is planned, specified, built, verified and
 |---|---|---|
 | [BA-84](https://halo-powered.atlassian.net/browse/BA-84) | Adopt the delivery workflow, beta roadmap and branching convention | 0.2.1 |
 | [BA-90](https://halo-powered.atlassian.net/browse/BA-90) | Rebuildable system specs in `specs/` | 0.2.2 |
+| [BA-108](https://halo-powered.atlassian.net/browse/BA-108) | Require the spec check before merging to `main` | 0.2.3 |
+| [BA-110](https://halo-powered.atlassian.net/browse/BA-110) | Require PR approval on `main`; only the repo admin may merge without one | 0.2.4 |
 
 ## Specs touched
 
 - [specs/README.md](../../README.md): layout, formats, lifecycle, rebuild prompt.
 - Every file under [product/](../../product/), [system/](../../system/) and [capabilities/](../../capabilities/), created by the BA-90 backfill.
+- [system/delivery.md](../../system/delivery.md): the release workflow and the branch rulesets on `main` (BA-108, BA-110).
 
 ## Acceptance
 
