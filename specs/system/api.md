@@ -372,13 +372,30 @@ Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra regi
 - Errors (Style B): `404 "Agent \"<key>\" not found"`.
 
 #### 35. `GET /agents/:key/evals`
-- Response `200`: `{ sets: AgentEvalSet[] }`. Only `assistant` has sets; any other key returns `{ sets: [] }` (no 404). `AgentEvalSet = { id, name, description, cases: { id, question, intent, checks: { id, name, description }[] }[] }`.
+- Response `200`: `{ sets: AgentEvalSet[] }`, one entry per set definition ([data-model.md 4.8](data-model.md#48-eval-set-definitions-suite-files)), sorted by `id`, re-read on every call. Only `assistant` has sets; any other key returns `{ sets: [] }` (no 404). If any set definition fails validation the response is `{ sets: [] }` and the error is only logged as a warning.
+
+```ts
+interface AgentEvalSet {
+  id: string;            // set (suite) id, e.g. "health-insurance"
+  name: string;
+  description: string;   // '' when the definition has none
+  fixtureId?: string;    // bundled sample the set questions; absent for the synthetic sets
+  datasets: string[];    // dataset names the set is written against (declared, or the sample's dataset name)
+  cases: {
+    id: string;
+    category: string;    // failure class, e.g. "ties"; '' only if a case somehow has none
+    question: string;
+    intent: string;
+    checks: { id: string; name: string; description: string }[];  // the text/tool checks only
+  }[];
+}
+```
 
 #### 36. `POST /agents/:key/evals/run`
-- Body: `{ datasourceId: string; caseIds?: string[] }`. `caseIds` omitted = all questions.
+- Body: `{ datasourceId: string; caseIds?: string[]; suiteId?: string }`. `suiteId` names the set to run (the shipped UI always sends the open set). Without `suiteId` the set is resolved from `caseIds` (case ids are unique across sets). `caseIds` omitted = every question of the set; omitted together with `suiteId`, the request spans every set and is refused (below). Ids that do not belong to the resolved set are ignored.
 - Success: `{ ok:true, message:"Eval run started", jobId }`. Returns immediately; the run is long-running (see [3.3](#33-eval-runs)).
-- Failures (Style A, `ok:false`): `"Agent \"<key>\" has no evals to run"` (non-assistant); `"An eval run is already in progress for this agent"` (also returns the running `jobId`); `"Pick a datasource to run against"`; `"That datasource has no datasets — create one in Datasets before running evals"`; `"Pick at least one question to run"`; fixture/dataset coverage errors (the datasets bound to the datasource must expose the entities the selected questions need).
-- Side effects: persists an initial run record; spawns the run (one throwaway session is created for the run to host visual tools and deleted afterwards).
+- Failures (Style A, `ok:false`), checked in this order: `"Agent \"<key>\" has no evals to run"` (non-assistant); `"An eval run is already in progress for this agent"` (also returns the running `jobId`); `"Pick a datasource to run against"`; set resolution — unknown `suiteId`: `"Unknown eval suite \"<id>\". Looked in <suites dir>. Available suites: <ids>."` (or `"… — a suite id is letters, digits and hyphens."` for an id with other characters; `"Invalid eval suite <file>: <reason>"` when the definition fails validation); no `suiteId` and no case id matches a set: `"No question set matches the selected questions, so there is no sample to validate the datasets against."`; ids spanning several sets: `"The selected questions span several sets (<ids>) — run one set at a time."`; then `"That datasource has no datasets — create one in Datasets before running evals"`; `"Pick at least one question to run"`; then the dataset preflight messages of [agents-evals](../capabilities/agents-evals/spec.md) R20, evaluated on the datasets in scope (R21).
+- Side effects: persists an initial run record (with `suiteId`, `suiteName` and the datasets in scope); spawns the run (one throwaway session is created for the run to host visual tools and deleted afterwards). When the run ends a run log is written outside the app data dir ([data-model.md 4.9](data-model.md#49-eval-run-logs-and-the-price-table)).
 
 #### 37. `GET /agents/:key/evals/runs`
 - Response `200`: `{ runs: EvalRunView[] }`, newest first; in-flight runs reflect live in-memory state.
@@ -387,33 +404,47 @@ Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra regi
 - Response `200`: `{ ok:true, message:<status>, ...EvalRunView }`; unknown job: `{ ok:false, message:"Eval run \"<jobId>\" not found" }` (HTTP 200). `:key` is ignored by the lookup.
 
 #### 39. `GET /agents/:key/evals/runs/:jobId/download`
-- Response `200`: `text/markdown; charset=utf-8`, `Content-Disposition: attachment; filename="eval-run-<agentKey>-<YYYY-MM-DD-HH-mm-ss>-<first 8 of jobId>.md"`. Body: summary, failures, traces, answers, and the regression comparison when present; the datasource is shown by name.
+- Response `200`: `text/markdown; charset=utf-8`, `Content-Disposition: attachment; filename="eval-run-<agentKey>-<YYYY-MM-DD-HH-mm-ss>-<first 8 of jobId>.md"`. Body: summary, category table, tokens and cost, the regression comparison when present, failures, traces and answers (section order in [agents-evals](../capabilities/agents-evals/spec.md) R38); the datasource is shown by name.
 - Errors (Style B): `404 "Eval run \"<jobId>\" not found"`.
 
 #### 40. `DELETE /agents/:key/evals/runs/:jobId`
 - Success: `{ ok:true, message:"Run deleted" }`. A run still `running`, or an unknown id, returns `{ ok:false, message:"Cannot delete a run that is still going" }` (the same message for both cases).
 
-`EvalRunView` (wire shape; `comparison` is present on the wire but absent from the frontend type, see G5):
+`EvalRunView` (wire shape; the persisted fields and their meaning are in [data-model.md 3.8](data-model.md#38-eval_runs)):
 
 ```ts
 interface EvalRunView {
-  jobId: string; agentKey: string; datasourceId: string;
-  datasets: string[];            // dataset names bound to the datasource
+  jobId: string; agentKey: string;
+  suiteId: string; suiteName: string;   // the set that ran; absent on runs stored before sets were recorded
+  datasourceId: string;
+  datasets: string[];            // datasets in scope: the set's declared ones, else every dataset bound to the datasource
   caseIds: string[]; totalCases: number;
   status: 'running' | 'completed' | 'failed';
   results: AssistantEvalCaseResult[];   // finished questions, in order
   currentQuestion?: string; error?: string;
   startedAt: string; finishedAt?: string;
   comparison?: { previousRunId: string; regressions: {id,question}[]; improvements: {id,question}[]; unchanged: {id,question}[] };
+  usage?: TokenUsage;            // summed over finished questions; absent until one reports usage, and on old runs
+  estimatedCostUsd?: number;     // set when the run ends and the model has a rate; absent = not priced / not measured
+  model?: string;                // model id the run actually ran on, set when the run ends
+  categories?: Record<string, { total: number; passed: number }>;  // per-category tallies
 }
 interface AssistantEvalCaseResult {
   id: string; question: string;
+  category?: string;                                  // absent on results stored before categories existed
   scores: Record<string, number>;                     // per scorer id, 0..1
   checkResults: { id: string; description: string; score: number; passed: boolean; reason?: string }[];
   answer: string;
   toolCalls: { name: string; input?: string; output?: string; error?: string }[];   // JSON-encoded, truncated to ~2000 chars each
   passed: boolean;                                    // every scorer scored 1
   error?: string; durationMs: number;
+  usage?: TokenUsage;                                 // agent run + judge; absent when nothing was reported
+}
+interface TokenUsage {
+  inputTokens: number; outputTokens: number;
+  totalTokens: number;            // input + output unless the provider reports its own total
+  reasoningTokens: number; cachedInputTokens: number;
+  calls: number;                  // model calls summed; 0 = not observed (never "free")
 }
 ```
 
@@ -635,9 +666,10 @@ Pattern: **start, poll, then download**. Endpoints 41-43.
 Pattern: **start, poll, list, download, delete**. Endpoints 36-40.
 
 - One running run per agent (`conflictWith` surfaced as `ok:false` + `jobId`).
-- A run executes the selected questions sequentially against the datasets bound to the datasource. After every question the finished result is appended to `results` and the record is persisted (a crash mid-suite keeps finished questions). `currentQuestion` names the question in flight.
+- A run executes the selected questions of one set sequentially against the datasets in scope (the set's declared datasets when the datasource has all of them, else every dataset bound to it). After every question the finished result is appended to `results`, `usage` and `categories` are updated, and the record is persisted (a crash mid-suite keeps finished questions and their cost). `currentQuestion` names the question in flight.
 - Observed by polling `GET /agents/:key/evals/runs/:jobId` (the shipped UI polls every **1500 ms** until `status !== "running"`); the run history (`…/runs`) reads persisted records with live in-memory state overlaid for in-flight runs. Persisted runs survive restart; an interrupted run is not resumed and its stored `status` may stay `running` (G4).
-- On completion the run is compared with the most recent previous completed run for the same agent, datasource and datasets, and `comparison` (regressions, improvements, unchanged by case id) is attached; a comparison failure never fails the run.
+- On completion the run is compared with the most recent previous completed run for the same agent, set (`suiteId`, a missing one read as `world-cup`), datasource and datasets, and `comparison` (regressions, improvements, unchanged by case id) is attached; a comparison failure never fails the run.
+- When the run ends (completed or failed) `model` and `estimatedCostUsd` are set and a run log is written (best effort, [data-model.md 4.9](data-model.md#49-eval-run-logs-and-the-price-table)).
 - Cannot delete a run while it is `running`.
 
 ### 3.4 Knowledge bootstrap stream: `POST /knowledge/bootstrap/stream`
@@ -782,6 +814,8 @@ Argument parsing is **strict**: an unknown flag or malformed argument prints `qu
 | `OPENAI_API_KEY` | Mastra's env-bound model router (via model resolver) | Fallback model credential (`openai/gpt-4o-mini`) when no LLM settings are saved. | unset |
 | `WORLD_CUP_DB_PORT` | testing-data fixture registry | Port of the sample PostgreSQL server in the form prefill and compose stack. | `55432` |
 | `EVAL_DATASETS` | `mastra/evals/run-assistant-evals.ts` (CLI eval script only) | Comma-separated dataset names to run the assistant evals against. Required by that script. | none |
+| `EVAL_SUITE` | `mastra/evals/run-assistant-evals.ts` (CLI eval script only) | Id of the eval set that script runs. | `world-cup` |
+| `EVAL_LOG_DIR` | eval run-log writer (in-app eval runs, `scripts/run-eval.ts`) | Folder to write eval run logs into (`<dir>/evals/…`) and to read `pricing.json` from. Unset: the `logs/` folder at the root of the source checkout the backend runs from; with no checkout (installed app, npm package) runs are not logged and cost is unpriced. | unset |
 
 ### 6.2 CLI-only
 
@@ -802,7 +836,7 @@ Argument parsing is **strict**: an unknown flag or malformed argument prints `qu
 
 ### 6.4 Developer scripts (not part of the shipped app)
 
-`BACKEND_URL` (default `http://127.0.0.1:3000`) and `WORLD_CUP_API_URL` (`http://127.0.0.1:55080`) for `setup-worldcup-rest.ts`; `WORLD_CUP_API_PORT` (`55080`) for the sample REST server; `WORLD_CUP_DB_HOST|PORT|DATABASE|USER|PASSWORD` (`127.0.0.1|55432|world_cup|world_cup|world_cup_dev`) for the dump script; `EVAL_ROW_LIMIT` (`500`), `EVAL_TIMEOUT_MS` (`300000`) for `run-eval.ts`; `CHECK_TIMEOUT_MS` (`180000`), `CHECK_MODEL` (`gpt-4o-mini`), `CHECK_ARM`, `CHECK_TRIALS` for `check-answers.ts`.
+`BACKEND_URL` (default `http://127.0.0.1:3000`) and `WORLD_CUP_API_URL` (`http://127.0.0.1:55080`) for `setup-worldcup-rest.ts`; `WORLD_CUP_API_PORT` (`55080`) for the sample REST server; `WORLD_CUP_DB_HOST|PORT|DATABASE|USER|PASSWORD` (`127.0.0.1|55432|world_cup|world_cup|world_cup_dev`) for the dump script; `EVAL_ROW_LIMIT` (`500`), `EVAL_TIMEOUT_MS` (`300000`), `EVAL_LOG_DIR` (see 6.1), `APP_DATA_DIR` and `OPENAI_API_KEY` for `run-eval.ts`; `WORLD_CUP_DB_PORT` (`55432`) and `APP_DATA_DIR` for `bootstrap-fixtures.ts` (`npm run fixtures:register`); `CHECK_TIMEOUT_MS` (`180000`), `CHECK_MODEL` (`gpt-4o-mini`), `CHECK_ARM`, `CHECK_TRIALS` for `check-answers.ts`.
 
 ### 6.5 Frontend build/runtime
 
@@ -816,7 +850,8 @@ No environment variables. The only runtime switch is the page protocol (`file:` 
 - **G2. `POST /sessions/:id/messages` is unused** by the frontend and is a degraded duplicate of the streaming path (no tool-data capture, clarification, grounding guard or careful mode). Open question: keep as a public non-streaming API or remove.
 - **G3. `POST /knowledge/bootstrap` is unused** (superseded by the streamed variant); it shares the service call.
 - **G4. Eval run recovery.** In-flight run state lives in memory with write-through persistence per question. Open question: what status a run left `running` by a crash shows after restart (no reconciliation code was found).
-- **G5. Frontend type drift.** The frontend `EvalRunView` omits `comparison` (present on the wire, only used in the Markdown report). The frontend `getEvalRun` result is a loose merge type.
+- **G5. Frontend type drift.** The frontend `getEvalRun` result is a loose merge type. (The frontend `EvalRunView` now carries `comparison`, `usage`, `estimatedCostUsd`, `model` and `categories`, and the Executions list shows them.)
+- **G14. One bad set definition empties the catalogue.** `GET /agents/:key/evals` reads every set definition and answers `{ sets: [] }` on the first validation error, so a single malformed definition hides every set (the UI then says "No evals configured for this agent yet."); runs naming a valid set still work.
 - **G6. No cascade.** Deleting a datasource leaves datasets pointing at it; deleting a dataset leaves sessions/knowledge that name it. Behaviour of such dangling references is not specified in the API.
 - **G7. `POST /sessions` does not verify the named datasets exist.** Open question whether that is intended.
 - **G8. Error-style inconsistency.** Style A (`200 { ok:false }`) vs Style B (real 4xx) is endpoint-specific and also differs in list shapes (`{ sessions }`, `{ datasources }`, `{ metrics }`, `{ datasets }`, bare array for knowledge, bare `SessionDoc`). Several read endpoints (`GET /llm/settings`, `GET /datasources`, eval-run listing) can still return a framework 500.

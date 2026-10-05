@@ -26,6 +26,8 @@ Build, packaging and versioning detail is in [../system/delivery.md](../system/d
   - agent observability data (traces, metrics, logs),
   - one workspace folder per session (visuals, reports),
   - the app secret file.
+
+  The one exception is the eval run log, a developer record written only into a source checkout or an explicitly configured folder ([../system/data-model.md](../system/data-model.md) 4.9); an installed app writes none by default. It never holds query results.
 - N9. Default data directory: on desktop, the operating system's per-user application data folder. On Windows it SHALL be the local, non-roaming profile folder, because roaming profiles are often synced or locked. Existing data SHALL be moved there once; if the move fails, the app SHALL keep using the roaming folder and log a diagnostic, and SHALL NOT lose data. In web mode, `~/.questions-to-insights`, overridable with `--data-dir` or the `QTI_DATA_DIR` or `APP_DATA_DIR` environment variables.
 - N10. A rename of a stored collection or field SHALL come with a migration that keeps old data readable. Existing migrations: `projects` to `sessions`, `sandbox_selections` to `datasets`, session field `sandboxes` to `datasets`, source field `sourceProjectId` to `sourceSessionId`, workspace folders `project-<id>` to `session-<id>`, a single anonymous Databricks connection to a named datasource, and the desktop user-data folder rename from "Questions to Insights" to "Halo BI Assistant". The session list order (by last update) SHALL NOT change because of a migration.
 - N11. UI layout preferences (right-panel width) SHALL be kept in browser local storage, not on the backend.

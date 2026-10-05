@@ -74,7 +74,9 @@ Persistence in one line: SQLite documents (better-sqlite3) for app data, LibSQL 
 frontend/   Angular app (Electron renderer) + Electron main process (electron/main.cjs, preload.cjs)
 backend/    NestJS API, Mastra agents, the CLI (npm package source)
 site/       Static product page and download routes (Cloudflare Pages), see delivery.md
-docker/     World Cup sample Postgres init scripts
+docker/     development Postgres init scripts (World Cup sample, synthetic health-insurance and genomics eval fixtures) and the seeded generators of the synthetic ones
+docs/       design notes and runbooks (eval domain design, improvement loop, phase plans)
+logs/       committed eval run history (`logs/evals/`) and the operator-maintained `pricing.json`, see data-model.md 4.9
 .github/    version-on-merge, build-desktop, publish-npm workflows
 specs/      this specification
 ```
@@ -149,7 +151,7 @@ Current state (verified): existing modules are `agents`, `datasets`, `datasource
 
 Datastore pattern: a small `DocStore<T>` interface (`infrastructure/database/doc-store.ts`) with a better-sqlite3 adapter (`sqlite-doc-store.ts`): one table per collection, each row one JSON document, filters and sorts evaluated in-process. `DatabaseModule` is `@Global()` and exposes one injection token per collection (for example `CONNECTIONS_STORE`); repositories inject the token, never the db handle. A new collection is a `{ token, table }` entry in `COLLECTIONS` in `database.module.ts` plus a token in `doc-store.ts`. Renames need a migration (see [data-model.md](data-model.md)). Data directory: `APP_DATA_DIR`, else `<cwd>/data`.
 
-Agent harness: `backend/src/mastra/` — `index.ts` builds the standalone Mastra instance and registers agents; `mastra.service.ts` is a thin DI wrapper (`MastraService.getAgent(id)`) so the rest of the backend stays Mastra-agnostic; `model-resolver.ts` and `model-compat.ts` bridge DI-less agents to the persisted LLM settings; `storage.ts` builds the composite store (LibSQL + DuckDB); `session-workspaces.ts` manages per-session filesystem workspaces; `agents/`, `tools/`, `skills/`, `evals/` hold the agents, their tools, prompt skills and eval suites. A new agent is a file in `mastra/agents/` plus its registration in `index.ts`. What each agent does: [agents.md](agents.md).
+Agent harness: `backend/src/mastra/` — `index.ts` builds the standalone Mastra instance and registers agents; `mastra.service.ts` is a thin DI wrapper (`MastraService.getAgent(id)`) so the rest of the backend stays Mastra-agnostic; `model-resolver.ts` and `model-compat.ts` bridge DI-less agents to the persisted LLM settings; `storage.ts` builds the composite store (LibSQL + DuckDB); `session-workspaces.ts` manages per-session filesystem workspaces; `agents/`, `tools/`, `skills/`, `evals/` hold the agents, their tools, prompt skills and the eval runner; eval sets are JSON definitions in `evals/suites/<id>.json`, loaded and validated by `evals/suite-loader.ts` and copied into `dist` as a `nest-cli.json` asset (format in [data-model.md](data-model.md) 4.8). Token accounting and run logs for evals are pure modules in `modules/agents/` (`eval-telemetry.ts`, `eval-run-log.ts`). A new agent is a file in `mastra/agents/` plus its registration in `index.ts`. What each agent does: [agents.md](agents.md).
 
 ## Test layout
 
@@ -164,11 +166,11 @@ Playwright specifics:
 
 - Fixture `e2e/fixtures/electron.fixture.ts` extends the base test with `appDataDir` (a fresh temp dir per test), `electronApp` (launches `frontend/` via `_electron.launch`, `NODE_ENV=test`, `QUESTIONS_TO_INSIGHTS_USER_DATA_DIR=<temp dir>` so the test never touches a developer's profile) and `page` (first window, waits for the "Open system logs" control). On failure it attaches `system-diagnostics.ndjson`, `electron-stdout.txt` and `electron-stderr.txt`. `e2e/helpers/app-actions.ts` holds shared UI actions.
 - `e2e/global-setup.ts` aborts if port 3000 is already in use (close any running app first), then runs `docker compose up -d --wait postgres` from the repo root. `E2E_SKIP_DOCKER=1` skips the compose step when an equivalent database is already running.
-- The World Cup sample database: `docker-compose.yml` service `postgres` (`postgres:16-alpine`, DB/user `world_cup`, password `world_cup_dev`, host port `${WORLD_CUP_DB_PORT:-55432}`), seeded from `docker/postgres/init/001_world_cup.sql` into schema `world_cup`. `world-cup-workflow.spec.ts` depends on it. See [delivery.md](delivery.md) for compose and isolation knobs.
+- The World Cup sample database: `docker-compose.yml` service `postgres` (`postgres:16-alpine`, DB/user `world_cup`, password `world_cup_dev`, host port `${WORLD_CUP_DB_PORT:-55432}`), seeded from `docker/postgres/init/001_world_cup.sql` into schema `world_cup` (plus the synthetic eval fixtures `002_health_insurance.sql` and `003_genomics.sql` in their own schemas). `world-cup-workflow.spec.ts` depends on it. See [delivery.md](delivery.md) for compose and isolation knobs.
 - Visual baseline: `e2e/layout-accessibility.spec.ts-snapshots/application-shell-darwin.png` (macOS only; `maxDiffPixelRatio: 0.01`, animations disabled). Update only with `npm run test:e2e:update`, and only for an intended visual change.
 - Before the suite runs, `npm run test:e2e:prepare` compiles the e2e TypeScript, builds the backend and builds the Angular app with `--base-href ./`, because the tests run the *built* app, not the dev server.
 
-Other test-adjacent tooling in `backend/`: a golden-set evaluation harness (`npm run eval`, `eval/golden-set.json`), a live answer-quality gate that costs real model calls (`npm run check:answers`), the assistant eval CLI (`npm run evals:assistant`), and a World Cup REST API fixture for the REST connector. All are documented in [delivery.md](delivery.md).
+Other test-adjacent tooling in `backend/`: a golden-set evaluation harness (`npm run eval`, `eval/golden-set.json` or any eval set with `--suite`) and its zero-cost reference-SQL check (`npm run eval:validate`), the fixture generators and registration script (`npm run fixtures:health-insurance`, `fixtures:genomics`, `fixtures:register`), a live answer-quality gate that costs real model calls (`npm run check:answers`), the assistant eval CLI (`npm run evals:assistant`), and a World Cup REST API fixture for the REST connector. All are documented in [delivery.md](delivery.md).
 
 ## To rebuild on another stack
 

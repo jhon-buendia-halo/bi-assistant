@@ -1089,28 +1089,33 @@ Behaviour of the Agents → Evals UI (set list, question selection, runs list, r
 
 ### 8.1 Case and set format
 
+Sets are data: one definition file per set, whose format, check vocabulary, `variantOf` derivation and validation are owned by [data-model.md 4.8](data-model.md#48-eval-set-definitions-suite-files). At load each definition becomes:
+
 ```
-EvalSet  = { id, name, description, fixtureId, cases: EvalCase[] }
+EvalSet  = { id, name, description, fixtureId?, datasets: string[], datasourceKind, requiredEntities, cases: EvalCase[] }
 EvalCase = {
   id: string                 unique across all sets
+  category: string           failure class (glossary: Eval category)
   question: string           sent verbatim as the user message
   intent: string             what the question probes (shown in the UI)
-  scorers: Check[]           text / tool checks; each check type at most once per case
+  scorers: Check[]           built from the definition's checks; each check type at most once per case
   expectedSql?: string       trusted SQL whose live result is the reference answer
   resultSetOptions?: { distinctRows?: boolean }
   judgeRubric?: string       natural-language rubric for the LLM judge
 }
 ```
 
-Built-in check types used by the cases (each exposes an id, name and a description such as `Checks if output includes "Argentina"`, shown in the UI): `includes(text)`, `matches(regex)`, `calledTool(name)`, `didNotCall(name)`, `toolOrder([names])`, `noToolErrors()`. The report also knows how to explain an `excludes(text)` check, currently unused.
+For a set with `fixtureId`, `datasourceKind`, `requiredEntities` and the default `datasets` come from the sample catalogue ([testing-data](../capabilities/testing-data/spec.md)). Check types: `includes(text)`, `excludes(text)`, `equals(text)`, `matches(regex)`, `calledTool(name[, times])`, `didNotCall(name)`, `toolOrder([names])`, `noToolErrors()`, `usedNoTools()`, `maxToolCalls(n)`; each exposes an id, a name and a description such as `Checks if output includes "Argentina"`, shown in the UI. The shipped sets use `includes`, `matches`, `calledTool`, `didNotCall`, `toolOrder` and `noToolErrors`.
 
-**Sets** (all expected facts were verified against the bundled fixture data):
+**Sets** (every expected fact was verified against its fixture's data):
 
-| Set id | Name | Fixture | Cases |
+| Set id | Name | Data | Cases |
 |---|---|---|---|
-| `world-cup` | World Cup | `world-cup` (PostgreSQL) | 10: `champion-2022`, `final-score-2018`, `top-scorer-2022`, `shootouts`, `biggest-venue` (distinctRows), `schema-discovery`, `ambiguous-best-team` (judge), `possession-vs-result` (judge), `out-of-scope` (judge), `visual-request` (judge) |
-| `world-cup-rest` | World Cup (REST API) | `world-cup-rest` (REST) | the same 10 with ids prefixed `rest-` and `expectedSql` ported to SQLite over `api.world_cup.*`; a base case with `expectedSql` but no port is a startup error |
-| `formula-1` | Formula 1 | `formula-1` (PostgreSQL) | `f1-champion-2023`, `f1-british-gp-2023`, `f1-most-race-wins`, `f1-most-titles-tie`, `f1-monaco-2024-podium`, `f1-schema-discovery`, `f1-ambiguous-dominant-driver` (judge), `f1-pole-to-win-2023` (judge), `f1-out-of-scope-motogp` (judge), `f1-visual-request` (judge) |
+| `formula-1` | Formula 1 | bundled sample `formula-1` (PostgreSQL) | 10, ids prefixed `f1-`; 4 judged |
+| `genomics` | Genomics | synthetic fixture, schema `genomics`, dataset "Genomics" (PostgreSQL) | 20; 3 judged |
+| `health-insurance` | Health Insurance | synthetic fixture, schema `health_insurance`, dataset "Health Insurance" (PostgreSQL) | 20; 3 judged |
+| `world-cup` | World Cup | bundled sample `world-cup` (PostgreSQL), dataset "World Cup" | 10; 4 judged; `biggest-venue` uses `distinctRows` |
+| `world-cup-rest` | World Cup (REST API) | bundled sample `world-cup-rest` (REST) | derived from `world-cup`: ids prefixed `rest-`, `expectedSql` ported to SQLite over `api.world_cup.*`; a base case with `expectedSql` but no port fails the load |
 
 Representative cases (pattern every set follows):
 
@@ -1120,16 +1125,19 @@ Representative cases (pattern every set follows):
 - *Out of scope* — only `noToolErrors`; judge requires stating it cannot answer for the uncovered scope **and** what the data does cover, with no invented statistic.
 - *Visual* — toolOrder `run_readonly_sql` → `create_visual`, calledTool `create_visual`; judge checks the created visual's title/description matches the request.
 - *Judgement over counts* (`possession-vs-result`) — no expectedSql (a wide pivot vs a long aggregate state the same fact but don't compare positionally); the judge rubric states the true answer (2 won / 6 lost of 8).
+- *Constant column* (`claims-by-currency`, `variants-by-assembly`) — expectedSql **and** a judge: the answer must say the column holds a single value, so there is no breakdown.
+- *Planted traps* (health insurance, genomics) — each question targets one trap planted by the fixture generator (a ratio of look-alike columns, an empty column, a tie, status vocabulary, ids instead of names, a curated metric or default filter, cents vs dollars, genotype `0/0`, zero expression); reference SQL applies the seeded default filters (`is_test` claims, `is_control` samples excluded) so an assistant that follows curated knowledge is graded correct.
 
-The exact questions, regexes, reference SQL and rubrics are a data asset copied verbatim on rebuild; see *Data assets* in [specs/README.md](../README.md). The question list is in [agents-evals](../capabilities/agents-evals/spec.md).
+The exact questions, regexes, reference SQL and rubrics are a data asset copied verbatim on rebuild; see *Data assets* in [specs/README.md](../README.md). The question lists, with categories, are in [agents-evals](../capabilities/agents-evals/spec.md).
 
 ### 8.2 Data preflight
 
-Before a run starts (and before any tokens are spent):
+Before a run starts (and before any tokens are spent), in the order of [agents-evals](../capabilities/agents-evals/spec.md) R19:
 
-- The selected questions must belong to exactly one fixture: none → `No question set matches the selected questions, so there is no sample to validate the datasets against.`; several → `The selected questions span several samples (<ids>) — run one sample at a time.`; unknown fixture → `Unknown sample fixture "<id>" — …`.
-- The run's datasets are **every dataset bound to the chosen datasource** (none → `That datasource has no datasets — create one in Datasets before running evals`). An empty explicit selection → `Pick at least one question to run`; no datasource → `Pick a datasource to run against`.
-- The datasets must belong to one datasource of the fixture's kind, and together contain every entity the fixture requires (compared on the last two dot-segments, case-insensitive). Failures start with `These evals require the bundled <name> sample: <description> Select its <PostgreSQL|REST API> datasource and save a dataset containing the <schema> tables and views. Setup: <doc>.` followed by `Datasets not found: …` / `No datasets selected.` / `The selected datasets must belong to one <kind> datasource.` / `Selected datasets: …. Missing entities: <list>.`
+- The set is the named `suiteId` (unknown → `Unknown eval suite "<id>". Looked in <folder>. Available suites: <ids>.`; invalid definition → `Invalid eval suite <file>: …`), else the one set the selected case ids belong to: none → `No question set matches the selected questions, so there is no sample to validate the datasets against.`; several → `The selected questions span several sets (<ids>) — run one set at a time.`
+- No datasource → `Pick a datasource to run against`; a datasource with no datasets → `That datasource has no datasets — create one in Datasets before running evals`; no selected case in the set → `Pick at least one question to run`.
+- The run's datasets are the **set's declared datasets when every one of them is bound to the chosen datasource**, else every dataset bound to it.
+- Those datasets must belong to one datasource of the set's kind, and together contain every entity the set requires (compared on the last two dot-segments, case-insensitive). For a set over a bundled sample the failure starts with `These evals require the bundled <name> sample: <description> Select its <PostgreSQL|REST API> datasource and save a dataset containing the <schema> tables and views. Setup: <doc>.`; for any other set it starts with the set's `description` (fallback `These evals require the <name> fixture (suite "<id>"). Select its <kind> datasource and save a dataset containing: <entities>.`). Either is followed by `Datasets not found: …` / `No datasets selected.` / `The selected datasets must belong to one <kind> datasource.` / `Selected datasets: …. Missing entities: <list>.`
 - One running eval job per agent; a second start returns `An eval run is already in progress for this agent` with the running job id.
 
 ### 8.3 Executing a case
@@ -1143,21 +1151,22 @@ Per case, one `assistant` generate with: input = the question; `maxSteps: 15`; c
 3. **Result-set check** (`result-set-match`, "Result set matches expectedSql (primary correctness signal)") when `expectedSql` exists: run the reference through the same SQL bridge (row limit 500; a truncated reference fails `reference result is truncated; completeness cannot be verified`), then pass if **any** successful, complete (`rows` present, not truncated, rowCount = rows length) `run_readonly_sql` record of the case matches: width-tolerant comparison where each candidate row must have at least the reference's width; with `distinctRows`, set equality at the reference grain (every reference row contained in some candidate row and vice versa). Failure reasons: `the agent ran no successful run_readonly_sql to compare`, `could not resolve a datasource for the expectedSql comparison`, `expectedSql returned <n> row(s); none of <k> successful SQL result(s) matched. The last SQL ("<sql>") did not match — <reason>`, `expectedSql failed to run — <error>`.
 4. **LLM judge** (`llm-judge`, description `LLM judge: <rubric>`) when `judgeRubric` exists (2.6). Invalid JSON → score 0 `judge error: the judge did not return valid JSON`; thrown error → `judge error: <message>`.
 
-A case **passes** when it has at least one check and every check scored 1. Each check result is `{id, description, score 0..1, passed, reason?}`; reasons for built-in failures are rendered from the scorer payload (`expected "<x>" in the answer — answer began "<first line ≤120 chars>…"`, `expected the answer to match <pattern> — …`, `expected "<tool>" to be called 1×, it was called <n>×`, `expected "<tool>" NOT to be called, it was`, `expected the tool order a → b, got …`, `a tool call failed: …`). The case result also carries the answer, the ordered tool calls `{name, input?, output?, error?}` (JSON, each field capped at 2,000 chars with `… (truncated)`), raw scores, `error` when the agent run itself threw, and duration.
+A case **passes** when it has at least one check and every check scored 1. Each check result is `{id, description, score 0..1, passed, reason?}`; reasons for built-in failures are rendered from the scorer payload (`expected "<x>" in the answer — answer began "<first line ≤120 chars>…"`, `expected the answer to match <pattern> — …`, `expected "<tool>" to be called 1×, it was called <n>×`, `expected "<tool>" NOT to be called, it was`, `expected the tool order a → b, got …`, `a tool call failed: …`). The case result also carries the answer, the ordered tool calls `{name, input?, output?, error?}` (JSON, each field capped at 2,000 chars with `… (truncated)`), raw scores, `error` when the agent run itself threw, duration, the case's `category`, and `usage`: the token counts read off the agent result (multi-step total, else summed per-step usage) plus the judge result's, summed; absent when neither reported anything, kept when the run threw part-way. The tool-only synthesis is not counted ([data-model.md 3.8](data-model.md#38-eval_runs)).
 
 ### 8.4 Runs, regression and report
 
-- A run is `{jobId, agentKey, datasourceId, datasets, caseIds, status: running|completed|failed, results, totalCases, currentQuestion?, error?, startedAt, finishedAt?, comparison?}`, persisted at start and after every case (a crash keeps finished questions).
-- On completion it is compared, by case id, with the agent's most recent previous **completed** run with the same datasource and datasets: `regressions` (passed → failed), `improvements` (failed → passed), `unchanged`; cases present in only one run are skipped. Failure to compute it never fails the run.
-- The run downloads as a Markdown report (summary, per-case verdict, checks table with reasons, executed steps with inputs/outputs or errors, answers, regression section) — format owned by [agents-evals](../capabilities/agents-evals/spec.md).
+- A run is `{jobId, agentKey, suiteId, suiteName, datasourceId, datasets, caseIds, status: running|completed|failed, results, totalCases, currentQuestion?, error?, startedAt, finishedAt?, comparison?, usage?, estimatedCostUsd?, model?, categories?}` ([data-model.md 3.8](data-model.md#38-eval_runs)), persisted at start and after every case (a crash keeps finished questions). After each case its `usage` is added to the run's and the per-category tallies are recomputed.
+- When the run ends (completed or failed) it records `model` — the id the model resolver last returned to any agent (what actually ran), else the currently resolved one — and `estimatedCostUsd` from the price table ([data-model.md 4.9](data-model.md#49-eval-run-logs-and-the-price-table)); a resolver failure only logs a warning. It then writes a run log (`harness: "in-app"`), best effort.
+- On completion it is compared, by case id, with the agent's most recent previous **completed** run of the same set (`suiteId`, missing = `world-cup`), datasource and datasets: `regressions` (passed → failed), `improvements` (failed → passed), `unchanged`; cases present in only one run are skipped. Failure to compute it never fails the run.
+- The run downloads as a Markdown report (summary, per-category table, tokens and cost, regression section, failures, per-case verdict, category, checks table with reasons, executed steps with inputs/outputs or errors, answers) — format owned by [agents-evals](../capabilities/agents-evals/spec.md).
 - A running run cannot be deleted (`Cannot delete a run that is still going`).
 
 ### 8.5 Other entry points
 
-- **CLI** — same suite over `EVAL_DATASETS` (comma-separated saved dataset names), booting the whole backend without HTTP; prints `PASS|FAIL <id> (<ms>)` per case and `<passed>/<total> questions passed`; exit code 1 unless all pass.
-- **Golden-set harness** — a separate developer harness over a JSON golden set (`{name, question, dataset, expectedSql, placeholder?, notes?}`) that runs each question as a **real streamed chat turn** in a throwaway session (300 s timeout) and compares the answer's last successful SQL result with `expectedSql` using 5.9 (strict width). Verdicts `PASS|FAIL|ERROR|SKIP`.
+- **CLI** — any set (`EVAL_SUITE`, default `world-cup`) over `EVAL_DATASETS` (comma-separated saved dataset names, used as given), booting the whole backend without HTTP; same preflight and scoring; prints `PASS|FAIL <id> (<ms>)` per case and `<passed>/<total> questions passed`; exit code 1 unless all pass. Records no run and no run log.
+- **Golden-set harness** — a separate developer harness ([agents-evals](../capabilities/agents-evals/spec.md) R50, R51) that runs each case as a **real streamed chat turn** in its own throwaway session (300 s timeout, `EVAL_TIMEOUT_MS`) and compares the answer's last successful SQL, re-run under the same row limit (stored rows are used if the replay fails), with `expectedSql` using 5.9 in width-tolerant mode (a wider answer passes as `PASS(extra-columns)`). Cases come from `--suite <id>` (a set definition; every case bound to the set's first declared dataset) or `--file <path>` (default the World Cup golden set): either a flat array of `{name, question, dataset, expectedSql, category?, placeholder?, notes?}` or a set-shaped object whose cases inherit its first dataset; `--suite` and `--file` are mutually exclusive. Options: `--only <substring>` (case name), `--category <substring>`, `--repeat <n>` (pass only if all n pass; `k/n` column), `--label <text>`, `--validate`, `--no-log`, `--include-placeholders`, `--keep-sessions`, `--verbose`. A graded run needs an LLM (saved settings or `OPENAI_API_KEY`) and reachable datasets; `--validate` needs neither an LLM nor sessions. Verdicts `PASS|FAIL|ERROR|SKIP` with reasons (`result-mismatch`, `no-sql`, `expected-sql`, `turn-failed`, `timeout`, `replay-failed`, `placeholder`, `no-expected-sql`); validate statuses `OK|EMPTY|TOO-MANY|ERROR`. Token counts come from the persisted answers' `usage` (so they cover the turn's own agent run, not its side passes) and are summed over repetitions. Prints the verdict table, a category table worst first and `Tokens: <in> in / <out> out / <total> total over <n> turn(s) — est. $<x> at logs/pricing.json rates` (or `— not priced (add "<model>" to logs/pricing.json)`, or `Tokens: not reported by the provider for this run`), then writes the run log (`harness: "golden-set"` or `"validate"`). Exit 1 when any case failed or errored; setup errors print `✖ <message>` and exit 1.
 
-> Implementation note: `mastra/evals/assistant.evals.ts` (`runEvals` from `@mastra/core/evals`, checks from `@mastra/evals/checks`), `result-set-check.ts`, `assistant-eval-datasets.ts`, `run-assistant-evals.ts` (`npm run evals:assistant`), `modules/agents/eval-runs.service.ts`, `eval-regression.ts`, `eval-report.ts`; golden set `backend/eval/golden-set.json` via `npm run eval` (`scripts/run-eval.ts`).
+> Implementation note: `mastra/evals/assistant.evals.ts` (`runEvals` from `@mastra/core/evals`, checks from `@mastra/evals/checks`), `suite-loader.ts` (set definitions, check mapping, preflight for synthetic sets), `suites/*.json`, `result-set-check.ts`, `assistant-eval-datasets.ts` (preflight for bundled samples), `run-assistant-evals.ts` (`npm run evals:assistant`), `modules/agents/eval-runs.service.ts`, `eval-regression.ts`, `eval-report.ts`, `eval-telemetry.ts` (token usage, pricing, tallies), `eval-run-log.ts` (run logs); `mastra/model-resolver.ts` (`lastAgentModelId`); golden set `backend/eval/golden-set.json` via `npm run eval` / `npm run eval:validate` (`scripts/run-eval.ts`).
 
 ---
 

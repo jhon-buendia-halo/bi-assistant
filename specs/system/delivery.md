@@ -65,7 +65,7 @@ Electron loads the renderer from `file://`. An absolute base (`/`) would resolve
 
 | Script | Runs | Purpose |
 |---|---|---|
-| `build` | `nest build` | Compile to `dist/` (clears the folder first; copies `mastra/skills` and testing-data SQL fixtures). |
+| `build` | `nest build` | Compile to `dist/` (clears the folder first; copies the assets declared in `nest-cli.json`: `mastra/skills/**`, the testing-data SQL fixtures and the eval set definitions `mastra/evals/suites/**`, all watched in watch mode). |
 | `start` | `nest start` | Run the API once (port 3000, data in `<cwd>/data`). |
 | `start:dev` | `nest start --watch` | Watch mode. |
 | `start:debug` | `nest start --debug --watch` | Watch mode with the inspector. |
@@ -75,9 +75,13 @@ Electron loads the renderer from `file://`. An absolute base (`/`) would resolve
 | `lint` | `eslint … --fix` | Lint **and auto-fix**; run it on specific files, not project-wide, because it reformats unrelated files. |
 | `test`, `test:watch`, `test:cov`, `test:debug` | Jest | Unit tests (`src/**/*.spec.ts`), watch, coverage, debugger. |
 | `test:e2e` | `jest --config ./test/jest-e2e.json` | API-level e2e specs in `test/`; the live-data specs skip without the World Cup Postgres. |
-| `eval` | `ts-node scripts/run-eval.ts` | Golden-set harness: asks each question in `eval/golden-set.json` in a throwaway session and compares the result set of the SQL the assistant ran with the case's trusted SQL. No HTTP port. |
+| `eval` | `ts-node scripts/run-eval.ts` | Golden-set harness: asks each question of `eval/golden-set.json` (or `--file <path>`, or an eval set with `--suite <id>`) in a throwaway session and compares the result set of the SQL the assistant ran with the case's trusted SQL; `--category`, `--only`, `--repeat`, `--label`, `--no-log`; prints per-category pass rates and the run's tokens and estimated cost, and writes a run log to `logs/evals/`. No HTTP port. Contract: [agents.md](agents.md) 8.5. |
+| `eval:validate` | `ts-node scripts/run-eval.ts --validate` | Runs every reference query of the selected cases against the live fixture with zero model calls (no LLM needed): `OK` / `EMPTY` / `TOO-MANY` / `ERROR`, exit 1 on `TOO-MANY` or `ERROR`. Defaults to the golden set; run it per set with `npm run eval:validate -- --suite <id>` after editing reference SQL or regenerating a fixture. |
 | `check:answers` | `ts-node scripts/check-answers.ts` | Opt-in live answer-quality gate over the World Cup fixture; costs real model calls and needs `OPENAI_API_KEY`. Tunable by `CHECK_TRIALS`, `CHECK_ARM`, `CHECK_MODEL`, `CHECK_TIMEOUT_MS`. |
-| `evals:assistant` | `nest build && node dist/mastra/evals/run-assistant-evals.js` | The assistant eval suite from the command line, same suite the Agents screen runs. Needs `EVAL_DATASETS` (comma-separated saved dataset names); optional `EVAL_TIMEOUT_MS`, `EVAL_ROW_LIMIT`. |
+| `evals:assistant` | `nest build && node dist/mastra/evals/run-assistant-evals.js` | One eval set from the command line, scored exactly as the Agents screen scores it. Needs `EVAL_DATASETS` (comma-separated saved dataset names); `EVAL_SUITE` picks the set (default `world-cup`); optional `EVAL_TIMEOUT_MS`, `EVAL_ROW_LIMIT`. Writes no run log. |
+| `fixtures:health-insurance` | `ts-node ../docker/postgres/generate/health-insurance.ts` | Regenerates `docker/postgres/init/002_health_insurance.sql` from its fixed seed (section 6). |
+| `fixtures:genomics` | `ts-node ../docker/postgres/generate/genomics.ts` | Regenerates `docker/postgres/init/003_genomics.sql` from its fixed seed (section 6). |
+| `fixtures:register` | `ts-node scripts/bootstrap-fixtures.ts` | Registers the compose database's fixtures in the local datastore (`APP_DATA_DIR`) without HTTP: datasource, one dataset per schema and the curated knowledge and metrics the eval traps rely on (section 6). `--dry-run`, `--force-refresh`. |
 | `worldcup:api:dump` | `ts-node scripts/worldcup-rest-api/dump.ts` | Snapshot the World Cup Postgres into JSON files for the test REST API (`WORLD_CUP_DB_*` env). |
 | `worldcup:api` | `ts-node scripts/worldcup-rest-api/serve.ts` | Zero-dependency REST + OpenAPI server over that snapshot on `127.0.0.1:55080` (`WORLD_CUP_API_PORT`), for exercising the REST connector. |
 | `worldcup:rest:setup` | `ts-node scripts/setup-worldcup-rest.ts` | Registers that API as a `rest` datasource and a dataset in a running backend through its HTTP API (`BACKEND_URL`, `WORLD_CUP_API_URL`); idempotent. |
@@ -256,9 +260,9 @@ Repository ruleset **"main: specs match the code"**, enforcement *active*, targe
 - **Direct pushes to `main`** are rejected unless the pushed commit already carries a successful `Specs match the code` status. Only the release workflow does this (see *Spec check* in `version-on-merge.yml` above). Everyone else goes through a PR.
 - **Inspect or change the rule:** Settings → Rules → Rulesets, or `gh api repos/<owner>/<repo>/rulesets`.
 
-## 6. Docker Compose: the World Cup sample database
+## 6. Docker Compose: the World Cup and eval fixtures database
 
-`docker-compose.yml` at the repo root defines the sample PostgreSQL datasource used by the Playwright suite, the live-data backend specs, the testing-data feature and the product-page screenshots.
+`docker-compose.yml` at the repo root defines the sample PostgreSQL datasource used by the Playwright suite, the live-data backend specs, the testing-data feature, the product-page screenshots and the eval fixtures. One database holds every development fixture, each in its own schema: `world_cup`, `health_insurance` and `genomics`.
 
 | Setting | Value |
 |---|---|
@@ -266,11 +270,15 @@ Repository ruleset **"main: specs match the code"**, enforcement *active*, targe
 | Service / image | `postgres` / `postgres:16-alpine` |
 | Database, user, password | `world_cup` / `world_cup` / `world_cup_dev` |
 | Host port | `${WORLD_CUP_DB_PORT:-55432}` → container 5432 |
-| Seed | `docker/postgres/init/001_world_cup.sql` mounted read-only at `/docker-entrypoint-initdb.d`; tables and analytics views live in schema `world_cup` (quarter-finals to final of the 2018 and 2022 tournaments; scores and outcomes mirror reality, detailed metrics such as xG are representative sample values) |
+| Seed | `docker/postgres/init/` mounted read-only at `/docker-entrypoint-initdb.d`, run in name order on first start: `001_world_cup.sql` (hand-written; schema `world_cup`, quarter-finals to final of the 2018 and 2022 tournaments; scores and outcomes mirror reality, detailed metrics such as xG are representative sample values), `002_health_insurance.sql` (schema `health_insurance`, synthetic claims, members, providers and denials for 2024-2025, money in cents) and `003_genomics.sql` (schema `genomics`, a synthetic variant-call, sample and gene-expression cohort for 2023-2024; never for clinical use). 002 and 003 are generated, not hand-edited |
 | Volume | `world_cup_postgres_data`; to re-run the init scripts: `docker compose down -v` then `docker compose up -d postgres` |
 | Healthcheck | `pg_isready -U world_cup -d world_cup`, every 5 s, 10 retries, 10 s start period |
 
 Start it with `docker compose up -d postgres` from the repo root. App datasource settings: host `localhost`, port `55432`, database `world_cup`, user `world_cup`, password `world_cup_dev`, SSL off. The Playwright global setup runs `docker compose up -d --wait postgres` itself, unless `E2E_SKIP_DOCKER=1`.
+
+**Synthetic eval fixtures.** `002` and `003` are written by seeded generators, `docker/postgres/generate/health-insurance.ts` and `genomics.ts` (`npm run fixtures:health-insurance`, `npm run fixtures:genomics` in `backend/`). Every value is drawn from one seeded pseudo-random generator (`generate/lib/rng.ts`), so regeneration is byte-identical and the hand-verified reference SQL of the `health-insurance` and `genomics` eval sets stays valid; each generator asserts the traps it plants (ties, null rates, constant columns) and fails rather than emit a drifted fixture. After regenerating: `docker compose down -v`, `docker compose up -d postgres`, then `npm run eval:validate -- --suite <id>`. The trap catalogue each fixture was built around is in `docs/evals/synthetic-domains.md`; the operator runbook for measuring a change is `docs/evals/improvement-loop.md`.
+
+**Registering the fixtures in the app.** `npm run fixtures:register` (in `backend/`, against the datastore in `APP_DATA_DIR`; port from `WORLD_CUP_DB_PORT`) boots the backend without HTTP and, idempotently: creates or reuses the PostgreSQL datasource **Fixtures (local Postgres)** (`localhost`, the compose credentials, SSL off; fails with an actionable message when the database is unreachable); saves one dataset per schema with every table and view of it, through the normal dataset save so sample values and join hints are captured: **World Cup** (`world_cup`), **Health Insurance** (`health_insurance`), **Genomics** (`genomics`); a schema that does not exist yet is skipped with a warning, and an existing dataset is left alone unless `--force-refresh`; and seeds the curated context the eval traps depend on, each skipped when its dataset was not registered or an equivalent entry exists (a metric by name; a knowledge entry by kind, title and dataset scope): metric `net_paid` "Net paid" on `health_insurance.claims` (paid minus reversed), default filter "Exclude test claims" and term "Amounts are stored in cents" (Health Insurance), metric `allele_fraction` "Allele fraction" on `genomics.variant_calls` (alt/total reads on `PASS` calls with depth ≥ 20), default filter "Exclude control samples" and term "Genotype 0/0 is not a carrier" (Genomics). `--dry-run` reports what would change without writing.
 
 ## 7. Running a second instance (worktrees and parallel runs)
 

@@ -10,7 +10,7 @@ Defined once in [the glossary](../../product/glossary.md); used here as follows.
 - **Seedable** — a fixture that ships seed SQL and can be loaded into an empty database. A fixture without seed SQL is **register-only**: it can only be pointed at a database that already holds the data.
 - **Loaded** — a fixture is loaded when the app holds both its datasource and its dataset and the dataset covers every required table.
 - **Datasource** / **Dataset** — see [datasources](../datasources/spec.md) and [datasets](../datasets/spec.md); testing data creates one of each per fixture, by name.
-- **Eval** — assistant evaluation runs depend on a fixture; see [agents-evals](../agents-evals/spec.md).
+- **Eval** — assistant evaluation runs depend on a fixture; see [agents-evals](../agents-evals/spec.md). The eval sets over the bundled samples name a catalogue entry; the synthetic health-insurance and genomics eval fixtures are not catalogue samples (they live only in the development database, [delivery.md](../../system/delivery.md)).
 
 ## Rules
 
@@ -165,6 +165,6 @@ Feature: Testing data
 2. Loading Formula 1 into a server that lacks the `formula1` database creates it, seeds 48 required tables and reports `48/48 entities`.
 3. Remove clears both app-side records and leaves the database intact; status returns to `0/<required>`.
 4. A failure at any stage (connection, creation, seed, missing entities) produces the corresponding message and does not leave a dataset behind; a seed failure leaves nothing registered.
-5. The assistant eval start checks the datasets bound to the chosen datasource against the required entities of the fixture the selected questions belong to (by `schema.table`), so a loaded fixture lets its question set run and a datasource lacking those entities is refused ([agents-evals](../agents-evals/spec.md)).
+5. The assistant eval start checks the datasets in scope on the chosen datasource (the set's declared datasets, which for a sample is the sample's dataset name, else every dataset bound to the datasource) against the required entities the catalogue lists for the set's sample (by `schema.table`), so a loaded fixture lets its question set run and a datasource lacking those entities is refused with the catalogue's message ([agents-evals](../agents-evals/spec.md) R20, R21).
 
-<!-- sources: backend/src/modules/testing-data/**, backend/src/modules/testing-data/fixtures/registry.ts, backend/src/modules/agents/eval-runs.service.ts (fixture preflight), docker-compose.yml, backend/package.json (worldcup scripts), frontend/src/app/features/testing-data/**, frontend/src/app/app.html (Testing Data navigation) -->
+<!-- sources: backend/src/modules/testing-data/**, backend/src/modules/testing-data/fixtures/registry.ts, backend/src/modules/agents/eval-runs.service.ts (fixture preflight), backend/src/mastra/evals/suite-loader.ts (fixtureId), docker-compose.yml, backend/package.json (worldcup scripts), frontend/src/app/features/testing-data/**, frontend/src/app/app.html (Testing Data navigation) -->

@@ -44,17 +44,23 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Entity.** A queryable table or view, named in full as `catalog.schema.table`. Every datasource kind is normalised to this three-level shape. The UI says "entities". An entity may be *browse-only* (visible but not queryable with the credentials); it is shown greyed.
 
-**Eval case.** One question in an *eval set*, with the intent it probes and a list of *eval checks* (for example "answer includes Argentina", result-set comparison, or an LLM-judge rubric).
+**Eval case.** One question in an *eval set*, with the intent it probes, its *eval category* and a list of *eval checks* (for example "answer includes Argentina", result-set comparison, or an LLM-judge rubric).
+
+**Eval category.** The failure class an *eval case* probes, so a run can say *what kind* of mistake is failing rather than only how many. In use: `control` (a healthy baseline that must keep passing), `ratio-trap` (dividing a measure by a look-alike, or by itself), `constant-column` (a column that never varies), `empty-column` (grouping by a mostly-empty column), `ties` (several rows tie at the top), `value-vocabulary` (values written differently from the question, such as "approved" for `PAID`), `out-of-scope` (data that is not there), `clarification` (asking, or not asking), `id-vs-name` (ids instead of names), `metric-definition` (a curated metric definition), `default-filter` (a curated default filter), `multi-step-join` (an answer several joins away, such as region to state to country), `discovery` (a schema question), `unit-confusion` (cents vs dollars), `domain-semantics` (field knowledge, such as genotype `0/0` not being a carrier) and `quality-filter` (rows a status or quality flag should exclude, such as pending claims or low-quality variant calls). Shown as a chip on each question, used to filter the question list and tallied per run.
 
 **Eval check.** One scorer that grades an eval case's answer or tool calls.
 
-**Eval run.** One execution of selected eval cases against a datasource and its datasets. Records per-question results (pass or fail, scores, tool calls, answer). When a completed earlier run exists for the same agent, datasource and datasets, the run also stores a *regression comparison*.
+**Eval run.** One execution of selected eval cases of one *eval set* against a datasource and its datasets. Records per-question results (pass or fail, scores, tool calls, answer, category, *token usage*), per-category tallies, the run's total token usage, the model it ran on and, when that model is priced, an estimated cost. When a completed earlier run exists for the same agent, set, datasource and datasets, the run also stores a *regression comparison*. Every finished run also writes an *eval run log* when it can.
 
-**Eval set.** A named group of eval cases bound to one *sample fixture* (World Cup on PostgreSQL, World Cup on REST, Formula 1).
+**Eval run log.** A developer record of one eval run (set, datasets, model, verdicts per question, category tallies, token usage, estimated cost) written as a file next to the source code, plus a one-line entry in a running index, so runs can be compared over time. Holds no query results. Not written by an installed app unless a log location is configured.
+
+**Eval set.** A named group of eval cases over one fixture: World Cup on PostgreSQL, World Cup on REST (derived from the World Cup set), Formula 1, Health Insurance and Genomics. A set over a bundled *sample fixture* names it; the Health Insurance and Genomics sets run over synthetic fixtures that exist only in the development database and declare their own datasets and required entities. Each set is defined as data in one *eval suite*.
+
+**Eval suite.** The data file that defines one *eval set*. The UI and API say *set*; files, the developer CLI (`--suite`) and stored runs (`suiteId`) say *suite*. Same thing.
 
 **Feedback.** The user's thumbs-up or thumbs-down on an answer. Thumbs-up also saves a *verified query*. Thumbs-down only marks the answer as wrong.
 
-**Fixture.** See *Sample fixture*.
+**Fixture.** See *Sample fixture*. The synthetic health-insurance and genomics eval fixtures are not sample fixtures: they are generated from a fixed seed into the development database only (see *Eval set*).
 
 **Foreign key / relationship.** A join link from a column of one dataset entity to a column of another. `declared` when the datasource reports the constraint; `inferred` when guessed from column names (`team_id` to a `teams` table). Used to tell the assistant which columns join. Inference deliberately skips ambiguous cases.
 
@@ -107,6 +113,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 **Term.** A *knowledge entry* of kind `term`.
 
 **Tool call.** One invocation of a capability by the assistant during a turn. Data tools: `list_entities`, `describe_entity`, `sample_rows`, `run_readonly_sql`. Visual tools: `create_visual`, `update_visual`. UI tool: `ask_clarification`. Calls to the data tools are captured as *data records*.
+
+**Token usage.** The token counts a model provider reports for its calls: input, output, total, reasoning and cached-input tokens, and how many calls were summed. Always measured, never estimated from text: a call the provider reported nothing for has no usage, and zero observed calls means "not measured", never "free". Money is a separate, estimated figure: usage priced at operator-maintained per-model rates, "not priced" when the model has no rate. Recorded per eval question and run, and on each chat answer.
 
 **Turn.** One user message and everything the assistant does in response, up to its final answer or a clarification. Includes streamed reasoning, tool calls and their results.
 

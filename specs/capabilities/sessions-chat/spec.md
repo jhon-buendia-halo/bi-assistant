@@ -95,7 +95,8 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
   - the entities its SQL referenced;
   - a deterministic interpretation line (R31);
   - a reasoning trail: one step per call that carried a rationale, in run order, with that call's row count or error;
-  - the knowledge snippets that were in its context.
+  - the knowledge snippets that were in its context;
+  - the token usage the provider reported for the turn's own agent run, all steps included (see glossary *Token usage*), read once just before the answer is persisted. The turn SHALL wait at most 2 seconds for it (a turn that ended early, for example on a clarification, may never receive it); without it the answer carries no usage, never a zero. Side passes (grounding, tool-only synthesis, careful-mode cross-check, visual design) are not counted, and the usage is not shown in the chat. A clarification carries the same usage.
 - R31. The interpretation line SHALL be built from the successful SQL runs only, never from model output: `Computed from <N> quer(y|ies)[ over <entity, …>] — <R> row(s) analyzed.` It is absent when no SQL succeeded.
 - R32. Under an answer, the chat SHALL show these blocks, each only when non-empty:
   - a collapsible "How I worked this out (N step(s))" list, each step's rationale followed by "N rows" or "failed — <error>";

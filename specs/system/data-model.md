@@ -38,7 +38,7 @@ The directory is created (recursively) at backend start if it does not exist.
 | **Diagnostics log** (desktop app only) | `<Electron userData>/logs/system.ndjson`, rotated to `system.previous.ndjson` when larger than 5 MiB at startup | Newline-delimited JSON | System log entries `{id, timestamp, level, source, message, details}` (redacted), at most the last 2000 reloaded at startup. Lives under Electron `userData`, **not** the app data dir (they differ on Windows). See [../capabilities/diagnostics/spec.md](../capabilities/diagnostics/spec.md). | Electron main |
 | **Renderer preference** (client) | Browser/Electron `localStorage` key `questions-to-insights:right-panel-width` | String holding a number | Right panel width in pixels; default 572, clamped to 360..960 (upper bound also limited by window width). Missing or non-numeric = default. See [ui.md](ui.md). | Frontend |
 
-Nothing else is persisted. Deep-analysis jobs and REST-datasource row materialisation are in-memory only (sections 3.10, 3.11).
+Nothing else is persisted in the app data dir. Deep-analysis jobs and REST-datasource row materialisation are in-memory only (sections 3.10, 3.11). Two developer-facing file sets live **outside** it: the eval set definitions shipped with the backend (section 4.8, read-only at run time) and the eval run logs with their price table, written into a source checkout's `logs/` folder or `EVAL_LOG_DIR` (section 4.9); an installed app with neither writes no run log.
 
 **Implementation note.** The current implementation uses `better-sqlite3` for `app.sqlite`, `@mastra/libsql` for `mastra.sqlite` and `@mastra/duckdb` for `observability.duckdb` (see [tech-stack.md](tech-stack.md)). Only the *document shapes* and the *file layout under `workspaces/`* are contracts that matter across stacks; the agent memory and observability stores are opaque framework state.
 
@@ -242,6 +242,7 @@ Deleting a session deletes the document, its agent memory thread and its workspa
 | `reasoning` | `ReasoningStep[]` | no | The assistant's plain-language route to the answer (3.4.2); omitted when no call carried a rationale. Older transcripts lack it; readers derive it from `data[].rationale`. |
 | `knowledge` | `KnowledgeUse[]` | no | The enabled knowledge snippets that fit the turn's context budget (3.9). Records what the model was *given*. |
 | `report` | `AnalysisReport` | no | `{jobId: string, title: string, path: string, angles: number}` — set on the message a finished deep-analysis job appends. `path` is workspace-relative (`reports/<jobId>.md`), `angles` the number of investigation angles covered. |
+| `usage` | `TokenUsage` | no | Assistant answers and clarifications of a streamed turn: the token counts the provider reported for the turn's own agent run, all steps included (`{inputTokens, outputTokens, totalTokens, reasoningTokens, cachedInputTokens, calls}`, shape in 3.8). Read once just before the answer is persisted, preferring the multi-step total over the last step's; the turn waits at most 2 s for it (it can delay the `done` event by up to that long). Absent when the provider reported nothing in time — never zeroed or estimated. Side passes (grounding pass, tool-only synthesis, careful-mode cross-check, visual designer) are not included. Not shown in the UI; the golden-set eval harness reads it. |
 
 Messages never carry an id; user messages have only `role`, `content`, `at`.
 
@@ -337,8 +338,10 @@ Persisted record of an eval run (the assistant's regression suite). Rewritten wh
 |---|---|---|---|
 | `jobId` | uuid | yes | Run id. |
 | `agentKey` | string | yes | Agent evaluated; only `assistant` has evals. |
+| `suiteId` | string | no | Id of the eval set that ran (4.8). Absent on runs recorded before sets were stored; every reader treats a missing value as `world-cup`. |
+| `suiteName` | string | no | The set's display name at start, denormalised for listings and the report. Absent on old runs. |
 | `datasourceId` | string | yes | Datasource the run was scoped to. |
-| `datasets` | string[] | yes | Names of the datasets bound to that datasource at start. |
+| `datasets` | string[] | yes | Names of the datasets in scope at start: the set's declared datasets when all of them are bound to the datasource, else every dataset bound to it. (Runs recorded before scoping hold every bound dataset.) |
 | `caseIds` | string[] | yes | Ids of the questions the run covers. |
 | `status` | enum | yes | `running` \| `completed` \| `failed`. A backend crash leaves `running` on disk (nothing reconciles it). |
 | `results` | `AssistantEvalCaseResult[]` | yes | Finished questions in order. |
@@ -347,10 +350,16 @@ Persisted record of an eval run (the assistant's regression suite). Rewritten wh
 | `error` | string | no | Set when `status = failed`. |
 | `startedAt` | ISO | yes | Sort key (desc) for listings. |
 | `finishedAt` | ISO | no | Set when the run ends. |
-| `comparison` | `EvalRegressionSummary` | no | Set when a run completes and a previous completed run with the same agent, `datasourceId` and the same set of datasets (order-insensitive) exists. Absent on older records and when no comparable run exists. |
+| `comparison` | `EvalRegressionSummary` | no | Set when a run completes and a previous completed run with the same agent, `suiteId` (missing = `world-cup`), `datasourceId` and the same set of datasets (order-insensitive) exists. Absent on older records and when no comparable run exists. |
+| `usage` | `TokenUsage` | no | Sum of the finished questions' `usage`, updated after every question. Absent until a question reports usage, and on runs recorded before token accounting. |
+| `estimatedCostUsd` | number | no | Set when the run ends: `usage` priced at the price-table rate of `model` (4.9), rounded to 6 decimals. Absent when the model has no rate or nothing was measured — never stored as 0 for an unpriced run. |
+| `model` | string | no | Set when the run ends: the model id the agents last resolved to (what actually ran, e.g. `openai/gpt-4o-mini`), else the currently configured one. |
+| `categories` | map<string, `CategoryTally`> | no | Per-category tallies of the finished questions, recomputed after every question. Absent on old runs. |
 | `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
 
-`AssistantEvalCaseResult`: `id` (string, case id), `question` (string), `scores` (map<string, number 0..1>, per scorer id; empty when the run threw), `checkResults` (`EvalCheckResult[]`), `answer` (string), `toolCalls` (`EvalToolCall[]`), `passed` (boolean; every scorer scored 1), `error` (string, no; agent run failure), `durationMs` (number).
+`AssistantEvalCaseResult`: `id` (string, case id), `category` (string, no; the case's category when it ran, absent on old results), `question` (string), `scores` (map<string, number 0..1>, per scorer id; empty when the run threw), `checkResults` (`EvalCheckResult[]`), `answer` (string), `toolCalls` (`EvalToolCall[]`), `passed` (boolean; every scorer scored 1), `error` (string, no; agent run failure), `durationMs` (number), `usage` (`TokenUsage`, no; the agent run, all steps, plus the LLM judge call when the case has a rubric; kept when the run threw part-way; absent when the provider reported nothing; the tool-only answer synthesis is not counted).
+`TokenUsage`: `inputTokens`, `outputTokens`, `totalTokens` (input + output unless the provider reports its own total), `reasoningTokens`, `cachedInputTokens` (a subset of input), `calls` (number of model results summed; `0` = nothing observed, which is not "free"). All non-negative integers. Read defensively from the provider result: the multi-step total first, then the last-step usage, then nested response usage, accepting both `inputTokens`/`outputTokens` and `promptTokens`/`completionTokens` naming; when no roll-up exists the per-step usages are summed.
+`CategoryTally`: `total` (questions with a verdict in that category), `passed` (number). A question that threw counts as not passed; a result without a category is tallied under `uncategorised`; questions never reached are not counted.
 `EvalCheckResult`: `id`, `description` (string), `score` (number), `passed` (boolean), `reason` (string, no).
 `EvalToolCall`: `name` (string), `input`, `output` (strings, no; JSON-encoded, each truncated to 2000 chars with a trailing `… (truncated)`), `error` (string, no).
 `EvalRegressionSummary`: `previousRunId` (string), `regressions`, `improvements`, `unchanged` (each `{id: string, question: string}[]`); cases present in only one of the two runs are skipped; regression = passed before, fails now; improvement = the reverse.
@@ -404,7 +413,7 @@ Deep-analysis jobs exist only in process memory (bounded history; a backend rest
 
 ## 4. Files on disk
 
-All paths in this section are relative to `<app data dir>/workspaces/session-<session-id>/` (the **session workspace**), a contained filesystem root: agents' file tools cannot escape it and the file-delete tool is disabled for them (they may create and edit). The session id used in a directory name must match `^[a-zA-Z0-9_-]+$` (otherwise the operation fails with `Invalid session workspace ID`).
+Sections 4.8 and 4.9 describe developer-facing files that live outside the app data dir. All paths in sections 4.1 to 4.7 are relative to `<app data dir>/workspaces/session-<session-id>/` (the **session workspace**), a contained filesystem root: agents' file tools cannot escape it and the file-delete tool is disabled for them (they may create and edit). The session id used in a directory name must match `^[a-zA-Z0-9_-]+$` (otherwise the operation fails with `Invalid session workspace ID`).
 
 ### 4.1 Workspace layout
 
@@ -529,6 +538,87 @@ Visuals created before versioning keep their **v1 files directly under `visuals/
 - Once such a visual gains version 2, `versions` is materialised as `[{version: 1, createdAt: visual.createdAt, sourceMessageAt: visual.sourceMessageAt}, {version: 2, …}]` and v2 is written to `visuals/<id>/v2/`; for version 1 the reader prefers `visuals/<id>/v1/index.html` and falls back to the root when it does not exist.
 - Legacy versions may lack `body.html`, `manifest.json`, `data.json`, `answer.md`, `spec.json`; each reader has a fallback (extract the body from `index.html`, use the session metadata for title/description, use the source answer's `data`). Downloads always regenerate `index.html` so old versions ship with the readable frame.
 
+### 4.8 Eval set definitions (suite files)
+
+The assistant's eval sets ([agents-evals](../capabilities/agents-evals/spec.md)) are data: one UTF-8 JSON file per set, named `<set id>.json`, in the backend's suites folder. The folder ships with the backend as a build asset; when the built copy is missing the source copy is used. It is listed on every catalogue read and every run start (no cache), so an edited file applies without a restart; a missing folder lists no sets. The UI and API call a definition a *set*; files, the CLI (`--suite`) and run records (`suiteId`) call it a *suite* (glossary *Eval suite*).
+
+Top-level object:
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `id` | string | yes | Set id: letters, digits and hyphens, starting with a letter or digit. Must equal the file name; loading by id rejects a mismatch (`declares id "<x>" but is named "<y>.json"`). |
+| `name` | string | yes | Display name. |
+| `description` | string | no | Shown under the set name. For a set without `fixtureId` it is also the operator-facing setup sentence that opens the preflight message. |
+| `fixtureId` | string | no | Id of a bundled sample in the sample catalogue ([testing-data](../capabilities/testing-data/spec.md)). When present, required entities and datasource kind come from the catalogue and the file must not carry `requiredEntities` or `datasourceKind`; `datasets` defaults to `[<sample's dataset name>]`. |
+| `datasets` | string[] | yes without `fixtureId` | Non-empty. Dataset names the set is written against: the in-app run scopes to them when the datasource has all of them; the golden-set harness binds every case to the first. |
+| `requiredEntities` | string[] | yes without `fixtureId` | Non-empty. `schema.table` entities the questions cannot run without (dataset preflight). |
+| `datasourceKind` | `postgres` \| `rest` | no | Without `fixtureId` only. Default `postgres`. |
+| `variantOf` | object | no | Derive the cases from another set (below). Excludes `cases`. |
+| `cases` | `EvalSuiteCase[]` | yes unless `variantOf` | Non-empty. |
+
+`EvalSuiteCase`: `id` (string, unique within the set; the shipped sets keep ids unique across all sets, which a unit test asserts and the API relies on), `category` (string, required: the failure class; the vocabulary in the glossary is not enforced), `question` (string, sent verbatim), `intent` (string, shown in the UI), `notes` (string, no; documentation only), `checks` (`EvalCheckSpec[]`, no; at most one per `type`, because scores are keyed by check type), `expectedSql` (string, no; trusted reference query for the result-set match), `resultSetOptions` (`{distinctRows?: boolean}`, no), `judgeRubric` (string, no; rubric for the LLM judge). Every string present must be non-empty; values are trimmed.
+
+`EvalCheckSpec` is `{type, …}`; the type decides its argument (descriptions shown in the UI come from the check itself, see [agents.md](agents.md) 8.1):
+
+| `type` | Argument | Passes when |
+|---|---|---|
+| `includes` / `excludes` / `equals` | `value` (non-empty string) | the answer contains / does not contain / equals the text |
+| `matches` | `pattern` (regular-expression source, must compile at load), `flags?` (e.g. `i`) | the answer matches |
+| `calledTool` | `tool`, `times?` (integer; default 1) | the tool was called (that many times) |
+| `didNotCall` | `tool` | the tool was not called |
+| `toolOrder` | `tools` (non-empty string[]) | the tools were called in that order |
+| `noToolErrors` | none | no tool call errored |
+| `usedNoTools` | none | no tool was called |
+| `maxToolCalls` | `max` (integer) | at most `max` tool calls were made |
+
+`variantOf` is `{suite: <base set id>, idPrefix: string, expectedSql?: map<base case id, SQL>}`. The derived set takes every base case (category, question, intent, notes, checks, rubric, options), prefixes its id with `idPrefix` and replaces its `expectedSql` with the mapped port. A base case with `expectedSql` but no port, a port for a case the base does not have, or a base that is itself a variant fails the load.
+
+**Validation.** Any violation fails the load with `Invalid eval suite <file>: <what>`, naming the field and case, for example `case "<id>".category must be a non-empty string`, `case "<id>" has an unknown check type "<t>" — known types: <list>`, `case "<id>" check "matches".pattern is not a valid regular expression: <error>`, `duplicate case id "<id>"`, `fixtureId "<x>" is not in the sample fixture registry`, `requiredEntities comes from fixture "<x>" — remove it from the suite`, `a suite with variantOf takes its cases from the base suite — remove cases`; unparseable JSON fails with `could not be read as JSON — <error>`. Loading an unknown id fails with `Unknown eval suite "<id>". Looked in <folder>. Available suites: <ids>.` (or `No suite files found there — was mastra/evals/suites copied into dist?`).
+
+**Shipped files.** `formula-1.json`, `genomics.json`, `health-insurance.json`, `world-cup.json` and `world-cup-rest.json` (a `variantOf` `world-cup`, `idPrefix` `rest-`, five SQLite ports over `api.world_cup.*`). Their content is summarised in [agents-evals](../capabilities/agents-evals/spec.md) and copied verbatim on rebuild (*Data assets* in [../README.md](../README.md)).
+
+### 4.9 Eval run logs and the price table
+
+Developer records of what eval runs scored and cost, committed with the repository so runs can be compared over time. They live in the **log dir**: `EVAL_LOG_DIR` when set, else the `logs/` folder at the root of the source checkout the backend runs from (found by walking up from the backend code, at most 12 levels, to a folder holding both `backend/package.json` and `docker-compose.yml`). With neither (installed app, npm package) nothing is written and every model is unpriced.
+
+```
+<log dir>/
+  pricing.json          operator-maintained rates; ships with an empty "models" object
+  evals/
+    index.ndjson        one summary line per run, append-only
+    <YYYY-MM-DD>-<suite>[-<label>]-<first 8 of runId>.json   one record per run
+```
+
+The record file name is the `startedAt` date, the suite and optional label slugged (lower-cased, runs of other characters turned into `-`, trimmed of `-`), then the first 8 characters of the run id. Records carry case ids, verdicts, durations and token counts, never query results. Writers: the in-app runner (harness `in-app`, every run that ends, completed or failed), the golden-set harness (`golden-set`) and its validate mode (`validate`); the harness skips the write with `--no-log`. Writing is best effort: a failure is reported as a warning and never fails a run.
+
+Run record (`schemaVersion: 1`):
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `schemaVersion` | `1` | yes | Bumped if the shape changes. |
+| `runId` | uuid | yes | For in-app runs, the eval run's `jobId`. |
+| `label` | string | no | Operator tag (`--label baseline`); in-app runs have none. |
+| `harness` | `in-app` \| `golden-set` \| `validate` | yes | Which runner wrote it. |
+| `suite` | string | yes | Set id, or the case file's `id` or basename. |
+| `agentKey` | string | no | In-app runs only. |
+| `datasets` | string[] | yes | Datasets the cases ran against. |
+| `model` | string | no | The model that actually ran; absent for `validate`. |
+| `startedAt`, `finishedAt` | ISO | yes | |
+| `durationMs` | number | yes | `finishedAt − startedAt`. |
+| `appVersion` | string | no | Harness only: the frontend package version. |
+| `gitCommit` | string | no | Harness only: short commit of the checkout. |
+| `totals` | object | yes | `{cases, passed, failed, errored, skipped}`; for in-app runs `skipped` counts questions the run never reached. |
+| `categories` | map<string, `CategoryTally`> | yes | As in 3.8; skipped cases excluded. |
+| `usage` | `TokenUsage` | yes | Run total; `calls: 0` when nothing was observed. |
+| `estimatedCostUsd` | number | no | Absent when unpriced. |
+| `costIncomplete` | `true` | no | Usage was observed but the model has no rate, so any cost derived from it is a floor. |
+| `cases` | array | yes | Per case: `id`, `category?`, `verdict` (`PASS` \| `FAIL` \| `ERROR` \| `SKIP`), `reason?`, `durationMs`, `usage?`, `estimatedCostUsd?` (harness only); with `--repeat` above 1 also `runs` and `passes`. In-app `reason` is the id of the first failing check, or `run-error`; harness reasons are `result-mismatch`, `no-sql`, `timeout`, `turn-failed`, `expected-sql`, `replay-failed`, `extra-columns` (a pass), `placeholder`, `no-expected-sql`, `sql-error`, `empty`, `too-many-rows`. |
+| `comparedToRunId`, `regressions`, `improvements` | string, string[], string[] | no | In-app runs with a comparison: the previous run id and the case ids that flipped. |
+
+Index line: `{runId, startedAt, suite, label?, harness, model?, gitCommit?, cases, passed, inputTokens, outputTokens, totalTokens, estimatedCostUsd?, file}`, `file` being the record's file name.
+
+`pricing.json`: `{"models": {"<model id>": {"inputPerMillionUsd": number, "outputPerMillionUsd": number, "cachedInputPerMillionUsd"?: number}}}` in US dollars per million tokens. The `models` wrapper is optional; entries without finite input and output rates are ignored, so comment keys (`_comment`, `_howToFill`, `_example` in the shipped file) are harmless. Keys are lower-cased. A run's model is matched by the part after its last `/` (so `gpt-4o-mini` covers `openai/gpt-4o-mini` and `lenai/gpt-4o-mini`), else by its full id. Cost = ((input − cached) × input rate + cached × (cached rate, else input rate) + output × output rate) / 1,000,000, rounded to 6 decimals; reasoning tokens are not priced separately. A missing or malformed file means no rates; an unknown model means no cost, never a zero.
+
 ---
 
 ## 5. Agent memory
@@ -557,6 +647,7 @@ Visuals created before versioning keep their **v1 files directly under `visuals/
 | M8 | Electron profile directory rename | Electron startup (desktop app) | If the current `userData` directory does not exist but a sibling `Questions to Insights` directory does, keep using the legacy directory. |
 | M9 | Windows roaming to local data move | Electron startup, Windows only | See section 1.1 (moves `app.sqlite`, `mastra.sqlite`, `workspaces` once; rollback on failure). `.app-secret` is resolved in the *resulting* data dir so the secret and the data it protects travel together. |
 | M10 | Pre-versioning visuals; messages without `reasoning`; datasets without `sampleValues`/`references` | Read time | Tolerated by readers (section 4.7; reasoning derived from `data[].rationale`; absent snapshot fields simply omitted). No rewrite. |
+| M11 | Eval runs without `suiteId`, `suiteName`, `usage`, `estimatedCostUsd`, `model`, `categories`; results without `category`, `usage`; messages without `usage` | Read time | Tolerated, no rewrite. A missing `suiteId` is read as `world-cup` for the regression baseline (see Open questions: older Formula 1 and REST runs are misread the same way); listings label the run "unknown suite" and the report "—"; the report recomputes category tallies from the results and omits the section when none carry a category; absent usage reads as "not measured". |
 
 Tests: the table/field renames (M1-M3) and M4/M5 are covered by `database.module.spec.ts` and the repository/workspace specs.
 
@@ -569,6 +660,8 @@ Tests: the table/field renames (M1-M3) and M4/M5 are covered by `database.module
 - **Version overwrite after revert.** Tailoring/repairing always writes version `currentVersion + 1`. After reverting from v3 to v1, the next tailoring writes `v2/`, overwriting the existing v2 directory and appending a second `{version: 2}` entry to `versions`. Open question: should the next version number be `max(versions) + 1`?
 - **Verified-query id instability**: re-approving the same answer replaces `id` with a fresh uuid (the upsert patch carries a new id), which can orphan `metrics.sourceVerifiedQueryId`.
 - **Eval runs left `running`** after a crash are never reconciled; the in-code comment on the service still says runs are in-memory although they are persisted.
+- **Eval runs without `suiteId`** are all read as `world-cup` runs (M11), but releases before set ids were stored already offered the `formula-1` and `world-cup-rest` sets, so such runs can be mislabelled. Their `caseIds` would identify the set (case ids are unique across sets); open question whether readers should infer it from them.
+- **Eval run logs are written into the source checkout** whenever the backend runs from one (including a desktop app started from a working tree), so every in-app eval run adds files under `logs/evals/` to the working tree. Intended (the history is committed), but easy to commit by accident.
 - **No cascades**: deleting a session keeps its verified queries; deleting a dataset or datasource leaves dangling names/ids in sessions, knowledge scopes, datasets and eval runs.
 - **Message identity is the `at` millisecond timestamp**; two assistant messages created in the same millisecond would collide as feedback/visual/verified-query keys. Not observed, not guarded.
 - **Legacy single-selection `datasets` documents** (pre-`name` era) are ignored by readers but their exact shape is not documented anywhere in the code. Open question: can they be dropped?
