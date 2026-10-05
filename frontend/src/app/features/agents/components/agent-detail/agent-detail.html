@@ -177,7 +177,11 @@
           }
         }
         @case ("evals") {
-          @if (evalSets().length > 0 || evalTab() === "runs") {
+          @if (
+            evalSets().length > 0 ||
+            evalTab() === "runs" ||
+            evalTab() === "history"
+          ) {
             <!-- Sub-tabs: the suite, and what has been run -->
             <div class="mb-5 flex items-center gap-1">
               <button
@@ -201,6 +205,17 @@
                 [class.hover:text-zinc-200]="evalTab() !== 'runs'"
               >
                 Executions
+              </button>
+              <button
+                data-testid="eval-subtab-history"
+                (click)="selectEvalTab('history')"
+                class="rounded-lg px-3 py-1.5 text-[13px]"
+                [class.bg-white/10]="evalTab() === 'history'"
+                [class.text-zinc-200]="evalTab() === 'history'"
+                [class.text-zinc-400]="evalTab() !== 'history'"
+                [class.hover:text-zinc-200]="evalTab() !== 'history'"
+              >
+                History
               </button>
             </div>
           }
@@ -255,9 +270,18 @@
                           >{{ passedIn(run) }}/{{ run.totalCases }} passed</span
                         >
                         <span class="truncate text-[12px] text-zinc-500">
-                          {{ startedLabel(run) }} ·
+                          {{ startedLabel(run) }} · {{ runSuiteLabel(run) }} ·
                           {{ datasourceName(run.datasourceId) }} ·
                           {{ runDuration(run) }}
+                        </span>
+                        <span
+                          [attr.data-testid]="'eval-run-tokens-' + run.jobId"
+                          class="ml-auto flex shrink-0 items-center gap-1.5 font-mono text-[11px]"
+                          [class.text-zinc-400]="runHasUsage(run)"
+                          [class.text-zinc-600]="!runHasUsage(run)"
+                        >
+                          <lucide-angular [img]="Coins" [size]="11" />
+                          <span>{{ runTokensLabel(run) }}</span>
                         </span>
                       </button>
                       <button
@@ -294,42 +318,17 @@
                     </div>
 
                     @if (expandedRunId() === run.jobId) {
-                      <p class="mt-2 text-[12px] text-zinc-500">
-                        Scoped to {{ run.datasets.join(", ") }}
-                      </p>
-                      <div class="mt-2 flex flex-col gap-1">
-                        @for (result of run.results; track result.id) {
-                          <button
-                            type="button"
-                            [attr.data-testid]="
-                              'eval-run-result-' + run.jobId + '-' + result.id
-                            "
-                            (click)="selectRunResult(result)"
-                            class="flex items-start gap-2 rounded-md px-2 py-1.5 text-left hover:bg-white/5"
-                          >
-                            <lucide-angular
-                              [img]="result.passed ? CircleCheck : CircleX"
-                              [size]="12"
-                              class="mt-1 shrink-0"
-                              [class.text-emerald-400]="result.passed"
-                              [class.text-red-400]="!result.passed"
-                            />
-                            <span
-                              class="min-w-0 flex-1 text-[12px] text-zinc-300"
-                              >{{ result.question }}</span
-                            >
-                            <span
-                              class="shrink-0 font-mono text-[11px] text-zinc-600"
-                              >{{ result.durationMs }}ms</span
-                            >
-                          </button>
-                        }
-                      </div>
+                      <app-eval-run-summary
+                        [run]="run"
+                        (selectResult)="selectRunResult($event)"
+                      />
                     }
                   </div>
                 }
               </div>
             }
+          } @else if (evalTab() === "history") {
+            <app-eval-log-history [agentKey]="agentKey()" />
           } @else if (evalsLoading()) {
             <div class="flex items-center gap-2.5 text-zinc-400">
               <lucide-angular
@@ -410,7 +409,10 @@
                   <option value="">No datasources configured</option>
                 }
                 @for (datasource of datasources(); track datasource.id) {
-                  <option [value]="datasource.id">
+                  <option
+                    [value]="datasource.id"
+                    [selected]="datasource.id === selectedDatasourceId()"
+                  >
                     {{ datasource.name }} · {{ kindLabel(datasource.kind) }}
                   </option>
                 }
@@ -422,7 +424,8 @@
                   running() ||
                   runStarting() ||
                   datasources().length === 0 ||
-                  selectedCaseIds().size === 0
+                  selectedCaseIds().size === 0 ||
+                  (isCustomArm() && customOverrideErrors().length > 0)
                 "
                 class="flex items-center gap-1.5 rounded-lg bg-zinc-200 px-3.5 py-2 text-[13px] font-medium text-zinc-900 hover:bg-white disabled:opacity-50"
               >
@@ -432,11 +435,31 @@
                     [size]="14"
                     class="animate-spin"
                   />
-                  <span>Running…</span>
+                  <span>{{ runStatus() === 'queued' ? 'Queued…' : 'Running…' }}</span>
                 } @else {
                   <lucide-angular [img]="Play" [size]="14" />
                   <span>Run {{ selectedCaseIds().size }} selected</span>
                 }
+              </button>
+              @if (running() && runningJobId()) {
+                <button
+                  type="button"
+                  data-testid="eval-stop"
+                  (click)="stopRun()"
+                  class="flex items-center gap-1.5 rounded-lg border border-white/15 px-3 py-2 text-[13px] text-zinc-300 hover:bg-white/5"
+                >
+                  <lucide-angular [img]="StopCircle" [size]="14" />
+                  <span>Stop</span>
+                </button>
+              }
+              <button
+                type="button"
+                data-testid="eval-loop-run"
+                (click)="showLoopPanel() ? closeLoopPanel() : openLoopPanel()"
+                class="flex items-center gap-1.5 rounded-lg border border-white/15 px-3 py-2 text-[13px] text-zinc-300 hover:bg-white/5"
+              >
+                <lucide-angular [img]="Layers" [size]="14" />
+                <span>Loop run</span>
               </button>
               @if (runStatus() !== "idle") {
                 <span class="text-[12px] text-zinc-500">
@@ -446,11 +469,136 @@
               }
             </div>
 
-            @if (runDatasets().length > 0) {
+            <!-- Repeat / arm / label / paraphrases -->
+            <div class="mt-2 flex flex-wrap items-center gap-2">
+              <select
+                data-testid="eval-repeat-select"
+                aria-label="How many times each question runs"
+                [value]="repeat()"
+                (change)="onRepeatChange($event)"
+                [disabled]="running() || runStarting()"
+                class="rounded-lg border border-white/15 bg-[#232323] px-2.5 py-1.5 text-[12px] text-zinc-200 disabled:opacity-50"
+              >
+                <option [value]="1">repeat 1</option>
+                <option [value]="3">
+                  repeat 3 — pass^3, the number we trust
+                </option>
+                <option [value]="5">repeat 5</option>
+              </select>
+              <select
+                data-testid="eval-arm-select"
+                aria-label="Engine arm to run this eval with"
+                [value]="selectedArm()"
+                (change)="onArmChange($event)"
+                [disabled]="running() || runStarting()"
+                class="rounded-lg border border-white/15 bg-[#232323] px-2.5 py-1.5 text-[12px] text-zinc-200 disabled:opacity-50"
+              >
+                @for (arm of armNames(); track arm) {
+                  <option
+                    [value]="arm"
+                    [title]="armDescription(arm)"
+                    [selected]="arm === selectedArm()"
+                  >
+                    {{ arm }}
+                  </option>
+                }
+                <option value="custom" [selected]="isCustomArm()">
+                  custom…
+                </option>
+              </select>
+              <input
+                data-testid="eval-label-input"
+                type="text"
+                placeholder="label, e.g. iter0-gpt5"
+                [value]="runLabel()"
+                (input)="onLabelInput($event)"
+                [disabled]="running() || runStarting()"
+                class="rounded-lg border border-white/15 bg-[#232323] px-2.5 py-1.5 text-[12px] text-zinc-200 placeholder:text-zinc-600 disabled:opacity-50"
+              />
+              <label
+                class="flex cursor-pointer items-center gap-1.5 text-[12px] text-zinc-400"
+              >
+                <input
+                  type="checkbox"
+                  data-testid="eval-include-variants"
+                  [checked]="includeVariants()"
+                  (change)="toggleIncludeVariants()"
+                  [disabled]="running() || runStarting()"
+                  class="h-3.5 w-3.5 accent-zinc-300"
+                />
+                include paraphrases
+              </label>
+            </div>
+
+            @if (isCustomArm()) {
+              <div class="mt-2 flex flex-col gap-1">
+                <textarea
+                  data-testid="eval-arm-custom-overrides"
+                  aria-label="Custom engine overrides, key=value comma-separated"
+                  rows="2"
+                  placeholder="sqlRepair=false,careful=auto,promptAblation=visuals+rationale"
+                  [value]="customOverrideText()"
+                  (input)="onCustomOverrideInput($event)"
+                  [disabled]="running() || runStarting()"
+                  class="w-full max-w-[560px] rounded-lg border border-white/15 bg-[#232323] px-2.5 py-1.5 font-mono text-[12px] text-zinc-200 placeholder:text-zinc-600 disabled:opacity-50"
+                ></textarea>
+                @if (customOverrideErrors().length > 0) {
+                  <p
+                    data-testid="eval-arm-custom-errors"
+                    class="text-[11px] text-red-400"
+                  >
+                    {{ customOverrideErrors().join(" · ") }}
+                  </p>
+                }
+              </div>
+            }
+
+            @if (showLoopPanel()) {
+              <app-eval-loop-panel
+                [agentKey]="agentKey()"
+                [datasourceId]="selectedDatasourceId()"
+                [sets]="evalSets()"
+                [arms]="engineSettings()?.arms ?? {}"
+                [armDescriptions]="engineSettings()?.armDescriptions ?? {}"
+                (closed)="closeLoopPanel()"
+                (openRun)="openLoopRun($event)"
+              />
+            }
+
+            <!-- Which database the questions run against -->
+            @if (datasetNames().length > 0) {
+              <div
+                data-testid="eval-dataset-scope"
+                class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5"
+              >
+                <span class="text-[12px] text-zinc-500">Evaluate against</span>
+                @for (name of datasetNames(); track name) {
+                  <label
+                    [attr.data-testid]="'eval-dataset-' + name"
+                    class="flex cursor-pointer items-center gap-1.5 text-[12px] text-zinc-400"
+                  >
+                    <input
+                      type="checkbox"
+                      [checked]="isDatasetSelected(name)"
+                      (change)="toggleDataset(name)"
+                      [disabled]="running() || runStarting()"
+                      class="h-3.5 w-3.5 accent-zinc-300"
+                    />
+                    {{ name }}
+                  </label>
+                }
+                @if (selectedDatasets().length === 0) {
+                  <span class="text-[11px] text-zinc-600"
+                    >set default —
+                    {{ scopeSelection().join(", ") || "none" }}</span
+                  >
+                }
+              </div>
+            } @else if (scopeDatasets().length > 0) {
               <p class="mt-2 text-[12px] text-zinc-500">
                 Scoped to
                 <span class="text-zinc-400">{{
-                  runDatasets().join(", ")
+                  scopeDatasets().join(", ")
                 }}</span>
               </p>
             }
@@ -461,23 +609,59 @@
                 {{ err }}
               </p>
             }
-            <label
-              class="mt-5 flex w-fit cursor-pointer items-center gap-2 text-[12px] text-zinc-400"
-            >
-              <input
-                type="checkbox"
-                data-testid="eval-select-all"
-                [checked]="allCasesSelected()"
-                (change)="toggleAllCases()"
-                [disabled]="running() || runStarting()"
-                class="h-3.5 w-3.5 accent-zinc-300"
-              />
-              <span>Select all</span>
-            </label>
+            <div class="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2">
+              <label
+                class="flex w-fit cursor-pointer items-center gap-2 text-[12px] text-zinc-400"
+              >
+                <input
+                  type="checkbox"
+                  data-testid="eval-select-all"
+                  [checked]="allCasesSelected()"
+                  (change)="toggleAllCases()"
+                  [disabled]="running() || runStarting()"
+                  class="h-3.5 w-3.5 accent-zinc-300"
+                />
+                <span>Select all{{ categoryFilter() ? " shown" : "" }}</span>
+              </label>
+              @if (evalCategories().length > 0) {
+                <select
+                  data-testid="eval-category-filter"
+                  aria-label="Filter questions by category"
+                  [value]="categoryFilter()"
+                  (change)="onCategoryFilterChange($event)"
+                  class="rounded-lg border border-white/15 bg-[#232323] px-2.5 py-1.5 text-[12px] text-zinc-200"
+                >
+                  <option value="" [selected]="categoryFilter() === ''">
+                    All categories ({{ evalCases().length }})
+                  </option>
+                  @for (entry of evalCategories(); track entry.category) {
+                    <option
+                      [value]="entry.category"
+                      [selected]="entry.category === categoryFilter()"
+                    >
+                      {{ entry.category }} ({{ entry.count }})
+                    </option>
+                  }
+                </select>
+              }
+              <span class="text-[12px] text-zinc-500">
+                {{ selectedCaseIds().size }} of
+                {{ evalCases().length }} selected
+                @if (categoryFilter()) {
+                  · showing {{ visibleCases().length }}
+                }
+              </span>
+            </div>
+
+            @if (visibleCases().length === 0) {
+              <p class="mt-3 text-[13px] text-zinc-500">
+                No questions in this category.
+              </p>
+            }
 
             <div class="mt-2 flex flex-col gap-2">
               @for (
-                evalCase of evalCases();
+                evalCase of visibleCases();
                 track evalCase.id;
                 let i = $index
               ) {
@@ -510,10 +694,20 @@
                         >{{ i + 1 }}</span
                       >
                       <div class="flex min-w-0 flex-col gap-1.5">
-                        <span class="flex items-center gap-2">
+                        <span class="flex flex-wrap items-center gap-2">
                           <span class="text-[13px] text-zinc-200">{{
                             evalCase.question
                           }}</span>
+                          @if (evalCase.category) {
+                            <span
+                              [attr.data-testid]="
+                                'eval-category-' + evalCase.id
+                              "
+                              title="Failure class this question probes"
+                              class="rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-zinc-400"
+                              >{{ evalCase.category }}</span
+                            >
+                          }
                           @if (resultFor(evalCase.id); as result) {
                             @if (result.passed) {
                               <span
@@ -539,6 +733,13 @@
                                 <span>failed</span>
                               </span>
                             }
+                            <span
+                              [attr.data-testid]="'eval-verdict-' + evalCase.id"
+                              [title]="resultVerdictTooltip(result)"
+                              class="font-mono text-[10px]"
+                              [class]="resultVerdictClass(result)"
+                              >{{ resultVerdictLabel(result) }}</span
+                            >
                           } @else if (
                             runCurrentQuestion() === evalCase.question
                           ) {

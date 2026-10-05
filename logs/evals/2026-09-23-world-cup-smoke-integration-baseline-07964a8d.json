@@ -1,0 +1,256 @@
+{
+  "schemaVersion": 2,
+  "runId": "07964a8d-9689-44da-9b67-1a2000afe59e",
+  "label": "smoke-integration",
+  "harness": "in-app",
+  "suite": "world-cup",
+  "agentKey": "assistant",
+  "datasets": [
+    "World Cup"
+  ],
+  "datasourceKind": "postgres",
+  "dialect": "postgres",
+  "model": "openai/gpt-5",
+  "reasoningEffort": "high",
+  "repeat": 1,
+  "arm": "baseline",
+  "engine": {
+    "careful": "off",
+    "answerReview": false,
+    "sqlRepair": true,
+    "repairIntentGuard": true,
+    "context": "curated",
+    "columnProfiles": false,
+    "inlineKnowledge": false,
+    "rankedKnowledge": false,
+    "lookupTools": false,
+    "sqlPrecheck": false,
+    "descriptiveErrors": false,
+    "extendedGuards": false,
+    "staticFirstContext": false,
+    "promptAblation": []
+  },
+  "configHash": "84fab82d4506",
+  "startedAt": "2026-09-23T19:37:38.999Z",
+  "finishedAt": "2026-09-23T19:38:52.404Z",
+  "durationMs": 73405,
+  "appVersion": "0.10.1",
+  "gitCommit": "f04defd",
+  "totals": {
+    "cases": 2,
+    "passed": 2,
+    "failed": 0,
+    "errored": 0,
+    "gaps": 0,
+    "skipped": 0
+  },
+  "summary": {
+    "passK": 2,
+    "passKRate": 1,
+    "scored": 2,
+    "meanPassRate": 1,
+    "flaky": 0,
+    "gaps": 0,
+    "answeredEveryTime": 2,
+    "answeredObserved": 2,
+    "byCategory": {
+      "control": {
+        "total": 2,
+        "passK": 2,
+        "meanPassRate": 1
+      }
+    },
+    "byDifficulty": {
+      "easy": {
+        "total": 2,
+        "passK": 2
+      }
+    },
+    "tokensPerCase": 21641
+  },
+  "categories": {
+    "control": {
+      "total": 2,
+      "passed": 2
+    }
+  },
+  "usage": {
+    "inputTokens": 39478,
+    "outputTokens": 3803,
+    "totalTokens": 43281,
+    "reasoningTokens": 3008,
+    "cachedInputTokens": 22400,
+    "calls": 3
+  },
+  "sidePassUsage": {
+    "fixer": {
+      "inputTokens": 1026,
+      "outputTokens": 281,
+      "totalTokens": 1307,
+      "reasoningTokens": 192,
+      "cachedInputTokens": 0,
+      "calls": 1
+    }
+  },
+  "costIncomplete": true,
+  "cases": [
+    {
+      "id": "champion-2022",
+      "category": "control",
+      "question": "Who won the 2022 World Cup?",
+      "difficulty": "easy",
+      "verdict": "PASS",
+      "runs": 1,
+      "passes": 1,
+      "flaky": false,
+      "durationMs": 28274,
+      "usage": {
+        "inputTokens": 16055,
+        "outputTokens": 1479,
+        "totalTokens": 17534,
+        "reasoningTokens": 1088,
+        "cachedInputTokens": 7424,
+        "calls": 2
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-includes",
+              "passed": true
+            },
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-no-tool-errors",
+              "passed": true
+            },
+            {
+              "id": "result-set-match",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT t.tournament_year, tm.common_name AS winner_team FROM world_cup.world_cup.matches m JOIN world_cup.world_cup.tournaments t ON m.tournament_id = t.id JOIN world_cup.world_cup.teams tm ON m.winner_team_id = tm.id WHERE t.tournament_year = 2022 AND m.stage = 'final'",
+          "sql": [
+            {
+              "sql": "SELECT t.tournament_year, tm.common_name AS winner_team FROM world_cup.world_cup.matches m JOIN world_cup.world_cup.tournaments t ON m.tournament_id = t.id JOIN world_cup.world_cup.teams tm ON m.winner_team_id = tm.id WHERE t.tournament_year = 2022 AND m.stage = 'final'",
+              "ok": true,
+              "rowCount": 1,
+              "repaired": true
+            }
+          ],
+          "answer": "Argentina.\n\nSource: final match in 2022 from world_cup.world_cup.matches joined to world_cup.world_cup.tournaments (by year) and world_cup.world_cup.teams (winner_team_id → team).",
+          "steps": 1,
+          "calledTools": [
+            "run_readonly_sql"
+          ],
+          "repairs": [
+            {
+              "original": "SELECT t.tournament_year,\n       tm.name AS winner_team\nFROM world_cup.world_cup.matches m\nJOIN world_cup.world_cup.tournaments t ON m.tournament_id = t.id\nJOIN world_cup.world_cup.teams tm ON m.winner_team_id = tm.id\nWHERE t.tournament_year = 2022 AND m.stage = 'final';",
+              "repaired": "SELECT t.tournament_year, tm.common_name AS winner_team FROM world_cup.world_cup.matches m JOIN world_cup.world_cup.tournaments t ON m.tournament_id = t.id JOIN world_cup.world_cup.teams tm ON m.winner_team_id = tm.id WHERE t.tournament_year = 2022 AND m.stage = 'final'",
+              "error": "Postgres — column tm.name does not exist — HINT: Perhaps you meant to reference the column \"t.name\".",
+              "kind": "identifier",
+              "usage": {
+                "inputTokens": 1026,
+                "outputTokens": 281,
+                "totalTokens": 1307,
+                "reasoningTokens": 192,
+                "cachedInputTokens": 0,
+                "calls": 1
+              }
+            }
+          ],
+          "warnings": [],
+          "durationMs": 28274,
+          "usage": {
+            "inputTokens": 16055,
+            "outputTokens": 1479,
+            "totalTokens": 17534,
+            "reasoningTokens": 1088,
+            "cachedInputTokens": 7424,
+            "calls": 2
+          }
+        }
+      ]
+    },
+    {
+      "id": "goals-by-type",
+      "category": "control",
+      "question": "How many goals were scored in each way — open play, headers, penalties and so on?",
+      "difficulty": "easy",
+      "verdict": "PASS",
+      "runs": 1,
+      "passes": 1,
+      "flaky": false,
+      "durationMs": 45112,
+      "usage": {
+        "inputTokens": 23423,
+        "outputTokens": 2324,
+        "totalTokens": 25747,
+        "reasoningTokens": 1920,
+        "cachedInputTokens": 14976,
+        "calls": 1
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-matches",
+              "passed": true
+            },
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-no-tool-errors",
+              "passed": true
+            },
+            {
+              "id": "result-set-match",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT goal_type, COUNT(*) AS goals\nFROM world_cup.world_cup.goals\nGROUP BY goal_type\nORDER BY goals DESC, goal_type;",
+          "sql": [
+            {
+              "sql": "SELECT goal_type, COUNT(*) AS goals\nFROM world_cup.world_cup.goals\nGROUP BY goal_type\nORDER BY goals DESC, goal_type;",
+              "ok": true,
+              "rowCount": 5
+            }
+          ],
+          "answer": "Here’s the breakdown across all matches in this dataset:\n\n- Open play: 24\n- Header: 13\n- Penalty: 7\n- Own goal: 2\n- Free kick: 1\n\nTakeaway: Most goals came from open play, with headers a clear second. Penalties contributed a smaller share, and own goals and direct free kicks were rare.\n\nSource: world_cup.world_cup.goals (grouped by goal_type).",
+          "steps": 2,
+          "calledTools": [
+            "describe_entity",
+            "run_readonly_sql"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 45112,
+          "usage": {
+            "inputTokens": 23423,
+            "outputTokens": 2324,
+            "totalTokens": 25747,
+            "reasoningTokens": 1920,
+            "cachedInputTokens": 14976,
+            "calls": 1
+          }
+        }
+      ]
+    }
+  ],
+  "comparedToRunId": "89445f06-55e2-4d3b-8e51-7f778d3b0e33",
+  "regressions": [],
+  "improvements": [
+    "champion-2022"
+  ],
+  "flakyChanges": [],
+  "status": "completed"
+}

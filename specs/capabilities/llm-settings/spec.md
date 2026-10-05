@@ -14,7 +14,7 @@ Capability-local vocabulary:
 ## Rules
 
 Configuration
-- R1. The system SHALL support exactly three providers: `openai` (shown as "OpenAI"), `anthropic` ("Anthropic") and `lenai` ("LenAI (Halo gateway)"). Any other provider SHALL be rejected with `provider must be one of: openai, anthropic, lenai`.
+- R1. The system SHALL support exactly four providers: `openai` (shown as "OpenAI"), `anthropic` ("Anthropic"), `lenai` ("LenAI (Halo gateway)") and `databricks` ("Databricks (Model Serving)", R33). Any other provider SHALL be rejected with `provider must be one of: openai, anthropic, lenai, databricks`.
 - R2. There SHALL be one global configuration, shared by every agent and every session. It SHALL hold: provider, model, base URL (may be empty), the encrypted API key and the reasoning effort.
 - R3. The model SHALL be a free-text, non-empty value after trimming; otherwise `model is required`. For `lenai` it is labelled "Deployment name".
 - R4. For `lenai`, the base URL SHALL be required (`baseUrl is required for lenai`). It is the gateway root. Requests for a deployment SHALL go to `<base URL without trailing slashes>/openai/v1/deployments/<deployment>`, carrying the key both as a bearer credential and in an `X-Api-Key` header.
@@ -56,16 +56,20 @@ Fallback
 
 Applying the settings
 - R26. Every agent SHALL resolve its model from the saved configuration at call time, on every call. A saved change SHALL therefore apply to the next call of every agent without restarting the app, including a turn already in a session.
-- R27. The model route SHALL be: `openai/<model>` for OpenAI; `anthropic/<model>` for Anthropic; for LenAI `lenai/<deployment>` with the gateway URL of R4 and the `X-Api-Key` header.
+- R27. The model route SHALL be: `openai/<model>` for OpenAI; `anthropic/<model>` for Anthropic; for LenAI `lenai/<deployment>` with the gateway URL of R4 and the `X-Api-Key` header; for Databricks `databricks/<serving endpoint>` with the URL of R33.
 - R28. The configured reasoning effort SHALL be sent with chat turns, the SQL cross-check and the answer synthesised after a tool-only turn. Calls with their own need SHALL override it: SQL repair and visual generation use `low`, and the synthesised answer of a tool-only eval turn uses `medium`.
 - R29. Reasoning effort SHALL be filed under the provider option the target model actually reads: `reasoningEffort` for OpenAI and LenAI; `effort` for Anthropic, and for Anthropic SHALL be dropped entirely for models that reject it (Haiku, the Claude 3 line, Sonnet 4 and 4.5, Opus 4 and 4.1, including dated variants).
 - R30. For OpenAI-compatible gateway routes whose model belongs to a family that rejects `max_tokens`, an output cap SHALL be sent as `max_completion_tokens`. For Anthropic that passthrough SHALL be dropped.
 - R31. Provider responses of 429, 500, 502 or 503 SHALL be retried up to 3 times, waiting the `Retry-After` value when the response carries one (seconds or an HTTP date), else 1 s, 2 s, then 4 s. Other statuses and network errors SHALL NOT be retried. Retrying SHALL apply to every model request the process makes and SHALL be installed once.
 - R32. The visual-designer agent MAY use a different model from the configured one: the `VISUAL_MODEL` environment variable forces a route; otherwise a configured gpt-5 or o-series OpenAI route (not a gateway deployment) is replaced by `openai/gpt-4.1-mini`, and any route whose name contains the token `nano` is replaced by its `mini` sibling with a warning log. All other agents use the configured model unchanged.
 
+Databricks Model Serving
+- R33. For `databricks` the model SHALL be the serving-endpoint name (labelled "Serving endpoint"), the key a personal access token, and the base URL ("Workspace URL") SHALL be required (`baseUrl is required for databricks`): an `https://` workspace host, trailing slashes and a pasted `/serving-endpoints` suffix removed; a plain `http` URL, or one with any other path, query or fragment, SHALL be refused with a message saying so. Requests SHALL go to `<workspace host>/serving-endpoints/chat/completions` with bearer authentication only. The probe SHALL send its cap as `max_tokens` (these endpoints reject `max_completion_tokens`), and SHALL report HTTP 403 as `Access denied (403) — check the API key has access to serving endpoint "<endpoint>"` and 404 as `Serving endpoint not found (404) — check the name "<endpoint>"`.
+- R34. Reasoning effort SHALL NOT be sent to Databricks endpoints unless the operator switches it on under Settings → Engine levers ([../engine-levers/spec.md](../engine-levers/spec.md) R13); then it is filed under the `databricks` provider option.
+
 ## Edge cases and errors
 
-- Switching provider in the form keeps the typed model and key; the placeholder example changes (`gpt-4o-mini`, `claude-sonnet-5-5`, `my-deployment`).
+- Switching provider in the form keeps the typed model and key; the placeholder example changes (`gpt-4o-mini`, `claude-sonnet-5-5`, `my-deployment`, `databricks-claude-sonnet-4-5`).
 - Typing a key and leaving it in the field after a successful save is harmless: it is sent again on the next test or save and replaces the stored one.
 - If the app secret changes (a lost secret file on a new install, a different `APP_SECRET`), the stored key can no longer be decrypted: reading the settings fails with a backend error and the screen stays empty. The user must re-enter the key. Open question: show a clear message instead of an unexplained backend error.
 - Masking shows the last four characters; a key shorter than four characters would be shown whole. Open question: pad or fully hide very short keys.
@@ -81,7 +85,7 @@ Applying the settings
 
 ## UI
 
-Settings sidebar, **LLM Configuration** ([../app-shell/spec.md](../app-shell/spec.md), [../../system/ui.md](../../system/ui.md)). The form, top to bottom: heading "LLM Configuration" with "Configure the language-model provider and verify the credentials."; **Provider** select; **Model** (or **Deployment name**) text box; for LenAI a **Base URL** box with the hint "Gateway root; requests use <base URL>/openai/v1/deployments/<deployment>."; **API key** password box; **Test connection** button; **Save connection** button (tooltip "Test the connection successfully before saving"). States: empty (nothing saved), populated (saved values, masked key placeholder), testing, saving, tested-ok (Save enabled). Results appear as toasts. The new-session composer shows the saved model name (or "No model configured") and a reasoning-effort chip (Low, Medium, High).
+Settings sidebar, **LLM Configuration** ([../app-shell/spec.md](../app-shell/spec.md), [../../system/ui.md](../../system/ui.md)). The form, top to bottom: heading "LLM Configuration" with "Configure the language-model provider and verify the credentials."; **Provider** select; **Model** (or **Deployment name**) text box; for LenAI a **Base URL** box with the hint "Gateway root; requests use <base URL>/openai/v1/deployments/<deployment>."; for Databricks a **Workspace URL** box with the hint "Requests go to <workspace>/serving-endpoints/chat/completions with your token. Untested against a live workspace — use Test connection first." and the key labelled **Personal access token**; **API key** password box; **Test connection** button; **Save connection** button (tooltip "Test the connection successfully before saving"). States: empty (nothing saved), populated (saved values, masked key placeholder), testing, saving, tested-ok (Save enabled). Results appear as toasts. The new-session composer shows the saved model name (or "No model configured") and a reasoning-effort chip (Low, Medium, High).
 
 ## Flows
 
@@ -162,6 +166,7 @@ Feature: LLM settings
 
 ## Open questions
 
+- The Databricks provider is unit-tested only; it has not been exercised against a live workspace.
 - The agents screen's Model tab says "No model resolved — save an LLM configuration in Settings first" when no settings exist, but R25 says a default route is used. Confirm which the Model tab should show with no saved configuration.
 
 <!-- sources: backend/src/modules/llm/{llm.controller,llm.service,llm.types,retry-fetch}.ts, backend/src/modules/llm/repositories/llm-settings.repository.ts, backend/src/infrastructure/crypto/crypto.service.ts, backend/src/mastra/{model-resolver,model-compat}.ts, backend/src/mastra/agents/visualization.agent.ts, backend/src/modules/sessions/sessions.service.ts (reasoning effort use), frontend/src/app/features/llm/, frontend/src/app/app.ts (composer chip, setEffort) -->

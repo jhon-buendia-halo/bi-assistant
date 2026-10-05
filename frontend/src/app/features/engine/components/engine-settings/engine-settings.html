@@ -1,0 +1,365 @@
+<div class="flex flex-col gap-4">
+  <div>
+    <h1 class="text-[15px] font-semibold text-zinc-100">Engine levers</h1>
+    <p class="mt-1 text-[12px] text-zinc-500">
+      These are production defaults for every chat turn. Eval runs override
+      them per arm — measure a lever with Agents → Evals → Loop run before
+      switching it on here.
+    </p>
+  </div>
+
+  @if (loading()) {
+    <div class="flex items-center gap-2 text-[12px] text-zinc-500">
+      <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+      <span>Loading engine settings…</span>
+    </div>
+  } @else if (loadError(); as error) {
+    <p class="rounded-md bg-red-500/10 px-3 py-2.5 text-[12px] text-red-400">
+      {{ error }}
+    </p>
+  } @else {
+    <!-- Context -->
+    <section class="flex flex-col gap-2">
+      <h2
+        class="text-[11px] font-semibold tracking-[0.08em] text-zinc-500 uppercase"
+      >
+        Context
+      </h2>
+      @for (field of contextFields; track field.key) {
+        <div
+          class="flex items-start justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2.5"
+        >
+          <div class="flex min-w-0 flex-col gap-0.5">
+            <div class="flex items-center gap-2">
+              <span class="text-[13px] font-medium text-zinc-200">{{
+                field.label
+              }}</span>
+              <span
+                class="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-zinc-500"
+                >{{ field.leverId }}</span
+              >
+              @if (isChanged(field.key)) {
+                <span
+                  class="shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-400"
+                  >changed</span
+                >
+              }
+            </div>
+            <span class="text-[11px] leading-snug text-zinc-500">{{
+              field.description
+            }}</span>
+          </div>
+          @if (field.kind === "context") {
+            <select
+              [value]="options().context"
+              (change)="setContext($any($event.target).value)"
+              class="shrink-0 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[12px] text-zinc-200 outline-none focus:border-white/25"
+            >
+              <option value="curated" class="bg-[#232323]">Curated</option>
+              <option value="bare" class="bg-[#232323]">Bare</option>
+            </select>
+          } @else {
+            <input
+              type="checkbox"
+              [checked]="booleanValue(field.key)"
+              (change)="setBoolean(field.key, $any($event.target).checked)"
+              class="mt-0.5 h-4 w-4 shrink-0 accent-emerald-500"
+            />
+          }
+        </div>
+      }
+    </section>
+
+    <!-- Tools -->
+    <section class="flex flex-col gap-2">
+      <h2
+        class="text-[11px] font-semibold tracking-[0.08em] text-zinc-500 uppercase"
+      >
+        Tools
+      </h2>
+      @for (field of toolFields; track field.key) {
+        <div
+          class="flex items-start justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2.5"
+        >
+          <div class="flex min-w-0 flex-col gap-0.5">
+            <div class="flex items-center gap-2">
+              <span class="text-[13px] font-medium text-zinc-200">{{
+                field.label
+              }}</span>
+              <span
+                class="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-zinc-500"
+                >{{ field.leverId }}</span
+              >
+              @if (isChanged(field.key)) {
+                <span
+                  class="shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-400"
+                  >changed</span
+                >
+              }
+            </div>
+            <span class="text-[11px] leading-snug text-zinc-500">{{
+              field.description
+            }}</span>
+          </div>
+          <input
+            type="checkbox"
+            [checked]="booleanValue(field.key)"
+            (change)="setBoolean(field.key, $any($event.target).checked)"
+            class="mt-0.5 h-4 w-4 shrink-0 accent-emerald-500"
+          />
+        </div>
+      }
+    </section>
+
+    <!-- Pipeline -->
+    <section class="flex flex-col gap-2">
+      <h2
+        class="text-[11px] font-semibold tracking-[0.08em] text-zinc-500 uppercase"
+      >
+        Pipeline
+      </h2>
+      @for (field of pipelineFields; track field.key) {
+        <div
+          class="flex items-start justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2.5"
+        >
+          <div class="flex min-w-0 flex-col gap-0.5">
+            <div class="flex items-center gap-2">
+              <span class="text-[13px] font-medium text-zinc-200">{{
+                field.label
+              }}</span>
+              <span
+                class="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-zinc-500"
+                >{{ field.leverId }}</span
+              >
+              @if (isChanged(field.key)) {
+                <span
+                  class="shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-400"
+                  >changed</span
+                >
+              }
+            </div>
+            <span class="text-[11px] leading-snug text-zinc-500">{{
+              field.description
+            }}</span>
+          </div>
+          @switch (field.kind) {
+            @case ("careful") {
+              <select
+                [value]="options().careful"
+                (change)="setCareful($any($event.target).value)"
+                class="shrink-0 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[12px] text-zinc-200 outline-none focus:border-white/25"
+              >
+                <option value="off" class="bg-[#232323]">Off</option>
+                <option value="on" class="bg-[#232323]">On</option>
+                <option value="auto" class="bg-[#232323]">Auto</option>
+              </select>
+            }
+            @case ("effort") {
+              <select
+                [value]="options().reasoningEffort ?? ''"
+                (change)="setReasoningEffort($any($event.target).value)"
+                class="shrink-0 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[12px] text-zinc-200 outline-none focus:border-white/25"
+              >
+                <option value="" class="bg-[#232323]">
+                  None (use Settings → LLM)
+                </option>
+                <option value="low" class="bg-[#232323]">Low</option>
+                <option value="medium" class="bg-[#232323]">Medium</option>
+                <option value="high" class="bg-[#232323]">High</option>
+              </select>
+            }
+            @case ("max-steps") {
+              <input
+                type="text"
+                inputmode="numeric"
+                placeholder="Default"
+                [value]="maxStepsText()"
+                (input)="setMaxSteps($any($event.target).value)"
+                class="w-20 shrink-0 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[12px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+              />
+            }
+            @default {
+              <input
+                type="checkbox"
+                [checked]="booleanValue(field.key)"
+                (change)="setBoolean(field.key, $any($event.target).checked)"
+                class="mt-0.5 h-4 w-4 shrink-0 accent-emerald-500"
+              />
+            }
+          }
+        </div>
+      }
+    </section>
+
+    <!-- Prompt -->
+    <section class="flex flex-col gap-2">
+      <div class="flex items-center justify-between">
+        <h2
+          class="text-[11px] font-semibold tracking-[0.08em] text-zinc-500 uppercase"
+        >
+          Prompt
+        </h2>
+        <div class="flex items-center gap-2 text-[11px]">
+          <button
+            type="button"
+            (click)="removeAllRuleGroups()"
+            class="rounded px-1.5 py-0.5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"
+          >
+            Remove all
+          </button>
+          <button
+            type="button"
+            (click)="restoreAllRuleGroups()"
+            class="rounded px-1.5 py-0.5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"
+          >
+            Restore all
+          </button>
+        </div>
+      </div>
+      <p class="text-[11px] leading-snug text-zinc-500">
+        L5 — rule groups removed from the assistant's prompt (ablation).
+        "Remove all" stores a single wildcard rather than every id
+        individually.
+      </p>
+      @if (ablatableGroups().length === 0) {
+        <p class="text-[12px] text-zinc-500">No ablatable rule groups.</p>
+      } @else {
+        <div class="flex flex-col gap-1.5">
+          @for (group of ablatableGroups(); track group.id) {
+            <label
+              class="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-[12px] text-zinc-300"
+            >
+              <span class="flex items-center gap-2">
+                <span>{{ group.title }}</span>
+                <span
+                  class="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-zinc-500"
+                  >L5</span
+                >
+              </span>
+              <input
+                type="checkbox"
+                [checked]="isGroupAblated(group.id)"
+                (change)="toggleRuleGroup(group.id)"
+                class="h-4 w-4 shrink-0 accent-emerald-500"
+              />
+            </label>
+          }
+        </div>
+      }
+    </section>
+
+    <!-- Judge model -->
+    <section class="flex flex-col gap-2">
+      <h2
+        class="text-[11px] font-semibold tracking-[0.08em] text-zinc-500 uppercase"
+      >
+        Eval judge
+      </h2>
+      <label class="flex flex-col gap-1">
+        <span class="text-[11px] font-medium text-zinc-500">Judge model</span>
+        <input
+          type="text"
+          data-testid="engine-judge-model-input"
+          placeholder="openai/gpt-4.1-mini"
+          [value]="judgeModel()"
+          (input)="judgeModel.set($any($event.target).value)"
+          class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+        />
+        <span class="text-[11px] leading-snug text-zinc-500">
+          Router id (&lt;provider&gt;/&lt;model&gt;), pinned so changing the
+          assistant's model does not move the ruler. Empty = the assistant's
+          own configured model.
+        </span>
+        @if (judgeModelError(); as error) {
+          <span class="text-[11px] text-red-400">{{ error }}</span>
+        }
+      </label>
+
+      <label
+        class="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2.5"
+      >
+        <span class="flex min-w-0 flex-col gap-0.5">
+          <span class="text-[13px] font-medium text-zinc-200"
+            >Send reasoning effort to Databricks endpoints</span
+          >
+          <span class="text-[11px] leading-snug text-zinc-500">
+            Off by default — many serving endpoints reject the field.
+          </span>
+        </span>
+        <input
+          type="checkbox"
+          [checked]="databricksReasoningEffort()"
+          (change)="toggleDatabricksReasoningEffort()"
+          class="h-4 w-4 shrink-0 accent-emerald-500"
+        />
+      </label>
+    </section>
+
+    <!-- Arms (read-only, collapsible) -->
+    <section class="flex flex-col gap-2">
+      <button
+        type="button"
+        (click)="toggleArmsOpen()"
+        class="flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.08em] text-zinc-500 uppercase hover:text-zinc-300"
+      >
+        <lucide-angular
+          [img]="ChevronDown"
+          [size]="12"
+          [class.-rotate-90]="!armsOpen()"
+        />
+        <span>Eval arms ({{ armNames().length }})</span>
+      </button>
+      @if (armsOpen()) {
+        <p class="text-[11px] leading-snug text-zinc-500">
+          Named overrides an eval run can apply over these production
+          defaults — what each one changes, for reference only.
+        </p>
+        <div class="flex flex-col gap-1">
+          @for (name of armNames(); track name) {
+            <div
+              class="flex items-start justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-[12px]"
+            >
+              <span class="shrink-0 font-mono text-zinc-300">{{ name }}</span>
+              <span class="text-right text-zinc-500">{{
+                armDescriptions()[name]
+              }}</span>
+            </div>
+          }
+        </div>
+      }
+    </section>
+
+    <!-- Actions -->
+    <div class="mt-1 flex items-center gap-2">
+      <button
+        type="button"
+        data-testid="engine-settings-save"
+        (click)="save()"
+        [disabled]="!canSave()"
+        class="flex flex-1 items-center justify-center gap-2 rounded-md bg-emerald-600 px-3 py-1.5 font-medium text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+      >
+        @if (saving()) {
+          <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+          <span>Saving…</span>
+        } @else {
+          <span>Save</span>
+        }
+      </button>
+      <button
+        type="button"
+        data-testid="engine-settings-reset"
+        (click)="resetToDefaults()"
+        [disabled]="resetting() || saving()"
+        title="Clears every stored lever back to the shipped engine"
+        class="flex items-center justify-center gap-2 rounded-md border border-white/10 px-3 py-1.5 font-medium text-zinc-300 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        @if (resetting()) {
+          <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+          <span>Resetting…</span>
+        } @else {
+          <span>Reset to shipped defaults</span>
+        }
+      </button>
+    </div>
+  }
+</div>

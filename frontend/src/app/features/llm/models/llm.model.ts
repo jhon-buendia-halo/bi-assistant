@@ -1,4 +1,4 @@
-export type LlmProvider = 'openai' | 'anthropic' | 'lenai';
+export type LlmProvider = 'openai' | 'anthropic' | 'lenai' | 'databricks';
 
 export interface LlmSettings {
   provider: LlmProvider;

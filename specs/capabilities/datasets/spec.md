@@ -79,6 +79,11 @@ Defined once in [the glossary](../../product/glossary.md); used here as follows.
 
 - R38. The persisted collection was previously named `sandbox_selections` and session documents carried `sandboxes`; both are migrated to `datasets` on startup, without changing sessions' recency order. Legacy documents in the datasets collection that have no name (the older single-selection shape) SHALL be ignored when listing. See [data-model.md](../../system/data-model.md).
 
+
+Column profiles and descriptions (engine improvement loop)
+- R39. Saving a dataset SHALL also compute, best effort, a profile per included column: rows counted, null rate, distinct count, whether it is constant, minimum and maximum, the top values with counts when there are at most 25 distinct values, and a magnitude hint (`cents-like`, `fraction`, `count`, `large-integer`); a failure leaves that table unprofiled and never fails the save. A REST datasource SHALL NOT be profiled. Join references SHALL carry a cardinality (one-to-many, many-to-one, one-to-one, unknown) derived from the profiles.
+- R40. A saved dataset SHALL be re-profilable on demand (`Dataset "<name>" re-profiled`), leaving its entities, sample values and joins unchanged; a dataset without a datasource SHALL be refused with `Dataset "<name>" has no datasource to profile`.
+- R41. A dataset SHALL carry an optional description of up to 2,000 characters (`Description must be 2000 characters or fewer`), set or cleared from the dataset screen and shown to the assistant. The entity details panel SHALL show each column's profile when present.
 ## Edge cases and errors
 
 - **No datasource configured:** the browser shows `No datasource configured. Add one in Datasource Configuration first.`

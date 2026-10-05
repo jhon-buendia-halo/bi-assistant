@@ -1,0 +1,216 @@
+<div
+  data-testid="eval-loop-panel"
+  class="mt-4 rounded-xl border border-white/10 bg-white/[0.03] p-4"
+>
+  <div class="flex items-center justify-between">
+    <p class="flex items-center gap-1.5 text-[13px] font-medium text-zinc-200">
+      <lucide-angular [img]="Layers" [size]="14" />
+      <span>Loop run</span>
+    </p>
+    <button
+      type="button"
+      data-testid="eval-loop-close"
+      (click)="close()"
+      class="rounded p-1 text-zinc-500 hover:bg-white/10 hover:text-zinc-300"
+    >
+      <lucide-angular [img]="X" [size]="14" />
+    </button>
+  </div>
+  <p class="mt-1 max-w-[70ch] text-[12px] leading-relaxed text-zinc-500">
+    Runs every checked question set against every checked arm, sequentially, then
+    shows pass^k, mean, flaky, gaps, tokens and $/correct in one matrix.
+  </p>
+
+  <!-- Suites -->
+  <div class="mt-3">
+    <p class="text-[11px] tracking-wider text-zinc-500 uppercase">Question sets</p>
+    <div class="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+      @if (sets().length === 0) {
+        <span class="text-[12px] text-zinc-600">No question sets available</span>
+      }
+      @for (set of sets(); track set.id) {
+        <label
+          [attr.data-testid]="'eval-loop-suite-' + set.id"
+          class="flex cursor-pointer items-center gap-1.5 text-[12px] text-zinc-300"
+        >
+          <input
+            type="checkbox"
+            [checked]="isSuiteSelected(set.id)"
+            (change)="toggleSuite(set.id)"
+            [disabled]="running()"
+            class="h-3.5 w-3.5 accent-zinc-300"
+          />
+          {{ set.name }} ({{ set.cases.length }})
+        </label>
+      }
+    </div>
+  </div>
+
+  <!-- Arms -->
+  <div class="mt-3">
+    <p class="text-[11px] tracking-wider text-zinc-500 uppercase">Arms</p>
+    <div class="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+      @for (arm of armNames(); track arm) {
+        <label
+          [attr.data-testid]="'eval-loop-arm-' + arm"
+          [title]="armDescriptions()[arm] || ''"
+          class="flex cursor-pointer items-center gap-1.5 text-[12px] text-zinc-300"
+        >
+          <input
+            type="checkbox"
+            [checked]="isArmSelected(arm)"
+            (change)="toggleArm(arm)"
+            [disabled]="running()"
+            class="h-3.5 w-3.5 accent-zinc-300"
+          />
+          {{ arm }}
+        </label>
+      }
+    </div>
+  </div>
+
+  <!-- Repeat, label, category filter, paraphrases -->
+  <div class="mt-3 flex flex-wrap items-center gap-2">
+    <select
+      data-testid="eval-loop-repeat-select"
+      aria-label="How many times each question runs in the loop"
+      [value]="repeat()"
+      (change)="onRepeatChange($event)"
+      [disabled]="running()"
+      class="rounded-lg border border-white/15 bg-[#232323] px-2.5 py-1.5 text-[12px] text-zinc-200 disabled:opacity-50"
+    >
+      <option [value]="1">repeat 1</option>
+      <option [value]="3">repeat 3 — pass^3, the number we trust</option>
+      <option [value]="5">repeat 5</option>
+    </select>
+    <input
+      data-testid="eval-loop-label-input"
+      type="text"
+      placeholder="label, e.g. iter0-gpt5"
+      [value]="label()"
+      (input)="onLabelInput($event)"
+      [disabled]="running()"
+      class="rounded-lg border border-white/15 bg-[#232323] px-2.5 py-1.5 text-[12px] text-zinc-200 placeholder:text-zinc-600 disabled:opacity-50"
+    />
+    <input
+      data-testid="eval-loop-categories-input"
+      type="text"
+      placeholder="categories, comma-separated (optional)"
+      [value]="categoriesText()"
+      (input)="onCategoriesInput($event)"
+      [disabled]="running()"
+      class="w-64 rounded-lg border border-white/15 bg-[#232323] px-2.5 py-1.5 text-[12px] text-zinc-200 placeholder:text-zinc-600 disabled:opacity-50"
+    />
+    <label
+      class="flex cursor-pointer items-center gap-1.5 text-[12px] text-zinc-400"
+    >
+      <input
+        type="checkbox"
+        data-testid="eval-loop-include-variants"
+        [checked]="includeVariants()"
+        (change)="toggleIncludeVariants()"
+        [disabled]="running()"
+        class="h-3.5 w-3.5 accent-zinc-300"
+      />
+      include paraphrases
+    </label>
+  </div>
+
+  <!-- Honest cost preview before spending anything -->
+  <p data-testid="eval-loop-estimate" class="mt-3 text-[12px] text-zinc-500">
+    ≈ {{ estimatedTurns() }} turns (cases × repeat × arms)
+  </p>
+
+  @if (error(); as err) {
+    <p class="mt-2 rounded-md bg-red-500/10 px-3 py-2 text-[12px] text-red-400">
+      {{ err }}
+    </p>
+  }
+
+  <div class="mt-3 flex items-center gap-2">
+    <button
+      type="button"
+      data-testid="eval-loop-start"
+      (click)="startLoop()"
+      [disabled]="!canStart()"
+      class="flex items-center gap-1.5 rounded-lg bg-zinc-200 px-3.5 py-2 text-[13px] font-medium text-zinc-900 hover:bg-white disabled:opacity-50"
+    >
+      @if (starting() || running()) {
+        <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+        <span>{{ running() ? "Running…" : "Starting…" }}</span>
+      } @else {
+        <lucide-angular [img]="Play" [size]="14" />
+        <span>Start loop</span>
+      }
+    </button>
+    @if (loopId()) {
+      <span class="text-[12px] text-zinc-500">
+        {{ loopJobs().length }} job{{ loopJobs().length === 1 ? "" : "s" }} ·
+        {{ loopStatus() }}
+      </span>
+    }
+  </div>
+
+  <!-- Matrix: suite × arm -->
+  @if (loopRows().length > 0) {
+    <div
+      data-testid="eval-loop-matrix"
+      class="mt-4 overflow-x-auto rounded-lg border border-white/10"
+    >
+      <table class="w-full border-collapse text-[12px]">
+        <thead>
+          <tr class="border-b border-white/10 text-left text-zinc-500">
+            <th class="px-2.5 py-1.5 font-normal">Suite</th>
+            <th class="px-2.5 py-1.5 font-normal">Arm</th>
+            <th class="px-2.5 py-1.5 font-normal">pass^k</th>
+            <th class="px-2.5 py-1.5 font-normal">mean</th>
+            <th class="px-2.5 py-1.5 font-normal">flaky</th>
+            <th class="px-2.5 py-1.5 font-normal">gaps</th>
+            <th class="px-2.5 py-1.5 font-normal">tokens</th>
+            <th class="px-2.5 py-1.5 font-normal">$/correct</th>
+            <th class="px-2.5 py-1.5 font-normal"></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (
+            row of loopRows();
+            track row.suite + ":" + armLabel(row.arm)
+          ) {
+            <tr
+              [attr.data-testid]="
+                'eval-loop-row-' + row.suite + '-' + armLabel(row.arm)
+              "
+              class="border-b border-white/5 text-zinc-300 last:border-b-0"
+            >
+              <td class="px-2.5 py-1.5">{{ row.suite }}</td>
+              <td class="px-2.5 py-1.5 font-mono text-zinc-400">
+                {{ armLabel(row.arm) }}
+              </td>
+              <td class="px-2.5 py-1.5">{{ rateLabel(row.passKRate) }}</td>
+              <td class="px-2.5 py-1.5">{{ rateLabel(row.meanPassRate) }}</td>
+              <td class="px-2.5 py-1.5">{{ row.flaky }}</td>
+              <td class="px-2.5 py-1.5">{{ row.gaps }}</td>
+              <td class="px-2.5 py-1.5 font-mono">{{ row.tokens }}</td>
+              <td class="px-2.5 py-1.5">{{ costPerCorrectCellLabel(row) }}</td>
+              <td class="px-2.5 py-1.5">
+                @if (jobFor(row); as job) {
+                  <button
+                    type="button"
+                    [attr.data-testid]="
+                      'eval-loop-open-' + row.suite + '-' + armLabel(row.arm)
+                    "
+                    (click)="openCell(row)"
+                    class="flex items-center gap-1 text-zinc-400 hover:text-zinc-200"
+                  >
+                    <lucide-angular [img]="ExternalLink" [size]="11" />
+                    <span>Open run</span>
+                  </button>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>

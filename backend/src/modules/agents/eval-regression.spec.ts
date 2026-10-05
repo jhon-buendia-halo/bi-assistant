@@ -98,6 +98,62 @@ describe('computeRegressionDiff', () => {
   it('returns empty diffs for two empty runs', () => {
     const diff = computeRegressionDiff([], []);
 
-    expect(diff).toEqual({ regressions: [], improvements: [], unchanged: [] });
+    expect(diff).toEqual({
+      regressions: [],
+      improvements: [],
+      unchanged: [],
+      unmeasured: [],
+      flakyChanges: [],
+    });
+  });
+});
+
+describe('computeRegressionDiff — pass^k verdicts', () => {
+  function v(
+    id: string,
+    verdict: ComparableCaseResult['verdict'],
+    flaky = false,
+  ): ComparableCaseResult {
+    // `passed` deliberately disagrees: the verdict must win when present.
+    return { id, question: `question ${id}`, passed: verdict !== 'PASS', verdict, flaky };
+  }
+
+  it('reads the pass^k verdict, not `passed`, when a result carries one', () => {
+    const diff = computeRegressionDiff(
+      [v('a', 'PASS'), v('b', 'FAIL'), v('c', 'ERROR')],
+      [v('a', 'FAIL', true), v('b', 'PASS'), v('c', 'PASS')],
+    );
+    expect(diff.regressions.map((d) => d.id)).toEqual(['a']);
+    expect(diff.improvements.map((d) => d.id)).toEqual(['b', 'c']);
+  });
+
+  it('compares a pass^k run against a run recorded before pass^k', () => {
+    const diff = computeRegressionDiff(
+      [
+        { id: 'a', question: 'q', passed: true },
+        { id: 'b', question: 'q', passed: false, error: 'timeout' },
+      ],
+      [v('a', 'FAIL'), v('b', 'PASS')],
+    );
+    expect(diff.regressions.map((d) => d.id)).toEqual(['a']);
+    expect(diff.improvements.map((d) => d.id)).toEqual(['b']);
+  });
+
+  it('treats GAP and SKIP as unmeasured — neither better nor worse', () => {
+    const diff = computeRegressionDiff(
+      [v('a', 'PASS'), v('b', 'GAP'), v('c', 'FAIL')],
+      [v('a', 'GAP'), v('b', 'PASS'), v('c', 'SKIP')],
+    );
+    expect(diff.regressions).toEqual([]);
+    expect(diff.improvements).toEqual([]);
+    expect(diff.unmeasured.map((d) => d.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('flags cases whose flakiness changed either way', () => {
+    const diff = computeRegressionDiff(
+      [v('a', 'FAIL', true), v('b', 'FAIL', false), v('c', 'FAIL', true)],
+      [v('a', 'PASS', false), v('b', 'FAIL', true), v('c', 'FAIL', true)],
+    );
+    expect(diff.flakyChanges.map((d) => d.id)).toEqual(['a', 'b']);
   });
 });

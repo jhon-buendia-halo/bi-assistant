@@ -15,6 +15,8 @@ export interface KnowledgeSnippet {
   body: string;
   synonyms?: string[];
   entities?: string[];
+  /** A single column within `entities`, when the snippet describes exactly one. */
+  column?: string;
   enabled: boolean;
   /** 'mined' snippets are AI-suggested and arrive disabled, pending approval. */
   source: KnowledgeSnippetSource;
@@ -29,6 +31,8 @@ export interface KnowledgeSnippetInput {
   body: string;
   synonyms?: string[];
   entities?: string[];
+  /** A single column within `entities`, when the snippet describes exactly one. */
+  column?: string;
   enabled?: boolean;
 }
 

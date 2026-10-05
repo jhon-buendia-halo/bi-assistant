@@ -12,5 +12,7 @@ export class CreateKnowledgeSnippetDto {
   body: string;
   synonyms?: string[];
   entities?: string[];
+  /** See `KnowledgeSnippet.column` — only valid when `entities` has exactly one member. */
+  column?: string;
   enabled?: boolean;
 }

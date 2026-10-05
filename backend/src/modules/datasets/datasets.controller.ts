@@ -1,4 +1,12 @@
-import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+} from '@nestjs/common';
 import { DatasetsService } from './datasets.service';
 import type { DatasetDoc } from './repositories/datasets.repository';
 import type { DatasetEntitySnapshot } from './repositories/datasets.repository';
@@ -59,5 +67,43 @@ export class DatasetsController {
       return { ok: false, message: `Dataset "${name}" not found` };
     }
     return { ok: true, message: `Dataset "${name}" deleted` };
+  }
+
+  /** Recompute column profiles (null rate, distinct count, top values, …). */
+  @Post(':name/profile')
+  async profile(
+    @Param('name') name: string,
+  ): Promise<{ ok: boolean; message: string; dataset?: DatasetDoc }> {
+    try {
+      const dataset = await this.datasets.reprofile(name);
+      return {
+        ok: true,
+        message: `Dataset "${name}" re-profiled`,
+        dataset: dataset ?? undefined,
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { ok: false, message };
+    }
+  }
+
+  @Patch(':name')
+  async update(
+    @Param('name') name: string,
+    @Body() body: { description?: unknown },
+  ): Promise<{ ok: boolean; message: string; dataset?: DatasetDoc }> {
+    try {
+      const description =
+        typeof body?.description === 'string' ? body.description : '';
+      const dataset = await this.datasets.updateDescription(name, description);
+      return {
+        ok: true,
+        message: `Dataset "${name}" description updated`,
+        dataset: dataset ?? undefined,
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { ok: false, message };
+    }
   }
 }

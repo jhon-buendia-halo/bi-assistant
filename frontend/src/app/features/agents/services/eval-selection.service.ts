@@ -1,5 +1,5 @@
 import { Injectable, signal } from '@angular/core';
-import { AgentEvalCase, AgentEvalCaseResult } from './agents-api.service';
+import { AgentEvalCase, AgentEvalCaseResult } from '../models/eval.model';
 
 export interface EvalSelection {
   /** The question that was clicked. */

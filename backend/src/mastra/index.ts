@@ -1,6 +1,7 @@
 import { Mastra } from '@mastra/core';
 import { PinoLogger } from '@mastra/loggers';
 import { MastraStorageExporter, Observability } from '@mastra/observability';
+import { answerReviewAgent } from './agents/answer-review.agent';
 import { assistantAgent } from './agents/assistant.agent';
 import { evalJudgeAgent } from './agents/eval-judge.agent';
 import { knowledgeBootstrapAgent } from './agents/knowledge-bootstrap.agent';
@@ -19,6 +20,7 @@ export const mastra = new Mastra({
     visualization: visualizationAgent,
     'sql-fixer': sqlFixerAgent,
     'sql-verifier': sqlVerifierAgent,
+    'answer-review': answerReviewAgent,
     'assistant-eval-judge': evalJudgeAgent,
     'knowledge-bootstrap': knowledgeBootstrapAgent,
   },

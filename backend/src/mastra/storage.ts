@@ -16,9 +16,18 @@ const runtimeStorage = new LibSQLStore({
   url: `file:${join(mastraDataDir, 'mastra.sqlite')}`,
 });
 
+// DuckDB allows one writer per file. The desktop app's backend holds this one
+// for as long as it runs, so a second process on the same APP_DATA_DIR — the
+// eval CLI or `fixtures:register` pointed at the app's store while the app is
+// open — fails every agent call with "Could not set lock on file". Scripts set
+// MASTRA_OBSERVABILITY_PATH to a per-process file instead (see
+// `scripts/lib/isolated-observability.ts`); the server keeps the shared file
+// so Mastra Studio still sees the app's traces.
 const observabilityStorage = new DuckDBStore({
   id: 'questions-to-insights-observability',
-  path: join(mastraDataDir, 'observability.duckdb'),
+  path:
+    process.env.MASTRA_OBSERVABILITY_PATH?.trim() ||
+    join(mastraDataDir, 'observability.duckdb'),
   memoryLimit: '512MB',
   threads: 2,
 });

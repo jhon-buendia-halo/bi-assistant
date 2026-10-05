@@ -15,25 +15,43 @@ import {
   Brain,
   CircleCheck,
   CircleX,
+  Coins,
   Cpu,
   Trash2,
   Gauge,
+  Layers,
   Loader2,
   ListChecks,
   ChevronRight,
   Download,
   Play,
   ScrollText,
+  StopCircle,
   Wrench,
 } from 'lucide-angular';
 import {
   AgentDetail as AgentDetailModel,
-  AgentEvalCase,
-  AgentEvalCaseResult,
   AgentEvalSet,
   AgentsApiService,
-  EvalRunView,
 } from '../../services/agents-api.service';
+import {
+  AgentEvalCase,
+  AgentEvalCaseResult,
+  CategoryRate,
+  EvalCostState,
+  EvalRepeat,
+  EvalRunRequest,
+  EvalRunView,
+  categoryRateClass,
+  evalCostState,
+  formatRate,
+  formatTokenCount,
+  formatTokensCompact,
+  isUsageMeasured,
+  sortedCategoryRates,
+  verdictClass,
+  verdictOf,
+} from '../../models/eval.model';
 import { EvalSelectionService } from '../../services/eval-selection.service';
 import { ToastService } from '../../../../core/toast/toast.service';
 import {
@@ -41,14 +59,23 @@ import {
   kindLabel,
 } from '../../../datasources/models/datasource.model';
 import { DatasourcesApiService } from '../../../datasources/services/datasources-api.service';
+import { DatasetsApiService } from '../../../datasets/services/datasets-api.service';
+import { EngineApiService } from '../../../engine/services/engine-api.service';
+import {
+  EngineSettingsView,
+  parseEngineOverrideText,
+} from '../../../engine/models/engine.model';
+import { EvalRunSummary } from '../eval-run-summary/eval-run-summary';
+import { EvalLoopPanel } from '../eval-loop-panel/eval-loop-panel';
+import { EvalLogHistory } from '../eval-log-history/eval-log-history';
 
 type AgentTab = 'prompt' | 'tools' | 'memory' | 'model' | 'evals';
 /** Sub-tabs inside the evals tab. */
-type EvalTab = 'questions' | 'runs';
+type EvalTab = 'questions' | 'runs' | 'history';
 
 @Component({
   selector: 'app-agent-detail',
-  imports: [LucideAngularModule],
+  imports: [LucideAngularModule, EvalRunSummary, EvalLoopPanel, EvalLogHistory],
   templateUrl: './agent-detail.html',
   styleUrl: './agent-detail.scss',
 })
@@ -58,19 +85,24 @@ export class AgentDetail implements OnDestroy {
   readonly Brain = Brain;
   readonly CircleCheck = CircleCheck;
   readonly CircleX = CircleX;
+  readonly Coins = Coins;
   readonly Cpu = Cpu;
   readonly Gauge = Gauge;
+  readonly Layers = Layers;
   readonly Loader2 = Loader2;
   readonly ListChecks = ListChecks;
   readonly ChevronRight = ChevronRight;
   readonly Download = Download;
   readonly Play = Play;
+  readonly StopCircle = StopCircle;
   readonly Trash2 = Trash2;
   readonly ScrollText = ScrollText;
   readonly Wrench = Wrench;
 
   private readonly api = inject(AgentsApiService);
+  private readonly engineApi = inject(EngineApiService);
   private readonly datasourcesApi = inject(DatasourcesApiService);
+  private readonly datasetsApi = inject(DatasetsApiService);
   private readonly evalSelection = inject(EvalSelectionService);
   private readonly toast = inject(ToastService);
 
@@ -125,6 +157,8 @@ export class AgentDetail implements OnDestroy {
       this.evalsRequested.set(true);
       this.loadEvals(this.agentKey());
       this.loadDatasources();
+      this.loadDatasets();
+      this.loadEngineSettings();
     });
 
     // Reload whenever the selected agent changes.
@@ -134,13 +168,24 @@ export class AgentDetail implements OnDestroy {
       this.error.set(null);
       this.activeTab.set('prompt');
       this.evalsRequested.set(false);
+      // Orphan any evals request still in flight for the previous agent.
+      this.evalsRequestId++;
       this.evalSets.set([]);
       this.selectedSetId.set(null);
+      this.categoryFilter.set('');
       this.selectedCaseIds.set(new Set());
       this.evalTab.set('questions');
       this.evalRuns.set([]);
       this.expandedRunId.set(null);
       this.evalSelection.clear();
+      this.repeat.set(1);
+      this.selectedArm.set('baseline');
+      this.customOverrideText.set('');
+      this.runLabel.set('');
+      this.includeVariants.set(false);
+      this.showLoopPanel.set(false);
+      this.runningJobId.set(null);
+      this.engineSettings.set(null);
       this.api.getAgent(key).subscribe({
         next: (agent) => {
           this.agent.set(agent);
@@ -178,24 +223,67 @@ export class AgentDetail implements OnDestroy {
   /** Set once the evals tab has triggered its one fetch for this agent. */
   private readonly evalsRequested = signal(false);
 
+  /**
+   * Bumped per request (and when the agent changes): a slow response for an
+   * agent the user has left must not overwrite the current one's sets.
+   */
+  private evalsRequestId = 0;
+
   private loadEvals(key: string): void {
+    const requestId = ++this.evalsRequestId;
     this.evalsLoading.set(true);
     this.evalsError.set(null);
     this.api.getAgentEvals(key).subscribe({
       next: (res) => {
+        if (requestId !== this.evalsRequestId) return;
         this.evalSets.set(res.sets);
         // No set is opened for you — the questions stay hidden until one is
         // clicked, so the tab always starts on the set list.
         this.selectedSetId.set(null);
+        this.categoryFilter.set('');
         this.selectedCaseIds.set(new Set());
         this.evalsLoading.set(false);
       },
       error: (err) => {
+        if (requestId !== this.evalsRequestId) return;
         this.evalsError.set(err?.error?.message ?? 'Backend unreachable');
         this.evalsLoading.set(false);
       },
     });
   }
+
+  /**
+   * Open a question set, revealing its questions; clicking the open set again
+   * closes it. Opening ticks all of that set's questions, so a selection is
+   * never left pointing at questions that are no longer on screen. The last
+   * run's results belong to whichever set it ran, so they are cleared too, and
+   * so is an explicit dataset scope picked for the previous set.
+   */
+  selectSet(setId: string | null): void {
+    const next = this.selectedSetId() === setId ? null : setId;
+    if (next !== this.selectedSetId()) {
+      this.evalSelection.clear();
+      this.runError.set(null);
+      this.runResults.set([]);
+      this.runStatus.set('idle');
+      this.runCurrentQuestion.set(null);
+      this.runDatasets.set([]);
+      this.selectedDatasets.set([]);
+    }
+    this.selectedSetId.set(next);
+    this.categoryFilter.set('');
+    this.selectedCaseIds.set(new Set(this.evalCases().map((c) => c.id)));
+  }
+
+  /**
+   * What the questions run against: the datasets the live run reported, or —
+   * before anything has run — the ones the open set is written for.
+   */
+  readonly scopeDatasets = computed(() => {
+    const fromRun = this.runDatasets();
+    if (fromRun.length > 0) return fromRun;
+    return this.selectedSet()?.datasets ?? [];
+  });
 
   readonly evalTab = signal<EvalTab>('questions');
 
@@ -211,6 +299,93 @@ export class AgentDetail implements OnDestroy {
 
   toggleRun(jobId: string): void {
     this.expandedRunId.set(this.expandedRunId() === jobId ? null : jobId);
+  }
+
+  /* ---- Run controls: repeat, arm, label, include paraphrases --------- */
+
+  /** `1 | 3 | 5` — pass^k only means something at these (plan §2.6). */
+  readonly repeat = signal<EvalRepeat>(1);
+  /** A named arm preset, or the sentinel `'custom'` (see {@link isCustomArm}). */
+  readonly selectedArm = signal<string>('baseline');
+  /** `k=v,k=v` text for the custom-arm textarea, parsed client-side. */
+  readonly customOverrideText = signal<string>('');
+  readonly runLabel = signal<string>('');
+  readonly includeVariants = signal<boolean>(false);
+  /** `GET /engine/settings` — arms, their descriptions, production defaults. */
+  readonly engineSettings = signal<EngineSettingsView | null>(null);
+  readonly showLoopPanel = signal<boolean>(false);
+  /** The job the Run button started, so Stop knows what to abort. */
+  readonly runningJobId = signal<string | null>(null);
+
+  readonly isCustomArm = computed(() => this.selectedArm() === 'custom');
+
+  /** Preset names from the backend, `baseline` first if present. */
+  readonly armNames = computed(() => {
+    const arms = this.engineSettings()?.arms;
+    const names = arms ? Object.keys(arms) : [];
+    if (names.length === 0) return ['baseline'];
+    return names.includes('baseline')
+      ? ['baseline', ...names.filter((name) => name !== 'baseline')]
+      : names;
+  });
+
+  armDescription(arm: string): string {
+    return this.engineSettings()?.armDescriptions[arm] ?? '';
+  }
+
+  private readonly customOverrideResult = computed(() =>
+    parseEngineOverrideText(this.customOverrideText()),
+  );
+
+  /** One message per `key=value` pair the textarea could not parse. */
+  readonly customOverrideErrors = computed(
+    () => this.customOverrideResult().errors,
+  );
+
+  private loadEngineSettings(): void {
+    this.engineApi.getSettings().subscribe({
+      // Arms are additive to the run controls, never required to run evals —
+      // a failed fetch just leaves the picker at its `baseline`-only default.
+      next: (settings) => this.engineSettings.set(settings),
+      error: () => this.engineSettings.set(null),
+    });
+  }
+
+  onRepeatChange(event: Event): void {
+    const value = Number((event.target as HTMLSelectElement).value);
+    this.repeat.set((value === 3 || value === 5 ? value : 1) as EvalRepeat);
+  }
+
+  onArmChange(event: Event): void {
+    this.selectedArm.set((event.target as HTMLSelectElement).value);
+  }
+
+  onCustomOverrideInput(event: Event): void {
+    this.customOverrideText.set((event.target as HTMLTextAreaElement).value);
+  }
+
+  onLabelInput(event: Event): void {
+    this.runLabel.set((event.target as HTMLInputElement).value);
+  }
+
+  toggleIncludeVariants(): void {
+    this.includeVariants.set(!this.includeVariants());
+  }
+
+  openLoopPanel(): void {
+    this.showLoopPanel.set(true);
+  }
+
+  closeLoopPanel(): void {
+    this.showLoopPanel.set(false);
+  }
+
+  /** A loop matrix cell's "Open run" — switch to Executions and expand it. */
+  openLoopRun(jobId: string): void {
+    this.showLoopPanel.set(false);
+    this.evalTab.set('runs');
+    this.expandedRunId.set(jobId);
+    this.loadEvalRuns();
   }
 
   private loadEvalRuns(): void {
@@ -248,7 +423,9 @@ export class AgentDetail implements OnDestroy {
       },
       error: (err) => {
         this.downloadingRunId.set(null);
-        this.toast.error(err?.error?.message ?? 'Could not download the report');
+        this.toast.error(
+          err?.error?.message ?? 'Could not download the report',
+        );
       },
     });
   }
@@ -288,23 +465,89 @@ export class AgentDetail implements OnDestroy {
     return this.datasources().find((d) => d.id === id)?.name ?? id;
   }
 
-  /**
-   * Open a question set, revealing its questions; clicking the open set again
-   * closes it. Opening ticks all of that set's questions, so a selection is
-   * never left pointing at questions that are no longer on screen.
-   */
-  selectSet(setId: string | null): void {
-    const next = this.selectedSetId() === setId ? null : setId;
-    this.selectedSetId.set(next);
-    this.selectedCaseIds.set(new Set(this.evalCases().map((c) => c.id)));
+  /* ---- Run telemetry ------------------------------------------------- */
+
+  /** Exact counts, grouped: `41,231`. */
+  readonly tokenCount = formatTokenCount;
+  readonly rateLabel = formatRate;
+  readonly rateClass = categoryRateClass;
+
+  /** Which suite the run covered; older records carry neither field. */
+  runSuiteLabel(run: EvalRunView): string {
+    return run.suiteName || run.suiteId || 'unknown suite';
+  }
+
+  /** True once the provider reported at least one call's worth of tokens. */
+  runHasUsage(run: EvalRunView): boolean {
+    return isUsageMeasured(run.usage);
+  }
+
+  /** Header meta: `41.2k tokens`, or nothing measured at all. */
+  runTokensLabel(run: EvalRunView): string {
+    const usage = run.usage;
+    if (!isUsageMeasured(usage) || !usage) return 'tokens not measured';
+    return `${formatTokensCompact(usage.totalTokens)} tokens`;
+  }
+
+  /** Never invents a number: see {@link evalCostState}. */
+  runCost(run: EvalRunView): EvalCostState {
+    return evalCostState(run.usage, run.estimatedCostUsd);
+  }
+
+  /** Per-category pass rates, worst first. */
+  runCategoryRates(run: EvalRunView): CategoryRate[] {
+    return sortedCategoryRates(run.categories);
+  }
+
+  /** True when the run was diffed against a previous one. */
+  hasComparison(run: EvalRunView): boolean {
+    return !!run.comparison;
+  }
+
+  /** A comparison with nothing moved either way. */
+  comparisonUnmoved(run: EvalRunView): boolean {
+    const comparison = run.comparison;
+    if (!comparison) return false;
+    return (
+      comparison.regressions.length === 0 &&
+      comparison.improvements.length === 0
+    );
   }
 
   /** Questions ticked to run; every question starts selected. */
   readonly selectedCaseIds = signal<Set<string>>(new Set());
 
-  readonly allCasesSelected = computed(() => {
+  /** Failure class the list is narrowed to; `''` shows every question. */
+  readonly categoryFilter = signal<string>('');
+
+  /** The categories present in the open set, alphabetically. */
+  readonly evalCategories = computed(() => {
+    const seen = new Map<string, number>();
+    for (const evalCase of this.evalCases()) {
+      if (!evalCase.category) continue;
+      seen.set(evalCase.category, (seen.get(evalCase.category) ?? 0) + 1);
+    }
+    return [...seen.entries()]
+      .map(([category, count]) => ({ category, count }))
+      .sort((a, b) => a.category.localeCompare(b.category));
+  });
+
+  /** Questions the filter lets through — what "Select all" operates on. */
+  readonly visibleCases = computed(() => {
+    const filter = this.categoryFilter();
     const cases = this.evalCases();
-    return cases.length > 0 && this.selectedCaseIds().size === cases.length;
+    return filter ? cases.filter((c) => c.category === filter) : cases;
+  });
+
+  onCategoryFilterChange(event: Event): void {
+    this.categoryFilter.set((event.target as HTMLSelectElement).value);
+  }
+
+  /** True when every *visible* question is ticked. */
+  readonly allCasesSelected = computed(() => {
+    const visible = this.visibleCases();
+    const selected = this.selectedCaseIds();
+    return visible.length > 0 && visible.every((c) => selected.has(c.id));
   });
 
   isCaseSelected(caseId: string): boolean {
@@ -318,30 +561,46 @@ export class AgentDetail implements OnDestroy {
     this.selectedCaseIds.set(next);
   }
 
+  /**
+   * Tick or untick the visible questions only, leaving whatever is hidden by
+   * the filter alone — otherwise filtering would silently drop a selection.
+   */
   toggleAllCases(): void {
-    this.selectedCaseIds.set(
-      this.allCasesSelected()
-        ? new Set()
-        : new Set(this.evalCases().map((evalCase) => evalCase.id)),
-    );
+    const next = new Set(this.selectedCaseIds());
+    const visible = this.visibleCases();
+    if (this.allCasesSelected()) {
+      for (const evalCase of visible) next.delete(evalCase.id);
+    } else {
+      for (const evalCase of visible) next.add(evalCase.id);
+    }
+    this.selectedCaseIds.set(next);
   }
 
   /** Datasources offered in the run dropdown. */
   readonly datasources = signal<Datasource[]>([]);
   readonly selectedDatasourceId = signal<string>('');
+  /** Every dataset name on the chosen datasource. */
+  readonly datasetNames = signal<string[]>([]);
+  /** Datasets the run is scoped to. Empty = the open set's own. */
+  readonly selectedDatasets = signal<string[]>([]);
 
   /** Live state of the current run. */
   readonly runStarting = signal(false);
   readonly runError = signal<string | null>(null);
-  readonly runStatus = signal<'idle' | 'running' | 'completed' | 'failed'>(
-    'idle',
-  );
+  // `EvalRunView['status']` plus this component's own pre-run 'idle'. A run
+  // started while another (or a loop) is going comes back 'queued'.
+  readonly runStatus = signal<
+    'idle' | 'queued' | 'running' | 'completed' | 'failed'
+  >('idle');
   readonly runResults = signal<AgentEvalCaseResult[]>([]);
   readonly runCurrentQuestion = signal<string | null>(null);
   readonly runDatasets = signal<string[]>([]);
   private pollTimer: ReturnType<typeof setTimeout> | undefined;
 
-  readonly running = computed(() => this.runStatus() === 'running');
+  /** In flight: started, or queued behind another run (Stop works for both). */
+  readonly running = computed(
+    () => this.runStatus() === 'running' || this.runStatus() === 'queued',
+  );
   readonly passedCount = computed(
     () => this.runResults().filter((result) => result.passed).length,
   );
@@ -351,6 +610,79 @@ export class AgentDetail implements OnDestroy {
     return this.runResults().find((result) => result.id === caseId);
   }
 
+  /**
+   * `"PASS"`, `"FAIL 2/3"` when `repeat > 1`, or `"GAP"` — the honest
+   * verdict for the live question list, incl. results recorded before
+   * `verdict` existed ({@link verdictOf} derives PASS/FAIL/ERROR for those).
+   */
+  resultVerdictLabel(result: AgentEvalCaseResult): string {
+    const verdict = verdictOf(result);
+    const suffix =
+      result.runs && result.runs > 1 ? ` ${result.passes ?? 0}/${result.runs}` : '';
+    return `${verdict}${suffix}`;
+  }
+
+  resultVerdictClass(result: AgentEvalCaseResult): string {
+    return verdictClass(verdictOf(result));
+  }
+
+  /** GAP is a harness problem, not a wrong answer — say so on hover. */
+  resultVerdictTooltip(result: AgentEvalCaseResult): string | undefined {
+    return verdictOf(result) === 'GAP'
+      ? 'the harness could not measure this — not counted'
+      : undefined;
+  }
+
+  /** Dataset names on the chosen datasource, for the scope picker. */
+  private allDatasets = signal<{ name: string; datasourceId?: string }[]>([]);
+
+  private loadDatasets(): void {
+    this.datasetsApi.getDatasets().subscribe({
+      next: (res) => {
+        this.allDatasets.set(res.datasets ?? []);
+        this.syncDatasetNames();
+      },
+      error: () => this.allDatasets.set([]),
+    });
+  }
+
+  private syncDatasetNames(): void {
+    const id = this.selectedDatasourceId();
+    const names = this.allDatasets()
+      .filter((d) => !id || d.datasourceId === id)
+      .map((d) => d.name);
+    this.datasetNames.set(names);
+    this.selectedDatasets.update((chosen) =>
+      chosen.filter((name) => names.includes(name)),
+    );
+  }
+
+  /** Checked datasets, or the open set's own when nothing is checked. */
+  readonly scopeSelection = computed(() => {
+    const chosen = this.selectedDatasets();
+    return chosen.length ? chosen : (this.selectedSet()?.datasets ?? []);
+  });
+
+  /**
+   * Plain checkbox semantics over what is shown: the first click starts from
+   * the set's defaults that exist on this datasource, so ticking a second
+   * dataset adds it rather than replacing the default. Unticking everything
+   * falls back to the set's own datasets.
+   */
+  toggleDataset(name: string): void {
+    const names = this.datasetNames();
+    const current = this.scopeSelection().filter((n) => names.includes(n));
+    this.selectedDatasets.set(
+      current.includes(name)
+        ? current.filter((n) => n !== name)
+        : [...current, name],
+    );
+  }
+
+  isDatasetSelected(name: string): boolean {
+    return this.scopeSelection().includes(name);
+  }
+
   private loadDatasources(): void {
     this.datasourcesApi.list().subscribe({
       next: (res) => {
@@ -358,6 +690,7 @@ export class AgentDetail implements OnDestroy {
         if (!this.selectedDatasourceId() && res.datasources.length > 0) {
           this.selectedDatasourceId.set(res.datasources[0].id);
         }
+        this.syncDatasetNames();
       },
       error: () => this.datasources.set([]),
     });
@@ -365,6 +698,37 @@ export class AgentDetail implements OnDestroy {
 
   onDatasourceChange(event: Event): void {
     this.selectedDatasourceId.set((event.target as HTMLSelectElement).value);
+    this.selectedDatasets.set([]);
+    this.syncDatasetNames();
+  }
+
+  /** Builds the `startEvalRun` request from the run controls (repeat/arm/label/…). */
+  private buildRunRequest(
+    datasourceId: string,
+    caseIds: string[],
+  ): EvalRunRequest {
+    const suiteId = this.selectedSetId() || undefined;
+    // Only an explicit choice is sent: with none, the backend scopes to the
+    // set's own datasets when the datasource has them and otherwise lets the
+    // set's required entities decide (a dataset saved under another name).
+    const datasets = this.selectedDatasets();
+    const label = this.runLabel().trim();
+    const custom = this.isCustomArm();
+    return {
+      datasourceId,
+      caseIds,
+      ...(suiteId ? { suiteId } : {}),
+      ...(datasets.length ? { datasets } : {}),
+      repeat: this.repeat(),
+      ...(label ? { label } : {}),
+      // A custom arm has no server-side preset to look up by name, so `arm`
+      // stays a readable label for the run log and the overrides travel in
+      // `engine` instead — same split the backend's `ARM_PRESETS[arm]` +
+      // `request.engine` overlay expects (plan §2.6/§3 U2-B).
+      arm: custom ? 'custom' : this.selectedArm(),
+      ...(custom ? { engine: this.customOverrideResult().overrides } : {}),
+      ...(this.includeVariants() ? { includeVariants: true } : {}),
+    };
   }
 
   startRun(): void {
@@ -372,6 +736,7 @@ export class AgentDetail implements OnDestroy {
     const caseIds = [...this.selectedCaseIds()];
     if (!datasourceId || caseIds.length === 0) return;
     if (this.running() || this.runStarting()) return;
+    if (this.isCustomArm() && this.customOverrideErrors().length > 0) return;
 
     this.runStarting.set(true);
     this.runError.set(null);
@@ -379,7 +744,8 @@ export class AgentDetail implements OnDestroy {
     this.runCurrentQuestion.set(null);
     this.syncSelection();
 
-    this.api.startEvalRun(this.agentKey(), datasourceId, caseIds).subscribe({
+    const request = this.buildRunRequest(datasourceId, caseIds);
+    this.api.startEvalRun(this.agentKey(), request).subscribe({
       next: (res) => {
         this.runStarting.set(false);
         if (!res.ok || !res.jobId) {
@@ -387,6 +753,7 @@ export class AgentDetail implements OnDestroy {
           this.runStatus.set('idle');
           return;
         }
+        this.runningJobId.set(res.jobId);
         this.runStatus.set('running');
         this.pollRun(res.jobId);
       },
@@ -398,6 +765,18 @@ export class AgentDetail implements OnDestroy {
     });
   }
 
+  /** Aborts the in-flight run; the log is still written, with `status: 'aborted'`. */
+  stopRun(): void {
+    const jobId = this.runningJobId();
+    if (!jobId) return;
+    this.api.stopEvalRun(this.agentKey(), jobId).subscribe({
+      // The poll loop already in flight picks up the terminal status on its
+      // next tick — nothing to do here beyond surfacing a failed request.
+      error: (err) =>
+        this.toast.error(err?.error?.message ?? 'Could not stop the run'),
+    });
+  }
+
   /** Poll until the job leaves `running`; each question lands as it finishes. */
   private pollRun(jobId: string): void {
     this.api.getEvalRun(this.agentKey(), jobId).subscribe({
@@ -405,24 +784,30 @@ export class AgentDetail implements OnDestroy {
         if (!view.ok) {
           this.runStatus.set('failed');
           this.runError.set(view.message);
+          this.runningJobId.set(null);
           return;
         }
         this.runResults.set(view.results ?? []);
         this.syncSelection();
         this.runCurrentQuestion.set(view.currentQuestion ?? null);
         this.runDatasets.set(view.datasets ?? []);
-        if (view.status === 'running') {
+        // A queued run (another run or a Loop run is ahead of it) has not
+        // finished — it has not started. Keep polling until it leaves both.
+        if (view.status === 'running' || view.status === 'queued') {
+          this.runStatus.set(view.status);
           this.pollTimer = setTimeout(() => this.pollRun(jobId), 1500);
           return;
         }
         this.runStatus.set(view.status ?? 'completed');
         if (view.error) this.runError.set(view.error);
+        this.runningJobId.set(null);
         // The finished run belongs in the history list.
         if (this.evalTab() === 'runs') this.loadEvalRuns();
       },
       error: (err) => {
         this.runStatus.set('failed');
         this.runError.set(err?.error?.message ?? 'Backend unreachable');
+        this.runningJobId.set(null);
       },
     });
   }

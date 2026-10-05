@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { DatabaseModule } from './infrastructure/database/database.module';
 import { DatasourcesModule } from './modules/datasources/datasources.module';
+import { EngineModule } from './modules/engine/engine.module';
 import { LlmModule } from './modules/llm/llm.module';
 import { DatasetsModule } from './modules/datasets/datasets.module';
 import { MastraModule } from './mastra/mastra.module';
@@ -16,6 +17,7 @@ import { TestingDataModule } from './modules/testing-data/testing-data.module';
   imports: [
     DatabaseModule,
     DatasourcesModule,
+    EngineModule,
     LlmModule,
     DatasetsModule,
     MastraModule,

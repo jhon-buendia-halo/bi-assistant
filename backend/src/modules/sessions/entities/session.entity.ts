@@ -1,4 +1,11 @@
 import type { KnowledgeUse } from '../../knowledge/entities/knowledge-snippet.entity';
+import type { TokenUsage } from '../../agents/eval-telemetry';
+import type { CarefulMode } from '../../engine/engine-options';
+import type {
+  AnswerReview,
+  ProviderError,
+  SqlRepairRecord,
+} from '../turn-result';
 
 export type { KnowledgeUse };
 
@@ -35,6 +42,14 @@ export interface ToolDataRecord {
    * anyone reads the SQL.
    */
   warnings?: string[];
+  /**
+   * Every auto-repair the `sql-fixer` made to reach this result, with how it
+   * changed the statement — a repair that altered filters or aggregates
+   * answered a different question, and carries a `warning` saying so.
+   */
+  repairs?: SqlRepairRecord[];
+  /** Static precheck findings on the statement (never blocked execution). */
+  precheck?: string[];
 }
 
 /** One step of the assistant's plain-language route from question to answer. */
@@ -92,6 +107,20 @@ export interface ChatMessage {
    * executed and its result set compared with this answer's.
    */
   crossCheck?: CrossCheck;
+  /** Answer review (engine lever `answerReview`): what it found and whether the answer was revised. */
+  review?: AnswerReview;
+  /**
+   * The engine levers this answer was produced with — the config hash plus
+   * the two that change what the user sees (careful, review) and the eval
+   * arm when a harness ran the turn. Lets a reader of an old transcript tell
+   * which engine said it.
+   */
+  engine?: {
+    hash: string;
+    careful: CarefulMode;
+    answerReview: boolean;
+    arm?: string;
+  };
   /**
    * How the assistant reasoned its way from the question to this answer: one
    * step per data-gathering call that carried a rationale. Assembled at
@@ -112,6 +141,25 @@ export interface ChatMessage {
    * the report's executive summary; the full markdown lives in the workspace.
    */
   report?: AnalysisReport;
+  /**
+   * Tokens the provider reported for the turn that produced this answer, read
+   * off the model stream at persist time. **Measured, never estimated** —
+   * absent means the provider reported nothing, which is not the same as zero
+   * (see `modules/agents/eval-telemetry.ts`). It covers the turn's own agent
+   * run, every step of it; the side passes a turn can make — the grounding
+   * guard, the tool-only synthesis, careful mode's cross-check, the visual
+   * designer sub-calls — are separate agent calls and are not counted here.
+   *
+   * Written so an eval run can report what a turn cost without the harness
+   * having to wrap the provider.
+   */
+  usage?: TokenUsage;
+  /**
+   * The model provider failed during this turn (quota, rate limit, auth,
+   * network, timeout). When it left no answer, `content` is the honest
+   * explanation shown to the user rather than an answer.
+   */
+  providerError?: ProviderError;
 }
 
 export interface AnalysisReport {

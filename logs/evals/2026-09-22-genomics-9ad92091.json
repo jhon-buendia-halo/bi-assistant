@@ -1,0 +1,208 @@
+{
+  "schemaVersion": 1,
+  "runId": "9ad92091-4eb0-493a-b73e-877e12b5ad17",
+  "harness": "validate",
+  "suite": "genomics",
+  "datasets": [
+    "Genomics"
+  ],
+  "startedAt": "2026-09-22T18:36:08.689Z",
+  "finishedAt": "2026-09-22T18:36:09.431Z",
+  "durationMs": 742,
+  "appVersion": "0.10.1",
+  "gitCommit": "5629494",
+  "totals": {
+    "cases": 20,
+    "passed": 17,
+    "failed": 0,
+    "errored": 0,
+    "skipped": 3
+  },
+  "categories": {
+    "ratio-trap": {
+      "total": 1,
+      "passed": 1
+    },
+    "constant-column": {
+      "total": 1,
+      "passed": 1
+    },
+    "empty-column": {
+      "total": 1,
+      "passed": 1
+    },
+    "ties": {
+      "total": 1,
+      "passed": 1
+    },
+    "value-vocabulary": {
+      "total": 1,
+      "passed": 1
+    },
+    "id-vs-name": {
+      "total": 1,
+      "passed": 1
+    },
+    "metric-definition": {
+      "total": 1,
+      "passed": 1
+    },
+    "default-filter": {
+      "total": 1,
+      "passed": 1
+    },
+    "multi-step-join": {
+      "total": 1,
+      "passed": 1
+    },
+    "domain-semantics": {
+      "total": 4,
+      "passed": 4
+    },
+    "quality-filter": {
+      "total": 1,
+      "passed": 1
+    },
+    "unit-confusion": {
+      "total": 1,
+      "passed": 1
+    },
+    "control": {
+      "total": 2,
+      "passed": 2
+    }
+  },
+  "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "totalTokens": 0,
+    "reasoningTokens": 0,
+    "cachedInputTokens": 0,
+    "calls": 0
+  },
+  "cases": [
+    {
+      "id": "allele-fraction-by-gene",
+      "category": "ratio-trap",
+      "verdict": "PASS",
+      "durationMs": 15
+    },
+    {
+      "id": "variants-by-assembly",
+      "category": "constant-column",
+      "verdict": "PASS",
+      "durationMs": 6
+    },
+    {
+      "id": "variants-with-rsid",
+      "category": "empty-column",
+      "verdict": "PASS",
+      "durationMs": 5
+    },
+    {
+      "id": "genes-with-seven-pathogenic",
+      "category": "ties",
+      "verdict": "PASS",
+      "durationMs": 6
+    },
+    {
+      "id": "damaging-variant-count",
+      "category": "value-vocabulary",
+      "verdict": "PASS",
+      "durationMs": 6
+    },
+    {
+      "id": "most-called-genes",
+      "category": "id-vs-name",
+      "verdict": "PASS",
+      "durationMs": 8
+    },
+    {
+      "id": "mean-allele-fraction",
+      "category": "metric-definition",
+      "verdict": "PASS",
+      "durationMs": 7
+    },
+    {
+      "id": "cohort-sample-count",
+      "category": "default-filter",
+      "verdict": "PASS",
+      "durationMs": 5
+    },
+    {
+      "id": "subjects-by-superpopulation",
+      "category": "multi-step-join",
+      "verdict": "PASS",
+      "durationMs": 6
+    },
+    {
+      "id": "pathogenic-carrier-samples",
+      "category": "domain-semantics",
+      "verdict": "PASS",
+      "durationMs": 7
+    },
+    {
+      "id": "pathogenic-carriers-by-gene",
+      "category": "domain-semantics",
+      "verdict": "PASS",
+      "durationMs": 7
+    },
+    {
+      "id": "mean-expression-by-gene",
+      "category": "domain-semantics",
+      "verdict": "PASS",
+      "durationMs": 6
+    },
+    {
+      "id": "genes-silent-in-most-samples",
+      "category": "domain-semantics",
+      "verdict": "PASS",
+      "durationMs": 8
+    },
+    {
+      "id": "high-confidence-calls",
+      "category": "quality-filter",
+      "verdict": "PASS",
+      "durationMs": 6
+    },
+    {
+      "id": "coverage-by-assay",
+      "category": "unit-confusion",
+      "verdict": "PASS",
+      "durationMs": 6
+    },
+    {
+      "id": "variants-by-type",
+      "category": "control",
+      "verdict": "PASS",
+      "durationMs": 5
+    },
+    {
+      "id": "samples-per-collection-year",
+      "category": "control",
+      "verdict": "PASS",
+      "durationMs": 5
+    },
+    {
+      "id": "samples-sequenced-2015",
+      "category": "out-of-scope",
+      "verdict": "SKIP",
+      "reason": "no-expected-sql",
+      "durationMs": 0
+    },
+    {
+      "id": "most-important-gene",
+      "category": "clarification",
+      "verdict": "SKIP",
+      "reason": "no-expected-sql",
+      "durationMs": 0
+    },
+    {
+      "id": "expression-data-discovery",
+      "category": "discovery",
+      "verdict": "SKIP",
+      "reason": "no-expected-sql",
+      "durationMs": 0
+    }
+  ]
+}

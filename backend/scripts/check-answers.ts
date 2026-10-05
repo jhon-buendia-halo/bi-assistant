@@ -35,6 +35,8 @@
  * trusted SQL, this one asserts the answer is not degenerate. Same boot path,
  * same throwaway-session mechanics.
  */
+// Must stay the first import: see scripts/lib/use-isolated-observability.ts.
+import './lib/use-isolated-observability';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -42,6 +44,8 @@ import type { INestApplicationContext } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 // Pure heuristics — no DI, no datastore import, safe to pull in eagerly.
 import { inspectResult } from '../src/modules/sessions/result-guards';
+// Wilson 95% interval, shared with the eval run log's pass^k reporting.
+import { wilson95 } from '../src/modules/agents/eval-telemetry';
 import type {
   ChatMessage,
   ToolDataRecord,
@@ -491,26 +495,6 @@ function summarize(results: CheckResult[]): void {
       `${countVerdict(results, 'FAIL')} failed, ` +
       `${countVerdict(results, 'ERROR')} errored`,
   );
-}
-
-/**
- * Wilson score interval at 95%, implemented inline to keep this script
- * dependency-free. Deliberately not the normal approximation: at the rates these
- * checks sit at (0.9 and up, sometimes 1.0) the Wald interval runs past 1 and
- * collapses to zero width at 0/n and n/n, which would read as certainty
- * manufactured by arithmetic. Sanity anchor: 9/10 → [0.596, 0.982].
- */
-function wilson95(passes: number, trials: number): [number, number] {
-  if (trials <= 0) return [0, 0];
-  const z = 1.959963984540054;
-  const z2 = z * z;
-  const p = passes / trials;
-  const denominator = 1 + z2 / trials;
-  const centre = (p + z2 / (2 * trials)) / denominator;
-  const margin =
-    (z / denominator) *
-    Math.sqrt((p * (1 - p)) / trials + z2 / (4 * trials * trials));
-  return [Math.max(0, centre - margin), Math.min(1, centre + margin)];
 }
 
 /**

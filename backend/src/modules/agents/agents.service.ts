@@ -1,6 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { MastraService } from '../../mastra/mastra.service';
-import { ASSISTANT_EVAL_SETS } from '../../mastra/evals/assistant.evals';
+import { assistantEvalSets } from '../../mastra/evals/suite-loader';
+import type {
+  EvalCaseProvenance,
+  EvalDifficulty,
+} from '../../mastra/evals/suite-loader';
+import { describeChecks } from '../../mastra/evals/eval-checks';
 
 export interface AgentSummary {
   /** Registry key the agent is registered under in the Mastra instance. */
@@ -40,18 +45,30 @@ export interface AgentEvalCheck {
 
 export interface AgentEvalCase {
   id: string;
+  /** Failure class the case probes, e.g. `ties` or `value-vocabulary`. */
+  category: string;
   question: string;
   /** What the question probes for. */
   intent: string;
   checks: AgentEvalCheck[];
+  /** How hard the question is for a careful analyst (per-difficulty table). */
+  difficulty?: EvalDifficulty;
+  /** How the reference answer was produced and checked. */
+  provenance?: EvalCaseProvenance;
+  /** Paraphrase variants the case carries (run with `includeVariants`). */
+  variants: number;
 }
 
-/** A named group of eval questions sharing one fixture. */
+/** A named group of eval questions sharing one fixture (one suite file). */
 export interface AgentEvalSet {
   id: string;
   name: string;
   /** What the set covers and what it needs to run. */
   description: string;
+  /** The registry sample the set questions, when it is a bundled one. */
+  fixtureId?: string;
+  /** The dataset names the set is written against, as a default/hint. */
+  datasets: string[];
   cases: AgentEvalCase[];
 }
 
@@ -73,7 +90,9 @@ export class AgentsService {
   async list(): Promise<AgentSummary[]> {
     const registry = this.mastra.listAgents();
     const summaries = await Promise.all(
-      Object.entries(registry).map(([key, agent]) => this.summarize(key, agent)),
+      Object.entries(registry).map(([key, agent]) =>
+        this.summarize(key, agent),
+      ),
     );
     return summaries.sort((a, b) => a.name.localeCompare(b.name));
   }
@@ -96,36 +115,39 @@ export class AgentsService {
       instructions: flattenInstructions(instructions),
       toolDetails: describeTools(tools),
       memory: describeMemory(memory),
-      model: model
-        ? {
-            id: String((model as { modelId?: unknown }).modelId ?? ''),
-            provider: String((model as { provider?: unknown }).provider ?? ''),
-          }
-        : null,
+      model: model ? describeModel(model) : null,
     };
   }
 
   /** The eval question sets defined for an agent; empty when it has none. */
   evalSets(key: string): AgentEvalSet[] {
     if (key !== 'assistant') return [];
-    return ASSISTANT_EVAL_SETS.map((set) => ({
+    return assistantEvalSets().map((set) => ({
       id: set.id,
       name: set.name,
       description: set.description,
+      ...(set.fixtureId ? { fixtureId: set.fixtureId } : {}),
+      datasets: set.datasets,
+      // The checks' own descriptions ('Checks if output includes
+      // "Argentina"'), with the ids `evaluateChecks` reports under, so the
+      // tab shows exactly what the run will assert.
       cases: set.cases.map((evalCase) => ({
         id: evalCase.id,
+        category: evalCase.category ?? '',
         question: evalCase.question,
         intent: evalCase.intent,
-        checks: evalCase.scorers.map((scorer) => ({
-          id: String(scorer.id ?? ''),
-          name: String(scorer.name ?? ''),
-          description: String(scorer.description ?? ''),
-        })),
+        checks: describeChecks(evalCase.checks ?? []),
+        ...(evalCase.difficulty ? { difficulty: evalCase.difficulty } : {}),
+        ...(evalCase.provenance ? { provenance: evalCase.provenance } : {}),
+        variants: evalCase.variantCount,
       })),
     }));
   }
 
-  private async summarize(key: string, agent: AgentLike): Promise<AgentSummary> {
+  private async summarize(
+    key: string,
+    agent: AgentLike,
+  ): Promise<AgentSummary> {
     return {
       key,
       id: agent.id ?? key,
@@ -137,6 +159,30 @@ export class AgentsService {
 }
 
 type AgentLike = ReturnType<MastraService['listAgents']>[string];
+
+/**
+ * The model as the Model tab shows it. Mastra's router reports a model it
+ * reached through a custom `url` (LenAI, Databricks serving endpoints) as
+ * provider `openai-compatible` with the whole router id as its model id
+ * (`databricks/my-endpoint`); split that back into provider and model.
+ */
+export function describeModel(model: unknown): {
+  id: string;
+  provider: string;
+} {
+  const id = String((model as { modelId?: unknown })?.modelId ?? '');
+  const provider = String((model as { provider?: unknown })?.provider ?? '');
+  const slash = id.indexOf('/');
+  if (
+    slash > 0 &&
+    (!provider ||
+      provider === 'openai-compatible' ||
+      id.startsWith(`${provider}/`))
+  ) {
+    return { id: id.slice(slash + 1), provider: id.slice(0, slash) };
+  }
+  return { id, provider };
+}
 
 /** Agent accessors may be dynamic and throw without a request context. */
 async function safe<T>(read: () => T | Promise<T>): Promise<T | undefined> {
@@ -205,7 +251,7 @@ function describeMemory(memory: unknown): AgentMemoryDetail | null {
     storage: storageName || null,
     lastMessages:
       typeof config.lastMessages === 'number' || config.lastMessages === false
-        ? (config.lastMessages as number | false)
+        ? config.lastMessages
         : null,
     semanticRecall: Boolean(config.semanticRecall),
     workingMemory: Boolean(

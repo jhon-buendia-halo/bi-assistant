@@ -232,6 +232,74 @@ describe('MetricsService.definitionBlock', () => {
     expect(block!.length).toBeLessThanOrEqual(4_200);
     expect(block).toContain('Metric 0');
   });
+
+  it('is byte-identical to the newest-defined path when ranked is explicitly false', async () => {
+    const { service: unranked } = build(library);
+    const { service: rankedFalse } = build(library);
+
+    const a = await unranked.definitionBlock(['main.health.claims']);
+    const b = await rankedFalse.definitionBlock(['main.health.claims'], {
+      ranked: false,
+      question: 'irrelevant, ignored when ranked is false',
+      budgetChars: 1,
+    });
+
+    expect(b).toEqual(a);
+  });
+
+  describe('ranked', () => {
+    it('ranks a metric matching the question above an unrelated one covering the same entities', async () => {
+      const netPaid = metric({
+        id: 'net-paid',
+        name: 'net_paid',
+        label: 'Net paid',
+        entity: 'main.health.claims',
+        expression: 'SUM(paid) - SUM(reversed)',
+        description: 'Net paid amount by region.',
+      });
+      const unrelated = metric({
+        id: 'other',
+        name: 'claim_count',
+        label: 'Claim count',
+        entity: 'main.health.claims',
+        expression: 'COUNT(*)',
+        description: 'Total number of claims.',
+      });
+      const { service } = build([unrelated, netPaid]);
+
+      const block = await service.definitionBlock(['main.health.claims'], {
+        ranked: true,
+        question: 'net paid by region',
+      });
+
+      expect(block!.indexOf('net_paid')).toBeLessThan(
+        block!.indexOf('claim_count'),
+      );
+    });
+
+    it('fills the budget best-first, skipping a higher-ranked entry that does not fit', async () => {
+      const bigButRelevant = metric({
+        id: 'big',
+        name: 'net_paid',
+        label: 'net paid net paid net paid',
+        description: 'x'.repeat(3_990),
+      });
+      const smallLessRelevant = metric({
+        id: 'small',
+        name: 'other',
+        label: 'Other',
+      });
+      const { service } = build([smallLessRelevant, bigButRelevant]);
+
+      const block = await service.definitionBlock(['main.health.claims'], {
+        ranked: true,
+        question: 'net paid',
+      });
+
+      expect(block).toContain('Other');
+      expect(block).not.toContain('net paid net paid');
+    });
+  });
 });
 
 describe('MetricsService.candidates', () => {
@@ -288,6 +356,90 @@ describe('MetricsService.candidates', () => {
     ]);
 
     expect(candidates.map((c) => c.verifiedQueryId)).toEqual(['vq-2']);
+  });
+});
+
+describe('MetricsService.lookup', () => {
+  const netPaid = metric({
+    id: 'net-paid',
+    name: 'net_paid',
+    label: 'Net paid',
+    entity: 'main.health.claims',
+    expression: 'SUM(paid) - SUM(reversed)',
+    description: 'Net paid amount by region.',
+  });
+  const denialRate = metric({
+    id: 'denial-rate',
+    name: 'denial_rate',
+    label: 'Denial rate',
+    entity: 'main.health.claims',
+  });
+  const alleleFraction = metric({
+    id: 'allele-fraction',
+    name: 'allele_fraction',
+    label: 'Allele fraction',
+    entity: 'main.genomics.variant_calls',
+    expression: 'AVG(fraction)',
+  });
+
+  it('scopes to the given entities', async () => {
+    const { service } = build([netPaid, denialRate, alleleFraction]);
+
+    const results = await service.lookup(['main.health.claims'], {});
+
+    expect(results.map((r) => r.name).sort()).toEqual([
+      'denial_rate',
+      'net_paid',
+    ]);
+  });
+
+  it('filters by entity (last-two-segment match)', async () => {
+    const { service } = build([netPaid, denialRate, alleleFraction]);
+
+    const results = await service.lookup([], { entity: 'health.claims' });
+
+    expect(results.map((r) => r.name).sort()).toEqual([
+      'denial_rate',
+      'net_paid',
+    ]);
+  });
+
+  it('ranks results by phrase', async () => {
+    const { service } = build([denialRate, netPaid]);
+
+    const results = await service.lookup(['main.health.claims'], {
+      phrase: 'net paid by region',
+    });
+
+    expect(results[0].name).toBe('net_paid');
+  });
+
+  it('returns at most 8 results', async () => {
+    const many = Array.from({ length: 20 }, (_, n) =>
+      metric({
+        id: `m${n}`,
+        name: `metric_${n}`,
+        entity: 'main.health.claims',
+      }),
+    );
+    const { service } = build(many);
+
+    const results = await service.lookup(['main.health.claims'], {});
+
+    expect(results.length).toBeLessThanOrEqual(8);
+  });
+
+  it('omits description when the metric has none', async () => {
+    const { service } = build([denialRate]);
+
+    const results = await service.lookup(['main.health.claims'], {});
+
+    expect(results[0]).toEqual({
+      name: 'denial_rate',
+      label: 'Denial rate',
+      entity: 'main.health.claims',
+      expression: denialRate.expression,
+    });
   });
 });
 

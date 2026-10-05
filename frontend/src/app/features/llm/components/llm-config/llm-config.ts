@@ -46,10 +46,12 @@ export class LlmConfig implements OnInit {
   }
 
   get canTest(): boolean {
+    const needsBaseUrl =
+      this.provider() === 'lenai' || this.provider() === 'databricks';
     return (
       !this.testing() &&
       this.model().trim() !== '' &&
-      (this.provider() !== 'lenai' || this.baseUrl().trim() !== '')
+      (!needsBaseUrl || this.baseUrl().trim() !== '')
     );
   }
 

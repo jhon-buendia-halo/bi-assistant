@@ -12,6 +12,10 @@
       {
         "include": "modules/testing-data/fixtures/**/*.sql*",
         "watchAssets": true
+      },
+      {
+        "include": "mastra/evals/suites/**/*",
+        "watchAssets": true
       }
     ]
   }

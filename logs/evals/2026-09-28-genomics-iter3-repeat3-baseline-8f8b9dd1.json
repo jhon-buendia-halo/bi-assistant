@@ -1,0 +1,2817 @@
+{
+  "schemaVersion": 2,
+  "runId": "8f8b9dd1-5286-4965-b3cf-3c6ae63e9122",
+  "label": "iter3-repeat3",
+  "harness": "in-app",
+  "suite": "genomics",
+  "agentKey": "assistant",
+  "datasets": [
+    "Genomics"
+  ],
+  "datasourceKind": "postgres",
+  "dialect": "postgres",
+  "model": "openai/gpt-5",
+  "reasoningEffort": "high",
+  "judgeModel": "openai/gpt-5",
+  "repeat": 3,
+  "arm": "baseline",
+  "engine": {
+    "careful": "off",
+    "answerReview": false,
+    "sqlRepair": true,
+    "repairIntentGuard": true,
+    "context": "curated",
+    "columnProfiles": false,
+    "inlineKnowledge": false,
+    "rankedKnowledge": false,
+    "lookupTools": false,
+    "sqlPrecheck": false,
+    "descriptiveErrors": false,
+    "extendedGuards": false,
+    "staticFirstContext": false,
+    "promptAblation": []
+  },
+  "configHash": "84fab82d4506",
+  "startedAt": "2026-09-28T18:29:37.840Z",
+  "finishedAt": "2026-09-28T19:22:22.996Z",
+  "durationMs": 3165156,
+  "appVersion": "0.10.1",
+  "gitCommit": "f04defd",
+  "totals": {
+    "cases": 17,
+    "passed": 12,
+    "failed": 5,
+    "errored": 0,
+    "gaps": 0,
+    "skipped": 0
+  },
+  "summary": {
+    "passK": 12,
+    "passKRate": 0.7058823529411765,
+    "scored": 17,
+    "meanPassRate": 0.8627450980392157,
+    "flaky": 5,
+    "gaps": 0,
+    "answeredEveryTime": 15,
+    "answeredObserved": 17,
+    "behaviourPassK": 2,
+    "behaviourTotal": 3,
+    "byCategory": {
+      "ratio-trap": {
+        "total": 1,
+        "passK": 1,
+        "meanPassRate": 1
+      },
+      "constant-column": {
+        "total": 1,
+        "passK": 0,
+        "meanPassRate": 0.6666666666666666
+      },
+      "empty-column": {
+        "total": 1,
+        "passK": 1,
+        "meanPassRate": 1
+      },
+      "ties": {
+        "total": 1,
+        "passK": 1,
+        "meanPassRate": 1
+      },
+      "value-vocabulary": {
+        "total": 1,
+        "passK": 1,
+        "meanPassRate": 1
+      },
+      "out-of-scope": {
+        "total": 1,
+        "passK": 1,
+        "meanPassRate": 1
+      },
+      "clarification": {
+        "total": 1,
+        "passK": 1,
+        "meanPassRate": 1
+      },
+      "id-vs-name": {
+        "total": 1,
+        "passK": 0,
+        "meanPassRate": 0.3333333333333333
+      },
+      "metric-definition": {
+        "total": 1,
+        "passK": 1,
+        "meanPassRate": 1
+      },
+      "default-filter": {
+        "total": 1,
+        "passK": 1,
+        "meanPassRate": 1
+      },
+      "multi-step-join": {
+        "total": 1,
+        "passK": 1,
+        "meanPassRate": 1
+      },
+      "discovery": {
+        "total": 1,
+        "passK": 0,
+        "meanPassRate": 0.6666666666666666
+      },
+      "domain-semantics": {
+        "total": 2,
+        "passK": 1,
+        "meanPassRate": 0.8333333333333334
+      },
+      "quality-filter": {
+        "total": 1,
+        "passK": 0,
+        "meanPassRate": 0.3333333333333333
+      },
+      "unit-confusion": {
+        "total": 1,
+        "passK": 1,
+        "meanPassRate": 1
+      },
+      "control": {
+        "total": 1,
+        "passK": 1,
+        "meanPassRate": 1
+      }
+    },
+    "byDifficulty": {
+      "hard": {
+        "total": 7,
+        "passK": 4
+      },
+      "easy": {
+        "total": 4,
+        "passK": 2
+      },
+      "medium": {
+        "total": 6,
+        "passK": 6
+      }
+    },
+    "tokensPerCase": 80710
+  },
+  "categories": {
+    "ratio-trap": {
+      "total": 1,
+      "passed": 1
+    },
+    "constant-column": {
+      "total": 1,
+      "passed": 0
+    },
+    "empty-column": {
+      "total": 1,
+      "passed": 1
+    },
+    "ties": {
+      "total": 1,
+      "passed": 1
+    },
+    "value-vocabulary": {
+      "total": 1,
+      "passed": 1
+    },
+    "out-of-scope": {
+      "total": 1,
+      "passed": 1
+    },
+    "clarification": {
+      "total": 1,
+      "passed": 1
+    },
+    "id-vs-name": {
+      "total": 1,
+      "passed": 0
+    },
+    "metric-definition": {
+      "total": 1,
+      "passed": 1
+    },
+    "default-filter": {
+      "total": 1,
+      "passed": 1
+    },
+    "multi-step-join": {
+      "total": 1,
+      "passed": 1
+    },
+    "discovery": {
+      "total": 1,
+      "passed": 0
+    },
+    "domain-semantics": {
+      "total": 2,
+      "passed": 1
+    },
+    "quality-filter": {
+      "total": 1,
+      "passed": 0
+    },
+    "unit-confusion": {
+      "total": 1,
+      "passed": 1
+    },
+    "control": {
+      "total": 1,
+      "passed": 1
+    }
+  },
+  "usage": {
+    "inputTokens": 1263800,
+    "outputTokens": 108274,
+    "totalTokens": 1372074,
+    "reasoningTokens": 88640,
+    "cachedInputTokens": 1168512,
+    "calls": 54
+  },
+  "costIncomplete": true,
+  "cases": [
+    {
+      "id": "allele-fraction-by-gene",
+      "category": "ratio-trap",
+      "question": "Which five genes show the highest average alternate-allele fraction?",
+      "difficulty": "hard",
+      "verdict": "PASS",
+      "runs": 3,
+      "passes": 3,
+      "flaky": false,
+      "durationMs": 151129,
+      "usage": {
+        "inputTokens": 100474,
+        "outputTokens": 9989,
+        "totalTokens": 110463,
+        "reasoningTokens": 8128,
+        "cachedInputTokens": 92928,
+        "calls": 3
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-includes",
+              "passed": true
+            },
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": true
+            },
+            {
+              "id": "result-set-match",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT \n  g.hgnc_symbol AS gene,\n  ROUND(\n    AVG(vc.alt_read_count::numeric / NULLIF(vc.total_read_count, 0)) \n      FILTER (WHERE vc.filter_status = 'PASS' AND vc.total_read_count >= 20),\n    4\n  ) AS allele_fraction,\n  COUNT(*) FILTER (WHERE vc.filter_status = 'PASS' AND vc.total_read_count >= 20) AS n_calls\nFROM world_cup.genomics.variant_calls vc\nJOIN world_cup.genomics.variants v ON vc.variant_id = v.id\nJOIN world_cup.genomics.genes g ON v.gene_id = g.id\nJOIN world_cup.genomics.samples s ON vc.sample_id = s.id\nWHERE s.is_control = false\nGROUP BY g.hgnc_symbol\nHAVING COUNT(*) FILTER (WHERE vc.filter_status = 'PASS' AND vc.total_read_count >= 20) > 0\nORDER BY allele_fraction DESC, gene ASC\nLIMIT 5;",
+          "sql": [
+            {
+              "sql": "SELECT \n  g.hgnc_symbol AS gene,\n  ROUND(\n    AVG(vc.alt_read_count::numeric / NULLIF(vc.total_read_count, 0)) \n      FILTER (WHERE vc.filter_status = 'PASS' AND vc.total_read_count >= 20),\n    4\n  ) AS allele_fraction,\n  COUNT(*) FILTER (WHERE vc.filter_status = 'PASS' AND vc.total_read_count >= 20) AS n_calls\nFROM world_cup.genomics.variant_calls vc\nJOIN world_cup.genomics.variants v ON vc.variant_id = v.id\nJOIN world_cup.genomics.genes g ON v.gene_id = g.id\nJOIN world_cup.genomics.samples s ON vc.sample_id = s.id\nWHERE s.is_control = false\nGROUP BY g.hgnc_symbol\nHAVING COUNT(*) FILTER (WHERE vc.filter_status = 'PASS' AND vc.total_read_count >= 20) > 0\nORDER BY allele_fraction DESC, gene ASC\nLIMIT 5;",
+              "ok": true,
+              "rowCount": 5
+            }
+          ],
+          "answer": "Top five genes by average alternate-allele fraction (governed metric; PASS calls with ≥20 reads):\n\n- MUTYH — 0.5325 (165 qualifying calls)\n- SCN5A — 0.5068 (53)\n- SMAD4 — 0.5066 (54)\n- TSC2 — 0.4943 (49)\n- XIST — 0.4921 (153)\n\nTakeaway: MUTYH stands out with the highest mean alternate-allele fraction (~0.53), with the others clustered near 0.50.\n\nData sources: world_cup.genomics.variant_calls joined to world_cup.genomics.variants and world_cup.genomics.genes; samples joined to apply filters. Excludes control samples, as configured.",
+          "steps": 1,
+          "calledTools": [
+            "run_readonly_sql"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 26890,
+          "usage": {
+            "inputTokens": 17983,
+            "outputTokens": 2210,
+            "totalTokens": 20193,
+            "reasoningTokens": 1664,
+            "cachedInputTokens": 14336,
+            "calls": 1
+          }
+        },
+        {
+          "attempt": 2,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-includes",
+              "passed": true
+            },
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": true
+            },
+            {
+              "id": "result-set-match",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT\n  g.hgnc_symbol AS gene,\n  AVG(vc.alt_read_count::numeric / NULLIF(vc.total_read_count, 0)) FILTER (\n    WHERE vc.filter_status = 'PASS' AND vc.total_read_count >= 20\n  ) AS allele_fraction\nFROM world_cup.genomics.variant_calls vc\nJOIN world_cup.genomics.variants v ON vc.variant_id = v.id\nJOIN world_cup.genomics.genes g ON v.gene_id = g.id\nJOIN world_cup.genomics.samples s ON vc.sample_id = s.id\nWHERE s.is_control = FALSE\nGROUP BY g.hgnc_symbol\nHAVING AVG(vc.alt_read_count::numeric / NULLIF(vc.total_read_count, 0)) FILTER (\n    WHERE vc.filter_status = 'PASS' AND vc.total_read_count >= 20\n  ) IS NOT NULL\nORDER BY allele_fraction DESC\nLIMIT 5;",
+          "sql": [
+            {
+              "sql": "SELECT\n  g.hgnc_symbol AS gene,\n  AVG(vc.alt_read_count::numeric / NULLIF(vc.total_read_count, 0)) FILTER (\n    WHERE vc.filter_status = 'PASS' AND vc.total_read_count >= 20\n  ) AS allele_fraction\nFROM world_cup.genomics.variant_calls vc\nJOIN world_cup.genomics.variants v ON vc.variant_id = v.id\nJOIN world_cup.genomics.genes g ON v.gene_id = g.id\nJOIN world_cup.genomics.samples s ON vc.sample_id = s.id\nWHERE s.is_control = FALSE\nGROUP BY g.hgnc_symbol\nHAVING AVG(vc.alt_read_count::numeric / NULLIF(vc.total_read_count, 0)) FILTER (\n    WHERE vc.filter_status = 'PASS' AND vc.total_read_count >= 20\n  ) IS NOT NULL\nORDER BY allele_fraction DESC\nLIMIT 5;",
+              "ok": true,
+              "rowCount": 5
+            }
+          ],
+          "answer": "Top 5 genes by average alternate‑allele fraction (governed metric; PASS calls with ≥20 reads; non‑control samples):\n- MUTYH — 0.5325\n- SCN5A — 0.5068\n- SMAD4 — 0.5066\n- TSC2 — 0.4943\n- XIST — 0.4921\n\nTakeaway: The highest averages cluster around ~0.5, with MUTYH modestly above the rest.\n\nEntities used: world_cup.genomics.variant_calls joined to world_cup.genomics.variants, world_cup.genomics.genes and world_cup.genomics.samples. Excludes control samples, as configured.",
+          "steps": 1,
+          "calledTools": [
+            "run_readonly_sql"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 52437,
+          "usage": {
+            "inputTokens": 18606,
+            "outputTokens": 3809,
+            "totalTokens": 22415,
+            "reasoningTokens": 3328,
+            "cachedInputTokens": 17792,
+            "calls": 1
+          }
+        },
+        {
+          "attempt": 3,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-includes",
+              "passed": true
+            },
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": true
+            },
+            {
+              "id": "result-set-match",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT\n  g.hgnc_symbol AS gene,\n  AVG(vc.alt_read_count::numeric / NULLIF(vc.total_read_count, 0)) FILTER (WHERE vc.filter_status = 'PASS' AND vc.total_read_count >= 20) AS allele_fraction,\n  COUNT(*) FILTER (WHERE vc.filter_status = 'PASS' AND vc.total_read_count >= 20) AS pass_calls\nFROM world_cup.genomics.variant_calls vc\nJOIN world_cup.genomics.variants v ON vc.variant_id = v.id\nJOIN world_cup.genomics.genes g ON v.gene_id = g.id\nJOIN world_cup.genomics.samples s ON vc.sample_id = s.id\nWHERE s.is_control = false\nGROUP BY g.hgnc_symbol\nHAVING COUNT(*) FILTER (WHERE vc.filter_status = 'PASS' AND vc.total_read_count >= 20) > 0\nORDER BY allele_fraction DESC\nLIMIT 5;",
+          "sql": [
+            {
+              "sql": "SELECT\n  g.hgnc_symbol AS gene,\n  AVG(vc.alt_read_count::numeric / NULLIF(vc.total_read_count, 0)) FILTER (WHERE vc.filter_status = 'PASS' AND vc.total_read_count >= 20) AS allele_fraction,\n  COUNT(*) FILTER (WHERE vc.filter_status = 'PASS' AND vc.total_read_count >= 20) AS pass_calls\nFROM world_cup.genomics.variant_calls vc\nJOIN world_cup.genomics.variants v ON vc.variant_id = v.id\nJOIN world_cup.genomics.genes g ON v.gene_id = g.id\nJOIN world_cup.genomics.samples s ON vc.sample_id = s.id\nWHERE s.is_control = false\nGROUP BY g.hgnc_symbol\nHAVING COUNT(*) FILTER (WHERE vc.filter_status = 'PASS' AND vc.total_read_count >= 20) > 0\nORDER BY allele_fraction DESC\nLIMIT 5;",
+              "ok": true,
+              "rowCount": 5
+            }
+          ],
+          "answer": "Top five genes by average alternate-allele fraction (governed allele_fraction metric):\n\n1) MUTYH — 0.5325 (n=165 PASS calls)\n2) SCN5A — 0.5068 (n=53)\n3) SMAD4 — 0.5066 (n=54)\n4) TSC2 — 0.4943 (n=49)\n5) XIST — 0.4921 (n=153)\n\nWhat stands out: MUTYH has the highest mean fraction of reads supporting the alternate allele among genes with qualifying calls, with several others clustering near 0.50.\n\nData used: world_cup.genomics.variant_calls joined via world_cup.genomics.variants to world_cup.genomics.genes; world_cup.genomics.samples used to exclude controls. Excludes control samples, as configured. Metric follows the governed definition: average of alt_read_count / total_read_count over PASS calls with total_read_count ≥ 20.",
+          "steps": 5,
+          "calledTools": [
+            "describe_entity",
+            "describe_entity",
+            "describe_entity",
+            "describe_entity",
+            "run_readonly_sql"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 71802,
+          "usage": {
+            "inputTokens": 63885,
+            "outputTokens": 3970,
+            "totalTokens": 67855,
+            "reasoningTokens": 3136,
+            "cachedInputTokens": 60800,
+            "calls": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "variants-by-assembly",
+      "category": "constant-column",
+      "question": "How do our variants break down across genome assemblies?",
+      "difficulty": "easy",
+      "verdict": "FAIL",
+      "runs": 3,
+      "passes": 2,
+      "flaky": true,
+      "failureLabel": "no-sql",
+      "reason": "check-called-tool",
+      "durationMs": 277952,
+      "usage": {
+        "inputTokens": 44998,
+        "outputTokens": 7382,
+        "totalTokens": 52380,
+        "reasoningTokens": 6528,
+        "cachedInputTokens": 40960,
+        "calls": 6
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-includes",
+              "passed": true
+            },
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": true
+            },
+            {
+              "id": "result-set-match",
+              "passed": true
+            },
+            {
+              "id": "llm-judge",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT assembly,\n       COUNT(*) AS variant_count,\n       ROUND(100.0 * COUNT(*) / NULLIF(SUM(COUNT(*)) OVER (), 0), 2) AS percent_of_total\nFROM world_cup.genomics.variants\nGROUP BY assembly\nORDER BY variant_count DESC;",
+          "sql": [
+            {
+              "sql": "SELECT assembly,\n       COUNT(*) AS variant_count,\n       ROUND(100.0 * COUNT(*) / NULLIF(SUM(COUNT(*)) OVER (), 0), 2) AS percent_of_total\nFROM world_cup.genomics.variants\nGROUP BY assembly\nORDER BY variant_count DESC;",
+              "ok": true,
+              "rowCount": 1
+            }
+          ],
+          "answer": "Breakdown by genome assembly (from world_cup.genomics.variants):\n- GRCh38: 450 variants (100.00%)\n\nAll variants in this dataset are annotated to GRCh38; none are on other assemblies.\n\nNotes:\n- Source entity: world_cup.genomics.variants\n- No control-sample filter applies here (we did not read sample rows).",
+          "steps": 1,
+          "calledTools": [
+            "run_readonly_sql"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 75224,
+          "usage": {
+            "inputTokens": 18084,
+            "outputTokens": 1751,
+            "totalTokens": 19835,
+            "reasoningTokens": 1408,
+            "cachedInputTokens": 16512,
+            "calls": 2
+          }
+        },
+        {
+          "attempt": 2,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-includes",
+              "passed": true
+            },
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": true
+            },
+            {
+              "id": "result-set-match",
+              "passed": true
+            },
+            {
+              "id": "llm-judge",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT assembly, COUNT(*) AS variant_count\nFROM world_cup.genomics.variants\nGROUP BY assembly\nORDER BY variant_count DESC;",
+          "sql": [
+            {
+              "sql": "SELECT assembly, COUNT(*) AS variant_count\nFROM world_cup.genomics.variants\nGROUP BY assembly\nORDER BY variant_count DESC;",
+              "ok": true,
+              "rowCount": 1
+            }
+          ],
+          "answer": "All variants are on GRCh38 only.\n\nBreakdown (world_cup.genomics.variants):\n- GRCh38: 450 variants (100%)\n- No variants on other assemblies are recorded.\n\nSource: world_cup.genomics.variants. No control-sample filter applies here since this counts variants from the variants table only (no sample rows read).",
+          "steps": 1,
+          "calledTools": [
+            "run_readonly_sql"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 99335,
+          "usage": {
+            "inputTokens": 18033,
+            "outputTokens": 2599,
+            "totalTokens": 20632,
+            "reasoningTokens": 2240,
+            "cachedInputTokens": 16640,
+            "calls": 2
+          }
+        },
+        {
+          "attempt": 3,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-includes",
+              "passed": true
+            },
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"run_readonly_sql\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": false,
+              "reason": "the agent never ran a SQL query"
+            },
+            {
+              "id": "result-set-match",
+              "passed": false,
+              "reason": "the agent ran no successful run_readonly_sql to compare"
+            },
+            {
+              "id": "llm-judge",
+              "passed": true
+            }
+          ],
+          "sql": [],
+          "answer": "All variants are on a single genome assembly: GRCh38. There are no records on GRCh37/hg19 or any other assembly, so the breakdown is 100% GRCh38.\n\nEntity: world_cup.genomics.variants",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "no-sql",
+          "durationMs": 103393,
+          "usage": {
+            "inputTokens": 8881,
+            "outputTokens": 3032,
+            "totalTokens": 11913,
+            "reasoningTokens": 2880,
+            "cachedInputTokens": 7808,
+            "calls": 2
+          }
+        }
+      ]
+    },
+    {
+      "id": "variants-with-rsid",
+      "category": "empty-column",
+      "question": "How many of our variants have a dbSNP rsID?",
+      "difficulty": "easy",
+      "verdict": "PASS",
+      "runs": 3,
+      "passes": 3,
+      "flaky": false,
+      "durationMs": 73328,
+      "usage": {
+        "inputTokens": 52891,
+        "outputTokens": 5219,
+        "totalTokens": 58110,
+        "reasoningTokens": 4288,
+        "cachedInputTokens": 49024,
+        "calls": 3
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": true
+            },
+            {
+              "id": "result-set-match",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT\n  COUNT(*) AS total_variants,\n  COUNT(rsid) AS variants_with_rsid,\n  ROUND(100.0 * COUNT(rsid)::numeric / NULLIF(COUNT(*), 0), 2) AS pct_with_rsid\nFROM world_cup.genomics.variants;",
+          "sql": [
+            {
+              "sql": "SELECT\n  COUNT(*) AS total_variants,\n  COUNT(rsid) AS variants_with_rsid,\n  ROUND(100.0 * COUNT(rsid)::numeric / NULLIF(COUNT(*), 0), 2) AS pct_with_rsid\nFROM world_cup.genomics.variants;",
+              "ok": true,
+              "rowCount": 1
+            }
+          ],
+          "answer": "46 variants have a dbSNP rsID (10.22% of 450 total variants).\n\nSource: world_cup.genomics.variants. No sample-level default filters apply here (this counts all variants).",
+          "steps": 1,
+          "calledTools": [
+            "run_readonly_sql"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 21734,
+          "usage": {
+            "inputTokens": 17578,
+            "outputTokens": 1339,
+            "totalTokens": 18917,
+            "reasoningTokens": 1024,
+            "cachedInputTokens": 16896,
+            "calls": 1
+          }
+        },
+        {
+          "attempt": 2,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": true
+            },
+            {
+              "id": "result-set-match",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT \n  COUNT(*) FILTER (WHERE rsid IS NOT NULL) AS variants_with_rsid,\n  COUNT(*) AS total_variants,\n  ROUND(100.0 * COUNT(*) FILTER (WHERE rsid IS NOT NULL) / NULLIF(COUNT(*), 0), 2) AS share_with_rsid\nFROM world_cup.genomics.variants;",
+          "sql": [
+            {
+              "sql": "SELECT \n  COUNT(*) FILTER (WHERE rsid IS NOT NULL) AS variants_with_rsid,\n  COUNT(*) AS total_variants,\n  ROUND(100.0 * COUNT(*) FILTER (WHERE rsid IS NOT NULL) / NULLIF(COUNT(*), 0), 2) AS share_with_rsid\nFROM world_cup.genomics.variants;",
+              "ok": true,
+              "rowCount": 1
+            }
+          ],
+          "answer": "46 variants have a dbSNP rsID, out of 450 total variants (10.22%). \nSource: world_cup.genomics.variants.\n\nTakeaway: Only about one in ten variants in this dataset are cross-referenced to dbSNP.\n\nFilters applied: None — this query reads the variants table only; the control-sample default filter does not apply.",
+          "steps": 1,
+          "calledTools": [
+            "run_readonly_sql"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 31661,
+          "usage": {
+            "inputTokens": 18071,
+            "outputTokens": 2357,
+            "totalTokens": 20428,
+            "reasoningTokens": 2048,
+            "cachedInputTokens": 15616,
+            "calls": 1
+          }
+        },
+        {
+          "attempt": 3,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": true
+            },
+            {
+              "id": "result-set-match",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT\n  COUNT(*) AS total_variants,\n  COUNT(rsid) AS variants_with_rsid,\n  COUNT(*) - COUNT(rsid) AS variants_without_rsid,\n  ROUND(100.0 * COUNT(rsid)::numeric / NULLIF(COUNT(*), 0), 2) AS pct_with_rsid\nFROM world_cup.genomics.variants;",
+          "sql": [
+            {
+              "sql": "SELECT\n  COUNT(*) AS total_variants,\n  COUNT(rsid) AS variants_with_rsid,\n  COUNT(*) - COUNT(rsid) AS variants_without_rsid,\n  ROUND(100.0 * COUNT(rsid)::numeric / NULLIF(COUNT(*), 0), 2) AS pct_with_rsid\nFROM world_cup.genomics.variants;",
+              "ok": true,
+              "rowCount": 1
+            }
+          ],
+          "answer": "46 variants have a dbSNP rsID.\n\nContext: That’s 46 of 450 total variants (10.22%) in world_cup.genomics.variants.\n\nTakeaway: dbSNP cross-reference coverage is about one in ten variants; this measures external ID coverage, not variant quality.\n\nFilters: None applied — this is a direct count from the variants table (no sample-level control filter involved).",
+          "steps": 1,
+          "calledTools": [
+            "run_readonly_sql"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 19933,
+          "usage": {
+            "inputTokens": 17242,
+            "outputTokens": 1523,
+            "totalTokens": 18765,
+            "reasoningTokens": 1216,
+            "cachedInputTokens": 16512,
+            "calls": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "genes-with-seven-pathogenic",
+      "category": "ties",
+      "question": "Which genes carry exactly seven pathogenic variants?",
+      "difficulty": "medium",
+      "verdict": "PASS",
+      "runs": 3,
+      "passes": 3,
+      "flaky": false,
+      "durationMs": 48558,
+      "usage": {
+        "inputTokens": 51615,
+        "outputTokens": 3438,
+        "totalTokens": 55053,
+        "reasoningTokens": 2432,
+        "cachedInputTokens": 48768,
+        "calls": 3
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-includes",
+              "passed": true
+            },
+            {
+              "id": "check-matches",
+              "passed": true
+            },
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": true
+            },
+            {
+              "id": "result-set-match",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT g.id AS gene_id, g.hgnc_symbol, COUNT(*) AS pathogenic_variant_count\nFROM world_cup.genomics.variants v\nJOIN world_cup.genomics.genes g ON v.gene_id = g.id\nWHERE v.clinical_significance = 'PATHOGENIC'\nGROUP BY g.id, g.hgnc_symbol\nHAVING COUNT(*) = 7\nORDER BY g.hgnc_symbol;",
+          "sql": [
+            {
+              "sql": "SELECT g.id AS gene_id, g.hgnc_symbol, COUNT(*) AS pathogenic_variant_count\nFROM world_cup.genomics.variants v\nJOIN world_cup.genomics.genes g ON v.gene_id = g.id\nWHERE v.clinical_significance = 'PATHOGENIC'\nGROUP BY g.id, g.hgnc_symbol\nHAVING COUNT(*) = 7\nORDER BY g.hgnc_symbol;",
+              "ok": true,
+              "rowCount": 2
+            }
+          ],
+          "answer": "Genes with exactly seven pathogenic variants:\n- MLH1\n- PTEN\n\nMethod: counted variants where world_cup.genomics.variants.clinical_significance = 'PATHOGENIC' (excluding LIKELY_PATHOGENIC) and grouped by world_cup.genomics.genes.hgnc_symbol.\n\nData sources: world_cup.genomics.variants joined to world_cup.genomics.genes.\n\nFilters: No sample-based filters apply (the control-sample exclusion applies only to queries reading samples or sample-derived tables).",
+          "steps": 1,
+          "calledTools": [
+            "run_readonly_sql"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 18150,
+          "usage": {
+            "inputTokens": 17406,
+            "outputTokens": 1511,
+            "totalTokens": 18917,
+            "reasoningTokens": 1152,
+            "cachedInputTokens": 16768,
+            "calls": 1
+          }
+        },
+        {
+          "attempt": 2,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-includes",
+              "passed": true
+            },
+            {
+              "id": "check-matches",
+              "passed": true
+            },
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": true
+            },
+            {
+              "id": "result-set-match",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT g.hgnc_symbol AS gene, COUNT(v.id) AS pathogenic_variant_count\nFROM world_cup.genomics.variants v\nJOIN world_cup.genomics.genes g ON v.gene_id = g.id\nWHERE v.clinical_significance = 'PATHOGENIC'\nGROUP BY g.hgnc_symbol\nHAVING COUNT(v.id) = 7\nORDER BY g.hgnc_symbol;",
+          "sql": [
+            {
+              "sql": "SELECT g.hgnc_symbol AS gene, COUNT(v.id) AS pathogenic_variant_count\nFROM world_cup.genomics.variants v\nJOIN world_cup.genomics.genes g ON v.gene_id = g.id\nWHERE v.clinical_significance = 'PATHOGENIC'\nGROUP BY g.hgnc_symbol\nHAVING COUNT(v.id) = 7\nORDER BY g.hgnc_symbol;",
+              "ok": true,
+              "rowCount": 2
+            }
+          ],
+          "answer": "Genes with exactly seven pathogenic variants:\n- MLH1\n- PTEN\n\nMethod: Counted variants with clinical_significance = 'PATHOGENIC' per gene (world_cup.genomics.variants → world_cup.genomics.genes by gene_id) and filtered to counts equal to 7. No sample-level filters apply because this uses only the variants and genes entities.",
+          "steps": 1,
+          "calledTools": [
+            "run_readonly_sql"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 13523,
+          "usage": {
+            "inputTokens": 17114,
+            "outputTokens": 810,
+            "totalTokens": 17924,
+            "reasoningTokens": 512,
+            "cachedInputTokens": 15616,
+            "calls": 1
+          }
+        },
+        {
+          "attempt": 3,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-includes",
+              "passed": true
+            },
+            {
+              "id": "check-matches",
+              "passed": true
+            },
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": true
+            },
+            {
+              "id": "result-set-match",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT g.hgnc_symbol AS gene, COUNT(*) AS pathogenic_variant_count\nFROM world_cup.genomics.variants v\nJOIN world_cup.genomics.genes g ON v.gene_id = g.id\nWHERE v.clinical_significance = 'PATHOGENIC'\nGROUP BY g.hgnc_symbol\nHAVING COUNT(*) = 7\nORDER BY g.hgnc_symbol;",
+          "sql": [
+            {
+              "sql": "SELECT g.hgnc_symbol AS gene, COUNT(*) AS pathogenic_variant_count\nFROM world_cup.genomics.variants v\nJOIN world_cup.genomics.genes g ON v.gene_id = g.id\nWHERE v.clinical_significance = 'PATHOGENIC'\nGROUP BY g.hgnc_symbol\nHAVING COUNT(*) = 7\nORDER BY g.hgnc_symbol;",
+              "ok": true,
+              "rowCount": 2
+            }
+          ],
+          "answer": "Genes with exactly seven pathogenic variants:\n- MLH1\n- PTEN\n\nNotes:\n- Based on variants labeled PATHOGENIC in world_cup.genomics.variants, joined to world_cup.genomics.genes by gene_id and reported by HGNC symbol.\n- Used the curated definition that “pathogenic” means clinical_significance = 'PATHOGENIC' (excluding LIKELY_PATHOGENIC).\n- No control-sample filter applies here since the query reads only variants and genes.",
+          "steps": 1,
+          "calledTools": [
+            "run_readonly_sql"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 16885,
+          "usage": {
+            "inputTokens": 17095,
+            "outputTokens": 1117,
+            "totalTokens": 18212,
+            "reasoningTokens": 768,
+            "cachedInputTokens": 16384,
+            "calls": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "damaging-variant-count",
+      "category": "value-vocabulary",
+      "question": "How many damaging variants did we find?",
+      "difficulty": "medium",
+      "verdict": "PASS",
+      "runs": 3,
+      "passes": 3,
+      "flaky": false,
+      "durationMs": 83164,
+      "usage": {
+        "inputTokens": 52745,
+        "outputTokens": 5786,
+        "totalTokens": 58531,
+        "reasoningTokens": 4928,
+        "cachedInputTokens": 46848,
+        "calls": 3
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-matches",
+              "passed": true
+            },
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": true
+            },
+            {
+              "id": "result-set-match",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT COUNT(*) AS damaging_variants,\n       COUNT(*) FILTER (WHERE clinical_significance = 'PATHOGENIC') AS pathogenic_variants,\n       COUNT(*) FILTER (WHERE clinical_significance = 'LIKELY_PATHOGENIC') AS likely_pathogenic_variants\nFROM world_cup.genomics.variants\nWHERE clinical_significance IN ('PATHOGENIC','LIKELY_PATHOGENIC');",
+          "sql": [
+            {
+              "sql": "SELECT COUNT(*) AS damaging_variants,\n       COUNT(*) FILTER (WHERE clinical_significance = 'PATHOGENIC') AS pathogenic_variants,\n       COUNT(*) FILTER (WHERE clinical_significance = 'LIKELY_PATHOGENIC') AS likely_pathogenic_variants\nFROM world_cup.genomics.variants\nWHERE clinical_significance IN ('PATHOGENIC','LIKELY_PATHOGENIC');",
+              "ok": true,
+              "rowCount": 1
+            }
+          ],
+          "answer": "149 damaging variants.\n\nBreakdown:\n- Pathogenic: 96\n- Likely pathogenic: 53\n\nBased on world_cup.genomics.variants, counting variants where clinical_significance is PATHOGENIC or LIKELY_PATHOGENIC. No control-sample filter applies here since this query did not read sample rows.",
+          "steps": 1,
+          "calledTools": [
+            "run_readonly_sql"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 30566,
+          "usage": {
+            "inputTokens": 17813,
+            "outputTokens": 2128,
+            "totalTokens": 19941,
+            "reasoningTokens": 1856,
+            "cachedInputTokens": 15616,
+            "calls": 1
+          }
+        },
+        {
+          "attempt": 2,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-matches",
+              "passed": true
+            },
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": true
+            },
+            {
+              "id": "result-set-match",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT COUNT(*) AS damaging_variant_count FROM world_cup.genomics.variants WHERE clinical_significance IN ('PATHOGENIC','LIKELY_PATHOGENIC');",
+          "sql": [
+            {
+              "sql": "SELECT COUNT(*) AS damaging_variant_count FROM world_cup.genomics.variants WHERE clinical_significance IN ('PATHOGENIC','LIKELY_PATHOGENIC');",
+              "ok": true,
+              "rowCount": 1
+            }
+          ],
+          "answer": "149 damaging variants.\n\nDetails:\n- Definition used: “Damaging” = PATHOGENIC or LIKELY_PATHOGENIC (clinical_significance).\n- Source entity: world_cup.genomics.variants.\n\nFilters: The control-sample exclusion does not apply here because this count reads only the variants table (no sample rows).",
+          "steps": 1,
+          "calledTools": [
+            "run_readonly_sql"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 23914,
+          "usage": {
+            "inputTokens": 17493,
+            "outputTokens": 1741,
+            "totalTokens": 19234,
+            "reasoningTokens": 1472,
+            "cachedInputTokens": 15616,
+            "calls": 1
+          }
+        },
+        {
+          "attempt": 3,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-matches",
+              "passed": true
+            },
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": true
+            },
+            {
+              "id": "result-set-match",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT \n  COUNT(*) FILTER (WHERE clinical_significance IN ('PATHOGENIC','LIKELY_PATHOGENIC')) AS damaging_variants,\n  COUNT(*) AS total_variants,\n  ROUND(100.0 * COUNT(*) FILTER (WHERE clinical_significance IN ('PATHOGENIC','LIKELY_PATHOGENIC')) / NULLIF(COUNT(*),0), 2) AS pct_damaging\nFROM world_cup.genomics.variants;",
+          "sql": [
+            {
+              "sql": "SELECT \n  COUNT(*) FILTER (WHERE clinical_significance IN ('PATHOGENIC','LIKELY_PATHOGENIC')) AS damaging_variants,\n  COUNT(*) AS total_variants,\n  ROUND(100.0 * COUNT(*) FILTER (WHERE clinical_significance IN ('PATHOGENIC','LIKELY_PATHOGENIC')) / NULLIF(COUNT(*),0), 2) AS pct_damaging\nFROM world_cup.genomics.variants;",
+              "ok": true,
+              "rowCount": 1
+            }
+          ],
+          "answer": "149 damaging variants.\n\nDetails:\n- Definition used: damaging = clinical_significance in {PATHOGENIC, LIKELY_PATHOGENIC}.\n- Context: 149 out of 450 total variants (33.11%) in world_cup.genomics.variants.\n\nFilters: None applied — this counts variants from the catalog; the control-sample exclusion does not apply because no sample rows were read.",
+          "steps": 1,
+          "calledTools": [
+            "run_readonly_sql"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 28684,
+          "usage": {
+            "inputTokens": 17439,
+            "outputTokens": 1917,
+            "totalTokens": 19356,
+            "reasoningTokens": 1600,
+            "cachedInputTokens": 15616,
+            "calls": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "samples-sequenced-2015",
+      "category": "out-of-scope",
+      "question": "How many samples did we sequence in 2015?",
+      "difficulty": "medium",
+      "verdict": "PASS",
+      "runs": 3,
+      "passes": 3,
+      "flaky": false,
+      "durationMs": 172291,
+      "usage": {
+        "inputTokens": 48734,
+        "outputTokens": 7891,
+        "totalTokens": 56625,
+        "reasoningTokens": 7104,
+        "cachedInputTokens": 44416,
+        "calls": 6
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-did-not-call",
+              "passed": true
+            },
+            {
+              "id": "llm-judge",
+              "passed": true
+            }
+          ],
+          "sql": [],
+          "answer": "Not captured: this dataset only includes subjects and samples from 2023–2024. There is no 2015 sample data here, so I can’t report a 2015 count from this dataset.\n\nIf helpful, I can pull how many samples were sequenced in 2023 and 2024 instead.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 61992,
+          "usage": {
+            "inputTokens": 8930,
+            "outputTokens": 1726,
+            "totalTokens": 10656,
+            "reasoningTokens": 1536,
+            "cachedInputTokens": 7808,
+            "calls": 2
+          }
+        },
+        {
+          "attempt": 2,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-did-not-call",
+              "passed": true
+            },
+            {
+              "id": "llm-judge",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT EXTRACT(YEAR FROM collected_on)::int AS year, COUNT(*) AS sample_count\nFROM world_cup.genomics.samples\nWHERE is_control = false\nGROUP BY 1\nORDER BY 1;",
+          "sql": [
+            {
+              "sql": "SELECT EXTRACT(YEAR FROM collected_on)::int AS year, COUNT(*) AS sample_count\nFROM world_cup.genomics.samples\nWHERE is_control = false\nGROUP BY 1\nORDER BY 1;",
+              "ok": true,
+              "rowCount": 2
+            }
+          ],
+          "answer": "Not captured: this dataset has no 2015 sample data — it only covers 2023–2024.\n\nFor context (using sample collection date):\n- 2023: 59 samples\n- 2024: 66 samples\n\nSource entity: world_cup.genomics.samples. Applied default filter: excludes control samples (is_control = false).",
+          "steps": 2,
+          "calledTools": [
+            "describe_entity",
+            "run_readonly_sql"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 67292,
+          "usage": {
+            "inputTokens": 30896,
+            "outputTokens": 4340,
+            "totalTokens": 35236,
+            "reasoningTokens": 3904,
+            "cachedInputTokens": 28800,
+            "calls": 2
+          }
+        },
+        {
+          "attempt": 3,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-did-not-call",
+              "passed": true
+            },
+            {
+              "id": "llm-judge",
+              "passed": true
+            }
+          ],
+          "sql": [],
+          "answer": "Not captured: this dataset only contains samples collected in 2023–2024; there is no 2015 sample data here. If helpful, I can pull the sequenced sample counts for 2023 and 2024 instead.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 43007,
+          "usage": {
+            "inputTokens": 8908,
+            "outputTokens": 1825,
+            "totalTokens": 10733,
+            "reasoningTokens": 1664,
+            "cachedInputTokens": 7808,
+            "calls": 2
+          }
+        }
+      ]
+    },
+    {
+      "id": "most-important-gene",
+      "category": "clarification",
+      "question": "Which gene matters most in this cohort?",
+      "difficulty": "medium",
+      "verdict": "PASS",
+      "runs": 3,
+      "passes": 3,
+      "flaky": false,
+      "durationMs": 119078,
+      "usage": {
+        "inputTokens": 3239,
+        "outputTokens": 2766,
+        "totalTokens": 6005,
+        "reasoningTokens": 2496,
+        "cachedInputTokens": 0,
+        "calls": 3
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-did-not-call",
+              "passed": true
+            },
+            {
+              "id": "llm-judge",
+              "passed": true
+            }
+          ],
+          "sql": [],
+          "answer": "What should “matters most” mean for genes in this cohort?",
+          "steps": 1,
+          "calledTools": [
+            "ask_clarification"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "clarification": "What should “matters most” mean for genes in this cohort?\n\nOptions offered to the user:\n- Damaging-variant carriers — Gene with the most subjects carrying a PATHOGENIC or LIKELY_PATHOGENIC variant (high-confidence PASS calls).\n- Highest average expression (TPM) — Gene with the highest mean TPM across non-control samples (zeros included).\n- Most high-confidence variant carriers — Gene seen in the most subjects with any PASS variant call, regardless of clinical significance.\n- Widest expression variability — Gene with the largest spread (std dev) of TPM across non-control samples.",
+          "durationMs": 44884,
+          "usage": {
+            "inputTokens": 1072,
+            "outputTokens": 1291,
+            "totalTokens": 2363,
+            "reasoningTokens": 1216,
+            "cachedInputTokens": 0,
+            "calls": 1
+          }
+        },
+        {
+          "attempt": 2,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-did-not-call",
+              "passed": true
+            },
+            {
+              "id": "llm-judge",
+              "passed": true
+            }
+          ],
+          "sql": [],
+          "answer": "What should “matters most” mean for this cohort?",
+          "steps": 1,
+          "calledTools": [
+            "ask_clarification"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "clarification": "What should “matters most” mean for this cohort?\n\nOptions offered to the user:\n- Most carriers of damaging variants — Gene with the highest number of subjects carrying a PATHOGENIC or LIKELY_PATHOGENIC variant (high‑confidence PASS calls).\n- Highest average expression (TPM) — Gene with the highest mean TPM across non‑control samples.\n- Most high‑confidence variant calls — Gene with the largest number of PASS variant calls across non‑control samples.\n- Most distinct damaging variants — Gene with the most unique PATHOGENIC or LIKELY_PATHOGENIC variants observed in the cohort.",
+          "durationMs": 37441,
+          "usage": {
+            "inputTokens": 1082,
+            "outputTokens": 680,
+            "totalTokens": 1762,
+            "reasoningTokens": 576,
+            "cachedInputTokens": 0,
+            "calls": 1
+          }
+        },
+        {
+          "attempt": 3,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-did-not-call",
+              "passed": true
+            },
+            {
+              "id": "llm-judge",
+              "passed": true
+            }
+          ],
+          "sql": [],
+          "answer": "What should “matters most” mean for genes in this cohort?",
+          "steps": 1,
+          "calledTools": [
+            "ask_clarification"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "clarification": "What should “matters most” mean for genes in this cohort?\n\nOptions offered to the user:\n- Most carriers of damaging variants — Gene with the most subjects carrying a PATHOGENIC or LIKELY_PATHOGENIC variant (0/1 or 1/1, PASS calls).\n- Highest average expression (TPM) — Gene with the highest mean TPM across non-control samples.\n- Most distinct PASS variants observed — Gene with the largest number of unique variants with filter_status = PASS.\n- Most subjects carrying any variant — Gene with the most subjects who carry any PASS variant (0/1 or 1/1).",
+          "durationMs": 36753,
+          "usage": {
+            "inputTokens": 1085,
+            "outputTokens": 795,
+            "totalTokens": 1880,
+            "reasoningTokens": 704,
+            "cachedInputTokens": 0,
+            "calls": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "most-called-genes",
+      "category": "id-vs-name",
+      "question": "Which genes were called most often across our samples? Show the top five.",
+      "difficulty": "hard",
+      "verdict": "FAIL",
+      "runs": 3,
+      "passes": 1,
+      "flaky": true,
+      "failureLabel": "clarified",
+      "reason": "check-includes",
+      "durationMs": 125554,
+      "usage": {
+        "inputTokens": 67130,
+        "outputTokens": 4410,
+        "totalTokens": 71540,
+        "reasoningTokens": 3584,
+        "cachedInputTokens": 58112,
+        "calls": 1
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-includes",
+              "passed": false,
+              "reason": "expected \"CFTR\" in the answer — answer began \"How should we rank “called most often” — by total variant-call events per gene, or by the number of samples that had any…\""
+            },
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"run_readonly_sql\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": false,
+              "reason": "the agent never ran a SQL query"
+            },
+            {
+              "id": "result-set-match",
+              "passed": false,
+              "reason": "the agent ran no successful run_readonly_sql to compare"
+            }
+          ],
+          "sql": [],
+          "answer": "How should we rank “called most often” — by total variant-call events per gene, or by the number of samples that had any call in the gene?",
+          "steps": 1,
+          "calledTools": [
+            "ask_clarification"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "clarification": "How should we rank “called most often” — by total variant-call events per gene, or by the number of samples that had any call in the gene?\n\nOptions offered to the user:\n- Total calls per gene — Count all variant-call rows linked to each gene (multiple calls per sample can count).\n- Samples with any call — Count distinct samples that had at least one variant call in the gene.",
+          "failureLabel": "clarified",
+          "durationMs": 25702
+        },
+        {
+          "attempt": 2,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-includes",
+              "passed": true
+            },
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": true
+            },
+            {
+              "id": "result-set-match",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT g.hgnc_symbol AS gene, COUNT(*) AS call_count\nFROM world_cup.genomics.variant_calls vc\nJOIN world_cup.genomics.samples s ON vc.sample_id = s.id\nJOIN world_cup.genomics.variants v ON vc.variant_id = v.id\nJOIN world_cup.genomics.genes g ON v.gene_id = g.id\nWHERE s.is_control = false\nGROUP BY g.hgnc_symbol\nORDER BY call_count DESC, gene ASC\nLIMIT 5;",
+          "sql": [
+            {
+              "sql": "SELECT g.hgnc_symbol AS gene, COUNT(*) AS call_count\nFROM world_cup.genomics.variant_calls vc\nJOIN world_cup.genomics.samples s ON vc.sample_id = s.id\nJOIN world_cup.genomics.variants v ON vc.variant_id = v.id\nJOIN world_cup.genomics.genes g ON v.gene_id = g.id\nWHERE s.is_control = false\nGROUP BY g.hgnc_symbol\nORDER BY call_count DESC, gene ASC\nLIMIT 5;",
+              "ok": true,
+              "rowCount": 5
+            }
+          ],
+          "answer": "Top five genes by number of variant calls across non-control samples:\n- CFTR — 566 calls\n- TP53 — 208\n- XIST — 205\n- MUTYH — 201\n- NF2 — 187\n\nTakeaway: CFTR stands out with far more calls than any other gene in the cohort.\n\nData used: world_cup.genomics.variant_calls joined to world_cup.genomics.variants and world_cup.genomics.genes for gene symbols, and to world_cup.genomics.samples to exclude controls.\n\nNote: Counts include all call qualities and genotypes. If you’d prefer high-confidence (PASS) only or carriers-only (0/1 and 1/1), I can rerun. Excludes control samples, as configured.",
+          "steps": 5,
+          "calledTools": [
+            "describe_entity",
+            "describe_entity",
+            "describe_entity",
+            "describe_entity",
+            "run_readonly_sql"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 72893,
+          "usage": {
+            "inputTokens": 67130,
+            "outputTokens": 4410,
+            "totalTokens": 71540,
+            "reasoningTokens": 3584,
+            "cachedInputTokens": 58112,
+            "calls": 1
+          }
+        },
+        {
+          "attempt": 3,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-includes",
+              "passed": false,
+              "reason": "expected \"CFTR\" in the answer — answer was \"Do you want “most often” to mean raw call volume or sample coverage?\""
+            },
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"run_readonly_sql\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": false,
+              "reason": "the agent never ran a SQL query"
+            },
+            {
+              "id": "result-set-match",
+              "passed": false,
+              "reason": "the agent ran no successful run_readonly_sql to compare"
+            }
+          ],
+          "sql": [],
+          "answer": "Do you want “most often” to mean raw call volume or sample coverage?",
+          "steps": 1,
+          "calledTools": [
+            "ask_clarification"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "clarification": "Do you want “most often” to mean raw call volume or sample coverage?\n\nOptions offered to the user:\n- By total variant calls per gene — Count all variant call rows for each gene (PASS and LOW_QUAL), excluding control samples.\n- By number of samples with any call — Count distinct samples that have at least one variant in the gene, excluding control samples.",
+          "failureLabel": "clarified",
+          "durationMs": 26959
+        }
+      ]
+    },
+    {
+      "id": "mean-allele-fraction",
+      "category": "metric-definition",
+      "question": "What is our mean allele fraction, and how many calls is it based on?",
+      "difficulty": "hard",
+      "verdict": "PASS",
+      "runs": 3,
+      "passes": 3,
+      "flaky": false,
+      "durationMs": 92113,
+      "usage": {
+        "inputTokens": 53487,
+        "outputTokens": 6582,
+        "totalTokens": 60069,
+        "reasoningTokens": 5504,
+        "cachedInputTokens": 51456,
+        "calls": 3
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": true
+            },
+            {
+              "id": "result-set-match",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT\n  AVG(vc.alt_read_count::numeric / NULLIF(vc.total_read_count, 0)) FILTER (\n    WHERE vc.filter_status = 'PASS' AND vc.total_read_count >= 20 AND s.is_control = false\n  ) AS mean_allele_fraction,\n  COUNT(*) FILTER (\n    WHERE vc.filter_status = 'PASS' AND vc.total_read_count >= 20 AND s.is_control = false\n  ) AS call_count\nFROM world_cup.genomics.variant_calls vc\nJOIN world_cup.genomics.samples s ON s.id = vc.sample_id;",
+          "sql": [
+            {
+              "sql": "SELECT\n  AVG(vc.alt_read_count::numeric / NULLIF(vc.total_read_count, 0)) FILTER (\n    WHERE vc.filter_status = 'PASS' AND vc.total_read_count >= 20 AND s.is_control = false\n  ) AS mean_allele_fraction,\n  COUNT(*) FILTER (\n    WHERE vc.filter_status = 'PASS' AND vc.total_read_count >= 20 AND s.is_control = false\n  ) AS call_count\nFROM world_cup.genomics.variant_calls vc\nJOIN world_cup.genomics.samples s ON s.id = vc.sample_id;",
+              "ok": true,
+              "rowCount": 1
+            }
+          ],
+          "answer": "- Mean allele fraction: 0.416 (average of alt_read_count / total_read_count across qualifying calls)\n- Calls included: 3,640 PASS calls with total_read_count ≥ 20\n\nSource entities: world_cup.genomics.variant_calls joined to world_cup.genomics.samples.\n\nTakeaway: On average, about 41.6% of reads support the alternate allele across high-confidence calls.\n\nNote: Excludes control samples, as configured.",
+          "steps": 1,
+          "calledTools": [
+            "run_readonly_sql"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 32006,
+          "usage": {
+            "inputTokens": 17817,
+            "outputTokens": 2238,
+            "totalTokens": 20055,
+            "reasoningTokens": 1856,
+            "cachedInputTokens": 17152,
+            "calls": 1
+          }
+        },
+        {
+          "attempt": 2,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": true
+            },
+            {
+              "id": "result-set-match",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT\n  AVG(vc.alt_read_count::numeric / NULLIF(vc.total_read_count, 0)) FILTER (WHERE vc.filter_status = 'PASS' AND vc.total_read_count >= 20) AS mean_allele_fraction,\n  COUNT(*) FILTER (WHERE vc.filter_status = 'PASS' AND vc.total_read_count >= 20) AS calls_included\nFROM world_cup.genomics.variant_calls vc\nJOIN world_cup.genomics.samples s ON s.id = vc.sample_id\nWHERE COALESCE(s.is_control, false) = false;",
+          "sql": [
+            {
+              "sql": "SELECT\n  AVG(vc.alt_read_count::numeric / NULLIF(vc.total_read_count, 0)) FILTER (WHERE vc.filter_status = 'PASS' AND vc.total_read_count >= 20) AS mean_allele_fraction,\n  COUNT(*) FILTER (WHERE vc.filter_status = 'PASS' AND vc.total_read_count >= 20) AS calls_included\nFROM world_cup.genomics.variant_calls vc\nJOIN world_cup.genomics.samples s ON s.id = vc.sample_id\nWHERE COALESCE(s.is_control, false) = false;",
+              "ok": true,
+              "rowCount": 1
+            }
+          ],
+          "answer": "- Mean allele fraction: 0.4158\n- Calls included: 3,640 high-confidence calls (PASS) with ≥20 total reads\n\nComputed from world_cup.genomics.variant_calls joined to world_cup.genomics.samples. Takeaway: on average, about 41.6% of reads support the alternate allele across high-confidence calls. Excludes control samples, as configured.",
+          "steps": 1,
+          "calledTools": [
+            "run_readonly_sql"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 25782,
+          "usage": {
+            "inputTokens": 17810,
+            "outputTokens": 1955,
+            "totalTokens": 19765,
+            "reasoningTokens": 1600,
+            "cachedInputTokens": 17152,
+            "calls": 1
+          }
+        },
+        {
+          "attempt": 3,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": true
+            },
+            {
+              "id": "result-set-match",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT\n  AVG(vc.alt_read_count::numeric / NULLIF(vc.total_read_count, 0)) FILTER (WHERE vc.filter_status = 'PASS' AND vc.total_read_count >= 20)     AS mean_allele_fraction,\n  COUNT(*) FILTER (WHERE vc.filter_status = 'PASS' AND vc.total_read_count >= 20)                                                    AS contributing_calls\nFROM world_cup.genomics.variant_calls vc\nJOIN world_cup.genomics.samples s ON s.id = vc.sample_id\nWHERE s.is_control IS NOT TRUE;",
+          "sql": [
+            {
+              "sql": "SELECT\n  AVG(vc.alt_read_count::numeric / NULLIF(vc.total_read_count, 0)) FILTER (WHERE vc.filter_status = 'PASS' AND vc.total_read_count >= 20)     AS mean_allele_fraction,\n  COUNT(*) FILTER (WHERE vc.filter_status = 'PASS' AND vc.total_read_count >= 20)                                                    AS contributing_calls\nFROM world_cup.genomics.variant_calls vc\nJOIN world_cup.genomics.samples s ON s.id = vc.sample_id\nWHERE s.is_control IS NOT TRUE;",
+              "ok": true,
+              "rowCount": 1
+            }
+          ],
+          "answer": "- Mean allele fraction: 0.416\n- Based on: 3,640 variant calls\n\nDetails: Computed as the governed metric AVG(alt_read_count / total_read_count) over PASS calls with total_read_count ≥ 20 from world_cup.genomics.variant_calls, joining to world_cup.genomics.samples to apply the default sample filter. Excludes control samples, as configured.",
+          "steps": 1,
+          "calledTools": [
+            "run_readonly_sql"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 34325,
+          "usage": {
+            "inputTokens": 17860,
+            "outputTokens": 2389,
+            "totalTokens": 20249,
+            "reasoningTokens": 2048,
+            "cachedInputTokens": 17152,
+            "calls": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "cohort-sample-count",
+      "category": "default-filter",
+      "question": "How many samples do we have in the cohort?",
+      "difficulty": "medium",
+      "verdict": "PASS",
+      "runs": 3,
+      "passes": 3,
+      "flaky": false,
+      "durationMs": 55576,
+      "usage": {
+        "inputTokens": 61921,
+        "outputTokens": 2863,
+        "totalTokens": 64784,
+        "reasoningTokens": 2304,
+        "cachedInputTokens": 58496,
+        "calls": 3
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": true
+            },
+            {
+              "id": "result-set-match",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT COUNT(*) AS cohort_samples\nFROM world_cup.genomics.samples\nWHERE is_control = false;",
+          "sql": [
+            {
+              "sql": "SELECT COUNT(*) AS cohort_samples\nFROM world_cup.genomics.samples\nWHERE is_control = false;",
+              "ok": true,
+              "rowCount": 1
+            }
+          ],
+          "answer": "We have 125 samples in the cohort.\n\nSource: world_cup.genomics.samples. Excludes control samples, as configured.",
+          "steps": 2,
+          "calledTools": [
+            "describe_entity",
+            "run_readonly_sql"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 21719,
+          "usage": {
+            "inputTokens": 27448,
+            "outputTokens": 1083,
+            "totalTokens": 28531,
+            "reasoningTokens": 896,
+            "cachedInputTokens": 26240,
+            "calls": 1
+          }
+        },
+        {
+          "attempt": 2,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": true
+            },
+            {
+              "id": "result-set-match",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT COUNT(*) AS sample_count\nFROM world_cup.genomics.samples\nWHERE is_control = false;",
+          "sql": [
+            {
+              "sql": "SELECT COUNT(*) AS sample_count\nFROM world_cup.genomics.samples\nWHERE is_control = false;",
+              "ok": true,
+              "rowCount": 1
+            }
+          ],
+          "answer": "We have 125 samples in the cohort.\n\nNotes\n- Source: world_cup.genomics.samples\n- Excludes control samples, as configured.",
+          "steps": 1,
+          "calledTools": [
+            "run_readonly_sql"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 18676,
+          "usage": {
+            "inputTokens": 17242,
+            "outputTokens": 896,
+            "totalTokens": 18138,
+            "reasoningTokens": 704,
+            "cachedInputTokens": 15616,
+            "calls": 1
+          }
+        },
+        {
+          "attempt": 3,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": true
+            },
+            {
+              "id": "result-set-match",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT COUNT(*) AS sample_count\nFROM world_cup.genomics.samples\nWHERE is_control IS DISTINCT FROM TRUE;",
+          "sql": [
+            {
+              "sql": "SELECT COUNT(*) AS sample_count\nFROM world_cup.genomics.samples\nWHERE is_control IS DISTINCT FROM TRUE;",
+              "ok": true,
+              "rowCount": 1
+            }
+          ],
+          "answer": "We have 125 samples in the cohort.\n\nNotes: Excludes control samples, as configured. Data source: world_cup.genomics.samples.",
+          "steps": 1,
+          "calledTools": [
+            "run_readonly_sql"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 15181,
+          "usage": {
+            "inputTokens": 17231,
+            "outputTokens": 884,
+            "totalTokens": 18115,
+            "reasoningTokens": 704,
+            "cachedInputTokens": 16640,
+            "calls": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "subjects-by-superpopulation",
+      "category": "multi-step-join",
+      "question": "How many subjects do we have in each superpopulation?",
+      "difficulty": "hard",
+      "verdict": "PASS",
+      "runs": 3,
+      "passes": 3,
+      "flaky": false,
+      "durationMs": 143746,
+      "usage": {
+        "inputTokens": 142567,
+        "outputTokens": 7833,
+        "totalTokens": 150400,
+        "reasoningTokens": 6016,
+        "cachedInputTokens": 129920,
+        "calls": 3
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-includes",
+              "passed": true
+            },
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": true
+            },
+            {
+              "id": "result-set-match",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT sp.code AS superpopulation_code,\n       sp.name AS superpopulation_name,\n       COUNT(s.id) AS subject_count\nFROM world_cup.genomics.superpopulations sp\nLEFT JOIN world_cup.genomics.ancestry_groups ag\n  ON ag.superpopulation_id = sp.id\nLEFT JOIN world_cup.genomics.subjects s\n  ON s.ancestry_group_id = ag.id\nGROUP BY sp.code, sp.name\nORDER BY subject_count DESC, sp.code;",
+          "sql": [
+            {
+              "sql": "SELECT sp.code AS superpopulation_code,\n       sp.name AS superpopulation_name,\n       COUNT(s.id) AS subject_count\nFROM world_cup.genomics.superpopulations sp\nLEFT JOIN world_cup.genomics.ancestry_groups ag\n  ON ag.superpopulation_id = sp.id\nLEFT JOIN world_cup.genomics.subjects s\n  ON s.ancestry_group_id = ag.id\nGROUP BY sp.code, sp.name\nORDER BY subject_count DESC, sp.code;",
+              "ok": true,
+              "rowCount": 8
+            }
+          ],
+          "answer": "Subjects by superpopulation (code — name): \n- AFR — African: 36 \n- AMR — Admixed American: 16 \n- EAS — East Asian: 16 \n- EUR — European: 16 \n- SAS — South Asian: 16 \n- OCE — Oceanian: 10 \n- MID — Middle Eastern: 5 \n- OTH — Other or Unassigned: 5 \n\nTakeaway: African is the largest group (36). Four superpopulations tie at 16, followed by Oceanian (10); Middle Eastern and Other/Unassigned are smaller (5 each).\n\nEntities used: world_cup.genomics.subjects joined via world_cup.genomics.ancestry_groups to world_cup.genomics.superpopulations. No control-sample filter applies here (counts are of enrolled subjects; sample-level exclusions are not relevant).",
+          "steps": 4,
+          "calledTools": [
+            "describe_entity",
+            "describe_entity",
+            "describe_entity",
+            "run_readonly_sql"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 40003,
+          "usage": {
+            "inputTokens": 47037,
+            "outputTokens": 2271,
+            "totalTokens": 49308,
+            "reasoningTokens": 1664,
+            "cachedInputTokens": 43648,
+            "calls": 1
+          }
+        },
+        {
+          "attempt": 2,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-includes",
+              "passed": true
+            },
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": true
+            },
+            {
+              "id": "result-set-match",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT sp.code AS superpopulation_code,\n       sp.name AS superpopulation_name,\n       COUNT(DISTINCT s.id) AS subject_count\nFROM world_cup.genomics.superpopulations sp\nLEFT JOIN world_cup.genomics.ancestry_groups ag\n  ON ag.superpopulation_id = sp.id\nLEFT JOIN world_cup.genomics.subjects s\n  ON s.ancestry_group_id = ag.id\nGROUP BY sp.code, sp.name\nORDER BY subject_count DESC, sp.code;",
+          "sql": [
+            {
+              "sql": "SELECT sp.code AS superpopulation_code,\n       sp.name AS superpopulation_name,\n       COUNT(DISTINCT s.id) AS subject_count\nFROM world_cup.genomics.superpopulations sp\nLEFT JOIN world_cup.genomics.ancestry_groups ag\n  ON ag.superpopulation_id = sp.id\nLEFT JOIN world_cup.genomics.subjects s\n  ON s.ancestry_group_id = ag.id\nGROUP BY sp.code, sp.name\nORDER BY subject_count DESC, sp.code;",
+              "ok": true,
+              "rowCount": 8
+            }
+          ],
+          "answer": "Subjects by superpopulation (subjects → ancestry_groups → superpopulations):\n- AFR — African: 36\n- AMR — Admixed American: 16\n- EAS — East Asian: 16\n- EUR — European: 16\n- SAS — South Asian: 16\n- OCE — Oceanian: 10\n- MID — Middle Eastern: 5\n- OTH — Other or Unassigned: 5\n\nTakeaway: African is the largest group (36). Four groups tie at 16 each (AMR, EAS, EUR, SAS), followed by Oceanian (10); Middle Eastern and Other/Unassigned are smallest (5 each).\n\nData sources: world_cup.genomics.subjects joined via world_cup.genomics.ancestry_groups to world_cup.genomics.superpopulations. No control-sample filter applies here, as this query does not read sample rows.",
+          "steps": 4,
+          "calledTools": [
+            "describe_entity",
+            "describe_entity",
+            "describe_entity",
+            "run_readonly_sql"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 45841,
+          "usage": {
+            "inputTokens": 47545,
+            "outputTokens": 2503,
+            "totalTokens": 50048,
+            "reasoningTokens": 1920,
+            "cachedInputTokens": 41600,
+            "calls": 1
+          }
+        },
+        {
+          "attempt": 3,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-includes",
+              "passed": true
+            },
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": true
+            },
+            {
+              "id": "result-set-match",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT sp.code AS superpopulation_code,\n       sp.name AS superpopulation_name,\n       COUNT(*) AS subject_count\nFROM world_cup.genomics.subjects s\nJOIN world_cup.genomics.ancestry_groups ag\n  ON s.ancestry_group_id = ag.id\nJOIN world_cup.genomics.superpopulations sp\n  ON ag.superpopulation_id = sp.id\nGROUP BY sp.code, sp.name\nORDER BY sp.code;",
+          "sql": [
+            {
+              "sql": "SELECT sp.code AS superpopulation_code,\n       sp.name AS superpopulation_name,\n       COUNT(*) AS subject_count\nFROM world_cup.genomics.subjects s\nJOIN world_cup.genomics.ancestry_groups ag\n  ON s.ancestry_group_id = ag.id\nJOIN world_cup.genomics.superpopulations sp\n  ON ag.superpopulation_id = sp.id\nGROUP BY sp.code, sp.name\nORDER BY sp.code;",
+              "ok": true,
+              "rowCount": 8
+            }
+          ],
+          "answer": "Subjects by superpopulation:\n- African (AFR): 36\n- Admixed American (AMR): 16\n- East Asian (EAS): 16\n- European (EUR): 16\n- South Asian (SAS): 16\n- Oceanian (OCE): 10\n- Middle Eastern (MID): 5\n- Other or Unassigned (OTH): 5\n\nTakeaway: African (AFR) is the largest group (36), while Middle Eastern (MID) and Other/Unassigned (OTH) are the smallest (5 each). Total across superpopulations: 120 subjects.\n\nEntities used: world_cup.genomics.subjects joined via world_cup.genomics.ancestry_groups to world_cup.genomics.superpopulations. This is a subject count, so the control-sample exclusion does not apply.",
+          "steps": 4,
+          "calledTools": [
+            "describe_entity",
+            "describe_entity",
+            "describe_entity",
+            "run_readonly_sql"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 57902,
+          "usage": {
+            "inputTokens": 47985,
+            "outputTokens": 3059,
+            "totalTokens": 51044,
+            "reasoningTokens": 2432,
+            "cachedInputTokens": 44672,
+            "calls": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "expression-data-discovery",
+      "category": "discovery",
+      "question": "What expression data do we have?",
+      "difficulty": "easy",
+      "verdict": "FAIL",
+      "runs": 3,
+      "passes": 2,
+      "flaky": true,
+      "failureLabel": "timeout",
+      "reason": "run-error",
+      "durationMs": 531048,
+      "usage": {
+        "inputTokens": 108375,
+        "outputTokens": 9268,
+        "totalTokens": 117643,
+        "reasoningTokens": 7680,
+        "cachedInputTokens": 99840,
+        "calls": 5
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-matches",
+              "passed": true
+            },
+            {
+              "id": "check-did-not-call",
+              "passed": true
+            },
+            {
+              "id": "llm-judge",
+              "passed": true
+            }
+          ],
+          "sql": [],
+          "answer": "Here’s what’s available for gene expression in this dataset:\n\n- Where the expression lives\n  - world_cup.genomics.gene_expression: one row per gene per sample.\n    - tpm (numeric): transcripts per million — the normalised expression level to use for analysis.\n    - raw_count (bigint): unnormalised read count (not comparable across samples).\n    - Keys: gene_id → world_cup.genomics.genes.id; sample_id → world_cup.genomics.samples.id.\n\n- How to get gene and sample context\n  - Genes: join gene_expression.gene_id to world_cup.genomics.genes to report hgnc_symbol and gene_name (plus ensembl_id, chromosome, etc.).\n  - Samples: join gene_expression.sample_id to world_cup.genomics.samples for sample_code, tissue, assay, sequencer, collected_on (coverage is 2023–2024), mean_coverage, and is_control. From samples you can reach subjects and, if needed, ancestry via subjects → ancestry_groups → superpopulations.\n\n- What is and isn’t included\n  - Expression is gene-level (via gene_id). There is no transcript-level expression table; world_cup.genomics.transcripts holds transcript metadata only.\n  - TPM of zero is a real measured value (not missing) and should be kept when averaging or summarising expression.\n\n- Conventions to apply in analyses\n  - Use TPM as “expression level”; raw_count is for depth/context.\n  - Control samples are flagged in samples.is_control; by default, exclude them from expression aggregates unless you’re explicitly analysing controls.\n\nIf you want, I can pull a quick field listing for genes or samples you plan to stratify by (e.g., tissue, assay) or compute an example summary (e.g., mean TPM per gene by tissue) using these tables.",
+          "steps": 4,
+          "calledTools": [
+            "describe_entity",
+            "describe_entity",
+            "describe_entity",
+            "describe_entity"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 75081,
+          "usage": {
+            "inputTokens": 50696,
+            "outputTokens": 4398,
+            "totalTokens": 55094,
+            "reasoningTokens": 3520,
+            "cachedInputTokens": 45696,
+            "calls": 2
+          }
+        },
+        {
+          "attempt": 2,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-matches",
+              "passed": true
+            },
+            {
+              "id": "check-did-not-call",
+              "passed": true
+            },
+            {
+              "id": "llm-judge",
+              "passed": true
+            }
+          ],
+          "sql": [],
+          "answer": "Here’s what’s available for expression data in this dataset:\n\n- What it records\n  - Gene-level expression per sample: one row per (gene, sample) in world_cup.genomics.gene_expression.\n  - Measures:\n    - tpm: transcripts per million (the normalized expression level, comparable across samples/genes). A value of 0 means “not expressed” in that sample, not missing.\n    - raw_count: the unnormalized read count (scales with sequencing depth; not comparable across samples).\n\n- How to join and label it\n  - gene_expression.gene_id → world_cup.genomics.genes.id to report the gene by genes.hgnc_symbol (and access Ensembl ID, name, chromosome, etc.).\n  - gene_expression.sample_id → world_cup.genomics.samples.id to enrich with sample metadata (tissue, assay, collection date, sequencer, and a control flag) and then to subjects/phenotypes/ancestry if needed.\n\n- Granularity/scope\n  - Expression is at the gene level (by gene_id). There isn’t a transcript-level expression table here; transcripts are cataloged in world_cup.genomics.transcripts but without expression measures.\n\nEntities referenced: world_cup.genomics.gene_expression, world_cup.genomics.genes, world_cup.genomics.samples, world_cup.genomics.transcripts.",
+          "steps": 3,
+          "calledTools": [
+            "describe_entity",
+            "describe_entity",
+            "describe_entity"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 57348,
+          "usage": {
+            "inputTokens": 40343,
+            "outputTokens": 4074,
+            "totalTokens": 44417,
+            "reasoningTokens": 3520,
+            "cachedInputTokens": 37504,
+            "calls": 2
+          }
+        },
+        {
+          "attempt": 3,
+          "verdict": "ERROR",
+          "checks": [],
+          "sql": [],
+          "answer": "",
+          "steps": 3,
+          "calledTools": [
+            "describe_entity",
+            "describe_entity",
+            "describe_entity"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "timeout",
+          "error": "timeout after 300s",
+          "durationMs": 398619,
+          "usage": {
+            "inputTokens": 17336,
+            "outputTokens": 796,
+            "totalTokens": 18132,
+            "reasoningTokens": 640,
+            "cachedInputTokens": 16640,
+            "calls": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "pathogenic-carrier-samples",
+      "category": "domain-semantics",
+      "question": "How many samples carry a pathogenic variant?",
+      "difficulty": "hard",
+      "verdict": "FAIL",
+      "runs": 3,
+      "passes": 2,
+      "flaky": true,
+      "failureLabel": "clarified",
+      "reason": "check-called-tool",
+      "durationMs": 141709,
+      "usage": {
+        "inputTokens": 108048,
+        "outputTokens": 6880,
+        "totalTokens": 114928,
+        "reasoningTokens": 5504,
+        "cachedInputTokens": 100608,
+        "calls": 2
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": true
+            },
+            {
+              "id": "result-set-match",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT\n  COUNT(DISTINCT vc.sample_id) FILTER (\n    WHERE v.clinical_significance = 'PATHOGENIC'\n      AND vc.genotype IN ('0/1','1/1')\n  ) AS samples_carry_pathogenic_any_quality,\n  COUNT(DISTINCT vc.sample_id) FILTER (\n    WHERE v.clinical_significance = 'PATHOGENIC'\n      AND vc.genotype IN ('0/1','1/1')\n      AND vc.filter_status = 'PASS'\n  ) AS samples_carry_pathogenic_high_conf\nFROM world_cup.genomics.variant_calls vc\nJOIN world_cup.genomics.variants v ON vc.variant_id = v.id\nJOIN world_cup.genomics.samples s ON vc.sample_id = s.id\nWHERE s.is_control = false;",
+          "sql": [
+            {
+              "sql": "SELECT\n  COUNT(DISTINCT vc.sample_id) FILTER (\n    WHERE v.clinical_significance = 'PATHOGENIC'\n      AND vc.genotype IN ('0/1','1/1')\n  ) AS samples_carry_pathogenic_any_quality,\n  COUNT(DISTINCT vc.sample_id) FILTER (\n    WHERE v.clinical_significance = 'PATHOGENIC'\n      AND vc.genotype IN ('0/1','1/1')\n      AND vc.filter_status = 'PASS'\n  ) AS samples_carry_pathogenic_high_conf\nFROM world_cup.genomics.variant_calls vc\nJOIN world_cup.genomics.variants v ON vc.variant_id = v.id\nJOIN world_cup.genomics.samples s ON vc.sample_id = s.id\nWHERE s.is_control = false;",
+              "ok": true,
+              "rowCount": 1
+            }
+          ],
+          "answer": "67 samples carry a pathogenic variant.\n\nContext:\n- Using world_cup.genomics.variant_calls joined to world_cup.genomics.variants and world_cup.genomics.samples.\n- Carrier = genotype 0/1 or 1/1 at a variant with clinical_significance = 'PATHOGENIC'.\n- High-confidence view: 60 samples have at least one PASS pathogenic call.\n\nTakeaway: Most carriers (60 of 67) are supported by high-confidence calls.\n\nApplied default filter: excludes control samples (samples.is_control = true).",
+          "steps": 4,
+          "calledTools": [
+            "describe_entity",
+            "describe_entity",
+            "describe_entity",
+            "run_readonly_sql"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 54331,
+          "usage": {
+            "inputTokens": 54579,
+            "outputTokens": 3405,
+            "totalTokens": 57984,
+            "reasoningTokens": 2752,
+            "cachedInputTokens": 49664,
+            "calls": 1
+          }
+        },
+        {
+          "attempt": 2,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": true
+            },
+            {
+              "id": "result-set-match",
+              "passed": true
+            }
+          ],
+          "finalSql": "WITH per_sample AS (\n  SELECT\n    vc.sample_id,\n    MAX(CASE WHEN v.clinical_significance = 'PATHOGENIC' AND vc.genotype IN ('0/1','1/1') THEN 1 ELSE 0 END) AS is_path_carrier,\n    MAX(CASE WHEN v.clinical_significance = 'PATHOGENIC' AND vc.genotype IN ('0/1','1/1') AND vc.filter_status = 'PASS' THEN 1 ELSE 0 END) AS is_path_carrier_pass\n  FROM world_cup.genomics.variant_calls vc\n  JOIN world_cup.genomics.variants v ON v.id = vc.variant_id\n  JOIN world_cup.genomics.samples s ON s.id = vc.sample_id\n  WHERE s.is_control = false\n  GROUP BY vc.sample_id\n)\nSELECT\n  COUNT(*) FILTER (WHERE is_path_carrier = 1) AS samples_with_pathogenic_variant,\n  COUNT(*) FILTER (WHERE is_path_carrier_pass = 1) AS samples_with_pathogenic_variant_high_confidence\nFROM per_sample;",
+          "sql": [
+            {
+              "sql": "WITH per_sample AS (\n  SELECT\n    vc.sample_id,\n    MAX(CASE WHEN v.clinical_significance = 'PATHOGENIC' AND vc.genotype IN ('0/1','1/1') THEN 1 ELSE 0 END) AS is_path_carrier,\n    MAX(CASE WHEN v.clinical_significance = 'PATHOGENIC' AND vc.genotype IN ('0/1','1/1') AND vc.filter_status = 'PASS' THEN 1 ELSE 0 END) AS is_path_carrier_pass\n  FROM world_cup.genomics.variant_calls vc\n  JOIN world_cup.genomics.variants v ON v.id = vc.variant_id\n  JOIN world_cup.genomics.samples s ON s.id = vc.sample_id\n  WHERE s.is_control = false\n  GROUP BY vc.sample_id\n)\nSELECT\n  COUNT(*) FILTER (WHERE is_path_carrier = 1) AS samples_with_pathogenic_variant,\n  COUNT(*) FILTER (WHERE is_path_carrier_pass = 1) AS samples_with_pathogenic_variant_high_confidence\nFROM per_sample;",
+              "ok": true,
+              "rowCount": 1
+            }
+          ],
+          "answer": "67 non-control samples carry at least one PATHOGENIC variant (counting any call regardless of quality). Of these, 60 samples have a high-confidence (PASS) pathogenic call. Carriers were defined as genotypes 0/1 or 1/1, and “pathogenic” means the PATHOGENIC class only.\n\nWhat stands out: Most carriers (about 90%) are supported by high-confidence calls.\n\nEntities used: world_cup.genomics.variant_calls, world_cup.genomics.variants, world_cup.genomics.samples. Default filters: excludes control samples, as configured.",
+          "steps": 4,
+          "calledTools": [
+            "describe_entity",
+            "describe_entity",
+            "describe_entity",
+            "run_readonly_sql"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 54299,
+          "usage": {
+            "inputTokens": 53469,
+            "outputTokens": 3475,
+            "totalTokens": 56944,
+            "reasoningTokens": 2752,
+            "cachedInputTokens": 50944,
+            "calls": 1
+          }
+        },
+        {
+          "attempt": 3,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"run_readonly_sql\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": false,
+              "reason": "the agent never ran a SQL query"
+            },
+            {
+              "id": "result-set-match",
+              "passed": false,
+              "reason": "the agent ran no successful run_readonly_sql to compare"
+            }
+          ],
+          "sql": [],
+          "answer": "Should we count only high‑confidence pathogenic calls, or include LOW_QUAL too?",
+          "steps": 1,
+          "calledTools": [
+            "ask_clarification"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "clarification": "Should we count only high‑confidence pathogenic calls, or include LOW_QUAL too?\n\nOptions offered to the user:\n- PASS only — Count samples carrying a PATHOGENIC variant where the call’s filter_status = 'PASS'.\n- Include all calls — Count samples carrying a PATHOGENIC variant including LOW_QUAL as well (PASS + LOW_QUAL).",
+          "failureLabel": "clarified",
+          "durationMs": 33079
+        }
+      ]
+    },
+    {
+      "id": "genes-silent-in-most-samples",
+      "category": "domain-semantics",
+      "question": "Which genes are silent in more than half of our samples?",
+      "difficulty": "hard",
+      "verdict": "PASS",
+      "runs": 3,
+      "passes": 3,
+      "flaky": false,
+      "durationMs": 352141,
+      "usage": {
+        "inputTokens": 191144,
+        "outputTokens": 17190,
+        "totalTokens": 208334,
+        "reasoningTokens": 13888,
+        "cachedInputTokens": 182784,
+        "calls": 3
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-includes",
+              "passed": true
+            },
+            {
+              "id": "check-matches",
+              "passed": true
+            },
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": true
+            },
+            {
+              "id": "result-set-match",
+              "passed": true
+            }
+          ],
+          "finalSql": "WITH non_control_expr_samples AS (\n  SELECT COUNT(DISTINCT s.id) AS n_samples\n  FROM world_cup.genomics.samples s\n  JOIN world_cup.genomics.gene_expression ge ON ge.sample_id = s.id\n  WHERE s.is_control = false\n),\nper_gene AS (\n  SELECT\n    ge.gene_id,\n    COUNT(DISTINCT ge.sample_id) FILTER (WHERE ge.tpm = 0) AS zero_tpm_samples\n  FROM world_cup.genomics.gene_expression ge\n  JOIN world_cup.genomics.samples s ON s.id = ge.sample_id\n  WHERE s.is_control = false\n  GROUP BY ge.gene_id\n)\nSELECT\n  g.hgnc_symbol,\n  p.zero_tpm_samples,\n  n.n_samples AS total_samples,\n  ROUND(100.0 * p.zero_tpm_samples / NULLIF(n.n_samples,0), 2) AS pct_samples_silent\nFROM per_gene p\nCROSS JOIN non_control_expr_samples n\nJOIN world_cup.genomics.genes g ON g.id = p.gene_id\nWHERE p.zero_tpm_samples > n.n_samples / 2.0\nORDER BY pct_samples_silent DESC, g.hgnc_symbol;",
+          "sql": [
+            {
+              "sql": "WITH non_control_expr_samples AS (\n  SELECT COUNT(DISTINCT s.id) AS n_samples\n  FROM world_cup.genomics.samples s\n  JOIN world_cup.genomics.gene_expression ge ON ge.sample_id = s.id\n  WHERE s.is_control = false\n),\nper_gene AS (\n  SELECT\n    ge.gene_id,\n    COUNT(DISTINCT ge.sample_id) FILTER (WHERE ge.tpm = 0) AS zero_tpm_samples\n  FROM world_cup.genomics.gene_expression ge\n  JOIN world_cup.genomics.samples s ON s.id = ge.sample_id\n  WHERE s.is_control = false\n  GROUP BY ge.gene_id\n)\nSELECT\n  g.hgnc_symbol,\n  p.zero_tpm_samples,\n  n.n_samples AS total_samples,\n  ROUND(100.0 * p.zero_tpm_samples / NULLIF(n.n_samples,0), 2) AS pct_samples_silent\nFROM per_gene p\nCROSS JOIN non_control_expr_samples n\nJOIN world_cup.genomics.genes g ON g.id = p.gene_id\nWHERE p.zero_tpm_samples > n.n_samples / 2.0\nORDER BY pct_samples_silent DESC, g.hgnc_symbol;",
+              "ok": true,
+              "rowCount": 9
+            }
+          ],
+          "answer": "Genes silent (TPM = 0) in more than half of our non-control expression samples (N = 68):\n\n- RET — 63.24% silent (43 of 68)\n- F8 — 61.76% silent (42 of 68)\n- MLH1 — 60.29% silent (41 of 68)\n- TSC2 — 58.82% silent (40 of 68)\n- TP53 — 55.88% silent (38 of 68)\n- KRAS — 54.41% silent (37 of 68)\n- PMS2 — 54.41% silent (37 of 68)\n- NF2 — 52.94% silent (36 of 68)\n- NF1 — 51.47% silent (35 of 68)\n\nTakeaway: 9 genes meet the “silent in >50% of samples” criterion, led by RET (~63%).\n\nData used: world_cup.genomics.gene_expression joined to world_cup.genomics.samples (for control filtering) and world_cup.genomics.genes (for symbols). Excludes control samples, as configured.",
+          "steps": 4,
+          "calledTools": [
+            "describe_entity",
+            "describe_entity",
+            "describe_entity",
+            "run_readonly_sql"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 77423,
+          "usage": {
+            "inputTokens": 50342,
+            "outputTokens": 4395,
+            "totalTokens": 54737,
+            "reasoningTokens": 3520,
+            "cachedInputTokens": 46336,
+            "calls": 1
+          }
+        },
+        {
+          "attempt": 2,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-includes",
+              "passed": true
+            },
+            {
+              "id": "check-matches",
+              "passed": true
+            },
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": true
+            },
+            {
+              "id": "result-set-match",
+              "passed": true
+            }
+          ],
+          "finalSql": "WITH per_gene AS (\n  SELECT\n    ge.gene_id,\n    COUNT(*) FILTER (WHERE ge.tpm = 0) AS silent_samples,\n    COUNT(*) AS measured_samples\n  FROM world_cup.genomics.gene_expression ge\n  JOIN world_cup.genomics.samples s\n    ON ge.sample_id = s.id\n  WHERE s.is_control = false\n  GROUP BY ge.gene_id\n)\nSELECT\n  g.hgnc_symbol,\n  p.silent_samples,\n  p.measured_samples,\n  ROUND(100.0 * p.silent_samples::numeric / NULLIF(p.measured_samples, 0), 2) AS silent_share_pct\nFROM per_gene p\nJOIN world_cup.genomics.genes g\n  ON p.gene_id = g.id\nWHERE p.silent_samples > 0.5 * p.measured_samples\nORDER BY silent_share_pct DESC, g.hgnc_symbol;",
+          "sql": [
+            {
+              "sql": "WITH per_gene AS (\n  SELECT\n    ge.gene_id,\n    COUNT(*) FILTER (WHERE ge.tpm = 0) AS silent_samples,\n    COUNT(*) AS measured_samples\n  FROM world_cup.genomics.gene_expression ge\n  JOIN world_cup.genomics.samples s\n    ON ge.sample_id = s.id\n  WHERE s.is_control = false\n  GROUP BY ge.gene_id\n)\nSELECT COUNT(*) AS genes_silent_over_half\nFROM per_gene p\nWHERE p.silent_samples > 0.5 * p.measured_samples;",
+              "ok": true,
+              "rowCount": 1
+            },
+            {
+              "sql": "WITH per_gene AS (\n  SELECT\n    ge.gene_id,\n    COUNT(*) FILTER (WHERE ge.tpm = 0) AS silent_samples,\n    COUNT(*) AS measured_samples\n  FROM world_cup.genomics.gene_expression ge\n  JOIN world_cup.genomics.samples s\n    ON ge.sample_id = s.id\n  WHERE s.is_control = false\n  GROUP BY ge.gene_id\n)\nSELECT\n  g.hgnc_symbol,\n  p.silent_samples,\n  p.measured_samples,\n  ROUND(100.0 * p.silent_samples::numeric / NULLIF(p.measured_samples, 0), 2) AS silent_share_pct\nFROM per_gene p\nJOIN world_cup.genomics.genes g\n  ON p.gene_id = g.id\nWHERE p.silent_samples > 0.5 * p.measured_samples\nORDER BY silent_share_pct DESC, g.hgnc_symbol;",
+              "ok": true,
+              "rowCount": 9
+            }
+          ],
+          "answer": "Silent = tpm = 0 (no expression). Across our non-control samples, 9 genes are silent in more than half of samples (68 measured samples total):\n\n- RET — 63.24% silent (43/68)\n- F8 — 61.76% silent (42/68)\n- MLH1 — 60.29% silent (41/68)\n- TSC2 — 58.82% silent (40/68)\n- TP53 — 55.88% silent (38/68)\n- KRAS — 54.41% silent (37/68)\n- PMS2 — 54.41% silent (37/68)\n- NF2 — 52.94% silent (36/68)\n- NF1 — 51.47% silent (35/68)\n\nTakeaway: 9 genes meet the threshold; RET shows the highest fraction of silent samples, while NF1 is just over the 50% mark.\n\nData used: world_cup.genomics.gene_expression (tpm), world_cup.genomics.samples (to exclude controls), world_cup.genomics.genes (gene symbols). Excludes control samples, as configured.",
+          "steps": 2,
+          "calledTools": [
+            "run_readonly_sql",
+            "run_readonly_sql"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 161595,
+          "usage": {
+            "inputTokens": 33959,
+            "outputTokens": 5714,
+            "totalTokens": 39673,
+            "reasoningTokens": 4864,
+            "cachedInputTokens": 32640,
+            "calls": 1
+          }
+        },
+        {
+          "attempt": 3,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-includes",
+              "passed": true
+            },
+            {
+              "id": "check-matches",
+              "passed": true
+            },
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": true
+            },
+            {
+              "id": "result-set-match",
+              "passed": true
+            }
+          ],
+          "finalSql": "WITH per_gene AS (\n  SELECT ge.gene_id,\n         COUNT(*) AS n,\n         COUNT(*) FILTER (WHERE ge.tpm = 0) AS n_zero\n  FROM world_cup.genomics.gene_expression ge\n  JOIN world_cup.genomics.samples s ON ge.sample_id = s.id\n  WHERE s.is_control = false\n  GROUP BY ge.gene_id\n)\nSELECT g.hgnc_symbol,\n       n AS sample_count,\n       n_zero AS silent_samples,\n       ROUND(100.0 * n_zero::numeric / NULLIF(n, 0), 2) AS pct_silent\nFROM per_gene pg\nJOIN world_cup.genomics.genes g ON pg.gene_id = g.id\nWHERE n_zero > 0.5 * n\nORDER BY pct_silent DESC, g.hgnc_symbol\nLIMIT 500;",
+          "sql": [
+            {
+              "sql": "WITH per_gene AS (\n  SELECT ge.gene_id,\n         COUNT(*) AS n\n  FROM world_cup.genomics.gene_expression ge\n  JOIN world_cup.genomics.samples s ON ge.sample_id = s.id\n  WHERE s.is_control = false\n  GROUP BY ge.gene_id\n)\nSELECT MIN(n) AS min_samples_per_gene,\n       MAX(n) AS max_samples_per_gene\nFROM per_gene;",
+              "ok": true,
+              "rowCount": 1
+            },
+            {
+              "sql": "SELECT COUNT(*) AS total_non_control_samples\nFROM world_cup.genomics.samples s\nWHERE s.is_control = false;",
+              "ok": true,
+              "rowCount": 1
+            },
+            {
+              "sql": "WITH per_gene AS (\n  SELECT ge.gene_id,\n         COUNT(*) AS n,\n         COUNT(*) FILTER (WHERE ge.tpm = 0) AS n_zero\n  FROM world_cup.genomics.gene_expression ge\n  JOIN world_cup.genomics.samples s ON ge.sample_id = s.id\n  WHERE s.is_control = false\n  GROUP BY ge.gene_id\n)\nSELECT COUNT(*) AS genes_silent_in_more_than_half\nFROM per_gene\nWHERE n_zero > 0.5 * n;",
+              "ok": true,
+              "rowCount": 1
+            },
+            {
+              "sql": "WITH per_gene AS (\n  SELECT ge.gene_id,\n         COUNT(*) AS n,\n         COUNT(*) FILTER (WHERE ge.tpm = 0) AS n_zero\n  FROM world_cup.genomics.gene_expression ge\n  JOIN world_cup.genomics.samples s ON ge.sample_id = s.id\n  WHERE s.is_control = false\n  GROUP BY ge.gene_id\n)\nSELECT g.hgnc_symbol,\n       n AS sample_count,\n       n_zero AS silent_samples,\n       ROUND(100.0 * n_zero::numeric / NULLIF(n, 0), 2) AS pct_silent\nFROM per_gene pg\nJOIN world_cup.genomics.genes g ON pg.gene_id = g.id\nWHERE n_zero > 0.5 * n\nORDER BY pct_silent DESC, g.hgnc_symbol\nLIMIT 500;",
+              "ok": true,
+              "rowCount": 9
+            }
+          ],
+          "answer": "Here are the genes that are silent (TPM = 0) in more than half of the samples with expression measured:\n\n- RET — 63.24% silent (43 of 68)\n- F8 — 61.76% silent (42 of 68)\n- MLH1 — 60.29% silent (41 of 68)\n- TSC2 — 58.82% silent (40 of 68)\n- TP53 — 55.88% silent (38 of 68)\n- KRAS — 54.41% silent (37 of 68)\n- PMS2 — 54.41% silent (37 of 68)\n- NF2 — 52.94% silent (36 of 68)\n- NF1 — 51.47% silent (35 of 68)\n\nNotes:\n- “Silent” is interpreted as TPM = 0 (expression measure), per the dataset’s definition.\n- Expression data exist for 68 non-control samples; “more than half” here means >34 of those 68.\n\nWhat I used: world_cup.genomics.gene_expression joined to world_cup.genomics.samples (to exclude controls) and world_cup.genomics.genes (to report HGNC symbols).\n\nFilter applied: excludes control samples, as configured. Computed over the 68 non-control samples that have expression data.",
+          "steps": 7,
+          "calledTools": [
+            "describe_entity",
+            "describe_entity",
+            "describe_entity",
+            "run_readonly_sql",
+            "run_readonly_sql",
+            "run_readonly_sql",
+            "run_readonly_sql"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 113123,
+          "usage": {
+            "inputTokens": 106843,
+            "outputTokens": 7081,
+            "totalTokens": 113924,
+            "reasoningTokens": 5504,
+            "cachedInputTokens": 103808,
+            "calls": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "high-confidence-calls-by-gene",
+      "category": "quality-filter",
+      "question": "Which five genes have the most high-confidence variant calls?",
+      "difficulty": "hard",
+      "verdict": "FAIL",
+      "runs": 3,
+      "passes": 1,
+      "flaky": true,
+      "failureLabel": "timeout",
+      "reason": "run-error",
+      "durationMs": 650962,
+      "usage": {
+        "inputTokens": 17759,
+        "outputTokens": 1903,
+        "totalTokens": 19662,
+        "reasoningTokens": 1472,
+        "cachedInputTokens": 15616,
+        "calls": 1
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "ERROR",
+          "checks": [],
+          "sql": [],
+          "answer": "",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "timeout",
+          "error": "timeout after 300s",
+          "durationMs": 594852
+        },
+        {
+          "attempt": 2,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-includes",
+              "passed": false,
+              "reason": "expected \"CFTR\" in the answer — answer was \"I completed the data analysis but could not produce a final response. Please retry your question.\""
+            },
+            {
+              "id": "check-called-tool",
+              "passed": false,
+              "reason": "expected \"run_readonly_sql\" to be called 1×, it was called 0×"
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": false,
+              "reason": "the agent never ran a SQL query"
+            },
+            {
+              "id": "result-set-match",
+              "passed": false,
+              "reason": "the agent ran no successful run_readonly_sql to compare"
+            }
+          ],
+          "sql": [],
+          "answer": "I completed the data analysis but could not produce a final response. Please retry your question.",
+          "steps": 0,
+          "calledTools": [],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "no-sql",
+          "durationMs": 25322
+        },
+        {
+          "attempt": 3,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-includes",
+              "passed": true
+            },
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": true
+            },
+            {
+              "id": "result-set-match",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT g.hgnc_symbol AS gene, COUNT(*) AS high_conf_calls\nFROM world_cup.genomics.variant_calls vc\nJOIN world_cup.genomics.variants v ON vc.variant_id = v.id\nJOIN world_cup.genomics.genes g ON v.gene_id = g.id\nJOIN world_cup.genomics.samples s ON vc.sample_id = s.id\nWHERE vc.filter_status = 'PASS' AND COALESCE(s.is_control, false) = false\nGROUP BY g.hgnc_symbol\nORDER BY high_conf_calls DESC, g.hgnc_symbol\nLIMIT 5;",
+          "sql": [
+            {
+              "sql": "SELECT g.hgnc_symbol AS gene, COUNT(*) AS high_conf_calls\nFROM world_cup.genomics.variant_calls vc\nJOIN world_cup.genomics.variants v ON vc.variant_id = v.id\nJOIN world_cup.genomics.genes g ON v.gene_id = g.id\nJOIN world_cup.genomics.samples s ON vc.sample_id = s.id\nWHERE vc.filter_status = 'PASS' AND COALESCE(s.is_control, false) = false\nGROUP BY g.hgnc_symbol\nORDER BY high_conf_calls DESC, g.hgnc_symbol\nLIMIT 5;",
+              "ok": true,
+              "rowCount": 5
+            }
+          ],
+          "answer": "Top 5 genes by high-confidence variant calls (PASS) across non-control samples:\n- CFTR — 477\n- MUTYH — 177\n- TP53 — 174\n- XIST — 168\n- NF2 — 162\n\nTakeaway: CFTR stands out with nearly 3× the high-confidence calls of the next gene.\n\nEntities used: world_cup.genomics.variant_calls joined to world_cup.genomics.variants → world_cup.genomics.genes, and filtered via world_cup.genomics.samples to exclude controls.\n\nNotes: Excludes control samples, as configured. High-confidence means filter_status = 'PASS'.",
+          "steps": 1,
+          "calledTools": [
+            "run_readonly_sql"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 30788,
+          "usage": {
+            "inputTokens": 17759,
+            "outputTokens": 1903,
+            "totalTokens": 19662,
+            "reasoningTokens": 1472,
+            "cachedInputTokens": 15616,
+            "calls": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "canonical-transcript-length-kb",
+      "category": "unit-confusion",
+      "question": "What is the average length of a canonical transcript, in kilobases to one decimal place?",
+      "difficulty": "medium",
+      "verdict": "PASS",
+      "runs": 3,
+      "passes": 3,
+      "flaky": false,
+      "durationMs": 78931,
+      "usage": {
+        "inputTokens": 79688,
+        "outputTokens": 4498,
+        "totalTokens": 84186,
+        "reasoningTokens": 3456,
+        "cachedInputTokens": 74240,
+        "calls": 3
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": true
+            },
+            {
+              "id": "result-set-match",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT ROUND(AVG(length_bp)::numeric / 1000.0, 1) AS avg_length_kb\nFROM world_cup.genomics.transcripts\nWHERE is_canonical = true;",
+          "sql": [
+            {
+              "sql": "SELECT ROUND(AVG(length_bp)::numeric / 1000.0, 1) AS avg_length_kb\nFROM world_cup.genomics.transcripts\nWHERE is_canonical = true;",
+              "ok": true,
+              "rowCount": 1
+            }
+          ],
+          "answer": "Average canonical transcript length: 5.9 kb\n\nSource: world_cup.genomics.transcripts (is_canonical = true, average of length_bp converted to kilobases).\n\nDefault filters: None applied — this uses transcript metadata only (no sample-level rows).",
+          "steps": 2,
+          "calledTools": [
+            "describe_entity",
+            "run_readonly_sql"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 33838,
+          "usage": {
+            "inputTokens": 26618,
+            "outputTokens": 1734,
+            "totalTokens": 28352,
+            "reasoningTokens": 1408,
+            "cachedInputTokens": 25472,
+            "calls": 1
+          }
+        },
+        {
+          "attempt": 2,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": true
+            },
+            {
+              "id": "result-set-match",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT ROUND(AVG(length_bp) / 1000.0, 1) AS avg_canonical_transcript_length_kb\nFROM world_cup.genomics.transcripts\nWHERE is_canonical = TRUE;",
+          "sql": [
+            {
+              "sql": "SELECT ROUND(AVG(length_bp) / 1000.0, 1) AS avg_canonical_transcript_length_kb\nFROM world_cup.genomics.transcripts\nWHERE is_canonical = TRUE;",
+              "ok": true,
+              "rowCount": 1
+            }
+          ],
+          "answer": "5.9 kb\n\nComputed as the average of length_bp for is_canonical = true in world_cup.genomics.transcripts, converted to kilobases and rounded to one decimal. No control-sample exclusions apply (this reads transcripts only).",
+          "steps": 2,
+          "calledTools": [
+            "describe_entity",
+            "run_readonly_sql"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 20103,
+          "usage": {
+            "inputTokens": 26455,
+            "outputTokens": 1322,
+            "totalTokens": 27777,
+            "reasoningTokens": 1024,
+            "cachedInputTokens": 23936,
+            "calls": 1
+          }
+        },
+        {
+          "attempt": 3,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-final-sql-succeeded",
+              "passed": true
+            },
+            {
+              "id": "result-set-match",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT ROUND(AVG(length_bp) / 1000.0, 1) AS avg_canonical_transcript_length_kb\nFROM world_cup.genomics.transcripts\nWHERE is_canonical = true;",
+          "sql": [
+            {
+              "sql": "SELECT ROUND(AVG(length_bp) / 1000.0, 1) AS avg_canonical_transcript_length_kb\nFROM world_cup.genomics.transcripts\nWHERE is_canonical = true;",
+              "ok": true,
+              "rowCount": 1
+            }
+          ],
+          "answer": "5.9 kb\n\nComputed as the mean of length_bp for transcripts where is_canonical = true in world_cup.genomics.transcripts, converted to kilobases and rounded to one decimal place. No sample-control filter was applicable (this reads transcripts only).",
+          "steps": 2,
+          "calledTools": [
+            "describe_entity",
+            "run_readonly_sql"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 24990,
+          "usage": {
+            "inputTokens": 26615,
+            "outputTokens": 1442,
+            "totalTokens": 28057,
+            "reasoningTokens": 1024,
+            "cachedInputTokens": 24832,
+            "calls": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "genes-by-biotype",
+      "category": "control",
+      "question": "How many genes of each gene type (such as protein-coding) do we track?",
+      "difficulty": "easy",
+      "verdict": "PASS",
+      "runs": 3,
+      "passes": 3,
+      "flaky": false,
+      "durationMs": 67734,
+      "usage": {
+        "inputTokens": 78985,
+        "outputTokens": 4376,
+        "totalTokens": 83361,
+        "reasoningTokens": 3328,
+        "cachedInputTokens": 74496,
+        "calls": 3
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-matches",
+              "passed": true
+            },
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-no-tool-errors",
+              "passed": true
+            },
+            {
+              "id": "result-set-match",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT biotype AS gene_type, COUNT(*) AS gene_count\nFROM world_cup.genomics.genes\nGROUP BY biotype\nORDER BY gene_count DESC, biotype",
+          "sql": [
+            {
+              "sql": "SELECT biotype AS gene_type, COUNT(*) AS gene_count\nFROM world_cup.genomics.genes\nGROUP BY biotype\nORDER BY gene_count DESC, biotype",
+              "ok": true,
+              "rowCount": 2
+            }
+          ],
+          "answer": "Here’s the count of genes by gene type (biotype) in the dataset:\n\n- protein_coding: 37\n- lncRNA: 3\n\nTakeaway: The tracked genes are predominantly protein-coding (37 of 40, 92.5%).\n\nEntities used: world_cup.genomics.genes. Counts are unaffected by the default control-sample exclusion, since this query reads only genes.",
+          "steps": 2,
+          "calledTools": [
+            "describe_entity",
+            "run_readonly_sql"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 23427,
+          "usage": {
+            "inputTokens": 26334,
+            "outputTokens": 1432,
+            "totalTokens": 27766,
+            "reasoningTokens": 1088,
+            "cachedInputTokens": 25216,
+            "calls": 1
+          }
+        },
+        {
+          "attempt": 2,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-matches",
+              "passed": true
+            },
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-no-tool-errors",
+              "passed": true
+            },
+            {
+              "id": "result-set-match",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT biotype, COUNT(*) AS gene_count\nFROM world_cup.genomics.genes\nGROUP BY biotype\nORDER BY gene_count DESC, biotype ASC;",
+          "sql": [
+            {
+              "sql": "SELECT biotype, COUNT(*) AS gene_count\nFROM world_cup.genomics.genes\nGROUP BY biotype\nORDER BY gene_count DESC, biotype ASC;",
+              "ok": true,
+              "rowCount": 2
+            }
+          ],
+          "answer": "Here’s the count of genes by type in the dataset:\n\n- protein_coding: 37\n- lncRNA: 3\n\nTakeaway: The tracked gene set is mostly protein-coding (37 of 40 total). Counts come from world_cup.genomics.genes; no sample-based filters apply.",
+          "steps": 2,
+          "calledTools": [
+            "describe_entity",
+            "run_readonly_sql"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 24646,
+          "usage": {
+            "inputTokens": 26204,
+            "outputTokens": 1575,
+            "totalTokens": 27779,
+            "reasoningTokens": 1216,
+            "cachedInputTokens": 23936,
+            "calls": 1
+          }
+        },
+        {
+          "attempt": 3,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-matches",
+              "passed": true
+            },
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-no-tool-errors",
+              "passed": true
+            },
+            {
+              "id": "result-set-match",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT biotype AS gene_type, COUNT(*) AS gene_count\nFROM world_cup.genomics.genes\nGROUP BY biotype\nORDER BY gene_count DESC, gene_type;",
+          "sql": [
+            {
+              "sql": "SELECT biotype AS gene_type, COUNT(*) AS gene_count\nFROM world_cup.genomics.genes\nGROUP BY biotype\nORDER BY gene_count DESC, gene_type;",
+              "ok": true,
+              "rowCount": 2
+            }
+          ],
+          "answer": "Here’s the count of genes by gene type we track:\n\n- protein_coding: 37\n- lncRNA: 3\n\nTakeaway: Most tracked genes are protein-coding (37 of 40). Source: world_cup.genomics.genes (grouped by biotype). No sample-level filters apply to this table.",
+          "steps": 2,
+          "calledTools": [
+            "describe_entity",
+            "run_readonly_sql"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 19661,
+          "usage": {
+            "inputTokens": 26447,
+            "outputTokens": 1369,
+            "totalTokens": 27816,
+            "reasoningTokens": 1024,
+            "cachedInputTokens": 25344,
+            "calls": 1
+          }
+        }
+      ]
+    }
+  ],
+  "comparedToRunId": "8a817d13-bc79-4f2f-9233-3fa79fea8f7c",
+  "regressions": [
+    "variants-by-assembly",
+    "most-called-genes",
+    "expression-data-discovery",
+    "pathogenic-carrier-samples",
+    "high-confidence-calls-by-gene"
+  ],
+  "improvements": [
+    "damaging-variant-count"
+  ],
+  "flakyChanges": [
+    "variants-by-assembly",
+    "most-called-genes",
+    "expression-data-discovery",
+    "pathogenic-carrier-samples",
+    "high-confidence-calls-by-gene"
+  ],
+  "status": "completed"
+}

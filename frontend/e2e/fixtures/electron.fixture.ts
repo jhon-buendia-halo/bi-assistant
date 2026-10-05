@@ -45,6 +45,9 @@ export const test = base.extend<ElectronFixtures>({
         NODE_ENV: 'test',
         ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
         QUESTIONS_TO_INSIGHTS_USER_DATA_DIR: appDataDir,
+        // Eval runs write a run log; keep it in the throwaway data dir, not
+        // in the checkout's logs/evals/ (EVAL_LOG_DIR, see eval-run-log.ts).
+        EVAL_LOG_DIR: path.join(appDataDir, 'logs'),
       },
     });
 

@@ -16,23 +16,40 @@
       <option value="openai" class="bg-[#232323]">OpenAI</option>
       <option value="anthropic" class="bg-[#232323]">Anthropic</option>
       <option value="lenai" class="bg-[#232323]">LenAI (Halo gateway)</option>
+      <option value="databricks" class="bg-[#232323]">
+        Databricks (Model Serving)
+      </option>
     </select>
   </label>
 
   <label class="flex flex-col gap-1">
     <span class="text-[11px] font-medium text-zinc-500">
-      {{ provider() === 'lenai' ? 'Deployment name' : 'Model' }}
+      {{
+        provider() === "lenai"
+          ? "Deployment name"
+          : provider() === "databricks"
+            ? "Serving endpoint"
+            : "Model"
+      }}
     </span>
     <input
       type="text"
-      [placeholder]="provider() === 'lenai' ? 'my-deployment' : provider() === 'anthropic' ? 'claude-sonnet-5-5' : 'gpt-4o-mini'"
+      [placeholder]="
+        provider() === 'lenai'
+          ? 'my-deployment'
+          : provider() === 'anthropic'
+            ? 'claude-sonnet-5-5'
+            : provider() === 'databricks'
+              ? 'databricks-claude-sonnet-4-5'
+              : 'gpt-4o-mini'
+      "
       [value]="model()"
       (input)="model.set($any($event.target).value); onFieldChange()"
       class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
     />
   </label>
 
-  @if (provider() === 'lenai') {
+  @if (provider() === "lenai") {
     <label class="flex flex-col gap-1">
       <span class="text-[11px] font-medium text-zinc-500">Base URL</span>
       <input
@@ -47,10 +64,28 @@
         &lt;base URL&gt;/openai/v1/deployments/&lt;deployment&gt;.
       </span>
     </label>
+  } @else if (provider() === "databricks") {
+    <label class="flex flex-col gap-1">
+      <span class="text-[11px] font-medium text-zinc-500">Workspace URL</span>
+      <input
+        type="text"
+        placeholder="https://adb-1234567890123456.7.azuredatabricks.net"
+        [value]="baseUrl()"
+        (input)="baseUrl.set($any($event.target).value); onFieldChange()"
+        class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+      />
+      <span class="text-[10px] leading-4 text-zinc-600">
+        Requests go to &lt;workspace&gt;/serving-endpoints/chat/completions
+        with your token. Untested against a live workspace — use Test
+        connection first.
+      </span>
+    </label>
   }
 
   <label class="flex flex-col gap-1">
-    <span class="text-[11px] font-medium text-zinc-500">API key</span>
+    <span class="text-[11px] font-medium text-zinc-500">
+      {{ provider() === "databricks" ? "Personal access token" : "API key" }}
+    </span>
     <input
       type="password"
       [placeholder]="apiKeyPlaceholder()"

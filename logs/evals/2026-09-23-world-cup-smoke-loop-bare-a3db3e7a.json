@@ -1,0 +1,402 @@
+{
+  "schemaVersion": 2,
+  "runId": "a3db3e7a-f8dc-486a-b8dd-b2c0f9f3bf5a",
+  "label": "smoke-loop",
+  "harness": "in-app",
+  "suite": "world-cup",
+  "agentKey": "assistant",
+  "datasets": [
+    "World Cup"
+  ],
+  "datasourceKind": "postgres",
+  "dialect": "postgres",
+  "model": "openai/gpt-5",
+  "reasoningEffort": "high",
+  "judgeModel": "openai/gpt-5",
+  "repeat": 1,
+  "arm": "bare",
+  "engine": {
+    "careful": "off",
+    "answerReview": false,
+    "sqlRepair": true,
+    "repairIntentGuard": true,
+    "context": "bare",
+    "columnProfiles": false,
+    "inlineKnowledge": false,
+    "rankedKnowledge": false,
+    "lookupTools": false,
+    "sqlPrecheck": false,
+    "descriptiveErrors": false,
+    "extendedGuards": false,
+    "staticFirstContext": false,
+    "promptAblation": []
+  },
+  "configHash": "95363df0b16b",
+  "loopId": "cfb6c1e0-0c79-40b9-adfc-35dc3f1fb4ee",
+  "startedAt": "2026-09-23T19:41:44.095Z",
+  "finishedAt": "2026-09-23T19:46:04.851Z",
+  "durationMs": 260756,
+  "appVersion": "0.10.1",
+  "gitCommit": "f04defd",
+  "totals": {
+    "cases": 4,
+    "passed": 3,
+    "failed": 1,
+    "errored": 0,
+    "gaps": 0,
+    "skipped": 0
+  },
+  "summary": {
+    "passK": 3,
+    "passKRate": 0.75,
+    "scored": 4,
+    "meanPassRate": 0.75,
+    "flaky": 0,
+    "gaps": 0,
+    "answeredEveryTime": 4,
+    "answeredObserved": 4,
+    "byCategory": {
+      "control": {
+        "total": 4,
+        "passK": 3,
+        "meanPassRate": 0.75
+      }
+    },
+    "byDifficulty": {
+      "easy": {
+        "total": 3,
+        "passK": 3
+      },
+      "medium": {
+        "total": 1,
+        "passK": 0
+      }
+    },
+    "tokensPerCase": 51913
+  },
+  "categories": {
+    "control": {
+      "total": 4,
+      "passed": 3
+    }
+  },
+  "usage": {
+    "inputTokens": 195125,
+    "outputTokens": 12528,
+    "totalTokens": 207653,
+    "reasoningTokens": 9344,
+    "cachedInputTokens": 183552,
+    "calls": 5
+  },
+  "costIncomplete": true,
+  "cases": [
+    {
+      "id": "champion-2022",
+      "category": "control",
+      "question": "Who won the 2022 World Cup?",
+      "difficulty": "easy",
+      "verdict": "PASS",
+      "runs": 1,
+      "passes": 1,
+      "flaky": false,
+      "durationMs": 23827,
+      "usage": {
+        "inputTokens": 29537,
+        "outputTokens": 1107,
+        "totalTokens": 30644,
+        "reasoningTokens": 704,
+        "cachedInputTokens": 27904,
+        "calls": 1
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-includes",
+              "passed": true
+            },
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-no-tool-errors",
+              "passed": true
+            },
+            {
+              "id": "result-set-match",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT t.tournament_year, tm.common_name AS champion_team, tm.fifa_code\nFROM world_cup.world_cup.tournaments t\nJOIN world_cup.world_cup.teams tm ON tm.id = t.champion_team_id\nWHERE t.tournament_year = 2022;",
+          "sql": [
+            {
+              "sql": "SELECT t.tournament_year, tm.common_name AS champion_team, tm.fifa_code\nFROM world_cup.world_cup.tournaments t\nJOIN world_cup.world_cup.teams tm ON tm.id = t.champion_team_id\nWHERE t.tournament_year = 2022;",
+              "ok": true,
+              "rowCount": 1
+            }
+          ],
+          "answer": "Argentina.\n\nSource: world_cup.world_cup.tournaments joined to world_cup.world_cup.teams.",
+          "steps": 3,
+          "calledTools": [
+            "describe_entity",
+            "describe_entity",
+            "run_readonly_sql"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 23827,
+          "usage": {
+            "inputTokens": 29537,
+            "outputTokens": 1107,
+            "totalTokens": 30644,
+            "reasoningTokens": 704,
+            "cachedInputTokens": 27904,
+            "calls": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "visual-request",
+      "category": "control",
+      "question": "Chart the goals scored by each team in the 2022 knockout stage.",
+      "difficulty": "medium",
+      "verdict": "FAIL",
+      "runs": 1,
+      "passes": 0,
+      "flaky": false,
+      "failureLabel": "judge",
+      "reason": "llm-judge",
+      "durationMs": 150651,
+      "usage": {
+        "inputTokens": 102498,
+        "outputTokens": 6201,
+        "totalTokens": 108699,
+        "reasoningTokens": 4480,
+        "cachedInputTokens": 96256,
+        "calls": 2
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "FAIL",
+          "checks": [
+            {
+              "id": "check-tool-order",
+              "passed": true
+            },
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-no-tool-errors",
+              "passed": true
+            },
+            {
+              "id": "llm-judge",
+              "passed": false,
+              "reason": "No successful create_visual call is evidenced (no input/output shown), so the chart cannot be verified. The final answer is primarily text; the rubric requires a successful visual tool call producing a chart of goals per team for the 2022 knockout stage."
+            }
+          ],
+          "finalSql": "SELECT tm.common_name AS team, COUNT(*) AS goals\nFROM world_cup.world_cup.goals g\nJOIN world_cup.world_cup.matches m ON m.id = g.match_id\nJOIN world_cup.world_cup.tournaments t ON t.id = m.tournament_id\nJOIN world_cup.world_cup.teams tm ON tm.id = g.scoring_team_id\nWHERE t.tournament_year = 2022\n  AND m.stage IN ('quarter_final', 'semi_final', 'final', 'third_place')\nGROUP BY tm.common_name\nORDER BY goals DESC, tm.common_name;",
+          "sql": [
+            {
+              "sql": "SELECT DISTINCT m.stage\nFROM world_cup.world_cup.matches m\nJOIN world_cup.world_cup.tournaments t ON t.id = m.tournament_id\nWHERE t.tournament_year = 2022\nORDER BY 1;",
+              "ok": true,
+              "rowCount": 4
+            },
+            {
+              "sql": "SELECT m.stage, COUNT(*) AS matches\nFROM world_cup.world_cup.matches m\nJOIN world_cup.world_cup.tournaments t ON t.id = m.tournament_id\nWHERE t.tournament_year = 2022\nGROUP BY m.stage\nORDER BY matches DESC, m.stage;",
+              "ok": true,
+              "rowCount": 4
+            },
+            {
+              "sql": "WITH ko_matches AS (\n  SELECT m.id, m.home_team_id, m.away_team_id, m.home_goals, m.away_goals\n  FROM world_cup.world_cup.matches m\n  JOIN world_cup.world_cup.tournaments t ON t.id = m.tournament_id\n  WHERE t.tournament_year = 2022\n    AND m.stage IN ('quarter_final', 'semi_final', 'final', 'third_place')\n),\nteam_goals AS (\n  SELECT home_team_id AS team_id, home_goals AS goals FROM ko_matches\n  UNION ALL\n  SELECT away_team_id AS team_id, away_goals AS goals FROM ko_matches\n)\nSELECT tm.common_name AS team,\n       SUM(g.goals) AS goals\nFROM team_goals g\nJOIN world_cup.world_cup.teams tm ON tm.id = g.team_id\nGROUP BY tm.common_name\nORDER BY goals DESC, tm.common_name;",
+              "ok": true,
+              "rowCount": 8
+            },
+            {
+              "sql": "SELECT tm.common_name AS team, COUNT(*) AS goals\nFROM world_cup.world_cup.goals g\nJOIN world_cup.world_cup.matches m ON m.id = g.match_id\nJOIN world_cup.world_cup.tournaments t ON t.id = m.tournament_id\nJOIN world_cup.world_cup.teams tm ON tm.id = g.scoring_team_id\nWHERE t.tournament_year = 2022\n  AND m.stage IN ('quarter_final', 'semi_final', 'final', 'third_place')\nGROUP BY tm.common_name\nORDER BY goals DESC, tm.common_name;",
+              "ok": true,
+              "rowCount": 7
+            }
+          ],
+          "answer": "Here are the total goals by team in the 2022 knockout stage (quarters, semis, final, and 3rd-place) from this dataset:\n\n- Argentina — 8\n- France — 7\n- Croatia — 3\n- Morocco — 2\n- Netherlands — 2\n- Brazil — 1\n- England — 1\n- Portugal — 0\n\nNotes on coverage: The 2022 data here includes quarter-finals, semi-finals, final and the third-place match. Round of 16 matches are not present in this dataset, so they are not included.\n\nWhat I used: world_cup.world_cup.matches, world_cup.world_cup.tournaments, world_cup.world_cup.teams.\n\nI’ve added a bar chart of these results for you — sorted descending, with labels and Portugal shown at 0.",
+          "steps": 9,
+          "calledTools": [
+            "describe_entity",
+            "describe_entity",
+            "run_readonly_sql",
+            "run_readonly_sql",
+            "describe_entity",
+            "describe_entity",
+            "run_readonly_sql",
+            "run_readonly_sql",
+            "create_visual"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "failureLabel": "judge",
+          "durationMs": 150651,
+          "usage": {
+            "inputTokens": 102498,
+            "outputTokens": 6201,
+            "totalTokens": 108699,
+            "reasoningTokens": 4480,
+            "cachedInputTokens": 96256,
+            "calls": 2
+          }
+        }
+      ]
+    },
+    {
+      "id": "goals-by-type",
+      "category": "control",
+      "question": "How many goals were scored in each way — open play, headers, penalties and so on?",
+      "difficulty": "easy",
+      "verdict": "PASS",
+      "runs": 1,
+      "passes": 1,
+      "flaky": false,
+      "durationMs": 39428,
+      "usage": {
+        "inputTokens": 22259,
+        "outputTokens": 2283,
+        "totalTokens": 24542,
+        "reasoningTokens": 1920,
+        "cachedInputTokens": 21120,
+        "calls": 1
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-matches",
+              "passed": true
+            },
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-no-tool-errors",
+              "passed": true
+            },
+            {
+              "id": "result-set-match",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT goal_type, COUNT(*) AS goals\nFROM world_cup.world_cup.goals\nGROUP BY goal_type\nORDER BY goals DESC;",
+          "sql": [
+            {
+              "sql": "SELECT goal_type, COUNT(*) AS goals\nFROM world_cup.world_cup.goals\nGROUP BY goal_type\nORDER BY goals DESC;",
+              "ok": true,
+              "rowCount": 5
+            }
+          ],
+          "answer": "Here’s the breakdown across the dataset (all tournaments and matches):\n\n- open_play: 24\n- header: 13\n- penalty: 7\n- own_goal: 2\n- free_kick: 1\n\nTakeaway: Most goals came from open play, with headers next; penalties were less frequent, and own goals and free kicks were rare.\n\nSource: world_cup.world_cup.goals (grouped by goal_type).",
+          "steps": 2,
+          "calledTools": [
+            "describe_entity",
+            "run_readonly_sql"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "durationMs": 39428,
+          "usage": {
+            "inputTokens": 22259,
+            "outputTokens": 2283,
+            "totalTokens": 24542,
+            "reasoningTokens": 1920,
+            "cachedInputTokens": 21120,
+            "calls": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "attendance-by-tournament",
+      "category": "control",
+      "question": "What was the total match attendance for each tournament year?",
+      "difficulty": "easy",
+      "verdict": "PASS",
+      "runs": 1,
+      "passes": 1,
+      "flaky": false,
+      "durationMs": 46818,
+      "usage": {
+        "inputTokens": 40831,
+        "outputTokens": 2937,
+        "totalTokens": 43768,
+        "reasoningTokens": 2240,
+        "cachedInputTokens": 38272,
+        "calls": 1
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "verdict": "PASS",
+          "checks": [
+            {
+              "id": "check-called-tool",
+              "passed": true
+            },
+            {
+              "id": "check-no-tool-errors",
+              "passed": true
+            },
+            {
+              "id": "result-set-match",
+              "passed": true
+            }
+          ],
+          "finalSql": "SELECT t.tournament_year, m.stage, COUNT(*) AS matches\nFROM world_cup.world_cup.matches m\nJOIN world_cup.world_cup.tournaments t ON t.id = m.tournament_id\nGROUP BY t.tournament_year, m.stage\nORDER BY t.tournament_year, m.stage;",
+          "sql": [
+            {
+              "sql": "SELECT\n  t.tournament_year,\n  SUM(COALESCE(m.attendance, 0)) AS total_attendance,\n  COUNT(*) AS matches,\n  COUNT(m.attendance) AS matches_with_attendance\nFROM world_cup.world_cup.tournaments t\nJOIN world_cup.world_cup.matches m\n  ON m.tournament_id = t.id\nGROUP BY t.tournament_year\nORDER BY t.tournament_year;",
+              "ok": true,
+              "rowCount": 2
+            },
+            {
+              "sql": "SELECT t.tournament_year, m.stage, COUNT(*) AS matches\nFROM world_cup.world_cup.matches m\nJOIN world_cup.world_cup.tournaments t ON t.id = m.tournament_id\nGROUP BY t.tournament_year, m.stage\nORDER BY t.tournament_year, m.stage;",
+              "ok": true,
+              "rowCount": 8
+            }
+          ],
+          "answer": "Total attendance by tournament year (sum of recorded match attendances):\n- 2018: 476,717\n- 2022: 535,584\n\nTakeaway: 2022 drew about 59,000 more attendees than 2018 across the matches included in this dataset.\n\nNotes and data coverage:\n- Based on world_cup.world_cup.matches joined to world_cup.world_cup.tournaments.\n- The dataset contains 8 matches per tournament year — quarterfinals, semifinals, third-place match, and final — and all had attendance recorded.",
+          "steps": 4,
+          "calledTools": [
+            "describe_entity",
+            "describe_entity",
+            "run_readonly_sql",
+            "run_readonly_sql"
+          ],
+          "repairs": [],
+          "warnings": [],
+          "viaSupportingQuery": true,
+          "durationMs": 46818,
+          "usage": {
+            "inputTokens": 40831,
+            "outputTokens": 2937,
+            "totalTokens": 43768,
+            "reasoningTokens": 2240,
+            "cachedInputTokens": 38272,
+            "calls": 1
+          }
+        }
+      ]
+    }
+  ],
+  "comparedToRunId": "07964a8d-9689-44da-9b67-1a2000afe59e",
+  "regressions": [],
+  "improvements": [],
+  "flakyChanges": [],
+  "status": "completed"
+}

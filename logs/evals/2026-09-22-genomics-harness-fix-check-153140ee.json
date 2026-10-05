@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "runId": "153140ee-19bc-44f2-83be-72092a2c4b59",
+  "label": "harness-fix-check",
+  "harness": "golden-set",
+  "suite": "genomics",
+  "datasets": [
+    "Genomics"
+  ],
+  "model": "openai/gpt-4o-mini",
+  "startedAt": "2026-09-22T21:23:24.431Z",
+  "finishedAt": "2026-09-22T21:23:35.990Z",
+  "durationMs": 11559,
+  "appVersion": "0.10.1",
+  "gitCommit": "a4eb740",
+  "totals": {
+    "cases": 1,
+    "passed": 1,
+    "failed": 0,
+    "errored": 0,
+    "skipped": 0
+  },
+  "categories": {
+    "default-filter": {
+      "total": 1,
+      "passed": 1
+    }
+  },
+  "usage": {
+    "inputTokens": 21040,
+    "outputTokens": 247,
+    "totalTokens": 21287,
+    "reasoningTokens": 0,
+    "cachedInputTokens": 0,
+    "calls": 1
+  },
+  "costIncomplete": true,
+  "cases": [
+    {
+      "id": "cohort-sample-count",
+      "category": "default-filter",
+      "verdict": "PASS",
+      "durationMs": 10867,
+      "usage": {
+        "inputTokens": 21040,
+        "outputTokens": 247,
+        "totalTokens": 21287,
+        "reasoningTokens": 0,
+        "cachedInputTokens": 0,
+        "calls": 1
+      }
+    }
+  ]
+}

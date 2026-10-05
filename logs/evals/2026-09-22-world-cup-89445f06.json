@@ -1,0 +1,216 @@
+{
+  "schemaVersion": 1,
+  "runId": "89445f06-55e2-4d3b-8e51-7f778d3b0e33",
+  "harness": "in-app",
+  "suite": "world-cup",
+  "agentKey": "assistant",
+  "datasets": [
+    "World Cup"
+  ],
+  "model": "openai/gpt-4o-mini",
+  "startedAt": "2026-09-22T19:25:27.360Z",
+  "finishedAt": "2026-09-22T19:29:21.275Z",
+  "durationMs": 233915,
+  "totals": {
+    "cases": 10,
+    "passed": 0,
+    "failed": 10,
+    "errored": 0,
+    "skipped": 0
+  },
+  "categories": {
+    "control": {
+      "total": 2,
+      "passed": 0
+    },
+    "multi-step-join": {
+      "total": 2,
+      "passed": 0
+    },
+    "metric-definition": {
+      "total": 1,
+      "passed": 0
+    },
+    "domain-semantics": {
+      "total": 1,
+      "passed": 0
+    },
+    "ties": {
+      "total": 1,
+      "passed": 0
+    },
+    "discovery": {
+      "total": 1,
+      "passed": 0
+    },
+    "clarification": {
+      "total": 1,
+      "passed": 0
+    },
+    "out-of-scope": {
+      "total": 1,
+      "passed": 0
+    }
+  },
+  "usage": {
+    "inputTokens": 259515,
+    "outputTokens": 7482,
+    "totalTokens": 266997,
+    "reasoningTokens": 0,
+    "cachedInputTokens": 72448,
+    "calls": 13
+  },
+  "costIncomplete": true,
+  "cases": [
+    {
+      "id": "champion-2022",
+      "category": "control",
+      "verdict": "FAIL",
+      "reason": "result-set-match",
+      "durationMs": 21750,
+      "usage": {
+        "inputTokens": 12053,
+        "outputTokens": 328,
+        "totalTokens": 12381,
+        "reasoningTokens": 0,
+        "cachedInputTokens": 0,
+        "calls": 1
+      }
+    },
+    {
+      "id": "final-score-2018",
+      "category": "multi-step-join",
+      "verdict": "FAIL",
+      "reason": "check-matches",
+      "durationMs": 26809,
+      "usage": {
+        "inputTokens": 22127,
+        "outputTokens": 698,
+        "totalTokens": 22825,
+        "reasoningTokens": 0,
+        "cachedInputTokens": 0,
+        "calls": 1
+      }
+    },
+    {
+      "id": "top-scorer-2022",
+      "category": "metric-definition",
+      "verdict": "FAIL",
+      "reason": "result-set-match",
+      "durationMs": 9620,
+      "usage": {
+        "inputTokens": 8273,
+        "outputTokens": 416,
+        "totalTokens": 8689,
+        "reasoningTokens": 0,
+        "cachedInputTokens": 0,
+        "calls": 1
+      }
+    },
+    {
+      "id": "shootouts",
+      "category": "domain-semantics",
+      "verdict": "FAIL",
+      "reason": "check-includes",
+      "durationMs": 18797,
+      "usage": {
+        "inputTokens": 21444,
+        "outputTokens": 688,
+        "totalTokens": 22132,
+        "reasoningTokens": 0,
+        "cachedInputTokens": 7424,
+        "calls": 1
+      }
+    },
+    {
+      "id": "biggest-venue",
+      "category": "ties",
+      "verdict": "FAIL",
+      "reason": "result-set-match",
+      "durationMs": 6658,
+      "usage": {
+        "inputTokens": 7865,
+        "outputTokens": 186,
+        "totalTokens": 8051,
+        "reasoningTokens": 0,
+        "cachedInputTokens": 0,
+        "calls": 1
+      }
+    },
+    {
+      "id": "schema-discovery",
+      "category": "discovery",
+      "verdict": "FAIL",
+      "reason": "check-called-tool",
+      "durationMs": 4349,
+      "usage": {
+        "inputTokens": 3787,
+        "outputTokens": 328,
+        "totalTokens": 4115,
+        "reasoningTokens": 0,
+        "cachedInputTokens": 3712,
+        "calls": 1
+      }
+    },
+    {
+      "id": "ambiguous-best-team",
+      "category": "clarification",
+      "verdict": "FAIL",
+      "reason": "check-called-tool",
+      "durationMs": 15821,
+      "usage": {
+        "inputTokens": 14851,
+        "outputTokens": 681,
+        "totalTokens": 15532,
+        "reasoningTokens": 0,
+        "cachedInputTokens": 8064,
+        "calls": 2
+      }
+    },
+    {
+      "id": "possession-vs-result",
+      "category": "multi-step-join",
+      "verdict": "FAIL",
+      "reason": "check-no-tool-errors",
+      "durationMs": 55155,
+      "usage": {
+        "inputTokens": 46282,
+        "outputTokens": 1545,
+        "totalTokens": 47827,
+        "reasoningTokens": 0,
+        "cachedInputTokens": 11136,
+        "calls": 1
+      }
+    },
+    {
+      "id": "out-of-scope",
+      "category": "out-of-scope",
+      "verdict": "FAIL",
+      "reason": "llm-judge",
+      "durationMs": 24091,
+      "usage": {
+        "inputTokens": 52308,
+        "outputTokens": 989,
+        "totalTokens": 53297,
+        "reasoningTokens": 0,
+        "cachedInputTokens": 4480,
+        "calls": 2
+      }
+    },
+    {
+      "id": "visual-request",
+      "category": "control",
+      "verdict": "FAIL",
+      "reason": "check-no-tool-errors",
+      "durationMs": 50844,
+      "usage": {
+        "inputTokens": 70525,
+        "outputTokens": 1623,
+        "totalTokens": 72148,
+        "reasoningTokens": 0,
+        "cachedInputTokens": 37632,
+        "calls": 2
+      }
+    }
+  ]
+}

@@ -5,14 +5,26 @@ jest.mock('@mastra/core/agent', () => ({
   },
 }));
 
-import { resolveAgentModel } from '../../mastra/model-resolver';
+import { Logger } from '@nestjs/common';
+import {
+  resolveAgentModel,
+  resolveJudgeModel,
+} from '../../mastra/model-resolver';
 import { CryptoService } from '../../infrastructure/crypto/crypto.service';
-import { LlmService, lenaiModelConfig } from './llm.service';
+import { EngineSettingsService } from '../engine/engine-settings.service';
+import {
+  LlmService,
+  databricksModelConfig,
+  lenaiModelConfig,
+  normalizeDatabricksBaseUrl,
+} from './llm.service';
 import { LlmSettingsRepository } from './repositories/llm-settings.repository';
 
 function serviceWith(opts?: {
   settings?: Awaited<ReturnType<LlmSettingsRepository['get']>>;
   decryptedKey?: string;
+  judgeModel?: string;
+  databricksReasoningEffort?: boolean;
 }) {
   const { service } = serviceWithMocks(opts);
   return service;
@@ -26,6 +38,8 @@ function serviceWith(opts?: {
 function serviceWithMocks(opts?: {
   settings?: Awaited<ReturnType<LlmSettingsRepository['get']>>;
   decryptedKey?: string;
+  judgeModel?: string;
+  databricksReasoningEffort?: boolean;
 }) {
   let doc = opts?.settings ?? null;
   const repository = {
@@ -44,7 +58,17 @@ function serviceWithMocks(opts?: {
     decrypt: jest.fn().mockReturnValue(opts?.decryptedKey ?? 'len-key'),
     encrypt: jest.fn().mockImplementation((v: string) => `enc(${v})`),
   } as unknown as CryptoService;
-  return { service: new LlmService(repository, crypto), repository, crypto };
+  const engineSettings = {
+    judgeModel: jest.fn().mockResolvedValue(opts?.judgeModel),
+    databricksReasoningEffort: jest
+      .fn()
+      .mockResolvedValue(opts?.databricksReasoningEffort ?? false),
+  } as unknown as EngineSettingsService;
+  return {
+    service: new LlmService(repository, crypto, engineSettings),
+    repository,
+    crypto,
+  };
 }
 
 /** Swaps in a fetch stub for one probe and hands back the request it saw. */
@@ -390,5 +414,365 @@ describe('testConnection on reasoning models', () => {
     expect((result as Error).message).toMatch(
       /hit the 4096-token limit before replying/,
     );
+  });
+});
+
+describe('Databricks provider contract', () => {
+  it('builds a bearer-only serving-endpoints config (no LenAI-style extra header)', () => {
+    expect(
+      databricksModelConfig({
+        model: 'databricks-claude-sonnet-4-5',
+        baseUrl: 'https://adb-1234567890123456.7.azuredatabricks.net/',
+        apiKey: 'db-key',
+      }),
+    ).toEqual({
+      id: 'databricks/databricks-claude-sonnet-4-5',
+      url: 'https://adb-1234567890123456.7.azuredatabricks.net/serving-endpoints',
+      apiKey: 'db-key',
+    });
+  });
+
+  describe('normalizeDatabricksBaseUrl', () => {
+    it('trims and strips a trailing slash', () => {
+      expect(
+        normalizeDatabricksBaseUrl('  https://adb-123.azuredatabricks.net/  '),
+      ).toBe('https://adb-123.azuredatabricks.net');
+    });
+
+    it('strips a pasted /serving-endpoints suffix, with or without a trailing slash', () => {
+      expect(
+        normalizeDatabricksBaseUrl(
+          'https://adb-123.azuredatabricks.net/serving-endpoints',
+        ),
+      ).toBe('https://adb-123.azuredatabricks.net');
+      expect(
+        normalizeDatabricksBaseUrl(
+          'https://adb-123.azuredatabricks.net/serving-endpoints/',
+        ),
+      ).toBe('https://adb-123.azuredatabricks.net');
+      expect(
+        normalizeDatabricksBaseUrl(
+          'https://adb-123.azuredatabricks.net/Serving-Endpoints',
+        ),
+      ).toBe('https://adb-123.azuredatabricks.net');
+    });
+
+    it('rejects a non-https host', () => {
+      expect(() =>
+        normalizeDatabricksBaseUrl('http://adb-123.azuredatabricks.net'),
+      ).toThrow(/https/);
+    });
+
+    it('rejects a host with its own path', () => {
+      expect(() =>
+        normalizeDatabricksBaseUrl(
+          'https://adb-123.azuredatabricks.net/some/path',
+        ),
+      ).toThrow(/no path/);
+    });
+
+    it('rejects a value that is not a URL at all', () => {
+      expect(() => normalizeDatabricksBaseUrl('not a url')).toThrow(/https/);
+    });
+  });
+
+  it('tests Databricks through the serving-endpoints route, bearer-only, with max_tokens', async () => {
+    const originalFetch = global.fetch;
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: jest.fn().mockResolvedValue({
+        choices: [{ message: { content: '{"status":"ok"}' } }],
+      }),
+    });
+    global.fetch = fetchMock as typeof fetch;
+
+    try {
+      await serviceWith().testConnection({
+        provider: 'databricks',
+        model: 'databricks-claude-sonnet-4-5',
+        baseUrl: 'https://adb-123.azuredatabricks.net',
+        apiKey: 'db-key',
+      });
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const [url, options] = fetchMock.mock.calls[0] as [
+        string,
+        { headers: Record<string, string>; body: string },
+      ];
+      expect(url).toBe(
+        'https://adb-123.azuredatabricks.net/serving-endpoints/chat/completions',
+      );
+      // Bearer-only — no X-Api-Key like LenAI gets.
+      expect(options.headers).toEqual({
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer db-key',
+      });
+      const body = JSON.parse(options.body) as Record<string, unknown>;
+      expect(body.max_tokens).toBe(512);
+      expect(body.max_completion_tokens).toBeUndefined();
+      // Same structured-output probe every other OpenAI-compatible provider gets.
+      expect(body.response_format).toEqual(
+        expect.objectContaining({ type: 'json_schema' }),
+      );
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
+  it('requires baseUrl for databricks', async () => {
+    await expect(
+      serviceWith().testConnection({
+        provider: 'databricks',
+        model: 'databricks-claude-sonnet-4-5',
+        apiKey: 'db-key',
+      }),
+    ).rejects.toThrow(/baseUrl is required for databricks/);
+  });
+
+  it.each([
+    [404, 'Serving endpoint not found (404) — check the name'],
+    [403, 'Access denied (403)'],
+  ])('gives a clear message for a %d response', async (status, expected) => {
+    const originalFetch = global.fetch;
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: false,
+      status,
+      text: jest.fn().mockResolvedValue('not found'),
+    });
+    global.fetch = fetchMock as typeof fetch;
+
+    try {
+      await expect(
+        serviceWith().testConnection({
+          provider: 'databricks',
+          model: 'no-such-endpoint',
+          baseUrl: 'https://adb-123.azuredatabricks.net',
+          apiKey: 'db-key',
+        }),
+      ).rejects.toThrow(expected);
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
+  it('uses the Databricks contract for runtime Mastra agent calls', async () => {
+    const service = serviceWith({
+      settings: {
+        key: 'llm',
+        provider: 'databricks',
+        model: 'databricks-claude-sonnet-4-5',
+        baseUrl: 'https://adb-123.azuredatabricks.net',
+        apiKeyCiphertext: 'encrypted',
+      },
+      decryptedKey: 'db-saved',
+    });
+
+    service.onModuleInit();
+
+    await expect(resolveAgentModel()).resolves.toEqual({
+      id: 'databricks/databricks-claude-sonnet-4-5',
+      url: 'https://adb-123.azuredatabricks.net/serving-endpoints',
+      apiKey: 'db-saved',
+    });
+  });
+});
+
+describe('providerOptionsFor', () => {
+  it('sends reasoningEffort under the openai key for openai', async () => {
+    const service = serviceWith({
+      settings: {
+        key: 'llm',
+        provider: 'openai',
+        model: 'gpt-5',
+        baseUrl: '',
+        apiKeyCiphertext: 'encrypted',
+      },
+    });
+    await expect(service.providerOptionsFor('high')).resolves.toEqual({
+      openai: { reasoningEffort: 'high' },
+    });
+  });
+
+  it('files reasoningEffort under the lenai key, the bucket a lenai/… model reads', async () => {
+    const service = serviceWith({
+      settings: {
+        key: 'llm',
+        provider: 'lenai',
+        model: 'gpt-5-deployment',
+        baseUrl: 'https://lenai.example.com',
+        apiKeyCiphertext: 'encrypted',
+      },
+    });
+    await expect(service.providerOptionsFor('medium')).resolves.toEqual({
+      lenai: { reasoningEffort: 'medium' },
+    });
+  });
+
+  it('defaults to the openai key when nothing is configured yet', async () => {
+    const service = serviceWith();
+    await expect(service.providerOptionsFor('low')).resolves.toEqual({
+      openai: { reasoningEffort: 'low' },
+    });
+  });
+
+  it('maps the effort to the anthropic bucket for a Claude model', async () => {
+    const service = serviceWith({
+      settings: {
+        key: 'llm',
+        provider: 'anthropic',
+        model: 'claude-sonnet-5-5',
+        baseUrl: '',
+        apiKeyCiphertext: 'encrypted',
+      },
+    });
+    const options = await service.providerOptionsFor('high');
+    expect(Object.keys(options)).toEqual(['anthropic']);
+  });
+
+  it('sends nothing for databricks unless the operator opted in', async () => {
+    const service = serviceWith({
+      settings: {
+        key: 'llm',
+        provider: 'databricks',
+        model: 'databricks-gpt-oss-120b',
+        baseUrl: 'https://adb-123.azuredatabricks.net',
+        apiKeyCiphertext: 'encrypted',
+      },
+      databricksReasoningEffort: false,
+    });
+    await expect(service.providerOptionsFor('high')).resolves.toEqual({});
+  });
+
+  it('sends reasoningEffort under the databricks key when opted in', async () => {
+    const service = serviceWith({
+      settings: {
+        key: 'llm',
+        provider: 'databricks',
+        model: 'databricks-gpt-oss-120b',
+        baseUrl: 'https://adb-123.azuredatabricks.net',
+        apiKeyCiphertext: 'encrypted',
+      },
+      databricksReasoningEffort: true,
+    });
+    await expect(service.providerOptionsFor('high')).resolves.toEqual({
+      databricks: { reasoningEffort: 'high' },
+    });
+  });
+});
+
+describe('judge model resolution', () => {
+  it('falls back to the assistant model when nothing is pinned', async () => {
+    const service = serviceWith({
+      settings: {
+        key: 'llm',
+        provider: 'openai',
+        model: 'gpt-5',
+        baseUrl: '',
+        apiKeyCiphertext: 'encrypted',
+      },
+      decryptedKey: 'open-key',
+    });
+    service.onModuleInit();
+
+    await expect(resolveJudgeModel()).resolves.toEqual({
+      id: 'openai/gpt-5',
+      apiKey: 'open-key',
+    });
+  });
+
+  it('reuses the stored key/url with the pinned model id when the provider matches', async () => {
+    const service = serviceWith({
+      settings: {
+        key: 'llm',
+        provider: 'lenai',
+        model: 'gpt-5-deployment',
+        baseUrl: 'https://lenai.example.com',
+        apiKeyCiphertext: 'encrypted',
+      },
+      decryptedKey: 'len-saved',
+      judgeModel: 'lenai/gpt-4.1-mini-deployment',
+    });
+    service.onModuleInit();
+
+    await expect(resolveJudgeModel()).resolves.toEqual(
+      lenaiModelConfig({
+        model: 'gpt-4.1-mini-deployment',
+        baseUrl: 'https://lenai.example.com',
+        apiKey: 'len-saved',
+      }),
+    );
+  });
+
+  it('reuses the stored key with a databricks pin under a databricks-configured LLM', async () => {
+    const service = serviceWith({
+      settings: {
+        key: 'llm',
+        provider: 'databricks',
+        model: 'databricks-claude-sonnet-4-5',
+        baseUrl: 'https://adb-123.azuredatabricks.net',
+        apiKeyCiphertext: 'encrypted',
+      },
+      decryptedKey: 'db-saved',
+      judgeModel: 'databricks/databricks-gpt-oss-120b',
+    });
+    service.onModuleInit();
+
+    await expect(resolveJudgeModel()).resolves.toEqual(
+      databricksModelConfig({
+        model: 'databricks-gpt-oss-120b',
+        baseUrl: 'https://adb-123.azuredatabricks.net',
+        apiKey: 'db-saved',
+      }),
+    );
+  });
+
+  it('falls back to the env-bound router and warns once when the pinned provider differs', async () => {
+    const warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+    try {
+      const service = serviceWith({
+        settings: {
+          key: 'llm',
+          provider: 'databricks',
+          model: 'databricks-claude-sonnet-4-5',
+          baseUrl: 'https://adb-123.azuredatabricks.net',
+          apiKeyCiphertext: 'encrypted',
+        },
+        decryptedKey: 'db-saved',
+        judgeModel: 'openai/gpt-4.1-mini',
+      });
+      service.onModuleInit();
+
+      await expect(resolveJudgeModel()).resolves.toBe('openai/gpt-4.1-mini');
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it('falls back to the assistant model and warns on a malformed pin', async () => {
+    const warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+    try {
+      const service = serviceWith({
+        settings: {
+          key: 'llm',
+          provider: 'openai',
+          model: 'gpt-5',
+          baseUrl: '',
+          apiKeyCiphertext: 'encrypted',
+        },
+        decryptedKey: 'open-key',
+        judgeModel: 'not-a-router-id',
+      });
+      service.onModuleInit();
+
+      await expect(resolveJudgeModel()).resolves.toEqual({
+        id: 'openai/gpt-5',
+        apiKey: 'open-key',
+      });
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      warnSpy.mockRestore();
+    }
   });
 });

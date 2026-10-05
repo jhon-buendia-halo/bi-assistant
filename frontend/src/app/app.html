@@ -96,6 +96,18 @@
             />
             <span>Testing Data</span>
           </button>
+          <button
+            (click)="selectSection('engine')"
+            class="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-zinc-200 hover:bg-white/10"
+            [class.option-active]="settingsSection() === 'engine'"
+          >
+            <lucide-angular
+              [img]="SlidersHorizontal"
+              [size]="15"
+              class="text-zinc-400"
+            />
+            <span>Engine levers</span>
+          </button>
         </nav>
 
         <div class="flex-1"></div>
@@ -378,6 +390,10 @@
       } @else if (settingsOpen() && settingsSection() === "testing-data") {
         <div class="flex flex-1 justify-center overflow-y-auto px-6 py-10">
           <app-testing-data-config class="w-full max-w-[560px]" />
+        </div>
+      } @else if (settingsOpen() && settingsSection() === "engine") {
+        <div class="flex flex-1 justify-center overflow-y-auto px-6 py-10">
+          <app-engine-settings class="w-full max-w-[640px]" />
         </div>
       } @else if (mainView() === "dataset") {
         <div class="flex flex-1 justify-center overflow-y-auto px-8 py-10">

@@ -286,6 +286,20 @@ flowchart LR
 - **Decision:** `create_visual` / `update_visual` tools drive a designer sub-agent; each edit writes a new `v<N>` directory; revert moves a pointer; a fixed, transcript-derived frame provides readable context.
 - **Consequences:** Readability does not depend on designer-model output; storage grows per version.
 
+#### ADR-0011 — Engine levers as one options object; evals run the production turn
+- **Status:** Accepted
+- **Date:** 2026-10-04
+- **Context:** Improving answer quality means changing one behaviour at a time and measuring it. Behaviours were hard-wired, so comparing two engines needed two builds, and the eval harness called the bare agent, so it measured a different pipeline from the one users get (no metrics, verified queries, reasoning effort or guards).
+- **Decision:** Every measurable behaviour is a field of one pure `EngineOptions` object with shipped defaults equal to the old engine; production values are persisted in the settings store (`key = "engine"`); an eval run applies a named arm over them. The eval harness runs each attempt through the production chat turn (`SessionsService.runTurn`) in a throwaway session and grades the finished turn with pure evaluators instead of the framework's scorer runner; verdicts fold into pass^k, with GAP for what the harness could not measure. The assistant prompt becomes ordered rule groups so an arm can ablate them.
+- **Consequences:** A lever change is a run, not a rebuild, and eval results reflect what users get. Every turn reads the settings document. Modules the unit tests load must stay free of the agent framework's ESM-only imports. Suite files gain fields (difficulty, provenance, paraphrases, trap and alternative SQL).
+
+#### ADR-0012 — Databricks Model Serving as an LLM provider
+- **Status:** Accepted
+- **Date:** 2026-10-04
+- **Context:** The product runs on Databricks; customers may only be allowed to call models through their workspace's Model Serving endpoints.
+- **Decision:** Add provider `databricks`, routed through the OpenAI-compatible client at `<workspace>/serving-endpoints` with bearer authentication; the model is the serving-endpoint name. Reasoning effort is not sent unless the operator opts in, because many endpoints reject it. The eval judge may be pinned to its own model.
+- **Consequences:** A fourth provider to keep working in the connection probe and per-call tuning. Unverified against a live workspace at the time of writing.
+
 ## Level 4 — Code
 
 ```mermaid

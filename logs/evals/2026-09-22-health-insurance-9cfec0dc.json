@@ -1,0 +1,399 @@
+{
+  "schemaVersion": 1,
+  "runId": "9cfec0dc-3044-44d6-bf3c-9b4b387286d5",
+  "harness": "in-app",
+  "suite": "health-insurance",
+  "agentKey": "assistant",
+  "datasets": [
+    "Health Insurance"
+  ],
+  "model": "openai/gpt-5",
+  "startedAt": "2026-09-22T22:24:50.254Z",
+  "finishedAt": "2026-09-22T22:34:27.251Z",
+  "durationMs": 576997,
+  "totals": {
+    "cases": 20,
+    "passed": 11,
+    "failed": 9,
+    "errored": 0,
+    "skipped": 0
+  },
+  "categories": {
+    "ratio-trap": {
+      "total": 3,
+      "passed": 2
+    },
+    "constant-column": {
+      "total": 1,
+      "passed": 1
+    },
+    "empty-column": {
+      "total": 1,
+      "passed": 1
+    },
+    "ties": {
+      "total": 1,
+      "passed": 1
+    },
+    "value-vocabulary": {
+      "total": 1,
+      "passed": 0
+    },
+    "out-of-scope": {
+      "total": 1,
+      "passed": 0
+    },
+    "clarification": {
+      "total": 1,
+      "passed": 1
+    },
+    "id-vs-name": {
+      "total": 1,
+      "passed": 1
+    },
+    "metric-definition": {
+      "total": 1,
+      "passed": 0
+    },
+    "domain-semantics": {
+      "total": 1,
+      "passed": 0
+    },
+    "default-filter": {
+      "total": 2,
+      "passed": 1
+    },
+    "multi-step-join": {
+      "total": 1,
+      "passed": 0
+    },
+    "discovery": {
+      "total": 1,
+      "passed": 0
+    },
+    "unit-confusion": {
+      "total": 1,
+      "passed": 1
+    },
+    "quality-filter": {
+      "total": 1,
+      "passed": 0
+    },
+    "control": {
+      "total": 2,
+      "passed": 2
+    }
+  },
+  "usage": {
+    "inputTokens": 438124,
+    "outputTokens": 34366,
+    "totalTokens": 472490,
+    "reasoningTokens": 21952,
+    "cachedInputTokens": 362496,
+    "calls": 23
+  },
+  "costIncomplete": true,
+  "cases": [
+    {
+      "id": "paid-share-by-specialty",
+      "category": "ratio-trap",
+      "verdict": "FAIL",
+      "reason": "result-set-match",
+      "durationMs": 37708,
+      "usage": {
+        "inputTokens": 21185,
+        "outputTokens": 2737,
+        "totalTokens": 23922,
+        "reasoningTokens": 1920,
+        "cachedInputTokens": 15232,
+        "calls": 1
+      }
+    },
+    {
+      "id": "plan-share-of-allowed-by-tier",
+      "category": "ratio-trap",
+      "verdict": "PASS",
+      "durationMs": 20080,
+      "usage": {
+        "inputTokens": 20800,
+        "outputTokens": 1900,
+        "totalTokens": 22700,
+        "reasoningTokens": 1088,
+        "cachedInputTokens": 18560,
+        "calls": 1
+      }
+    },
+    {
+      "id": "claims-by-currency",
+      "category": "constant-column",
+      "verdict": "PASS",
+      "durationMs": 20603,
+      "usage": {
+        "inputTokens": 16195,
+        "outputTokens": 1864,
+        "totalTokens": 18059,
+        "reasoningTokens": 1088,
+        "cachedInputTokens": 12544,
+        "calls": 2
+      }
+    },
+    {
+      "id": "claims-with-preauth",
+      "category": "empty-column",
+      "verdict": "PASS",
+      "durationMs": 33769,
+      "usage": {
+        "inputTokens": 14179,
+        "outputTokens": 1258,
+        "totalTokens": 15437,
+        "reasoningTokens": 832,
+        "cachedInputTokens": 12672,
+        "calls": 1
+      }
+    },
+    {
+      "id": "specialties-with-48-claims",
+      "category": "ties",
+      "verdict": "PASS",
+      "durationMs": 12370,
+      "usage": {
+        "inputTokens": 8012,
+        "outputTokens": 719,
+        "totalTokens": 8731,
+        "reasoningTokens": 448,
+        "cachedInputTokens": 7680,
+        "calls": 1
+      }
+    },
+    {
+      "id": "approved-claims-2024",
+      "category": "value-vocabulary",
+      "verdict": "FAIL",
+      "reason": "check-includes",
+      "durationMs": 22657,
+      "usage": {
+        "inputTokens": 14767,
+        "outputTokens": 1566,
+        "totalTokens": 16333,
+        "reasoningTokens": 1216,
+        "cachedInputTokens": 13440,
+        "calls": 1
+      }
+    },
+    {
+      "id": "payouts-2019",
+      "category": "out-of-scope",
+      "verdict": "FAIL",
+      "reason": "llm-judge",
+      "durationMs": 24878,
+      "usage": {
+        "inputTokens": 15921,
+        "outputTokens": 1785,
+        "totalTokens": 17706,
+        "reasoningTokens": 1408,
+        "cachedInputTokens": 13184,
+        "calls": 2
+      }
+    },
+    {
+      "id": "most-expensive-member",
+      "category": "clarification",
+      "verdict": "PASS",
+      "durationMs": 22766,
+      "usage": {
+        "inputTokens": 8918,
+        "outputTokens": 1814,
+        "totalTokens": 10732,
+        "reasoningTokens": 1472,
+        "cachedInputTokens": 7808,
+        "calls": 2
+      }
+    },
+    {
+      "id": "member-with-most-claims",
+      "category": "id-vs-name",
+      "verdict": "PASS",
+      "durationMs": 36079,
+      "usage": {
+        "inputTokens": 19914,
+        "outputTokens": 1083,
+        "totalTokens": 20997,
+        "reasoningTokens": 640,
+        "cachedInputTokens": 14080,
+        "calls": 1
+      }
+    },
+    {
+      "id": "net-paid-by-region-2024",
+      "category": "metric-definition",
+      "verdict": "FAIL",
+      "reason": "check-matches",
+      "durationMs": 35119,
+      "usage": {
+        "inputTokens": 23200,
+        "outputTokens": 2625,
+        "totalTokens": 25825,
+        "reasoningTokens": 1920,
+        "cachedInputTokens": 20992,
+        "calls": 1
+      }
+    },
+    {
+      "id": "net-paid-after-reversals-2024",
+      "category": "domain-semantics",
+      "verdict": "FAIL",
+      "reason": "result-set-match",
+      "durationMs": 23683,
+      "usage": {
+        "inputTokens": 15021,
+        "outputTokens": 1811,
+        "totalTokens": 16832,
+        "reasoningTokens": 1280,
+        "cachedInputTokens": 11008,
+        "calls": 1
+      }
+    },
+    {
+      "id": "claims-march-2024",
+      "category": "default-filter",
+      "verdict": "PASS",
+      "durationMs": 10109,
+      "usage": {
+        "inputTokens": 13685,
+        "outputTokens": 751,
+        "totalTokens": 14436,
+        "reasoningTokens": 384,
+        "cachedInputTokens": 12416,
+        "calls": 1
+      }
+    },
+    {
+      "id": "paid-by-country",
+      "category": "multi-step-join",
+      "verdict": "FAIL",
+      "reason": "result-set-match",
+      "durationMs": 65589,
+      "usage": {
+        "inputTokens": 67565,
+        "outputTokens": 2502,
+        "totalTokens": 70067,
+        "reasoningTokens": 1600,
+        "cachedInputTokens": 53504,
+        "calls": 1
+      }
+    },
+    {
+      "id": "denial-data-discovery",
+      "category": "discovery",
+      "verdict": "FAIL",
+      "reason": "check-called-tool",
+      "durationMs": 73791,
+      "usage": {
+        "inputTokens": 79190,
+        "outputTokens": 4283,
+        "totalTokens": 83473,
+        "reasoningTokens": 1984,
+        "cachedInputTokens": 64768,
+        "calls": 1
+      }
+    },
+    {
+      "id": "avg-paid-per-claim-dollars",
+      "category": "unit-confusion",
+      "verdict": "PASS",
+      "durationMs": 19170,
+      "usage": {
+        "inputTokens": 14573,
+        "outputTokens": 1310,
+        "totalTokens": 15883,
+        "reasoningTokens": 960,
+        "cachedInputTokens": 11392,
+        "calls": 1
+      }
+    },
+    {
+      "id": "units-cut-by-procedure",
+      "category": "ratio-trap",
+      "verdict": "PASS",
+      "durationMs": 20186,
+      "usage": {
+        "inputTokens": 19468,
+        "outputTokens": 1228,
+        "totalTokens": 20696,
+        "reasoningTokens": 576,
+        "cachedInputTokens": 17408,
+        "calls": 1
+      }
+    },
+    {
+      "id": "denial-rate",
+      "category": "quality-filter",
+      "verdict": "FAIL",
+      "reason": "check-includes",
+      "durationMs": 17412,
+      "usage": {
+        "inputTokens": 8303,
+        "outputTokens": 1115,
+        "totalTokens": 9418,
+        "reasoningTokens": 768,
+        "cachedInputTokens": 7936,
+        "calls": 1
+      }
+    },
+    {
+      "id": "active-members-by-region",
+      "category": "default-filter",
+      "verdict": "FAIL",
+      "reason": "check-includes",
+      "durationMs": 17263,
+      "usage": {
+        "inputTokens": 19006,
+        "outputTokens": 1117,
+        "totalTokens": 20123,
+        "reasoningTokens": 640,
+        "cachedInputTokens": 16256,
+        "calls": 1
+      }
+    },
+    {
+      "id": "members-per-plan-tier",
+      "category": "control",
+      "verdict": "PASS",
+      "durationMs": 34401,
+      "usage": {
+        "inputTokens": 25306,
+        "outputTokens": 1912,
+        "totalTokens": 27218,
+        "reasoningTokens": 1152,
+        "cachedInputTokens": 23552,
+        "calls": 1
+      }
+    },
+    {
+      "id": "providers-per-specialty",
+      "category": "control",
+      "verdict": "PASS",
+      "durationMs": 29276,
+      "usage": {
+        "inputTokens": 12916,
+        "outputTokens": 986,
+        "totalTokens": 13902,
+        "reasoningTokens": 576,
+        "cachedInputTokens": 8064,
+        "calls": 1
+      }
+    }
+  ],
+  "comparedToRunId": "9a8d7567-7a48-420f-b251-54a500029d77",
+  "regressions": [],
+  "improvements": [
+    "plan-share-of-allowed-by-tier",
+    "claims-by-currency",
+    "specialties-with-48-claims",
+    "most-expensive-member",
+    "member-with-most-claims",
+    "avg-paid-per-claim-dollars",
+    "units-cut-by-procedure",
+    "members-per-plan-tier"
+  ]
+}

@@ -54,11 +54,21 @@ export class KnowledgeForm {
   /** Comma-separated in the form, split into an array on save. */
   readonly synonyms = signal('');
   readonly entities = signal('');
+  /** Only offered when `entities` resolves to exactly one entity. */
+  readonly column = signal('');
   readonly saving = signal(false);
+
+  readonly entityList = computed(() => splitList(this.entities()));
+  /** The Column field only makes sense when the snippet names one entity. */
+  readonly showColumnField = computed(() => this.entityList().length === 1);
+  readonly columnTooLong = computed(() => this.column().trim().length > 128);
 
   readonly canSave = computed(
     () =>
-      !this.saving() && this.title().trim() !== '' && this.body().trim() !== '',
+      !this.saving() &&
+      this.title().trim() !== '' &&
+      this.body().trim() !== '' &&
+      !(this.showColumnField() && this.columnTooLong()),
   );
 
   constructor() {
@@ -72,6 +82,7 @@ export class KnowledgeForm {
         this.datasetScope.set(current.scope?.datasetId ?? '');
         this.synonyms.set((current.synonyms ?? []).join(', '));
         this.entities.set((current.entities ?? []).join(', '));
+        this.column.set(current.column ?? '');
       } else {
         this.reset();
       }
@@ -90,6 +101,9 @@ export class KnowledgeForm {
         : {}),
       ...(this.entities().trim()
         ? { entities: splitList(this.entities()) }
+        : {}),
+      ...(this.showColumnField() && this.column().trim()
+        ? { column: this.column().trim() }
         : {}),
     };
     const existing = this.snippet();
@@ -121,6 +135,7 @@ export class KnowledgeForm {
     this.datasetScope.set('');
     this.synonyms.set('');
     this.entities.set('');
+    this.column.set('');
   }
 }
 
