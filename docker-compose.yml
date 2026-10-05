@@ -19,5 +19,33 @@ services:
       retries: 10
       start_period: 10s
 
+  # Hindsight learning memory (ADR-0013), opt-in: `docker compose --profile
+  # memory up -d hindsight`. API on 8888 (HINDSIGHT_URL=http://127.0.0.1:8888),
+  # control-plane UI on 9999. OPENAI_API_KEY comes from `.env`.
+  hindsight:
+    image: ghcr.io/vectorize-io/hindsight:0.10.2-slim
+    profiles: ["memory"]            # `docker compose up -d postgres` (E2E) must not start it
+    shm_size: 1g
+    ports:
+      - "127.0.0.1:8888:8888"       # API
+      - "127.0.0.1:9999:9999"       # control-plane UI
+    environment:
+      HINDSIGHT_API_LLM_PROVIDER: openai
+      HINDSIGHT_API_LLM_MODEL: gpt-5-mini
+      HINDSIGHT_API_LLM_API_KEY: ${OPENAI_API_KEY:-}     # from .env; never :? (it would break `up postgres`)
+      HINDSIGHT_API_EMBEDDINGS_PROVIDER: openai
+      HINDSIGHT_API_EMBEDDINGS_OPENAI_MODEL: text-embedding-3-small
+      HINDSIGHT_API_RERANKER_PROVIDER: rrf                # slim has no local reranker; RRF passthrough
+    volumes:
+      - hindsight_data:/home/hindsight/.pg0
+    healthcheck:
+      # The slim image has no curl; its Python is on PATH. GET /health is 200 when up.
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8888/health', timeout=4)"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
 volumes:
   world_cup_postgres_data:
+  hindsight_data:

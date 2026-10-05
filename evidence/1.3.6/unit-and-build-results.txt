@@ -1,0 +1,11 @@
+# Unit tests, builds and spec check — feat/hindsight-memory, 2026-10-05
+backend  npx jest: 79 suites passed, 2071 tests passed (base branch: 73 / 2008)
+backend  npx tsc --noEmit: only the pre-existing test/app.e2e-spec.ts error
+backend  npm run build (nest build): exit 0
+backend  eslint on new files: clean; changed files at their previous baselines
+frontend npm run build: exit 0
+frontend ng test --watch=false (ChromeHeadless): 296 passed, 1 failed — the pre-existing 'App should support keyboard resizing from the separator'
+frontend tsc -p e2e/tsconfig.json: exit 0
+repo     python3 scripts/check-specs.py: ALL CHECKS PASSED
+docker   docker compose config (no profile): parses, lists only postgres; docker compose --profile memory config -q: exit 0
+docker   ghcr.io/vectorize-io/hindsight:0.10.2-slim: GET /health 200; HINDSIGHT_API_RERANKER_PROVIDER=rrf accepted; OpenAI key verified at start-up (no 401)

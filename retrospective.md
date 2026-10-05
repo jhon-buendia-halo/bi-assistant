@@ -14,6 +14,28 @@ Entry template:
 
 ---
 
+## 2026-10-05 — 1.3.6 Hindsight memory spike behind a lever
+
+### What went well
+- One design brief, written before any agent started, carried the names, ids, block texts and rules for three parallel agents (backend, frontend + E2E, specs). The pieces fit on the first try: the frontend's lever key and values matched the backend's, and the specs matched the code except for one heading.
+- Probing the real Docker image before writing the compose file settled two unknowns the docs left open (the `/health` path and that `rrf` is accepted on the slim image) and verified the user's key at start-up without running a single retain.
+- Everything sits behind `memory: off`, so the E2E suite on the branch runs with memory off and the base behaviour is unchanged; the lever test is the only new E2E.
+- The port and the no-op store mean the branch costs nothing for anyone without `HINDSIGHT_URL`.
+
+### What went wrong
+- The first `.env` the user wrote held a GitHub token instead of an OpenAI key. The check on name, length and prefix caught it before the container used it; a plain "is the file there" check would not have.
+- Specs and code were written concurrently from the brief instead of specs first, so one block heading and the outbox details had to be reconciled afterwards. The brief did not spell out the mental-models heading or the backoff numbers, and both agents filled the gap differently.
+- The base build on port 3000 collided with the E2E global setup, which refuses a busy port 3000, so the base instance had to be stopped and restarted around the E2E run.
+- `scripts/check-answers.ts` goes through `streamMessage`, so a careful-mode run of it with Hindsight on would retain `xc:` signals as if a user had asked.
+- The first smoke test failed on the first question with "Unsupported state or unable to authenticate data": the LLM key in the user's profile was encrypted under the crypto service's development default (`APP_SECRET` unset), and the `.app-secret` file that now sets `APP_SECRET` was only created today, when the merged build first opened that profile. Any install that saved its key before the `.app-secret` logic landed loses it on upgrade. The demo instances run with `APP_SECRET=insecure-dev-secret`; the bug needs a Jira entry next to BA-106 and a one-time re-encryption migration.
+
+### What to do differently
+- When the brief defines a prompt block, give its exact heading text and every numeric constant (timeouts, backoff, caps); agents reproduce text literally and invent numbers inconsistently.
+- Verify any secret file by variable name, value length and prefix, never by existence alone, and never print the value.
+- Keep port 3000 free for E2E: run side-by-side web instances on other ports, or stop the one on 3000 before `npm run test:e2e`.
+- Before enabling memory for scripted runs, decide whether `check-answers.ts` should pass `memorySignals: false`, and add the memory lever to the eval arm matrix (`memory-recall` vs `baseline`) so the next eval run measures it.
+- The pin-fingerprint recompute after a 👍 re-runs recall (and was the one call that hit the 800 ms timeout in the smoke test). Make it reuse the turn's recorded `source: 'memory'` items instead of recalling again, so the fingerprint cannot drift from the turn's. In the UI, memory items show a "global" scope chip because `KnowledgeUse.datasetId` is empty; decide whether to show the datasource instead.
+
 ## 2026-10-05 — 1.3.5 Integrate business expert, feedback learning and the eval loop
 
 ### What went well

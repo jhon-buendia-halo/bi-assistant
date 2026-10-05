@@ -9,6 +9,7 @@ import {
   KNOWLEDGE_STORE,
   REASONING_FEEDBACK_STORE,
   ANSWER_PINS_STORE,
+  MEMORY_SIGNALS_STORE,
   SESSIONS_STORE,
   DATASETS_STORE,
   SETTINGS_STORE,
@@ -39,6 +40,7 @@ const COLLECTIONS = [
   { token: KNOWLEDGE_STORE, table: 'knowledge_snippets' },
   { token: REASONING_FEEDBACK_STORE, table: 'reasoning_feedback' },
   { token: ANSWER_PINS_STORE, table: 'answer_pins' },
+  { token: MEMORY_SIGNALS_STORE, table: 'memory_signals' },
 ];
 
 const sqliteDbProvider: Provider = {

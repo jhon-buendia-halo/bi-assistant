@@ -120,6 +120,12 @@ export interface RunTurnOptions {
    * measures the engine, never a cache.
    */
   pin?: boolean;
+  /**
+   * Learning-memory signals from this turn (a cross-check that disagreed,
+   * ADR-0013). Off by default — only chat (`streamMessage`) turns it on, so
+   * an eval arm may recall from the memory but never writes to it.
+   */
+  memorySignals?: boolean;
 }
 
 export interface TurnResult {

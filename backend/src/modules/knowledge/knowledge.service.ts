@@ -1,7 +1,9 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { MastraService } from '../../mastra/mastra.service';
@@ -13,6 +15,7 @@ import {
 } from '../../mastra/agents/knowledge-bootstrap.agent';
 import { DatasetsRepository } from '../datasets/repositories/datasets.repository';
 import { DatasourcesService } from '../datasources/datasources.service';
+import { MemoryOutboxService } from '../memory/memory-outbox.service';
 import { KnowledgeRepository } from './repositories/knowledge.repository';
 import {
   KNOWLEDGE_SNIPPET_KINDS,
@@ -54,6 +57,8 @@ const BOOTSTRAP_SCHEMA_SAMPLE_VALUES = 5;
 /** Sample rows fetched per entity, and the total character budget for them. */
 const BOOTSTRAP_SAMPLE_ROW_LIMIT = 5;
 const BOOTSTRAP_SAMPLE_ROWS_CHARS = 4_000;
+/** Who is speaking in a `knowledge` memory signal (ADR-0013). */
+const KNOWLEDGE_SIGNAL_CONTEXT = 'Curated business knowledge (authoritative)';
 
 /**
  * One step of a bootstrap run, reported while it is still going. `key`
@@ -108,11 +113,19 @@ export interface KnowledgeContextOptions {
  */
 @Injectable()
 export class KnowledgeService {
+  private readonly logger = new Logger(KnowledgeService.name);
+
   constructor(
     private readonly repository: KnowledgeRepository,
     private readonly datasetsRepository: DatasetsRepository,
     private readonly datasourcesService: DatasourcesService,
     private readonly mastra: MastraService,
+    /**
+     * The learning memory's outbox (ADR-0013): every curated edit is mirrored
+     * into the memory bank as authoritative context. Optional so a caller
+     * built without `MemoryModule` (unit tests) keeps working.
+     */
+    @Optional() private readonly memory?: MemoryOutboxService,
   ) {}
 
   /**
@@ -128,13 +141,15 @@ export class KnowledgeService {
   async create(input: KnowledgeSnippetInput): Promise<KnowledgeSnippet> {
     const clean = validateCreate(input);
     const now = new Date().toISOString();
-    return this.repository.insert({
+    const created = await this.repository.insert({
       id: randomUUID(),
       ...clean,
       source: 'user',
       createdAt: now,
       updatedAt: now,
     });
+    await this.remember(created);
+    return created;
   }
 
   /**
@@ -166,6 +181,7 @@ export class KnowledgeService {
     if (!saved) {
       throw new NotFoundException(`Knowledge snippet ${id} not found`);
     }
+    await this.remember(saved, existing);
     return saved;
   }
 
@@ -175,6 +191,7 @@ export class KnowledgeService {
       throw new NotFoundException(`Knowledge snippet ${id} not found`);
     }
     await this.repository.delete(id);
+    await this.forget(existing);
     return existing;
   }
 
@@ -190,7 +207,7 @@ export class KnowledgeService {
   ): Promise<KnowledgeSnippet> {
     const clean = validateCreate(input);
     const now = new Date().toISOString();
-    return this.repository.insert({
+    const created = await this.repository.insert({
       id: randomUUID(),
       ...clean,
       source: 'feedback',
@@ -198,6 +215,8 @@ export class KnowledgeService {
       createdAt: now,
       updatedAt: now,
     });
+    await this.remember(created);
+    return created;
   }
 
   /**
@@ -205,7 +224,97 @@ export class KnowledgeService {
    * comment). Returns the count removed.
    */
   async deleteLearnedFor(feedbackId: string): Promise<number> {
-    return this.repository.deleteMany({ 'provenance.feedbackId': feedbackId });
+    const lessons = this.memory
+      ? (await this.repository.list()).filter(
+          (snippet) => snippet.provenance?.feedbackId === feedbackId,
+        )
+      : [];
+    const removed = await this.repository.deleteMany({
+      'provenance.feedbackId': feedbackId,
+    });
+    for (const lesson of lessons) await this.forget(lesson);
+    return removed;
+  }
+
+  // ------------------------------------------------------- learning memory
+
+  /**
+   * Mirror a curated snippet into the learning memory (ADR-0013) as a
+   * `knowledge` signal — the memory's directive makes curated knowledge win
+   * any conflict with what it learned. An enabled snippet is (re)retained, a
+   * disabled one forgotten, and one moved to another datasource forgotten
+   * from the old bank. Global snippets are skipped: a bank is per
+   * datasource. Never throws — the edit itself is already saved.
+   */
+  private async remember(
+    snippet: KnowledgeSnippet,
+    before?: KnowledgeSnippet,
+  ): Promise<void> {
+    if (!this.memory) return;
+    try {
+      const datasourceId = await this.snippetDatasource(snippet);
+      if (before) {
+        const previous = await this.snippetDatasource(before);
+        if (previous && previous !== datasourceId) {
+          void this.memory.forget(previous, knowledgeDocumentId(snippet.id));
+        }
+      }
+      if (!datasourceId) return;
+      if (!snippet.enabled) {
+        void this.memory.forget(datasourceId, knowledgeDocumentId(snippet.id));
+        return;
+      }
+      await this.memory.enqueue({
+        id: randomUUID(),
+        kind: 'knowledge',
+        datasourceId,
+        datasetIds: snippet.scope?.datasetId ? [snippet.scope.datasetId] : [],
+        documentId: knowledgeDocumentId(snippet.id),
+        content: snippetText(snippet),
+        context: KNOWLEDGE_SIGNAL_CONTEXT,
+        occurredAt: snippet.updatedAt ?? new Date().toISOString(),
+        entities: snippet.entities ?? [],
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Knowledge snippet ${snippet.id} was not sent to the memory: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  /** Remove a deleted snippet from the memory, without waiting on it. */
+  private async forget(snippet: KnowledgeSnippet): Promise<void> {
+    if (!this.memory) return;
+    try {
+      const datasourceId = await this.snippetDatasource(snippet);
+      if (datasourceId) {
+        void this.memory.forget(datasourceId, knowledgeDocumentId(snippet.id));
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Knowledge snippet ${snippet.id} was not forgotten by the memory: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  /**
+   * The datasource whose memory bank a snippet belongs to: its own
+   * `scope.datasourceId`, else its dataset's (a dataset bound before
+   * datasources existed falls back to the default one, as in a chat turn).
+   * Undefined for a global snippet.
+   */
+  private async snippetDatasource(
+    snippet: KnowledgeSnippet,
+  ): Promise<string | undefined> {
+    if (snippet.scope?.datasourceId) return snippet.scope.datasourceId;
+    const datasetId = snippet.scope?.datasetId;
+    if (!datasetId) return undefined;
+    const [dataset] = await this.datasetsRepository.getByNames([datasetId]);
+    if (!dataset) return undefined;
+    return (
+      dataset.datasourceId ??
+      (await this.datasourcesService.defaultDatasource())?.id
+    );
   }
 
   /**
@@ -677,13 +786,23 @@ function toKnowledgeUse(snippet: KnowledgeSnippet): KnowledgeUse {
 
 /** One compact line per snippet: kind tag, title, body, then optional extras. */
 function formatSnippet(snippet: KnowledgeSnippet): string {
+  return `- ${snippetText(snippet)}`;
+}
+
+/** `[kind] title: body; synonyms: …; entities: …` — the block line and the memory signal. */
+function snippetText(snippet: KnowledgeSnippet): string {
   const synonyms = snippet.synonyms?.length
     ? `; synonyms: ${snippet.synonyms.join(', ')}`
     : '';
   const entities = snippet.entities?.length
     ? `; entities: ${snippet.entities.join(', ')}`
     : '';
-  return `- [${snippet.kind}] ${snippet.title}: ${snippet.body}${synonyms}${entities}`;
+  return `[${snippet.kind}] ${snippet.title}: ${snippet.body}${synonyms}${entities}`;
+}
+
+/** Memory document id of a snippet: re-retaining it replaces it. */
+export function knowledgeDocumentId(snippetId: string): string {
+  return `knowledge:${snippetId}`;
 }
 
 function normalizeScope(scope: unknown): KnowledgeSnippetScope | null {

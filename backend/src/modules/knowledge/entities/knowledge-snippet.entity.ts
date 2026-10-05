@@ -9,7 +9,12 @@
  * referenced, including here.
  */
 export type KnowledgeSnippetKind = 'instruction' | 'term' | 'default_filter';
-export type KnowledgeSnippetSource = 'user' | 'mined' | 'feedback';
+/**
+ * `memory` never sits on a stored snippet: it marks a `KnowledgeUse` recalled
+ * from the Hindsight memory (`modules/memory`) rather than read from this
+ * collection — lower trust, shown with its own provenance badge.
+ */
+export type KnowledgeSnippetSource = 'user' | 'mined' | 'feedback' | 'memory';
 
 export const KNOWLEDGE_SNIPPET_KINDS: KnowledgeSnippetKind[] = [
   'instruction',

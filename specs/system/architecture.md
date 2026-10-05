@@ -375,6 +375,26 @@ ADR-0006 and ADR-0007 are used on the unmerged BA-2 branch ([epics/BA-2](../epic
 - **Decision:** Add provider `databricks`, routed through the OpenAI-compatible client at `<workspace>/serving-endpoints` with bearer authentication; the model is the serving-endpoint name. Reasoning effort is not sent unless the operator opts in, because many endpoints reject it. The eval judge may be pinned to its own model.
 - **Consequences:** A fourth provider to keep working in the connection probe and per-call tuning. Unverified against a live workspace at the time of writing.
 
+#### ADR-0013 — Hindsight as the learning memory, behind a `LearningStore` port
+- **Status:** Accepted
+- **Date:** 2026-10-05
+- **Context:**
+  - Curated Knowledge, Metrics and Verified queries are authoritative but static: an approval or a correction in one session changes nothing in the next unless a person edits Knowledge. The Knowledge block is also selected without looking at the question (scope and recency, then a character budget), and verified queries are matched by ASCII token overlap, so a paraphrase or a Spanish question finds nothing.
+  - Learning from feedback (ADR-0009) writes lessons straight into Knowledge, which blurs the line between what a person curated and what the system inferred.
+  - The Lifesight "agent brain" architecture separates a governed layer (decisions, policies, evidence) from a self-improving memory layer and the session state. Our governed layer exists; the memory layer does not.
+  - Hindsight (MIT, self-hosted) stores facts, experiences and consolidated observations with entity, temporal, semantic and keyword retrieval, reconciles contradictions, and keeps provenance; recall makes no LLM call. mem0's open-source edition dropped graph memory and in-place updates in April 2026. Hindsight is pre-1.0 with breaking changes in 0.4, 0.5 and 0.10, needs its own server and an LLM for extraction, and has no Mastra integration.
+- **Decision:**
+  - A `LearningStore` port (`retain`, `recall`, `mentalModels`, `forget`) in `modules/memory`, with a Hindsight implementation over the official TypeScript client and a no-op when `HINDSIGHT_URL` is unset. The rest of the app depends on the port only.
+  - Memory is a second, lower-trust source beside curated Knowledge: recalled items enter the prompt in their own block marked "not curated; curated knowledge wins on conflict", and are recorded as `KnowledgeUse` entries with `source: 'memory'` so they appear in the answer's provenance and in the answer-pin fingerprint. The memory never writes to Knowledge; promotion to Knowledge stays a human action (phase H4).
+  - Only verified signals are retained — approvals, rejections, reviewer comments, cross-check disagreements and curated Knowledge edits — through a persisted outbox (`memory_signals`) flushed asynchronously after the turn. Content carries questions, redacted SQL and schema names, never row values.
+  - One bank per datasource, tagged by dataset; recall runs in parallel with the other context blocks with a 2.5-second timeout and degrades to "no memory".
+  - Everything sits behind the engine lever `memory` (default `off`), so the effect is measured as an eval arm before it is on by default.
+- **Consequences:**
+  - A new external system (Python server with Postgres and pgvector, Docker in development) and a per-signal LLM extraction cost on Hindsight's side. The installer is unchanged; where the server runs in production (team server vs. per machine) is a later decision.
+  - Hindsight API changes are absorbed in one implementation; a contract test against a running server is needed per upgrade.
+  - The outbox adds a collection; no migration of existing data.
+  - Row-level privacy depends on the redaction rule and on the directives; an audit of retained content is part of acceptance.
+
 ## Level 4 — Code
 
 ```mermaid

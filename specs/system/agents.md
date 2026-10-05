@@ -1045,6 +1045,17 @@ Visual currently open in the right panel: <visualId>.   ← or "No visual is ope
 
 Join hints: one line per column with a reference, `->` when declared by the datasource, `~>` when inferred; de-duplicated; stop adding lines once 1,500 characters are used.
 
+**Block 1b — what this datasource has taught the assistant** (lever `memory` = `recall+models`, a memory server configured and at least one mental model with content; placed right after Block 1, a position that is stable between turns):
+
+```
+## What this datasource has taught the assistant
+### <mental model name>
+<content>
+…
+```
+
+Up to three models (`known-pitfalls`, `table-guide`, `learned-glossary`, up to about 800 tokens each) read from the memory server with a 2.5-second timeout; on timeout or error the block is omitted. See [data-model.md](data-model.md) 3.15 and [knowledge](../capabilities/knowledge/spec.md) R39.
+
 **Block 2 — governed metrics** (when any metric is defined on an entity in scope, matched case-insensitively):
 
 ```
@@ -1062,6 +1073,17 @@ Curated dataset knowledge (user-authored — treat as authoritative over anythin
 ```
 
 Budget 8,000 characters of entry lines. An entry that does not fit the remaining budget is skipped, and later entries are still tried. The list of snippets that made it in (`{id, kind, title, body, source, datasetId?}`) is threaded through the turn and persisted on the answer as `knowledge`: exactly what the model saw, even if the store changes mid-turn. The same block goes to the cross-check verifier (2.4).
+
+**Block 3b — learned from past sessions** (lever `memory` = `recall` or `recall+models`, a memory server configured and at least one recalled item; placed after Block 3 and before Block 4):
+
+```
+## Learned from past sessions (not curated; curated knowledge wins on conflict)
+- [observation · 3 evidences] <text>
+- [experience · 2026-09-28] <text>
+- [world] <text>
+```
+
+One line per recalled memory, ordered as the server returns them (consolidated observations preferred), at most about 1,200 tokens. The recall is one request to the memory server, started in parallel with the construction of Blocks 2 to 4, with a 2.5-second timeout; on timeout or error the turn proceeds without the block. **Recall never calls an LLM** (the server answers from its embeddings and indexes), so it adds no model cost to the turn. Every recalled item is appended to the turn's knowledge list as `{id: <memory id>, kind: "instruction", title: "<type> memory", body: <text>, source: "memory"}`, so it appears in the answer's "Knowledge in context" with a "Memory" badge and is part of the pin fingerprint ([answer-pinning](../capabilities/answer-pinning/spec.md)). The `bare` context lever sends neither this block nor Block 1b, and no recall is made. The curated Knowledge always wins: this block's header says so and the memory server carries a directive to the same effect.
 
 **Block 4 — verified reference queries** (only when the call has a question and stored verified pairs share vocabulary with it):
 
@@ -1639,6 +1661,7 @@ The assistant's instructions are built from named rule groups in this order: `ro
 | `repairIntentGuard` | Each repair is diffed with the original statement (tables, filters, aggregates, grouping); a repair that changed the question carries a warning, recorded in `repairs` on the tool record. |
 | `careful` | `on`: 5.8 on every turn; `auto`: only for risky categories (eval turns) or turns whose own SQL drew a result warning or a precheck finding, or whose repair changed what the query asks. |
 | `answerReview` | 2.8 after the answer is final. |
+| `memory` | `off`: no recall, no retain. `recall`: Block 3b is built and user signals are retained. `recall+models`: also Block 1b. Both blocks are skipped under `context: bare` (4.1). |
 | `reasoningEffort`, `maxSteps` | Override the user's effort and the 15-step budget for the turn. |
 
 A turn whose model provider fails (quota, rate limit, authentication, network, timeout) and leaves no answer records the provider error on the message and shows an explanation instead of an answer. Each answer records the configuration hash of the levers it ran with, `careful`, `answerReview` and, for eval turns, the arm.

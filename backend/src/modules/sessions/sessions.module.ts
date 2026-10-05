@@ -10,6 +10,7 @@ import { EngineModule } from '../engine/engine.module';
 import { ExpertModeModule } from '../expert-mode/expert-mode.module';
 import { AnswerPinsModule } from '../answer-pins/answer-pins.module';
 import { LearningModule } from '../learning/learning.module';
+import { MemoryModule } from '../memory/memory.module';
 import { SessionsController } from './sessions.controller';
 import { SessionsService } from './sessions.service';
 import { SessionsRepository } from './repositories/sessions.repository';
@@ -29,6 +30,8 @@ import { VisualizationService } from './visualization.service';
     ExpertModeModule,
     AnswerPinsModule,
     LearningModule,
+    // Hindsight learning memory: recall in the turn, signals from feedback.
+    MemoryModule,
   ],
   controllers: [SessionsController],
   providers: [SessionsService, SessionsRepository, VisualizationService],

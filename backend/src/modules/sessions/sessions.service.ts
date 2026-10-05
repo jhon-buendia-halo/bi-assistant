@@ -1,11 +1,13 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
   OnModuleInit,
+  Optional,
 } from '@nestjs/common';
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { RequestContext } from '@mastra/core/request-context';
 import { WORKSPACE_TOOLS } from '@mastra/core/workspace';
 import { MastraService } from '../../mastra/mastra.service';
@@ -114,6 +116,19 @@ import {
   LearningService,
   type LearnedLesson,
 } from '../learning/learning.service';
+import { MemoryOutboxService } from '../memory/memory-outbox.service';
+import { MemoryBankService } from '../memory/memory-bank.service';
+import {
+  LEARNING_STORE,
+  type LearningStore,
+} from '../memory/learning-store.port';
+import type { MemorySignal } from '../memory/entities/memory-signal.entity';
+import {
+  learnedBlock,
+  mentalModelsBlock,
+  toKnowledgeUse as memoryUses,
+} from '../memory/learned-block';
+import { clip, redactSqlLiterals, SIGNAL_SQL_CHARS } from '../memory/redact';
 import { SessionsRepository } from './repositories/sessions.repository';
 import { VisualizationService } from './visualization.service';
 import { sourceEntities } from './visualization-document';
@@ -230,6 +245,18 @@ const CROSS_CHECK_DISAGREE_NOTE = 'results differ — treat with care';
 const CROSS_CHECK_ROW_LIMIT = STORED_ROWS_CAP;
 /** How long the turn waits for the provider's token counts before giving up. */
 const USAGE_WAIT_MS = 2_000;
+/**
+ * Learning memory (lever `memory`, ADR-0013): the recall's token budget and
+ * the deadline for recall and the mental models — a turn never waits longer
+ * on the memory than this, and a late memory is no memory.
+ */
+const MEMORY_RECALL_TOKENS = 1_200;
+// Recall embeds the question through the memory server's provider (a network
+// call with OpenAI embeddings), so 800 ms timed out in practice; 2.5 s still
+// runs in parallel with the other context blocks (ADR-0013).
+const MEMORY_TIMEOUT_MS = 2_500;
+/** Longest reviewer note a correction signal carries. */
+const SIGNAL_NOTE_CHARS = 1_000;
 /**
  * Extra system context on business-expert-mode turns. Expert mode shows every
  * assumption block by block and turns a reviewer's correction into curated
@@ -354,7 +381,19 @@ interface GroundingSources {
   view: ModelPartView;
   verified?: string;
   metrics?: string;
+  /** `used` also lists the recalled memories (`source: 'memory'`). */
   knowledge: { block: string; used: KnowledgeUse[] };
+  /** "Learned from past sessions" — lever `memory` on, something recalled. */
+  learned?: string;
+  /** The memory bank's mental models — lever `memory: 'recall+models'`. */
+  mentalModels?: string;
+}
+
+/** What the learning memory adds to one turn's grounding. */
+interface MemoryContext {
+  used: KnowledgeUse[];
+  learned?: string;
+  mentalModels?: string;
 }
 
 @Injectable()
@@ -375,6 +414,13 @@ export class SessionsService implements OnModuleInit {
     private readonly expertMode: ExpertModeService,
     private readonly pins: AnswerPinsService,
     private readonly learning: LearningService,
+    // Learning memory (ADR-0013). Optional so a service built without
+    // `MemoryModule` (most unit tests) behaves as if Hindsight were unset.
+    @Optional() private readonly memoryOutbox?: MemoryOutboxService,
+    @Optional() private readonly memoryBanks?: MemoryBankService,
+    @Optional()
+    @Inject(LEARNING_STORE)
+    private readonly learningStore?: LearningStore,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -473,6 +519,11 @@ export class SessionsService implements OnModuleInit {
    * - `lookupTools: false` hides `lookup_values` / `lookup_knowledge` via a
    *   per-call `activeTools` — only when the agent has them registered, so
    *   the call is unchanged until they exist.
+   * - `memory` (ADR-0013) adds what past sessions taught: the "Learned from
+   *   past sessions" block right after the curated Knowledge (before the
+   *   verified pairs) and, with `recall+models`, the mental models right
+   *   after the orientation block, where they stay cacheable. Never in
+   *   `bare`.
    *
    * Memory-free on purpose — `agentOptions` adds the session's conversation
    * thread, `backgroundAgentOptions` deliberately does not.
@@ -492,6 +543,8 @@ export class SessionsService implements OnModuleInit {
       verified,
       metrics,
       knowledge,
+      learned,
+      mentalModels,
     } = await this.groundingSources(session, question, levers);
     const visualLines = (session.visualizations ?? []).map(
       (v) =>
@@ -537,20 +590,24 @@ export class SessionsService implements OnModuleInit {
       : await this.toolsWithoutLookups(requestContext);
     const system = (content: string) => ({ role: 'system' as const, content });
     const orientation = entityOrientationLines(session.datasets, datasets);
+    const modelsBlock = mentalModels ? [system(mentalModels)] : [];
     const curatedBlocks = [
       ...(cards ? [system(cards)] : []),
       ...(metrics ? [system(metrics)] : []),
       ...(knowledge.block ? [system(knowledge.block)] : []),
+      ...(learned ? [system(learned)] : []),
     ];
     const context = levers.staticFirstContext
       ? [
           system(orientation.join('\n')),
+          ...modelsBlock,
           ...curatedBlocks,
           ...(verified ? [system(verified)] : []),
           system(visualsBlock.join('\n')),
         ]
       : [
           system([...orientation, '', ...visualsBlock].join('\n')),
+          ...modelsBlock,
           ...curatedBlocks,
           ...(verified ? [system(verified)] : []),
         ];
@@ -574,8 +631,13 @@ export class SessionsService implements OnModuleInit {
    * never be built two different ways.
    *
    * `levers` are the turn's engine levers: `context: 'bare'` withholds every
-   * curated block (verified pairs, metrics, knowledge), and `rankedKnowledge`
-   * orders knowledge and metrics by relevance to `question`.
+   * curated block (verified pairs, metrics, knowledge) and the memory, and
+   * `rankedKnowledge` orders knowledge and metrics by relevance to
+   * `question`. With `memory` on, the recalled memories join `knowledge.used`
+   * — so the answer's provenance and its pin fingerprint both cover them.
+   *
+   * The blocks are independent reads and run in parallel, so the memory's
+   * deadline overlaps the rest instead of adding to it.
    */
   private async groundingSources(
     session: SessionDoc,
@@ -585,30 +647,92 @@ export class SessionsService implements OnModuleInit {
     const curated = levers.context !== 'bare';
     const datasets = await this.boundDatasets(session.datasets);
     const entities = datasets.flatMap((s) => s.tables ?? []);
-    const view = await this.llmService.getView();
-    const verified =
+    const noMemory: MemoryContext = { used: [] };
+    const [view, verified, metrics, knowledge, memory] = await Promise.all([
+      this.llmService.getView(),
       curated && question
-        ? await this.verifiedQueries.referenceBlock(question)
-        : undefined;
-    // Curated semantics for the entities this session can see — the one
-    // definition of each business number, never re-derived per turn.
-    const metrics = curated
-      ? await this.metrics.definitionBlock(entities, {
-          question,
-          ranked: levers.rankedKnowledge,
-        })
-      : undefined;
-    // Curated, user-authored knowledge (glossary/instructions/default
-    // filters, learned lessons) for this session's datasets — authoritative
-    // over anything the model would otherwise infer from schema alone.
-    const knowledge = curated
-      ? await this.knowledge.contextFor(session.datasets, {
-          question,
-          entities,
-          ranked: levers.rankedKnowledge,
-        })
-      : { block: '', used: [] as KnowledgeUse[] };
-    return { datasets, view, verified, metrics, knowledge };
+        ? this.verifiedQueries.referenceBlock(question)
+        : undefined,
+      // Curated semantics for the entities this session can see — the one
+      // definition of each business number, never re-derived per turn.
+      curated
+        ? this.metrics.definitionBlock(entities, {
+            question,
+            ranked: levers.rankedKnowledge,
+          })
+        : undefined,
+      // Curated, user-authored knowledge (glossary/instructions/default
+      // filters, learned lessons) for this session's datasets — authoritative
+      // over anything the model would otherwise infer from schema alone.
+      curated
+        ? this.knowledge.contextFor(session.datasets, {
+            question,
+            entities,
+            ranked: levers.rankedKnowledge,
+          })
+        : { block: '', used: [] as KnowledgeUse[] },
+      curated
+        ? this.memoryContext(session, datasets, question, levers)
+        : noMemory,
+    ]);
+    return {
+      datasets,
+      view,
+      verified,
+      metrics,
+      knowledge: memory.used.length
+        ? { block: knowledge.block, used: [...knowledge.used, ...memory.used] }
+        : knowledge,
+      ...(memory.learned ? { learned: memory.learned } : {}),
+      ...(memory.mentalModels ? { mentalModels: memory.mentalModels } : {}),
+    };
+  }
+
+  /**
+   * What the learning memory (lever `memory`, ADR-0013) adds to a turn:
+   * memories recalled for `question` — a block plus one `KnowledgeUse`
+   * each, `source: 'memory'` — and, with `recall+models`, the bank's mental
+   * models. Nothing when the lever is off, Hindsight is not configured or
+   * the session spans several datasources (a bank is per datasource).
+   * Recall makes no model call and has a deadline; a failure, a timeout or
+   * an empty bank all mean "no memory", never a failed turn.
+   */
+  private async memoryContext(
+    session: SessionDoc,
+    datasets: DatasetDoc[],
+    question: string | undefined,
+    levers: EngineOptions,
+  ): Promise<MemoryContext> {
+    const store = this.learningStore;
+    if (levers.memory === 'off' || !store?.enabled) return { used: [] };
+    const datasourceId = soleDatasourceOf(datasets);
+    if (!datasourceId) return { used: [] };
+    // Missions, directives and mental models before the bank's first use:
+    // once per process, never throws, never waited on by a turn.
+    void this.memoryBanks?.ensureBank(datasourceId);
+    const [memories, models] = await Promise.all([
+      question
+        ? store
+            .recall({
+              datasourceId,
+              datasetIds: session.datasets,
+              question,
+              maxTokens: MEMORY_RECALL_TOKENS,
+              timeoutMs: MEMORY_TIMEOUT_MS,
+            })
+            .catch(() => [])
+        : [],
+      levers.memory === 'recall+models'
+        ? store.mentalModels(datasourceId, MEMORY_TIMEOUT_MS).catch(() => [])
+        : [],
+    ]);
+    const learned = learnedBlock(memories);
+    const mentalModels = mentalModelsBlock(models);
+    return {
+      used: memoryUses(memories),
+      ...(learned ? { learned } : {}),
+      ...(mentalModels ? { mentalModels } : {}),
+    };
   }
 
   /**
@@ -1588,6 +1712,9 @@ export class SessionsService implements OnModuleInit {
    * the HTTP controller turns it on. Pinning never breaks a turn: any error
    * in it is logged and the turn derives normally.
    *
+   * A chat turn is a user's turn, so it may send learning-memory signals
+   * (`memorySignals`); a harness calling `runTurn` directly never does.
+   *
    * Everything else is the production turn, `runTurn`.
    */
   async streamMessage(
@@ -1607,6 +1734,7 @@ export class SessionsService implements OnModuleInit {
       engine: careful ? { careful: 'on' } : undefined,
       expert,
       pin,
+      memorySignals: true,
     });
   }
 
@@ -1632,6 +1760,9 @@ export class SessionsService implements OnModuleInit {
    * graded turn never replays a pin nor writes one — an eval measures the
    * model and the levers, never a cache (business-expert plan decision 11,
    * the same reason Snowflake strips verified queries before grading).
+   * Learning memory likewise: an arm may recall (lever `memory`), but only a
+   * turn with `opts.memorySignals` (chat) retains a cross-check
+   * disagreement, so an eval run never writes memory (ADR-0013).
    *
    * Returns everything a harness grades, side passes and their token counts
    * included. An aborted turn still returns what it had (`aborted: true`).
@@ -2186,6 +2317,24 @@ export class SessionsService implements OnModuleInit {
     if (!turn.signal.aborted || clarification) {
       emit({ type: 'done', session: updated ?? fresh });
     }
+    // An independent re-derivation got different numbers — on a user's turn,
+    // a signal for the memory (ADR-0013). After `done`: never delays it.
+    if (
+      opts.memorySignals &&
+      persisted &&
+      crossChecked?.status === 'disagree'
+    ) {
+      await this.signalMemory(
+        session,
+        disagreementSignal(
+          id,
+          trimmed,
+          pickAnswerRecord(data, text)?.input,
+          crossChecked.note ?? CROSS_CHECK_DISAGREE_NOTE,
+          persisted,
+        ),
+      );
+    }
     return finish(persisted, usage);
   }
 
@@ -2459,6 +2608,10 @@ export class SessionsService implements OnModuleInit {
       sourceSessionId: session.id,
       sourceMessageAt: answer.at,
     });
+    await this.signalMemory(
+      session,
+      approvalSignal(question.content.trim(), sql, answer),
+    );
     if (answer.expertTrace) {
       messages[index] = {
         ...answer,
@@ -2813,6 +2966,10 @@ export class SessionsService implements OnModuleInit {
     if (rating === 'down') {
       await this.verifiedQueries.removeForMessage(id, messageAt);
       await this.rejectPin(session, index);
+      const question = questionBefore(messages, index);
+      if (question) {
+        await this.signalMemory(session, rejectionSignal(id, question, answer));
+      }
     } else {
       await this.approveAnswer(session, messages, index);
     }
@@ -2900,6 +3057,18 @@ export class SessionsService implements OnModuleInit {
     const comment = saved.comment?.trim() ?? '';
     let lessons: LearnedLesson[] | undefined;
     if (comment && comment !== previousComment) {
+      // The note itself is a correction for the memory (ADR-0013) — queued
+      // before the slower lesson distillation, and replaced by a later note.
+      await this.signalMemory(
+        session,
+        blockCorrectionSignal(
+          id,
+          question?.content ?? '',
+          block,
+          comment,
+          answer,
+        ),
+      );
       lessons = await this.learnFromComment(session, index, {
         feedbackId: saved.id,
         block,
@@ -2916,6 +3085,10 @@ export class SessionsService implements OnModuleInit {
           `Forgetting learned lessons failed: ${errorText(error)}`,
         );
       }
+      void this.forgetMemory(
+        session,
+        correctionDocumentId(id, messageAt, block),
+      );
     }
 
     const updated = await this.repository.update(id, { messages });
@@ -2978,6 +3151,53 @@ export class SessionsService implements OnModuleInit {
     }
   }
 
+  // ------------------------------------------------------- learning memory
+
+  /**
+   * Queue one learning-memory signal (ADR-0013) for this session's
+   * datasource. Skipped when Hindsight is not configured or the session
+   * spans several datasources; the outbox also drops it while the
+   * production `memory` lever is off. Never throws — a rating or an answer
+   * is never lost to its memory echo.
+   */
+  private async signalMemory(
+    session: SessionDoc,
+    signal: Omit<MemorySignal, 'id' | 'datasourceId' | 'datasetIds'>,
+  ): Promise<void> {
+    if (!this.memoryOutbox || !this.learningStore?.enabled) return;
+    try {
+      const datasourceId = await this.soleDatasourceId(session);
+      if (!datasourceId) return;
+      await this.memoryOutbox.enqueue({
+        id: randomUUID(),
+        datasourceId,
+        datasetIds: [...session.datasets],
+        ...signal,
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Memory signal ${signal.documentId} skipped: ${errorText(error)}`,
+      );
+    }
+  }
+
+  /** Remove one retained document (a cleared reviewer note). Never throws. */
+  private async forgetMemory(
+    session: SessionDoc,
+    documentId: string,
+  ): Promise<void> {
+    if (!this.memoryOutbox || !this.learningStore?.enabled) return;
+    try {
+      const datasourceId = await this.soleDatasourceId(session);
+      if (datasourceId)
+        await this.memoryOutbox.forget(datasourceId, documentId);
+    } catch (error) {
+      this.logger.warn(
+        `Memory document ${documentId} not forgotten: ${errorText(error)}`,
+      );
+    }
+  }
+
   /** The session's datasource when it is unambiguous — provenance only. */
   private async soleDatasourceId(
     session: SessionDoc,
@@ -2999,6 +3219,127 @@ export class SessionsService implements OnModuleInit {
       at: new Date().toISOString(),
     });
   }
+}
+
+// ---------------------------------------------------- memory signals
+
+/** A signal as `signalMemory` takes it: the datasource is the session's. */
+type SessionSignal = Omit<MemorySignal, 'id' | 'datasourceId' | 'datasetIds'>;
+
+/** SQL as a signal carries it: literals not in the question redacted, clipped. */
+function signalSql(sql: string, question: string): string {
+  return clip(redactSqlLiterals(sql.trim(), question), SIGNAL_SQL_CHARS);
+}
+
+/** The user message the answer at `index` replied to. */
+function questionBefore(
+  messages: ChatMessage[],
+  index: number,
+): string | undefined {
+  const question = messages
+    .slice(0, index)
+    .reverse()
+    .find((m) => m.role === 'user')
+    ?.content.trim();
+  return question || undefined;
+}
+
+/** Memory document of a correction: a whole answer, or one reasoning block. */
+function correctionDocumentId(
+  sessionId: string,
+  messageAt: string,
+  block: string,
+): string {
+  return `corr:${sessionId}:${messageAt}:${block}`;
+}
+
+/**
+ * 👍: the approved pair. Keyed by the normalised question, so approving the
+ * same question again (in any session) replaces the earlier approval.
+ */
+function approvalSignal(
+  question: string,
+  sql: string,
+  answer: ChatMessage,
+): SessionSignal {
+  const key = createHash('sha256')
+    .update(normalizeQuestion(question))
+    .digest('hex');
+  return {
+    kind: 'verified_query',
+    documentId: `vq:${key}`,
+    content: `Question: ${question}\nApproved SQL: ${signalSql(sql, question)}`,
+    context: 'An analyst approved this SQL answer as correct',
+    occurredAt: answer.at,
+    entities: answer.entities ?? [],
+  };
+}
+
+/** 👎 on a whole answer. */
+function rejectionSignal(
+  sessionId: string,
+  question: string,
+  answer: ChatMessage,
+): SessionSignal {
+  const sql = pickAnswerRecord(answer.data, answer.content)?.input?.trim();
+  return {
+    kind: 'correction',
+    documentId: correctionDocumentId(sessionId, answer.at, 'answer'),
+    content: [
+      `Question: ${question}`,
+      ...(sql ? [`Rejected SQL: ${signalSql(sql, question)}`] : []),
+      'The analyst marked this answer incorrect.',
+    ].join('\n'),
+    context: 'An analyst rejected this SQL answer',
+    occurredAt: answer.at,
+    entities: answer.entities ?? [],
+  };
+}
+
+/** A reviewer's note on one reasoning block (business expert mode). */
+function blockCorrectionSignal(
+  sessionId: string,
+  question: string,
+  block: string,
+  comment: string,
+  answer: ChatMessage,
+): SessionSignal {
+  const sql = pickAnswerRecord(answer.data, answer.content)?.input?.trim();
+  return {
+    kind: 'correction',
+    documentId: correctionDocumentId(sessionId, answer.at, block),
+    content: [
+      `Question: ${question}`,
+      `Step: ${block}`,
+      `Reviewer note: ${clip(comment, SIGNAL_NOTE_CHARS)}`,
+      ...(sql ? [`Final SQL: ${signalSql(sql, question)}`] : []),
+    ].join('\n'),
+    context: `An analyst corrected the "${block}" step of this answer`,
+    occurredAt: answer.at,
+    entities: answer.entities ?? [],
+  };
+}
+
+/** Careful mode's independent re-derivation disagreed with the answer. */
+function disagreementSignal(
+  sessionId: string,
+  question: string,
+  sql: string | undefined,
+  note: string,
+  answer: ChatMessage,
+): SessionSignal {
+  return {
+    kind: 'cross_check_differs',
+    documentId: `xc:${sessionId}:${answer.at}`,
+    content: [
+      `Question: ${question}`,
+      ...(sql?.trim() ? [`Answer SQL: ${signalSql(sql, question)}`] : []),
+      `An independent cross-check disagreed: ${note}`,
+    ].join('\n'),
+    context: "The system's independent cross-check disagreed with this answer",
+    occurredAt: answer.at,
+    entities: answer.entities ?? [],
+  };
 }
 
 /** A string value off a requestContext, or undefined. */

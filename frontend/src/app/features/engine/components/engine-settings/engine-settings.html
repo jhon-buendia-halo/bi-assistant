@@ -154,6 +154,21 @@
                 <option value="auto" class="bg-[#232323]">Auto</option>
               </select>
             }
+            @case ("memory") {
+              <select
+                data-testid="engine-lever-memory"
+                aria-label="Memory (Hindsight)"
+                [value]="options().memory"
+                (change)="setMemory($any($event.target).value)"
+                class="shrink-0 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[12px] text-zinc-200 outline-none focus:border-white/25"
+              >
+                <option value="off" class="bg-[#232323]">Off</option>
+                <option value="recall" class="bg-[#232323]">Recall</option>
+                <option value="recall+models" class="bg-[#232323]">
+                  Recall + mental models
+                </option>
+              </select>
+            }
             @case ("effort") {
               <select
                 [value]="options().reasoningEffort ?? ''"

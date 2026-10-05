@@ -9,7 +9,7 @@ Only enabled snippets reach the assistant, and every answer records exactly whic
 
 ## Concepts
 
-Defined in [../../product/glossary.md](../../product/glossary.md): knowledge snippet, kind (instruction, term, default filter), scope (global or dataset), source (user, mined or feedback), lesson, pending suggestion, dataset, datasource, entity, session, assistant, knowledge bootstrap agent, feedback learner.
+Defined in [../../product/glossary.md](../../product/glossary.md): knowledge snippet, kind (instruction, term, default filter), scope (global or dataset), source (user, mined or feedback), lesson, pending suggestion, dataset, datasource, entity, session, assistant, knowledge bootstrap agent, feedback learner, memory bank, observation, mental model, retain, recall.
 
 Capability-local vocabulary is limited to the UI words "Pending suggestions" (the review queue of mined, still-disabled snippets), "Learned" (the view of lessons) and "Knowledge in context" (the per-answer provenance disclosure).
 
@@ -75,6 +75,17 @@ Engine-loop changes ([../engine-levers/spec.md](../engine-levers/spec.md))
 - R33. With the `rankedKnowledge` lever on, snippets SHALL be ordered by relevance to the question only inside each tier of R16, with scope and recency as the tiebreak. The tiers stay strict (every default filter, then every lesson, then the rest), so ranking never moves a lesson or a default filter behind a more relevant hand-written snippet. The 8,000-character skip-and-continue limit of R17 still applies.
 - R34. A snippet bound to exactly one entity MAY name one `column` of it; naming a column on a snippet with no entity or several SHALL be refused with a message saying it needs exactly one entity. With the `inlineKnowledge` lever on, such a snippet is shown beside that column in the schema the assistant sees. The knowledge form SHALL offer the column once a single entity is chosen.
 - R35. With the `context` lever set to `bare`, no knowledge block SHALL be sent. With the `lookupTools` lever on, the assistant MAY look snippets and metrics up by term during a turn (engine-levers R8).
+
+Memory from past sessions ([ADR-0013](../../system/architecture.md), roadmap 1.3.6)
+- R36. Memory SHALL be off by default. The engine lever `memory` ([../engine-levers/spec.md](../engine-levers/spec.md) R15) is `off` until the operator changes it, and with it `off`, or with no `HINDSIGHT_URL` configured, nothing SHALL be recalled, retained or sent to the memory server; no turn is slower or different.
+- R37. With the lever on, the system SHALL retain a memory only from a user signal: an approval of an answer (thumbs up), a rejection (thumbs down), a reviewer's comment on a reasoning block, a disagreement of the independent cross-check, or a create, update or delete of a curated Knowledge entry. Nothing else SHALL be retained: not questions asked, not answers given, not eval runs. Shapes, ids and the delivery outbox are in [../../system/data-model.md](../../system/data-model.md) 3.15.
+- R38. A retained memory SHALL never contain row values: the SQL of a signal is stored with every string literal replaced by `'?'` unless the question itself contains that literal or the literal is a snake_case code such as `'own_goal'` (schema vocabulary), and the memory server is told never to quote row values or personal data.
+- R39. With the lever on, a turn SHALL recall the memories of the session's datasource that are relevant to the question, and show them to the assistant in a block "Learned from past sessions (not curated; curated knowledge wins on conflict)" ([../../system/agents.md](../../system/agents.md) 4.1). When a recalled memory contradicts a curated Knowledge entry, a metric or a verified query, the curated one SHALL win. No recalled memory means no block.
+- R40. Each recalled memory SHALL be recorded on the answer as a "Knowledge in context" item with source `memory`, and the answer panel SHALL badge it "Memory", so the analyst can see what the answer owes to memory. A memory SHALL NOT create, edit or enable a Knowledge snippet; promotion to curated Knowledge remains a person's act.
+- R41. A memory server that is unreachable, slow (recall is cut off after 2.5 seconds) or failing SHALL never block, delay beyond that bound or fail a turn or a save: recall then returns nothing, and a signal that cannot be delivered stays queued and is retried, then marked failed.
+- R42. A reviewer's comment SHALL be retained as a correction, and clearing the comment SHALL make the system forget that memory. Deleting a Knowledge entry SHALL forget its memory.
+- R43. Knowledge that has global scope (no dataset and no datasource) SHALL NOT be retained, because memory is kept per datasource; entries scoped to a dataset are retained in the datasource of that dataset.
+- R44. With the `context` lever set to `bare`, no memory block SHALL be sent either (R35).
 ## Edge cases and errors
 
 - Empty library: the screen shows "No knowledge yet" with a hint and both "New snippet" and "Generate suggestions" actions.
@@ -233,6 +244,34 @@ Feature: Knowledge snippets (E2E: none yet)
     Then "Knowledge in context" lists the two short snippets and not the long one
 ```
 
+```gherkin
+Feature: Memory from past sessions (E2E: scenario 1 is covered by chat-and-visuals.spec.ts, scenario 2 by agents.spec.ts; the others need a Hindsight server and a model)
+
+  Scenario: With the Memory lever off an answer carries no memory
+    Given the Memory lever is "Off"
+    When I ask a question in a session
+    Then the answer's "Knowledge in context" lists no item badged "Memory"
+    And the answer is the same as without a memory server
+
+  Scenario: Settings shows the Memory lever off by default
+    When I open Settings and click "Engine levers"
+    Then I see the "Memory (Hindsight)" lever with "Off" selected
+
+  Scenario: An approval in one session informs a similar question in another
+    Given the Memory lever is "Recall" and a memory server is reachable
+    And I approved an answer to "Which team scored the most goals in 2022?" in one session
+    When I start a new session on the same dataset and ask "Who was the top scoring team in 2022?"
+    Then the answer's "Knowledge in context" lists an item badged "Memory"
+    And no Knowledge snippet was created or changed
+
+  Scenario: A reviewer comment is retained as a correction and forgotten when cleared
+    Given the Memory lever is "Recall" and business expert mode is on
+    When I write a comment on a reasoning block and save it
+    Then the comment is retained as a correction for the datasource
+    When I clear the comment
+    Then that correction is forgotten
+```
+
 ## Acceptance
 
 - Every Gherkin scenario above passes against the running app (backend tests cover R1-R28 at service level).
@@ -240,6 +279,7 @@ Feature: Knowledge snippets (E2E: none yet)
 - With a default-filter snippet enabled, the generated SQL applies it and the answer names it.
 - A bootstrap run on the sample dataset yields at most 15 disabled, mined, dataset-scoped drafts and none duplicates an existing title for that dataset.
 - A reviewer's note on an expert answer's block yields at most three enabled lessons with source `feedback` and full provenance, listed under "Learned", and the next turn on that dataset receives them ahead of older non-filter snippets.
+- With the Memory lever on and a reachable memory server, approving an answer in one session makes a similar question in a new session list a "Memory" item in "Knowledge in context"; with the lever off, or the server down, answers are unchanged and no turn fails.
 - Open question: parts of roadmap Milestone 1.3 Knowledge Store (BA-4) already exist in code: authoring of the three kinds, dataset/global scoping, bootstrap from schema and samples (reviewed as pending suggestions), tiered injection under a character budget, per-answer "Knowledge in context" provenance, and lessons learned from reviewer notes on business-expert answers (a form of correction feedback). Not yet built: the ontology/concept graph (1.3.2), question-relevance retrieval (1.3.3), mining from past sessions and thumbs-up answers, and conflict detection between snippets, for example a lesson that contradicts a hand-written term (1.3.4).
 
 ## Open questions

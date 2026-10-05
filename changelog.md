@@ -5,6 +5,14 @@ Running log of every meaningful change, newest first. See *Logging convention* a
 ## 2026-10-05
 
 ### Added
+- **Hindsight memory spike: learn across sessions behind a lever** (roadmap 1.3.6, epic [BA-4](https://halo-powered.atlassian.net/browse/BA-4); Jira story pending, Epic gate waived by the user for this branch; [ADR-0013](specs/system/architecture.md)). Built on 1.3.5:
+  - `modules/memory`: a `LearningStore` port with a Hindsight implementation over `@vectorize-io/hindsight-client` 0.10.2 and a no-op when `HINDSIGHT_URL` is unset; a persisted `memory_signals` outbox that retains approvals, rejections, reviewer comments, cross-check disagreements and curated Knowledge edits (questions, redacted SQL and schema names, never row values); one bank per datasource with two directives and three mental models.
+  - The turn recalls memories relevant to the question (2.5-second timeout, in parallel with the other context blocks) into a "Learned from past sessions" block, recorded as `KnowledgeUse` items with `source: 'memory'`, so they show as "Memory" in Knowledge in context and enter the answer-pin fingerprint. Curated Knowledge wins on conflict; the memory never edits Knowledge.
+  - Engine lever `memory: off | recall | recall+models` (default `off`) in Settings → Engine levers, with arms `memory-recall` and `memory-models`. Evals never retain.
+  - `hindsight` service in `docker-compose.yml` behind the `memory` profile (`ghcr.io/vectorize-io/hindsight:0.10.2-slim`, OpenAI embeddings, API on 127.0.0.1:8888, UI on 127.0.0.1:9999); `.env.example` documents `OPENAI_API_KEY`, `HINDSIGHT_URL` and `HINDSIGHT_API_KEY`.
+  - Specs: knowledge R36–R44 and the Gherkin Feature "Memory from past sessions", engine-levers R15, agents.md blocks 1b/3b, data-model 3.15, delivery (compose service and running two web instances side by side), ui, api, glossary, BA-4 epic spec.
+
+  Evidence: [evidence/1.3.6/](evidence/1.3.6/) (25/25 E2E including the new lever test, 2071 backend tests, the memory smoke test against the running Hindsight server, screenshots). Not in scope yet: a curation screen (the Hindsight UI serves the demo), schema-drift and eval-failure signals, a team server (H4–H5 of the plan).
 - **Learn from reviewer feedback, business expert mode and the eval loop, integrated on one branch** (roadmap 1.3.5, epic [BA-4](https://halo-powered.atlassian.net/browse/BA-4); Jira story pending, Epic gate waived by the user for this branch). `feat/knowledge-learning-evals` merges three branches that were built on the same base and never reached `main`:
   - `docs/eval-suites-specs`: eval suites as data files, failure categories, token and cost accounting, CLI runner.
   - `feat/engine-eval-loop`: engine levers in Settings, eval arms, pass^k repeats, fixed-model judge, `answer-review` agent, Databricks Model Serving, supply-chain and banking fixtures (ADR-0011, ADR-0012).

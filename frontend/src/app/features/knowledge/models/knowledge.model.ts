@@ -1,5 +1,5 @@
 export type KnowledgeSnippetKind = 'instruction' | 'term' | 'default_filter';
-export type KnowledgeSnippetSource = 'user' | 'mined' | 'feedback';
+export type KnowledgeSnippetSource = 'user' | 'mined' | 'feedback' | 'memory';
 
 export interface KnowledgeScope {
   datasetId?: string;

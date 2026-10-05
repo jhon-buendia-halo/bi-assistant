@@ -25,6 +25,7 @@ const PRODUCTION_DEFAULTS: EngineOptions = {
   extendedGuards: false,
   staticFirstContext: false,
   promptAblation: [],
+  memory: 'off',
 };
 
 function view(overrides: Partial<EngineSettingsView> = {}): EngineSettingsView {
@@ -147,6 +148,33 @@ describe('EngineSettings', () => {
     expect(component.isChanged('reasoningEffort')).toBeTrue();
     component.setReasoningEffort('');
     expect(component.isChanged('reasoningEffort')).toBeFalse();
+  });
+
+  it('renders the memory lever with three options and updates the working copy', () => {
+    fixture.detectChanges();
+    const select: HTMLSelectElement = fixture.nativeElement.querySelector(
+      '[data-testid="engine-lever-memory"]',
+    );
+    expect(select).not.toBeNull();
+    expect(select.value).toBe('off');
+    expect(Array.from(select.options).map((o) => o.value)).toEqual([
+      'off',
+      'recall',
+      'recall+models',
+    ]);
+
+    select.value = 'recall+models';
+    select.dispatchEvent(new Event('change'));
+    expect(component.options().memory).toBe('recall+models');
+    expect(component.isChanged('memory')).toBeTrue();
+
+    component.setMemory('bogus');
+    expect(component.options().memory).toBe('recall+models');
+
+    component.save();
+    const req = http.expectOne(settingsUrl);
+    expect(req.request.body.defaults.memory).toBe('recall+models');
+    req.flush({ ok: true, message: 'Engine settings saved' });
   });
 
   it('accepts a well-formed judge model router id', () => {

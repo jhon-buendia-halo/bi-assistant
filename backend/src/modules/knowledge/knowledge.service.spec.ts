@@ -80,6 +80,8 @@ function build(
     defaultDatasource?: { id: string; kind: string };
     sampleRows?: { columns: string[]; rows: Record<string, unknown>[] };
     generate?: jest.Mock;
+    /** The learning memory's outbox; absent = built without MemoryModule. */
+    memory?: { enqueue: jest.Mock; forget: jest.Mock };
   } = {},
 ) {
   const repository = {
@@ -128,6 +130,7 @@ function build(
     datasetsRepository as never,
     datasourcesService as never,
     mastra as never,
+    options.memory as never,
   );
   return {
     service,
@@ -1417,5 +1420,127 @@ describe('KnowledgeService.bootstrap', () => {
     expect(progress[1].message).toContain('1 table');
     expect(progress[2].message).toContain('1 of 1 table');
     expect(progress[4].message).toContain('1 draft');
+  });
+});
+
+describe('KnowledgeService learning memory', () => {
+  const memoryOutbox = () => ({
+    enqueue: jest.fn().mockResolvedValue(undefined),
+    forget: jest.fn().mockResolvedValue(undefined),
+  });
+  const datasets = [
+    { name: 'World Cup', datasourceId: 'ds-1', tables: ['main.wc.matches'] },
+  ];
+  /** Fire-and-forget calls settle on the next turn of the event loop. */
+  const settle = () => new Promise((resolve) => setImmediate(resolve));
+
+  it('sends a created snippet as an authoritative knowledge: signal', async () => {
+    const memory = memoryOutbox();
+    const { service, datasetsRepository } = build([], { datasets, memory });
+
+    const created = await service.create({
+      kind: 'term',
+      scope: { datasetId: 'World Cup' },
+      title: 'DNF',
+      body: 'Did not finish',
+      synonyms: ['retired'],
+      entities: ['main.wc.matches'],
+    });
+
+    expect(datasetsRepository.getByNames).toHaveBeenCalledWith(['World Cup']);
+    expect(memory.enqueue).toHaveBeenCalledWith({
+      id: expect.any(String) as string,
+      kind: 'knowledge',
+      datasourceId: 'ds-1',
+      datasetIds: ['World Cup'],
+      documentId: `knowledge:${created.id}`,
+      content:
+        '[term] DNF: Did not finish; synonyms: retired; entities: main.wc.matches',
+      context: 'Curated business knowledge (authoritative)',
+      occurredAt: created.updatedAt,
+      entities: ['main.wc.matches'],
+    });
+  });
+
+  it('uses the scope datasource directly and skips global snippets', async () => {
+    const memory = memoryOutbox();
+    const { service } = build([], { datasets, memory });
+
+    await service.create({
+      kind: 'instruction',
+      scope: { datasourceId: 'ds-9' },
+      title: 'Currency',
+      body: 'Amounts are in EUR',
+    });
+    await service.create({
+      kind: 'instruction',
+      title: 'Tone',
+      body: 'Be brief',
+    });
+
+    expect(memory.enqueue).toHaveBeenCalledTimes(1);
+    expect(memory.enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({ datasourceId: 'ds-9', datasetIds: [] }),
+    );
+  });
+
+  it('re-sends an updated snippet and forgets a disabled one', async () => {
+    const memory = memoryOutbox();
+    const existing = snippet({ id: 'k1', scope: { datasetId: 'World Cup' } });
+    const { service } = build([existing], { datasets, memory });
+
+    await service.update('k1', { body: 'Did not finish the race' });
+    expect(memory.enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        documentId: 'knowledge:k1',
+        content: '[term] DNF: Did not finish the race',
+      }),
+    );
+
+    await service.update('k1', { enabled: false });
+    await settle();
+    expect(memory.forget).toHaveBeenCalledWith('ds-1', 'knowledge:k1');
+    expect(memory.enqueue).toHaveBeenCalledTimes(1);
+  });
+
+  it('forgets a deleted snippet', async () => {
+    const memory = memoryOutbox();
+    const { service } = build(
+      [snippet({ id: 'k1', scope: { datasetId: 'World Cup' } })],
+      { datasets, memory },
+    );
+
+    await service.delete('k1');
+    await settle();
+
+    expect(memory.forget).toHaveBeenCalledWith('ds-1', 'knowledge:k1');
+  });
+
+  it('sends learned lessons and forgets them with their feedback', async () => {
+    const memory = memoryOutbox();
+    const lesson = snippet({
+      id: 'l1',
+      source: 'feedback',
+      scope: { datasetId: 'World Cup' },
+      provenance: provenanceFor('fb-1'),
+    });
+    const { service } = build([lesson], { datasets, memory });
+
+    await service.createLearned(
+      {
+        kind: 'term',
+        title: 'Final',
+        body: 'Stage = Final',
+        scope: { datasetId: 'World Cup' },
+      },
+      provenanceFor('fb-1'),
+    );
+    expect(memory.enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'knowledge', datasourceId: 'ds-1' }),
+    );
+
+    await service.deleteLearnedFor('fb-1');
+    await settle();
+    expect(memory.forget).toHaveBeenCalledWith('ds-1', 'knowledge:l1');
   });
 });

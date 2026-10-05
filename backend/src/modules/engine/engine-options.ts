@@ -31,6 +31,13 @@ export type ContextMode = 'curated' | 'bare';
 
 export type EngineReasoningEffort = 'low' | 'medium' | 'high';
 
+/**
+ * Learning memory (ADR-0013, `modules/memory`): `off` neither recalls nor
+ * retains; `recall` puts what past sessions taught into the turn and retains
+ * new user signals; `recall+models` also adds the bank's mental models.
+ */
+export type MemoryMode = 'off' | 'recall' | 'recall+models';
+
 export interface EngineOptions {
   /** L4: independent re-derivation of the answer's SQL. */
   careful: CarefulMode;
@@ -67,6 +74,11 @@ export interface EngineOptions {
   reasoningEffort?: EngineReasoningEffort;
   /** Overrides `ASSISTANT_MAX_STEPS`. */
   maxSteps?: number;
+  /**
+   * Hindsight memory (ADR-0013): recall from approvals and corrections made
+   * in other sessions, retain new ones. Inert without `HINDSIGHT_URL`.
+   */
+  memory: MemoryMode;
 }
 
 /** Today's engine. See the module comment for why every lever starts off. */
@@ -85,6 +97,7 @@ export const ENGINE_DEFAULTS: Readonly<EngineOptions> = Object.freeze({
   extendedGuards: false,
   staticFirstContext: false,
   promptAblation: [],
+  memory: 'off',
 });
 
 /** requestContext key the tools read the turn's resolved options from. */
@@ -149,6 +162,8 @@ export const ARM_PRESETS: Readonly<Record<string, Partial<EngineOptions>>> =
     'no-prompt-rules': { promptAblation: ['*'] },
     'effort-medium': { reasoningEffort: 'medium' },
     'effort-low': { reasoningEffort: 'low' },
+    'memory-recall': { memory: 'recall' },
+    'memory-models': { memory: 'recall+models' },
     full: {
       ...CONTEXT_LEVERS,
       ...TOOL_LEVERS,
@@ -180,12 +195,14 @@ export const ARM_DESCRIPTIONS: Readonly<Record<string, string>> = Object.freeze(
     'no-prompt-rules': 'Prompt ablation — every ablatable rule group removed',
     'effort-medium': 'Reasoning effort medium',
     'effort-low': 'Reasoning effort low',
+    'memory-recall': 'Hindsight memory recalled into the turn',
+    'memory-models': 'Hindsight memory recalled, plus the mental models',
     full: 'Every lever on (context, tools, review, careful auto)',
   },
 );
 
 type OptionKind =
-  'boolean' | 'careful' | 'context' | 'effort' | 'steps' | 'list';
+  'boolean' | 'careful' | 'context' | 'effort' | 'steps' | 'list' | 'memory';
 
 const OPTION_KINDS: Readonly<Record<keyof EngineOptions, OptionKind>> = {
   careful: 'careful',
@@ -204,6 +221,7 @@ const OPTION_KINDS: Readonly<Record<keyof EngineOptions, OptionKind>> = {
   promptAblation: 'list',
   reasoningEffort: 'effort',
   maxSteps: 'steps',
+  memory: 'memory',
 };
 
 /** Every option key, in declaration order. */
@@ -235,6 +253,10 @@ function coerce(kind: OptionKind, value: unknown): unknown {
         Number.isInteger(value) &&
         value >= 1 &&
         value <= 50
+        ? value
+        : undefined;
+    case 'memory':
+      return value === 'off' || value === 'recall' || value === 'recall+models'
         ? value
         : undefined;
     case 'list':
@@ -305,7 +327,8 @@ const TRUE_WORDS = new Set(['true', 'on', 'yes', '1']);
 const FALSE_WORDS = new Set(['false', 'off', 'no', '0']);
 
 /**
- * The CLI form: `sqlRepair=false,careful=auto,promptAblation=visuals+ratio`.
+ * The CLI form: `sqlRepair=false,careful=auto,promptAblation=visuals+ratio`
+ * (`memory=recall+models` keeps its `+`: only a `list` option splits on it).
  * Throws on an unknown key or a value its option cannot take — a typo in a
  * paid run's flags must fail before the first token, not silently run the
  * wrong arm.
@@ -382,12 +405,18 @@ function canonical(value: unknown): unknown {
  * A short, stable id for "the same engine": two runs with the same hash ran
  * the same levers (plus whatever `extra` pins — model, effort, judge), so
  * their numbers are comparable. 12 hex chars of SHA-1.
+ *
+ * `memory: 'off'` is left out of the payload: it is the engine as it was
+ * before the lever existed, so every earlier run keeps its hash and stays
+ * comparable. Any other memory mode is hashed like every other lever.
  */
 export function engineConfigHash(
   options: EngineOptions,
   extra?: Record<string, unknown>,
 ): string {
-  const payload = JSON.stringify(canonical({ engine: options, ...extra }));
+  const engine: Partial<EngineOptions> = { ...options };
+  if (engine.memory === 'off') delete engine.memory;
+  const payload = JSON.stringify(canonical({ engine, ...extra }));
   return createHash('sha1').update(payload).digest('hex').slice(0, 12);
 }
 

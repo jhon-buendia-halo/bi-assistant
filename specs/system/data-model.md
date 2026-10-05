@@ -108,6 +108,7 @@ Summary:
 | `knowledge_snippets` | Curated knowledge entries, lessons included | `id` | `updatedAt` desc | [knowledge](../capabilities/knowledge/spec.md) |
 | `reasoning_feedback` | Ratings of reasoning-trace blocks | `id`; upsert key `(sessionId, messageAt, block)` | `updatedAt` desc | [business-expert](../capabilities/business-expert/spec.md) |
 | `answer_pins` | One pinned answer per question lineage | `id`; unique `lineageKey` | `updatedAt` desc | [answer-pinning](../capabilities/answer-pinning/spec.md) |
+| `memory_signals` | Outbox of user signals waiting to be retained in the memory server | `id`; upsert key `documentId` | `createdAt` asc (delivery order) | [knowledge](../capabilities/knowledge/spec.md) R36 to R44 |
 
 Every document in every collection also carries `createdAt` and `updatedAt` (ISO), maintained by the store (section 2.1); they are listed per collection only where they matter. There are **no foreign-key constraints and no cascading deletes** between collections; references are by value (`name`, `id`) and may dangle (section 3.14).
 
@@ -430,7 +431,7 @@ Lessons are always `{source: "feedback", enabled: true, provenance}`. They are s
 
 `LessonProvenance`: `feedbackId` (string, the `reasoning_feedback` id), `sessionId` (string), `messageAt` (ISO, the rated answer), `block` (string, a reasoning block kind), `question` (string), `comment` (string, the note as saved), `vote` (`up` | `down`, no), `learnedAt` (ISO), `method` (`agent` | `verbatim`).
 
-`KnowledgeUse` (embedded in messages, not a collection): `id`, `kind`, `title`, `body` (exactly as it appeared in the block), `source` (enum, no; absent on answers recorded before it was kept, read as not learned), `datasetId` (string, no; absent for a global snippet). Context assembly:
+`KnowledgeUse` (embedded in messages, not a collection): `id`, `kind`, `title`, `body` (exactly as it appeared in the block), `source` (enum, no; `memory` marks an item recalled from the memory server, never a stored snippet: its `id` is the memory's id, its `kind` is `instruction` and its `title` is `<type> memory`, see 3.15; absent on answers recorded before it was kept, read as not learned), `datasetId` (string, no; absent for a global snippet). Context assembly:
 - Candidates are the enabled snippets whose scope is global or whose `datasetId` is among the session's datasets.
 - They are ordered in three tiers: every `default_filter`; then `source: "feedback"`; then the rest. Within a tier, dataset-scoped come before global, then `updatedAt` desc.
 - They are added to an 8,000-character block. An entry that does not fit the remaining budget is skipped and later entries are still tried.
@@ -523,7 +524,47 @@ Deep-analysis jobs exist only in process memory (bounded history; a backend rest
 | `answer_pins` | `sourceSessionId` + `sourceMessageAt`, `datasets[]`, `datasourceId`, `knowledgeIds[]` | sessions, `datasets.name`, `connections.id`, `knowledge_snippets.id` | By value, no cascade: deleting a session, dataset, datasource or snippet leaves its pins (a dataset's pins are removed only through `DELETE /answer-pins?datasetId=`). |
 | `sessions[].visualizations[]` | `id`, `path` | `workspaces/session-<id>/visuals/<id>/` | Files under the session workspace; both removed with the session. |
 | `sessions[].messages[]` | `visual.visualId`, `report.jobId` | visual id / report file | By value. |
+| `memory_signals` | `datasourceId` | `connections.id` | By value, no cascade. Delivered rows are kept for audit. |
 | session | `id` | agent memory thread id and resource id; workspace `session-<id>` | See section 5. |
+
+### 3.15 `memory_signals` and the memory server (roadmap 1.3.6)
+
+Memory is kept by an external Hindsight server ([ADR-0013](architecture.md)); the app stores only an **outbox** of what still has to be sent. Token `MEMORY_SIGNALS_STORE`. Behaviour: [knowledge](../capabilities/knowledge/spec.md) R36 to R44.
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `id` | uuid | yes | Also the retain operation id. |
+| `kind` | enum | yes | `verified_query` (an approved answer) \| `correction` (a rejected answer, or a reviewer comment on a reasoning block) \| `cross_check_differs` (the independent cross-check disagreed) \| `knowledge` (a curated Knowledge create, update or learned lesson). |
+| `datasourceId` | string | yes | Selects the memory bank. |
+| `datasetIds` | string[] | yes | Dataset names; empty for a datasource-wide signal. |
+| `documentId` | string | yes | Upsert key in the memory server, so a repeated signal replaces rather than duplicates (scheme below). |
+| `content` | string | yes | The question, the SQL with literals redacted and a short note. **Never row values**: every single-quoted SQL literal is replaced by `'?'` unless the question contains it (case-insensitive) or it is a snake_case code such as `'own_goal'` (schema vocabulary, never a row value); numbers are kept; SQL is clipped to 2,000 characters and a reviewer note to 1,000. |
+| `context` | string | yes | Who is speaking, for example "An analyst approved this SQL answer as correct"; the server uses it to tell a world fact from an experience. |
+| `occurredAt` | ISO | yes | The answer's `messageAt` (or the snippet's update time). |
+| `entities` | string[] | yes | `catalog.schema.table` names. |
+| `status` | enum | yes | `pending` (waiting or retrying) \| `sent` (accepted by the server) \| `failed` (given up). |
+| `attempts` | number | yes | Delivery attempts so far. |
+| `lastError` | string | no | The last delivery error. |
+| `nextAttemptAt` | ISO | no | Earliest next attempt; set after a failure with exponential backoff. |
+| `createdAt` | ISO | yes | |
+| `sentAt` | ISO | no | Set when `status` becomes `sent`. |
+
+Delivery: enqueueing never fails the action that caused it. The outbox is flushed shortly after a signal is queued (debounced about 2 seconds), every 30 seconds and at start-up; each flush sends the `pending` rows whose `nextAttemptAt` has passed, grouped by bank, in one asynchronous batch. A failed batch increments `attempts`, records `lastError` (clipped to 500 characters) and backs off 30 seconds, doubling each time up to 15 minutes; after 5 attempts the row becomes `failed` and is never retried. A new signal for a `documentId` that is still `pending` replaces that row. Sent rows are kept as the audit of what was retained; nothing prunes them. With no `HINDSIGHT_URL` nothing is enqueued, and a cross-check disagreement is only retained for a user's chat turn, never for an eval turn.
+
+**Document ids** (the upsert key in the memory server, one id per fact):
+
+| Prefix | Signal | Scheme |
+|---|---|---|
+| `vq:` | approved answer | `vq:<sha-256 of the normalised question>` (the normaliser of verified queries) |
+| `corr:` | rejected answer or reviewer comment | `corr:<sessionId>:<messageAt>:answer` for a thumbs-down, `corr:<sessionId>:<messageAt>:<block>` for a comment; clearing the comment forgets this document |
+| `xc:` | cross-check disagreement | `xc:<sessionId>:<messageAt>` |
+| `knowledge:` | curated Knowledge | `knowledge:<snippet id>`; deleting the snippet forgets it |
+
+**Memory bank.** One bank per datasource, named `halo-ds-<datasourceId>`, created lazily on first use with a retain mission that ignores row values and personal data, observations enabled, two directives (curated Knowledge wins on conflict; never quote row values or personal data) and three mental models (`known-pitfalls`, `table-guide`, `learned-glossary`). Every memory carries tags `dataset:<name>` for each dataset (or `scope:global` when none), `kind:<signal kind>` and `entity:<fqn>` for each entity. Recall filters on the session's `dataset:` tags plus `scope:global`.
+
+**Recalled memory** (not persisted except inside `KnowledgeUse`, above): `id`, `type` (`world` \| `experience` \| `observation`), `text`, `occurredAt?`, `documentId?`, `entities`, `evidenceCount?` (observations: how many facts back it).
+
+**Configuration** (environment, not stored): `HINDSIGHT_URL` (for example `http://127.0.0.1:8888`; unset = memory disabled, zero cost) and `HINDSIGHT_API_KEY` (optional bearer key). There is no Settings screen for them yet. The engine lever `memory` ([engine-levers](../capabilities/engine-levers/spec.md) R15) is stored like every lever (3.13).
 
 ---
 

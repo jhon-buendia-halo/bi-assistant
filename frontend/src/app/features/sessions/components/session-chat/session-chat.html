@@ -787,6 +787,16 @@
                   <span>Learned</span>
                 </span>
               }
+              @if (item.source === "memory") {
+                <span
+                  data-testid="knowledge-use-source-memory"
+                  title="Recalled from cross-session memory"
+                  class="flex shrink-0 items-center gap-1 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-1.5 py-0.5 text-[10px] text-emerald-400"
+                >
+                  <lucide-angular [img]="GraduationCap" [size]="10" />
+                  <span>Memory</span>
+                </span>
+              }
               <span class="text-[11px] text-zinc-600">{{
                 item.datasetId ?? "global"
               }}</span>

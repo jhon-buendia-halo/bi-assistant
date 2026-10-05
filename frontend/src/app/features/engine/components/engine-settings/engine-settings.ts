@@ -10,6 +10,7 @@ import {
   EngineRuleGroup,
   EngineSettingsSaveRequest,
   EngineSettingsView,
+  MemoryMode,
   engineDiff,
 } from '../../models/engine.model';
 
@@ -32,10 +33,11 @@ const EMPTY_OPTIONS: EngineOptions = {
   extendedGuards: false,
   staticFirstContext: false,
   promptAblation: [],
+  memory: 'off',
 };
 
 type LeverGroup = 'context' | 'tools' | 'pipeline';
-type LeverKind = 'boolean' | 'context' | 'careful' | 'effort' | 'max-steps';
+type LeverKind = 'boolean' | 'context' | 'careful' | 'memory' | 'effort' | 'max-steps';
 
 export interface LeverField {
   key: keyof EngineOptions;
@@ -138,6 +140,15 @@ export const LEVER_FIELDS: LeverField[] = [
     description:
       'Extra result checks: a constant metric of any value, id-only projections, a missing default filter.',
     leverId: 'L3',
+  },
+  {
+    key: 'memory',
+    group: 'pipeline',
+    kind: 'memory',
+    label: 'Memory (Hindsight)',
+    description:
+      'Learn from approvals and corrections across sessions. Needs HINDSIGHT_URL on the backend.',
+    leverId: 'Memory',
   },
   {
     key: 'staticFirstContext',
@@ -307,6 +318,14 @@ export class EngineSettings implements OnInit {
   setContext(value: string): void {
     if (value !== 'curated' && value !== 'bare') return;
     this.options.update((o) => ({ ...o, context: value as ContextMode }));
+    this.leversDirty.set(true);
+  }
+
+  setMemory(value: string): void {
+    if (value !== 'off' && value !== 'recall' && value !== 'recall+models') {
+      return;
+    }
+    this.options.update((o) => ({ ...o, memory: value as MemoryMode }));
     this.leversDirty.set(true);
   }
 

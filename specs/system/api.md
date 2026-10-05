@@ -721,10 +721,10 @@ Controller prefix `/engine`. Capability: engine-levers. One document in the `set
 | 62 | `PUT /engine/settings` | Save production levers and the judge pin | yes |
 
 #### 61. `GET /engine/settings`
-- Response `200`: `{ defaults: EngineOptions /* resolved production values */; stored: Partial<EngineOptions> /* only the changed levers */; productionDefaults: EngineOptions /* the shipped defaults */; judgeModel: string|null; databricksReasoningEffort: boolean; arms: Record<string, Partial<EngineOptions>>; armDescriptions: Record<string, string>; ruleGroups: { id, title, ablatable }[] }`. `EngineOptions` lists the levers of engine-levers R1.
+- Response `200`: `{ defaults: EngineOptions /* resolved production values */; stored: Partial<EngineOptions> /* only the changed levers */; productionDefaults: EngineOptions /* the shipped defaults */; judgeModel: string|null; databricksReasoningEffort: boolean; arms: Record<string, Partial<EngineOptions>>; armDescriptions: Record<string, string>; ruleGroups: { id, title, ablatable }[] }`. `EngineOptions` lists the levers of engine-levers R1 and R15, including `memory` (`off` | `recall` | `recall+models`, default `off`; [engine-levers](../capabilities/engine-levers/spec.md) R15). `KnowledgeUse.source` values, `memory` included: [data-model.md](data-model.md) 3.9 and 3.15.
 
 #### 62. `PUT /engine/settings`
-- Body: `{ defaults?: EngineOptions-like; judgeModel?: string|null; databricksReasoningEffort?: boolean }`. Omitted fields keep the stored values; unknown or mistyped levers are dropped; only differences from the shipped defaults are stored.
+- Body: `{ defaults?: EngineOptions-like; judgeModel?: string|null; databricksReasoningEffort?: boolean }`. Omitted fields keep the stored values; unknown or mistyped levers (a `memory` value other than `off`, `recall` or `recall+models` included) are dropped; only differences from the shipped defaults are stored.
 - Success: `{ ok:true, message:"Engine settings saved", settings: <as 61> }`. Failure: `{ ok:false, message }`, e.g. `judgeModel must be a "<provider>/<model>" router id (e.g. openai/gpt-4.1-mini), or empty to clear it — got "<value>"`.
 
 ### 2.13 Dataset profiles and descriptions

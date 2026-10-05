@@ -110,6 +110,10 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Measurement gap (GAP).** An eval verdict meaning the harness itself could not tell whether the answer was right (a reference query failed, the judge errored twice). Never counted as a pass or a failure, and excluded from every rate.
 
+**Memory bank.** The per-datasource store in the Hindsight memory server (`halo-ds-<datasourceId>`) that holds what past user signals taught the system. Lower trust than curated knowledge. See [../capabilities/knowledge/spec.md](../capabilities/knowledge/spec.md) R36 to R44.
+
+**Mental model.** A short summary the memory server keeps up to date for a *memory bank* (known pitfalls, a guide to the tables, a learned glossary), sent to the assistant when the Memory lever is "Recall + mental models".
+
 **Message.** One entry in a session's transcript, from the `user` or the `assistant`, with a timestamp that doubles as its identity (`at`). Assistant messages may carry data records, entities, a clarification, a visual event, feedback, a cross-check, a reasoning trail, knowledge used, a report, a *reasoning trace* or a *consistency verdict*.
 
 **Metric.** A governed, named SQL aggregation expression over one entity (for example `denial_rate`), with a label, description and dimensions. The assistant reuses its expression verbatim instead of re-deriving it. Metrics are the app's lightweight semantic layer. A metric can be promoted from a *verified query*; the draft is a *metric candidate*.
@@ -120,7 +124,11 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **pass^k.** The verdict of an eval case run k times: it passes only when every measured attempt passed. A run reports pass^k per set, category and difficulty; repeat 3 (pass^3) is the number the improvement loop trusts.
 
+**Observation.** A consolidated statement the memory server derives from several *retained* signals, with a count of the evidence behind it. Preferred over single facts when *recalling*.
+
 **Reasoning block.** One of the five fixed parts of a *reasoning trace*: interpretation (how the question was read), data selection (tables, joins and tables not used, drawn as a diagram), assumptions, metric definition, and annotated SQL. Each has its own *confidence* and its own *block rating*.
+
+**Recall.** Fetching the memories relevant to a question from the *memory bank* during a turn (no model call, 2.5-second limit); the result is shown as "Memory" items in Knowledge in context.
 
 **Reasoning effort.** `low`, `medium` or `high` (default `high`). A global setting passed to models that support it and dropped for models that reject it.
 
@@ -133,6 +141,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 **Result guard.** A deterministic check on a query result that attaches a *warning*: a ratio of a sum to itself, a metric constant on every row, an unordered "top N".
 
 **Review mode.** How the assistant behaves in *business expert mode*. When a question depends on a business convention the curated knowledge does not define (a fiscal calendar, a metric's formula), it answers under the most common convention and states the assumption instead of asking a *clarification*, because the reviewer's correction becomes a *lesson*. It still asks when the data itself matches several ways.
+
+**Retain.** Sending a user signal (an approval, a rejection, a reviewer comment, a cross-check disagreement, a curated Knowledge edit) to the *memory bank*, through a queue that retries.
 
 **Row cap.** A limit on rows returned or stored. See [non-functional.md](non-functional.md). A result clipped by a cap is marked *truncated*.
 

@@ -443,6 +443,20 @@ test('shows the pass^k headline and a GAP badge for a stubbed v2 run', async ({
   );
 });
 
+test('shows the Memory lever in Settings → Engine levers', async ({ page }) => {
+  await page.getByTitle('Settings').click();
+  await page.getByRole('button', { name: 'Engine levers' }).click();
+
+  const memory = page.getByTestId('engine-lever-memory');
+  await expect(memory).toBeVisible();
+  await expect(memory).toHaveValue('off');
+  await expect(memory.locator('option')).toHaveText([
+    'Off',
+    'Recall',
+    'Recall + mental models',
+  ]);
+});
+
 test('opens Settings → Engine levers and lists the Databricks LLM provider', async ({
   page,
 }) => {

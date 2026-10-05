@@ -71,6 +71,7 @@
     "@nestjs/common": "^11.0.1",
     "@nestjs/core": "^11.0.1",
     "@nestjs/platform-express": "^11.0.1",
+    "@vectorize-io/hindsight-client": "^0.10.2",
     "better-sqlite3": "13.0.3",
     "marked": "18.0.13",
     "pg": "8.23.0",

@@ -133,8 +133,18 @@ import {
 import { EMPTY_RESPONSE_FALLBACK } from './turn-data';
 import type { ChatMessage, SessionDoc } from './entities/session.entity';
 import type { AnswerPinDoc } from '../answer-pins/entities/answer-pin.entity';
-import { fingerprintFor, lineageKeyFor } from '../answer-pins/pin-key';
+import {
+  fingerprintFor,
+  lineageKeyFor,
+  normalizeQuestion,
+} from '../answer-pins/pin-key';
 import { stripForPin } from '../answer-pins/answer-pins.service';
+import type {
+  MentalModel,
+  RecalledMemory,
+} from '../memory/learning-store.port';
+import type { MemorySignal } from '../memory/entities/memory-signal.entity';
+import { createHash } from 'crypto';
 
 /** Settings → Engine levers as the store returns them: `defaults` resolved. */
 function engineSettings(defaults: Partial<EngineOptions> = {}) {
@@ -191,6 +201,8 @@ describe('SessionsService streaming', () => {
       expertThrows?: boolean;
       /** Answer pins, keyed by lineage — share one map across builds. */
       pinStore?: Map<string, AnswerPinDoc>;
+      /** Learning memory (store, outbox, banks); absent = no MemoryModule. */
+      memory?: MemoryDoubles;
     } = {},
   ) {
     const session: SessionDoc = {
@@ -343,6 +355,9 @@ describe('SessionsService streaming', () => {
       expertMode as never,
       pins as never,
       learning as never,
+      options.memory?.outbox as never,
+      options.memory?.banks as never,
+      options.memory?.store,
     );
     return {
       service,
@@ -3050,6 +3065,230 @@ describe('SessionsService streaming', () => {
       ]);
     });
   });
+
+  describe('learning memory (lever memory)', () => {
+    const KNOWLEDGE = 'Curated dataset knowledge:\n- Exclude friendlies';
+    const VERIFIED = 'Verified reference queries:\n- Q: wins → SELECT 1';
+    const RECALLED: RecalledMemory[] = [
+      {
+        id: 'mem-1',
+        type: 'observation',
+        text: 'Wins count only official matches.',
+        entities: [],
+        evidenceCount: 2,
+      },
+    ];
+    type CallOptions = {
+      context: { role: string; content: string }[];
+      requestContext: { get(key: string): unknown };
+    };
+    const contextOf = (agent: { stream: jest.Mock }) =>
+      (
+        (agent.stream.mock.calls as unknown[][])[0][1] as CallOptions
+      ).context.map((block) => block.content);
+    const curated = {
+      tables: ['main.football.matches'],
+      knowledgeBlock: KNOWLEDGE,
+      verifiedBlock: VERIFIED,
+      knowledgeUsed: [
+        { id: 'k1', kind: 'instruction', title: 'Friendlies', body: 'Exclude' },
+      ],
+    };
+
+    it('never calls the memory with the lever off (the default)', async () => {
+      const memory = memoryDoubles({ recall: RECALLED });
+      const { service, agent } = buildStreaming(
+        answerStream([{ sql: 'select 1', rows: [{ n: 1 }] }]),
+        { ...curated, memory },
+      );
+
+      await service.streamMessage('session-1', 'Who wins most?', () => {});
+
+      expect(memory.store.recall).not.toHaveBeenCalled();
+      expect(memory.store.mentalModels).not.toHaveBeenCalled();
+      expect(memory.banks.ensureBank).not.toHaveBeenCalled();
+      expect(contextOf(agent).join('\n')).not.toContain('Learned from past');
+    });
+
+    it('recalls into a block after the curated knowledge and records each memory as Knowledge in context', async () => {
+      const memory = memoryDoubles({ recall: RECALLED });
+      const { service, agent, session } = buildStreaming(
+        answerStream([{ sql: 'select 1', rows: [{ n: 1 }] }]),
+        { ...curated, memory, engineDefaults: { memory: 'recall' } },
+      );
+
+      await service.streamMessage('session-1', 'Who wins most?', () => {});
+
+      expect(memory.banks.ensureBank).toHaveBeenCalledWith('ds-1');
+      expect(memory.store.recall).toHaveBeenCalledWith({
+        datasourceId: 'ds-1',
+        datasetIds: ['football'],
+        question: 'Who wins most?',
+        maxTokens: 1200,
+        timeoutMs: 2_500,
+      });
+      expect(memory.store.mentalModels).not.toHaveBeenCalled();
+      const context = contextOf(agent);
+      const learned = context.findIndex((c) =>
+        c.startsWith('## Learned from past sessions'),
+      );
+      expect(context[learned]).toBe(
+        [
+          '## Learned from past sessions (not curated; curated knowledge wins on conflict)',
+          '- [observation · 2 evidences] Wins count only official matches.',
+        ].join('\n'),
+      );
+      expect(context[learned - 1]).toBe(KNOWLEDGE);
+      expect(context[learned + 1]).toBe(VERIFIED);
+      expect(session.messages.at(-1)?.knowledge).toEqual([
+        { id: 'k1', kind: 'instruction', title: 'Friendlies', body: 'Exclude' },
+        {
+          id: 'mem-1',
+          kind: 'instruction',
+          title: 'observation memory',
+          body: 'Wins count only official matches.',
+          source: 'memory',
+        },
+      ]);
+    });
+
+    it('puts the mental models right after the orientation block with recall+models', async () => {
+      const memory = memoryDoubles({
+        recall: RECALLED,
+        models: [
+          { id: 'known-pitfalls', name: 'Errores conocidos', content: '- A' },
+        ],
+      });
+      const { service, agent } = buildStreaming(
+        answerStream([{ sql: 'select 1', rows: [{ n: 1 }] }]),
+        { ...curated, memory, engineDefaults: { memory: 'recall+models' } },
+      );
+
+      await service.streamMessage('session-1', 'Who wins most?', () => {});
+
+      expect(memory.store.mentalModels).toHaveBeenCalledWith('ds-1', 2_500);
+      const context = contextOf(agent);
+      expect(context[0]).toContain('Datasets for this session: football.');
+      expect(context[1]).toBe(
+        '## What this datasource has taught the assistant\n\n### Errores conocidos\n- A',
+      );
+    });
+
+    it('answers as usual when the recall fails', async () => {
+      const memory = memoryDoubles({ recall: new Error('connection refused') });
+      const { service, agent, session } = buildStreaming(
+        answerStream([{ sql: 'select 1', rows: [{ n: 1 }] }], 'Brazil.'),
+        { ...curated, memory, engineDefaults: { memory: 'recall' } },
+      );
+
+      await service.streamMessage('session-1', 'Who wins most?', () => {});
+
+      expect(session.messages.at(-1)?.content).toBe('Brazil.');
+      expect(contextOf(agent).join('\n')).not.toContain('Learned from past');
+      expect(session.messages.at(-1)?.knowledge).toEqual(curated.knowledgeUsed);
+    });
+
+    it('adds no memory in the bare context arm, nor without a configured memory', async () => {
+      const bareMemory = memoryDoubles({ recall: RECALLED });
+      const bare = buildStreaming(
+        answerStream([{ sql: 'select 1', rows: [{ n: 1 }] }]),
+        { ...curated, memory: bareMemory },
+      );
+      await bare.service.runTurn('session-1', 'Who wins most?', {
+        engine: { context: 'bare', memory: 'recall+models' },
+      });
+      expect(bareMemory.store.recall).not.toHaveBeenCalled();
+      expect(bareMemory.store.mentalModels).not.toHaveBeenCalled();
+
+      const unset = memoryDoubles({ enabled: false, recall: RECALLED });
+      const noop = buildStreaming(
+        answerStream([{ sql: 'select 1', rows: [{ n: 1 }] }]),
+        { ...curated, memory: unset, engineDefaults: { memory: 'recall' } },
+      );
+      await noop.service.streamMessage('session-1', 'Who wins most?', () => {});
+      expect(unset.store.recall).not.toHaveBeenCalled();
+      expect(unset.banks.ensureBank).not.toHaveBeenCalled();
+    });
+
+    it('lets an eval arm recall without the production lever', async () => {
+      const memory = memoryDoubles({ recall: RECALLED });
+      const { service } = buildStreaming(
+        answerStream([{ sql: 'select 1', rows: [{ n: 1 }] }]),
+        { ...curated, memory },
+      );
+
+      await service.runTurn('session-1', 'Who wins most?', {
+        engine: { memory: 'recall' },
+        arm: 'memory-recall',
+      });
+
+      expect(memory.store.recall).toHaveBeenCalledTimes(1);
+    });
+
+    describe('cross-check disagreement', () => {
+      const PRIMARY =
+        "SELECT count(*) AS n FROM main.football.matches WHERE stage = 'Final'";
+      const disagreeing = (memory: MemoryDoubles) =>
+        buildStreaming(answerStream([{ sql: PRIMARY, rows: [{ n: 64 }] }]), {
+          tables: ['main.football.matches'],
+          // The independent query returns nothing: the results differ.
+          crossCheck: { sql: 'SELECT 1', rows: [] },
+          memory,
+        });
+
+      it('sends an xc: signal from a careful chat turn', async () => {
+        const memory = memoryDoubles();
+        const { service, session } = disagreeing(memory);
+        (sourceEntities as jest.Mock).mockReturnValue([
+          'main.football.matches',
+        ]);
+
+        await service.streamMessage(
+          'session-1',
+          'How many matches were played?',
+          () => {},
+          undefined,
+          undefined,
+          true,
+        );
+
+        const answer = session.messages.at(-1)!;
+        expect(answer.crossCheck?.status).toBe('disagree');
+        expect(memory.outbox.enqueue).toHaveBeenCalledTimes(1);
+        const [sent] = memory.outbox.enqueue.mock.calls[0] as [MemorySignal];
+        expect(sent).toEqual({
+          id: expect.any(String) as string,
+          kind: 'cross_check_differs',
+          datasourceId: 'ds-1',
+          datasetIds: ['football'],
+          documentId: `xc:session-1:${answer.at}`,
+          content: [
+            'Question: How many matches were played?',
+            // The literal is not in the question: redacted.
+            "Answer SQL: SELECT count(*) AS n FROM main.football.matches WHERE stage = '?'",
+            `An independent cross-check disagreed: ${answer.crossCheck?.note}`,
+          ].join('\n'),
+          context:
+            "The system's independent cross-check disagreed with this answer",
+          occurredAt: answer.at,
+          entities: ['main.football.matches'],
+        });
+      });
+
+      it('never sends one from an eval turn', async () => {
+        const memory = memoryDoubles();
+        const { service, session } = disagreeing(memory);
+
+        await service.runTurn('session-1', 'How many matches were played?', {
+          engine: { careful: 'on', memory: 'recall' },
+          arm: 'careful-on',
+        });
+
+        expect(session.messages.at(-1)?.crossCheck?.status).toBe('disagree');
+        expect(memory.outbox.enqueue).not.toHaveBeenCalled();
+      });
+    });
+  });
 });
 
 describe('SessionsService SQL self-correction', () => {
@@ -3833,7 +4072,7 @@ describe('SessionsService visual tool bridge (turn records)', () => {
 });
 
 describe('SessionsService answer feedback', () => {
-  function build(session: SessionDoc) {
+  function build(session: SessionDoc, memory?: MemoryDoubles) {
     const repository = {
       get: jest.fn().mockResolvedValue(session),
       update: jest.fn().mockImplementation(async (_id, patch) => {
@@ -3866,6 +4105,9 @@ describe('SessionsService answer feedback', () => {
       {} as never,
       pins as never,
       {} as never,
+      memory?.outbox as never,
+      memory?.banks as never,
+      memory?.store,
     );
     return { service, verifiedQueries, pins };
   }
@@ -3992,6 +4234,78 @@ describe('SessionsService answer feedback', () => {
     expect(verifiedQueries.save).not.toHaveBeenCalled();
     expect(session.messages.at(-1)?.feedback).toBe('up');
   });
+
+  describe('learning memory signals', () => {
+    it('sends a vq: signal keyed by the normalised question on thumbs-up', async () => {
+      const session = answered();
+      const memory = memoryDoubles();
+      const { service } = build(session, memory);
+
+      await service.recordFeedback(
+        'session-1',
+        '2024-01-01T00:00:03.000Z',
+        'up',
+      );
+
+      const key = createHash('sha256')
+        .update(normalizeQuestion('How many claims were denied last year?'))
+        .digest('hex');
+      expect(memory.outbox.enqueue).toHaveBeenCalledWith({
+        id: expect.any(String) as string,
+        kind: 'verified_query',
+        datasourceId: 'ds-1',
+        datasetIds: ['claims'],
+        documentId: `vq:${key}`,
+        content:
+          'Question: How many claims were denied last year?\nApproved SQL: SELECT count(*) FROM main.health.claims',
+        context: 'An analyst approved this SQL answer as correct',
+        occurredAt: '2024-01-01T00:00:03.000Z',
+        entities: ['main.health.claims'],
+      });
+    });
+
+    it('sends a corr: signal for the whole answer on thumbs-down', async () => {
+      const session = answered();
+      const memory = memoryDoubles();
+      const { service } = build(session, memory);
+
+      await service.recordFeedback(
+        'session-1',
+        '2024-01-01T00:00:03.000Z',
+        'down',
+      );
+
+      expect(memory.outbox.enqueue).toHaveBeenCalledTimes(1);
+      const [sent] = memory.outbox.enqueue.mock.calls[0] as [MemorySignal];
+      expect(sent).toEqual(
+        expect.objectContaining({
+          kind: 'correction',
+          documentId: 'corr:session-1:2024-01-01T00:00:03.000Z:answer',
+          content: [
+            'Question: How many claims were denied last year?',
+            'Rejected SQL: SELECT count(*) FROM main.health.claims',
+            'The analyst marked this answer incorrect.',
+          ].join('\n'),
+          context: 'An analyst rejected this SQL answer',
+          occurredAt: '2024-01-01T00:00:03.000Z',
+        }),
+      );
+    });
+
+    it('sends nothing without a configured memory', async () => {
+      const session = answered();
+      const memory = memoryDoubles({ enabled: false });
+      const { service } = build(session, memory);
+
+      await service.recordFeedback(
+        'session-1',
+        '2024-01-01T00:00:03.000Z',
+        'up',
+      );
+
+      expect(memory.outbox.enqueue).not.toHaveBeenCalled();
+    });
+  });
 });
 
 describe('SessionsService reasoning-block feedback', () => {
@@ -4014,7 +4328,7 @@ describe('SessionsService reasoning-block feedback', () => {
     },
   ];
 
-  function build(withTrace = true) {
+  function build(withTrace = true, memory?: MemoryDoubles) {
     const session: SessionDoc = {
       id: 'session-1',
       name: 'HR',
@@ -4135,6 +4449,9 @@ describe('SessionsService reasoning-block feedback', () => {
       expertMode as never,
       pins as never,
       learning as never,
+      memory?.outbox as never,
+      memory?.banks as never,
+      memory?.store,
     );
     return {
       service,
@@ -4431,6 +4748,67 @@ describe('SessionsService reasoning-block feedback', () => {
       }),
     ).rejects.toThrow('No assistant message');
   });
+
+  describe('learning memory signals', () => {
+    it('sends a reviewer note as a corr: signal for its block', async () => {
+      const memory = memoryDoubles();
+      const { service } = build(true, memory);
+
+      await service.recordBlockFeedback('session-1', {
+        messageAt: AT,
+        block: 'sql',
+        vote: 'down',
+        comment: 'Tech means department = Engineering',
+      });
+
+      expect(memory.outbox.enqueue).toHaveBeenCalledWith({
+        id: expect.any(String) as string,
+        kind: 'correction',
+        datasourceId: 'ds-1',
+        datasetIds: ['hr'],
+        documentId: `corr:session-1:${AT}:sql`,
+        content: [
+          'Question: Average tech salary in 2025?',
+          'Step: sql',
+          'Reviewer note: Tech means department = Engineering',
+          `Final SQL: ${FINAL_SQL}`,
+        ].join('\n'),
+        context: 'An analyst corrected the "sql" step of this answer',
+        occurredAt: AT,
+        entities: ['main.hr.employees'],
+      });
+    });
+
+    it('sends nothing for a vote alone, and forgets a cleared note', async () => {
+      const memory = memoryDoubles();
+      const { service } = build(true, memory);
+      await service.recordBlockFeedback('session-1', {
+        messageAt: AT,
+        block: 'sql',
+        comment: 'Use the 31 December rate',
+      });
+      memory.outbox.enqueue.mockClear();
+
+      await service.recordBlockFeedback('session-1', {
+        messageAt: AT,
+        block: 'sql',
+        vote: 'down',
+      });
+      expect(memory.outbox.enqueue).not.toHaveBeenCalled();
+
+      await service.recordBlockFeedback('session-1', {
+        messageAt: AT,
+        block: 'sql',
+        comment: null,
+      });
+      // Fire and forget: let it settle.
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(memory.outbox.forget).toHaveBeenCalledWith(
+        'ds-1',
+        `corr:session-1:${AT}:sql`,
+      );
+    });
+  });
 });
 
 /** SQL runs followed by a written answer — the ordinary completed turn. */
@@ -4508,6 +4886,38 @@ async function* visualStream(sql: string) {
   };
   yield { type: 'text-delta', payload: { text: 'Here is the chart.' } };
 }
+
+/**
+ * The learning memory as `MemoryModule` provides it: the store (`recall`
+ * resolves `recall`, or rejects when it is an Error), the outbox and the
+ * bank set-up — every call observable.
+ */
+function memoryDoubles(
+  options: {
+    enabled?: boolean;
+    recall?: RecalledMemory[] | Error;
+    models?: MentalModel[];
+  } = {},
+) {
+  return {
+    store: {
+      enabled: options.enabled ?? true,
+      recall:
+        options.recall instanceof Error
+          ? jest.fn().mockRejectedValue(options.recall)
+          : jest.fn().mockResolvedValue(options.recall ?? []),
+      mentalModels: jest.fn().mockResolvedValue(options.models ?? []),
+      retain: jest.fn().mockResolvedValue(undefined),
+      forget: jest.fn().mockResolvedValue(undefined),
+    },
+    outbox: {
+      enqueue: jest.fn().mockResolvedValue(undefined),
+      forget: jest.fn().mockResolvedValue(undefined),
+    },
+    banks: { ensureBank: jest.fn().mockResolvedValue(undefined) },
+  };
+}
+type MemoryDoubles = ReturnType<typeof memoryDoubles>;
 
 /** An in-memory `AnswerPinsService`, keyed by lineage like the real one. */
 function pinsDouble(store = new Map<string, AnswerPinDoc>()) {

@@ -15,6 +15,9 @@ export type CarefulMode = 'off' | 'on' | 'auto';
 /** `bare` = schema only, what a new customer gets on day one (L2 two arms). */
 export type ContextMode = 'curated' | 'bare';
 
+/** Hindsight cross-session memory: off, recall into context, or recall plus mental models. */
+export type MemoryMode = 'off' | 'recall' | 'recall+models';
+
 export type EngineReasoningEffort = 'low' | 'medium' | 'high';
 
 export interface EngineOptions {
@@ -49,6 +52,8 @@ export interface EngineOptions {
    * (`assistant-instructions.ts`). `'*'` removes every ablatable group.
    */
   promptAblation: string[];
+  /** Hindsight memory spike: learn from approvals and corrections across sessions. */
+  memory: MemoryMode;
   /** L1: overrides Settings → LLM reasoning effort for this run. */
   reasoningEffort?: EngineReasoningEffort;
   /** Overrides `ASSISTANT_MAX_STEPS`. */
@@ -98,7 +103,7 @@ export interface EngineSettingsSaveRequest {
  * ------------------------------------------------------------------ */
 
 type EngineOptionKind =
-  'boolean' | 'careful' | 'context' | 'effort' | 'steps' | 'list';
+  'boolean' | 'careful' | 'context' | 'memory' | 'effort' | 'steps' | 'list';
 
 const ENGINE_OPTION_KINDS: Readonly<
   Record<keyof EngineOptions, EngineOptionKind>
@@ -117,6 +122,7 @@ const ENGINE_OPTION_KINDS: Readonly<
   extendedGuards: 'boolean',
   staticFirstContext: 'boolean',
   promptAblation: 'list',
+  memory: 'memory',
   reasoningEffort: 'effort',
   maxSteps: 'steps',
 };
@@ -141,6 +147,10 @@ function coerceEngineOption(kind: EngineOptionKind, value: unknown): unknown {
         : undefined;
     case 'context':
       return value === 'curated' || value === 'bare' ? value : undefined;
+    case 'memory':
+      return value === 'off' || value === 'recall' || value === 'recall+models'
+        ? value
+        : undefined;
     case 'effort':
       return value === 'low' || value === 'medium' || value === 'high'
         ? value
