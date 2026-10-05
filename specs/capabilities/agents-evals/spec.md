@@ -293,13 +293,13 @@ Feature: Agents
     When I open the Model tab
     Then I see "Provider"
     When I open the Evals tab
-    Then I see the "world-cup" set listed with "10 questions"
+    Then I see the "world-cup" set listed with "38 questions"
     And no individual question is shown
     And the run button is hidden
     When I open the "world-cup" set
     Then the "champion-2022" question shows "Who won the 2022 World Cup?"
     And it lists the check "Checks if output includes "Argentina""
-    And 10 questions are listed
+    And 38 questions are listed
     When I click the open "world-cup" set again
     Then no questions are listed
     When I click "All agents"
@@ -322,19 +322,19 @@ Feature: Agents
     And I open the "Questions to Insights Assistant" agent
     And I open the Evals tab and the "world-cup" set
     Then the datasource picker offers "World Cup PostgreSQL" and "PostgreSQL"
-    And the run button reads "Run 10 selected"
+    And the run button reads "Run 38 selected"
     When I click the run button
     Then the run button reads "Running…"
-    And I see "0/10 done"
+    And I see "0/38 done"
 
   Scenario: Runs only the ticked questions
     Given a "World Cup PostgreSQL" datasource exists
     And I am on the "world-cup" set in the agent's Evals tab
-    Then the run button reads "Run 10 selected"
+    Then the run button reads "Run 38 selected"
     When I untick the "champion-2022" question
-    Then the run button reads "Run 9 selected"
+    Then the run button reads "Run 37 selected"
     When I click select-all
-    Then the run button reads "Run 10 selected"
+    Then the run button reads "Run 38 selected"
     When I click select-all again
     Then the run button reads "Run 0 selected"
     And the run button is disabled
@@ -372,15 +372,15 @@ Feature: Agents
     Given a "World Cup PostgreSQL" datasource exists
     And a dataset containing the World Cup tables and views exists
     And I am on the "world-cup" set in the agent's Evals tab
-    Then the Questions sub-tab is shown with 10 questions
+    Then the Questions sub-tab is shown with 38 questions
     When I open the executions sub-tab
     Then I see "No eval runs yet"
     And no questions are listed
     When I return to the Questions sub-tab and click the run button
     And I open the executions sub-tab
-    Then the first execution shows "0/10 passed"
+    Then the first execution shows "0/38 passed"
     When I return to the Questions sub-tab
-    Then 10 questions are listed
+    Then 38 questions are listed
 
   Scenario: Downloads an execution as a Markdown report
     Given a "World Cup PostgreSQL" datasource exists
@@ -450,8 +450,8 @@ Feature: Agents and evals behaviour not yet covered by Playwright
 
   Scenario: Lists every question set with its question count
     When I open the assistant's Evals tab
-    Then I see the sets "Formula 1", "Genomics", "Health Insurance", "World Cup" and "World Cup (REST API)" in that order
-    And "Genomics" and "Health Insurance" each show "20 questions"
+    Then I see the sets "Banking", "Formula 1", "Genomics", "Health Insurance", "Supply Chain", "World Cup" and "World Cup (REST API)" in that order
+    And "Genomics" shows "49 questions" and "Health Insurance" shows "42 questions"
 
   Scenario: Scopes a run to the set's own dataset on a shared datasource
     Given the development fixtures are registered, so one datasource carries the "World Cup", "Health Insurance" and "Genomics" datasets
@@ -474,21 +474,21 @@ Feature: Agents and evals behaviour not yet covered by Playwright
 
   Scenario: Narrows the open set to one category
     When I open the "health-insurance" set
-    Then the category filter reads "All categories (20)"
+    Then the category filter reads "All categories (42)"
     And it offers "ratio-trap (3)"
     When I pick "ratio-trap (3)"
     Then 3 questions are listed, numbered 1 to 3
-    And I see "20 of 20 selected · showing 3"
+    And I see "42 of 42 selected · showing 3"
     And the select-all box reads "Select all shown"
 
   Scenario: Select all shown keeps the ticks of hidden questions
     Given the "health-insurance" set is open with every question ticked
     And the list is narrowed to "ratio-trap"
     When I click select-all
-    Then I see "17 of 20 selected · showing 3"
-    And the run button reads "Run 17 selected"
-    When I pick "All categories (20)"
-    Then the 17 other questions are still ticked
+    Then I see "39 of 42 selected · showing 3"
+    And the run button reads "Run 39 selected"
+    When I pick "All categories (42)"
+    Then the 39 other questions are still ticked
 
   Scenario: Switching sets clears the filter and the last results
     Given a run of the "world-cup" set has finished and its verdicts are shown

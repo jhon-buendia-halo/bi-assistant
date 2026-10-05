@@ -63,7 +63,7 @@ test('opens an agent from the Agents list and switches between its tabs', async 
   await page.getByTestId('agent-tab-evals').click();
   // The tab opens on the set list, with every question still hidden.
   await expect(page.getByTestId('eval-set-world-cup')).toContainText(
-    '10 questions',
+    '38 questions',
   );
   await expect(page.locator('[data-testid^="eval-case-"]')).toHaveCount(0);
   await expect(page.getByTestId('eval-run')).toBeHidden();
@@ -76,7 +76,7 @@ test('opens an agent from the Agents list and switches between its tabs', async 
   await expect(page.getByTestId('eval-case-champion-2022')).toContainText(
     'Checks if output includes "Argentina"',
   );
-  await expect(page.locator('[data-testid^="eval-case-"]')).toHaveCount(10);
+  await expect(page.locator('[data-testid^="eval-case-"]')).toHaveCount(38);
 
   // Clicking the open set again collapses it.
   await page.getByTestId('eval-set-world-cup').click();
@@ -124,13 +124,13 @@ test('offers the configured datasources and starts a run from the evals tab', as
   await expect(picker).toContainText('PostgreSQL');
 
   // Every question is ticked by default.
-  await expect(page.getByTestId('eval-run')).toContainText('Run 10 selected');
+  await expect(page.getByTestId('eval-run')).toContainText('Run 38 selected');
 
   // Starting the run is enough to assert here: completing it means live model
   // calls, which the suite must not make.
   await page.getByTestId('eval-run').click();
   await expect(page.getByTestId('eval-run')).toContainText('Running…');
-  await expect(page.getByText(/0\/10 done/)).toBeVisible();
+  await expect(page.getByText(/0\/38 done/)).toBeVisible();
 });
 
 test('runs only the ticked questions', async ({ page }) => {
@@ -145,14 +145,14 @@ test('runs only the ticked questions', async ({ page }) => {
   await openWorldCupSet(page);
 
   const run = page.getByTestId('eval-run');
-  await expect(run).toContainText('Run 10 selected');
+  await expect(run).toContainText('Run 38 selected');
 
   // Untick one, then clear the rest via select-all.
   await page.getByTestId('eval-select-champion-2022').uncheck();
-  await expect(run).toContainText('Run 9 selected');
+  await expect(run).toContainText('Run 37 selected');
 
   await page.getByTestId('eval-select-all').click();
-  await expect(run).toContainText('Run 10 selected');
+  await expect(run).toContainText('Run 38 selected');
   await page.getByTestId('eval-select-all').click();
   await expect(run).toContainText('Run 0 selected');
   await expect(run).toBeDisabled();
@@ -230,7 +230,7 @@ test('separates the question suite from past executions', async ({ page }) => {
   await openWorldCupSet(page);
 
   // Questions is the default sub-tab.
-  await expect(page.locator('[data-testid^="eval-case-"]')).toHaveCount(10);
+  await expect(page.locator('[data-testid^="eval-case-"]')).toHaveCount(38);
 
   await page.getByTestId('eval-subtab-runs').click();
   await expect(page.getByText(/No eval runs yet/)).toBeVisible();
@@ -243,10 +243,10 @@ test('separates the question suite from past executions', async ({ page }) => {
   await page.getByTestId('eval-subtab-runs').click();
   await expect(
     page.locator('[data-testid^="eval-run-"]').first(),
-  ).toContainText('0/10 passed');
+  ).toContainText('0/38 passed');
 
   await page.getByTestId('eval-subtab-questions').click();
-  await expect(page.locator('[data-testid^="eval-case-"]')).toHaveCount(10);
+  await expect(page.locator('[data-testid^="eval-case-"]')).toHaveCount(38);
 });
 
 test('downloads an execution as a Markdown report', async ({ page }) => {
