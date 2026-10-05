@@ -102,6 +102,37 @@ Developer harness
 - R50. A developer harness SHALL run one set, or a case file of the same shape, as real streamed chat turns in throwaway sessions and grade each case by result-set comparison alone: a case without a reference query is skipped (`SKIP(no-expected-sql)`), never guessed. It SHALL accept a case-id substring filter, a category substring filter (an unmatched filter lists the categories present), a repeat count (a case passes only when every repetition passes, reported as `k/n`) and a free-text label; it SHALL print a verdict table, a per-category pass-rate table worst first and the run's measured tokens and estimated cost (R46, read from the persisted answers), write a run log unless told not to (R48), and exit non-zero when any case failed or errored.
 - R51. The same harness SHALL offer a validate mode that runs every reference query of the selected cases against the live data with zero model calls and no LLM configuration (cases without one are reported as skipped), reporting each as OK (rows returned), EMPTY (no rows: a warning, still passing), TOO-MANY (at or above the 500-row cap: failing) or ERROR (the query failed: failing), writing a run log with no usage unless told not to, and exiting non-zero on any failure.
 
+### Engine improvement loop
+
+These rules come with the engine improvement loop (levers, arms and pass^k; [../engine-levers/spec.md](../engine-levers/spec.md)). Where one of them names an earlier rule it extends or replaces, it governs over that rule.
+
+Run options
+- R52. (Extends R19 and R22.) Starting a run SHALL also accept: a repeat count (1, 3 or 5, default 1; anything else is refused with `Repeat must be 1, 3 or 5 (got <n>)`); an arm (default `baseline`; an unknown arm is refused, engine-levers R6) and explicit lever overrides applied over the arm (the arm `custom` means "the overrides only"); a free-text label, trimmed and cut to 80 characters; "include paraphrases" (R60); a list of categories (only the set's questions in those categories run); and an explicit list of datasets (R55). All of these SHALL be validated before anything is stored or any token is spent. The run record SHALL keep the repeat, label, arm, the resolved lever values and their configuration hash, the judge model when pinned and the reasoning effort.
+- R53. (Extends R19 and the Edge cases.) An explicit empty list of questions SHALL be refused with "Pick at least one question to run" before the set is resolved. A request naming neither a set nor any question SHALL run every question of `world-cup`, the shipped set. A list of questions without a set id SHALL resolve the set from the ids, paraphrase ids (`<id>~v<n>`) counting as their base question.
+- R54. (Replaces R19 item 2 and R28.) A run started while another run of the agent is running or queued SHALL be accepted and stored with status `queued`, answering "Eval run queued" instead of "Eval run started". Queued runs SHALL start one at a time, in the order they were queued. While a started run is queued the run button SHALL read "Queued…".
+- R55. (Extends R21.) An explicit list of datasets SHALL scope the run to exactly those datasets; a name the chosen datasource does not have SHALL be refused with "That datasource has no dataset named <names>". Under the run controls the open set SHALL offer one tick box per dataset on the chosen datasource ("Evaluate against"), ticked by default for the set's declared datasets; with nothing ticked explicitly the hint reads "set default — <names>" and the run is scoped by R21. Ticking a box adds that dataset to the shown selection; unticking every box falls back to the set's own. Only an explicit choice SHALL be sent with the run. Changing the datasource or opening another set SHALL clear the explicit choice.
+- R56. A **Stop** button SHALL be shown while a run started from the Questions sub-tab is running or queued. Stopping a running run SHALL abort the question in flight ("Stopping — the question in flight is being aborted"), keep the finished questions and what they spent, end the run `failed` with "Stopped by the operator", and write its run log with status `aborted`. Stopping a queued run SHALL remove it from the queue ("Removed from the queue") and end it `failed` with "Stopped before it started". Stopping a stored `running` or `queued` run that no worker owns (the backend stopped while it was going) SHALL mark it `failed` with "Interrupted — the backend stopped before this run finished" ("Marked as interrupted"). A finished run SHALL answer "That run has already <status>"; an unknown one `Eval run "<id>" not found`.
+
+How a case runs and is graded
+- R57. (Replaces R24 and R29 to R32 for in-app runs and the developer harness.) Each attempt of a question SHALL run as a real chat turn through the same pipeline a session uses (curated context or not per the arm, metrics, verified queries, reasoning effort, guards, careful mode, answer review), in a fresh throwaway session that is deleted afterwards, with the run's resolved levers, and SHALL be cut off after 5 minutes (configurable). The finished turn SHALL be graded by the question's checks, the result-set match against every reference query of the question, and the judge.
+- R58. The checks of R30 SHALL be extended with **final SQL succeeded** (the answer's last `run_readonly_sql` succeeded — passing a turn that hit an error, recovered and answered), and a `matches` check SHALL be case-insensitive unless its definition asks otherwise. The result-set match SHALL pass when the assistant's final successful query (or, failing that, any supporting query) matches the primary reference or any alternative reference of the question, and SHALL use the reference written for the datasource's SQL dialect when the question has one.
+- R59. The judge SHALL grade on the pinned judge model when one is set (engine-levers R11 to R12), see a clarification with its offered options and a visual with its description, and SHALL ask a second time when it errors, returns unusable output, or fails the answer with low confidence; the second opinion wins. A judge that errors twice SHALL make the check a measurement gap, not a failure.
+- R60. With "include paraphrases", each question that carries paraphrases SHALL also run once per paraphrase, right after its original, under the id `<id>~v<n>`, with the original's checks, references and category; a paraphrase follows its original's tick.
+- R61. Each attempt SHALL get a verdict: ERROR (the turn threw, timed out, hit a provider error or was stopped), FAIL (a measured check failed), GAP (the harness could not measure it: a reference query or the judge failed, or no check could be measured) or PASS. Each question SHALL fold its attempts into one verdict by **pass^k**: PASS only when every measured attempt passed; FAIL when any measured attempt failed (ERROR when none passed and one errored); GAP when no attempt could be measured or every measured attempt passed but one was a gap; SKIP when the run was stopped before the question finished. A question is **flaky** when some but not all measured attempts passed. GAP and SKIP SHALL be excluded from every rate. A failed question SHALL carry a failure label naming the likely cause (for example `missing-default-filter`, `wrong-table`, `id-not-name`, `no-sql`, `clarified`).
+- R62. A finished run SHALL carry a summary: the pass^k count and rate over scored questions, the mean per-attempt pass rate, flaky and gap counts, how many questions were answered every time, pass^k per category and per difficulty, and, when priced, the cost per correct answer. Token usage SHALL include the side passes that report it (grounding guard, tool-only synthesis, careful cross-check, answer review, SQL fixer), broken out per pass.
+- R63. In the Questions sub-tab a finished question SHALL show its verdict badge: "PASS", "FAIL", "ERROR" or "GAP", followed by "<passes>/<runs>" when it ran more than once; a GAP badge SHALL carry the tooltip "the harness could not measure this — not counted".
+- R64. The run controls of an open set SHALL include a repeat picker ("repeat 1", "repeat 3 — pass^3, the number we trust", "repeat 5"), an arm picker listing the arms (baseline first, then the others, then "custom…", each with its description as tooltip), a label box (placeholder "label, e.g. iter0-gpt5"), and an "include paraphrases" tick box. Choosing "custom…" SHALL show a text box for `key=value` overrides; while it holds an override that does not parse, the error SHALL be shown under it and the run button SHALL be disabled.
+
+Loop runs
+- R65. **Loop run** SHALL open a panel to queue one run per set × arm, set-major (every arm of the first set, then the next set), all tagged with one loop id, with a repeat (default 3), a label (default `loop-<start time>`), "include paraphrases" and an optional comma-separated category list. It SHALL show "≈ <N> turns (cases × repeat × arms)" before starting. A loop SHALL be validated as a whole: a datasource, at least one set ("Pick at least one suite to loop over") and one arm ("Pick at least one arm to loop over") are required, at most 60 runs may be queued ("A loop is capped at 60 runs (<s> suites × <a> arms asked for)"), and one invalid set or arm queues nothing. A set with no question in the requested categories SHALL be skipped and named in the answer ("Queued <n> eval runs (skipped <ids>: no question in the selected categories)").
+- R66. While a loop runs, the panel SHALL poll it and show a matrix with one row per set × arm: status, model, repeat, pass^k ("<passK>/<scored>" and rate), mean pass rate, flaky, gaps, tokens and cost per correct answer, and an **Open run** action that switches to Executions with that run expanded. A loop SHALL be `running` while any of its runs is queued or running, `failed` when any failed, else `completed`.
+
+History
+- R67. A **History** sub-tab SHALL list every run log the app can read (in-app runs, the developer harness and validate runs), newest first, with filters by set, arm, model and harness, the folders read, a **Refresh** action, and per row the start time, set, arm, label, model, repeat and pass^k. With none it SHALL say "No logged runs yet — …". Marking two rows for comparison and choosing **Compare** SHALL show the diff of R68; a **Trend — pass^k over time** chart SHALL plot pass^k per set and arm, oldest first.
+- R68. Comparing two logged runs (before, after) SHALL show the pass^k headline of each and the change, per-category deltas, every question whose verdict flipped, flaky changes, and token and cost deltas ("Tokens not comparable — one side reported no usage." when one side has none), and SHALL warn "Not commensurable: …" naming each difference when the two differ in set, model, engine configuration or repeat. From a comparison the user SHALL be able to draft a change-log entry (lever, change, why) with the measured half filled in, copy it, or append it to the evaluation change log when the app runs from a source checkout; appending SHALL require all three fields ("Fill in the lever, the change and the why before appending to the change log"); outside a checkout the draft is returned to paste by hand.
+- R69. (Extends R48 and replaces its no-location clause.) Run logs SHALL be written in format version 2 ([../../system/data-model.md](../../system/data-model.md) 4.10) on every terminal state, completed, failed or aborted, with every attempt's checks, SQL, answer, tools, repairs, warnings and usage. They SHALL go to the first of: the configured log folder, the source checkout's log folder, the app data folder's `logs`, a `data/logs` folder under the working directory — so an installed app logs its runs too. Reading SHALL merge every one of those folders that exists, so an app started from a checkout also lists the command-line runs.
+- R70. (Extends R42 and R50.) The developer harness SHALL run suites through the same production turn and grading as in-app runs (R57 to R62), accept the same arm and override options, run several suites and arms in one invocation and print the set × arm matrix, and diff two run logs from the command line with the same comparison as R68.
+
 ### Eval suite content
 
 The questions, checks, reference queries and judge rubrics below are a data asset copied verbatim on rebuild (*Data assets* in [../../README.md](../../README.md)); the tables summarise them. Every expected value is a fact of the fixture's data.
@@ -186,6 +217,25 @@ Genomics set (`genomics`, 20 questions). Not a bundled sample: a synthetic clini
 | `variants-by-type` | control | How many variants of each type do we have? | includes "SNV"; matches `371`; ran SQL; no tool errors; result-set match |
 | `samples-per-collection-year` | control | How many samples did we collect in each year, counting every sample on record, controls included? | includes "2023"; matches `\b68\b`; ran SQL; no tool errors; result-set match |
 
+### Engine-loop suite content
+
+The set definitions shipped with the engine improvement loop are the data asset; where they differ from the tables above, the definitions win. In summary:
+
+| id | Name | Questions | Over |
+|---|---|---|---|
+| `banking` | Banking | 20 | synthetic retail-banking fixture, schema `banking` (declared dataset "Banking") |
+| `formula-1` | Formula 1 | 10 | unchanged |
+| `genomics` | Genomics | 49 | as above, grown to at least three questions per category |
+| `health-insurance` | Health Insurance | 42 | as above, grown to three questions per category |
+| `supply-chain` | Supply Chain | 20 | synthetic supply-chain fixture, schema `supply_chain` (declared dataset "Supply Chain") |
+| `world-cup` | World Cup | 38 | bundled World Cup sample, grown from 10 |
+| `world-cup-rest` | World Cup (REST API) | 38 | derived from `world-cup` (R45); all 27 reference queries ported to the REST sample's dialect |
+
+- Banking (required entities `banking.regions`, `branches`, `customers`, `account_types`, `accounts`, `cards`, `fx_rates`, `transactions`, `loans`, `loan_payments`, `v_accounts`, `v_transactions`) and supply chain (`supply_chain.regions`, `warehouses`, `suppliers`, `product_categories`, `products`, `carriers`, `purchase_orders`, `purchase_order_lines`, `shipments`, `receipts`, `inventory_snapshots`, `v_purchase_order_lines`, `v_shipments`, `v_receipts`) are generated from fixed seeds like the other synthetic fixtures; each description is its preflight setup sentence ("These evals require the bundled synthetic <banking|supply-chain> fixture (schema <schema>). Select its PostgreSQL datasource and save a dataset named <name> containing the <schema> tables and views. Setup: …").
+- Cases MAY carry a difficulty (`easy`, `medium`, `hard`), a provenance (`hand`, or `model-drafted-verified`: drafted by a model, rows read by a person), paraphrases, alternative reference queries, a per-dialect reference query and a trap query (the plausible wrong query the case guards against; validate mode asserts its result differs from the reference).
+- Checks that failed correct answers were retired: discovery questions no longer require a `list_entities` call (the entity list is already in context), "no tool errors" is replaced by **final SQL succeeded** on every question but a few behaviour questions, and a text check asserting a bare number is dropped where the result-set match already compares the figure (loading a set warns about any left). `world-cup`'s `possession-vs-result` stays judged by rubric, without a reference query.
+- Registering the development fixtures seeds the full business semantics of every synthetic fixture (every knowledge entry and metric, and each dataset's description), not only the entries the original traps needed; a knowledge entry states a fact about the data, never a hint about one question.
+
 ## Edge cases and errors
 
 - Starting with zero ticked questions is blocked in the UI (button disabled); a direct request with an explicit empty list SHALL NOT be read as "run everything": it is refused with "Pick at least one question to run" when it names a set, and with "No question set matches the selected questions, …" when it does not. A request that names a set but no list runs every question of that set; a request with neither fails with "The selected questions span several sets (formula-1, genomics, health-insurance, world-cup, world-cup-rest) — run one set at a time."
@@ -216,6 +266,7 @@ Genomics set (`genomics`, 20 questions). Not a bundled sample: a synthetic clini
 - The development fixtures database (World Cup, health insurance, genomics), their seeded generators, the registration script and the harness scripts: [../../system/delivery.md](../../system/delivery.md).
 - Copy and layout of the Evals tab and the eval trace: [../../system/ui.md](../../system/ui.md).
 - Terms: [../../product/glossary.md](../../product/glossary.md).
+- Engine improvement loop: endpoints `POST /agents/:key/evals/loop`, `GET /agents/:key/evals/loops/:loopId`, `POST /agents/:key/evals/runs/:jobId/stop`, `GET /agents/:key/evals/logs`, `GET /agents/:key/evals/logs/compare`, `GET /agents/:key/evals/logs/:file`, `POST /agents/:key/evals/logs/changelog-draft`, `GET /agents/:key/evals/trend` in [../../system/api.md](../../system/api.md) 2.11; run-log format version 2 in [../../system/data-model.md](../../system/data-model.md) 4.10; levers and arms in [../engine-levers/spec.md](../engine-levers/spec.md).
 
 ## UI
 
@@ -491,6 +542,82 @@ Feature: Agents and evals behaviour not yet covered by Playwright
     Then I see 'Agent "<key>" not found'
 ```
 
+E2E: `frontend/e2e/agents.spec.ts` for the Feature below too (the four engine-loop tests at the end of the file).
+
+```gherkin
+Feature: Engine improvement loop in the Evals tab
+
+  Scenario: Shows the repeat, arm, label and loop-run controls
+    When I click "Agents"
+    And I open the "Questions to Insights Assistant" agent
+    And I open the Evals tab and the "world-cup" set
+    Then the repeat picker offers "repeat 1", "repeat 3" and "repeat 5"
+    And the arm picker offers "baseline"
+    And I see the label box
+    When I click "Loop run"
+    Then the loop panel is shown
+
+  Scenario: Opens the History sub-tab
+    When I open the assistant's Evals tab
+    And I open the History sub-tab
+    Then I see either logged runs or "No logged runs yet"
+
+  Scenario: Shows the pass^k headline and a GAP badge for a finished run
+    Given a finished run with repeat 3 where one question passed 3 of 3 and one was a measurement gap
+    When I open the executions sub-tab and expand that run
+    Then its headline reads "pass^3" and mentions the gap
+    And the gap question shows the badge "GAP"
+
+  Scenario: Opens Engine levers and offers the Databricks provider
+    When I open Settings and click "Engine levers"
+    Then I see the heading "Engine levers"
+    When I click "LLM Configuration"
+    Then the provider picker offers "Databricks (Model Serving)"
+    When I choose it
+    Then I see the "Workspace URL" field
+```
+
+E2E: none yet for the Feature below.
+
+```gherkin
+Feature: Engine improvement loop behaviour not yet covered by Playwright
+
+  Scenario: Queues a second run instead of refusing it
+    Given a run of the "world-cup" set is in progress
+    When I start a run of the "genomics" set
+    Then I see "Eval run queued"
+    And it starts when the first run ends
+
+  Scenario: Stops a running run
+    Given a run is in progress
+    When I click "Stop"
+    Then the run ends with "Stopped by the operator"
+    And its finished questions and tokens are kept
+
+  Scenario: Runs each question three times and reports pass^3
+    When I pick "repeat 3" and run the "world-cup" set
+    Then a question that passed twice of three shows "FAIL 2/3"
+    And the run's headline counts it as not passed
+
+  Scenario: Compares two logged runs
+    Given two logged runs of the same set, model and engine
+    When I mark both in the History sub-tab and click "Compare"
+    Then I see the pass^k change, the category deltas and the questions that flipped
+    And no "Not commensurable" warning
+
+  Scenario: Queues a loop over sets and arms
+    When I open "Loop run", tick the sets "genomics" and "health-insurance" and the arms "baseline" and "fixer-off"
+    Then I see "≈ <N> turns (cases × repeat × arms)"
+    When I click "Start loop"
+    Then four runs are queued and the matrix shows one row per set and arm
+
+  Scenario: Scopes a run to an explicitly ticked dataset
+    Given the chosen datasource carries the datasets "World Cup" and "My World Cup"
+    When I open the "world-cup" set and tick only "My World Cup" under "Evaluate against"
+    And I click the run button
+    Then the run is scoped to "My World Cup"
+```
+
 ## Acceptance
 
 - The nine `agents.spec.ts` scenarios pass.
@@ -501,6 +628,9 @@ Feature: Agents and evals behaviour not yet covered by Playwright
 - Every reference query of every set validates against the development fixtures with zero model calls (R51): `OK` for every case with a reference query, the rest skipped.
 - After the development fixtures are registered on one datasource, the `health-insurance` and `genomics` sets each start, are scoped to their own dataset, and finish with one result per ticked question, a category tally, and a token total (or "tokens not measured").
 - Every finished run, completed or failed, leaves a run log and an index line in a source checkout; an installed app without a configured log location runs normally and only warns.
+- The four engine-loop scenarios of `agents.spec.ts` pass.
+- A repeat-3 run of any set records three attempts per question in its run log and a pass^k summary; a question whose judge errored twice is a GAP and is excluded from every rate.
+- A run started while another runs is queued, not refused; Stop ends a running run with its log written as `aborted`.
 
 ## Open questions
 

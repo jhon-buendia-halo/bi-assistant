@@ -318,7 +318,7 @@ Controller prefix `/llm`. Capability: llm-settings. One persisted singleton docu
 | 32 | `POST /llm/test-connection` | Test candidate settings | yes |
 
 ```ts
-type LlmProvider = 'openai' | 'anthropic' | 'lenai';
+type LlmProvider = 'openai' | 'anthropic' | 'lenai' | 'databricks';
 type ReasoningEffort = 'low' | 'medium' | 'high';
 interface SaveLlmSettingsDto { provider: LlmProvider; model: string; apiKey?: string; baseUrl?: string }
 interface LlmSettingsView {
@@ -335,7 +335,7 @@ interface LlmSettingsView {
 
 #### 30. `PUT /llm/settings`
 - Body: `SaveLlmSettingsDto`. `apiKey` omitted or blank = use the stored key. For `lenai`, `model` is the deployment name and `baseUrl` is required. `anthropic` takes an API key only (no subscription logins).
-- Validation (Style A): `"provider must be one of: openai, anthropic, lenai"`, `"model is required"`, `"baseUrl is required for lenai"`, `"apiKey is required — none stored yet"`.
+- Validation (Style A): `"provider must be one of: openai, anthropic, lenai, databricks"`, `"model is required"`, `"baseUrl is required for lenai"`, `"baseUrl is required for databricks"` (for `databricks`, `baseUrl` is the `https://` workspace host, a pasted `/serving-endpoints` suffix is stripped, and any other path, query or plain `http` is refused), `"apiKey is required — none stored yet"`. For `databricks`, `model` is the serving-endpoint name and `apiKey` a personal access token.
 - **The settings are tested against the provider before they are persisted**; a failing test fails the save with the provider's error text and nothing is stored.
 - Success: `{ ok:true, message:"Configuration saved", settings: LlmSettingsView }`. A re-save keeps the existing `reasoningEffort`, else defaults to `high`.
 - Side effects: persists (key encrypted); subsequent agent turns resolve the model from these settings.
@@ -585,6 +585,86 @@ interface SessionActionResult { ok: boolean; message: string; session?: SessionD
 ```
 
 `SessionVisualization`, `ReasoningStep`, `KnowledgeUse`, `AnalysisReport` are in data-model.md.
+
+### 2.11 Engine improvement loop (agents and evals, continued)
+
+Controller prefix `/agents`. Capability: agents-evals R52 to R70. Every route below is declared before `GET /agents/:key`, and `…/logs/compare` before `…/logs/:file`, so the literal segments are not read as parameters.
+
+| # | Method + path | Purpose | FE |
+|---|---|---|---|
+| 53 | `POST /agents/:key/evals/loop` | Queue one run per set × arm | yes |
+| 54 | `GET /agents/:key/evals/loops/:loopId` | A loop's runs and its set × arm matrix | yes |
+| 55 | `POST /agents/:key/evals/runs/:jobId/stop` | Stop a running run or unqueue a waiting one | yes |
+| 56 | `GET /agents/:key/evals/logs` | Run-log history | yes |
+| 57 | `GET /agents/:key/evals/logs/compare` | Diff two logged runs | yes |
+| 58 | `POST /agents/:key/evals/logs/changelog-draft` | Draft (and optionally append) a change-log entry | yes |
+| 59 | `GET /agents/:key/evals/logs/:file` | One run log, in full | yes |
+| 60 | `GET /agents/:key/evals/trend` | pass^k over time | yes |
+
+Changes to the endpoints of 2.6 that come with the loop:
+- `GET /agents/:key/evals` (35): each case also carries `difficulty?: 'easy'|'medium'|'hard'`, `provenance?: 'hand'|'model-drafted-verified'` and `variants: number` (how many paraphrases it has).
+- `POST /agents/:key/evals/run` (36): the body also accepts `datasets?: string[]` (explicit scope; an unknown name fails with `"That datasource has no dataset named <names>"`), `repeat?: 1|3|5` (`"Repeat must be 1, 3 or 5 (got <n>)"`), `label?: string` (trimmed, at most 80 characters), `arm?: string` (a preset, `custom:{json}` or `custom`; unknown: `"Unknown arm \"<name>\" — known arms: <names>"`), `engine?: Partial<EngineOptions>` (overrides over the arm, sanitised), `includeVariants?: boolean` and `categories?: string[]`. An explicit empty `caseIds` fails with `"Pick at least one question to run"` before set resolution; neither `suiteId` nor `caseIds` runs the whole `world-cup` set. A run is never refused for being concurrent: success is `{ ok:true, message:"Eval run started" | "Eval run queued", jobId }`.
+- `EvalRunView` (37, 38) also carries `status: 'queued'` while waiting, and `repeat`, `label`, `arm`, `engine` (resolved `EngineOptions`), `configHash`, `judgeModel`, `reasoningEffort`, `loopId`, `summary` (`EvalRunSummary`, data-model 4.10) and `logFile`. Each result also carries `verdict` (`PASS|FAIL|ERROR|GAP|SKIP`), `runs`, `passes`, `flaky`, `failureLabel`, `difficulty`, `variantOf` and `attempts` (the per-attempt log records).
+
+#### 53. `POST /agents/:key/evals/loop`
+- Body: `{ datasourceId: string; suiteIds: string[]; arms: string[]; repeat?: 1|3|5; label?: string; includeVariants?: boolean; categories?: string[] }`.
+- Success: `{ ok:true, message:"Queued <n> eval run(s)[ (skipped <ids>: no question in the selected categories)]", loopId, jobIds }`. Failures (Style A): `"Agent \"<key>\" has no evals to run"`, `"Pick a datasource to run against"`, `"Pick at least one suite to loop over"`, `"Pick at least one arm to loop over"`, `"A loop is capped at 60 runs (<s> suites × <a> arms asked for)"`, and any message of 36 for the first invalid set × arm (nothing is queued then).
+
+#### 54. `GET /agents/:key/evals/loops/:loopId`
+- Response `200`: `{ ok:true, loopId, status: 'running'|'completed'|'failed', jobs: EvalRunView[], summary: { rows: EvalLoopSummaryRow[] } }`; unknown loop: `{ ok:false, message:"Eval loop \"<id>\" not found" }`. `EvalLoopSummaryRow = { jobId, status, suite, arm, model?, repeat, passK, scored, passKRate, meanPassRate, flaky, gaps, tokens, costUsd?, costPerCorrectUsd?, file? }`.
+
+#### 55. `POST /agents/:key/evals/runs/:jobId/stop`
+- Response: `{ ok, message }` — `"Stopping — the question in flight is being aborted"`, `"Removed from the queue"`, `"Marked as interrupted"` (a stored running or queued run no worker owns), `"That run has already <status>"` (ok false) or `"Eval run \"<id>\" not found"` (ok false).
+
+#### 56. `GET /agents/:key/evals/logs`
+- Query: `suite?`, `limit?`. Response `200`: `{ logs: RunLogSummary[], dirs: string[] }`, newest first, merged across every log folder that exists (data-model 4.10). `RunLogSummary` = the run-index line (data-model 4.10: `runId, startedAt, suite, label?, harness?, model?, gitCommit?, cases, passed, inputTokens, outputTokens, totalTokens, estimatedCostUsd?, file`, plus for version 2 `repeat, arm?, configHash, loopId?, passK, passKRate, meanPassRate, gaps, flaky`) with `schemaVersion`, `dir` (the folder it was found in), `exists` (false when the index names a file no longer on disk) and `status`.
+
+#### 57. `GET /agents/:key/evals/logs/compare`
+- Query: `a` (before) and `b` (after), run-log file names. Response: `{ ok:true, diff: RunLogDiff, markdown }` or `{ ok:false, message }` (a missing or unreadable file). `RunLogDiff` holds both runs' identity and pass^k, the per-category and per-case deltas (verdict flips, flaky changes), token and cost deltas, and `warnings` naming each difference of set, model, engine configuration or repeat.
+
+#### 58. `POST /agents/:key/evals/logs/changelog-draft`
+- Body: `{ a, b, lever?, change?, why?, append?: boolean }`. Response: `{ ok:true, markdown, appendedTo?, message? }`; with `append`, all of `lever`, `change`, `why` are required (`"Fill in the lever, the change and the why before appending to the change log"`), and the entry is inserted newest-first into the source checkout's evaluation change log; with no checkout (or no change log in it) `message` says to paste the entry by hand.
+
+#### 59. `GET /agents/:key/evals/logs/:file`
+- Response: `{ ok:true, record: EvalRunLogRecordV2 }` (a version-1 log is upgraded on read) or `{ ok:false, message }`. The file name is reduced to its base name before it is resolved.
+
+#### 60. `GET /agents/:key/evals/trend`
+- Query: `suite?`, `arm?`. Response `200`: `{ points: TrendPoint[] }`, oldest first, one per version-2 log of the suite and/or arm: `{ runId, file, startedAt, suite, label?, arm?, model?, harness?, repeat, configHash, passK, passKRate, meanPassRate, gaps, flaky, costUsd? }`.
+
+### 2.12 Engine settings
+
+Controller prefix `/engine`. Capability: engine-levers. One document in the `settings` collection under `key = "engine"` ([data-model.md 3.13](data-model.md#313-engine-loop-additions-to-persisted-documents)).
+
+| # | Method + path | Purpose | FE |
+|---|---|---|---|
+| 61 | `GET /engine/settings` | Production levers, arms, rule groups, judge pin | yes |
+| 62 | `PUT /engine/settings` | Save production levers and the judge pin | yes |
+
+#### 61. `GET /engine/settings`
+- Response `200`: `{ defaults: EngineOptions /* resolved production values */; stored: Partial<EngineOptions> /* only the changed levers */; productionDefaults: EngineOptions /* the shipped defaults */; judgeModel: string|null; databricksReasoningEffort: boolean; arms: Record<string, Partial<EngineOptions>>; armDescriptions: Record<string, string>; ruleGroups: { id, title, ablatable }[] }`. `EngineOptions` lists the levers of engine-levers R1.
+
+#### 62. `PUT /engine/settings`
+- Body: `{ defaults?: EngineOptions-like; judgeModel?: string|null; databricksReasoningEffort?: boolean }`. Omitted fields keep the stored values; unknown or mistyped levers are dropped; only differences from the shipped defaults are stored.
+- Success: `{ ok:true, message:"Engine settings saved", settings: <as 61> }`. Failure: `{ ok:false, message }`, e.g. `judgeModel must be a "<provider>/<model>" router id (e.g. openai/gpt-4.1-mini), or empty to clear it — got "<value>"`.
+
+### 2.13 Dataset profiles and descriptions
+
+Controller prefix `/datasets`. Capability: datasets (column profiles feed engine-levers `columnProfiles`).
+
+| # | Method + path | Purpose | FE |
+|---|---|---|---|
+| 63 | `POST /datasets/:name/profile` | Recompute a saved dataset's column profiles | yes |
+| 64 | `PATCH /datasets/:name` | Set or clear the dataset's description | yes |
+
+- `POST /datasets` (22) now also computes a column profile per included column after sampling (data-model 3.3), best effort, and stamps the dataset's `profiledAt`; a REST datasource is sampled but not profiled. Each `references` entry may carry a `cardinality`.
+
+#### 63. `POST /datasets/:name/profile`
+- Success: `{ ok:true, message:"Dataset \"<name>\" re-profiled", dataset }`. Failures: `"Dataset \"<name>\" not found"`, `"Dataset \"<name>\" has no datasource to profile"`. Schema snapshot, sample values and join graph are left as they are.
+
+#### 64. `PATCH /datasets/:name`
+- Body: `{ description?: string }` — the operator-written description shown to the assistant; empty clears it. Success: `{ ok:true, message:"Dataset \"<name>\" description updated", dataset }`. Failures: `"Description must be 2000 characters or fewer"`, `"Dataset \"<name>\" not found"`.
+
+Other request-shape changes that come with the loop: knowledge entries (44 to 47) accept `column?: string`, allowed only when the entry names exactly one entity; `PUT /llm/settings` and `POST /llm/test-connection` (30, 32) accept provider `databricks` (2.5).
 
 ---
 

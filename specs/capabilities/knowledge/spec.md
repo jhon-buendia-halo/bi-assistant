@@ -48,6 +48,11 @@ Bootstrap (drafting from data)
 - R27. A bootstrap run SHALL report progress by stage: opening the dataset, reading schema (with table count), sampling rows (n of total tables), drafting, saving (with draft count). It SHALL end with exactly one terminal event, either the created snippets or an error message.
 - R28. Mined snippets SHALL never be sent to the assistant until a human enables them (Accept, or the Enabled toggle).
 
+
+Engine-loop changes ([../engine-levers/spec.md](../engine-levers/spec.md))
+- R29. (Replaces R16 and R17.) The block SHALL put every enabled default filter first, then the other snippets — dataset-scoped before global, newest-updated first, or ranked by relevance to the question when the `rankedKnowledge` lever is on — limited to 8,000 characters of snippet lines; a snippet that does not fit SHALL be skipped and assembly SHALL continue with the next.
+- R30. A snippet bound to exactly one entity MAY name one `column` of it; naming a column on a snippet with no entity or several SHALL be refused with a message saying it needs exactly one entity. With the `inlineKnowledge` lever on, such a snippet is shown beside that column in the schema the assistant sees. The knowledge form SHALL offer the column once a single entity is chosen.
+- R31. With the `context` lever set to `bare`, no knowledge block SHALL be sent. With the `lookupTools` lever on, the assistant MAY look snippets and metrics up by term during a turn (engine-levers R8).
 ## Edge cases and errors
 
 - Empty library: the screen shows "No knowledge yet" with a hint and both "New snippet" and "Generate suggestions" actions.

@@ -178,6 +178,10 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
     - "How have the main metrics moved over the last 12 months?"
 - R51. When a transcript has user messages, the chat SHALL show a history strip with one tick per user question. Hovering lists the questions, and clicking one scrolls to it.
 
+
+Engine levers in the turn ([../engine-levers/spec.md](../engine-levers/spec.md))
+- R52. Every turn SHALL run with the production engine levers saved in Settings → Engine levers; with nothing saved it behaves as before the levers existed. Each answer SHALL record the configuration it ran with and, with answer review on, the review outcome.
+- R53. When the model provider fails a turn (no credits, rate limit, rejected key, unreachable, timeout) and leaves no answer, the answer SHALL be a plain explanation of that failure instead of the generic empty-answer fallback, and the failure SHALL be recorded on the message.
 ## Edge cases and errors
 
 | Situation | Behaviour |

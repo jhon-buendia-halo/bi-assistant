@@ -411,6 +411,30 @@ Deep-analysis jobs exist only in process memory (bounded history; a backend rest
 
 ---
 
+### 3.13 Engine-loop additions to persisted documents
+
+Fields added by the engine improvement loop ([engine-levers](../capabilities/engine-levers/spec.md), [agents-evals](../capabilities/agents-evals/spec.md) R52 to R70). All are optional, so documents written before them read unchanged; no migration is needed.
+
+**`settings`, document `key = "engine"`** (a second document in the collection of 3.2; read and written only by the engine settings service):
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `key` | string | yes | Always `"engine"`. |
+| `defaults` | object | yes | Only the levers the operator changed from the shipped defaults (`Partial<EngineOptions>`, engine-levers R1). Unknown or mistyped levers are dropped on read and write. |
+| `judgeModel` | string | no | Pinned eval judge route `<provider>/<model>`; absent = the assistant's configured model. |
+| `databricksReasoningEffort` | boolean | no | Send reasoning effort to Databricks serving endpoints; absent = false. |
+| `createdAt`, `updatedAt` | ISO | no | Set by the service. |
+
+**`settings`, document `key = "llm"`**: `provider` may also be `databricks`; then `model` is the serving-endpoint name and `baseUrl` the normalised `https://` workspace host (no path).
+
+**`datasets`**: `description` (string, ≤ 2,000 characters, operator-written, shown to the assistant) and `profiledAt` (ISO, when the column profiles were last computed). `DatasetColumnSnapshot` gains `profile` (`ColumnProfile`) and `references.cardinality` (`one-to-many` \| `many-to-one` \| `one-to-one` \| `unknown`, from the profiles). `ColumnProfile`: `sampledRows` (rows counted), `nullRate` (0..1), `distinctCount`, `constant` (at most one distinct non-null value), `min`, `max` (strings, no), `topValues` (`{value, count}[]`, only when `distinctCount ≤ 25`), `magnitude` (`cents-like` \| `fraction` \| `count` \| `large-integer`, no), `profiledAt` (ISO). Computed at save with one aggregate query per table (best effort; never for REST datasources) and on re-profile.
+
+**`knowledge_snippets`**: `column` (string, no) — a column of the snippet's single entity, allowed only when `entities` has exactly one member; lets the entry be shown beside that column. Context assembly (replaces the last paragraph of 3.9): every enabled `default_filter` first, then the other entries (newest first, or ranked by relevance to the question under lever `rankedKnowledge`), accumulated into an 8,000-character block; an entry that does not fit is skipped and assembly continues with the next.
+
+**`sessions`, `ChatMessage`**: `review` (`{ status: 'ok'|'revised'|'flagged'|'error', findings: {code, detail, confidence}[], note? }`, lever `answerReview`), `engine` (`{ hash, careful, answerReview, arm? }` — the configuration the answer ran with), `providerError` (`{ kind: 'quota'|'rate-limit'|'auth'|'network'|'timeout'|'unknown', message, statusCode? }` when the model provider failed the turn). `ToolDataRecord` gains `repairs` (`SqlRepairRecord[]`: each automatic repair's original and repaired statement, its kind — `identifier`, `syntax`, `semantic` or `unknown` — the parts it changed and a warning when it changed the question) and `precheck` (string[], the precheck findings).
+
+**`eval_runs`** (3.8): `status` may also be `queued`. New fields: `repeat` (1 \| 3 \| 5), `label`, `arm`, `engineOverrides` (the run's explicit overrides), `engine` (resolved `EngineOptions`), `configHash`, `judgeModel`, `reasoningEffort`, `dialect` (`postgres` \| `databricks`, the reference dialect), `loopId` and `loopIndex` (position in its loop), `queuedAt`, `includeVariants`, `categoryFilter` (string[]), `summary` (`EvalRunSummary`, 4.10), `sidePassUsage` (map side pass → `TokenUsage`) and `logFile` (the run log's file name). `AssistantEvalCaseResult` gains `verdict`, `runs`, `passes`, `flaky`, `failureLabel`, `difficulty`, `variantOf` and `attempts` (`EvalRunLogAttempt[]`, 4.10); `passed` is true only for verdict `PASS`. On start-up nothing is resumed; a `running` or `queued` run no worker owns is finalised only when stopped (agents-evals R56).
+
 ## 4. Files on disk
 
 Sections 4.8 and 4.9 describe developer-facing files that live outside the app data dir. All paths in sections 4.1 to 4.7 are relative to `<app data dir>/workspaces/session-<session-id>/` (the **session workspace**), a contained filesystem root: agents' file tools cannot escape it and the file-delete tool is disabled for them (they may create and edit). The session id used in a directory name must match `^[a-zA-Z0-9_-]+$` (otherwise the operation fails with `Invalid session workspace ID`).
@@ -620,6 +644,40 @@ Index line: `{runId, startedAt, suite, label?, harness, model?, gitCommit?, case
 `pricing.json`: `{"models": {"<model id>": {"inputPerMillionUsd": number, "outputPerMillionUsd": number, "cachedInputPerMillionUsd"?: number}}}` in US dollars per million tokens. The `models` wrapper is optional; entries without finite input and output rates are ignored, so comment keys (`_comment`, `_howToFill`, `_example` in the shipped file) are harmless. Keys are lower-cased. A run's model is matched by the part after its last `/` (so `gpt-4o-mini` covers `openai/gpt-4o-mini` and `lenai/gpt-4o-mini`), else by its full id. Cost = ((input − cached) × input rate + cached × (cached rate, else input rate) + output × output rate) / 1,000,000, rounded to 6 decimals; reasoning tokens are not priced separately. A missing or malformed file means no rates; an unknown model means no cost, never a zero.
 
 ---
+
+### 4.10 Eval run logs, format version 2
+
+Written by in-app runs, the developer harness and validate runs on every terminal state ([agents-evals](../capabilities/agents-evals/spec.md) R69). Location: the first of `EVAL_LOG_DIR`, the source checkout's `logs/`, `<APP_DATA_DIR>/logs`, `<cwd>/data/logs`; files under `<dir>/evals/`, named `<YYYY-MM-DD>-<suite>[-<label>][-<arm>]-<first 8 of run id>.json` (each part slugified), and one line appended to `<dir>/evals/index.ndjson` per run. Readers merge every directory of that chain that exists; a version-1 record (4.9) is upgraded on read; a file name from a request is reduced to a bare `*.json` base name first. Pricing still comes from `pricing.json` beside the logs (4.9); a top-level `_notes` string in it is ignored.
+
+`EvalRunLogRecordV2`:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `schemaVersion` | `2` | |
+| `runId`, `label?`, `harness` | string | `harness`: `in-app` \| `golden-set` (the developer harness) \| `validate`. |
+| `suite`, `agentKey?`, `datasets` | | The set and the datasets in scope. |
+| `datasourceKind?`, `dialect?` | string | `postgres` \| `databricks` \| `rest`; dialect `sqlite` for REST. |
+| `model?`, `reasoningEffort?`, `judgeModel?` | string | What actually ran. |
+| `repeat`, `arm?`, `engine`, `configHash`, `loopId?` | | Attempts per case; the arm; resolved `EngineOptions`; a short hash of `engine` + model + effort ("the same engine"). |
+| `startedAt`, `finishedAt`, `durationMs`, `appVersion?`, `gitCommit?` | | |
+| `totals` | object | `{ cases, passed, failed, errored, gaps, skipped }` by case verdict. |
+| `summary` | `EvalRunSummary` | See below. |
+| `categories` | map → `CategoryTally` | As 3.8. |
+| `usage`, `sidePassUsage?` | `TokenUsage` | Run total; per side pass (`grounding`, `synthesis`, `crossCheck`, `review`, `fixer`). |
+| `estimatedCostUsd?`, `costIncomplete?` | | `costIncomplete`: usage observed but not all of it priced. |
+| `cases` | `EvalRunLogCaseV2[]` | |
+| `comparedToRunId?`, `regressions?`, `improvements?`, `flakyChanges?` | | Case ids, from the regression comparison. |
+| `status`, `error?` | | `completed` \| `failed` \| `aborted`. |
+
+`EvalRunLogCaseV2`: `id`, `category?`, `question?`, `difficulty?`, `variantOf?`, `verdict` (`PASS`\|`FAIL`\|`ERROR`\|`GAP`\|`SKIP`, folded per agents-evals R61), `runs` (measured attempts), `passes`, `flaky`, `failureLabel?`, `reason?`, `durationMs`, `usage?`, `estimatedCostUsd?`, `attempts`.
+
+`EvalRunLogAttempt`: `attempt` (1-based), `verdict`, `checks` (`{ id, passed, reason?, gap?, matchedReference? }[]`), `finalSql?`, `sql` (`{ sql, ok, error?, rowCount?, repaired? }[]`), `answer?` (clipped), `steps`, `calledTools`, `repairs` (`SqlRepairRecord[]`), `warnings`, `clarification?`, `crossCheck?` (status), `review?` (status), `failureLabel?`, `viaSupportingQuery?` (the result-set match passed on a supporting rather than the final statement), `error?`, `durationMs`, `usage?`.
+
+`FailureLabel` (the likely cause of a non-PASS attempt): `no-sql`, `clarified`, `missing-default-filter`, `wrong-table`, `missing-join`, `id-not-name`, `wrong-aggregate`, `unit`, `format-only`, `wrong-filter`, `judge`, `tool-error`, `timeout`, `unknown`.
+
+`EvalRunSummary`: `passK` (cases whose verdict is PASS), `passKRate` (`passK / scored`), `scored` (cases with verdict PASS, FAIL or ERROR), `meanPassRate` (mean of `passes / runs`), `flaky`, `gaps`, `answeredEveryTime`, `answeredObserved`, `behaviourPassK?` and `behaviourTotal?` (cases without a reference query), `byCategory` (map → `{ total, passK, meanPassRate }`), `byDifficulty` (map → `{ total, passK }`), `costPerCorrectUsd?`, `tokensPerCase?`.
+
+Set definitions (4.8) accept these further case fields: `difficulty` (`easy` \| `medium` \| `hard`), `provenance` (`hand` \| `model-drafted-verified`), `variants` (string[], paraphrases), `trapSql` (string), `expectedSqlAlternatives` (string[], only alongside `expectedSql`), `expectedSqlByDialect` (`{ postgres?, databricks? }`), and the check type `finalSqlSucceeded`; a `matches` check without `flags` is case-insensitive (`""` asks for a case-sensitive match). A derived set drops the base cases' `trapSql`, `expectedSqlAlternatives` and `expectedSqlByDialect` (they are in the base set's dialects). Loading a set warns, once per file, about text checks that assert a bare number on a case with `expectedSql`.
 
 ## 5. Agent memory
 

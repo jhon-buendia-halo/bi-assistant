@@ -6,13 +6,17 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Active visual.** The visual currently open in the right-hand panel. The assistant tailors it by default when the user asks for a change. See *Visual*.
 
-**Agent.** A single LLM role with its own instructions, optional tools and optional memory. The product has six: the assistant, the visual designer, the SQL fixer, the SQL verifier, the knowledge bootstrap agent and the eval judge. See [../system/agents.md](../system/agents.md). The Agents screen lists them and shows their prompts, tools, memory settings and model.
+**Agent.** A single LLM role with its own instructions, optional tools and optional memory. The product has seven: the assistant, the visual designer, the SQL fixer, the SQL verifier, the answer review agent, the knowledge bootstrap agent and the eval judge. See [../system/agents.md](../system/agents.md). The Agents screen lists them and shows their prompts, tools, memory settings and model.
 
 **Angle.** One sub-question of a *deep analysis*. A plan has between 3 and 5 angles (hard cap 5). Each is investigated on its own.
 
 **Answer.** The assistant's final message in a *turn*, together with the evidence stored with it: result rows, SQL, entities, interpretation, reasoning trail, knowledge used and any badges.
 
+**Answer review.** An optional check, after the assistant's answer is final, of that answer against its own transcript (claims without evidence, wrong date filters, truncated results read as complete, arithmetic in prose, mismatched comparison windows, an ignored breakdown, a degenerate query, a metric or default filter not honoured). A finding gets the assistant one corrective pass. Switched on by the *engine lever* `answerReview`. See [../capabilities/engine-levers/spec.md](../capabilities/engine-levers/spec.md).
+
 **App secret.** The key material from which the key that encrypts stored LLM API keys is derived. On desktop it is generated once and kept in a file in the data directory. See [non-functional.md](non-functional.md).
+
+**Arm.** A named preset of *engine lever* values applied over the production values for one *eval run* (for example `baseline`, `fixer-off`, `careful-auto`, `full`), so two engines are compared as two runs of the same set.
 
 **Assistant.** The main agent. It answers business questions over a session's datasets, runs SQL, calls the visual tools and asks clarifying questions.
 
@@ -42,6 +46,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Dimension.** A column a *metric* is meaningfully grouped by.
 
+**Engine lever.** One named switch of how the assistant answers — curated context or schema only, column profiles, ranked knowledge, lookup tools, descriptive errors, SQL precheck, extended guards, the SQL fixer, careful mode, *answer review*, prompt rule groups. Production values are set in Settings → Engine levers; an *arm* overrides them for an eval run. See [../capabilities/engine-levers/spec.md](../capabilities/engine-levers/spec.md).
+
 **Entity.** A queryable table or view, named in full as `catalog.schema.table`. Every datasource kind is normalised to this three-level shape. The UI says "entities". An entity may be *browse-only* (visible but not queryable with the credentials); it is shown greyed.
 
 **Eval case.** One question in an *eval set*, with the intent it probes, its *eval category* and a list of *eval checks* (for example "answer includes Argentina", result-set comparison, or an LLM-judge rubric).
@@ -50,11 +56,13 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Eval check.** One scorer that grades an eval case's answer or tool calls.
 
+**Eval judge.** The agent that grades an eval case against its rubric. It runs on the assistant's configured model unless a judge model is pinned in Settings → Engine levers, so changing the assistant's model does not move the ruler.
+
 **Eval run.** One execution of selected eval cases of one *eval set* against a datasource and its datasets. Records per-question results (pass or fail, scores, tool calls, answer, category, *token usage*), per-category tallies, the run's total token usage, the model it ran on and, when that model is priced, an estimated cost. When a completed earlier run exists for the same agent, set, datasource and datasets, the run also stores a *regression comparison*. Every finished run also writes an *eval run log* when it can.
 
-**Eval run log.** A developer record of one eval run (set, datasets, model, verdicts per question, category tallies, token usage, estimated cost) written as a file next to the source code, plus a one-line entry in a running index, so runs can be compared over time. Holds no query results. Not written by an installed app unless a log location is configured.
+**Eval run log.** A developer record of one eval run (set, datasets, model, verdicts per question, category tallies, token usage, estimated cost) written as a file next to the source code, plus a one-line entry in a running index, so runs can be compared over time. Holds no query results. Format version 2 also records every attempt's checks, SQL, answer, tools and usage, the arm and the engine configuration; an installed app writes it under its data folder.
 
-**Eval set.** A named group of eval cases over one fixture: World Cup on PostgreSQL, World Cup on REST (derived from the World Cup set), Formula 1, Health Insurance and Genomics. A set over a bundled *sample fixture* names it; the Health Insurance and Genomics sets run over synthetic fixtures that exist only in the development database and declare their own datasets and required entities. Each set is defined as data in one *eval suite*.
+**Eval set.** A named group of eval cases over one fixture: World Cup on PostgreSQL, World Cup on REST (derived from the World Cup set), Formula 1, Health Insurance, Genomics, Banking and Supply Chain. A set over a bundled *sample fixture* names it; the Health Insurance, Genomics, Banking and Supply Chain sets run over synthetic fixtures that exist only in the development database and declare their own datasets and required entities. Each set is defined as data in one *eval suite*.
 
 **Eval suite.** The data file that defines one *eval set*. The UI and API say *set*; files, the developer CLI (`--suite`) and stored runs (`suiteId`) say *suite*. Same thing.
 
@@ -74,13 +82,19 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Knowledge used.** The list of knowledge entries that were actually included in the context of one answer, recorded when the context was built. It shows what the model was given, not what it applied.
 
-**LLM provider.** The service the agents call. `openai`, `anthropic` or `lenai` (Halo's OpenAI-compatible gateway, which needs a base URL; the "model" field is then the deployment name). One global setting: provider, model, API key (stored encrypted, shown masked) and *reasoning effort*.
+**LLM provider.** The service the agents call. `openai`, `anthropic`, `lenai` (Halo's OpenAI-compatible gateway, which needs a base URL; the "model" field is then the deployment name) or `databricks` (Databricks Model Serving: a workspace URL, a personal access token and a serving-endpoint name). One global setting: provider, model, API key (stored encrypted, shown masked) and *reasoning effort*.
+
+**Measurement gap (GAP).** An eval verdict meaning the harness itself could not tell whether the answer was right (a reference query failed, the judge errored twice). Never counted as a pass or a failure, and excluded from every rate.
 
 **Message.** One entry in a session's transcript, from the `user` or the `assistant`, with a timestamp that doubles as its identity (`at`). Assistant messages may carry data records, entities, a clarification, a visual event, feedback, a cross-check, a reasoning trail, knowledge used or a report.
 
 **Metric.** A governed, named SQL aggregation expression over one entity (for example `denial_rate`), with a label, description and dimensions. The assistant reuses its expression verbatim instead of re-deriving it. Metrics are the app's lightweight semantic layer. A metric can be promoted from a *verified query*; the draft is a *metric candidate*.
 
 **Mined entry.** A *knowledge entry* with source `mined`.
+
+**Paraphrase variant.** A rewording of an *eval case*'s question with the same answer and checks, run under the id `<case id>~v<n>` when a run includes paraphrases, to tell understanding from wording.
+
+**pass^k.** The verdict of an eval case run k times: it passes only when every measured attempt passed. A run reports pass^k per set, category and difficulty; repeat 3 (pass^3) is the number the improvement loop trusts.
 
 **Reasoning effort.** `low`, `medium` or `high` (default `high`). A global setting passed to models that support it and dropped for models that reject it.
 
