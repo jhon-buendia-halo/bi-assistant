@@ -11,6 +11,9 @@ Running log of every meaningful change, newest first. See *Logging convention* a
   - Documented under *Branch rulesets on `main`* and *Release push* in [specs/system/delivery.md](specs/system/delivery.md), in the BA-89 epic spec, and as a **Review** bullet in the CLAUDE.md *Branching convention*.
   - Evidence: [evidence/0.2.4/](evidence/0.2.4/).
 
+### Fixed
+- **Merging no longer starts an installer build** (roadmap 0.2.4, [BA-110](https://halo-powered.atlassian.net/browse/BA-110)). The first release after the rollout (v0.20.7) pushed its tag with the deploy key, and `build-desktop.yml` runs on any pushed `v*` tag, so an installer build started on its own. It was cancelled before publishing a release. [`version-on-merge.yml`](.github/workflows/version-on-merge.yml) now pushes the tag with `GITHUB_TOKEN`, whose pushes start no workflows. Only the branch pushes use the deploy key. The *Chaining* row in [specs/system/delivery.md](specs/system/delivery.md) is corrected. Evidence: [evidence/0.2.4/release-run.txt](evidence/0.2.4/release-run.txt).
+
 ## 2026-10-04
 
 ### Changed

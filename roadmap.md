@@ -92,7 +92,7 @@ How work is planned, specified, built, verified and traced. It covers the repo's
   - A direct push to `main` is rejected, including the admin's.
   - After this PR merges, the release workflow still pushes the bump commit and tag to `main` with both rulesets active.
   - `specs/system/delivery.md` describes both rulesets and the deploy-key release push.
-- **Notes:** follows 0.2.3. The probe on a throwaway branch confirmed that deploy-key bypass works on a personal-account repo: [evidence/0.2.4/](evidence/0.2.4/).
+- **Notes:** follows 0.2.3. The probe on a throwaway branch confirmed that deploy-key bypass works on a personal-account repo. The first release (v0.20.7) passed, but its deploy-key tag push started an installer build; the follow-up pushes the tag with `GITHUB_TOKEN`. Evidence: [evidence/0.2.4/](evidence/0.2.4/).
 
 ## Release 1 — 1.0 Beta  (target 2026-10-31)
 

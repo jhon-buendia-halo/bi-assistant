@@ -36,7 +36,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          # Pushes below go over SSH with this repo-scoped deploy key. The
+          # Branch pushes below go over SSH with this repo-scoped deploy key. The
           # default branch requires a reviewed PR, and in a personal-account
           # repo only a deploy key (not GitHub Actions) can be on the bypass list.
           ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}
@@ -103,7 +103,13 @@ jobs:
             -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" >/dev/null
 
           git push origin "HEAD:${{ github.ref_name }}"
-          git push origin "${{ steps.bump.outputs.tag }}"
+          # Push the tag with GITHUB_TOKEN, not the deploy key. Pushes made with
+          # GITHUB_TOKEN start no workflows, so build-desktop.yml's v* tag
+          # trigger only fires for tags pushed by hand. No ruleset covers tags.
+          # The empty extraheader drops any credential checkout configured.
+          git -c http.https://github.com/.extraheader= push \
+            "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" \
+            "${{ steps.bump.outputs.tag }}"
         env:
           GH_TOKEN: ${{ github.token }}
 
