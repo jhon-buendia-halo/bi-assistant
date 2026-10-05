@@ -306,7 +306,7 @@ interface KnowledgeSummary {
 async function ensureDatasource(
   datasources: DatasourcesService,
   options: Options,
-): Promise<{ id: string; created: boolean }> {
+): Promise<{ id: string; created: boolean; repointed: boolean }> {
   const config: PostgresConfig = {
     host: DB_HOST,
     port: DB_PORT,
@@ -330,17 +330,39 @@ async function ensureDatasource(
   const existing = (await datasources.list()).find(
     (d) => d.name === DATASOURCE_NAME,
   );
-  if (existing) return { id: existing.id, created: false };
+  if (existing) {
+    // Reusing by name alone would keep a datasource that points at a stack
+    // that is no longer there — another WORLD_CUP_DB_PORT, or an isolated
+    // `docker compose -p …` project — and every snapshot below would then
+    // silently lose its sample values. Repoint it at the database just
+    // verified instead.
+    const current = existing.config as Partial<PostgresConfig>;
+    const moved =
+      existing.kind !== 'postgres' ||
+      current.host !== config.host ||
+      Number(current.port) !== config.port ||
+      current.database !== config.database;
+    if (!moved || options.dryRun) {
+      return { id: existing.id, created: false, repointed: moved };
+    }
+    await datasources.save({
+      id: existing.id,
+      name: DATASOURCE_NAME,
+      kind: 'postgres',
+      config,
+    });
+    return { id: existing.id, created: false, repointed: true };
+  }
 
   if (options.dryRun) {
-    return { id: '(dry-run: not created)', created: true };
+    return { id: '(dry-run: not created)', created: true, repointed: false };
   }
   const saved = await datasources.save({
     name: DATASOURCE_NAME,
     kind: 'postgres',
     config,
   });
-  return { id: saved.id, created: true };
+  return { id: saved.id, created: true, repointed: false };
 }
 
 // ------------------------------------------------------------ dataset step
@@ -755,7 +777,19 @@ async function main(): Promise<number> {
     const knowledge = app.get(KnowledgeService);
     const metrics = app.get(MetricsService);
 
-    const { id: datasourceId } = await ensureDatasource(datasources, options);
+    const { id: datasourceId, repointed } = await ensureDatasource(
+      datasources,
+      options,
+    );
+    if (repointed) {
+      console.log(
+        `${options.dryRun ? '[dry-run] would repoint' : 'Repointed'} ${DATASOURCE_NAME} at ` +
+          `${DB_HOST}:${DB_PORT}/${DB_NAME}; re-snapshotting its datasets.`,
+      );
+      // Snapshots taken against the old location carry its sample values
+      // (or none, if it was unreachable), so they are refreshed too.
+      options.forceRefresh = true;
+    }
 
     const config: PostgresConfig = {
       host: DB_HOST,
