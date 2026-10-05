@@ -7,7 +7,7 @@ jest.mock('@mastra/core/agent', () => ({
 }));
 jest.mock('../../mastra/mastra.service', () => ({ MastraService: class {} }));
 jest.mock('../../mastra/model-resolver', () => ({
-  resolveAgentModel: jest.fn(),
+  resolveAgentModel: jest.fn().mockResolvedValue('openai/gpt-5'),
   lastAgentModelId: () => 'openai/gpt-5',
 }));
 jest.mock('./repositories/reasoning-feedback.repository', () => ({
@@ -15,6 +15,7 @@ jest.mock('./repositories/reasoning-feedback.repository', () => ({
 }));
 
 import { ExpertModeService, type TraceInput } from './expert-mode.service';
+import { resolveAgentModel } from '../../mastra/model-resolver';
 import type { DatasetEntitySnapshot } from '../datasets/repositories/datasets.repository';
 import type {
   AssumptionsBlock,
@@ -323,6 +324,23 @@ describe('ExpertModeService.buildTrace', () => {
     );
     expect(prompt).toContain('Average base salary (USD) (avg_base_salary_usd)');
     expect(prompt).toContain('<verified-queries>\n(none)');
+  });
+
+  it('files the reasoning effort under the bucket the configured model reads', async () => {
+    (resolveAgentModel as jest.Mock).mockResolvedValueOnce(
+      'anthropic/claude-opus-5-5',
+    );
+    const { service, generate } = build([{ object: modelOutput() }]);
+
+    await service.buildTrace(input());
+
+    const [, options] = generate.mock.calls[0] as [
+      string,
+      Record<string, unknown>,
+    ];
+    expect(options.providerOptions).toEqual({
+      anthropic: { effort: 'medium' },
+    });
   });
 
   it('takes the SQL and row count from the records, never from the model (a)', async () => {

@@ -3,7 +3,11 @@ import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { MastraService } from '../../mastra/mastra.service';
 import { pickAnswerRecord } from './answer-record';
-import { lastAgentModelId } from '../../mastra/model-resolver';
+import {
+  lastAgentModelId,
+  resolveAgentModel,
+} from '../../mastra/model-resolver';
+import { providerOptionsFor } from '../../mastra/model-compat';
 import { referenceSuffix } from '../../mastra/context-blocks';
 import {
   businessExpertOutputSchema,
@@ -199,7 +203,11 @@ export class ExpertModeService {
           .generate(text, {
             maxSteps: 1,
             toolChoice: 'none',
-            providerOptions: { openai: { reasoningEffort: 'medium' } },
+            // Filed under the bucket the configured model reads — a hardcoded
+            // `openai` key is silently dropped for LenAI and Anthropic models.
+            providerOptions: providerOptionsFor(await resolveAgentModel(), {
+              reasoningEffort: 'medium',
+            }),
             structuredOutput: {
               schema: businessExpertOutputSchema,
               jsonPromptInjection: 'inline',

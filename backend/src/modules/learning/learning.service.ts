@@ -1,6 +1,8 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { z } from 'zod';
 import { MastraService } from '../../mastra/mastra.service';
+import { resolveAgentModel } from '../../mastra/model-resolver';
+import { providerOptionsFor } from '../../mastra/model-compat';
 import {
   feedbackLearnerOutputSchema,
   type FeedbackLearnerOutput,
@@ -201,7 +203,11 @@ export class LearningService {
           .generate(text, {
             maxSteps: 1,
             toolChoice: 'none',
-            providerOptions: { openai: { reasoningEffort: 'medium' } },
+            // Filed under the bucket the configured model reads — a hardcoded
+            // `openai` key is silently dropped for LenAI and Anthropic models.
+            providerOptions: providerOptionsFor(await resolveAgentModel(), {
+              reasoningEffort: 'medium',
+            }),
             structuredOutput: {
               schema: feedbackLearnerOutputSchema,
               jsonPromptInjection: 'inline',
