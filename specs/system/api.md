@@ -4,7 +4,7 @@ The complete contract between the renderer (or any HTTP client) and the backend,
 
 Contents: [1 Conventions](#1-conventions) · [2 Endpoints](#2-endpoints) · [3 Streaming and long-running work](#3-streaming-and-long-running-work) · [4 Desktop bridge (IPC)](#4-desktop-bridge-ipc) · [5 CLI contract](#5-cli-contract) · [6 Environment variables](#6-environment-variables) · [7 Gaps and open questions](#7-gaps-and-open-questions)
 
-Endpoint total: **52 HTTP route handlers** across 9 controllers (sessions 14, datasources 6, metrics 5, llm 4, datasets 3, agents 8, deep analysis 3, testing data 3, knowledge 6). Verified queries have **no** HTTP surface (they are created and removed as a side effect of message feedback, and read by the metrics promotion path).
+Endpoint total: **57 HTTP route handlers** across 11 controllers (sessions 15, datasources 6, metrics 5, llm 4, datasets 3, agents 8, deep analysis 3, testing data 3, knowledge 6, expert mode 1, answer pins 3). Endpoints are numbered in the order they were specified, so the five added with business expert mode and answer pinning are 53 to 57. Verified queries have **no** HTTP surface: they are created and removed as a side effect of message and block feedback, and read by the metrics promotion path.
 
 ---
 
@@ -18,7 +18,13 @@ Endpoint total: **52 HTTP route handlers** across 9 controllers (sessions 14, da
 | Desktop (Electron renderer, `file://`) | Client uses `http://localhost:3000` (hardcoded). The backend child process listens on `PORT`, which the main process sets from `BACKEND_PORT` (default `3000`). See gap G1: a non-default `BACKEND_PORT` breaks the renderer. |
 | Dev (`ng serve` / `electron:dev`, page served from `http://localhost:4200`) | Protocol is `http:`, so the client uses relative URLs against the dev server. No proxy or override exists in the repo (G13). |
 
-The client rule is: `API_BASE_URL = (window.location.protocol === 'file:') ? 'http://localhost:3000' : ''`. All paths below are relative to that base. There is no API prefix, no versioning and no authentication.
+The client rule is: under `file:` the base is `http://localhost:3000`. Otherwise it is the browser override when one is set, else `''` (relative URLs). The **browser override** lets a page point at another backend, to try a second build beside the running app:
+- Opening the page once with `?api=<url>` stores that URL (trailing slashes removed) in local storage under `qti.apiBaseUrl` for that origin and uses it.
+- `?api=` with an empty value clears it.
+- Without the parameter the stored value is used.
+- Storage errors fall back to `''`.
+
+The desktop renderer ignores the override. All paths below are relative to the base. There is no API prefix, no versioning and no authentication.
 
 ### 1.2 Wire format
 
@@ -42,7 +48,7 @@ interface ActionResult { ok: boolean; message: string; /* + endpoint-specific pa
 - On success: `{ ok: true, message: "<human sentence>", ...payload }`.
 - `message` is user-displayable and clients show it verbatim in toasts or inline errors. Exact success sentences are listed per endpoint because UI tests assert some of them.
 
-**Style B, framework exceptions, real HTTP status.** Endpoints that do not catch let the framework answer. Used by: `GET /sessions/:id`, the visual `GET` endpoints, `GET /agents/:key`, the eval-run download, the deep-analysis download, and the whole knowledge controller.
+**Style B, framework exceptions, real HTTP status.** Endpoints that do not catch let the framework answer. Used by: `GET /sessions/:id`, the visual `GET` endpoints, `GET /agents/:key`, the eval-run download, the deep-analysis download, the whole knowledge controller, `GET /expert/feedback` and the answer-pins controller.
 
 ```ts
 interface HttpErrorBody { statusCode: number; message: string | string[]; error: string }   // NestJS default
@@ -97,7 +103,7 @@ Everything else keeps the default 404 body (`{statusCode:404, message:"Cannot GE
 
 ## 2. Endpoints
 
-Legend for **FE**: whether the shipped frontend calls it. Document types referenced (`SessionDoc`, `ChatMessage`, `SessionVisualization`, `DatasetDoc`, `MetricDoc`, `KnowledgeSnippet`, `DatasourceView`, `CatalogInfo`, `LlmSettingsView`, `EvalRunView`) are defined in [data-model.md](data-model.md) and the shared ones in [section 2.10](#210-shared-wire-shapes).
+Legend for **FE**: whether the shipped frontend calls it. Document types referenced (`SessionDoc`, `ChatMessage`, `SessionVisualization`, `DatasetDoc`, `MetricDoc`, `KnowledgeSnippet`, `DatasourceView`, `CatalogInfo`, `LlmSettingsView`, `EvalRunView`, `ReasoningTrace`, `ReasoningFeedbackDoc`, `AnswerPinDoc`) are defined in [data-model.md](data-model.md) and the shared ones in [section 2.10](#210-shared-wire-shapes).
 
 ### 2.1 Sessions
 
@@ -119,6 +125,7 @@ Controller prefix `/sessions`. Capability: sessions-chat, visuals.
 | 12 | `POST /sessions/:id/visualizations/:vid/refresh` | Re-run SQL, refresh data in place | yes |
 | 13 | `POST /sessions/:id/visualizations/:vid/repair` | One-shot silent auto-repair | yes |
 | 14 | `GET /sessions/:id/visualizations/:vid/download` | Zip bundle | yes |
+| 53 | `POST /sessions/:id/expert/feedback` | Rate one block of an answer's reasoning trace | yes |
 
 #### 1. `GET /sessions`
 - Response `200`: `{ sessions: SessionDoc[] }`. Ordering is the repository's (most recently updated first; see data-model). No pagination; full documents including messages are returned.
@@ -155,7 +162,34 @@ See [section 3.1](#31-chat-stream-post-sessionsidmessagesstream).
 - Success: `{ ok:true, message, session }` where `message` is `"Answer saved as a verified query"` for `up` and `"Answer marked as wrong"` for `down`. (The `up` sentence is returned even when no SQL was found to save.)
 - Failures (Style A): `"rating must be 'up' or 'down'"`, `"messageAt is required"`, `"No assistant message at <messageAt>"`, `"Session <id> not found"`.
 - Side effects on the matched assistant message: sets `feedback`; `up` sets `verified: true`, `down` removes `verified`. `up` additionally saves a **verified query** `{question, sql, datasourceId, entities, sourceSessionId, sourceMessageAt}` when the answer has a successful `run_readonly_sql` and a preceding user question (question = nearest earlier user message; sql = the last successful `run_readonly_sql` input; `datasourceId` only when all the session's datasets share one datasource). `down` deletes any verified query contributed by that message.
+- Answer pinning and expert mode (only when the answer has SQL and a question, for `up`):
+  - `up` rescores the message's `expertTrace` as verified ([business-expert](../capabilities/business-expert/spec.md) R14) and approves the lineage's answer pin when the pin holds this answer's wording ([answer-pinning](../capabilities/answer-pinning/spec.md) R14);
+  - `down` marks the lineage's pin rejected (R13).
+
+  Pin errors are logged, never returned.
 - Persists the updated transcript.
+
+#### 53. `POST /sessions/:id/expert/feedback`
+- Body (`BlockFeedbackDto`): `{ messageAt: string; block: "interpretation"|"data-selection"|"assumptions"|"metric"|"sql"; vote?: "up"|"down"|null; comment?: string|null }`. **PATCH semantics**: only the fields present change.
+  - `vote: null` clears the vote.
+  - `comment: null` or a blank comment clears the note.
+  - An absent field keeps its stored value.
+  - The comment is trimmed and cut to 2,000 characters.
+- Success: `{ ok:true, message, session: SessionDoc, lessons?: LearnedLesson[] }`.
+  - `message` is `"Feedback saved — learned: <titles, comma-separated>"` when at least one lesson was learned, else `"Feedback saved"`.
+  - `lessons` is present when the comment changed and was learned from (possibly `[]`). `LearnedLesson = { id: string /* first stored copy */; kind: "instruction"|"term"|"default_filter"; title: string; body: string; method: "agent"|"verbatim" }`.
+- Failures (Style A, checked in this order): `"messageAt is required"`, `"block must be one of interpretation, data-selection, assumptions, metric, sql"`, `"vote must be 'up', 'down' or null"`, `"comment must be a string or null"`, `"send a vote, a comment, or both"`, `"Session <id> not found"`, `"No assistant message at <messageAt>"`, `"This answer has no reasoning trace"`, `"This reasoning trace has no <block> block"`.
+- Side effects, in order:
+  1. Upserts the `reasoning_feedback` document for (session, `messageAt`, block) with the trace id, the question and a snapshot of the block ([data-model.md](data-model.md) 3.10).
+  2. Mirrors `{vote?, comment?, at}` onto `expertTrace.feedback[block]` (removed when both are cleared).
+  3. Acts on the vote:
+     - `down` removes the message's verified queries, deletes `verified` and rejects the answer pin;
+     - `up` on `sql` sets `verified: true` and approves the answer as endpoint 7's `up` does;
+     - any other vote only records the rating.
+  4. When the stored comment changed, learns lessons from it (re-learning deletes the earlier lessons of this rating first); when the comment was cleared, deletes them. See [business-expert](../capabilities/business-expert/spec.md) R19–R29.
+  5. Persists the transcript.
+
+  A learning failure is logged and leaves `lessons` absent.
 
 #### 8. `POST /sessions/:id/visualizations`
 - Body: `{ sourceMessageAt?: string }`. Empty/omitted = the latest completed (non-clarification, non-empty) assistant answer.
@@ -351,7 +385,7 @@ interface LlmSettingsView {
 
 ### 2.6 Agents and evals
 
-Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra registry key (`assistant`, `interactive-visual-designer`, `sql-fixer`, `sql-verifier`, `knowledge-bootstrap`, `assistant-eval-judge`; see [agents.md](agents.md)).
+Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra registry key (`assistant`, `visualization`, `sql-fixer`, `sql-verifier`, `knowledge-bootstrap`, `assistant-eval-judge`, `business-expert`, `feedback-learner`; see [agents.md](agents.md)).
 
 | # | Method + path | Purpose | FE |
 |---|---|---|---|
@@ -488,7 +522,7 @@ Controller prefix `/knowledge`. Capability: knowledge. **Style B throughout** (r
 Route order: `bootstrap` and `bootstrap/stream` are POST-only literals and do not collide with `PATCH/DELETE :id`.
 
 #### 44. `GET /knowledge`
-- Query (all optional, lenient: an unrecognised value is dropped, not rejected): `datasetId` (that dataset's snippets **plus every global one**), `kind` (`instruction | term | default_filter`), `source` (`user | mined`), `enabled` (`true | false`).
+- Query (all optional, lenient: an unrecognised value is dropped, not rejected): `datasetId` (that dataset's snippets **plus every global one**), `kind` (`instruction | term | default_filter`), `source` (`user | mined | feedback`), `enabled` (`true | false`).
 - Response `200`: **`KnowledgeSnippet[]`** (a bare array, unlike the other list endpoints), `updatedAt` descending.
 
 #### 45. `POST /knowledge`
@@ -497,7 +531,7 @@ Route order: `bootstrap` and `bootstrap/stream` are POST-only literals and do no
 - Response `201`: the created `KnowledgeSnippet` (`source:"user"`, `id` generated, timestamps set).
 
 #### 46. `PATCH /knowledge/:id`
-- Body: any subset of the create fields. **Only fields present on the body are applied**; absent fields are untouched. A present `scope: null` makes the snippet global; a present `synonyms: []` clears them.
+- Body: any subset of the create fields. **Only fields present on the body are applied**; absent fields are untouched. A present `scope: null` makes the snippet global; a present `synonyms: []` clears them. `source` and `provenance` are not create fields and are ignored when sent, so a lesson stays `source: "feedback"` with its provenance.
 - Validation: `400` on invalid `kind`, `"title must not be empty"`, `"body must not be empty"`. `404 "Knowledge snippet <id> not found"`.
 - Response `200`: the updated `KnowledgeSnippet`.
 
@@ -512,6 +546,8 @@ Route order: `bootstrap` and `bootstrap/stream` are POST-only literals and do no
 
 #### 49. `POST /knowledge/bootstrap/stream`
 See [section 3.4](#34-knowledge-bootstrap-stream-post-knowledgebootstrapstream).
+
+Lessons (`source: "feedback"`, with `provenance`) are never created through this controller; endpoint 53 creates them.
 
 Bootstrap semantics shared by 48 and 49: the `knowledge-bootstrap` agent drafts kinds `instruction | term | default_filter` from the dataset's stored schema snapshot plus a sample of rows (see [agents.md](agents.md)); at most `MAX_BOOTSTRAP_DRAFTS` drafts are kept; a draft is skipped when its title (case-insensitive) already exists for that dataset or in the same batch; survivors are persisted with `scope: { datasetId }`, `source: "mined"`, **`enabled: false`** for human review.
 
@@ -573,6 +609,9 @@ interface ChatMessage {
   visual?: VisualEvent; verified?: boolean; interpretation?: string;
   feedback?: 'up' | 'down'; crossCheck?: { status: 'agree'|'disagree'|'error'; note?: string };
   reasoning?: ReasoningStep[]; knowledge?: KnowledgeUse[]; report?: AnalysisReport;
+  usage?: TokenUsage;
+  expertTrace?: ReasoningTrace;          // business expert mode only
+  consistency?: AnswerConsistency;       // answer pinning verdict
 }
 interface ToolDataRecord {
   tool: string; input?: string;                       // SQL text or entity name
@@ -581,10 +620,51 @@ interface ToolDataRecord {
 }
 interface VisualEvent { visualId: string; version: number; title: string; action: 'created'|'updated'|'reverted' }
 interface InteractiveVisualization extends SessionVisualization { document: string; version: number }
-interface SessionActionResult { ok: boolean; message: string; session?: SessionDoc; visualization?: InteractiveVisualization }
+interface SessionActionResult { ok: boolean; message: string; session?: SessionDoc; visualization?: InteractiveVisualization; lessons?: LearnedLesson[] /* endpoint 53 */ }
 ```
 
-`SessionVisualization`, `ReasoningStep`, `KnowledgeUse`, `AnalysisReport` are in data-model.md.
+`SessionVisualization`, `ReasoningStep`, `KnowledgeUse`, `AnalysisReport`, `ReasoningTrace` (3.4.4) and `AnswerConsistency` (3.4.5) are in data-model.md.
+
+### 2.11 Business expert mode
+
+Controller prefix `/expert`. Capability: business-expert. Ratings are written through endpoint 53 (the session owns the message they are mirrored onto); this controller only reads them.
+
+| # | Method + path | Purpose | FE |
+|---|---|---|---|
+| 54 | `GET /expert/feedback` | List reasoning-block ratings | **no** |
+
+#### 54. `GET /expert/feedback`
+- Query: `sessionId` (optional; blank or absent = every session).
+- Response `200`: `{ feedback: ReasoningFeedbackDoc[] }`, newest `updatedAt` first. Each document carries the question and the rated block's snapshot, so ratings of deleted sessions stay readable. For reviewing explanations offline.
+
+### 2.12 Answer pins
+
+Controller prefix `/answer-pins`. Capability: answer-pinning. A maintenance surface; replay itself happens inside the chat stream (3.1). Bare bodies, Style B.
+
+| # | Method + path | Purpose | FE |
+|---|---|---|---|
+| 55 | `GET /answer-pins` | List pins | **no** |
+| 56 | `DELETE /answer-pins` | Delete every pin touching a dataset | **no** |
+| 57 | `DELETE /answer-pins/:lineageKey` | Delete one lineage's pin | **no** |
+
+```ts
+interface AnswerPinSummary {
+  lineageKey: string; question: string; datasets: string[];
+  mode: 'plain' | 'careful' | 'expert'; fingerprint: string;
+  sourceSessionId: string; sourceMessageAt: string;
+  replays: number; rejectedAt?: string; updatedAt?: string;
+}
+```
+
+#### 55. `GET /answer-pins`
+- Query: `datasetId` (optional, a dataset **name**): only pins whose `datasets` include it.
+- Response `200`: `{ pins: AnswerPinSummary[] }`, newest `updatedAt` first. Never returns rows or the pinned message.
+
+#### 56. `DELETE /answer-pins`
+- Query: `datasetId` (a dataset name). Response `200`: `{ deleted: number }`, the pins removed whose `datasets` include it. Without `datasetId` nothing is deleted and the answer is `{ deleted: 0 }` (not an error). Used by the learning demo's reset step.
+
+#### 57. `DELETE /answer-pins/:lineageKey`
+- Response `200`: `{ deleted: 0 | 1 }`. An unknown key deletes nothing.
 
 ---
 
@@ -601,6 +681,8 @@ interface StreamMessageRequest {
   content: string;                 // required, trimmed, non-empty
   activeVisualizationId?: string;  // visual open in the right panel (so update_visual targets it); ignored unless a string
   careful?: boolean;               // only `true` enables careful mode (cross-check before `done`)
+  expert?: boolean;                // only `true` enables business expert mode (review-mode context, cross-check, reasoning trace)
+  pin?: boolean;                   // answer pinning; anything but `false` means on (the shipped client never sends it)
 }
 ```
 
@@ -617,6 +699,7 @@ interface StreamMessageRequest {
 | `tool` | `content: JSON string` `{ name: string; rationale?: string }` | A tool call started. `rationale` is the assistant's plain-language reason (flattened, max 400 chars) and is sent **with the call**, before the result. Legacy clients may receive a bare tool name instead of JSON; readers must fall back to treating non-JSON content as the name. Not emitted for `ask_clarification`. |
 | `tool-result` | `content: JSON string` | A tool call finished. For data tools (`run_readonly_sql`, `sample_rows`): `{ tool, input?, rowCount?, error?, rationale? }`. For visual tools (`create_visual`, `update_visual`): `{ tool, input? /* the instruction */, error? }`. **No `tool-result` is emitted for other tools** (`list_entities`, `describe_entity`). Row data is not streamed, only persisted in the final message. |
 | `visual-updated` | `content: JSON string` `VisualEvent` `{ visualId, version, title, action: "created"\|"updated" }` | A visual tool produced a visual this turn; sent just before that tool's `tool-result`. The panel refreshes live. |
+| `expert-status` | `content: "cross-check" \| "explaining" \| "failed"` (a plain string) | Business expert mode only, after the model stream: `cross-check` before the independent check (only when the turn ran a successful query), `explaining` before the explainer pass, `failed` when no trace could be built (the answer is still saved, without one). Not persisted. Clients ignore unknown values. |
 | `done` | `session: SessionDoc` | **Terminal, success.** The persisted session with this turn's messages. |
 | `error` | `content: string` | **Terminal, failure.** Human-readable message (`"message is required"`, `"Session <id> not found"`, provider/model errors). |
 
@@ -625,11 +708,15 @@ interface StreamMessageRequest {
 ```
 [reasoning* | text* | (tool → [visual-updated] → tool-result)*]  interleaved in model order
  → (optional silent post-processing)
+ → [expert-status: cross-check] → [expert-status: explaining] → [expert-status: failed]   (expert turns)
  → done            or            error
+
+replayed answer (answer pinning):   text (the whole answer) → done
 ```
 
 - `tool` always precedes its own `tool-result`; parallel/interleaved calls are possible. `visual-updated` precedes the matching `tool-result`.
-- After the model stream ends there can be **silent server-side steps with no events**: a tool-disabled synthesis pass (only if the turn produced no text and no visual; emits one `text` event with the result, or falls back to the fixed message `"I completed the data analysis but could not produce a final response. Please retry your question."`), the **zero-SQL grounding guard** (one corrective pass when a non-empty answer called no tool at all), the verified-query match, and the **careful-mode cross-check** (`crossCheck` verdict). No keepalive is sent during them.
+- After the model stream ends there can be **silent server-side steps with no events**: a tool-disabled synthesis pass (only if the turn produced no text and no visual; emits one `text` event with the result, or falls back to the fixed message `"I completed the data analysis but could not produce a final response. Please retry your question."`), the **zero-SQL grounding guard** (one corrective pass when a non-empty answer called no tool at all), the verified-query match, the **cross-check** (`crossCheck` verdict) in careful or expert mode, the **explainer pass** in expert mode (announced by `expert-status`), and answer pinning's stabiliser and pin save. No keepalive is sent during them.
+- **Replay.** Before the model starts, a pinnable turn ([answer-pinning](../capabilities/answer-pinning/spec.md) R1–R7) looks up its lineage's pin. When the pin replays, the stream is one `text` event carrying the whole stored answer followed by `done`; no `reasoning`, `tool` or `expert-status` event is sent and no model is called.
 - **The streamed deltas are not authoritative.** The grounding guard may replace the answer text after it was already streamed. The client must replace its whole message list with `done.session` rather than keep the deltas.
 
 **Termination.**
@@ -640,14 +727,15 @@ interface StreamMessageRequest {
 **Persistence and side effects.**
 
 1. The user message is persisted **before** the model starts (so a stop during provider connect still keeps the prompt). If the transcript already ends with that exact unanswered user prompt (retry after a failed turn) it is reused, not duplicated.
-2. On completion one assistant message is appended and persisted: `content` = answer text (or, for a visual-only turn with no text, `Created|Updated interactive visual "<title>" (v<n>).`), plus `data`, `entities`, `interpretation`, `reasoning`, `knowledge`, `verified`, `visual`, `crossCheck` as applicable. Visual tools persist visual metadata mid-turn; the final write reloads the session so it is preserved.
+2. On completion one assistant message is appended and persisted: `content` = answer text (or, for a visual-only turn with no text, `Created|Updated interactive visual "<title>" (v<n>).`; or the pinned wording on a `kept` verdict), plus `data`, `entities`, `interpretation`, `reasoning`, `knowledge`, `verified`, `visual`, `crossCheck`, `usage`, `expertTrace`, `consistency` as applicable. Visual tools persist visual metadata mid-turn; the final write reloads the session so it is preserved. After that write an eligible answer is saved as its lineage's answer pin (`answer_pins`).
 3. `ask_clarification` ends the turn immediately: the server aborts the model run, persists an assistant message whose `content` is the question and whose `clarification` holds `{ question, options }` (carrying any `data`/`entities`/`reasoning`/`knowledge` gathered before the question), and emits `done`. The user's pick arrives as the next message.
 4. Zero text and no visual: nothing is appended (the user message remains).
+5. A replayed answer is appended as a copy of the pinned message with a new `at` and `consistency: { kind: "replay", pinnedAt, sourceSessionId, verifiedAt }`.
 
 **Abort / stop.**
 
 - The client stops by aborting the `fetch` (`AbortController`). The server listens for the response `close` event and aborts the model turn. No further events are sent and **no `done`/`error` is emitted**.
-- Whatever text had already streamed is still persisted as a (partial) assistant message together with captured `data`; the careful-mode cross-check is skipped. The client should reload the session (`GET /sessions/:id`) to show the persisted state; the shipped chat does this.
+- Whatever text had already streamed is still persisted as a (partial) assistant message together with captured `data`; the cross-check, the explainer pass and pinning are skipped. A stop while a pinned query is being re-run for a replay persists nothing. The client should reload the session (`GET /sessions/:id`) to show the persisted state; the shipped chat does this.
 - Abort errors are swallowed silently on both sides.
 
 **Errors mid-stream.** Any thrown error that is not an abort is caught by the controller and sent as `{ type:"error", content: <message> }`, then the response ends. The user message stays persisted; no assistant message is added. A failed connect on the client yields `"Backend unreachable"`, a non-2xx or bodyless response yields `"Stream failed (<status>)"`, a read failure yields `"Stream disconnected"`.
@@ -859,5 +947,7 @@ No environment variables. The only runtime switch is the page protocol (`file:` 
 - **G10. Desktop backend bind address.** `main.ts` calls `createApp` without a host, so the Electron-spawned backend listens on **all interfaces** with CORS enabled and no authentication; only the CLI binds `127.0.0.1` by default. Open question whether the desktop backend should bind loopback only.
 - **G11. `message` timing on feedback.** `POST …/messages/feedback` with `up` reports `"Answer saved as a verified query"` even when the answer had no SQL and nothing was saved.
 - **G12. Spec of `PUT /metrics/:id` not-found** is thrown as a 400-class exception but surfaced inside the `ok:false` envelope, so clients cannot distinguish "not found" from validation by status.
-- **G13. Dev-mode API routing.** For `ng serve` the client uses relative URLs and the repo has no Angular proxy config, so API calls from a bare `ng serve` page hit the dev server, not the backend. Under `electron:dev` the window loads `http://localhost:4200` (protocol `http:`), so the same relative-URL problem applies. Open question: how the live-reload dev flow reaches the backend (no proxy or `API_BASE_URL` override found).
+- **G13. Dev-mode API routing.** For `ng serve` the client uses relative URLs and the repo has no Angular proxy config, so API calls from a bare `ng serve` page hit the dev server, not the backend. Under `electron:dev` the window loads `http://localhost:4200` (protocol `http:`), so the same relative-URL problem applies. The browser override (1.1) is the one way through today: open the page once with `?api=http://localhost:<backend port>`. Open question: should the dev flow get a proxy instead?
+- **G15. Answer-pin maintenance.** Endpoints 55–57 have no UI. Endpoint 56 without `datasetId` silently deletes nothing. Deleting a dataset or session does not remove its pins (see [answer-pinning](../capabilities/answer-pinning/spec.md) Open questions).
+- **G16. Ratings are write-mostly.** `GET /expert/feedback` has no UI caller; ratings are reviewed offline.
 - **Not an HTTP surface:** verified queries (saved via feedback), the Mastra Studio, and the workspace filesystem have no endpoints of their own.

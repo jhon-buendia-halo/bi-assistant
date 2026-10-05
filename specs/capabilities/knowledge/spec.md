@@ -1,28 +1,33 @@
 # Knowledge
 
-Analysts maintain a small library of **knowledge snippets**: business-glossary terms, standing instructions and default filters that the assistant must treat as authoritative over anything it would infer from column names alone. Snippets can be written by hand or drafted automatically from a dataset's schema and sample rows; drafts always arrive disabled so a human reviews each one before the assistant ever sees it. Only enabled snippets reach the assistant, and every answer records exactly which snippets it was given.
+Analysts maintain a small library of **knowledge snippets**: business-glossary terms, standing instructions and default filters that the assistant must treat as authoritative over anything it would infer from column names alone. Snippets come from three sources:
+- written by hand;
+- drafted from a dataset's schema and sample rows; drafts always arrive disabled, so a human reviews each one before the assistant ever sees it;
+- learned from a reviewer's note on a reasoning block in [business expert mode](../business-expert/spec.md); these **lessons** are enabled at once, because the reviewer who wrote the note is the human in the loop, and they stay visible, editable and reversible here.
+
+Only enabled snippets reach the assistant, and every answer records exactly which snippets it was given.
 
 ## Concepts
 
-Defined in [../../product/glossary.md](../../product/glossary.md): knowledge snippet, kind (instruction, term, default filter), scope (global or dataset), source (user or mined), pending suggestion, dataset, datasource, entity, session, assistant, knowledge bootstrap agent.
+Defined in [../../product/glossary.md](../../product/glossary.md): knowledge snippet, kind (instruction, term, default filter), scope (global or dataset), source (user, mined or feedback), lesson, pending suggestion, dataset, datasource, entity, session, assistant, knowledge bootstrap agent, feedback learner.
 
-Capability-local vocabulary is limited to the UI words "Pending suggestions" (the review queue of mined, still-disabled snippets) and "Knowledge in context" (the per-answer provenance disclosure).
+Capability-local vocabulary is limited to the UI words "Pending suggestions" (the review queue of mined, still-disabled snippets), "Learned" (the view of lessons) and "Knowledge in context" (the per-answer provenance disclosure).
 
 ## Rules
 
 Shape and validation
-- R1. The system SHALL store each snippet with: a unique id, a kind, an optional scope, a title, a body, optional synonyms, optional entities, an enabled flag, a source, and created/updated timestamps.
+- R1. The system SHALL store each snippet with: a unique id, a kind, an optional scope, a title, a body, optional synonyms, optional entities, an enabled flag, a source, created/updated timestamps and, for a lesson only, its provenance (R29).
 - R2. The system SHALL accept exactly three kinds: `instruction` (a standing rule, data quirk or coverage fact), `term` (a business-glossary entry or the meaning of an enum-like code) and `default_filter` (a SQL predicate plus when to apply it). Any other kind SHALL be rejected with the message `kind must be one of: instruction, term, default_filter`.
 - R3. The system SHALL require a non-empty title and a non-empty body after trimming whitespace. On create the messages are `title is required` / `body is required`; on update they are `title must not be empty` / `body must not be empty`.
 - R4. The system SHALL trim every synonym and entity, and drop blanks. A snippet with no synonyms or no entities on create SHALL omit those fields.
 - R5. The system SHALL treat `entities` as fully-qualified `catalog.schema.table` names, and SHALL treat `synonyms` as alternate names for the term.
-- R6. A snippet created through the API or UI SHALL have source `user`; a snippet created by bootstrap SHALL have source `mined`. The source SHALL NOT change afterwards (an accepted or edited mined snippet stays `mined`).
-- R7. A snippet created without an explicit enabled flag SHALL be enabled. A mined snippet SHALL always be created disabled.
+- R6. A snippet created through the API or UI SHALL have source `user`; a snippet created by bootstrap SHALL have source `mined`; a lesson learned from a reviewer's note SHALL have source `feedback`. Only learning can create a `feedback` snippet. The source and provenance SHALL NOT change afterwards: an update ignores them even when a client sends them, and an accepted or edited mined snippet stays `mined`.
+- R7. A snippet created without an explicit enabled flag SHALL be enabled. A mined snippet SHALL always be created disabled; a lesson SHALL always be created enabled.
 
 Scoping
 - R8. A snippet's scope SHALL be either global (no scope) or bound to one dataset, identified by the dataset's name. A scope object with neither a dataset nor a datasource, or a non-object scope, SHALL be normalised to global.
 - R9. The scope MAY additionally carry a datasource id in the stored shape, but the system SHALL NOT use a datasource-only scope to select snippets for the assistant (see Open questions) and the authoring UI SHALL NOT offer it.
-- R10. Listing with a dataset filter SHALL return snippets scoped to that dataset plus every global snippet. Listing with kind, source or enabled filters SHALL narrow further. An unrecognised filter value SHALL be ignored, not rejected.
+- R10. Listing with a dataset filter SHALL return snippets scoped to that dataset plus every global snippet. Listing with kind, source (`user`, `mined` or `feedback`) or enabled filters SHALL narrow further. An unrecognised filter value SHALL be ignored, not rejected.
 - R11. Listings SHALL be ordered by last-updated time, newest first. Any write to a snippet (including toggling enabled) SHALL refresh its updated time.
 
 Authoring
@@ -32,12 +37,17 @@ Authoring
 
 Reaching the assistant
 - R15. For each chat turn the system SHALL assemble a curated-knowledge block from snippets that are enabled and either global or scoped to a dataset the session uses. When none apply, no block SHALL be added.
-- R16. The block SHALL list dataset-scoped snippets before global ones, and newest-updated first within each group. Each snippet SHALL render as one line: its kind tag, title, body, then optional synonyms and entities.
-- R17. The block SHALL be limited to 2,000 characters of snippet lines (the header line is not counted). The system SHALL stop at the first snippet that does not fit and SHALL NOT skip ahead to try smaller ones.
+- R16. The block SHALL order snippets in three tiers:
+  1. every `default_filter`, whatever its source, so a filter is never crowded out;
+  2. lessons (source `feedback`), so a lesson is never crowded out by older hand-written or mined snippets;
+  3. everything else.
+
+  Within a tier, dataset-scoped snippets come before global ones, then the newest-updated first. Each snippet SHALL render as one line: its kind tag, title, body, then optional synonyms and entities.
+- R17. The block SHALL be limited to 8,000 characters of snippet lines (the header line is not counted). A snippet whose line does not fit the remaining budget SHALL be skipped, and later, smaller snippets SHALL still be added while they fit. A snippet is never cut.
 - R18. The block SHALL be sent as its own system message after the metric definitions and before the verified reference queries.
 - R19. The assistant SHALL be instructed to: read the block before planning; treat it as outranking schema inference while never inventing rows the data does not hold; apply every default filter to every query unless the question explicitly asks for the excluded rows, naming the applied filters in one short business sentence; follow every instruction as a standing rule and trust stated coverage facts instead of re-querying them; never list or quote the block unless asked; and fall back to schema and sample values, without inventing definitions, when nothing applies. (Full prompt requirements: [../../system/agents.md](../../system/agents.md).)
 - R20. The same block SHALL also be used for background deep-analysis calls and for eval runs, so those see the same knowledge as a chat turn.
-- R21. The system SHALL record, on each assistant answer, the list of snippets that were actually included in the block (id, kind, title, body exactly as shown, and dataset when scoped). It SHALL be recorded when the block is built, not inferred afterwards, and SHALL contain only snippets that fit the budget.
+- R21. The system SHALL record, on each assistant answer, the list of snippets that were actually included in the block (id, kind, title, body exactly as shown, source, and dataset when scoped). It SHALL be recorded when the block is built, not inferred afterwards, and SHALL contain only snippets that fit the budget. Answers recorded before the source was kept have no source; they are read as not learned.
 
 Bootstrap (drafting from data)
 - R22. The user SHALL be able to ask the system to generate suggestions for one chosen dataset. The system SHALL require a dataset name (`datasetId is required`) and the dataset SHALL exist (`Dataset "<name>" not found`).
@@ -48,6 +58,19 @@ Bootstrap (drafting from data)
 - R27. A bootstrap run SHALL report progress by stage: opening the dataset, reading schema (with table count), sampling rows (n of total tables), drafting, saving (with draft count). It SHALL end with exactly one terminal event, either the created snippets or an error message.
 - R28. Mined snippets SHALL never be sent to the assistant until a human enables them (Accept, or the Enabled toggle).
 
+Lessons (learned from feedback)
+- R29. A lesson SHALL carry its provenance:
+  - the id of the block rating it was learned from, the session and the answer's time;
+  - the rated block, the question and the reviewer's note;
+  - the vote, when there was one;
+  - when it was learned;
+  - the method: `agent` when the feedback learner wrote it, `verbatim` when the note was stored as written.
+
+  How lessons are distilled, scoped and replaced is owned by [business-expert](../business-expert/spec.md) R23–R28.
+- R30. A lesson SHALL behave like any other snippet once stored: it can be edited, disabled, enabled or deleted, and only an enabled lesson reaches the assistant. Editing the reviewer's note again replaces every lesson learned from it, hand edits included ([business-expert](../business-expert/spec.md) R25). Clearing the note deletes them.
+- R31. The Knowledge screen SHALL offer a **Learned** view listing every lesson (any scope, enabled or not), with a count of all lessons. Turning it on SHALL leave the Pending suggestions view, and the reverse. Choosing a kind or a dataset SHALL leave both.
+- R32. A lesson's row SHALL carry a "From feedback" badge whose tooltip reads `<question> — “<note>”` from its provenance ("Learned from a reviewer's feedback note" when there is none). In an answer's "Knowledge in context" list, a lesson SHALL carry a "Learned" chip (tooltip "Learned from a reviewer's feedback note").
+
 ## Edge cases and errors
 
 - Empty library: the screen shows "No knowledge yet" with a hint and both "New snippet" and "Generate suggestions" actions.
@@ -56,30 +79,32 @@ Bootstrap (drafting from data)
 - Bootstrap request fails to start: `Could not generate suggestions (<status>)`; connection failure: `Backend unreachable`; stream closes without a terminal event: `Stream interrupted` or `Stream ended unexpectedly`; empty error: `Could not generate suggestions — try again shortly`.
 - Bootstrap yields zero new drafts: toast `No new suggestions this time`.
 - No datasets exist: the Generate dialog's dataset picker shows "No datasets yet" and Generate is disabled.
-- A snippet whose body alone exceeds the remaining budget stops the block, so a very long newest snippet can hide older ones. (Known limitation of newest-first selection; roadmap 1.3.3 replaces it.)
+- A snippet whose line exceeds the remaining budget is skipped and the next ones are still tried, so a very long snippet hides only itself. Selection is still by tier and recency, not by relevance to the question (roadmap 1.3.3 replaces it).
+- No lessons yet: the Learned view shows "No lessons learned yet — they appear once a reviewer leaves a feedback note the assistant can generalise from."
+- A lesson deleted or edited here and then re-taught (its note edited again) is replaced by the newly learned lessons.
 - Editing a snippet cannot currently clear its entities (a blank entities field is not sent) and, when the kind is not `term`, does not send synonyms, so previously stored synonyms survive. See Open questions.
 
 ## Contracts
 
-- Endpoints: list, create, partial update and delete under the knowledge resource; bootstrap (single response) and bootstrap stream (server-sent progress, then done or error). See [../../system/api.md](../../system/api.md). The UI uses the stream variant only.
-- Collection and document shape (snippet, per-answer knowledge record): see [../../system/data-model.md](../../system/data-model.md).
-- Agents: the knowledge bootstrap agent (prompt requirements, output schema, draft cap) and the assistant's "Curated knowledge" instructions: see [../../system/agents.md](../../system/agents.md).
+- Endpoints: list, create, partial update and delete under the knowledge resource; bootstrap (single response) and bootstrap stream (server-sent progress, then done or error). See [../../system/api.md](../../system/api.md). The UI uses the stream variant only. Lessons are created through the reasoning-block feedback endpoint, never through the knowledge resource.
+- Collection and document shape (snippet, lesson provenance, per-answer knowledge record): see [../../system/data-model.md](../../system/data-model.md).
+- Agents: the knowledge bootstrap agent (prompt requirements, output schema, draft cap), the assistant's "Curated knowledge" instructions, and the feedback learner that writes lessons (2.9): see [../../system/agents.md](../../system/agents.md). The same block is also given to the cross-check verifier, and its entries are listed for the business-expert explainer.
 - Per-answer provenance is stored on the assistant message and read by [../sessions-chat/spec.md](../sessions-chat/spec.md).
-- Related: [../datasets/spec.md](../datasets/spec.md) (scope target), [../verified-queries/spec.md](../verified-queries/spec.md), [../metrics/spec.md](../metrics/spec.md) (sibling context blocks), [../agents-evals/spec.md](../agents-evals/spec.md) (eval runs reuse the block).
+- Related: [../datasets/spec.md](../datasets/spec.md) (scope target), [../verified-queries/spec.md](../verified-queries/spec.md), [../metrics/spec.md](../metrics/spec.md) (sibling context blocks), [../agents-evals/spec.md](../agents-evals/spec.md) (eval runs reuse the block), [../business-expert/spec.md](../business-expert/spec.md) (learning from notes), [../answer-pinning/spec.md](../answer-pinning/spec.md) (the block is part of every pin's fingerprint).
 
 ## UI
 
 Placement: the **Knowledge** item in the main sidebar navigation opens a full-width screen titled "Knowledge" in the main area (see [../../system/ui.md](../../system/ui.md)). Selecting the item again returns to the home view.
 
 - Header: title, subtitle "Instructions, glossary terms and default filters the assistant uses when answering. Only enabled snippets are applied.", and two buttons, "Generate suggestions" and "New snippet".
-- Filter row: kind pills "All", "Instruction", "Term", "Default filter" (each with a tooltip describing the kind), a "Filter by dataset" select ("All datasets" plus every dataset; shows that dataset's snippets and all global ones), and a toggle "Pending suggestions" with a count badge of mined, still-disabled snippets. Choosing a kind or dataset leaves the pending view.
-- States: loading ("Loading knowledge…"), error, empty ("No knowledge yet"), filtered-empty, populated.
-- Row (normal view): kind icon (colour per kind), title, kind label, a "Mined" badge for mined snippets, body, then scope ("Global" or the dataset name) and "Updated <Mon d>"; an Enabled/Disabled checkbox, an Edit button and a Delete button (with a spinner while deleting). Delete asks "Delete “<title>”? The assistant will stop using it."
+- Filter row: kind pills "All", "Instruction", "Term", "Default filter" (each with a tooltip describing the kind), a "Filter by dataset" select ("All datasets" plus every dataset; shows that dataset's snippets and all global ones), a toggle "Learned" (tooltip "Lessons learned from a reviewer's feedback note") with a count badge of lessons, and a toggle "Pending suggestions" with a count badge of mined, still-disabled snippets. Choosing a kind or dataset leaves the pending and learned views; the two toggles exclude each other.
+- States: loading ("Loading knowledge…"), error, empty ("No knowledge yet"), filtered-empty, learned-empty, populated.
+- Row (normal view): kind icon (colour per kind), title, kind label, a "Mined" badge for mined snippets or a "From feedback" badge for lessons (R32), body, then scope ("Global" or the dataset name) and "Updated <Mon d>"; an Enabled/Disabled checkbox, an Edit button and a Delete button (with a spinner while deleting). Delete asks "Delete “<title>”? The assistant will stop using it."
 - Row (Pending suggestions view): the Enabled checkbox, Edit and Delete are replaced by **Accept** (enables the snippet; toast "Snippet enabled") and **Reject** (confirmation "Reject “<title>”? This permanently removes the suggestion."; toast "Snippet deleted").
 - Toasts: "Snippet enabled" / "Snippet disabled", "Snippet created", "Snippet updated", "Snippet deleted".
 - New/Edit panel ("New snippet" / "Edit snippet"): Kind select (with the kind's description), Scope select ("Global" or a dataset), Title (placeholder "Always exclude test accounts"), Body, Synonyms (comma separated; shown only for kind Term), Entities (optional, comma separated). Buttons "Cancel" and "Create snippet" / "Save changes" (disabled until title and body are filled; shows "Saving…"). The panel does not edit the enabled flag; new snippets are enabled.
 - Generate suggestions panel: explanation ("The assistant reviews the dataset and drafts instructions, terms and default filters as pending suggestions — nothing is applied until you approve it. This can take up to a minute."), a Dataset select (defaults to the first dataset), "Cancel" and "Generate" (shows "Generating…"; cancel is blocked while running). A live progress list shows finished stages with a check mark and the current stage with a spinner. On success the panel closes, a toast reads "<n> suggestion(s) generated — review in Pending suggestions", and the screen switches to the Pending suggestions view.
-- In chat: each assistant answer that carried knowledge shows a collapsed "Knowledge in context (<n>)" disclosure listing, per snippet, its kind label, title, dataset (or "global") and body, plus the note "Curated knowledge the assistant was given before answering. Edit it under Knowledge; disabled snippets are never included." Clarification cards show it too.
+- In chat: each assistant answer that carried knowledge shows a collapsed "Knowledge in context (<n>)" disclosure listing, per snippet, its kind label, title, dataset (or "global") and body, plus the note "Curated knowledge the assistant was given before answering. Edit it under Knowledge; disabled snippets are never included." A lesson in that list carries the "Learned" chip. Clarification cards show it too.
 
 ## Flows
 
@@ -176,6 +201,32 @@ Feature: Knowledge snippets (E2E: none yet)
     Given a disabled snippet exists for the session's dataset
     When I ask a question in that session
     Then no "Knowledge in context" disclosure lists that snippet
+
+  Scenario: Lessons learned from feedback have their own view
+    Given a reviewer's note on a "Retail" answer taught the lesson "Fiscal year"
+    When I click "Knowledge" in the sidebar
+    Then the "Learned" toggle shows the count 1
+    When I click "Learned"
+    Then only "Fiscal year" is listed, badged "From feedback" and "Enabled"
+    And hovering "From feedback" shows the question and the reviewer's note
+    When I click "Term"
+    Then the Learned view is left and terms are listed
+
+  Scenario: A disabled lesson stops reaching the assistant
+    Given the lesson "Fiscal year" is listed under "Learned"
+    When I untick its "Enabled" checkbox
+    And I ask a question in a "Retail" session
+    Then that answer's "Knowledge in context" does not list "Fiscal year"
+
+  Scenario: A lesson is shown as learned in the answer that used it
+    Given the enabled lesson "Fiscal year" is scoped to "Retail"
+    When I ask a question in a "Retail" session
+    Then "Knowledge in context" lists "Fiscal year" with the chip "Learned"
+
+  Scenario: A long snippet does not hide the rest
+    Given a snippet whose body is longer than the knowledge budget and two short snippets exist for the session's dataset
+    When I ask a question in that session
+    Then "Knowledge in context" lists the two short snippets and not the long one
 ```
 
 ## Acceptance
@@ -184,14 +235,16 @@ Feature: Knowledge snippets (E2E: none yet)
 - With a snippet enabled for a dataset, an answer in a session over that dataset records it in "Knowledge in context"; after disabling or deleting it, the next answer does not.
 - With a default-filter snippet enabled, the generated SQL applies it and the answer names it.
 - A bootstrap run on the sample dataset yields at most 15 disabled, mined, dataset-scoped drafts and none duplicates an existing title for that dataset.
-- Open question: parts of roadmap Milestone 1.3 Knowledge Store (BA-4) already exist in code: authoring of the three kinds, dataset/global scoping, bootstrap from schema and samples (reviewed as pending suggestions), newest-first injection under a character budget, and per-answer "Knowledge in context" provenance. Not yet built: the ontology/concept graph (1.3.2), question-relevance retrieval (1.3.3), mining from past sessions and thumbs-up answers, conflict detection and correction feedback (1.3.4).
+- A reviewer's note on an expert answer's block yields at most three enabled lessons with source `feedback` and full provenance, listed under "Learned", and the next turn on that dataset receives them ahead of older non-filter snippets.
+- Open question: parts of roadmap Milestone 1.3 Knowledge Store (BA-4) already exist in code: authoring of the three kinds, dataset/global scoping, bootstrap from schema and samples (reviewed as pending suggestions), tiered injection under a character budget, per-answer "Knowledge in context" provenance, and lessons learned from reviewer notes on business-expert answers (a form of correction feedback). Not yet built: the ontology/concept graph (1.3.2), question-relevance retrieval (1.3.3), mining from past sessions and thumbs-up answers, and conflict detection between snippets, for example a lesson that contradicts a hand-written term (1.3.4).
 
 ## Open questions
 
 - Open question: a snippet whose scope has only a datasource id is stored but never selected for the assistant (selection requires a dataset match or no scope). Is datasource scoping intended to work, and should the authoring UI offer it?
 - Open question: editing in the UI cannot clear entities and does not clear stale synonyms when switching a term to another kind. Intended, or a bug to fix in the rebuild?
 - Open question: the "Pending suggestions" view hides the Edit action; a mined suggestion can only be edited after it is accepted. Intended?
-- Open question: the `source: user | mined` distinction of the stored shape allows mining from past sessions (roadmap 1.3.2); only dataset schema/sample mining exists today.
+- Open question: the `source` distinction (`user`, `mined`, `feedback`) of the stored shape allows mining from past sessions (roadmap 1.3.2); only dataset schema/sample mining and learning from reviewer notes exist today.
+- Open question: lessons are created enabled with no review gate (the reviewer writing the note is the review). Should a "learned, pending approval" state exist, like mined suggestions?
 - Open question: the non-streaming bootstrap endpoint exists but nothing in the UI calls it. Keep it as part of the public contract?
 
-<!-- sources: backend/src/modules/knowledge/**, backend/src/mastra/agents/knowledge-bootstrap.agent.ts, backend/src/mastra/agents/assistant.agent.ts (Curated knowledge), backend/src/modules/sessions/sessions.service.ts (agentContext, knowledgeUsed), backend/src/modules/agents/eval-runs.service.ts, frontend/src/app/features/knowledge/**, frontend/src/app/features/sessions/components/session-chat/session-chat.html (knowledgeApplied), frontend/src/app/app.html (Knowledge nav) -->
+<!-- sources: backend/src/modules/knowledge/**, backend/src/modules/learning/**, backend/src/mastra/agents/knowledge-bootstrap.agent.ts, backend/src/mastra/agents/assistant.agent.ts (Curated knowledge), backend/src/modules/sessions/sessions.service.ts (agentContext, knowledgeUsed), backend/src/modules/agents/eval-runs.service.ts, frontend/src/app/features/knowledge/**, frontend/src/app/features/sessions/components/session-chat/session-chat.html (knowledgeApplied), frontend/src/app/app.html (Knowledge nav) -->

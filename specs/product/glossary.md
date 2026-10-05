@@ -6,23 +6,39 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Active visual.** The visual currently open in the right-hand panel. The assistant tailors it by default when the user asks for a change. See *Visual*.
 
-**Agent.** A single LLM role with its own instructions, optional tools and optional memory. The product has six: the assistant, the visual designer, the SQL fixer, the SQL verifier, the knowledge bootstrap agent and the eval judge. See [../system/agents.md](../system/agents.md). The Agents screen lists them and shows their prompts, tools, memory settings and model.
+**Agent.** A single LLM role with its own instructions, optional tools and optional memory. The product has eight: the assistant, the visual designer, the SQL fixer, the SQL verifier, the knowledge bootstrap agent, the eval judge, the business expert (the explainer behind a *reasoning trace*) and the feedback learner (which turns a reviewer's note into *lessons*). See [../system/agents.md](../system/agents.md). The Agents screen lists them and shows their prompts, tools, memory settings and model.
 
 **Angle.** One sub-question of a *deep analysis*. A plan has between 3 and 5 angles (hard cap 5). Each is investigated on its own.
 
-**Answer.** The assistant's final message in a *turn*, together with the evidence stored with it: result rows, SQL, entities, interpretation, reasoning trail, knowledge used and any badges.
+**Answer.** The assistant's final message in a *turn*, together with the evidence stored with it: result rows, SQL, entities, interpretation, reasoning trail, knowledge used, any badges and, in *business expert mode*, a *reasoning trace*.
+
+**Answer pin.** The stored, checked answer of one *lineage*: its query, the rows it returned and the answer message, saved under a *fingerprint*. Asking the lineage's question again replays the pin word for word, with no model call, while the fingerprint still matches and the query still returns the same rows. A thumbs-down rejects a pin (it is never replayed) and a thumbs-up approves it. One pin per lineage.
+
+**Answer query.** The successful SQL query an answer is built on, chosen by which query's values the answer text quotes (its first figure first), not simply the last one that ran. The cross-check, the reasoning trace, answer pinning, learning and the developer eval harness all use it.
 
 **App secret.** The key material from which the key that encrypts stored LLM API keys is derived. On desktop it is generated once and kept in a file in the data directory. See [non-functional.md](non-functional.md).
 
 **Assistant.** The main agent. It answers business questions over a session's datasets, runs SQL, calls the visual tools and asks clarifying questions.
 
-**Careful mode.** An opt-in per-turn setting in the chat. After the assistant answers, a second agent (the *SQL verifier*) re-derives the SQL independently, runs it, and compares its result set with the answer's. The answer gets an agree, disagree or error badge. Slower per answer. See *Cross-check*.
+**Block rating.** A reviewer's thumbs up or down and optional note on one block of a *reasoning trace*. Stored once per answer and block, with a copy of the question and the block, and mirrored onto the answer. A thumbs-down withdraws the answer's verified query and rejects its *answer pin*; a thumbs-up on the SQL block approves the answer; a note is distilled into *lessons*.
+
+**Business expert mode.** A standing chat preference (the **Expert** toggle) under which every answer also carries a *reasoning trace* with measured *confidence*, always runs the *cross-check*, and runs in *review mode*. Each block of the trace can be rated, and notes become *lessons*.
+
+**Careful mode.** An opt-in per-turn setting in the chat. After the assistant answers, a second agent (the *SQL verifier*) re-derives the SQL independently, runs it, and compares its result set with the answer's. The answer gets an agree, disagree or error badge. Slower per answer. See *Cross-check*. *Business expert mode* runs the same check.
 
 **Catalog.** The top level of an *entity* name. A Databricks Unity Catalog catalog; the database name on PostgreSQL; `api` on a REST API datasource. See *Entity*.
 
 **Clarification.** A question the assistant asks the user, with 2 to 4 options, when interpretations diverge materially. The turn ends; the user's pick (or typed answer) arrives as the next message. At most one per user question.
 
-**Cross-check.** The result of *careful mode* on one answer: status `agree` (same results), `disagree` (results differ) or `error` (the check could not finish), plus a short note.
+**Confidence.** In a *reasoning trace*, a 0–1 score per block and for the whole answer, computed by the system as a weighted mean of measured *confidence signals*. It is never the model's own opinion. Shown as a *confidence band* and a percentage.
+
+**Confidence band.** `high` (0.80 or more), `medium` (0.55 or more) or `low`. One definition for every block and the overall score; shown green, amber or red.
+
+**Confidence signal.** One measured contributor to a *confidence*: schema grounding, join grounding, knowledge coverage, execution, independent cross-check, verified query match, assumption load, or the model's self-assessment (weighted lowest). A signal that cannot be measured is left out, not counted as zero.
+
+**Consistency verdict.** What *answer pinning* did for an answer: `replay` (the stored answer was returned after its query re-ran with the same rows), `kept` (a fresh derivation returned the same rows, so the earlier wording was kept) or `updated` (the numbers changed, listing any *lessons* learned since). Shown as a chip on the answer.
+
+**Cross-check.** The result of *careful mode* (or *business expert mode*) on one answer: status `agree` (same results), `disagree` (results differ) or `error` (the check could not finish), plus a short note.
 
 **Data directory.** The folder holding all app data: application database, agent memory, observability data, per-session *workspaces* and the *app secret* file. Desktop and web mode use different data directories on purpose.
 
@@ -54,13 +70,17 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Eval run log.** A developer record of one eval run (set, datasets, model, verdicts per question, category tallies, token usage, estimated cost) written as a file next to the source code, plus a one-line entry in a running index, so runs can be compared over time. Holds no query results. Not written by an installed app unless a log location is configured.
 
-**Eval set.** A named group of eval cases over one fixture: World Cup on PostgreSQL, World Cup on REST (derived from the World Cup set), Formula 1, Health Insurance and Genomics. A set over a bundled *sample fixture* names it; the Health Insurance and Genomics sets run over synthetic fixtures that exist only in the development database and declare their own datasets and required entities. Each set is defined as data in one *eval suite*.
+**Eval set.** A named group of eval cases over one fixture: World Cup on PostgreSQL, World Cup on REST (derived from the World Cup set), Formula 1, Health Insurance, Genomics, HR and Retail. A set over a bundled *sample fixture* names it; the Health Insurance, Genomics, HR and Retail sets run over synthetic fixtures that exist only in the development database and declare their own datasets and required entities. The HR set measures *business expert mode*; the Retail set carries the learning scenario that teaches *lessons*. Each set is defined as data in one *eval suite*.
 
 **Eval suite.** The data file that defines one *eval set*. The UI and API say *set*; files, the developer CLI (`--suite`) and stored runs (`suiteId`) say *suite*. Same thing.
 
-**Feedback.** The user's thumbs-up or thumbs-down on an answer. Thumbs-up also saves a *verified query*. Thumbs-down only marks the answer as wrong.
+**Evidence basis.** Where a claim in a *reasoning trace* comes from: a knowledge entry, a metric, a verified query (each only when the turn was actually given that source), the schema, a data sample, a common convention, or an assumption (a guess). The first five count as grounded.
 
-**Fixture.** See *Sample fixture*. The synthetic health-insurance and genomics eval fixtures are not sample fixtures: they are generated from a fixed seed into the development database only (see *Eval set*).
+**Feedback.** The user's thumbs-up or thumbs-down on an answer. Thumbs-up also saves a *verified query* and approves the answer's *answer pin*. Thumbs-down marks the answer as wrong and rejects its pin. See also *Block rating*.
+
+**Fingerprint.** A hash of everything that legitimately changes an answer without changing its question: the knowledge the turn was given, the governed-metrics and verified-query context, the datasets' schema, and the model with its reasoning effort. An *answer pin* is replayed only under the fingerprint it was saved with.
+
+**Fixture.** See *Sample fixture*. The synthetic health-insurance, genomics, HR and retail eval fixtures are not sample fixtures: they are generated from a fixed seed into the development database only (see *Eval set*).
 
 **Foreign key / relationship.** A join link from a column of one dataset entity to a column of another. `declared` when the datasource reports the constraint; `inferred` when guessed from column names (`team_id` to a `teams` table). Used to tell the assistant which columns join. Inference deliberately skips ambiguous cases.
 
@@ -68,27 +88,37 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Interpretation.** A one-line, deterministic summary of how an answer was produced (which entities, what kind of query), built by the system at save time. Never model output.
 
-**Knowledge entry.** A curated piece of business knowledge the assistant treats as authoritative. Three kinds: `term` (glossary definition, with optional synonyms and entity bindings), `instruction` (a standing rule) and `default_filter`. Scoped globally, to a dataset or to a datasource. Only enabled entries reach the assistant, within a size budget per turn. Source is `user` or `mined` (drafted by the bootstrap agent, saved disabled for review). The UI says "Knowledge". Code and Jira call these *snippets*.
+**Knowledge entry.** A curated piece of business knowledge the assistant treats as authoritative. Three kinds: `term` (glossary definition, with optional synonyms and entity bindings), `instruction` (a standing rule) and `default_filter`. Scoped globally, to a dataset or to a datasource. Only enabled entries reach the assistant, within a size budget per turn. Source is `user`, `mined` (drafted by the bootstrap agent, saved disabled for review) or `feedback` (a *lesson*). The UI says "Knowledge". Code and Jira call these *snippets*.
 
 **Knowledge bootstrap.** The action that has an agent draft up to 15 knowledge entries from a dataset's schema and a few sample rows. Drafts arrive as "Pending suggestions", disabled.
 
 **Knowledge used.** The list of knowledge entries that were actually included in the context of one answer, recorded when the context was built. It shows what the model was given, not what it applied.
 
+**Lesson.** A *knowledge entry* with source `feedback`: a general, standing rule (a fiscal calendar, a metric definition, a filter that always applies) distilled from a reviewer's note on a *reasoning block*. It is never the answer to the rated question. Stored enabled, scoped to the session's datasets, with its provenance (the rating, question, note and how it was learned), and shown in Knowledge as "From feedback". Not fine-tuning: lessons are read by every later turn and can be edited or switched off.
+
+**Lineage key.** The identity of a question for *answer pinning*: the question normalised (case, spacing and trailing punctuation ignored), the session's datasets, the earlier questions of the conversation (the *chain*) and the mode (`plain`, `careful` or `expert`). A rephrasing, another conversation history or another mode is a different lineage.
+
 **LLM provider.** The service the agents call. `openai`, `anthropic` or `lenai` (Halo's OpenAI-compatible gateway, which needs a base URL; the "model" field is then the deployment name). One global setting: provider, model, API key (stored encrypted, shown masked) and *reasoning effort*.
 
-**Message.** One entry in a session's transcript, from the `user` or the `assistant`, with a timestamp that doubles as its identity (`at`). Assistant messages may carry data records, entities, a clarification, a visual event, feedback, a cross-check, a reasoning trail, knowledge used or a report.
+**Message.** One entry in a session's transcript, from the `user` or the `assistant`, with a timestamp that doubles as its identity (`at`). Assistant messages may carry data records, entities, a clarification, a visual event, feedback, a cross-check, a reasoning trail, knowledge used, a report, a *reasoning trace* or a *consistency verdict*.
 
 **Metric.** A governed, named SQL aggregation expression over one entity (for example `denial_rate`), with a label, description and dimensions. The assistant reuses its expression verbatim instead of re-deriving it. Metrics are the app's lightweight semantic layer. A metric can be promoted from a *verified query*; the draft is a *metric candidate*.
 
 **Mined entry.** A *knowledge entry* with source `mined`.
 
+**Reasoning block.** One of the five fixed parts of a *reasoning trace*: interpretation (how the question was read), data selection (tables, joins and tables not used, drawn as a diagram), assumptions, metric definition, and annotated SQL. Each has its own *confidence* and its own *block rating*.
+
 **Reasoning effort.** `low`, `medium` or `high` (default `high`). A global setting passed to models that support it and dropped for models that reject it.
+
+**Reasoning trace.** In *business expert mode*, the structured explanation attached to an answer: five *reasoning blocks* plus an overall *confidence*. The model writes the prose; everything stated as fact (the SQL, its rows, the tables) comes from what ran, and every confidence is measured. Distinct from the *reasoning trail*.
 
 **Reasoning trail.** The "How I worked this out" list on an answer: one step per data-gathering call, with the assistant's plain-language rationale, the statement used and the outcome. The prose is the model's; ordering and outcomes come from what actually ran.
 
 **Report.** The markdown output of a *deep analysis*: title, executive summary, findings by angle, data appendix.
 
 **Result guard.** A deterministic check on a query result that attaches a *warning*: a ratio of a sum to itself, a metric constant on every row, an unordered "top N".
+
+**Review mode.** How the assistant behaves in *business expert mode*. When a question depends on a business convention the curated knowledge does not define (a fiscal calendar, a metric's formula), it answers under the most common convention and states the assumption instead of asking a *clarification*, because the reviewer's correction becomes a *lesson*. It still asks when the data itself matches several ways.
 
 **Row cap.** A limit on rows returned or stored. See [non-functional.md](non-functional.md). A result clipped by a cap is marked *truncated*.
 
@@ -132,4 +162,4 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Workspace.** A contained folder on disk, one per session, where the session's visuals and reports are stored. Created with the session and rediscovered on restart. Legacy folder name: `project-<id>`.
 
-<!-- sources: backend/src/modules/*/entities/*.ts, backend/src/modules/datasets/repositories/datasets.repository.ts, backend/src/modules/datasets/relationships.ts, backend/src/modules/agents/*.ts, backend/src/modules/llm/llm.types.ts, backend/src/modules/sessions/entities/session.entity.ts, backend/src/modules/sessions/visual-spec.ts, backend/src/modules/sessions/visualization.service.ts, backend/src/mastra/tools/*.ts, backend/src/mastra/agents/*.ts, backend/src/infrastructure/database/database.module.ts, frontend/src/app/features/*/models/*.ts, frontend/src/app/app.html, frontend/src/app/features/sessions/components/session-chat/session-chat.html -->
+<!-- sources: backend/src/modules/*/entities/*.ts, backend/src/modules/{expert-mode,learning,answer-pins}/*.ts, backend/src/modules/datasets/repositories/datasets.repository.ts, backend/src/modules/datasets/relationships.ts, backend/src/modules/agents/*.ts, backend/src/modules/llm/llm.types.ts, backend/src/modules/sessions/entities/session.entity.ts, backend/src/modules/sessions/visual-spec.ts, backend/src/modules/sessions/visualization.service.ts, backend/src/mastra/tools/*.ts, backend/src/mastra/agents/*.ts, backend/src/infrastructure/database/database.module.ts, frontend/src/app/features/*/models/*.ts, frontend/src/app/app.html, frontend/src/app/features/sessions/components/session-chat/session-chat.html -->

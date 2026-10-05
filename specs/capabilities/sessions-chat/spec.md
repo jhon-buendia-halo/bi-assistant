@@ -1,10 +1,10 @@
 # Sessions and chat
 
-A session is a named, persistent conversation over one or more datasets. The user asks business questions in plain English. The assistant plans the analysis, writes and runs read-only SQL against the datasets' datasources, and streams back its reasoning, each tool call and a final Markdown answer. Every answer shows how it was produced: the queries it ran and why, the rows each returned, the entities it touched, the curated knowledge it was given, and reliability signals (automatic SQL repair, result-quality warnings, a verified-query badge and an optional independent cross-check). Users can trust a number because they can see where it came from. They can stop a turn, answer the assistant's clarifying questions, and come back after a restart to the same conversation with the same memory.
+A session is a named, persistent conversation over one or more datasets. The user asks business questions in plain English. The assistant plans the analysis, writes and runs read-only SQL against the datasets' datasources, and streams back its reasoning, each tool call and a final Markdown answer. Every answer shows how it was produced: the queries it ran and why, the rows each returned, the entities it touched, the curated knowledge it was given, and reliability signals (automatic SQL repair, result-quality warnings, a verified-query badge and an optional independent cross-check). Users can trust a number because they can see where it came from. They can stop a turn, answer the assistant's clarifying questions, and come back after a restart to the same conversation with the same memory. A question asked again in a new session gets the same checked answer back ([answer-pinning](../answer-pinning/spec.md)), and [business expert mode](../business-expert/spec.md) adds a rated reasoning trace to every answer.
 
 ## Concepts
 
-All terms are defined in [glossary](../../product/glossary.md): **Session**, **Dataset**, **Datasource**, **Entity** (fully-qualified `catalog.schema.table`), **Turn**, **Answer**, **Tool call**, **Data record** (one captured tool result), **Rationale**, **Reasoning trail**, **Interpretation line**, **Clarification**, **Careful mode**, **Cross-check**, **Verified query**, **Knowledge snippet**, **Metric definition**, **Session workspace**, **Agent memory thread**, **Visual** (see [visuals](../visuals/spec.md)), **Deep analysis** (see [deep-analysis](../deep-analysis/spec.md)).
+All terms are defined in [glossary](../../product/glossary.md): **Session**, **Dataset**, **Datasource**, **Entity** (fully-qualified `catalog.schema.table`), **Turn**, **Answer**, **Tool call**, **Data record** (one captured tool result), **Rationale**, **Reasoning trail**, **Interpretation line**, **Clarification**, **Careful mode**, **Cross-check**, **Answer query**, **Answer pin**, **Business expert mode**, **Reasoning trace**, **Verified query**, **Knowledge snippet**, **Metric definition**, **Session workspace**, **Agent memory thread**, **Visual** (see [visuals](../visuals/spec.md)), **Deep analysis** (see [deep-analysis](../deep-analysis/spec.md)).
 
 ## Rules
 
@@ -29,9 +29,10 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
   - each tool call, with its stated rationale when it has one;
   - each tool result summary (input, row count or error);
   - the answer text as it forms;
-  - a visual-updated notice when a visual is created or tailored.
+  - a visual-updated notice when a visual is created or tailored;
+  - in business expert mode, progress notices for the cross-check and the explanation ([business-expert](../business-expert/spec.md) R4).
 
-  The turn ends with exactly one terminal event: `done`, carrying the persisted session, or `error`, carrying a message.
+  The turn ends with exactly one terminal event: `done`, carrying the persisted session, or `error`, carrying a message. A replayed answer streams only its full text and then `done` ([answer-pinning](../answer-pinning/spec.md) R7).
 - R13. While a turn runs, the chat SHALL show a "Thinking" block with:
   - the last ~90 characters of reasoning on one line;
   - one row per tool call: tool name, then "failed", "N rows" or a spinner;
@@ -110,6 +111,16 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
   - a "Copy SQL" action;
   - the rationale, each warning (with a warning icon), the SQL text and any error.
 - R34. The chat SHALL offer "Copy message" on every user message and answer.
+- R52. The **answer query** SHALL be the successful `run_readonly_sql` record the answer is built on, chosen by evidence rather than position. The assistant often runs a supporting query after the one that produced the figure, such as a count to say "over 38 employees".
+  - With no successful record there is none. With one, or with an empty answer, it is the last successful record.
+  - Otherwise each record scores by the distinct cell values of its first 50 rows that the answer text quotes:
+    - A numeric value matches a number in the answer (commas removed) when equal for integers, otherwise within 0.5 % of the value or of 100 × the value (a ratio shown as a percentage), with a tolerance of at least 0.5.
+    - A matched number scores 3 for a decimal, 2 for an integer of 1,000 or more, 1 for a smaller integer and 0 for a year-like integer (1900 to 2100).
+    - A text value of three or more characters found in the answer (ignoring case) scores 2, or 1 when it has only three characters.
+  - The headline, the first number in the answer that is not a year-like integer, decides first: when any record holds it, only those records compete.
+  - The highest score wins, the later record on a tie. When no record scores, the last successful record wins.
+
+  The cross-check (R38), the reasoning trace ([business-expert](../business-expert/spec.md) R6), answer pinning ([answer-pinning](../answer-pinning/spec.md) R5), learning from notes and the developer eval harness ([agents-evals](../agents-evals/spec.md) R50) all use this record. The Verified badge (R35) and thumbs-up (R36) keep using the last successful SQL.
 
 ### Verified badge and rating
 
@@ -119,15 +130,15 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
   - Thumbs down removes that answer's stored pair and clears the badge.
   - Repeating the same rating does nothing.
 
-  The rating is persisted on the answer. The library itself is specified in [verified-queries](../verified-queries/spec.md).
+  The rating is persisted on the answer. The library itself is specified in [verified-queries](../verified-queries/spec.md). Thumbs down also rejects the answer's pin, and thumbs up approves it ([answer-pinning](../answer-pinning/spec.md) R13, R14). Thumbs up also rescores an expert answer's reasoning trace as verified ([business-expert](../business-expert/spec.md) R14).
 
 ### Careful mode (cross-check)
 
-- R37. The composer SHALL offer a "Careful" toggle. It applies to every turn sent while on. It is client-only and lasts for the open conversation: switching sessions turns it off, and it is never stored.
-- R38. In careful mode, before `done`, the system SHALL check the turn's last successful SQL result:
-  1. The SQL-verifier agent derives an independent query from the question alone. It sees the question, the schema with up to 3 sample values per column and similar verified pairs, never the original SQL.
+- R37. The composer SHALL offer a "Careful" toggle. It applies to every turn sent while on. It is client-only and lasts for the open conversation: switching sessions turns it off, and it is never stored. A business-expert-mode turn runs the same cross-check whether or not Careful is on ([business-expert](../business-expert/spec.md) R2).
+- R38. In careful mode (and in business expert mode), before `done`, the system SHALL check the result of the answer query (R52):
+  1. The SQL-verifier agent derives an independent query from the question. It sees the question, the schema with up to 3 sample values per column, the curated knowledge block and the governed metric definitions the answer worked under (so it applies the same default filters, terms and metrics), and similar verified pairs. It never sees the original SQL.
   2. The system runs that query with a 200-row limit.
-  3. It compares both result sets as multisets, tolerating different column widths.
+  3. It compares both result sets as multisets, tolerating different column widths. When the row counts differ, the results also agree if, position by position, each row of the shorter result matches the row of the longer one at the same position, the narrower of the two rows having all its values in the wider one. This covers a top-1 answer against the full ranking, or the reverse.
 
   The verdict is stored on the answer.
 - R39. The cross-check chip SHALL read "Cross-checked" (agree), "Cross-check differs" (disagree) or "Cross-check failed" (error). Its tooltip is the note, clipped to 220 characters:
@@ -138,6 +149,8 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
     - "no datasource is bound to this session, so the query could not be re-run"
     - "the independent check did not produce a usable query"
     - "the check could not complete — <detail>"
+
+  An agreement on leading rows (R38, step 3) uses the "…over different columns" note.
 - R40. A failing cross-check SHALL NOT lose the answer. A turn with no successful SQL SHALL get no cross-check.
 
 ### Clarification
@@ -161,9 +174,9 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
 
 ### Memory and continuity
 
-- R46. Each session SHALL have its own persistent agent memory thread. Each turn replays the last 40 messages. There is no semantic recall and no auto-generated title.
+- R46. Each session SHALL have its own persistent agent memory thread. Each turn replays the last 40 messages. There is no semantic recall and no auto-generated title. A replayed answer never reaches memory; the next turn that reaches the model catches memory up first ([answer-pinning](../answer-pinning/spec.md) R9).
 - R47. When a session has a transcript but no memory thread (created before memory existed), the system SHALL seed the thread from the full persisted transcript on the next turn.
-- R48. Background work (deep-analysis sub-calls, grounding pass, SQL repair, cross-check, visual design) SHALL NOT write into the session's memory thread.
+- R48. Background work (deep-analysis sub-calls, grounding pass, SQL repair, cross-check, visual design, the business-expert explanation and learning from notes) SHALL NOT write into the session's memory thread.
 - R49. The full transcript SHALL be stored with the session and shown on reopen, including clarifications, visual event cards and deep-analysis reports. Memory and transcript survive app restarts.
 
 ### Empty session and navigation aids
@@ -209,10 +222,10 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
 
 - Endpoints, all in [api.md](../../system/api.md):
   - sessions: list, get, create, delete;
-  - chat: streamed message (and its event types `reasoning`, `text`, `tool`, `tool-result`, `visual-updated`, `done`, `error`), non-streamed message, message feedback.
-- Data in [data-model.md](../../system/data-model.md): the `sessions` collection (session document, chat message, data record, reasoning step, cross-check, clarification, visual event), the `verified_queries` collection, the agent memory store, and the per-session workspace directory and its legacy migrations.
-- Agents in [agents.md](../../system/agents.md): `assistant` (prompt, tools `list_entities`, `describe_entity`, `sample_rows`, `run_readonly_sql`, `ask_clarification`, `create_visual`, `update_visual`, and memory), `sql-fixer`, `sql-verifier`. Model resolution is in [llm-settings](../llm-settings/spec.md).
-- Related capabilities: [visuals](../visuals/spec.md) (visual cards, tailoring from chat, follow-up chips), [verified-queries](../verified-queries/spec.md), [knowledge](../knowledge/spec.md), [metrics](../metrics/spec.md), [deep-analysis](../deep-analysis/spec.md) (the "Deep analysis" composer action and report messages), [datasets](../datasets/spec.md), [datasources](../datasources/spec.md).
+  - chat: streamed message (its `careful`, `expert` and `pin` flags and its event types `reasoning`, `text`, `tool`, `tool-result`, `visual-updated`, `expert-status`, `done`, `error`), non-streamed message, message feedback, reasoning-block feedback.
+- Data in [data-model.md](../../system/data-model.md): the `sessions` collection (session document, chat message, data record, reasoning step, cross-check, clarification, visual event, reasoning trace, consistency verdict), the `verified_queries` collection, the `answer_pins` and `reasoning_feedback` collections (owned by [answer-pinning](../answer-pinning/spec.md) and [business-expert](../business-expert/spec.md)), the agent memory store, and the per-session workspace directory and its legacy migrations.
+- Agents in [agents.md](../../system/agents.md): `assistant` (prompt, tools `list_entities`, `describe_entity`, `sample_rows`, `run_readonly_sql`, `ask_clarification`, `create_visual`, `update_visual`, and memory), `sql-fixer`, `sql-verifier`, and in business expert mode `business-expert` and `feedback-learner`. Model resolution is in [llm-settings](../llm-settings/spec.md).
+- Related capabilities: [business-expert](../business-expert/spec.md) (the Expert toggle, reasoning traces, block ratings and lessons), [answer-pinning](../answer-pinning/spec.md) (replayed, kept and updated answers), [visuals](../visuals/spec.md) (visual cards, tailoring from chat, follow-up chips), [verified-queries](../verified-queries/spec.md), [knowledge](../knowledge/spec.md), [metrics](../metrics/spec.md), [deep-analysis](../deep-analysis/spec.md) (the "Deep analysis" composer action and report messages), [datasets](../datasets/spec.md), [datasources](../datasources/spec.md).
 
 ## UI
 
@@ -233,11 +246,11 @@ Shell placement and tokens are in [ui.md](../../system/ui.md).
   - transcript;
   - Thinking block while a turn runs;
   - deep-analysis status card;
-  - composer: textarea with placeholder "Ask a follow-up question…", plus "Careful" (pressed state), "Deep analysis", and "Send message" / "Stop response";
+  - composer: textarea with placeholder "Ask a follow-up question…", plus "Careful" (pressed state), "Expert" (pressed state, [business-expert](../business-expert/spec.md)), "Deep analysis", and "Send message" / "Stop response";
   - follow-up chips from the open visual, specified in [visuals](../visuals/spec.md).
 - **Message kinds**:
   - user bubble;
-  - answer (Markdown plus the R32–R36 blocks, the "Generate interactive visuals" action from [visuals](../visuals/spec.md), and the badges and rating buttons);
+  - answer (Markdown, the reasoning trace panel for an expert answer from [business-expert](../business-expert/spec.md), the R32–R36 blocks, the "Generate interactive visuals" action from [visuals](../visuals/spec.md), and the badges, including the consistency chip from [answer-pinning](../answer-pinning/spec.md), and rating buttons);
   - clarification card (R43);
   - visual event card (see [visuals](../visuals/spec.md));
   - deep-analysis report card;
@@ -460,4 +473,4 @@ Feature: Chat answers and reliability signals
   - there is no rename;
   - datasets cannot be edited after creation.
 
-<!-- sources: backend/src/modules/sessions/sessions.controller.ts, sessions.service.ts, turn-data.ts, result-guards.ts, result-compare.ts, entities/session.entity.ts, repositories/sessions.repository.ts; backend/src/mastra/agents/assistant.agent.ts, sql-fixer.agent.ts, sql-verifier.agent.ts, tools/dataset.tools.ts, tools/clarification.tool.ts, tools/visual.tools.ts, agent-constants.ts, mastra.service.ts; backend/src/modules/verified-queries/verified-queries.service.ts; backend/src/infrastructure/database/sqlite-doc-store.ts; frontend/src/app/app.ts, app.html; frontend/src/app/features/sessions/components/session-chat/*, services/sessions-api.service.ts, models/session.model.ts; frontend/e2e/chat-and-visuals.spec.ts, e2e/helpers/app-actions.ts -->
+<!-- sources: backend/src/modules/sessions/sessions.controller.ts, sessions.service.ts, turn-data.ts, result-guards.ts, result-compare.ts, backend/src/modules/expert-mode/answer-record.ts, entities/session.entity.ts, repositories/sessions.repository.ts; backend/src/mastra/agents/assistant.agent.ts, sql-fixer.agent.ts, sql-verifier.agent.ts, tools/dataset.tools.ts, tools/clarification.tool.ts, tools/visual.tools.ts, agent-constants.ts, mastra.service.ts; backend/src/modules/verified-queries/verified-queries.service.ts; backend/src/infrastructure/database/sqlite-doc-store.ts; frontend/src/app/app.ts, app.html; frontend/src/app/features/sessions/components/session-chat/*, services/sessions-api.service.ts, models/session.model.ts; frontend/e2e/chat-and-visuals.spec.ts, e2e/helpers/app-actions.ts -->

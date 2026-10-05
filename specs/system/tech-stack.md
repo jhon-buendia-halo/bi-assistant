@@ -60,7 +60,7 @@ Build facts: the Angular production build has budgets (initial 500 kB warn / 1 M
 | Jest | ^30.0.0 (`ts-jest` ^29.2.5, `@types/jest` ^30.0.0) | Backend unit tests and the API-level e2e specs. |
 | supertest | ^7.0.0 | HTTP assertions in backend e2e specs. |
 | ESLint 9 + `typescript-eslint` ^8.20.0 + Prettier ^3.4.2 | | Lint and format (the `lint` script runs with `--fix`). |
-| `@nestjs/cli` | ^11.0.0 | `nest build` / `nest start`. `nest-cli.json` copies non-TS assets: `mastra/skills/**/*` and `modules/testing-data/fixtures/**/*.sql*`. |
+| `@nestjs/cli` | ^11.0.0 | `nest build` / `nest start`. `nest-cli.json` copies non-TS assets: `mastra/skills/**/*`, `modules/testing-data/fixtures/**/*.sql*` and `mastra/evals/suites/**/*`. |
 
 The LLM providers (OpenAI-compatible endpoints including LenAI, Anthropic) are reached through Mastra's model router; there is no direct provider SDK dependency. See [agents.md](agents.md) for model resolution.
 
@@ -147,7 +147,7 @@ Rules:
 - `infrastructure/` is technical concerns. Feature modules depend on infrastructure, never the reverse.
 - `config/` is typed configuration files.
 
-Current state (verified): existing modules are `agents`, `datasets`, `datasources`, `deep-analysis`, `knowledge`, `llm`, `metrics`, `sessions`, `testing-data`, `verified-queries`. `infrastructure/` has `crypto` and `database` only. `common/` and `config/` do not exist yet; create them when the first cross-cutting block or typed config appears.
+Current state (verified): existing modules are `agents`, `answer-pins`, `datasets`, `datasources`, `deep-analysis`, `expert-mode`, `knowledge`, `learning`, `llm`, `metrics`, `sessions`, `testing-data`, `verified-queries`. `expert-mode`, `learning` and `answer-pins` are imported by `sessions` (never the reverse); `learning` has no controller, its only entry is the sessions controller's block-feedback route. The business-expert trace contract is one shape in two files, `modules/expert-mode/entities/reasoning-trace.entity.ts` and the frontend's `features/sessions/models/expert-trace.model.ts`. `infrastructure/` has `crypto` and `database` only. `common/` and `config/` do not exist yet; create them when the first cross-cutting block or typed config appears.
 
 Datastore pattern: a small `DocStore<T>` interface (`infrastructure/database/doc-store.ts`) with a better-sqlite3 adapter (`sqlite-doc-store.ts`): one table per collection, each row one JSON document, filters and sorts evaluated in-process. `DatabaseModule` is `@Global()` and exposes one injection token per collection (for example `CONNECTIONS_STORE`); repositories inject the token, never the db handle. A new collection is a `{ token, table }` entry in `COLLECTIONS` in `database.module.ts` plus a token in `doc-store.ts`. Renames need a migration (see [data-model.md](data-model.md)). Data directory: `APP_DATA_DIR`, else `<cwd>/data`.
 
@@ -157,8 +157,8 @@ Agent harness: `backend/src/mastra/` — `index.ts` builds the standalone Mastra
 
 | Layer | Where | Runner | Notes |
 |---|---|---|---|
-| Frontend unit | `frontend/src/**/*.spec.ts`, beside the source | `ng test` (Karma + Jasmine, Chrome) | 8 specs today: app shell, system logs panel, log runs, metrics and sessions API services, knowledge list, visual panel, session chat. |
-| Backend unit | `backend/src/**/*.spec.ts`, beside the source | Jest (`rootDir: src`, `ts-jest`, node env) | The bulk of the tests (33 specs). |
+| Frontend unit | `frontend/src/**/*.spec.ts`, beside the source | `ng test` (Karma + Jasmine, Chrome) | 12 specs today: app shell, system logs panel, log runs, agent detail, eval model, metrics and sessions API services, knowledge list, visual panel, session chat, expert trace, table and join diagram. |
+| Backend unit | `backend/src/**/*.spec.ts`, beside the source | Jest (`rootDir: src`, `ts-jest`, node env) | The bulk of the tests (51 specs). |
 | Backend API-level e2e | `backend/test/*.e2e-spec.ts`, config `test/jest-e2e.json` | Jest | `answer-guards.e2e-spec.ts` runs the result guards against the seeded World Cup Postgres and **skips** (visibly) when the fixture is unreachable. Fixture connection helpers are in `test/world-cup.ts` (`WORLD_CUP_DB_HOST` default `localhost`, `WORLD_CUP_DB_PORT` default `55432`). `app.e2e-spec.ts` is the untouched Nest scaffold (expects `GET /` to return "Hello World!"); the full `AppModule` cannot boot under Jest because Mastra is ESM, so specs that need Nest import focused feature modules and default-import supertest. |
 | Product e2e | `frontend/e2e/*.spec.ts` | Playwright driving the real Electron app | One spec file per Gherkin Feature: `agents`, `chat-and-visuals`, `diagnostics`, `layout-accessibility`, `world-cup-workflow`. Serial (`workers: 1`, `fullyParallel: false`), 60 s test timeout, 10 s expect timeout, traces/screenshots/video kept on failure, HTML report; one CI retry. |
 
@@ -166,7 +166,7 @@ Playwright specifics:
 
 - Fixture `e2e/fixtures/electron.fixture.ts` extends the base test with `appDataDir` (a fresh temp dir per test), `electronApp` (launches `frontend/` via `_electron.launch`, `NODE_ENV=test`, `QUESTIONS_TO_INSIGHTS_USER_DATA_DIR=<temp dir>` so the test never touches a developer's profile) and `page` (first window, waits for the "Open system logs" control). On failure it attaches `system-diagnostics.ndjson`, `electron-stdout.txt` and `electron-stderr.txt`. `e2e/helpers/app-actions.ts` holds shared UI actions.
 - `e2e/global-setup.ts` aborts if port 3000 is already in use (close any running app first), then runs `docker compose up -d --wait postgres` from the repo root. `E2E_SKIP_DOCKER=1` skips the compose step when an equivalent database is already running.
-- The World Cup sample database: `docker-compose.yml` service `postgres` (`postgres:16-alpine`, DB/user `world_cup`, password `world_cup_dev`, host port `${WORLD_CUP_DB_PORT:-55432}`), seeded from `docker/postgres/init/001_world_cup.sql` into schema `world_cup` (plus the synthetic eval fixtures `002_health_insurance.sql` and `003_genomics.sql` in their own schemas). `world-cup-workflow.spec.ts` depends on it. See [delivery.md](delivery.md) for compose and isolation knobs.
+- The World Cup sample database: `docker-compose.yml` service `postgres` (`postgres:16-alpine`, DB/user `world_cup`, password `world_cup_dev`, host port `${WORLD_CUP_DB_PORT:-55432}`), seeded from `docker/postgres/init/001_world_cup.sql` into schema `world_cup` (plus the synthetic eval fixtures `002_health_insurance.sql`, `003_genomics.sql`, `004_hr.sql` and `005_retail.sql` in their own schemas). `world-cup-workflow.spec.ts` depends on it. See [delivery.md](delivery.md) for compose and isolation knobs.
 - Visual baseline: `e2e/layout-accessibility.spec.ts-snapshots/application-shell-darwin.png` (macOS only; `maxDiffPixelRatio: 0.01`, animations disabled). Update only with `npm run test:e2e:update`, and only for an intended visual change.
 - Before the suite runs, `npm run test:e2e:prepare` compiles the e2e TypeScript, builds the backend and builds the Angular app with `--base-href ./`, because the tests run the *built* app, not the dev server.
 
