@@ -158,6 +158,26 @@ describe('suite validation', () => {
     expect(() => parseSuite(broken, 'demo.json')).toThrow(expected);
   });
 
+  it('rejects a case that uses one check type twice, which would collide in scoring', () => {
+    const twice = suiteJson({
+      cases: [
+        {
+          id: 'first',
+          category: 'control',
+          question: 'How many things?',
+          intent: 'A baseline count.',
+          checks: [
+            { type: 'matches', pattern: '7' },
+            { type: 'matches', pattern: 'things', flags: 'i' },
+          ],
+        },
+      ],
+    });
+    expect(() => parseSuite(twice, 'demo.json')).toThrow(
+      /case "first" uses the "matches" check twice/,
+    );
+  });
+
   it('rejects a matches pattern that does not compile, before any run pays for it', () => {
     const broken = suiteJson({
       cases: [

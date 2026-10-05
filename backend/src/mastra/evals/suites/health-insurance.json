@@ -254,11 +254,7 @@
       "checks": [
         {
           "type": "matches",
-          "pattern": "29[,.]?127[,.]?007|291[,.]?270"
-        },
-        {
-          "type": "matches",
-          "pattern": "revers",
+          "pattern": "^(?=[\\s\\S]*(?:29[,.]?127[,.]?007|291[,.]?270))(?=[\\s\\S]*revers)",
           "flags": "i"
         },
         {
@@ -335,12 +331,7 @@
         },
         {
           "type": "matches",
-          "pattern": "claim[ _]denials",
-          "flags": "i"
-        },
-        {
-          "type": "matches",
-          "pattern": "denial[ _]reasons",
+          "pattern": "^(?=[\\s\\S]*claim[ _]denials)(?=[\\s\\S]*denial[ _]reasons)",
           "flags": "i"
         },
         {

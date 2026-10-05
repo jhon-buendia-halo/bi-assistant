@@ -341,6 +341,19 @@ function validateCase(
     parsed.checks = raw.checks.map((check) =>
       validateCheck(check, file, where),
     );
+    // `runEvals` keys scores by scorer id, so a second check of the same type
+    // overwrites the first one's score instead of being graded on its own.
+    const seenTypes = new Set<string>();
+    for (const check of parsed.checks) {
+      if (seenTypes.has(check.type)) {
+        fail(
+          file,
+          `${where} uses the "${check.type}" check twice — scores are keyed by check type, ` +
+            'so one would silently replace the other. Combine them (e.g. one regex with lookaheads).',
+        );
+      }
+      seenTypes.add(check.type);
+    }
   }
   return parsed;
 }

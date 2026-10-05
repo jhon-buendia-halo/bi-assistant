@@ -236,7 +236,7 @@ describe('AgentDetail evals tab', () => {
       expect(component.selectedCaseIds().size).toBe(0);
     });
 
-    it('clears the category filter and the last results when switching sets', () => {
+    it('clears the category filter, refusal and last results when switching sets', () => {
       component.selectSet('genomics');
       component.categoryFilter.set('ties');
       component.runResults.set([
@@ -251,7 +251,9 @@ describe('AgentDetail evals tab', () => {
           durationMs: 1,
         },
       ]);
+      component.runError.set('Missing entities: genomics.variants');
       component.selectSet('world-cup');
+      expect(component.runError()).toBeNull();
       expect(component.categoryFilter()).toBe('');
       expect(component.runResults()).toEqual([]);
       expect([...component.selectedCaseIds()]).toEqual(['a']);

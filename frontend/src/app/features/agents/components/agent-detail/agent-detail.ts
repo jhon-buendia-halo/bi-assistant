@@ -228,6 +228,7 @@ export class AgentDetail implements OnDestroy {
     const next = this.selectedSetId() === setId ? null : setId;
     if (next !== this.selectedSetId()) {
       this.evalSelection.clear();
+      this.runError.set(null);
       this.runResults.set([]);
       this.runStatus.set('idle');
       this.runCurrentQuestion.set(null);
