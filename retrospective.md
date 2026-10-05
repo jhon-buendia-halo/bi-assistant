@@ -14,6 +14,29 @@ Entry template:
 
 ---
 
+## 2026-10-05 — 0.2.4 Require PR approval on main (BA-110)
+
+### What went well
+- Before writing anything, I spotted that a "require PR" rule would also block the release workflow's direct push to `main`. The deploy-key design then came from the 0.2.3 lesson that GitHub Actions can't be a bypass actor in a personal-account repo.
+- The throwaway-branch probe from 0.2.3 was reused, and it proved all four behaviours before `main` was touched: the admin's direct push is rejected, a deploy-key push is accepted, an unapproved PR is blocked, and the admin can merge it with `--admin`.
+- The new rule is a separate ruleset, so the admin bypass doesn't weaken the spec check.
+
+### What went wrong
+- The Conductor `GH_TOKEN` is an integration token without admin rights, so creating the deploy key and the ruleset failed with HTTP 403. The user had to log `gh` in as the owner mid-task.
+- The first deploy-key push looked like a failed bypass. ssh had offered the user's own key from `~/.ssh/config` and authenticated as the user ("Hi jhon-buendia-halo!"), not as the deploy key.
+- Shell slips in zsh cost three retries:
+  - `"$c1:refs/..."` was rewritten by zsh's `:r` modifier.
+  - `G="env -u GH_TOKEN gh"; $G ...` doesn't word-split in zsh.
+  - `jira.sh raw` was given a JSON file path when it expects the JSON inline.
+- The CLAUDE.md change asked for earlier in the session needed no edit, because the rule already existed. Reading the current text before planning settled that in one question.
+
+### What to do differently
+- For any repo-admin action (rulesets, deploy keys, secrets), run `unset GH_TOKEN` first and check `gh api repos/<r> -q .permissions.admin` is `true` before starting.
+- To test a deploy key, use `ssh -F /dev/null -i <key> -o IdentitiesOnly=yes -T git@github.com` and confirm the greeting names the repo, not a user, before trusting a push result.
+- In zsh, always brace variables next to a colon (`"${sha}:refs/heads/x"`).
+- Pass JSON to `jira.sh raw` inline: `jira.sh raw POST /rest/api/3/issue "$(cat body.json)"`.
+- Turn on a ruleset that changes how the release pushes only right before merging the PR that changes the release workflow, so no other merge runs the old workflow against the new rule.
+
 ## 2026-10-04 — 0.2.3 Require the spec check on main (BA-108)
 
 ### What went well

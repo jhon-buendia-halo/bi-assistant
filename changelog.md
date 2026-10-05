@@ -2,6 +2,15 @@
 
 Running log of every meaningful change, newest first. See *Logging convention* and *Evidence convention* in [CLAUDE.md](CLAUDE.md). Release versions come from Conventional Commits (`version-on-merge.yml`); this file records what shipped and links to the evidence.
 
+## 2026-10-05
+
+### Added
+- **PRs into `main` need an approving review; only the repo owner can merge without one** (roadmap 0.2.4, [BA-110](https://halo-powered.atlassian.net/browse/BA-110), epic [BA-89](https://halo-powered.atlassian.net/browse/BA-89)):
+  - A second ruleset, "main: PR approval, admin may merge without", requires a PR with 1 approving review and dismisses stale approvals. The *Repository admin* role bypasses it in *pull requests only* mode, so the owner can merge without approval but can't push directly to `main`. The spec-check ruleset is unchanged and still applies to everyone.
+  - [`version-on-merge.yml`](.github/workflows/version-on-merge.yml) now pushes its release commit and tag over SSH with a repo-scoped write deploy key (`RELEASE_DEPLOY_KEY` secret). Deploy keys are on the new ruleset's bypass list, because GitHub Actions can't be in a personal-account repo.
+  - Documented under *Branch rulesets on `main`* and *Release push* in [specs/system/delivery.md](specs/system/delivery.md), in the BA-89 epic spec, and as a **Review** bullet in the CLAUDE.md *Branching convention*.
+  - Evidence: [evidence/0.2.4/](evidence/0.2.4/).
+
 ## 2026-10-04
 
 ### Changed

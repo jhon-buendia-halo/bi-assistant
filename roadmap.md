@@ -79,6 +79,21 @@ How work is planned, specified, built, verified and traced. It covers the repo's
   - `specs/system/delivery.md` describes the ruleset and the release workflow's status step.
 - **Notes:** follows 0.2.2. Evidence: [evidence/0.2.3/](evidence/0.2.3/).
 
+#### 0.2.4 — Require PR approval on `main`; only the repo admin may merge without one ([BA-110](https://halo-powered.atlassian.net/browse/BA-110))  `✅ Done`
+- **Intent:** every change into `main` from a collaborator is reviewed by someone else first. The repo owner can still merge their own PRs without waiting.
+- **Scope:**
+  - A second repository ruleset on the default branch: PR required, 1 approving review, stale approvals dismissed when new commits are pushed.
+  - Bypass list: the *Repository admin* role in *pull requests only* mode. The owner is the only admin of this personal-account repo, so only the owner can merge without approval, and still can't push straight to `main`.
+  - The release workflow (`version-on-merge.yml`) pushes its bump commit straight to `main`, and GitHub Actions can't be on a bypass list in a personal-account repo. So it pushes with a repo-scoped write deploy key (`RELEASE_DEPLOY_KEY` secret), and deploy keys are on the bypass list.
+  - CLAUDE.md *Branching convention* states the rule.
+- **Out of scope:** CODEOWNERS or code-owner review; changing the spec-check ruleset; who has write access.
+- **Acceptance:**
+  - Without an approval, a PR can't be merged by a write collaborator, but the admin can merge it with the bypass.
+  - A direct push to `main` is rejected, including the admin's.
+  - After this PR merges, the release workflow still pushes the bump commit and tag to `main` with both rulesets active.
+  - `specs/system/delivery.md` describes both rulesets and the deploy-key release push.
+- **Notes:** follows 0.2.3. The probe on a throwaway branch confirmed that deploy-key bypass works on a personal-account repo: [evidence/0.2.4/](evidence/0.2.4/).
+
 ## Release 1 — 1.0 Beta  (target 2026-10-31)
 
 Source of truth for scope and dates: Jira project **BA**, version *1.0 Beta* ([timeline](https://halo-powered.atlassian.net/jira/software/projects/BA/boards/2688/timeline)). Each milestone mirrors one Jira epic and each feature mirrors one story, so IDs map 1:1. Imported 2026-10-01. Status changes are made in both places.

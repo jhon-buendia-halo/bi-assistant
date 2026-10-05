@@ -191,10 +191,11 @@ All release workflows run on Node 22 and live in `.github/workflows/`. The one p
 | Skipped when | The head commit message starts with `chore(release):` (its own bump commit). |
 | Concurrency | Group `version-on-merge`, no cancellation, so quick back-to-back merges queue. |
 | Bump level | From commits since the last `v*` tag: `BREAKING CHANGE` / `BREAKING-CHANGE` in any body, or a subject `type!:` → **major**; any subject `feat:` / `feat(scope):` → **minor**; otherwise **patch**. |
-| Effects | `npm version <level> --no-git-tag-version` in `frontend/`, then the same version in `backend/`; commits both `package.json` and `package-lock.json` pairs as `chore(release): vX.Y.Z` as `github-actions[bot]`; creates annotated tag `vX.Y.Z`; pushes the branch and the tag. Builds nothing. The run summary says which tag to build. |
-| Spec check | The default branch has a ruleset that requires the "Specs match the code" check (see *Branch ruleset* below). The bump commit is pushed straight to `main`, and GitHub Actions can't be put on the bypass list in a personal-account repo. So before pushing, the job runs `scripts/check-specs.py` on the bump commit. It then pushes the commit to a temporary `release-staging/<sha>` branch so GitHub knows the commit, and reports a successful `Specs match the code` commit status on it. Only then does it push to `main`, push the tag, and delete the staging branch. If the check fails, nothing is pushed. |
-| Permissions | `contents: write` (commit, tag, staging branch), `statuses: write` (the spec-check status) |
-| Chaining | Tags pushed with `GITHUB_TOKEN` do not trigger other workflows, which is what keeps merge-time tagging from starting builds. |
+| Effects | `npm version <level> --no-git-tag-version` in `frontend/`, then the same version in `backend/`; commits both `package.json` and `package-lock.json` pairs as `chore(release): vX.Y.Z` as `github-actions[bot]`; creates annotated tag `vX.Y.Z`; pushes the branch and the tag over SSH with the `RELEASE_DEPLOY_KEY` deploy key (see *Release push* below). Builds nothing. The run summary says which tag to build. |
+| Release push | `main` requires a reviewed PR (see *Branch rulesets* below), and GitHub Actions can't be put on a bypass list in a personal-account repo. So checkout uses `ssh-key: secrets.RELEASE_DEPLOY_KEY`: a write deploy key titled "version-on-merge release push (BA-110)", on the review ruleset's bypass list. Every `git push` in the job goes through it. |
+| Spec check | The default branch also requires the "Specs match the code" check (see *Branch rulesets* below), and that ruleset has no bypass, so the deploy key doesn't skip it. So before pushing, the job runs `scripts/check-specs.py` on the bump commit. It then pushes the commit to a temporary `release-staging/<sha>` branch so GitHub knows the commit, and reports a successful `Specs match the code` commit status on it. Only then does it push to `main`, push the tag, and delete the staging branch. If the check fails, nothing is pushed. |
+| Permissions | `contents: write`, `statuses: write` (the spec-check status, reported with `GITHUB_TOKEN`). Pushes use the deploy key, not `GITHUB_TOKEN`. |
+| Chaining | Pushes made with the deploy key do trigger workflows. The bump commit starts `spec-checks.yml` on `main` and a `version-on-merge.yml` run that skips itself (see *Skipped when*). No workflow listens for tags, so tagging starts no builds. |
 
 Conventional Commit subjects therefore drive the bump, which is why a branch's type should match its PR's main commit type (see *Branching convention* in [CLAUDE.md](../../CLAUDE.md)).
 
@@ -248,13 +249,40 @@ Runs on every pull request, on every push to `main`, and on manual dispatch. It 
 
 The checks prove coverage, not correctness. Reviewers still check that the spec text is right. Run the same check locally with `python3 scripts/check-specs.py`.
 
-### Branch ruleset on `main`
+### Branch rulesets on `main`
+
+Two repository rulesets apply to the default branch.
+
+#### "main: specs match the code"
 
 Repository ruleset **"main: specs match the code"**, enforcement *active*, target `~DEFAULT_BRANCH`. It has one rule: the required status check `Specs match the code`, from any source and without requiring the branch to be up to date. It has no bypass actors.
 
 - **Pull requests** can merge only once `spec-checks.yml` has passed on their head commit.
 - **Direct pushes to `main`** are rejected unless the pushed commit already carries a successful `Specs match the code` status. Only the release workflow does this (see *Spec check* in `version-on-merge.yml` above). Everyone else goes through a PR.
-- **Inspect or change the rule:** Settings → Rules → Rulesets, or `gh api repos/<owner>/<repo>/rulesets`.
+
+#### "main: PR approval, admin may merge without"
+
+Repository ruleset **"main: PR approval, admin may merge without"**, enforcement *active*, target `~DEFAULT_BRANCH`. It has one rule, *pull request required*:
+
+| Parameter | Value |
+|---|---|
+| Required approving reviews | 1 |
+| Dismiss stale approvals when new commits are pushed | yes |
+| Code-owner review, approval of the last push, resolved threads | not required |
+
+Bypass list:
+
+| Actor | Mode | Effect |
+|---|---|---|
+| Repository admin role | *pull requests only* | Can merge a PR without an approval (`gh pr merge --admin`, or the bypass checkbox in the merge box). Can't push straight to `main`. In this personal-account repo the owner is the only admin, so the owner is the only person who can merge without a review. Collaborators have write access. |
+| Deploy keys | *always* | The release workflow's `RELEASE_DEPLOY_KEY` pushes the bump commit straight to `main` (see *Release push* above). |
+
+- **Everyone else** needs one approving review before merging, and the spec check must still pass.
+- Granting another person admin, or adding a deploy key with write access, also lets them skip the review. Keep the repo's admin list and its write deploy keys to the owner and the release key.
+
+#### Both rulesets
+
+- **Inspect or change the rules:** Settings → Rules → Rulesets, or `gh api repos/<owner>/<repo>/rulesets`.
 
 ## 6. Docker Compose: the World Cup sample database
 
