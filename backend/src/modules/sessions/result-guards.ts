@@ -1,3 +1,5 @@
+import { predicateColumns, scanSql } from './sql-precheck';
+
 /**
  * Cheap, dialect-agnostic checks for result sets that are technically valid but
  * analytically worthless — the kind an assistant happily narrates ("retention
@@ -6,6 +8,11 @@
  * These run on every answer, so the bias is deliberately towards false
  * negatives: a spurious warning on a correct answer costs more trust than a
  * missed one. Heuristics only — no SQL parser, no schema knowledge.
+ *
+ * L3 `extendedGuards` (`InspectOptions.extended`) widens the net — constant
+ * metrics of any value, results keyed only by ids, a curated default filter
+ * the query skipped. Off by default: the engine ships unchanged until an eval
+ * arm shows the extra warnings help more than they distract.
  */
 
 export type DataWarningCode =
@@ -13,12 +20,21 @@ export type DataWarningCode =
   | 'constant-metric'
   | 'unordered-limit'
   | 'blank-group-key'
-  | 'row-cap-reached';
+  | 'row-cap-reached'
+  | 'id-only-projection'
+  | 'default-filter-missing';
 
 export interface DataWarning {
   code: DataWarningCode;
   /** One short business-readable sentence. No SQL syntax, no column-name dumps beyond naming the column. */
   message: string;
+}
+
+export interface InspectOptions {
+  /** L3 `extendedGuards`: constant metric of any value, id-only projection, missing default filter. */
+  extended?: boolean;
+  /** Knowledge `default_filter`s in scope (`KnowledgeService.defaultFilters`) — read only when `extended`. */
+  defaultFilters?: { entity: string; predicate: string; title?: string }[];
 }
 
 /** Cell scan ceiling; result sets are already row-capped upstream, this only bounds pathological cases. */
@@ -29,6 +45,7 @@ export function inspectResult(
   sql: string,
   rows: Record<string, unknown>[],
   rowLimit?: number,
+  opts?: InspectOptions,
 ): DataWarning[] {
   // Guards are advisory: any surprise in the input must degrade to "nothing to
   // report", never break the answer they are attached to.
@@ -42,12 +59,15 @@ export function inspectResult(
       : [];
     const mask = maskLiterals(text);
     const sample = data.slice(0, MAX_SCANNED_ROWS);
+    const extended = opts?.extended === true;
     return [
       ...degenerateRatios(text, mask),
-      ...constantMetrics(sample),
+      ...constantMetrics(sample, extended),
       ...unorderedLimit(mask),
       ...blankGroupKeys(sample),
       ...rowCapReached(mask, data.length, rowLimit),
+      ...(extended ? idOnlyProjection(sample) : []),
+      ...(extended ? defaultFilterMissing(text, opts?.defaultFilters) : []),
     ];
   } catch {
     return [];
@@ -245,11 +265,20 @@ function joinNames(names: string[]): string {
  * A rate that is 1 on every row (or a count that is 0 everywhere) almost always
  * means the join or the denominator collapsed, not that the business is
  * perfect. Only 0 and 1 are flagged — other constants are usually intentional.
+ *
+ * Extended: any constant value, because a `SUM` that comes back 4 812 on
+ * every row is the same collapsed join as a rate of 1 — except on id and
+ * period columns (`region_id`, `claim_year`), which are constant because the
+ * question filtered on them, not because the metric collapsed.
  */
-function constantMetrics(rows: Record<string, unknown>[]): DataWarning[] {
+function constantMetrics(
+  rows: Record<string, unknown>[],
+  extended = false,
+): DataWarning[] {
   if (rows.length < 2) return [];
   const warnings: DataWarning[] = [];
   for (const column of columnsOf(rows)) {
+    if (extended && (isIdColumn(column) || isPeriodColumn(column))) continue;
     let constant: number | null = null;
     let uniform = true;
     for (const row of rows) {
@@ -265,7 +294,7 @@ function constantMetrics(rows: Record<string, unknown>[]): DataWarning[] {
       }
     }
     if (!uniform || constant === null) continue;
-    if (constant !== 0 && constant !== 1) continue;
+    if (!extended && constant !== 0 && constant !== 1) continue;
     warnings.push({
       code: 'constant-metric',
       message: `${column} is ${constant} on every row, so it cannot explain any difference between them.`,
@@ -281,6 +310,102 @@ function numericValue(value: unknown): number | null {
   if (typeof value === 'string' && NUMERIC.test(value.trim()))
     return Number(value.trim());
   return null;
+}
+
+/** `id`, `member_id`: a key, not a measure. */
+function isIdColumn(column: string): boolean {
+  return /(^|_)id$/i.test(column);
+}
+
+const PERIOD_COLUMN = /(^|_)(year|month|quarter|week|day|date|period)$/i;
+
+function isPeriodColumn(column: string): boolean {
+  return PERIOD_COLUMN.test(column);
+}
+
+/* id-only-projection (extended) */
+
+/**
+ * A result whose only way of naming its rows is a `*_id` column answers
+ * "which member" with "member 5" — true, and useless to a reader who knows
+ * their members by name (the `id-vs-name` eval category).
+ */
+function idOnlyProjection(rows: Record<string, unknown>[]): DataWarning[] {
+  if (!rows.length) return [];
+  const columns = columnsOf(rows);
+  const ids = columns.filter(isIdColumn);
+  if (!ids.length) return [];
+  const others = columns.filter((column) => !ids.includes(column));
+  const hasText = others.some((column) =>
+    rows.some((row) => {
+      const value = row[column];
+      return (
+        typeof value === 'string' &&
+        value.trim() !== '' &&
+        numericValue(value) === null
+      );
+    }),
+  );
+  if (hasText) return [];
+  return [
+    {
+      code: 'id-only-projection',
+      message: `The result names its rows only by ${ids.length > 1 ? joinNames(ids) : ids[0]}, so join to the table that holds their names and report those instead.`,
+    },
+  ];
+}
+
+/* default-filter-missing (extended) */
+
+/**
+ * A curated `default_filter` (Knowledge) says every query over an entity
+ * excludes some rows — test claims, control samples. A query that reads the
+ * entity and never mentions the filter's column counts those rows. Without
+ * the schema this reads the predicate's columns from the text itself (the
+ * name next to a comparison), and any mention of them counts as applied.
+ */
+function defaultFilterMissing(
+  sql: string,
+  filters: InspectOptions['defaultFilters'],
+): DataWarning[] {
+  if (!filters?.length || !sql.trim()) return [];
+  const scan = scanSql(sql);
+  const mentioned = new Set(
+    scan.tokens
+      .filter(
+        (token) => token.kind === 'identifier' || token.kind === 'keyword',
+      )
+      .map((token) => token.value),
+  );
+  const warnings: DataWarning[] = [];
+  const seen = new Set<string>();
+  for (const filter of filters) {
+    if (!filter?.entity || !filter.predicate) continue;
+    const entityParts = filter.entity.toLowerCase().split('.');
+    const reads = scan.tables.some(
+      (ref) =>
+        !(ref.parts.length === 1 && scan.ctes.has(ref.parts[0])) &&
+        ref.parts.length <= entityParts.length &&
+        ref.parts.every(
+          (part, index) =>
+            entityParts[entityParts.length - ref.parts.length + index] === part,
+        ),
+    );
+    if (!reads) continue;
+    const columns = predicateColumns(filter.predicate);
+    if (!columns.length || columns.some((column) => mentioned.has(column)))
+      continue;
+    const table = entityParts[entityParts.length - 1];
+    const key = `${table} ${filter.title ?? ''}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const title = filter.title ? ` "${filter.title}"` : '';
+    warnings.push({
+      code: 'default-filter-missing',
+      message: `The query reads ${table} without its default filter${title} (${columns.join(', ')}), so rows that filter excludes are counted.`,
+    });
+  }
+  return warnings;
 }
 
 /* unordered-limit */

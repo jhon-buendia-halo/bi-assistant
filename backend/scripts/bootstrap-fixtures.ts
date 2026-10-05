@@ -11,16 +11,30 @@
  *   1. Register (or reuse) a Postgres datasource pointed at the dev
  *      `docker compose` database (see `docker-compose.yml`, port 55432).
  *   2. Save one dataset per fixture schema (`world_cup`, `health_insurance`,
- *      `genomics`), discovering the entity list from the datasource's own
- *      inventory rather than hard-coding table names.
- *   3. Seed the curated knowledge/metric entries that traps H9/H10 (health
- *      insurance) and G9/G10 (genomics) explicitly depend on existing.
+ *      `genomics`, `supply_chain`, `banking`), discovering the entity list
+ *      from the datasource's own inventory rather than hard-coding table
+ *      names.
+ *   3. Seed the FULL business-semantics document per fixture — every
+ *      knowledge snippet and metric in `fixture-semantics.ts`, plus each
+ *      dataset's operator-written description — not just the handful of
+ *      trap-specific entries the pre-U2-D version of this script seeded.
  *
  * Run with `npm run fixtures:register` from `backend/`.
  *
  * Boots the backend as a Nest standalone application context (no HTTP),
  * exactly like `run-eval.ts` — see that file for the pattern this mirrors.
+ *
+ * Flags (see `printUsage`): `--dry-run`, `--force-refresh` (dataset
+ * re-snapshot), `--reprofile` (also recompute column profiles),
+ * `--descriptions` (set dataset descriptions only — skip knowledge/metric
+ * seeding), `--semantics-only` (skip datasource/dataset creation — seed
+ * knowledge/metrics/descriptions against datasets already registered by a
+ * prior run). With no flags, today's behaviour is unchanged except that the
+ * full semantics set is now seeded (not just the four trap-specific
+ * entries) and dataset descriptions are set alongside it.
  */
+// Must stay the first import: see scripts/lib/use-isolated-observability.ts.
+import './lib/use-isolated-observability';
 import type { INestApplicationContext, LogLevel } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../src/app.module';
@@ -31,11 +45,23 @@ import type {
 } from '../src/modules/datasources/entities/datasource.entity';
 import { DatasetsService } from '../src/modules/datasets/datasets.service';
 import { DatasetsRepository } from '../src/modules/datasets/repositories/datasets.repository';
-import type { DatasetEntitySnapshot } from '../src/modules/datasets/repositories/datasets.repository';
+import type {
+  DatasetDoc,
+  DatasetEntitySnapshot,
+} from '../src/modules/datasets/repositories/datasets.repository';
 import { KnowledgeService } from '../src/modules/knowledge/knowledge.service';
-import type { KnowledgeSnippetInput } from '../src/modules/knowledge/entities/knowledge-snippet.entity';
+import type {
+  KnowledgeSnippet,
+  KnowledgeSnippetInput,
+} from '../src/modules/knowledge/entities/knowledge-snippet.entity';
 import { MetricsService } from '../src/modules/metrics/metrics.service';
-import type { MetricInput } from '../src/modules/metrics/entities/metric.entity';
+import type { MetricDoc, MetricInput } from '../src/modules/metrics/entities/metric.entity';
+import {
+  FIXTURE_SEMANTICS,
+  type FixtureSemantics,
+  type SemanticKnowledgeSnippet,
+  type SemanticMetric,
+} from './fixture-semantics';
 
 /** A misconfiguration the operator must fix — reported without a stack trace. */
 class SetupError extends Error {}
@@ -44,7 +70,9 @@ class SetupError extends Error {}
 
 const DATASOURCE_NAME = 'Fixtures (local Postgres)';
 // Mirrors docker-compose.yml exactly: same default port, same override var,
-// same fixed dev credentials (never a secret worth protecting further).
+// same fixed dev credentials (never a secret worth protecting further). Also
+// the catalog segment `fixture-semantics.ts`'s two-segment `schema.table`
+// entity names get qualified with — one Postgres database, three schemas.
 const DB_PORT = Number(process.env.WORLD_CUP_DB_PORT ?? 55432);
 const DB_HOST = 'localhost';
 const DB_NAME = 'world_cup';
@@ -62,6 +90,8 @@ const FIXTURE_DATASETS: FixtureDataset[] = [
   { name: 'World Cup', schema: 'world_cup' },
   { name: 'Health Insurance', schema: 'health_insurance' },
   { name: 'Genomics', schema: 'genomics' },
+  { name: 'Supply Chain', schema: 'supply_chain' },
+  { name: 'Banking', schema: 'banking' },
 ];
 
 // ------------------------------------------------------------------ cli
@@ -69,13 +99,28 @@ const FIXTURE_DATASETS: FixtureDataset[] = [
 interface Options {
   dryRun: boolean;
   forceRefresh: boolean;
+  /** Also call `DatasetsService.reprofile(name)` for each fixture dataset. */
+  reprofile: boolean;
+  /** Set dataset descriptions only — skip knowledge/metric seeding entirely. */
+  descriptionsOnly: boolean;
+  /** Skip datasource/dataset creation — seed semantics against existing datasets. */
+  semanticsOnly: boolean;
 }
 
 function parseArgs(argv: string[]): Options {
-  const options: Options = { dryRun: false, forceRefresh: false };
+  const options: Options = {
+    dryRun: false,
+    forceRefresh: false,
+    reprofile: false,
+    descriptionsOnly: false,
+    semanticsOnly: false,
+  };
   for (const arg of argv) {
     if (arg === '--dry-run') options.dryRun = true;
     else if (arg === '--force-refresh') options.forceRefresh = true;
+    else if (arg === '--reprofile') options.reprofile = true;
+    else if (arg === '--descriptions') options.descriptionsOnly = true;
+    else if (arg === '--semantics-only') options.semanticsOnly = true;
     else if (arg === '--help' || arg === '-h') {
       printUsage();
       process.exit(0);
@@ -89,8 +134,16 @@ function printUsage(): void {
     [
       'Usage: npm run fixtures:register -- [options]',
       '',
-      '  --dry-run        print what would change, touch nothing',
-      '  --force-refresh  re-snapshot datasets that already exist',
+      '  --dry-run         print what would change, touch nothing',
+      '  --force-refresh   re-snapshot datasets that already exist',
+      '  --reprofile       also recompute column profiles for each fixture dataset',
+      '  --descriptions    set dataset descriptions only — skip knowledge/metric seeding',
+      '  --semantics-only  skip datasource/dataset creation — seed knowledge/metrics/',
+      '                    descriptions against datasets a prior run already registered',
+      '',
+      'With no flags: register the datasource, save/refresh every fixture',
+      'dataset, seed the full semantics document per fixture (knowledge +',
+      'metrics), and set each dataset\'s description.',
       '',
       'Env: WORLD_CUP_DB_PORT (default 55432),',
       '     APP_DATA_DIR (datastore location — must match the desktop app).',
@@ -107,9 +160,20 @@ interface DatasetSummary {
   detail?: string;
 }
 
-interface KnowledgeSummary {
-  label: string;
-  status: 'created' | 'skipped' | 'would-create';
+/** One row of the semantics summary table — description, knowledge, metric or reprofile. */
+interface SemanticsRow {
+  fixture: string;
+  item: string;
+  status:
+    | 'created'
+    | 'updated'
+    | 'unchanged'
+    | 'would-create'
+    | 'would-update'
+    | 'reprofiled'
+    | 'would-reprofile'
+    | 'skipped';
+  detail?: string;
 }
 
 // -------------------------------------------------------- datasource step
@@ -186,9 +250,7 @@ function findSchema(catalogs: CatalogInfo[], schemaName: string) {
 
 /**
  * Ensure one fixture dataset exists, scoped to every table/view in its
- * schema. Skips (warns, does not fail) when the schema is not present yet —
- * the health-insurance and genomics generators are a parallel unit's work
- * and may not have run when this is first tried.
+ * schema. Skips (warns, does not fail) when the schema is not present yet.
  */
 async function ensureDataset(
   datasets: DatasetsService,
@@ -263,216 +325,236 @@ async function ensureDataset(
   };
 }
 
-// ----------------------------------------------------------- knowledge step
+// ---------------------------------------------------------- semantics step
 
-interface CuratedEntry {
-  label: string;
-  /** Which existing-entries pool `matches` should be checked against. */
-  pool: 'metric' | 'knowledge';
-  datasetReady: boolean;
-  /** True when an equivalent entry (by kind + scope + title) already exists. */
-  matches: (existing: { kind: string; title: string; scope: unknown }) => boolean;
-  create: () => Promise<void>;
+/** Prefix a `schema.table` entity name with the catalog (`DB_NAME` — one Postgres database, three schemas). */
+function qualifyEntity(entity: string): string {
+  return `${DB_NAME}.${entity}`;
 }
 
-function sameScope(
-  a: { datasetId?: string } | null | undefined,
-  datasetId: string,
-): boolean {
-  return (a?.datasetId ?? '') === datasetId;
+function qualifyEntities(entities: string[]): string[] {
+  return entities.map(qualifyEntity);
 }
 
-/** Create (or report as already present / would-create) one curated entry. */
-async function ensureEntry(
-  entry: CuratedEntry,
-  existingList: { kind: string; title: string; scope: unknown }[],
+/** Idempotent-by-`(scope.datasetId, title)` create/update of one knowledge snippet. */
+async function seedKnowledgeSnippet(
+  knowledge: KnowledgeService,
+  existing: KnowledgeSnippet[],
+  fixture: FixtureSemantics,
+  snippet: SemanticKnowledgeSnippet,
   options: Options,
-): Promise<KnowledgeSummary> {
-  const already = existingList.some((e) => entry.matches(e));
-  if (already) return { label: entry.label, status: 'skipped' };
-  if (options.dryRun) return { label: entry.label, status: 'would-create' };
-  await entry.create();
-  return { label: entry.label, status: 'created' };
+): Promise<SemanticsRow> {
+  const item = `knowledge: ${snippet.title}`;
+  const match = existing.find(
+    (k) =>
+      k.scope?.datasetId === fixture.datasetName && k.title === snippet.title,
+  );
+  const entities = qualifyEntities(snippet.entities);
+  const input: KnowledgeSnippetInput = {
+    kind: snippet.kind,
+    scope: { datasetId: fixture.datasetName },
+    title: snippet.title,
+    body: snippet.body,
+    ...(snippet.synonyms?.length ? { synonyms: snippet.synonyms } : {}),
+    entities,
+    ...(snippet.column ? { column: snippet.column } : {}),
+  };
+
+  if (!match) {
+    if (options.dryRun) {
+      return { fixture: fixture.datasetName, item, status: 'would-create' };
+    }
+    try {
+      await knowledge.create(input);
+      return { fixture: fixture.datasetName, item, status: 'created' };
+    } catch (err) {
+      return { fixture: fixture.datasetName, item, status: 'skipped', detail: message(err) };
+    }
+  }
+
+  const unchanged =
+    match.kind === input.kind &&
+    match.body === input.body &&
+    JSON.stringify(match.synonyms ?? []) === JSON.stringify(input.synonyms ?? []) &&
+    JSON.stringify(match.entities ?? []) === JSON.stringify(input.entities ?? []) &&
+    (match.column ?? undefined) === (input.column ?? undefined);
+  if (unchanged) return { fixture: fixture.datasetName, item, status: 'unchanged' };
+  if (options.dryRun) {
+    return { fixture: fixture.datasetName, item, status: 'would-update' };
+  }
+  try {
+    // Deliberately omit `enabled` from the update patch — a snippet a human
+    // disabled in the app should stay disabled across re-seeding.
+    await knowledge.update(match.id, input);
+    return { fixture: fixture.datasetName, item, status: 'updated' };
+  } catch (err) {
+    return { fixture: fixture.datasetName, item, status: 'skipped', detail: message(err) };
+  }
+}
+
+/** Idempotent-by-`name` create/update of one metric. */
+async function seedMetric(
+  metrics: MetricsService,
+  existing: MetricDoc[],
+  fixture: FixtureSemantics,
+  metric: SemanticMetric,
+  datasourceId: string | undefined,
+  options: Options,
+): Promise<SemanticsRow> {
+  const item = `metric: ${metric.name}`;
+  const match = existing.find((m) => m.name === metric.name);
+  const input: MetricInput = {
+    name: metric.name,
+    label: metric.label,
+    description: metric.description,
+    entity: qualifyEntity(metric.entity),
+    expression: metric.expression,
+    ...(metric.dimensions?.length ? { dimensions: metric.dimensions } : {}),
+    ...(datasourceId ? { datasourceId } : {}),
+  };
+
+  if (!match) {
+    if (options.dryRun) {
+      return { fixture: fixture.datasetName, item, status: 'would-create' };
+    }
+    try {
+      await metrics.create(input);
+      return { fixture: fixture.datasetName, item, status: 'created' };
+    } catch (err) {
+      return { fixture: fixture.datasetName, item, status: 'skipped', detail: message(err) };
+    }
+  }
+
+  const unchanged =
+    match.label === input.label &&
+    (match.description ?? '') === (input.description ?? '') &&
+    match.entity === input.entity &&
+    match.expression === input.expression &&
+    JSON.stringify(match.dimensions ?? []) === JSON.stringify(input.dimensions ?? []);
+  if (unchanged) return { fixture: fixture.datasetName, item, status: 'unchanged' };
+  if (options.dryRun) {
+    return { fixture: fixture.datasetName, item, status: 'would-update' };
+  }
+  try {
+    await metrics.update(match.id, input);
+    return { fixture: fixture.datasetName, item, status: 'updated' };
+  } catch (err) {
+    return { fixture: fixture.datasetName, item, status: 'skipped', detail: message(err) };
+  }
+}
+
+/** Set (idempotently) the operator-written dataset description. */
+async function seedDescription(
+  datasets: DatasetsService,
+  currentDoc: DatasetDoc | undefined,
+  fixture: FixtureSemantics,
+  options: Options,
+): Promise<SemanticsRow> {
+  const item = 'description';
+  if (!currentDoc) {
+    return {
+      fixture: fixture.datasetName,
+      item,
+      status: 'skipped',
+      detail: 'dataset not registered — run without --semantics-only first',
+    };
+  }
+  if ((currentDoc.description ?? '') === fixture.description) {
+    return { fixture: fixture.datasetName, item, status: 'unchanged' };
+  }
+  const hadDescription = Boolean(currentDoc.description);
+  if (options.dryRun) {
+    return {
+      fixture: fixture.datasetName,
+      item,
+      status: hadDescription ? 'would-update' : 'would-create',
+    };
+  }
+  try {
+    await datasets.updateDescription(fixture.datasetName, fixture.description);
+    return {
+      fixture: fixture.datasetName,
+      item,
+      status: hadDescription ? 'updated' : 'created',
+    };
+  } catch (err) {
+    return { fixture: fixture.datasetName, item, status: 'skipped', detail: message(err) };
+  }
+}
+
+/** Recompute column profiles for one fixture dataset (`--reprofile`). */
+async function reprofileFixture(
+  datasets: DatasetsService,
+  currentDoc: DatasetDoc | undefined,
+  fixture: FixtureSemantics,
+  options: Options,
+): Promise<SemanticsRow> {
+  const item = 'reprofile';
+  if (!currentDoc) {
+    return {
+      fixture: fixture.datasetName,
+      item,
+      status: 'skipped',
+      detail: 'dataset not registered — run without --semantics-only first',
+    };
+  }
+  if (options.dryRun) {
+    return { fixture: fixture.datasetName, item, status: 'would-reprofile' };
+  }
+  try {
+    await datasets.reprofile(fixture.datasetName);
+    return { fixture: fixture.datasetName, item, status: 'reprofiled' };
+  } catch (err) {
+    return { fixture: fixture.datasetName, item, status: 'skipped', detail: message(err) };
+  }
 }
 
 /**
- * Seed the curated knowledge/metrics the health-insurance and genomics trap
- * catalogues (H9/H10, G9/G10 in docs/evals/synthetic-domains.md) explicitly
- * depend on. Column names are taken from that design doc: at the time this
- * script was written, `docker/postgres/init/002_health_insurance.sql` and
- * `003_genomics.sql` did not exist yet (a parallel unit generates them), so
- * these names should be re-checked against the real init scripts once they
- * land — see the report for exactly which ones to verify.
+ * Seed the full semantics document (`fixture-semantics.ts`) for every
+ * fixture: description always; knowledge + metrics unless `--descriptions`
+ * restricts the run to descriptions only; reprofile only when `--reprofile`
+ * is passed. Every write is wrapped so a NotFoundException (dataset not
+ * registered — the `--semantics-only` case) is reported as a `skipped` row
+ * instead of aborting the whole run.
  */
-async function seedCuratedContext(
+async function seedAllSemantics(
   knowledge: KnowledgeService,
   metrics: MetricsService,
-  datasourceId: string,
-  db: string,
-  datasetReady: { healthInsurance: boolean; genomics: boolean },
+  datasets: DatasetsService,
+  datasetsRepo: DatasetsRepository,
+  datasourceId: string | undefined,
   options: Options,
-): Promise<KnowledgeSummary[]> {
-  const [existingKnowledge, existingMetrics] = await Promise.all([
+): Promise<SemanticsRow[]> {
+  const [existingKnowledge, existingMetrics, currentDocs] = await Promise.all([
     knowledge.list(),
     metrics.list(),
+    datasetsRepo.getByNames(FIXTURE_SEMANTICS.map((f) => f.datasetName)),
   ]);
-  const existingMetricRows = existingMetrics.map((m) => ({
-    kind: 'metric',
-    title: m.name,
-    scope: { datasetId: m.entity },
-  }));
+  const docByName = new Map(currentDocs.map((d) => [d.name, d]));
 
-  const entries: CuratedEntry[] = [
-    // --- Health Insurance (H9: metric definition, H10: default filter) ---
-    {
-      label: 'metric: net paid (Health Insurance)',
-      pool: 'metric',
-      datasetReady: datasetReady.healthInsurance,
-      matches: (e) => e.kind === 'metric' && e.title === 'net_paid',
-      create: async () => {
-        const input: MetricInput = {
-          name: 'net_paid',
-          label: 'Net paid',
-          description:
-            'Gross paid minus reversed claims. REVERSED rows carry a positive ' +
-            'paid_amount_cents that must be subtracted, not summed.',
-          entity: `${db}.health_insurance.claims`,
-          datasourceId,
-          expression:
-            "SUM(paid_amount_cents) FILTER (WHERE status='PAID') - SUM(paid_amount_cents) FILTER (WHERE status='REVERSED')",
-        };
-        await metrics.create(input);
-      },
-    },
-    {
-      label: 'knowledge: exclude test claims (Health Insurance)',
-      pool: 'knowledge',
-      datasetReady: datasetReady.healthInsurance,
-      matches: (e) =>
-        e.kind === 'default_filter' &&
-        e.title === 'Exclude test claims' &&
-        sameScope(e.scope as { datasetId?: string }, 'Health Insurance'),
-      create: async () => {
-        const input: KnowledgeSnippetInput = {
-          kind: 'default_filter',
-          scope: { datasetId: 'Health Insurance' },
-          title: 'Exclude test claims',
-          body:
-            'Unless the question explicitly asks about test data, exclude ' +
-            'claims where is_test = true from every claims aggregate.',
-          entities: [`${db}.health_insurance.claims`],
-        };
-        await knowledge.create(input);
-      },
-    },
-    {
-      label: 'knowledge: amounts are in cents (Health Insurance)',
-      pool: 'knowledge',
-      datasetReady: datasetReady.healthInsurance,
-      matches: (e) =>
-        e.kind === 'term' &&
-        e.title === 'Amounts are stored in cents' &&
-        sameScope(e.scope as { datasetId?: string }, 'Health Insurance'),
-      create: async () => {
-        const input: KnowledgeSnippetInput = {
-          kind: 'term',
-          scope: { datasetId: 'Health Insurance' },
-          title: 'Amounts are stored in cents',
-          body:
-            'billed_amount_cents, allowed_amount_cents, paid_amount_cents and ' +
-            'member_responsibility_cents are integer cents, not dollars — ' +
-            'divide by 100 to report a dollar figure.',
-          synonyms: ['cents', 'dollars'],
-          entities: [`${db}.health_insurance.claims`],
-        };
-        await knowledge.create(input);
-      },
-    },
-    // --- Genomics (G9: metric definition, G10: default filter) ---
-    {
-      label: 'metric: allele fraction (Genomics)',
-      pool: 'metric',
-      datasetReady: datasetReady.genomics,
-      matches: (e) => e.kind === 'metric' && e.title === 'allele_fraction',
-      create: async () => {
-        const input: MetricInput = {
-          name: 'allele_fraction',
-          label: 'Allele fraction',
-          description:
-            'Mean fraction of reads supporting the alternate allele, restricted ' +
-            "to confidently-called genotypes (filter_status='PASS', depth >= 20).",
-          entity: `${db}.genomics.variant_calls`,
-          datasourceId,
-          expression:
-            "AVG(alt_read_count::numeric / NULLIF(total_read_count, 0)) FILTER (WHERE filter_status = 'PASS' AND total_read_count >= 20)",
-        };
-        await metrics.create(input);
-      },
-    },
-    {
-      label: 'knowledge: exclude control samples (Genomics)',
-      pool: 'knowledge',
-      datasetReady: datasetReady.genomics,
-      matches: (e) =>
-        e.kind === 'default_filter' &&
-        e.title === 'Exclude control samples' &&
-        sameScope(e.scope as { datasetId?: string }, 'Genomics'),
-      create: async () => {
-        const input: KnowledgeSnippetInput = {
-          kind: 'default_filter',
-          scope: { datasetId: 'Genomics' },
-          title: 'Exclude control samples',
-          body:
-            'Unless the question explicitly asks about control samples, ' +
-            'exclude samples where is_control = true from cohort counts and ' +
-            'aggregates.',
-          entities: [`${db}.genomics.samples`],
-        };
-        await knowledge.create(input);
-      },
-    },
-    {
-      label: 'knowledge: genotype 0/0 is not a carrier (Genomics)',
-      pool: 'knowledge',
-      datasetReady: datasetReady.genomics,
-      matches: (e) =>
-        e.kind === 'term' &&
-        e.title === 'Genotype 0/0 is not a carrier' &&
-        sameScope(e.scope as { datasetId?: string }, 'Genomics'),
-      create: async () => {
-        const input: KnowledgeSnippetInput = {
-          kind: 'term',
-          scope: { datasetId: 'Genomics' },
-          title: 'Genotype 0/0 is not a carrier',
-          body:
-            'variant_calls.genotype = \'0/0\' is homozygous reference — the ' +
-            'sample does NOT carry the variant. Only genotypes with at least ' +
-            'one alt allele (e.g. 0/1, 1/1) count as carrying it.',
-          synonyms: ['carrier', 'homozygous reference'],
-          entities: [`${db}.genomics.variant_calls`],
-        };
-        await knowledge.create(input);
-      },
-    },
-  ];
+  const rows: SemanticsRow[] = [];
+  for (const fixture of FIXTURE_SEMANTICS) {
+    const currentDoc = docByName.get(fixture.datasetName);
+    rows.push(await seedDescription(datasets, currentDoc, fixture, options));
 
-  const results: KnowledgeSummary[] = [];
-  for (const entry of entries) {
-    if (!entry.datasetReady) {
-      results.push({ label: entry.label, status: 'skipped' });
-      continue;
+    if (!options.descriptionsOnly) {
+      for (const snippet of fixture.knowledge) {
+        rows.push(
+          await seedKnowledgeSnippet(knowledge, existingKnowledge, fixture, snippet, options),
+        );
+      }
+      for (const metric of fixture.metrics) {
+        rows.push(
+          await seedMetric(metrics, existingMetrics, fixture, metric, datasourceId, options),
+        );
+      }
     }
-    const pool =
-      entry.pool === 'metric'
-        ? existingMetricRows
-        : existingKnowledge.map((k) => ({
-            kind: k.kind,
-            title: k.title,
-            scope: k.scope,
-          }));
-    results.push(await ensureEntry(entry, pool, options));
+
+    if (options.reprofile) {
+      rows.push(await reprofileFixture(datasets, currentDoc, fixture, options));
+    }
   }
-  return results;
+  return rows;
 }
 
 // ---------------------------------------------------------------- helpers
@@ -486,23 +568,47 @@ function message(error: unknown): string {
 function printSummary(
   datasourceId: string,
   datasetSummaries: DatasetSummary[],
-  knowledgeSummaries: KnowledgeSummary[],
   options: Options,
 ): void {
   console.log('');
   console.log(`${options.dryRun ? '[dry-run] ' : ''}Datasource: ${DATASOURCE_NAME} (${datasourceId})`);
-  console.log('');
-  console.log('Datasets:');
-  for (const d of datasetSummaries) {
-    console.log(
-      `  - ${d.name}: ${d.status}${d.entityCount ? ` (${d.entityCount} entities)` : ''}` +
-        (d.detail ? ` — ${d.detail}` : ''),
-    );
+  if (datasetSummaries.length) {
+    console.log('');
+    console.log('Datasets:');
+    for (const d of datasetSummaries) {
+      console.log(
+        `  - ${d.name}: ${d.status}${d.entityCount ? ` (${d.entityCount} entities)` : ''}` +
+          (d.detail ? ` — ${d.detail}` : ''),
+      );
+    }
+  } else {
+    console.log('  (dataset step skipped — --semantics-only)');
   }
+}
+
+/** created/updated/unchanged (+ skipped/would-*) counts, then one line per item. */
+function printSemanticsSummary(rows: SemanticsRow[], options: Options): void {
   console.log('');
-  console.log('Curated context:');
-  for (const k of knowledgeSummaries) {
-    console.log(`  - ${k.label}: ${k.status}`);
+  console.log(
+    `${options.dryRun ? '[dry-run] ' : ''}Semantics (descriptions` +
+      `${options.descriptionsOnly ? ' only' : ' + knowledge + metrics'}` +
+      `${options.reprofile ? ' + reprofile' : ''}):`,
+  );
+  const counts = new Map<SemanticsRow['status'], number>();
+  for (const row of rows) counts.set(row.status, (counts.get(row.status) ?? 0) + 1);
+  const summaryLine = Array.from(counts.entries())
+    .map(([status, n]) => `${status}: ${n}`)
+    .join(', ');
+  console.log(`  ${summaryLine || '(nothing to seed)'}`);
+  console.log('');
+
+  let lastFixture: string | undefined;
+  for (const row of rows) {
+    if (row.fixture !== lastFixture) {
+      console.log(`  ${row.fixture}:`);
+      lastFixture = row.fixture;
+    }
+    console.log(`    - ${row.item}: ${row.status}${row.detail ? ` — ${row.detail}` : ''}`);
   }
   console.log('');
 }
@@ -524,53 +630,58 @@ async function main(): Promise<number> {
     const knowledge = app.get(KnowledgeService);
     const metrics = app.get(MetricsService);
 
-    const { id: datasourceId } = await ensureDatasource(datasources, options);
-
-    const config: PostgresConfig = {
-      host: DB_HOST,
-      port: DB_PORT,
-      database: DB_NAME,
-      user: DB_USER,
-      password: DB_PASSWORD,
-      ssl: false,
-    };
-    const catalogs = await loadCatalogs(datasources, config);
-
+    let datasourceId: string | undefined;
     const datasetSummaries: DatasetSummary[] = [];
-    for (const fixture of FIXTURE_DATASETS) {
-      const summary = await ensureDataset(
-        datasets,
-        datasetsRepo,
-        catalogs,
-        datasourceId,
-        fixture,
-        options,
-      );
-      datasetSummaries.push(summary);
-      if (summary.status === 'skipped') {
-        console.warn(`! ${summary.name}: ${summary.detail}`);
+
+    if (!options.semanticsOnly) {
+      const { id } = await ensureDatasource(datasources, options);
+      datasourceId = id;
+
+      const config: PostgresConfig = {
+        host: DB_HOST,
+        port: DB_PORT,
+        database: DB_NAME,
+        user: DB_USER,
+        password: DB_PASSWORD,
+        ssl: false,
+      };
+      const catalogs = await loadCatalogs(datasources, config);
+
+      for (const fixture of FIXTURE_DATASETS) {
+        const summary = await ensureDataset(
+          datasets,
+          datasetsRepo,
+          catalogs,
+          datasourceId,
+          fixture,
+          options,
+        );
+        datasetSummaries.push(summary);
+        if (summary.status === 'skipped') {
+          console.warn(`! ${summary.name}: ${summary.detail}`);
+        }
       }
+    } else {
+      // Best-effort provenance for new metrics — reuse the datasource id if
+      // it already exists, but never create or connect to one: the whole
+      // point of --semantics-only is to work without touching Postgres.
+      const existingDatasource = (await datasources.list()).find(
+        (d) => d.name === DATASOURCE_NAME,
+      );
+      datasourceId = existingDatasource?.id;
     }
 
-    const datasetReady = {
-      healthInsurance:
-        datasetSummaries.find((d) => d.name === 'Health Insurance')
-          ?.status !== 'skipped',
-      genomics:
-        datasetSummaries.find((d) => d.name === 'Genomics')?.status !==
-        'skipped',
-    };
-
-    const knowledgeSummaries = await seedCuratedContext(
+    const semanticsRows = await seedAllSemantics(
       knowledge,
       metrics,
+      datasets,
+      datasetsRepo,
       datasourceId,
-      DB_NAME,
-      datasetReady,
       options,
     );
 
-    printSummary(datasourceId, datasetSummaries, knowledgeSummaries, options);
+    printSummary(datasourceId ?? '(none — Postgres datasource not found)', datasetSummaries, options);
+    printSemanticsSummary(semanticsRows, options);
     return 0;
   } finally {
     await app.close().catch(() => undefined);

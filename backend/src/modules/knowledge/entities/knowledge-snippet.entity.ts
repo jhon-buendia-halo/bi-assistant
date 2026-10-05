@@ -34,6 +34,14 @@ export interface KnowledgeSnippet {
   synonyms?: string[];
   /** Fully-qualified `catalog.schema.table` bindings, e.g. `world_cup.world_cup.matches`. */
   entities?: string[];
+  /**
+   * A column name on the snippet's one entity — set only when `entities` has
+   * exactly one member (enforced by `KnowledgeService`). Lets the snippet be
+   * rendered inline next to that column (`describe_entity`, schema cards,
+   * `KnowledgeService.knowledgeByColumn`) instead of only in the separate
+   * Knowledge block.
+   */
+  column?: string;
   /** Only enabled snippets are injected into the assistant's context. */
   enabled: boolean;
   source: KnowledgeSnippetSource;
@@ -49,6 +57,8 @@ export interface KnowledgeSnippetInput {
   body: string;
   synonyms?: string[];
   entities?: string[];
+  /** See `KnowledgeSnippet.column` — only valid when `entities` has exactly one member. */
+  column?: string;
   enabled?: boolean;
 }
 

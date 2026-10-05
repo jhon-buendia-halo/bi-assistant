@@ -1,10 +1,27 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import { DATASETS_STORE } from '../../infrastructure/database/doc-store';
+import type { DocStore } from '../../infrastructure/database/doc-store';
 import { DatasourcesService } from '../datasources/datasources.service';
-import type { ForeignKeyEdge } from '../datasources/connectors/connector';
-import type { QueryResult } from '../datasources/entities/datasource.entity';
+import {
+  mapWithConcurrency,
+  type ForeignKeyEdge,
+} from '../datasources/connectors/connector';
+import type {
+  DatasourceKind,
+  QueryResult,
+} from '../datasources/entities/datasource.entity';
+import { profileColumns, DEFAULT_TOP_VALUES } from './column-profiles';
+import type { ProfileDialect } from './column-profiles';
 import { applyReferences, inferRelationships } from './relationships';
 import { DatasetsRepository } from './repositories/datasets.repository';
 import type {
+  ColumnProfile,
   DatasetColumnSnapshot,
   DatasetDoc,
   DatasetEntitySnapshot,
@@ -18,6 +35,8 @@ const SAMPLE_VALUE_CHARS = 40;
  * datasource kind supports it) — enough to be quick without hammering a
  * warehouse. */
 const ENRICHMENT_CONCURRENCY = 4;
+/** Operator-written dataset description, shown to the assistant. */
+const MAX_DESCRIPTION_CHARS = 2000;
 
 export interface SaveDatasetInput {
   name: string;
@@ -34,6 +53,8 @@ export class DatasetsService {
   constructor(
     private readonly repository: DatasetsRepository,
     private readonly datasources: DatasourcesService,
+    @Inject(DATASETS_STORE)
+    private readonly store: DocStore<DatasetDoc>,
   ) {}
 
   list(): Promise<DatasetDoc[]> {
@@ -46,7 +67,8 @@ export class DatasetsService {
 
   /**
    * Validate the selection against its datasource, enrich the schema snapshot
-   * with real sample values, and upsert the dataset by name.
+   * with real sample values and column profiles, and upsert the dataset by
+   * name.
    */
   async save(input: SaveDatasetInput): Promise<DatasetDoc | null> {
     const name = (input.name ?? '').trim();
@@ -68,23 +90,78 @@ export class DatasetsService {
     }
     const entities = await this.enrich(
       datasource.id,
+      datasource.kind,
       input.tables,
       input.entities,
     );
-    return this.repository.save(name, input.tables, entities, {
+    await this.repository.save(name, input.tables, entities, {
       id: datasource.id,
       kind: datasource.kind,
     });
+    return this.touchProfiledAt(name, entities);
   }
 
   /**
-   * Add `sampleValues` to each column from a live sample, then attach the join
-   * graph. Best effort per table: a sampling failure leaves that snapshot
-   * as-is, it never fails the save. Existing datasets are not backfilled —
-   * they enrich on re-save.
+   * Recompute column profiles for an already-saved dataset (its schema
+   * snapshot, sample values and join graph are left untouched) and persist
+   * them. Used by the `POST /datasets/:name/profile` re-profile action.
+   */
+  async reprofile(name: string): Promise<DatasetDoc | null> {
+    const dataset = (await this.repository.getByNames([name]))[0];
+    if (!dataset) throw new NotFoundException(`Dataset "${name}" not found`);
+    if (!dataset.datasourceId) {
+      throw new BadRequestException(
+        `Dataset "${name}" has no datasource to profile`,
+      );
+    }
+    const datasource = await this.datasources.get(dataset.datasourceId);
+    const entities = await this.profileEntities(
+      datasource.id,
+      datasource.kind,
+      dataset.entities ?? [],
+    );
+    await this.repository.save(name, dataset.tables, entities, {
+      id: datasource.id,
+      kind: datasource.kind,
+    });
+    return this.touchProfiledAt(name, entities);
+  }
+
+  /**
+   * Set (or, given an empty string, clear) the operator-written description
+   * shown to the assistant. `DatasetsRepository.save` has no room for a field
+   * outside `tables`/`entities`/`datasource`, so this goes through the shared
+   * `DATASETS_STORE` doc store directly — the same table the repository owns,
+   * patching only this one field.
+   */
+  async updateDescription(
+    name: string,
+    description: string | undefined,
+  ): Promise<DatasetDoc | null> {
+    const trimmed = (description ?? '').trim();
+    if (trimmed.length > MAX_DESCRIPTION_CHARS) {
+      throw new BadRequestException(
+        `Description must be ${MAX_DESCRIPTION_CHARS} characters or fewer`,
+      );
+    }
+    const exists = (await this.repository.getByNames([name])).length > 0;
+    if (!exists) throw new NotFoundException(`Dataset "${name}" not found`);
+    if (!trimmed) return this.store.unset({ name }, 'description');
+    return this.store.update({ name }, { description: trimmed });
+  }
+
+  /**
+   * Add `sampleValues` and column profiles to each column from a live sample,
+   * then attach the join graph — profiling runs before the join graph so
+   * `applyReferences` can read `distinctCount`/`sampledRows` off the columns
+   * it just profiled to infer `cardinality`. Best effort per table: a
+   * sampling or profiling failure leaves that snapshot as-is (profiling
+   * itself never throws — see `profileColumns`), it never fails the save.
+   * Existing datasets are not backfilled — they enrich on re-save.
    */
   private async enrich(
     datasourceId: string,
+    kind: DatasourceKind,
     tables: string[],
     entities: DatasetEntitySnapshot[],
   ): Promise<DatasetEntitySnapshot[]> {
@@ -121,7 +198,98 @@ export class DatasetsService {
     const sampled = entities.map(
       (entity) => enriched.get(entity?.key) ?? entity,
     );
-    return this.withJoins(datasourceId, tables, sampled);
+    const profiled = await this.profileEntities(
+      datasourceId,
+      kind,
+      sampled,
+      included,
+    );
+    return this.withJoins(datasourceId, tables, profiled);
+  }
+
+  /**
+   * Attach a `ColumnProfile` to every column of every entity in `scope`
+   * (default: all of them) that has profileable columns. One aggregate SQL
+   * round-trip per table via `profileColumns` — best-effort, so a table that
+   * fails or times out simply keeps its columns unprofiled.
+   */
+  private async profileEntities(
+    datasourceId: string,
+    kind: DatasourceKind,
+    entities: DatasetEntitySnapshot[],
+    scope?: Set<string>,
+  ): Promise<DatasetEntitySnapshot[]> {
+    const dialect = profileDialectFor(kind);
+    // A REST datasource re-fetches every endpoint per statement and speaks
+    // SQLite over `api.*` names the profiling SQL does not write, so its
+    // columns keep their sample values and go unprofiled.
+    if (!dialect) return entities;
+    const targets = entities.filter(
+      (entity) =>
+        entity?.key &&
+        Array.isArray(entity.columns) &&
+        entity.columns.length > 0 &&
+        (!scope || scope.has(entity.key)),
+    );
+    const profiled = new Map<string, DatasetEntitySnapshot>();
+    const run = (sql: string) =>
+      this.datasources.runReadOnlySql(datasourceId, sql, DEFAULT_TOP_VALUES);
+    await mapWithConcurrency(
+      targets,
+      ENRICHMENT_CONCURRENCY,
+      async (entity) => {
+        try {
+          const profiles: Record<string, ColumnProfile> = await profileColumns(
+            run,
+            entity.key,
+            entity.columns,
+            dialect,
+          );
+          if (!Object.keys(profiles).length) return;
+          profiled.set(entity.key, {
+            ...entity,
+            columns: entity.columns.map((column) =>
+              profiles[column.name]
+                ? { ...column, profile: profiles[column.name] }
+                : column,
+            ),
+          });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          this.logger.warn(`Profiling skipped for ${entity.key}: ${message}`);
+        }
+      },
+    );
+    return entities.map((entity) => profiled.get(entity?.key) ?? entity);
+  }
+
+  /** Latest `profiledAt` across every column that has a profile, if any. */
+  private latestProfiledAt(
+    entities: DatasetEntitySnapshot[],
+  ): string | undefined {
+    let latest: string | undefined;
+    for (const entity of entities) {
+      for (const column of entity.columns ?? []) {
+        const at = column.profile?.profiledAt;
+        if (at && (!latest || at > latest)) latest = at;
+      }
+    }
+    return latest;
+  }
+
+  /**
+   * Stamp `DatasetDoc.profiledAt` from the columns' own `profile.profiledAt`
+   * once `repository.save` has persisted `entities` — same doc-store reason
+   * as `updateDescription`: the repository's `save` patch has no room for it.
+   */
+  private async touchProfiledAt(
+    name: string,
+    entities: DatasetEntitySnapshot[],
+  ): Promise<DatasetDoc | null> {
+    const profiledAt = this.latestProfiledAt(entities);
+    if (!profiledAt)
+      return (await this.repository.getByNames([name]))[0] ?? null;
+    return this.store.update({ name }, { profiledAt });
   }
 
   /**
@@ -154,6 +322,13 @@ export class DatasetsService {
     }
     return applyReferences(entities, declared, inferred);
   }
+}
+
+/** The profiling SQL dialect for a datasource kind; none for REST (SQLite over fetched endpoints). */
+export function profileDialectFor(
+  kind: DatasourceKind,
+): ProfileDialect | undefined {
+  return kind === 'postgres' || kind === 'databricks' ? kind : undefined;
 }
 
 /** Attach up to `MAX_SAMPLE_VALUES` distinct stored values per column. */

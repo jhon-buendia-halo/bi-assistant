@@ -3,6 +3,35 @@ import { DATASETS_STORE } from '../../../infrastructure/database/doc-store';
 import type { DocStore } from '../../../infrastructure/database/doc-store';
 import type { DatasourceKind } from '../../datasources/entities/datasource.entity';
 
+/**
+ * Save-time statistics for one column, computed over the whole table where
+ * the datasource allows (`COUNT(*)` → `sampledRows` is exact). What the
+ * schema cards and `describe_entity` show so the assistant knows a column is
+ * constant, mostly null, low-cardinality or stored in cents before it writes
+ * SQL against it.
+ */
+export interface ColumnProfile {
+  /** Rows the statistics were computed over. */
+  sampledRows: number;
+  /** Share of NULLs, 0..1. */
+  nullRate: number;
+  distinctCount: number;
+  /** One distinct non-null value (or none) — a column that cannot vary. */
+  constant: boolean;
+  min?: string;
+  max?: string;
+  /** Most frequent values with counts; only when `distinctCount ≤ 25`. */
+  topValues?: { value: string; count: number }[];
+  /** Heuristic reading of the numbers' scale, when one is evident. */
+  magnitude?: 'cents-like' | 'fraction' | 'count' | 'large-integer';
+  /** ISO timestamp of the profiling run. */
+  profiledAt: string;
+}
+
+/** How rows on each side of a reference relate, when profiles can tell. */
+export type ReferenceCardinality =
+  'one-to-many' | 'many-to-one' | 'one-to-one' | 'unknown';
+
 export interface DatasetColumnSnapshot {
   name: string;
   type: string;
@@ -26,7 +55,11 @@ export interface DatasetColumnSnapshot {
     entity: string;
     column: string;
     source: 'declared' | 'inferred';
+    /** From this column's side; absent on datasets saved before profiling. */
+    cardinality?: ReferenceCardinality;
   };
+  /** Column statistics; absent on datasets saved before profiling. */
+  profile?: ColumnProfile;
 }
 
 export interface DatasetEntitySnapshot {
@@ -47,6 +80,10 @@ export interface DatasetDoc {
    * describe_entity don't need a live datasource round-trip.
    */
   entities?: DatasetEntitySnapshot[];
+  /** Operator-written: what questions this dataset answers. Shown to the assistant. */
+  description?: string;
+  /** When the column profiles in `entities` were last computed. */
+  profiledAt?: string;
   createdAt?: string;
   updatedAt?: string;
 }

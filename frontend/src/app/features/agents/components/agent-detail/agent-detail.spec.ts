@@ -3,6 +3,7 @@ import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import {
   AgentEvalCase,
+  AgentEvalCaseResult,
   AgentEvalSet,
   EvalRunView,
   TokenUsage,
@@ -30,6 +31,23 @@ function evalSet(
     description: `Questions about ${id}.`,
     datasets: [id],
     cases,
+    ...overrides,
+  };
+}
+
+function evalResult(
+  id: string,
+  overrides: Partial<AgentEvalCaseResult> = {},
+): AgentEvalCaseResult {
+  return {
+    id,
+    question: `Question ${id}?`,
+    scores: {},
+    checkResults: [],
+    answer: '',
+    toolCalls: [],
+    passed: true,
+    durationMs: 100,
     ...overrides,
   };
 }
@@ -335,15 +353,19 @@ describe('AgentDetail evals tab', () => {
       component.selectedDatasourceId.set('ds-1');
 
       component.startRun();
-      expect(start.calls.mostRecent().args[4]).toEqual([]);
+      const first = start.calls.mostRecent().args[1] as {
+        suiteId?: string;
+        datasets?: string[];
+      };
+      expect(first.suiteId).toBe('genomics');
+      expect(first.datasets).toBeUndefined();
 
       component.runStarting.set(false);
       component.toggleDataset('Health Insurance');
       component.startRun();
-      expect(start.calls.mostRecent().args[4]).toEqual([
-        'Genomics',
-        'Health Insurance',
-      ]);
+      expect(
+        (start.calls.mostRecent().args[1] as { datasets?: string[] }).datasets,
+      ).toEqual(['Genomics', 'Health Insurance']);
     });
   });
 
@@ -399,6 +421,136 @@ describe('AgentDetail evals tab', () => {
 
       component.runDatasets.set(['genomics_demo']);
       expect(component.scopeDatasets()).toEqual(['genomics_demo']);
+    });
+  });
+
+  describe('run controls', () => {
+    beforeEach(() => {
+      fixture.componentRef.setInput('agentKey', 'assistant');
+      component.selectedDatasourceId.set('ds-1');
+      component.evalSets.set([
+        evalSet('health-insurance', [evalCase('a', 'ties')]),
+      ]);
+      component.selectSet('health-insurance');
+    });
+
+    function captureStartRequest(): { request: unknown } {
+      const box: { request: unknown } = { request: null };
+      const api = (component as unknown as { api: unknown }).api as {
+        startEvalRun: (...args: unknown[]) => unknown;
+      };
+      spyOn(api, 'startEvalRun').and.callFake((_key, request) => {
+        box.request = request;
+        return { subscribe: () => undefined };
+      });
+      return box;
+    }
+
+    it('sends repeat, arm, label and includeVariants in the start payload', () => {
+      const box = captureStartRequest();
+
+      component.repeat.set(3);
+      component.selectedArm.set('fixer-off');
+      component.runLabel.set('iter0-gpt5');
+      component.includeVariants.set(true);
+      component.startRun();
+
+      expect(box.request).toEqual(
+        jasmine.objectContaining({
+          datasourceId: 'ds-1',
+          caseIds: ['a'],
+          suiteId: 'health-insurance',
+          repeat: 3,
+          arm: 'fixer-off',
+          label: 'iter0-gpt5',
+          includeVariants: true,
+        }),
+      );
+    });
+
+    it('defaults to repeat 1 and the baseline arm with no label', () => {
+      const box = captureStartRequest();
+      component.startRun();
+      expect(box.request).toEqual(
+        jasmine.objectContaining({ repeat: 1, arm: 'baseline' }),
+      );
+      expect((box.request as { label?: string }).label).toBeUndefined();
+      expect(
+        (box.request as { includeVariants?: boolean }).includeVariants,
+      ).toBeUndefined();
+    });
+
+    it('encodes a custom arm as parsed overrides under `engine`', () => {
+      const box = captureStartRequest();
+      component.selectedArm.set('custom');
+      component.customOverrideText.set('sqlRepair=false,careful=auto');
+      component.startRun();
+
+      expect((box.request as { arm?: string }).arm).toBe('custom');
+      expect((box.request as { engine?: object }).engine).toEqual({
+        sqlRepair: false,
+        careful: 'auto',
+      });
+    });
+
+    it('collects custom override parse errors and blocks the run', () => {
+      component.selectedArm.set('custom');
+      component.customOverrideText.set('notAKeyValuePair');
+      expect(component.customOverrideErrors()).toEqual([
+        '"notAKeyValuePair" is not key=value',
+      ]);
+
+      const api = (component as unknown as { api: unknown }).api as {
+        startEvalRun: (...args: unknown[]) => unknown;
+      };
+      const spy = spyOn(api, 'startEvalRun');
+      component.startRun();
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('lists baseline first among the arms the backend reports', () => {
+      component.engineSettings.set({
+        defaults: {} as never,
+        stored: {},
+        productionDefaults: {} as never,
+        judgeModel: null,
+        databricksReasoningEffort: false,
+        arms: { 'fixer-off': {}, baseline: {}, 'context-full': {} },
+        armDescriptions: {},
+        ruleGroups: [],
+      });
+      expect(component.armNames()).toEqual([
+        'baseline',
+        'fixer-off',
+        'context-full',
+      ]);
+    });
+  });
+
+  describe('verdict badges', () => {
+    it('labels a GAP verdict and explains it is not counted', () => {
+      const result = evalResult('a', { verdict: 'GAP', passed: false });
+      expect(component.resultVerdictLabel(result)).toBe('GAP');
+      expect(component.resultVerdictClass(result)).toBe('text-slate-400');
+      expect(component.resultVerdictTooltip(result)).toBe(
+        'the harness could not measure this — not counted',
+      );
+    });
+
+    it('appends passes/runs once the case ran more than once', () => {
+      const result = evalResult('a', {
+        verdict: 'FAIL',
+        passed: false,
+        runs: 3,
+        passes: 1,
+      });
+      expect(component.resultVerdictLabel(result)).toBe('FAIL 1/3');
+    });
+
+    it('derives PASS for a legacy result with no explicit verdict', () => {
+      const result = evalResult('a', { passed: true });
+      expect(component.resultVerdictLabel(result)).toBe('PASS');
+      expect(component.resultVerdictTooltip(result)).toBeUndefined();
     });
   });
 });

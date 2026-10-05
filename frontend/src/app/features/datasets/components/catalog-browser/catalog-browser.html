@@ -76,6 +76,92 @@
     </div>
   </div>
 
+  @if (currentDataset(); as dataset) {
+    <div class="mt-5 flex items-start justify-between gap-4">
+      <p class="text-[11px] text-zinc-600">
+        @if (dataset.profiledAt) {
+          Profiled {{ profiledLabel() }}
+        } @else {
+          Not profiled yet — columns show sample values only.
+        }
+      </p>
+      <button
+        type="button"
+        data-testid="reprofile-dataset"
+        title="Counts distinct values, blanks and constant columns once, so the assistant sees exact facts instead of samples."
+        (click)="reprofile()"
+        [disabled]="reprofiling()"
+        class="flex shrink-0 items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-[12px] text-zinc-300 hover:bg-white/10 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <lucide-angular
+          [img]="ScanSearch"
+          [size]="14"
+          [class.animate-spin]="reprofiling()"
+        />
+        <span>{{
+          reprofiling() ? "Re-profiling…" : "Re-profile columns"
+        }}</span>
+      </button>
+    </div>
+
+    <div
+      class="mt-3 flex flex-col gap-2.5 rounded-xl border border-white/10 bg-white/5 p-4"
+    >
+      <div class="flex flex-col gap-0.5">
+        <label
+          for="dataset-description"
+          class="text-[12px] font-medium text-zinc-300"
+          >What questions this dataset answers</label
+        >
+        <p class="text-[11px] text-zinc-500">
+          The assistant reads this to pick the right dataset.
+        </p>
+      </div>
+      <textarea
+        id="dataset-description"
+        data-testid="dataset-description"
+        rows="3"
+        maxlength="2000"
+        placeholder="e.g. Claims, denials and payer mix for the health-insurance book of business."
+        [value]="descriptionDraft()"
+        (input)="descriptionDraft.set($any($event.target).value)"
+        class="w-full resize-none rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+      ></textarea>
+      <div class="flex items-center justify-between">
+        <span class="text-[11px] text-zinc-600"
+          >{{ descriptionDraft().length }}/2000</span
+        >
+        <div class="flex items-center gap-2">
+          <button
+            type="button"
+            data-testid="cancel-dataset-description"
+            (click)="cancelDescription()"
+            [disabled]="!descriptionDirty() || savingDescription()"
+            class="rounded-md px-2.5 py-1 text-[12px] text-zinc-400 hover:bg-white/5 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            data-testid="save-dataset-description"
+            (click)="saveDescription()"
+            [disabled]="!descriptionDirty() || savingDescription()"
+            class="flex items-center gap-1.5 rounded-md bg-zinc-200 px-2.5 py-1 text-[12px] font-medium text-zinc-900 hover:bg-white disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+          >
+            @if (savingDescription()) {
+              <lucide-angular
+                [img]="Loader2"
+                [size]="12"
+                class="animate-spin"
+              />
+            }
+            <span>Save</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
   @if (awaitingChoice()) {
     <div class="mt-10 flex flex-col items-start gap-3">
       <div class="flex flex-col gap-1">

@@ -221,6 +221,69 @@ describe('KnowledgeService.create', () => {
     ).rejects.toThrow(expected);
     expect(repository.insert).not.toHaveBeenCalled();
   });
+
+  it('stores a column when exactly one entity is given', async () => {
+    const { service, repository } = build();
+
+    await service.create({
+      kind: 'term',
+      title: 'Status',
+      body: 'Claim status',
+      entities: ['world_cup.health_insurance.claims'],
+      column: 'status',
+    });
+
+    expect(repository.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ column: 'status' }),
+    );
+  });
+
+  it('rejects a column with zero or more than one entity', async () => {
+    const { service } = build();
+
+    await expect(
+      service.create({
+        kind: 'term',
+        title: 'Status',
+        body: 'Claim status',
+        column: 'status',
+      }),
+    ).rejects.toThrow(/exactly one entity/);
+
+    await expect(
+      service.create({
+        kind: 'term',
+        title: 'Status',
+        body: 'Claim status',
+        entities: ['a.claims', 'b.claims'],
+        column: 'status',
+      }),
+    ).rejects.toThrow(/exactly one entity/);
+  });
+
+  it('rejects an empty or over-long column', async () => {
+    const { service } = build();
+
+    await expect(
+      service.create({
+        kind: 'term',
+        title: 'Status',
+        body: 'Claim status',
+        entities: ['a.claims'],
+        column: '   ',
+      }),
+    ).rejects.toThrow(/column must not be empty/);
+
+    await expect(
+      service.create({
+        kind: 'term',
+        title: 'Status',
+        body: 'Claim status',
+        entities: ['a.claims'],
+        column: 'x'.repeat(129),
+      }),
+    ).rejects.toThrow(/128 characters or fewer/);
+  });
 });
 
 describe('KnowledgeService.update', () => {
@@ -261,6 +324,51 @@ describe('KnowledgeService.update', () => {
     await expect(service.update('missing', { enabled: false })).rejects.toThrow(
       NotFoundException,
     );
+  });
+
+  it('accepts a column when the existing snippet already names exactly one entity', async () => {
+    const { service, repository } = build([
+      snippet({ entities: ['a.claims'] }),
+    ]);
+
+    await service.update('snippet-1', { column: 'status' });
+
+    expect(repository.update).toHaveBeenCalledWith('snippet-1', {
+      column: 'status',
+    });
+  });
+
+  it('rejects a column when the existing snippet has no single entity', async () => {
+    const { service } = build([snippet({ entities: undefined })]);
+
+    await expect(
+      service.update('snippet-1', { column: 'status' }),
+    ).rejects.toThrow(/exactly one entity/);
+  });
+
+  it('rejects a column paired in the same patch with more than one entity', async () => {
+    const { service } = build([snippet({ entities: ['a.claims'] })]);
+
+    await expect(
+      service.update('snippet-1', {
+        entities: ['a.claims', 'b.claims'],
+        column: 'status',
+      }),
+    ).rejects.toThrow(/exactly one entity/);
+  });
+
+  it('accepts a column paired in the same patch with exactly one entity', async () => {
+    const { service, repository } = build([snippet({ entities: undefined })]);
+
+    await service.update('snippet-1', {
+      entities: ['a.claims'],
+      column: 'status',
+    });
+
+    expect(repository.update).toHaveBeenCalledWith('snippet-1', {
+      entities: ['a.claims'],
+      column: 'status',
+    });
   });
 });
 
@@ -343,8 +451,8 @@ describe('KnowledgeService.definitionBlock', () => {
 
     const block = await service.definitionBlock(['World Cup']);
 
-    expect(block!.indexOf('Scoped rule')).toBeLessThan(
-      block!.indexOf('Global rule'),
+    expect(block.indexOf('Scoped rule')).toBeLessThan(
+      block.indexOf('Global rule'),
     );
   });
 
@@ -380,7 +488,7 @@ describe('KnowledgeService.definitionBlock', () => {
 
     const block = await service.definitionBlock([]);
 
-    expect(block!.length).toBeLessThanOrEqual(2_200);
+    expect(block.length).toBeLessThanOrEqual(8_200);
     expect(block).toContain('Term 0');
   });
 });
@@ -451,6 +559,55 @@ describe('KnowledgeService.contextFor', () => {
     for (const entry of used) expect(block).toContain(entry.title);
   });
 
+  it('pins default filters first and skips, not stops at, an entry that does not fit', async () => {
+    // The 2026-09-28 genomics regression: newest-first filling stopped at the
+    // first snippet over budget, so an older default filter vanished from
+    // every turn once a dataset's knowledge outgrew the block.
+    const filter = snippet({
+      id: 'filter',
+      kind: 'default_filter',
+      scope: { datasetId: 'Genomics' },
+      title: 'Exclude control samples',
+      body: 'Exclude samples where is_control = true.',
+      updatedAt: '2024-01-01T00:00:00.000Z',
+    });
+    const newer = Array.from({ length: 20 }, (_, n) =>
+      snippet({
+        id: `t${n}`,
+        kind: 'term',
+        scope: { datasetId: 'Genomics' },
+        title: `Term ${n}`,
+        body: 'x'.repeat(250),
+        updatedAt: `2024-06-${String(n + 1).padStart(2, '0')}T00:00:00.000Z`,
+      }),
+    );
+    const oversized = snippet({
+      id: 'huge',
+      kind: 'term',
+      scope: { datasetId: 'Genomics' },
+      title: 'Huge',
+      body: 'x'.repeat(9_000),
+      updatedAt: '2024-12-31T00:00:00.000Z',
+    });
+    const tiny = snippet({
+      id: 'tiny',
+      kind: 'term',
+      scope: { datasetId: 'Genomics' },
+      title: 'Tiny',
+      body: 'small',
+      updatedAt: '2023-01-01T00:00:00.000Z',
+    });
+    const { service } = build([oversized, ...newer.reverse(), filter, tiny]);
+
+    const { used } = await service.contextFor(['Genomics']);
+    const ids = used.map((u) => u.id);
+
+    expect(ids[0]).toBe('filter');
+    expect(ids).not.toContain('huge');
+    expect(ids).toContain('tiny');
+    expect(ids).toContain('t0');
+  });
+
   it('excludes disabled and out-of-scope snippets', async () => {
     const { service } = build([
       snippet({ id: 'off', enabled: false, scope: null, title: 'Disabled' }),
@@ -469,6 +626,305 @@ describe('KnowledgeService.contextFor', () => {
     const { used } = await service.contextFor(['World Cup']);
 
     expect(used.map((u) => u.id)).toEqual(['on']);
+  });
+
+  it('is byte-identical to the newest-first path when ranked is explicitly false', async () => {
+    const library = [
+      snippet({
+        id: 'global',
+        scope: null,
+        title: 'Global rule',
+        updatedAt: '2024-06-01T00:00:00.000Z',
+      }),
+      snippet({
+        id: 'scoped',
+        scope: { datasetId: 'World Cup' },
+        title: 'Scoped rule',
+        updatedAt: '2024-01-01T00:00:00.000Z',
+      }),
+    ];
+    const { service: unranked } = build(library);
+    const { service: rankedFalse } = build(library);
+
+    const a = await unranked.contextFor(['World Cup']);
+    const b = await rankedFalse.contextFor(['World Cup'], {
+      ranked: false,
+      question: 'irrelevant, ignored when ranked is false',
+      budgetChars: 1,
+    });
+
+    expect(b).toEqual(a);
+  });
+
+  describe('ranked', () => {
+    it('ranks the net-paid term and the test-claims default filter above an unrelated genomics term for a health-insurance question', async () => {
+      const netPaidTerm = snippet({
+        id: 'net-paid',
+        kind: 'term',
+        scope: { datasetId: 'Health Insurance' },
+        title: 'Net paid',
+        body: 'Net paid is paid minus reversed amounts by region.',
+        entities: ['world_cup.health_insurance.claims'],
+      });
+      const testClaimsFilter = snippet({
+        id: 'test-claims',
+        kind: 'default_filter',
+        scope: { datasetId: 'Health Insurance' },
+        title: 'Exclude test claims',
+        body: 'Exclude claims where is_test = true.',
+        entities: ['world_cup.health_insurance.claims'],
+      });
+      const genotypeTerm = snippet({
+        id: 'genotype',
+        kind: 'term',
+        scope: null,
+        title: 'Genotype 0/0',
+        body: 'Homozygous reference is not a carrier.',
+        entities: ['world_cup.genomics.variant_calls'],
+      });
+      const { service } = build([genotypeTerm, testClaimsFilter, netPaidTerm]);
+
+      const { used } = await service.contextFor(['Health Insurance'], {
+        ranked: true,
+        question: 'net paid by region in 2024',
+      });
+
+      const ids = used.map((u) => u.id);
+      expect(ids.indexOf('net-paid')).toBeLessThan(ids.indexOf('genotype'));
+      expect(ids.indexOf('test-claims')).toBeLessThan(ids.indexOf('genotype'));
+    });
+
+    it('fills the budget best-first, skipping a higher-ranked entry that does not fit', async () => {
+      const bigButRelevant = snippet({
+        id: 'big',
+        title: 'net paid net paid net paid net paid',
+        body: 'x'.repeat(8_990),
+      });
+      const smallLessRelevant = snippet({
+        id: 'small',
+        title: 'Other',
+        body: 'small',
+      });
+      const { service } = build([smallLessRelevant, bigButRelevant]);
+
+      const { used } = await service.contextFor([], {
+        ranked: true,
+        question: 'net paid',
+      });
+
+      // The big, higher-scored entry does not fit; best-first fill still
+      // picks up the smaller one instead of stopping outright.
+      expect(used.map((u) => u.id)).toEqual(['small']);
+    });
+
+    it('fills the default budget (8000) and honours an explicit budgetChars override', async () => {
+      const many = Array.from({ length: 100 }, (_, n) =>
+        snippet({
+          id: `s${n}`,
+          scope: null,
+          title: `Term ${n}`,
+          body: 'x'.repeat(200),
+        }),
+      );
+      const { service: defaultBudget } = build(many);
+      const { service: customBudget } = build(many);
+
+      const a = await defaultBudget.contextFor([], { ranked: true });
+      expect(a.block.length).toBeLessThanOrEqual(8_200);
+      expect(a.used.length).toBeGreaterThan(30);
+
+      const b = await customBudget.contextFor([], {
+        ranked: true,
+        budgetChars: 500,
+      });
+      expect(b.block.length).toBeLessThanOrEqual(700);
+    });
+
+    it('never drops an in-scope default_filter snippet even under heavy competition for budget', async () => {
+      const filter = snippet({
+        id: 'default-filter',
+        kind: 'default_filter',
+        scope: null,
+        title: 'Exclude test claims',
+        body: 'Exclude claims where is_test = true.',
+      });
+      const noise = Array.from({ length: 50 }, (_, n) =>
+        snippet({
+          id: `noise-${n}`,
+          kind: 'term',
+          scope: null,
+          title: `Term ${n}`,
+          body: 'irrelevant filler text',
+        }),
+      );
+      const { service } = build([...noise, filter]);
+
+      const { used } = await service.contextFor([], {
+        ranked: true,
+        question: 'something entirely unrelated',
+      });
+
+      expect(used.map((u) => u.id)).toContain('default-filter');
+    });
+  });
+});
+
+describe('KnowledgeService.knowledgeByColumn', () => {
+  it('keys a single-entity, no-column snippet by its normalized entity', async () => {
+    const { service } = build([
+      snippet({
+        id: 's1',
+        title: 'Claims',
+        body: 'About claims',
+        entities: ['world_cup.health_insurance.claims'],
+      }),
+    ]);
+
+    const map = await service.knowledgeByColumn([]);
+
+    expect(map.get('health_insurance.claims')).toEqual([
+      { kind: 'term', title: 'Claims', body: 'About claims' },
+    ]);
+  });
+
+  it('keys a column-scoped snippet by <entity>.<column>', async () => {
+    const { service } = build([
+      snippet({
+        id: 's1',
+        title: 'Status',
+        body: 'PAID/DENIED/PENDING/REVERSED',
+        entities: ['world_cup.health_insurance.claims'],
+        column: 'status',
+      }),
+    ]);
+
+    const map = await service.knowledgeByColumn([]);
+
+    expect(map.get('health_insurance.claims.status')).toEqual([
+      { kind: 'term', title: 'Status', body: 'PAID/DENIED/PENDING/REVERSED' },
+    ]);
+    expect(map.has('health_insurance.claims')).toBe(false);
+  });
+
+  it('files a multi-entity snippet under every one of its entity keys', async () => {
+    const { service } = build([
+      snippet({
+        id: 's1',
+        title: 'Join note',
+        body: 'claims join lines',
+        entities: ['a.claims', 'b.lines'],
+      }),
+    ]);
+
+    const map = await service.knowledgeByColumn([]);
+
+    expect(map.get('a.claims')?.[0]?.title).toBe('Join note');
+    expect(map.get('b.lines')?.[0]?.title).toBe('Join note');
+  });
+
+  it('excludes disabled and out-of-scope snippets, and snippets with no entities', async () => {
+    const { service } = build([
+      snippet({ id: 'off', enabled: false, entities: ['a.b'] }),
+      snippet({
+        id: 'other-scope',
+        scope: { datasetId: 'Other' },
+        entities: ['a.b'],
+      }),
+      snippet({ id: 'no-entities', entities: undefined }),
+      snippet({
+        id: 'in-scope',
+        scope: { datasetId: 'World Cup' },
+        entities: ['a.b'],
+      }),
+    ]);
+
+    const map = await service.knowledgeByColumn(['World Cup']);
+
+    expect([...map.values()].flat().map((e) => e.title)).toEqual(['DNF']);
+  });
+});
+
+describe('KnowledgeService.lookup', () => {
+  const claims = snippet({
+    id: 'claims-term',
+    kind: 'term',
+    title: 'Claims overview',
+    body: 'net paid claims',
+    entities: ['world_cup.health_insurance.claims'],
+  });
+  const status = snippet({
+    id: 'claims-status',
+    kind: 'term',
+    title: 'Status',
+    body: 'PAID/DENIED',
+    entities: ['world_cup.health_insurance.claims'],
+    column: 'status',
+  });
+  const genomics = snippet({
+    id: 'genomics-term',
+    kind: 'term',
+    title: 'Genotype',
+    body: 'homozygous reference',
+    entities: ['world_cup.genomics.variant_calls'],
+  });
+
+  it('filters by entity (last-two-segment match)', async () => {
+    const { service } = build([claims, status, genomics]);
+
+    const results = await service.lookup([], {
+      entity: 'health_insurance.claims',
+    });
+
+    expect(results.map((r) => r.title).sort()).toEqual([
+      'Claims overview',
+      'Status',
+    ]);
+  });
+
+  it('filters by column', async () => {
+    const { service } = build([claims, status, genomics]);
+
+    const results = await service.lookup([], {
+      entity: 'health_insurance.claims',
+      column: 'status',
+    });
+
+    expect(results.map((r) => r.title)).toEqual(['Status']);
+  });
+
+  it('ranks results by phrase', async () => {
+    const { service } = build([genomics, claims]);
+
+    const results = await service.lookup([], { phrase: 'net paid claims' });
+
+    expect(results[0].title).toBe('Claims overview');
+  });
+
+  it('returns at most 8 results', async () => {
+    const many = Array.from({ length: 20 }, (_, n) =>
+      snippet({ id: `s${n}`, title: `Term ${n}`, entities: ['a.b'] }),
+    );
+    const { service } = build(many);
+
+    const results = await service.lookup([], {});
+
+    expect(results.length).toBeLessThanOrEqual(8);
+  });
+
+  it('scopes to the given datasets plus global, same as contextFor', async () => {
+    const { service } = build([
+      snippet({
+        id: 'scoped',
+        scope: { datasetId: 'World Cup' },
+        title: 'Scoped',
+      }),
+      snippet({ id: 'other', scope: { datasetId: 'Other' }, title: 'Other' }),
+      snippet({ id: 'global', scope: null, title: 'Global' }),
+    ]);
+
+    const results = await service.lookup(['World Cup'], {});
+
+    expect(results.map((r) => r.title).sort()).toEqual(['Global', 'Scoped']);
   });
 });
 

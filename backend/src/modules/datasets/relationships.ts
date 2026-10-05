@@ -17,6 +17,7 @@
 import type {
   DatasetColumnSnapshot,
   DatasetEntitySnapshot,
+  ReferenceCardinality,
 } from './repositories/datasets.repository';
 
 /** A join edge between two dataset entities. Entity keys are `catalog.schema.table`. */
@@ -226,9 +227,51 @@ export function inferRelationships(
 }
 
 /**
+ * Is the referenced column unique — one row per value, as a real primary key
+ * would be? Only decidable once it has been profiled; `sampledRows` is an
+ * exact `COUNT(*)` (see `ColumnProfile`), so `distinctCount === sampledRows`
+ * with at least one row is as good as a uniqueness constraint.
+ */
+function isUniqueColumn(column: DatasetColumnSnapshot | undefined): boolean {
+  const profile = column?.profile;
+  if (!profile || profile.sampledRows <= 0) return false;
+  return profile.distinctCount === profile.sampledRows;
+}
+
+function findColumnByName(
+  entities: DatasetEntitySnapshot[],
+  entityKey: string,
+  columnName: string,
+): DatasetColumnSnapshot | undefined {
+  const entity = entities.find((e) => e?.key === entityKey);
+  return entity?.columns?.find((c) => c.name === columnName);
+}
+
+/**
+ * `cardinality` of a reference from the FK side's point of view: `unknown`
+ * when either side has no profile to check, `many-to-one` when the referenced
+ * column is unique (the common FK shape — many rows point at one), and
+ * `one-to-one` when the FK column is unique too (a rarer, stricter case).
+ * Never `one-to-many` here — that is the same edge read from the other side,
+ * which this function does not have.
+ */
+function inferCardinality(
+  entities: DatasetEntitySnapshot[],
+  from: { entity: string; column: string },
+  to: { entity: string; column: string },
+): ReferenceCardinality {
+  const targetColumn = findColumnByName(entities, to.entity, to.column);
+  if (!isUniqueColumn(targetColumn)) return 'unknown';
+  const sourceColumn = findColumnByName(entities, from.entity, from.column);
+  return isUniqueColumn(sourceColumn) ? 'one-to-one' : 'many-to-one';
+}
+
+/**
  * Merge join edges onto the columns they belong to. One reference per column,
  * declared beating inferred, so a hint the datasource guarantees is never
- * displaced by a guess.
+ * displaced by a guess. `cardinality` is derived from column profiles when
+ * they are available (see `inferCardinality`); this only ever reads profiles
+ * that are already attached to `entities` — it never computes them.
  */
 export function applyReferences(
   entities: DatasetEntitySnapshot[],
@@ -237,7 +280,12 @@ export function applyReferences(
 ): DatasetEntitySnapshot[] {
   const byColumn = new Map<
     string,
-    { entity: string; column: string; source: 'declared' | 'inferred' }
+    {
+      entity: string;
+      column: string;
+      source: 'declared' | 'inferred';
+      cardinality: ReferenceCardinality;
+    }
   >();
   for (const edge of inferred) {
     if (!edge?.from?.entity || !edge?.to?.entity) continue;
@@ -245,6 +293,7 @@ export function applyReferences(
       entity: edge.to.entity,
       column: edge.to.column,
       source: 'inferred',
+      cardinality: inferCardinality(entities, edge.from, edge.to),
     });
   }
   for (const edge of declared) {
@@ -253,6 +302,7 @@ export function applyReferences(
       entity: edge.to.entity,
       column: edge.to.column,
       source: 'declared',
+      cardinality: inferCardinality(entities, edge.from, edge.to),
     });
   }
   if (!byColumn.size) return entities;

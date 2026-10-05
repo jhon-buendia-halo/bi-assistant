@@ -177,7 +177,11 @@
           }
         }
         @case ("evals") {
-          @if (evalSets().length > 0 || evalTab() === "runs") {
+          @if (
+            evalSets().length > 0 ||
+            evalTab() === "runs" ||
+            evalTab() === "history"
+          ) {
             <!-- Sub-tabs: the suite, and what has been run -->
             <div class="mb-5 flex items-center gap-1">
               <button
@@ -201,6 +205,17 @@
                 [class.hover:text-zinc-200]="evalTab() !== 'runs'"
               >
                 Executions
+              </button>
+              <button
+                data-testid="eval-subtab-history"
+                (click)="selectEvalTab('history')"
+                class="rounded-lg px-3 py-1.5 text-[13px]"
+                [class.bg-white/10]="evalTab() === 'history'"
+                [class.text-zinc-200]="evalTab() === 'history'"
+                [class.text-zinc-400]="evalTab() !== 'history'"
+                [class.hover:text-zinc-200]="evalTab() !== 'history'"
+              >
+                History
               </button>
             </div>
           }
@@ -303,265 +318,17 @@
                     </div>
 
                     @if (expandedRunId() === run.jobId) {
-                      <p class="mt-2 text-[12px] text-zinc-500">
-                        {{ runSuiteLabel(run) }} · scoped to
-                        {{ run.datasets.join(", ") }}
-                      </p>
-
-                      <!-- What moved since the previous run -->
-                      @if (run.comparison; as comparison) {
-                        <div
-                          [attr.data-testid]="
-                            'eval-run-comparison-' + run.jobId
-                          "
-                          class="mt-3 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2.5"
-                        >
-                          <p
-                            class="flex items-center gap-1.5 text-[11px] tracking-wider text-zinc-500 uppercase"
-                          >
-                            <lucide-angular [img]="GitCompare" [size]="11" />
-                            <span>Compared to the previous run</span>
-                          </p>
-                          @if (comparisonUnmoved(run)) {
-                            <p class="mt-2 text-[12px] text-zinc-400">
-                              No change from the previous run
-                              <span class="text-zinc-600"
-                                >· {{ comparison.unchanged.length }} questions
-                                held their verdict</span
-                              >
-                            </p>
-                          } @else {
-                            <div class="mt-2 flex flex-col gap-2">
-                              @if (comparison.regressions.length > 0) {
-                                <div
-                                  class="rounded-md border border-red-400/20 bg-red-500/10 px-3 py-2"
-                                >
-                                  <p
-                                    class="flex items-center gap-1.5 text-[12px] font-medium text-red-400"
-                                  >
-                                    <lucide-angular
-                                      [img]="TrendingDown"
-                                      [size]="12"
-                                    />
-                                    <span
-                                      >Regressions ({{
-                                        comparison.regressions.length
-                                      }})</span
-                                    >
-                                  </p>
-                                  <div class="mt-1.5 flex flex-col gap-1">
-                                    @for (
-                                      delta of comparison.regressions;
-                                      track delta.id
-                                    ) {
-                                      <p class="flex items-start gap-2">
-                                        <span
-                                          class="shrink-0 font-mono text-[11px] text-red-400/70"
-                                          >{{ delta.id }}</span
-                                        >
-                                        <span class="text-[12px] text-zinc-300"
-                                          >— {{ delta.question }}</span
-                                        >
-                                      </p>
-                                    }
-                                  </div>
-                                </div>
-                              }
-                              @if (comparison.improvements.length > 0) {
-                                <div
-                                  class="rounded-md border border-emerald-400/20 bg-emerald-500/10 px-3 py-2"
-                                >
-                                  <p
-                                    class="flex items-center gap-1.5 text-[12px] font-medium text-emerald-400"
-                                  >
-                                    <lucide-angular
-                                      [img]="TrendingUp"
-                                      [size]="12"
-                                    />
-                                    <span
-                                      >Improvements ({{
-                                        comparison.improvements.length
-                                      }})</span
-                                    >
-                                  </p>
-                                  <div class="mt-1.5 flex flex-col gap-1">
-                                    @for (
-                                      delta of comparison.improvements;
-                                      track delta.id
-                                    ) {
-                                      <p class="flex items-start gap-2">
-                                        <span
-                                          class="shrink-0 font-mono text-[11px] text-emerald-400/70"
-                                          >{{ delta.id }}</span
-                                        >
-                                        <span class="text-[12px] text-zinc-300"
-                                          >— {{ delta.question }}</span
-                                        >
-                                      </p>
-                                    }
-                                  </div>
-                                </div>
-                              }
-                            </div>
-                          }
-                        </div>
-                      }
-
-                      <!-- Where the failures cluster, worst first -->
-                      @if (runCategoryRates(run); as rates) {
-                        @if (rates.length > 0) {
-                          <div
-                            class="mt-3 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2.5"
-                          >
-                            <p
-                              class="text-[11px] tracking-wider text-zinc-500 uppercase"
-                            >
-                              Pass rate by category
-                            </p>
-                            <div class="mt-1.5 flex flex-col">
-                              @for (rate of rates; track rate.category) {
-                                <div
-                                  [attr.data-testid]="
-                                    'eval-run-category-' +
-                                    run.jobId +
-                                    '-' +
-                                    rate.category
-                                  "
-                                  class="flex items-center gap-3 border-t border-white/5 py-1.5 first:border-t-0"
-                                >
-                                  <span
-                                    class="min-w-0 flex-1 truncate text-[12px] text-zinc-300"
-                                    >{{ rate.category }}</span
-                                  >
-                                  <span
-                                    class="shrink-0 font-mono text-[11px] text-zinc-500"
-                                    >{{ rate.passed }}/{{ rate.total }}</span
-                                  >
-                                  <span
-                                    class="w-10 shrink-0 text-right font-mono text-[12px]"
-                                    [class]="rateClass(rate.rate)"
-                                    >{{ rateLabel(rate.rate) }}</span
-                                  >
-                                </div>
-                              }
-                            </div>
-                          </div>
-                        }
-                      }
-
-                      <!-- What it spent -->
-                      <div
-                        [attr.data-testid]="'eval-run-usage-' + run.jobId"
-                        class="mt-3 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2.5"
-                      >
-                        <p
-                          class="flex items-center gap-1.5 text-[11px] tracking-wider text-zinc-500 uppercase"
-                        >
-                          <lucide-angular [img]="Coins" [size]="11" />
-                          <span>Tokens and cost</span>
-                        </p>
-                        <dl
-                          class="mt-2 grid grid-cols-[auto_1fr] gap-x-6 gap-y-1"
-                        >
-                          <dt class="text-[12px] text-zinc-500">Model</dt>
-                          <dd class="font-mono text-[12px] text-zinc-300">
-                            {{ run.model || "unknown" }}
-                          </dd>
-                          @if (runHasUsage(run) && run.usage; as usage) {
-                            <dt class="text-[12px] text-zinc-500">Input</dt>
-                            <dd class="font-mono text-[12px] text-zinc-300">
-                              {{ tokenCount(usage.inputTokens) }}
-                            </dd>
-                            <dt class="text-[12px] text-zinc-500">Output</dt>
-                            <dd class="font-mono text-[12px] text-zinc-300">
-                              {{ tokenCount(usage.outputTokens) }}
-                            </dd>
-                            <dt class="text-[12px] text-zinc-500">Total</dt>
-                            <dd class="font-mono text-[12px] text-zinc-200">
-                              {{ tokenCount(usage.totalTokens) }}
-                            </dd>
-                            <dt class="text-[12px] text-zinc-500">
-                              Model calls
-                            </dt>
-                            <dd class="font-mono text-[12px] text-zinc-300">
-                              {{ usage.calls }}
-                            </dd>
-                            @if (usage.cachedInputTokens > 0) {
-                              <dt class="text-[12px] text-zinc-500">
-                                Cached input
-                              </dt>
-                              <dd class="font-mono text-[12px] text-zinc-300">
-                                {{ tokenCount(usage.cachedInputTokens) }}
-                              </dd>
-                            }
-                            @if (usage.reasoningTokens > 0) {
-                              <dt class="text-[12px] text-zinc-500">
-                                Reasoning
-                              </dt>
-                              <dd class="font-mono text-[12px] text-zinc-300">
-                                {{ tokenCount(usage.reasoningTokens) }}
-                              </dd>
-                            }
-                          } @else {
-                            <dt class="text-[12px] text-zinc-500">Tokens</dt>
-                            <dd class="text-[12px] text-zinc-500">
-                              not measured
-                            </dd>
-                          }
-                          @if (runCost(run); as cost) {
-                            <dt class="text-[12px] text-zinc-500">
-                              Estimated cost
-                            </dt>
-                            <dd
-                              class="text-[12px]"
-                              [class.font-mono]="cost.kind === 'priced'"
-                              [class.text-zinc-200]="cost.kind === 'priced'"
-                              [class.text-amber-400]="
-                                cost.kind === 'not-priced'
-                              "
-                              [class.text-zinc-500]="
-                                cost.kind === 'not-measured'
-                              "
-                            >
-                              {{ cost.label }}
-                            </dd>
-                          }
-                        </dl>
-                      </div>
-
-                      <div class="mt-3 flex flex-col gap-1">
-                        @for (result of run.results; track result.id) {
-                          <button
-                            type="button"
-                            [attr.data-testid]="
-                              'eval-run-result-' + run.jobId + '-' + result.id
-                            "
-                            (click)="selectRunResult(result)"
-                            class="flex items-start gap-2 rounded-md px-2 py-1.5 text-left hover:bg-white/5"
-                          >
-                            <lucide-angular
-                              [img]="result.passed ? CircleCheck : CircleX"
-                              [size]="12"
-                              class="mt-1 shrink-0"
-                              [class.text-emerald-400]="result.passed"
-                              [class.text-red-400]="!result.passed"
-                            />
-                            <span
-                              class="min-w-0 flex-1 text-[12px] text-zinc-300"
-                              >{{ result.question }}</span
-                            >
-                            <span
-                              class="shrink-0 font-mono text-[11px] text-zinc-600"
-                              >{{ result.durationMs }}ms</span
-                            >
-                          </button>
-                        }
-                      </div>
+                      <app-eval-run-summary
+                        [run]="run"
+                        (selectResult)="selectRunResult($event)"
+                      />
                     }
                   </div>
                 }
               </div>
             }
+          } @else if (evalTab() === "history") {
+            <app-eval-log-history [agentKey]="agentKey()" />
           } @else if (evalsLoading()) {
             <div class="flex items-center gap-2.5 text-zinc-400">
               <lucide-angular
@@ -657,7 +424,8 @@
                   running() ||
                   runStarting() ||
                   datasources().length === 0 ||
-                  selectedCaseIds().size === 0
+                  selectedCaseIds().size === 0 ||
+                  (isCustomArm() && customOverrideErrors().length > 0)
                 "
                 class="flex items-center gap-1.5 rounded-lg bg-zinc-200 px-3.5 py-2 text-[13px] font-medium text-zinc-900 hover:bg-white disabled:opacity-50"
               >
@@ -667,11 +435,31 @@
                     [size]="14"
                     class="animate-spin"
                   />
-                  <span>Running…</span>
+                  <span>{{ runStatus() === 'queued' ? 'Queued…' : 'Running…' }}</span>
                 } @else {
                   <lucide-angular [img]="Play" [size]="14" />
                   <span>Run {{ selectedCaseIds().size }} selected</span>
                 }
+              </button>
+              @if (running() && runningJobId()) {
+                <button
+                  type="button"
+                  data-testid="eval-stop"
+                  (click)="stopRun()"
+                  class="flex items-center gap-1.5 rounded-lg border border-white/15 px-3 py-2 text-[13px] text-zinc-300 hover:bg-white/5"
+                >
+                  <lucide-angular [img]="StopCircle" [size]="14" />
+                  <span>Stop</span>
+                </button>
+              }
+              <button
+                type="button"
+                data-testid="eval-loop-run"
+                (click)="showLoopPanel() ? closeLoopPanel() : openLoopPanel()"
+                class="flex items-center gap-1.5 rounded-lg border border-white/15 px-3 py-2 text-[13px] text-zinc-300 hover:bg-white/5"
+              >
+                <lucide-angular [img]="Layers" [size]="14" />
+                <span>Loop run</span>
               </button>
               @if (runStatus() !== "idle") {
                 <span class="text-[12px] text-zinc-500">
@@ -680,6 +468,102 @@
                 </span>
               }
             </div>
+
+            <!-- Repeat / arm / label / paraphrases -->
+            <div class="mt-2 flex flex-wrap items-center gap-2">
+              <select
+                data-testid="eval-repeat-select"
+                aria-label="How many times each question runs"
+                [value]="repeat()"
+                (change)="onRepeatChange($event)"
+                [disabled]="running() || runStarting()"
+                class="rounded-lg border border-white/15 bg-[#232323] px-2.5 py-1.5 text-[12px] text-zinc-200 disabled:opacity-50"
+              >
+                <option [value]="1">repeat 1</option>
+                <option [value]="3">
+                  repeat 3 — pass^3, the number we trust
+                </option>
+                <option [value]="5">repeat 5</option>
+              </select>
+              <select
+                data-testid="eval-arm-select"
+                aria-label="Engine arm to run this eval with"
+                [value]="selectedArm()"
+                (change)="onArmChange($event)"
+                [disabled]="running() || runStarting()"
+                class="rounded-lg border border-white/15 bg-[#232323] px-2.5 py-1.5 text-[12px] text-zinc-200 disabled:opacity-50"
+              >
+                @for (arm of armNames(); track arm) {
+                  <option
+                    [value]="arm"
+                    [title]="armDescription(arm)"
+                    [selected]="arm === selectedArm()"
+                  >
+                    {{ arm }}
+                  </option>
+                }
+                <option value="custom" [selected]="isCustomArm()">
+                  custom…
+                </option>
+              </select>
+              <input
+                data-testid="eval-label-input"
+                type="text"
+                placeholder="label, e.g. iter0-gpt5"
+                [value]="runLabel()"
+                (input)="onLabelInput($event)"
+                [disabled]="running() || runStarting()"
+                class="rounded-lg border border-white/15 bg-[#232323] px-2.5 py-1.5 text-[12px] text-zinc-200 placeholder:text-zinc-600 disabled:opacity-50"
+              />
+              <label
+                class="flex cursor-pointer items-center gap-1.5 text-[12px] text-zinc-400"
+              >
+                <input
+                  type="checkbox"
+                  data-testid="eval-include-variants"
+                  [checked]="includeVariants()"
+                  (change)="toggleIncludeVariants()"
+                  [disabled]="running() || runStarting()"
+                  class="h-3.5 w-3.5 accent-zinc-300"
+                />
+                include paraphrases
+              </label>
+            </div>
+
+            @if (isCustomArm()) {
+              <div class="mt-2 flex flex-col gap-1">
+                <textarea
+                  data-testid="eval-arm-custom-overrides"
+                  aria-label="Custom engine overrides, key=value comma-separated"
+                  rows="2"
+                  placeholder="sqlRepair=false,careful=auto,promptAblation=visuals+rationale"
+                  [value]="customOverrideText()"
+                  (input)="onCustomOverrideInput($event)"
+                  [disabled]="running() || runStarting()"
+                  class="w-full max-w-[560px] rounded-lg border border-white/15 bg-[#232323] px-2.5 py-1.5 font-mono text-[12px] text-zinc-200 placeholder:text-zinc-600 disabled:opacity-50"
+                ></textarea>
+                @if (customOverrideErrors().length > 0) {
+                  <p
+                    data-testid="eval-arm-custom-errors"
+                    class="text-[11px] text-red-400"
+                  >
+                    {{ customOverrideErrors().join(" · ") }}
+                  </p>
+                }
+              </div>
+            }
+
+            @if (showLoopPanel()) {
+              <app-eval-loop-panel
+                [agentKey]="agentKey()"
+                [datasourceId]="selectedDatasourceId()"
+                [sets]="evalSets()"
+                [arms]="engineSettings()?.arms ?? {}"
+                [armDescriptions]="engineSettings()?.armDescriptions ?? {}"
+                (closed)="closeLoopPanel()"
+                (openRun)="openLoopRun($event)"
+              />
+            }
 
             <!-- Which database the questions run against -->
             @if (datasetNames().length > 0) {
@@ -849,6 +733,13 @@
                                 <span>failed</span>
                               </span>
                             }
+                            <span
+                              [attr.data-testid]="'eval-verdict-' + evalCase.id"
+                              [title]="resultVerdictTooltip(result)"
+                              class="font-mono text-[10px]"
+                              [class]="resultVerdictClass(result)"
+                              >{{ resultVerdictLabel(result) }}</span
+                            >
                           } @else if (
                             runCurrentQuestion() === evalCase.question
                           ) {

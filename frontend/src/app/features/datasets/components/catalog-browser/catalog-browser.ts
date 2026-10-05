@@ -20,6 +20,7 @@ import {
   Lock,
   Play,
   RefreshCw,
+  ScanSearch,
   Search,
   Table2,
   X,
@@ -37,9 +38,14 @@ import {
   InclusionState,
   DatasetInclusionService,
 } from '../../services/dataset-inclusion.service';
+import { DatasetEditingService } from '../../services/dataset-editing.service';
 import { Dataset, DatasetsApiService } from '../../services/datasets-api.service';
+import { relativeTime } from '../../utils/column-profile.utils';
 import { MetricsPanel } from '../metrics-panel/metrics-panel';
 import { ToastService } from '../../../../core/toast/toast.service';
+
+/** One-paragraph description cap, enforced client and server side. */
+export const DATASET_DESCRIPTION_MAX_LENGTH = 2000;
 
 @Component({
   selector: 'app-catalog-browser',
@@ -57,6 +63,7 @@ export class CatalogBrowser implements OnInit, OnDestroy {
   readonly Lock = Lock;
   readonly Play = Play;
   readonly RefreshCw = RefreshCw;
+  readonly ScanSearch = ScanSearch;
   readonly Search = Search;
   readonly Table2 = Table2;
   readonly X = X;
@@ -64,6 +71,7 @@ export class CatalogBrowser implements OnInit, OnDestroy {
   private readonly api = inject(DatasourcesApiService);
   private readonly selectionService = inject(DatasetSelectionService);
   private readonly inclusionService = inject(DatasetInclusionService);
+  private readonly editingService = inject(DatasetEditingService);
   private readonly datasetApi = inject(DatasetsApiService);
   private readonly toast = inject(ToastService);
 
@@ -121,6 +129,27 @@ export class CatalogBrowser implements OnInit, OnDestroy {
   readonly saved = output<void>();
   /** When set, the browser opens in edit mode with this dataset's data. */
   readonly initial = input<Dataset | null>(null);
+
+  /**
+   * Local, updatable copy of the dataset being edited — refreshed after a
+   * successful save, re-profile or description update so the header reflects
+   * the change immediately, without waiting on the parent to re-pass
+   * `initial()`. Mirrored into `DatasetEditingService` so `EntityDetails` can
+   * merge persisted column profiles into the live catalog tree.
+   */
+  readonly currentDataset = signal<Dataset | null>(null);
+  readonly descriptionDraft = signal('');
+  readonly savingDescription = signal(false);
+  readonly reprofiling = signal(false);
+
+  readonly descriptionDirty = computed(
+    () => this.descriptionDraft() !== (this.currentDataset()?.description ?? ''),
+  );
+  readonly profiledLabel = computed(() => {
+    const at = this.currentDataset()?.profiledAt;
+    if (!at) return '';
+    return relativeTime(at) || '';
+  });
   readonly selectedDatasource = computed(
     () => this.datasources().find((d) => d.id === this.datasourceId()) ?? null,
   );
@@ -148,6 +177,7 @@ export class CatalogBrowser implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     const editing = this.initial();
+    this.setCurrentDataset(editing);
     if (editing) {
       // Edit mode — prefill the name and the included entities.
       this.datasetName.set(editing.name);
@@ -419,5 +449,63 @@ export class CatalogBrowser implements OnInit, OnDestroy {
           this.saving.set(false);
         },
       });
+  }
+
+  /** Save the "what questions this dataset answers" description. Empty clears it. */
+  saveDescription(): void {
+    const dataset = this.currentDataset();
+    if (!dataset || this.savingDescription() || !this.descriptionDirty()) return;
+    const description = this.descriptionDraft()
+      .trim()
+      .slice(0, DATASET_DESCRIPTION_MAX_LENGTH);
+    this.savingDescription.set(true);
+    this.datasetApi.updateDescription(dataset.name, description).subscribe({
+      next: (res) => {
+        this.savingDescription.set(false);
+        if (!res.ok) {
+          this.toast.error(res.message);
+          return;
+        }
+        this.toast.success(res.message);
+        this.setCurrentDataset(res.dataset ?? { ...dataset, description });
+      },
+      error: (err) => {
+        this.savingDescription.set(false);
+        this.toast.error(err?.error?.message ?? 'Backend unreachable');
+      },
+    });
+  }
+
+  /** Discard unsaved edits to the description, back to the last saved value. */
+  cancelDescription(): void {
+    this.descriptionDraft.set(this.currentDataset()?.description ?? '');
+  }
+
+  /** Recompute column profiles (null rate, distinct count, top values, …). */
+  reprofile(): void {
+    const dataset = this.currentDataset();
+    if (!dataset || this.reprofiling()) return;
+    this.reprofiling.set(true);
+    this.datasetApi.reprofile(dataset.name).subscribe({
+      next: (res) => {
+        this.reprofiling.set(false);
+        if (!res.ok) {
+          this.toast.error(res.message);
+          return;
+        }
+        this.toast.success(res.message);
+        if (res.dataset) this.setCurrentDataset(res.dataset);
+      },
+      error: (err) => {
+        this.reprofiling.set(false);
+        this.toast.error(err?.error?.message ?? 'Backend unreachable');
+      },
+    });
+  }
+
+  private setCurrentDataset(dataset: Dataset | null): void {
+    this.currentDataset.set(dataset);
+    this.descriptionDraft.set(dataset?.description ?? '');
+    this.editingService.set(dataset);
   }
 }

@@ -458,3 +458,158 @@ ORDER BY retention_rate DESC`;
     }
   });
 });
+
+describe('inspectResult / extended guards (L3 extendedGuards)', () => {
+  const FILTERS = [
+    {
+      entity: 'questions_to_insights.health_insurance.claims',
+      title: 'Exclude test claims',
+      predicate:
+        'Unless the question explicitly asks about test data, exclude claims where is_test = true from every claims aggregate.',
+    },
+  ];
+
+  it('leaves every legacy result unchanged without the option', () => {
+    const sql = 'SELECT member_id, total FROM health_insurance.claims';
+    const rows = [
+      { member_id: 1, total: 7 },
+      { member_id: 2, total: 7 },
+    ];
+    expect(inspectResult(sql, rows, 100)).toEqual([]);
+    expect(
+      inspectResult(sql, rows, 100, {
+        extended: false,
+        defaultFilters: FILTERS,
+      }),
+    ).toEqual([]);
+  });
+
+  it('flags a constant metric of any value only when extended', () => {
+    const rows = [
+      { plan: 'Gold', claims: 48 },
+      { plan: 'Silver', claims: 48 },
+    ];
+    expect(codes(inspectResult('SELECT plan, claims FROM t', rows))).toEqual(
+      [],
+    );
+    const extended = inspectResult(
+      'SELECT plan, claims FROM t',
+      rows,
+      undefined,
+      { extended: true },
+    );
+    expect(codes(extended)).toEqual(['constant-metric']);
+    expect(messageFor(extended, 'constant-metric')).toBe(
+      'claims is 48 on every row, so it cannot explain any difference between them.',
+    );
+  });
+
+  it('does not call a filtered id or period column a constant metric', () => {
+    const rows = [
+      { region_id: 3, claim_year: 2024, specialty: 'Oncology', claims: 10 },
+      { region_id: 3, claim_year: 2024, specialty: 'Cardiology', claims: 12 },
+    ];
+    expect(
+      codes(
+        inspectResult('SELECT * FROM t', rows, undefined, { extended: true }),
+      ),
+    ).toEqual([]);
+  });
+
+  it('flags a result keyed only by ids', () => {
+    const warnings = inspectResult(
+      'SELECT member_id, COUNT(*) AS claims FROM health_insurance.claims WHERE is_test = false GROUP BY member_id ORDER BY claims DESC LIMIT 1',
+      [{ member_id: 4711, claims: 31 }],
+      1,
+      { extended: true },
+    );
+    expect(codes(warnings)).toEqual(['id-only-projection']);
+    expect(messageFor(warnings, 'id-only-projection')).toBe(
+      'The result names its rows only by member_id, so join to the table that holds their names and report those instead.',
+    );
+  });
+
+  it('stays quiet when a name rides along with the id', () => {
+    expect(
+      codes(
+        inspectResult(
+          'SELECT m.id, m.full_name, COUNT(*) AS claims FROM t',
+          [{ id: 4711, full_name: 'Ada Lovelace', claims: 31 }],
+          1,
+          { extended: true },
+        ),
+      ),
+    ).toEqual([]);
+  });
+
+  it('flags a default filter the query skipped, and accepts it in any spelling', () => {
+    const rows = [{ claims: 1200 }];
+    const warnings = inspectResult(
+      "SELECT COUNT(*) AS claims FROM health_insurance.claims c WHERE c.status = 'PAID'",
+      rows,
+      100,
+      { extended: true, defaultFilters: FILTERS },
+    );
+    expect(codes(warnings)).toEqual(['default-filter-missing']);
+    expect(messageFor(warnings, 'default-filter-missing')).toBe(
+      'The query reads claims without its default filter "Exclude test claims" (is_test), so rows that filter excludes are counted.',
+    );
+    for (const predicate of [
+      'c.is_test = false',
+      'NOT c.is_test',
+      'c.is_test IS FALSE',
+    ]) {
+      expect(
+        inspectResult(
+          `SELECT COUNT(*) AS claims FROM health_insurance.claims c WHERE ${predicate}`,
+          rows,
+          100,
+          { extended: true, defaultFilters: FILTERS },
+        ),
+      ).toEqual([]);
+    }
+  });
+
+  it('ignores default filters for entities the query does not read, and CTE names', () => {
+    const rows = [{ n: 5 }];
+    expect(
+      inspectResult(
+        'SELECT COUNT(*) AS n FROM health_insurance.members',
+        rows,
+        100,
+        {
+          extended: true,
+          defaultFilters: FILTERS,
+        },
+      ),
+    ).toEqual([]);
+    expect(
+      inspectResult(
+        'WITH claims AS (SELECT 1 AS n) SELECT n FROM claims',
+        rows,
+        100,
+        {
+          extended: true,
+          defaultFilters: FILTERS,
+        },
+      ),
+    ).toEqual([]);
+  });
+
+  it('never returns SQL syntax in an extended message', () => {
+    const warnings = inspectResult(
+      'SELECT member_id, 7 AS total FROM health_insurance.claims',
+      [
+        { member_id: 1, total: 7 },
+        { member_id: 2, total: 7 },
+      ],
+      100,
+      { extended: true, defaultFilters: FILTERS },
+    );
+    expect(warnings.length).toBe(3);
+    for (const warning of warnings) {
+      expect(warning.message).not.toMatch(/SELECT|WHERE|GROUP BY|= ?false/i);
+      expect(warning.message.endsWith('.')).toBe(true);
+    }
+  });
+});

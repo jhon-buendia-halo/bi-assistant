@@ -4,6 +4,22 @@ import type { DatasourceKind } from '../modules/datasources/entities/datasource.
 // constructed at module load with no Nest DI, so SessionsService installs the
 // real implementations at boot.
 
+import type { EngineOptions } from '../modules/engine/engine-options';
+import type { TokenUsage } from '../modules/agents/eval-telemetry';
+
+/** Mirrors `ColumnProfile` in the datasets repository — see there. */
+export interface ColumnProfile {
+  sampledRows: number;
+  nullRate: number;
+  distinctCount: number;
+  constant: boolean;
+  min?: string;
+  max?: string;
+  topValues?: { value: string; count: number }[];
+  magnitude?: 'cents-like' | 'fraction' | 'count' | 'large-integer';
+  profiledAt: string;
+}
+
 /** Column snapshot as stored on a dataset (mirrors `DatasetEntitySnapshot`). */
 export interface DatasetColumnSnapshot {
   name: string;
@@ -17,13 +33,17 @@ export interface DatasetColumnSnapshot {
     entity: string;
     column: string;
     source: 'declared' | 'inferred';
+    cardinality?: 'one-to-many' | 'many-to-one' | 'one-to-one' | 'unknown';
   };
+  profile?: ColumnProfile;
 }
 
 export interface DatasetSnapshot {
   name: string;
   datasourceId?: string;
   datasourceKind?: DatasourceKind;
+  /** Mirrors `DatasetDoc.description`. */
+  description?: string;
   tables: string[];
   entities?: {
     key: string;
@@ -44,6 +64,52 @@ export interface SqlRunResult {
    * limit was reached).
    */
   note?: string;
+  /** Every auto-repair made on the way to this result (mirrors `SqlRepairRecord`). */
+  repairs?: SqlRunRepair[];
+  /** Static precheck findings on the statement (lever `sqlPrecheck`; never blocks). */
+  precheck?: string[];
+  /**
+   * Descriptive-error hints (lever `descriptiveErrors`) — closest names,
+   * types, known values. On a failed statement they are part of the thrown
+   * message instead; here they annotate a result that came back empty.
+   */
+  hints?: string[];
+}
+
+/**
+ * Mirrors `SqlRepairRecord` (modules/sessions/turn-result.ts) without
+ * importing it, like the other mirrors in this file.
+ */
+export interface SqlRunRepair {
+  original: string;
+  repaired: string;
+  error: string;
+  kind: 'identifier' | 'syntax' | 'semantic' | 'unknown';
+  warning?: string;
+  /**
+   * What the `sql-fixer` call behind this repair cost, when the provider
+   * reported it. Travels with the record so the turn can bill it as its
+   * `fixer` side pass — the bridge itself never sees which turn called it.
+   */
+  usage?: TokenUsage;
+}
+
+/** What `knowledgeFor` returns: the curated semantics that match a lookup. */
+export interface KnowledgeLookupResult {
+  snippets: {
+    kind: string;
+    title: string;
+    body: string;
+    entities?: string[];
+    column?: string;
+  }[];
+  metrics: {
+    name: string;
+    label?: string;
+    entity: string;
+    expression: string;
+    description?: string;
+  }[];
 }
 
 export interface VisualToolResult {
@@ -101,14 +167,37 @@ export interface DatasetToolServices {
   ): Promise<{ columns: string[]; rows: Record<string, unknown>[] }>;
   /**
    * Runs the statement and repairs it on execution errors — `datasets` names
-   * the datasets whose schema the fixer may draw on.
+   * the datasets whose schema the fixer may draw on. `options.engine` is the
+   * turn's resolved levers (fixer on/off, intent guard, precheck, errors).
    */
   runReadOnlySql(
     datasourceId: string,
     sql: string,
     limit: number,
     datasets: string[],
+    options?: { engine?: EngineOptions },
   ): Promise<SqlRunResult>;
+  /**
+   * `lookup_values`: stored values of `entity.column` resembling `phrase`,
+   * most frequent first. Optional until SessionsService installs it; the tool
+   * falls back to the column profile's top values.
+   */
+  lookupValues?(
+    datasourceId: string,
+    entity: string,
+    column: string,
+    phrase: string,
+    limit: number,
+  ): Promise<{ value: string; count?: number }[]>;
+  /** `lookup_knowledge` and inline knowledge: curated snippets and metrics matching the query. */
+  knowledgeFor?(
+    datasets: string[],
+    query: { entity?: string; column?: string; phrase?: string },
+  ): Promise<KnowledgeLookupResult>;
+  /** Knowledge `default_filter` predicates in scope, for the precheck and guards. */
+  defaultFilters?(
+    datasets: string[],
+  ): Promise<{ entity: string; predicate: string; title: string }[]>;
 }
 
 let services: DatasetToolServices | null = null;

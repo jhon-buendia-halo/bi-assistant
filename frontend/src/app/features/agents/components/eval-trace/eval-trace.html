@@ -46,115 +46,308 @@
         }
       </div>
 
-      <!-- Why it failed -->
-      @if (result.error) {
+      @if (attempts().length > 0) {
+        <!-- Run log v2: one entry per repeat, each expandable -->
         <div class="flex flex-col gap-1.5">
           <p class="text-[11px] tracking-wider text-zinc-500 uppercase">
-            Run error
+            Attempts ({{ attempts().length }})
           </p>
-          <p
-            class="rounded-md bg-red-500/10 px-3 py-2.5 text-[12px] text-red-400"
-          >
-            {{ result.error }}
-          </p>
-        </div>
-      } @else if (failedChecks().length > 0) {
-        <div class="flex flex-col gap-1.5">
-          <p class="text-[11px] tracking-wider text-zinc-500 uppercase">
-            Why it failed
-          </p>
-          @for (check of failedChecks(); track check.id) {
-            <div class="rounded-md bg-red-500/10 px-3 py-2">
-              <p class="text-[12px] text-red-300">{{ check.description }}</p>
-              @if (check.reason) {
-                <p class="mt-1 text-[11px] text-red-400/80">
-                  {{ check.reason }}
-                </p>
+          @for (attempt of attempts(); track attempt.attempt) {
+            <div
+              [attr.data-testid]="'eval-attempt-' + attempt.attempt"
+              class="rounded-md bg-white/5"
+            >
+              <button
+                type="button"
+                (click)="toggleAttempt(attempt.attempt)"
+                class="flex w-full items-center gap-2 px-2.5 py-2 text-left"
+              >
+                <lucide-angular
+                  [img]="attemptVerdictIcon(attempt.verdict)"
+                  [size]="13"
+                  [class]="verdictClass(attempt.verdict)"
+                />
+                <span
+                  [title]="attemptVerdictTooltip(attempt.verdict)"
+                  class="text-[12px]"
+                  [class]="verdictClass(attempt.verdict)"
+                  >{{ attempt.verdict }}</span
+                >
+                <span class="font-mono text-[11px] text-zinc-600"
+                  >#{{ attempt.attempt }}</span
+                >
+                @if (attempt.viaSupportingQuery) {
+                  <span
+                    title="Checked against an earlier query, not the final one"
+                    class="rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-zinc-400"
+                    >via earlier query</span
+                  >
+                }
+                @if (attempt.failureLabel) {
+                  <span
+                    class="rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-zinc-400"
+                    >{{ attempt.failureLabel }}</span
+                  >
+                }
+                <span
+                  class="ml-auto flex items-center gap-1 font-mono text-[11px] text-zinc-500"
+                >
+                  <lucide-angular [img]="Clock" [size]="10" />
+                  {{ durationLabel(attempt.durationMs) }}
+                </span>
+                @if (attemptUsage(attempt); as usage) {
+                  <span
+                    class="flex items-center gap-1 font-mono text-[11px] text-zinc-500"
+                  >
+                    <lucide-angular [img]="Coins" [size]="10" />
+                    {{ tokensCompact(usage.totalTokens) }}
+                  </span>
+                }
+              </button>
+              @if (isAttemptExpanded(attempt.attempt)) {
+                <div class="flex flex-col gap-2 px-2.5 pb-2.5">
+                  @if (attempt.crossCheck || attempt.review) {
+                    <div class="flex flex-wrap items-center gap-1.5">
+                      @if (attempt.crossCheck) {
+                        <span
+                          class="rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-zinc-400"
+                          >careful: {{ attempt.crossCheck }}</span
+                        >
+                      }
+                      @if (attempt.review) {
+                        <span
+                          class="rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-zinc-400"
+                          >review: {{ attempt.review }}</span
+                        >
+                      }
+                    </div>
+                  }
+                  @if (attempt.clarification) {
+                    <div class="flex flex-col gap-1">
+                      <p class="text-[10px] tracking-wider text-zinc-500 uppercase">
+                        Asked for clarification
+                      </p>
+                      <p class="text-[12px] text-zinc-300">
+                        {{ attempt.clarification }}
+                      </p>
+                    </div>
+                  }
+                  @if (attempt.finalSql) {
+                    <div class="flex flex-col gap-1">
+                      <p class="text-[10px] tracking-wider text-zinc-500 uppercase">
+                        Final SQL
+                      </p>
+                      <pre
+                        class="overflow-x-auto rounded bg-black/30 px-2.5 py-2 font-mono text-[11px] whitespace-pre-wrap text-zinc-300"
+                        >{{ attempt.finalSql }}</pre>
+                    </div>
+                  }
+                  @if (attempt.sql.length > 0) {
+                    <div class="flex flex-col gap-1">
+                      <p class="text-[10px] tracking-wider text-zinc-500 uppercase">
+                        Every statement run
+                      </p>
+                      @for (stmt of attempt.sql; track $index) {
+                        <div
+                          class="rounded px-2 py-1.5"
+                          [class.bg-red-500/10]="!stmt.ok"
+                          [class.bg-black/20]="stmt.ok"
+                        >
+                          <div class="flex items-center gap-1.5">
+                            <lucide-angular
+                              [img]="stmt.ok ? CircleCheck : CircleX"
+                              [size]="11"
+                              [class.text-emerald-400]="stmt.ok"
+                              [class.text-red-400]="!stmt.ok"
+                            />
+                            @if (stmt.repaired) {
+                              <span class="text-[10px] text-amber-400"
+                                >repaired</span
+                              >
+                            }
+                            @if (stmt.ok && stmt.rowCount !== undefined) {
+                              <span class="ml-auto font-mono text-[10px] text-zinc-500"
+                                >{{ stmt.rowCount }} rows</span
+                              >
+                            }
+                          </div>
+                          <pre
+                            class="mt-1 overflow-x-auto font-mono text-[11px] whitespace-pre-wrap text-zinc-400"
+                            >{{ stmt.sql }}</pre>
+                          @if (stmt.error) {
+                            <p class="mt-1 text-[11px] text-red-400">
+                              {{ stmt.error }}
+                            </p>
+                          }
+                        </div>
+                      }
+                    </div>
+                  }
+                  @if (attempt.repairs.length > 0) {
+                    <div class="flex flex-col gap-1">
+                      <p class="text-[10px] tracking-wider text-zinc-500 uppercase">
+                        SQL fixer repairs
+                      </p>
+                      @for (repair of attempt.repairs; track $index) {
+                        <div class="rounded bg-white/5 px-2 py-1.5">
+                          <p class="text-[10px] text-zinc-500">
+                            {{ repair.kind }}
+                            @if (repair.warning) {
+                              <span class="text-amber-400"
+                                >— {{ repair.warning }}</span
+                              >
+                            }
+                          </p>
+                          <pre
+                            class="mt-1 overflow-x-auto font-mono text-[11px] whitespace-pre-wrap text-zinc-500 line-through"
+                            >{{ repair.original }}</pre>
+                          <pre
+                            class="mt-1 overflow-x-auto font-mono text-[11px] whitespace-pre-wrap text-zinc-300"
+                            >{{ repair.repaired }}</pre>
+                        </div>
+                      }
+                    </div>
+                  }
+                  @if (attempt.warnings.length > 0) {
+                    <div class="flex flex-col gap-1">
+                      <p class="text-[10px] tracking-wider text-zinc-500 uppercase">
+                        Warnings
+                      </p>
+                      @for (warning of attempt.warnings; track $index) {
+                        <p class="text-[11px] text-amber-400">{{ warning }}</p>
+                      }
+                    </div>
+                  }
+                  <div class="flex flex-col gap-1">
+                    <p class="text-[10px] tracking-wider text-zinc-500 uppercase">
+                      Answer
+                    </p>
+                    @if (attempt.answer) {
+                      <pre
+                        class="overflow-x-auto rounded bg-white/5 px-2.5 py-2 text-[12px] leading-relaxed whitespace-pre-wrap text-zinc-300"
+                        >{{ attempt.answer }}</pre>
+                    } @else {
+                      <p class="text-[12px] text-zinc-500">
+                        The agent returned no text.
+                      </p>
+                    }
+                  </div>
+                </div>
               }
             </div>
+          }
+        </div>
+      } @else {
+        <!-- Why it failed -->
+        @if (result.error) {
+          <div class="flex flex-col gap-1.5">
+            <p class="text-[11px] tracking-wider text-zinc-500 uppercase">
+              Run error
+            </p>
+            <p
+              class="rounded-md bg-red-500/10 px-3 py-2.5 text-[12px] text-red-400"
+            >
+              {{ result.error }}
+            </p>
+          </div>
+        } @else if (failedChecks().length > 0) {
+          <div class="flex flex-col gap-1.5">
+            <p class="text-[11px] tracking-wider text-zinc-500 uppercase">
+              Why it failed
+            </p>
+            @for (check of failedChecks(); track check.id) {
+              <div class="rounded-md bg-red-500/10 px-3 py-2">
+                <p class="text-[12px] text-red-300">{{ check.description }}</p>
+                @if (check.reason) {
+                  <p class="mt-1 text-[11px] text-red-400/80">
+                    {{ check.reason }}
+                  </p>
+                }
+              </div>
+            }
+          </div>
+        }
+
+        <!-- Every check -->
+        <div class="flex flex-col gap-1.5">
+          <p class="text-[11px] tracking-wider text-zinc-500 uppercase">Checks</p>
+          @for (check of result.checkResults; track check.id) {
+            <div
+              class="flex items-start gap-2 rounded-md bg-white/5 px-2.5 py-1.5"
+            >
+              <lucide-angular
+                [img]="check.passed ? CircleCheck : CircleX"
+                [size]="13"
+                class="mt-0.5 shrink-0"
+                [class.text-emerald-400]="check.passed"
+                [class.text-red-400]="!check.passed"
+              />
+              <span class="min-w-0 flex-1 text-[12px] text-zinc-300">{{
+                check.description
+              }}</span>
+              <span class="shrink-0 font-mono text-[11px] text-zinc-500">{{
+                check.score
+              }}</span>
+            </div>
+          }
+        </div>
+
+        <!-- What the agent actually did -->
+        <div class="flex flex-col gap-1.5">
+          <p class="text-[11px] tracking-wider text-zinc-500 uppercase">
+            Executed steps
+          </p>
+          @if (result.toolCalls.length === 0) {
+            <p class="text-[12px] text-zinc-500">
+              The agent answered without calling any tool.
+            </p>
+          } @else {
+            @for (call of result.toolCalls; track $index) {
+              <div class="rounded-md bg-white/5 px-2.5 py-2">
+                <div class="flex items-center gap-1.5">
+                  <lucide-angular
+                    [img]="Wrench"
+                    [size]="12"
+                    class="text-zinc-500"
+                  />
+                  <span class="font-mono text-[12px] text-zinc-200">{{
+                    call.name
+                  }}</span>
+                  <span class="ml-auto font-mono text-[11px] text-zinc-600"
+                    >#{{ $index + 1 }}</span
+                  >
+                </div>
+                @if (call.input) {
+                  <pre
+                    class="mt-1.5 overflow-x-auto font-mono text-[11px] whitespace-pre-wrap text-zinc-400"
+                    >{{ call.input }}</pre>
+                }
+                @if (call.error) {
+                  <pre
+                    class="mt-1.5 overflow-x-auto rounded bg-red-500/10 px-2 py-1 font-mono text-[11px] whitespace-pre-wrap text-red-400"
+                    >{{ call.error }}</pre>
+                } @else if (call.output) {
+                  <pre
+                    class="mt-1.5 max-h-40 overflow-auto font-mono text-[11px] whitespace-pre-wrap text-zinc-500"
+                    >{{ call.output }}</pre>
+                }
+              </div>
+            }
+          }
+        </div>
+
+        <!-- Final answer -->
+        <div class="flex flex-col gap-1.5">
+          <p class="text-[11px] tracking-wider text-zinc-500 uppercase">Answer</p>
+          @if (result.answer) {
+            <pre
+              class="overflow-x-auto rounded-md bg-white/5 px-3 py-2 text-[12px] leading-relaxed whitespace-pre-wrap text-zinc-300"
+              >{{ result.answer }}</pre>
+          } @else {
+            <p class="text-[12px] text-zinc-500">The agent returned no text.</p>
           }
         </div>
       }
-
-      <!-- Every check -->
-      <div class="flex flex-col gap-1.5">
-        <p class="text-[11px] tracking-wider text-zinc-500 uppercase">Checks</p>
-        @for (check of result.checkResults; track check.id) {
-          <div
-            class="flex items-start gap-2 rounded-md bg-white/5 px-2.5 py-1.5"
-          >
-            <lucide-angular
-              [img]="check.passed ? CircleCheck : CircleX"
-              [size]="13"
-              class="mt-0.5 shrink-0"
-              [class.text-emerald-400]="check.passed"
-              [class.text-red-400]="!check.passed"
-            />
-            <span class="min-w-0 flex-1 text-[12px] text-zinc-300">{{
-              check.description
-            }}</span>
-            <span class="shrink-0 font-mono text-[11px] text-zinc-500">{{
-              check.score
-            }}</span>
-          </div>
-        }
-      </div>
-
-      <!-- What the agent actually did -->
-      <div class="flex flex-col gap-1.5">
-        <p class="text-[11px] tracking-wider text-zinc-500 uppercase">
-          Executed steps
-        </p>
-        @if (result.toolCalls.length === 0) {
-          <p class="text-[12px] text-zinc-500">
-            The agent answered without calling any tool.
-          </p>
-        } @else {
-          @for (call of result.toolCalls; track $index) {
-            <div class="rounded-md bg-white/5 px-2.5 py-2">
-              <div class="flex items-center gap-1.5">
-                <lucide-angular
-                  [img]="Wrench"
-                  [size]="12"
-                  class="text-zinc-500"
-                />
-                <span class="font-mono text-[12px] text-zinc-200">{{
-                  call.name
-                }}</span>
-                <span class="ml-auto font-mono text-[11px] text-zinc-600"
-                  >#{{ $index + 1 }}</span
-                >
-              </div>
-              @if (call.input) {
-                <pre
-                  class="mt-1.5 overflow-x-auto font-mono text-[11px] whitespace-pre-wrap text-zinc-400"
-                  >{{ call.input }}</pre>
-              }
-              @if (call.error) {
-                <pre
-                  class="mt-1.5 overflow-x-auto rounded bg-red-500/10 px-2 py-1 font-mono text-[11px] whitespace-pre-wrap text-red-400"
-                  >{{ call.error }}</pre>
-              } @else if (call.output) {
-                <pre
-                  class="mt-1.5 max-h-40 overflow-auto font-mono text-[11px] whitespace-pre-wrap text-zinc-500"
-                  >{{ call.output }}</pre>
-              }
-            </div>
-          }
-        }
-      </div>
-
-      <!-- Final answer -->
-      <div class="flex flex-col gap-1.5">
-        <p class="text-[11px] tracking-wider text-zinc-500 uppercase">Answer</p>
-        @if (result.answer) {
-          <pre
-            class="overflow-x-auto rounded-md bg-white/5 px-3 py-2 text-[12px] leading-relaxed whitespace-pre-wrap text-zinc-300"
-            >{{ result.answer }}</pre>
-        } @else {
-          <p class="text-[12px] text-zinc-500">The agent returned no text.</p>
-        }
-      </div>
     } @else {
       <!-- Not run yet: show what it will be scored on -->
       <div class="flex flex-col gap-1.5">

@@ -122,11 +122,36 @@ describe('assistant eval dataset preflight', () => {
   it.each([
     { datasourceId: undefined },
     { datasourceKind: undefined },
-    { datasourceKind: 'databricks' as const },
+    { datasourceKind: 'rest' as const },
   ])('rejects unsupported or missing datasource metadata: %p', (overrides) => {
     expect(check(['Sample'], [fixture(overrides)])).toContain(
       'one PostgreSQL datasource',
     );
+  });
+
+  it('accepts a fixture loaded into one Databricks datasource', () => {
+    // `npm run fixtures:databricks` copies the Postgres fixtures into a
+    // Databricks catalog; the case's Databricks reference SQL grades it.
+    expect(
+      check(['Sample'], [fixture({ datasourceKind: 'databricks' as const })]),
+    ).toBeUndefined();
+  });
+
+  it('rejects a scope split across a PostgreSQL and a Databricks datasource', () => {
+    expect(
+      check(
+        ['Core', 'Stats'],
+        [
+          fixture({ name: 'Core', tables: tables.slice(0, 4) }),
+          fixture({
+            name: 'Stats',
+            datasourceId: 'dbx',
+            datasourceKind: 'databricks',
+            tables: tables.slice(4),
+          }),
+        ],
+      ),
+    ).toContain('one PostgreSQL datasource or one Databricks datasource');
   });
 });
 

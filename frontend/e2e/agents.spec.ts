@@ -5,6 +5,7 @@ import {
   createWorldCupDatasource,
   createWorldCupDataset,
 } from './helpers/app-actions';
+import type { EvalRunView } from '../src/app/features/agents/models/eval.model';
 
 /**
  * The questions tab opens on the set list — a set has to be clicked before its
@@ -281,4 +282,180 @@ test('downloads an execution as a Markdown report', async ({ page }) => {
   expect(report).toContain('# Eval run — assistant');
   expect(report).toContain('## Summary');
   expect(report).toContain('Who won the 2022 World Cup?');
+});
+
+test('shows the repeat, arm, label and loop-run controls in the evals tab', async ({
+  page,
+}) => {
+  await page.getByRole('button', { name: 'Agents' }).click();
+  await page.getByTestId('agent-assistant').click();
+  await page.getByTestId('agent-tab-evals').click();
+  // The run controls belong to an open question set.
+  await openWorldCupSet(page);
+
+  // Repeat: 1/3/5 — pass^k only means something at these (execution plan §2.6).
+  const repeatSelect = page.getByTestId('eval-repeat-select');
+  await expect(repeatSelect).toBeVisible();
+  await expect(repeatSelect.locator('option')).toHaveCount(3);
+  await expect(
+    repeatSelect.locator('option', { hasText: 'repeat 1' }),
+  ).toHaveCount(1);
+  await expect(
+    repeatSelect.locator('option', { hasText: /repeat 3/ }),
+  ).toHaveCount(1);
+  await expect(
+    repeatSelect.locator('option', { hasText: 'repeat 5' }),
+  ).toHaveCount(1);
+
+  // Arm: always offers at least the `baseline` preset, even if
+  // `GET /engine/settings` has not resolved yet.
+  const armSelect = page.getByTestId('eval-arm-select');
+  await expect(armSelect).toBeVisible();
+  await expect(
+    armSelect.locator('option', { hasText: 'baseline' }),
+  ).toHaveCount(1);
+
+  await expect(page.getByTestId('eval-label-input')).toBeVisible();
+
+  // Loop run opens the loop panel — starting it is out of scope here (that
+  // would mean live model calls).
+  const loopRunButton = page.getByTestId('eval-loop-run');
+  await expect(loopRunButton).toBeVisible();
+  await loopRunButton.click();
+  await expect(page.getByTestId('eval-loop-panel')).toBeVisible();
+});
+
+test('opens the History sub-tab and renders its table or empty state', async ({
+  page,
+}) => {
+  await page.getByRole('button', { name: 'Agents' }).click();
+  await page.getByTestId('agent-assistant').click();
+  await page.getByTestId('agent-tab-evals').click();
+
+  await page.getByTestId('eval-subtab-history').click();
+
+  // Whatever run-log files this checkout happens to have (in-app, CLI, or
+  // none at all), the tab must render one of the two honest states.
+  const historyRows = page.locator('[data-testid^="eval-history-row-"]');
+  const emptyState = page.getByText(/No logged runs yet/);
+  await expect(historyRows.first().or(emptyState)).toBeVisible();
+});
+
+test('shows the pass^k headline and a GAP badge for a stubbed v2 run', async ({
+  page,
+}) => {
+  // The run-list endpoint is intercepted so this only exercises the pass^k
+  // rendering added to eval-run-summary — never a real (paid) eval run.
+  const stubbedRun: EvalRunView = {
+    jobId: 'stub-gap-run',
+    agentKey: 'assistant',
+    suiteId: 'world-cup',
+    suiteName: 'World Cup',
+    datasourceId: 'stub-datasource',
+    datasets: ['World Cup Core'],
+    caseIds: ['champion-2022', 'gap-case'],
+    status: 'completed',
+    totalCases: 2,
+    startedAt: new Date().toISOString(),
+    finishedAt: new Date().toISOString(),
+    repeat: 3,
+    arm: 'baseline',
+    model: 'openai/gpt-4o-mini',
+    usage: {
+      inputTokens: 1000,
+      outputTokens: 200,
+      totalTokens: 1200,
+      reasoningTokens: 0,
+      cachedInputTokens: 0,
+      calls: 6,
+    },
+    summary: {
+      passK: 1,
+      passKRate: 1,
+      scored: 1,
+      meanPassRate: 0.5,
+      flaky: 0,
+      gaps: 1,
+      answeredEveryTime: 1,
+      answeredObserved: 2,
+      byCategory: {
+        'single-hop': { total: 1, passK: 1 },
+        'ratio-trap': { total: 1, passK: 0 },
+      },
+      byDifficulty: {
+        easy: { total: 2, passK: 1 },
+      },
+    },
+    results: [
+      {
+        id: 'champion-2022',
+        question: 'Who won the 2022 World Cup?',
+        scores: { 'check-includes': 1 },
+        checkResults: [],
+        answer: 'Argentina won the 2022 World Cup.',
+        toolCalls: [],
+        passed: true,
+        durationMs: 1200,
+        verdict: 'PASS',
+        runs: 3,
+        passes: 3,
+        flaky: false,
+      },
+      {
+        id: 'gap-case',
+        question: 'Which team had the highest average possession?',
+        scores: {},
+        checkResults: [],
+        answer: '',
+        toolCalls: [],
+        passed: false,
+        durationMs: 900,
+        verdict: 'GAP',
+        runs: 3,
+        passes: 0,
+        flaky: false,
+      },
+    ],
+  };
+
+  await page.route('**/agents/assistant/evals/runs', async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({ json: { runs: [stubbedRun] } });
+  });
+
+  await page.getByRole('button', { name: 'Agents' }).click();
+  await page.getByTestId('agent-assistant').click();
+  await page.getByTestId('agent-tab-evals').click();
+  await page.getByTestId('eval-subtab-runs').click();
+
+  const runRow = page.getByTestId(`eval-run-${stubbedRun.jobId}`);
+  await expect(runRow).toBeVisible();
+  await runRow.getByText('1/2 passed').click();
+
+  const headline = page.getByTestId(`eval-run-passk-${stubbedRun.jobId}`);
+  await expect(headline).toContainText('pass^3');
+  await expect(headline).toContainText('gap');
+  await expect(page.getByTestId('eval-verdict-gap-case')).toContainText(
+    'GAP',
+  );
+});
+
+test('opens Settings → Engine levers and lists the Databricks LLM provider', async ({
+  page,
+}) => {
+  await page.getByTitle('Settings').click();
+
+  await page.getByRole('button', { name: 'Engine levers' }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Engine levers' }),
+  ).toBeVisible();
+
+  await page.getByRole('button', { name: 'LLM Configuration' }).click();
+  const providerSelect = page.getByLabel('Provider');
+  await expect(providerSelect).toContainText('Databricks (Model Serving)');
+  await providerSelect.selectOption('databricks');
+  await expect(page.getByLabel('Workspace URL')).toBeVisible();
 });

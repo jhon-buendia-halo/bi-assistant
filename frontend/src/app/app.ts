@@ -25,6 +25,7 @@ import {
   ScrollText,
   Settings,
   Signal,
+  SlidersHorizontal,
   Sparkle,
   TestTube,
   Trash2,
@@ -38,6 +39,7 @@ import {
 import { DatasourcesApiService } from './features/datasources/services/datasources-api.service';
 import { LlmConfig } from './features/llm/components/llm-config/llm-config';
 import { TestingDataConfig } from './features/testing-data/components/testing-data-config/testing-data-config';
+import { EngineSettings } from './features/engine/components/engine-settings/engine-settings';
 import { DatasetList } from './features/datasets/components/dataset-list/dataset-list';
 import { AgentList } from './features/agents/components/agent-list/agent-list';
 import { AgentDetail } from './features/agents/components/agent-detail/agent-detail';
@@ -73,7 +75,12 @@ import { ReasoningEffort } from './features/llm/models/llm.model';
 import { ToastService } from './core/toast/toast.service';
 import { APP_VERSION } from './core/config/app-version';
 
-type SettingsSection = 'datasources' | 'llm' | 'testing-data' | null;
+type SettingsSection =
+  | 'datasources'
+  | 'llm'
+  | 'testing-data'
+  | 'engine'
+  | null;
 type MainView =
   | 'home'
   | 'dataset'
@@ -100,6 +107,7 @@ const RIGHT_PANEL_WIDTH_STORAGE_KEY = 'questions-to-insights:right-panel-width';
     DatasourceConfig,
     LlmConfig,
     TestingDataConfig,
+    EngineSettings,
     DatasetList,
     AgentList,
     AgentDetail,
@@ -136,6 +144,7 @@ export class App {
   readonly ScrollText = ScrollText;
   readonly Settings = Settings;
   readonly Signal = Signal;
+  readonly SlidersHorizontal = SlidersHorizontal;
   readonly Sparkle = Sparkle;
   readonly TestTube = TestTube;
   readonly Trash2 = Trash2;

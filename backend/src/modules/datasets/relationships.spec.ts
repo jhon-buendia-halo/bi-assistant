@@ -1,6 +1,9 @@
-import { inferRelationships } from './relationships';
+import { applyReferences, inferRelationships } from './relationships';
 import type { ForeignKeyEdge } from './relationships';
-import type { DatasetEntitySnapshot } from './repositories/datasets.repository';
+import type {
+  ColumnProfile,
+  DatasetEntitySnapshot,
+} from './repositories/datasets.repository';
 
 /**
  * Column DSL: `name` is non-nullable, `name?` is nullable. Types are irrelevant
@@ -457,7 +460,158 @@ describe('inferRelationships — robustness', () => {
     ]);
     expect(edges).toEqual(DECLARED_FOREIGN_KEYS);
   });
+});
 
+describe('applyReferences — cardinality', () => {
+  function profile(sampledRows: number, distinctCount: number): ColumnProfile {
+    return {
+      sampledRows,
+      distinctCount,
+      nullRate: 0,
+      constant: distinctCount <= 1,
+      profiledAt: '2026-09-23T00:00:00.000Z',
+    };
+  }
+
+  const edge: ForeignKeyEdge = {
+    from: { entity: 'wc.wc.goals', column: 'team_id' },
+    to: { entity: 'wc.wc.teams', column: 'id' },
+  };
+
+  it('is many-to-one when the referenced column is unique and the FK column is not', () => {
+    const goals: DatasetEntitySnapshot = {
+      key: 'wc.wc.goals',
+      columns: [
+        {
+          name: 'team_id',
+          type: 'bigint',
+          nullable: false,
+          profile: profile(500, 32),
+        },
+      ],
+    };
+    const teams: DatasetEntitySnapshot = {
+      key: 'wc.wc.teams',
+      columns: [
+        {
+          name: 'id',
+          type: 'bigint',
+          nullable: false,
+          profile: profile(32, 32),
+        },
+      ],
+    };
+
+    const [result] = applyReferences([goals, teams], [], [edge]);
+    expect(result.columns[0].references?.cardinality).toBe('many-to-one');
+  });
+
+  it('is one-to-one when both sides are unique', () => {
+    const goals: DatasetEntitySnapshot = {
+      key: 'wc.wc.goals',
+      columns: [
+        {
+          name: 'team_id',
+          type: 'bigint',
+          nullable: false,
+          profile: profile(32, 32),
+        },
+      ],
+    };
+    const teams: DatasetEntitySnapshot = {
+      key: 'wc.wc.teams',
+      columns: [
+        {
+          name: 'id',
+          type: 'bigint',
+          nullable: false,
+          profile: profile(32, 32),
+        },
+      ],
+    };
+
+    const [result] = applyReferences([goals, teams], [], [edge]);
+    expect(result.columns[0].references?.cardinality).toBe('one-to-one');
+  });
+
+  it('is unknown when the referenced column has no profile', () => {
+    const goals: DatasetEntitySnapshot = {
+      key: 'wc.wc.goals',
+      columns: [{ name: 'team_id', type: 'bigint', nullable: false }],
+    };
+    const teams: DatasetEntitySnapshot = {
+      key: 'wc.wc.teams',
+      columns: [{ name: 'id', type: 'bigint', nullable: false }],
+    };
+
+    const [result] = applyReferences([goals, teams], [], [edge]);
+    expect(result.columns[0].references?.cardinality).toBe('unknown');
+  });
+
+  it('is unknown when the referenced column profile is not unique (a real one-to-many FK)', () => {
+    const goals: DatasetEntitySnapshot = {
+      key: 'wc.wc.goals',
+      columns: [
+        {
+          name: 'team_id',
+          type: 'bigint',
+          nullable: false,
+          profile: profile(500, 32),
+        },
+      ],
+    };
+    const teams: DatasetEntitySnapshot = {
+      key: 'wc.wc.teams',
+      columns: [
+        // teams.id itself references nothing here — its own profile is not unique
+        {
+          name: 'id',
+          type: 'bigint',
+          nullable: false,
+          profile: profile(32, 20),
+        },
+      ],
+    };
+
+    const [result] = applyReferences([goals, teams], [], [edge]);
+    expect(result.columns[0].references?.cardinality).toBe('unknown');
+  });
+
+  it('prefers the declared edge and still computes cardinality for it', () => {
+    const goals: DatasetEntitySnapshot = {
+      key: 'wc.wc.goals',
+      columns: [
+        {
+          name: 'team_id',
+          type: 'bigint',
+          nullable: false,
+          profile: profile(500, 32),
+        },
+      ],
+    };
+    const teams: DatasetEntitySnapshot = {
+      key: 'wc.wc.teams',
+      columns: [
+        {
+          name: 'id',
+          type: 'bigint',
+          nullable: false,
+          profile: profile(32, 32),
+        },
+      ],
+    };
+
+    const [result] = applyReferences([goals, teams], [edge], [edge]);
+    expect(result.columns[0].references).toEqual({
+      entity: 'wc.wc.teams',
+      column: 'id',
+      source: 'declared',
+      cardinality: 'many-to-one',
+    });
+  });
+});
+
+describe('inferRelationships — robustness (malformed input)', () => {
   it('tolerates malformed entity keys without throwing', () => {
     const entities: DatasetEntitySnapshot[] = [
       { key: '', columns: [{ name: 'id', type: 'bigint', nullable: false }] },

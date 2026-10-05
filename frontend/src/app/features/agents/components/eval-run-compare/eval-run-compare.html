@@ -1,0 +1,280 @@
+<div class="flex flex-col gap-4" data-testid="eval-compare-panel">
+  @if (loading()) {
+    <div class="flex items-center gap-2.5 text-zinc-400">
+      <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
+      <span>Comparing runs…</span>
+    </div>
+  } @else if (error()) {
+    <p class="text-[12px] text-red-400">{{ error() }}</p>
+  } @else if (diff(); as diff) {
+    <!-- Not like-for-like warning -->
+    @if (notComparableReasons().length > 0) {
+      <div
+        data-testid="eval-compare-warning"
+        class="flex items-start gap-2 rounded-lg border border-amber-400/20 bg-amber-500/10 px-3 py-2.5"
+      >
+        <lucide-angular
+          [img]="TriangleAlert"
+          [size]="14"
+          class="mt-0.5 shrink-0 text-amber-400"
+        />
+        <p class="text-[12px] text-amber-300">
+          <span class="font-medium">Not commensurable:</span>
+          {{ notComparableReasons().join('; ') }}.
+        </p>
+      </div>
+    }
+
+    <!-- Headline -->
+    <div data-testid="eval-compare-headline" class="text-[13px] text-zinc-200">
+      {{ headline() }}
+    </div>
+
+    <!-- Tokens / cost -->
+    <div class="flex flex-wrap items-center gap-4 text-[12px] text-zinc-400">
+      @if (diff.tokensComparable) {
+        <span
+          >Tokens: {{ diff.tokensDelta > 0 ? "+" : ""
+          }}{{ diff.tokensDelta.toLocaleString("en-US") }}</span
+        >
+        @if (diff.costDelta !== undefined) {
+          <span
+            >Cost: {{ diff.costDelta < 0 ? "−" : "+"
+            }}${{
+              (diff.costDelta < 0 ? -diff.costDelta : diff.costDelta).toFixed(
+                4
+              )
+            }}</span
+          >
+        }
+      } @else {
+        <span>Tokens not comparable — one side reported no usage.</span>
+      }
+    </div>
+
+    <!-- Category deltas, worst after-rate first -->
+    <div class="flex flex-col gap-1.5">
+      <p class="text-[11px] tracking-wider text-zinc-500 uppercase">
+        By category (worst first)
+      </p>
+      <div class="flex flex-col">
+        @for (category of orderedCategories(); track category) {
+          @let c = diff.categoryDeltas[category];
+          <div
+            [attr.data-testid]="'eval-compare-category-' + category"
+            class="flex items-center gap-3 border-t border-white/5 py-1.5 first:border-t-0"
+          >
+            <span class="min-w-0 flex-1 truncate text-[12px] text-zinc-300">{{
+              category
+            }}</span>
+            <span class="shrink-0 font-mono text-[11px] text-zinc-500"
+              >{{ c.passKBefore }}/{{ c.totalBefore }} →
+              {{ c.passKAfter }}/{{ c.totalAfter }}</span
+            >
+            @if (c.after > c.before) {
+              <span class="shrink-0 text-[11px] text-emerald-400">▲</span>
+            } @else if (c.after < c.before) {
+              <span class="shrink-0 text-[11px] text-red-400">▼</span>
+            }
+          </div>
+        }
+      </div>
+    </div>
+
+    <!-- Verdict flips -->
+    <div class="flex flex-col gap-1.5">
+      <p class="text-[11px] tracking-wider text-zinc-500 uppercase">
+        Verdict changes ({{ flips().length }})
+      </p>
+      @if (flips().length === 0) {
+        <p class="text-[12px] text-zinc-500">Nothing flipped.</p>
+      } @else {
+        @for (row of flips(); track row.id) {
+          <div
+            [attr.data-testid]="'eval-compare-flip-' + row.id"
+            class="rounded-md bg-white/5 px-2.5 py-2"
+          >
+            <button
+              type="button"
+              (click)="toggleFlip(row.id)"
+              class="flex w-full items-center gap-2 text-left"
+            >
+              <span
+                class="font-mono text-[11px] text-zinc-500"
+                [class.text-red-400]="row.before === 'PASS'"
+                [class.text-emerald-400]="row.after === 'PASS'"
+                >{{ row.id }}</span
+              >
+              @if (row.category) {
+                <span class="text-[11px] text-zinc-600">{{
+                  row.category
+                }}</span>
+              }
+              <span class="ml-auto text-[12px] text-zinc-300"
+                >{{ row.before }} {{ row.passesBefore }}/{{
+                  row.runsBefore
+                }}
+                → {{ row.after }} {{ row.passesAfter }}/{{
+                  row.runsAfter
+                }}</span
+              >
+            </button>
+            @if (isFlipExpanded(row.id)) {
+              <div class="mt-2 flex flex-col gap-2">
+                @for (delta of row.checkDeltas; track delta.id) {
+                  <p class="text-[11px] text-zinc-500">
+                    {{ delta.id }}:
+                    {{
+                      delta.before === undefined
+                        ? "absent"
+                        : delta.before
+                          ? "pass"
+                          : "fail"
+                    }}
+                    →
+                    {{
+                      delta.after === undefined
+                        ? "absent"
+                        : delta.after
+                          ? "pass"
+                          : "fail"
+                    }}
+                  </p>
+                }
+                @if (row.sqlBefore || row.sqlAfter) {
+                  <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <pre
+                      class="overflow-x-auto rounded bg-black/30 px-2 py-1.5 font-mono text-[11px] whitespace-pre-wrap text-zinc-400"
+                      >{{ row.sqlBefore || "-- (no successful SQL)" }}</pre
+                    >
+                    <pre
+                      class="overflow-x-auto rounded bg-black/30 px-2 py-1.5 font-mono text-[11px] whitespace-pre-wrap text-zinc-400"
+                      >{{ row.sqlAfter || "-- (no successful SQL)" }}</pre
+                    >
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        }
+      }
+    </div>
+
+    <!-- Cases only on one side -->
+    @if (diff.onlyBefore.length > 0 || diff.onlyAfter.length > 0) {
+      <div class="flex flex-col gap-1 text-[11px] text-zinc-500">
+        @if (diff.onlyBefore.length > 0) {
+          <p>Before only: {{ diff.onlyBefore.join(", ") }}</p>
+        }
+        @if (diff.onlyAfter.length > 0) {
+          <p>After only: {{ diff.onlyAfter.join(", ") }}</p>
+        }
+      </div>
+    }
+
+    <!-- Draft change-log entry -->
+    <div
+      data-testid="eval-changelog-draft"
+      class="flex flex-col gap-2.5 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-3"
+    >
+      <p class="flex items-center gap-1.5 text-[11px] tracking-wider text-zinc-500 uppercase">
+        <lucide-angular [img]="FileText" [size]="11" />
+        <span>Draft change-log entry</span>
+      </p>
+
+      <select
+        data-testid="eval-changelog-lever"
+        [value]="lever()"
+        (change)="onLeverChange($event)"
+        class="rounded-md bg-white/5 px-2.5 py-1.5 text-[12px] text-zinc-200 outline-none"
+      >
+        <option value="" disabled>Which lever?</option>
+        @for (option of leverOptions; track option) {
+          <option [value]="option">{{ option }}</option>
+        }
+      </select>
+
+      <textarea
+        data-testid="eval-changelog-change"
+        placeholder="What changed (one or two sentences)"
+        rows="2"
+        [value]="change()"
+        (input)="onChangeInput($event)"
+        class="resize-none rounded-md bg-white/5 px-2.5 py-1.5 text-[12px] text-zinc-200 placeholder-zinc-600 outline-none"
+      ></textarea>
+
+      <textarea
+        data-testid="eval-changelog-why"
+        placeholder="Why — the failure this addresses"
+        rows="2"
+        [value]="why()"
+        (input)="onWhyInput($event)"
+        class="resize-none rounded-md bg-white/5 px-2.5 py-1.5 text-[12px] text-zinc-200 placeholder-zinc-600 outline-none"
+      ></textarea>
+
+      <div class="flex items-center gap-2">
+        <button
+          type="button"
+          data-testid="eval-changelog-preview"
+          [disabled]="!canDraft() || draftLoading()"
+          (click)="preview()"
+          class="rounded-md bg-white/10 px-3 py-1.5 text-[12px] text-zinc-200 hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          @if (draftLoading()) {
+            Drafting…
+          } @else {
+            Preview
+          }
+        </button>
+        <button
+          type="button"
+          data-testid="eval-changelog-append"
+          [disabled]="!draftMarkdown() || appendLoading()"
+          (click)="append()"
+          class="rounded-md bg-white/10 px-3 py-1.5 text-[12px] text-zinc-200 hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          @if (appendLoading()) {
+            Appending…
+          } @else {
+            Append to docs/evals/change-log.md
+          }
+        </button>
+      </div>
+
+      @if (draftError()) {
+        <p class="text-[11px] text-red-400">{{ draftError() }}</p>
+      }
+      @if (appendError()) {
+        <p class="text-[11px] text-amber-400">{{ appendError() }}</p>
+      }
+      @if (appendedTo()) {
+        <p class="text-[11px] text-emerald-400">
+          Appended to {{ appendedTo() }}
+        </p>
+      }
+
+      @if (draftMarkdown(); as markdown) {
+        <div class="flex flex-col gap-1.5">
+          <div class="flex items-center justify-between">
+            <p class="text-[11px] tracking-wider text-zinc-500 uppercase">
+              Preview
+            </p>
+            <button
+              type="button"
+              data-testid="eval-changelog-copy"
+              (click)="copyMarkdown()"
+              class="flex items-center gap-1 rounded p-1 text-zinc-500 hover:bg-white/10 hover:text-zinc-300"
+              title="Copy to clipboard"
+            >
+              <lucide-angular [img]="ClipboardCopy" [size]="13" />
+            </button>
+          </div>
+          <pre
+            class="overflow-x-auto rounded-md bg-black/30 px-3 py-2.5 font-mono text-[11px] leading-relaxed whitespace-pre-wrap text-zinc-300"
+            >{{ markdown }}</pre
+          >
+        </div>
+      }
+    </div>
+  }
+</div>

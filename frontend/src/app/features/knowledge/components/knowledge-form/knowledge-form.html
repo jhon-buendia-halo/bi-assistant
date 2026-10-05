@@ -105,6 +105,29 @@
     />
   </label>
 
+  @if (showColumnField()) {
+    <label class="flex flex-col gap-1">
+      <span class="text-[11px] font-medium text-zinc-500"
+        >Column (optional)</span
+      >
+      <input
+        type="text"
+        placeholder="member_status"
+        maxlength="128"
+        [value]="column()"
+        (input)="column.set($any($event.target).value)"
+        class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+      />
+      <span class="text-[11px] leading-snug text-zinc-500">
+        Rendered beside this column in the schema when Column profiles/inline
+        knowledge are on. Up to 128 characters.
+      </span>
+      @if (columnTooLong()) {
+        <span class="text-[11px] text-red-400">128 characters max.</span>
+      }
+    </label>
+  }
+
   <div class="mt-1 flex items-center gap-2 text-[13px]">
     <button
       type="button"

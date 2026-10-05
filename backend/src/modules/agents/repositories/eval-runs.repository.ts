@@ -54,6 +54,21 @@ export class EvalRunsRepository {
     );
   }
 
+  /**
+   * Every run a Loop queued, in the order it queued them (`loopIndex`) —
+   * how `getLoop` rebuilds a loop after a backend restart forgot it.
+   */
+  async findByLoop(loopId: string): Promise<EvalRunView[]> {
+    const runs = await this.store.find({ loopId });
+    return runs.sort(
+      (a, b) =>
+        (a.loopIndex ?? 0) - (b.loopIndex ?? 0) ||
+        String(a.queuedAt ?? a.startedAt).localeCompare(
+          String(b.queuedAt ?? b.startedAt),
+        ),
+    );
+  }
+
   insert(run: EvalRunView): Promise<EvalRunView> {
     return this.store.insert(run);
   }

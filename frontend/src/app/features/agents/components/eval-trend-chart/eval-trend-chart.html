@@ -1,0 +1,96 @@
+@if (!hasData()) {
+  <p class="text-[12px] text-zinc-500">
+    No trend data yet for this suite — run it more than once to see a line.
+  </p>
+} @else {
+  <div class="flex flex-col gap-3">
+    <svg
+      [attr.viewBox]="viewBox"
+      preserveAspectRatio="xMidYMid meet"
+      class="h-[220px] w-full"
+      role="img"
+      [attr.aria-label]="
+        'Pass rate over time, one line per ' + groupBy() + '.'
+      "
+    >
+      <!-- Gridlines + y labels -->
+      @for (tick of yTicks; track tick.pct) {
+        <line
+          [attr.x1]="plotLeft"
+          [attr.x2]="plotRight"
+          [attr.y1]="tick.y"
+          [attr.y2]="tick.y"
+          stroke="rgba(255,255,255,0.08)"
+          stroke-width="1"
+        />
+        <text
+          [attr.x]="plotLeft - 6"
+          [attr.y]="tick.y + 3"
+          text-anchor="end"
+          class="fill-zinc-500"
+          font-size="9"
+          >{{ tick.pct }}%</text
+        >
+      }
+
+      <!-- Plot border -->
+      <line
+        [attr.x1]="plotLeft"
+        [attr.x2]="plotLeft"
+        [attr.y1]="plotTop"
+        [attr.y2]="plotBottom"
+        stroke="rgba(255,255,255,0.12)"
+        stroke-width="1"
+      />
+
+      <!-- X axis labels -->
+      @for (tick of xTicks(); track tick.x) {
+        <text
+          [attr.x]="tick.x"
+          [attr.y]="plotBottom + 16"
+          text-anchor="middle"
+          class="fill-zinc-500"
+          font-size="9"
+          >{{ tick.label }}</text
+        >
+      }
+
+      <!-- Series lines -->
+      @for (line of lines(); track line.key) {
+        <path
+          [attr.d]="line.path"
+          fill="none"
+          [attr.stroke]="line.color"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+        @for (p of line.points; track p.point.runId) {
+          <circle
+            [attr.cx]="p.x"
+            [attr.cy]="p.y"
+            r="3.5"
+            [attr.fill]="line.color"
+            stroke="#09090b"
+            stroke-width="1.5"
+          >
+            <title>{{ pointTitle(p.point) }}</title>
+          </circle>
+        }
+      }
+    </svg>
+
+    <!-- Legend -->
+    <div class="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+      @for (line of lines(); track line.key) {
+        <span class="flex items-center gap-1.5 text-[11px] text-zinc-400">
+          <span
+            class="inline-block h-2 w-2 shrink-0 rounded-full"
+            [style.background]="line.color"
+          ></span>
+          {{ line.key }}
+        </span>
+      }
+    </div>
+  </div>
+}

@@ -1,10 +1,16 @@
 import { existsSync, readdirSync, readFileSync } from 'fs';
 import { join, sep } from 'path';
-import type { MastraScorer } from '@mastra/core/evals';
 import type { AssistantEvalCase } from './assistant.evals';
+import { describeChecks } from './eval-checks';
+import type { EvalCheckDescription } from './eval-checks';
 import type { DatasetSnapshot } from '../tool-services';
+import type { EvalDifficulty } from '../../modules/agents/eval-telemetry';
 import { findFixture, requiredEntities } from '../../modules/testing-data/fixtures/registry';
-import { assistantEvalDatasetError } from './assistant-eval-datasets';
+import {
+  acceptedDatasourceKinds,
+  assistantEvalDatasetError,
+  datasourceKindLabel,
+} from './assistant-eval-datasets';
 
 /**
  * Eval suites, loaded from JSON instead of hard-coded TypeScript.
@@ -15,8 +21,8 @@ import { assistantEvalDatasetError } from './assistant-eval-datasets';
  * `docs/evals/synthetic-domains.md`) makes the TS array the wrong shape: cases
  * are data, they are written and reviewed alongside the fixture they probe,
  * and they must be diffable without a rebuild. So a suite is now a JSON file
- * in `suites/`, and the scorer objects are built from declarative `checks`
- * specs at load time.
+ * in `suites/`, and its `checks` are declarative specs that `eval-checks.ts`
+ * evaluates against the finished production turn (`TurnResult`).
  *
  * Two things stay in code on purpose:
  *
@@ -25,7 +31,8 @@ import { assistantEvalDatasetError } from './assistant-eval-datasets';
  *   than silently scoring a case on fewer checks than its author intended.
  * - **The dataset preflight.** What a suite needs from the datasource
  *   (`requiredEntities`) is data, but the comparison — schema-qualified, last
- *   two dotted segments, one datasource of the suite's kind — is logic that
+ *   two dotted segments, one datasource of the suite's kind (a PostgreSQL
+ *   suite also runs on a Databricks copy of its fixture) — is logic that
  *   every suite shares.
  *
  * A suite over one of the app's bundled samples names it with `fixtureId`
@@ -45,9 +52,13 @@ export const DEFAULT_SUITE_ID = 'world-cup';
 const SUITES_DIRNAME = 'suites';
 
 /**
- * One declarative assertion on a case, mapped to a `@mastra/evals/checks`
- * scorer by `toAssistantEvalCase`. Which fields a spec must carry depends on
- * its `type`; `validateCheck` enforces that pairing, since JSON cannot.
+ * One declarative assertion on a case, evaluated by `eval-checks.ts` on the
+ * final turn. Which fields a spec must carry depends on its `type`;
+ * `validateCheck` enforces that pairing, since JSON cannot.
+ *
+ * `finalSqlSucceeded` passes when the answer's last `run_readonly_sql`
+ * succeeded — what `noToolErrors` was being used for, without failing a turn
+ * that hit an error, recovered and answered correctly.
  */
 export interface EvalCheckSpec {
   type:
@@ -60,12 +71,17 @@ export interface EvalCheckSpec {
     | 'toolOrder'
     | 'noToolErrors'
     | 'usedNoTools'
-    | 'maxToolCalls';
+    | 'maxToolCalls'
+    | 'finalSqlSucceeded';
   /** includes / excludes / equals — the substring compared against the answer. */
   value?: string;
   /** matches — a regular expression source, compiled at load time. */
   pattern?: string;
-  /** matches — regex flags, e.g. `i`. */
+  /**
+   * matches — regex flags. Absent = `i`: an answer that writes "Paid" for
+   * `PAID` is not wrong, and a case-sensitive default failed correct answers.
+   * `""` asks for a case-sensitive match explicitly.
+   */
   flags?: string;
   /** calledTool / didNotCall — the tool name. */
   tool?: string;
@@ -96,9 +112,39 @@ export interface EvalSuiteCase {
   checks?: EvalCheckSpec[];
   /** Trusted SQL whose live result set is the reference answer. */
   expectedSql?: string;
+  /**
+   * Further references that are equally correct, for a question that
+   * legitimately admits more than one answer the data cannot decide between
+   * — typically a unit the question does not name (cents or dollars, a
+   * fraction or a percentage). The result-set check passes when an answer
+   * matches ANY reference (`referenceSqlsFor`). Never a way to accept a wrong
+   * answer. Postgres/portable SQL: there is no per-dialect form, and an
+   * alternative that cannot run on a datasource only costs that alternative.
+   * Only allowed alongside `expectedSql`.
+   */
+  expectedSqlAlternatives?: string[];
   resultSetOptions?: { distinctRows?: boolean };
   /** Grading rubric for cases a regex on the final answer would judge badly. */
   judgeRubric?: string;
+  /** How hard the question is for a careful analyst, for the per-difficulty table. */
+  difficulty?: EvalDifficulty;
+  /**
+   * Paraphrases of `question` with the same answer. Run only when a caller
+   * asks (`expandVariants(suite, true)`): they measure whether a pass was the
+   * wording or the understanding.
+   */
+  variants?: string[];
+  /**
+   * The plausible wrong query this case is a trap for (the ratio of the wrong
+   * columns, the count without the default filter). `eval:validate` asserts
+   * its result differs from `expectedSql`'s — a trap whose wrong answer
+   * happens to equal the right one tests nothing.
+   */
+  trapSql?: string;
+  /** Per-dialect reference SQL; `referenceSqlFor` falls back to `expectedSql`. */
+  expectedSqlByDialect?: { postgres?: string; databricks?: string };
+  /** `hand` = written and verified by a person; `model-drafted-verified` = drafted by a model, rows read by a person. */
+  provenance?: EvalCaseProvenance;
 }
 
 /** The kinds of datasource a suite can be run against. */
@@ -122,6 +168,10 @@ export interface EvalSuiteVariant {
    */
   expectedSql: Record<string, string>;
 }
+
+export type { EvalDifficulty };
+export type EvalCaseProvenance = 'hand' | 'model-drafted-verified';
+export type SqlDialect = 'postgres' | 'databricks';
 
 export interface EvalSuite {
   /** Matches the filename (`world-cup.json` → `world-cup`). */
@@ -187,7 +237,7 @@ function swapDistForSrc(dir: string): string | undefined {
 
 /* ------------------------------------------------------------ validation */
 
-/** Every check type this module can build a scorer for. */
+/** Every check type `eval-checks.ts` can evaluate. */
 const CHECK_TYPES = new Set<EvalCheckSpec['type']>([
   'includes',
   'excludes',
@@ -199,7 +249,15 @@ const CHECK_TYPES = new Set<EvalCheckSpec['type']>([
   'noToolErrors',
   'usedNoTools',
   'maxToolCalls',
+  'finalSqlSucceeded',
 ]);
+
+const DIFFICULTIES = new Set<EvalDifficulty>(['easy', 'medium', 'hard']);
+const PROVENANCES = new Set<EvalCaseProvenance>([
+  'hand',
+  'model-drafted-verified',
+]);
+const DIALECTS = new Set<SqlDialect>(['postgres', 'databricks']);
 
 /** Suite ids become filenames, so they may not reach outside the folder. */
 const SUITE_ID = /^[a-z0-9][a-z0-9-]*$/i;
@@ -212,7 +270,7 @@ function requiredString(value: unknown, file: string, field: string): string {
   if (typeof value !== 'string' || !value.trim()) {
     fail(file, `${field} must be a non-empty string`);
   }
-  return (value as string).trim();
+  return value.trim();
 }
 
 function stringArray(value: unknown, file: string, field: string): string[] {
@@ -255,8 +313,11 @@ function validateCheck(
       break;
     case 'matches':
       requiredString(spec.pattern, file, `${label}.pattern`);
+      if (spec.flags !== undefined && typeof spec.flags !== 'string') {
+        fail(file, `${label}.flags must be a string`);
+      }
       try {
-        new RegExp(spec.pattern as string, spec.flags);
+        new RegExp(spec.pattern as string, spec.flags ?? 'i');
       } catch (err) {
         fail(
           file,
@@ -284,7 +345,7 @@ function validateCheck(
       }
       break;
     default:
-      // noToolErrors / usedNoTools take no arguments.
+      // noToolErrors / usedNoTools / finalSqlSucceeded take no arguments.
       break;
   }
   return spec;
@@ -317,6 +378,21 @@ function validateCase(
       `${where}.expectedSql`,
     );
   }
+  if (raw.expectedSqlAlternatives !== undefined) {
+    // An alternative is "another way to be right about the same question",
+    // so it means nothing without the reference it is an alternative to.
+    if (parsed.expectedSql === undefined) {
+      fail(
+        file,
+        `${where}.expectedSqlAlternatives needs an expectedSql to be an alternative to`,
+      );
+    }
+    parsed.expectedSqlAlternatives = stringArray(
+      raw.expectedSqlAlternatives,
+      file,
+      `${where}.expectedSqlAlternatives`,
+    );
+  }
   if (raw.judgeRubric !== undefined) {
     parsed.judgeRubric = requiredString(
       raw.judgeRubric,
@@ -334,6 +410,56 @@ function validateCase(
         ? {}
         : { distinctRows: Boolean(options.distinctRows) };
   }
+  if (raw.difficulty !== undefined) {
+    if (!DIFFICULTIES.has(raw.difficulty as EvalDifficulty)) {
+      fail(
+        file,
+        `${where}.difficulty must be one of ${[...DIFFICULTIES].join(', ')} — got ${JSON.stringify(raw.difficulty)}`,
+      );
+    }
+    parsed.difficulty = raw.difficulty as EvalDifficulty;
+  }
+  if (raw.variants !== undefined) {
+    parsed.variants = stringArray(raw.variants, file, `${where}.variants`);
+  }
+  if (raw.trapSql !== undefined) {
+    parsed.trapSql = requiredString(raw.trapSql, file, `${where}.trapSql`);
+  }
+  if (raw.expectedSqlByDialect !== undefined) {
+    const byDialect = raw.expectedSqlByDialect as Record<string, unknown>;
+    if (
+      !byDialect ||
+      typeof byDialect !== 'object' ||
+      Array.isArray(byDialect)
+    ) {
+      fail(file, `${where}.expectedSqlByDialect must be an object`);
+    }
+    const parsedByDialect: NonNullable<EvalSuiteCase['expectedSqlByDialect']> =
+      {};
+    for (const [dialect, sql] of Object.entries(byDialect)) {
+      if (!DIALECTS.has(dialect as SqlDialect)) {
+        fail(
+          file,
+          `${where}.expectedSqlByDialect has an unknown dialect "${dialect}" — known: ${[...DIALECTS].join(', ')}`,
+        );
+      }
+      parsedByDialect[dialect as SqlDialect] = requiredString(
+        sql,
+        file,
+        `${where}.expectedSqlByDialect.${dialect}`,
+      );
+    }
+    parsed.expectedSqlByDialect = parsedByDialect;
+  }
+  if (raw.provenance !== undefined) {
+    if (!PROVENANCES.has(raw.provenance as EvalCaseProvenance)) {
+      fail(
+        file,
+        `${where}.provenance must be one of ${[...PROVENANCES].join(', ')} — got ${JSON.stringify(raw.provenance)}`,
+      );
+    }
+    parsed.provenance = raw.provenance as EvalCaseProvenance;
+  }
   if (raw.checks !== undefined) {
     if (!Array.isArray(raw.checks)) {
       fail(file, `${where}.checks must be an array`);
@@ -341,19 +467,7 @@ function validateCase(
     parsed.checks = raw.checks.map((check) =>
       validateCheck(check, file, where),
     );
-    // `runEvals` keys scores by scorer id, so a second check of the same type
-    // overwrites the first one's score instead of being graded on its own.
-    const seenTypes = new Set<string>();
-    for (const check of parsed.checks) {
-      if (seenTypes.has(check.type)) {
-        fail(
-          file,
-          `${where} uses the "${check.type}" check twice — scores are keyed by check type, ` +
-            'so one would silently replace the other. Combine them (e.g. one regex with lookaheads).',
-        );
-      }
-      seenTypes.add(check.type);
-    }
+    rejectDuplicateCheckTypes(parsed.checks, file, where);
   }
   return parsed;
 }
@@ -404,7 +518,14 @@ function deriveVariantCases(
       `variantOf.expectedSql names cases suite "${baseId}" does not have: ${unknown.join(', ')}`,
     );
   }
-  const cases = base.cases.map(({ id, expectedSql: baseSql, ...rest }) => {
+  const cases = base.cases.map((baseCase) => {
+    // Reference data in the base suite's dialects (Postgres alternatives, a
+    // Databricks override, the trap query) cannot run against the variant's
+    // datasource; its only reference is the ported `expectedSql`.
+    const { id, expectedSql: baseSql, ...rest } = baseCase;
+    delete rest.expectedSqlAlternatives;
+    delete rest.expectedSqlByDialect;
+    delete rest.trapSql;
     if (baseSql && !expectedSql[id]) {
       fail(file, `case "${id}" of suite "${baseId}" has expectedSql but no port`);
     }
@@ -415,6 +536,110 @@ function deriveVariantCases(
     };
   });
   return { variant: { suite: baseId, idPrefix, expectedSql }, cases };
+}
+
+/**
+ * One check of each type per case. Scores are keyed by check id, and the id
+ * is the type (`check-matches`), so a second `matches` would silently replace
+ * the first (it did under Mastra `runEvals`) or need a suffix nobody reading
+ * a report would connect back to the JSON. Two assertions of one kind belong
+ * in one pattern (a regex with lookaheads).
+ */
+function rejectDuplicateCheckTypes(
+  checks: EvalCheckSpec[],
+  file: string,
+  where: string,
+): void {
+  const seen = new Set<string>();
+  for (const check of checks) {
+    if (seen.has(check.type)) {
+      fail(
+        file,
+        `${where} uses the "${check.type}" check twice — scores are keyed by check type, ` +
+          'so one would silently replace the other. Combine them (e.g. one regex with lookaheads).',
+      );
+    }
+    seen.add(check.type);
+  }
+}
+
+/**
+ * A text check whose value is nothing but a number: digits, separators and
+ * regex punctuation (`\b`, `[,.]?`, `|`, `\s*`), no word.
+ */
+export function isNumericLooking(value: string): boolean {
+  const stripped = value
+    .replace(/\\[bBdDsSwW]/g, ' ')
+    .replace(/\\(.)/g, '$1')
+    .replace(/[\s.,:;%()[\]|?*+{}^$\-–—'"]/g, '');
+  return /^\d+$/.test(stripped);
+}
+
+/** One text check asserting a bare number on a case that has `expectedSql`. */
+export interface NumericCheckFinding {
+  caseId: string;
+  type: 'includes' | 'matches';
+  value: string;
+}
+
+/**
+ * A bare number asserted on the answer text of a case whose figure the
+ * result-set check already compares. It adds no correctness signal and fails
+ * correct answers on formatting (`1,234` vs `1234.0`, `48.4%` vs `0.484`).
+ */
+export function numericCheckFindings(
+  cases: readonly EvalSuiteCase[],
+): NumericCheckFinding[] {
+  const findings: NumericCheckFinding[] = [];
+  for (const evalCase of cases) {
+    if (!evalCase.expectedSql) continue;
+    for (const check of evalCase.checks ?? []) {
+      const value =
+        check.type === 'includes'
+          ? check.value
+          : check.type === 'matches'
+            ? check.pattern
+            : undefined;
+      if (value && isNumericLooking(value)) {
+        findings.push({
+          caseId: evalCase.id,
+          type: check.type as NumericCheckFinding['type'],
+          value,
+        });
+      }
+    }
+  }
+  return findings;
+}
+
+/** Warn once per process per suite state, not on every listing of the suites. */
+const numericWarnings = new Set<string>();
+
+/**
+ * Flagged as a warning, not an error: the suites still carry such checks,
+ * and refusing to load them would take the Evals tab down with them. One
+ * line per suite file, so listing suites does not flood the log.
+ */
+function warnNumericChecks(
+  cases: readonly EvalSuiteCase[],
+  file: string,
+): void {
+  const findings = numericCheckFindings(cases);
+  if (!findings.length) return;
+  const listed = findings
+    .map(
+      (finding) =>
+        `${finding.caseId} (${finding.type} ${JSON.stringify(finding.value)})`,
+    )
+    .join(', ');
+  const key = `${file}|${listed}`;
+  if (numericWarnings.has(key)) return;
+  numericWarnings.add(key);
+  console.warn(
+    `Eval suite ${file}: ${findings.length} check(s) assert a bare number on a case that has ` +
+      'expectedSql — the result-set check already compares the figure, and a text check fails ' +
+      `correct answers on formatting: ${listed}.`,
+  );
 }
 
 /**
@@ -501,7 +726,8 @@ export function parseSuite(
       validateCase(entry, file, index),
     );
   }
-  // `runEvals` keys scores by case id and the run report matches cases across
+  warnNumericChecks(suite.cases, file);
+  // Run logs key cases by id and the regression diff matches cases across
   // runs by id — duplicates would silently merge two questions into one.
   const seen = new Set<string>();
   for (const evalCase of suite.cases) {
@@ -587,77 +813,221 @@ export function loadSuite(id: string): EvalSuite {
   return suite;
 }
 
-/* ---------------------------------------------------------- check mapping */
-
-type ChecksModule = typeof import('@mastra/evals/checks');
-
-let checksCache: ChecksModule['checks'] | undefined;
-
 /**
- * `@mastra/evals/checks` is pulled in lazily, not imported at the top of this
- * file, because loading it drags in the whole Mastra core — including
- * ESM-only transitive dependencies. Everything else here (parsing, validating,
- * the dataset preflight) is plain data work that callers and unit tests must
- * be able to do without standing up a model stack, and only
- * `toAssistantEvalCase` actually needs a live scorer.
+ * The suite a selection of questions belongs to. Case ids are unique across
+ * suites (the suite loader's tests assert it), so a list of ids alone names
+ * its suite. Throws when the selection matches no suite, or spans several —
+ * their schemas are unrelated, and a run scoped to one cannot answer the
+ * other.
  */
-function checkFactories(): ChecksModule['checks'] {
-  checksCache ??= (require('@mastra/evals/checks') as ChecksModule).checks;
-  return checksCache;
-}
-
-function toScorer(spec: EvalCheckSpec): MastraScorer<any, any, any, any> {
-  const checks = checkFactories();
-  switch (spec.type) {
-    case 'includes':
-      return checks.includes(spec.value as string);
-    case 'excludes':
-      return checks.excludes(spec.value as string);
-    case 'equals':
-      return checks.equals(spec.value as string);
-    case 'matches':
-      return checks.matches(new RegExp(spec.pattern as string, spec.flags));
-    case 'calledTool':
-      return checks.calledTool(
-        spec.tool as string,
-        spec.times === undefined ? undefined : { times: spec.times },
-      );
-    case 'didNotCall':
-      return checks.didNotCall(spec.tool as string);
-    case 'toolOrder':
-      return checks.toolOrder(spec.tools as string[]);
-    case 'maxToolCalls':
-      return checks.maxToolCalls(spec.max as number);
-    case 'usedNoTools':
-      return checks.usedNoTools();
-    case 'noToolErrors':
-      return checks.noToolErrors();
-    default:
-      // Unreachable for a validated suite; kept so an added type that skips
-      // `toScorer` fails here instead of scoring the case on fewer checks.
-      throw new Error(`Unsupported eval check type "${String(spec.type)}"`);
+export function suiteForCases(caseIds?: string[]): EvalSuite {
+  const suites = listSuites();
+  // A paraphrase (`<id>~v1`, see `variantCaseId`) belongs to its base case's suite.
+  const wanted = caseIds
+    ? new Set(caseIds.map((id) => id.replace(/~v\d+$/, '')))
+    : undefined;
+  const touched = wanted
+    ? suites.filter((suite) =>
+        suite.cases.some((evalCase) => wanted.has(evalCase.id)),
+      )
+    : suites;
+  if (touched.length === 0) {
+    throw new Error(
+      'No question set matches the selected questions, so there is no sample ' +
+        'to validate the datasets against.',
+    );
   }
+  if (touched.length > 1) {
+    throw new Error(
+      `The selected questions span several sets (${touched
+        .map((suite) => suite.id)
+        .join(', ')}) — run one set at a time.`,
+    );
+  }
+  return touched[0];
+}
+
+/* ------------------------------------------------------------- run cases */
+
+/**
+ * A case as the runners want it: the declarative `checks` (what the parity
+ * harness evaluates with `eval-checks.ts`) plus the case's reference data.
+ * `difficulty`, `variantOf` and `expectedSqlByDialect` are declared on
+ * `AssistantEvalCase` itself, because the harness reads them.
+ */
+export interface SuiteEvalCase extends AssistantEvalCase {
+  checks: EvalCheckSpec[];
+  trapSql?: string;
+  provenance?: EvalCaseProvenance;
 }
 
 /**
- * A JSON case as the runner wants it: declarative specs become live scorer
- * objects, everything else passes straight through.
+ * A JSON case as the runner wants it. `checks` are the specs themselves.
  *
- * `runEvals` keys its scores by scorer id, so two scorers of the same kind in
- * one case collide — a case must use each check type at most once, which is a
- * property of the suite file, not something this mapping can repair.
+ * `scorers` is a compatibility view only: the specs as the question list
+ * shows them (`describeChecks` — id, name, description), for callers written
+ * when a case carried live `@mastra/evals/checks` scorer objects. Nothing
+ * scores through it any more — the parity harness grades the `TurnResult`
+ * with `evaluateChecks` — so new code should call `describeChecks(checks)`.
  */
-export function toAssistantEvalCase(c: EvalSuiteCase): AssistantEvalCase {
+export function toAssistantEvalCase(
+  c: EvalSuiteCase,
+): SuiteEvalCase & { scorers: EvalCheckDescription[] } {
+  const checks = c.checks ?? [];
   return {
     id: c.id,
     category: c.category,
     question: c.question,
     intent: c.intent,
-    scorers: (c.checks ?? []).map(toScorer),
+    checks,
+    scorers: describeChecks(checks),
     ...(c.expectedSql ? { expectedSql: c.expectedSql } : {}),
+    ...(c.expectedSqlAlternatives?.length
+      ? { expectedSqlAlternatives: c.expectedSqlAlternatives }
+      : {}),
     ...(c.resultSetOptions ? { resultSetOptions: c.resultSetOptions } : {}),
     ...(c.judgeRubric ? { judgeRubric: c.judgeRubric } : {}),
+    ...(c.difficulty ? { difficulty: c.difficulty } : {}),
+    ...(c.trapSql ? { trapSql: c.trapSql } : {}),
+    ...(c.expectedSqlByDialect
+      ? { expectedSqlByDialect: c.expectedSqlByDialect }
+      : {}),
+    ...(c.provenance ? { provenance: c.provenance } : {}),
   };
+}
+
+/**
+ * The reference SQL for the dialect a run executes in: the case's override
+ * for that dialect, else `expectedSql` (portable SQL needs no override).
+ */
+export function referenceSqlFor(
+  evalCase: {
+    expectedSql?: string;
+    expectedSqlByDialect?: { postgres?: string; databricks?: string };
+  },
+  /** A `SqlDialect`; anything else (or nothing) means "use `expectedSql`". */
+  dialect: string | undefined,
+): string | undefined {
+  const override =
+    dialect && DIALECTS.has(dialect as SqlDialect)
+      ? evalCase.expectedSqlByDialect?.[dialect as SqlDialect]
+      : undefined;
+  return override ?? evalCase.expectedSql;
+}
+
+/**
+ * Every reference that may judge a case in `dialect`: the primary
+ * (`referenceSqlFor`) first, then `expectedSqlAlternatives` in file order.
+ * Alternatives are Postgres/portable SQL and are listed for every dialect —
+ * one that cannot run on a datasource only costs that alternative, since the
+ * result-set check is a measurement gap only when every reference failed.
+ * Empty when the case has no primary reference.
+ */
+export function referenceSqlsFor(
+  evalCase: {
+    expectedSql?: string;
+    expectedSqlByDialect?: { postgres?: string; databricks?: string };
+    expectedSqlAlternatives?: string[];
+  },
+  dialect: string | undefined,
+): string[] {
+  const primary = referenceSqlFor(evalCase, dialect);
+  return primary ? [primary, ...(evalCase.expectedSqlAlternatives ?? [])] : [];
+}
+
+/** `<case id>~v<n>` — the id a paraphrase variant runs under. */
+export function variantCaseId(caseId: string, index: number): string {
+  return `${caseId}~v${index + 1}`;
+}
+
+/**
+ * The suite's cases, plus — when `includeVariants` — one extra case per
+ * paraphrase, right after its original. A variant keeps every check, the
+ * reference SQL and the category: only the wording changes, so a variant
+ * that fails where its original passed is a wording-sensitivity finding.
+ */
+export function expandVariants(
+  suite: EvalSuite,
+  includeVariants: boolean,
+): SuiteEvalCase[] {
+  return suite.cases.flatMap((c) => {
+    const original = toAssistantEvalCase(c);
+    if (!includeVariants || !c.variants?.length) return [original];
+    return [
+      original,
+      ...c.variants.map((question, index) => {
+        const variant = toAssistantEvalCase({
+          ...c,
+          id: variantCaseId(c.id, index),
+          question,
+        });
+        variant.variantOf = c.id;
+        return variant;
+      }),
+    ];
+  });
+}
+
+/**
+ * A named group of eval questions that share one fixture — one suite file
+ * under `suites/`, presented as a set by the questions tab. Sets exist so the
+ * suite can grow past the World Cup sample without the questions tab becoming
+ * one undifferentiated list: a set brings its own schema and its own
+ * datasource, and two sets must not be run against each other.
+ */
+export interface AssistantEvalSet {
+  /** Stable id (the suite file name), used by the API and the questions tab. */
+  id: string;
+  name: string;
+  /** What the set covers and what it needs to run, shown above its questions. */
+  description: string;
+  /**
+   * The registry sample this set questions, by `SampleFixture.id`, when it is
+   * one of the bundled samples. Absent for suites whose fixture is installed
+   * outside the app (`npm run fixtures:register`); those declare their own
+   * required entities instead.
+   */
+  fixtureId?: string;
+  /** The dataset names the set is written against, as a default/hint. */
+  datasets: string[];
+  cases: AssistantEvalSetCase[];
+}
+
+/** A set's case as the questions tab lists it: the run shape plus its paraphrase count. */
+export type AssistantEvalSetCase = SuiteEvalCase & {
+  /** Paraphrase variants the case carries (run with `includeVariants`). */
+  variantCount: number;
+};
+
+/**
+ * Every question set the assistant offers: one per suite file, id-sorted.
+ * Read fresh on each call (see `listSuites`) so a suite edited while the
+ * backend runs shows up without a restart.
+ *
+ * Defensive like `loadDefaultSuiteCases` (assistant.evals.ts): the suites are a build asset,
+ * and a broken or missing one must not take the Agents page down with it.
+ */
+export function assistantEvalSets(): AssistantEvalSet[] {
+  try {
+    return listSuites().map((suite) => ({
+      id: suite.id,
+      name: suite.name,
+      description: suite.description ?? '',
+      ...(suite.fixtureId ? { fixtureId: suite.fixtureId } : {}),
+      datasets: suite.datasets,
+      cases: suite.cases.map((evalCase) => ({
+        ...toAssistantEvalCase(evalCase),
+        variantCount: evalCase.variants?.length ?? 0,
+      })),
+    }));
+  } catch (err) {
+    console.warn(
+      `Eval suites could not be loaded: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+    return [];
+  }
 }
 
 /* ------------------------------------------------------------- preflight */
@@ -666,7 +1036,10 @@ export function toAssistantEvalCase(c: EvalSuiteCase): AssistantEvalCase {
  * Validate a run's data scope before creating a run or spending model tokens.
  * Dataset *names* are user-defined, so this matches on schema-qualified
  * entities instead. It checks the saved scope, not whether the live fixture's
- * rows have drifted.
+ * rows have drifted. One datasource of the suite's kind — for a PostgreSQL
+ * suite that may also be a Databricks copy of the fixture (the fixture loader
+ * can copy the schemas into a Databricks catalog, and `referenceSqlFor` picks
+ * the reference SQL for its dialect).
  *
  * The suite's `description` carries the operator-facing setup sentence (what
  * fixture to load, where the instructions live), because only the suite's
@@ -683,7 +1056,8 @@ export function suiteDatasetError(
     const fixture = findFixture(suite.fixtureId);
     if (fixture) return assistantEvalDatasetError(names, snapshots, fixture);
   }
-  const kindLabel = suite.datasourceKind === 'rest' ? 'REST API' : 'PostgreSQL';
+  const accepted = acceptedDatasourceKinds(suite.datasourceKind);
+  const kindLabel = datasourceKindLabel(suite.datasourceKind);
   const setup =
     suite.description?.trim() ||
     `These evals require the ${suite.name} fixture (suite "${suite.id}"). ` +
@@ -703,13 +1077,16 @@ export function suiteDatasetError(
     datasourceIds.size !== 1 ||
     datasourceIds.has(undefined) ||
     datasourceIds.has('') ||
-    selected.some((dataset) => dataset.datasourceKind !== suite.datasourceKind)
+    selected.some(
+      (dataset) => !accepted.includes(dataset.datasourceKind ?? ('' as never)),
+    )
   ) {
     return `${setup} The selected datasets must belong to one ${kindLabel} datasource.`;
   }
-  // Inventory keys are catalog.schema.table (`api.schema.table` for REST);
-  // older snapshots may have schema.table. Never accept a similarly named
-  // table in another schema.
+  // Inventory keys are catalog.schema.table (`api.schema.table` for REST,
+  // the Databricks catalog for a copied fixture); older Postgres snapshots
+  // may have schema.table. Never accept a similarly named table in another
+  // schema.
   const entities = new Set(
     selected.flatMap((dataset) =>
       dataset.tables.map((table) =>

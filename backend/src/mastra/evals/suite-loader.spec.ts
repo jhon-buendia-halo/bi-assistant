@@ -1,44 +1,31 @@
-/**
- * The real `@mastra/evals/checks` is mocked rather than loaded: requiring it
- * pulls in Mastra core, whose ESM-only dependencies Jest cannot require. What
- * this module owns is the mapping — which factory a spec picks and what it
- * passes — and that is exactly what the stub records. The factories
- * themselves are Mastra's to test, and the real wiring is exercised by the
- * app and by `nest build`.
- */
-jest.mock('@mastra/evals/checks', () => {
-  const record =
-    (id: string) =>
-    (...args: unknown[]) => ({ id, args });
-  return {
-    checks: {
-      includes: record('check-includes'),
-      excludes: record('check-excludes'),
-      equals: record('check-equals'),
-      matches: record('check-matches'),
-      calledTool: record('check-called-tool'),
-      didNotCall: record('check-did-not-call'),
-      toolOrder: record('check-tool-order'),
-      maxToolCalls: record('check-max-tool-calls'),
-      usedNoTools: record('check-used-no-tools'),
-      noToolErrors: record('check-no-tool-errors'),
-    },
-  };
-});
-
 import { mkdirSync, mkdtempSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import {
   DEFAULT_SUITE_ID,
+  expandVariants,
+  isNumericLooking,
   listSuites,
   loadSuite,
+  numericCheckFindings,
   parseSuite,
+  referenceSqlFor,
+  referenceSqlsFor,
   suiteDatasetError,
   suiteDirectory,
   toAssistantEvalCase,
 } from './suite-loader';
-import type { EvalSuite } from './suite-loader';
+import { describeChecks } from './eval-checks';
+
+// Loading a suite whose text checks assert bare numbers on a case with
+// reference SQL warns. The warning has its own tests below; keep it out of
+// every other test's output.
+let quietWarn: jest.SpyInstance;
+beforeEach(() => {
+  quietWarn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+});
+afterEach(() => quietWarn.mockRestore());
+import type { EvalCheckSpec, EvalSuite } from './suite-loader';
 import type { DatasetSnapshot } from '../tool-services';
 import {
   findFixture,
@@ -197,61 +184,48 @@ describe('suite validation', () => {
 });
 
 describe('check mapping', () => {
-  it('builds one scorer per spec, in declaration order', () => {
+  it('keeps the specs as checks, in declaration order', () => {
+    const checks: EvalCheckSpec[] = [
+      { type: 'includes', value: 'Argentina' },
+      { type: 'matches', pattern: 'argentina', flags: 'i' },
+      { type: 'calledTool', tool: 'run_readonly_sql', times: 2 },
+      { type: 'didNotCall', tool: 'create_visual' },
+      { type: 'toolOrder', tools: ['a', 'b'] },
+      { type: 'maxToolCalls', max: 3 },
+      { type: 'usedNoTools' },
+      { type: 'noToolErrors' },
+      { type: 'excludes', value: 'Pelé' },
+      { type: 'equals', value: 'exact' },
+      { type: 'finalSqlSucceeded' },
+    ];
     const evalCase = toAssistantEvalCase({
       id: 'mapped',
       category: 'control',
       question: 'q',
       intent: 'i',
-      checks: [
-        { type: 'includes', value: 'Argentina' },
-        { type: 'matches', pattern: 'argentina', flags: 'i' },
-        { type: 'calledTool', tool: 'run_readonly_sql', times: 2 },
-        { type: 'didNotCall', tool: 'create_visual' },
-        { type: 'toolOrder', tools: ['a', 'b'] },
-        { type: 'maxToolCalls', max: 3 },
-        { type: 'usedNoTools' },
-        { type: 'noToolErrors' },
-        { type: 'excludes', value: 'Pelé' },
-        { type: 'equals', value: 'exact' },
-      ],
+      checks,
     });
-    const built = evalCase.scorers as unknown as {
-      id: string;
-      args: unknown[];
-    }[];
-    expect(built.map((scorer) => scorer.id)).toEqual([
-      'check-includes',
-      'check-matches',
-      'check-called-tool',
-      'check-did-not-call',
-      'check-tool-order',
-      'check-max-tool-calls',
-      'check-used-no-tools',
-      'check-no-tool-errors',
-      'check-excludes',
-      'check-equals',
-    ]);
-    expect(built[0].args).toEqual(['Argentina']);
-    // Pattern + flags become one RegExp: the flags are the reason `matches`
-    // takes them separately in JSON at all.
-    expect(built[1].args).toEqual([/argentina/i]);
-    expect(built[2].args).toEqual(['run_readonly_sql', { times: 2 }]);
-    expect(built[4].args).toEqual([['a', 'b']]);
-    expect(built[5].args).toEqual([3]);
+    expect(evalCase.checks).toEqual(checks);
   });
 
-  it('omits the options object when calledTool has no times', () => {
+  it('exposes `scorers` only as the question-list view of the checks', () => {
     const evalCase = toAssistantEvalCase({
-      id: 'once',
+      id: 'described',
       category: 'control',
       question: 'q',
       intent: 'i',
-      checks: [{ type: 'calledTool', tool: 'list_entities' }],
+      checks: [
+        { type: 'includes', value: 'Argentina' },
+        { type: 'finalSqlSucceeded' },
+      ],
     });
-    expect(
-      (evalCase.scorers[0] as unknown as { args: unknown[] }).args,
-    ).toEqual(['list_entities', undefined]);
+    // No Mastra scorer objects any more: id, name and description, exactly
+    // what `describeChecks` lists — finalSqlSucceeded included.
+    expect(evalCase.scorers).toEqual(describeChecks(evalCase.checks));
+    expect(evalCase.scorers.map((scorer) => scorer.id)).toEqual([
+      'check-includes',
+      'check-final-sql-succeeded',
+    ]);
   });
 
   it('carries the reference SQL, rubric, category and options through', () => {
@@ -271,8 +245,10 @@ describe('check mapping', () => {
       expectedSql: 'SELECT 1',
       resultSetOptions: { distinctRows: true },
       judgeRubric: 'pass when true',
+      checks: [],
       scorers: [],
     });
+    expect(evalCase).not.toHaveProperty('notes');
   });
 });
 
@@ -312,10 +288,27 @@ describe('suiteDirectory', () => {
 });
 
 describe('loadSuite', () => {
-  it('loads the shipped World Cup suite with all ten cases', () => {
+  it('loads the shipped World Cup suite, original ten cases included', () => {
     const suite = loadSuite(DEFAULT_SUITE_ID);
     expect(suite.name).toBe('World Cup');
-    expect(suite.cases).toHaveLength(10);
+    // Suites grow (≥ 3 cases per category is the target), so pin the cases
+    // that must never disappear rather than a count that must never change.
+    const ids = suite.cases.map((evalCase) => evalCase.id);
+    expect(ids).toEqual(
+      expect.arrayContaining([
+        'champion-2022',
+        'final-score-2018',
+        'top-scorer-2022',
+        'shootouts',
+        'biggest-venue',
+        'schema-discovery',
+        'ambiguous-best-team',
+        'possession-vs-result',
+        'out-of-scope',
+        'visual-request',
+      ]),
+    );
+    expect(new Set(ids).size).toBe(ids.length);
     expect(suite.requiredEntities).toContain('world_cup.v_player_goal_totals');
     // Every case is categorised: an uncategorised one would silently land in
     // the "uncategorised" bucket and steer nothing.
@@ -561,5 +554,415 @@ describe('shipped suites', () => {
     expect(loadSuite('world-cup').fixtureId).toBe('world-cup');
     expect(loadSuite('formula-1').fixtureId).toBe('formula-1');
     expect(loadSuite('formula-1').cases).toHaveLength(10);
+  });
+});
+
+/* ------------------------------------------------- schema v2 additions */
+
+/** One case with overrides, inside an otherwise valid suite. */
+function withCase(overrides: Record<string, unknown>): unknown {
+  return suiteJson({
+    cases: [
+      {
+        id: 'first',
+        category: 'control',
+        question: 'How many things?',
+        intent: 'A baseline count.',
+        ...overrides,
+      },
+    ],
+  });
+}
+
+describe('case schema additions', () => {
+  it('accepts difficulty, variants, trapSql, per-dialect SQL and provenance', () => {
+    const suite = parseSuite(
+      withCase({
+        difficulty: 'hard',
+        variants: ['What is the thing count?', 'Count the things.'],
+        expectedSql: 'SELECT COUNT(*) FROM demo.things',
+        trapSql: 'SELECT COUNT(*) FROM demo.things_with_tests',
+        expectedSqlByDialect: {
+          databricks: 'SELECT COUNT(*) FROM `demo`.`things`',
+        },
+        provenance: 'model-drafted-verified',
+        checks: [{ type: 'finalSqlSucceeded' }],
+      }),
+      'demo.json',
+    );
+    expect(suite.cases[0]).toMatchObject({
+      difficulty: 'hard',
+      variants: ['What is the thing count?', 'Count the things.'],
+      trapSql: 'SELECT COUNT(*) FROM demo.things_with_tests',
+      expectedSqlByDialect: {
+        databricks: 'SELECT COUNT(*) FROM `demo`.`things`',
+      },
+      provenance: 'model-drafted-verified',
+      checks: [{ type: 'finalSqlSucceeded' }],
+    });
+  });
+
+  it.each([
+    [
+      { difficulty: 'trivial' },
+      /case "first"\.difficulty must be one of easy, medium, hard — got "trivial"/,
+    ],
+    [{ variants: [] }, /case "first"\.variants must be a non-empty array/],
+    [
+      { variants: ['  '] },
+      /case "first"\.variants\[0\] must be a non-empty string/,
+    ],
+    [{ trapSql: '' }, /case "first"\.trapSql must be a non-empty string/],
+    [
+      { expectedSqlByDialect: { snowflake: 'SELECT 1' } },
+      /unknown dialect "snowflake"/,
+    ],
+    [
+      { expectedSqlByDialect: 'SELECT 1' },
+      /expectedSqlByDialect must be an object/,
+    ],
+    [
+      { provenance: 'vibes' },
+      /case "first"\.provenance must be one of hand, model-drafted-verified/,
+    ],
+    [
+      { checks: [{ type: 'matches', pattern: 'x', flags: 7 }] },
+      /\.flags must be a string/,
+    ],
+  ])('rejects %p', (override, expected) => {
+    expect(() => parseSuite(withCase(override), 'demo.json')).toThrow(expected);
+  });
+
+  it('rejects a repeated check type, naming the file, the case and the type', () => {
+    const broken = withCase({
+      checks: [
+        { type: 'matches', pattern: 'a' },
+        { type: 'calledTool', tool: 'run_readonly_sql' },
+        { type: 'matches', pattern: 'b' },
+      ],
+    });
+    expect(() => parseSuite(broken, 'demo.json')).toThrow(
+      /demo\.json: case "first" uses the "matches" check twice/,
+    );
+  });
+
+  it('compiles matches patterns with the default i flag when flags are absent', () => {
+    // An inline flag group is only valid source under some flag sets; the
+    // point is that validation compiles what the run will compile.
+    expect(() =>
+      parseSuite(
+        withCase({ checks: [{ type: 'matches', pattern: '[a-z]+' }] }),
+        'demo.json',
+      ),
+    ).not.toThrow();
+  });
+});
+
+describe('numeric text checks', () => {
+  it.each([
+    ['57', true],
+    ['561.62', true],
+    ['\\b42\\b', true],
+    ['6[,.]?318[,.]?595|63[,.]?185', true],
+    ['4\\s*[-–:]\\s*2', true],
+    ['0\\.48[45]|48\\.[45]', true],
+    ['Argentina', false],
+    ['\\b(possession|%)\\b', false],
+    ['likely[_ ]pathogenic', false],
+    ['GRCh38', false],
+  ])('%p numeric-looking → %p', (value, expected) => {
+    expect(isNumericLooking(value)).toBe(expected);
+  });
+
+  it('warns — once — when a case with expectedSql asserts a bare number', () => {
+    const warn = jest
+      .spyOn(console, 'warn')
+      .mockImplementation(() => undefined);
+    try {
+      const raw = withCase({
+        expectedSql: 'SELECT COUNT(*) FROM demo.things',
+        checks: [
+          { type: 'includes', value: '1,234' },
+          { type: 'matches', pattern: 'things', flags: 'i' },
+        ],
+      });
+      parseSuite(raw, 'numeric-warning.json');
+      parseSuite(raw, 'numeric-warning.json');
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0][0])).toMatch(
+        /numeric-warning\.json: 1 check\(s\) assert a bare number.*first \(includes "1,234"\)/,
+      );
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('does not warn when there is no reference SQL to compare the figure', () => {
+    const warn = jest
+      .spyOn(console, 'warn')
+      .mockImplementation(() => undefined);
+    try {
+      parseSuite(
+        withCase({ checks: [{ type: 'includes', value: '7' }] }),
+        'numeric-no-sql.json',
+      );
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('lists the findings for tooling', () => {
+    const suite = parseSuite(
+      withCase({
+        expectedSql: 'SELECT 1',
+        checks: [{ type: 'matches', pattern: '\\b22\\b' }],
+      }),
+      'numeric-findings.json',
+    );
+    expect(numericCheckFindings(suite.cases)).toEqual([
+      { caseId: 'first', type: 'matches', value: '\\b22\\b' },
+    ]);
+  });
+});
+
+describe('referenceSqlFor', () => {
+  const evalCase = {
+    expectedSql: 'SELECT x::numeric FROM t',
+    expectedSqlByDialect: { databricks: 'SELECT CAST(x AS DECIMAL) FROM t' },
+  };
+
+  it('picks the dialect override when there is one', () => {
+    expect(referenceSqlFor(evalCase, 'databricks')).toBe(
+      'SELECT CAST(x AS DECIMAL) FROM t',
+    );
+  });
+
+  it('falls back to expectedSql for other or missing dialects', () => {
+    expect(referenceSqlFor(evalCase, 'postgres')).toBe(
+      'SELECT x::numeric FROM t',
+    );
+    expect(referenceSqlFor(evalCase, undefined)).toBe(
+      'SELECT x::numeric FROM t',
+    );
+    expect(referenceSqlFor(evalCase, 'snowflake')).toBe(
+      'SELECT x::numeric FROM t',
+    );
+    expect(referenceSqlFor({ expectedSql: 'SELECT 1' }, 'databricks')).toBe(
+      'SELECT 1',
+    );
+    expect(referenceSqlFor({}, 'postgres')).toBeUndefined();
+  });
+});
+
+describe('expectedSqlAlternatives', () => {
+  const paid = {
+    expectedSql: 'SELECT SUM(paid_cents) FROM t',
+    expectedSqlAlternatives: ['SELECT SUM(paid_cents) / 100.0 FROM t'],
+    checks: [{ type: 'finalSqlSucceeded' }],
+  };
+
+  it('loads and carries them through to the run case', () => {
+    const suite = parseSuite(withCase(paid), 'demo.json');
+    expect(suite.cases[0].expectedSqlAlternatives).toEqual([
+      'SELECT SUM(paid_cents) / 100.0 FROM t',
+    ]);
+    expect(toAssistantEvalCase(suite.cases[0])).toMatchObject({
+      expectedSql: 'SELECT SUM(paid_cents) FROM t',
+      expectedSqlAlternatives: ['SELECT SUM(paid_cents) / 100.0 FROM t'],
+    });
+    expect(expandVariants(suite, false)[0]).toHaveProperty(
+      'expectedSqlAlternatives',
+    );
+  });
+
+  it('leaves the field off a case without alternatives', () => {
+    const suite = parseSuite(
+      withCase({ expectedSql: 'SELECT 1', checks: [] }),
+      'demo.json',
+    );
+    expect(toAssistantEvalCase(suite.cases[0])).not.toHaveProperty(
+      'expectedSqlAlternatives',
+    );
+  });
+
+  it.each([
+    [
+      { expectedSqlAlternatives: ['SELECT 2'] },
+      /case "first"\.expectedSqlAlternatives needs an expectedSql/,
+    ],
+    [
+      { ...paid, expectedSqlAlternatives: [] },
+      /case "first"\.expectedSqlAlternatives must be a non-empty array/,
+    ],
+    [
+      { ...paid, expectedSqlAlternatives: 'SELECT 2' },
+      /case "first"\.expectedSqlAlternatives must be a non-empty array/,
+    ],
+    [
+      { ...paid, expectedSqlAlternatives: ['SELECT 2', '  '] },
+      /case "first"\.expectedSqlAlternatives\[1\] must be a non-empty string/,
+    ],
+    [
+      { ...paid, expectedSqlAlternatives: [7] },
+      /case "first"\.expectedSqlAlternatives\[0\] must be a non-empty string/,
+    ],
+  ])('rejects %p', (override, expected) => {
+    expect(() => parseSuite(withCase(override), 'demo.json')).toThrow(expected);
+  });
+});
+
+describe('referenceSqlsFor', () => {
+  const evalCase = {
+    expectedSql: 'SELECT cents FROM t',
+    expectedSqlByDialect: { databricks: 'SELECT CAST(cents AS BIGINT) FROM t' },
+    expectedSqlAlternatives: ['SELECT cents / 100.0 FROM t', 'SELECT 3'],
+  };
+
+  it('lists the primary for the dialect first, then the alternatives in order', () => {
+    expect(referenceSqlsFor(evalCase, 'postgres')).toEqual([
+      'SELECT cents FROM t',
+      'SELECT cents / 100.0 FROM t',
+      'SELECT 3',
+    ]);
+    expect(referenceSqlsFor(evalCase, 'databricks')).toEqual([
+      'SELECT CAST(cents AS BIGINT) FROM t',
+      'SELECT cents / 100.0 FROM t',
+      'SELECT 3',
+    ]);
+  });
+
+  it('is the primary alone without alternatives, and empty without a reference', () => {
+    expect(referenceSqlsFor({ expectedSql: 'SELECT 1' }, undefined)).toEqual([
+      'SELECT 1',
+    ]);
+    expect(
+      referenceSqlsFor({ expectedSqlAlternatives: ['SELECT 2'] }, 'postgres'),
+    ).toEqual([]);
+  });
+
+  it('keeps referenceSqlFor the primary only', () => {
+    expect(referenceSqlFor(evalCase, 'postgres')).toBe('SELECT cents FROM t');
+  });
+});
+
+describe('toAssistantEvalCase (checks + new fields)', () => {
+  it('carries the specs as checks, plus the new fields', () => {
+    const evalCase = toAssistantEvalCase({
+      id: 'full',
+      category: 'ties',
+      question: 'q',
+      intent: 'i',
+      difficulty: 'easy',
+      trapSql: 'SELECT 2',
+      expectedSql: 'SELECT 1',
+      expectedSqlByDialect: { databricks: 'SELECT 1' },
+      provenance: 'hand',
+      checks: [{ type: 'includes', value: 'x' }, { type: 'finalSqlSucceeded' }],
+    });
+    expect(evalCase).toMatchObject({
+      checks: [{ type: 'includes', value: 'x' }, { type: 'finalSqlSucceeded' }],
+      difficulty: 'easy',
+      trapSql: 'SELECT 2',
+      expectedSqlByDialect: { databricks: 'SELECT 1' },
+      provenance: 'hand',
+    });
+  });
+});
+
+describe('expandVariants', () => {
+  const suite = parseSuite(
+    suiteJson({
+      cases: [
+        {
+          id: 'count',
+          category: 'control',
+          question: 'How many things?',
+          intent: 'i',
+          expectedSql: 'SELECT COUNT(*) FROM demo.things',
+          variants: ['What is the number of things?', 'Count the things.'],
+          checks: [{ type: 'finalSqlSucceeded' }],
+        },
+        { id: 'plain', category: 'ties', question: 'q', intent: 'i' },
+      ],
+    }),
+    'demo.json',
+  );
+
+  it('returns the originals only unless variants are asked for', () => {
+    expect(expandVariants(suite, false).map((c) => c.id)).toEqual([
+      'count',
+      'plain',
+    ]);
+  });
+
+  it('adds each paraphrase after its original as <id>~v<n>, same checks and SQL', () => {
+    const cases = expandVariants(suite, true);
+    expect(cases.map((c) => [c.id, c.variantOf, c.question])).toEqual([
+      ['count', undefined, 'How many things?'],
+      ['count~v1', 'count', 'What is the number of things?'],
+      ['count~v2', 'count', 'Count the things.'],
+      ['plain', undefined, 'q'],
+    ]);
+    expect(cases[2]).toMatchObject({
+      category: 'control',
+      expectedSql: 'SELECT COUNT(*) FROM demo.things',
+      checks: [{ type: 'finalSqlSucceeded' }],
+    });
+  });
+});
+
+describe('shipped suites', () => {
+  // Every suite must load: a suite that throws takes the Evals tab down.
+  it.each(['world-cup', 'health-insurance', 'genomics', 'supply-chain', 'banking'])('%s loads', (id) => {
+    const warn = jest
+      .spyOn(console, 'warn')
+      .mockImplementation(() => undefined);
+    try {
+      const suite = loadSuite(id);
+      expect(suite.cases.length).toBeGreaterThan(0);
+      for (const evalCase of suite.cases) {
+        const types = (evalCase.checks ?? []).map((check) => check.type);
+        expect(new Set(types).size).toBe(types.length);
+      }
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});
+
+describe('suiteDatasetError — datasource kinds', () => {
+  it('accepts a Databricks datasource carrying the entities', () => {
+    expect(
+      suiteDatasetError(
+        worldCup(),
+        ['Sample'],
+        [snapshot({ datasourceKind: 'databricks' })],
+      ),
+    ).toBeUndefined();
+  });
+
+  it('still rejects datasets spread over two datasources', () => {
+    expect(
+      suiteDatasetError(
+        worldCup(),
+        ['Sample', 'Other'],
+        [snapshot(), snapshot({ name: 'Other', datasourceId: 'other' })],
+      ),
+    ).toContain(
+      'must belong to one PostgreSQL datasource or one Databricks datasource',
+    );
+  });
+
+  it('rejects a kind it cannot run reference SQL on', () => {
+    expect(
+      suiteDatasetError(
+        worldCup(),
+        ['Sample'],
+        [snapshot({ datasourceKind: 'sqlite' as never })],
+      ),
+    ).toContain(
+      'must belong to one PostgreSQL datasource or one Databricks datasource',
+    );
   });
 });

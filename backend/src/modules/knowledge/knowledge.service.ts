@@ -23,9 +23,29 @@ import {
   KnowledgeSnippetSource,
   KnowledgeUse,
 } from './entities/knowledge-snippet.entity';
+import {
+  entityKeysMatch,
+  normalizeEntityKey,
+  rankSnippets,
+  tokenize,
+} from './knowledge-ranking';
 
-/** Character budget the curated-knowledge system block may take per turn. */
-const KNOWLEDGE_BLOCK_CHARS = 2_000;
+/**
+ * Character budget the curated-knowledge system block may take per turn
+ * (newest-first, `ranked` false/absent). It was 2 000 until 2026-09-28: the
+ * genomics fixture's full seed (12 snippets, ~5 100 chars) then lost its
+ * default filter, its value vocabulary and its coverage facts on every turn
+ * — the block stopped at the first snippet that did not fit — and the
+ * suite fell from 61% to 43%. ~2 000 tokens is small next to the model's
+ * context and next to what a dropped default filter costs.
+ */
+const KNOWLEDGE_BLOCK_CHARS = 8_000;
+/** Character budget when `ranked` is true — ranking decides *which* snippets fill it, not how many fit. */
+const RANKED_KNOWLEDGE_BLOCK_CHARS = 8_000;
+/** Max snippets `lookup` returns — a pull, not a dump. */
+const LOOKUP_LIMIT = 8;
+/** `column` field length cap — a column name, not a description. */
+const MAX_COLUMN_CHARS = 128;
 /** Schema block budget/sample-value depth handed to the bootstrap agent. */
 const BOOTSTRAP_SCHEMA_CHARS = 6_000;
 const BOOTSTRAP_SCHEMA_SAMPLE_VALUES = 5;
@@ -53,6 +73,25 @@ export interface KnowledgeQuery {
   kind?: KnowledgeSnippetKind;
   source?: KnowledgeSnippetSource;
   enabled?: boolean;
+}
+
+/**
+ * `contextFor` options for L2 ranked/inline knowledge.
+ *
+ * `ranked` false/absent: dataset-scoped-then-global, newest-first, with every
+ * `default_filter` pinned ahead of the rest, budget `KNOWLEDGE_BLOCK_CHARS`.
+ * `ranked` true: snippets are scored against `question`/`entities`
+ * (`knowledge-ranking.ts`) and the budget (default
+ * `RANKED_KNOWLEDGE_BLOCK_CHARS`, override via `budgetChars`) is filled
+ * best-first. On both paths a snippet that does not fit is skipped, never
+ * the end of the block: a later, smaller one may still fit, and a default
+ * filter the model never sees silently changes every number it reports.
+ */
+export interface KnowledgeContextOptions {
+  question?: string;
+  entities?: string[];
+  ranked?: boolean;
+  budgetChars?: number;
 }
 
 /**
@@ -106,6 +145,17 @@ export class KnowledgeService {
       throw new NotFoundException(`Knowledge snippet ${id} not found`);
     }
     const patch = validateUpdate(input);
+    if (patch.column !== undefined) {
+      const resultingEntities =
+        patch.entities !== undefined
+          ? patch.entities
+          : (existing.entities ?? []);
+      if (resultingEntities.length !== 1) {
+        throw new BadRequestException(
+          'column may only be set when the snippet names exactly one entity',
+        );
+      }
+    }
     const saved = await this.repository.update(id, patch);
     if (!saved) {
       throw new NotFoundException(`Knowledge snippet ${id} not found`);
@@ -140,6 +190,7 @@ export class KnowledgeService {
    */
   async contextFor(
     datasetIds: string[],
+    opts?: KnowledgeContextOptions,
   ): Promise<{ block: string; used: KnowledgeUse[] }> {
     const empty = { block: '', used: [] as KnowledgeUse[] };
     const scope = new Set(datasetIds);
@@ -153,23 +204,161 @@ export class KnowledgeService {
     );
     if (!applicable.length) return empty;
     // Stable sort: dataset-scoped before global, `updatedAt desc` preserved
-    // within each group since `all` already carries that order.
+    // within each group since `all` already carries that order. This is
+    // also the pre-sort / tiebreak order relevance ranking starts from.
     const ordered = [...applicable].sort(
       (a, b) => rank(a.scope) - rank(b.scope),
     );
+
+    const ranked = opts?.ranked === true;
+    const candidates = ranked
+      ? rankSnippets(ordered, {
+          questionTokens: tokenize(opts?.question),
+          entityNames: opts?.entities ?? [],
+        })
+      : [
+          ...ordered.filter((snippet) => snippet.kind === 'default_filter'),
+          ...ordered.filter((snippet) => snippet.kind !== 'default_filter'),
+        ];
+
     const lines = [
       'Curated dataset knowledge (user-authored — treat as authoritative over anything you infer from schema):',
     ];
     const used: KnowledgeUse[] = [];
-    let budget = KNOWLEDGE_BLOCK_CHARS;
-    for (const snippet of ordered) {
+    let budget = ranked
+      ? (opts?.budgetChars ?? RANKED_KNOWLEDGE_BLOCK_CHARS)
+      : KNOWLEDGE_BLOCK_CHARS;
+    for (const snippet of candidates) {
       const entry = formatSnippet(snippet);
-      if (entry.length > budget) break;
+      // Skip, never stop: a lower-priority entry further down may still be
+      // small enough to fit.
+      if (entry.length > budget) continue;
       budget -= entry.length;
       lines.push(entry);
       used.push(toKnowledgeUse(snippet));
     }
     return used.length ? { block: lines.join('\n'), used } : empty;
+  }
+
+  /**
+   * Enabled snippets keyed by the column they describe, for `schemaCardBlock`
+   * (U1-E) to render inline next to that column — key format `'<entity>'`
+   * (a snippet naming that entity, no `column`) or `'<entity>.<column>'` (a
+   * snippet whose `column` names that column on that entity). `<entity>` is
+   * normalised to its last two dot-segments (`normalizeEntityKey`, the same
+   * rule `suiteDatasetError` uses), so a snippet entity recorded with or
+   * without a catalog prefix lines up with a dataset's table keys as long as
+   * the caller normalises its own lookup key the same way. A snippet with
+   * `entities.length > 1` and no `column` is filed under every one of its
+   * entity keys; a snippet with `column` set (always exactly one entity —
+   * enforced on write) is filed only under `<entity>.<column>`.
+   */
+  async knowledgeByColumn(
+    datasetIds: string[],
+  ): Promise<Map<string, { kind: string; title: string; body: string }[]>> {
+    const scope = new Set(datasetIds);
+    const all = await this.repository.list();
+    const map = new Map<
+      string,
+      { kind: string; title: string; body: string }[]
+    >();
+    for (const snippet of all) {
+      if (!inScope(snippet, scope)) continue;
+      const entities = snippet.entities ?? [];
+      if (!entities.length) continue;
+      const entry = {
+        kind: snippet.kind,
+        title: snippet.title,
+        body: snippet.body,
+      };
+      for (const entity of entities) {
+        const key = snippet.column
+          ? `${normalizeEntityKey(entity)}.${snippet.column}`
+          : normalizeEntityKey(entity);
+        const bucket = map.get(key);
+        if (bucket) bucket.push(entry);
+        else map.set(key, [entry]);
+      }
+    }
+    return map;
+  }
+
+  /**
+   * Snippets matching `query`, ranked by relevance to `phrase` (and
+   * `entity`) — the bridge behind the `lookup_knowledge` tool (L2
+   * `lookupTools`, U1-F) and `DatasetToolServices.knowledgeFor`. `entity`
+   * matches via `entityKeysMatch` (exact or last-two-segment); `column`
+   * matches exactly. At most `LOOKUP_LIMIT` (8) results.
+   */
+  async lookup(
+    datasetIds: string[],
+    query: { entity?: string; column?: string; phrase?: string },
+  ): Promise<
+    {
+      kind: string;
+      title: string;
+      body: string;
+      entities?: string[];
+      column?: string;
+    }[]
+  > {
+    const scope = new Set(datasetIds);
+    const all = await this.repository.list();
+    const applicable = all.filter((snippet) => {
+      if (!inScope(snippet, scope)) return false;
+      if (
+        query.entity &&
+        !(snippet.entities ?? []).some((entity) =>
+          entityKeysMatch(entity, query.entity as string),
+        )
+      ) {
+        return false;
+      }
+      if (query.column && snippet.column !== query.column) return false;
+      return true;
+    });
+    const ranked = rankSnippets(applicable, {
+      questionTokens: tokenize(query.phrase),
+      entityNames: query.entity ? [query.entity] : [],
+    });
+    return ranked.slice(0, LOOKUP_LIMIT).map((snippet) => ({
+      kind: snippet.kind,
+      title: snippet.title,
+      body: snippet.body,
+      ...(snippet.entities?.length ? { entities: snippet.entities } : {}),
+      ...(snippet.column ? { column: snippet.column } : {}),
+    }));
+  }
+
+  /**
+   * Enabled `default_filter` snippets in scope, one row per entity they
+   * name — `predicate` is the snippet's `body` verbatim (a SQL predicate
+   * fragment, e.g. `is_test = false`). Used by `sql-precheck.ts` (U1-F) to
+   * flag a query that omits a filter it should have applied, and by
+   * `result-guards.ts`'s `default-filter-missing` guard.
+   */
+  async defaultFilters(
+    datasetIds: string[],
+  ): Promise<{ entity: string; predicate: string; title: string }[]> {
+    const scope = new Set(datasetIds);
+    const all = await this.repository.list();
+    const filters: { entity: string; predicate: string; title: string }[] = [];
+    for (const snippet of all) {
+      if (!snippet.enabled || snippet.kind !== 'default_filter') continue;
+      if (
+        snippet.scope != null &&
+        !(
+          snippet.scope.datasetId !== undefined &&
+          scope.has(snippet.scope.datasetId)
+        )
+      ) {
+        continue;
+      }
+      for (const entity of snippet.entities ?? []) {
+        filters.push({ entity, predicate: snippet.body, title: snippet.title });
+      }
+    }
+    return filters;
   }
 
   /**
@@ -364,6 +553,15 @@ function rank(scope: KnowledgeSnippetScope | null): number {
   return scope?.datasetId ? 0 : 1;
 }
 
+/** Enabled, and either global or scoped to one of `scope`'s dataset names. */
+function inScope(snippet: KnowledgeSnippet, scope: Set<string>): boolean {
+  if (!snippet.enabled) return false;
+  if (snippet.scope == null) return true;
+  return (
+    snippet.scope.datasetId !== undefined && scope.has(snippet.scope.datasetId)
+  );
+}
+
 function matchesQuery(
   snippet: KnowledgeSnippet,
   query: KnowledgeQuery,
@@ -424,12 +622,41 @@ function normalizeList(value: unknown): string[] {
     .filter(Boolean);
 }
 
+/** `column` (when present) must be non-empty and ≤ `MAX_COLUMN_CHARS`. */
+function validateColumnValue(value: string | undefined): string {
+  const column = (value ?? '').trim();
+  if (!column) {
+    throw new BadRequestException('column must not be empty when provided');
+  }
+  if (column.length > MAX_COLUMN_CHARS) {
+    throw new BadRequestException(
+      `column must be ${MAX_COLUMN_CHARS} characters or fewer`,
+    );
+  }
+  return column;
+}
+
+function requireSingleEntity(entityCount: number): void {
+  if (entityCount !== 1) {
+    throw new BadRequestException(
+      'column may only be set when exactly one entity is given',
+    );
+  }
+}
+
 /** Full validation for `create` — every required field must be present. */
 function validateCreate(
   input: KnowledgeSnippetInput,
 ): Pick<
   KnowledgeSnippet,
-  'kind' | 'scope' | 'title' | 'body' | 'synonyms' | 'entities' | 'enabled'
+  | 'kind'
+  | 'scope'
+  | 'title'
+  | 'body'
+  | 'synonyms'
+  | 'entities'
+  | 'column'
+  | 'enabled'
 > {
   const kind = input?.kind;
   if (!KNOWLEDGE_SNIPPET_KINDS.includes(kind)) {
@@ -443,6 +670,11 @@ function validateCreate(
   if (!body) throw new BadRequestException('body is required');
   const synonyms = normalizeList(input?.synonyms);
   const entities = normalizeList(input?.entities);
+  let column: string | undefined;
+  if (input?.column !== undefined) {
+    column = validateColumnValue(input.column);
+    requireSingleEntity(entities.length);
+  }
   return {
     kind,
     scope: normalizeScope(input?.scope),
@@ -450,11 +682,9 @@ function validateCreate(
     body,
     ...(synonyms.length ? { synonyms } : {}),
     ...(entities.length ? { entities } : {}),
+    ...(column !== undefined ? { column } : {}),
     enabled: input?.enabled ?? true,
-  } as Pick<
-    KnowledgeSnippet,
-    'kind' | 'scope' | 'title' | 'body' | 'synonyms' | 'entities' | 'enabled'
-  >;
+  };
 }
 
 /** Partial validation for `update` — only fields present on `input` are checked/applied. */
@@ -486,6 +716,12 @@ function validateUpdate(
   }
   if (input.entities !== undefined) {
     patch.entities = normalizeList(input.entities);
+  }
+  if (input.column !== undefined) {
+    patch.column = validateColumnValue(input.column);
+    // The "exactly one entity" cross-field check needs the *resulting*
+    // entity list (this patch's, or the existing snippet's when entities
+    // isn't part of this patch) — done in `KnowledgeService.update`.
   }
   if (input.enabled !== undefined) patch.enabled = Boolean(input.enabled);
   return patch;

@@ -1,0 +1,254 @@
+<div class="flex flex-col gap-5">
+  <!-- Filters -->
+  <div class="flex flex-wrap items-center gap-2">
+    <select
+      data-testid="eval-history-filter-suite"
+      [value]="history.suiteFilter()"
+      (change)="onSuiteFilterChange($event)"
+      class="rounded-md bg-white/5 px-2.5 py-1.5 text-[12px] text-zinc-300 outline-none"
+    >
+      <option value="">All suites</option>
+      @for (suite of history.suites(); track suite) {
+        <option [value]="suite">{{ suite }}</option>
+      }
+    </select>
+
+    <select
+      data-testid="eval-history-filter-arm"
+      [value]="history.armFilter()"
+      (change)="onArmFilterChange($event)"
+      class="rounded-md bg-white/5 px-2.5 py-1.5 text-[12px] text-zinc-300 outline-none"
+    >
+      <option value="">All arms</option>
+      @for (arm of history.arms(); track arm) {
+        <option [value]="arm">{{ armLabel(arm) }}</option>
+      }
+    </select>
+
+    <select
+      data-testid="eval-history-filter-harness"
+      [value]="history.harnessFilter()"
+      (change)="onHarnessFilterChange($event)"
+      class="rounded-md bg-white/5 px-2.5 py-1.5 text-[12px] text-zinc-300 outline-none"
+    >
+      <option value="">All harnesses</option>
+      @for (harness of history.harnesses(); track harness) {
+        <option [value]="harness">{{ harnessLabel(harness) }}</option>
+      }
+    </select>
+
+    <select
+      data-testid="eval-history-filter-model"
+      [value]="history.modelFilter()"
+      (change)="onModelFilterChange($event)"
+      class="rounded-md bg-white/5 px-2.5 py-1.5 text-[12px] text-zinc-300 outline-none"
+    >
+      <option value="">All models</option>
+      @for (model of history.models(); track model) {
+        <option [value]="model">{{ model }}</option>
+      }
+    </select>
+
+    <button
+      type="button"
+      data-testid="eval-history-refresh"
+      (click)="refresh()"
+      class="ml-auto flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] text-zinc-400 hover:bg-white/10 hover:text-zinc-200"
+    >
+      <lucide-angular
+        [img]="RefreshCw"
+        [size]="12"
+        [class.animate-spin]="history.loading()"
+      />
+      <span>Refresh</span>
+    </button>
+  </div>
+
+  <!-- Table -->
+  @if (history.loading()) {
+    <p class="text-[13px] text-zinc-400">Loading run history…</p>
+  } @else if (history.error()) {
+    <p class="text-[13px] text-red-400">{{ history.error() }}</p>
+  } @else if (history.filteredLogs().length === 0) {
+    <p class="text-[13px] text-zinc-500">
+      No logged runs yet — every run (in-app, CLI, or `eval:validate`) is
+      recorded here once it finishes.
+    </p>
+  } @else {
+    <div class="flex flex-col gap-1.5">
+      @for (log of history.filteredLogs(); track log.runId) {
+        <div
+          [attr.data-testid]="'eval-history-row-' + log.runId"
+          class="rounded-xl bg-white/5 px-4 py-2.5"
+        >
+          <div class="flex items-center gap-3">
+            <input
+              type="checkbox"
+              [attr.data-testid]="'eval-history-compare-' + log.runId"
+              [checked]="isSelectedA(log) || isSelectedB(log)"
+              [disabled]="!log.exists"
+              (click)="toggleCompare(log, $event)"
+              class="shrink-0"
+              [attr.aria-label]="'Pick ' + log.runId + ' for Compare'"
+            />
+            @if (isSelectedA(log)) {
+              <span class="shrink-0 rounded bg-white/10 px-1 text-[10px] text-zinc-300">A</span>
+            } @else if (isSelectedB(log)) {
+              <span class="shrink-0 rounded bg-white/10 px-1 text-[10px] text-zinc-300">B</span>
+            }
+
+            <button
+              type="button"
+              [attr.data-testid]="'eval-history-open-' + log.runId"
+              [disabled]="!log.exists"
+              (click)="open(log)"
+              class="flex min-w-0 flex-1 items-center gap-3 text-left disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <lucide-angular
+                [img]="isOpen(log) ? ChevronDown : ChevronRight"
+                [size]="13"
+                class="shrink-0 text-zinc-500"
+              />
+              <span class="shrink-0 text-[12px] text-zinc-500">{{
+                log.startedAt.slice(0, 10)
+              }}</span>
+              <span class="shrink-0 text-[12px] text-zinc-200">{{
+                log.suite
+              }}</span>
+              @if (log.label) {
+                <span class="shrink-0 text-[11px] text-zinc-500">{{
+                  log.label
+                }}</span>
+              }
+              <span
+                class="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-zinc-400"
+                >{{ armLabel(log.arm) }}</span
+              >
+              <span
+                class="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-zinc-400"
+                >{{ harnessLabel(log.harness) }}</span
+              >
+              @if (log.model) {
+                <span class="shrink-0 truncate font-mono text-[11px] text-zinc-500">{{
+                  log.model
+                }}</span>
+              }
+              <span
+                [attr.data-testid]="'eval-history-passk-' + log.runId"
+                [class]="categoryRateClass(log.passKRate ?? 0)"
+                class="ml-auto shrink-0 font-mono text-[11px]"
+                >{{ passKLabel(log) }}</span
+              >
+              @if ((log.flaky ?? 0) > 0) {
+                <span class="shrink-0 text-[11px] text-amber-400"
+                  >{{ log.flaky }} flaky</span
+                >
+              }
+              <span class="shrink-0 font-mono text-[11px] text-zinc-500"
+                >{{ costLabel(log) }}</span
+              >
+              @if (!log.exists) {
+                <span
+                  [attr.data-testid]="'eval-history-missing-' + log.runId"
+                  class="flex shrink-0 items-center gap-1 text-[11px] text-red-400"
+                  title="The run-log file is no longer on disk"
+                >
+                  <lucide-angular [img]="CircleAlert" [size]="11" />
+                  <span>missing file</span>
+                </span>
+              }
+            </button>
+          </div>
+
+          @if (isOpen(log)) {
+            @if (history.openLoading() && history.openedFile() === log.file) {
+              <p class="mt-2 text-[12px] text-zinc-500">Loading…</p>
+            } @else if (history.openError() && history.openedFile() === log.file) {
+              <p class="mt-2 text-[12px] text-red-400">
+                {{ history.openError() }}
+              </p>
+            } @else if (history.openedRecord(); as record) {
+              <div class="mt-2 flex flex-col gap-1 border-t border-white/5 pt-2">
+                @for (item of record.cases; track item.id) {
+                  <button
+                    type="button"
+                    [attr.data-testid]="'eval-history-case-' + item.id"
+                    (click)="selectCase(item)"
+                    class="flex items-center gap-2 rounded-md px-2 py-1 text-left hover:bg-white/5"
+                  >
+                    <span [class]="verdictClass(item.verdict)" class="w-12 shrink-0 font-mono text-[11px]">{{
+                      item.verdict
+                    }}</span>
+                    <span class="min-w-0 flex-1 truncate text-[12px] text-zinc-300">{{
+                      item.question || item.id
+                    }}</span>
+                    @if (item.category) {
+                      <span class="shrink-0 text-[11px] text-zinc-600">{{
+                        item.category
+                      }}</span>
+                    }
+                    @if (item.failureLabel) {
+                      <span class="shrink-0 rounded bg-red-500/10 px-1.5 py-0.5 text-[10px] text-red-400">{{
+                        item.failureLabel
+                      }}</span>
+                    }
+                    <span class="shrink-0 font-mono text-[10px] text-zinc-600"
+                      >{{ item.passes }}/{{ item.runs }}</span
+                    >
+                  </button>
+                }
+              </div>
+            }
+          }
+        </div>
+      }
+    </div>
+
+    <!-- Directories read -->
+    @if (history.dirs().length > 0) {
+      <p data-testid="eval-history-dirs" class="text-[11px] text-zinc-600">
+        Read from: {{ history.dirs().join(", ") }}
+      </p>
+    }
+  }
+
+  <!-- Compare -->
+  @if (history.selectedA() || history.selectedB()) {
+    <div class="flex flex-col gap-2 rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3">
+      <div class="flex items-center gap-2">
+        <lucide-angular [img]="GitCompare" [size]="13" class="text-zinc-500" />
+        <p class="text-[11px] tracking-wider text-zinc-500 uppercase">Compare</p>
+        <button
+          type="button"
+          data-testid="eval-history-clear-compare"
+          (click)="history.clearCompareSelection()"
+          class="ml-auto text-[11px] text-zinc-500 hover:text-zinc-300"
+        >
+          Clear selection
+        </button>
+      </div>
+      @if (history.canCompare()) {
+        <app-eval-run-compare
+          [agentKey]="agentKey()"
+          [fileA]="history.selectedA()!"
+          [fileB]="history.selectedB()!"
+        />
+      } @else {
+        <p class="text-[12px] text-zinc-500">
+          Pick a second run to compare against
+          {{ history.selectedA() || history.selectedB() }}.
+        </p>
+      }
+    </div>
+  }
+
+  <!-- Trend -->
+  <div class="flex flex-col gap-2">
+    <p class="text-[11px] tracking-wider text-zinc-500 uppercase">
+      Trend — pass^k over time
+    </p>
+    <div data-testid="eval-history-trend">
+      <app-eval-trend-chart [points]="trendPoints()" groupBy="arm" />
+    </div>
+  </div>
+</div>

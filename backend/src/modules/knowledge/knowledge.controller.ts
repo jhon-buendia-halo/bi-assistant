@@ -139,6 +139,7 @@ function toInput(dto: CreateKnowledgeSnippetDto): KnowledgeSnippetInput {
     ...(Array.isArray(dto?.entities)
       ? { entities: dto.entities.map((e) => String(e)) }
       : {}),
+    ...(typeof dto?.column === 'string' ? { column: dto.column } : {}),
     ...(typeof dto?.enabled === 'boolean' ? { enabled: dto.enabled } : {}),
   };
 }
@@ -162,6 +163,7 @@ function toPartialInput(
   if (Array.isArray(dto?.entities)) {
     patch.entities = dto.entities.map((e) => String(e));
   }
+  if (typeof dto?.column === 'string') patch.column = dto.column;
   if (typeof dto?.enabled === 'boolean') patch.enabled = dto.enabled;
   return patch;
 }

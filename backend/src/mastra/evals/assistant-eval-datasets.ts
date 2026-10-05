@@ -1,4 +1,5 @@
 import type { DatasetSnapshot } from '../tool-services';
+import type { DatasourceKind } from '../../modules/datasources/entities/datasource.entity';
 import {
   findFixture,
   requiredEntities,
@@ -19,6 +20,26 @@ export function evalFixture(fixtureId: string): SampleFixture {
     );
   }
   return fixture;
+}
+
+/**
+ * The datasource kinds a fixture written for `kind` can be run against. A
+ * PostgreSQL fixture may also have been copied into a Databricks catalog
+ * (`npm run fixtures:databricks`); its reference SQL then comes from the
+ * case's `expectedSqlByDialect.databricks` when it needs one. A REST sample
+ * only exists behind its REST API.
+ */
+export function acceptedDatasourceKinds(
+  kind: 'postgres' | 'rest',
+): DatasourceKind[] {
+  return kind === 'rest' ? ['rest'] : ['postgres', 'databricks'];
+}
+
+/** `PostgreSQL datasource or one Databricks`, for "must belong to one … datasource". */
+export function datasourceKindLabel(kind: 'postgres' | 'rest'): string {
+  return kind === 'rest'
+    ? 'REST API'
+    : 'PostgreSQL datasource or one Databricks';
 }
 
 /**
@@ -55,13 +76,16 @@ export function assistantEvalDatasetError(
   const datasourceIds = new Set(
     selected.map((dataset) => dataset.datasourceId),
   );
+  const accepted = acceptedDatasourceKinds(kind);
   if (
     datasourceIds.size !== 1 ||
     datasourceIds.has(undefined) ||
     datasourceIds.has('') ||
-    selected.some((dataset) => dataset.datasourceKind !== kind)
+    selected.some(
+      (dataset) => !accepted.includes(dataset.datasourceKind ?? ('' as never)),
+    )
   ) {
-    return `${setup} The selected datasets must belong to one ${kindLabel} datasource.`;
+    return `${setup} The selected datasets must belong to one ${datasourceKindLabel(kind)} datasource.`;
   }
   // Inventory keys are catalog.schema.table (`api.schema.table` for REST);
   // older snapshots may have schema.table. Never accept a similarly named

@@ -1,13 +1,15 @@
 // LLM provider settings, mirrored from data-readiness-agent (its Feature
-// 1.5.3 / ADR-0026). OpenAI, Anthropic and LenAI (Halo's internal
-// OpenAI-compatible gateway) are wired; adding another provider later is a new
-// union member + a branch in the test service, not a restructure.
-export type LlmProvider = 'openai' | 'anthropic' | 'lenai';
+// 1.5.3 / ADR-0026). OpenAI, Anthropic, LenAI (Halo's internal
+// OpenAI-compatible gateway) and Databricks Model Serving are wired; adding
+// another provider later is a new union member + a branch in the test
+// service, not a restructure.
+export type LlmProvider = 'openai' | 'anthropic' | 'lenai' | 'databricks';
 
 export const SUPPORTED_PROVIDERS: LlmProvider[] = [
   'openai',
   'anthropic',
   'lenai',
+  'databricks',
 ];
 
 export type ReasoningEffort = 'low' | 'medium' | 'high';
@@ -17,6 +19,9 @@ export const REASONING_EFFORTS: ReasoningEffort[] = ['low', 'medium', 'high'];
 /**
  * Request body for save/test. `apiKey` omitted or empty = use the stored key.
  * For LenAI, `model` carries the deployment name and `baseUrl` is required.
+ * For Databricks, `baseUrl` is the workspace host (e.g.
+ * `https://adb-123.azuredatabricks.net`, required) and `model` is the
+ * serving-endpoint name (e.g. `databricks-claude-sonnet-4-5`).
  */
 export interface SaveLlmSettingsDto {
   provider: LlmProvider;
