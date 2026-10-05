@@ -1,0 +1,19 @@
+First release under both rulesets, 2026-10-05.
+
+Ruleset "main: PR approval, admin may merge without" created as id 24514122 (active, ~DEFAULT_BRANCH), then PR #49 merged:
+  gh pr view 49            -> reviewDecision REVIEW_REQUIRED, mergeStateStatus BLOCKED
+  gh pr merge 49 --merge   -> "X Pull request ...#49 is not mergeable: the base branch policy prohibits the merge."
+  gh pr merge 49 --merge --admin -> MERGED 8f9fd91
+
+Version on merge, run 37335141305: success
+  https://github.com/jhon-buendia-halo/bi-assistant/actions/runs/37335141305
+  origin/main: 2307f0e chore(release): v0.20.7   (pushed with the RELEASE_DEPLOY_KEY deploy key, accepted via bypass)
+  tag v0.20.7 pushed; no release-staging/* branch left behind.
+  Follow-on runs on 2307f0e: Spec checks success; Version on merge skipped (its own bump commit).
+
+Regression found: Build desktop installers, run 37335170147, event "push", ref v0.20.7, started automatically.
+  build-desktop.yml listens for pushed v* tags. Tags pushed with GITHUB_TOKEN never started it, but tags pushed with
+  the deploy key do. That breaks "merges never build automatically". Cancelled by hand (conclusion: cancelled);
+  `gh release view v0.20.7` -> "release not found", so no release was published.
+  Fix (this follow-up PR): version-on-merge.yml pushes the tag with GITHUB_TOKEN again; only branch pushes use the
+  deploy key. The run triggered by merging the fix is the check: it must create a tag and start no build.

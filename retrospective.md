@@ -14,6 +14,18 @@ Entry template:
 
 ---
 
+## 2026-10-05 — 0.2.4 follow-up: release tag started an installer build (BA-110)
+
+### What went well
+- Watching the first release run, and listing every run on the bump commit, caught the unwanted build within a minute. It was cancelled before it published a release.
+
+### What went wrong
+- The 0.2.4 spec said "no workflow listens for tags". I wrote that from a 4-line `grep -A4 '^on:'` that cut off `build-desktop.yml`'s `push: tags: v*` trigger. The deploy key changed who pushes the tag, and so whether workflows start, and I checked that change against a truncated view.
+
+### What to do differently
+- When a change alters which credential pushes refs (`GITHUB_TOKEN`, deploy key, PAT), read every workflow's full `on:` block and list the push, tag and `workflow_run` triggers it could start. Do it before writing the *Chaining* spec, not after the first run.
+- After any release-workflow change, run `gh run list -c <bump sha>` and `gh run list -w build-desktop.yml -L 3` right after the release run, and treat any unexpected run as a regression.
+
 ## 2026-10-05 — 0.2.4 Require PR approval on main (BA-110)
 
 ### What went well
