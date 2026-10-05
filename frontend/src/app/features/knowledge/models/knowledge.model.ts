@@ -1,9 +1,26 @@
 export type KnowledgeSnippetKind = 'instruction' | 'term' | 'default_filter';
-export type KnowledgeSnippetSource = 'user' | 'mined';
+export type KnowledgeSnippetSource = 'user' | 'mined' | 'feedback';
 
 export interface KnowledgeScope {
   datasetId?: string;
   datasourceId?: string;
+}
+
+/**
+ * Where a learned lesson came from — a reviewer's note on one block of one
+ * answer. `block` is a `ReasoningBlockKind`, typed as `string` here to keep
+ * this model free of an expert-mode import.
+ */
+export interface LessonProvenance {
+  feedbackId: string;
+  sessionId: string;
+  messageAt: string;
+  block: string;
+  question: string;
+  comment: string;
+  vote?: 'up' | 'down';
+  learnedAt: string;
+  method: 'agent' | 'verbatim';
 }
 
 export interface KnowledgeSnippet {
@@ -20,6 +37,8 @@ export interface KnowledgeSnippet {
   enabled: boolean;
   /** 'mined' snippets are AI-suggested and arrive disabled, pending approval. */
   source: KnowledgeSnippetSource;
+  /** Present only when `source === 'feedback'` — the note it was learned from. */
+  provenance?: LessonProvenance;
   createdAt: string;
   updatedAt: string;
 }

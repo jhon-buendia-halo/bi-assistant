@@ -11,6 +11,7 @@ import { WORKSPACE_TOOLS } from '@mastra/core/workspace';
 import { MastraService } from '../../mastra/mastra.service';
 import { setDatasetToolServices } from '../../mastra/tool-services';
 import type {
+  DatasetColumnSnapshot,
   DatasetSnapshot,
   SqlRunRepair,
   SqlRunResult,
@@ -23,7 +24,10 @@ import {
 } from '../../mastra/model-resolver';
 import { sqlFixOutputSchema } from '../../mastra/agents/sql-fixer.agent';
 import { sqlVerifyOutputSchema } from '../../mastra/agents/sql-verifier.agent';
-import { DATASETS_CONTEXT_KEY } from '../../mastra/tools/dataset.tools';
+import {
+  DATASETS_CONTEXT_KEY,
+  DEFAULT_SQL_ROW_LIMIT,
+} from '../../mastra/tools/dataset.tools';
 import {
   ACTIVE_VISUAL_CONTEXT_KEY,
   SESSION_ID_CONTEXT_KEY,
@@ -55,13 +59,61 @@ import {
 } from '../engine/engine-options';
 import { EngineSettingsService } from '../engine/engine-settings.service';
 import { splitEntity } from '../datasources/connectors/connector';
-import { DatasetsRepository } from '../datasets/repositories/datasets.repository';
+import {
+  DatasetsRepository,
+  type DatasetDoc,
+} from '../datasets/repositories/datasets.repository';
 import { DatasourcesService } from '../datasources/datasources.service';
 import type { DatasourceKind } from '../datasources/entities/datasource.entity';
 import { LlmService } from '../llm/llm.service';
 import { VerifiedQueriesService } from '../verified-queries/verified-queries.service';
 import { MetricsService } from '../metrics/metrics.service';
-import { KnowledgeService } from '../knowledge/knowledge.service';
+import {
+  KnowledgeService,
+  type KnowledgeQuery,
+} from '../knowledge/knowledge.service';
+import {
+  ExpertModeService,
+  type TraceInput,
+} from '../expert-mode/expert-mode.service';
+import { pickAnswerRecord } from '../expert-mode/answer-record';
+import { withVerifiedMatch } from '../expert-mode/rescore';
+import {
+  validateBlockFeedback,
+  type BlockFeedbackDto,
+} from '../expert-mode/dto/block-feedback.dto';
+import type {
+  BlockFeedback,
+  BlockVote,
+  ReasoningBlock,
+  ReasoningBlockKind,
+  ReasoningTrace,
+} from '../expert-mode/entities/reasoning-trace.entity';
+import {
+  AnswerPinsService,
+  stripForPin,
+} from '../answer-pins/answer-pins.service';
+import type {
+  AnswerPinDoc,
+  FingerprintParts,
+  PinMode,
+} from '../answer-pins/entities/answer-pin.entity';
+import {
+  fingerprintFor,
+  knowledgePart,
+  lineageKeyFor,
+  modelPart,
+  normalizeQuestion,
+  schemaPart,
+  textPart,
+  type ModelPartView,
+  type SchemaDataset,
+} from '../answer-pins/pin-key';
+import { pinEligible } from '../answer-pins/eligibility';
+import {
+  LearningService,
+  type LearnedLesson,
+} from '../learning/learning.service';
 import { SessionsRepository } from './repositories/sessions.repository';
 import { VisualizationService } from './visualization.service';
 import { sourceEntities } from './visualization-document';
@@ -95,6 +147,7 @@ import {
   toolRecords,
 } from './turn-data';
 import {
+  AnswerConsistency,
   ChatMessage,
   CrossCheck,
   InteractiveVisualization,
@@ -114,11 +167,15 @@ const VISUAL_TOOLS = new Set(['create_visual', 'update_visual']);
  */
 const KNOWLEDGE_USED_CONTEXT_KEY = 'knowledge-used';
 /**
- * requestContext key carrying the governed-metrics block this turn was
- * given, so the answer review judges the answer against the same
- * definitions the assistant saw rather than a re-read that may differ.
+ * requestContext keys carrying the governed-metrics and verified-reference
+ * blocks this turn was given — read back by the answer review (it judges the
+ * answer against the same definitions the assistant saw rather than a
+ * re-read that may differ), by business expert mode (its trace may only cite
+ * sources the turn was actually given) and by answer pinning (the
+ * fingerprint hashes the exact context the model received).
  */
 const METRICS_BLOCK_CONTEXT_KEY = 'metrics-block';
+const VERIFIED_BLOCK_CONTEXT_KEY = 'verified-block';
 /**
  * Tools Mastra adds to a call at execution time, outside `agent.listTools()`:
  * the session workspace's filesystem tools and, because the workspace ships
@@ -173,6 +230,27 @@ const CROSS_CHECK_DISAGREE_NOTE = 'results differ — treat with care';
 const CROSS_CHECK_ROW_LIMIT = STORED_ROWS_CAP;
 /** How long the turn waits for the provider's token counts before giving up. */
 const USAGE_WAIT_MS = 2_000;
+/**
+ * Extra system context on business-expert-mode turns. Expert mode shows every
+ * assumption block by block and turns a reviewer's correction into curated
+ * knowledge (`modules/learning`), so for a definition the knowledge does not
+ * cover, a stated assumption the reviewer can correct once is worth more than
+ * a clarification that only settles this one conversation. Without it GPT-5
+ * asked "What's your fiscal year boundary?" on the Retail trap before running
+ * a single query — and none of its options was the real calendar.
+ */
+const REVIEW_MODE_CONTEXT = [
+  'Business expert mode is on for this turn: a reviewer reads your',
+  'interpretation, assumptions and metric definition one by one and corrects',
+  'them, and every correction becomes curated knowledge for later answers.',
+  'So when the definition you need is a business convention the curated',
+  'knowledge does not cover — a fiscal calendar, how a metric is calculated,',
+  'which records a business term includes — do not ask: answer under the most',
+  'common convention and state that assumption plainly in the answer. Still',
+  'ask when the question names something the data itself matches in several',
+  'ways (a person, product, member or value with several plausible matches),',
+  'because no convention can settle that.',
+].join('\n');
 
 /**
  * Token counts for one turn, read off the model stream.
@@ -229,10 +307,55 @@ async function readTurnUsage(stream: {
 
 export type StreamEvent = {
   type:
-    'reasoning' | 'text' | 'tool' | 'tool-result' | 'visual-updated' | 'done';
+    | 'reasoning'
+    | 'text'
+    | 'tool'
+    | 'tool-result'
+    | 'visual-updated'
+    /** Business expert mode progress — content is an `ExpertStatus`. */
+    | 'expert-status'
+    | 'done';
   content?: string;
   session?: SessionDoc;
 };
+
+/** Progress of business expert mode's extra passes, streamed as `expert-status`. */
+export type ExpertStatus = 'cross-check' | 'explaining' | 'failed';
+
+/** What a block rating returns: the session plus any lessons its note taught. */
+export interface BlockFeedbackResult {
+  session: SessionDoc;
+  /** Present when the rating's comment changed and was learned from (may be empty). */
+  lessons?: LearnedLesson[];
+}
+
+/**
+ * One turn's answer-pinning state, computed before the model runs: which
+ * lineage the question belongs to, the fingerprint of the context the turn
+ * was given, and the pin already saved at that lineage (if any). Absent on a
+ * turn that is not pinnable (`pin: false`, an open visual, an answer to a
+ * clarification) or whose key could not be computed.
+ */
+interface TurnPin {
+  lineageKey: string;
+  question: string;
+  /** Normalised prior user messages, oldest first. */
+  chain: string[];
+  mode: PinMode;
+  fingerprint: string;
+  fingerprintParts: FingerprintParts;
+  datasourceId?: string;
+  existing?: AnswerPinDoc;
+}
+
+/** Everything a turn's grounding (and so its fingerprint) is built from. */
+interface GroundingSources {
+  datasets: DatasetDoc[];
+  view: ModelPartView;
+  verified?: string;
+  metrics?: string;
+  knowledge: { block: string; used: KnowledgeUse[] };
+}
 
 @Injectable()
 export class SessionsService implements OnModuleInit {
@@ -249,6 +372,9 @@ export class SessionsService implements OnModuleInit {
     private readonly metrics: MetricsService,
     private readonly knowledge: KnowledgeService,
     private readonly engineSettings: EngineSettingsService,
+    private readonly expertMode: ExpertModeService,
+    private readonly pins: AnswerPinsService,
+    private readonly learning: LearningService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -360,8 +486,13 @@ export class SessionsService implements OnModuleInit {
   ) {
     const levers = engine ?? (await this.engineSettings.resolved());
     const curated = levers.context !== 'bare';
-    const datasets = await this.boundDatasets(session.datasets);
-    const entities = datasets.flatMap((s) => s.tables ?? []);
+    const {
+      datasets,
+      view: { reasoningEffort },
+      verified,
+      metrics,
+      knowledge,
+    } = await this.groundingSources(session, question, levers);
     const visualLines = (session.visualizations ?? []).map(
       (v) =>
         `- ${v.id} — "${v.title}" v${this.visuals.currentVersion(v)} (from the answer at ${v.sourceMessageAt})`,
@@ -387,34 +518,12 @@ export class SessionsService implements OnModuleInit {
     // The tools read the turn's levers back off the context they run with
     // (`readEngineOptions`), so one resolution governs the whole turn.
     requestContext.set(ENGINE_OPTIONS_CONTEXT_KEY, levers);
-    const { reasoningEffort } = await this.llmService.getView();
     const effort = levers.reasoningEffort ?? reasoningEffort;
-    const verified =
-      curated && question
-        ? await this.verifiedQueries.referenceBlock(question)
-        : undefined;
-    // Curated semantics for the entities this session can see — the one
-    // definition of each business number, never re-derived per turn.
-    const metrics = curated
-      ? await this.metrics.definitionBlock(entities, {
-          question,
-          ranked: levers.rankedKnowledge,
-        })
-      : undefined;
-    // Curated, user-authored knowledge (glossary/instructions/default
-    // filters) for this session's datasets — authoritative over anything
-    // the model would otherwise infer from schema alone.
-    const knowledge = curated
-      ? await this.knowledge.contextFor(session.datasets, {
-          question,
-          entities,
-          ranked: levers.rankedKnowledge,
-        })
-      : { block: '', used: [] as KnowledgeUse[] };
     // Threaded on requestContext rather than returned alongside the options,
     // because the options object is spread straight into the agent call.
     requestContext.set(KNOWLEDGE_USED_CONTEXT_KEY, knowledge.used);
     if (metrics) requestContext.set(METRICS_BLOCK_CONTEXT_KEY, metrics);
+    if (verified) requestContext.set(VERIFIED_BLOCK_CONTEXT_KEY, verified);
     const cards = levers.columnProfiles
       ? schemaCardBlock(datasets, {
           knowledgeByColumn:
@@ -456,6 +565,50 @@ export class SessionsService implements OnModuleInit {
       requestContext,
       abortSignal,
     };
+  }
+
+  /**
+   * The inputs every turn's grounding is built from — and therefore what an
+   * answer pin's fingerprint hashes. One function for both, so the context a
+   * turn is given and the fingerprint the feedback path recomputes later can
+   * never be built two different ways.
+   *
+   * `levers` are the turn's engine levers: `context: 'bare'` withholds every
+   * curated block (verified pairs, metrics, knowledge), and `rankedKnowledge`
+   * orders knowledge and metrics by relevance to `question`.
+   */
+  private async groundingSources(
+    session: SessionDoc,
+    question: string | undefined,
+    levers: EngineOptions,
+  ): Promise<GroundingSources> {
+    const curated = levers.context !== 'bare';
+    const datasets = await this.boundDatasets(session.datasets);
+    const entities = datasets.flatMap((s) => s.tables ?? []);
+    const view = await this.llmService.getView();
+    const verified =
+      curated && question
+        ? await this.verifiedQueries.referenceBlock(question)
+        : undefined;
+    // Curated semantics for the entities this session can see — the one
+    // definition of each business number, never re-derived per turn.
+    const metrics = curated
+      ? await this.metrics.definitionBlock(entities, {
+          question,
+          ranked: levers.rankedKnowledge,
+        })
+      : undefined;
+    // Curated, user-authored knowledge (glossary/instructions/default
+    // filters, learned lessons) for this session's datasets — authoritative
+    // over anything the model would otherwise infer from schema alone.
+    const knowledge = curated
+      ? await this.knowledge.contextFor(session.datasets, {
+          question,
+          entities,
+          ranked: levers.rankedKnowledge,
+        })
+      : { block: '', used: [] as KnowledgeUse[] };
+    return { datasets, view, verified, metrics, knowledge };
   }
 
   /**
@@ -859,17 +1012,28 @@ export class SessionsService implements OnModuleInit {
    *
    * Never throws — a check that cannot run reports `error`, because failing to
    * verify must not lose the answer it was verifying. `effort` is the turn's
-   * effective reasoning effort; `onUsage` receives the verifier call's token
-   * counts (the turn's `crossCheck` side pass) when they were reported.
+   * effective reasoning effort; `options.answer` is the answer text, so the
+   * check corroborates the query the answer actually quotes;
+   * `options.engine` is the turn's levers (the verifier gets the curated
+   * context the answer got, none in `bare`); `options.onUsage` receives the
+   * verifier call's token counts (the turn's `crossCheck` side pass) when
+   * they were reported.
    */
   private async crossCheckAnswer(
     session: SessionDoc,
     question: string,
     data: ToolDataRecord[],
     effort: EngineReasoningEffort,
-    onUsage?: (usage: TokenUsage) => void,
+    options: {
+      answer?: string;
+      engine?: EngineOptions;
+      onUsage?: (usage: TokenUsage) => void;
+    } = {},
   ): Promise<CrossCheck | undefined> {
-    const record = successfulSqlRuns(data).at(-1);
+    const { answer, engine, onUsage } = options;
+    // The query the answer actually quotes — a supporting count that ran
+    // after it must not be the one an independent derivation is compared to.
+    const record = pickAnswerRecord(data, answer);
     // Nothing was executed — there is no result set to corroborate.
     if (!record?.input?.trim()) return undefined;
     try {
@@ -880,7 +1044,11 @@ export class SessionsService implements OnModuleInit {
           "the answer's result set hit the row cap — a partial result cannot be compared",
         );
       }
-      const context = await this.verifierContext(session);
+      const context = await this.verifierContext(
+        session,
+        engine ?? (await this.engineSettings.resolved()),
+        question,
+      );
       if (!context) {
         this.logger.warn('Cross-check skipped: no datasource bound');
         return crossCheck(
@@ -910,11 +1078,13 @@ export class SessionsService implements OnModuleInit {
       );
       // Width tolerance matters here: the verifier is told to project nothing
       // beyond the question while the analysis agent selects the figures its
-      // answer needs, so equal facts routinely arrive at different widths.
+      // answer needs, so equal facts routinely arrive at different widths —
+      // and a top-1 from the verifier against the answer's full ranking (or
+      // the reverse) is the same fact at a different row count.
       const { match, reason, shapeDiffers } = compareResults(
         record.rows ?? [],
         result.rows,
-        { widthTolerant: true },
+        { widthTolerant: true, leadingRows: true },
       );
       // Logged so the agree / shape / disagree / error split is measurable
       // rather than anecdotal — `npm run eval` reports the same verdicts.
@@ -940,12 +1110,23 @@ export class SessionsService implements OnModuleInit {
     }
   }
 
-  /** Dialect, datasource and a sample-value bearing schema for the verifier. */
-  private async verifierContext(session: SessionDoc): Promise<
+  /**
+   * Dialect, datasource and a sample-value bearing schema for the verifier,
+   * plus the curated knowledge and governed metrics the answer worked under.
+   * `engine` is the checked turn's levers: in the `bare` context arm the
+   * answer had no curated block, so neither does its second opinion.
+   */
+  private async verifierContext(
+    session: SessionDoc,
+    engine: EngineOptions,
+    question: string,
+  ): Promise<
     | {
         dialect: string;
         schema: string;
         datasourceId: string;
+        knowledge?: string;
+        metrics?: string;
       }
     | undefined
   > {
@@ -955,6 +1136,36 @@ export class SessionsService implements OnModuleInit {
       datasets.find((s) => s.datasourceId)?.datasourceId;
     if (!datasourceId) return undefined;
     const inScope = datasets.filter((s) => s.datasourceId === datasourceId);
+    // The second opinion works under the same business rules as the answer:
+    // the curated knowledge (default filters, term definitions, learned
+    // lessons) and the governed metrics, built with the same levers.
+    // Independence means never seeing the answer's SQL, not re-deriving
+    // without the semantic layer — a verifier that ignores "employees only"
+    // or "convert to USD" disagrees with every correct answer that applied
+    // them, which turns the cross-check into a measure of whether the
+    // knowledge was followed, inverted.
+    const curated = engine.context !== 'bare';
+    const [knowledge, metrics] = curated
+      ? await Promise.all([
+          this.knowledge
+            .contextFor(session.datasets, {
+              question,
+              entities: datasets.flatMap((s) => s.tables ?? []),
+              ranked: engine.rankedKnowledge,
+            })
+            .then((k) => k.block || undefined)
+            .catch(() => undefined),
+          this.metrics
+            .definitionBlock(
+              inScope.flatMap((s) => s.tables ?? []),
+              {
+                question,
+                ranked: engine.rankedKnowledge,
+              },
+            )
+            .catch(() => undefined),
+        ])
+      : [undefined, undefined];
     return {
       dialect: sqlDialectOf(inScope),
       datasourceId,
@@ -962,16 +1173,24 @@ export class SessionsService implements OnModuleInit {
         budgetChars: VERIFIER_SCHEMA_CHARS,
         sampleValues: VERIFIER_SAMPLE_VALUES,
       }),
+      ...(knowledge ? { knowledge } : {}),
+      ...(metrics ? { metrics } : {}),
     };
   }
 
   /**
-   * One verifier pass. It gets the question, the schema with sample values and
+   * One verifier pass. It gets the question, the schema with sample values,
+   * the curated knowledge and metric definitions the answer worked under, and
    * the user-approved reference pairs — deliberately not the original SQL.
    */
   private async deriveIndependentSql(
     question: string,
-    context: { dialect: string; schema: string },
+    context: {
+      dialect: string;
+      schema: string;
+      knowledge?: string;
+      metrics?: string;
+    },
     effort: EngineReasoningEffort,
     onUsage?: (usage: TokenUsage) => void,
   ): Promise<string | undefined> {
@@ -992,6 +1211,22 @@ export class SessionsService implements OnModuleInit {
           '<available-entities>',
           context.schema || '(no schema snapshot stored for this session)',
           '</available-entities>',
+          ...(context.knowledge
+            ? [
+                '',
+                '<curated-knowledge>',
+                context.knowledge,
+                '</curated-knowledge>',
+              ]
+            : []),
+          ...(context.metrics
+            ? [
+                '',
+                '<metric-definitions>',
+                context.metrics,
+                '</metric-definitions>',
+              ]
+            : []),
           ...(verified
             ? [
                 '',
@@ -1039,11 +1274,22 @@ export class SessionsService implements OnModuleInit {
     const latest = session.messages.at(-1);
     const previous = session.messages.at(-2);
     if (thread && latest?.role === 'user') {
+      // A replayed answer never reached the agent, so memory has neither its
+      // question nor its answer: catch up every contiguous replayed exchange
+      // right before this message, oldest first, on the next real turn.
+      const replayed = replayedExchanges(session.messages);
       // A clarification ends its turn before memory sees the question, so
       // replay it alongside the user's answer.
       if (previous?.role === 'assistant' && previous.clarification) {
         return [
+          ...replayed,
           { role: 'assistant' as const, content: previous.content },
+          { role: 'user' as const, content: latest.content },
+        ];
+      }
+      if (replayed.length) {
+        return [
+          ...replayed,
           { role: 'user' as const, content: latest.content },
         ];
       }
@@ -1325,7 +1571,24 @@ export class SessionsService implements OnModuleInit {
    *
    * `careful` opts the turn into an independent cross-check of the answer's
    * SQL, run before `done` so the transcript the client receives already
-   * carries the verdict. Everything else is the production turn, `runTurn`.
+   * carries the verdict.
+   *
+   * `expert` (business expert mode) runs the same cross-check and then one
+   * explainer pass that attaches a `ReasoningTrace` to the answer, streaming
+   * `expert-status` events while it works. The explanation never blocks the
+   * answer: when it cannot be built the turn emits `expert-status: failed`
+   * and saves the answer without a trace.
+   *
+   * `pin` turns on answer pinning (`modules/answer-pins`): a question whose
+   * lineage already has a pin derived under the same fingerprint is answered
+   * by re-running the pinned SQL — identical live rows replay the stored
+   * answer with zero model calls — and an eligible fresh answer is saved as
+   * the lineage's pin (keeping the old wording when its rows did not move).
+   * Off by default here so the eval harness keeps measuring the raw engine;
+   * the HTTP controller turns it on. Pinning never breaks a turn: any error
+   * in it is logged and the turn derives normally.
+   *
+   * Everything else is the production turn, `runTurn`.
    */
   async streamMessage(
     id: string,
@@ -1334,12 +1597,16 @@ export class SessionsService implements OnModuleInit {
     abortSignal?: AbortSignal,
     activeVisualId?: string,
     careful = false,
+    expert = false,
+    pin = false,
   ): Promise<void> {
     await this.runTurn(id, content, {
       emit,
       abortSignal,
       activeVisualId,
       engine: careful ? { careful: 'on' } : undefined,
+      expert,
+      pin,
     });
   }
 
@@ -1349,13 +1616,22 @@ export class SessionsService implements OnModuleInit {
    * all come through here, so a graded run measures exactly what a user
    * gets (`turn-result.ts` says why that matters).
    *
-   * One turn, in order: persist the prompt → stream the assistant run
-   * (tools, repairs, guards) → tool-only synthesis when it ended without
-   * prose → the zero-tool grounding guard → the answer review (lever
-   * `answerReview`) → careful mode's cross-check (`careful`, `'auto'` on a
-   * risky category or a turn whose SQL drew a warning) → persist the answer
-   * → `done`. The levers are `opts.engine` over Settings → Engine levers,
-   * resolved once and handed to the tools on the requestContext.
+   * One turn, in order: persist the prompt → answer-pin lookup and replay
+   * (`opts.pin` only; a replay ends the turn with zero model calls) →
+   * stream the assistant run (tools, repairs, guards) → tool-only synthesis
+   * when it ended without prose → the zero-tool grounding guard → the
+   * answer review (lever `answerReview`) → careful mode's cross-check
+   * (`careful`, `'auto'` on a risky category or a turn whose SQL drew a
+   * warning; always in business expert mode) → the expert explainer pass
+   * (`opts.expert`) → persist the answer → save its answer pin → `done`.
+   * The levers are `opts.engine` over Settings → Engine levers, resolved
+   * once and handed to the tools on the requestContext.
+   *
+   * Answer pinning in evals: `opts.pin` defaults to off, and neither eval
+   * harness (the CLI `run-eval` and the in-app runner) turns it on, so a
+   * graded turn never replays a pin nor writes one — an eval measures the
+   * model and the levers, never a cache (business-expert plan decision 11,
+   * the same reason Snowflake strips verified queries before grading).
    *
    * Returns everything a harness grades, side passes and their token counts
    * included. An aborted turn still returns what it had (`aborted: true`).
@@ -1408,6 +1684,12 @@ export class SessionsService implements OnModuleInit {
     // RequestContext + array per call — no leakage across turns or sessions.
     const data: ToolDataRecord[] = [];
     options.requestContext.set(TURN_RECORDS_CONTEXT_KEY, data);
+    const expert = opts.expert === true;
+    // Expert mode is review mode: a missing business definition is answered
+    // under a stated convention for the reviewer to correct, not asked about.
+    if (expert) {
+      options.context.push({ role: 'system', content: REVIEW_MODE_CONTEXT });
+    }
 
     let text = '';
     let clarification: ChatMessage['clarification'] | null = null;
@@ -1420,6 +1702,9 @@ export class SessionsService implements OnModuleInit {
     // an outage looked like a turn that simply had nothing to say.
     let providerError: ProviderError | undefined;
     const pendingCalls = new Map<string, Record<string, unknown>>();
+    // Statements the SQL fixer had to repair before they ran — the expert
+    // trace's execution signal counts a repair against the final query.
+    const repairedSql: string[] = [];
     // Every tool name the model invoked this turn, in call order, repeats
     // kept — what a harness grades `calledTool`/`toolOrder` on, and what the
     // zero-SQL-turn grounding guard below keys off (it fires only when empty).
@@ -1447,6 +1732,35 @@ export class SessionsService implements OnModuleInit {
         durationMs: Date.now() - started,
         providerError,
       });
+
+    // Answer pinning: key the question and look up its pin from the context
+    // just built — no model call has happened yet, so a replay costs nothing.
+    const mode = turnPinMode(engine, expert);
+    const pinning =
+      opts.pin &&
+      !opts.activeVisualId &&
+      !answersClarification(session.messages)
+        ? await this.preparePin(session, mode, options.requestContext, effort)
+        : undefined;
+    if (pinning) {
+      const replay = await this.replayPin(session, pinning, turn.signal, emit);
+      if (replay) {
+        opts.abortSignal?.removeEventListener('abort', forwardAbort);
+        // A replay is a whole turn: the stored answer, no model call, no
+        // side pass. `aborted` when the user stopped while the SQL re-ran.
+        return turnResult({
+          text: replay.message?.content ?? '',
+          message: replay.message,
+          data: replay.message?.data ?? [],
+          calledTools: [],
+          sidePassUsage: {},
+          engine,
+          configHash,
+          aborted: !replay.message,
+          durationMs: Date.now() - started,
+        });
+      }
+    }
 
     const stream = await agent.stream(input, options);
     try {
@@ -1539,6 +1853,9 @@ export class SessionsService implements OnModuleInit {
             continue;
           }
           const record = toolDataRecord(toolName, args, payload.result);
+          const corrected = (payload.result as { correctedSql?: unknown })
+            ?.correctedSql;
+          if (typeof corrected === 'string') repairedSql.push(corrected);
           if (record) {
             data.push(record);
             emit({
@@ -1714,6 +2031,11 @@ export class SessionsService implements OnModuleInit {
           }
         : {};
     let persisted: ChatMessage | undefined;
+    // Set when this turn's answer becomes its lineage's pin, saved once the
+    // transcript is persisted so a pin never points at an unsaved message.
+    let pinned:
+      | { pinning: TurnPin; record: ToolDataRecord; message: ChatMessage }
+      | undefined;
     if (clarification) {
       // The turn stops here, but the schema/sample work done before the
       // question is real work — keep it on the card instead of dropping it.
@@ -1736,43 +2058,131 @@ export class SessionsService implements OnModuleInit {
       const interpretation = providerFailed
         ? undefined
         : interpretationLine(data, entities);
-      // Careful mode only, and only when there is a result set to corroborate.
-      crossChecked =
+      // Careful mode (lever `careful`) and business expert mode, and only
+      // when there is a result set to corroborate.
+      if (
         !turn.signal.aborted &&
         !providerFailed &&
-        crossCheckWanted(engine, opts.category, data)
-          ? await this.crossCheckAnswer(
+        (expert || crossCheckWanted(engine, opts.category, data))
+      ) {
+        if (expert && lastSuccessfulSql(data)) {
+          emit({ type: 'expert-status', content: 'cross-check' });
+        }
+        crossChecked = await this.crossCheckAnswer(
+          session,
+          trimmed,
+          data,
+          effort,
+          {
+            answer: text,
+            engine,
+            onUsage: (observed) => bill('crossCheck', observed),
+          },
+        );
+      }
+      const verified =
+        !providerFailed && (await this.matchesVerifiedQuery(session, data));
+      const answer =
+        text.trim() ||
+        `${visualEvent!.action === 'created' ? 'Created' : 'Updated'} interactive visual "${visualEvent!.title}" (v${visualEvent!.version}).`;
+      const expertTrace =
+        expert && !turn.signal.aborted && !providerFailed
+          ? await this.explainAnswer(
+              {
+                sessionId: id,
+                question: trimmed,
+                answer,
+                data,
+                knowledgeUsed: knowledge ?? [],
+                metricsBlock: contextString(
+                  options.requestContext,
+                  METRICS_BLOCK_CONTEXT_KEY,
+                ),
+                verifiedBlock: contextString(
+                  options.requestContext,
+                  VERIFIED_BLOCK_CONTEXT_KEY,
+                ),
+                verified,
+                crossCheck: crossChecked,
+                repairedSql,
+                abortSignal: turn.signal,
+              },
               session,
-              trimmed,
-              data,
-              effort,
-              (observed) => bill('crossCheck', observed),
+              emit,
             )
           : undefined;
+      // The query behind the answer, when this turn may become its lineage's
+      // pin. An expert pin must carry its trace — an expert ask only ever
+      // replays an expert answer, trace included. A provider-error message
+      // is not an answer, and an answer the review flagged (findings its
+      // corrective pass could not address) carries a known defect — like a
+      // result-guard warning, neither is ever pinned and replayed.
+      const record = pickAnswerRecord(data, answer);
+      const pinRecord =
+        pinning &&
+        !turn.signal.aborted &&
+        !providerFailed &&
+        review?.status !== 'flagged' &&
+        (mode !== 'expert' || expertTrace) &&
+        pinEligible({
+          record,
+          visualEvent,
+          activeVisualId: opts.activeVisualId,
+          text,
+          datasourceId: pinning.datasourceId,
+        })
+          ? record
+          : undefined;
+      const stabilised =
+        pinning?.existing && pinRecord
+          ? stabilise(pinning.existing, pinRecord, knowledge ?? [])
+          : undefined;
+      if (stabilised?.reproducesRejected) {
+        // The engine re-derived the very numbers the reviewer rejected. No
+        // continuity is claimed — the answer is saved as a fresh pin — but
+        // it is worth a look: the note did not change the result.
+        this.logger.warn(
+          'Fresh derivation reproduced the rows of a rejected answer pin',
+        );
+      }
       persisted = {
         role: 'assistant',
-        content:
-          text.trim() ||
-          `${visualEvent!.action === 'created' ? 'Created' : 'Updated'} interactive visual "${visualEvent!.title}" (v${visualEvent!.version}).`,
+        // `kept`: the numbers held, so the wording the lineage already
+        // showed is kept — only the content is swapped, everything else is
+        // this turn's fresh derivation.
+        content: stabilised?.content ?? answer,
         at: new Date().toISOString(),
         ...(data.length ? { data } : {}),
         ...(entities.length ? { entities } : {}),
         ...(interpretation ? { interpretation } : {}),
         ...(reasoning ? { reasoning } : {}),
         ...(knowledge ? { knowledge } : {}),
-        ...(!providerFailed && (await this.matchesVerifiedQuery(session, data))
-          ? { verified: true }
-          : {}),
+        ...(verified ? { verified: true } : {}),
         ...(visualEvent ? { visual: visualEvent } : {}),
         ...(crossChecked ? { crossCheck: crossChecked } : {}),
         ...(review ? { review } : {}),
         ...(usage ? { usage } : {}),
         ...(providerError ? { providerError } : {}),
+        ...(expertTrace ? { expertTrace } : {}),
+        ...(stabilised?.consistency
+          ? { consistency: stabilised.consistency }
+          : {}),
         ...engineStamp,
       };
       messages.push(persisted);
+      if (pinning && pinRecord) {
+        pinned = { pinning, record: pinRecord, message: persisted };
+      }
     }
     const updated = await this.repository.update(id, { messages });
+    if (pinned) {
+      await this.savePin(
+        session,
+        pinned.pinning,
+        pinned.record,
+        pinned.message,
+      );
+    }
     if (!turn.signal.aborted || clarification) {
       emit({ type: 'done', session: updated ?? fresh });
     }
@@ -1787,6 +2197,330 @@ export class SessionsService implements OnModuleInit {
       // The agent call will surface the real error; the hash just needs a name.
       return lastAgentModelId() ?? 'unknown';
     }
+  }
+
+  // ------------------------------------------------------- answer pinning
+
+  /**
+   * Key this turn's question (lineage) and fingerprint the context it was
+   * just given, then look up the lineage's pin. The knowledge, metrics and
+   * verified blocks are read back off the turn's own requestContext — the
+   * exact context the model is about to receive, so the engine levers that
+   * shape it (`context`, `rankedKnowledge`) are already in it; datasets and
+   * model settings are the same reads `groundingSources` made, with `effort`
+   * the turn's effective reasoning effort (a lever may override Settings →
+   * LLM). `undefined` (pinning off for this turn) when anything fails: a
+   * turn is never broken by its pin.
+   */
+  private async preparePin(
+    session: SessionDoc,
+    mode: PinMode,
+    requestContext: { get(key: string): unknown },
+    effort: EngineReasoningEffort,
+  ): Promise<TurnPin | undefined> {
+    try {
+      const lineage = turnLineage(
+        session.messages,
+        session.messages.length - 1,
+        session.datasets,
+        mode,
+      );
+      if (!lineage) return undefined;
+      const datasets = await this.boundDatasets(session.datasets);
+      const view = await this.llmService.getView();
+      const used = requestContext.get(KNOWLEDGE_USED_CONTEXT_KEY);
+      const { fingerprint, parts } = pinFingerprint({
+        used: Array.isArray(used) ? (used as KnowledgeUse[]) : [],
+        metrics: contextString(requestContext, METRICS_BLOCK_CONTEXT_KEY),
+        verified: contextString(requestContext, VERIFIED_BLOCK_CONTEXT_KEY),
+        datasets,
+        view: { ...view, reasoningEffort: effort },
+      });
+      const existing = await this.pins.lookup(lineage.lineageKey);
+      return {
+        ...lineage,
+        mode,
+        fingerprint,
+        fingerprintParts: parts,
+        datasourceId: soleDatasourceOf(datasets),
+        ...(existing ? { existing } : {}),
+      };
+    } catch (error) {
+      this.logger.warn(
+        `Answer pin lookup failed; answering without pinning: ${errorText(error)}`,
+      );
+      return undefined;
+    }
+  }
+
+  /**
+   * Replay: the lineage's pin was derived under this exact fingerprint on
+   * this datasource, and re-running its SQL now returns the same rows — so
+   * the stored answer is still the answer. Persists it as this turn's reply
+   * (one `text` event, then `done`) with zero model calls and returns it;
+   * `{}` when the user stopped while the SQL re-ran (nothing persisted, the
+   * turn is over). `undefined` whenever any of that does not hold, or the
+   * re-run fails: the turn then derives a fresh answer as usual.
+   */
+  private async replayPin(
+    session: SessionDoc,
+    pinning: TurnPin,
+    signal: AbortSignal,
+    emit: (event: StreamEvent) => void,
+  ): Promise<{ message?: ChatMessage } | undefined> {
+    const pin = pinning.existing;
+    if (
+      !pin ||
+      // A reviewer rejected this answer: never hand it out again.
+      pin.rejectedAt ||
+      pin.fingerprint !== pinning.fingerprint ||
+      !pinning.datasourceId ||
+      pin.datasourceId !== pinning.datasourceId
+    ) {
+      return undefined;
+    }
+    try {
+      const live = await this.datasourcesService.runReadOnlySql(
+        pin.datasourceId,
+        pin.sql,
+        Math.max(pin.rowCount + 1, pin.rowLimit),
+      );
+      const rows = live.rows ?? [];
+      if (
+        rows.length !== pin.rows.length ||
+        !compareResults(pin.rows, rows).match
+      ) {
+        this.logger.log(
+          'Answer pin not replayed: its query returns different rows now',
+        );
+        return undefined;
+      }
+    } catch (error) {
+      this.logger.warn(`Answer pin replay failed: ${errorText(error)}`);
+      return undefined;
+    }
+    // Stopped while the query re-ran: nothing to answer, nothing to derive.
+    if (signal.aborted) return {};
+    const now = new Date().toISOString();
+    const message: ChatMessage = {
+      ...pin.message,
+      at: now,
+      consistency: {
+        kind: 'replay',
+        pinnedAt: pin.sourceMessageAt,
+        sourceSessionId: pin.sourceSessionId,
+        verifiedAt: now,
+      },
+    };
+    emit({ type: 'text', content: message.content });
+    const fresh = await this.get(session.id);
+    const messages = [...fresh.messages, message];
+    const updated = await this.repository.update(session.id, { messages });
+    try {
+      await this.pins.touchReplay(pin.lineageKey, now);
+    } catch (error) {
+      this.logger.warn(`Answer pin replay count failed: ${errorText(error)}`);
+    }
+    emit({ type: 'done', session: updated ?? { ...fresh, messages } });
+    return { message };
+  }
+
+  /** Save `message` as its lineage's pin — full replace. Never throws. */
+  private async savePin(
+    session: SessionDoc,
+    pinning: TurnPin,
+    record: ToolDataRecord,
+    message: ChatMessage,
+  ): Promise<void> {
+    try {
+      const rows = record.rows ?? [];
+      await this.pins.save({
+        id: randomUUID(),
+        lineageKey: pinning.lineageKey,
+        fingerprint: pinning.fingerprint,
+        fingerprintParts: pinning.fingerprintParts,
+        question: pinning.question,
+        normalizedQuestion: normalizeQuestion(pinning.question),
+        datasets: [...session.datasets],
+        chain: pinning.chain,
+        mode: pinning.mode,
+        datasourceId: pinning.datasourceId as string,
+        sql: record.input as string,
+        columns: record.columns ?? Object.keys(rows[0] ?? {}),
+        rows,
+        rowCount: record.rowCount ?? rows.length,
+        // A replay re-runs the SQL with `max(rowCount + 1, rowLimit)`, so a
+        // result that grew past the pinned rows shows up as a difference
+        // rather than a clipped match.
+        rowLimit: DEFAULT_SQL_ROW_LIMIT,
+        message: stripForPin(message),
+        knowledgeIds: (message.knowledge ?? []).map((k) => k.id),
+        sourceSessionId: session.id,
+        sourceMessageAt: message.at,
+        replays: 0,
+      });
+    } catch (error) {
+      this.logger.warn(`Answer pin save failed: ${errorText(error)}`);
+    }
+  }
+
+  /**
+   * The lineage of the answer at `index`: the user message it answered, the
+   * user messages before that, and the mode read off the answer itself
+   * (a trace → expert, a cross-check → careful). Same key `streamMessage`
+   * computed for the turn — `turnLineage` builds both.
+   */
+  private lineageFor(session: SessionDoc, index: number) {
+    const questionIndex = session.messages
+      .slice(0, index)
+      .map((m) => m.role)
+      .lastIndexOf('user');
+    if (questionIndex < 0) return undefined;
+    return turnLineage(
+      session.messages,
+      questionIndex,
+      session.datasets,
+      messageMode(session.messages[index]),
+    );
+  }
+
+  /**
+   * The fingerprint a turn asking `question` in this session would get right
+   * now — the same `groundingSources`, under the same production levers
+   * (Settings → Engine levers), the turn's context is built from, so a pin
+   * approved from the feedback path matches the next turn's key.
+   */
+  private async fingerprintFor(
+    session: SessionDoc,
+    question: string,
+  ): Promise<{ fingerprint: string; parts: FingerprintParts }> {
+    const levers = await this.engineSettings.resolved();
+    const sources = await this.groundingSources(session, question, levers);
+    return pinFingerprint({
+      used: sources.knowledge.used,
+      metrics: sources.metrics,
+      verified: sources.verified,
+      datasets: sources.datasets,
+      view: {
+        ...sources.view,
+        reasoningEffort: levers.reasoningEffort ?? sources.view.reasoningEffort,
+      },
+    });
+  }
+
+  /**
+   * A 👎 anywhere on an answer (`block` names the rated reasoning block):
+   * its lineage's pin is marked rejected — never replayed, its wording never
+   * reused — but not deleted, so the next fresh derivation can still report
+   * what changed since it (`updated` + the lessons learned).
+   */
+  private async rejectPin(
+    session: SessionDoc,
+    index: number,
+    block?: ReasoningBlockKind,
+  ): Promise<void> {
+    try {
+      const lineage = this.lineageFor(session, index);
+      if (!lineage) return;
+      await this.pins.reject(
+        lineage.lineageKey,
+        new Date().toISOString(),
+        block ? { block } : undefined,
+      );
+    } catch (error) {
+      this.logger.warn(`Answer pin rejection failed: ${errorText(error)}`);
+    }
+  }
+
+  /**
+   * A 👍 on an answer: promote its question → SQL pair into the verified
+   * library, badge it, rescore its trace as verified, and — when the rated
+   * answer is its lineage's pin — approve the pin under the fingerprint the
+   * next ask will compute (the verified block for this question just
+   * changed). Mutates `messages[index]`.
+   */
+  private async approveAnswer(
+    session: SessionDoc,
+    messages: ChatMessage[],
+    index: number,
+  ): Promise<void> {
+    const answer = messages[index];
+    const sql = lastSuccessfulSql(answer.data);
+    const question = messages
+      .slice(0, index)
+      .reverse()
+      .find((m) => m.role === 'user');
+    if (!sql || !question?.content.trim()) return;
+    await this.verifiedQueries.save({
+      question: question.content,
+      sql,
+      datasourceId: await this.soleDatasourceId(session),
+      entities: answer.entities ?? [],
+      sourceSessionId: session.id,
+      sourceMessageAt: answer.at,
+    });
+    if (answer.expertTrace) {
+      messages[index] = {
+        ...answer,
+        expertTrace: withVerifiedMatch(answer.expertTrace),
+      };
+    }
+    try {
+      const lineage = this.lineageFor(session, index);
+      if (!lineage) return;
+      const pin = await this.pins.lookup(lineage.lineageKey);
+      // Only the answer the pin actually holds is approved — a 👍 on an
+      // older answer of the same lineage must not vouch for a newer one.
+      if (!pin || pin.message.content !== answer.content) return;
+      const { fingerprint, parts } = await this.fingerprintFor(
+        session,
+        lineage.question,
+      );
+      await this.pins.approve(lineage.lineageKey, {
+        fingerprint,
+        fingerprintParts: parts,
+        message: {
+          ...pin.message,
+          verified: true,
+          ...(pin.message.expertTrace
+            ? { expertTrace: withVerifiedMatch(pin.message.expertTrace) }
+            : {}),
+        },
+      });
+    } catch (error) {
+      this.logger.warn(`Answer pin approval failed: ${errorText(error)}`);
+    }
+  }
+
+  /**
+   * Business expert mode's explainer pass over a finished answer. Never
+   * throws and never blocks the answer: a trace that cannot be built is
+   * reported as `expert-status: failed` and the answer is saved without one.
+   */
+  private async explainAnswer(
+    input: Omit<TraceInput, 'entities'>,
+    session: SessionDoc,
+    emit: (event: StreamEvent) => void,
+  ): Promise<ReasoningTrace | undefined> {
+    emit({ type: 'expert-status', content: 'explaining' });
+    let trace: ReasoningTrace | undefined;
+    try {
+      const datasets = await this.boundDatasets(session.datasets);
+      trace = await this.expertMode.buildTrace({
+        ...input,
+        entities: boundEntities(datasets),
+      });
+    } catch (error) {
+      if (!input.abortSignal?.aborted) {
+        this.logger.warn(
+          `Reasoning trace failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+    if (!trace && !input.abortSignal?.aborted) {
+      emit({ type: 'expert-status', content: 'failed' });
+    }
+    return trace;
   }
 
   /**
@@ -2046,6 +2780,11 @@ export class SessionsService implements OnModuleInit {
    * pattern) and badges the answer as verified; thumbs-down removes whatever
    * that answer contributed and clears the badge. An answer that ran no SQL
    * just records the rating.
+   *
+   * Answer pinning follows the rating: 👍 approves the lineage's pin (re-keyed
+   * under the new verified block, `verified: true`, trace rescored with the
+   * verified match, any rejection lifted) and 👎 marks it rejected, so a
+   * rejected answer is never replayed.
    */
   async recordFeedback(
     id: string,
@@ -2073,36 +2812,177 @@ export class SessionsService implements OnModuleInit {
 
     if (rating === 'down') {
       await this.verifiedQueries.removeForMessage(id, messageAt);
+      await this.rejectPin(session, index);
     } else {
-      const sql = lastSuccessfulSql(answer.data);
-      const question = messages
-        .slice(0, index)
-        .reverse()
-        .find((m) => m.role === 'user');
-      if (sql && question?.content.trim()) {
-        await this.verifiedQueries.save({
-          question: question.content,
-          sql,
-          datasourceId: await this.soleDatasourceId(session),
-          entities: answer.entities ?? [],
-          sourceSessionId: id,
-          sourceMessageAt: messageAt,
-        });
-      }
+      await this.approveAnswer(session, messages, index);
     }
     const updated = await this.repository.update(id, { messages });
     return updated ?? { ...session, messages };
+  }
+
+  /**
+   * Rate one block of an answer's reasoning trace (business expert mode):
+   * thumbs up/down and/or a comment, PATCH semantics (`vote: null` clears the
+   * vote). The rating is stored in the `reasoning_feedback` collection — with
+   * the question and a snapshot of the rated block, for the improvement loop —
+   * and mirrored onto the message so the transcript renders it.
+   *
+   * Then the rating acts: a 👎 marks the lineage's pin rejected and withdraws
+   * the answer's verified query and badge; a 👍 on the SQL block approves the
+   * answer exactly like a whole-answer 👍. Last, a comment that changed is
+   * learned from — distilled into standing knowledge lessons returned with
+   * the session — and a cleared comment forgets what it taught. Learning runs
+   * after the vote so an approved pin is keyed without the new lessons, and
+   * the next ask re-derives under them.
+   */
+  async recordBlockFeedback(
+    id: string,
+    body: BlockFeedbackDto,
+  ): Promise<BlockFeedbackResult> {
+    const { messageAt, block, patch } = validateBlockFeedback(body);
+    const session = await this.get(id);
+    const index = session.messages.findIndex(
+      (m) => m.role === 'assistant' && m.at === messageAt,
+    );
+    if (index < 0) {
+      throw new NotFoundException(`No assistant message at ${messageAt}`);
+    }
+    const answer = session.messages[index];
+    const trace = answer.expertTrace;
+    if (!trace) {
+      throw new BadRequestException('This answer has no reasoning trace');
+    }
+    const snapshot = trace.blocks.find((b) => b.kind === block);
+    if (!snapshot) {
+      throw new BadRequestException(
+        `This reasoning trace has no ${block} block`,
+      );
+    }
+    const question = session.messages
+      .slice(0, index)
+      .reverse()
+      .find((m) => m.role === 'user');
+    // The mirror is written from the saved feedback doc on every rating, so
+    // it holds the comment as stored before this write.
+    const previousComment = trace.feedback?.[block]?.comment?.trim() ?? '';
+    const saved = await this.expertMode.saveFeedback(
+      { sessionId: id, messageAt, block },
+      {
+        traceId: trace.id,
+        question: question?.content ?? '',
+        blockSnapshot: snapshot,
+      },
+      patch,
+    );
+    const mirrored: BlockFeedback = {
+      ...(saved.vote ? { vote: saved.vote } : {}),
+      ...(saved.comment ? { comment: saved.comment } : {}),
+      at: saved.updatedAt ?? new Date().toISOString(),
+    };
+    const feedback = { ...(trace.feedback ?? {}) };
+    // A rating cleared of both vote and comment leaves nothing to render.
+    if (mirrored.vote || mirrored.comment) feedback[block] = mirrored;
+    else delete feedback[block];
+    const messages = [...session.messages];
+    messages[index] = { ...answer, expertTrace: { ...trace, feedback } };
+
+    if (patch.vote === 'down') {
+      await this.verifiedQueries.removeForMessage(id, messageAt);
+      const rejected: ChatMessage = { ...messages[index] };
+      delete rejected.verified;
+      messages[index] = rejected;
+      await this.rejectPin(session, index, block);
+    } else if (patch.vote === 'up' && block === 'sql') {
+      messages[index] = { ...messages[index], verified: true };
+      await this.approveAnswer(session, messages, index);
+    }
+
+    const comment = saved.comment?.trim() ?? '';
+    let lessons: LearnedLesson[] | undefined;
+    if (comment && comment !== previousComment) {
+      lessons = await this.learnFromComment(session, index, {
+        feedbackId: saved.id,
+        block,
+        vote: saved.vote,
+        comment,
+        blockSnapshot: snapshot,
+        question: question?.content ?? '',
+      });
+    } else if (!comment && previousComment) {
+      try {
+        await this.learning.forget(saved.id);
+      } catch (error) {
+        this.logger.warn(
+          `Forgetting learned lessons failed: ${errorText(error)}`,
+        );
+      }
+    }
+
+    const updated = await this.repository.update(id, { messages });
+    return {
+      session: updated ?? { ...session, messages },
+      ...(lessons ? { lessons } : {}),
+    };
+  }
+
+  /**
+   * Distil one reviewer note into standing knowledge lessons. The learner
+   * sees the same schema snapshot the expert trace was built against and the
+   * titles already on file for these datasets. A failure is logged and
+   * yields no lessons — the rating itself is already saved.
+   */
+  private async learnFromComment(
+    session: SessionDoc,
+    index: number,
+    note: {
+      feedbackId: string;
+      block: ReasoningBlockKind;
+      vote?: BlockVote;
+      comment: string;
+      blockSnapshot: ReasoningBlock;
+      question: string;
+    },
+  ): Promise<LearnedLesson[] | undefined> {
+    const answer = session.messages[index];
+    try {
+      const datasets = await this.boundDatasets(session.datasets);
+      // `list({ datasetId })` covers that dataset's snippets plus the global ones.
+      const queries: KnowledgeQuery[] = session.datasets.length
+        ? session.datasets.map((datasetId) => ({ datasetId }))
+        : [{}];
+      const known = await Promise.all(
+        queries.map((query) => this.knowledge.list(query)),
+      );
+      const existingTitles = Array.from(
+        new Set(known.flat().map((snippet) => snippet.title)),
+      );
+      const result = await this.learning.learnFromComment({
+        sessionId: session.id,
+        messageAt: answer.at,
+        feedbackId: note.feedbackId,
+        datasets: session.datasets,
+        question: note.question,
+        answer: answer.content,
+        block: note.block,
+        ...(note.vote ? { vote: note.vote } : {}),
+        comment: note.comment,
+        blockSnapshot: note.blockSnapshot,
+        finalSql: pickAnswerRecord(answer.data, answer.content)?.input,
+        entities: boundEntities(datasets),
+        existingTitles,
+      });
+      return result.lessons;
+    } catch (error) {
+      this.logger.warn(`Learning from feedback failed: ${errorText(error)}`);
+      return undefined;
+    }
   }
 
   /** The session's datasource when it is unambiguous — provenance only. */
   private async soleDatasourceId(
     session: SessionDoc,
   ): Promise<string | undefined> {
-    const datasets = await this.boundDatasets(session.datasets);
-    const ids = new Set(
-      datasets.map((s) => s.datasourceId).filter((id): id is string => !!id),
-    );
-    return ids.size === 1 ? Array.from(ids)[0] : undefined;
+    return soleDatasourceOf(await this.boundDatasets(session.datasets));
   }
 
   /**
@@ -2119,6 +2999,223 @@ export class SessionsService implements OnModuleInit {
       at: new Date().toISOString(),
     });
   }
+}
+
+/** A string value off a requestContext, or undefined. */
+function contextString(
+  requestContext: { get(key: string): unknown } | undefined,
+  key: string,
+): string | undefined {
+  const value = requestContext?.get(key);
+  return typeof value === 'string' && value ? value : undefined;
+}
+
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/** The datasource every bound dataset shares, when there is exactly one. */
+function soleDatasourceOf(
+  datasets: { datasourceId?: string }[],
+): string | undefined {
+  const ids = new Set(
+    datasets.map((s) => s.datasourceId).filter((id): id is string => !!id),
+  );
+  return ids.size === 1 ? Array.from(ids)[0] : undefined;
+}
+
+/**
+ * Does the latest user message answer a pending clarification? Such a turn
+ * is never pinned or replayed: its meaning lives in the card before it.
+ */
+function answersClarification(messages: ChatMessage[]): boolean {
+  const previous = messages.at(-2);
+  return (
+    messages.at(-1)?.role === 'user' &&
+    previous?.role === 'assistant' &&
+    !!previous.clarification
+  );
+}
+
+/**
+ * The pin mode a turn is keyed under, decided before the model runs:
+ * business expert mode, else careful when the turn's levers always
+ * cross-check (`careful: 'on'` — the composer's Careful chip, or Settings →
+ * Engine levers), else plain. `careful: 'auto'` decides per turn after the
+ * answer exists, so it keys as plain — `messageMode` reads it back the same.
+ */
+function turnPinMode(engine: EngineOptions, expert: boolean): PinMode {
+  if (expert) return 'expert';
+  return engine.careful === 'on' ? 'careful' : 'plain';
+}
+
+/**
+ * Which pin mode an answer was produced in, read off what it carries — the
+ * same key `turnPinMode` gave its turn. A cross-check that `careful: 'auto'`
+ * escalated to (the engine stamp says `auto`) was keyed plain.
+ */
+function messageMode(message: ChatMessage | undefined): PinMode {
+  if (message?.expertTrace) return 'expert';
+  if (message?.crossCheck && message.engine?.careful !== 'auto') {
+    return 'careful';
+  }
+  return 'plain';
+}
+
+/**
+ * The lineage of the user message at `questionIndex`: the question, every
+ * user message before it (the chain), the session's datasets and the mode.
+ * The one place a lineage key is built — the chat turn and the feedback
+ * path both call it, so they can never key the same answer differently.
+ */
+function turnLineage(
+  messages: ChatMessage[],
+  questionIndex: number,
+  datasets: string[],
+  mode: PinMode,
+): { lineageKey: string; question: string; chain: string[] } | undefined {
+  const asked = messages[questionIndex];
+  if (asked?.role !== 'user' || !asked.content.trim()) return undefined;
+  const prior = messages
+    .slice(0, questionIndex)
+    .filter((m) => m.role === 'user')
+    .map((m) => m.content);
+  return {
+    lineageKey: lineageKeyFor({
+      question: asked.content,
+      datasets,
+      chain: prior,
+      mode,
+    }),
+    question: asked.content,
+    chain: prior.map(normalizeQuestion),
+  };
+}
+
+/** The fingerprint of a turn's context, from the sources it was built of. */
+function pinFingerprint(sources: {
+  used: KnowledgeUse[];
+  metrics?: string;
+  verified?: string;
+  datasets: SchemaDataset[];
+  view: ModelPartView;
+}): { fingerprint: string; parts: FingerprintParts } {
+  const parts: FingerprintParts = {
+    v: 1,
+    knowledge: knowledgePart(sources.used),
+    metrics: textPart(sources.metrics || undefined),
+    verified: textPart(sources.verified || undefined),
+    schema: schemaPart(sources.datasets),
+    model: modelPart(sources.view),
+  };
+  return { fingerprint: fingerprintFor(parts), parts };
+}
+
+/**
+ * The stabiliser, for a fresh derivation of a lineage that already has a pin
+ * (its fingerprint moved, its data changed, or a reviewer rejected it): the
+ * same rows keep the pinned wording (`kept`); different rows are an
+ * `updated` answer, listing the feedback lessons the turn was given that the
+ * pin was not. A rejected pin's wording is never kept: the same rows then
+ * claim nothing at all (`reproducesRejected`, no consistency).
+ */
+function stabilise(
+  pin: AnswerPinDoc,
+  record: ToolDataRecord,
+  used: KnowledgeUse[],
+): {
+  content?: string;
+  consistency?: AnswerConsistency;
+  reproducesRejected?: true;
+} {
+  const rows = record.rows ?? [];
+  const base = {
+    pinnedAt: pin.sourceMessageAt,
+    sourceSessionId: pin.sourceSessionId,
+  };
+  if (rows.length === pin.rows.length && compareResults(pin.rows, rows).match) {
+    if (pin.rejectedAt) return { reproducesRejected: true };
+    return {
+      content: pin.message.content,
+      consistency: { kind: 'kept', ...base },
+    };
+  }
+  const known = new Set(pin.knowledgeIds ?? []);
+  const lessons = Array.from(
+    new Set(
+      used
+        .filter((k) => k.source === 'feedback' && !known.has(k.id))
+        .map((k) => k.title),
+    ),
+  );
+  return {
+    consistency: {
+      kind: 'updated',
+      ...base,
+      ...(lessons.length ? { lessons } : {}),
+    },
+  };
+}
+
+/** One turn of a caught-up exchange, as the agent's input takes it. */
+type ExchangeMessage =
+  { role: 'user'; content: string } | { role: 'assistant'; content: string };
+
+/**
+ * The contiguous replayed exchanges right before the latest message, oldest
+ * first: (user, assistant-replay) pairs walked back from the end until the
+ * first assistant message that is not a replay. A replay never ran the
+ * agent, so memory holds none of these — the next real turn catches up.
+ */
+function replayedExchanges(messages: ChatMessage[]): ExchangeMessage[] {
+  const pairs: ExchangeMessage[][] = [];
+  for (let i = messages.length - 2; i >= 1; i -= 2) {
+    const answer = messages[i];
+    const asked = messages[i - 1];
+    if (
+      answer.role !== 'assistant' ||
+      answer.consistency?.kind !== 'replay' ||
+      asked.role !== 'user'
+    ) {
+      break;
+    }
+    pairs.unshift([
+      { role: 'user', content: asked.content },
+      { role: 'assistant', content: answer.content },
+    ]);
+  }
+  return pairs.flat();
+}
+
+/**
+ * Every entity the session's datasets expose, deduplicated by key. A table
+ * listed without a schema snapshot is kept with no columns, so it still
+ * counts as bound when the expert trace checks the SQL against it.
+ */
+function boundEntities(
+  datasets: {
+    tables?: string[];
+    entities?: { key: string; columns: DatasetColumnSnapshot[] }[];
+  }[],
+): { key: string; columns: DatasetColumnSnapshot[] }[] {
+  const byKey = new Map<
+    string,
+    { key: string; columns: DatasetColumnSnapshot[] }
+  >();
+  for (const dataset of datasets) {
+    for (const entity of dataset.entities ?? []) {
+      if (entity?.key && !byKey.has(entity.key)) {
+        byKey.set(entity.key, {
+          key: entity.key,
+          columns: entity.columns ?? [],
+        });
+      }
+    }
+    for (const key of dataset.tables ?? []) {
+      if (key && !byKey.has(key)) byKey.set(key, { key, columns: [] });
+    }
+  }
+  return Array.from(byKey.values());
 }
 
 /** Successful SQL runs behind an answer, oldest first. */

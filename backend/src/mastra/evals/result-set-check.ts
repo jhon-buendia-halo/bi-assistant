@@ -16,6 +16,13 @@ export interface ResultSetCheckOptions {
   /** For questions about distinct facts, repeated identical facts are harmless. */
   distinctRows?: boolean;
   /**
+   * The reference is a ratio the answer may report as a fraction or as a
+   * percentage: when the answer's rows do not match as they are, its numeric
+   * cells are also tried scaled by 100 and by 1/100. Use on rate questions
+   * only, with a reference that does not round.
+   */
+  percentEquivalent?: boolean;
+  /**
    * Compare the answer's **final** SQL (the last successful
    * `run_readonly_sql`) first — that is the query the answer used, and the
    * one the metric is defined on (engineering plan §4). Only when it does not
@@ -69,7 +76,44 @@ function containsReferenceRow(expected: Row, actual: Row): boolean {
   );
 }
 
+/** Every numeric cell (a number, or a string that is one) times `factor`. */
+function scaleNumericCells(rows: Row[], factor: number): Row[] {
+  return rows.map((row) =>
+    Object.fromEntries(
+      Object.entries(row).map(([key, value]) => {
+        const numeric =
+          typeof value === 'number'
+            ? value
+            : typeof value === 'string' &&
+                /^-?\d+(?:\.\d+)?$/.test(value.trim())
+              ? Number(value)
+              : undefined;
+        return [key, numeric === undefined ? value : numeric * factor];
+      }),
+    ),
+  );
+}
+
 function compareEvidence(
+  expected: Row[],
+  actual: Row[],
+  options: ResultSetCheckOptions,
+): { match: boolean; reason: string } {
+  const direct = compareEvidenceAsIs(expected, actual, options);
+  if (direct.match || !options.percentEquivalent) return direct;
+  // A fraction reported as a percentage (or the reverse) is the same fact.
+  for (const factor of [100, 0.01]) {
+    const scaled = compareEvidenceAsIs(
+      expected,
+      scaleNumericCells(actual, factor),
+      options,
+    );
+    if (scaled.match) return scaled;
+  }
+  return direct;
+}
+
+function compareEvidenceAsIs(
   expected: Row[],
   actual: Row[],
   options: ResultSetCheckOptions,

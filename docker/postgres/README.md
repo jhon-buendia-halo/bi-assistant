@@ -10,14 +10,17 @@ asked about.
 | `world_cup` | `World Cup` | FIFA World Cup 2018 + 2022 | `init/001_world_cup.sql` (hand-written) |
 | `health_insurance` | `Health Insurance` | Claims, members, providers, denials | `init/002_health_insurance.sql` (generated) |
 | `genomics` | `Genomics` | Variant calls, samples, gene expression | `init/003_genomics.sql` (generated) |
+| `hr` | `HR` | Employees, salary history, bonuses, reviews, org chart | `init/004_hr.sql` (generated) |
+| `retail` | `Retail` | Stores, products, customers, orders, order lines | `init/005_retail.sql` (generated) |
 | `supply_chain` | `Supply Chain` | Suppliers, purchase orders, shipments, receipts, inventory | `init/006_supply_chain.sql` (generated) |
 | `banking` | `Banking` | Customers, accounts, cards, transactions, loans | `init/007_banking.sql` (generated) |
 
 The World Cup scores and knockout outcomes mirror the real tournaments;
-its detailed metrics are representative sample values. The health-insurance and
-genomics fixtures are **entirely synthetic** — invented members, invented
-providers, invented variants. The genomics data must never be used for any
-clinical purpose.
+its detailed metrics are representative sample values. The health-insurance,
+genomics, HR, retail, supply-chain and banking fixtures are **entirely
+synthetic** — invented members, invented providers, invented variants,
+invented employees, invented shoppers, invented suppliers, invented account
+holders. The genomics data must never be used for any clinical purpose.
 
 See `docs/evals/synthetic-domains.md` for the schema sketches and the trap
 catalogue each fixture was built around.
@@ -39,6 +42,28 @@ docker compose down -v
 docker compose up -d postgres
 ```
 
+Or, to keep the other schemas and reload just one into the running container
+(here `hr`; each init script creates its own schema inside one transaction):
+
+```bash
+docker exec -i questions-to-insights-world-cup-postgres-1 \
+  psql -U world_cup -d world_cup -v ON_ERROR_STOP=1 -c 'DROP SCHEMA IF EXISTS hr CASCADE'
+docker exec -i questions-to-insights-world-cup-postgres-1 \
+  psql -U world_cup -d world_cup -v ON_ERROR_STOP=1 < docker/postgres/init/004_hr.sql
+```
+
+The same for `retail` — a volume created before `005_retail.sql` existed never
+ran it, so this is also how an existing setup gets the schema:
+
+```bash
+docker exec -i questions-to-insights-world-cup-postgres-1 \
+  psql -U world_cup -d world_cup -v ON_ERROR_STOP=1 -c 'DROP SCHEMA IF EXISTS retail CASCADE'
+docker exec -i questions-to-insights-world-cup-postgres-1 \
+  psql -U world_cup -d world_cup -v ON_ERROR_STOP=1 < docker/postgres/init/005_retail.sql
+```
+
+The container name is Compose's default for this repo — check `docker compose ps`.
+
 Connect with `psql`:
 
 ```bash
@@ -49,7 +74,8 @@ Set `WORLD_CUP_DB_PORT` before starting Compose if port 55432 is already in use.
 
 ## Register it in the app
 
-One command, instead of clicking through Datasources and Datasets three times:
+One command, instead of clicking through Datasources and Datasets once per
+fixture:
 
 ```bash
 cd backend && npm run fixtures:register
@@ -66,6 +92,23 @@ after regenerating a fixture, or after editing `fixture-semantics.ts`; an
 existing knowledge snippet or metric with the same title/name is updated in
 place, everything else is left untouched (a fresh run prints a
 created/updated/unchanged summary table).
+
+`hr` and `retail` have no semantics document (and so no dataset description);
+they get curated glossaries kept in `backend/scripts/bootstrap-fixtures.ts`
+instead, seeded the same idempotent way. The HR glossary covers tech
+employees, the 31 December salary row, the employees-only and active-at-date
+filters, local currency, top performers and total compensation, with the
+`avg_base_salary_usd`, `attrition_rate` and `total_compensation_usd` metrics.
+The retail glossary covers completed orders only, order date, units, line
+discount and coverage — and deliberately leaves out the fiscal calendar and
+the definition of net revenue: those are what the learning demo teaches
+(`npm run learning:demo`, see `docs/evals/synthetic-domains.md`), so Retail
+must never get a full semantics document.
+
+When the datasource already exists but points at a stack that is no longer
+there (another `WORLD_CUP_DB_PORT`, an isolated `docker compose -p …`
+project), the run repoints it at the database it just verified and
+re-snapshots every dataset, as if `--force-refresh` had been passed.
 
 Flags:
 
@@ -95,13 +138,15 @@ To do it by hand instead, configure a PostgreSQL datasource with:
 
 ## Regenerating a fixture
 
-`001_world_cup.sql` is hand-written and stays that way. The other four are
+`001_world_cup.sql` is hand-written and stays that way. The other six are
 produced by seeded generators in `generate/`:
 
 ```bash
 cd backend
 npm run fixtures:health-insurance    # rewrites init/002_health_insurance.sql
 npm run fixtures:genomics            # rewrites init/003_genomics.sql
+npm run fixtures:hr                  # rewrites init/004_hr.sql
+npm run fixtures:retail              # rewrites init/005_retail.sql
 npm run fixtures:supply-chain        # rewrites init/006_supply_chain.sql
 npm run fixtures:banking             # rewrites init/007_banking.sql
 ```
@@ -118,13 +163,17 @@ Change the data and you must re-verify the eval sets:
 
 ```bash
 cd backend && npm run eval:validate -- --suite health-insurance   # zero model calls
+cd backend && npm run eval:validate -- --suite hr                 # likewise
+cd backend && npm run eval:validate -- --suite retail             # likewise
+cd backend && npm run eval:validate -- --suites all               # every suite at once
 ```
 
 ## Databricks-dialect coverage
 
 Production targets Databricks SQL; every eval above runs on Postgres. To load
-these same three schemas into a Databricks catalog for
+these schemas into a Databricks catalog for
 `npm run eval:validate -- --dialect databricks` and Databricks-dialect suite
 cases, see `docker/databricks/README.md` — a separate loader
 (`backend/scripts/load-fixtures-databricks.ts`), **untested against a live
-workspace**.
+workspace**. The loader covers `world_cup`, `health_insurance`, `genomics`,
+`supply_chain` and `banking`; `hr` and `retail` are Postgres-only for now.

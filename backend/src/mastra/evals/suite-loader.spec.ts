@@ -183,6 +183,294 @@ describe('suite validation', () => {
   });
 });
 
+describe('expectedReasoning', () => {
+  const withReasoning = (expectedReasoning: unknown): unknown =>
+    suiteJson({
+      cases: [
+        {
+          id: 'first',
+          category: 'domain-semantics',
+          question: 'What is the average salary of tech employees in 2025?',
+          intent: 'Technology division, salary on 31 December, USD.',
+          expectedReasoning,
+        },
+      ],
+    });
+
+  it('is optional, and carried through trimmed when present', () => {
+    expect(parseSuite(suiteJson(), 'demo.json').cases[0]).not.toHaveProperty(
+      'expectedReasoning',
+    );
+    const suite = parseSuite(
+      withReasoning({
+        tables: ['hr.v_salary_by_year', ' hr.departments '],
+        assumptions: ['employees only, no contractors'],
+        metric: ' avg_base_salary_usd ',
+      }),
+      'demo.json',
+    );
+    expect(suite.cases[0].expectedReasoning).toEqual({
+      tables: ['hr.v_salary_by_year', 'hr.departments'],
+      assumptions: ['employees only, no contractors'],
+      metric: 'avg_base_salary_usd',
+    });
+  });
+
+  it('accepts any one of the three fields on its own', () => {
+    for (const reasoning of [
+      { tables: ['hr.employees'] },
+      { assumptions: ['salary effective on 31 December'] },
+      { metric: 'attrition_rate' },
+    ]) {
+      expect(
+        parseSuite(withReasoning(reasoning), 'demo.json').cases[0]
+          .expectedReasoning,
+      ).toEqual(reasoning);
+    }
+  });
+
+  it.each([
+    [
+      'not an object',
+      ['hr.employees'],
+      /case "first"\.expectedReasoning must be an object/,
+    ],
+    [
+      'empty',
+      {},
+      /expectedReasoning must carry at least one of tables, assumptions, metric/,
+    ],
+    [
+      'a typo in a key',
+      { table: ['hr.employees'] },
+      /unknown field\(s\) "table".*known fields: tables/,
+    ],
+    [
+      'empty tables',
+      { tables: [] },
+      /expectedReasoning\.tables must be a non-empty array/,
+    ],
+    [
+      'a blank table',
+      { tables: [' '] },
+      /expectedReasoning\.tables\[0\] must be a non-empty string/,
+    ],
+    [
+      'a bare table name',
+      { tables: ['employees'] },
+      /tables\[0\] "employees" must be schema\.table/,
+    ],
+    [
+      'a catalog-qualified table',
+      { tables: ['world_cup.hr.employees'] },
+      /must be schema\.table/,
+    ],
+    [
+      'empty assumptions',
+      { assumptions: [] },
+      /expectedReasoning\.assumptions must be a non-empty array/,
+    ],
+    [
+      'an unscorable phrase',
+      { assumptions: ['in USD'] },
+      /assumptions\[0\] "in USD" has no word of four or more letters/,
+    ],
+    [
+      'a blank metric',
+      { metric: '  ' },
+      /expectedReasoning\.metric must be a non-empty string/,
+    ],
+  ])('rejects %s', (_label, reasoning, expected) => {
+    expect(() => parseSuite(withReasoning(reasoning), 'demo.json')).toThrow(
+      expected,
+    );
+  });
+
+  it('leaves the in-app case shape untouched — only the CLI reads it', () => {
+    const suite = parseSuite(
+      withReasoning({ tables: ['hr.employees'] }),
+      'demo.json',
+    );
+    expect(toAssistantEvalCase(suite.cases[0])).not.toHaveProperty(
+      'expectedReasoning',
+    );
+  });
+});
+
+describe('learningScenario', () => {
+  const scenario = (overrides: Record<string, unknown> = {}) => ({
+    comments: [
+      {
+        block: 'interpretation',
+        vote: 'down',
+        comment: 'Our fiscal year runs from 1 February to 31 January.',
+      },
+      { block: 'metric', comment: 'Net revenue excludes tax and shipping.' },
+    ],
+    generalisesTo: ['second'],
+    before: { band: 'medium' },
+    after: { band: 'high' },
+    ...overrides,
+  });
+  /** Two cases: `first` carries the scenario, `second` is its target. */
+  const withScenario = (
+    learningScenario: unknown,
+    second: Record<string, unknown> = {},
+  ): unknown =>
+    suiteJson({
+      cases: [
+        {
+          id: 'first',
+          category: 'domain-semantics',
+          question: 'What was our net revenue in fiscal year 2025?',
+          intent: 'Fiscal year and net revenue are tribal knowledge.',
+          learningScenario,
+        },
+        {
+          id: 'second',
+          category: 'domain-semantics',
+          question: 'How many orders did we take in fiscal year 2025?',
+          intent: 'The fiscal-year lesson must carry over.',
+          ...second,
+        },
+      ],
+    });
+
+  it('is optional, and parsed with its comments, targets and bands', () => {
+    expect(parseSuite(suiteJson(), 'demo.json').cases[0]).not.toHaveProperty(
+      'learningScenario',
+    );
+    const suite = parseSuite(withScenario(scenario()), 'demo.json');
+    expect(suite.cases[0].learningScenario).toEqual({
+      comments: [
+        {
+          block: 'interpretation',
+          vote: 'down',
+          comment: 'Our fiscal year runs from 1 February to 31 January.',
+        },
+        { block: 'metric', comment: 'Net revenue excludes tax and shipping.' },
+      ],
+      generalisesTo: ['second'],
+      before: { band: 'medium' },
+      after: { band: 'high' },
+    });
+  });
+
+  it('needs only its comments', () => {
+    const minimal = {
+      comments: [{ block: 'sql', vote: 'up', comment: 'Right join.' }],
+    };
+    expect(
+      parseSuite(withScenario(minimal), 'demo.json').cases[0].learningScenario,
+    ).toEqual(minimal);
+  });
+
+  it.each([
+    ['not an object', ['a note'], /learningScenario must be an object/],
+    [
+      'an unknown key',
+      scenario({ generalizesTo: ['second'] }),
+      /learningScenario has unknown field\(s\) "generalizesTo".*known fields: comments/,
+    ],
+    [
+      'no comments',
+      scenario({ comments: undefined }),
+      /learningScenario\.comments must be a non-empty array/,
+    ],
+    [
+      'empty comments',
+      scenario({ comments: [] }),
+      /learningScenario\.comments must be a non-empty array/,
+    ],
+    [
+      'an unknown key on a comment',
+      scenario({ comments: [{ block: 'metric', note: 'x', comment: 'y' }] }),
+      /comments\[0\] has unknown field\(s\) "note"/,
+    ],
+    [
+      'an unknown block kind',
+      scenario({ comments: [{ block: 'answer', comment: 'Wrong.' }] }),
+      /comments\[0\]\.block must be one of interpretation, data-selection, assumptions, metric, sql/,
+    ],
+    [
+      'a vote that is not up or down',
+      scenario({
+        comments: [{ block: 'metric', vote: 'neutral', comment: 'Hmm.' }],
+      }),
+      /comments\[0\]\.vote must be one of up, down/,
+    ],
+    [
+      'a blank comment',
+      scenario({ comments: [{ block: 'metric', comment: '  ' }] }),
+      /comments\[0\]\.comment must be a non-empty string/,
+    ],
+    [
+      'an empty generalisesTo',
+      scenario({ generalisesTo: [] }),
+      /generalisesTo must be a non-empty array/,
+    ],
+    [
+      'a repeated generalisesTo id',
+      scenario({ generalisesTo: ['second', 'second'] }),
+      /generalisesTo lists "second" twice/,
+    ],
+    [
+      'a band outside high, medium, low',
+      scenario({ after: { band: 'certain' } }),
+      /learningScenario\.after\.band must be one of high, medium, low/,
+    ],
+    [
+      'an unknown key on a band expectation',
+      scenario({ before: { band: 'medium', score: 0.7 } }),
+      /learningScenario\.before has unknown field\(s\) "score"/,
+    ],
+  ])('rejects %s', (_label, value, expected) => {
+    expect(() => parseSuite(withScenario(value), 'demo.json')).toThrow(
+      expected,
+    );
+  });
+
+  it('rejects a generalisesTo id that is not a case in the suite', () => {
+    expect(() =>
+      parseSuite(
+        withScenario(scenario({ generalisesTo: ['orders-fy2025'] })),
+        'demo.json',
+      ),
+    ).toThrow(
+      /generalisesTo names "orders-fy2025", which is not a case in this suite — known ids: first, second/,
+    );
+  });
+
+  it('rejects a case that names itself as its own generalisation', () => {
+    expect(() =>
+      parseSuite(
+        withScenario(scenario({ generalisesTo: ['first'] })),
+        'demo.json',
+      ),
+    ).toThrow(/generalisesTo names the case itself/);
+  });
+
+  it('rejects a generalisation target that is taught directly', () => {
+    expect(() =>
+      parseSuite(
+        withScenario(scenario(), {
+          learningScenario: {
+            comments: [{ block: 'metric', comment: 'Count completed only.' }],
+          },
+        }),
+        'demo.json',
+      ),
+    ).toThrow(/names "second", which carries a learningScenario of its own/);
+  });
+
+  it('leaves the in-app case shape untouched — only the learning demo reads it', () => {
+    const suite = parseSuite(withScenario(scenario()), 'demo.json');
+    expect(toAssistantEvalCase(suite.cases[0])).not.toHaveProperty(
+      'learningScenario',
+    );
+  });
+});
+
 describe('check mapping', () => {
   it('keeps the specs as checks, in declaration order', () => {
     const checks: EvalCheckSpec[] = [
@@ -313,6 +601,23 @@ describe('loadSuite', () => {
     // Every case is categorised: an uncategorised one would silently land in
     // the "uncategorised" bucket and steer nothing.
     expect(suite.cases.every((evalCase) => evalCase.category)).toBe(true);
+  });
+
+  it('loads the shipped retail suite with its learning scenario', () => {
+    const suite = loadSuite('retail');
+    expect(suite.datasets).toEqual(['Retail']);
+    const trap = suite.cases.find((c) => c.id === 'net-revenue-fy2025');
+    expect(trap?.learningScenario).toMatchObject({
+      comments: [
+        { block: 'interpretation', vote: 'down' },
+        { block: 'metric', vote: 'down' },
+      ],
+      generalisesTo: ['orders-fy2025'],
+      before: { band: 'medium' },
+      after: { band: 'high' },
+    });
+    // Exactly one taught case: every other case must pass on what it teaches.
+    expect(suite.cases.filter((c) => c.learningScenario)).toHaveLength(1);
   });
 
   // The id here must stay one that will never ship. Naming a real domain (this

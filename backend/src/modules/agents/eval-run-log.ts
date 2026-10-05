@@ -220,6 +220,11 @@ export interface RunLogIndexLine {
   flaky?: number;
   costPerCorrectUsd?: number;
   status?: EvalRunStatus;
+  // expert runs only (CLI `--expert`), v1 or v2 ↓
+  /** AUROC of the trace's overall confidence vs PASS — the expert headline. */
+  expertAuroc?: number;
+  /** Accuracy inside the high confidence band — the expert constraint. */
+  expertHighBandAccuracy?: number;
 }
 
 function indexLine(record: EvalRunLogRecord): RunLogIndexLine {
@@ -237,6 +242,13 @@ function indexLine(record: EvalRunLogRecord): RunLogIndexLine {
     outputTokens: record.usage.outputTokens,
     totalTokens: record.usage.totalTokens,
     estimatedCostUsd: record.estimatedCostUsd,
+    // Expert runs: the headline and the constraint belong on the trend line.
+    ...(record.expert
+      ? {
+          expertAuroc: record.expert.auroc,
+          expertHighBandAccuracy: record.expert.bands.high.accuracy,
+        }
+      : {}),
     file: runLogFilename(record),
   };
   if (!isRunLogV2(record)) return line;

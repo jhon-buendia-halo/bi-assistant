@@ -10,6 +10,7 @@ Curated knowledge the assistant treats as authoritative: business-glossary terms
 - Ontology model and knowledge graph, snippet migration, extended bootstrap agent (drafts arrive disabled).
 - Ontology-grounded retrieval and SQL checking, replacing newest-first selection; retrieval logged per turn.
 - Curation UI, conflict detection, feedback learning, per-answer provenance.
+- First slice already built (1.3.5): reviewer comments distilled into Knowledge lessons with provenance, business expert mode, answer pinning, and the eval loop that measures them.
 
 ## Out of scope
 - The structural model itself ([BA-2](../BA-2/spec.md)).
@@ -22,9 +23,10 @@ Curated knowledge the assistant treats as authoritative: business-glossary terms
 | [BA-79](https://halo-powered.atlassian.net/browse/BA-79) | Ontology model, knowledge graph and bootstrap | 1.3.2 |
 | [BA-80](https://halo-powered.atlassian.net/browse/BA-80) | Ontology-grounded retrieval and SQL generation, measured by evals | 1.3.3 |
 | [BA-81](https://halo-powered.atlassian.net/browse/BA-81) | Curation UI, feedback learning and provenance | 1.3.4 |
+| *pending* | Learn from reviewer feedback, business expert mode and the eval loop (integration of three branches; Epic gate waived 2026-10-05, story to be created by hand) | 1.3.5 |
 
 ## Specs touched
-- Capabilities: [knowledge](../../capabilities/knowledge/spec.md) (concept/relation model, retrieval, curation), [verified-queries](../../capabilities/verified-queries/spec.md) and [metrics](../../capabilities/metrics/spec.md) (linked to concepts), [sessions-chat](../../capabilities/sessions-chat/spec.md) (retrieval, provenance in the answer panel), [agents-evals](../../capabilities/agents-evals/spec.md) (knowledge on/off eval).
+- Capabilities: [knowledge](../../capabilities/knowledge/spec.md) (concept/relation model, retrieval, curation, learned lessons), [business-expert](../../capabilities/business-expert/spec.md) and [answer-pinning](../../capabilities/answer-pinning/spec.md) (1.3.5), [engine-levers](../../capabilities/engine-levers/spec.md) (eval arms), [verified-queries](../../capabilities/verified-queries/spec.md) and [metrics](../../capabilities/metrics/spec.md) (linked to concepts), [sessions-chat](../../capabilities/sessions-chat/spec.md) (retrieval, provenance in the answer panel), [agents-evals](../../capabilities/agents-evals/spec.md) (knowledge on/off eval).
 - System: [data-model](../../system/data-model.md) (concept/relation collections, snippet migration), [api](../../system/api.md) (knowledge endpoints), [agents](../../system/agents.md) (`knowledge-bootstrap`, `sql-verifier`, `sql-fixer`), [ui](../../system/ui.md) (curation surface). Needs an ADR (BA-78).
 
 ## Acceptance
@@ -33,6 +35,7 @@ Per story, from Jira and the roadmap:
 - A dataset can be bootstrapped into a reviewed ontology; the graph returns a concept with its metric, mappings and example queries (BA-79).
 - A golden-dataset eval with knowledge on vs off shows an accuracy gain with no category worse (BA-80).
 - An analyst can fix a wrong answer by editing a concept and the next answer cites it (BA-81).
+- A reviewer comment on an answer block becomes a Knowledge lesson with provenance that the next answer uses; the full test and E2E suites are green (1.3.5).
 
 ## Dependencies, risks and open questions
 - **Partly built already:** `backend/src/modules/knowledge` and `frontend/src/app/features/knowledge` exist (snippets of kind instruction / term / default_filter with scope, synonyms, entities, enabled flag, a `knowledge-bootstrap` agent, and a per-turn injected block). Open: which of BA-79 to BA-81 is genuinely new versus an extension of this?

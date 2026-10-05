@@ -316,6 +316,16 @@
         } @else {
           <div class="group">
             <div class="prose-dark" [innerHTML]="message.content | markdown"></div>
+            @if (message.expertTrace; as trace) {
+              <!-- Business expert mode: the reasoning behind this answer -->
+              <app-expert-trace
+                [trace]="trace"
+                [sessionId]="session().id"
+                [messageAt]="message.at"
+                [learnedTitles]="learnedTitlesFor(message)"
+                (feedbackSaved)="onExpertFeedbackSaved($event)"
+              />
+            }
             <ng-container
               [ngTemplateOutlet]="reasoningTrail"
               [ngTemplateOutletContext]="{ $implicit: message }"
@@ -358,6 +368,17 @@
                 >
                   <lucide-angular [img]="crossCheckIcon(check)" [size]="12" />
                   {{ crossCheckLabel(check) }}
+                </span>
+              }
+              @if (message.consistency; as consistency) {
+                <!-- Answer pinning: replayed, kept or updated after learning -->
+                <span
+                  [title]="consistencyTitle(consistency)"
+                  class="mr-1 flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium"
+                  [class]="consistencyClass(consistency)"
+                >
+                  <lucide-angular [img]="consistencyIcon(consistency)" [size]="12" />
+                  {{ consistencyLabel(consistency) }}
                 </span>
               }
               <button
@@ -481,6 +502,22 @@
           }
           @if (streamingText()) {
             <div class="prose-dark" [innerHTML]="streamingText() | markdown"></div>
+          }
+          @if (expertStatus(); as status) {
+            <!-- Business expert mode: cross-check / explanation pass -->
+            <div
+              class="ml-0.5 flex items-center gap-2.5 text-[12px]"
+              [class]="status === 'failed' ? 'text-amber-400/90' : 'text-zinc-400'"
+              aria-live="polite"
+              data-expert-status
+            >
+              <lucide-angular
+                [img]="status === 'failed' ? TriangleAlert : status === 'cross-check' ? ShieldCheck : Lightbulb"
+                [size]="13"
+                class="shrink-0"
+              />
+              <span>{{ expertStatusLine(status) }}</span>
+            </div>
           }
           <div class="flex items-center gap-2 text-zinc-500">
             <lucide-angular [img]="Loader2" [size]="13" class="animate-spin" />
@@ -609,6 +646,27 @@
           <lucide-angular [img]="ShieldCheck" [size]="12" class="shrink-0" />
           Careful
         </button>
+        <!-- Business expert mode: answers come with a rated reasoning trace -->
+        <button
+          type="button"
+          (click)="toggleExpert()"
+          [attr.aria-pressed]="expert()"
+          aria-label="Business expert mode"
+          [attr.data-tip]="
+            expert()
+              ? 'Business expert mode is on: every answer shows how the question was read, which tables and joins, the assumptions, the metric and the annotated SQL — each with a measured confidence you can rate. Includes the Careful cross-check. Slower per answer.'
+              : 'Business expert mode: show the reasoning behind each answer — interpretation, tables and joins, assumptions, metric and annotated SQL — each with a measured confidence you can rate. Includes the Careful cross-check. Slower per answer.'
+          "
+          class="qti-tip flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px]"
+          [class]="
+            expert()
+              ? 'border-sky-400/30 bg-sky-400/10 text-sky-400'
+              : 'border-white/10 bg-white/[0.04] text-zinc-400 hover:border-white/20 hover:bg-white/[0.08] hover:text-zinc-200'
+          "
+        >
+          <lucide-angular [img]="GraduationCap" [size]="12" class="shrink-0" />
+          Expert
+        </button>
         <!-- Deep analysis: the draft becomes a background job, not a turn -->
         <button
           type="button"
@@ -720,6 +778,15 @@
                 >{{ knowledgeKindLabel(item.kind) }}</span
               >
               <span class="text-zinc-300">{{ item.title }}</span>
+              @if (item.source === "feedback") {
+                <span
+                  title="Learned from a reviewer's feedback note"
+                  class="flex shrink-0 items-center gap-1 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-1.5 py-0.5 text-[10px] text-emerald-400"
+                >
+                  <lucide-angular [img]="GraduationCap" [size]="10" />
+                  <span>Learned</span>
+                </span>
+              }
               <span class="text-[11px] text-zinc-600">{{
                 item.datasetId ?? "global"
               }}</span>

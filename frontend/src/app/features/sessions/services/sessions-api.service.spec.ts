@@ -5,7 +5,11 @@ import {
 } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { API_BASE_URL } from '../../../core/config/api.config';
-import { SessionsApiService, parseToolEvent } from './sessions-api.service';
+import {
+  SessionsApiService,
+  parseExpertStatus,
+  parseToolEvent,
+} from './sessions-api.service';
 
 describe('SessionsApiService feedback', () => {
   let service: SessionsApiService;
@@ -77,6 +81,59 @@ describe('SessionsApiService feedback', () => {
     expect(req.request.method).toBe('GET');
     expect(req.request.responseType).toBe('blob');
     req.flush(new Blob(['# report']));
+  });
+
+  it('posts block feedback with only the fields that changed', () => {
+    service
+      .sendBlockFeedback('session 1', {
+        messageAt: '2026-01-01T00:00:01.000Z',
+        block: 'data-selection',
+        vote: 'down',
+      })
+      .subscribe();
+    const vote = http.expectOne(
+      `${API_BASE_URL}/sessions/session%201/expert/feedback`,
+    );
+    expect(vote.request.method).toBe('POST');
+    expect(vote.request.body).toEqual({
+      messageAt: '2026-01-01T00:00:01.000Z',
+      block: 'data-selection',
+      vote: 'down',
+    });
+    expect(Object.keys(vote.request.body)).not.toContain('comment');
+    vote.flush({ ok: true, message: 'Saved' });
+
+    // A note alone must not touch the vote; `vote: null` clears one.
+    service
+      .sendBlockFeedback('session 1', {
+        messageAt: '2026-01-01T00:00:01.000Z',
+        block: 'sql',
+        comment: 'Should filter on 31 December.',
+      })
+      .subscribe();
+    const note = http.expectOne(
+      `${API_BASE_URL}/sessions/session%201/expert/feedback`,
+    );
+    expect(Object.keys(note.request.body)).not.toContain('vote');
+    expect(note.request.body.comment).toBe('Should filter on 31 December.');
+    note.flush({ ok: true, message: 'Saved' });
+
+    service
+      .sendBlockFeedback('session 1', {
+        messageAt: '2026-01-01T00:00:01.000Z',
+        block: 'sql',
+        vote: null,
+      })
+      .subscribe();
+    const cleared = http.expectOne(
+      `${API_BASE_URL}/sessions/session%201/expert/feedback`,
+    );
+    expect(cleared.request.body).toEqual({
+      messageAt: '2026-01-01T00:00:01.000Z',
+      block: 'sql',
+      vote: null,
+    });
+    cleared.flush({ ok: true, message: 'Cleared' });
   });
 
   it('posts a tailoring instruction', () => {
@@ -189,6 +246,97 @@ describe('SessionsApiService streaming', () => {
       careful: true,
     });
   });
+
+  it('asks for business expert mode only when the turn requested it', async () => {
+    const fetchSpy = spyOn(globalThis, 'fetch').and.callFake(() =>
+      Promise.resolve(sseResponse({ type: 'done' })),
+    );
+
+    await service.streamMessage(
+      'session-1',
+      'question',
+      {},
+      undefined,
+      undefined,
+      false,
+      false,
+    );
+    expect(requestBody(fetchSpy)).toEqual({ content: 'question' });
+
+    await service.streamMessage(
+      'session-1',
+      'question',
+      {},
+      undefined,
+      undefined,
+      false,
+      true,
+    );
+    expect(requestBody(fetchSpy)).toEqual({ content: 'question', expert: true });
+  });
+
+  it('sends pin:false only when asked, omitting it otherwise', async () => {
+    const fetchSpy = spyOn(globalThis, 'fetch').and.callFake(() =>
+      Promise.resolve(sseResponse({ type: 'done' })),
+    );
+
+    // Omitted pin argument — the backend's own default (replay on) applies.
+    await service.streamMessage('session-1', 'question', {});
+    expect(requestBody(fetchSpy)).toEqual({ content: 'question' });
+
+    // pin: true is never sent explicitly — it is the implicit default.
+    await service.streamMessage(
+      'session-1',
+      'question',
+      {},
+      undefined,
+      undefined,
+      false,
+      false,
+      true,
+    );
+    expect(requestBody(fetchSpy)).toEqual({ content: 'question' });
+
+    await service.streamMessage(
+      'session-1',
+      'question',
+      {},
+      undefined,
+      undefined,
+      false,
+      false,
+      false,
+    );
+    expect(requestBody(fetchSpy)).toEqual({ content: 'question', pin: false });
+  });
+
+  it('reports expert-status frames and ignores unknown statuses', async () => {
+    spyOn(globalThis, 'fetch').and.resolveTo(
+      sseResponse(
+        { type: 'expert-status', content: 'cross-check' },
+        { type: 'expert-status', content: 'explaining' },
+        { type: 'expert-status', content: 'pondering' },
+        { type: 'expert-status', content: 'failed' },
+        { type: 'done' },
+      ),
+    );
+    const onExpertStatus = jasmine.createSpy('onExpertStatus');
+    const onError = jasmine.createSpy('onError');
+
+    await service.streamMessage('session-1', 'question', {
+      onExpertStatus,
+      onError,
+    });
+
+    expect(onExpertStatus.calls.allArgs()).toEqual([
+      ['cross-check'],
+      ['explaining'],
+      ['failed'],
+    ]);
+    expect(onError).not.toHaveBeenCalled();
+    expect(parseExpertStatus(' explaining ')).toBe('explaining');
+    expect(parseExpertStatus(undefined)).toBeNull();
+  });
 });
 
 /** The JSON body of the most recent fetch the service issued. */
@@ -197,12 +345,14 @@ function requestBody(fetchSpy: jasmine.Spy): unknown {
   return JSON.parse(init.body as string);
 }
 
-function sseResponse(event: unknown): Response {
+function sseResponse(...events: unknown[]): Response {
   const body = new ReadableStream({
     start(controller) {
-      controller.enqueue(
-        new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`),
-      );
+      for (const event of events) {
+        controller.enqueue(
+          new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`),
+        );
+      }
       controller.close();
     },
   });

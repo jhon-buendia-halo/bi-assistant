@@ -9,7 +9,7 @@
  * referenced, including here.
  */
 export type KnowledgeSnippetKind = 'instruction' | 'term' | 'default_filter';
-export type KnowledgeSnippetSource = 'user' | 'mined';
+export type KnowledgeSnippetSource = 'user' | 'mined' | 'feedback';
 
 export const KNOWLEDGE_SNIPPET_KINDS: KnowledgeSnippetKind[] = [
   'instruction',
@@ -20,6 +20,22 @@ export const KNOWLEDGE_SNIPPET_KINDS: KnowledgeSnippetKind[] = [
 export interface KnowledgeSnippetScope {
   datasetId?: string;
   datasourceId?: string;
+}
+
+/**
+ * Where a learned lesson came from. `block` is a `ReasoningBlockKind`, typed
+ * as `string` to keep this entity free of expert-mode imports.
+ */
+export interface LessonProvenance {
+  feedbackId: string;
+  sessionId: string;
+  messageAt: string;
+  block: string;
+  question: string;
+  comment: string;
+  vote?: 'up' | 'down';
+  learnedAt: string;
+  method: 'agent' | 'verbatim';
 }
 
 export interface KnowledgeSnippet {
@@ -45,6 +61,8 @@ export interface KnowledgeSnippet {
   /** Only enabled snippets are injected into the assistant's context. */
   enabled: boolean;
   source: KnowledgeSnippetSource;
+  /** Set only for `source: 'feedback'` — where the lesson was distilled from. */
+  provenance?: LessonProvenance;
   createdAt: string;
   updatedAt: string;
 }
@@ -85,4 +103,6 @@ export interface KnowledgeUse {
   body: string;
   /** Dataset the snippet is scoped to; absent for a global snippet. */
   datasetId?: string;
+  /** Set by `toKnowledgeUse` — surfaces a learned lesson to the caller. */
+  source?: KnowledgeSnippetSource;
 }

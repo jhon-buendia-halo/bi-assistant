@@ -26,6 +26,13 @@
  * - **Run log v2** on every terminal state (completed, failed, aborted) into
  *   `logs/evals/`, built by `eval-run-record.ts` like the in-app runner's.
  *
+ * `--expert` runs every turn in business expert mode and measures the
+ * reasoning trace it produces (`src/modules/expert-mode/expert-metrics.ts`):
+ * the headline is the AUROC of the trace's overall confidence against the
+ * verdict, the constraint is the accuracy inside the high band, and each
+ * case's `expectedReasoning` is scored for coverage. The verdict itself is
+ * graded exactly as without the flag — the trace never changes a PASS.
+ *
  * Run with `npm run eval` from `backend/`. See `eval/README.md`.
  */
 // Must stay the first import: see scripts/lib/use-isolated-observability.ts.
@@ -41,7 +48,11 @@ import type { DatasetsRepository } from '../src/modules/datasets/repositories/da
 import type { EngineSettingsService } from '../src/modules/engine/engine-settings.service';
 import type { LlmSettingsView } from '../src/modules/llm/llm.types';
 import type { SessionsService } from '../src/modules/sessions/sessions.service';
-import type { SidePass } from '../src/modules/sessions/turn-result';
+import type {
+  RunTurnOptions,
+  SidePass,
+  TurnResult,
+} from '../src/modules/sessions/turn-result';
 import type { DatasetSnapshot } from '../src/mastra/tool-services';
 import type {
   EvalSuite,
@@ -69,6 +80,7 @@ import {
 } from '../src/modules/engine/engine-options';
 import {
   addUsage,
+  estimateCostUsd,
   isUsageUnobserved,
   normalizeModelId,
   representativeAttempt,
@@ -91,6 +103,15 @@ import {
   writeRunLog,
   type WrittenRunLog,
 } from '../src/modules/agents/eval-run-log';
+import type { EvalRunLogExpertCase } from '../src/modules/agents/eval-telemetry';
+// Expert-mode metrics are pure as well: AUROC, selective accuracy, coverage.
+import {
+  expertCaseRecord,
+  summarizeExpert,
+  type ExpectedReasoning,
+  type ExpertCaseRecord,
+  type ExpertRunSummary,
+} from '../src/modules/expert-mode/expert-metrics';
 
 // Connectors clamp `runReadOnlySql` at 500 rows, so comparing more is moot.
 const ROW_LIMIT = Number(process.env.EVAL_ROW_LIMIT ?? 500);
@@ -140,6 +161,11 @@ interface GoldenCase {
    * cases, which `goldenToSuiteEvalCase` maps on demand.
    */
   evalCase?: SuiteEvalCase;
+  /**
+   * What a correct reasoning trace names — scored by `--expert` runs only,
+   * never part of the verdict. Read off the suite case on a registered suite.
+   */
+  expectedReasoning?: ExpectedReasoning;
 }
 
 type Dialect = 'postgres' | 'databricks';
@@ -203,6 +229,8 @@ interface Options {
   includeVariants: boolean;
   /** Stop the run (and the loop) at the first case whose verdict is ERROR. */
   stopOnError: boolean;
+  /** `--expert`: run every turn in business expert mode and score its trace. */
+  expert: boolean;
 }
 
 function parseArgs(argv: string[]): Options {
@@ -218,6 +246,7 @@ function parseArgs(argv: string[]): Options {
     dialect: 'auto',
     includeVariants: false,
     stopOnError: false,
+    expert: false,
   };
   const value = (flag: string, index: number, what: string): string => {
     const next = argv[index];
@@ -326,12 +355,20 @@ function parseArgs(argv: string[]): Options {
       options.keepSessions = true;
     } else if (arg === '--verbose' || arg === '-v') {
       options.verbose = true;
+    } else if (arg === '--expert') {
+      options.expert = true;
     } else if (arg === '--help' || arg === '-h') {
       printUsage();
       process.exit(0);
     } else {
       throw new EvalSetupError(`Unknown argument "${arg}" (try --help)`);
     }
+  }
+  if (options.expert && options.validate) {
+    throw new EvalSetupError(
+      '--expert measures the reasoning trace of answered turns and --validate ' +
+        'makes no model calls — drop one of them',
+    );
   }
   if (options.validate) {
     // A validate run makes no model call, so a lever flag would do nothing —
@@ -482,6 +519,14 @@ function printUsage(): void {
       'Run',
       '      --repeat <n>           attempts per case; a case passes only if every',
       '                             attempt passes — pass^n (default 1)',
+      '      --expert               business expert mode: every turn also builds a',
+      '                             reasoning trace; reports the AUROC of its overall',
+      '                             confidence vs PASS (headline), accuracy in the',
+      '                             high band (constraint) and expectedReasoning',
+      '                             coverage. Cases without reference SQL count as',
+      '                             probes (trace presence only); a --file case with',
+      '                             nothing to grade runs once as a probe (excludes',
+      '                             --validate)',
       '      --stop-on-error        stop at the first case whose verdict is ERROR',
       "      --validate             run every case's reference SQL (and trapSql)",
       '                             and stop: zero model calls, no LLM needed',
@@ -494,6 +539,7 @@ function printUsage(): void {
       'Examples',
       '  npm run eval -- --suites all --repeat 3 --arms baseline --label iter0-gpt5',
       '  npm run eval -- --suite health-insurance --repeat 3 --arms baseline,fixer-off',
+      '  npm run eval -- --suite hr --expert --label expert-baseline',
       '  npm run eval:validate -- --suites all',
       '  npm run eval:diff -- <before.json> <after.json> [--markdown]',
       '',
@@ -567,18 +613,32 @@ function loadSuiteCases(id: string, includeVariants: boolean): CaseSource {
   if (!suite.cases?.length) {
     throw new EvalSetupError(`Suite "${suite.id}" has no cases`);
   }
+  // `expectedReasoning` stays off the harness's case shape (only `--expert`
+  // reads it), so it is taken from the suite case itself — a paraphrase
+  // variant shares its original's.
+  const reasoning = new Map(
+    suite.cases.flatMap((c) =>
+      c.expectedReasoning ? [[c.id, c.expectedReasoning] as const] : [],
+    ),
+  );
   return {
     suite: suite.id,
     origin: `suite ${suite.id} (${suite.name})`,
     registered: suite,
-    cases: loader.expandVariants(suite, includeVariants).map((evalCase) => ({
-      name: evalCase.id,
-      ...(evalCase.category ? { category: evalCase.category } : {}),
-      question: evalCase.question,
-      dataset,
-      ...(evalCase.expectedSql ? { expectedSql: evalCase.expectedSql } : {}),
-      evalCase,
-    })),
+    cases: loader.expandVariants(suite, includeVariants).map((evalCase) => {
+      const expectedReasoning = reasoning.get(
+        evalCase.variantOf ?? evalCase.id,
+      );
+      return {
+        name: evalCase.id,
+        ...(evalCase.category ? { category: evalCase.category } : {}),
+        question: evalCase.question,
+        dataset,
+        ...(evalCase.expectedSql ? { expectedSql: evalCase.expectedSql } : {}),
+        evalCase,
+        ...(expectedReasoning ? { expectedReasoning } : {}),
+      };
+    }),
   };
 }
 
@@ -727,6 +787,21 @@ function normalizeCase(
       `${where} has "expectedSqlAlternatives" but no "expectedSql" for them to be alternatives to`,
     );
   }
+  // Held to the registered suites' rules — one validator, loaded only when a
+  // case file actually carries the field.
+  let expectedReasoning: ExpectedReasoning | undefined;
+  if (value.expectedReasoning !== undefined) {
+    try {
+      expectedReasoning = suiteLoader().parseExpectedReasoning(
+        value.expectedReasoning,
+        file,
+        `case "${name}"`,
+      );
+    } catch (error) {
+      if (error instanceof EvalSetupError) throw error;
+      throw new EvalSetupError(message(error));
+    }
+  }
   return {
     name,
     question,
@@ -738,6 +813,7 @@ function normalizeCase(
     ...(suiteShaped && text('trapSql') ? { trapSql: text('trapSql') } : {}),
     ...(byDialect ? { expectedSqlByDialect: byDialect } : {}),
     ...(alternatives ? { expectedSqlAlternatives: alternatives } : {}),
+    ...(expectedReasoning ? { expectedReasoning } : {}),
   };
 }
 
@@ -880,12 +956,7 @@ function partitionCases(
       });
       continue;
     }
-    const byDialect =
-      testCase.evalCase?.expectedSqlByDialect ?? testCase.expectedSqlByDialect;
-    const hasReference =
-      !!testCase.expectedSql ||
-      !!byDialect?.postgres ||
-      !!byDialect?.databricks;
+    const hasReference = hasReferenceSql(testCase);
     if (
       mode === 'validate' ? !hasReference : !testCase.evalCase && !hasReference
     ) {
@@ -902,6 +973,15 @@ function partitionCases(
     runnable.push(testCase);
   }
   return { runnable, skipped };
+}
+
+/** True when the case has reference SQL in some dialect — what a result-set check needs. */
+function hasReferenceSql(testCase: GoldenCase): boolean {
+  const byDialect =
+    testCase.evalCase?.expectedSqlByDialect ?? testCase.expectedSqlByDialect;
+  return (
+    !!testCase.expectedSql || !!byDialect?.postgres || !!byDialect?.databricks
+  );
 }
 
 function allSkippedMessage(source: CaseSource, skipped: SkippedCase[]): string {
@@ -1306,6 +1386,8 @@ interface CellResult {
   written?: WrittenRunLog;
   /** Why the run stopped early, when it did — the loop stops with it. */
   stopped?: 'aborted' | 'stop-on-error' | 'crashed';
+  /** `--expert` only: every case as the expert report sees it, and the summary. */
+  expert?: { results: CaseResult[]; summary: ExpertRunSummary };
 }
 
 /** The part of the shared harness's `EvalCaseOutcome` the CLI reads. */
@@ -1353,13 +1435,26 @@ async function runCell(
     ),
   ];
   const levers = describeEngineDiff(fallbackEngine, ENGINE_DEFAULTS);
+  // `--expert`: every turn runs in business expert mode; a `--file` case with
+  // nothing to grade still runs once, as a probe of trace presence.
+  const tap = options.expert ? expertTap(env.sessions) : undefined;
+  const probeCases = options.expert
+    ? cell.skipped
+        .filter((skipped) => skipped.reason === 'no-expected-sql')
+        .map((skipped) => skipped.testCase)
+    : [];
+  const expertResults: CaseResult[] = [];
+  const probeResults = new Map<string, CaseResult>();
 
   console.log(
     `\nRunning ${cell.runnable.length} case(s) from ${cell.source.origin} — arm ${cell.arm}` +
       (options.repeat > 1 ? `, pass^${options.repeat}` : '') +
       `, model ${env.model}${effort ? ` (effort ${effort})` : ''}` +
       `, timeout ${Math.round(TURN_TIMEOUT_MS / 1000)}s` +
-      (dialects.length ? `, dialect ${dialects.join('/')}` : ''),
+      (dialects.length ? `, dialect ${dialects.join('/')}` : '') +
+      (options.expert
+        ? `, business expert mode${probeCases.length ? ` + ${probeCases.length} ungraded probe(s)` : ''}`
+        : ''),
   );
   console.log(
     `Levers vs today's engine: ${levers.length ? levers.join(', ') : "none (today's engine)"}`,
@@ -1381,7 +1476,7 @@ async function runCell(
       error ??= 'interrupted (SIGINT)';
       notReached = cell.runnable.length - outcomes.length;
     }
-    record = buildCliRunRecord({
+    const built = buildCliRunRecord({
       runId: randomUUID(),
       label: options.label,
       harness: 'golden-set',
@@ -1400,12 +1495,21 @@ async function runCell(
       startedAt,
       finishedAt: new Date(),
       outcomes,
-      skipped: cell.skipped.map(skippedLogCase),
+      skipped: cell.skipped.map((skipped) =>
+        withProbeSpend(
+          skippedLogCase(skipped),
+          probeResults.get(skipped.testCase.name),
+          env.model,
+        ),
+      ),
       notReached,
       pricing: pricing(),
       status,
       error,
     });
+    record = options.expert
+      ? withExpert(built, [...expertResults, ...probeResults.values()])
+      : built;
     if (options.log) written = writeRunLog(record);
     return record;
   };
@@ -1423,11 +1527,13 @@ async function runCell(
       }
       const testCase = cell.runnable[index];
       console.log(`\n▶ ${testCase.name}: ${oneLine(testCase.question)}`);
+      // Per attempt, what its turn showed the expert report (`--expert`).
+      const observed: ExpertObservation[] = [];
       const outcome: CaseOutcomeLike =
         await harness.runAssistantEvalCaseRepeated(
           toSuiteEvalCase(testCase),
           {
-            sessions: env.sessions,
+            sessions: tap?.sessions ?? env.sessions,
             datasets: [testCase.dataset],
             ...(cell.source.registered
               ? { suite: cell.source.registered }
@@ -1440,8 +1546,15 @@ async function runCell(
           },
           options.repeat,
           {
-            onAttempt: (attempt) =>
-              printAttempt(attempt, options.repeat, options.verbose),
+            onAttempt: (attempt, attemptIndex) => {
+              printAttempt(attempt, options.repeat, options.verbose);
+              if (tap) {
+                observed[attemptIndex] = observeTurn(
+                  tap.take(),
+                  testCase.expectedReasoning,
+                );
+              }
+            },
             pricing: { model: env.model, table: pricing() },
           },
         );
@@ -1456,6 +1569,15 @@ async function runCell(
       }
       outcomes.push(outcome);
       console.log(`  ${caseLine(outcome.logCase)}`);
+      if (options.expert) {
+        const expertCase = expertCaseResult(
+          testCase,
+          outcome.logCase,
+          observed,
+        );
+        expertResults.push(expertCase);
+        console.log(`    expert: ${describeExpert(expertCase.expert)}`);
+      }
       if (options.stopOnError && outcome.logCase.verdict === 'ERROR') {
         notReached = cell.runnable.length - index - 1;
         status = 'failed';
@@ -1463,6 +1585,15 @@ async function runCell(
         stopped = 'stop-on-error';
         break;
       }
+    }
+    for (const testCase of probeCases) {
+      if (stopped || state.aborted) break;
+      console.log(
+        `\n▶ ${testCase.name} (ungraded — trace presence only): ${oneLine(testCase.question)}`,
+      );
+      const probe = await runProbe(env, testCase, overrides, cell.arm, state);
+      probeResults.set(testCase.name, probe);
+      console.log(`  SKIP(${probe.reason}) — ${oneLine(probe.detail)}`);
     }
   } catch (err) {
     status = 'failed';
@@ -1473,12 +1604,23 @@ async function runCell(
   } finally {
     state.flush = undefined;
     const final = finish();
+    const expertView = options.expert
+      ? [...expertResults, ...probeResults.values()]
+      : undefined;
     result = {
       suite: cell.source.suite,
       arm: cell.arm,
       record: final,
       ...(written ? { written } : {}),
       ...(stopped ? { stopped } : {}),
+      ...(expertView
+        ? {
+            expert: {
+              results: expertView,
+              summary: final.expert ?? expertSummaryOf(expertView),
+            },
+          }
+        : {}),
     };
     sink.push(result);
     printCellReport(result, options, env.model);
@@ -1794,6 +1936,7 @@ function printCellReport(
         : ''),
   );
   reportSpend(record, model);
+  if (result.expert) reportExpert(result.expert.results, result.expert.summary);
   const gaps = record.cases.filter((item) => item.verdict === 'GAP');
   if (gaps.length) {
     console.warn('');
@@ -1937,6 +2080,421 @@ function reportSpend(
         .join(' · ')}`,
     );
   }
+}
+
+/* ------------------------------------------------------ expert mode */
+
+/**
+ * One case as the expert report sees it: the verdict the shared harness gave
+ * it, plus the reasoning-trace measurements of its attempts. `expertSummaryOf`
+ * and `reportExpert` read only this, so they unit-test without a run.
+ */
+interface CaseResult {
+  name: string;
+  category?: string;
+  verdict: EvalVerdict;
+  /** Short verdict qualifier: the failure label, or why a case was skipped. */
+  reason: string;
+  detail: string;
+  durationMs: number;
+  /** Absent when the provider reported nothing — never faked from text length. */
+  usage?: TokenUsage;
+  /**
+   * The reasoning-trace measurements of the attempt this result reports
+   * (see `expert-metrics.ts`). `{ traced: false }` when the answer carried no
+   * trace; absent when the turn never completed.
+   */
+  expert?: ExpertCaseRecord;
+  /** Every attempt's verdict and trace — what the AUROC ranks. */
+  expertAttempts?: { verdict: EvalVerdict; record: ExpertCaseRecord }[];
+  /**
+   * A case with no reference SQL: its answers say nothing about whether a
+   * confident figure was right, so they are never ranked — only whether they
+   * carried a trace is recorded (a clarification turn must carry none).
+   */
+  probe?: boolean;
+  /** Probes only: the turn ended in a clarifying question. */
+  clarified?: boolean;
+}
+
+/** What one attempt's turn showed the expert report. */
+interface ExpertObservation {
+  /** Absent when the turn never completed (stopped, timed out, threw). */
+  record?: ExpertCaseRecord;
+  clarified: boolean;
+}
+
+/**
+ * `--expert` without a harness flag: the shared harness gets a sessions
+ * service whose `runTurn` runs every turn in business expert mode and keeps
+ * the turn it returned, so each attempt's reasoning trace is scored when the
+ * harness reports the attempt (`take`). Only the turn of the attempt in
+ * flight counts — one the harness already gave up on (timeout grace) cannot
+ * land on the next attempt. Answer pinning stays off: the run measures the
+ * engine, not a replay.
+ */
+function expertTap(sessions: SessionsService): {
+  sessions: SessionsService;
+  take: () => TurnResult | undefined;
+} {
+  let sequence = 0;
+  let live = 0;
+  let latest: TurnResult | undefined;
+  const proxy = new Proxy(sessions, {
+    get(target, prop, receiver) {
+      if (prop === 'runTurn') {
+        return (id: string, content: string, opts: RunTurnOptions = {}) => {
+          const mine = ++sequence;
+          live = mine;
+          latest = undefined;
+          const turn = target.runTurn(id, content, { ...opts, expert: true });
+          turn.then(
+            (result) => {
+              if (live === mine) latest = result;
+            },
+            () => undefined,
+          );
+          return turn;
+        };
+      }
+      return Reflect.get(target, prop, receiver) as unknown;
+    },
+  });
+  return {
+    sessions: proxy,
+    take: () => {
+      const turn = latest;
+      latest = undefined;
+      live = 0;
+      return turn;
+    },
+  };
+}
+
+/** A finished turn's trace, scored; nothing when the turn did not complete. */
+function observeTurn(
+  turn: TurnResult | undefined,
+  expected: ExpectedReasoning | undefined,
+): ExpertObservation {
+  if (!turn || turn.aborted) return { clarified: false };
+  return {
+    record: expertCaseRecord(turn.message?.expertTrace, expected),
+    clarified: !!turn.clarification,
+  };
+}
+
+/**
+ * A graded case as the expert report sees it. The representative attempt
+ * (the one the verdict reports) supplies `expert`; every observed attempt is
+ * kept for the AUROC. A case with no reference SQL is a probe: it reports the
+ * attempt that matters most — a clarification that carried a trace.
+ */
+function expertCaseResult(
+  testCase: GoldenCase,
+  logCase: EvalRunLogCaseV2,
+  observed: readonly (ExpertObservation | undefined)[],
+): CaseResult {
+  const attempts = logCase.attempts ?? [];
+  const pairs = attempts.flatMap((attempt, index) => {
+    const record = observed[index]?.record;
+    return record ? [{ verdict: attempt.verdict, record }] : [];
+  });
+  const representative = representativeAttempt(attempts);
+  const probe = !hasReferenceSql(testCase);
+  const seen = observed.filter(
+    (item): item is ExpertObservation => !!item?.record,
+  );
+  const chosen = probe
+    ? (seen.find((item) => item.clarified && item.record?.traced) ?? seen[0])
+    : representative
+      ? observed[attempts.indexOf(representative)]
+      : undefined;
+  return {
+    name: testCase.name,
+    ...(testCase.category ? { category: testCase.category } : {}),
+    verdict: logCase.verdict,
+    reason:
+      logCase.verdict === 'PASS'
+        ? ''
+        : (logCase.failureLabel ?? logCase.reason ?? ''),
+    detail: attemptDetail(representative),
+    durationMs: logCase.durationMs,
+    ...(logCase.usage ? { usage: logCase.usage } : {}),
+    ...(chosen?.record ? { expert: chosen.record } : {}),
+    ...(pairs.length ? { expertAttempts: pairs } : {}),
+    ...(probe ? { probe: true, clarified: !!chosen?.clarified } : {}),
+  };
+}
+
+/**
+ * `--expert` on a `--file` case with nothing to grade (no reference SQL, no
+ * checks) — typically a clarification case. The harness cannot grade it, so
+ * it stays SKIP; but the turn is still run, once, because whether its answer
+ * carried a reasoning trace is itself a check: a clarification turn must
+ * carry none.
+ */
+async function runProbe(
+  env: GradedEnv,
+  testCase: GoldenCase,
+  engine: Partial<EngineOptions>,
+  arm: string,
+  state: InterruptState,
+): Promise<CaseResult> {
+  const started = Date.now();
+  const result = (
+    detail: string,
+    extra: Partial<CaseResult> = {},
+  ): CaseResult => ({
+    name: testCase.name,
+    ...(testCase.category ? { category: testCase.category } : {}),
+    verdict: 'SKIP',
+    reason: 'no-expected-sql',
+    detail,
+    durationMs: Date.now() - started,
+    probe: true,
+    ...extra,
+  });
+  const turn = new AbortController();
+  const onStop = () => turn.abort();
+  state.signal.addEventListener('abort', onStop, { once: true });
+  const timer = setTimeout(() => turn.abort(), TURN_TIMEOUT_MS);
+  let sessionId: string | undefined;
+  try {
+    const session = await env.sessions.create(
+      `eval ${testCase.name} probe ${new Date().toISOString()}`.slice(0, 64),
+      [testCase.dataset],
+    );
+    sessionId = session.id;
+    const answered = await env.sessions.runTurn(session.id, testCase.question, {
+      engine,
+      arm,
+      ...(testCase.category ? { category: testCase.category } : {}),
+      abortSignal: turn.signal,
+      expert: true,
+    });
+    if (turn.signal.aborted || answered.aborted) {
+      return result(
+        `not graded (no reference SQL); the probe turn was stopped or exceeded ${Math.round(TURN_TIMEOUT_MS / 1000)}s`,
+      );
+    }
+    const expert = expertCaseRecord(
+      answered.message?.expertTrace,
+      testCase.expectedReasoning,
+    );
+    const clarified = !!answered.clarification;
+    const detail = clarified
+      ? expert.traced
+        ? 'not graded (no reference SQL); clarified but carried a reasoning trace — clarification turns should carry none'
+        : 'not graded (no reference SQL); clarified, no reasoning trace (as expected)'
+      : `not graded (no reference SQL); answered without clarifying, reasoning trace ${expert.traced ? 'present' : 'absent'}`;
+    return result(detail, {
+      expert,
+      clarified,
+      ...(answered.usage ? { usage: answered.usage } : {}),
+    });
+  } catch (error) {
+    return result(
+      `not graded (no reference SQL); the probe turn failed — ${message(error)}`,
+    );
+  } finally {
+    clearTimeout(timer);
+    state.signal.removeEventListener('abort', onStop);
+    if (sessionId) {
+      await env.sessions
+        .delete(sessionId)
+        .catch((error: unknown) =>
+          console.warn(
+            `  ! could not delete throwaway session ${sessionId} — ${message(error)}`,
+          ),
+        );
+    }
+  }
+}
+
+/**
+ * A skipped case's log entry, carrying what its probe spent: the probe turn
+ * is a real, paid model call, and a run log that left it out would read
+ * cheaper than it was.
+ */
+function withProbeSpend(
+  logCase: EvalRunLogCaseV2,
+  probe: CaseResult | undefined,
+  model: string,
+): EvalRunLogCaseV2 {
+  if (!probe?.usage) return logCase;
+  const cost = estimateCostUsd(model, probe.usage, pricing());
+  return {
+    ...logCase,
+    usage: probe.usage,
+    ...(cost !== undefined ? { estimatedCostUsd: cost } : {}),
+  };
+}
+
+/**
+ * The run record with the expert measurements on it: each case's record
+ * (`expertLogCase`) and the run's summary — the headline and the constraint
+ * also reach the index line (`writeRunLog`).
+ */
+function withExpert(
+  record: EvalRunLogRecordV2,
+  results: CaseResult[],
+): EvalRunLogRecordV2 {
+  const byName = new Map(results.map((result) => [result.name, result]));
+  return {
+    ...record,
+    cases: record.cases.map((item) => {
+      const result = byName.get(item.id);
+      return result?.expert ? { ...item, expert: expertLogCase(result) } : item;
+    }),
+    expert: expertSummaryOf(results),
+  };
+}
+
+/**
+ * A case's expert record as logged. With `--repeat`, every attempt's
+ * (verdict, confidence) pair is kept so the run's AUROC can be recomputed
+ * from the log alone.
+ */
+function expertLogCase(result: CaseResult): EvalRunLogExpertCase {
+  const attempts = result.expertAttempts ?? [];
+  return {
+    ...result.expert!,
+    ...(result.probe ? { clarified: !!result.clarified } : {}),
+    ...(attempts.length > 1
+      ? {
+          attempts: attempts.map(({ verdict, record }) => ({
+            verdict,
+            traced: record.traced,
+            ...(record.confidence !== undefined
+              ? { confidence: record.confidence }
+              : {}),
+            ...(record.band ? { band: record.band } : {}),
+          })),
+        }
+      : {}),
+  };
+}
+
+/** One line under a case's verdict while the run is in progress. */
+function describeExpert(record: ExpertCaseRecord | undefined): string {
+  if (!record) return 'the turn did not complete — nothing to measure';
+  if (!record.traced) return 'no reasoning trace on this answer';
+  const parts = [
+    `conf ${formatScore(record.confidence)} (${record.band ?? '-'})`,
+    `tables ${formatShare(record.tablesCoverage)}`,
+    `assumptions ${formatShare(record.assumptionsCoverage)}`,
+    `metric ${formatMatch(record.metricMatched)}`,
+  ];
+  return parts.join(' · ');
+}
+
+/**
+ * Fold every graded attempt (PASS or FAIL — an ERROR or a GAP says nothing
+ * about the answer) and every probe into the run's expert summary.
+ */
+function expertSummaryOf(results: CaseResult[]): ExpertRunSummary {
+  const attempts = results
+    .filter((result) => !result.probe)
+    .flatMap((result) => result.expertAttempts ?? [])
+    .filter(
+      (attempt) => attempt.verdict === 'PASS' || attempt.verdict === 'FAIL',
+    )
+    .map((attempt) => ({
+      record: attempt.record,
+      correct: attempt.verdict === 'PASS',
+    }));
+  const probes = results.flatMap((result) =>
+    result.probe && result.expert
+      ? [{ record: result.expert, clarified: !!result.clarified }]
+      : [],
+  );
+  return summarizeExpert(attempts, probes);
+}
+
+/**
+ * The per-case expert table, then the headline (AUROC), the constraint
+ * (high-band accuracy) and the coverage means. Cases that never ran
+ * (placeholders, SKIPs without a probe) are left out of the table.
+ */
+function reportExpert(results: CaseResult[], summary: ExpertRunSummary): void {
+  const shown = results.filter(
+    (result) => result.verdict !== 'SKIP' || result.probe,
+  );
+  printTable(
+    ['CASE', 'VERDICT', 'CONF', 'BAND', 'TABLES', 'ASSUMPTIONS', 'METRIC'],
+    shown.map((result) => [
+      result.name,
+      result.verdict + (result.reason ? `(${result.reason})` : ''),
+      formatScore(result.expert?.confidence),
+      !result.expert
+        ? '-'
+        : result.expert.traced
+          ? (result.expert.band ?? '-')
+          : 'no trace',
+      formatShare(result.expert?.tablesCoverage),
+      formatShare(result.expert?.assumptionsCoverage),
+      formatMatch(result.expert?.metricMatched),
+    ]),
+  );
+
+  const high = summary.bands.high;
+  const target = `target ≥ ${Math.round(summary.highBandTarget * 100)}%`;
+  const lines = [
+    `Expert mode: ${summary.traced}/${summary.graded} graded answer(s) carried a reasoning trace`,
+    summary.auroc !== undefined
+      ? `  Headline   AUROC (overall confidence vs PASS): ${summary.auroc.toFixed(2)} over ${summary.traced} traced answer(s) (${summary.tracedPassed} pass / ${summary.tracedFailed} fail)`
+      : `  Headline   AUROC: not measurable — needs at least one PASS and one FAIL among traced answers (have ${summary.tracedPassed} pass / ${summary.tracedFailed} fail)`,
+    high.accuracy !== undefined
+      ? `  Constraint high-band accuracy: ${high.correct}/${high.n} = ${formatShare(high.accuracy)} (${target}: ${summary.meetsHighBandTarget ? 'met' : 'NOT met'}); the high band holds ${formatShare(high.coverage)} of traced answers`
+      : `  Constraint high-band accuracy: no traced answer was shown as high (${target}: not measurable)`,
+    `  Bands      ${(['high', 'medium', 'low'] as const)
+      .map((band) => {
+        const entry = summary.bands[band];
+        return `${band} ${entry.correct}/${entry.n}${entry.accuracy !== undefined ? ` = ${formatShare(entry.accuracy)}` : ''}`;
+      })
+      .join(' · ')}`,
+  ];
+  const { tables, assumptions, metric } = summary.coverage;
+  lines.push(
+    tables || assumptions || metric
+      ? `  Coverage   ${[
+          tables
+            ? `tables ${formatShare(tables.mean)} (n=${tables.n})`
+            : 'tables -',
+          assumptions
+            ? `assumptions ${formatShare(assumptions.mean)} (n=${assumptions.n})`
+            : 'assumptions -',
+          metric ? `metric ${metric.matched}/${metric.n} matched` : 'metric -',
+        ].join(
+          ' · ',
+        )} — means over traced answers whose case declares expectedReasoning`
+      : '  Coverage   no traced answer belongs to a case with expectedReasoning',
+  );
+  if (summary.probes) {
+    const probes = summary.probes;
+    lines.push(
+      `  Probes     ${probes.run} ungraded case(s) run, ${probes.clarified} clarified, ${probes.traced} carried a trace`,
+    );
+    if (probes.tracedClarifications) {
+      lines.push(
+        `  ! ${probes.tracedClarifications} clarification turn(s) carried a reasoning trace — they should carry none`,
+      );
+    }
+  }
+  console.log('');
+  for (const line of lines) console.log(line);
+}
+
+function formatScore(value: number | undefined): string {
+  return value === undefined ? '-' : value.toFixed(2);
+}
+
+function formatShare(value: number | undefined): string {
+  return value === undefined ? '-' : `${Math.round(value * 100)}%`;
+}
+
+function formatMatch(value: boolean | undefined): string {
+  return value === undefined ? '-' : value ? 'yes' : 'no';
 }
 
 function printTable(header: string[], rows: string[][]): void {
@@ -2732,10 +3290,15 @@ export {
   loopCell,
   loopMatrixTable,
   loopFilename,
+  expertSummaryOf,
+  reportExpert,
+  expertCaseResult,
+  withExpert,
   EvalSetupError,
 };
 export type {
   GoldenCase,
+  CaseResult,
   CaseSource,
   Options,
   ValidateStatus,

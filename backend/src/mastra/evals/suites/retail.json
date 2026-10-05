@@ -1,0 +1,205 @@
+{
+  "id": "retail",
+  "name": "Retail",
+  "description": "These evals require the bundled synthetic retail fixture (schema retail). Select its PostgreSQL datasource and save a dataset named Retail containing the retail tables. Setup: docker/postgres/README.md.",
+  "datasets": ["Retail"],
+  "requiredEntities": [
+    "retail.stores",
+    "retail.products",
+    "retail.customers",
+    "retail.orders",
+    "retail.order_lines"
+  ],
+  "cases": [
+    {
+      "id": "net-revenue-fy2025",
+      "category": "domain-semantics",
+      "question": "What was our net revenue in fiscal year 2025?",
+      "intent": "Both the fiscal calendar (February to January, named for its start year) and the net-revenue definition (merchandise net of line discounts, completed orders, never amount_charged) are tribal knowledge that nothing in the schema reveals — the trap the learning demo teaches away.",
+      "notes": "Net revenue is merchandise net of line discounts — SUM(quantity * unit_price - discount_amount) over order_lines — for completed orders placed in fiscal year 2025, which runs 2025-02-01 through 2026-01-31 and is named for the year it starts: $401,306.11 over 3,068 completed orders. Neither fact is in the schema (no tax or shipping column, no fiscal calendar, amount_charged described only as the amount charged at checkout) and the seeded knowledge does not state them; the learningScenario notes teach both. Every shortcut moves the figure: the naive answer — calendar 2025 and SUM(orders.amount_charged) — gives $423,385.36 (+5.50%), because amount_charged is the amount charged and carries sales tax and web shipping ($31,933.32 of tax and $2,941.09 of shipping inside fiscal 2025's total); amount_charged over the right fiscal year gives $436,180.52 (+8.69%); line net over calendar 2025 gives $389,641.99 (-2.91%); keeping the 124 cancelled orders gives $418,660.32 (+4.32%); ignoring discounts (gross merchandise) gives $420,780.01 (+4.85%); reading FY2025 as the year that ends in January 2025 (2024-02-01 to 2025-01-31) gives $313,678.02; calendar 2025 amount_charged with cancelled orders gives $441,572.57; summing amount_charged after joining order_lines repeats each order once per line and gives $1,225,732.60. Guards against a confident figure built on the wrong calendar and the wrong revenue column.",
+      "checks": [
+        {
+          "type": "matches",
+          "pattern": "401[,.]?306|401(?:[.,]3)?\\s?[kK]"
+        },
+        {
+          "type": "calledTool",
+          "tool": "run_readonly_sql"
+        },
+        {
+          "type": "noToolErrors"
+        }
+      ],
+      "expectedSql": "SELECT ROUND(SUM(line.quantity * line.unit_price - line.discount_amount), 2) AS net_revenue FROM retail.orders o JOIN retail.order_lines line ON line.order_id = o.id WHERE o.status = 'completed' AND o.ordered_at >= DATE '2025-02-01' AND o.ordered_at < DATE '2026-02-01'",
+      "expectedReasoning": {
+        "tables": ["retail.orders", "retail.order_lines"],
+        "assumptions": [
+          "fiscal year February to January",
+          "merchandise net of discounts",
+          "excludes tax and shipping",
+          "completed orders only"
+        ],
+        "metric": "net revenue"
+      },
+      "learningScenario": {
+        "comments": [
+          {
+            "block": "interpretation",
+            "vote": "down",
+            "comment": "Our fiscal year runs from 1 February to 31 January and is named for the year it starts: FY2025 is 2025-02-01 through 2026-01-31. Apply this only when a question says fiscal year or FY — a plain year like '2025' means the calendar year."
+          },
+          {
+            "block": "metric",
+            "vote": "down",
+            "comment": "Net revenue is merchandise only: for each order line, quantity × unit_price minus discount_amount, summed over completed orders placed in the period. Never use orders.amount_charged for revenue — it is the amount charged and includes tax and shipping. Cancelled orders never count."
+          }
+        ],
+        "generalisesTo": ["orders-fy2025"],
+        "before": { "band": "medium" },
+        "after": { "band": "high" }
+      }
+    },
+    {
+      "id": "orders-fy2025",
+      "category": "domain-semantics",
+      "question": "How many orders did we take in fiscal year 2025?",
+      "intent": "The fiscal-year lesson taught on net-revenue-fy2025 must carry over to a different question with no note of its own.",
+      "notes": "3,068 completed orders were placed in fiscal year 2025 (2025-02-01 through 2026-01-31). Calendar 2025 has 2,934 (-4.37%); keeping the 124 cancelled orders gives 3,192; the fiscal year named for its end (2024-02-01 to 2025-01-31) has 2,334; counting rows after joining order_lines (one row per product on the order) gives 6,775. The completed-orders default filter is seeded knowledge, so the only thing this case needs from the learning demo is the fiscal year — and it carries no notes of its own, which is what makes a PASS after learning evidence that the lesson generalised rather than memorised one answer. Guards against a fiscal year silently read as the calendar year.",
+      "checks": [
+        {
+          "type": "matches",
+          "pattern": "\\b3[,.]?068\\b"
+        },
+        {
+          "type": "calledTool",
+          "tool": "run_readonly_sql"
+        },
+        {
+          "type": "noToolErrors"
+        }
+      ],
+      "expectedSql": "SELECT COUNT(*) AS completed_orders FROM retail.orders o WHERE o.status = 'completed' AND o.ordered_at >= DATE '2025-02-01' AND o.ordered_at < DATE '2026-02-01'",
+      "expectedReasoning": {
+        "tables": ["retail.orders"],
+        "assumptions": [
+          "fiscal year February to January",
+          "completed orders only"
+        ]
+      }
+    },
+    {
+      "id": "top-category-units-march-2025",
+      "category": "control",
+      "question": "Which product category sold the most units in March 2025?",
+      "intent": "A plain calendar month, units rather than revenue — neither the fiscal-year nor the net-revenue lesson applies, so it must pass before and after learning.",
+      "notes": "Outdoor sold 92 units in March 2025 across completed orders, ahead of Footwear (82) and Electronics (80); the generator plants Outdoor to sell more in spring (March-May). With cancelled orders included Outdoor still leads (99 vs Electronics 89). Reading \"sold the most\" as revenue names Electronics instead ($6,997.61 of net revenue vs Outdoor's $6,088.68); counting order lines instead of units still names Outdoor (68 lines vs 52 each for Accessories and Electronics). Units are order_lines.quantity, as the seeded knowledge says. Healthy baseline: no fiscal year, no revenue definition, no tie — if it fails after learning, a lesson has leaked into a question it does not govern.",
+      "checks": [
+        {
+          "type": "includes",
+          "value": "Outdoor"
+        },
+        {
+          "type": "matches",
+          "pattern": "\\b92\\b"
+        },
+        {
+          "type": "calledTool",
+          "tool": "run_readonly_sql"
+        },
+        {
+          "type": "noToolErrors"
+        }
+      ],
+      "expectedSql": "SELECT product.category FROM retail.order_lines line JOIN retail.orders o ON o.id = line.order_id JOIN retail.products product ON product.id = line.product_id WHERE o.status = 'completed' AND o.ordered_at >= DATE '2025-03-01' AND o.ordered_at < DATE '2025-04-01' GROUP BY product.category ORDER BY SUM(line.quantity) DESC LIMIT 1",
+      "expectedReasoning": {
+        "tables": ["retail.order_lines", "retail.orders", "retail.products"],
+        "assumptions": ["units are quantity", "completed orders only"]
+      }
+    },
+    {
+      "id": "gross-charged-cy2025",
+      "category": "control",
+      "question": "How much did we charge customers in total in calendar year 2025?",
+      "intent": "The amount charged is exactly SUM(amount_charged) over the calendar year — the revenue lesson must not over-generalise into never using amount_charged, and the fiscal-year lesson must not hijack an explicit calendar year.",
+      "notes": "$423,385.36 was charged at checkout — SUM(orders.amount_charged) — on the 2,934 completed orders placed in calendar 2025 (2025-01-01 through 2025-12-31). It is the naive answer to net-revenue-fy2025 and the right answer here: the question asks what customers were charged, tax and shipping included, over the calendar year. Keeping the 122 cancelled orders gives $441,572.57; the fiscal year gives $436,180.52; line net revenue over the calendar year gives $389,641.99 — the figure an over-applied revenue lesson would produce. Guards against a taught rule spreading to questions that did not ask about it.",
+      "checks": [
+        {
+          "type": "matches",
+          "pattern": "423[,.]?385|423(?:[.,]4)?\\s?[kK]"
+        },
+        {
+          "type": "calledTool",
+          "tool": "run_readonly_sql"
+        },
+        {
+          "type": "noToolErrors"
+        }
+      ],
+      "expectedSql": "SELECT SUM(o.amount_charged) AS total_charged FROM retail.orders o WHERE o.status = 'completed' AND o.ordered_at >= DATE '2025-01-01' AND o.ordered_at < DATE '2026-01-01'",
+      "expectedReasoning": {
+        "tables": ["retail.orders"],
+        "assumptions": ["calendar year", "completed orders only"]
+      }
+    },
+    {
+      "id": "new-customers-2025",
+      "category": "control",
+      "question": "How many new customers signed up in 2025?",
+      "intent": "A plain year is the calendar year — the fiscal-year lesson says so itself, and applying it here would be contamination.",
+      "notes": "530 customers signed up in calendar 2025 (customers.signed_up_on from 2025-01-01 through 2025-12-31). Reading 2025 as fiscal year 2025 (2025-02-01 through 2026-01-31) gives 518. Counting customers whose first order fell in 2025 gives 489, and customers who ordered at all in 2025 gives 1,136 — neither is a sign-up. Guards against the fiscal-year lesson contaminating plain-year questions.",
+      "checks": [
+        {
+          "type": "matches",
+          "pattern": "\\b530\\b"
+        },
+        {
+          "type": "calledTool",
+          "tool": "run_readonly_sql"
+        },
+        {
+          "type": "noToolErrors"
+        }
+      ],
+      "expectedSql": "SELECT COUNT(*) AS new_customers FROM retail.customers customer WHERE customer.signed_up_on >= DATE '2025-01-01' AND customer.signed_up_on < DATE '2026-01-01'",
+      "expectedReasoning": {
+        "tables": ["retail.customers"],
+        "assumptions": ["calendar year", "sign-up date"]
+      }
+    },
+    {
+      "id": "net-revenue-by-store-fy2025",
+      "category": "domain-semantics",
+      "question": "What was net revenue by store in fiscal year 2025?",
+      "intent": "Both lessons at once, grouped: six store figures that are right only under the fiscal calendar and the line-level revenue definition.",
+      "notes": "Net revenue (SUM(quantity * unit_price - discount_amount), completed orders) by store for fiscal year 2025 (2025-02-01 through 2026-01-31): Web Store $162,611.53, Seattle Capitol Hill $50,130.50, Austin South Congress $49,103.29, Denver Union Station $48,748.73, Chicago Wicker Park $46,636.15, Boston Back Bay $44,075.91 — six rows summing to net-revenue-fy2025's $401,306.11. SUM(amount_charged) by store instead gives Web Store $176,936.47, Seattle Capitol Hill $55,193.68, Austin South Congress $53,154.35, Denver Union Station $52,649.09, Chicago Wicker Park $51,416.25, Boston Back Bay $46,830.68 (tax differs by store, shipping is web-only, so the gap is uneven); calendar 2025 line net gives Web Store $158,729.53, Seattle Capitol Hill $49,447.78, Denver Union Station $48,008.07, Chicago Wicker Park $45,589.48, Austin South Congress $44,990.68, Boston Back Bay $42,876.45 — Austin drops from third to fifth. Guards against both lessons holding for the headline question and failing once the answer is grouped.",
+      "checks": [
+        {
+          "type": "includes",
+          "value": "Web Store"
+        },
+        {
+          "type": "matches",
+          "pattern": "162[,.]?61[12]|162(?:[.,]6)?\\s?[kK]"
+        },
+        {
+          "type": "calledTool",
+          "tool": "run_readonly_sql"
+        },
+        {
+          "type": "noToolErrors"
+        }
+      ],
+      "expectedSql": "SELECT store.name AS store, ROUND(SUM(line.quantity * line.unit_price - line.discount_amount), 2) AS net_revenue FROM retail.orders o JOIN retail.order_lines line ON line.order_id = o.id JOIN retail.stores store ON store.id = o.store_id WHERE o.status = 'completed' AND o.ordered_at >= DATE '2025-02-01' AND o.ordered_at < DATE '2026-02-01' GROUP BY store.name",
+      "expectedReasoning": {
+        "tables": ["retail.orders", "retail.order_lines", "retail.stores"],
+        "assumptions": [
+          "fiscal year February to January",
+          "merchandise net of discounts",
+          "excludes tax and shipping",
+          "completed orders only"
+        ],
+        "metric": "net revenue"
+      }
+    }
+  ]
+}

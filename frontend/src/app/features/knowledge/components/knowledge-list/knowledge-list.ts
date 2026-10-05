@@ -4,6 +4,7 @@ import {
   BookOpen,
   Filter,
   FileText,
+  GraduationCap,
   Loader2,
   Pencil,
   Plus,
@@ -45,6 +46,7 @@ export class KnowledgeList implements OnInit {
   readonly BookOpen = BookOpen;
   readonly Check = Check;
   readonly Filter = Filter;
+  readonly GraduationCap = GraduationCap;
   readonly Loader2 = Loader2;
   readonly Pencil = Pencil;
   readonly Plus = Plus;
@@ -70,6 +72,8 @@ export class KnowledgeList implements OnInit {
   readonly kindFilter = signal<KindFilter>('all');
   readonly datasetFilter = signal<'all' | string>('all');
   readonly pendingOnly = signal(false);
+  /** Snippets learned from a reviewer's feedback note (`source: 'feedback'`). */
+  readonly learnedOnly = signal(false);
 
   readonly formOpen = signal(false);
   readonly editingSnippet = signal<KnowledgeSnippet | null>(null);
@@ -88,10 +92,17 @@ export class KnowledgeList implements OnInit {
       this.snippets().filter((s) => s.source === 'mined' && !s.enabled).length,
   );
 
+  readonly learnedCount = computed(
+    () => this.snippets().filter((s) => s.source === 'feedback').length,
+  );
+
   readonly filteredSnippets = computed(() => {
     let list = this.snippets();
     if (this.pendingOnly()) {
       return list.filter((s) => s.source === 'mined' && !s.enabled);
+    }
+    if (this.learnedOnly()) {
+      return list.filter((s) => s.source === 'feedback');
     }
     if (this.kindFilter() !== 'all') {
       list = list.filter((s) => s.kind === this.kindFilter());
@@ -134,16 +145,33 @@ export class KnowledgeList implements OnInit {
 
   setKindFilter(kind: KindFilter): void {
     this.pendingOnly.set(false);
+    this.learnedOnly.set(false);
     this.kindFilter.set(kind);
   }
 
   setDatasetFilter(id: string): void {
     this.pendingOnly.set(false);
+    this.learnedOnly.set(false);
     this.datasetFilter.set(id);
   }
 
   togglePendingOnly(): void {
-    this.pendingOnly.set(!this.pendingOnly());
+    const next = !this.pendingOnly();
+    this.pendingOnly.set(next);
+    if (next) this.learnedOnly.set(false);
+  }
+
+  toggleLearnedOnly(): void {
+    const next = !this.learnedOnly();
+    this.learnedOnly.set(next);
+    if (next) this.pendingOnly.set(false);
+  }
+
+  /** Tooltip for the "From feedback" badge: the question it was learned from and the note. */
+  learnedTooltip(snippet: KnowledgeSnippet): string {
+    const provenance = snippet.provenance;
+    if (!provenance) return "Learned from a reviewer's feedback note";
+    return `${provenance.question} — “${provenance.comment}”`;
   }
 
   scopeLabel(snippet: KnowledgeSnippet): string {

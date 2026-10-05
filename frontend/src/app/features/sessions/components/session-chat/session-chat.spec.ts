@@ -8,9 +8,14 @@ import {
   tick,
 } from '@angular/core/testing';
 import { of } from 'rxjs';
+import { ReasoningTrace } from '../../models/expert-trace.model';
 import { ChatMessage, Session } from '../../models/session.model';
 import { SessionsApiService } from '../../services/sessions-api.service';
-import { SessionChat } from './session-chat';
+import {
+  EXPERT_MODE_STORAGE_KEY,
+  SessionChat,
+  readExpertPreference,
+} from './session-chat';
 
 function sessionWith(message: ChatMessage): Session {
   return {
@@ -176,6 +181,89 @@ describe('SessionChat trust UX', () => {
   it('shows no cross-check chip on an ordinary answer', async () => {
     const el = await render(answer);
     expect(el.textContent).not.toContain('Cross-check');
+  });
+
+  it('renders a replay badge with the pinned date and a re-verified tooltip', async () => {
+    const el = await render({
+      ...answer,
+      consistency: {
+        kind: 'replay',
+        // Noon UTC so the local-time formatted date can't roll to a
+        // different day under any reasonable test-runner timezone.
+        pinnedAt: '2026-01-05T12:00:00.000Z',
+        verifiedAt: '2026-01-10T12:00:00.000Z',
+      },
+    });
+    const chip = el.querySelector(
+      '[title="This exact question was answered before under the same knowledge; its query was re-run just now and returned the same data."]',
+    );
+    expect(chip?.textContent?.trim()).toBe('Same answer as Jan 5 · re-verified');
+  });
+
+  it('renders a kept badge when the fresh derivation matched the pinned rows', async () => {
+    const el = await render({
+      ...answer,
+      consistency: { kind: 'kept', pinnedAt: '2026-01-05T00:00:00.000Z' },
+    });
+    const chip = Array.from(el.querySelectorAll('span')).find(
+      (span) => span.textContent?.trim() === 'Same numbers · wording kept',
+    );
+    expect(chip).toBeTruthy();
+    expect(chip?.getAttribute('title')).toContain('re-derived');
+  });
+
+  it('renders an amber updated badge listing the new lesson titles', async () => {
+    const el = await render({
+      ...answer,
+      consistency: {
+        kind: 'updated',
+        pinnedAt: '2026-01-05T00:00:00.000Z',
+        lessons: ['Fiscal year', 'Net revenue'],
+      },
+    });
+    const chip = el.querySelector(
+      '[title="Updated after learning: Fiscal year, Net revenue"]',
+    );
+    expect(chip?.textContent?.trim()).toBe('Updated after learning');
+    expect(chip?.className).toContain('text-amber-400');
+  });
+
+  it('shows no consistency badge on an answer that was never pinned', async () => {
+    const el = await render(answer);
+    expect(el.textContent).not.toContain('Same answer as');
+    expect(el.textContent).not.toContain('Same numbers');
+    expect(el.textContent).not.toContain('Updated after learning');
+  });
+
+  it('tags feedback-learned knowledge in the "Knowledge in context" list', async () => {
+    const el = await render({
+      ...answer,
+      knowledge: [
+        {
+          id: 'k1',
+          kind: 'term',
+          title: 'Fiscal year',
+          body: 'FY runs Feb–Jan.',
+          datasetId: 'Retail',
+          source: 'feedback',
+        },
+        {
+          id: 'k2',
+          kind: 'instruction',
+          title: 'Coverage',
+          body: 'Data runs 2024–2026.',
+          datasetId: 'Retail',
+          source: 'user',
+        },
+      ],
+    });
+    el.querySelector<HTMLElement>('summary')!.click();
+    fixture.detectChanges();
+    const learnedTags = Array.from(
+      el.querySelectorAll('[title="Learned from a reviewer\'s feedback note"]'),
+    );
+    expect(learnedTags.length).toBe(1);
+    expect(learnedTags[0].textContent).toContain('Learned');
   });
 
   it('sends careful mode only while the Careful chip is on', async () => {
@@ -610,4 +698,185 @@ describe('SessionChat welcome message', () => {
     expect(fixture.componentInstance.sending()).toBeFalse();
     flush();
   }));
+});
+
+describe('SessionChat business expert mode', () => {
+  let fixture: ComponentFixture<SessionChat>;
+
+  const trace: ReasoningTrace = {
+    id: 'trace-1',
+    version: 1,
+    generatedAt: '2026-01-01T00:00:02.000Z',
+    overall: { score: 0.62, band: 'medium', signals: [] },
+    blocks: [
+      {
+        kind: 'interpretation',
+        restatement: 'Average base salary of Technology-division employees.',
+        terms: [],
+        ambiguities: [],
+        confidence: { score: 0.62, band: 'medium', signals: [] },
+      },
+    ],
+  };
+
+  const answer: ChatMessage = {
+    role: 'assistant',
+    content: 'The average is **$128,400**.',
+    at: '2026-01-01T00:00:01.000Z',
+    data: [{ tool: 'run_readonly_sql', input: 'select 1', rowCount: 1 }],
+  };
+
+  beforeEach(async () => {
+    localStorage.removeItem(EXPERT_MODE_STORAGE_KEY);
+    await TestBed.configureTestingModule({
+      imports: [SessionChat],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+  });
+
+  afterEach(() => localStorage.removeItem(EXPERT_MODE_STORAGE_KEY));
+
+  function mount(message: ChatMessage = answer): HTMLElement {
+    fixture = TestBed.createComponent(SessionChat);
+    fixture.componentRef.setInput('session', sessionWith(message));
+    fixture.detectChanges();
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  const chip = (el: HTMLElement) =>
+    el.querySelector<HTMLButtonElement>('[aria-label="Business expert mode"]')!;
+
+  it('sends the expert flag only while the Expert chip is on', () => {
+    const el = mount();
+    const api = TestBed.inject(SessionsApiService);
+    const stream = spyOn(api, 'streamMessage').and.resolveTo();
+    expect(chip(el).textContent?.trim()).toBe('Expert');
+    expect(chip(el).getAttribute('aria-pressed')).toBe('false');
+
+    fixture.componentInstance.draft.set('Average tech salary in 2025?');
+    fixture.componentInstance.send();
+    expect(stream.calls.mostRecent().args[6]).toBeFalse();
+
+    chip(el).click();
+    fixture.detectChanges();
+    expect(chip(el).getAttribute('aria-pressed')).toBe('true');
+    expect(chip(el).className).toContain('text-sky-400');
+
+    fixture.componentInstance.stop();
+    fixture.componentInstance.draft.set('And for Sales?');
+    fixture.componentInstance.send();
+    // Careful stays off: the flags are independent.
+    expect(stream.calls.mostRecent().args[5]).toBeFalse();
+    expect(stream.calls.mostRecent().args[6]).toBeTrue();
+    fixture.componentInstance.stop();
+  });
+
+  it('remembers the Expert preference across sessions and restarts', () => {
+    const el = mount();
+    chip(el).click();
+    fixture.detectChanges();
+    expect(localStorage.getItem(EXPERT_MODE_STORAGE_KEY)).toBe('1');
+
+    // Switching conversation resets Careful, not Expert.
+    fixture.componentInstance.toggleCareful();
+    fixture.componentRef.setInput('session', {
+      id: 'session-2',
+      name: 'Session 2',
+      datasets: [],
+      messages: [],
+    } satisfies Session);
+    fixture.detectChanges();
+    expect(fixture.componentInstance.careful()).toBeFalse();
+    expect(fixture.componentInstance.expert()).toBeTrue();
+
+    // A fresh instance (app restart) reads it back.
+    const again = TestBed.createComponent(SessionChat);
+    again.componentRef.setInput('session', sessionWith(answer));
+    again.detectChanges();
+    expect(again.componentInstance.expert()).toBeTrue();
+
+    chip(el).click();
+    expect(localStorage.getItem(EXPERT_MODE_STORAGE_KEY)).toBe('0');
+    expect(readExpertPreference()).toBeFalse();
+  });
+
+  it('narrates the expert pass in the thinking block', () => {
+    const el = mount();
+    const api = TestBed.inject(SessionsApiService);
+    let handlers!: Parameters<SessionsApiService['streamMessage']>[2];
+    spyOn(api, 'streamMessage').and.callFake((_id, _content, h) => {
+      handlers = h;
+      return Promise.resolve();
+    });
+
+    fixture.componentInstance.draft.set('Average tech salary in 2025?');
+    fixture.componentInstance.send();
+    handlers.onExpertStatus?.('cross-check');
+    fixture.detectChanges();
+    expect(el.querySelector('[data-expert-status]')?.textContent).toContain(
+      'Cross-checking with an independent query…',
+    );
+
+    handlers.onExpertStatus?.('explaining');
+    fixture.detectChanges();
+    expect(el.querySelector('[data-expert-status]')?.textContent).toContain(
+      'Explaining the reasoning…',
+    );
+
+    handlers.onExpertStatus?.('failed');
+    fixture.detectChanges();
+    const line = el.querySelector('[data-expert-status]')!;
+    expect(line.textContent).toContain('Could not build the reasoning trace');
+    expect(line.className).toContain('text-amber-400');
+
+    handlers.onDone?.(sessionWith(answer));
+    fixture.detectChanges();
+    expect(el.querySelector('[data-expert-status]')).toBeNull();
+  });
+
+  it('renders the reasoning trace under an answer that carries one', () => {
+    const plain = mount();
+    expect(plain.querySelector('app-expert-trace')).toBeNull();
+
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      imports: [SessionChat],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
+    const el = mount({ ...answer, expertTrace: trace });
+    const rendered = el.querySelector('app-expert-trace');
+    expect(rendered).toBeTruthy();
+    // Right after the answer text, before the provenance blocks.
+    expect(rendered?.previousElementSibling?.className).toContain('prose-dark');
+    expect(rendered?.textContent).toContain('Medium · 62%');
+    expect(rendered?.textContent).toContain(
+      'Average base salary of Technology-division employees.',
+    );
+  });
+
+  it('adopts the persisted transcript when a block rating is saved', () => {
+    mount({ ...answer, expertTrace: trace });
+    const updated = spyOn(fixture.componentInstance.sessionUpdated, 'emit');
+    const session = sessionWith({
+      ...answer,
+      expertTrace: {
+        ...trace,
+        feedback: { interpretation: { vote: 'up', at: '2026-01-01T00:00:03.000Z' } },
+      },
+    });
+
+    fixture.componentInstance.onExpertFeedbackSaved({
+      ok: true,
+      message: 'Feedback saved',
+      session,
+    });
+    fixture.detectChanges();
+
+    expect(updated).toHaveBeenCalledWith(session);
+    expect(
+      (fixture.nativeElement as HTMLElement)
+        .querySelector('[aria-label="Mark Interpretation as right"]')
+        ?.getAttribute('aria-pressed'),
+    ).toBe('true');
+  });
 });

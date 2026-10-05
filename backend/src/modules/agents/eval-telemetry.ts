@@ -27,6 +27,11 @@ import type {
   SqlRepairRecord,
 } from '../sessions/turn-result';
 import type { CrossCheck } from '../sessions/entities/session.entity';
+import type {
+  ExpertCaseRecord,
+  ExpertRunSummary,
+} from '../expert-mode/expert-metrics';
+import type { ConfidenceBand } from '../expert-mode/entities/reasoning-trace.entity';
 
 /** Token counts for one or more model calls. */
 export interface TokenUsage {
@@ -263,6 +268,25 @@ export interface EvalRunLogCase {
   /** CLI `--repeat` only: how many repetitions ran, and how many passed. */
   runs?: number;
   passes?: number;
+  /** Business expert mode measurements — CLI `--expert` runs only. */
+  expert?: EvalRunLogExpertCase;
+}
+
+/**
+ * One case's reasoning-trace measurements (`expert-metrics.ts`). With
+ * `--repeat`, the top-level fields describe the attempt the verdict reports
+ * and `attempts` keeps every attempt's (verdict, confidence) pair — the pairs
+ * the run's AUROC is computed over. Carried on v1 and v2 cases alike.
+ */
+export interface EvalRunLogExpertCase extends ExpertCaseRecord {
+  /** Cases with no reference SQL only: the turn asked a clarifying question. */
+  clarified?: boolean;
+  attempts?: {
+    verdict: EvalVerdict;
+    traced: boolean;
+    confidence?: number;
+    band?: ConfidenceBand;
+  }[];
 }
 
 /**
@@ -303,6 +327,12 @@ export interface EvalRunLogRecordV1 {
   comparedToRunId?: string;
   regressions?: string[];
   improvements?: string[];
+  /**
+   * Business expert mode (CLI `--expert`): AUROC of overall confidence vs
+   * PASS, selective accuracy per band and the coverage means. Optional, so
+   * `schemaVersion` stays 1 and older readers ignore it.
+   */
+  expert?: ExpertRunSummary;
 }
 
 /** One check's verdict on one attempt. */
@@ -397,6 +427,8 @@ export interface EvalRunLogCaseV2 {
   usage?: TokenUsage;
   estimatedCostUsd?: number;
   attempts: EvalRunLogAttempt[];
+  /** Business expert mode measurements — CLI `--expert` runs only. */
+  expert?: EvalRunLogExpertCase;
 }
 
 /**
@@ -506,6 +538,12 @@ export interface EvalRunLogRecordV2 {
   status: EvalRunStatus;
   /** Why the run failed or was aborted. */
   error?: string;
+  /**
+   * Business expert mode (CLI `--expert`): AUROC of overall confidence vs
+   * PASS, selective accuracy per band and the coverage means. Optional, so
+   * readers that predate it ignore it.
+   */
+  expert?: ExpertRunSummary;
 }
 
 /**
@@ -793,6 +831,7 @@ function caseFromV1(item: EvalRunLogCase): EvalRunLogCaseV2 {
       ? { estimatedCostUsd: item.estimatedCostUsd }
       : {}),
     attempts: [],
+    ...(item.expert ? { expert: item.expert } : {}),
   };
 }
 
@@ -858,6 +897,7 @@ export function normalizeRunLog(record: EvalRunLogRecord): EvalRunLogRecordV2 {
     ...(v1.regressions ? { regressions: v1.regressions } : {}),
     ...(v1.improvements ? { improvements: v1.improvements } : {}),
     status: 'completed',
+    ...(v1.expert ? { expert: v1.expert } : {}),
   };
 }
 

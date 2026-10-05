@@ -840,6 +840,58 @@ describe('runResultSetCheck', () => {
     });
   });
 
+  describe('percentEquivalent: a ratio as a fraction or a percentage', () => {
+    it('passes a percentage against a fraction reference only when asked', async () => {
+      reference([{ attrition_rate: '0.1250' }]);
+      const records = [sql([{ year: 2025, attrition_pct: '12.50' }])];
+      expect(
+        (
+          await runResultSetCheck(
+            'SELECT reference',
+            ['World Cup'],
+            snapshot,
+            records,
+          )
+        )?.passed,
+      ).toBe(false);
+      expect(
+        (
+          await runResultSetCheck(
+            'SELECT reference',
+            ['World Cup'],
+            snapshot,
+            records,
+            { percentEquivalent: true },
+          )
+        )?.passed,
+      ).toBe(true);
+    });
+
+    it('passes a fraction against a percentage reference', async () => {
+      reference([{ attrition_pct: 12.5 }]);
+      const result = await runResultSetCheck(
+        'SELECT reference',
+        ['World Cup'],
+        snapshot,
+        [sql([{ attrition_rate: 0.125 }])],
+        { percentEquivalent: true },
+      );
+      expect(result?.passed).toBe(true);
+    });
+
+    it('still fails a different figure', async () => {
+      reference([{ attrition_rate: '0.1250' }]);
+      const result = await runResultSetCheck(
+        'SELECT reference',
+        ['World Cup'],
+        snapshot,
+        [sql([{ attrition_pct: '14.00' }])],
+        { percentEquivalent: true },
+      );
+      expect(result?.passed).toBe(false);
+    });
+  });
+
   describe('expectedSqlAlternatives: any reference may judge', () => {
     const cents = [{ country: 'United States', paid_cents: '58862147' }];
     const dollars = [

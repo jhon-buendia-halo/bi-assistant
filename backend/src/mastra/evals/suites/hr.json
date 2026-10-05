@@ -1,0 +1,335 @@
+{
+  "id": "hr",
+  "name": "HR",
+  "description": "These evals require the bundled synthetic HR fixture (schema hr). Select its PostgreSQL datasource and save a dataset named HR containing the hr tables and views. Setup: docker/postgres/README.md.",
+  "datasets": ["HR"],
+  "requiredEntities": [
+    "hr.departments",
+    "hr.locations",
+    "hr.job_titles",
+    "hr.employees",
+    "hr.salary_history",
+    "hr.bonus_payments",
+    "hr.performance_reviews",
+    "hr.time_off_requests",
+    "hr.exchange_rates",
+    "hr.v_current_employees",
+    "hr.v_salary_by_year"
+  ],
+  "cases": [
+    {
+      "id": "avg-salary-tech-2025",
+      "category": "domain-semantics",
+      "question": "What is the average salary of tech employees in 2025?",
+      "intent": "\"Tech employees\" is a division, a year's salary is the row in force on 31 December, and three currencies need converting — the user's own example question.",
+      "notes": "\"Tech\" is the Technology division (Engineering, Data Platform, IT & Security), and the salary for 2025 is the salary_history row effective on 31 December 2025, converted at the 2025 rate. The 38 employees who qualify (15 paid in USD, 13 in EUR, 10 in GBP) average $127,520.61; the reference obeys both default filters (employees only, active at the date). Every shortcut moves the figure: reading tech as the Engineering/Data/IT job families (42 people, including four Data-family analysts sitting in Finance and Marketing) gives $125,843.78; keeping contractors and interns (45 people) gives $129,799.29; averaging the local amounts unconverted gives 112,581.58; averaging every salary row that starts in 2025 (55 rows) gives $122,130.65, and every row that touches 2025 (93 rows) $121,651.08; all four mistakes at once give 106,062.69. Guards against a confident single number built on the wrong population, the wrong salary row or mixed currencies.",
+      "checks": [
+        {
+          "type": "matches",
+          "pattern": "127[,.]?52[01]|127[.,]5\\s?[kK]"
+        },
+        {
+          "type": "calledTool",
+          "tool": "run_readonly_sql"
+        },
+        {
+          "type": "noToolErrors"
+        }
+      ],
+      "expectedSql": "SELECT ROUND(AVG(salary.annual_base_amount * rate.rate_to_usd), 2) AS avg_salary_usd FROM hr.employees employee JOIN hr.departments department ON department.id = employee.department_id JOIN hr.salary_history salary ON salary.employee_id = employee.id AND salary.effective_from <= DATE '2025-12-31' AND (salary.effective_to IS NULL OR salary.effective_to > DATE '2025-12-31') JOIN hr.exchange_rates rate ON rate.currency = salary.currency AND rate.year = 2025 WHERE department.division = 'Technology' AND employee.employment_type = 'employee' AND employee.hired_on <= DATE '2025-12-31' AND (employee.terminated_on IS NULL OR employee.terminated_on > DATE '2025-12-31')",
+      "expectedReasoning": {
+        "tables": [
+          "hr.employees",
+          "hr.departments",
+          "hr.salary_history",
+          "hr.exchange_rates"
+        ],
+        "assumptions": [
+          "Technology division",
+          "not contractors or interns",
+          "salary row effective on 31 December",
+          "USD via exchange rate"
+        ],
+        "metric": "avg_base_salary_usd"
+      }
+    },
+    {
+      "id": "active-headcount-end-2025",
+      "category": "control",
+      "question": "How many active employees did we have at the end of 2025?",
+      "intent": "A plain headcount at a date: employees only, hired by the date and not yet terminated.",
+      "notes": "106 employees were on the books on 31 December 2025 (hired_on on or before the date, terminated_on null or later). The table holds 174 rows: counting every row gives 174, every employee-type row ever hired gives 145 (39 have left), and dropping the employees-only filter gives 122 (11 active contractors and 5 active interns). No ratio, no currency, no tie — if this fails, the problem is the two default filters or schema linking rather than a planted trap, and it is the healthy baseline the other HR cases lean on.",
+      "checks": [
+        {
+          "type": "matches",
+          "pattern": "\\b106\\b"
+        },
+        {
+          "type": "calledTool",
+          "tool": "run_readonly_sql"
+        },
+        {
+          "type": "noToolErrors"
+        }
+      ],
+      "expectedSql": "SELECT COUNT(*) AS active_employees FROM hr.employees employee WHERE employee.employment_type = 'employee' AND employee.hired_on <= DATE '2025-12-31' AND (employee.terminated_on IS NULL OR employee.terminated_on > DATE '2025-12-31')",
+      "expectedReasoning": {
+        "tables": ["hr.employees"],
+        "assumptions": [
+          "not contractors or interns",
+          "active and not terminated"
+        ]
+      }
+    },
+    {
+      "id": "dept-most-headcount-2025",
+      "category": "ties",
+      "question": "Which department had the most active employees at the end of 2025?",
+      "intent": "A \"which is the most\" question whose answer is a two-way tie that only holds under the dataset's default filters.",
+      "notes": "Engineering and Sales each had exactly 22 active employees at the end of 2025; Customer Success is next on 10, so the tie is isolated at the top and both names must appear. It only exists under the default filters: counting contractors too gives Engineering 25 vs Sales 23, every worker type gives 27 vs 24, and forgetting the termination filter (every employee ever hired) gives Sales 33 vs Engineering 31 — each looser count names a single winner. ORDER BY headcount DESC LIMIT 1 silently drops one of the two tied departments. Guards against answers that report one arbitrary winner from a tied group.",
+      "checks": [
+        {
+          "type": "includes",
+          "value": "Engineering"
+        },
+        {
+          "type": "matches",
+          "pattern": "\\bSales\\b"
+        },
+        {
+          "type": "calledTool",
+          "tool": "run_readonly_sql"
+        },
+        {
+          "type": "noToolErrors"
+        }
+      ],
+      "expectedSql": "WITH headcount AS (SELECT department.name AS department, COUNT(*) AS active_employees FROM hr.employees employee JOIN hr.departments department ON department.id = employee.department_id WHERE employee.employment_type = 'employee' AND employee.hired_on <= DATE '2025-12-31' AND (employee.terminated_on IS NULL OR employee.terminated_on > DATE '2025-12-31') GROUP BY department.name) SELECT department FROM headcount WHERE active_employees = (SELECT MAX(active_employees) FROM headcount) ORDER BY department",
+      "expectedReasoning": {
+        "tables": ["hr.employees", "hr.departments"],
+        "assumptions": [
+          "not contractors or interns",
+          "active and not terminated"
+        ]
+      }
+    },
+    {
+      "id": "total-bonus-2024-usd",
+      "category": "unit-confusion",
+      "question": "How much did we pay out in bonuses for fiscal year 2024, in USD?",
+      "intent": "Bonuses are booked to a fiscal year, paid later, and recorded in three currencies — the total needs the fiscal year and a conversion.",
+      "notes": "fiscal_year is the year a bonus was earned for; the annual bonus for a year is paid on 14 March of the next. FY2024 bonuses to employees total $1,761,340.62 converted at each currency's 2024 rate — 94 annual ($1,701,102.56), 3 retention ($40,840.10) and 13 spot ($19,397.96). Filtering on paid_on in 2024 instead picks up the FY2023 annual payout and gives $1,524,869.46; summing the EUR/GBP/USD amounts unconverted gives 1,625,720.00; converting at 2025 rates gives $1,789,105.46 (at each payment year's rate $1,787,884.17); keeping only people still employed gives $1,666,631.98; a contractor's EUR 1,350 spot award brings all worker types to $1,762,801.86; paid-in-2024, unconverted and unfiltered together give 1,419,990.00. Guards against summing mixed currencies and against reading a payment date as the fiscal year.",
+      "checks": [
+        {
+          "type": "matches",
+          "pattern": "1[,.]?761[,.]?34[01]|1[.,]76\\s?(M\\b|million)"
+        },
+        {
+          "type": "calledTool",
+          "tool": "run_readonly_sql"
+        },
+        {
+          "type": "noToolErrors"
+        }
+      ],
+      "expectedSql": "SELECT ROUND(SUM(bonus.amount * rate.rate_to_usd), 2) AS total_bonus_usd FROM hr.bonus_payments bonus JOIN hr.employees employee ON employee.id = bonus.employee_id JOIN hr.exchange_rates rate ON rate.currency = bonus.currency AND rate.year = bonus.fiscal_year WHERE bonus.fiscal_year = 2024 AND employee.employment_type = 'employee'",
+      "expectedReasoning": {
+        "tables": ["hr.bonus_payments", "hr.employees", "hr.exchange_rates"],
+        "assumptions": [
+          "by fiscal year",
+          "USD via exchange rate",
+          "not contractors or interns"
+        ]
+      }
+    },
+    {
+      "id": "avg-total-comp-sales-2024",
+      "category": "metric-definition",
+      "question": "What was the average total compensation for Sales employees in 2024?",
+      "intent": "Total compensation is base plus that fiscal year's bonuses, per employee, in USD — the governed metric, not base salary alone.",
+      "notes": "Total compensation for 2024 = the salary_history row effective on 31 December 2024 plus every bonus booked to fiscal year 2024 (the FY2024 annual bonus paid in March 2025, plus 2024 spot and retention awards), converted at the 2024 rate and averaged over the 22 Sales-department employees active on that date (14 paid in USD, 7 in GBP, 1 in EUR): $121,899.31. Base salary alone averages $96,200.04; the unconverted average is 113,728.64; including the three Sales contractors and interns gives $118,216.63; taking bonuses by payment date in 2024 gives $120,965.98; the whole Commercial division gives $107,032.40; inner-joining bonus rows (one row per bonus, people without a bonus dropped) gives $122,829.78. Sales job titles and the Sales department coincide in this fixture, so \"Sales\" is not ambiguous. Guards against a metric that quietly loses its bonus half or its currency conversion.",
+      "checks": [
+        {
+          "type": "matches",
+          "pattern": "121[,.]?899|121[.,]9\\s?[kK]"
+        },
+        {
+          "type": "calledTool",
+          "tool": "run_readonly_sql"
+        },
+        {
+          "type": "noToolErrors"
+        }
+      ],
+      "expectedSql": "WITH sales_employees AS (SELECT employee.id, salary.annual_base_amount, salary.currency FROM hr.employees employee JOIN hr.departments department ON department.id = employee.department_id JOIN hr.salary_history salary ON salary.employee_id = employee.id AND salary.effective_from <= DATE '2024-12-31' AND (salary.effective_to IS NULL OR salary.effective_to > DATE '2024-12-31') WHERE department.name = 'Sales' AND employee.employment_type = 'employee' AND employee.hired_on <= DATE '2024-12-31' AND (employee.terminated_on IS NULL OR employee.terminated_on > DATE '2024-12-31')), bonuses AS (SELECT bonus.employee_id, SUM(bonus.amount) AS bonus_amount FROM hr.bonus_payments bonus WHERE bonus.fiscal_year = 2024 GROUP BY bonus.employee_id) SELECT ROUND(AVG((sales.annual_base_amount + COALESCE(bonuses.bonus_amount, 0)) * rate.rate_to_usd), 2) AS avg_total_compensation_usd FROM sales_employees sales LEFT JOIN bonuses ON bonuses.employee_id = sales.id JOIN hr.exchange_rates rate ON rate.currency = sales.currency AND rate.year = 2024",
+      "expectedReasoning": {
+        "tables": [
+          "hr.employees",
+          "hr.departments",
+          "hr.salary_history",
+          "hr.bonus_payments",
+          "hr.exchange_rates"
+        ],
+        "assumptions": [
+          "Sales department",
+          "salary and bonus",
+          "salary row effective on 31 December",
+          "not contractors or interns",
+          "USD via exchange rate"
+        ],
+        "metric": "total_compensation_usd"
+      }
+    },
+    {
+      "id": "attrition-rate-2025",
+      "category": "metric-definition",
+      "question": "What was our attrition rate in 2025?",
+      "intent": "Attrition has one denominator — active headcount on 1 January — and the dataset's metric definition says so.",
+      "notes": "Attrition = employees terminated during 2025 divided by active headcount on 1 January 2025: 12 / 104 = 11.54%. One of the 12 was hired and left inside 2025 (hired 2025-02-03, gone 2025-08-29), so the numerator is not a subset of the denominator. Dividing by the 106 on the books at year end gives 11.32%, by the average headcount (105) 11.43%; counting contractors and interns gives 18 / 117 = 15.38%; dividing by all 145 employees ever hired gives 8.28%; counting only leavers who were on the books on 1 January gives 11 / 104 = 10.58%. Guards against a named metric degrading into whichever denominator is easiest to compute.",
+      "checks": [
+        {
+          "type": "matches",
+          "pattern": "\\b11[.,]54?(?![0-9])|0[.,]1154"
+        },
+        {
+          "type": "calledTool",
+          "tool": "run_readonly_sql"
+        },
+        {
+          "type": "noToolErrors"
+        }
+      ],
+      "expectedSql": "SELECT 100.0 * COUNT(*) FILTER (WHERE employee.terminated_on >= DATE '2025-01-01' AND employee.terminated_on < DATE '2026-01-01') / COUNT(*) FILTER (WHERE employee.hired_on <= DATE '2025-01-01' AND (employee.terminated_on IS NULL OR employee.terminated_on > DATE '2025-01-01')) AS attrition_rate_pct FROM hr.employees employee WHERE employee.employment_type = 'employee'",
+      "expectedReasoning": {
+        "tables": ["hr.employees"],
+        "assumptions": ["headcount on 1 January", "not contractors or interns"],
+        "metric": "attrition_rate"
+      },
+      "resultSetOptions": {
+        "percentEquivalent": true
+      }
+    },
+    {
+      "id": "top-performers-engineering-2025",
+      "category": "domain-semantics",
+      "question": "Who were the top performers in Engineering in 2025?",
+      "intent": "\"Top performer\" is a rating threshold (4 or 5), and Engineering is a department, not the whole Technology division.",
+      "notes": "A top performer is rated 4 or 5 (5 is best). Seven Engineering-department employees were rated 4 or better for 2025: Amara Adeyemi, Freya Ishikawa, Hugo Petrov, Kenji Umarov, Luca Fontaine, Luca Weber and Yusuf Dubois — only Hugo Petrov is a 5, so reading \"top\" as the highest rating returns one name. Reading Engineering as the Technology division adds seven more from Data Platform and IT & Security (Felix Moreau, Gideon Dubois, Luca Torres, Noah Gallagher, Wren Rasmussen, Yara Chowdhury, Yusuf Schmidt); the 2024 list is a different eight that shares only Freya Ishikawa and Yusuf Dubois. Contractors and interns are never rated and every 2025 review belongs to someone still employed at year end, so the default filters do not move this list; Engineering job titles and the Engineering department coincide. Guards against a threshold read as a maximum and a department read as its division.",
+      "checks": [
+        {
+          "type": "includes",
+          "value": "Kenji Umarov"
+        },
+        {
+          "type": "matches",
+          "pattern": "Luca Fontaine"
+        },
+        {
+          "type": "excludes",
+          "value": "Noah Gallagher"
+        },
+        {
+          "type": "calledTool",
+          "tool": "run_readonly_sql"
+        },
+        {
+          "type": "noToolErrors"
+        }
+      ],
+      "expectedSql": "SELECT employee.full_name AS employee FROM hr.performance_reviews review JOIN hr.employees employee ON employee.id = review.employee_id JOIN hr.departments department ON department.id = employee.department_id WHERE department.name = 'Engineering' AND review.review_year = 2025 AND review.rating >= 4 AND employee.employment_type = 'employee' ORDER BY employee.full_name",
+      "expectedReasoning": {
+        "tables": ["hr.performance_reviews", "hr.employees", "hr.departments"],
+        "assumptions": ["rating 4 or 5", "Engineering department"]
+      }
+    },
+    {
+      "id": "reports-to-manager",
+      "category": "clarification",
+      "question": "How many people report to Helena Voss?",
+      "intent": "\"Report to\" is either direct reports or the whole reporting line, and the two differ ninefold — the agent must ask which is meant.",
+      "notes": "Helena Voss is the Chief Technology Officer and her line is three levels deep. Her direct reports still employed are 4 (Ines Dubois, Director of Engineering; Yusuf Dubois, Principal Engineer; Luca Torres, Head of Data Platform; Yara Chowdhury, IT Manager); her whole reporting line is 37 employees (4 + 17 + 16 by level), 44 with contractors and interns. A direct-report count that forgets the active filter returns 5, because former Principal Engineer Hana Pereira (left 2023-03-31) still points at her, and a recursive count over every row ever returns 65. Direct and total differ ninefold, so whichever the agent picks unasked is confidently wrong for half the people who ask; the pass condition is that it asks. Guards against silently resolving an ambiguous org-chart question.",
+      "checks": [
+        {
+          "type": "calledTool",
+          "tool": "ask_clarification"
+        },
+        {
+          "type": "didNotCall",
+          "tool": "run_readonly_sql"
+        },
+        {
+          "type": "noToolErrors"
+        }
+      ],
+      "judgeRubric": "The question (\"How many people report to Helena Voss?\") is ambiguous: Helena Voss is the Chief Technology Officer, and \"report to\" can mean her direct reports (4 people still employed) or everyone in her reporting line (37 employees across three levels, 44 once contractors and interns are counted). Score pass=true only if the final answer is itself a clarifying question that offers concrete, well-formed options grounded in this data — at least direct reports versus her whole reporting line or organisation, optionally also whether to count contractors and interns — and does not state a headcount as if it were the answer. Score pass=false if it answers with a number, picks one interpretation without asking, invents a reporting relationship the data does not hold, or asks a vague open-ended question with no concrete options.",
+      "expectedReasoning": {
+        "tables": ["hr.employees"],
+        "assumptions": ["direct reports", "whole reporting line"]
+      }
+    },
+    {
+      "id": "highest-avg-salary-location-2025",
+      "category": "unit-confusion",
+      "question": "Which location had the highest average salary in 2025?",
+      "intent": "The winner changes when salaries paid in GBP and EUR are compared without converting them to USD.",
+      "notes": "Average 2025 base salary per location in USD (employees active on 31 December 2025, the row effective that day, the 2025 rate): London $133,486.75 (26 employees), New York $117,534.78, Berlin $116,161.56, Austin $96,061.76, Lisbon $58,917.67. London pays in GBP, so the unconverted averages put New York first (117,534.78) and London third (101,011.54, behind Berlin's 102,888.89). Including contractors and interns keeps London on top ($141,332.15), as does converting at 2024 rates ($129,102.85); averaging every salary row that starts in 2025, unconverted and across all worker types, names New York (109,126.67). Guards against ranking amounts in different currencies as if they were one unit.",
+      "checks": [
+        {
+          "type": "includes",
+          "value": "London"
+        },
+        {
+          "type": "matches",
+          "pattern": "133[,.]?48[67]|133[.,]5\\s?[kK]"
+        },
+        {
+          "type": "calledTool",
+          "tool": "run_readonly_sql"
+        },
+        {
+          "type": "noToolErrors"
+        }
+      ],
+      "expectedSql": "WITH by_location AS (SELECT location.city, AVG(salary.annual_base_amount * rate.rate_to_usd) AS avg_salary_usd FROM hr.employees employee JOIN hr.locations location ON location.id = employee.location_id JOIN hr.salary_history salary ON salary.employee_id = employee.id AND salary.effective_from <= DATE '2025-12-31' AND (salary.effective_to IS NULL OR salary.effective_to > DATE '2025-12-31') JOIN hr.exchange_rates rate ON rate.currency = salary.currency AND rate.year = 2025 WHERE employee.employment_type = 'employee' AND employee.hired_on <= DATE '2025-12-31' AND (employee.terminated_on IS NULL OR employee.terminated_on > DATE '2025-12-31') GROUP BY location.city) SELECT city AS location FROM by_location ORDER BY avg_salary_usd DESC LIMIT 1",
+      "expectedReasoning": {
+        "tables": [
+          "hr.employees",
+          "hr.locations",
+          "hr.salary_history",
+          "hr.exchange_rates"
+        ],
+        "assumptions": [
+          "USD via exchange rate",
+          "salary row effective on 31 December",
+          "not contractors or interns"
+        ],
+        "metric": "avg_base_salary_usd"
+      }
+    },
+    {
+      "id": "avg-promotion-raise-2025",
+      "category": "multi-step-join",
+      "question": "What was the average raise from promotions in 2025?",
+      "intent": "A promotion raise is measured against the salary row immediately before it — in 2025 an April merit row, not the hire row or last year's salary.",
+      "notes": "Twelve employees were promoted in 2025 (salary_history.reason = 'promotion', effective 2025-07-01 or 2025-10-01), each after an April 2025 merit row in the same currency (nobody changes location in this fixture). The raise is the promotion row over the row immediately before it, 8.78% to 14.60%, averaging 11.72%. Comparing with the hire row gives 23.63%, and with the salary on 31 December 2024 gives 15.15% (the April merit compounds in); the ratio of summed amounts gives 11.92%; averaging every 2025 pay change (125 rows of merit, market, adjustment and promotion) gives 4.19%; the average absolute raise is 8,416.67 in mixed currencies ($8,993.32 converted) — an amount, not the percentage asked for. Guards against a window function or self-join that compares against the wrong prior row.",
+      "checks": [
+        {
+          "type": "matches",
+          "pattern": "\\b11[.,]72?(?![0-9])|0[.,]1172"
+        },
+        {
+          "type": "calledTool",
+          "tool": "run_readonly_sql"
+        },
+        {
+          "type": "noToolErrors"
+        }
+      ],
+      "expectedSql": "WITH ordered AS (SELECT salary.employee_id, salary.effective_from, salary.reason, salary.annual_base_amount, LAG(salary.annual_base_amount) OVER (PARTITION BY salary.employee_id ORDER BY salary.effective_from) AS previous_amount FROM hr.salary_history salary) SELECT ROUND(AVG(100.0 * (ordered.annual_base_amount - ordered.previous_amount) / ordered.previous_amount), 2) AS avg_promotion_raise_pct FROM ordered JOIN hr.employees employee ON employee.id = ordered.employee_id WHERE ordered.reason = 'promotion' AND ordered.effective_from >= DATE '2025-01-01' AND ordered.effective_from < DATE '2026-01-01' AND employee.employment_type = 'employee'",
+      "expectedReasoning": {
+        "tables": ["hr.salary_history", "hr.employees"],
+        "assumptions": ["reason promotion", "previous salary row"]
+      }
+    }
+  ]
+}

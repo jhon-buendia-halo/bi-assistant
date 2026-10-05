@@ -26,8 +26,22 @@ Agent catalogue
 
 Question sets
 - R10. Only the assistant SHALL have eval sets. Every other agent's Evals tab SHALL show "No evals configured for this agent yet."
-- R11. The system SHALL provide five sets, listed in id order: `formula-1` ("Formula 1", the bundled Formula 1 sample on PostgreSQL, 1950 to 2026; 10 questions), `genomics` ("Genomics", the synthetic genomics fixture on PostgreSQL; 20 questions), `health-insurance` ("Health Insurance", the synthetic health-insurance fixture on PostgreSQL; 20 questions), `world-cup` ("World Cup", the bundled World Cup sample on PostgreSQL; 10 questions) and `world-cup-rest` ("World Cup (REST API)", the bundled REST sample: the 10 `world-cup` questions derived per R45, case ids prefixed `rest-`). The question lists are in *Eval suite content* below. Case ids SHALL be unique across all sets, so a list of case ids names exactly one set.
-- R12. Each set SHALL carry an id, a name, a description, the names of the datasets it is written against, and its cases. A set over a bundled sample ([../testing-data/spec.md](../testing-data/spec.md)) SHALL name that sample and take its required entities, datasource kind and default dataset name from the sample catalogue, never repeating them; any other set SHALL declare its datasets, its required entities and its datasource kind (PostgreSQL unless stated), and its description SHALL be the operator-facing setup sentence the preflight quotes (R20). Each case SHALL carry an id, a category (R43), the question, an intent (what it probes) and its checks (id, name and description).
+- R11. The system SHALL provide nine sets, listed in id order (question counts as grown by the engine loop; see *Engine-loop suite content*):
+
+  | Id | Name | Data | Questions |
+  |---|---|---|---|
+  | `banking` | Banking | the synthetic banking fixture on PostgreSQL | 20 |
+  | `formula-1` | Formula 1 | the bundled Formula 1 sample on PostgreSQL, 1950 to 2026 | 10 |
+  | `genomics` | Genomics | the synthetic genomics fixture on PostgreSQL | 49 |
+  | `health-insurance` | Health Insurance | the synthetic health-insurance fixture on PostgreSQL | 42 |
+  | `hr` | HR | the synthetic HR fixture on PostgreSQL | 10 |
+  | `retail` | Retail | the synthetic retail fixture on PostgreSQL | 6 |
+  | `supply-chain` | Supply Chain | the synthetic supply-chain fixture on PostgreSQL | 20 |
+  | `world-cup` | World Cup | the bundled World Cup sample on PostgreSQL | 38 |
+  | `world-cup-rest` | World Cup (REST API) | the bundled REST sample: the `world-cup` questions derived per R45, case ids prefixed `rest-` | 38 |
+
+  The question lists are in *Eval suite content* below. Case ids SHALL be unique across all sets, so a list of case ids names exactly one set.
+- R12. Each set SHALL carry an id, a name, a description, the names of the datasets it is written against, and its cases. A set over a bundled sample ([../testing-data/spec.md](../testing-data/spec.md)) SHALL name that sample and take its required entities, datasource kind and default dataset name from the sample catalogue, never repeating them; any other set SHALL declare its datasets, its required entities and its datasource kind (PostgreSQL unless stated), and its description SHALL be the operator-facing setup sentence the preflight quotes (R20). Each case SHALL carry an id, a category (R43), the question, an intent (what it probes) and its checks (id, name and description). A case MAY also carry, for the developer harness only, the reasoning a correct business-expert trace should explain and a learning scenario ([business-expert](../business-expert/spec.md) R32, R33). The in-app runner ignores both.
 - R13. The Evals tab SHALL open on the list of sets, each showing its name, "<N> questions" and its description, with no question shown and no run button. Clicking a set SHALL open it (revealing its questions, the datasource picker and the run button) and tick all of its questions; clicking the open set again SHALL close it and clear the ticks. Opening another set, or closing the open one, SHALL also reset the category filter (R44), clear the Details panel selection, clear any refusal message under the run controls and clear the progress, verdicts and scope of the last run shown in the Questions sub-tab (the run itself stays under Executions). Sets SHALL be unselectable while a run is starting or running.
 - R14. An open set SHALL show "<N> questions in <set name>. Each check must score 1.0 for its question to pass.", then the datasource picker, the run button, "Scoped to <datasets>" (R21), a **Select all** checkbox, the category filter (R44), "<ticked> of <N> selected", and the numbered question list.
 - R15. Each question row SHALL show a tick box (labelled "Run: <question>"), the number (its position in the list as shown), the question text, a chip with its category, its intent and a chip per check showing the check's description. Clicking the row (not the tick box) SHALL select it for the Details panel and highlight it.
@@ -88,7 +102,7 @@ Categories
 - R44. When the open set's questions carry categories, the system SHALL offer a category filter whose first option is "All categories (<N>)" (N = questions in the set) followed by each category present in the set, alphabetically, as "<category> (<count>)". Picking a category SHALL show only that category's questions (numbered from 1) and append " · showing <k>" to the selected count. The filter SHALL NOT change which questions are ticked: the run button and the run cover every ticked question of the set, shown or not. When no question is shown the list SHALL read "No questions in this category."
 
 Set definitions
-- R45. Sets SHALL be data, one definition per set (format and validation in [../../system/data-model.md](../../system/data-model.md)), re-read on every listing so an edited definition shows without a restart. A definition SHALL be rejected when read, with a message naming the definition and the case at fault, when a required field is missing or empty, a check is of an unknown kind or lacks its argument, a regular expression does not compile, a case uses the same kind of check twice (R30), a case id repeats within the set, the named bundled sample is unknown, or it repeats what the sample catalogue owns (required entities, datasource kind). A set MAY be derived from another, non-derived set: it takes the base set's questions, categories, checks and rubrics, prefixes every case id, and replaces only the reference queries; every base case with a reference query SHALL have a replacement, and a replacement for a case the base does not have SHALL fail the load. A set that cannot be read SHALL NOT run.
+- R45. Sets SHALL be data, one definition per set (format and validation in [../../system/data-model.md](../../system/data-model.md)), re-read on every listing so an edited definition shows without a restart. A definition SHALL be rejected when read, with a message naming the definition and the case at fault, when a required field is missing or empty, a check is of an unknown kind or lacks its argument, a regular expression does not compile, a case uses the same kind of check twice (R30), a case id repeats within the set, the named bundled sample is unknown, or it repeats what the sample catalogue owns (required entities, datasource kind). Expected reasoning and learning scenarios are validated strictly: an unknown field, a table not written `schema.table`, an assumption phrase with no word of four or more letters, an unknown block or vote, or a generalisation case that is missing, is the case itself, or carries a scenario of its own also fails the load. A set MAY be derived from another, non-derived set: it takes the base set's questions, categories, checks and rubrics, prefixes every case id, and replaces only the reference queries; every base case with a reference query SHALL have a replacement, and a replacement for a case the base does not have SHALL fail the load. A set that cannot be read SHALL NOT run.
 
 Token accounting and run logs
 - R46. The system SHALL record, per question, the tokens the provider reported for the assistant's run (every step of it) plus the LLM judge's call when the question has a rubric: input, output, total (input + output unless the provider reports its own total), reasoning and cached-input tokens, and the number of model calls observed. Counts SHALL be measured, never estimated: a question for which the provider reported nothing SHALL carry no usage, and a question whose run threw SHALL keep what was observed before the error. The answer synthesised after a tool-only turn is not counted. The run SHALL carry the sum of its questions' usage, updated after every question; a run with zero observed calls is "not measured", never "free". When the run ends the system SHALL record the model the agents actually ran on (the currently configured model when none was observed) and an estimated cost in US dollars from an operator-maintained price table that ships empty (per model: input, output and optional cached-input dollars per million tokens; cached input tokens are billed at the cached rate; a model is matched by its full id or by the part after its last "/", case-insensitively). A model with no rate, or a run with nothing measured, SHALL have no cost, and neither the UI nor the report SHALL ever show such a run as "$0.00".
@@ -99,7 +113,7 @@ Executions detail
 - R49. An expanded execution SHALL show, in order: when the run has a comparison (R40), "Compared to the previous run" with either "No change from the previous run · <N> questions held their verdict" or a "Regressions (<n>)" list and/or an "Improvements (<n>)" list, each item `<id> — <question>`; when it has category tallies, "Pass rate by category", one row per category, worst rate first (ties: more questions first, then alphabetical), each with "<passed>/<total>" and a whole percentage coloured green at 100 %, red below 50 % and amber in between; and "Tokens and cost": "Model" (or "unknown"), then "Input", "Output", "Total" and "Model calls" (exact, thousands grouped), "Cached input" and "Reasoning" when non-zero, or "Tokens: not measured", and "Estimated cost": the amount in US dollars (four decimals under one cent, two otherwise), "not priced — add the model to logs/pricing.json" when tokens were measured but the model has no rate, or "not measured".
 
 Developer harness
-- R50. A developer harness SHALL run one set, or a case file of the same shape, as real streamed chat turns in throwaway sessions and grade each case by result-set comparison alone: a case without a reference query is skipped (`SKIP(no-expected-sql)`), never guessed. It SHALL accept a case-id substring filter, a category substring filter (an unmatched filter lists the categories present), a repeat count (a case passes only when every repetition passes, reported as `k/n`) and a free-text label; it SHALL print a verdict table, a per-category pass-rate table worst first and the run's measured tokens and estimated cost (R46, read from the persisted answers), write a run log unless told not to (R48), and exit non-zero when any case failed or errored.
+- R50. A developer harness SHALL run one set, or a case file of the same shape, as real streamed chat turns in throwaway sessions and grade each case by result-set comparison alone: a case without a reference query is skipped (`SKIP(no-expected-sql)`), never guessed. Its turns never use answer pinning ([answer-pinning](../answer-pinning/spec.md) R1), so a repeat measures the engine, not a replay. It SHALL grade the answer query ([sessions-chat](../sessions-chat/spec.md) R52) width-tolerantly first. When that does not match, it SHALL re-run each of the answer's other complete, successful queries and pass the case as `PASS(alternate-query)` if one matches, because a headline total and its breakdown, or a rate and its parts, are both correct. A case marked percent-equivalent SHALL also accept the assistant's numbers scaled by 100 or by 1/100, so a rate may be reported as a fraction or a percentage. With the expert option every turn runs in business expert mode and the run reports confidence measurements ([business-expert](../business-expert/spec.md) R31). It SHALL accept a case-id substring filter, a category substring filter (an unmatched filter lists the categories present), a repeat count (a case passes only when every repetition passes, reported as `k/n`), a free-text label and the expert option (not combinable with the validate mode); it SHALL print a verdict table, a per-category pass-rate table worst first and the run's measured tokens and estimated cost (R46, read from the persisted answers), write a run log unless told not to (R48), and exit non-zero when any case failed or errored.
 - R51. The same harness SHALL offer a validate mode that runs every reference query of the selected cases against the live data with zero model calls and no LLM configuration (cases without one are reported as skipped), reporting each as OK (rows returned), EMPTY (no rows: a warning, still passing), TOO-MANY (at or above the 500-row cap: failing) or ERROR (the query failed: failing), writing a run log with no usage unless told not to, and exiting non-zero on any failure.
 
 ### Engine improvement loop
@@ -217,6 +231,50 @@ Genomics set (`genomics`, 20 questions). Not a bundled sample: a synthetic clini
 | `variants-by-type` | control | How many variants of each type do we have? | includes "SNV"; matches `371`; ran SQL; no tool errors; result-set match |
 | `samples-per-collection-year` | control | How many samples did we collect in each year, counting every sample on record, controls included? | includes "2023"; matches `\b68\b`; ran SQL; no tool errors; result-set match |
 
+HR set (`hr`, 10 questions), the measuring set of business expert mode ([business-expert](../business-expert/spec.md) R31). Not a bundled sample: a synthetic company in schema `hr` with employees, departments grouped into divisions, locations paid in three currencies, salary history, bonuses booked to a fiscal year, performance reviews, time off and a three-level reporting line, for 2019 to 2025. It is generated from a fixed seed.
+- **Declared dataset:** "HR".
+- **Required entities:** `hr.departments`, `locations`, `job_titles`, `employees`, `salary_history`, `bonus_payments`, `performance_reviews`, `time_off_requests`, `exchange_rates`, `v_current_employees`, `v_salary_by_year`.
+- **Description (the preflight setup sentence):** "These evals require the bundled synthetic HR fixture (schema hr). Select its PostgreSQL datasource and save a dataset named HR containing the hr tables and views. Setup: docker/postgres/README.md."
+- **Curated context saved by registering the development fixtures** ([../../system/delivery.md](../../system/delivery.md)):
+  - the default filters "Employees only" and "Active as of a date";
+  - the terms "Tech employees" (the Technology division, not a job family), "Salary" (the row in force on 31 December), "Local currency", "Top performer" (rating 4 or 5) and "Total compensation";
+  - the metrics `avg_base_salary_usd`, `attrition_rate` and `total_compensation_usd`.
+- Every case carries expected reasoning (tables, assumption phrases, and for four of them a metric). `attrition-rate-2025` is percent-equivalent.
+
+| id | Category | Question | What must hold |
+|---|---|---|---|
+| `avg-salary-tech-2025` | domain-semantics | What is the average salary of tech employees in 2025? | matches `127[,.]?52[01]\|127[.,]5\s?[kK]`; ran SQL; no tool errors; result-set match |
+| `active-headcount-end-2025` | control | How many active employees did we have at the end of 2025? | matches `\b106\b`; ran SQL; no tool errors; result-set match |
+| `dept-most-headcount-2025` | ties | Which department had the most active employees at the end of 2025? | includes "Engineering"; matches `\bSales\b`; ran SQL; no tool errors; result-set match |
+| `total-bonus-2024-usd` | unit-confusion | How much did we pay out in bonuses for fiscal year 2024, in USD? | matches `1[,.]?761[,.]?34[01]\|1[.,]76\s?(M\b\|million)`; ran SQL; no tool errors; result-set match |
+| `avg-total-comp-sales-2024` | metric-definition | What was the average total compensation for Sales employees in 2024? | matches `121[,.]?899\|121[.,]9\s?[kK]`; ran SQL; no tool errors; result-set match |
+| `attrition-rate-2025` | metric-definition | What was our attrition rate in 2025? | matches `\b11[.,]54?(?![0-9])\|0[.,]1154`; ran SQL; no tool errors; result-set match |
+| `top-performers-engineering-2025` | domain-semantics | Who were the top performers in Engineering in 2025? | includes "Kenji Umarov"; matches `Luca Fontaine`; excludes "Noah Gallagher"; ran SQL; no tool errors; result-set match |
+| `reports-to-manager` | clarification | How many people report to Helena Voss? | called `ask_clarification`; no SQL; no tool errors; judge: the answer is itself a clarifying question offering at least direct reports versus her whole reporting line (optionally whether to count contractors and interns), and states no headcount |
+| `highest-avg-salary-location-2025` | unit-confusion | Which location had the highest average salary in 2025? | includes "London"; matches `133[,.]?48[67]\|133[.,]5\s?[kK]`; ran SQL; no tool errors; result-set match |
+| `avg-promotion-raise-2025` | multi-step-join | What was the average raise from promotions in 2025? | matches `\b11[.,]72?(?![0-9])\|0[.,]1172`; ran SQL; no tool errors; result-set match |
+
+Retail set (`retail`, 6 questions), the teaching set of business expert mode ([business-expert](../business-expert/spec.md) R33). Not a bundled sample: a synthetic retailer in schema `retail` with 6 stores (one online), products in 8 categories, customers, orders from 2024-01-01 to 2026-03-31 that are completed or cancelled, and order lines with quantity, unit price and line discount. It is generated from a fixed seed. The right answer to its flagship question rests on two facts nothing in the data reveals:
+- the fiscal year runs from 1 February to 31 January and is named for the year it starts;
+- net revenue is the sum of quantity × unit price − line discount over completed orders, never `orders.amount_charged`, which includes sales tax and web shipping.
+
+The rest of the set:
+- **Declared dataset:** "Retail".
+- **Required entities:** `retail.stores`, `products`, `customers`, `orders`, `order_lines`.
+- **Description:** "These evals require the bundled synthetic retail fixture (schema retail). Select its PostgreSQL datasource and save a dataset named Retail containing the retail tables. Setup: docker/postgres/README.md."
+- **Curated context saved by registration:** the default filter "Completed orders only" and the entries "Order date", "Units", "Line discount" and "Coverage". It deliberately states neither the fiscal calendar nor net revenue: those are what the learning scenario teaches.
+- Every case carries expected reasoning.
+- `net-revenue-fy2025` carries the learning scenario: two thumbs-down notes, on its interpretation (the fiscal calendar, applied only when a question says fiscal year or FY) and on its metric (the net-revenue definition). It must generalise to `orders-fy2025`, and its band is expected to move from medium to high.
+
+| id | Category | Question | What must hold |
+|---|---|---|---|
+| `net-revenue-fy2025` | domain-semantics | What was our net revenue in fiscal year 2025? | matches `401[,.]?306\|401(?:[.,]3)?\s?[kK]`; ran SQL; no tool errors; result-set match |
+| `orders-fy2025` | domain-semantics | How many orders did we take in fiscal year 2025? | matches `\b3[,.]?068\b`; ran SQL; no tool errors; result-set match |
+| `top-category-units-march-2025` | control | Which product category sold the most units in March 2025? | includes "Outdoor"; matches `\b92\b`; ran SQL; no tool errors; result-set match |
+| `gross-charged-cy2025` | control | How much did we charge customers in total in calendar year 2025? | matches `423[,.]?385\|423(?:[.,]4)?\s?[kK]`; ran SQL; no tool errors; result-set match |
+| `new-customers-2025` | control | How many new customers signed up in 2025? | matches `\b530\b`; ran SQL; no tool errors; result-set match |
+| `net-revenue-by-store-fy2025` | domain-semantics | What was net revenue by store in fiscal year 2025? | includes "Web Store"; matches `162[,.]?61[12]\|162(?:[.,]6)?\s?[kK]`; ran SQL; no tool errors; result-set match |
+
 ### Engine-loop suite content
 
 The set definitions shipped with the engine improvement loop are the data asset; where they differ from the tables above, the definitions win. In summary:
@@ -227,6 +285,8 @@ The set definitions shipped with the engine improvement loop are the data asset;
 | `formula-1` | Formula 1 | 10 | unchanged |
 | `genomics` | Genomics | 49 | as above, grown to at least three questions per category |
 | `health-insurance` | Health Insurance | 42 | as above, grown to three questions per category |
+| `hr` | HR | 10 | as above (unchanged) |
+| `retail` | Retail | 6 | as above (unchanged) |
 | `supply-chain` | Supply Chain | 20 | synthetic supply-chain fixture, schema `supply_chain` (declared dataset "Supply Chain") |
 | `world-cup` | World Cup | 38 | bundled World Cup sample, grown from 10 |
 | `world-cup-rest` | World Cup (REST API) | 38 | derived from `world-cup` (R45); all 27 reference queries ported to the REST sample's dialect |
@@ -261,9 +321,9 @@ The set definitions shipped with the engine improvement loop are the data asset;
 
 - Endpoints `GET /agents`, `GET /agents/:key`, `GET /agents/:key/evals`, `POST /agents/:key/evals/run`, `GET /agents/:key/evals/runs`, `GET|DELETE /agents/:key/evals/runs/:jobId`, `GET /agents/:key/evals/runs/:jobId/download`: [../../system/api.md](../../system/api.md).
 - Eval run documents (run, per-question result, check result, tool call, regression summary, token usage, category tallies), the set definition format, the run log and index, and the price table: [../../system/data-model.md](../../system/data-model.md).
-- The six agents, the assistant's tools and memory settings, the judge's prompt and how a case is executed and scored: [../../system/agents.md](../../system/agents.md).
+- The nine agents, the assistant's tools and memory settings, the judge's prompt and how a case is executed and scored: [../../system/agents.md](../../system/agents.md).
 - Sample fixtures and their required entities: [../testing-data/spec.md](../testing-data/spec.md).
-- The development fixtures database (World Cup, health insurance, genomics), their seeded generators, the registration script and the harness scripts: [../../system/delivery.md](../../system/delivery.md).
+- The development fixtures database (World Cup, health insurance, genomics, HR, retail), their seeded generators, the registration script, the harness scripts and the learning demo: [../../system/delivery.md](../../system/delivery.md).
 - Copy and layout of the Evals tab and the eval trace: [../../system/ui.md](../../system/ui.md).
 - Terms: [../../product/glossary.md](../../product/glossary.md).
 - Engine improvement loop: endpoints `POST /agents/:key/evals/loop`, `GET /agents/:key/evals/loops/:loopId`, `POST /agents/:key/evals/runs/:jobId/stop`, `GET /agents/:key/evals/logs`, `GET /agents/:key/evals/logs/compare`, `GET /agents/:key/evals/logs/:file`, `POST /agents/:key/evals/logs/changelog-draft`, `GET /agents/:key/evals/trend` in [../../system/api.md](../../system/api.md) 2.11; run-log format version 2 in [../../system/data-model.md](../../system/data-model.md) 4.10; levers and arms in [../engine-levers/spec.md](../engine-levers/spec.md).
@@ -450,8 +510,9 @@ Feature: Agents and evals behaviour not yet covered by Playwright
 
   Scenario: Lists every question set with its question count
     When I open the assistant's Evals tab
-    Then I see the sets "Banking", "Formula 1", "Genomics", "Health Insurance", "Supply Chain", "World Cup" and "World Cup (REST API)" in that order
+    Then I see the sets "Banking", "Formula 1", "Genomics", "Health Insurance", "HR", "Retail", "Supply Chain", "World Cup" and "World Cup (REST API)" in that order
     And "Genomics" shows "49 questions" and "Health Insurance" shows "42 questions"
+    And "HR" shows "10 questions" and "Retail" shows "6 questions"
 
   Scenario: Scopes a run to the set's own dataset on a shared datasource
     Given the development fixtures are registered, so one datasource carries the "World Cup", "Health Insurance" and "Genomics" datasets
@@ -626,7 +687,7 @@ Feature: Engine improvement loop behaviour not yet covered by Playwright
 - Starting against a datasource with no datasets, or with datasets missing required entities, never spends model tokens and never leaves a run in history.
 - The report downloaded from the Executions list opens as readable Markdown and contains the title, summary, per-question checks, executed steps and answers.
 - Every reference query of every set validates against the development fixtures with zero model calls (R51): `OK` for every case with a reference query, the rest skipped.
-- After the development fixtures are registered on one datasource, the `health-insurance` and `genomics` sets each start, are scoped to their own dataset, and finish with one result per ticked question, a category tally, and a token total (or "tokens not measured").
+- After the development fixtures are registered on one datasource, the `health-insurance`, `genomics`, `hr` and `retail` sets each start, are scoped to their own dataset, and finish with one result per ticked question, a category tally, and a token total (or "tokens not measured").
 - Every finished run, completed or failed, leaves a run log and an index line in a source checkout; an installed app without a configured log location runs normally and only warns.
 - The four engine-loop scenarios of `agents.spec.ts` pass.
 - A repeat-3 run of any set records three attempts per question in its run log and a pass^k summary; a question whose judge errored twice is a GAP and is excluded from every rate.
@@ -636,7 +697,7 @@ Feature: Engine improvement loop behaviour not yet covered by Playwright
 
 - A run interrupted by a backend stop stays `running` forever: nothing finalises it and the UI hides its delete button.
 - The progress line shows "<finished>/<all questions in the open set> done", not the number of ticked questions. With 3 of 10 ticked it reads "0/10 done" although only 3 will run. The gherkin scenario for a full run is consistent with either; confirm the intended denominator.
-- One invalid set definition empties the whole set list (the listing reads every definition and gives up on the first error), so a typo in one set hides all five and the tab reads "No evals configured for this agent yet." Should the listing skip and report the bad definition instead?
+- One invalid set definition empties the whole set list (the listing reads every definition and gives up on the first error), so a typo in one set hides all seven and the tab reads "No evals configured for this agent yet." Should the listing skip and report the bad definition instead?
 - Before a run, "Scoped to <declared datasets>" is shown even when the chosen datasource has no datasets of those names and the run will fall back to every bound dataset (R21), so the hint can name datasets the run will not use.
 - A run recorded before sets were stored is labelled "unknown suite" in Executions and "—" in its report, yet the comparison treats it as a `world-cup` run (R40), even when it was a Formula 1 or REST run from a release that already offered those sets; its question ids would identify the set.
 - The category vocabulary (R43) is a convention: any non-empty text is accepted as a category.
@@ -645,7 +706,7 @@ Feature: Engine improvement loop behaviour not yet covered by Playwright
 - A failed (not just partial) run or a partial pass is drawn with the same red cross in Executions.
 - The Agents screen's search icon is a placeholder with no behaviour.
 
-<!-- sources: backend/src/modules/agents/{agents.controller,agents.service,eval-runs.service,eval-regression,eval-report,eval-telemetry,eval-run-log}.ts, backend/src/modules/agents/repositories/eval-runs.repository.ts, backend/src/mastra/evals/{assistant.evals,assistant-eval-datasets,suite-loader,result-set-check,run-assistant-evals}.ts, backend/src/mastra/evals/suites/*.json, backend/src/mastra/model-resolver.ts, backend/src/mastra/agents/eval-judge.agent.ts, backend/src/modules/sessions/{sessions.service,result-compare}.ts, backend/src/modules/testing-data/fixtures/registry.ts, backend/scripts/{run-eval,bootstrap-fixtures}.ts, backend/eval/README.md, docker/postgres/README.md, docs/evals/{synthetic-domains,improvement-loop}.md, logs/README.md, logs/pricing.json, frontend/src/app/features/agents/ (agent-detail, eval-trace, models/eval.model.ts, services/agents-api.service.ts), frontend/e2e/agents.spec.ts -->
+<!-- sources: backend/src/modules/agents/{agents.controller,agents.service,eval-runs.service,eval-regression,eval-report,eval-telemetry,eval-run-log}.ts, backend/src/modules/agents/repositories/eval-runs.repository.ts, backend/src/mastra/evals/{assistant.evals,assistant-eval-datasets,suite-loader,result-set-check,run-assistant-evals}.ts, backend/src/mastra/evals/suites/*.json, backend/src/mastra/model-resolver.ts, backend/src/mastra/agents/eval-judge.agent.ts, backend/src/modules/sessions/{sessions.service,result-compare}.ts, backend/src/modules/testing-data/fixtures/registry.ts, backend/scripts/{run-eval,bootstrap-fixtures,learning-demo}.ts, backend/src/modules/expert-mode/{answer-record,expert-metrics}.ts, backend/eval/README.md, docker/postgres/README.md, docs/evals/{synthetic-domains,improvement-loop}.md, logs/README.md, logs/pricing.json, frontend/src/app/features/agents/ (agent-detail, eval-trace, models/eval.model.ts, services/agents-api.service.ts), frontend/e2e/agents.spec.ts -->
 
 <!-- Implementation reference (not part of the rebuild contract): set definitions are `backend/src/mastra/evals/suites/<id>.json`; the failure-class vocabulary and the trap catalogue each synthetic fixture was designed around are in `docs/evals/synthetic-domains.md`; the operator runbook for measure, change, re-measure is `docs/evals/improvement-loop.md`. -->
 

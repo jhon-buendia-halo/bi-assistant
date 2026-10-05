@@ -1,0 +1,118 @@
+@let l = layout();
+@if (l.nodes.length || l.rejected.length) {
+  <svg
+    [attr.viewBox]="viewBox()"
+    width="100%"
+    [style.max-width.px]="l.width"
+    [style.max-height.px]="maxHeight"
+    preserveAspectRatio="xMinYMin meet"
+    role="img"
+    [attr.aria-label]="ariaLabel()"
+    class="block"
+  >
+    <!-- Joins first, so the table boxes paint over their ends -->
+    @for (edge of l.edges; track edge.key) {
+      <g data-edge>
+        <title>{{ edge.title }}</title>
+        <path
+          [attr.d]="edge.path"
+          fill="none"
+          stroke-width="1.5"
+          stroke-linecap="round"
+          [attr.stroke-dasharray]="edge.dashed ? '5 4' : null"
+          [class]="edgeStroke(edge.basis)"
+        />
+        <circle [attr.cx]="edge.start.x" [attr.cy]="edge.start.y" r="2.5" class="fill-zinc-500" />
+        <circle [attr.cx]="edge.end.x" [attr.cy]="edge.end.y" r="2.5" class="fill-zinc-500" />
+      </g>
+    }
+
+    @for (node of l.nodes; track $index) {
+      <g data-node [attr.transform]="'translate(' + node.x + ' ' + node.y + ')'">
+        <title>{{ node.entity }} ({{ node.role }}) — {{ node.reason }}</title>
+        <rect
+          [attr.width]="node.width"
+          [attr.height]="node.height"
+          rx="8"
+          class="fill-[#2a2a2a]"
+          [class]="node.primary ? 'stroke-sky-400/50' : 'stroke-white/15'"
+        />
+        <text x="10" y="18" class="fill-zinc-200 text-[11.5px] font-medium">
+          {{ node.label }}
+        </text>
+        <text
+          [attr.x]="node.width - 10"
+          y="18"
+          text-anchor="end"
+          class="fill-zinc-500 text-[9.5px] tracking-wide uppercase"
+        >
+          {{ node.roleLabel }}
+        </text>
+        @if (node.lines.length) {
+          <line x1="1" y1="28" [attr.x2]="node.width - 1" y2="28" class="stroke-white/10" />
+          @for (line of node.lines; track $index) {
+            <text
+              x="10"
+              [attr.y]="28 + 15 * ($index + 1) - 1"
+              class="fill-zinc-400 font-mono text-[10.5px]"
+            >
+              {{ line }}
+            </text>
+          }
+        }
+      </g>
+    }
+
+    <!-- Labels on top of everything so a curve never hides one -->
+    @for (edge of l.edges; track edge.key) {
+      <g data-edge-label>
+        <rect
+          [attr.x]="edge.labelX - edge.labelWidth / 2"
+          [attr.y]="edge.labelY - 8"
+          [attr.width]="edge.labelWidth"
+          height="16"
+          rx="4"
+          class="fill-[#232323] stroke-white/10"
+        />
+        <text
+          [attr.x]="edge.labelX"
+          [attr.y]="edge.labelY + 3.5"
+          text-anchor="middle"
+          class="fill-zinc-400 font-mono text-[10px]"
+        >
+          {{ edge.label }}
+        </text>
+      </g>
+    }
+
+    @if (l.rejected.length) {
+      <text
+        [attr.x]="12"
+        [attr.y]="l.rejectedCaptionY"
+        class="fill-zinc-500 text-[9.5px] tracking-wide uppercase"
+      >
+        Considered, not used
+      </text>
+      @for (item of l.rejected; track $index) {
+        <g data-rejected opacity="0.5" [attr.transform]="'translate(' + item.x + ' ' + item.y + ')'">
+          <title>{{ item.entity }} — {{ item.reason }}</title>
+          <rect
+            [attr.width]="item.width"
+            [attr.height]="item.height"
+            rx="6"
+            fill="none"
+            stroke-dasharray="4 3"
+            class="stroke-zinc-400"
+          />
+          <text
+            x="10"
+            y="15.5"
+            class="fill-zinc-400 font-mono text-[10.5px]"
+          >
+            {{ item.label }}
+          </text>
+        </g>
+      }
+    }
+  </svg>
+}

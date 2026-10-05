@@ -16,7 +16,7 @@
  *
  *   cd backend && npx ts-node -T -P tsconfig.json ../docker/postgres/generate/supply-chain.ts
  *
- * The traps S1-S15 in `docs/evals/synthetic-domains.md` (Domain 3 —
+ * The traps S1-S15 in `docs/evals/synthetic-domains.md` (Domain 5 —
  * `supply_chain`) are planted here. The ones that must hold exactly (the 41/41
  * supplier tie, the three distinct "biggest supplier" answers, the nine test
  * purchase orders in January 2025, the per-supplier acceptance ladder, the

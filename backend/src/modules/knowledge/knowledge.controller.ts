@@ -113,7 +113,11 @@ function toQuery(raw: {
 }): KnowledgeQuery {
   const kind = KNOWLEDGE_SNIPPET_KINDS.find((k) => k === raw.kind);
   const source =
-    raw.source === 'user' || raw.source === 'mined' ? raw.source : undefined;
+    raw.source === 'user' ||
+    raw.source === 'mined' ||
+    raw.source === 'feedback'
+      ? raw.source
+      : undefined;
   const enabled =
     raw.enabled === 'true' || raw.enabled === 'false'
       ? raw.enabled === 'true'

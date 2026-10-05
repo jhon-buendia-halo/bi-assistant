@@ -106,7 +106,7 @@ The measurement baseline. Every change to the DSL, knowledge store or connectors
 - **Scope:** a golden dataset of representative questions with known-correct answers on the sample fixtures. An eval suite (LLM judge plus SQL and result checks) that runs against it, building on the existing `assistant-eval-judge` agent and `mastra/evals/` and the Agents → Evals tab.
 - **Out of scope:** evals on customer data.
 - **Acceptance:** the suite runs on demand against the golden dataset and reports per-question and per-category results. Results can be compared run to run, and a knowledge on/off comparison is possible (needed by 1.3.3).
-- **Notes:** Jira has no stories under this epic yet, so this feature mirrors the epic. Split it into stories in Jira first, then mirror them here.
+- **Notes:** Jira has no stories under this epic yet, so this feature mirrors the epic. Split it into stories in Jira first, then mirror them here. Suites as data files, failure categories, token accounting, arms and pass^k arrive with 1.3.5.
 
 ### Milestone 1.2 — Data Model DSL ([BA-2](https://halo-powered.atlassian.net/browse/BA-2))
 
@@ -166,6 +166,16 @@ Curated knowledge the assistant treats as authoritative: glossary terms, standin
 - **Acceptance:** an analyst can fix a wrong answer by editing a concept, and the next answer cites it.
 - **Notes:** a new UI surface, so it needs Gherkin scenarios and E2E specs first. The provenance display ties into 1.4.1.
 
+#### 1.3.5 — Learn from reviewer feedback, business expert mode and the eval loop (Jira story pending)  `🚧 In progress`
+- **Intent:** a reviewer's comment on an answer changes the next answer, and every change to the engine is measured before it ships.
+- **Scope:** one integration branch (`feat/knowledge-learning-evals`) that brings together three branches built on the same base:
+  - `docs/eval-suites-specs`: eval suites as data files (World Cup, World Cup REST, Formula 1, Health insurance, Genomics), failure categories, token and cost accounting, CLI runner.
+  - `feat/engine-eval-loop`: engine levers in Settings, eval arms, pass^k repeats, a fixed-model judge, the `answer-review` agent, Databricks Model Serving, and the supply-chain and banking fixtures (ADR-0011, ADR-0012).
+  - `feat/business-expert-learning`: business expert mode (reasoning trace, measured confidence, per-block feedback), lessons distilled from reviewer comments into Knowledge with provenance (`feedback-learner`), answer pinning, and the HR and retail fixtures (ADR-0008 to ADR-0010).
+- **Out of scope:** an external memory layer (Hindsight); ontology work from 1.3.1 to 1.3.3.
+- **Acceptance:** the Gherkin in [business-expert](specs/capabilities/business-expert/spec.md), [answer-pinning](specs/capabilities/answer-pinning/spec.md), [engine-levers](specs/capabilities/engine-levers/spec.md), [knowledge](specs/capabilities/knowledge/spec.md) and [agents-evals](specs/capabilities/agents-evals/spec.md) passes; backend and frontend unit tests, lint, builds, `check-specs.py` and the full E2E suite are green; the existing World Cup, Health Insurance and Genomics datasets open and answer in the app.
+- **Notes:** the user waived the Epic gate for this branch on 2026-10-05 and will create the Jira story under epic BA-4 by hand; rename the branch to `feat/<BA-ID>-knowledge-learning-evals` and put the key here before the PR. Delivers the first slice of 1.3.4 (feedback learning with provenance), part of 1.1.1 (suites, arms, pass^k) and part of 1.4.1 (measured confidence).
+
 ### Milestone 1.4 — Response Reliability Signals ([BA-12](https://halo-powered.atlassian.net/browse/BA-12))
 
 Show users how much to trust each answer. Assignee: Sergio Berrospi.
@@ -181,7 +191,7 @@ Show users how much to trust each answer. Assignee: Sergio Berrospi.
   This builds on the existing SQL self-correction, verified queries and answer feedback.
 - **Out of scope:** —
 - **Acceptance:** *to be defined.* The Jira epic has only a description.
-- **Notes:** see [docs/plans/phase-1-answer-reliability.md](docs/plans/phase-1-answer-reliability.md) and [docs/plans/phase-2-trust-ux.md](docs/plans/phase-2-trust-ux.md); confirm what has already shipped. The epic has no `1.0 Beta` fix version in Jira although it sits in the beta window.
+- **Notes:** see [docs/plans/phase-1-answer-reliability.md](docs/plans/phase-1-answer-reliability.md) and [docs/plans/phase-2-trust-ux.md](docs/plans/phase-2-trust-ux.md); confirm what has already shipped. The epic has no `1.0 Beta` fix version in Jira although it sits in the beta window. Measured confidence and the reasoning trace from business expert mode arrive with 1.3.5.
 
 ### Milestone 1.5 — Data Connectors ([BA-5](https://halo-powered.atlassian.net/browse/BA-5))
 

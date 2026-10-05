@@ -137,6 +137,7 @@ Top level (`EvalRunLogRecordV2`):
 | `comparedToRunId` / `regressions` / `improvements` / `flakyChanges` | | Set when the run was diffed against an earlier one. |
 | `status` | `completed` \| `failed` \| `aborted` | A failed or aborted run is still written — it still spent money. |
 | `error` | string? | Why the run failed or was aborted. |
+| `expert` | object? | CLI `--expert` runs only (business expert mode): `{ graded, traced, tracedPassed, tracedFailed, auroc?, bands: { high \| medium \| low: { n, correct, accuracy?, coverage? } }, highBandTarget, meetsHighBandTarget?, coverage: { tables?, assumptions?, metric? }, probes? }`. `auroc` is the headline (overall confidence vs PASS, Mann–Whitney with ties), computed over PASS and FAIL attempts only — an ERROR or a GAP says nothing about the answer; absent when a class is empty. Cases without reference SQL are `probes` (trace presence only), never ranked. The index line gains `expertAuroc` and `expertHighBandAccuracy`. |
 
 `summary` (`EvalRunSummary` — the pass^k headline, computed over *scored*
 cases: all cases minus `GAP` minus `SKIP`):
@@ -167,6 +168,7 @@ every attempt behind it):
 | `failureLabel` | From the first non-pass attempt that has one (`failure-labels.ts`): `no-sql`, `clarified`, `missing-default-filter`, `wrong-table`, `missing-join`, `id-not-name`, `wrong-aggregate`, `unit`, `format-only`, `wrong-filter`, `judge`, `tool-error`, `timeout`, `unknown`. |
 | `usage` / `estimatedCostUsd` | Case totals. |
 | `attempts` | `EvalRunLogAttempt[]`, below. |
+| `expert` | `--expert` runs only: `{ traced, confidence?, band?, tablesCoverage?, assumptionsCoverage?, metricMatched?, blocks }` for the attempt the verdict reports; `clarified` on a probe; and, with `--repeat`, `attempts: { verdict, traced, confidence?, band? }[]` — every pair the run's AUROC ranks, so it can be recomputed from the log alone. A `SKIP` probe's `usage` is the probe turn's spend. |
 
 `attempts[]` (`EvalRunLogAttempt` — one row per repeat, 1-based `attempt`):
 
@@ -250,7 +252,8 @@ enough for a listing or a trend line without opening every run's file:
 `cases`, `passed`, `inputTokens`/`outputTokens`/`totalTokens`,
 `estimatedCostUsd`, `file` — plus, on a v2 line, `schemaVersion: 2`,
 `repeat`, `arm`, `configHash`, `loopId`, `passK`, `passKRate`,
-`meanPassRate`, `gaps`, `flaky`, `costPerCorrectUsd`, `status`. A run written
+`meanPassRate`, `gaps`, `flaky`, `costPerCorrectUsd`, `status` — and, on an
+`--expert` run (v1 or v2), `expertAuroc` and `expertHighBandAccuracy`. A run written
 twice (a partial write on abort or crash, then the final one on completion)
 appends a second index line for the same `runId`; every reader keeps the
 last line per run id.
@@ -272,6 +275,10 @@ tail -10 logs/evals/index.ndjson | jq -s 'map(.estimatedCostUsd // 0) | add'
 
 # find a run's file by label
 jq -r 'select(.label == "iter0-gpt5") | .file' logs/evals/index.ndjson
+
+# expert runs: the AUROC headline and the high-band constraint over time
+jq -c 'select(.expertAuroc != null) |
+  {startedAt, suite, label, expertAuroc, expertHighBandAccuracy}' logs/evals/index.ndjson
 ```
 
 ## Comparing two runs

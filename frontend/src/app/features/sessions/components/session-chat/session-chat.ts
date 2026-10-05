@@ -20,8 +20,13 @@ import {
   Brain,
   Copy,
   Download,
+  Equal,
+  GraduationCap,
+  History,
   Info,
+  Lightbulb,
   Loader2,
+  LucideIconData,
   ShieldAlert,
   ShieldCheck,
   ShieldOff,
@@ -37,16 +42,20 @@ import {
 import { SessionsApiService } from '../../services/sessions-api.service';
 import {
   AnalysisReport,
+  AnswerConsistency,
   ChatMessage,
   CrossCheck,
   DataPointSelection,
   DeepAnalysisStatus,
   MessageFeedback,
   Session,
+  SessionActionResult,
   ReasoningStep,
   ToolDataRecord,
   VisualEvent,
 } from '../../models/session.model';
+import { ExpertStatus } from '../../models/expert-trace.model';
+import { ExpertTrace } from '../expert-trace/expert-trace';
 import {
   kindAccentClass,
   kindDescription,
@@ -67,6 +76,38 @@ export function drillPrompt(selection: DataPointSelection): string {
 
 export function whyPrompt(selection: DataPointSelection): string {
   return `Why does "${selection.value}" stand out? Explain the drivers.`;
+}
+
+/** Where the Expert chip's on/off state is remembered between sessions. */
+export const EXPERT_MODE_STORAGE_KEY = 'qti.expertMode';
+
+/** Stored Expert preference; off when storage is empty or unavailable. */
+export function readExpertPreference(): boolean {
+  try {
+    return globalThis.localStorage?.getItem(EXPERT_MODE_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function writeExpertPreference(on: boolean): void {
+  try {
+    globalThis.localStorage?.setItem(EXPERT_MODE_STORAGE_KEY, on ? '1' : '0');
+  } catch {
+    // Private window / blocked storage: the chip still works for this run.
+  }
+}
+
+/** Thinking-block line for one business-expert progress notice. */
+export function expertStatusLine(status: ExpertStatus): string {
+  switch (status) {
+    case 'cross-check':
+      return 'Cross-checking with an independent query…';
+    case 'explaining':
+      return 'Explaining the reasoning…';
+    case 'failed':
+      return 'Could not build the reasoning trace';
+  }
 }
 
 /** One tool call shown in the Thinking block, enriched when its result lands. */
@@ -116,7 +157,7 @@ export function deepAnalysisProgressLine(job: DeepAnalysisActivity): string {
 
 @Component({
   selector: 'app-session-chat',
-  imports: [LucideAngularModule, MarkdownPipe, NgTemplateOutlet],
+  imports: [ExpertTrace, LucideAngularModule, MarkdownPipe, NgTemplateOutlet],
   templateUrl: './session-chat.html',
   styleUrl: './session-chat.scss',
 })
@@ -133,7 +174,11 @@ export class SessionChat implements OnDestroy {
   readonly Brain = Brain;
   readonly Copy = Copy;
   readonly Download = Download;
+  readonly Equal = Equal;
+  readonly GraduationCap = GraduationCap;
+  readonly History = History;
   readonly Info = Info;
+  readonly Lightbulb = Lightbulb;
   readonly Loader2 = Loader2;
   readonly ShieldAlert = ShieldAlert;
   readonly ShieldCheck = ShieldCheck;
@@ -172,6 +217,14 @@ export class SessionChat implements OnDestroy {
    * not stored with the session.
    */
   readonly careful = signal(false);
+  /**
+   * Business expert mode: answers come back with a reasoning trace (and a
+   * cross-check). A standing preference — remembered across sessions and app
+   * restarts, unlike Careful.
+   */
+  readonly expert = signal(readExpertPreference());
+  /** Latest progress notice of the expert pass for the in-flight turn. */
+  readonly expertStatus = signal<ExpertStatus | null>(null);
   /** Tail of the model's reasoning stream, shown Conductor-style. */
   readonly reasoning = signal('');
   /** Tools invoked during the current turn, with result summaries. */
@@ -277,6 +330,7 @@ export class SessionChat implements OnDestroy {
       // it opens another session, so nothing to reset here.
       this.draft.set('');
       // A new conversation starts a new session — careful mode is opt-in again.
+      // Expert mode is a standing preference and deliberately survives.
       this.careful.set(false);
       this.customAnswer.set('');
       this.customAnswerOpen.set(false);
@@ -401,12 +455,22 @@ export class SessionChat implements OnDestroy {
           if (this.activeStream !== controller) return;
           this.visualUpdated.emit(event);
         },
+        onExpertStatus: (status) => {
+          if (this.activeStream !== controller) return;
+          this.expertStatus.set(status);
+          this.scrollToBottom();
+        },
         onDone: (session) => {
           if (this.activeStream !== controller) return;
+          const traceFailed = this.expertStatus() === 'failed';
           this.activeStream = null;
           this.stopTimer();
           this.sending.set(false);
           this.resetTurnState();
+          // The thinking block is about to disappear with its status line.
+          if (traceFailed) {
+            this.toast.info('Answer saved without its reasoning trace');
+          }
           if (session) this.messages.set(session.messages);
           this.scrollToBottom();
         },
@@ -446,11 +510,29 @@ export class SessionChat implements OnDestroy {
       controller.signal,
       this.activeVisualizationId() ?? undefined,
       this.careful(),
+      this.expert(),
     );
   }
 
   toggleCareful(): void {
     this.careful.update((on) => !on);
+  }
+
+  toggleExpert(): void {
+    const on = !this.expert();
+    this.expert.set(on);
+    writeExpertPreference(on);
+  }
+
+  expertStatusLine(status: ExpertStatus): string {
+    return expertStatusLine(status);
+  }
+
+  /** A reasoning-block rating was saved: adopt the persisted transcript. */
+  onExpertFeedbackSaved(result: SessionActionResult): void {
+    if (!result.session) return;
+    if (!this.sending()) this.messages.set(result.session.messages);
+    this.sessionUpdated.emit(result.session);
   }
 
   stop(): void {
@@ -491,6 +573,7 @@ export class SessionChat implements OnDestroy {
     this.reasoning.set('');
     this.toolCalls.set([]);
     this.streamingText.set('');
+    this.expertStatus.set(null);
     this.elapsed.set(0);
   }
 
@@ -705,6 +788,65 @@ export class SessionChat implements OnDestroy {
   /** Tooltip: the backend's note, or the verdict when it sent none. */
   crossCheckTitle(check: CrossCheck): string {
     return check.note?.trim() || this.crossCheckLabel(check);
+  }
+
+  // ------------------------------------------------------- answer pinning
+
+  /** Titles of this answer's feedback-learned knowledge, for the trace's chips. */
+  learnedTitlesFor(message: ChatMessage): string[] {
+    return (message.knowledge ?? [])
+      .filter((item) => item.source === 'feedback')
+      .map((item) => item.title);
+  }
+
+  /** "Same answer as <date> · re-verified" / "Same numbers · wording kept" / "Updated after learning". */
+  consistencyLabel(consistency: AnswerConsistency): string {
+    switch (consistency.kind) {
+      case 'replay':
+        return `Same answer as ${this.consistencyDate(consistency.pinnedAt)} · re-verified`;
+      case 'kept':
+        return 'Same numbers · wording kept';
+      case 'updated':
+        return 'Updated after learning';
+    }
+  }
+
+  consistencyIcon(consistency: AnswerConsistency): LucideIconData {
+    switch (consistency.kind) {
+      case 'replay':
+        return this.History;
+      case 'kept':
+        return this.Equal;
+      case 'updated':
+        return this.GraduationCap;
+    }
+  }
+
+  /** Amber for `updated` (numbers moved, worth a second look); muted otherwise. */
+  consistencyClass(consistency: AnswerConsistency): string {
+    return consistency.kind === 'updated'
+      ? 'border-amber-400/20 bg-amber-400/10 text-amber-400'
+      : 'border-white/10 bg-white/[0.04] text-zinc-400';
+  }
+
+  consistencyTitle(consistency: AnswerConsistency): string {
+    switch (consistency.kind) {
+      case 'replay':
+        return 'This exact question was answered before under the same knowledge; its query was re-run just now and returned the same data.';
+      case 'kept':
+        return 'The context behind this answer changed, so the query was re-derived — it returned the same numbers as before, so the earlier wording was kept.';
+      case 'updated':
+        return consistency.lessons?.length
+          ? `Updated after learning: ${consistency.lessons.join(', ')}`
+          : 'Updated after learning.';
+    }
+  }
+
+  private consistencyDate(iso: string): string {
+    const date = new Date(iso);
+    return isNaN(date.getTime())
+      ? ''
+      : date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   }
 
   /**

@@ -9,15 +9,21 @@
  * everything a human would otherwise click through in the app:
  *
  *   1. Register (or reuse) a Postgres datasource pointed at the dev
- *      `docker compose` database (see `docker-compose.yml`, port 55432).
+ *      `docker compose` database (see `docker-compose.yml`, port 55432) —
+ *      repointing a reused one when the stack it names has moved (another
+ *      `WORLD_CUP_DB_PORT`, an isolated `docker compose -p …` project).
  *   2. Save one dataset per fixture schema (`world_cup`, `health_insurance`,
- *      `genomics`, `supply_chain`, `banking`), discovering the entity list
- *      from the datasource's own inventory rather than hard-coding table
- *      names.
+ *      `genomics`, `hr`, `retail`, `supply_chain`, `banking`), discovering
+ *      the entity list from the datasource's own inventory rather than
+ *      hard-coding table names.
  *   3. Seed the FULL business-semantics document per fixture — every
  *      knowledge snippet and metric in `fixture-semantics.ts`, plus each
  *      dataset's operator-written description — not just the handful of
  *      trap-specific entries the pre-U2-D version of this script seeded.
+ *      HR and Retail have no semantics document: they get the curated
+ *      glossaries below instead — HR's for traps HR1-HR10, and Retail's,
+ *      which deliberately leaves out the two facts the learning demo teaches
+ *      (see `RETAIL_CURATED`).
  *
  * Run with `npm run fixtures:register` from `backend/`.
  *
@@ -72,7 +78,8 @@ const DATASOURCE_NAME = 'Fixtures (local Postgres)';
 // Mirrors docker-compose.yml exactly: same default port, same override var,
 // same fixed dev credentials (never a secret worth protecting further). Also
 // the catalog segment `fixture-semantics.ts`'s two-segment `schema.table`
-// entity names get qualified with — one Postgres database, three schemas.
+// entity names get qualified with — one Postgres database, one schema per
+// fixture.
 const DB_PORT = Number(process.env.WORLD_CUP_DB_PORT ?? 55432);
 const DB_HOST = 'localhost';
 const DB_NAME = 'world_cup';
@@ -90,9 +97,194 @@ const FIXTURE_DATASETS: FixtureDataset[] = [
   { name: 'World Cup', schema: 'world_cup' },
   { name: 'Health Insurance', schema: 'health_insurance' },
   { name: 'Genomics', schema: 'genomics' },
+  { name: 'HR', schema: 'hr' },
+  { name: 'Retail', schema: 'retail' },
   { name: 'Supply Chain', schema: 'supply_chain' },
   { name: 'Banking', schema: 'banking' },
 ];
+
+// ------------------------------------------------- curated-only fixtures
+
+/**
+ * A fixture seeded with a curated glossary instead of a full semantics
+ * document (`fixture-semantics.ts`): knowledge and metrics only, in the same
+ * two-segment `schema.table` form, through the same idempotent seeding — but
+ * no dataset description. A snippet with no `entities` applies to the
+ * dataset as a whole.
+ */
+interface CuratedFixture {
+  /** Saved dataset name the knowledge is scoped to (`scope.datasetId`). */
+  datasetName: string;
+  schema: string;
+  knowledge: SemanticKnowledgeSnippet[];
+  metrics: SemanticMetric[];
+}
+
+/**
+ * The HR fixture's business glossary (traps HR1-HR10 in
+ * docs/evals/synthetic-domains.md). Facts about the data and the company's
+ * definitions only — never a hint that answers one eval question.
+ *
+ * Budget: `KnowledgeService.contextFor` gives the whole knowledge block 8,000
+ * chars (default filters first, then learned lessons) and skips an entry that
+ * does not fit; these seven lines are ~1,150 chars as formatted (`- [kind]
+ * title: body; synonyms: …; entities: …`), well inside it.
+ */
+const HR_CURATED: CuratedFixture = {
+  datasetName: 'HR',
+  schema: 'hr',
+  knowledge: [
+    {
+      kind: 'default_filter',
+      title: 'Employees only',
+      body:
+        "Headcount and pay figures cover employment_type = 'employee'; " +
+        'exclude contractor and intern rows unless asked.',
+      entities: ['hr.employees'],
+    },
+    {
+      kind: 'default_filter',
+      title: 'Active as of a date',
+      body:
+        'Headcount at a date = hired_on <= date AND (terminated_on IS NULL ' +
+        'OR terminated_on > date).',
+      entities: ['hr.employees'],
+    },
+    {
+      kind: 'term',
+      title: 'Tech employees',
+      body:
+        'Employees whose department is in the Technology division ' +
+        '(Engineering, Data Platform, IT & Security); job family does not ' +
+        'define it.',
+      synonyms: ['tech', 'technology'],
+      entities: [],
+    },
+    {
+      kind: 'term',
+      title: 'Salary',
+      body:
+        'Annual base pay from salary_history only, bonuses excluded. A ' +
+        "year's salary is the row effective on 31 December: effective_from " +
+        '<= date AND (effective_to IS NULL OR effective_to > date).',
+      entities: ['hr.salary_history'],
+    },
+    {
+      kind: 'term',
+      title: 'Local currency',
+      body:
+        "Amounts are in the employee's location currency; convert with " +
+        "exchange_rates.rate_to_usd for the same year (a bonus's " +
+        'fiscal_year) to report USD.',
+      entities: ['hr.exchange_rates'],
+    },
+    {
+      kind: 'term',
+      title: 'Top performer',
+      body: 'Performance rating 4 or 5 on the 1-5 scale (5 is best).',
+      entities: [],
+    },
+    {
+      kind: 'term',
+      title: 'Total compensation',
+      body: 'Base salary for the year plus bonuses paid for that fiscal year.',
+      entities: [],
+    },
+  ],
+  // The HR fixture's governed metrics; `datasourceId` is filled in at seed time.
+  metrics: [
+    {
+      name: 'avg_base_salary_usd',
+      label: 'Average base salary (USD)',
+      description:
+        'One salary_history row per employee: the row effective on ' +
+        '31 December of the year, joined to exchange_rates on currency and ' +
+        'that year. Bonuses excluded.',
+      entity: 'hr.salary_history',
+      expression:
+        'AVG(salary_history.annual_base_amount * exchange_rates.rate_to_usd)',
+    },
+    {
+      name: 'attrition_rate',
+      label: 'Attrition rate',
+      description:
+        'Employees terminated during the year divided by active headcount ' +
+        'on 1 January of that year (:year_start). A ratio; multiply by 100 ' +
+        'for a percentage.',
+      entity: 'hr.employees',
+      expression:
+        'COUNT(*) FILTER (WHERE terminated_on >= :year_start AND terminated_on < :next_year_start)::numeric / ' +
+        'NULLIF(COUNT(*) FILTER (WHERE hired_on <= :year_start AND (terminated_on IS NULL OR terminated_on > :year_start)), 0)',
+    },
+    {
+      name: 'total_compensation_usd',
+      label: 'Total compensation (USD)',
+      description:
+        'Per employee and year: the salary_history row effective on ' +
+        '31 December plus fy_bonus.amount = SUM(bonus_payments.amount) for ' +
+        "that fiscal_year, converted at exchange_rates for the employee's " +
+        'currency and that year. Aggregate with AVG or SUM as asked.',
+      entity: 'hr.salary_history',
+      expression:
+        '(salary_history.annual_base_amount + COALESCE(fy_bonus.amount, 0)) * exchange_rates.rate_to_usd',
+    },
+  ],
+};
+
+/**
+ * The Retail fixture's glossary: facts about the data only. It deliberately
+ * says nothing about the fiscal calendar or what "net revenue" means, and no
+ * metric is seeded — those two facts are the tribal knowledge the learning
+ * demo's reviewer notes teach (`learningScenario` on `net-revenue-fy2025` in
+ * `suites/retail.json`). Seeding either would answer the trap question before
+ * anyone taught it, which is the overfitting rule's failure in reverse — and
+ * the reason Retail must never get a full semantics document.
+ */
+const RETAIL_CURATED: CuratedFixture = {
+  datasetName: 'Retail',
+  schema: 'retail',
+  knowledge: [
+    {
+      kind: 'default_filter',
+      title: 'Completed orders only',
+      body:
+        "Revenue, order counts and units cover orders with status = 'completed'; " +
+        'cancelled orders never count unless the question is about cancellations.',
+      entities: ['retail.orders'],
+    },
+    {
+      kind: 'term',
+      title: 'Order date',
+      body:
+        'ordered_at is the date the order was placed — the only date on an ' +
+        'order and the one every period question uses.',
+      entities: [],
+    },
+    {
+      kind: 'term',
+      title: 'Units',
+      body: 'order_lines.quantity; an order has one line per product.',
+      entities: ['retail.order_lines'],
+    },
+    {
+      kind: 'term',
+      title: 'Line discount',
+      body:
+        'order_lines.discount_amount is the money taken off that line at ' +
+        'checkout, 0 when none.',
+      entities: [],
+    },
+    {
+      kind: 'instruction',
+      title: 'Coverage',
+      body: 'Orders run from 2024-01-01 to 2026-03-31; every amount is in USD.',
+      entities: [],
+    },
+  ],
+  metrics: [],
+};
+
+const CURATED_FIXTURES: CuratedFixture[] = [HR_CURATED, RETAIL_CURATED];
 
 // ------------------------------------------------------------------ cli
 
@@ -141,9 +333,11 @@ function printUsage(): void {
       '  --semantics-only  skip datasource/dataset creation — seed knowledge/metrics/',
       '                    descriptions against datasets a prior run already registered',
       '',
-      'With no flags: register the datasource, save/refresh every fixture',
-      'dataset, seed the full semantics document per fixture (knowledge +',
-      'metrics), and set each dataset\'s description.',
+      'With no flags: register the datasource (repointing it when the stack',
+      'moved), save/refresh every fixture dataset, seed the full semantics',
+      'document per fixture (knowledge + metrics), and set each dataset\'s',
+      'description. HR and Retail get their curated glossaries instead (no',
+      'description).',
       '',
       'Env: WORLD_CUP_DB_PORT (default 55432),',
       '     APP_DATA_DIR (datastore location — must match the desktop app).',
@@ -187,7 +381,7 @@ interface SemanticsRow {
 async function ensureDatasource(
   datasources: DatasourcesService,
   options: Options,
-): Promise<{ id: string; created: boolean }> {
+): Promise<{ id: string; created: boolean; repointed: boolean }> {
   const config: PostgresConfig = {
     host: DB_HOST,
     port: DB_PORT,
@@ -211,17 +405,39 @@ async function ensureDatasource(
   const existing = (await datasources.list()).find(
     (d) => d.name === DATASOURCE_NAME,
   );
-  if (existing) return { id: existing.id, created: false };
+  if (existing) {
+    // Reusing by name alone would keep a datasource that points at a stack
+    // that is no longer there — another WORLD_CUP_DB_PORT, or an isolated
+    // `docker compose -p …` project — and every snapshot below would then
+    // silently lose its sample values. Repoint it at the database just
+    // verified instead.
+    const current = existing.config as Partial<PostgresConfig>;
+    const moved =
+      existing.kind !== 'postgres' ||
+      current.host !== config.host ||
+      Number(current.port) !== config.port ||
+      current.database !== config.database;
+    if (!moved || options.dryRun) {
+      return { id: existing.id, created: false, repointed: moved };
+    }
+    await datasources.save({
+      id: existing.id,
+      name: DATASOURCE_NAME,
+      kind: 'postgres',
+      config,
+    });
+    return { id: existing.id, created: false, repointed: true };
+  }
 
   if (options.dryRun) {
-    return { id: '(dry-run: not created)', created: true };
+    return { id: '(dry-run: not created)', created: true, repointed: false };
   }
   const saved = await datasources.save({
     name: DATASOURCE_NAME,
     kind: 'postgres',
     config,
   });
-  return { id: saved.id, created: true };
+  return { id: saved.id, created: true, repointed: false };
 }
 
 // ------------------------------------------------------------ dataset step
@@ -327,7 +543,7 @@ async function ensureDataset(
 
 // ---------------------------------------------------------- semantics step
 
-/** Prefix a `schema.table` entity name with the catalog (`DB_NAME` — one Postgres database, three schemas). */
+/** Prefix a `schema.table` entity name with the catalog (`DB_NAME` — one Postgres database, one schema per fixture). */
 function qualifyEntity(entity: string): string {
   return `${DB_NAME}.${entity}`;
 }
@@ -340,7 +556,7 @@ function qualifyEntities(entities: string[]): string[] {
 async function seedKnowledgeSnippet(
   knowledge: KnowledgeService,
   existing: KnowledgeSnippet[],
-  fixture: FixtureSemantics,
+  fixture: Pick<FixtureSemantics, 'datasetName'>,
   snippet: SemanticKnowledgeSnippet,
   options: Options,
 ): Promise<SemanticsRow> {
@@ -396,7 +612,7 @@ async function seedKnowledgeSnippet(
 async function seedMetric(
   metrics: MetricsService,
   existing: MetricDoc[],
-  fixture: FixtureSemantics,
+  fixture: Pick<FixtureSemantics, 'datasetName'>,
   metric: SemanticMetric,
   datasourceId: string | undefined,
   options: Options,
@@ -486,7 +702,7 @@ async function seedDescription(
 async function reprofileFixture(
   datasets: DatasetsService,
   currentDoc: DatasetDoc | undefined,
-  fixture: FixtureSemantics,
+  fixture: Pick<FixtureSemantics, 'datasetName'>,
   options: Options,
 ): Promise<SemanticsRow> {
   const item = 'reprofile';
@@ -513,7 +729,8 @@ async function reprofileFixture(
  * Seed the full semantics document (`fixture-semantics.ts`) for every
  * fixture: description always; knowledge + metrics unless `--descriptions`
  * restricts the run to descriptions only; reprofile only when `--reprofile`
- * is passed. Every write is wrapped so a NotFoundException (dataset not
+ * is passed. Then the curated-only fixtures (`CURATED_FIXTURES`), the same
+ * way minus the description they do not have. Every write is wrapped so a NotFoundException (dataset not
  * registered — the `--semantics-only` case) is reported as a `skipped` row
  * instead of aborting the whole run.
  */
@@ -528,7 +745,9 @@ async function seedAllSemantics(
   const [existingKnowledge, existingMetrics, currentDocs] = await Promise.all([
     knowledge.list(),
     metrics.list(),
-    datasetsRepo.getByNames(FIXTURE_SEMANTICS.map((f) => f.datasetName)),
+    datasetsRepo.getByNames(
+      [...FIXTURE_SEMANTICS, ...CURATED_FIXTURES].map((f) => f.datasetName),
+    ),
   ]);
   const docByName = new Map(currentDocs.map((d) => [d.name, d]));
 
@@ -551,6 +770,24 @@ async function seedAllSemantics(
     }
 
     if (options.reprofile) {
+      rows.push(await reprofileFixture(datasets, currentDoc, fixture, options));
+    }
+  }
+  for (const fixture of CURATED_FIXTURES) {
+    if (!options.descriptionsOnly) {
+      for (const snippet of fixture.knowledge) {
+        rows.push(
+          await seedKnowledgeSnippet(knowledge, existingKnowledge, fixture, snippet, options),
+        );
+      }
+      for (const metric of fixture.metrics) {
+        rows.push(
+          await seedMetric(metrics, existingMetrics, fixture, metric, datasourceId, options),
+        );
+      }
+    }
+    if (options.reprofile) {
+      const currentDoc = docByName.get(fixture.datasetName);
       rows.push(await reprofileFixture(datasets, currentDoc, fixture, options));
     }
   }
@@ -634,8 +871,17 @@ async function main(): Promise<number> {
     const datasetSummaries: DatasetSummary[] = [];
 
     if (!options.semanticsOnly) {
-      const { id } = await ensureDatasource(datasources, options);
+      const { id, repointed } = await ensureDatasource(datasources, options);
       datasourceId = id;
+      if (repointed) {
+        console.log(
+          `${options.dryRun ? '[dry-run] would repoint' : 'Repointed'} ${DATASOURCE_NAME} at ` +
+            `${DB_HOST}:${DB_PORT}/${DB_NAME}; re-snapshotting its datasets.`,
+        );
+        // Snapshots taken against the old location carry its sample values
+        // (or none, if it was unreachable), so they are refreshed too.
+        options.forceRefresh = true;
+      }
 
       const config: PostgresConfig = {
         host: DB_HOST,

@@ -22,6 +22,8 @@ import {
   buildCliRunRecord,
   buildValidateRecord,
   decideValidateStatus,
+  expertCaseResult,
+  expertSummaryOf,
   formatHeadline,
   goldenToSuiteEvalCase,
   judgeModelMismatch,
@@ -34,13 +36,16 @@ import {
   parseArgs,
   partitionCases,
   readCaseFile,
+  reportExpert,
   resolveDialect,
   runsText,
   selectCases,
   splitArmList,
   summarizeCategories,
   validateSummaryLine,
+  withExpert,
   type CaseOutcomeLike,
+  type CaseResult,
   type CliRunRecordInput,
   type GoldenCase,
   type ValidateRow,
@@ -205,6 +210,17 @@ describe('run-eval CLI', () => {
       expect(options.dialect).toBe('auto');
       expect(options.includeVariants).toBe(false);
       expect(options.stopOnError).toBe(false);
+      expect(options.expert).toBe(false);
+    });
+
+    it('parses --expert, and refuses it with --validate (which makes no model calls)', () => {
+      expect(parseArgs(['--suite', 'hr', '--expert']).expert).toBe(true);
+      expect(() => parseArgs(['--expert', '--validate'])).toThrow(
+        /--expert .* --validate/,
+      );
+      expect(() => parseArgs(['--validate', '--expert'])).toThrow(
+        EvalSetupError,
+      );
     });
 
     it('keeps the original flags working', () => {
@@ -643,6 +659,45 @@ describe('run-eval CLI', () => {
         cases: [{ id: 'a', question: 'q', ...fields }],
       });
       expect(() => loadGoldenSet(file)).toThrow(expected);
+    });
+
+    it('carries expectedReasoning through, validated like a registered suite', () => {
+      const file = writeJson('reasoning.json', {
+        id: 'hr',
+        datasets: ['HR'],
+        cases: [
+          {
+            id: 'avg-salary-tech-2025',
+            question: 'What is the average salary of tech employees in 2025?',
+            expectedSql: 'SELECT 1',
+            expectedReasoning: {
+              tables: ['hr.v_salary_by_year'],
+              metric: 'avg_base_salary_usd',
+            },
+          },
+        ],
+      });
+      expect(loadGoldenSet(file)[0].expectedReasoning).toEqual({
+        tables: ['hr.v_salary_by_year'],
+        metric: 'avg_base_salary_usd',
+      });
+
+      const broken = writeJson('reasoning-broken.json', {
+        id: 'hr',
+        datasets: ['HR'],
+        cases: [
+          {
+            id: 'bad',
+            question: 'q',
+            expectedSql: 'SELECT 1',
+            expectedReasoning: { tables: ['employees'] },
+          },
+        ],
+      });
+      expect(() => loadGoldenSet(broken)).toThrow(EvalSetupError);
+      expect(() => loadGoldenSet(broken)).toThrow(
+        /case "bad"\.expectedReasoning\.tables\[0\] "employees" must be schema\.table/,
+      );
     });
 
     it("lets a suite case override the suite's dataset", () => {
@@ -1779,6 +1834,294 @@ describe('eval-diff CLI', () => {
         'control',
         'ratio-trap',
       ]);
+    });
+  });
+
+  describe('expert mode report', () => {
+    const base = { reason: '', detail: '', durationMs: 0 };
+    const graded = (
+      name: string,
+      verdict: 'PASS' | 'FAIL' | 'ERROR',
+      record: NonNullable<CaseResult['expert']>,
+      reason = '',
+    ): CaseResult => ({
+      ...base,
+      name,
+      verdict,
+      reason,
+      expert: record,
+      expertAttempts: [{ verdict, record }],
+    });
+    const results: CaseResult[] = [
+      graded('avg-salary', 'PASS', {
+        traced: true,
+        confidence: 0.91,
+        band: 'high',
+        tablesCoverage: 1,
+        assumptionsCoverage: 0.5,
+        metricMatched: true,
+      }),
+      graded('headcount', 'PASS', {
+        traced: true,
+        confidence: 0.84,
+        band: 'high',
+      }),
+      graded(
+        'attrition',
+        'FAIL',
+        {
+          traced: true,
+          confidence: 0.62,
+          band: 'medium',
+          metricMatched: false,
+        },
+        'result-mismatch',
+      ),
+      graded('no-trace', 'FAIL', { traced: false }, 'no-sql'),
+      // An ERROR says nothing about the answer: never ranked.
+      graded(
+        'timeout',
+        'ERROR',
+        { traced: true, confidence: 0.99, band: 'high' },
+        'timeout',
+      ),
+      {
+        ...base,
+        name: 'reports-to',
+        verdict: 'SKIP',
+        reason: 'no-expected-sql',
+        probe: true,
+        clarified: true,
+        expert: { traced: false },
+      },
+      { ...base, name: 'placeholder', verdict: 'SKIP', reason: 'placeholder' },
+    ];
+
+    it('ranks graded attempts only and counts probes separately', () => {
+      const summary = expertSummaryOf(results);
+      expect(summary).toMatchObject({
+        graded: 4,
+        traced: 3,
+        tracedPassed: 2,
+        tracedFailed: 1,
+        auroc: 1,
+        meetsHighBandTarget: true,
+        coverage: {
+          tables: { mean: 1, n: 1 },
+          assumptions: { mean: 0.5, n: 1 },
+          metric: { matched: 1, n: 2, rate: 0.5 },
+        },
+        probes: { run: 1, traced: 0, clarified: 1, tracedClarifications: 0 },
+      });
+      expect(summary.bands.high).toMatchObject({
+        n: 2,
+        correct: 2,
+        accuracy: 1,
+      });
+    });
+
+    it('prints one row per case that ran, then the headline and the constraint', () => {
+      const lines: string[] = [];
+      const log = jest
+        .spyOn(console, 'log')
+        .mockImplementation((...args: unknown[]) => {
+          lines.push(args.map(String).join(' '));
+        });
+      try {
+        reportExpert(results, expertSummaryOf(results));
+      } finally {
+        log.mockRestore();
+      }
+      const text = lines.join('\n');
+      expect(lines).toContainEqual(
+        expect.stringMatching(
+          /^CASE\s+VERDICT\s+CONF\s+BAND\s+TABLES\s+ASSUMPTIONS\s+METRIC$/,
+        ),
+      );
+      expect(text).toMatch(
+        /avg-salary\s+PASS\s+0\.91\s+high\s+100%\s+50%\s+yes/,
+      );
+      expect(text).toMatch(
+        /attrition\s+FAIL\(result-mismatch\)\s+0\.62\s+medium\s+-\s+-\s+no/,
+      );
+      expect(text).toMatch(/no-trace\s+FAIL\(no-sql\)\s+-\s+no trace/);
+      expect(text).toMatch(
+        /reports-to\s+SKIP\(no-expected-sql\)\s+-\s+no trace/,
+      );
+      expect(text).not.toMatch(/placeholder/);
+      expect(text).toContain(
+        'Expert mode: 3/4 graded answer(s) carried a reasoning trace',
+      );
+      expect(text).toContain(
+        'AUROC (overall confidence vs PASS): 1.00 over 3 traced answer(s) (2 pass / 1 fail)',
+      );
+      expect(text).toMatch(
+        /high-band accuracy: 2\/2 = 100% \(target ≥ 90%: met\)/,
+      );
+      expect(text).toContain(
+        'Probes     1 ungraded case(s) run, 1 clarified, 0 carried a trace',
+      );
+    });
+
+    it('says the headline is not measurable rather than printing 1.0 or 0.0', () => {
+      const lines: string[] = [];
+      const log = jest
+        .spyOn(console, 'log')
+        .mockImplementation((...args: unknown[]) => {
+          lines.push(args.map(String).join(' '));
+        });
+      const onlyPasses = results.slice(0, 2);
+      try {
+        reportExpert(onlyPasses, expertSummaryOf(onlyPasses));
+      } finally {
+        log.mockRestore();
+      }
+      expect(lines.join('\n')).toMatch(
+        /AUROC: not measurable — needs at least one PASS and one FAIL/,
+      );
+    });
+
+    it('parses --expert alongside the engine flags of a graded run', () => {
+      const options = parseArgs([
+        '--suites',
+        'hr,retail',
+        '--arms',
+        'baseline,fixer-off',
+        '--repeat',
+        '3',
+        '--expert',
+      ]);
+      expect(options).toMatchObject({
+        expert: true,
+        suites: ['hr', 'retail'],
+        arms: ['baseline', 'fixer-off'],
+        repeat: 3,
+      });
+    });
+  });
+
+  describe('expert mode on the shared harness', () => {
+    const traced = (confidence: number, band: 'high' | 'medium' | 'low') => ({
+      traced: true,
+      confidence,
+      band,
+    });
+
+    it('scores every observed attempt and reports the representative one', () => {
+      const logCase = buildLogCase({ id: 'avg-salary', category: 'unit' }, [
+        attempt(1, 'PASS'),
+        attempt(2, 'FAIL'),
+        attempt(3, 'PASS'),
+      ]);
+      const result = expertCaseResult(
+        {
+          name: 'avg-salary',
+          category: 'unit',
+          dataset: 'HR',
+          question: 'q',
+          expectedSql: 'SELECT 1',
+        },
+        logCase,
+        [
+          { record: traced(0.9, 'high'), clarified: false },
+          { record: traced(0.4, 'low'), clarified: false },
+          // The third turn never completed: nothing to rank.
+          { clarified: false },
+        ],
+      );
+      expect(result).toMatchObject({
+        name: 'avg-salary',
+        verdict: 'FAIL',
+        expert: traced(0.4, 'low'),
+        expertAttempts: [
+          { verdict: 'PASS', record: traced(0.9, 'high') },
+          { verdict: 'FAIL', record: traced(0.4, 'low') },
+        ],
+      });
+      expect(result.probe).toBeUndefined();
+    });
+
+    it('treats a case with no reference SQL as a probe and surfaces a traced clarification', () => {
+      const logCase = buildLogCase({ id: 'reports-to' }, [
+        attempt(1, 'PASS'),
+        attempt(2, 'PASS'),
+      ]);
+      const result = expertCaseResult(
+        {
+          name: 'reports-to',
+          dataset: 'HR',
+          question: 'Who reports to whom?',
+          evalCase: {
+            id: 'reports-to',
+            question: 'Who reports to whom?',
+            intent: 'clarify',
+            checks: [],
+          },
+        },
+        logCase,
+        [
+          { record: { traced: false }, clarified: true },
+          { record: traced(0.7, 'medium'), clarified: true },
+        ],
+      );
+      expect(result).toMatchObject({
+        probe: true,
+        clarified: true,
+        expert: traced(0.7, 'medium'),
+      });
+      // A probe is never ranked, whatever its verdict.
+      expect(expertSummaryOf([result])).toMatchObject({
+        graded: 0,
+        probes: { run: 1, clarified: 1, tracedClarifications: 1 },
+      });
+    });
+
+    it('attaches the per-case records and the summary to the v2 run record', () => {
+      const record = buildCliRunRecord(
+        recordInput({ outcomes: sampleOutcomes() }),
+      );
+      const results: CaseResult[] = [
+        {
+          name: 'a-ratio',
+          verdict: 'FAIL',
+          reason: '',
+          detail: '',
+          durationMs: 0,
+          expert: traced(0.3, 'low'),
+          expertAttempts: [
+            { verdict: 'PASS', record: traced(0.8, 'high') },
+            { verdict: 'FAIL', record: traced(0.3, 'low') },
+          ],
+        },
+        {
+          name: 'b-control',
+          verdict: 'PASS',
+          reason: '',
+          detail: '',
+          durationMs: 0,
+          expert: traced(0.95, 'high'),
+          expertAttempts: [{ verdict: 'PASS', record: traced(0.95, 'high') }],
+        },
+      ];
+      const withTrace = withExpert(record, results);
+      expect(withTrace.expert).toMatchObject({
+        graded: 3,
+        traced: 3,
+        auroc: 1,
+      });
+      const byId = new Map(withTrace.cases.map((item) => [item.id, item]));
+      expect(byId.get('a-ratio')?.expert).toMatchObject({
+        confidence: 0.3,
+        attempts: [
+          { verdict: 'PASS', traced: true, confidence: 0.8, band: 'high' },
+          { verdict: 'FAIL', traced: true, confidence: 0.3, band: 'low' },
+        ],
+      });
+      // One attempt: no per-attempt list to repeat.
+      expect(byId.get('b-control')?.expert).not.toHaveProperty('attempts');
+      expect(byId.get('c-gap')).not.toHaveProperty('expert');
+      // Everything the plain record said is still there.
+      expect(withTrace.summary).toEqual(record.summary);
     });
   });
 });

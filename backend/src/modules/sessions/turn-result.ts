@@ -108,6 +108,18 @@ export interface RunTurnOptions {
   category?: string;
   /** The eval arm this turn ran under, recorded on the persisted message. */
   arm?: string;
+  /**
+   * Business expert mode: cross-check the answer, then attach a reasoning
+   * trace (`expert-status` progress events). Never on by default.
+   */
+  expert?: boolean;
+  /**
+   * Answer pinning: replay a pinned answer whose SQL still returns the same
+   * rows, and pin an eligible fresh one. Off by default — only the chat
+   * controller turns it on; an eval harness leaves it off so a graded turn
+   * measures the engine, never a cache.
+   */
+  pin?: boolean;
 }
 
 export interface TurnResult {

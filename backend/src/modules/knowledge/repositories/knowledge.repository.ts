@@ -1,6 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { KNOWLEDGE_STORE } from '../../../infrastructure/database/doc-store';
-import type { DocStore } from '../../../infrastructure/database/doc-store';
+import type {
+  DocFilter,
+  DocStore,
+} from '../../../infrastructure/database/doc-store';
 import type { KnowledgeSnippet } from '../entities/knowledge-snippet.entity';
 
 /**
@@ -38,5 +41,14 @@ export class KnowledgeRepository {
 
   delete(id: string): Promise<number> {
     return this.store.deleteOne({ id });
+  }
+
+  /**
+   * Passthrough to `DocStore.deleteMany` — used for `{ 'provenance.feedbackId':
+   * id }` (re-learn / cleared comment). `matchesFilter` already supports
+   * dotted paths, so no in-process filtering is needed here.
+   */
+  deleteMany(filter: DocFilter): Promise<number> {
+    return this.store.deleteMany(filter);
   }
 }

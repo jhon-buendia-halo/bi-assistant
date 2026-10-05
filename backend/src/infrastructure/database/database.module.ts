@@ -7,6 +7,8 @@ import {
   METRICS_STORE,
   EVAL_RUNS_STORE,
   KNOWLEDGE_STORE,
+  REASONING_FEEDBACK_STORE,
+  ANSWER_PINS_STORE,
   SESSIONS_STORE,
   DATASETS_STORE,
   SETTINGS_STORE,
@@ -35,6 +37,8 @@ const COLLECTIONS = [
   { token: METRICS_STORE, table: 'metrics' },
   { token: EVAL_RUNS_STORE, table: 'eval_runs' },
   { token: KNOWLEDGE_STORE, table: 'knowledge_snippets' },
+  { token: REASONING_FEEDBACK_STORE, table: 'reasoning_feedback' },
+  { token: ANSWER_PINS_STORE, table: 'answer_pins' },
 ];
 
 const sqliteDbProvider: Provider = {

@@ -12,7 +12,7 @@
  *
  * The domain is a fictional US retail bank, "Meridian Trust Bank", with a few
  * EUR and GBP deposit accounts. The traps B1-B15 in
- * `docs/evals/synthetic-domains.md` (Domain 4 — `banking`) are planted here.
+ * `docs/evals/synthetic-domains.md` (Domain 6 — `banking`) are planted here.
  * The ones that must hold exactly — the 12/12 branch tie, the three distinct
  * "most valuable customer" answers, the 14 test-account transactions in March
  * 2025, the exact FX conversion, the paired transfer legs — are enforced by

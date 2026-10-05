@@ -101,6 +101,21 @@ or a percentage, when the question names neither — never to paper over a
 wrong answer; verify each alternative against the fixture and say so in
 `notes`.
 
+**Ratios: `percentEquivalent`.** A rate question may be answered as a
+fraction (`0.1154`) or a percentage (`11.54`). Mark such a case
+`"resultSetOptions": { "percentEquivalent": true }` and the result-set check
+also accepts the answer's numbers scaled by 100 either way — in both runners,
+since they share the check. Prefer a reference that does not round
+(`100.0 * a / b`, not `ROUND(…, 2)`): the rounding tolerance above only
+forgives rounding that keeps three significant figures.
+
+**Which of the assistant's queries is graded.** The final successful query
+first, then every earlier complete, successful one (see above) — so a
+supporting query run *after* the one behind the figure (a `COUNT(*)` to say
+"over 38 employees"), or an answer built on a headline total plus a
+breakdown, still passes when one complete result carries every reference
+fact; the attempt is flagged `viaSupportingQuery`.
+
 ### Verdicts
 
 | Verdict | Meaning |
@@ -235,6 +250,7 @@ npm run eval -- --suite health-insurance        # a registered JSON suite
 npm run eval -- --suites all --repeat 3         # every suite, pass^3 (= npm run eval:loop)
 npm run eval -- --suite genomics --arm fixer-off                   # one arm
 npm run eval -- --suite genomics --engine sqlRepair=false,careful=auto
+npm run eval -- --suite hr --expert --label expert-baseline           # expert mode
 npm run eval -- --suites all --repeat 3 --arms baseline,fixer-off --label fixer-off-1
 npm run eval -- --only denial-rate              # one case (substring match)
 npm run eval -- --category ratio-trap           # one failure class
@@ -278,6 +294,7 @@ is a harness bug — report it rather than reading past it.
 | `--no-log` | Do not write a run log (nor a loop summary). |
 | `--include-placeholders` | Also run cases marked `"placeholder": true`. |
 | `--keep-sessions` | Do not delete the throwaway sessions (for inspecting a turn in the app); their ids are printed at the end. |
+| `--expert` | Run every turn in **business expert mode** (the answer also carries a reasoning trace with confidence). Grading is unchanged — the trace never changes a verdict; each case line gains an `expert:` line and the report an expert table (`CASE \| VERDICT \| CONF \| BAND \| TABLES \| ASSUMPTIONS \| METRIC`, coverage from each case's optional `expectedReasoning`), and the summary reports the headline **AUROC of overall confidence vs PASS** plus the **high-band accuracy** constraint (target ≥ 90 %). Only PASS and FAIL attempts of cases with reference SQL are ranked; cases without one are **probes** (trace presence only — a clarification must carry none), and a `--file` case with nothing to grade is still run once as a probe. Combines with arms, loops and `--repeat` (every attempt's pair is ranked); not with `--validate`. Answer pinning stays off. |
 | `-v, --verbose` | Nest logs plus the final SQL of every attempt. |
 | `-h, --help` | Usage, including the list of arms. |
 
@@ -348,6 +365,9 @@ and exits immediately. A crash mid-run writes the partial log with status
    `tokens not reported` when the provider reported no usage).
 5. Token totals (side passes broken out when measured) and the estimated cost.
    Token counts are measured; costs are estimated.
+   With `--expert`: the per-case expert table and the expert summary (AUROC,
+   band accuracies, coverage means, probes) — see
+   `docs/plans/business-expert-mode-engineering.md`.
 6. A loud warning listing every `GAP` case —
    "GAP = the harness could not measure — fix the harness, not the engine".
 7. Where the run log was written; for a loop, the matrix and the loop summary.
@@ -473,6 +493,15 @@ Differences from the flat array:
   traps can be validated while it is drafted); `intent`, `checks`,
   `judgeRubric` and `resultSetOptions` are graded only once the file is a
   registered suite.
+- `expectedReasoning` (optional; `{ tables?: ["schema.table", …], assumptions?: [phrase, …], metric?: name }`)
+  describes what a correct business-expert trace should explain, and is
+  validated by path exactly as in a registered suite. It feeds the `--expert`
+  coverage columns only and never changes a verdict. An assumption phrase is
+  covered when every word of four or more letters appears in the trace's
+  assumptions, term mappings or metric block, so write phrases with the words
+  a trace would naturally use.
+- `learningScenario` (registered suites only) scripts the reviewer notes the
+  learning demo posts (`npm run learning:demo`); neither runner reads it.
 
 Registered suites (`src/mastra/evals/suites/<id>.json`) are run by id with
 `--suite <id>` / `--suites`; a file anywhere else is run with `--file <path>`.

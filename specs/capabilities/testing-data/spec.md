@@ -10,7 +10,7 @@ Defined once in [the glossary](../../product/glossary.md); used here as follows.
 - **Seedable** — a fixture that ships seed SQL and can be loaded into an empty database. A fixture without seed SQL is **register-only**: it can only be pointed at a database that already holds the data.
 - **Loaded** — a fixture is loaded when the app holds both its datasource and its dataset and the dataset covers every required table.
 - **Datasource** / **Dataset** — see [datasources](../datasources/spec.md) and [datasets](../datasets/spec.md); testing data creates one of each per fixture, by name.
-- **Eval** — assistant evaluation runs depend on a fixture; see [agents-evals](../agents-evals/spec.md). The eval sets over the bundled samples name a catalogue entry; the synthetic health-insurance and genomics eval fixtures are not catalogue samples (they live only in the development database, [delivery.md](../../system/delivery.md)).
+- **Eval** — assistant evaluation runs depend on a fixture; see [agents-evals](../agents-evals/spec.md). The eval sets over the bundled samples name a catalogue entry; the synthetic health-insurance, genomics, HR and retail eval fixtures are not catalogue samples (they live only in the development database, [delivery.md](../../system/delivery.md)).
 
 ## Rules
 

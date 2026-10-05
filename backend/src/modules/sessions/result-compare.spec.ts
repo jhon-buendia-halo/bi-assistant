@@ -130,6 +130,49 @@ describe('width tolerance', () => {
     expect(result.match).toBe(false);
   });
 
+  describe('leadingRows (careful mode cross-check)', () => {
+    // The live Retail run: the answer listed every category, the verifier
+    // returned only the winner — same fact, capped at low as a disagreement.
+    const ranking = [
+      { category: 'Outdoor', units: 92 },
+      { category: 'Footwear', units: 82 },
+      { category: 'Electronics', units: 80 },
+    ];
+
+    it('agrees when the verifier returns the top row of the same ranking', () => {
+      const result = compareResults(ranking, [{ category: 'Outdoor' }], {
+        widthTolerant: true,
+        leadingRows: true,
+      });
+      expect(result.match).toBe(true);
+      expect(result.shapeDiffers).toBe(true);
+    });
+
+    it('is symmetric about which side is shorter', () => {
+      const result = compareResults(
+        [{ category: 'Outdoor', units: 92 }],
+        ranking,
+        { widthTolerant: true, leadingRows: true },
+      );
+      expect(result.match).toBe(true);
+    });
+
+    it('disagrees when the verifier picks a different leader', () => {
+      const result = compareResults(ranking, [{ category: 'Footwear' }], {
+        widthTolerant: true,
+        leadingRows: true,
+      });
+      expect(result.match).toBe(false);
+    });
+
+    it('is off unless asked for — eval grading keeps strict row counts', () => {
+      const result = compareResults(ranking, [{ category: 'Outdoor' }], {
+        widthTolerant: true,
+      });
+      expect(result.match).toBe(false);
+    });
+  });
+
   it('still compares exactly when the widths agree', () => {
     const other = [
       { line: 'Dental', kept: 2963, total: 2963, rate: 1 },
