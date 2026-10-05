@@ -108,15 +108,6 @@ import {
 
 const VISUAL_TOOLS = new Set(['create_visual', 'update_visual']);
 /**
- * `providerOptions` as an agent call types it: provider name → settings.
- * `LlmService.providerOptionsFor` returns the looser `Record<string,
- * unknown>` (it knows the provider, not Mastra's option types).
- */
-type AgentProviderOptions = Record<
-  string,
-  Record<string, string | number | boolean>
->;
-/**
  * requestContext key carrying the curated-knowledge snippets this turn's
  * system block was built from, so the persist step can record them on the
  * answer without re-reading (and possibly disagreeing with) the store.
@@ -459,9 +450,7 @@ export class SessionsService implements OnModuleInit {
       maxSteps: levers.maxSteps ?? ASSISTANT_MAX_STEPS,
       // The user-configured reasoning effort (Low/Medium/High chip), unless
       // the turn's levers override it; keyed by provider (`LlmService`).
-      providerOptions: (await this.llmService.providerOptionsFor(
-        effort,
-      )) as AgentProviderOptions,
+      providerOptions: await this.llmService.providerOptionsFor(effort),
       context,
       ...(activeTools ? { activeTools } : {}),
       requestContext,
@@ -835,9 +824,7 @@ export class SessionsService implements OnModuleInit {
             maxSteps: 1,
             toolChoice: 'none',
             // A syntax/column fix does not benefit from hidden reasoning tokens.
-            providerOptions: (await this.llmService.providerOptionsFor(
-              'low',
-            )) as AgentProviderOptions,
+            providerOptions: await this.llmService.providerOptionsFor('low'),
             structuredOutput: {
               schema: sqlFixOutputSchema,
               jsonPromptInjection: 'inline',
@@ -995,9 +982,7 @@ export class SessionsService implements OnModuleInit {
       verified = undefined;
     }
     // A second opinion should think as hard as the answer it is checking.
-    const providerOptions = (await this.llmService.providerOptionsFor(
-      effort,
-    )) as AgentProviderOptions;
+    const providerOptions = await this.llmService.providerOptionsFor(effort);
     const result = await this.mastra
       .getAgent('sql-verifier')
       .generate(

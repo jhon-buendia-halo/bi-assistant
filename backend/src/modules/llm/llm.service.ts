@@ -323,7 +323,6 @@ export class LlmService implements OnModuleInit {
     });
   }
 
-
   async getView(): Promise<LlmSettingsView> {
     const doc = await this.repository.get();
     if (!doc) {

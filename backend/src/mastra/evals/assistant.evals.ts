@@ -25,7 +25,6 @@ import type {
 import {
   DEFAULT_SUITE_ID,
   expandVariants,
-  listSuites,
   loadSuite,
   referenceSqlsFor,
   assistantEvalSets,
