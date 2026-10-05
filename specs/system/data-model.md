@@ -538,7 +538,7 @@ Memory is kept by an external Hindsight server ([ADR-0013](architecture.md)); th
 | `datasourceId` | string | yes | Selects the memory bank. |
 | `datasetIds` | string[] | yes | Dataset names; empty for a datasource-wide signal. |
 | `documentId` | string | yes | Upsert key in the memory server, so a repeated signal replaces rather than duplicates (scheme below). |
-| `content` | string | yes | The question, the SQL with literals redacted and a short note. **Never row values**: every single-quoted SQL literal is replaced by `'?'` unless the question contains it (case-insensitive) or it is a snake_case code such as `'own_goal'` (schema vocabulary, never a row value); numbers are kept; SQL is clipped to 2,000 characters and a reviewer note to 1,000. |
+| `content` | string | yes | The question, the SQL with literals redacted and a short note. **Never row values**: every single-quoted SQL literal is replaced by `'?'` unless the question contains it (case-insensitive) or it is a category code such as `'completed'`, `'RECEIVED'` or `'own_goal'` (one all-lowercase or all-uppercase token of at most 24 characters, underscores allowed: statuses and enum values, never a capitalised name or an email); numbers are kept; SQL is clipped to 2,000 characters and a reviewer note to 1,000. |
 | `context` | string | yes | Who is speaking, for example "An analyst approved this SQL answer as correct"; the server uses it to tell a world fact from an experience. |
 | `occurredAt` | ISO | yes | The answer's `messageAt` (or the snippet's update time). |
 | `entities` | string[] | yes | `catalog.schema.table` names. |

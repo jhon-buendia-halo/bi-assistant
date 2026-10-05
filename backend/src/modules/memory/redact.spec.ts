@@ -39,14 +39,14 @@ describe('redactSqlLiterals', () => {
     );
   });
 
-  it('keeps snake_case codes (schema vocabulary), not single words', () => {
+  it('keeps category codes (statuses, enums), not capitalised words or emails', () => {
     expect(
       redactSqlLiterals(
-        "SELECT 1 FROM goals WHERE goal_type <> 'own_goal' AND stage = 'round_of_16' AND team = 'Croatia' AND pos = 'gk'",
+        "SELECT 1 FROM goals WHERE goal_type <> 'own_goal' AND stage = 'round_of_16' AND team = 'Croatia' AND pos = 'gk' AND status = 'completed' AND po = 'RECEIVED' AND email = 'ana@x.io' AND who = 'Garcia'",
         'top scorer excluding own goals',
       ),
     ).toBe(
-      "SELECT 1 FROM goals WHERE goal_type <> 'own_goal' AND stage = 'round_of_16' AND team = '?' AND pos = '?'",
+      "SELECT 1 FROM goals WHERE goal_type <> 'own_goal' AND stage = 'round_of_16' AND team = '?' AND pos = 'gk' AND status = 'completed' AND po = 'RECEIVED' AND email = '?' AND who = '?'",
     );
   });
 
