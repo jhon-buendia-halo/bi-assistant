@@ -14,6 +14,26 @@ Entry template:
 
 ---
 
+## 2026-10-05 — 1.3.5 Integrate business expert, feedback learning and the eval loop
+
+### What went well
+- `git merge-tree --write-tree --name-only` previewed all 30 conflicts before any branch existed, so the scope question went to the user with real numbers.
+- Splitting the resolution by file ownership worked: three parallel agents (sessions + knowledge core, eval tooling, specs) with disjoint file lists and no git writes. The core agent rebuilt `sessions.service.ts` from the engine version and ported every business hunk, then checked line coverage with a script.
+- Cloning `node_modules` from the source worktrees (`cp -cR`, identical lockfiles) let the agents type-check and run Jest without an install.
+- The user's real profile was backed up first, then opened read-only through Playwright. That gave screenshots of the existing data on the merged build without sending a question to the model.
+
+### What went wrong
+- The first E2E run failed every test in 30 ms with "bad option: --remote-debugging-port". The VS Code terminal exports `ELECTRON_RUN_AS_NODE=1`, so Playwright started Electron as plain Node.
+- Neither source branch had a Jira story, a roadmap status change or a changelog entry. The Epic gate was waived for this branch instead of being met.
+- One frontend unit test (`App should support keyboard resizing from the separator`) fails on all three source branches. Nobody had noticed, because the frontend tests were not run on them.
+- Backend lint already had 330 to 412 errors on the source branches. Lint is not in CI, so the debt grew unseen.
+
+### What to do differently
+- Run E2E from a VS Code terminal as `env -u ELECTRON_RUN_AS_NODE npm run test:e2e`, or unset that variable in the Electron fixture.
+- Create the Jira story and roadmap entry when a feature branch is started, not when it is integrated. Three unregistered branches of 29 commits were hard to place in one epic.
+- Before integrating long-lived branches, run `git merge-tree` between them and merge them early. Two branches touching `runTurn` and `streamMessage` for two weeks produced a structural conflict, not a textual one.
+- Run `ng test --watch=false` (with `CHROME_BIN` pointed at Playwright's Chromium when Chrome is missing) on every branch, not only E2E.
+
 ## 2026-10-04 — 0.2.3 Require the spec check on main (BA-108)
 
 ### What went well

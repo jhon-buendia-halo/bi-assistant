@@ -1,0 +1,149 @@
+{
+  "datasources": [
+    {
+      "name": "Fixtures (local Postgres)",
+      "kind": "postgres"
+    },
+    {
+      "name": "World Cup (local Postgres)",
+      "kind": "postgres"
+    }
+  ],
+  "datasets": [
+    {
+      "name": "Dataset_29092026",
+      "datasource": "1ba3c9ab-ea4a-4a9a-8eee-ac9feced985c",
+      "entities": [
+        "world_cup.genomics.ancestry_groups",
+        "world_cup.genomics.gene_expression",
+        "world_cup.genomics.genes",
+        "world_cup.genomics.phenotypes",
+        "world_cup.genomics.samples",
+        "world_cup.genomics.subject_phenotypes",
+        "world_cup.genomics.subjects",
+        "world_cup.genomics.superpopulations",
+        "world_cup.genomics.transcripts",
+        "world_cup.genomics.v_sample_qc",
+        "world_cup.genomics.v_variant_calls",
+        "world_cup.genomics.variant_calls",
+        "world_cup.genomics.variants",
+        "world_cup.health_insurance.claim_denials",
+        "world_cup.health_insurance.claim_lines",
+        "world_cup.health_insurance.claims",
+        "world_cup.health_insurance.countries",
+        "world_cup.health_insurance.denial_reasons",
+        "world_cup.health_insurance.members",
+        "world_cup.health_insurance.plans",
+        "world_cup.health_insurance.providers",
+        "world_cup.health_insurance.regions",
+        "world_cup.health_insurance.states",
+        "world_cup.health_insurance.v_claim_financials",
+        "world_cup.health_insurance.v_member_claim_totals"
+      ]
+    },
+    {
+      "name": "Genomics",
+      "datasource": "1ba3c9ab-ea4a-4a9a-8eee-ac9feced985c",
+      "entities": [
+        "world_cup.genomics.ancestry_groups",
+        "world_cup.genomics.gene_expression",
+        "world_cup.genomics.genes",
+        "world_cup.genomics.phenotypes",
+        "world_cup.genomics.samples",
+        "world_cup.genomics.subject_phenotypes",
+        "world_cup.genomics.subjects",
+        "world_cup.genomics.superpopulations",
+        "world_cup.genomics.transcripts",
+        "world_cup.genomics.v_sample_qc",
+        "world_cup.genomics.v_variant_calls",
+        "world_cup.genomics.variant_calls",
+        "world_cup.genomics.variants"
+      ]
+    },
+    {
+      "name": "Health Insurance",
+      "datasource": "1ba3c9ab-ea4a-4a9a-8eee-ac9feced985c",
+      "entities": [
+        "world_cup.health_insurance.claim_denials",
+        "world_cup.health_insurance.claim_lines",
+        "world_cup.health_insurance.claims",
+        "world_cup.health_insurance.countries",
+        "world_cup.health_insurance.denial_reasons",
+        "world_cup.health_insurance.members",
+        "world_cup.health_insurance.plans",
+        "world_cup.health_insurance.providers",
+        "world_cup.health_insurance.regions",
+        "world_cup.health_insurance.states",
+        "world_cup.health_insurance.v_claim_financials",
+        "world_cup.health_insurance.v_member_claim_totals"
+      ]
+    },
+    {
+      "name": "World Cup",
+      "datasource": "1ba3c9ab-ea4a-4a9a-8eee-ac9feced985c",
+      "entities": [
+        "world_cup.world_cup.confederations",
+        "world_cup.world_cup.countries",
+        "world_cup.world_cup.disciplinary_events",
+        "world_cup.world_cup.goals",
+        "world_cup.world_cup.match_team_statistics",
+        "world_cup.world_cup.matches",
+        "world_cup.world_cup.players",
+        "world_cup.world_cup.squad_members",
+        "world_cup.world_cup.teams",
+        "world_cup.world_cup.tournament_teams",
+        "world_cup.world_cup.tournaments",
+        "world_cup.world_cup.v_match_results",
+        "world_cup.world_cup.v_player_goal_totals",
+        "world_cup.world_cup.v_seeded_team_performance",
+        "world_cup.world_cup.venues"
+      ]
+    },
+    {
+      "name": "World Cup Data",
+      "datasource": "b5f5d8f4-e1b4-4306-952e-e9329553ac04",
+      "entities": [
+        "world_cup.world_cup.confederations",
+        "world_cup.world_cup.countries",
+        "world_cup.world_cup.disciplinary_events",
+        "world_cup.world_cup.goals",
+        "world_cup.world_cup.match_team_statistics",
+        "world_cup.world_cup.matches",
+        "world_cup.world_cup.players",
+        "world_cup.world_cup.squad_members",
+        "world_cup.world_cup.teams",
+        "world_cup.world_cup.tournament_teams",
+        "world_cup.world_cup.tournaments",
+        "world_cup.world_cup.v_match_results",
+        "world_cup.world_cup.v_player_goal_totals",
+        "world_cup.world_cup.v_seeded_team_performance",
+        "world_cup.world_cup.venues"
+      ]
+    }
+  ],
+  "sessions": [
+    "Chat 2",
+    "Tell me an overview about this genomics",
+    "eval cohort-sample-count 2026-09-22T21:22:58.831Z",
+    "assistant eval 2026-09-22T21:14:19.250Z",
+    "Tell me the list of players basing on number of goals",
+    "Tell me what is the best world cup and why basing on number of g"
+  ],
+  "knowledgeCount": 27,
+  "inventorySchemas": {
+    "Fixtures (local Postgres)": {
+      "schemas": [
+        "world_cup",
+        "health_insurance",
+        "genomics"
+      ],
+      "error": null
+    },
+    "World Cup (local Postgres)": {
+      "schemas": [
+        "world_cup"
+      ],
+      "error": null
+    }
+  }
+}

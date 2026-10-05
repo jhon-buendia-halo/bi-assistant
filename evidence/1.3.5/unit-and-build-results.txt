@@ -1,0 +1,7 @@
+# Unit tests, builds and spec check — 2026-10-05
+backend  npx jest: Test Suites 73 passed, Tests 2008 passed
+backend  npm run build (nest build): exit 0
+frontend npm run build: exit 0 (initial bundle budget warning, 897.57 kB vs 500 kB)
+frontend ng test --watch=false (ChromeHeadless): 295 passed, 1 failed — 'App should support keyboard resizing from the separator' (expected 548, got 501). Same failure on docs/eval-suites-specs, feat/engine-eval-loop and feat/business-expert-learning before the merge: pre-existing, headless window size.
+backend  eslint (no --fix): 474 errors / 28 warnings; feat/engine-eval-loop 412/28, feat/business-expert-learning 330/10 before the merge. Lint is not enforced in CI; not fixed here to keep the merge diff to the merge.
+repo     python3 scripts/check-specs.py: ALL CHECKS PASSED

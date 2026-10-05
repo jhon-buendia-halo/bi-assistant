@@ -2,6 +2,23 @@
 
 Running log of every meaningful change, newest first. See *Logging convention* and *Evidence convention* in [CLAUDE.md](CLAUDE.md). Release versions come from Conventional Commits (`version-on-merge.yml`); this file records what shipped and links to the evidence.
 
+## 2026-10-05
+
+### Added
+- **Learn from reviewer feedback, business expert mode and the eval loop, integrated on one branch** (roadmap 1.3.5, epic [BA-4](https://halo-powered.atlassian.net/browse/BA-4); Jira story pending, Epic gate waived by the user for this branch). `feat/knowledge-learning-evals` merges three branches that were built on the same base and never reached `main`:
+  - `docs/eval-suites-specs`: eval suites as data files, failure categories, token and cost accounting, CLI runner.
+  - `feat/engine-eval-loop`: engine levers in Settings, eval arms, pass^k repeats, fixed-model judge, `answer-review` agent, Databricks Model Serving, supply-chain and banking fixtures (ADR-0011, ADR-0012).
+  - `feat/business-expert-learning`: business expert mode (reasoning trace, measured confidence, per-block feedback), lessons distilled from reviewer comments into Knowledge with provenance, answer pinning, HR and retail fixtures (ADR-0008 to ADR-0010).
+
+  The 30 conflicted files were resolved keeping both sides:
+  - The business flow runs inside the engine's single production turn (`runTurn`).
+  - Evals never replay or save a pinned answer.
+  - Knowledge keeps strict tiers (default filters, lessons, the rest) with the 8,000-character skip-and-continue budget; the `rankedKnowledge` lever re-orders only inside each tier (knowledge R33).
+  - The CLI eval harness keeps arms and pass^k and gains `--expert` scoring.
+  - `fixtures:register` covers all seven fixture domains.
+
+  The user's existing profile (World Cup, Health Insurance and Genomics datasets, 6 sessions, 27 Knowledge snippets) opens unchanged on the merged build. The merge only adds the `reasoning_feedback` and `answer_pins` collections, with no renames. Evidence: [evidence/1.3.5/](evidence/1.3.5/) (24/24 E2E, 2008 backend tests, screenshots of the existing data). No eval or LLM call was run.
+
 ## 2026-10-04
 
 ### Changed
