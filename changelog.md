@@ -5,6 +5,16 @@ Running log of every meaningful change, newest first. See *Logging convention* a
 ## 2026-10-05
 
 ### Added
+- **Local development observability is planned** (roadmap 0.3.1, [BA-112](https://halo-powered.atlassian.net/browse/BA-112), epic [BA-111](https://halo-powered.atlassian.net/browse/BA-111)):
+  - New Jira epic BA-111 with stories BA-112 to BA-118, mirrored as roadmap Milestone 0.3 (features 0.3.1–0.3.7).
+  - **ADR-0006** in [specs/system/architecture.md](specs/system/architecture.md):
+    - Arize Phoenix and Grafana `otel-lgtm` are used only when a Developer setting is on. It is off by default.
+    - The setting is stored as a file under `APP_DATA_DIR`, so the entry points can read it before the app loads.
+    - Exporters are added next to the DuckDB store, not instead of it.
+    - Changes apply on restart.
+  - The epic spec [specs/epics/BA-111/spec.md](specs/epics/BA-111/spec.md) is confirmed by the user and listed in [specs/README.md](specs/README.md).
+  - No product code changed.
+  - Evidence: [evidence/0.3.1/](evidence/0.3.1/).
 - **PRs into `main` need an approving review; only the repo owner can merge without one** (roadmap 0.2.4, [BA-110](https://halo-powered.atlassian.net/browse/BA-110), epic [BA-89](https://halo-powered.atlassian.net/browse/BA-89)):
   - A second ruleset, "main: PR approval, admin may merge without", requires a PR with 1 approving review and dismisses stale approvals. The *Repository admin* role bypasses it in *pull requests only* mode, so the owner can merge without approval but can't push directly to `main`. The spec-check ruleset is unchanged and still applies to everyone.
   - [`version-on-merge.yml`](.github/workflows/version-on-merge.yml) now pushes its release commit and tag over SSH with a repo-scoped write deploy key (`RELEASE_DEPLOY_KEY` secret). Deploy keys are on the new ruleset's bypass list, because GitHub Actions can't be in a personal-account repo.
