@@ -15,6 +15,8 @@ Fix the bugs and blockers found during user testing ([BA-10](../BA-10/spec.md)) 
 ## Stories
 | Story | Summary | Roadmap feature |
 |---|---|---|
+| [BA-131](https://halo-powered.atlassian.net/browse/BA-131) | Bug Fixes — Research | 1.7.21 |
+| [BA-132](https://halo-powered.atlassian.net/browse/BA-132) | Bug Fixes — Execution plan | 1.7.22 |
 | [BA-83](https://halo-powered.atlassian.net/browse/BA-83) | Session thread is empty after navigating away and back until the page is refreshed (Bug) | 1.7.1 |
 | — | Release stabilization (not a Jira issue) | 1.7.2 |
 | [BA-101](https://halo-powered.atlassian.net/browse/BA-101) | Datasource credentials stored in plaintext (Bug) | 1.7.3 |

@@ -18,6 +18,8 @@ Curated knowledge the assistant treats as authoritative: business-glossary terms
 ## Stories
 | Story | Summary | Roadmap feature |
 |---|---|---|
+| [BA-123](https://halo-powered.atlassian.net/browse/BA-123) | Knowledge Store — Research | 1.3.5 |
+| [BA-124](https://halo-powered.atlassian.net/browse/BA-124) | Knowledge Store — Execution plan | 1.3.6 |
 | [BA-78](https://halo-powered.atlassian.net/browse/BA-78) | Research and ontology design | 1.3.1 |
 | [BA-79](https://halo-powered.atlassian.net/browse/BA-79) | Ontology model, knowledge graph and bootstrap | 1.3.2 |
 | [BA-80](https://halo-powered.atlassian.net/browse/BA-80) | Ontology-grounded retrieval and SQL generation, measured by evals | 1.3.3 |

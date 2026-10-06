@@ -2,6 +2,16 @@
 
 Running log of every meaningful change, newest first. See *Logging convention* and *Evidence convention* in [CLAUDE.md](CLAUDE.md). Release versions come from Conventional Commits (`version-on-merge.yml`); this file records what shipped and links to the evidence.
 
+## 2026-10-06
+
+### Added
+- **Research and execution plan stories in every epic** (roadmap 0.4.1, [BA-120](https://halo-powered.atlassian.net/browse/BA-120), epic [BA-119](https://halo-powered.atlassian.net/browse/BA-119)):
+  - New rule in the *Epic gate* of [CLAUDE.md](CLAUDE.md): every epic has a `<Epic name> — Research` story (delivers `docs/research/<EPIC-ID>.md`) and a `<Epic name> — Execution plan` story (delivers the confirmed epic spec, the roadmap milestone, any ADRs and `docs/plans/<EPIC-ID>.md`). Research comes first, and no other story in the epic branches until both are Done. Stories in progress on 2026-10-06 may finish; BA-120 is exempt.
+  - [specs/README.md](specs/README.md): the epic spec template lists both stories first, and the lifecycle requires them before code.
+  - New epic [BA-119](https://halo-powered.atlassian.net/browse/BA-119) Harness Adjustments, with its spec [specs/epics/BA-119/spec.md](specs/epics/BA-119/spec.md) (confirmed) and Milestone 0.4.
+  - Backfill: 20 Jira stories (BA-121 to BA-140), a Research and an Execution plan story under each open epic (BA-2, BA-4, BA-5, BA-9, BA-10, BA-11, BA-12, BA-82, BA-89, BA-119). Each is listed first in its epic spec and as a feature in its milestone (BA-82, which has no milestone, in its Backlog entry).
+  - Evidence: [evidence/0.4.1/](evidence/0.4.1/) — Jira listing and spec check. No UI change; no E2E affected.
+
 ## 2026-10-05
 
 ### Added

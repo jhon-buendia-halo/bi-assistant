@@ -13,10 +13,12 @@ Show users how much to trust each answer, so beta users can tell a solid answer 
 - New verification techniques beyond what the plans below already define; the knowledge provenance UI itself ([BA-81](../BA-4/spec.md)).
 
 ## Stories
-Jira lists **no child issues**; the roadmap has one feature.
+Jira lists only the Research and Execution plan stories, added on 2026-10-06; the rest of the epic is one roadmap feature.
 
 | Story | Summary | Roadmap feature |
 |---|---|---|
+| [BA-133](https://halo-powered.atlassian.net/browse/BA-133) | Response Reliability Signals — Research | 1.4.2 |
+| [BA-134](https://halo-powered.atlassian.net/browse/BA-134) | Response Reliability Signals — Execution plan | 1.4.3 |
 | — | Answer trust signals | 1.4.1 |
 
 ## Specs touched

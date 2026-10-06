@@ -14,10 +14,12 @@ Know, with numbers, whether a change made answers better or worse. A golden data
 - Evals on customer data.
 
 ## Stories
-Jira lists **no child issues**; the roadmap mirrors the epic as one feature.
+Jira lists only the Research and Execution plan stories, added on 2026-10-06; the rest of the epic is mirrored as one roadmap feature.
 
 | Story | Summary | Roadmap feature |
 |---|---|---|
+| [BA-127](https://halo-powered.atlassian.net/browse/BA-127) | Golden Dataset and Evals — Research | 1.1.2 |
+| [BA-128](https://halo-powered.atlassian.net/browse/BA-128) | Golden Dataset and Evals — Execution plan | 1.1.3 |
 | — | Golden dataset and eval suite | 1.1.1 |
 
 ## Specs touched

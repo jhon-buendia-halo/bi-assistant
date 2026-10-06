@@ -12,10 +12,12 @@ To be agreed.
 To be agreed. Not sequenced into the 1.0 Beta.
 
 ## Stories
-Jira lists **no child issues**.
+Jira lists only the Research and Execution plan stories, added on 2026-10-06.
 
 | Story | Summary | Roadmap feature |
 |---|---|---|
+| [BA-135](https://halo-powered.atlassian.net/browse/BA-135) | Agent Routines — Research | — |
+| [BA-136](https://halo-powered.atlassian.net/browse/BA-136) | Agent Routines — Execution plan | — |
 | — | — | none (Backlog entry only) |
 
 ## Specs touched

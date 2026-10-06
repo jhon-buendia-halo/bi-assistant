@@ -60,6 +60,7 @@ A Gherkin Feature that spans capabilities lives in the capability that owns its 
 | BA-82 Agent Routines | [epics/BA-82](epics/BA-82/spec.md) |
 | BA-89 Delivery Process | [epics/BA-89](epics/BA-89/spec.md) |
 | BA-111 Local Development Observability | [epics/BA-111](epics/BA-111/spec.md) |
+| BA-119 Harness Adjustments | [epics/BA-119](epics/BA-119/spec.md) |
 
 ## Stack neutrality
 
@@ -130,6 +131,10 @@ The user-observable outcome the epic delivers, and why.
 ## Out of scope
 ## Stories
 | Story | Summary | Roadmap feature |
+|---|---|---|
+| <key> | <Epic name> — Research | R.M.F |
+| <key> | <Epic name> — Execution plan | R.M.F |
+| <key> | <story summary> | R.M.F |
 ## Specs touched
 The capability and system specs this epic changes, and how.
 ## Acceptance
@@ -137,11 +142,11 @@ Epic-level success criteria.
 ## Dependencies, risks and open questions
 ```
 
-Keep it high level: story detail lives in the roadmap and Jira, behaviour in the capability specs.
+Keep it high level: story detail lives in the roadmap and Jira, behaviour in the capability specs. The Research and Execution plan stories always come first (*Epic gate* in [CLAUDE.md](../CLAUDE.md)).
 
 ## Lifecycle
 
-1. **Before code:** the epic spec exists (Epic gate). The change's branch updates every capability and system spec it affects (workflow step 5): new or changed rules, Gherkin, endpoints, document shapes, prompts, UI.
+1. **Before code:** the epic's Research and Execution plan stories are Done and the epic spec is confirmed (Epic gate). The change's branch updates every capability and system spec it affects (workflow step 5): new or changed rules, Gherkin, endpoints, document shapes, prompts, UI.
 2. **Review:** the PR diff shows the spec change next to the code change. A PR that changes behaviour, an endpoint, a persisted shape, a prompt or the UI without the matching spec change is incomplete.
 3. **Merge:** because specs change on the same branch as the code, `main` always describes the shipped app.
 
