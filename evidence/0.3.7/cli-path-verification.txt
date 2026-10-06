@@ -1,0 +1,22 @@
+# Following docs/observability.md with the npm CLI (web mode) against the real compose tools
+# Data dir: temporary; port 3125 (3000 kept free for the E2E suite)
+
+1. node dist/cli.js --data-dir <tmp> --port 3125 --no-open
+2. PUT /developer-settings {"observabilityEnabled":true, defaults…}  (what Settings → Developer → Save sends)
+   -> "Developer settings saved — restart to apply" | restartRequired: True
+3. Stopped and restarted the CLI with the same --data-dir
+   GET /developer-settings -> after restart: active on = True | restartRequired: False
+4. GET /llm/settings, /datasources, /developer-settings
+
+Loki ({service_name="questions-to-insights"} |= "successfully started"):
+  Nest application successfully started
+
+Tempo (search, 5-minute window, ~50 s after the requests):
+  GET /developer-settings
+  GET /datasources
+  GET /llm/settings
+  GET /sessions
+  Create Nest App
+
+Note: a search 15 s after the requests returned nothing; the same traces appeared 30–50 s later.
+The guide's troubleshooting section says to widen the time range and wait up to a minute.

@@ -14,6 +14,22 @@ Entry template:
 
 ---
 
+## 2026-10-05 — 0.3.7 Developer docs for the local observability stack (BA-118)
+
+### What went well
+- Following the guide literally through the **npm CLI** path covered `cli.ts`'s telemetry start, which no earlier story had run against the real tools: save, restart the CLI, and see Loki and Tempo data.
+- Before writing that Loki's `trace_id` opens Tempo, I read the Grafana Loki datasource's `derivedFields`, so the docs name the actual "Trace: <id>" link.
+- The guide links to `delivery.md` for ports, tags and isolation instead of copying them, so the facts stay in one file.
+
+### What went wrong
+- The BA-114 compose profile was on a sibling branch, not in the 113→117 chain, so the docs branch needed a merge. That produced conflicts in changelog.md and retrospective.md, because every story inserts at the top of the same sections.
+- The first Tempo check of the CLI run came back empty 15 s after the requests and looked like a CLI bug. The traces appeared 30–50 s later. That's the same ingest-lag lesson as BA-115, applied too impatiently.
+
+### What to do differently
+- For an epic delivered as stacked PRs, chain *every* story linearly (including independent ones like a compose profile), so the last branch holds the full stack without a merge.
+- When a shared file takes one entry per story (changelog, retrospective), expect top-of-section conflicts on every stacked merge. Resolve by keeping both sides in story order, then run `python3 scripts/check-specs.py`.
+- Wait at least 45 s and search a 5-minute window before concluding that traces are missing from Tempo.
+
 ## 2026-10-05 — 0.3.6 Backend logs exported with trace ids (BA-117)
 
 ### What went well
@@ -84,6 +100,22 @@ Entry template:
 - Use `{ exact: true }` on `getByLabel` whenever a nearby control's aria-label contains the field's label.
 - Before a full E2E run, make sure the compose Postgres is warm, by running `docker compose up -d --wait postgres` and then one `psql`/TCP check. If the first spec fails at "Connection successful", rerun that spec alone before suspecting the change.
 - Don't use `whitespace-pre-wrap` on elements whose text comes from a multi-line interpolation, unless the message really has line breaks.
+## 2026-10-05 — 0.3.3 Docker Compose observability profile (BA-114)
+
+### What went well
+- I checked the real Docker Hub tags before pinning. `arizephoenix/phoenix` has no plain `0.x` tags (they are `version-N.M.P`), so a guessed tag would have failed to pull.
+- I ran every claimed behaviour against the real images: both profile listings, startup, UI, Grafana health and both OTLP endpoints. That is where the protobuf-only finding came from.
+- On the shared stack I stopped and removed only the two new services and never ran `down`, so the user's Postgres container was untouched.
+
+### What went wrong
+- The brief's OTLP check (`-d '{"resourceSpans":[]}'` as JSON) returned 415 from Phoenix. I would have logged a failure or silently dropped the check if I had treated the brief's command as the definition of "works". Phoenix accepts only protobuf on `/v1/traces`.
+- The project already had an unrelated orphan container (`postgres-f1-1`), so compose printed an orphan warning on every command. Running with `--remove-orphans` would have deleted another session's container.
+- I assumed Phoenix would need a healthcheck and did not look for one in the image first. It has none, so `--wait` only waits for "running".
+
+### What to do differently
+- When a brief gives a verification command, run it, and if it fails, find out whether the command or the service is wrong before recording a result. Record the real protocol requirement in the spec for the next story.
+- Never pass `--remove-orphans` on the shared compose project; other worktrees and sessions create containers in it.
+- For 0.3.5, build the Phoenix exporter with the protobuf OTLP exporter, not the JSON one.
 
 ## 2026-10-05 — 0.3.1 Plan local development observability (BA-112)
 

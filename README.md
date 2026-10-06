@@ -99,6 +99,8 @@ cd frontend && npm test       # karma
 cd frontend && npm run test:e2e   # Playwright driving the real Electron app
 ```
 
+To see traces, metrics and logs of your local runs in Phoenix and Grafana, follow [docs/observability.md](docs/observability.md). It is off by default.
+
 The e2e suite needs the seeded World Cup Postgres. The suite starts it through Docker (`docker compose up -d postgres` at the repo root). Set `E2E_SKIP_DOCKER=1` only when an equivalent database is already running; the specs that need it still run.
 
 ## Releasing
