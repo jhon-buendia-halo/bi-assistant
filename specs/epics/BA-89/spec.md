@@ -22,6 +22,8 @@ Every change to Questions to Insights is planned, specified, built, verified and
 
 | Story | Summary | Roadmap feature |
 |---|---|---|
+| [BA-137](https://halo-powered.atlassian.net/browse/BA-137) | Delivery Process — Research | 0.2.5 |
+| [BA-138](https://halo-powered.atlassian.net/browse/BA-138) | Delivery Process — Execution plan | 0.2.6 |
 | [BA-84](https://halo-powered.atlassian.net/browse/BA-84) | Adopt the delivery workflow, beta roadmap and branching convention | 0.2.1 |
 | [BA-90](https://halo-powered.atlassian.net/browse/BA-90) | Rebuildable system specs in `specs/` | 0.2.2 |
 | [BA-108](https://halo-powered.atlassian.net/browse/BA-108) | Require the spec check before merging to `main` | 0.2.3 |

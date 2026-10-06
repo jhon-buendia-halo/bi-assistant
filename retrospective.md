@@ -14,6 +14,23 @@ Entry template:
 
 ---
 
+## 2026-10-06 — 0.4.1 Research and execution plan stories in every epic (BA-120)
+
+### What went well
+- Asking whether "harness" meant the agent or the delivery harness, once the rule landed under BA-119, caught a wrong epic description before the epic spec was written on top of it.
+- The trap from BA-90 (a rule that blocks its own story) was named before any edit, and the user chose an explicit exemption for BA-120.
+- One Python script inserted the 18 roadmap features and the epic spec rows, with an assertion on every anchor, so no edit landed on the wrong milestone.
+
+### What went wrong
+- I created BA-119 with an "agent harness" description I suggested myself. The repo already uses "harness" for the delivery workflow (*Adopt delivery workflow harness*), and the description had to be rewritten in Jira.
+- The first roadmap pass linked `docs/research/<EPIC>.md` and `docs/plans/<EPIC>.md`, which don't exist yet. The link check would have failed; they became code spans.
+- Backfilled stories were numbered after each milestone's last feature (for example 1.7.21) but placed first, so feature IDs in a milestone no longer read in order.
+
+### What to do differently
+- Before suggesting an epic description, grep the repo for the epic's key term (`grep -ri harness retrospective.md CLAUDE.md`) and use the meaning the repo already gives it.
+- In roadmap and spec text, link only files that exist; name planned deliverables in backticks.
+- When a rule applies to the epic its own story sits under, write the exemption into the rule text itself, not only into the roadmap.
+
 ## 2026-10-05 — 1.7.9 Fixed default APP_SECRET fallback (BA-106)
 
 ### What went well

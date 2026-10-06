@@ -1,0 +1,23 @@
+key	type	status	parent	summary
+BA-119	Epic	To Do	-	Harness Adjustments
+BA-120	Story	To Do	BA-119	Require research and execution plan stories in every epic
+BA-121	Story	To Do	BA-2	Data Model DSL — Research
+BA-122	Story	To Do	BA-2	Data Model DSL — Execution plan
+BA-123	Story	To Do	BA-4	Knowledge Store — Research
+BA-124	Story	To Do	BA-4	Knowledge Store — Execution plan
+BA-125	Story	To Do	BA-5	Data Connectors — Research
+BA-126	Story	To Do	BA-5	Data Connectors — Execution plan
+BA-127	Story	To Do	BA-9	Golden Dataset and Evals — Research
+BA-128	Story	To Do	BA-9	Golden Dataset and Evals — Execution plan
+BA-129	Story	To Do	BA-10	User Testing — Research
+BA-130	Story	To Do	BA-10	User Testing — Execution plan
+BA-131	Story	To Do	BA-11	Bug Fixes — Research
+BA-132	Story	To Do	BA-11	Bug Fixes — Execution plan
+BA-133	Story	To Do	BA-12	Response Reliability Signals — Research
+BA-134	Story	To Do	BA-12	Response Reliability Signals — Execution plan
+BA-135	Story	To Do	BA-82	Agent Routines — Research
+BA-136	Story	To Do	BA-82	Agent Routines — Execution plan
+BA-137	Story	To Do	BA-89	Delivery Process — Research
+BA-138	Story	To Do	BA-89	Delivery Process — Execution plan
+BA-139	Story	To Do	BA-119	Harness Adjustments — Research
+BA-140	Story	To Do	BA-119	Harness Adjustments — Execution plan

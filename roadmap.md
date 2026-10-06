@@ -36,6 +36,20 @@ Electron shell, backend spawning, and renderer↔backend wiring: the app must be
 
 How work is planned, specified, built, verified and traced. It covers the repo's process documents, conventions and specs, not product behaviour. Epic spec: [specs/epics/BA-89/spec.md](specs/epics/BA-89/spec.md).
 
+#### 0.2.5 — Delivery Process — Research ([BA-137](https://halo-powered.atlassian.net/browse/BA-137))  `📋 Planned`
+- **Intent:** the epic's other stories start from evidence, not assumptions.
+- **Scope:** `docs/research/BA-89.md`: findings, options and a recommendation for the epic.
+- **Out of scope:** the execution plan and product code.
+- **Acceptance:** `docs/research/BA-89.md` exists and the user has reviewed it.
+- **Notes:** first story of the epic (*Epic gate* in [CLAUDE.md](CLAUDE.md)). 0.2.6 starts after it is Done.
+
+#### 0.2.6 — Delivery Process — Execution plan ([BA-138](https://halo-powered.atlassian.net/browse/BA-138))  `📋 Planned`
+- **Intent:** every story of the epic is sequenced and specified before any of them is built.
+- **Scope:** the confirmed epic spec, this milestone with one feature per story, any ADRs, and `docs/plans/BA-89.md`.
+- **Out of scope:** product code.
+- **Acceptance:** `docs/plans/BA-89.md` exists, [specs/epics/BA-89/spec.md](specs/epics/BA-89/spec.md) is `Status: Confirmed`, and every story of the epic has a feature in this milestone.
+- **Notes:** starts after 0.2.5 is Done. No other story in the epic branches until it is Done, except stories already in progress on 2026-10-06.
+
 #### 0.2.1 — Adopt the delivery workflow, beta roadmap and branching convention ([BA-84](https://halo-powered.atlassian.net/browse/BA-84))  `✅ Done`
 - **Intent:** every change follows the same plan → spec → test → implement → evidence → retrospective loop and traces back to a Jira issue.
 - **Scope:**
@@ -155,6 +169,39 @@ Developer tooling for seeing what the backend and agents are doing: agent and LL
 - **Acceptance:** a developer following only the docs sees one chat question in Phoenix and Grafana.
 - **Notes:** last; depends on 0.3.2–0.3.6. Guide: [docs/observability.md](docs/observability.md), linked from README *Development*. Branch `docs/BA-118-observability-docs` (it includes the BA-114 compose branch merged in, so it holds the whole stack). Evidence: [evidence/0.3.7/](evidence/0.3.7/).
 
+### Milestone 0.4 — Harness Adjustments ([BA-119](https://halo-powered.atlassian.net/browse/BA-119))
+
+Adjustments to the delivery workflow harness adopted under Milestone 0.2: CLAUDE.md conventions, workflow gates, skills and checks that govern how changes are planned, built and shipped. Epic spec: [specs/epics/BA-119/spec.md](specs/epics/BA-119/spec.md).
+
+#### 0.4.1 — Require research and execution plan stories in every epic ([BA-120](https://halo-powered.atlassian.net/browse/BA-120))  `✅ Done`
+- **Intent:** no epic's implementation starts before its problem is researched and its stories are planned.
+- **Scope:**
+  - A rule in the *Epic gate* of [CLAUDE.md](CLAUDE.md): every epic has a `<Epic name> — Research` story and a `<Epic name> — Execution plan` story, Research first, and no other story in the epic branches until both are Done.
+  - The epic spec format and lifecycle in [specs/README.md](specs/README.md) list both stories first.
+  - Backfill: both stories created in Jira under every open epic (BA-2, BA-4, BA-5, BA-9, BA-10, BA-11, BA-12, BA-82, BA-89, BA-119), listed first in each epic spec and as features in each milestone.
+  - The BA-119 epic spec and this milestone.
+- **Out of scope:** doing the research or writing the plans; a CI check for the rule; Jira issue links between the stories.
+- **Acceptance:**
+  - CLAUDE.md states the rule, the deliverables of each story and the exemptions.
+  - Every open epic has both stories in Jira, in its epic spec and in its roadmap milestone (BA-82, which has no milestone, in the Backlog entry).
+  - `specs/epics/BA-119/spec.md` is `Status: Confirmed`.
+  - `python3 scripts/check-specs.py` passes.
+- **Notes:** branch `docs/BA-120-epic-research-plan-stories`. Introduces the rule, so it is the one story exempt from it. The user confirmed the epic spec and rule text on 2026-10-06. Evidence: [evidence/0.4.1/](evidence/0.4.1/).
+
+#### 0.4.2 — Harness Adjustments — Research ([BA-139](https://halo-powered.atlassian.net/browse/BA-139))  `📋 Planned`
+- **Intent:** the epic's other stories start from evidence, not assumptions.
+- **Scope:** `docs/research/BA-119.md`: findings, options and a recommendation for the epic.
+- **Out of scope:** the execution plan and product code.
+- **Acceptance:** `docs/research/BA-119.md` exists and the user has reviewed it.
+- **Notes:** first story of the epic (*Epic gate* in [CLAUDE.md](CLAUDE.md)). 0.4.3 starts after it is Done.
+
+#### 0.4.3 — Harness Adjustments — Execution plan ([BA-140](https://halo-powered.atlassian.net/browse/BA-140))  `📋 Planned`
+- **Intent:** every story of the epic is sequenced and specified before any of them is built.
+- **Scope:** the confirmed epic spec, this milestone with one feature per story, any ADRs, and `docs/plans/BA-119.md`.
+- **Out of scope:** product code.
+- **Acceptance:** `docs/plans/BA-119.md` exists, [specs/epics/BA-119/spec.md](specs/epics/BA-119/spec.md) is `Status: Confirmed`, and every story of the epic has a feature in this milestone.
+- **Notes:** starts after 0.4.2 is Done. No other story in the epic branches until it is Done, except stories already in progress on 2026-10-06.
+
 ## Release 1 — 1.0 Beta  (target 2026-10-31)
 
 Source of truth for scope and dates: Jira project **BA**, version *1.0 Beta* ([timeline](https://halo-powered.atlassian.net/jira/software/projects/BA/boards/2688/timeline)). Each milestone mirrors one Jira epic and each feature mirrors one story, so IDs map 1:1. Imported 2026-10-01. Status changes are made in both places.
@@ -177,16 +224,44 @@ Evals come first in the order even though they run in parallel: every other mile
 
 The measurement baseline. Every change to the DSL, knowledge store or connectors is measured against it before the beta ships.
 
+#### 1.1.2 — Golden Dataset and Evals — Research ([BA-127](https://halo-powered.atlassian.net/browse/BA-127))  `📋 Planned`
+- **Intent:** the epic's other stories start from evidence, not assumptions.
+- **Scope:** `docs/research/BA-9.md`: findings, options and a recommendation for the epic.
+- **Out of scope:** the execution plan and product code.
+- **Acceptance:** `docs/research/BA-9.md` exists and the user has reviewed it.
+- **Notes:** first story of the epic (*Epic gate* in [CLAUDE.md](CLAUDE.md)). 1.1.3 starts after it is Done.
+
+#### 1.1.3 — Golden Dataset and Evals — Execution plan ([BA-128](https://halo-powered.atlassian.net/browse/BA-128))  `📋 Planned`
+- **Intent:** every story of the epic is sequenced and specified before any of them is built.
+- **Scope:** the confirmed epic spec, this milestone with one feature per story, any ADRs, and `docs/plans/BA-9.md`.
+- **Out of scope:** product code.
+- **Acceptance:** `docs/plans/BA-9.md` exists, [specs/epics/BA-9/spec.md](specs/epics/BA-9/spec.md) is `Status: Confirmed`, and every story of the epic has a feature in this milestone.
+- **Notes:** starts after 1.1.2 is Done. No other story in the epic branches until it is Done, except stories already in progress on 2026-10-06.
+
 #### 1.1.1 — Golden dataset and eval suite  `📋 Planned`
 - **Intent:** know, with numbers, whether a change made answers better or worse.
 - **Scope:** a golden dataset of representative questions with known-correct answers on the sample fixtures. An eval suite (LLM judge plus SQL and result checks) that runs against it, building on the existing `assistant-eval-judge` agent and `mastra/evals/` and the Agents → Evals tab.
 - **Out of scope:** evals on customer data.
 - **Acceptance:** the suite runs on demand against the golden dataset and reports per-question and per-category results. Results can be compared run to run, and a knowledge on/off comparison is possible (needed by 1.3.3).
-- **Notes:** Jira has no stories under this epic yet, so this feature mirrors the epic. Split it into stories in Jira first, then mirror them here.
+- **Notes:** this feature mirrors the epic. Its Research (1.1.2) and Execution plan (1.1.3) stories split it into stories in Jira, then mirror them here.
 
 ### Milestone 1.2 — Data Model DSL ([BA-2](https://halo-powered.atlassian.net/browse/BA-2))
 
 The structure the assistant reasons over, as a single, versionable source of truth.
+
+#### 1.2.2 — Data Model DSL — Research ([BA-121](https://halo-powered.atlassian.net/browse/BA-121))  `📋 Planned`
+- **Intent:** the epic's other stories start from evidence, not assumptions.
+- **Scope:** `docs/research/BA-2.md`: findings, options and a recommendation for the epic.
+- **Out of scope:** the execution plan and product code.
+- **Acceptance:** `docs/research/BA-2.md` exists and the user has reviewed it.
+- **Notes:** first story of the epic (*Epic gate* in [CLAUDE.md](CLAUDE.md)). 1.2.3 starts after it is Done.
+
+#### 1.2.3 — Data Model DSL — Execution plan ([BA-122](https://halo-powered.atlassian.net/browse/BA-122))  `📋 Planned`
+- **Intent:** every story of the epic is sequenced and specified before any of them is built.
+- **Scope:** the confirmed epic spec, this milestone with one feature per story, any ADRs, and `docs/plans/BA-2.md`.
+- **Out of scope:** product code.
+- **Acceptance:** `docs/plans/BA-2.md` exists, [specs/epics/BA-2/spec.md](specs/epics/BA-2/spec.md) is `Status: Confirmed`, and every story of the epic has a feature in this milestone.
+- **Notes:** starts after 1.2.2 is Done. No other story in the epic branches until it is Done, except stories already in progress on 2026-10-06.
 
 #### 1.2.1 — Data Model DSL  `📋 Planned`
 - **Intent:** answers stop depending on what the model infers from raw schema alone.
@@ -198,6 +273,20 @@ The structure the assistant reasons over, as a single, versionable source of tru
 ### Milestone 1.3 — Knowledge Store ([BA-4](https://halo-powered.atlassian.net/browse/BA-4))
 
 Curated knowledge the assistant treats as authoritative: glossary terms, standing instructions and default filters, scoped to a datasource or dataset. Covers authoring, mining suggestions from past sessions, and injecting the relevant snippets into each turn. Assignee: Sergio Berrospi.
+
+#### 1.3.5 — Knowledge Store — Research ([BA-123](https://halo-powered.atlassian.net/browse/BA-123))  `📋 Planned`
+- **Intent:** the epic's other stories start from evidence, not assumptions.
+- **Scope:** `docs/research/BA-4.md`: findings, options and a recommendation for the epic.
+- **Out of scope:** the execution plan and product code.
+- **Acceptance:** `docs/research/BA-4.md` exists and the user has reviewed it.
+- **Notes:** first story of the epic (*Epic gate* in [CLAUDE.md](CLAUDE.md)). 1.3.6 starts after it is Done.
+
+#### 1.3.6 — Knowledge Store — Execution plan ([BA-124](https://halo-powered.atlassian.net/browse/BA-124))  `📋 Planned`
+- **Intent:** every story of the epic is sequenced and specified before any of them is built.
+- **Scope:** the confirmed epic spec, this milestone with one feature per story, any ADRs, and `docs/plans/BA-4.md`.
+- **Out of scope:** product code.
+- **Acceptance:** `docs/plans/BA-4.md` exists, [specs/epics/BA-4/spec.md](specs/epics/BA-4/spec.md) is `Status: Confirmed`, and every story of the epic has a feature in this milestone.
+- **Notes:** starts after 1.3.5 is Done. No other story in the epic branches until it is Done, except stories already in progress on 2026-10-06.
 
 #### 1.3.1 — Research and ontology design ([BA-78](https://halo-powered.atlassian.net/browse/BA-78))  `📋 Planned`
 - **Intent:** an evidence-based design for how the knowledge store models business meaning, so query generation follows each data store's ontology.
@@ -246,6 +335,20 @@ Curated knowledge the assistant treats as authoritative: glossary terms, standin
 
 Show users how much to trust each answer. Assignee: Sergio Berrospi.
 
+#### 1.4.2 — Response Reliability Signals — Research ([BA-133](https://halo-powered.atlassian.net/browse/BA-133))  `📋 Planned`
+- **Intent:** the epic's other stories start from evidence, not assumptions.
+- **Scope:** `docs/research/BA-12.md`: findings, options and a recommendation for the epic.
+- **Out of scope:** the execution plan and product code.
+- **Acceptance:** `docs/research/BA-12.md` exists and the user has reviewed it.
+- **Notes:** first story of the epic (*Epic gate* in [CLAUDE.md](CLAUDE.md)). 1.4.3 starts after it is Done.
+
+#### 1.4.3 — Response Reliability Signals — Execution plan ([BA-134](https://halo-powered.atlassian.net/browse/BA-134))  `📋 Planned`
+- **Intent:** every story of the epic is sequenced and specified before any of them is built.
+- **Scope:** the confirmed epic spec, this milestone with one feature per story, any ADRs, and `docs/plans/BA-12.md`.
+- **Out of scope:** product code.
+- **Acceptance:** `docs/plans/BA-12.md` exists, [specs/epics/BA-12/spec.md](specs/epics/BA-12/spec.md) is `Status: Confirmed`, and every story of the epic has a feature in this milestone.
+- **Notes:** starts after 1.4.2 is Done. No other story in the epic branches until it is Done, except stories already in progress on 2026-10-06.
+
 #### 1.4.1 — Answer trust signals  `📋 Planned`
 - **Intent:** beta users can tell a solid answer from one that needs checking.
 - **Scope:** per-answer signals:
@@ -262,6 +365,20 @@ Show users how much to trust each answer. Assignee: Sergio Berrospi.
 ### Milestone 1.5 — Data Connectors ([BA-5](https://halo-powered.atlassian.net/browse/BA-5))
 
 Connect to the sources beta users actually have. Each connector needs reliable connection setup, schema discovery and read-only querying. All three kinds already exist in code (`DatasourceKind = 'databricks' | 'postgres' | 'rest'`), so this milestone is about hardening them to beta quality.
+
+#### 1.5.4 — Data Connectors — Research ([BA-125](https://halo-powered.atlassian.net/browse/BA-125))  `📋 Planned`
+- **Intent:** the epic's other stories start from evidence, not assumptions.
+- **Scope:** `docs/research/BA-5.md`: findings, options and a recommendation for the epic.
+- **Out of scope:** the execution plan and product code.
+- **Acceptance:** `docs/research/BA-5.md` exists and the user has reviewed it.
+- **Notes:** first story of the epic (*Epic gate* in [CLAUDE.md](CLAUDE.md)). 1.5.5 starts after it is Done.
+
+#### 1.5.5 — Data Connectors — Execution plan ([BA-126](https://halo-powered.atlassian.net/browse/BA-126))  `📋 Planned`
+- **Intent:** every story of the epic is sequenced and specified before any of them is built.
+- **Scope:** the confirmed epic spec, this milestone with one feature per story, any ADRs, and `docs/plans/BA-5.md`.
+- **Out of scope:** product code.
+- **Acceptance:** `docs/plans/BA-5.md` exists, [specs/epics/BA-5/spec.md](specs/epics/BA-5/spec.md) is `Status: Confirmed`, and every story of the epic has a feature in this milestone.
+- **Notes:** starts after 1.5.4 is Done. No other story in the epic branches until it is Done, except stories already in progress on 2026-10-06.
 
 #### 1.5.1 — Databricks ([BA-6](https://halo-powered.atlassian.net/browse/BA-6))  `📋 Planned`
 - **Intent:** beta users can query a Databricks SQL warehouse.
@@ -285,6 +402,20 @@ Connect to the sources beta users actually have. Each connector needs reliable c
 
 Hands-on testing of the beta build with real users and their data. No fix version in Jira yet.
 
+#### 1.6.2 — User Testing — Research ([BA-129](https://halo-powered.atlassian.net/browse/BA-129))  `📋 Planned`
+- **Intent:** the epic's other stories start from evidence, not assumptions.
+- **Scope:** `docs/research/BA-10.md`: findings, options and a recommendation for the epic.
+- **Out of scope:** the execution plan and product code.
+- **Acceptance:** `docs/research/BA-10.md` exists and the user has reviewed it.
+- **Notes:** first story of the epic (*Epic gate* in [CLAUDE.md](CLAUDE.md)). 1.6.3 starts after it is Done.
+
+#### 1.6.3 — User Testing — Execution plan ([BA-130](https://halo-powered.atlassian.net/browse/BA-130))  `📋 Planned`
+- **Intent:** every story of the epic is sequenced and specified before any of them is built.
+- **Scope:** the confirmed epic spec, this milestone with one feature per story, any ADRs, and `docs/plans/BA-10.md`.
+- **Out of scope:** product code.
+- **Acceptance:** `docs/plans/BA-10.md` exists, [specs/epics/BA-10/spec.md](specs/epics/BA-10/spec.md) is `Status: Confirmed`, and every story of the epic has a feature in this milestone.
+- **Notes:** starts after 1.6.2 is Done. No other story in the epic branches until it is Done, except stories already in progress on 2026-10-06.
+
 #### 1.6.1 — Beta user testing round  `📋 Planned`
 - **Intent:** find what breaks or confuses real users before release.
 - **Scope:** real users install the app, connect a source, ask questions and build visuals; issues, confusing flows and wrong answers are captured as Jira bugs or feedback under [BA-11](https://halo-powered.atlassian.net/browse/BA-11).
@@ -295,6 +426,20 @@ Hands-on testing of the beta build with real users and their data. No fix versio
 ### Milestone 1.7 — Bug Fixes ([BA-11](https://halo-powered.atlassian.net/browse/BA-11))
 
 Fix the bugs and blockers from user testing and the golden-dataset evals, and stabilize the build for the Oct 31 release. No fix version in Jira yet. New bugs filed under BA-11 get a feature here.
+
+#### 1.7.21 — Bug Fixes — Research ([BA-131](https://halo-powered.atlassian.net/browse/BA-131))  `📋 Planned`
+- **Intent:** the epic's other stories start from evidence, not assumptions.
+- **Scope:** `docs/research/BA-11.md`: findings, options and a recommendation for the epic.
+- **Out of scope:** the execution plan and product code.
+- **Acceptance:** `docs/research/BA-11.md` exists and the user has reviewed it.
+- **Notes:** first story of the epic (*Epic gate* in [CLAUDE.md](CLAUDE.md)). 1.7.22 starts after it is Done.
+
+#### 1.7.22 — Bug Fixes — Execution plan ([BA-132](https://halo-powered.atlassian.net/browse/BA-132))  `📋 Planned`
+- **Intent:** every story of the epic is sequenced and specified before any of them is built.
+- **Scope:** the confirmed epic spec, this milestone with one feature per story, any ADRs, and `docs/plans/BA-11.md`.
+- **Out of scope:** product code.
+- **Acceptance:** `docs/plans/BA-11.md` exists, [specs/epics/BA-11/spec.md](specs/epics/BA-11/spec.md) is `Status: Confirmed`, and every story of the epic has a feature in this milestone.
+- **Notes:** starts after 1.7.21 is Done. No other story in the epic branches until it is Done, except stories already in progress on 2026-10-06.
 
 #### 1.7.1 — Session thread is empty after navigating away and back ([BA-83](https://halo-powered.atlassian.net/browse/BA-83))  `📋 Planned`
 - **Intent:** returning to a session always shows its history.
@@ -425,4 +570,4 @@ Not yet sequenced into a release. The detailed phase plans below predate this ro
 - Trust UX — [docs/plans/phase-2-trust-ux.md](docs/plans/phase-2-trust-ux.md)
 - Visual quality + interactivity — [docs/plans/phase-3-visual-quality-interactivity.md](docs/plans/phase-3-visual-quality-interactivity.md)
 - Strategic bets — [docs/plans/phase-4-strategic-bets.md](docs/plans/phase-4-strategic-bets.md)
-- Agent Routines ([BA-82](https://halo-powered.atlassian.net/browse/BA-82)): an epic in Jira with no description, dates or fix version. Promote it into a release once it's defined.
+- Agent Routines ([BA-82](https://halo-powered.atlassian.net/browse/BA-82)): an epic in Jira with no description, dates or fix version. Promote it into a release once it's defined. When it is promoted, its first features are its Research ([BA-135](https://halo-powered.atlassian.net/browse/BA-135)) and Execution plan ([BA-136](https://halo-powered.atlassian.net/browse/BA-136)) stories.

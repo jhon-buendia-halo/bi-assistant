@@ -17,6 +17,8 @@ Beta users can connect to the sources they actually have. Each connector gives r
 ## Stories
 | Story | Summary | Roadmap feature |
 |---|---|---|
+| [BA-125](https://halo-powered.atlassian.net/browse/BA-125) | Data Connectors — Research | 1.5.4 |
+| [BA-126](https://halo-powered.atlassian.net/browse/BA-126) | Data Connectors — Execution plan | 1.5.5 |
 | [BA-6](https://halo-powered.atlassian.net/browse/BA-6) | Databricks | 1.5.1 |
 | [BA-7](https://halo-powered.atlassian.net/browse/BA-7) | Postgres | 1.5.2 |
 | [BA-8](https://halo-powered.atlassian.net/browse/BA-8) | Rest API | 1.5.3 |

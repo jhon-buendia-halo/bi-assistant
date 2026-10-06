@@ -13,10 +13,12 @@ Find what breaks or confuses real users before release: they install the beta bu
 - Fixing the findings (BA-11).
 
 ## Stories
-Jira lists **no child issues**; the roadmap has one feature.
+Jira lists only the Research and Execution plan stories, added on 2026-10-06; the rest of the epic is one roadmap feature.
 
 | Story | Summary | Roadmap feature |
 |---|---|---|
+| [BA-129](https://halo-powered.atlassian.net/browse/BA-129) | User Testing — Research | 1.6.2 |
+| [BA-130](https://halo-powered.atlassian.net/browse/BA-130) | User Testing — Execution plan | 1.6.3 |
 | — | Beta user testing round | 1.6.1 |
 
 ## Specs touched

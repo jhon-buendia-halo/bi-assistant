@@ -16,10 +16,12 @@ Every dataset has one versioned, storage-neutral description of the data the ass
 - MongoDB, CSV and JSON adapters; Ossie / Databricks Metric Views import (Jira: backlog).
 
 ## Stories
-Jira lists **no child issues**. The original stories BA-85, BA-86 and BA-87 were deleted on 2026-10-02 (one branch per epic); their work is described in the epic description.
+Jira lists only the Research and Execution plan stories, added on 2026-10-06. The original stories BA-85, BA-86 and BA-87 were deleted on 2026-10-02 (one branch per epic); their work is described in the epic description.
 
 | Story | Summary | Roadmap feature |
 |---|---|---|
+| [BA-121](https://halo-powered.atlassian.net/browse/BA-121) | Data Model DSL — Research | 1.2.2 |
+| [BA-122](https://halo-powered.atlassian.net/browse/BA-122) | Data Model DSL — Execution plan | 1.2.3 |
 | — | Data model DSL: schema, bindings, bootstrap, metrics mirror | 1.2.1 (on `main`'s roadmap: a single *Data Model DSL* feature, Planned) |
 | — | Logical query layer (ADR-0007) | 1.2.2 (branch roadmap only) |
 | — | Model editing, versioning and export | 1.2.3 (branch roadmap only) |
