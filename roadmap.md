@@ -119,12 +119,12 @@ Developer tooling for seeing what the backend and agents are doing: agent and LL
 - **Acceptance:** Gherkin flows and a Playwright spec cover opening the section, toggling, editing and validating endpoints, testing connections and the restart notice; the settings survive a restart; a fresh install shows the toggle off.
 - **Notes:** blocks 0.3.4, 0.3.5 and 0.3.6. Capability spec: [specs/capabilities/developer-settings/spec.md](specs/capabilities/developer-settings/spec.md). Branch `feat/BA-113-developer-settings`. Evidence: [evidence/0.3.2/](evidence/0.3.2/).
 
-#### 0.3.3 — Docker Compose observability profile ([BA-114](https://halo-powered.atlassian.net/browse/BA-114))  `📋 Planned`
+#### 0.3.3 — Docker Compose observability profile ([BA-114](https://halo-powered.atlassian.net/browse/BA-114))  `✅ Done`
 - **Intent:** the local tools start with one command and never start by accident.
 - **Scope:** an `observability` profile in `docker-compose.yml` running `arizephoenix/phoenix` (UI and OTLP on 6006) and `grafana/otel-lgtm` (OTLP 4317/4318, Grafana on a host port other than 3000).
 - **Out of scope:** persistent volumes for the tools; any change to the Postgres service.
 - **Acceptance:** `docker compose --profile observability up -d --wait` starts both tools; plain `docker compose up` and the E2E global setup start only Postgres.
-- **Notes:** independent of 0.3.2; can ship in parallel.
+- **Notes:** independent of 0.3.2; can ship in parallel. Branch `build/BA-114-observability-compose-profile`. Pinned `arizephoenix/phoenix:version-20.19.0` and `grafana/otel-lgtm:0.35.0`; Phoenix's OTLP HTTP endpoint accepts protobuf only (relevant to 0.3.5). Evidence: [evidence/0.3.3/](evidence/0.3.3/).
 
 #### 0.3.4 — OpenTelemetry bootstrap gated by the developer setting ([BA-115](https://halo-powered.atlassian.net/browse/BA-115))  `✅ Done`
 - **Intent:** with the toggle on, every request's HTTP, NestJS, Postgres and outbound connector work is visible as one trace in Grafana.

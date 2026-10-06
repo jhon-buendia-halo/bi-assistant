@@ -284,7 +284,7 @@ Bypass list:
 
 - **Inspect or change the rules:** Settings → Rules → Rulesets, or `gh api repos/<owner>/<repo>/rulesets`.
 
-## 6. Docker Compose: the World Cup sample database
+## 6. Docker Compose: the World Cup sample database and the observability profile
 
 `docker-compose.yml` at the repo root defines the sample PostgreSQL datasource used by the Playwright suite, the live-data backend specs, the testing-data feature and the product-page screenshots.
 
@@ -300,6 +300,20 @@ Bypass list:
 
 Start it with `docker compose up -d postgres` from the repo root. App datasource settings: host `localhost`, port `55432`, database `world_cup`, user `world_cup`, password `world_cup_dev`, SSL off. The Playwright global setup runs `docker compose up -d --wait postgres` itself, unless `E2E_SKIP_DOCKER=1`.
 
+### Observability profile (opt-in)
+
+Local developer tools for [ADR-0006](architecture.md) and the [BA-111 epic](../epics/BA-111/spec.md). Both services carry `profiles: [observability]`, so a plain `docker compose up` and the E2E global setup (which names `postgres` explicitly) never start them. They have no volumes: data is lost when the containers are removed.
+
+| Service | Image | Host port (override) | Use |
+|---|---|---|---|
+| `phoenix` | `arizephoenix/phoenix:version-20.19.0` | `${PHOENIX_PORT:-6006}` → 6006 | Phoenix UI and OTLP HTTP at `/v1/traces`. It accepts OTLP **protobuf** only: `application/json` gets 415, `application/x-protobuf` gets 200. |
+| `otel-lgtm` | `grafana/otel-lgtm:0.35.0` | `${GRAFANA_PORT:-3001}` → 3000 (Grafana UI; 3000 on the host is the backend), `${OTLP_GRPC_PORT:-4317}` → 4317, `${OTLP_HTTP_PORT:-4318}` → 4318 | Grafana, Tempo, Loki, Prometheus and the OTLP collector. Healthcheck: `curl -sf http://localhost:3000/api/health`. |
+
+- **Start:** `docker compose --profile observability up -d --wait phoenix otel-lgtm` (omit the names to include `postgres`). Grafana is at `http://localhost:3001`, Phoenix at `http://localhost:6006`. The image has no healthcheck for `phoenix`, so `--wait` only waits for it to be running; poll `http://localhost:6006`.
+- **Stop only the tools:** `docker compose --profile observability stop phoenix otel-lgtm`, then `rm -f phoenix otel-lgtm`. Do not use `docker compose down` on a shared stack: it also removes `postgres`.
+- **Isolation:** use `-p <name>` and the four port variables, as in section 7.
+- **Pinned tags:** Bump them deliberately; they were the latest releases on 2026-10-05.
+
 ## 7. Running a second instance (worktrees and parallel runs)
 
 Defaults are shared state: the desktop app uses Electron's `userData` directory and port 3000; the npm CLI uses `~/.questions-to-insights` and port 3000; Compose uses project `questions-to-insights-world-cup` and port 55432. A second instance (for example from a git worktree) collides unless isolated.
@@ -313,6 +327,7 @@ Defaults are shared state: the desktop app uses Electron's `userData` directory 
 | Bare backend (`start:dev`) data dir and port | `<cwd>/data`, `PORT` or 3000 | `APP_DATA_DIR`, `PORT` |
 | Secret | persisted `.app-secret` in the data dir | `APP_SECRET` |
 | Sample Postgres | project `questions-to-insights-world-cup`, port 55432 | `docker compose -p <name>` plus `WORLD_CUP_DB_PORT=<port>`; the e2e fixtures read the same variable (and `WORLD_CUP_DB_HOST`) |
+| Observability profile | same project; ports 6006, 3001, 4317, 4318 | `docker compose -p <name>` plus `PHOENIX_PORT`, `GRAFANA_PORT`, `OTLP_GRPC_PORT`, `OTLP_HTTP_PORT` (see *Observability profile* above) |
 | Playwright | needs port 3000 free | one e2e run at a time per machine; each test already gets its own temp profile |
 
 The project rule: when work happens in a worktree, ask which target (shared or isolated) before starting the app or the Compose stack. See *Worktree deploy convention* in [CLAUDE.md](../../CLAUDE.md).

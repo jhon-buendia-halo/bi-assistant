@@ -1,0 +1,73 @@
+$ docker compose config --services
+postgres
+
+$ docker compose --profile observability config --services
+otel-lgtm
+phoenix
+postgres
+ 655ce7293a91 Pull complete 0B
+ Image arizephoenix/phoenix:version-20.19.0 Pulled 
+ 47b6b059562d Extracting 6B
+ 47b6b059562d Extracting 6B
+ 47b6b059562d Extracting 6B
+ 47b6b059562d Extracting 6B
+ 47b6b059562d Extracting 6B
+ 47b6b059562d Extracting 7B
+ 47b6b059562d Extracting 7B
+ 47b6b059562d Extracting 7B
+ 47b6b059562d Pull complete 0B
+ Image grafana/otel-lgtm:0.35.0 Pulled 
+time="2026-10-05T20:40:26-05:00" level=warning msg="Found orphan containers ([questions-to-insights-world-cup-postgres-f1-1]) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up."
+ Container questions-to-insights-world-cup-phoenix-1 Creating 
+ Container questions-to-insights-world-cup-otel-lgtm-1 Creating 
+ Container questions-to-insights-world-cup-otel-lgtm-1 Created 
+ Container questions-to-insights-world-cup-phoenix-1 Created 
+ Container questions-to-insights-world-cup-phoenix-1 Starting 
+ Container questions-to-insights-world-cup-otel-lgtm-1 Starting 
+ Container questions-to-insights-world-cup-phoenix-1 Started 
+ Container questions-to-insights-world-cup-otel-lgtm-1 Started 
+ Container questions-to-insights-world-cup-otel-lgtm-1 Waiting 
+ Container questions-to-insights-world-cup-phoenix-1 Waiting 
+ Container questions-to-insights-world-cup-phoenix-1 Healthy 
+ Container questions-to-insights-world-cup-otel-lgtm-1 Healthy 
+
+$ docker compose ps (phoenix health)
+otel-lgtm Up 14 seconds (healthy)
+phoenix Up 14 seconds
+phoenix image healthcheck: null
+
+$ curl Phoenix UI
+200
+$ curl Grafana health
+{
+  "database": "ok",
+  "version": "13.2.2",
+  "commit": "1bea008f7e4e858b6824c9e364d608bd4d10b13a"
+}$ curl OTLP HTTP 4318 /v1/traces
+200
+$ curl Phoenix /v1/traces
+415
+$ gRPC port 4317 reachable
+Connection to localhost port 4317 [tcp/*] succeeded!
+open
+
+$ Phoenix rejects JSON (415); it accepts OTLP protobuf. Empty ExportTraceServiceRequest = zero bytes:
+http://localhost:6006/v1/traces
+200
+http://localhost:4318/v1/traces
+200
+
+$ docker compose --profile observability stop phoenix otel-lgtm
+ Container questions-to-insights-world-cup-otel-lgtm-1 Stopping 
+ Container questions-to-insights-world-cup-phoenix-1 Stopping 
+ Container questions-to-insights-world-cup-phoenix-1 Stopped 
+ Container questions-to-insights-world-cup-otel-lgtm-1 Stopped 
+$ docker compose --profile observability rm -f phoenix otel-lgtm
+Going to remove questions-to-insights-world-cup-phoenix-1, questions-to-insights-world-cup-otel-lgtm-1
+ Container questions-to-insights-world-cup-otel-lgtm-1 Removing 
+ Container questions-to-insights-world-cup-phoenix-1 Removing 
+ Container questions-to-insights-world-cup-phoenix-1 Removed 
+ Container questions-to-insights-world-cup-otel-lgtm-1 Removed 
+$ docker ps (postgres untouched)
+questions-to-insights-world-cup-postgres-1 Exited (0) 5 days ago
+questions-to-insights-world-cup-postgres-f1-1 Exited (0) 5 days ago
