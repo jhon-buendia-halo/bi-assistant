@@ -14,6 +14,23 @@ Entry template:
 
 ---
 
+## 2026-10-05 — 0.3.1 Plan local development observability (BA-112)
+
+### What went well
+- Before planning, I read the existing setup (`mastra/index.ts`, `storage.ts`, the entry points). It showed that Mastra already exports to DuckDB, so the plan adds Phoenix next to it rather than replacing it.
+- Four short multiple-choice questions settled visibility, restart, endpoints and DuckDB in one round, before the epic spec was written.
+- The OpenTelemetry load-order constraint shaped the ADR: the setting goes in a file, read before the app is imported. It wasn't left as a surprise for BA-115.
+
+### What went wrong
+- The first epic draft gated observability on an env var. The user wanted a Developer toggle in Settings, so the epic was rewritten after it was created. I hadn't asked how a developer would switch it on.
+- The workspace had no `.env`, so the first Jira call failed. The user had to create a token mid-task.
+- `jira.sh` has no command to update a description or set `parent`. I re-sourced its `adf()` helper and used `raw`.
+
+### What to do differently
+- For any "developer-only" or opt-in feature, ask how it is switched on (setting, env var, build flag) and who can see it, before drafting the epic.
+- At the start of a Jira task in a new Conductor workspace, run `jira.sh whoami` first. If it fails, offer to create `.env` from `.env.example` straight away.
+- To set a parent or edit a description, build the body with `source <(sed -n '/^adf() {/,/^}/p' jira.sh)`, then `jira.sh raw POST|PUT … "$body"`.
+
 ## 2026-10-05 — 0.2.4 follow-up: release tag started an installer build (BA-110)
 
 ### What went well

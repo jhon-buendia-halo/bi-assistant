@@ -1,6 +1,6 @@
 # BA-111 — Local Development Observability
 
-- **Jira:** [BA-111](https://halo-powered.atlassian.net/browse/BA-111) · **Roadmap:** Milestone 0.3 · **Status:** Draft
+- **Jira:** [BA-111](https://halo-powered.atlassian.net/browse/BA-111) · **Roadmap:** Milestone 0.3 · **Status:** Confirmed
 
 ## Goal
 

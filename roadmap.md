@@ -98,7 +98,7 @@ How work is planned, specified, built, verified and traced. It covers the repo's
 
 Developer tooling for seeing what the backend and agents are doing: agent and LLM traces, HTTP and database traces, metrics and linked logs. Switched on by a Developer toggle in Settings. With it off, which is the default, end-user installs behave exactly as before. Epic spec: [specs/epics/BA-111/spec.md](specs/epics/BA-111/spec.md). Decision: ADR-0006 in [specs/system/architecture.md](specs/system/architecture.md).
 
-#### 0.3.1 — ADR, epic spec and roadmap ([BA-112](https://halo-powered.atlassian.net/browse/BA-112))  `🚧 In progress`
+#### 0.3.1 — ADR, epic spec and roadmap ([BA-112](https://halo-powered.atlassian.net/browse/BA-112))  `✅ Done`
 - **Intent:** the observability work is planned and its architecture decided before any code, so each later story can be built and reviewed on its own.
 - **Scope:** ADR-0006 in `specs/system/architecture.md`; the BA-111 epic spec; this milestone with one feature per story; the epic row in `specs/README.md`.
 - **Out of scope:** product code, and capability or system spec changes for behaviour that hasn't shipped yet. Each later story updates those on its own branch.
@@ -106,7 +106,7 @@ Developer tooling for seeing what the backend and agents are doing: agent and LL
   - ADR-0006 records the setting file read before bootstrap, the restart-to-apply rule, the additive exporters and the off-by-default guarantee.
   - `specs/epics/BA-111/spec.md` exists and the user has confirmed it (`Status: Confirmed`).
   - `python3 scripts/check-specs.py` passes.
-- **Notes:** branch `docs/BA-112-observability-specs`.
+- **Notes:** branch `docs/BA-112-observability-specs`. The user confirmed the epic spec on 2026-10-05. Evidence: [evidence/0.3.1/](evidence/0.3.1/).
 
 #### 0.3.2 — Developer settings panel with observability toggle ([BA-113](https://halo-powered.atlassian.net/browse/BA-113))  `📋 Planned`
 - **Intent:** a developer can turn observability on or off and point it at their tools without editing files or env vars.
