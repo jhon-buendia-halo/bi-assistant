@@ -71,10 +71,11 @@ Capability specs referenced below: [app-shell](../capabilities/app-shell/spec.md
 1. Header: a **Back** button (arrow-left icon + "Back") right-aligned; returns to the primary sidebar and to whatever main view was showing.
 2. The same static account row ("Demo User").
 3. A "Search settings" field (search icon, placeholder `Search settings`, a `⌘ F` key hint). Non-functional placeholder today.
-4. `nav aria-label="Settings navigation"` with three rows (icon + label), selecting one shows its form in the main column; selecting the active one again deselects it (main column returns to the empty content area):
+4. `nav aria-label="Settings navigation"` with four rows (icon + label), selecting one shows its form in the main column; selecting the active one again deselects it (main column returns to the empty content area):
    - **Datasource Configuration** (database icon) -> 4.10
    - **LLM Configuration** (bot icon) -> 4.9
    - **Testing Data** (test-tube icon) -> 4.11
+   - **Developer** (wrench icon) -> 4.12
 5. Footer: "Halo BI Assistant" then `v<version>` (muted; `data-testid="app-version"`). The version is the shipped package version.
 
 Opening the settings sidebar does not clear the current main view; selecting a settings section takes precedence over the main view while the sidebar is in settings mode. Leaving settings (Back) restores the main view that was underneath.
@@ -275,6 +276,20 @@ Capability: [testing-data](../capabilities/testing-data/spec.md).
 
 Title "Testing Data", subtitle "Bundled sample datasets you can load into a PostgreSQL database to power local testing and evals." Empty: "No testing data fixtures are registered." (while loading: `Loading fixtures…`). Each fixture is a collapsible card (`testing-data-fixture-<id>`; chevron rotates when open): name, a status chip (`testing-data-status-<id>`: check/X icon + "<loaded>/<required> entities"), description, and when loaded the connection `host:port/database`. Expanded: an optional error line (`testing-data-error-<id>`), **Connection** form (Host `localhost`, Port `5432`, Database, User `postgres`, Password, **Use SSL**; `testing-data-host|port|database|user|password-<id>`), the last test message, **Test connection** (plug icon, `testing-data-test-<id>`) and the load button (`testing-data-load-<id>`: `Load testing data` / `Recreate testing data` for seedable fixtures, `Register testing data` otherwise; `Loading…` / `Registering…` while running). Load shows an inline amber confirm panel (`testing-data-confirm-panel-<id>`): for seedable fixtures "This drops and recreates schema <schema> on <host:port/database>. Everything in that schema will be lost." and for registrable ones "This registers "<name>" as a datasource and dataset against the existing database at <host:port/database>. No schema changes are made."; buttons **Confirm** (`testing-data-confirm-<id>`) and **Cancel**. A **Remove** section ("Deletes the "<name>" datasource and dataset records from the app only. It does not touch the database itself.") has a **Remove** button (trash icon, `testing-data-remove-<id>`, disabled unless loaded; `Removing…`) with its own confirm panel ("This removes the "<name>" datasource and dataset records from the app. The database and its data are not touched."). Only one card is expanded at a time and each card keeps its own form values, busy flags and confirmations.
 
+
+### 4.12 Developer (settings)
+
+Capability: [developer-settings](../capabilities/developer-settings/spec.md).
+
+- Centred column, max width 560 px, like Testing Data.
+- Title "Developer", subtitle "Tools for developing this app. Everything here is off by default."
+- **Switch row:** a `role="switch"` button labelled "Developer observability" (`aria-checked`), with the description "Export agent traces to Arize Phoenix and backend traces, metrics and logs to an OpenTelemetry endpoint. Traces are still kept in the local store." The track is emerald when on and zinc when off.
+- **Endpoint rows** (`data-testid="developer-phoenix-endpoint"` and `"developer-otlp-endpoint"`): a label ("Phoenix endpoint", "OTLP endpoint"), a monospace text field (placeholders `http://localhost:6006`, `http://localhost:4318`), and a secondary **Test** button (plug icon; "Testing…" with a spinner while it runs).
+  - Under the row: the validation error in red (`<Phoenix|OTLP> endpoint must be an http(s) URL`), or the last test result, green when it passed and red when it failed.
+- **Save:** a green, full-width button ("Saving…"). It is disabled unless the form differs from the saved setting and both endpoints are valid. The result is a toast with the server message.
+- **Restart notice** (`data-testid="developer-restart-notice"`): an amber panel with "Restart to apply" and "The running backend has developer observability on|off."
+  - Desktop app: a **Restart backend** button (rotate icon; "Restarting…" until the backend is ready again).
+  - Browser: the text "Restart the CLI to apply." instead of the button.
 ### 4.12 Session chat
 
 Capability: [sessions-chat](../capabilities/sessions-chat/spec.md); deep analysis in [deep-analysis](../capabilities/deep-analysis/spec.md); verification badges in [verified-queries](../capabilities/verified-queries/spec.md).

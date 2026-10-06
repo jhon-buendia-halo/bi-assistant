@@ -108,7 +108,7 @@ Developer tooling for seeing what the backend and agents are doing: agent and LL
   - `python3 scripts/check-specs.py` passes.
 - **Notes:** branch `docs/BA-112-observability-specs`. The user confirmed the epic spec on 2026-10-05. Evidence: [evidence/0.3.1/](evidence/0.3.1/).
 
-#### 0.3.2 — Developer settings panel with observability toggle ([BA-113](https://halo-powered.atlassian.net/browse/BA-113))  `📋 Planned`
+#### 0.3.2 — Developer settings panel with observability toggle ([BA-113](https://halo-powered.atlassian.net/browse/BA-113))  `✅ Done`
 - **Intent:** a developer can turn observability on or off and point it at their tools without editing files or env vars.
 - **Scope:**
   - A fourth Settings row, "Developer", after Datasources, LLM and Testing data, visible in every build.
@@ -117,7 +117,7 @@ Developer tooling for seeing what the backend and agents are doing: agent and LL
   - A "Restart to apply" notice when the saved values differ from the ones the backend started with, with a Restart button in the desktop app (respawns the backend) and a restart hint in the npm CLI.
 - **Out of scope:** the exporters themselves (0.3.4–0.3.6).
 - **Acceptance:** Gherkin flows and a Playwright spec cover opening the section, toggling, editing and validating endpoints, testing connections and the restart notice; the settings survive a restart; a fresh install shows the toggle off.
-- **Notes:** blocks 0.3.4, 0.3.5 and 0.3.6.
+- **Notes:** blocks 0.3.4, 0.3.5 and 0.3.6. Capability spec: [specs/capabilities/developer-settings/spec.md](specs/capabilities/developer-settings/spec.md). Branch `feat/BA-113-developer-settings`. Evidence: [evidence/0.3.2/](evidence/0.3.2/).
 
 #### 0.3.3 — Docker Compose observability profile ([BA-114](https://halo-powered.atlassian.net/browse/BA-114))  `📋 Planned`
 - **Intent:** the local tools start with one command and never start by accident.

@@ -14,6 +14,26 @@ Entry template:
 
 ---
 
+## 2026-10-05 — 0.3.2 Developer settings panel with observability toggle (BA-113)
+
+### What went well
+- The E2E spec was written before the code and failed for the right reason (no "Developer" row). It then drove the whole UI contract: labels, `role="switch"`, test ids and the restart notice.
+- The "Test" probe used an empty OTLP protobuf body. The BA-114 subagent independently found that Phoenix returns 415 to JSON and 200 to protobuf, which confirmed the choice before any real tool was wired up.
+- The probe uses `node:http` instead of `fetch`, because the global fetch carries model-call retries (`retry-fetch.ts`). Without that, a 503 from an endpoint would have been retried for about 7 s.
+- The restart-done check waits for the status to leave `ready` and come back. This avoids reloading against the old, dying backend.
+
+### What went wrong
+- `npm run lint` is `eslint --fix`. Running it as a check rewrote 29 unrelated backend files, which I then had to revert.
+- `getByLabel('Phoenix endpoint')` also matched the "Test Phoenix endpoint" button through its aria-label substring. That cost one E2E round.
+- The first full E2E run had 2 `agents.spec.ts` failures. The shared Postgres had been stopped, and global setup's `--wait` returned before Postgres accepted TCP logins. That cost a diagnosis and a rerun.
+- The probe result first rendered with a leading space, because `whitespace-pre-wrap` kept the template indentation. The screenshots caught it, not the tests.
+
+### What to do differently
+- To check lint without side effects, run `npx eslint "{src,apps,libs,test}/**/*.ts"`, never `npm run lint`. Check changed files with `npx eslint <paths>`. Compare against the pre-existing count (234 problems on this base).
+- Use `{ exact: true }` on `getByLabel` whenever a nearby control's aria-label contains the field's label.
+- Before a full E2E run, make sure the compose Postgres is warm, by running `docker compose up -d --wait postgres` and then one `psql`/TCP check. If the first spec fails at "Connection successful", rerun that spec alone before suspecting the change.
+- Don't use `whitespace-pre-wrap` on elements whose text comes from a multi-line interpolation, unless the message really has line breaks.
+
 ## 2026-10-05 — 0.3.1 Plan local development observability (BA-112)
 
 ### What went well
