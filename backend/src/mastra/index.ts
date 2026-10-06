@@ -7,6 +7,7 @@ import { knowledgeBootstrapAgent } from './agents/knowledge-bootstrap.agent';
 import { sqlFixerAgent } from './agents/sql-fixer.agent';
 import { sqlVerifierAgent } from './agents/sql-verifier.agent';
 import { visualizationAgent } from './agents/visualization.agent';
+import { developerTraceExporters } from './developer-exporters';
 import { mastraStorage } from './storage';
 import { watchSessionWorkspaceRegistry } from './session-workspaces';
 
@@ -28,7 +29,9 @@ export const mastra = new Mastra({
     configs: {
       local: {
         serviceName: 'questions-to-insights',
-        exporters: [new MastraStorageExporter()],
+        // The local store always gets every trace; Phoenix is added only
+        // when developer observability is on.
+        exporters: [new MastraStorageExporter(), ...developerTraceExporters()],
         logging: {
           enabled: true,
           level: 'info',

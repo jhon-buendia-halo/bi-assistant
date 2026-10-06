@@ -5,6 +5,12 @@ Running log of every meaningful change, newest first. See *Logging convention* a
 ## 2026-10-05
 
 ### Added
+- **Developer observability now sends agent traces to Arize Phoenix** (roadmap 0.3.5, [BA-116](https://halo-powered.atlassian.net/browse/BA-116), epic [BA-111](https://halo-powered.atlassian.net/browse/BA-111)):
+  - When the active developer setting is on, [`backend/src/mastra/developer-exporters.ts`](backend/src/mastra/developer-exporters.ts) adds `@mastra/arize`'s `ArizeExporter` next to `MastraStorageExporter`. It sends OpenInference spans in OTLP protobuf to `<Phoenix endpoint>/v1/traces`, under the project `questions-to-insights`.
+  - `observability.duckdb` keeps receiving every trace. When the setting is off, the exporter is never `require`d, so no OpenTelemetry module loads.
+  - Specs: R21–R23 and a Phoenix scenario in [specs/capabilities/developer-settings/spec.md](specs/capabilities/developer-settings/spec.md), agents.md §1.7, tech-stack.md (`@mastra/arize` 1.3.16, pinned to match `@mastra/observability` 1.17.8), and the container diagram.
+  - Verified against real Phoenix: the `questions-to-insights` project shows the assistant's `invoke_agent` → model and memory spans.
+  - Evidence: [evidence/0.3.5/](evidence/0.3.5/).
 - **Developer observability now exports backend traces and metrics to an OTLP endpoint** (roadmap 0.3.4, [BA-115](https://halo-powered.atlassian.net/browse/BA-115), epic [BA-111](https://halo-powered.atlassian.net/browse/BA-111)):
   - When the active developer setting is on, `main.ts` and `cli.ts` start the OpenTelemetry Node SDK **before** they import the app. It instruments HTTP, Express, NestJS, `pg` and undici, with fs, dns and net disabled. Traces go to `<OTLP endpoint>/v1/traces` and metrics every 10 s to `/v1/metrics`, both in OTLP protobuf, as `questions-to-insights`.
   - When the setting is off, nothing from OpenTelemetry is imported and nothing is sent. A failure to start logs one warning, and the backend runs without telemetry.

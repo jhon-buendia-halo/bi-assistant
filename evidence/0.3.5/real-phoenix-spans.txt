@@ -1,0 +1,17 @@
+16 spans in Phoenix project questions-to-insights
+- invoke_agent Questions to Insights Assistant |  | ERROR | Could not find API key process.env.OPENAI_API_KEY for model id openai/gpt-4o-mini
+- chat gpt-4o-mini |  | OK | 
+- memory_operation MessageHistory |  | OK | 
+- model_step Questions to Insights Assistant |  | OK | 
+- model_inference Questions to Insights Assistant |  | OK | 
+- skill_action Skills Processor |  | OK | 
+- workspace_action Workspace Instructions Processor |  | OK | 
+- memory_operation MessageHistory |  | OK | 
+- invoke_agent Questions to Insights Assistant |  | ERROR | Could not find API key process.env.OPENAI_API_KEY for model id openai/gpt-4o-mini
+- chat gpt-4o-mini |  | OK | 
+- memory_operation MessageHistory |  | OK | 
+- model_step Questions to Insights Assistant |  | OK | 
+- model_inference Questions to Insights Assistant |  | OK | 
+- skill_action Skills Processor |  | OK | 
+- workspace_action Workspace Instructions Processor |  | OK | 
+- memory_operation MessageHistory |  | OK | 

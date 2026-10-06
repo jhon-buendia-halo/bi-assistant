@@ -14,6 +14,23 @@ Entry template:
 
 ---
 
+## 2026-10-05 — 0.3.5 Agent trace export to Arize Phoenix gated by the developer setting (BA-116)
+
+### What went well
+- Before installing, I mapped `@mastra/arize` → `@mastra/otel-exporter` → `@mastra/observability` versions. That showed the latest arize (1.3.21) would bring in observability 1.18.3 next to the pinned 1.17.8, and that 1.3.16 matches exactly (`npm ls` shows it deduped).
+- A failing agent run (no model configured, `OPENAI_API_KEY` removed) gave a deterministic, cost-free real agent trace for both the E2E and the real-Phoenix check.
+- Comparing `require.cache` for the built `dist/mastra/index.js` with the setting off and on proved the off-path loads nothing. That is stronger than the unit test alone.
+- Screenshots of the real Phoenix UI were taken by navigating the Electron window to `http://localhost:6006`, with no extra browser install.
+
+### What went wrong
+- `mastra/index.ts` builds the `Mastra` instance at import time, so a lazy `await import()` was impossible there. It needed a guarded synchronous `require` with an eslint disable, which is easy to "tidy" back into a static import by mistake.
+- The E2E's `delete process.env.OPENAI_API_KEY` affects the shared Playwright worker. It has to be restored in `afterEach`, or later spec files would silently lose a developer's key.
+
+### What to do differently
+- Before adding any `@mastra/*` package, run `npm view <pkg>@<v> dependencies` down to `@mastra/observability` and `@mastra/core`, and pick the version that dedupes against the repo's pins.
+- Keep the comment above the `require('@mastra/arize')`. If a static import ever comes back, the `require.cache` check (setting off → no `@opentelemetry`) catches it. Re-run it after any change to `mastra/index.ts`.
+- Any E2E that changes `process.env` must restore it in `afterEach`, because workers are shared across spec files.
+
 ## 2026-10-05 — 0.3.4 OpenTelemetry bootstrap gated by the developer setting (BA-115)
 
 ### What went well

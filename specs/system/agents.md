@@ -121,9 +121,10 @@ LenAI deployments are never swapped to `openai/gpt-4.1-mini` (rule 2 requires no
 
 - **Conversation memory** (assistant only) lives in a local SQL store at `<APP_DATA_DIR>/mastra.sqlite` (fallback `<launch dir>/data/mastra.sqlite`).
 - **Traces, metrics and logs** of every agent call go to a columnar store at `<APP_DATA_DIR>/observability.duckdb` (512 MB memory limit, 2 threads), service name `questions-to-insights`.
+- **Developer observability** ([../capabilities/developer-settings/spec.md](../capabilities/developer-settings/spec.md) R21–R23): when the active developer setting is on, every agent trace is *also* exported to Arize Phoenix at `<Phoenix endpoint>/v1/traces` (OpenInference attributes, OTLP protobuf, project name `questions-to-insights`). The local store above keeps receiving every trace. When the setting is off, the exporter's package is never loaded.
 - The launch directory is `INIT_CWD`, else `PWD`, else the process cwd (so a developer studio process that changes cwd still finds the same files).
 
-> Implementation note: `mastra/storage.ts` — `MastraCompositeStore` with LibSQL default and DuckDB `observability` domain.
+> Implementation note: `mastra/storage.ts` — `MastraCompositeStore` with LibSQL default and DuckDB `observability` domain. `mastra/developer-exporters.ts` adds `@mastra/arize`'s `ArizeExporter` next to `MastraStorageExporter` in the `Observability` config, `require`d only when the setting is on.
 
 ---
 
