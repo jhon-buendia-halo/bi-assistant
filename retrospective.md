@@ -14,6 +14,23 @@ Entry template:
 
 ---
 
+## 2026-10-05 — 0.3.3 Docker Compose observability profile (BA-114)
+
+### What went well
+- I checked the real Docker Hub tags before pinning. `arizephoenix/phoenix` has no plain `0.x` tags (they are `version-N.M.P`), so a guessed tag would have failed to pull.
+- I ran every claimed behaviour against the real images: both profile listings, startup, UI, Grafana health and both OTLP endpoints. That is where the protobuf-only finding came from.
+- On the shared stack I stopped and removed only the two new services and never ran `down`, so the user's Postgres container was untouched.
+
+### What went wrong
+- The brief's OTLP check (`-d '{"resourceSpans":[]}'` as JSON) returned 415 from Phoenix. I would have logged a failure or silently dropped the check if I had treated the brief's command as the definition of "works". Phoenix accepts only protobuf on `/v1/traces`.
+- The project already had an unrelated orphan container (`postgres-f1-1`), so compose printed an orphan warning on every command. Running with `--remove-orphans` would have deleted another session's container.
+- I assumed Phoenix would need a healthcheck and did not look for one in the image first. It has none, so `--wait` only waits for "running".
+
+### What to do differently
+- When a brief gives a verification command, run it, and if it fails, find out whether the command or the service is wrong before recording a result. Record the real protocol requirement in the spec for the next story.
+- Never pass `--remove-orphans` on the shared compose project; other worktrees and sessions create containers in it.
+- For 0.3.5, build the Phoenix exporter with the protobuf OTLP exporter, not the JSON one.
+
 ## 2026-10-05 — 0.3.1 Plan local development observability (BA-112)
 
 ### What went well

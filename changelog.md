@@ -5,6 +5,11 @@ Running log of every meaningful change, newest first. See *Logging convention* a
 ## 2026-10-05
 
 ### Added
+- **Opt-in `observability` Docker Compose profile** (roadmap 0.3.3, [BA-114](https://halo-powered.atlassian.net/browse/BA-114), epic [BA-111](https://halo-powered.atlassian.net/browse/BA-111)):
+  - `docker-compose.yml` gains `phoenix` (`arizephoenix/phoenix:version-20.19.0`, port 6006) and `otel-lgtm` (`grafana/otel-lgtm:0.35.0`; Grafana on 3001, OTLP gRPC 4317, OTLP HTTP 4318), each behind `profiles: [observability]`. Host ports are overridable. A plain `docker compose up` and the E2E global setup still start only Postgres.
+  - Verified against the real images: Phoenix UI 200, Grafana health ok, OTLP HTTP `/v1/traces` 200 on both. Phoenix accepts OTLP protobuf only (JSON gets 415), which 0.3.5 must account for.
+  - Documented in [specs/system/delivery.md](specs/system/delivery.md) (section 6 and the isolation table in section 7) and in the CLAUDE.md *Worktree deploy convention*.
+  - Evidence: [evidence/0.3.3/](evidence/0.3.3/).
 - **Local development observability is planned** (roadmap 0.3.1, [BA-112](https://halo-powered.atlassian.net/browse/BA-112), epic [BA-111](https://halo-powered.atlassian.net/browse/BA-111)):
   - New Jira epic BA-111 with stories BA-112 to BA-118, mirrored as roadmap Milestone 0.3 (features 0.3.1–0.3.7).
   - **ADR-0006** in [specs/system/architecture.md](specs/system/architecture.md):
