@@ -148,12 +148,12 @@ Developer tooling for seeing what the backend and agents are doing: agent and LL
 - **Acceptance:** toggle on → backend logs in Loki link to their Tempo trace; toggle off → console logging only, with no OTLP export.
 - **Notes:** depends on 0.3.4. Rules R24–R26 in [specs/capabilities/developer-settings/spec.md](specs/capabilities/developer-settings/spec.md). Branch `feat/BA-117-otel-logs`. Evidence: [evidence/0.3.6/](evidence/0.3.6/).
 
-#### 0.3.7 — Developer docs for the local observability stack ([BA-118](https://halo-powered.atlassian.net/browse/BA-118))  `📋 Planned`
+#### 0.3.7 — Developer docs for the local observability stack ([BA-118](https://halo-powered.atlassian.net/browse/BA-118))  `✅ Done`
 - **Intent:** any developer can go from a clean checkout to a trace in Phoenix and Grafana without asking anyone.
 - **Scope:** docs for starting the compose profile, turning on the toggle, and finding a chat question in Phoenix and Grafana; worktree isolation notes (compose project name, ports).
 - **Out of scope:** end-user documentation.
 - **Acceptance:** a developer following only the docs sees one chat question in Phoenix and Grafana.
-- **Notes:** last; depends on 0.3.2–0.3.6.
+- **Notes:** last; depends on 0.3.2–0.3.6. Guide: [docs/observability.md](docs/observability.md), linked from README *Development*. Branch `docs/BA-118-observability-docs` (it includes the BA-114 compose branch merged in, so it holds the whole stack). Evidence: [evidence/0.3.7/](evidence/0.3.7/).
 
 ## Release 1 — 1.0 Beta  (target 2026-10-31)
 

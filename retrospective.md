@@ -14,6 +14,22 @@ Entry template:
 
 ---
 
+## 2026-10-05 — 0.3.7 Developer docs for the local observability stack (BA-118)
+
+### What went well
+- Following the guide literally through the **npm CLI** path covered `cli.ts`'s telemetry start, which no earlier story had run against the real tools: save, restart the CLI, and see Loki and Tempo data.
+- Before writing that Loki's `trace_id` opens Tempo, I read the Grafana Loki datasource's `derivedFields`, so the docs name the actual "Trace: <id>" link.
+- The guide links to `delivery.md` for ports, tags and isolation instead of copying them, so the facts stay in one file.
+
+### What went wrong
+- The BA-114 compose profile was on a sibling branch, not in the 113→117 chain, so the docs branch needed a merge. That produced conflicts in changelog.md and retrospective.md, because every story inserts at the top of the same sections.
+- The first Tempo check of the CLI run came back empty 15 s after the requests and looked like a CLI bug. The traces appeared 30–50 s later. That's the same ingest-lag lesson as BA-115, applied too impatiently.
+
+### What to do differently
+- For an epic delivered as stacked PRs, chain *every* story linearly (including independent ones like a compose profile), so the last branch holds the full stack without a merge.
+- When a shared file takes one entry per story (changelog, retrospective), expect top-of-section conflicts on every stacked merge. Resolve by keeping both sides in story order, then run `python3 scripts/check-specs.py`.
+- Wait at least 45 s and search a 5-minute window before concluding that traces are missing from Tempo.
+
 ## 2026-10-05 — 0.3.6 Backend logs exported with trace ids (BA-117)
 
 ### What went well

@@ -5,6 +5,11 @@ Running log of every meaningful change, newest first. See *Logging convention* a
 ## 2026-10-05
 
 ### Added
+- **Developer guide for local observability** (roadmap 0.3.7, [BA-118](https://halo-powered.atlassian.net/browse/BA-118), epic [BA-111](https://halo-powered.atlassian.net/browse/BA-111)):
+  - [docs/observability.md](docs/observability.md) covers starting Phoenix and Grafana, turning on **Settings → Developer → Developer observability** and restarting, and where to find each signal: Phoenix projects, Tempo search and TraceQL, Loki with its "Trace: <id>" link, and Prometheus. It also covers turning it off and troubleshooting (ingest lag, unreachable endpoints, worktree isolation).
+  - Linked from README *Development*.
+  - Verified by following it with the npm CLI against the real tools.
+  - Evidence: [evidence/0.3.7/](evidence/0.3.7/).
 - **Developer observability now exports backend logs, linked to their traces** (roadmap 0.3.6, [BA-117](https://halo-powered.atlassian.net/browse/BA-117), epic [BA-111](https://halo-powered.atlassian.net/browse/BA-111)):
   - When the active developer setting is on, the OpenTelemetry SDK also exports logs to `<OTLP endpoint>/v1/logs`.
   - Nest logs: [`developer-nest-logger.ts`](backend/src/infrastructure/telemetry/developer-nest-logger.ts) wraps `ConsoleLogger.prototype.printMessages`. Each line prints exactly as before and is also emitted as a log record.
