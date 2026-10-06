@@ -85,6 +85,7 @@ flowchart TB
   end
 
   ext["External: datasources, LLM providers"]
+  devtools["Developer only: OTLP endpoint<br/>(Grafana otel-lgtm)"]
 
   analyst --> renderer
   analyst --> browser
@@ -102,6 +103,7 @@ flowchart TB
   backend -->|"DuckDB (@mastra/duckdb)"| obsdb
   backend -->|"fs read/write (Mastra workspace)"| ws
   backend -->|"pg / @databricks/sql / HTTPS"| ext
+  backend -.->|"OTLP traces + metrics,<br/>only when developer observability is on"| devtools
 ```
 
 *Containers: the two delivery modes (Electron spawning the backend as a child process, or the npm CLI serving backend + bundled UI to a browser) share one NestJS backend and its on-disk stores under `APP_DATA_DIR`.*

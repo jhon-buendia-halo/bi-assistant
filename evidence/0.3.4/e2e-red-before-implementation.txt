@@ -1,0 +1,8 @@
+  ✘  1 e2e/developer-observability.spec.ts:50:5 › backend traces reach the OTLP endpoint when observability is on (27.5s)
+  ✓  2 e2e/developer-observability.spec.ts:66:5 › nothing is exported when observability is off (14.1s)
+    Error: expect(received).toBeGreaterThan(expected)
+    Expected: > 0
+    Received:   0
+    test-results/developer-observability-ba-b39b1-nt-when-observability-is-on/test-failed-1.png
+  1 failed
+  1 passed (42.7s)

@@ -38,6 +38,12 @@ Testing an endpoint
 Default behaviour
 - R16. The section SHALL NOT change what the app does while the setting is off. Turning it on SHALL change nothing until the backend restarts.
 
+Exporting backend telemetry (active setting on)
+- R17. When the active setting is on, the backend SHALL start OpenTelemetry before it loads any app module. It SHALL instrument incoming HTTP requests, the web framework and its route handlers, PostgreSQL queries, and outgoing HTTP calls (including the model provider and connector calls). File-system, DNS and raw socket activity SHALL NOT be traced.
+- R18. Traces SHALL be exported in OTLP protobuf to `<OTLP endpoint>/v1/traces`, and metrics to `<OTLP endpoint>/v1/metrics` every 10 seconds, under the service name `questions-to-insights`.
+- R19. When the active setting is off, the backend SHALL NOT load any OpenTelemetry package and SHALL send nothing to either endpoint.
+- R20. An endpoint that is down or rejects data SHALL NOT fail startup, a request or an agent call. Telemetry that cannot be delivered SHALL be dropped silently. If OpenTelemetry itself fails to start, the backend SHALL log one warning and start without it.
+
 ## Edge cases and errors
 
 - Saving while the backend is unreachable shows an error toast with `Backend unreachable`, and the form keeps the typed values.
@@ -119,6 +125,28 @@ Feature: Developer settings
     Then the message is gone
 ```
 
+### Feature: Developer observability export
+
+E2E: `frontend/e2e/developer-observability.spec.ts`
+
+```gherkin
+Feature: Developer observability export
+
+  Background:
+    Given an OTLP trace receiver is listening
+    And I set the OTLP endpoint to that receiver in "Developer"
+
+  Scenario: Backend traces reach the OTLP endpoint when observability is on
+    When I turn on "Developer observability", click "Save" and click "Restart backend"
+    And I open "LLM Configuration"
+    Then the receiver gets trace data from the service "questions-to-insights"
+
+  Scenario: Nothing is exported when observability is off
+    When I click "Save" with "Developer observability" off and click "Restart backend"
+    And I open "LLM Configuration"
+    Then the receiver gets no data
+```
+
 ## Acceptance
 
 1. A fresh data directory shows the switch off, the default endpoints and no restart notice, and the backend has no developer-settings file until the first save.
@@ -126,5 +154,6 @@ Feature: Developer settings
 3. In the desktop app, **Restart backend** brings the backend back without using the crash-restart budget, and the notice disappears once it is ready.
 4. Invalid endpoints are rejected by both the form and the backend, with the messages in R4.
 5. **Test** reports reachable, a wrong status, or unreachable, with the messages in R14, using the typed value.
+6. With the active setting on, backend HTTP and PostgreSQL spans and metrics reach the OTLP endpoint; with it off, no OpenTelemetry module is loaded and nothing is sent (R17 to R20).
 
-<!-- sources: backend/src/infrastructure/developer-settings/**, backend/src/modules/developer-settings/**, frontend/src/app/features/developer/**, frontend/src/app/app.html (Developer navigation), frontend/electron/main.cjs (backend:restart), frontend/electron/preload.cjs -->
+<!-- sources: backend/src/infrastructure/developer-settings/**, backend/src/infrastructure/telemetry/**, backend/src/main.ts, backend/src/cli.ts, backend/src/modules/developer-settings/**, frontend/src/app/features/developer/**, frontend/src/app/app.html (Developer navigation), frontend/electron/main.cjs (backend:restart), frontend/electron/preload.cjs -->

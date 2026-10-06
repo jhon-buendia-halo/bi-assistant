@@ -1,0 +1,38 @@
+# Backend with developer observability ON (APP_DATA_DIR=temp, PORT=3123) exporting to grafana/otel-lgtm:0.35.0 at http://localhost:4318
+
+## Tempo: recent traces for service questions-to-insights
+questions-to-insights | POST /datasources/test-connection | 21 ms | 4a91923935d19e0b2711c979dc7aaecd
+questions-to-insights | GET /llm/settings | None ms | 78f8e231e566cd85d572bca2c72b332d
+questions-to-insights | GET /sessions | 1 ms | d78cc04d25659907056a3530091473c3
+questions-to-insights | GET /datasources | None ms | 745bcaecf42888555d479e444cfb1cb8
+questions-to-insights | GET /developer-settings | 1 ms | e427332c929aa04acb139dbd0d104f87
+questions-to-insights | GET /llm/settings | 1 ms | db1b36ae19ceca39fe86438132ef0f7b
+questions-to-insights | GET /sessions | 1 ms | d27a549f83f83023fcc733797e745215
+questions-to-insights | GET /sessions | 6 ms | a7757024cf821ad02d1eaa35cc87b8dd
+questions-to-insights | Create Nest App | 48 ms | ce8fd9bec206826d2af32691f153bf12
+
+## Spans of POST /datasources/test-connection (trace 4a91923935d19e0b2711c979dc7aaecd)
+@opentelemetry/instrumentation-express | middleware - <anonymous>
+@opentelemetry/instrumentation-express | middleware - corsMiddleware
+@opentelemetry/instrumentation-express | middleware - jsonParser
+@opentelemetry/instrumentation-express | middleware - urlencodedParser
+@opentelemetry/instrumentation-express | request handler - /datasources/test-connection
+@opentelemetry/instrumentation-router | middleware - patched
+@opentelemetry/instrumentation-router | middleware - patched
+@opentelemetry/instrumentation-router | middleware - patched
+@opentelemetry/instrumentation-router | middleware - patched
+@opentelemetry/instrumentation-router | request handler - /datasources/test-connection
+@opentelemetry/instrumentation-router | middleware - patched
+@opentelemetry/instrumentation-pg | pg.connect
+@opentelemetry/instrumentation-pg | pg.query:SELECT world_cup
+@opentelemetry/instrumentation-nestjs-core | testConnection
+@opentelemetry/instrumentation-nestjs-core | DatasourcesController.testConnection
+@opentelemetry/instrumentation-http | POST /datasources/test-connection
+
+## Prometheus: HTTP metric names received
+http_client_request_duration_seconds_bucket
+http_client_request_duration_seconds_count
+http_client_request_duration_seconds_sum
+http_server_request_duration_seconds_bucket
+http_server_request_duration_seconds_count
+http_server_request_duration_seconds_sum

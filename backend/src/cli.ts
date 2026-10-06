@@ -167,6 +167,14 @@ async function main(): Promise<void> {
   process.env.APP_DATA_DIR = dataDir;
   process.env.APP_SECRET = resolveAppSecret(dataDir);
 
+  // Telemetry must start before the app is imported: auto-instrumentation
+  // only patches modules loaded after it (ADR-0006).
+  const { startupDeveloperSettings } =
+    await import('./infrastructure/developer-settings/developer-settings.file.js');
+  const { startDeveloperTelemetry } =
+    await import('./infrastructure/telemetry/developer-telemetry.js');
+  await startDeveloperTelemetry(startupDeveloperSettings(dataDir));
+
   const { createApp, hasWebUi, resolveWebRoot } =
     await import('./app-bootstrap.js');
   const webRoot = resolveWebRoot();

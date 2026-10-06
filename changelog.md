@@ -5,6 +5,13 @@ Running log of every meaningful change, newest first. See *Logging convention* a
 ## 2026-10-05
 
 ### Added
+- **Developer observability now exports backend traces and metrics to an OTLP endpoint** (roadmap 0.3.4, [BA-115](https://halo-powered.atlassian.net/browse/BA-115), epic [BA-111](https://halo-powered.atlassian.net/browse/BA-111)):
+  - When the active developer setting is on, `main.ts` and `cli.ts` start the OpenTelemetry Node SDK **before** they import the app. It instruments HTTP, Express, NestJS, `pg` and undici, with fs, dns and net disabled. Traces go to `<OTLP endpoint>/v1/traces` and metrics every 10 s to `/v1/metrics`, both in OTLP protobuf, as `questions-to-insights`.
+  - When the setting is off, nothing from OpenTelemetry is imported and nothing is sent. A failure to start logs one warning, and the backend runs without telemetry.
+  - Code: [`backend/src/infrastructure/telemetry/developer-telemetry.ts`](backend/src/infrastructure/telemetry/developer-telemetry.ts). New pinned dependencies: `@opentelemetry/*` 0.222.0 / 2.11.0, `auto-instrumentations-node` 0.80.0.
+  - Specs: R17–R20 and the Feature "Developer observability export" (`frontend/e2e/developer-observability.spec.ts`) in [specs/capabilities/developer-settings/spec.md](specs/capabilities/developer-settings/spec.md). The packages are listed in tech-stack.md, and the container diagram shows the developer-only OTLP edge.
+  - Verified against real Grafana: Tempo shows http → NestJS → `pg.query` spans.
+  - Evidence: [evidence/0.3.4/](evidence/0.3.4/).
 - **Settings → Developer: a developer observability switch with restart to apply** (roadmap 0.3.2, [BA-113](https://halo-powered.atlassian.net/browse/BA-113), epic [BA-111](https://halo-powered.atlassian.net/browse/BA-111)):
   - **Settings:** a fourth row, "Developer", holds the "Developer observability" switch (off by default) and editable Phoenix (`http://localhost:6006`) and OTLP (`http://localhost:4318`) endpoints. The form and the backend both reject a value that isn't an http(s) URL.
   - **Test:** probes the typed endpoint from the backend with an empty OTLP protobuf export to `/v1/traces`. It reports "Reachable", a wrong status, or "Unreachable".
