@@ -1,0 +1,10 @@
+  ✓  1 e2e/developer-observability.spec.ts:69:5 › backend traces reach the OTLP endpoint when observability is on (12.6s)
+  ✓  2 e2e/developer-observability.spec.ts:86:5 › agent runs reach Phoenix when observability is on (9.8s)
+  ✘  3 e2e/developer-observability.spec.ts:104:5 › backend logs reach the OTLP endpoint when observability is on (22.0s)
+  ✓  4 e2e/developer-observability.spec.ts:118:5 › nothing is exported when observability is off (14.0s)
+    Error: expect(received).toContain(expected) // indexOf
+    Expected substring: "Nest application successfully started"
+    Received string:    ""
+    test-results/developer-observability-ba-7da5d-nt-when-observability-is-on/test-failed-1.png
+  1 failed
+  3 passed (1.1m)

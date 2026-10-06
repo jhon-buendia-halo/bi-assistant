@@ -5,6 +5,15 @@ Running log of every meaningful change, newest first. See *Logging convention* a
 ## 2026-10-05
 
 ### Added
+- **Developer observability now exports backend logs, linked to their traces** (roadmap 0.3.6, [BA-117](https://halo-powered.atlassian.net/browse/BA-117), epic [BA-111](https://halo-powered.atlassian.net/browse/BA-111)):
+  - When the active developer setting is on, the OpenTelemetry SDK also exports logs to `<OTLP endpoint>/v1/logs`.
+  - Nest logs: [`developer-nest-logger.ts`](backend/src/infrastructure/telemetry/developer-nest-logger.ts) wraps `ConsoleLogger.prototype.printMessages`. Each line prints exactly as before and is also emitted as a log record.
+  - Mastra's Pino logs: sent through `@opentelemetry/instrumentation-pino`, with stdout field injection disabled.
+  - A line logged during a request or agent run carries that trace's id. Verified in real Grafana: a Loki line resolves to its Tempo trace.
+  - Console output is byte-identical whether the setting is on or off, so the desktop system-logs panel is unaffected.
+  - **Scope change:** `nestjs-pino` was dropped from the plan, because it would have turned the console output into JSON even with the setting off.
+  - Specs: R24–R26 and a logs scenario in [specs/capabilities/developer-settings/spec.md](specs/capabilities/developer-settings/spec.md), plus tech-stack.md and the container diagram.
+  - Evidence: [evidence/0.3.6/](evidence/0.3.6/).
 - **Developer observability now sends agent traces to Arize Phoenix** (roadmap 0.3.5, [BA-116](https://halo-powered.atlassian.net/browse/BA-116), epic [BA-111](https://halo-powered.atlassian.net/browse/BA-111)):
   - When the active developer setting is on, [`backend/src/mastra/developer-exporters.ts`](backend/src/mastra/developer-exporters.ts) adds `@mastra/arize`'s `ArizeExporter` next to `MastraStorageExporter`. It sends OpenInference spans in OTLP protobuf to `<Phoenix endpoint>/v1/traces`, under the project `questions-to-insights`.
   - `observability.duckdb` keeps receiving every trace. When the setting is off, the exporter is never `require`d, so no OpenTelemetry module loads.

@@ -16,6 +16,7 @@ import { existsSync } from 'node:fs';
 import { AddressInfo } from 'node:net';
 import { extname, join, resolve } from 'node:path';
 import { AppModule } from './app.module';
+import { startupDeveloperSettings } from './infrastructure/developer-settings/developer-settings.file';
 
 export interface CreateAppOptions {
   port: number;
@@ -80,10 +81,24 @@ class SpaFallbackFilter extends BaseExceptionFilter {
   }
 }
 
+/**
+ * With developer observability on, Nest log lines are also exported as
+ * OpenTelemetry log records. The module (and the OpenTelemetry logs API under
+ * it) is only required in that case.
+ */
+function installDeveloperLogExport(): void {
+  if (!startupDeveloperSettings().observabilityEnabled) return;
+  const { installNestLogExport } =
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('./infrastructure/telemetry/developer-nest-logger') as typeof import('./infrastructure/telemetry/developer-nest-logger');
+  installNestLogExport();
+}
+
 export async function createApp(
   options: CreateAppOptions,
 ): Promise<CreatedApp> {
   const logger = new Logger('Bootstrap');
+  installDeveloperLogExport();
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   if (options.cors) app.enableCors();
 

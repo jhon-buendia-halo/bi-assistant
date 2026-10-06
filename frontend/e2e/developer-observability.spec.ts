@@ -101,6 +101,20 @@ test('agent runs reach Phoenix when observability is on', async ({ page }) => {
   expect(payloadOf(phoenix, '/v1/traces')).toContain('questions-to-insights');
 });
 
+test('backend logs reach the OTLP endpoint when observability is on', async ({
+  page,
+}) => {
+  await saveAndRestart(page, true);
+
+  await expect
+    .poll(() => payloadOf(otlp, '/v1/logs'), { timeout: 20_000 })
+    .toContain('Nest application successfully started');
+  expect(otlp.received('/v1/logs')[0].contentType).toContain(
+    'application/x-protobuf',
+  );
+  expect(payloadOf(otlp, '/v1/logs')).toContain('questions-to-insights');
+});
+
 test('nothing is exported when observability is off', async ({ page }) => {
   await saveAndRestart(page, false);
   await openLlmConfiguration(page);

@@ -14,6 +14,23 @@ Entry template:
 
 ---
 
+## 2026-10-05 — 0.3.6 Backend logs exported with trace ids (BA-117)
+
+### What went well
+- Before building, I checked the planned `nestjs-pino` approach against the epic's "off changes nothing" rule. It would have changed Nest's console output to JSON for every user and broken the system-logs panel's parsing. I recorded the change of approach in the roadmap and changelog instead of following the plan silently.
+- A normalized diff of the console output with the setting off and on caught a real regression. The first custom logger dropped Nest's `+Nms` suffix, because Nest adds it only through its own per-context logger instances. Wrapping the shared `ConsoleLogger` prototype fixed it.
+- The Loki → Tempo check followed one real trace id from the log line back to its root span, which proves correlation rather than assuming it.
+
+### What went wrong
+- I wrote the first version (a `ConsoleLogger` subclass passed to `NestFactory.create`) before reading how Nest prints `+Nms`. It cost one build-and-diff round.
+- I ran a probe script under `timeout`, which macOS doesn't have (exit 127), and its output was swallowed by a `grep`. That cost two silent runs.
+- A Loki match on "Mastra" looked like a Pino log but was really a Nest line ("MastraModule dependencies initialized"). I needed a separate probe to verify Pino export.
+
+### What to do differently
+- Before replacing or wrapping a framework logger, diff its console output with the change and without it (normalize timestamps and PIDs). Treat any difference as a regression wherever stdout is parsed (the Electron system-logs panel parses it).
+- On macOS, don't use `timeout`. Let the script `process.exit()` itself, and capture its full output to a file before grepping.
+- When checking that a specific producer's logs were exported, emit a unique probe string from that producer and search for exactly that string.
+
 ## 2026-10-05 — 0.3.5 Agent trace export to Arize Phoenix gated by the developer setting (BA-116)
 
 ### What went well

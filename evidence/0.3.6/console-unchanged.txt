@@ -1,0 +1,24 @@
+# Backend console output, developer observability OFF vs ON (normalized: ANSI colours, timestamps, PIDs, +Nms values)
+# diff result: IDENTICAL —       84 lines each
+
+## ON (first 20 lines)
+[Nest] PID  -      LOG [NestFactory] Starting Nest application...
+[Nest] PID  -     WARN [CryptoService] APP_SECRET not set — using an insecure development default. Set APP_SECRET in production.
+[Nest] PID  -      LOG [InstanceLoader] AppModule dependencies initialized +Nms
+[Nest] PID  -      LOG [InstanceLoader] CryptoModule dependencies initialized +Nms
+[Nest] PID  -      LOG [InstanceLoader] MastraModule dependencies initialized +Nms
+[Nest] PID  -      LOG [InstanceLoader] DatabaseModule dependencies initialized +Nms
+[Nest] PID  -      LOG [InstanceLoader] DeveloperSettingsModule dependencies initialized +Nms
+[Nest] PID  -      LOG [InstanceLoader] VerifiedQueriesModule dependencies initialized +Nms
+[Nest] PID  -      LOG [InstanceLoader] LlmModule dependencies initialized +Nms
+[Nest] PID  -      LOG [InstanceLoader] DatasourcesModule dependencies initialized +Nms
+[Nest] PID  -      LOG [InstanceLoader] DatasetsModule dependencies initialized +Nms
+[Nest] PID  -      LOG [InstanceLoader] KnowledgeModule dependencies initialized +Nms
+[Nest] PID  -      LOG [InstanceLoader] MetricsModule dependencies initialized +Nms
+[Nest] PID  -      LOG [InstanceLoader] TestingDataModule dependencies initialized +Nms
+[Nest] PID  -      LOG [InstanceLoader] SessionsModule dependencies initialized +Nms
+[Nest] PID  -      LOG [InstanceLoader] DeepAnalysisModule dependencies initialized +Nms
+[Nest] PID  -      LOG [InstanceLoader] AgentsModule dependencies initialized +Nms
+[Nest] PID  -      LOG [Bootstrap] Web UI not found at /Users/jhonbuendia/conductor/workspaces/questions-to-insights/singapore/.claude/worktrees/BA-117-otel-logs/backend/public (no index.html) — serving API only
+[Nest] PID  -      LOG [RoutesResolver] DatasourcesController {/datasources}: +Nms
+[Nest] PID  -      LOG [RouterExplorer] Mapped {/datasources, GET} route +Nms

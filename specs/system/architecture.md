@@ -104,7 +104,7 @@ flowchart TB
   backend -->|"DuckDB (@mastra/duckdb)"| obsdb
   backend -->|"fs read/write (Mastra workspace)"| ws
   backend -->|"pg / @databricks/sql / HTTPS"| ext
-  backend -.->|"OTLP traces + metrics,<br/>only when developer observability is on"| devtools
+  backend -.->|"OTLP traces, metrics + logs,<br/>only when developer observability is on"| devtools
   backend -.->|"agent traces (OpenInference),<br/>only when developer observability is on"| phoenix
 ```
 

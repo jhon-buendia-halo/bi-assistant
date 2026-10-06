@@ -53,6 +53,7 @@ Build facts: the Angular production build has budgets (initial 500 kB warn / 1 M
 | `@opentelemetry/exporter-trace-otlp-proto`, `@opentelemetry/exporter-metrics-otlp-proto` | 0.222.0 | Developer observability: OTLP protobuf exporters for traces and metrics. |
 | `@opentelemetry/sdk-metrics`, `@opentelemetry/resources` | 2.11.0 | Developer observability: periodic metric reader and the `service.name` resource. |
 | `@opentelemetry/api` | 1.9.1 | OpenTelemetry API shared by the SDK and the instrumentations. |
+| `@opentelemetry/sdk-logs`, `@opentelemetry/exporter-logs-otlp-proto`, `@opentelemetry/api-logs` | 0.222.0 | Developer observability: OTLP log export. Nest logs go through `DeveloperNestLogger`, which prints as Nest's console logger and also emits a log record. Mastra's Pino logs go through `@opentelemetry/instrumentation-pino`. |
 | `@mastra/arize` | 1.3.16 | Developer observability: `ArizeExporter`, which sends agent traces with OpenInference attributes to Arize Phoenix. Its `@mastra/otel-exporter` 1.3.16 depends on `@mastra/observability` 1.17.8, so it must move in lockstep with that pin. It is `require`d only when the developer setting is on. |
 | `@mastra/evals` | 1.10.2 | Scorers for the assistant eval suites. |
 | `@mastra/loggers` | 1.3.1 | Mastra logging. |

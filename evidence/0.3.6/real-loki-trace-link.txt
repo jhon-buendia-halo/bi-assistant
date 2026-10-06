@@ -1,0 +1,13 @@
+# Real grafana/otel-lgtm: backend log in Loki linked to its Tempo trace
+# Trigger: POST /datasources/test-connection to 127.0.0.1:1 with developer observability on
+
+line: Postgres call failed: connect ECONNREFUSED 127.0.0.1:1
+severity: WARN | context: PostgresConnector | trace_id: ad62fe827d61cd9c7498ccaadf44f3cf | span_id: d531b3637324d573
+root span of trace: POST /datasources/test-connection
+mastra pino log: MastraModule dependencies initialized
+total log lines in Loki for service questions-to-insights after one startup + one request: 93
+
+## Mastra PinoLogger → OTLP /v1/logs (probe: built dist, setting on, stub receiver on :4999)
+telemetry started: true
+INFO [2026-10-05 21:28:37.749 -0500] (Mastra): pino-probe-line-from-mastra
+pino line exported: true | log requests: 1
