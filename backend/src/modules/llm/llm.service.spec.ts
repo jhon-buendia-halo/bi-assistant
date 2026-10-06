@@ -6,7 +6,10 @@ jest.mock('@mastra/core/agent', () => ({
 }));
 
 import { resolveAgentModel } from '../../mastra/model-resolver';
-import { CryptoService } from '../../infrastructure/crypto/crypto.service';
+import {
+  CryptoService,
+  UnreadableSecretError,
+} from '../../infrastructure/crypto/crypto.service';
 import { LlmService, lenaiModelConfig } from './llm.service';
 import { LlmSettingsRepository } from './repositories/llm-settings.repository';
 
@@ -26,6 +29,10 @@ function serviceWith(opts?: {
 function serviceWithMocks(opts?: {
   settings?: Awaited<ReturnType<LlmSettingsRepository['get']>>;
   decryptedKey?: string;
+  /** The stored key does not open with the current app secret. */
+  unreadable?: boolean;
+  /** What `reencryptFormerSecret` hands back (null = nothing to migrate). */
+  reencrypted?: string | null;
 }) {
   let doc = opts?.settings ?? null;
   const repository = {
@@ -41,8 +48,12 @@ function serviceWithMocks(opts?: {
     }),
   } as unknown as LlmSettingsRepository;
   const crypto = {
-    decrypt: jest.fn().mockReturnValue(opts?.decryptedKey ?? 'len-key'),
+    decrypt: jest.fn().mockImplementation(() => {
+      if (opts?.unreadable) throw new UnreadableSecretError();
+      return opts?.decryptedKey ?? 'len-key';
+    }),
     encrypt: jest.fn().mockImplementation((v: string) => `enc(${v})`),
+    reencryptFormerSecret: jest.fn().mockReturnValue(opts?.reencrypted ?? null),
   } as unknown as CryptoService;
   return { service: new LlmService(repository, crypto), repository, crypto };
 }
@@ -142,7 +153,7 @@ describe('LenAI provider contract', () => {
       decryptedKey: 'len-saved',
     });
 
-    service.onModuleInit();
+    await service.onModuleInit();
 
     await expect(resolveAgentModel()).resolves.toEqual({
       id: 'lenai/gpt-5-deployment',
@@ -280,7 +291,7 @@ describe('save() enforces test-before-save', () => {
         apiKey: 'len-key',
       }),
     ).rejects.toThrow('Provider request failed (404) — Resource not found');
-    expect(repository.save).not.toHaveBeenCalled();
+    expect(jest.spyOn(repository, 'save')).not.toHaveBeenCalled();
   });
 
   it('persists once the same probe the test-connection endpoint runs succeeds', async () => {
@@ -320,7 +331,7 @@ describe('Anthropic provider', () => {
       decryptedKey: 'sk-ant-saved',
     });
 
-    service.onModuleInit();
+    await service.onModuleInit();
 
     await expect(resolveAgentModel()).resolves.toEqual({
       id: 'anthropic/claude-sonnet-5-5',
@@ -390,5 +401,101 @@ describe('testConnection on reasoning models', () => {
     expect((result as Error).message).toMatch(
       /hit the 4096-token limit before replying/,
     );
+  });
+});
+
+describe('a stored key the app secret cannot read', () => {
+  const stored = {
+    key: 'llm' as const,
+    provider: 'lenai' as const,
+    model: 'my-deployment',
+    baseUrl: 'https://lenai.example.com',
+    apiKeyCiphertext: 'sealed-with-another-secret',
+    reasoningEffort: 'low' as const,
+  };
+  const unreadableMessage =
+    "The saved API key can't be read because the app secret changed — enter it again in Settings → LLM Configuration";
+
+  it('re-encrypts a key sealed with the former development secret at startup', async () => {
+    const { service, repository } = serviceWithMocks({
+      settings: stored,
+      reencrypted: 'sealed-with-current-secret',
+    });
+
+    await service.onModuleInit();
+
+    expect(jest.spyOn(repository, 'patch')).toHaveBeenCalledWith({
+      apiKeyCiphertext: 'sealed-with-current-secret',
+    });
+    expect(jest.spyOn(repository, 'save')).not.toHaveBeenCalled();
+  });
+
+  it('leaves a readable key alone at startup', async () => {
+    const { service, repository } = serviceWithMocks({ settings: stored });
+
+    await service.onModuleInit();
+
+    expect(jest.spyOn(repository, 'patch')).not.toHaveBeenCalled();
+  });
+
+  it('reports the settings as unreadable instead of failing', async () => {
+    const view = await serviceWith({
+      settings: stored,
+      unreadable: true,
+    }).getView();
+
+    expect(view).toEqual({
+      provider: 'lenai',
+      model: 'my-deployment',
+      baseUrl: 'https://lenai.example.com',
+      apiKeyMasked: null,
+      reasoningEffort: 'low',
+      configured: false,
+      keyUnreadable: true,
+    });
+  });
+
+  it('fails an agent call with the re-entry message', async () => {
+    const service = serviceWith({ settings: stored, unreadable: true });
+    await service.onModuleInit();
+
+    await expect(resolveAgentModel()).rejects.toThrow(unreadableMessage);
+  });
+
+  it('fails a test without a typed key with the re-entry message', async () => {
+    await expect(
+      serviceWith({ settings: stored, unreadable: true }).testConnection({
+        provider: 'lenai',
+        model: 'my-deployment',
+        baseUrl: 'https://lenai.example.com',
+      }),
+    ).rejects.toThrow(unreadableMessage);
+  });
+
+  it('saves a newly typed key without reading the old one', async () => {
+    const { service, crypto } = serviceWithMocks({
+      settings: stored,
+      unreadable: true,
+    });
+    const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          choices: [{ message: { content: '{"status":"ok"}' } }],
+        }),
+    } as unknown as Response);
+
+    try {
+      await service.save({
+        provider: 'lenai',
+        model: 'my-deployment',
+        baseUrl: 'https://lenai.example.com',
+        apiKey: 'sk-new-key',
+      });
+    } finally {
+      fetchSpy.mockRestore();
+    }
+
+    expect(jest.spyOn(crypto, 'encrypt')).toHaveBeenCalledWith('sk-new-key');
   });
 });

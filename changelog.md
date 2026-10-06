@@ -63,6 +63,15 @@ Running log of every meaningful change, newest first. See *Logging convention* a
   - Evidence: [evidence/0.2.4/](evidence/0.2.4/).
 
 ### Fixed
+- **LLM API key no longer lost or broken when the app secret changes** (roadmap 1.7.9, [BA-106](https://halo-powered.atlassian.net/browse/BA-106), epic [BA-11](https://halo-powered.atlassian.net/browse/BA-11)):
+  - Found from a desktop diagnostics report: the first launch of a data dir after Electron started persisting `.app-secret` (commit `a3ef363`) could not read a key saved under the backend's fixed development secret. `GET /llm/settings` failed with `Unsupported state or unable to authenticate data` (a 500), and so did every agent turn.
+  - [`crypto.service.ts`](backend/src/infrastructure/crypto/crypto.service.ts): a backend started without `APP_SECRET` now reads or creates `<APP_DATA_DIR>/.app-secret` (mode 0600), like Electron main and the CLI. The fixed development secret is never used to encrypt again. `decrypt` throws `UnreadableSecretError`, and `reencryptFormerSecret` re-encrypts a value only the former development secret opens.
+  - [`llm.service.ts`](backend/src/modules/llm/llm.service.ts): at startup a key under the former development secret is re-encrypted with the current one (migration M11). A key no known secret opens is reported as `configured: false`, `keyUnreadable: true` with provider, model and base URL kept. Agent calls, and tests or saves without a typed key, fail with a "re-enter the key" message instead of the crypto error.
+  - LLM Configuration screen: an amber notice asks for the key again and the other fields stay filled. It clears after a successful save.
+  - `.app-secret` added to `.gitignore`, because a bare backend run now writes one into `backend/data/`.
+  - Specs: R11 rewritten and R33–R35 plus two scenarios in [specs/capabilities/llm-settings/spec.md](specs/capabilities/llm-settings/spec.md) (its Feature now has an E2E file); api.md (`keyUnreadable`, no more 500), data-model.md (2.3, app-secret owner, M11), non-functional.md (N15, N16a; open question resolved), delivery.md and ui.md.
+  - Tests: new `frontend/e2e/llm-settings.spec.ts` (4 scenarios against a local LenAI stub), `crypto.service.spec.ts`, and new cases in `llm.service.spec.ts`. The E2E fixture gained `launchElectronApp` / `readyWindow` so a spec can relaunch the app on the same data dir.
+  - Evidence: [evidence/1.7.9/](evidence/1.7.9/).
 - **Merging no longer starts an installer build** (roadmap 0.2.4, [BA-110](https://halo-powered.atlassian.net/browse/BA-110)). The first release after the rollout (v0.20.7) pushed its tag with the deploy key, and `build-desktop.yml` runs on any pushed `v*` tag, so an installer build started on its own. It was cancelled before publishing a release. [`version-on-merge.yml`](.github/workflows/version-on-merge.yml) now pushes the tag with `GITHUB_TOKEN`, whose pushes start no workflows. Only the branch pushes use the deploy key. The *Chaining* row in [specs/system/delivery.md](specs/system/delivery.md) is corrected. Evidence: [evidence/0.2.4/release-run.txt](evidence/0.2.4/release-run.txt).
 
 ## 2026-10-04

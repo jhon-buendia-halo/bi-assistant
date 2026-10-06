@@ -1,0 +1,8 @@
+## run 1: GET /llm/settings
+{"provider": "openai", "model": "gpt-5", "baseUrl": null, "reasoningEffort": "high", "apiKeyMasked": "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022<last 4 redacted>", "configured": true}
+## run 1: backend log lines
+[1005/224947.581257:ERROR:electron/shell/common/mac/codesign_util.cc:79] task_name_for_pid: (os/kern) failure (5)
+## run 2: GET /llm/settings
+{"provider": "openai", "model": "gpt-5", "baseUrl": null, "reasoningEffort": "high", "apiKeyMasked": "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022<last 4 redacted>", "configured": true}
+## run 2: backend log lines
+[1005/224950.685978:ERROR:electron/shell/common/mac/codesign_util.cc:79] task_name_for_pid: (os/kern) failure (5)

@@ -1,0 +1,115 @@
+time="2026-10-05T22:43:50-05:00" level=warning msg="Found orphan containers ([questions-to-insights-world-cup-postgres-f1-1]) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up."
+ Container questions-to-insights-world-cup-postgres-1 Recreate 
+ Container questions-to-insights-world-cup-postgres-1 Recreated 
+ Container questions-to-insights-world-cup-postgres-1 Starting 
+ Container questions-to-insights-world-cup-postgres-1 Started 
+ Container questions-to-insights-world-cup-postgres-1 Waiting 
+ Container questions-to-insights-world-cup-postgres-1 Healthy 
+
+Running 4 tests using 1 worker
+
+[1/4] e2e/llm-settings.spec.ts:136:5 › LenAI needs a deployment name and a base URL
+e2e/llm-settings.spec.ts:136:5 › LenAI needs a deployment name and a base URL
+Downloading Electron binary...
+
+[2/4] e2e/llm-settings.spec.ts:149:5 › never shows the stored key
+[3/4] e2e/llm-settings.spec.ts:168:5 › keeps a key saved under the former development secret
+  1) e2e/llm-settings.spec.ts:168:5 › keeps a key saved under the former development secret ────────
+
+    Error: expect(locator).toHaveAttribute(expected) failed
+
+    Locator:  getByLabel('API key')
+    Expected: "••••••••1a2b"
+    Received: "sk-…"
+    Timeout:  10000ms
+
+    Call log:
+      - Expect "toHaveAttribute" getByLabel('API key') with timeout 10000ms
+      - waiting for getByLabel('API key')
+        24 × locator resolved to <input type="password" placeholder="sk-…" class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"/>
+           - unexpected value "sk-…"
+
+
+      183 |
+      184 |   await expect(keyUnreadableNotice(after.page)).toHaveCount(0);
+    > 185 |   await expect(apiKeyField(after.page)).toHaveAttribute(
+          |                                         ^
+      186 |     'placeholder',
+      187 |     '••••••••1a2b',
+      188 |   );
+        at /Users/jhonbuendia/conductor/workspaces/questions-to-insights/new-york/.claude/worktrees/BA-106-app-secret-fallback/frontend/e2e/llm-settings.spec.ts:185:41
+
+    attachment #1: system-diagnostics.ndjson (application/x-ndjson) ────────────────────────────────
+    test-results/llm-settings-keeps-a-key-s-9f2c9-e-former-development-secret/attachments/system-diagnostics-ndjson-729820e428c4b1e4335cac6b2ef80a7bfe76ce76.ndjson
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/llm-settings-keeps-a-key-s-9f2c9-e-former-development-secret/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/llm-settings-keeps-a-key-s-9f2c9-e-former-development-secret/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/llm-settings-keeps-a-key-s-9f2c9-e-former-development-secret/error-context.md
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/llm-settings-keeps-a-key-s-9f2c9-e-former-development-secret/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/llm-settings-keeps-a-key-s-9f2c9-e-former-development-secret/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[4/4] e2e/llm-settings.spec.ts:196:5 › asks for the key again when the app secret changed
+  2) e2e/llm-settings.spec.ts:196:5 › asks for the key again when the app secret changed ───────────
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator: getByTestId('llm-key-unreadable-notice')
+    Expected: "Your saved API key can't be read because the app secret changed. Enter the key again, test and save."
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toHaveText" getByTestId('llm-key-unreadable-notice') with timeout 10000ms
+      - waiting for getByTestId('llm-key-unreadable-notice')
+
+
+      209 |   await openLlmConfiguration(after.page);
+      210 |
+    > 211 |   await expect(keyUnreadableNotice(after.page)).toHaveText(
+          |                                                 ^
+      212 |     KEY_UNREADABLE_NOTICE,
+      213 |   );
+      214 |   await expect(providerSelect(after.page)).toHaveValue('lenai');
+        at /Users/jhonbuendia/conductor/workspaces/questions-to-insights/new-york/.claude/worktrees/BA-106-app-secret-fallback/frontend/e2e/llm-settings.spec.ts:211:49
+
+    attachment #1: system-diagnostics.ndjson (application/x-ndjson) ────────────────────────────────
+    test-results/llm-settings-asks-for-the--62112-when-the-app-secret-changed/attachments/system-diagnostics-ndjson-9b7794c5511cf12dd45b6207013ec05d5e75cced.ndjson
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/llm-settings-asks-for-the--62112-when-the-app-secret-changed/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/llm-settings-asks-for-the--62112-when-the-app-secret-changed/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/llm-settings-asks-for-the--62112-when-the-app-secret-changed/error-context.md
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/llm-settings-asks-for-the--62112-when-the-app-secret-changed/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/llm-settings-asks-for-the--62112-when-the-app-secret-changed/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+  2 failed
+    e2e/llm-settings.spec.ts:168:5 › keeps a key saved under the former development secret ─────────
+    e2e/llm-settings.spec.ts:196:5 › asks for the key again when the app secret changed ────────────
+  2 passed (38.5s)
