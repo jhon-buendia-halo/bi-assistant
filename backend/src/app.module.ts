@@ -11,6 +11,7 @@ import { MetricsModule } from './modules/metrics/metrics.module';
 import { KnowledgeModule } from './modules/knowledge/knowledge.module';
 import { DeepAnalysisModule } from './modules/deep-analysis/deep-analysis.module';
 import { TestingDataModule } from './modules/testing-data/testing-data.module';
+import { DeveloperSettingsModule } from './modules/developer-settings/developer-settings.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { TestingDataModule } from './modules/testing-data/testing-data.module';
     SessionsModule,
     DeepAnalysisModule,
     TestingDataModule,
+    DeveloperSettingsModule,
   ],
   controllers: [],
   providers: [],

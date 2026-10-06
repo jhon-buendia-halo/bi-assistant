@@ -57,6 +57,7 @@ let diagnosticEntries = [];
 // Backend supervisor state.
 let backendStatus = "starting"; // 'starting' | 'ready' | 'restarting' | 'down'
 let backendQuitting = false; // guards the 'exit' handler against restarting during app shutdown
+let backendRestartRequested = false; // a developer-settings restart: respawn at once, outside the crash budget
 let restartAttempt = 0;
 let restartTimer = null;
 let stableTimer = null;
@@ -206,6 +207,10 @@ function initializeDiagnostics() {
   }
 
   ipcMain.handle("diagnostics:list", () => diagnosticEntries);
+  ipcMain.handle("backend:restart", () => {
+    restartBackendOnRequest();
+    return { ok: true };
+  });
   ipcMain.on("diagnostics:record", (_event, entry) => {
     recordDiagnostic(
       entry?.level,
@@ -517,6 +522,12 @@ function startBackend() {
     stableTimer = null;
     // A quit-initiated kill must not trigger a restart.
     if (backendQuitting) return;
+    if (backendRestartRequested) {
+      backendRestartRequested = false;
+      startBackend();
+      void pollUntilReadyThenNotify();
+      return;
+    }
     scheduleBackendRestart(code);
   });
 }
@@ -581,6 +592,27 @@ function scheduleBackendRestart(exitCode) {
     startBackend();
     void pollUntilReadyThenNotify();
   }, delay);
+}
+
+// "Restart backend" in developer settings: the new backend re-reads the
+// developer-settings file at startup. Not a crash, so it neither waits for
+// nor spends the crash-restart budget.
+function restartBackendOnRequest() {
+  if (backendQuitting) return;
+  restartAttempt = 0;
+  clearTimeout(restartTimer);
+  restartTimer = null;
+  clearTimeout(stableTimer);
+  stableTimer = null;
+  setBackendStatus("restarting");
+  recordDiagnostic("info", "electron", "Backend restart requested");
+  if (backendProcess) {
+    backendRestartRequested = true;
+    backendProcess.kill();
+    return;
+  }
+  startBackend();
+  void pollUntilReadyThenNotify();
 }
 
 function stopBackend() {

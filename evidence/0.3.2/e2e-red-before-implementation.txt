@@ -1,0 +1,18 @@
+  ✘  1 e2e/developer-settings.spec.ts:36:5 › developer observability is off by default (31.4s)
+  ✘  2 e2e/developer-settings.spec.ts:59:5 › turning observability on asks for a restart, and restarting applies it (31.4s)
+  ✘  3 e2e/developer-settings.spec.ts:94:5 › turning it back off before restarting needs no restart (31.4s)
+  ✘  4 e2e/developer-settings.spec.ts:111:5 › rejects an endpoint that is not a URL (31.0s)
+  ✘  5 e2e/developer-settings.spec.ts:121:5 › tests an endpoint that accepts OTLP traces (31.0s)
+  ✘  6 e2e/developer-settings.spec.ts:145:5 › tests an endpoint that is not listening (31.5s)
+    TimeoutError: locator.click: Timeout 30000ms exceeded.
+      - waiting for getByRole('navigation', { name: 'Settings navigation' }).getByRole('button', { name: 'Developer' })
+    TimeoutError: locator.click: Timeout 30000ms exceeded.
+      - waiting for getByRole('navigation', { name: 'Settings navigation' }).getByRole('button', { name: 'Developer' })
+    TimeoutError: locator.click: Timeout 30000ms exceeded.
+      - waiting for getByRole('navigation', { name: 'Settings navigation' }).getByRole('button', { name: 'Developer' })
+    TimeoutError: locator.click: Timeout 30000ms exceeded.
+      - waiting for getByRole('navigation', { name: 'Settings navigation' }).getByRole('button', { name: 'Developer' })
+    TimeoutError: locator.click: Timeout 30000ms exceeded.
+      - waiting for getByRole('navigation', { name: 'Settings navigation' }).getByRole('button', { name: 'Developer' })
+    TimeoutError: locator.click: Timeout 30000ms exceeded.
+      - waiting for getByRole('navigation', { name: 'Settings navigation' }).getByRole('button', { name: 'Developer' })

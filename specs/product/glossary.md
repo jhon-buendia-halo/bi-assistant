@@ -26,6 +26,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Data directory.** The folder holding all app data: application database, agent memory, observability data, per-session *workspaces* and the *app secret* file. Desktop and web mode use different data directories on purpose.
 
+**Developer observability.** An opt-in developer setting, off by default. When it is on, the backend exports agent traces to Arize Phoenix and backend traces, metrics and logs to an OpenTelemetry (OTLP) endpoint, in addition to the local observability store. It takes effect when the backend restarts. See [../capabilities/developer-settings/spec.md](../capabilities/developer-settings/spec.md).
+
 **Data point selection.** The user clicking a mark (bar, segment, point) inside a *visual*. The panel reports it to the chat so the user can ask a follow-up about that value.
 
 **Data record.** The stored result of one `run_readonly_sql` or `sample_rows` call: tool, input, columns, rows (capped), total row count, truncated flag, error, rationale and warnings.

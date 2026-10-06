@@ -5,6 +5,15 @@ Running log of every meaningful change, newest first. See *Logging convention* a
 ## 2026-10-05
 
 ### Added
+- **Settings → Developer: a developer observability switch with restart to apply** (roadmap 0.3.2, [BA-113](https://halo-powered.atlassian.net/browse/BA-113), epic [BA-111](https://halo-powered.atlassian.net/browse/BA-111)):
+  - **Settings:** a fourth row, "Developer", holds the "Developer observability" switch (off by default) and editable Phoenix (`http://localhost:6006`) and OTLP (`http://localhost:4318`) endpoints. The form and the backend both reject a value that isn't an http(s) URL.
+  - **Test:** probes the typed endpoint from the backend with an empty OTLP protobuf export to `/v1/traces`. It reports "Reachable", a wrong status, or "Unreachable".
+  - **Storage:** the setting is saved to `<APP_DATA_DIR>/developer-settings.json` (atomic write), not the document store, so entry points can read it before bootstrap (ADR-0006).
+  - **Applying it:** the backend keeps the copy it read at startup as the active setting. A "Restart to apply" notice appears while the saved setting differs from it. In the desktop app, **Restart backend** respawns the backend through a new `backend:restart` IPC channel, outside the crash-restart budget. The browser (npm CLI) shows "Restart the CLI to apply" instead.
+  - **Scope:** nothing is exported yet. The exporters arrive in 0.3.4–0.3.6.
+  - **API:** new `GET`/`PUT /developer-settings` and `POST /developer-settings/test-endpoint`.
+  - **Specs:** the new [developer-settings](specs/capabilities/developer-settings/spec.md) capability (Gherkin + `frontend/e2e/developer-settings.spec.ts`), plus api.md, data-model.md, ui.md §4.12, app-shell R5, the glossary and tech-stack.md.
+  - Evidence: [evidence/0.3.2/](evidence/0.3.2/).
 - **Local development observability is planned** (roadmap 0.3.1, [BA-112](https://halo-powered.atlassian.net/browse/BA-112), epic [BA-111](https://halo-powered.atlassian.net/browse/BA-111)):
   - New Jira epic BA-111 with stories BA-112 to BA-118, mirrored as roadmap Milestone 0.3 (features 0.3.1–0.3.7).
   - **ADR-0006** in [specs/system/architecture.md](specs/system/architecture.md):

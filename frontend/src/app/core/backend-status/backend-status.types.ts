@@ -6,6 +6,7 @@ export interface BackendStatusEvent {
 
 export interface DesktopBridge {
   onBackendStatus(listener: (event: BackendStatusEvent) => void): () => void;
+  restartBackend(): Promise<{ ok: boolean }>;
 }
 
 declare global {

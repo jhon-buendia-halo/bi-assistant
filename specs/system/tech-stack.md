@@ -112,7 +112,7 @@ Rules:
 Current state versus the target above (verified against the code):
 
 - The app is **not routed yet**: `app.routes.ts` exports an empty `Routes` array and the shell (`app.ts`) imports each feature's components directly. When the first routed view is introduced, adopt the `pages/` + lazy `<feature>.routes.ts` convention for it.
-- Existing features: `agents`, `datasets`, `datasources`, `knowledge`, `llm`, `sessions`, `testing-data`. They have `components/`, `services/` and (except `agents` and `testing-data`) `models/`; none has `pages/`, `store/` or a routes file.
+- Existing features: `agents`, `datasets`, `datasources`, `developer`, `knowledge`, `llm`, `sessions`, `testing-data`. They have `components/`, `services/` and (except `agents` and `testing-data`) `models/`; none has `pages/`, `store/` or a routes file.
 - The metrics UI (`metrics-panel` component, `metrics-api.service`) lives inside `features/datasets`, not in a feature of its own.
 - Populated `core/` folders: `config` (`api.config.ts`, `app-version.ts`), `backend-status`, `diagnostics`, `toast`. `core/api`, `auth`, `guards`, `interceptors` exist as empty placeholders.
 - Populated `shared/` folders: `components` (`app-logo`, `backend-status-banner`, `system-logs-panel`, `toast-container`) and `pipes` (`markdown.pipe.ts`); `directives` and `utils` are empty placeholders.
@@ -145,7 +145,7 @@ Rules:
 - `infrastructure/` is technical concerns. Feature modules depend on infrastructure, never the reverse.
 - `config/` is typed configuration files.
 
-Current state (verified): existing modules are `agents`, `datasets`, `datasources`, `deep-analysis`, `knowledge`, `llm`, `metrics`, `sessions`, `testing-data`, `verified-queries`. `infrastructure/` has `crypto` and `database` only. `common/` and `config/` do not exist yet; create them when the first cross-cutting block or typed config appears.
+Current state (verified): existing modules are `agents`, `datasets`, `datasources`, `deep-analysis`, `developer-settings`, `knowledge`, `llm`, `metrics`, `sessions`, `testing-data`, `verified-queries`. `infrastructure/` has `crypto`, `database` and `developer-settings` (the developer-settings file reader, free of Nest imports so entry points can use it before bootstrap). `common/` and `config/` do not exist yet; create them when the first cross-cutting block or typed config appears.
 
 Datastore pattern: a small `DocStore<T>` interface (`infrastructure/database/doc-store.ts`) with a better-sqlite3 adapter (`sqlite-doc-store.ts`): one table per collection, each row one JSON document, filters and sorts evaluated in-process. `DatabaseModule` is `@Global()` and exposes one injection token per collection (for example `CONNECTIONS_STORE`); repositories inject the token, never the db handle. A new collection is a `{ token, table }` entry in `COLLECTIONS` in `database.module.ts` plus a token in `doc-store.ts`. Renames need a migration (see [data-model.md](data-model.md)). Data directory: `APP_DATA_DIR`, else `<cwd>/data`.
 

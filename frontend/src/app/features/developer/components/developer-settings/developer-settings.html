@@ -1,0 +1,151 @@
+<div class="flex flex-col gap-4">
+  <div class="mb-1">
+    <h1 class="text-[15px] font-semibold text-zinc-100">Developer</h1>
+    <p class="mt-1 text-[12px] text-zinc-500">
+      Tools for developing this app. Everything here is off by default.
+    </p>
+  </div>
+
+  @if (view(); as current) {
+    @if (current.restartRequired) {
+      <div
+        data-testid="developer-restart-notice"
+        class="flex flex-col gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-[12px] text-amber-200"
+      >
+        <p class="flex items-start gap-2">
+          <lucide-angular
+            [img]="TriangleAlert"
+            [size]="14"
+            class="mt-0.5 shrink-0"
+          />
+          <span>
+            <span class="font-medium">Restart to apply.</span>
+            The running backend has developer observability
+            {{ current.active.observabilityEnabled ? "on" : "off" }}.
+          </span>
+        </p>
+        @if (canRestart) {
+          <button
+            type="button"
+            (click)="restart()"
+            [disabled]="restarting()"
+            class="flex w-fit items-center gap-2 rounded-md bg-amber-500 px-3 py-1.5 font-medium text-zinc-900 hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <lucide-angular
+              [img]="restarting() ? Loader2 : RotateCw"
+              [size]="14"
+              [class.animate-spin]="restarting()"
+            />
+            <span>{{ restarting() ? "Restarting…" : "Restart backend" }}</span>
+          </button>
+        } @else {
+          <p class="ml-6">Restart the CLI to apply.</p>
+        }
+      </div>
+    }
+
+    <div
+      class="flex items-start justify-between gap-4 rounded-xl border border-white/10 p-3"
+    >
+      <div class="flex flex-col gap-1">
+        <span
+          id="developer-observability-label"
+          class="text-[13px] font-medium text-zinc-200"
+          >Developer observability</span
+        >
+        <span class="text-[12px] text-zinc-500">
+          Export agent traces to Arize Phoenix and backend traces, metrics and
+          logs to an OpenTelemetry endpoint. Traces are still kept in the local
+          store.
+        </span>
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-labelledby="developer-observability-label"
+        [attr.aria-checked]="enabled()"
+        (click)="toggleEnabled()"
+        class="relative mt-0.5 h-5 w-9 shrink-0 rounded-full transition-colors"
+        [class.bg-emerald-500]="enabled()"
+        [class.bg-zinc-700]="!enabled()"
+      >
+        <span
+          class="absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white transition-transform"
+          [class.translate-x-4]="enabled()"
+        ></span>
+      </button>
+    </div>
+
+    @for (key of endpointKeys; track key) {
+      <div
+        [attr.data-testid]="'developer-' + key + '-endpoint'"
+        class="flex flex-col gap-1"
+      >
+        <label
+          [attr.for]="'developer-' + key + '-endpoint-input'"
+          class="text-[11px] font-medium text-zinc-500"
+          >{{ endpointLabels[key] }}</label
+        >
+        <div class="flex items-center gap-2">
+          <input
+            type="text"
+            [id]="'developer-' + key + '-endpoint-input'"
+            [placeholder]="
+              key === 'phoenix'
+                ? 'http://localhost:6006'
+                : 'http://localhost:4318'
+            "
+            [value]="endpoints()[key]"
+            (input)="setEndpoint(key, $any($event.target).value)"
+            class="flex-1 rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 font-mono text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+          />
+          <button
+            type="button"
+            [attr.aria-label]="'Test ' + endpointLabels[key]"
+            (click)="testEndpoint(key)"
+            [disabled]="tests()[key].testing || !!errors()[key]"
+            class="flex items-center gap-1.5 rounded-md border border-white/10 px-2.5 py-1.5 text-[12px] text-zinc-200 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <lucide-angular
+              [img]="tests()[key].testing ? Loader2 : PlugZap"
+              [size]="13"
+              [class.animate-spin]="tests()[key].testing"
+            />
+            <span>{{ tests()[key].testing ? "Testing…" : "Test" }}</span>
+          </button>
+        </div>
+        @if (errors()[key]; as error) {
+          <p class="text-[12px] text-red-400">{{ error }}</p>
+        } @else if (tests()[key].result; as result) {
+          <p
+            [attr.data-testid]="'developer-' + key + '-endpoint-result'"
+            class="text-[12px]"
+            [class.text-emerald-400]="result.ok"
+            [class.text-red-400]="!result.ok"
+          >
+            {{ result.message }}
+          </p>
+        }
+      </div>
+    }
+
+    <button
+      type="button"
+      (click)="save()"
+      [disabled]="!canSave()"
+      class="mt-1 flex items-center justify-center gap-2 rounded-md bg-emerald-600 px-3 py-1.5 font-medium text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+    >
+      @if (saving()) {
+        <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+        <span>Saving…</span>
+      } @else {
+        <span>Save</span>
+      }
+    </button>
+  } @else {
+    <p class="flex items-center gap-2 text-[12px] text-zinc-500">
+      <lucide-angular [img]="Loader2" [size]="13" class="animate-spin" />
+      <span>Loading developer settings…</span>
+    </p>
+  }
+</div>

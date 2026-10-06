@@ -17,4 +17,5 @@ contextBridge.exposeInMainWorld("desktop", {
     ipcRenderer.on("backend-status", handler);
     return () => ipcRenderer.removeListener("backend-status", handler);
   },
+  restartBackend: () => ipcRenderer.invoke("backend:restart"),
 });

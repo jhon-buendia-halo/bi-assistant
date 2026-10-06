@@ -29,6 +29,7 @@ import {
   TestTube,
   Trash2,
   Workflow,
+  Wrench,
 } from 'lucide-angular';
 import { DatasourceConfig } from './features/datasources/components/datasource-config/datasource-config';
 import {
@@ -38,6 +39,7 @@ import {
 import { DatasourcesApiService } from './features/datasources/services/datasources-api.service';
 import { LlmConfig } from './features/llm/components/llm-config/llm-config';
 import { TestingDataConfig } from './features/testing-data/components/testing-data-config/testing-data-config';
+import { DeveloperSettingsConfig } from './features/developer/components/developer-settings/developer-settings';
 import { DatasetList } from './features/datasets/components/dataset-list/dataset-list';
 import { AgentList } from './features/agents/components/agent-list/agent-list';
 import { AgentDetail } from './features/agents/components/agent-detail/agent-detail';
@@ -73,7 +75,12 @@ import { ReasoningEffort } from './features/llm/models/llm.model';
 import { ToastService } from './core/toast/toast.service';
 import { APP_VERSION } from './core/config/app-version';
 
-type SettingsSection = 'datasources' | 'llm' | 'testing-data' | null;
+type SettingsSection =
+  | 'datasources'
+  | 'llm'
+  | 'testing-data'
+  | 'developer'
+  | null;
 type MainView =
   | 'home'
   | 'dataset'
@@ -100,6 +107,7 @@ const RIGHT_PANEL_WIDTH_STORAGE_KEY = 'questions-to-insights:right-panel-width';
     DatasourceConfig,
     LlmConfig,
     TestingDataConfig,
+    DeveloperSettingsConfig,
     DatasetList,
     AgentList,
     AgentDetail,
@@ -138,6 +146,7 @@ export class App {
   readonly Signal = Signal;
   readonly Sparkle = Sparkle;
   readonly TestTube = TestTube;
+  readonly Wrench = Wrench;
   readonly Trash2 = Trash2;
   readonly Workflow = Workflow;
 

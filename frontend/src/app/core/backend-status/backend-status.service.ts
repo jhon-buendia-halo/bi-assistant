@@ -16,6 +16,19 @@ export class BackendStatusService {
 
   readonly status = signal<BackendStatus>('ready');
 
+  /** Only the desktop app can restart its backend; the CLI owns its own. */
+  readonly canRestart = !!this.bridge;
+
+  /** Asks the main process to respawn the backend. Resolves false without a bridge. */
+  async restart(): Promise<boolean> {
+    if (!this.bridge) return false;
+    try {
+      return (await this.bridge.restartBackend()).ok;
+    } catch {
+      return false;
+    }
+  }
+
   constructor() {
     const unsubscribe = this.bridge?.onBackendStatus((event) => {
       this.zone.run(() => this.status.set(event.status));
