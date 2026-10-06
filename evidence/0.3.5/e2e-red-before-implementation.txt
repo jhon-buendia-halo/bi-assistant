@@ -1,0 +1,9 @@
+  ✓  1 e2e/developer-observability.spec.ts:69:5 › backend traces reach the OTLP endpoint when observability is on (11.2s)
+  ✘  2 e2e/developer-observability.spec.ts:86:5 › agent runs reach Phoenix when observability is on (33.2s)
+  ✓  3 e2e/developer-observability.spec.ts:104:5 › nothing is exported when observability is off (14.2s)
+    Error: expect(received).toContain(expected) // indexOf
+    Expected substring: "assistant"
+    Received string:    ""
+    test-results/developer-observability-ag-55010-ix-when-observability-is-on/test-failed-1.png
+  1 failed
+  2 passed (1.1m)

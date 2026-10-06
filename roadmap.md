@@ -133,12 +133,12 @@ Developer tooling for seeing what the backend and agents are doing: agent and LL
 - **Acceptance:** toggle on → a chat question's HTTP and `pg` spans appear in Tempo; toggle off → no OpenTelemetry module is loaded and no OTLP request is made; an unreachable endpoint never fails a request or startup.
 - **Notes:** depends on 0.3.2; uses 0.3.3 for verification. Rules R17–R20 and the Feature "Developer observability export" in [specs/capabilities/developer-settings/spec.md](specs/capabilities/developer-settings/spec.md). Branch `feat/BA-115-otel-bootstrap`. Evidence: [evidence/0.3.4/](evidence/0.3.4/).
 
-#### 0.3.5 — Agent trace export to Arize Phoenix gated by the developer setting ([BA-116](https://halo-powered.atlassian.net/browse/BA-116))  `📋 Planned`
+#### 0.3.5 — Agent trace export to Arize Phoenix gated by the developer setting ([BA-116](https://halo-powered.atlassian.net/browse/BA-116))  `✅ Done`
 - **Intent:** with the toggle on, a developer can inspect each agent run (prompts, LLM calls, tool calls, tokens, latency) in Phoenix.
 - **Scope:** add the Phoenix exporter to the Mastra `Observability` config next to `MastraStorageExporter` when the setting is on.
 - **Out of scope:** removing or replacing the DuckDB store.
 - **Acceptance:** toggle on → a chat question's agent run appears in Phoenix and in `observability.duckdb`; toggle off → only `observability.duckdb`, exactly as before.
-- **Notes:** depends on 0.3.2.
+- **Notes:** depends on 0.3.2. Rules R21–R23 in [specs/capabilities/developer-settings/spec.md](specs/capabilities/developer-settings/spec.md). `@mastra/arize` is pinned at 1.3.16 to match `@mastra/observability` 1.17.8. Branch `feat/BA-116-phoenix-exporter`. Evidence: [evidence/0.3.5/](evidence/0.3.5/).
 
 #### 0.3.6 — Unified pino logging with trace ids ([BA-117](https://halo-powered.atlassian.net/browse/BA-117))  `📋 Planned`
 - **Intent:** backend and agent logs are one stream that can be followed from a trace.

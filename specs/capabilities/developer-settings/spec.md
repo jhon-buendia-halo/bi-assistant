@@ -44,6 +44,11 @@ Exporting backend telemetry (active setting on)
 - R19. When the active setting is off, the backend SHALL NOT load any OpenTelemetry package and SHALL send nothing to either endpoint.
 - R20. An endpoint that is down or rejects data SHALL NOT fail startup, a request or an agent call. Telemetry that cannot be delivered SHALL be dropped silently. If OpenTelemetry itself fails to start, the backend SHALL log one warning and start without it.
 
+Exporting agent traces to Phoenix (active setting on)
+- R21. When the active setting is on, every agent run (model calls, tool calls, token usage, errors) SHALL also be exported to `<Phoenix endpoint>/v1/traces` in OTLP protobuf with OpenInference attributes, under the project name `questions-to-insights`. Failed runs SHALL be exported too.
+- R22. The local observability store SHALL keep receiving every agent trace whether the setting is on or off. Phoenix is in addition to it, never instead of it.
+- R23. When the active setting is off, the Phoenix exporter's package SHALL NOT be loaded. If it fails to load, the backend SHALL log one warning and run with the local store only.
+
 ## Edge cases and errors
 
 - Saving while the backend is unreachable shows an error toast with `Backend unreachable`, and the form keeps the typed values.
@@ -133,18 +138,24 @@ E2E: `frontend/e2e/developer-observability.spec.ts`
 Feature: Developer observability export
 
   Background:
-    Given an OTLP trace receiver is listening
-    And I set the OTLP endpoint to that receiver in "Developer"
+    Given an OTLP receiver and a Phoenix receiver are listening
+    And I set the OTLP and Phoenix endpoints to them in "Developer"
 
   Scenario: Backend traces reach the OTLP endpoint when observability is on
     When I turn on "Developer observability", click "Save" and click "Restart backend"
     And I open "LLM Configuration"
-    Then the receiver gets trace data from the service "questions-to-insights"
+    Then the OTLP receiver gets trace data from the service "questions-to-insights"
+
+  Scenario: Agent runs reach Phoenix when observability is on
+    Given a session on the World Cup dataset and no model is configured
+    When I turn on "Developer observability", click "Save" and click "Restart backend"
+    And I ask a question in the session
+    Then the Phoenix receiver gets trace data for the "assistant" agent
 
   Scenario: Nothing is exported when observability is off
     When I click "Save" with "Developer observability" off and click "Restart backend"
     And I open "LLM Configuration"
-    Then the receiver gets no data
+    Then neither receiver gets data
 ```
 
 ## Acceptance
@@ -155,5 +166,6 @@ Feature: Developer observability export
 4. Invalid endpoints are rejected by both the form and the backend, with the messages in R4.
 5. **Test** reports reachable, a wrong status, or unreachable, with the messages in R14, using the typed value.
 6. With the active setting on, backend HTTP and PostgreSQL spans and metrics reach the OTLP endpoint; with it off, no OpenTelemetry module is loaded and nothing is sent (R17 to R20).
+7. With the active setting on, an agent run appears in Phoenix and in the local observability store; with it off, only in the local store (R21 to R23).
 
-<!-- sources: backend/src/infrastructure/developer-settings/**, backend/src/infrastructure/telemetry/**, backend/src/main.ts, backend/src/cli.ts, backend/src/modules/developer-settings/**, frontend/src/app/features/developer/**, frontend/src/app/app.html (Developer navigation), frontend/electron/main.cjs (backend:restart), frontend/electron/preload.cjs -->
+<!-- sources: backend/src/infrastructure/developer-settings/**, backend/src/infrastructure/telemetry/**, backend/src/main.ts, backend/src/cli.ts, backend/src/mastra/developer-exporters.ts, backend/src/mastra/index.ts, backend/src/modules/developer-settings/**, frontend/src/app/features/developer/**, frontend/src/app/app.html (Developer navigation), frontend/electron/main.cjs (backend:restart), frontend/electron/preload.cjs -->

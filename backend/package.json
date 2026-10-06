@@ -49,6 +49,7 @@
   },
   "dependencies": {
     "@databricks/sql": "2.1.0",
+    "@mastra/arize": "1.3.16",
     "@mastra/core": "1.66.0",
     "@mastra/duckdb": "1.8.0",
     "@mastra/evals": "1.10.2",
