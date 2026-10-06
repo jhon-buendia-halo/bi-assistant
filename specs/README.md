@@ -58,6 +58,7 @@ A Gherkin Feature that spans capabilities lives in the capability that owns its 
 | BA-12 Response Reliability Signals | [epics/BA-12](epics/BA-12/spec.md) |
 | BA-82 Agent Routines | [epics/BA-82](epics/BA-82/spec.md) |
 | BA-89 Delivery Process | [epics/BA-89](epics/BA-89/spec.md) |
+| BA-111 Local Development Observability | [epics/BA-111](epics/BA-111/spec.md) |
 
 ## Stack neutrality
 

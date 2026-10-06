@@ -94,6 +94,66 @@ How work is planned, specified, built, verified and traced. It covers the repo's
   - `specs/system/delivery.md` describes both rulesets and the deploy-key release push.
 - **Notes:** follows 0.2.3. The probe on a throwaway branch confirmed that deploy-key bypass works on a personal-account repo. The first release (v0.20.7) passed, but its deploy-key tag push started an installer build; the follow-up pushes the tag with `GITHUB_TOKEN`. Evidence: [evidence/0.2.4/](evidence/0.2.4/).
 
+### Milestone 0.3 — Local Development Observability ([BA-111](https://halo-powered.atlassian.net/browse/BA-111))
+
+Developer tooling for seeing what the backend and agents are doing: agent and LLM traces, HTTP and database traces, metrics and linked logs. Switched on by a Developer toggle in Settings. With it off, which is the default, end-user installs behave exactly as before. Epic spec: [specs/epics/BA-111/spec.md](specs/epics/BA-111/spec.md). Decision: ADR-0006 in [specs/system/architecture.md](specs/system/architecture.md).
+
+#### 0.3.1 — ADR, epic spec and roadmap ([BA-112](https://halo-powered.atlassian.net/browse/BA-112))  `🚧 In progress`
+- **Intent:** the observability work is planned and its architecture decided before any code, so each later story can be built and reviewed on its own.
+- **Scope:** ADR-0006 in `specs/system/architecture.md`; the BA-111 epic spec; this milestone with one feature per story; the epic row in `specs/README.md`.
+- **Out of scope:** product code, and capability or system spec changes for behaviour that hasn't shipped yet. Each later story updates those on its own branch.
+- **Acceptance:**
+  - ADR-0006 records the setting file read before bootstrap, the restart-to-apply rule, the additive exporters and the off-by-default guarantee.
+  - `specs/epics/BA-111/spec.md` exists and the user has confirmed it (`Status: Confirmed`).
+  - `python3 scripts/check-specs.py` passes.
+- **Notes:** branch `docs/BA-112-observability-specs`.
+
+#### 0.3.2 — Developer settings panel with observability toggle ([BA-113](https://halo-powered.atlassian.net/browse/BA-113))  `📋 Planned`
+- **Intent:** a developer can turn observability on or off and point it at their tools without editing files or env vars.
+- **Scope:**
+  - A fourth Settings row, "Developer", after Datasources, LLM and Testing data, visible in every build.
+  - A "Developer observability" toggle (off by default); editable Phoenix endpoint (default `http://localhost:6006`) and OTLP endpoint (default `http://localhost:4318`); a "Test connection" status for each.
+  - Saved to a developer-settings file under `APP_DATA_DIR` through new backend endpoints, so the backend entry points can read it before the app loads.
+  - A "Restart to apply" notice when the saved values differ from the ones the backend started with, with a Restart button in the desktop app (respawns the backend) and a restart hint in the npm CLI.
+- **Out of scope:** the exporters themselves (0.3.4–0.3.6).
+- **Acceptance:** Gherkin flows and a Playwright spec cover opening the section, toggling, editing and validating endpoints, testing connections and the restart notice; the settings survive a restart; a fresh install shows the toggle off.
+- **Notes:** blocks 0.3.4, 0.3.5 and 0.3.6.
+
+#### 0.3.3 — Docker Compose observability profile ([BA-114](https://halo-powered.atlassian.net/browse/BA-114))  `📋 Planned`
+- **Intent:** the local tools start with one command and never start by accident.
+- **Scope:** an `observability` profile in `docker-compose.yml` running `arizephoenix/phoenix` (UI and OTLP on 6006) and `grafana/otel-lgtm` (OTLP 4317/4318, Grafana on a host port other than 3000).
+- **Out of scope:** persistent volumes for the tools; any change to the Postgres service.
+- **Acceptance:** `docker compose --profile observability up -d --wait` starts both tools; plain `docker compose up` and the E2E global setup start only Postgres.
+- **Notes:** independent of 0.3.2; can ship in parallel.
+
+#### 0.3.4 — OpenTelemetry bootstrap gated by the developer setting ([BA-115](https://halo-powered.atlassian.net/browse/BA-115))  `📋 Planned`
+- **Intent:** with the toggle on, every request's HTTP, NestJS, Postgres and outbound connector work is visible as one trace in Grafana.
+- **Scope:** `main.ts` and `cli.ts` read the developer setting and, only when it is on, start the OpenTelemetry Node SDK with auto-instrumentation before dynamically importing the app; traces and metrics exported over OTLP to the configured endpoint.
+- **Out of scope:** manual spans inside services; renderer tracing.
+- **Acceptance:** toggle on → a chat question's HTTP and `pg` spans appear in Tempo; toggle off → no OpenTelemetry module is loaded and no OTLP request is made; an unreachable endpoint never fails a request or startup.
+- **Notes:** depends on 0.3.2; uses 0.3.3 for verification.
+
+#### 0.3.5 — Agent trace export to Arize Phoenix gated by the developer setting ([BA-116](https://halo-powered.atlassian.net/browse/BA-116))  `📋 Planned`
+- **Intent:** with the toggle on, a developer can inspect each agent run (prompts, LLM calls, tool calls, tokens, latency) in Phoenix.
+- **Scope:** add the Phoenix exporter to the Mastra `Observability` config next to `MastraStorageExporter` when the setting is on.
+- **Out of scope:** removing or replacing the DuckDB store.
+- **Acceptance:** toggle on → a chat question's agent run appears in Phoenix and in `observability.duckdb`; toggle off → only `observability.duckdb`, exactly as before.
+- **Notes:** depends on 0.3.2.
+
+#### 0.3.6 — Unified pino logging with trace ids ([BA-117](https://halo-powered.atlassian.net/browse/BA-117))  `📋 Planned`
+- **Intent:** backend and agent logs are one stream that can be followed from a trace.
+- **Scope:** route Nest logging through `nestjs-pino` alongside the agent `PinoLogger`; trace and span ids on each line when a trace is active; readable console output; OTLP log export to Loki only when the setting is on.
+- **Out of scope:** changing what is logged.
+- **Acceptance:** toggle on → backend logs in Loki link to their Tempo trace; toggle off → console logging only, with no OTLP export.
+- **Notes:** depends on 0.3.4.
+
+#### 0.3.7 — Developer docs for the local observability stack ([BA-118](https://halo-powered.atlassian.net/browse/BA-118))  `📋 Planned`
+- **Intent:** any developer can go from a clean checkout to a trace in Phoenix and Grafana without asking anyone.
+- **Scope:** docs for starting the compose profile, turning on the toggle, and finding a chat question in Phoenix and Grafana; worktree isolation notes (compose project name, ports).
+- **Out of scope:** end-user documentation.
+- **Acceptance:** a developer following only the docs sees one chat question in Phoenix and Grafana.
+- **Notes:** last; depends on 0.3.2–0.3.6.
+
 ## Release 1 — 1.0 Beta  (target 2026-10-31)
 
 Source of truth for scope and dates: Jira project **BA**, version *1.0 Beta* ([timeline](https://halo-powered.atlassian.net/jira/software/projects/BA/boards/2688/timeline)). Each milestone mirrors one Jira epic and each feature mirrors one story, so IDs map 1:1. Imported 2026-10-01. Status changes are made in both places.
