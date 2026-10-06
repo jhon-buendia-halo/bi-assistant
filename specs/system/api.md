@@ -326,16 +326,17 @@ interface LlmSettingsView {
   apiKeyMasked: string | null;   // "••••••••" + last 4 chars of the key
   reasoningEffort: ReasoningEffort;   // default 'high'
   configured: boolean;
+  keyUnreadable?: true;   // present only when a stored key cannot be decrypted with the current APP_SECRET
 }
 ```
 
 #### 29. `GET /llm/settings`
 - Response `200`: `LlmSettingsView` (bare). Nothing stored: `{ provider:null, model:null, baseUrl:null, apiKeyMasked:null, reasoningEffort:"high", configured:false }`.
-- May return 500 if the stored ciphertext cannot be decrypted (e.g. `APP_SECRET` changed) (G8).
+- Stored key that cannot be decrypted with the current `APP_SECRET`: still `200`, with `configured:false`, `keyUnreadable:true`, the stored `provider`, `model`, `baseUrl` and `reasoningEffort`, and `apiKeyMasked:null`.
 
 #### 30. `PUT /llm/settings`
 - Body: `SaveLlmSettingsDto`. `apiKey` omitted or blank = use the stored key. For `lenai`, `model` is the deployment name and `baseUrl` is required. `anthropic` takes an API key only (no subscription logins).
-- Validation (Style A): `"provider must be one of: openai, anthropic, lenai"`, `"model is required"`, `"baseUrl is required for lenai"`, `"apiKey is required — none stored yet"`.
+- Validation (Style A): `"provider must be one of: openai, anthropic, lenai"`, `"model is required"`, `"baseUrl is required for lenai"`, `"apiKey is required — none stored yet"`, and, with no `apiKey` and a stored key that cannot be decrypted, `"The saved API key can't be read because the app secret changed — enter it again in Settings → LLM Configuration"` (same for `POST /llm/test-connection`).
 - **The settings are tested against the provider before they are persisted**; a failing test fails the save with the provider's error text and nothing is stored.
 - Success: `{ ok:true, message:"Configuration saved", settings: LlmSettingsView }`. A re-save keeps the existing `reasoningEffort`, else defaults to `high`.
 - Side effects: persists (key encrypted); subsequent agent turns resolve the model from these settings.
@@ -811,7 +812,7 @@ Argument parsing is **strict**: an unknown flag or malformed argument prints `qu
 |---|---|---|---|
 | `PORT` | `main.ts` (Electron-spawned/standalone start) | Listen port. The Electron main process sets it from `BACKEND_PORT`. Ignored by the CLI (which uses `--port`). | `3000` |
 | `APP_DATA_DIR` | database module, Mastra storage; set by CLI and Electron main | Directory for `app.sqlite`, `mastra.sqlite`, `observability.duckdb`, `workspaces/`. | database: `<cwd>/data`; Mastra storage: `<INIT_CWD or PWD or cwd>/data` |
-| `APP_SECRET` | crypto service; set by CLI and Electron main | Key material for encrypting API keys at rest (SHA-256 to an AES-256-GCM key). Missing: logs a warning and uses an insecure development default. Must stay stable across launches. | none |
+| `APP_SECRET` | crypto service; set by CLI and Electron main | Key material for encrypting API keys at rest (SHA-256 to an AES-256-GCM key). Missing: the crypto service reads `<APP_DATA_DIR>/.app-secret`, or generates it (32 random bytes hex, mode 0600) and logs where. Must stay stable across launches. | `<APP_DATA_DIR>/.app-secret` |
 | `WEB_ROOT` | `app-bootstrap.ts` | Directory holding the built web UI (`index.html`). | `<package>/public` |
 | `INIT_CWD`, `PWD` | Mastra storage | Launch directory used to place the fallback `data/` folder (Studio changes `cwd`). | process cwd |
 | `VISUAL_MODEL` | visual designer agent | Forces the designer model (router id `provider/model`). Unset: reasoning-family models are swapped for `openai/gpt-4.1-mini` and `nano` models upgraded to their `mini` sibling; others kept. | unset |
@@ -855,7 +856,7 @@ No environment variables. The only runtime switch is the page protocol (`file:` 
 - **G5. Frontend type drift.** The frontend `EvalRunView` omits `comparison` (present on the wire, only used in the Markdown report). The frontend `getEvalRun` result is a loose merge type.
 - **G6. No cascade.** Deleting a datasource leaves datasets pointing at it; deleting a dataset leaves sessions/knowledge that name it. Behaviour of such dangling references is not specified in the API.
 - **G7. `POST /sessions` does not verify the named datasets exist.** Open question whether that is intended.
-- **G8. Error-style inconsistency.** Style A (`200 { ok:false }`) vs Style B (real 4xx) is endpoint-specific and also differs in list shapes (`{ sessions }`, `{ datasources }`, `{ metrics }`, `{ datasets }`, bare array for knowledge, bare `SessionDoc`). Several read endpoints (`GET /llm/settings`, `GET /datasources`, eval-run listing) can still return a framework 500.
+- **G8. Error-style inconsistency.** Style A (`200 { ok:false }`) vs Style B (real 4xx) is endpoint-specific and also differs in list shapes (`{ sessions }`, `{ datasources }`, `{ metrics }`, `{ datasets }`, bare array for knowledge, bare `SessionDoc`). Several read endpoints (`GET /datasources`, eval-run listing) can still return a framework 500.
 - **G9. Request body size.** No explicit JSON body limit is configured, so the framework default (about 100 kB) applies; large dataset snapshots in `POST /datasets` could exceed it. Not verified against a real large dataset.
 - **G10. Desktop backend bind address.** `main.ts` calls `createApp` without a host, so the Electron-spawned backend listens on **all interfaces** with CORS enabled and no authentication; only the CLI binds `127.0.0.1` by default. Open question whether the desktop backend should bind loopback only.
 - **G11. `message` timing on feedback.** `POST …/messages/feedback` with `up` reports `"Answer saved as a verified query"` even when the answer had no SQL and nothing was saved.

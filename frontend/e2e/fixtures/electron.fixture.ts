@@ -17,6 +17,41 @@ interface ElectronFixtures {
 
 const frontendRoot = path.resolve(__dirname, '../..');
 
+/**
+ * Launches the desktop app on `appDataDir`. `env` is layered over the test
+ * defaults; a value of `undefined` removes an inherited variable.
+ */
+export function launchElectronApp(
+  appDataDir: string,
+  env: Record<string, string | undefined> = {},
+): Promise<ElectronApplication> {
+  const merged: Record<string, string> = {};
+  for (const [name, value] of Object.entries({
+    ...process.env,
+    NODE_ENV: 'test',
+    ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
+    QUESTIONS_TO_INSIGHTS_USER_DATA_DIR: appDataDir,
+    ...env,
+  })) {
+    if (value !== undefined) merged[name] = value;
+  }
+  return electron.launch({
+    args: [frontendRoot],
+    cwd: frontendRoot,
+    env: merged,
+  });
+}
+
+/** The main window, once the app shell has rendered. */
+export async function readyWindow(
+  application: ElectronApplication,
+): Promise<Page> {
+  const page = await application.firstWindow();
+  await page.waitForLoadState('domcontentloaded');
+  await expect(page.getByLabel('Open system logs')).toBeVisible();
+  return page;
+}
+
 export const test = base.extend<ElectronFixtures>({
   appDataDir: async ({}, use, testInfo) => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'qti-e2e-'));
@@ -37,16 +72,7 @@ export const test = base.extend<ElectronFixtures>({
   electronApp: async ({ appDataDir }, use, testInfo) => {
     const stdout: string[] = [];
     const stderr: string[] = [];
-    const application = await electron.launch({
-      args: [frontendRoot],
-      cwd: frontendRoot,
-      env: {
-        ...process.env,
-        NODE_ENV: 'test',
-        ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
-        QUESTIONS_TO_INSIGHTS_USER_DATA_DIR: appDataDir,
-      },
-    });
+    const application = await launchElectronApp(appDataDir);
 
     application
       .process()
@@ -71,10 +97,7 @@ export const test = base.extend<ElectronFixtures>({
   },
 
   page: async ({ electronApp }, use) => {
-    const page = await electronApp.firstWindow();
-    await page.waitForLoadState('domcontentloaded');
-    await expect(page.getByLabel('Open system logs')).toBeVisible();
-    await use(page);
+    await use(await readyWindow(electronApp));
   },
 });
 

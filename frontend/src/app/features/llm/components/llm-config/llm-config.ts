@@ -1,5 +1,5 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
-import { LucideAngularModule, Loader2 } from 'lucide-angular';
+import { LucideAngularModule, Loader2, TriangleAlert } from 'lucide-angular';
 import { LlmApiService } from '../../services/llm-api.service';
 import { LlmProvider } from '../../models/llm.model';
 import { ToastService } from '../../../../core/toast/toast.service';
@@ -12,6 +12,7 @@ import { ToastService } from '../../../../core/toast/toast.service';
 })
 export class LlmConfig implements OnInit {
   readonly Loader2 = Loader2;
+  readonly TriangleAlert = TriangleAlert;
 
   private readonly api = inject(LlmApiService);
   private readonly toast = inject(ToastService);
@@ -22,6 +23,9 @@ export class LlmConfig implements OnInit {
   readonly baseUrl = signal('');
   // Placeholder for the key field when a key is already stored (masked view).
   readonly apiKeyPlaceholder = signal('sk-…');
+  // A key is stored but can't be decrypted (the app secret changed) — the
+  // user has to type it again.
+  readonly keyUnreadable = signal(false);
 
   readonly testing = signal(false);
   readonly saving = signal(false);
@@ -31,7 +35,8 @@ export class LlmConfig implements OnInit {
   ngOnInit(): void {
     this.api.getSettings().subscribe({
       next: (saved) => {
-        if (!saved.configured) return;
+        if (!saved.configured && !saved.keyUnreadable) return;
+        this.keyUnreadable.set(saved.keyUnreadable === true);
         this.provider.set(saved.provider ?? 'openai');
         this.model.set(saved.model ?? '');
         this.baseUrl.set(saved.baseUrl ?? '');
@@ -91,8 +96,12 @@ export class LlmConfig implements OnInit {
     this.saving.set(true);
     this.api.saveSettings(this.payload()).subscribe({
       next: (res) => {
-        if (res.ok) this.toast.success(res.message);
-        else this.toast.error(res.message);
+        if (res.ok) {
+          this.toast.success(res.message);
+          this.keyUnreadable.set(false);
+        } else {
+          this.toast.error(res.message);
+        }
         this.saving.set(false);
       },
       error: (err) => {

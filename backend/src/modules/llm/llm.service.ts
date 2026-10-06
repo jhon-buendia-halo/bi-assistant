@@ -6,7 +6,10 @@ import {
 } from '@nestjs/common';
 import { Agent } from '@mastra/core/agent';
 import { z } from 'zod';
-import { CryptoService } from '../../infrastructure/crypto/crypto.service';
+import {
+  CryptoService,
+  UnreadableSecretError,
+} from '../../infrastructure/crypto/crypto.service';
 import {
   setAgentModelResolver,
   type AgentModelConfig,
@@ -16,12 +19,16 @@ import { installRetryFetch } from './retry-fetch';
 import { LlmSettingsRepository } from './repositories/llm-settings.repository';
 import {
   LlmProvider,
+  LlmSettingsDoc,
   LlmSettingsView,
   REASONING_EFFORTS,
   ReasoningEffort,
   SaveLlmSettingsDto,
   SUPPORTED_PROVIDERS,
 } from './llm.types';
+
+const UNREADABLE_KEY_MESSAGE =
+  "The saved API key can't be read because the app secret changed — enter it again in Settings → LLM Configuration";
 
 const TEST_PROMPT =
   'Reply with JSON matching the schema, using the value "ok" for `status`.';
@@ -119,7 +126,7 @@ export class LlmService implements OnModuleInit {
     private readonly crypto: CryptoService,
   ) {}
 
-  onModuleInit(): void {
+  async onModuleInit(): Promise<void> {
     // Install the Mastra agent-model resolver: agents call this at generate
     // time, so saved settings apply immediately without a restart.
     setAgentModelResolver(() => this.resolveAgentModel());
@@ -127,6 +134,43 @@ export class LlmService implements OnModuleInit {
     // outright — see retry-fetch.ts for why this has to patch the process's
     // global fetch rather than the agent model config.
     installRetryFetch();
+    await this.reencryptFormerSecretKey();
+  }
+
+  /**
+   * Migration M11: a key saved while the backend fell back to the fixed
+   * development secret is re-encrypted with the current one, so the first
+   * launch with a real secret does not lose it.
+   */
+  private async reencryptFormerSecretKey(): Promise<void> {
+    try {
+      const doc = await this.repository.get();
+      if (!doc) return;
+      const ciphertext = this.crypto.reencryptFormerSecret(
+        doc.apiKeyCiphertext,
+      );
+      if (!ciphertext) return;
+      await this.repository.patch({ apiKeyCiphertext: ciphertext });
+      this.logger.log(
+        'Re-encrypted the stored LLM API key with the current app secret',
+      );
+    } catch (err) {
+      this.logger.warn(
+        `Could not re-encrypt the stored LLM API key: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  /** The stored key in plaintext, or a readable error when it cannot be. */
+  private storedApiKey(doc: LlmSettingsDoc): string {
+    try {
+      return this.crypto.decrypt(doc.apiKeyCiphertext);
+    } catch (err) {
+      if (err instanceof UnreadableSecretError) {
+        throw new BadRequestException(UNREADABLE_KEY_MESSAGE);
+      }
+      throw err;
+    }
   }
 
   /** Mastra model config from the persisted settings (decrypted key). */
@@ -136,7 +180,7 @@ export class LlmService implements OnModuleInit {
       // No settings yet — env-bound string router keeps the harness bootable.
       return 'openai/gpt-4o-mini';
     }
-    const apiKey = this.crypto.decrypt(doc.apiKeyCiphertext);
+    const apiKey = this.storedApiKey(doc);
     if (doc.provider === 'lenai') {
       return lenaiModelConfig({
         model: doc.model,
@@ -162,13 +206,27 @@ export class LlmService implements OnModuleInit {
         configured: false,
       };
     }
-    const key = this.crypto.decrypt(doc.apiKeyCiphertext);
-    return {
+    const view = {
       provider: doc.provider,
       model: doc.model,
       baseUrl: doc.baseUrl || null,
-      apiKeyMasked: `••••••••${key.slice(-4)}`,
       reasoningEffort: doc.reasoningEffort ?? 'high',
+    };
+    let key: string;
+    try {
+      key = this.crypto.decrypt(doc.apiKeyCiphertext);
+    } catch (err) {
+      if (!(err instanceof UnreadableSecretError)) throw err;
+      return {
+        ...view,
+        apiKeyMasked: null,
+        configured: false,
+        keyUnreadable: true,
+      };
+    }
+    return {
+      ...view,
+      apiKeyMasked: `••••••••${key.slice(-4)}`,
       configured: true,
     };
   }
@@ -409,6 +467,6 @@ export class LlmService implements OnModuleInit {
     if (!doc) {
       throw new BadRequestException('apiKey is required — none stored yet');
     }
-    return this.crypto.decrypt(doc.apiKeyCiphertext);
+    return this.storedApiKey(doc);
   }
 }

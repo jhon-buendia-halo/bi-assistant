@@ -16,6 +16,8 @@ export interface LlmSettingsView {
   apiKeyMasked: string | null;
   reasoningEffort: ReasoningEffort;
   configured: boolean;
+  /** A key is stored but the backend's app secret cannot decrypt it. */
+  keyUnreadable?: true;
 }
 
 export interface LlmActionResult {

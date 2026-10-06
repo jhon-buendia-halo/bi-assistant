@@ -37,7 +37,7 @@ Fix the bugs and blockers found during user testing ([BA-10](../BA-10/spec.md)) 
 | [BA-109](https://halo-powered.atlassian.net/browse/BA-109) | Desktop renderer ignores a non-default `BACKEND_PORT` (Bug; moved from roadmap 0.1.1) | 1.7.20 |
 
 ## Specs touched
-Decided per bug. Known so far: [sessions-chat](../../capabilities/sessions-chat/spec.md) for BA-83 (history shown on return, same-id refresh must not abort a stream); [delivery](../../system/delivery.md) for release stabilization. The spec-backfill bugs (BA-91 to BA-107) each name their spec in Jira and in [evidence/0.2.2/findings.md](../../../evidence/0.2.2/findings.md).
+Decided per bug. Known so far: [sessions-chat](../../capabilities/sessions-chat/spec.md) for BA-83 (history shown on return, same-id refresh must not abort a stream); [delivery](../../system/delivery.md) for release stabilization. The spec-backfill bugs (BA-91 to BA-107) each name their spec in Jira and in [evidence/0.2.2/findings.md](../../../evidence/0.2.2/findings.md). BA-106 touched [llm-settings](../../capabilities/llm-settings/spec.md), [non-functional](../../product/non-functional.md), [api](../../system/api.md), [data-model](../../system/data-model.md), [delivery](../../system/delivery.md) and [ui](../../system/ui.md).
 
 ## Acceptance
 - BA-83: returning to a session always shows its messages without a refresh, including after leaving mid-stream; same-id refreshes do not abort an in-flight stream; an E2E test covers it.

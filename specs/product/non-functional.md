@@ -37,14 +37,13 @@ Build, packaging and versioning detail is in [../system/delivery.md](../system/d
 ### Secrets
 
 - N14. LLM API keys SHALL be encrypted at rest with AES-256-GCM. The key is derived from the app secret (SHA-256); each value has its own random 12-byte IV and an authentication tag.
-- N15. On desktop the app secret SHALL be 32 random bytes (hex), created on first launch and stored in `.app-secret` in the data directory with owner-only permissions (mode 0600). The `APP_SECRET` environment variable, when set, SHALL win. The web command SHALL create and read the same file in its own data directory.
+- N15. On desktop the app secret SHALL be 32 random bytes (hex), created on first launch and stored in `.app-secret` in the data directory with owner-only permissions (mode 0600). The `APP_SECRET` environment variable, when set, SHALL win. The web command SHALL create and read the same file in its own data directory, and so SHALL a backend started on its own without `APP_SECRET`. No fixed, known secret SHALL ever encrypt a key.
 - N16. If the app secret file cannot be written, the app SHALL log a diagnostic and use a new secret each launch, which makes previously encrypted keys unreadable. The user SHALL back up the data directory together with `.app-secret`.
+- N16a. A key encrypted under the former fixed development secret (used before BA-106 when no `APP_SECRET` was set) SHALL be re-encrypted with the current secret at startup. A key that cannot be read SHALL be reported as needing re-entry, never as an unexplained error.
 - N17. API responses SHALL NEVER contain a stored API key, database password, Databricks token or REST credential in plain text. They SHALL show the mask `••••••••`. When the UI sends the mask back, the system SHALL keep the stored secret.
 - N18. The LLM settings view SHALL show only a masked form of the key.
 
 Open question (discrepancy): the README says the application database stores datasource credentials "encrypted". The code encrypts only the LLM API key. Datasource credentials (Databricks token, PostgreSQL password, REST tokens and passwords) are stored as plain JSON in the application database and are only masked in API responses. Decide: encrypt them (preferred) or correct the documentation.
-
-Open question: with no `APP_SECRET` set (for example a bare backend run in development), the backend uses a fixed insecure development default and logs a warning. Confirm this is development-only. The desktop app and the web command always set a real secret.
 
 ### Read-only access to data
 

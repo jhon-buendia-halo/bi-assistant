@@ -60,6 +60,23 @@
     />
   </label>
 
+  @if (keyUnreadable()) {
+    <p
+      data-testid="llm-key-unreadable-notice"
+      class="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-[12px] text-amber-200"
+    >
+      <lucide-angular
+        [img]="TriangleAlert"
+        [size]="14"
+        class="mt-0.5 shrink-0"
+      />
+      <span>
+        Your saved API key can't be read because the app secret changed. Enter
+        the key again, test and save.
+      </span>
+    </p>
+  }
+
   <button
     (click)="testConnection()"
     [disabled]="!canTest"

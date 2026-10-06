@@ -14,6 +14,27 @@ Entry template:
 
 ---
 
+## 2026-10-05 — 1.7.9 Fixed default APP_SECRET fallback (BA-106)
+
+### What went well
+- The root cause came from the diagnostics alone. Boots with and without the `APP_SECRET not set` warning, plus the `.app-secret` file time, showed the secret had changed under existing data. No reproduction was needed to explain it.
+- A local LenAI stub (an OpenAI-compatible `/chat/completions` returning `{"status":"ok"}`) made the real save flow testable in E2E with no provider key. It also lets the test assert which key the backend actually sent.
+- Relaunching the app on the same `appDataDir` with a different `APP_SECRET` reproduced the bug exactly. The red run showed the same `Unsupported state or unable to authenticate data` as the user's report.
+- Extending BA-106, rather than filing a separate bug, kept removing the dev default and migrating data sealed with it in one change. Shipping the first without the second would have broken old installs again.
+
+### What went wrong
+- The Jira script needs `JIRA_*` in this workspace's `.env`, which a fresh Conductor workspace doesn't have. I had to read them from a sibling workspace's `.env` for the command.
+- Running prettier on the whole template reformatted unrelated lines, because the file was not prettier-clean at base. I had to revert and reapply the change by hand.
+- An earlier `sed` on `llm.service.spec.ts` also matched a pre-existing line (`expect(repository.save)`). It was harmless (one lint error fewer) but outside the intended edit.
+- The real-data check couldn't prove the migration: the user had already re-entered the key, so the stored ciphertext was under the new secret. Only the E2E and unit tests prove the legacy path.
+- Port 3000 was held by the user's running dev app, which had to be stopped before the E2E run.
+
+### What to do differently
+- Before using prettier on a file you're editing, check whether the base version is already prettier-clean (`git show HEAD:<f> | npx prettier --stdin-filepath <f> | diff - <(git show HEAD:<f>)`). If it isn't, only hand-format the lines you add.
+- Anchor `sed` replacements to unique text, or use a Python replacement that asserts exactly one match.
+- Before a real-data check on a copy of a data dir, first find out which secret opens the stored ciphertext. That shows whether the check can prove the path you care about.
+- Any change that alters how a stored secret is derived must ship with a migration for values sealed under the old derivation, plus an E2E that relaunches on the same data dir with the new derivation.
+
 ## 2026-10-05 — 0.3.7 Developer docs for the local observability stack (BA-118)
 
 ### What went well

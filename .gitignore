@@ -3,6 +3,7 @@ dist
 *.local
 *.sqlite
 *.sqlite-*
+.app-secret
 .mastra
 .DS_Store
 .context

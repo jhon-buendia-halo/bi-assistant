@@ -33,6 +33,8 @@ export interface LlmSettingsView {
   apiKeyMasked: string | null;
   reasoningEffort: ReasoningEffort;
   configured: boolean;
+  /** Set when a key is stored but the current app secret cannot decrypt it. */
+  keyUnreadable?: true;
 }
 
 /** Persisted document (single row keyed 'llm'; the API key is encrypted). */

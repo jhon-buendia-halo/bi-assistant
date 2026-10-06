@@ -26,8 +26,11 @@ Configuration
 Key protection
 - R9. The API key SHALL be stored only in encrypted form: AES-256-GCM with a 256-bit key derived (SHA-256) from the app secret, a fresh random 12-byte IV per encryption, stored as `iv:tag:data` (each base64).
 - R10. The system SHALL NEVER return the key in plaintext. The settings view SHALL carry a masked form: eight bullet characters followed by the key's last four characters. The settings screen SHALL show that mask as the key field's placeholder, leave the field itself empty, and keep the stored key unless a new one is typed.
-- R11. If no app secret is available the system SHALL log a warning and use a fixed, insecure development secret. Desktop and web mode SHALL generate and persist a random secret on first run (see [../../product/non-functional.md](../../product/non-functional.md)).
+- R11. The app secret SHALL never be a fixed, known value. When no `APP_SECRET` is given, the backend SHALL read `.app-secret` from its data directory, or generate and persist it there on first run, exactly as desktop and web mode do (see [../../product/non-functional.md](../../product/non-functional.md)).
 - R12. The key SHALL be decrypted only in memory, at the moment a model call or a connection probe needs it.
+- R33. At backend startup, a stored key that the current app secret cannot read but the former fixed development secret (`insecure-dev-secret`, used before the backend persisted its own secret) can SHALL be re-encrypted with the current secret and saved, leaving every other field unchanged. Installs that saved a key before the desktop app persisted a secret therefore keep their key.
+- R34. When the stored key cannot be read with the current app secret (and R33 does not apply), reading the settings SHALL NOT fail: the view SHALL report `configured: false`, `keyUnreadable: true`, the stored provider, model, base URL and reasoning effort, and no masked key.
+- R35. The settings screen SHALL then fill in provider, model and base URL and show "Your saved API key can't be read because the app secret changed. Enter the key again, test and save." until a new key is saved. An agent call, and a test or save that does not carry a new key, SHALL fail with `The saved API key can't be read because the app secret changed — enter it again in Settings → LLM Configuration`.
 
 Testing a connection
 - R13. The user SHALL be able to test a configuration without saving it. The system SHALL send the candidate configuration (not the saved one) through a probe and report the outcome.
@@ -67,7 +70,7 @@ Applying the settings
 
 - Switching provider in the form keeps the typed model and key; the placeholder example changes (`gpt-4o-mini`, `claude-sonnet-5-5`, `my-deployment`).
 - Typing a key and leaving it in the field after a successful save is harmless: it is sent again on the next test or save and replaces the stored one.
-- If the app secret changes (a lost secret file on a new install, a different `APP_SECRET`), the stored key can no longer be decrypted: reading the settings fails with a backend error and the screen stays empty. The user must re-enter the key. Open question: show a clear message instead of an unexplained backend error.
+- If the app secret changes (a lost secret file on a new install, a different `APP_SECRET`), the stored key can no longer be decrypted. Only a key under the former development secret is recovered (R33); any other must be entered again (R34, R35).
 - Masking shows the last four characters; a key shorter than four characters would be shown whole. Open question: pad or fully hide very short keys.
 - A backend that is unreachable during load leaves the form empty and shows no toast.
 - The reasoning-effort control is only in the new-session composer; there is no effort field on the Settings screen. Open question: whether it should also appear there.
@@ -81,11 +84,11 @@ Applying the settings
 
 ## UI
 
-Settings sidebar, **LLM Configuration** ([../app-shell/spec.md](../app-shell/spec.md), [../../system/ui.md](../../system/ui.md)). The form, top to bottom: heading "LLM Configuration" with "Configure the language-model provider and verify the credentials."; **Provider** select; **Model** (or **Deployment name**) text box; for LenAI a **Base URL** box with the hint "Gateway root; requests use <base URL>/openai/v1/deployments/<deployment>."; **API key** password box; **Test connection** button; **Save connection** button (tooltip "Test the connection successfully before saving"). States: empty (nothing saved), populated (saved values, masked key placeholder), testing, saving, tested-ok (Save enabled). Results appear as toasts. The new-session composer shows the saved model name (or "No model configured") and a reasoning-effort chip (Low, Medium, High).
+Settings sidebar, **LLM Configuration** ([../app-shell/spec.md](../app-shell/spec.md), [../../system/ui.md](../../system/ui.md)). The form, top to bottom: heading "LLM Configuration" with "Configure the language-model provider and verify the credentials."; **Provider** select; **Model** (or **Deployment name**) text box; for LenAI a **Base URL** box with the hint "Gateway root; requests use <base URL>/openai/v1/deployments/<deployment>."; **API key** password box; **Test connection** button; **Save connection** button (tooltip "Test the connection successfully before saving"). States: empty (nothing saved), populated (saved values, masked key placeholder), key unreadable (saved values without a key, plus the notice "Your saved API key can't be read because the app secret changed. Enter the key again, test and save."), testing, saving, tested-ok (Save enabled). Results appear as toasts. The new-session composer shows the saved model name (or "No model configured") and a reasoning-effort chip (Low, Medium, High).
 
 ## Flows
 
-E2E: none yet.
+E2E: `frontend/e2e/llm-settings.spec.ts` covers "LenAI needs a deployment name and a base URL", "Never shows the stored key", "Keeps a key saved under the former development secret" and "Asks for the key again when the app secret changed", against a local stub of the LenAI gateway. The other scenarios need a real provider and are not automated yet.
 
 ```gherkin
 Feature: LLM settings
@@ -150,12 +153,31 @@ Feature: LLM settings
     Given nothing is configured
     When I click "New conversation"
     Then I see "No model configured"
+
+  Scenario: Keeps a key saved under the former development secret
+    Given a LenAI configuration was saved while the app used the former development secret
+    When I start the app with its own app secret
+    And I open "LLM Configuration"
+    Then the API key placeholder shows the saved key's last four characters
+    When I click "Test connection" without typing a key
+    Then the test uses the saved key and succeeds
+
+  Scenario: Asks for the key again when the app secret changed
+    Given a LenAI configuration was saved
+    And the app secret was replaced
+    When I open "LLM Configuration"
+    Then I see "Your saved API key can't be read because the app secret changed. Enter the key again, test and save."
+    And the provider, deployment name and base URL are filled in
+    When I enter the key, click "Test connection" and then "Save connection"
+    Then I see "Configuration saved"
+    And the notice is gone
 ```
 
 ## Acceptance
 
 - The scenarios above pass against a real provider (or a stub that honours the JSON schema).
-- A configuration saved today still works after a restart (the key decrypts with the persisted app secret).
+- A configuration saved today still works after a restart (the key decrypts with the persisted app secret), and one saved under the former development secret still works after the first launch with a real secret.
+- A key the current secret cannot read never surfaces as a backend error; the screen asks for the key again.
 - The stored document contains the key only as `iv:tag:data`; no API response and no log line contains the plaintext key.
 - With a model that rejects `max_tokens`, a chat turn on a LenAI deployment succeeds (cap sent as `max_completion_tokens`); with an Anthropic Haiku model, a chat turn succeeds with reasoning effort dropped.
 - A provider 429 during a turn is retried transparently and the user sees the answer, not an error.
