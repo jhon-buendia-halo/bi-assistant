@@ -14,6 +14,23 @@ Entry template:
 
 ---
 
+## 2026-10-05 — 0.3.4 OpenTelemetry bootstrap gated by the developer setting (BA-115)
+
+### What went well
+- Writing the "off" scenario first, as a guard that already passed, made the off-by-default promise testable. The real proof (nothing on the wire for 12 s) sits next to the unit test (no `@opentelemetry` module in `require.cache`).
+- The E2E uses a local stub OTLP receiver rather than Docker, so it is fast and deterministic. The real-tool check against `otel-lgtm` was a separate step with its own evidence.
+- All OpenTelemetry versions were pinned to the set that `@mastra/arize` already depends on (0.222 / 2.11), ahead of BA-116.
+
+### What went wrong
+- The first Tempo search returned no traces. Without `start`/`end`, the search API only covers a short recent window, and ingest lags by a few seconds. I nearly suspected the exporter.
+- `npx tsc --noEmit -p tsconfig.json` reports a pre-existing error in `test/app.e2e-spec.ts`. It is noise that hides real type errors. `nest build` uses `tsconfig.build.json` and is the check to trust.
+- npm 11 blocked `protobufjs`'s postinstall script with an "install-scripts" warning. It's harmless here, but it went unexplained until I checked.
+
+### What to do differently
+- To query Tempo through Grafana, always pass `start` and `end` (epoch seconds) and wait at least 15 s after the request. Use TraceQL `q={span.db.system.name="postgresql"}` to find database spans.
+- Type-check the backend with `npm run build` (or `npx tsc -p tsconfig.build.json --noEmit`), not the root tsconfig.
+- Verify developer-observability stories against real tools with a backend on another port (`APP_DATA_DIR=<tmp> PORT=3123 node dist/main.js`). Port 3000 stays free for the E2E suite.
+
 ## 2026-10-05 — 0.3.2 Developer settings panel with observability toggle (BA-113)
 
 ### What went well

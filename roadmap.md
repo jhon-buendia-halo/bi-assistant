@@ -126,12 +126,12 @@ Developer tooling for seeing what the backend and agents are doing: agent and LL
 - **Acceptance:** `docker compose --profile observability up -d --wait` starts both tools; plain `docker compose up` and the E2E global setup start only Postgres.
 - **Notes:** independent of 0.3.2; can ship in parallel.
 
-#### 0.3.4 — OpenTelemetry bootstrap gated by the developer setting ([BA-115](https://halo-powered.atlassian.net/browse/BA-115))  `📋 Planned`
+#### 0.3.4 — OpenTelemetry bootstrap gated by the developer setting ([BA-115](https://halo-powered.atlassian.net/browse/BA-115))  `✅ Done`
 - **Intent:** with the toggle on, every request's HTTP, NestJS, Postgres and outbound connector work is visible as one trace in Grafana.
 - **Scope:** `main.ts` and `cli.ts` read the developer setting and, only when it is on, start the OpenTelemetry Node SDK with auto-instrumentation before dynamically importing the app; traces and metrics exported over OTLP to the configured endpoint.
 - **Out of scope:** manual spans inside services; renderer tracing.
 - **Acceptance:** toggle on → a chat question's HTTP and `pg` spans appear in Tempo; toggle off → no OpenTelemetry module is loaded and no OTLP request is made; an unreachable endpoint never fails a request or startup.
-- **Notes:** depends on 0.3.2; uses 0.3.3 for verification.
+- **Notes:** depends on 0.3.2; uses 0.3.3 for verification. Rules R17–R20 and the Feature "Developer observability export" in [specs/capabilities/developer-settings/spec.md](specs/capabilities/developer-settings/spec.md). Branch `feat/BA-115-otel-bootstrap`. Evidence: [evidence/0.3.4/](evidence/0.3.4/).
 
 #### 0.3.5 — Agent trace export to Arize Phoenix gated by the developer setting ([BA-116](https://halo-powered.atlassian.net/browse/BA-116))  `📋 Planned`
 - **Intent:** with the toggle on, a developer can inspect each agent run (prompts, LLM calls, tool calls, tokens, latency) in Phoenix.

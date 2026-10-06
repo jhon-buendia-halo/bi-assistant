@@ -35,7 +35,7 @@ specs/
 | [datasources](capabilities/datasources/spec.md) | Connections (PostgreSQL, Databricks, REST/OpenAPI), testing, discovery, read-only execution | Datasources, datasets, and sessions (`world-cup-workflow.spec.ts`) |
 | [datasets](capabilities/datasets/spec.md) | Catalog browser, entity selection, entity details, relationships | — (covered by the datasources Feature) |
 | [testing-data](capabilities/testing-data/spec.md) | Sample / test data setup | — |
-| [developer-settings](capabilities/developer-settings/spec.md) | Developer observability switch, endpoints, restart to apply | Developer settings (`developer-settings.spec.ts`) |
+| [developer-settings](capabilities/developer-settings/spec.md) | Developer observability switch, endpoints, restart to apply | Developer settings (`developer-settings.spec.ts`), Developer observability export (`developer-observability.spec.ts`) |
 | [sessions-chat](capabilities/sessions-chat/spec.md) | Sessions, streamed chat, tools, SQL repair and verification, clarification, memory | Chat and visuals (`chat-and-visuals.spec.ts`) |
 | [visuals](capabilities/visuals/spec.md) | Interactive visuals: create, tailor, version, revert, refresh, repair, export | — (covered by the Chat and visuals Feature) |
 | [knowledge](capabilities/knowledge/spec.md) | Knowledge entries and bootstrap from data | — |

@@ -48,6 +48,11 @@ Build facts: the Angular production build has budgets (initial 500 kB warn / 1 M
 | `@mastra/libsql` | 1.22.5 | LibSQL storage for agent memory and runtime data (`<APP_DATA_DIR>/mastra.sqlite`). |
 | `@mastra/duckdb` | 1.8.0 | DuckDB storage for observability: traces, metrics, logs (`<APP_DATA_DIR>/observability.duckdb`; limits: 512MB memory, 2 threads). |
 | `@mastra/observability` | 1.17.8 | Tracing / observability wiring. |
+| `@opentelemetry/sdk-node` | 0.222.0 | Developer observability only (ADR-0006): the OpenTelemetry Node SDK, started by the entry points when the developer setting is on. It is never imported when the setting is off. |
+| `@opentelemetry/auto-instrumentations-node` | 0.80.0 | Developer observability: HTTP, Express, NestJS, `pg` and undici (fetch) instrumentation. fs, dns and net are disabled. |
+| `@opentelemetry/exporter-trace-otlp-proto`, `@opentelemetry/exporter-metrics-otlp-proto` | 0.222.0 | Developer observability: OTLP protobuf exporters for traces and metrics. |
+| `@opentelemetry/sdk-metrics`, `@opentelemetry/resources` | 2.11.0 | Developer observability: periodic metric reader and the `service.name` resource. |
+| `@opentelemetry/api` | 1.9.1 | OpenTelemetry API shared by the SDK and the instrumentations. |
 | `@mastra/evals` | 1.10.2 | Scorers for the assistant eval suites. |
 | `@mastra/loggers` | 1.3.1 | Mastra logging. |
 | `mastra` (CLI, dev dependency) | 1.29.0 | Mastra Studio tooling against `src/mastra/index.ts`. |
