@@ -140,12 +140,13 @@ Developer tooling for seeing what the backend and agents are doing: agent and LL
 - **Acceptance:** toggle on → a chat question's agent run appears in Phoenix and in `observability.duckdb`; toggle off → only `observability.duckdb`, exactly as before.
 - **Notes:** depends on 0.3.2. Rules R21–R23 in [specs/capabilities/developer-settings/spec.md](specs/capabilities/developer-settings/spec.md). `@mastra/arize` is pinned at 1.3.16 to match `@mastra/observability` 1.17.8. Branch `feat/BA-116-phoenix-exporter`. Evidence: [evidence/0.3.5/](evidence/0.3.5/).
 
-#### 0.3.6 — Unified pino logging with trace ids ([BA-117](https://halo-powered.atlassian.net/browse/BA-117))  `📋 Planned`
+#### 0.3.6 — Unified pino logging with trace ids ([BA-117](https://halo-powered.atlassian.net/browse/BA-117))  `✅ Done`
 - **Intent:** backend and agent logs are one stream that can be followed from a trace.
-- **Scope:** route Nest logging through `nestjs-pino` alongside the agent `PinoLogger`; trace and span ids on each line when a trace is active; readable console output; OTLP log export to Loki only when the setting is on.
+- **Scope:** OTLP log export to Loki only when the setting is on. Nest logs go through a console-identical logger that also emits OpenTelemetry log records; Mastra's `PinoLogger` goes through `@opentelemetry/instrumentation-pino`. Records written during a trace carry its trace and span ids.
+- **Scope change (2026-10-05):** `nestjs-pino` was dropped. It would turn Nest's console output into JSON even with the setting off, which breaks the desktop system-logs panel's parsing and the epic's "off changes nothing" rule (R26).
 - **Out of scope:** changing what is logged.
 - **Acceptance:** toggle on → backend logs in Loki link to their Tempo trace; toggle off → console logging only, with no OTLP export.
-- **Notes:** depends on 0.3.4.
+- **Notes:** depends on 0.3.4. Rules R24–R26 in [specs/capabilities/developer-settings/spec.md](specs/capabilities/developer-settings/spec.md). Branch `feat/BA-117-otel-logs`. Evidence: [evidence/0.3.6/](evidence/0.3.6/).
 
 #### 0.3.7 — Developer docs for the local observability stack ([BA-118](https://halo-powered.atlassian.net/browse/BA-118))  `📋 Planned`
 - **Intent:** any developer can go from a clean checkout to a trace in Phoenix and Grafana without asking anyone.

@@ -49,6 +49,11 @@ Exporting agent traces to Phoenix (active setting on)
 - R22. The local observability store SHALL keep receiving every agent trace whether the setting is on or off. Phoenix is in addition to it, never instead of it.
 - R23. When the active setting is off, the Phoenix exporter's package SHALL NOT be loaded. If it fails to load, the backend SHALL log one warning and run with the local store only.
 
+Exporting logs (active setting on)
+- R24. When the active setting is on, every backend log line (application and agent-framework logs, from startup on) SHALL also be exported as an OTLP log record to `<OTLP endpoint>/v1/logs`, with its level, its source (context) and the service name `questions-to-insights`.
+- R25. A log line written while a request or agent run is being traced SHALL carry that trace's id and span id, so it can be followed from the trace and back.
+- R26. Console output SHALL stay exactly as it is with the setting off, whether the setting is on or off, so the desktop system-logs panel reads it unchanged. With the setting off, no log exporter is loaded.
+
 ## Edge cases and errors
 
 - Saving while the backend is unreachable shows an error toast with `Backend unreachable`, and the form keeps the typed values.
@@ -152,6 +157,10 @@ Feature: Developer observability export
     And I ask a question in the session
     Then the Phoenix receiver gets trace data for the "assistant" agent
 
+  Scenario: Backend logs reach the OTLP endpoint when observability is on
+    When I turn on "Developer observability", click "Save" and click "Restart backend"
+    Then the OTLP receiver gets log records including "Nest application successfully started"
+
   Scenario: Nothing is exported when observability is off
     When I click "Save" with "Developer observability" off and click "Restart backend"
     And I open "LLM Configuration"
@@ -167,5 +176,6 @@ Feature: Developer observability export
 5. **Test** reports reachable, a wrong status, or unreachable, with the messages in R14, using the typed value.
 6. With the active setting on, backend HTTP and PostgreSQL spans and metrics reach the OTLP endpoint; with it off, no OpenTelemetry module is loaded and nothing is sent (R17 to R20).
 7. With the active setting on, an agent run appears in Phoenix and in the local observability store; with it off, only in the local store (R21 to R23).
+8. With the active setting on, backend logs reach the OTLP endpoint, and a log written during a request carries that request's trace id; the console output is the same either way (R24 to R26).
 
-<!-- sources: backend/src/infrastructure/developer-settings/**, backend/src/infrastructure/telemetry/**, backend/src/main.ts, backend/src/cli.ts, backend/src/mastra/developer-exporters.ts, backend/src/mastra/index.ts, backend/src/modules/developer-settings/**, frontend/src/app/features/developer/**, frontend/src/app/app.html (Developer navigation), frontend/electron/main.cjs (backend:restart), frontend/electron/preload.cjs -->
+<!-- sources: backend/src/infrastructure/developer-settings/**, backend/src/infrastructure/telemetry/**, backend/src/main.ts, backend/src/cli.ts, backend/src/mastra/developer-exporters.ts, backend/src/mastra/index.ts, backend/src/app-bootstrap.ts, backend/src/modules/developer-settings/**, frontend/src/app/features/developer/**, frontend/src/app/app.html (Developer navigation), frontend/electron/main.cjs (backend:restart), frontend/electron/preload.cjs -->

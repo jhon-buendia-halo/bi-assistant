@@ -51,6 +51,8 @@ async function loadNodeSdk(
     { OTLPMetricExporter },
     { PeriodicExportingMetricReader },
     { resourceFromAttributes },
+    { BatchLogRecordProcessor },
+    { OTLPLogExporter },
   ] = await Promise.all([
     import('@opentelemetry/sdk-node'),
     import('@opentelemetry/auto-instrumentations-node'),
@@ -58,6 +60,8 @@ async function loadNodeSdk(
     import('@opentelemetry/exporter-metrics-otlp-proto'),
     import('@opentelemetry/sdk-metrics'),
     import('@opentelemetry/resources'),
+    import('@opentelemetry/sdk-logs'),
+    import('@opentelemetry/exporter-logs-otlp-proto'),
   ]);
 
   const sdk = new NodeSDK({
@@ -75,6 +79,15 @@ async function loadNodeSdk(
         exportIntervalMillis: METRIC_EXPORT_INTERVAL_MS,
       }),
     ],
+    // Nest logs reach this through DeveloperNestLogger, Mastra's Pino logs
+    // through the pino instrumentation below.
+    logRecordProcessors: [
+      new BatchLogRecordProcessor({
+        exporter: new OTLPLogExporter({
+          url: `${settings.otlpEndpoint}/v1/logs`,
+        }),
+      }),
+    ],
     instrumentations: [
       getNodeAutoInstrumentations({
         // Noise without insight for this app: every file read, DNS lookup
@@ -82,6 +95,9 @@ async function loadNodeSdk(
         '@opentelemetry/instrumentation-fs': { enabled: false },
         '@opentelemetry/instrumentation-dns': { enabled: false },
         '@opentelemetry/instrumentation-net': { enabled: false },
+        // Send Pino records to the logs SDK, but keep stdout unchanged: the
+        // desktop system-logs panel parses it (developer-settings R26).
+        '@opentelemetry/instrumentation-pino': { disableLogCorrelation: true },
       }),
     ],
   });
