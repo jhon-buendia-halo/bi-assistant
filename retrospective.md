@@ -14,6 +14,29 @@ Entry template:
 
 ---
 
+## 2026-10-07 — 1.3.5 Knowledge Store research (BA-123)
+
+### What went well
+- Reading the retrospective first surfaced the rule that the Epic gate has no docs exemption, and the open PR #59 already named the file locations and the stories (BA-123 delivers `docs/research/BA-4.md`), so no placement was invented. The request for "a branch called plan and execution" was mapped to the branch convention before any file existed.
+- The six alignment questions (two plan files or one, two branches, the base branch, the main-only rule, the open BA-124 scope, the content split) went to the user in one message with a recommendation each, and were settled in one round.
+- The artifact's inventory of what is on `main` was re-verified against the current `main` (3012e34, v0.24.2) before writing: no concept, ontology or Hindsight code; 24 uncategorised eval questions; ADRs 0001 to 0006; the engine branches local only. The document states that commit so the next check has a fixed point.
+- Three writers worked in parallel on the three files from the same text extract of the artifact and the same verified facts. A script checked tables, fences, relative links and Mermaid label hygiene on each file before the review.
+
+### What went wrong
+- The first read of the artifact HTML (223 KB, 2,001 lines) overflowed the tool output limit, and the first text extract put code-span backticks outside table cells, so the converter needed a second pass before the writers could use it.
+- The artifact's header said `main` at v0.20.6 while `main` is at v0.24.2. The inventory still held, but every number had to be re-checked rather than copied.
+- The artifact carried cross-references from earlier versions ("section 6.4", "section 9", "section 12"); the research file alone needed fourteen of them mapped to the new section names.
+- A scripted edit of this file nested two `replace` calls and duplicated the whole file. `git diff --stat` caught it (279 insertions for a 25-line entry) before the commit.
+- The branch `feat/hindsight-memory` numbers its memory feature 1.3.6 and keeps its evidence under `evidence/1.3.6/`; PR #59 gave 1.3.6 to BA-124. When that branch merges, one of the two must be renumbered.
+- No E2E run: the change touches no code or tests.
+
+### What to do differently
+- To read a large published artifact, convert it to text with an HTML parser first (figures as their `aria-label`, status chips as markers, code spans kept inside table cells) and read it by line ranges under the output limit. Never `cat` the HTML.
+- Before writing a document that states what is on `main`, write the `main` commit into its header and re-run the inventory commands against that commit. Copy nothing from a document written against an older `main`.
+- Before converting a versioned document, grep it for "section N" and "Part N" and put the mapping in the writer's brief, not in the review.
+- After any scripted edit of a shared file, compare `git diff --stat` with the expected line count before committing. One `replace` per anchor, assigned to a variable, never nested.
+- When a branch and `main` allocate the same roadmap feature number, record the collision in the plan's risks so the merge renumbers on purpose.
+
 ## 2026-10-06 — 0.4.1 Research and execution plan stories in every epic (BA-120)
 
 ### What went well

@@ -274,12 +274,12 @@ The structure the assistant reasons over, as a single, versionable source of tru
 
 Curated knowledge the assistant treats as authoritative: glossary terms, standing instructions and default filters, scoped to a datasource or dataset. Covers authoring, mining suggestions from past sessions, and injecting the relevant snippets into each turn. Assignee: Sergio Berrospi.
 
-#### 1.3.5 — Knowledge Store — Research ([BA-123](https://halo-powered.atlassian.net/browse/BA-123))  `📋 Planned`
+#### 1.3.5 — Knowledge Store — Research ([BA-123](https://halo-powered.atlassian.net/browse/BA-123))  `✅ Done`
 - **Intent:** the epic's other stories start from evidence, not assumptions.
-- **Scope:** `docs/research/BA-4.md`: findings, options and a recommendation for the epic.
-- **Out of scope:** the execution plan and product code.
-- **Acceptance:** `docs/research/BA-4.md` exists and the user has reviewed it.
-- **Notes:** first story of the epic (*Epic gate* in [CLAUDE.md](CLAUDE.md)). 1.3.6 starts after it is Done.
+- **Scope:** [docs/research/BA-4.md](docs/research/BA-4.md): findings, options and a recommendation for the epic, converted from the *Knowledge Store Ontology* artifact (version 3, 2026-10-07) and re-checked against `main` at 3012e34 (v0.24.2): theory and the market, the five layers as they exist in this app (on `main`, on a branch, or missing), the eval questions that need meaning, Hindsight memory, the concept and relation design, further reading, every source by type and the vendor appendix.
+- **Out of scope:** the execution plan and product code. The artifact's execution part and its "how it should work after" story go to `docs/plans/BA-4.md` under 1.3.6.
+- **Acceptance:** [docs/research/BA-4.md](docs/research/BA-4.md) exists and the user has reviewed it.
+- **Notes:** first story of the epic (*Epic gate* in [CLAUDE.md](CLAUDE.md)). 1.3.6 starts after it is Done. The file also serves as the decision record 1.3.1 ([BA-78](https://halo-powered.atlassian.net/browse/BA-78)) asks for; whether BA-78 closes as covered or keeps only the ADR is an open Jira decision. Branch `docs/BA-123-knowledge-store-research`, stacked on `docs/BA-120-epic-research-plan-stories` (PR #59). Evidence: [evidence/1.3.5/](evidence/1.3.5/).
 
 #### 1.3.6 — Knowledge Store — Execution plan ([BA-124](https://halo-powered.atlassian.net/browse/BA-124))  `📋 Planned`
 - **Intent:** every story of the epic is sequenced and specified before any of them is built.

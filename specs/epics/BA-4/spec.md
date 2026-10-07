@@ -37,6 +37,7 @@ Per story, from Jira and the roadmap:
 - An analyst can fix a wrong answer by editing a concept and the next answer cites it (BA-81).
 
 ## Dependencies, risks and open questions
+- **Research:** [docs/research/BA-4.md](../../../docs/research/BA-4.md) (BA-123) holds the findings, options and recommendation, and the decision record BA-78 asks for. The ADR itself is still to be written (BA-124).
 - **Partly built already:** `backend/src/modules/knowledge` and `frontend/src/app/features/knowledge` exist (snippets of kind instruction / term / default_filter with scope, synonyms, entities, enabled flag, a `knowledge-bootstrap` agent, and a per-turn injected block). Open: which of BA-79 to BA-81 is genuinely new versus an extension of this?
 - BA-79 depends on BA-78; BA-80 depends on BA-79 and the golden dataset ([BA-9](../BA-9/spec.md)); BA-81's provenance display ties into [BA-12](../BA-12/spec.md).
 - Depends on the DSL's logical references ([BA-2](../BA-2/spec.md)), which are not on `main` yet.
