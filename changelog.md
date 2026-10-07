@@ -2,6 +2,11 @@
 
 Running log of every meaningful change, newest first. See *Logging convention* and *Evidence convention* in [CLAUDE.md](CLAUDE.md). Release versions come from Conventional Commits (`version-on-merge.yml`); this file records what shipped and links to the evidence.
 
+## 2026-10-07
+
+### Added
+- **Knowledge Store research** (roadmap 1.3.5, [BA-123](https://halo-powered.atlassian.net/browse/BA-123), epic [BA-4](https://halo-powered.atlassian.net/browse/BA-4)): [docs/research/BA-4.md](docs/research/BA-4.md), the research story's deliverable, converted from the *Knowledge Store Ontology* artifact (version 3, 2026-10-07) and re-checked against `main` at 3012e34 (v0.24.2). Findings, options and recommendation up front; then theory and the market, how it applies to this app (what is on `main`, what is on a branch, what is missing), Hindsight memory, the concept and relation design, further reading, every source by type and the vendor appendix. The execution part and the "after" story of the artifact go to `docs/plans/BA-4.md` under BA-124. [specs/epics/BA-4/spec.md](specs/epics/BA-4/spec.md) links the research. Evidence: [evidence/1.3.5/](evidence/1.3.5/) — spec check and link check; no code or UI change, no E2E affected.
+
 ## 2026-10-06
 
 ### Added

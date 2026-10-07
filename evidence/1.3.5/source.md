@@ -1,0 +1,8 @@
+# Evidence for 1.3.5 — Knowledge Store — Research (BA-123)
+
+- **Deliverable:** `docs/research/BA-4.md`.
+- **Source:** the *Knowledge Store Ontology* artifact, https://claude.ai/artifact/Q4DtSwSqv7yi8VBqjrn9BN, version 3 of 2026-10-07 (223 KB HTML, 10 SVG figures). Parts 1, 2, the further reading, the sources and the appendix were converted; Part 3 (execution) and Part 4 (how it should work after) go to `docs/plans/BA-4.md` and `docs/plans/BA-4-technical.md` under BA-124.
+- **Baseline the inventory was re-checked against:** `main` at commit 3012e34 (v0.24.2) on 2026-10-07. Checks run: `grep -rli 'hindsight\|ontology\|concept' backend/src frontend/src --include='*.ts'` (no hits), `ls backend/src/mastra/agents` (assistant, eval-judge, knowledge-bootstrap, sql-fixer, sql-verifier, visualization), `grep -c "question:" backend/src/mastra/evals/assistant.evals.ts` (24, no category labels), `grep -n 'ADR-' specs/system/architecture.md` (ADR-0001 to ADR-0006), `git rev-list --left-right --count origin/ba-2-epic-kickoff...main` (5 ahead, 44 behind), `git branch -r` (the engine branches `feat/engine-eval-loop`, `feat/business-expert-learning` and `feat/hindsight-memory` are local only).
+- **Figures:** redrawn as Mermaid flowcharts where the figure is a graph or a flow, otherwise described in words or rebuilt as a table.
+- **Link verification:** external URLs were opened on 2026-10-06 and 2026-10-07 by the artifact's author as its sources section states; this story re-verified the relative links (`link-check.txt`) and ran the spec check (`check-specs.txt`).
+- **No code or UI change:** the E2E suite was not run.

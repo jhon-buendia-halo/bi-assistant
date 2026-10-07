@@ -1,0 +1,1 @@
+docs/research/BA-4.md: 86316 chars, 774 lines, 6 relative links, 202 external links, 5 mermaid blocks, 10 code blocks, headings: 52
