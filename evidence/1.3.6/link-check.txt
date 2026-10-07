@@ -1,0 +1,2 @@
+docs/plans/BA-4.md: 70262 chars, 537 lines, 36 relative links, 9 external links, 4 mermaid blocks, 4 code blocks, headings: 23
+docs/plans/BA-4-technical.md: 65270 chars, 647 lines, 33 relative links, 3 external links, 6 mermaid blocks, 18 code blocks, headings: 32
