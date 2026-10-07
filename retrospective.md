@@ -14,6 +14,26 @@ Entry template:
 
 ---
 
+## 2026-10-07 — 1.3.6 Knowledge Store execution plan, the two plan files (BA-124, partial)
+
+### What went well
+- The functional and the technical plan were written in parallel from one brief each, with the same verified `main` inventory, the same step names and the same done-when sentences, so they agree without a reconciliation pass.
+- Every "on `main`" claim in the technical plan names the file or symbol it was checked against (`contextFor`, `KNOWLEDGE_BLOCK_CHARS`, `MAX_BOOTSTRAP_DRAFTS`, `apiKeyCiphertext`, `parseArgs` in `cli.ts`), and a spot check of nine of them held. The status-check notes turn them into 40 checkbox lines a later review can re-run.
+- Writing against `main` only showed, in one table, that Step 1 cannot start on `main` until the DSL lands and that the three engine branches are local only. The artifact's "merge first" became an open decision instead of an assumption.
+- Stacking the branch on the research branch made the plan's links to `docs/research/BA-4.md` resolve and let the shared files (roadmap, changelog, retrospective) take one entry each without conflicts.
+
+### What went wrong
+- BA-124 is not Done by this change: the epic spec confirmation, the ADR (whose number collides with the BA-2 branch's 0007) and the roadmap text alignment remain. The roadmap entry lists them and stays In progress.
+- Both plan files came out above the size asked for (70 and 65 thousand characters against 25 to 55). The overrun is verbatim shapes, the 28-row inventory and the Part 4 story, not padding, but a reader after the steps alone has to scroll.
+- The artifact's own numbers disagree on how many eval questions depend on a business word (fourteen in the text, eight in the category table). The plan keeps both and asks the team to confirm.
+- `scripts/check-specs.py` does not scan `docs/`, so the plan files' links were checked by a session script and recorded in evidence instead of CI.
+
+### What to do differently
+- When a plan carries verbatim shapes and tables, keep a one-page steps table near the top (section 4 of the functional plan) so the length does not hide the sequence.
+- When two numbers in a source disagree, write both into an open question with where each comes from; never pick one silently.
+- When a story's deliverables are wider than the change at hand, list what remains in the roadmap Notes and in the changelog bullet in the same words, so the next session finds them without reading the PR.
+- Under a harness story, extend `scripts/check-specs.py` to resolve relative links in `docs/**/*.md` as well (one glob), so plan and research links are CI-checked.
+
 ## 2026-10-07 — 1.3.5 Knowledge Store research (BA-123)
 
 ### What went well
