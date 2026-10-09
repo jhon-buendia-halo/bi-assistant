@@ -1,11 +1,6 @@
 import axe from 'axe-core';
-import type { ElectronApplication, Page } from '@playwright/test';
-import {
-  expect,
-  launchElectronApp,
-  readyWindow,
-  test,
-} from './fixtures/electron.fixture';
+import type { Page } from '@playwright/test';
+import { expect, RunningApp, test } from './fixtures/app.fixture';
 
 type Theme = 'light' | 'dark';
 
@@ -54,16 +49,27 @@ async function expectTheme(page: Page, theme: Theme): Promise<void> {
   }
 }
 
-async function windowBackground(
-  electronApp: ElectronApplication,
-): Promise<string> {
-  return electronApp.evaluate(({ BrowserWindow }) =>
-    BrowserWindow.getAllWindows()[0].getBackgroundColor().toLowerCase(),
-  );
+/**
+ * Desktop only: the Electron window's own background colour (app-shell R44).
+ * The web target has no native window, so there is nothing to check.
+ */
+async function expectWindowBackground(
+  app: RunningApp,
+  colour: string,
+): Promise<void> {
+  const electronApp = app.electronApp;
+  if (!electronApp) return;
+  await expect
+    .poll(() =>
+      electronApp.evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows()[0].getBackgroundColor().toLowerCase(),
+      ),
+    )
+    .toBe(colour);
 }
 
 test('follows the operating system theme by default', async ({
-  electronApp,
+  app,
   page,
 }) => {
   await setOsTheme(page, 'light');
@@ -71,18 +77,18 @@ test('follows the operating system theme by default', async ({
 
   await expect(themeOption(page, 'System')).toBeChecked();
   await expectTheme(page, 'light');
-  await expect.poll(() => windowBackground(electronApp)).toBe('#f3f6fa');
+  await expectWindowBackground(app, '#f3f6fa');
 
   const url = page.url();
   await setOsTheme(page, 'dark');
   await expectTheme(page, 'dark');
   expect(page.url()).toBe(url);
   await expect(themeOption(page, 'System')).toBeChecked();
-  await expect.poll(() => windowBackground(electronApp)).toBe('#0b1626');
+  await expectWindowBackground(app, '#0b1626');
 });
 
 test('forces a theme regardless of the operating system', async ({
-  electronApp,
+  app,
   page,
 }) => {
   await setOsTheme(page, 'light');
@@ -90,7 +96,7 @@ test('forces a theme regardless of the operating system', async ({
 
   await themeOption(page, 'Dark').check();
   await expectTheme(page, 'dark');
-  await expect.poll(() => windowBackground(electronApp)).toBe('#0b1626');
+  await expectWindowBackground(app, '#0b1626');
 
   await setOsTheme(page, 'dark');
   await setOsTheme(page, 'light');
@@ -98,36 +104,36 @@ test('forces a theme regardless of the operating system', async ({
 
   await themeOption(page, 'Light').check();
   await expectTheme(page, 'light');
-  await expect.poll(() => windowBackground(electronApp)).toBe('#f3f6fa');
+  await expectWindowBackground(app, '#f3f6fa');
 });
 
-test('remembers the chosen theme after a restart', async ({ appDataDir }) => {
-  const first = await launchElectronApp(appDataDir);
-  try {
-    const page = await readyWindow(first);
-    await setOsTheme(page, 'light');
-    await openAppearance(page);
-    await themeOption(page, 'Dark').check();
-    await expectTheme(page, 'dark');
-  } finally {
-    await first.close();
-  }
+test('remembers the chosen theme after a restart', async ({
+  app,
+  appDataDir,
+  launchApp,
+}) => {
+  let page = app.page;
+  await setOsTheme(page, 'light');
+  await openAppearance(page);
+  await themeOption(page, 'Dark').check();
+  await expectTheme(page, 'dark');
 
-  const second = await launchElectronApp(appDataDir);
-  try {
-    const page = await second.firstWindow();
-    await page.waitForLoadState('domcontentloaded');
-    // Set by the inline boot script, before the app has rendered.
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-    await readyWindow(second);
-    await expect.poll(() => windowBackground(second)).toBe('#0b1626');
-
-    await openAppearance(page);
-    await expect(themeOption(page, 'Dark')).toBeChecked();
-    await expectTheme(page, 'dark');
-  } finally {
-    await second.close();
+  let restarted = app;
+  if (app.target === 'web') {
+    // Same port and browser profile, so the remembered choice is still there.
+    await app.restartCli();
+  } else {
+    await app.close();
+    restarted = await launchApp(appDataDir);
+    page = restarted.page;
   }
+  // Set by the inline boot script, before the app has rendered.
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await expectWindowBackground(restarted, '#0b1626');
+
+  await openAppearance(page);
+  await expect(themeOption(page, 'Dark')).toBeChecked();
+  await expectTheme(page, 'dark');
 });
 
 test('has no automatically detectable accessibility violations in either theme', async ({
