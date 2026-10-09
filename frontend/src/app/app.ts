@@ -21,6 +21,8 @@ import {
   FlaskConical,
   FolderKanban,
   PanelLeft,
+  PanelLeftClose,
+  PanelLeftOpen,
   PanelRight,
   Plus,
   Search,
@@ -166,6 +168,8 @@ export class App {
   readonly FlaskConical = FlaskConical;
   readonly FolderKanban = FolderKanban;
   readonly PanelLeft = PanelLeft;
+  readonly PanelLeftClose = PanelLeftClose;
+  readonly PanelLeftOpen = PanelLeftOpen;
   readonly PanelRight = PanelRight;
   readonly Plus = Plus;
   readonly Search = Search;
@@ -772,6 +776,12 @@ export class App {
     { key: 'developer', label: 'Developer', icon: Wrench },
     { key: 'appearance', label: 'Appearance', icon: SunMoon },
   ];
+
+  /** Sessions list pane; session-only, like the details panel (app-shell R47). */
+  readonly sessionListOpen = signal(true);
+  readonly sessionListCollapsed = computed(
+    () => this.currentArea() === 'sessions' && !this.sessionListOpen(),
+  );
 
   /** The page header shows the session's datasources while a chat is open. */
   readonly showSessionContext = computed(

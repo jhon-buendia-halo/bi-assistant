@@ -42,6 +42,22 @@ test('moves between areas from the rail', async ({ page }) => {
   ).toBeVisible();
 });
 
+test('collapses and expands the session list', async ({ page }) => {
+  await railItem(page, 'Sessions').click();
+  const sessionsNav = page.getByRole('navigation', {
+    name: 'Sessions navigation',
+  });
+  await expect(sessionsNav).toBeVisible();
+
+  await page.getByTitle('Collapse session list').click();
+  await expect(sessionsNav).toBeHidden();
+  await expect(page.getByTitle('Expand session list')).toBeVisible();
+
+  await page.getByTitle('Expand session list').click();
+  await expect(sessionsNav).toBeVisible();
+  await expect(page.getByTitle('Expand session list')).toBeHidden();
+});
+
 test('opens Settings as an area with a section list', async ({ page }) => {
   await railItem(page, 'Settings').click();
   await expectCurrent(page, 'Settings');

@@ -90,7 +90,7 @@
 
       <div class="flex min-h-0 flex-1 gap-3">
         <main class="card flex min-w-0 flex-1 overflow-hidden">
-          @if (currentArea() === "sessions") {
+          @if (currentArea() === "sessions" && sessionListOpen()) {
             <!-- Sessions list pane -->
             <div
               class="flex w-[280px] shrink-0 flex-col border-r border-border"
@@ -101,15 +101,25 @@
                 <h2 class="text-[14px] font-semibold text-fg-strong">
                   Sessions
                 </h2>
-                <button
-                  type="button"
-                  (click)="openComposer()"
-                  title="New conversation"
-                  class="btn-icon"
-                  [class.bg-surface-selected]="mainView() === 'conversation-new'"
-                >
-                  <lucide-angular [img]="Plus" [size]="16" />
-                </button>
+                <div class="flex items-center gap-0.5">
+                  <button
+                    type="button"
+                    (click)="openComposer()"
+                    title="New conversation"
+                    class="btn-icon"
+                    [class.bg-surface-selected]="mainView() === 'conversation-new'"
+                  >
+                    <lucide-angular [img]="Plus" [size]="16" />
+                  </button>
+                  <button
+                    type="button"
+                    (click)="sessionListOpen.set(false)"
+                    title="Collapse session list"
+                    class="btn-icon"
+                  >
+                    <lucide-angular [img]="PanelLeftClose" [size]="16" />
+                  </button>
+                </div>
               </div>
               <nav
                 aria-label="Sessions navigation"
@@ -128,9 +138,16 @@
                       type="button"
                       (click)="openSession(session)"
                       [disabled]="deletingSession() === session.id"
-                      class="min-w-0 flex-1 truncate px-3 py-2.5 text-left text-[13px] font-medium text-fg disabled:opacity-50"
+                      class="flex min-w-0 flex-1 flex-col px-3 py-2.5 text-left disabled:opacity-50"
                     >
-                      {{ session.name }}
+                      <span class="truncate text-[13px] font-medium text-fg">{{
+                        session.name
+                      }}</span>
+                      @if (session.datasets.length > 0) {
+                        <span class="truncate text-[12px] text-fg-muted">{{
+                          session.datasets.join(" · ")
+                        }}</span>
+                      }
                     </button>
                     <button
                       type="button"
@@ -160,6 +177,8 @@
                       </div>
                     }
                   </div>
+                } @empty {
+                  <p class="px-1 text-[12px] text-fg-muted">No sessions yet.</p>
                 }
               </nav>
             </div>
@@ -215,10 +234,20 @@
           }
 
           <div class="flex min-w-0 flex-1 flex-col">
-            @if (showSessionContext() || !rightPanelOpen()) {
+            @if (showSessionContext() || !rightPanelOpen() || sessionListCollapsed()) {
               <header
                 class="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4"
               >
+                @if (sessionListCollapsed()) {
+                  <button
+                    type="button"
+                    (click)="sessionListOpen.set(true)"
+                    title="Expand session list"
+                    class="btn-icon -ml-1"
+                  >
+                    <lucide-angular [img]="PanelLeftOpen" [size]="16" />
+                  </button>
+                }
                 @if (showSessionContext()) {
                   <div class="flex min-w-0 items-center gap-2">
                     <lucide-angular
@@ -375,26 +404,24 @@
                   class="flex flex-1 flex-col items-center overflow-y-auto px-6 pt-10 pb-8"
                 >
                   <div
-                    class="w-full max-w-[920px] rounded-2xl border border-white/10 bg-[#232323] p-4 shadow-lg"
+                    class="card w-full max-w-[920px] p-4"
                   >
                     <label class="flex flex-col gap-1.5">
-                      <span class="text-[11px] font-medium text-zinc-500"
-                        >Session name</span
-                      >
+                      <span class="field-label">Session name</span>
                       <input
                         type="text"
                         placeholder="My new session"
                         [value]="composerName()"
                         (input)="composerName.set($any($event.target).value)"
-                        class="rounded-md border border-white/10 bg-white/5 px-3 py-2 text-[14px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                        class="field text-[14px]"
                       />
                     </label>
                     <div class="mt-4 flex items-center justify-between">
                       <div class="flex items-center gap-3">
                         <button
-                          class="flex items-center gap-1.5 rounded-md px-1.5 py-1 hover:bg-white/5"
-                          [class.text-zinc-300]="llmModel()"
-                          [class.text-zinc-500]="!llmModel()"
+                          class="flex items-center gap-1.5 rounded-md px-1.5 py-1 hover:bg-surface-muted"
+                          [class.text-fg]="llmModel()"
+                          [class.text-fg-muted]="!llmModel()"
                         >
                           <lucide-angular [img]="Sparkle" [size]="13" />
                           <span>{{ llmModel() ?? "No model configured" }}</span>
@@ -403,7 +430,7 @@
                           <button
                             (click)="effortMenuOpen.set(!effortMenuOpen())"
                             title="Reasoning effort"
-                            class="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-zinc-400 capitalize hover:bg-white/5"
+                            class="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-fg-muted capitalize hover:bg-surface-muted"
                           >
                             <lucide-angular [img]="Signal" [size]="13" />
                             <span>{{ llmEffort() }}</span>
@@ -414,14 +441,15 @@
                               (click)="effortMenuOpen.set(false)"
                             ></div>
                             <div
-                              class="absolute bottom-full left-0 z-20 mb-1 w-36 rounded-lg border border-white/10 bg-[#2a2a2a] p-1 shadow-xl"
+                              class="menu absolute bottom-full left-0 z-20 mb-1 w-36"
                             >
                               @for (effort of reasoningEfforts; track effort) {
                                 <button
                                   (click)="setEffort(effort)"
-                                  class="flex w-full items-center rounded-md px-2.5 py-1.5 text-left text-[13px] capitalize hover:bg-white/10"
-                                  [class.text-zinc-100]="llmEffort() === effort"
-                                  [class.text-zinc-400]="llmEffort() !== effort"
+                                  class="menu-item capitalize"
+                                  [class.font-semibold]="llmEffort() === effort"
+                                  [class.text-fg-strong]="llmEffort() === effort"
+                                  [class.text-fg-muted]="llmEffort() !== effort"
                                 >
                                   {{ effort }}
                                 </button>
@@ -439,7 +467,7 @@
                             composerName().trim() === ''
                           "
                           title="Name the session and select at least one dataset"
-                          class="flex items-center gap-1.5 rounded-lg bg-zinc-200 px-3.5 py-2 text-[13px] font-medium text-zinc-900 hover:bg-white disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+                          class="btn btn-primary"
                         >
                           @if (creatingSession()) {
                             <span>Creating…</span>
@@ -454,45 +482,39 @@
 
                   <!-- Dataset selection: the session needs at least one -->
                   <div class="mt-8 w-full max-w-[920px]">
-                    <p class="text-[12px] text-zinc-500">
+                    <p class="field-label">
                       Select at least one dataset for this session
                     </p>
                     @if (composerDatasets().length === 0) {
-                      <p class="mt-3 text-[13px] text-zinc-500">
+                      <p class="mt-3 text-[13px] text-fg-muted">
                         No datasets yet — create one in Datasets first.
                       </p>
                     } @else {
-                      <div class="mt-2 flex flex-col gap-1">
+                      <div class="mt-2 flex flex-col gap-2">
                         @for (dataset of composerDatasets(); track dataset.name) {
                           <button
                             (click)="toggleDatasetSelection(dataset.name)"
-                            class="flex items-center gap-3 rounded-xl border px-3 py-2.5 text-left hover:bg-white/5"
-                            [class.border-emerald-500/40]="
+                            class="list-row flex items-center gap-3 px-3 py-2.5"
+                            [class.list-row-selected]="
                               selectedDatasets().has(dataset.name)
-                            "
-                            [class.bg-emerald-500/5]="
-                              selectedDatasets().has(dataset.name)
-                            "
-                            [class.border-white/10]="
-                              !selectedDatasets().has(dataset.name)
                             "
                           >
                             <span
-                              class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/5 text-zinc-400"
+                              class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-muted text-accent"
                             >
                               <lucide-angular [img]="Workflow" [size]="15" />
                             </span>
-                            <span class="truncate text-[13px] text-zinc-200">{{
+                            <span class="truncate text-[13px] font-medium text-fg">{{
                               dataset.name
                             }}</span>
-                            <span class="text-[12px] text-zinc-500"
+                            <span class="text-[12px] text-fg-muted"
                               >{{ dataset.tables.length }} entities</span
                             >
                             @if (selectedDatasets().has(dataset.name)) {
                               <lucide-angular
                                 [img]="CircleCheck"
                                 [size]="16"
-                                class="ml-auto shrink-0 text-emerald-400"
+                                class="ml-auto shrink-0 text-primary"
                               />
                             }
                           </button>
