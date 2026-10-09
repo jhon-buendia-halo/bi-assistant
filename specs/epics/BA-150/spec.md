@@ -80,9 +80,9 @@ All stories are built on one branch, `feat/BA-150-agent-hub`, and ship as one PR
 
 ## Dependencies, risks and open questions
 
-- **Depends on BA-141** for the cards, filter pills, status chips and the icon rail. Building 1.9.4 and 1.9.5 before BA-141's shared components (1.8.4) land would mean restyling them twice. 1.9.2 and 1.9.3 are backend-led and can start first.
+- **Depends on BA-141** for the cards, filter pills, status chips and the icon rail. Building 1.9.4 and 1.9.5 before BA-141's shared components (1.8.4) land would mean restyling them twice. 1.9.2 and 1.9.3 are backend-led and can start first. BA-141 merged on 2026-10-09, so 1.9.3 and 1.9.5 build on its components directly.
 - **Timing.** This epic is inside the 1.0 Beta (due 2026-10-31) and competes with BA-141 and milestones 1.1–1.7 for the same window. If the window closes, the fallback is to ship 1.9.2–1.9.4 and move the preview chat (part of 1.9.5) out.
-- **ADR numbering.** BA-141's unmerged branch claims ADR-0007, so this epic uses ADR-0008. Whichever merges second keeps its number.
+- **ADR numbering.** BA-141 claimed ADR-0007 and merged first (v0.25.0), so this epic's ADR-0008 stands.
 - **Prompt injection by design.** User instructions go into the assistant's context. They SHALL be placed after the base rules and labelled as user-supplied, and the guard and grounding checks stay in code, not in the prompt. Eval coverage of a user agent is out of scope, so a user agent's answer quality is not measured.
 - **Dataset references are by name** ([data-model.md](../../system/data-model.md) §3.13). Renaming or deleting a dataset leaves an agent pointing at a missing name. The hub should flag such an agent rather than fail at chat time.
 - **Open: who owns a user agent?** Every user agent reads "Owner: You" until there is a sharing backend. The mockup's team owners ("Claims Analytics", "Platform") are deferred with *My team* and *Whole org*.

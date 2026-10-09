@@ -1,9 +1,9 @@
 <div class="flex h-full min-h-0 flex-col">
   <div
-    class="flex h-12 shrink-0 items-center gap-2 border-b border-white/5 px-3 whitespace-nowrap"
+    class="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3 whitespace-nowrap"
   >
-    <lucide-angular [img]="BarChart3" [size]="15" class="shrink-0 text-zinc-400" />
-    <span class="shrink-0 text-[13px] font-medium text-zinc-200">Visuals</span>
+    <lucide-angular [img]="BarChart3" [size]="15" class="shrink-0 text-fg-muted" />
+    <span class="shrink-0 text-[13px] font-medium text-fg">Visuals</span>
 
     <div class="ml-auto flex shrink-0 items-center gap-1.5">
       @if (visualization(); as visual) {
@@ -14,11 +14,11 @@
             (click)="versionMenuOpen.set(!versionMenuOpen())"
             [attr.aria-expanded]="versionMenuOpen()"
             title="Version history"
-            class="flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[12px] hover:bg-white/[0.06]"
-            [class.border-white/10]="!viewingOldVersion()"
-            [class.text-zinc-300]="!viewingOldVersion()"
-            [class.border-amber-500/40]="viewingOldVersion()"
-            [class.text-amber-300]="viewingOldVersion()"
+            class="flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[12px] hover:bg-surface-selected"
+            [class.border-border]="!viewingOldVersion()"
+            [class.text-fg]="!viewingOldVersion()"
+            [class.border-on-warning-soft]="viewingOldVersion()"
+            [class.text-on-warning-soft]="viewingOldVersion()"
           >
             <lucide-angular [img]="History" [size]="13" />
             <span>v{{ visual.version }}</span>
@@ -32,16 +32,16 @@
               (click)="versionMenuOpen.set(false)"
             ></button>
             <div
-              class="absolute top-full right-0 z-30 mt-1 w-80 rounded-xl border border-white/10 bg-[#2a2a2a] p-1.5 shadow-xl"
+              class="absolute top-full right-0 z-30 mt-1 w-80 menu"
             >
               @if (viewingOldVersion()) {
                 <button
                   type="button"
                   (click)="revertVersion.emit(visual.version); versionMenuOpen.set(false)"
-                  class="mb-1 flex w-full items-center justify-between rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-2 text-left text-[12px] text-emerald-300 hover:bg-emerald-500/20"
+                  class="mb-1 flex w-full items-center justify-between rounded-lg border border-on-success-soft/30 bg-success-soft px-2.5 py-2 text-left text-[12px] text-on-success-soft hover:bg-success-soft"
                 >
                   <span>Make v{{ visual.version }} the current version</span>
-                  <span class="text-[11px] text-emerald-300/70">now v{{ currentVersion() }}</span>
+                  <span class="text-[11px] text-on-success-soft">now v{{ currentVersion() }}</span>
                 </button>
               }
               <div class="max-h-64 overflow-y-auto">
@@ -49,19 +49,19 @@
                   <button
                     type="button"
                     (click)="pickVersion(entry.version)"
-                    class="flex w-full flex-col rounded-lg px-2.5 py-2 text-left hover:bg-white/10"
-                    [class.bg-white\/5]="visual.version === entry.version"
+                    class="flex w-full flex-col rounded-lg px-2.5 py-2 text-left hover:bg-surface-muted"
+                    [class.bg-surface-selected]="visual.version === entry.version"
                   >
-                    <span class="flex w-full items-center gap-2 text-[12px] text-zinc-200">
+                    <span class="flex w-full items-center gap-2 text-[12px] text-fg">
                       <span>Version {{ entry.version }}</span>
                       @if (entry.version === currentVersion()) {
-                        <span class="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-300">current</span>
+                        <span class="rounded bg-success-soft px-1.5 py-0.5 text-[10px] text-on-success-soft">current</span>
                       }
                       @if (entry.version === visual.version) {
-                        <span class="ml-auto text-[10px] text-zinc-500">viewing</span>
+                        <span class="ml-auto text-[10px] text-fg-muted">viewing</span>
                       }
                     </span>
-                    <span class="mt-0.5 w-full truncate text-[11px] text-zinc-500">
+                    <span class="mt-0.5 w-full truncate text-[11px] text-fg-muted">
                       {{ entry.instruction ? entry.instruction : "Initial version" }} · {{ formatCreatedAt(entry.createdAt) }}
                       @if (entry.refreshedAt) {
                         · refreshed {{ formatCreatedAt(entry.refreshedAt) }}
@@ -86,7 +86,7 @@
                 ? 'Make this version current before tailoring'
                 : 'Tailor this visual'
             "
-            class="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-[12px] text-zinc-300 hover:border-white/20 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
+            class="flex items-center gap-1.5 rounded-lg border border-border bg-surface-muted px-2.5 py-1.5 text-[12px] text-fg hover:border-border-strong hover:bg-surface-selected disabled:cursor-not-allowed disabled:opacity-50"
           >
             @if (tailoring()) {
               <lucide-angular [img]="Loader2" [size]="13" class="animate-spin" />
@@ -103,15 +103,15 @@
               (click)="tailorMenuOpen.set(false)"
             ></button>
             <div
-              class="absolute top-full right-0 z-30 mt-1 w-72 rounded-xl border border-white/10 bg-[#2a2a2a] p-3 shadow-xl"
+              class="absolute top-full right-0 z-30 mt-1 w-72 rounded-xl border border-border bg-surface p-3 shadow-xl"
             >
               <label class="flex flex-col gap-1">
-                <span class="text-[11px] font-medium text-zinc-500">Chart type</span>
+                <span class="text-[11px] font-medium text-fg-muted">Chart type</span>
                 <select
                   aria-label="Chart type"
                   [value]="tailorChartType()"
                   (change)="tailorChartType.set($any($event.target).value)"
-                  class="rounded-lg border border-white/10 bg-[#232323] px-2.5 py-1.5 text-[12px] text-zinc-200 outline-none focus:border-white/25"
+                  class="rounded-lg border border-border bg-surface-muted px-2.5 py-1.5 text-[12px] text-fg outline-none focus:border-border-selected"
                 >
                   @for (option of chartTypes; track option.value) {
                     <option [value]="option.value">{{ option.label }}</option>
@@ -119,12 +119,12 @@
                 </select>
               </label>
               <label class="mt-2.5 flex flex-col gap-1">
-                <span class="text-[11px] font-medium text-zinc-500">Sort</span>
+                <span class="text-[11px] font-medium text-fg-muted">Sort</span>
                 <select
                   aria-label="Sort"
                   [value]="tailorSort()"
                   (change)="tailorSort.set($any($event.target).value)"
-                  class="rounded-lg border border-white/10 bg-[#232323] px-2.5 py-1.5 text-[12px] text-zinc-200 outline-none focus:border-white/25"
+                  class="rounded-lg border border-border bg-surface-muted px-2.5 py-1.5 text-[12px] text-fg outline-none focus:border-border-selected"
                 >
                   @for (option of sorts; track option.value) {
                     <option [value]="option.value">{{ option.label }}</option>
@@ -132,7 +132,7 @@
                 </select>
               </label>
               <label class="mt-2.5 flex flex-col gap-1">
-                <span class="text-[11px] font-medium text-zinc-500">
+                <span class="text-[11px] font-medium text-fg-muted">
                   Top N ({{ minTopN }}–{{ maxTopN }}, optional)
                 </span>
                 <input
@@ -143,22 +143,22 @@
                   [max]="maxTopN"
                   [value]="tailorTopN() ?? ''"
                   (input)="setTopN($any($event.target).value)"
-                  class="rounded-lg border border-white/10 bg-[#232323] px-2.5 py-1.5 text-[12px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                  class="rounded-lg border border-border bg-surface-muted px-2.5 py-1.5 text-[12px] text-fg outline-none placeholder:text-fg-muted focus:border-border-selected"
                 />
               </label>
               @if (tailorInstruction(); as instruction) {
-                <p class="mt-2.5 rounded-lg bg-white/[0.04] px-2.5 py-1.5 text-[11px] leading-5 text-zinc-400">
+                <p class="mt-2.5 rounded-lg bg-surface-muted px-2.5 py-1.5 text-[11px] leading-5 text-fg-muted">
                   {{ instruction }}
                 </p>
               }
               @if (tailorError(); as tailorError) {
-                <p class="mt-2.5 text-[11px] leading-5 text-red-300">{{ tailorError }}</p>
+                <p class="mt-2.5 text-[11px] leading-5 text-on-danger-soft">{{ tailorError }}</p>
               }
               <div class="mt-3 flex items-center justify-end gap-2">
                 <button
                   type="button"
                   (click)="tailorMenuOpen.set(false)"
-                  class="rounded-lg px-2.5 py-1.5 text-[12px] text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
+                  class="rounded-lg px-2.5 py-1.5 text-[12px] text-fg-muted hover:bg-surface-muted hover:text-fg"
                 >
                   Cancel
                 </button>
@@ -166,7 +166,7 @@
                   type="button"
                   (click)="applyTailoring()"
                   [disabled]="tailoring() || tailorInstruction() === ''"
-                  class="flex items-center gap-1.5 rounded-lg bg-zinc-200 px-3 py-1.5 text-[12px] font-medium text-zinc-900 hover:bg-white disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+                  class="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-[12px] font-medium text-on-primary hover:bg-primary-hover disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-fg-muted"
                 >
                   @if (tailoring()) {
                     <lucide-angular [img]="Loader2" [size]="12" class="animate-spin" />
@@ -184,7 +184,7 @@
           aria-label="Refresh data"
           (click)="refreshData()"
           [disabled]="refreshingData() || viewingOldVersion()"
-          class="flex items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] p-1.5 text-zinc-300 hover:border-white/20 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
+          class="flex items-center justify-center rounded-lg border border-border bg-surface-muted p-1.5 text-fg hover:border-border-strong hover:bg-surface-selected disabled:cursor-not-allowed disabled:opacity-50"
         >
           @if (refreshingData()) {
             <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
@@ -199,7 +199,7 @@
           aria-label="Download bundle"
           (click)="downloadVisual.emit(visual)"
           [disabled]="downloading()"
-          class="flex items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] p-1.5 text-zinc-300 hover:border-white/20 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
+          class="flex items-center justify-center rounded-lg border border-border bg-surface-muted p-1.5 text-fg hover:border-border-strong hover:bg-surface-selected disabled:cursor-not-allowed disabled:opacity-50"
         >
           @if (downloading()) {
             <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
@@ -217,7 +217,7 @@
               (click)="visualMenuOpen.set(!visualMenuOpen())"
               [attr.aria-expanded]="visualMenuOpen()"
               title="Saved visuals in this session"
-              class="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-[12px] text-zinc-300 hover:border-white/20 hover:bg-white/[0.06]"
+              class="flex items-center gap-1.5 rounded-lg border border-border bg-surface-muted px-2.5 py-1.5 text-[12px] text-fg hover:border-border-strong hover:bg-surface-selected"
             >
               <lucide-angular [img]="GalleryVerticalEnd" [size]="13" />
               <span>{{ visuals.length }}</span>
@@ -231,17 +231,17 @@
                 (click)="visualMenuOpen.set(false)"
               ></button>
               <div
-                class="absolute top-full right-0 z-30 mt-1 max-h-72 w-80 overflow-y-auto rounded-xl border border-white/10 bg-[#2a2a2a] p-1.5 shadow-xl"
+                class="absolute top-full right-0 z-30 mt-1 max-h-72 w-80 overflow-y-auto menu"
               >
                 @for (visual of visuals; track visual.id) {
                   <button
                     type="button"
                     (click)="selectVisualization(visual)"
-                    class="flex w-full flex-col rounded-lg px-2.5 py-2 text-left hover:bg-white/10"
-                    [class.bg-white\/5]="visualization()?.id === visual.id"
+                    class="flex w-full flex-col rounded-lg px-2.5 py-2 text-left hover:bg-surface-muted"
+                    [class.bg-surface-selected]="visualization()?.id === visual.id"
                   >
-                    <span class="w-full truncate text-[12px] text-zinc-200">{{ visual.title }}</span>
-                    <span class="mt-0.5 text-[11px] text-zinc-500">v{{ visual.currentVersion ?? 1 }} · {{ formatCreatedAt(visual.createdAt) }}</span>
+                    <span class="w-full truncate text-[12px] text-fg">{{ visual.title }}</span>
+                    <span class="mt-0.5 text-[11px] text-fg-muted">v{{ visual.currentVersion ?? 1 }} · {{ formatCreatedAt(visual.createdAt) }}</span>
                   </button>
                 }
               </div>
@@ -257,19 +257,19 @@
       class="flex flex-1 flex-col items-center justify-center gap-3 px-8 text-center"
     >
       <span
-        class="flex h-10 w-10 items-center justify-center rounded-xl bg-white/5"
+        class="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-muted"
       >
         <lucide-angular
           [img]="Loader2"
           [size]="18"
-          class="animate-spin text-zinc-300"
+          class="animate-spin text-fg"
         />
       </span>
       <div>
-        <p class="text-[13px] font-medium text-zinc-200">
+        <p class="text-[13px] font-medium text-fg">
           Designing the visual
         </p>
-        <p class="mt-1 text-[12px] leading-5 text-zinc-500">
+        <p class="mt-1 text-[12px] leading-5 text-fg-muted">
           Building and saving HTML, CSS, and JavaScript in the session
           workspace…
         </p>
@@ -279,17 +279,17 @@
     <div
       class="flex flex-1 flex-col items-center justify-center px-8 text-center"
     >
-      <p class="text-[13px] font-medium text-red-300">
+      <p class="text-[13px] font-medium text-on-danger-soft">
         Visual generation failed
       </p>
-      <p class="mt-1 text-[12px] leading-5 text-zinc-500">{{ error() }}</p>
+      <p class="mt-1 text-[12px] leading-5 text-fg-muted">{{ error() }}</p>
     </div>
   } @else if (visualization(); as visual) {
     <div class="relative min-h-0 flex-1 p-3 pb-0">
       @if (repairing()) {
         <!-- Silent auto-repair in flight; the banner only returns if it fails -->
         <div
-          class="absolute inset-x-3 top-3 z-10 flex items-center gap-2 rounded-lg border border-white/10 bg-[#2a2a2a] px-3 py-2 text-[12px] text-zinc-300 shadow-lg"
+          class="absolute inset-x-3 top-3 z-10 flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-[12px] text-fg shadow-lg"
         >
           <lucide-angular [img]="Loader2" [size]="14" class="shrink-0 animate-spin" />
           <span>Fixing the visual…</span>
@@ -297,17 +297,17 @@
       }
       @if (runtimeError(); as runtimeError) {
         <div
-          class="absolute inset-x-3 top-3 z-10 flex items-start gap-2 rounded-lg border border-red-500/30 bg-[#2a1a1a] px-3 py-2 text-[12px] text-red-300"
+          class="absolute inset-x-3 top-3 z-10 flex items-start gap-2 rounded-lg border border-on-danger-soft/30 bg-danger-soft px-3 py-2 text-[12px] text-on-danger-soft"
         >
           <lucide-angular [img]="TriangleAlert" [size]="14" class="mt-0.5 shrink-0" />
           <span class="min-w-0">
             <span class="font-medium">This visual hit a runtime error.</span>
-            <span class="text-red-300/80"> {{ runtimeError }} — ask the assistant to fix it or revert to an earlier version.</span>
+            <span class="text-on-danger-soft"> {{ runtimeError }} — ask the assistant to fix it or revert to an earlier version.</span>
           </span>
         </div>
       }
       <iframe
-        class="h-full w-full rounded-xl border border-white/10 bg-[#171717]"
+        class="h-full w-full rounded-xl border border-border bg-surface-muted"
         sandbox="allow-scripts"
         referrerpolicy="no-referrer"
         title="Interactive visualization"
@@ -316,23 +316,23 @@
     </div>
     <!-- Title, takeaway and analysis now live inside the document itself. -->
     <div class="flex shrink-0 items-center justify-between gap-3 px-4 py-2.5">
-      <p class="truncate text-[12px] text-zinc-400">{{ visual.title }}</p>
-      <p class="shrink-0 font-mono text-[10px] text-zinc-600">{{ visual.path }}/v{{ visual.version }}</p>
+      <p class="truncate text-[12px] text-fg-muted">{{ visual.title }}</p>
+      <p class="shrink-0 font-mono text-[10px] text-fg-muted">{{ visual.path }}/v{{ visual.version }}</p>
     </div>
   } @else {
     <div
       class="flex flex-1 flex-col items-center justify-center gap-3 px-8 text-center"
     >
       <span
-        class="flex h-10 w-10 items-center justify-center rounded-xl bg-white/5"
+        class="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-muted"
       >
-        <lucide-angular [img]="Sparkles" [size]="18" class="text-zinc-400" />
+        <lucide-angular [img]="Sparkles" [size]="18" class="text-fg-muted" />
       </span>
       <div>
-        <p class="text-[13px] font-medium text-zinc-300">
+        <p class="text-[13px] font-medium text-fg">
           No visual generated yet
         </p>
-        <p class="mt-1 text-[12px] leading-5 text-zinc-500">
+        <p class="mt-1 text-[12px] leading-5 text-fg-muted">
           Generate an interactive visual from any completed assistant answer.
         </p>
       </div>

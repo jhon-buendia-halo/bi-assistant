@@ -199,6 +199,7 @@ Timeline (from the Jira timeline):
 | 1.5 Data Connectors | [BA-5](https://halo-powered.atlassian.net/browse/BA-5) | Sep 30 – Oct 23 |
 | 1.6 User Testing | [BA-10](https://halo-powered.atlassian.net/browse/BA-10) | Oct 19 – Oct 23 |
 | 1.7 Bug Fixes | [BA-11](https://halo-powered.atlassian.net/browse/BA-11) | Oct 26 – Oct 30 |
+| 1.8 Agentic Hub Look and Feel | [BA-141](https://halo-powered.atlassian.net/browse/BA-141) | No dates in Jira yet |
 | 1.9 Agent Hub | [BA-150](https://halo-powered.atlassian.net/browse/BA-150) | No dates in Jira yet; due with the beta |
 
 Evals come first in the order even though they run in parallel: every other milestone is measured against them.
@@ -447,6 +448,126 @@ Bugs found by the spec backfill (0.2.2), security first. Details: [evidence/0.2.
   - The `API_BASE_URL` sentence in CLAUDE.md ("Known gap") is updated.
 - **Notes:** moved from 0.1.1 on 2026-10-04 so the bug sits under a Jira epic (BA-11). Found while drawing the C4 container diagram ([specs/system/architecture.md](specs/system/architecture.md), Level 2). Related to ADR-0001.
 
+### Milestone 1.8 — Agentic Hub Look and Feel ([BA-141](https://halo-powered.atlassian.net/browse/BA-141))
+
+The app gets the Agentic Hub visual design: a gradient frame, an "Agentic Hub" banner, white rounded cards, an icon rail, pill buttons and status chips. There is a light theme and a navy dark theme derived from it, and the app follows the OS by default. Only the look changes. All stories are built on the branch `feat/BA-141-agentic-hub-look-and-feel` and ship as one PR. Epic spec: [specs/epics/BA-141/spec.md](specs/epics/BA-141/spec.md). Decision: ADR-0007 in [specs/system/architecture.md](specs/system/architecture.md).
+
+#### 1.8.1 — ADR, epic spec and roadmap ([BA-142](https://halo-powered.atlassian.net/browse/BA-142))  `✅ Done`
+- **Intent:** the restyle is planned and its theming approach decided before any code, so each later story can be built and reviewed on its own.
+- **Scope:** ADR-0007 in `specs/system/architecture.md`; the BA-141 epic spec; this milestone with one feature per story; the epic row in `specs/README.md`.
+- **Out of scope:** product code, and capability or system spec changes for behaviour that hasn't shipped yet. Each later story updates those itself.
+- **Acceptance:**
+  - ADR-0007 records the semantic tokens, the System / Light / Dark preference and the bundled webfont.
+  - `specs/epics/BA-141/spec.md` exists and the user has confirmed it (`Status: Confirmed`).
+  - `python3 scripts/check-specs.py` passes.
+- **Notes:** mockup reference: the "Publish requests" screen shared on 2026-10-09 (style only). The user confirmed the epic spec on 2026-10-09, kept `productName` and dropped the "Powered by LenAI" footer. Evidence: [evidence/1.8.1/](evidence/1.8.1/).
+
+#### 1.8.2 — Design tokens and light/dark theme switch ([BA-143](https://halo-powered.atlassian.net/browse/BA-143))  `✅ Done`
+- **Intent:** the app can be shown in a light or a navy dark theme, and it follows the OS by default.
+- **Scope:**
+  - A semantic token layer (light and navy dark sets) as CSS custom properties, mapped into Tailwind v4 with `@theme inline`.
+  - Noto Sans (400, 500, 600, 700; Latin) bundled from `@fontsource/noto-sans` and used as the app's sans font.
+  - A fifth Settings section, **Appearance**, after Developer, with a System / Light / Dark choice. System is the default.
+  - The choice is kept in renderer `localStorage` and applied before Angular boots, so the page never paints in the wrong theme. On System, the app follows the OS live.
+  - The Electron window background matches the resolved theme, through one preload call.
+  - The dark token set is reviewed with screenshots before 1.8.3.
+- **Out of scope:** restyling the shell and the screens (1.8.3–1.8.7). Until then only the page background and the Appearance section use the tokens, and the rest stays dark.
+- **Acceptance:**
+  - Choosing Light or Dark, or changing the OS theme while on System, retheme the open app without a reload.
+  - The choice survives a restart.
+  - The Appearance Gherkin in [specs/capabilities/app-shell/spec.md](specs/capabilities/app-shell/spec.md) passes as `frontend/e2e/appearance.spec.ts`.
+  - The axe scan is clean in both themes.
+- **Notes:** ADR-0007. Updates `ui.md` §1, §6 and §7, `data-model.md`, `tech-stack.md` and `non-functional.md`. The user chose the Settings section and Noto Sans on 2026-10-09 and approved both palettes from the token-preview screenshots the same day. The E2E simulates the OS theme with `emulateMedia`, because Electron's `nativeTheme.themeSource` doesn't reach `prefers-color-scheme` on Linux. Evidence: [evidence/1.8.2/](evidence/1.8.2/).
+
+#### 1.8.3 — App shell: gradient frame, Agentic Hub banner and icon rail ([BA-144](https://halo-powered.atlassian.net/browse/BA-144))  `✅ Done`
+- **Intent:** the window has the Agentic Hub frame, banner and navigation rail, in both themes.
+- **Scope:**
+  - Gradient frame around a rail card and a canvas card.
+  - A compact (72 px) "Agentic Hub" banner, which is the page's level-one heading.
+  - Page content and the details panel as `card`s side by side.
+  - An always-visible icon rail replaces the 296 px sidebar. Datasets, Agents, Knowledge and Sessions are at the top; the account avatar, system logs and Settings are at the bottom. The collapse and expand sidebar controls are removed.
+  - Sessions becomes a rail destination with a list pane (refined in 1.8.5).
+  - Settings becomes a rail destination with a section list beside the chosen form, replacing the settings sidebar and its Back button.
+  - "Halo BI Assistant" becomes "Agentic Hub" in the window title, the document title and the settings footer.
+  - Fix the existing axe contrast failures in the old Settings sidebar (the `⌘ F` hint and the version footer), found in 1.8.2.
+  - The right-panel empty states, which are visible in the shell's initial state, move to tokens.
+- **Out of scope:**
+  - `productName`, installer names and the data directory, which stay "Halo BI Assistant".
+  - The mockup's "Powered by LenAI" footer.
+  - Collapsing the session list and restyling its rows (1.8.5).
+  - Restyling the screens inside the cards (1.8.6, 1.8.7).
+- **Acceptance:**
+  - Every rail destination opens the same view the old sidebar did.
+  - The titles read "Agentic Hub".
+  - The new Feature "Navigation rail" (`frontend/e2e/navigation.spec.ts`) and the updated layout scenario pass, with the E2E helpers moved off "Back".
+  - The axe scan of the initial shell is clean in the light theme.
+- **Notes:** decided with the user on 2026-10-09: a compact banner, Settings as a rail destination with a section list, and no collapse control. Depends on 1.8.2 and 1.8.4. Also done here:
+  - nine screen titles demoted from `h1` to `h2`, so the banner is the only `h1` (R7);
+  - theme switches suppress transitions for one frame, because the axe run caught rows mid-fade;
+  - the page card became the `<main>` landmark, for the axe `region` rule.
+  Evidence: [evidence/1.8.3/](evidence/1.8.3/).
+#### 1.8.4 — Shared components: pill buttons, status chips, cards and list rows ([BA-145](https://halo-powered.atlassian.net/browse/BA-145))  `✅ Done`
+- **Intent:** the building blocks every screen uses match the design in both themes, so the screen stories only swap classes.
+- **Scope:** Tailwind v4 `@utility` classes in `frontend/src/styles/components.css`, built only from the 1.8.2 tokens:
+  - buttons: `btn` with `btn-primary`, `btn-secondary`, `btn-outline`, `btn-ghost`, `btn-danger`, plus `btn-icon`;
+  - chips: `chip` with `chip-warning`, `chip-info`, `chip-neutral`, `chip-success`, `chip-danger`;
+  - `card`, `card-muted`, `list-row` / `list-row-selected`, `filter-pill` / `filter-pill-active`, `field` / `field-label`, `section-header` / `section-title`, `menu` / `menu-item`.
+  - The Appearance section adopts them.
+- **Out of scope:** adopting them on every screen (1.8.3, 1.8.5–1.8.7).
+- **Acceptance:** the classes compile into the app's CSS from tokens only (no hex or palette colours); the Appearance E2E stays green with the section built from them; ui.md §3 documents each class.
+- **Notes:** built before 1.8.3 so the shell can use the classes. Depends on 1.8.2. Evidence: [evidence/1.8.4/](evidence/1.8.4/).
+#### 1.8.5 — Sessions master-detail list pane ([BA-146](https://halo-powered.atlassian.net/browse/BA-146))  `✅ Done`
+- **Intent:** sessions are browsed in a list pane beside the content, as in the mockup's request list, and the pane can step aside to give the chat room.
+- **Scope:**
+  - The Sessions list pane from 1.8.3 gets a **Collapse session list** button. While collapsed, the page header shows **Expand session list**. The state is not remembered between launches.
+  - Each row shows the session name and, under it, its datasets (`fg-muted`), like the mockup's rows.
+  - "No sessions yet." when the list is empty.
+  - The new-session composer moves to tokens and shared components.
+- **Out of scope:** changes to the session data or its order (see 1.7.19); the chat itself (1.8.7).
+- **Acceptance:** the new scenario "Collapses and expands the session list" in the Navigation rail Feature and the existing session flows (`world-cup-workflow.spec.ts`, `chat-and-visuals.spec.ts`, `developer-observability.spec.ts`) pass on web.
+- **Notes:** the user chose a collapsible pane on 2026-10-09. Depends on 1.8.3 and 1.8.4. Evidence: [evidence/1.8.5/](evidence/1.8.5/).
+#### 1.8.6 — Restyle feature screens: datasets, catalog, agents, knowledge and settings ([BA-147](https://halo-powered.atlassian.net/browse/BA-147))  `✅ Done`
+- **Intent:** the feature screens match the design in both themes.
+- **Scope:** datasets list, catalog browser, agents list and detail, knowledge list and form, and the settings forms move to tokens and shared components.
+- **Out of scope:** behaviour and copy changes.
+- **Acceptance:** no hardcoded colours remain on these screens; their E2E specs pass unchanged apart from moved navigation and the colour-class assertions in `developer-settings.spec.ts`; the new scenario "no accessibility violations on any screen in either theme" passes.
+- **Notes:**
+  - Depends on 1.8.4.
+  - Built by two parallel subagents, then checked with a class-stripping diff against HEAD (0 non-class changes).
+  - Also gave names to the unnamed Datasets and Agents search, layout and row-options buttons, which the new axe scan flagged.
+  - Evidence: [evidence/1.8.6/](evidence/1.8.6/).
+
+#### 1.8.7 — Restyle chat, visual panel, system logs and toasts; regenerate the visual baseline ([BA-148](https://halo-powered.atlassian.net/browse/BA-148))  `✅ Done`
+- **Intent:** the rest of the app matches the design, and the visual tests guard both themes.
+- **Scope:** session chat and composer, the interactive visual panel frame, the right panel, system logs and toasts move to tokens; Playwright visual baselines are regenerated for Light and Dark.
+- **Out of scope:** the generated visuals' own styling inside the iframe.
+- **Acceptance:** no hardcoded colours remain in the renderer; the axe scan is clean in both themes; baselines for both themes are committed.
+- **Notes:**
+  - Depends on 1.8.4.
+  - The web baseline was regenerated in 1.8.3 and still matches. The desktop (`-darwin`) baseline is regenerated only on a requested desktop run.
+  - Also: toasts became a "Notifications" live region with a named dismiss button; `index.html` declares the cascade-layer order first; ui.md §2, §3, §4, §6 and §8 were synced to tokens.
+  - Evidence: [evidence/1.8.7/](evidence/1.8.7/).
+
+#### 1.8.8 — Align with the Insight Agent AI Figma design ([BA-158](https://halo-powered.atlassian.net/browse/BA-158))  `✅ Done`
+- **Intent:** the app matches the Figma the design team owns (file `qW41gtAbnTcqoqpEKajqZX`, Chat frame `2154:31891`), not just a mockup's visual language, while keeping the name "Agentic Hub".
+- **Scope:**
+  - Light tokens from the Figma variables, with the dark set re-derived. Frame gradient and texture, rail and banner sizes, and shadows as in the Figma.
+  - Rail: hamburger, logo, workspace items, avatar, system logs, Settings, a divider and the LenAI footer. The hamburger toggles a 240 px drawer with labels and the session list, replacing the 1.8.5 pane.
+  - Each page gets a header (icon, 24 px light title, soft action). In a session that's the session name and "Start New Conversation".
+  - Chat restyled to the frame: user bubble with avatar, the answer with the sparks mark at 16/24 px, bordered tables with a `#F8FAFC` header row, "Data Sources" (today's "Data used"), the thumbs and copy actions, the prompt input with the send icon, and the disclaimer.
+  - The visual panel opens on demand.
+  - Figma brand assets live in `frontend/public/brand/agentic-hub/`; the two photos are re-encoded as WebP, 504 KB instead of 8.4 MB.
+- **Out of scope:** the "Insight Agent AI" name, the logout button, and new features. Generic icons stay `lucide-angular`.
+- **Acceptance:**
+  - A side-by-side screenshot of the Figma frame and the running chat in the evidence.
+  - Navigation rail scenarios for the drawer (open, choose a session, close) and the on-demand visual panel.
+  - The full web suite passes, and axe is clean on every screen in both themes.
+- **Notes:**
+  - Decided with the user on 2026-10-09: keep "Agentic Hub", include both LenAI marks, drawer plus on-demand panel, and track as a new story. The user re-confirmed the epic spec ("implement the full epic").
+  - The chat restyle was done by a subagent in parallel with the shell.
+  - `fg-muted` is `rgba(0,0,0,.6)` rather than Figma's `.55`, for AA.
+  - Evidence: [evidence/1.8.8/](evidence/1.8.8/).
+
 ### Milestone 1.9 — Agent Hub ([BA-150](https://halo-powered.atlassian.net/browse/BA-150))
 
 Users build their own data agents on top of the assistant (instructions, datasets, starter questions, an optional model override), test them as drafts, publish them, pin them and start chats from them. The Agents screen becomes a searchable hub of cards with the filters All, Pinned, Official and Mine. The built-in helper agents move to a System section. Teams, the org and sharing are out: the app stays local-first. Builds on the look and feel of Milestone 1.8 ([BA-141](https://halo-powered.atlassian.net/browse/BA-141)). All stories are built on the branch `feat/BA-150-agent-hub` and ship as one PR. Epic spec: [specs/epics/BA-150/spec.md](specs/epics/BA-150/spec.md). Decision: ADR-0008 in [specs/system/architecture.md](specs/system/architecture.md).
@@ -480,7 +601,7 @@ Users build their own data agents on top of the assistant (instructions, dataset
 - **Scope:** the Agents screen becomes the hub: header with **New agent**, search over name and description, filter pills All, Pinned, Official and Mine, sections of cards with **Show more**, card name, description, owner ("You" or "Official"), Pin or Pinned and Draft or Live chip; a System section for the helper agents; a card opens today's detail view (tabs unchanged) with Publish and Delete for user agents (Start chat arrives with 1.9.3 and Edit with 1.9.5); empty, loading, error and no-match states; a warning on agents whose datasets are missing.
 - **Out of scope:** My team and Whole org; the editor form (1.9.5): **New agent** is shown but disabled until 1.9.5; Start chat (1.9.3).
 - **Acceptance:** Playwright covers search, each filter, pin and unpin, Show more and opening an agent; the existing `agents.spec.ts` eval flows pass; the axe scan is clean; `ui.md` and the agents-evals rules R1–R9 and Gherkin are rewritten for the hub.
-- **Notes:** depends on 1.9.2. Built with today's styles, not BA-141's components (decided 2026-10-09); BA-141 restyles it later. Moved ahead of 1.9.3 on 2026-10-09 so the user can see the hub sooner. E2E runs on the web target (BA-156). Shipped to the mockup: under All, pinned cards stay first in their own section (Official, Mine, System), Pinned is a filter, and the search is a full-width row. Card text is `zinc-400` for axe contrast. Desktop not run. Evidence: [evidence/1.9.4/](evidence/1.9.4/).
+- **Notes:** depends on 1.9.2. Built with today's styles, not BA-141's components (decided 2026-10-09). BA-141 then merged to `main` first, so the hub, card, detail and eval-trace templates moved onto BA-141's theme tokens and shared classes when `main` was merged into this branch (2026-10-09). Moved ahead of 1.9.3 on 2026-10-09 so the user can see the hub sooner. E2E runs on the web target (BA-156). Shipped to the mockup: under All, pinned cards stay first in their own section (Official, Mine, System), Pinned is a filter, and the search is a full-width row. Card text was `zinc-400` for axe contrast before the token move; the axe scan re-runs in both themes after it. Desktop not run. Evidence: [evidence/1.9.4/](evidence/1.9.4/).
 
 #### 1.9.5 — Agent editor: create, test, publish and delete ([BA-155](https://halo-powered.atlassian.net/browse/BA-155))  `📋 Planned`
 - **Intent:** users build and change agents safely, testing a draft before it reaches their sessions.

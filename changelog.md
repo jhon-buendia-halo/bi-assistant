@@ -30,6 +30,72 @@ Running log of every meaningful change, newest first. See *Logging convention* a
   - Milestone 1.9 in [roadmap.md](roadmap.md), with one feature per story (1.9.1–1.9.5), and the epic row in [specs/README.md](specs/README.md).
   - Decisions: teams, the org and sharing are out (the app stays local-first); the epic is inside the 1.0 Beta; the hub UI is built with today's styles and restyled later by BA-141.
   - Evidence: [evidence/1.9.1/](evidence/1.9.1/).
+- **Aligned with the Insight Agent AI Figma design** (roadmap 1.8.8, [BA-158](https://halo-powered.atlassian.net/browse/BA-158), epic [BA-141](https://halo-powered.atlassian.net/browse/BA-141)):
+  - Light tokens now come from the Figma variables (brand `#0B41AD`, text `rgba(0,0,0,.85)`, headings `#001F52`, radius 12, Figma shadows), and the navy dark set is re-derived from them.
+  - Shell: the Figma's teal gradient frame with its texture, a 64 px translucent rail (menu, logo, workspace items, avatar, system logs, Settings, divider, LenAI mark and "Powered by LenAI"), and a 136 px banner with the Figma image, still reading "Agentic Hub".
+  - The menu button expands the rail into a 240 px drawer with labels and the session list. This replaces the 1.8.5 session pane; choosing Sessions opens it.
+  - The Sessions area has a page header: an icon, a 24 px light title, the datasource context and "Start New Conversation".
+  - The details panel is closed on launch and opens on demand: a dataset element, an eval question, a visual, or "Expand right panel".
+  - Chat restyled to the Figma: the user bubble with an avatar, answers with the sparks mark at 16/24 px, Figma tables, "Data used" styled as the Data Sources row, feedback icons always visible, the bordered prompt, and the AI disclaimer.
+  - Buttons are 40 px tall at 14 px. Screen titles are 24 px light.
+  - The 19 Figma assets are in `frontend/public/brand/agentic-hub/`, with the photos re-encoded as WebP (8.4 MB → 0.5 MB).
+  - Specs: app-shell R1–R4, R10, R37 and R46–R49 with new Navigation rail scenarios; agents-evals R37 and its scenario; [ui.md](specs/system/ui.md) §1, §3, §4.12, §6, §7 and §9; sessions-chat UI; api.md `window:theme`; tech-stack.md.
+  - Evidence (with a side-by-side against the Figma): [evidence/1.8.8/](evidence/1.8.8/).
+- **Chat, visual panel, system logs and toasts in both themes** (roadmap 1.8.7, [BA-148](https://halo-powered.atlassian.net/browse/BA-148), epic [BA-141](https://halo-powered.atlassian.net/browse/BA-141)):
+  - The session chat (including its `.prose-dark` Markdown styles and tooltips), the interactive visual panel frame, the system logs dialog, toasts and the backend banner now use theme tokens and the shared classes.
+  - Toasts sit in a "Notifications" region (`aria-live="polite"`) with a "Dismiss notification" button (app-shell R30).
+  - `SessionChat` unit tests assert token classes.
+  - ui.md is synced to tokens throughout: §2 conventions, §3 shared components, §4 screens, §6.1 colour usage (the legacy dark palette section is retired) and §8.
+  - Evidence: [evidence/1.8.7/](evidence/1.8.7/).
+- **Feature screens in both themes** (roadmap 1.8.6, [BA-147](https://halo-powered.atlassian.net/browse/BA-147), epic [BA-141](https://halo-powered.atlassian.net/browse/BA-141)):
+  - These screens now use only theme tokens and the shared `btn`, `chip`, `card`, `field`, `menu` and `list-row` classes: datasets, the catalog browser, metrics, entity details, agents (list, detail, eval trace), knowledge, and the datasource, LLM, testing-data and developer settings. The dataset editor header now wraps.
+  - New E2E scenario: axe finds no violations on any screen in Light or Dark.
+  - Fixed along the way: names for the Datasets and Agents search, layout and row-options buttons.
+  - Evidence: [evidence/1.8.6/](evidence/1.8.6/).
+- **Collapsible Sessions list pane** (roadmap 1.8.5, [BA-146](https://halo-powered.atlassian.net/browse/BA-146), epic [BA-141](https://halo-powered.atlassian.net/browse/BA-141)):
+  - The pane has "Collapse session list" / "Expand session list" (not remembered between launches).
+  - Rows show the session's datasets under its name, and the empty list reads "No sessions yet."
+  - The new-session composer uses tokens and shared classes.
+  - Specs: app-shell R46, R47 and R37, plus the Navigation rail scenario "Collapses and expands the session list".
+  - Evidence: [evidence/1.8.5/](evidence/1.8.5/).
+- **Agentic Hub shell: gradient frame, banner and navigation rail** (roadmap 1.8.3, [BA-144](https://halo-powered.atlassian.net/browse/BA-144), epic [BA-141](https://halo-powered.atlassian.net/browse/BA-141)):
+  - The 296 px sidebar is replaced by a gradient frame. The always-visible icon rail holds Datasets, Agents, Knowledge and Sessions at the top, and the avatar, system logs and Settings at the bottom. Beside it, a canvas card holds the 72 px "Agentic Hub" banner (the page's only `h1`) over the page card (`main`) and the details panel card. The collapse and expand sidebar controls are gone.
+  - **Sessions** is now a rail area, with a list pane beside the composer or chat.
+  - **Settings** is now a rail area, with a section list beside the chosen form. "Back" is gone, and leaving and returning keeps the chosen section.
+  - The window and document titles read "Agentic Hub". The OS app name, installers and data directory stay "Halo BI Assistant".
+  - Theme switches suppress transitions for one frame, so every surface changes at once. Screen titles are now `h2`.
+  - Specs: app-shell R1–R7, R32, R33, R36, R37 and R46, the new Feature "Navigation rail" (`frontend/e2e/navigation.spec.ts`), [ui.md](specs/system/ui.md) §1, §3.4, §7, §8, §9 and §10, and the sidebar references in the datasets, knowledge, metrics, diagnostics, sessions-chat, llm-settings, developer-settings and datasources specs, plus vision.md and non-functional N59/N60.
+  - The web visual baseline is regenerated. Merged `main` (BA-156, E2E on the web target) and moved the Appearance spec to `app.fixture`.
+  - Evidence: [evidence/1.8.3/](evidence/1.8.3/).
+- **Shared component classes** (roadmap 1.8.4, [BA-145](https://halo-powered.atlassian.net/browse/BA-145), epic [BA-141](https://halo-powered.atlassian.net/browse/BA-141)):
+  - Tailwind v4 `@utility` classes in [frontend/src/styles/components.css](frontend/src/styles/components.css), built from the theme tokens only: pill buttons (`btn` with primary, secondary, outline, ghost and danger variants, plus `btn-icon`), status chips (`chip-warning|info|neutral|success|danger`), `card`, `card-muted`, `list-row`, `filter-pill`, `field`, `field-label`, `section-header`/`section-title` and `menu`/`menu-item`.
+  - Documented in [ui.md](specs/system/ui.md) §3.6. The Appearance section now uses `card` and `field-label`.
+  - Evidence: [evidence/1.8.4/](evidence/1.8.4/).
+- **Light and dark themes with an Appearance setting** (roadmap 1.8.2, [BA-143](https://halo-powered.atlassian.net/browse/BA-143), epic [BA-141](https://halo-powered.atlassian.net/browse/BA-141)):
+  - Settings → **Appearance** (fifth section) offers System, Light and Dark. System is the default and follows the OS live. The choice applies at once and is kept in `localStorage` under `questions-to-insights:theme`.
+  - Semantic theme tokens with a light set and an approved navy dark set, in [frontend/src/styles/tokens.css](frontend/src/styles/tokens.css), mapped into Tailwind v4 with `@theme inline` (ADR-0007). Every text pair meets WCAG AA in both themes.
+  - An inline boot script in `index.html` applies the theme before the app renders. `ThemeService` keeps it in sync. The desktop window background follows the theme through the new `desktop.setWindowTheme` / `window:theme` IPC.
+  - Noto Sans (`@fontsource/noto-sans` 5.3.0) is bundled and is now the app's font.
+  - Only the page background and the Appearance section use the tokens so far. The other screens move over in 1.8.3–1.8.7.
+  - Specs: app-shell R39–R45 and Feature "Appearance" (`frontend/e2e/appearance.spec.ts`, new), [ui.md](specs/system/ui.md) §4.16, §6.0 and §6.5, and updates to [data-model.md](specs/system/data-model.md), [api.md](specs/system/api.md), [tech-stack.md](specs/system/tech-stack.md) and [non-functional.md](specs/product/non-functional.md) N64.
+  - The E2E helper `createWorldCupDatasource` honours `WORLD_CUP_DB_PORT`, so a worktree can run the suite against its own compose stack.
+  - Evidence: [evidence/1.8.2/](evidence/1.8.2/).
+- **Agentic Hub look and feel planned** (roadmap 1.8.1, [BA-142](https://halo-powered.atlassian.net/browse/BA-142), epic [BA-141](https://halo-powered.atlassian.net/browse/BA-141)):
+  - New epic spec [specs/epics/BA-141/spec.md](specs/epics/BA-141/spec.md), confirmed by the user. It plans a light theme and a navy dark theme (System by default), a gradient frame, an "Agentic Hub" banner, an icon rail, a sessions list pane and pill and chip components. Only the look changes.
+  - ADR-0007 in [specs/system/architecture.md](specs/system/architecture.md): semantic design tokens mapped into Tailwind v4, a System / Light / Dark preference applied before first paint, and a bundled webfont.
+  - Milestone 1.8 in [roadmap.md](roadmap.md), with one feature per story (1.8.1–1.8.7), and the epic row in [specs/README.md](specs/README.md).
+  - Decisions: `productName`, the installers and the data directory stay "Halo BI Assistant"; only the window title, document title and settings footer become "Agentic Hub". The mockup's "Powered by LenAI" footer is left out.
+  - Evidence: [evidence/1.8.1/](evidence/1.8.1/).
+
+### Fixed
+- **Agent Hub's active filter pill readable in dark** (roadmap 1.9.4, [BA-154](https://halo-powered.atlassian.net/browse/BA-154), epic [BA-150](https://halo-powered.atlassian.net/browse/BA-150)):
+  - Merging `main` (v0.25.0, BA-141) moved the hub onto the theme tokens. The shared `filter-pill-active` kept `primary` text, which is 4.34:1 on the selected fill in dark, so the axe scan failed. It now uses `on-primary-soft` in both themes (`components.css`, [ui.md](specs/system/ui.md) §3).
+  - Full web suite after the merge: 54 passed, 2 skipped (desktop only). Desktop not run.
+  - Evidence: [evidence/1.9.4/](evidence/1.9.4/) (`merge-main-*`).
+- **Shared component classes could lose to Tailwind's base reset** (roadmap 1.8.4, [BA-145](https://halo-powered.atlassian.net/browse/BA-145)):
+  - The classes in `frontend/src/styles/components.css` moved from `@utility` to `@layer components` and now reference the raw `--qti-*` tokens, so utilities on the same element override them without `!`.
+  - `index.html` declares `@layer theme, base, components, utilities;` before anything else. Otherwise Angular's inlined critical CSS can name `components` first, and Tailwind's button reset then wins.
+  - Evidence: the screenshots in [evidence/1.8.6/](evidence/1.8.6/).
 
 ### Changed
 - **Agent Hub branch synced with `main`** (epic [BA-150](https://halo-powered.atlassian.net/browse/BA-150)): merged BA-156's web E2E harness into `feat/BA-150-agent-hub`. The `E2E_BACKEND_PORT` option added under 1.9.2 is removed, because the web target already gives each test its own free port and data dir. 1.9.2's checks were re-run on the web target; see [evidence/1.9.2/](evidence/1.9.2/).

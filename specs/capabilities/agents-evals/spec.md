@@ -80,7 +80,7 @@ Executions, details and report
 - R34. The **Executions** sub-tab SHALL list past and in-flight runs of the agent, newest first, loaded when the sub-tab opens ("Loading executions…"; empty: "No eval runs yet — run the suite from the Questions tab."). The sub-tabs SHALL be shown whenever the agent has sets (or the Executions tab is open).
 - R35. Each execution SHALL show a status icon (spinner while running, green check when all questions passed, red cross otherwise), "<passed>/<total> passed", the start time, the datasource name and the duration ("—" until finished; milliseconds under a second, else whole seconds). Expanding it SHALL show "Scoped to <datasets>" and one row per finished question with its verdict and duration; clicking a row SHALL open that question's result in the Details panel.
 - R36. Each execution SHALL offer a download button (**Download as Markdown**) and, once it is no longer running, a delete button. Deleting a run that is still going SHALL be refused ("Cannot delete a run that is still going"); deleting a finished one SHALL remove it permanently ("Run deleted"). Download success SHALL show the toast "Eval report downloaded"; failure "Could not download the report" (or the backend's message).
-- R37. The Details panel SHALL show, for the selected question: the question and its intent. When it has not been run: "Checks it will be scored on" (the check descriptions) and "Run the evals to see the steps the agent executed for this question." When it has a result: the verdict (Passed or Failed) and duration; "Run error" or "Why it failed" (each failed check with its reason); every check with its score; "Executed steps" (each tool call in order, numbered, with its input and output or error, or "The agent answered without calling any tool."); and the final "Answer" (or "The agent returned no text."). With nothing selected it SHALL say "Select a question in the Evals tab to see how it ran." Selection SHALL clear when the agent changes or the view closes, and SHALL follow the newest result while a run is in progress.
+- R37. The Details panel SHALL show, for the selected question: the question and its intent. When it has not been run: "Checks it will be scored on" (the check descriptions) and "Run the evals to see the steps the agent executed for this question." When it has a result: the verdict (Passed or Failed) and duration; "Run error" or "Why it failed" (each failed check with its reason); every check with its score; "Executed steps" (each tool call in order, numbered, with its input and output or error, or "The agent answered without calling any tool."); and the final "Answer" (or "The agent returned no text."). Selecting a question SHALL open the Details panel if it is closed (app-shell R10). With nothing selected it SHALL say "Select a question in the Evals tab to see how it ran." Selection SHALL clear when the agent changes or the view closes, and SHALL follow the newest result while a run is in progress.
 - R38. The Markdown report of a run SHALL contain, in order: `# Eval run — <agent key>`; "**<passed>/<total> questions passed**"; a list of started, finished, duration, status, datasource name, datasets and run id; a "Run error" quote when the run failed; `## Summary` (a table of number, question, result, duration); `## Compared to previous run` (R40) when there is a comparison; `## Failures at a glance` when anything failed (each failed question with its failed-check reasons or run error); and `## Questions`, one section per finished question with result, id, duration, a checks table (check, score, why), `#### Executed steps` (each tool call with input and output or error in fenced blocks) and `#### Answer`. Fences inside payloads SHALL be neutralised. The server SHALL name the file `eval-run-<agent>-<start date and time>-<8-character run id>.md` and send it as a Markdown attachment.
 - R39. Downloading a run that does not exist SHALL fail with `Eval run "<id>" not found` (HTTP 404); polling one SHALL answer with ok false and the same message.
 
@@ -257,9 +257,9 @@ Feature: Agents
 
   Scenario: Opens a question in the right panel with what it is scored on
     Given I am on the "world-cup" set in the agent's Evals tab
-    Then the Details panel says "Select a question in the Evals tab"
+    And the Details panel is closed
     When I click the "champion-2022" question
-    Then the Details panel shows "Who won the 2022 World Cup?"
+    Then the Details panel opens and shows "Who won the 2022 World Cup?"
     And it shows "Single-hop lookup"
     And it shows "Checks if output includes "Argentina""
     And it shows "Run the evals to see the steps the agent executed"
@@ -396,10 +396,11 @@ Feature: Agent Hub
     Then I see the toast 'Agent "Claims triage" deleted'
     And I am back on the Agent Hub, which no longer lists "Claims triage"
 
-  Scenario: The hub has no detectable accessibility violations
+  Scenario: The hub has no detectable accessibility violations in either theme
     When I click "Agents"
     And I click "Show more (2)"
-    Then the axe scan reports no violations
+    Then the axe scan reports no violations in the Light theme
+    And the axe scan reports no violations in the Dark theme
 ```
 
 E2E: none yet for the Feature below.
@@ -504,7 +505,7 @@ Feature: Agent definitions (API)
 
 ## Acceptance
 
-- The nine `agents.spec.ts` scenarios pass, and the nine `agent-hub.spec.ts` scenarios pass, with the axe scan of the hub clean.
+- The nine `agents.spec.ts` scenarios pass, and the nine `agent-hub.spec.ts` scenarios pass, with the axe scan of the hub clean in both themes.
 - Running the `world-cup` set against the bundled sample with a working model finishes, records one result per ticked question, and every question's Details panel shows its checks and executed steps.
 - A second completed run on the same datasource and datasets produces a Markdown report with a "Compared to previous run" section; a run on a different datasource or dataset set does not.
 - Starting against a datasource with no datasets, or with datasets missing required entities, never spends model tokens and never leaves a run in history.

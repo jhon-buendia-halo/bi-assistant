@@ -1,0 +1,303 @@
+/*
+ * Shared components (specs/system/ui.md §3.6, roadmap 1.8.4).
+ * Built from the theme tokens in tokens.css only — never hex or palette
+ * shades — so every class follows the Light and Dark themes.
+ * Combine a base with a variant: `btn btn-primary`, `chip chip-warning`.
+ * Defined in the components layer, so any utility on the same element
+ * (`pl-8`, `w-48`, `hover:text-on-danger-soft`) overrides them without `!`.
+ */
+
+@layer components {
+  /* ---------- Buttons: pill-shaped ---------- */
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    border: 1px solid transparent;
+    border-radius: 9999px;
+    padding: 0.5625rem 1rem; /* 40 px with the 1 px border (Figma button/medium) */
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.25rem;
+    letter-spacing: 0.07px;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+      background-color 120ms ease,
+      border-color 120ms ease,
+      color 120ms ease;
+
+    &:focus-visible {
+      outline: 2px solid var(--qti-focus);
+      outline-offset: 2px;
+    }
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.55;
+    }
+  }
+
+  .btn-primary {
+    background-color: var(--qti-primary);
+    color: var(--qti-on-primary);
+
+    &:hover:not(:disabled) {
+      background-color: var(--qti-primary-hover);
+    }
+  }
+
+  .btn-secondary {
+    background-color: var(--qti-primary-soft);
+    color: var(--qti-on-primary-soft);
+
+    &:hover:not(:disabled) {
+      border-color: var(--qti-border-strong);
+    }
+  }
+
+  .btn-outline {
+    border-color: var(--qti-border-strong);
+    background-color: var(--qti-surface);
+    color: var(--qti-on-primary-soft);
+
+    &:hover:not(:disabled) {
+      background-color: var(--qti-surface-muted);
+    }
+  }
+
+  .btn-ghost {
+    background-color: transparent;
+    color: var(--qti-fg-muted);
+
+    &:hover:not(:disabled) {
+      background-color: var(--qti-surface-muted);
+      color: var(--qti-fg);
+    }
+  }
+
+  .btn-danger {
+    background-color: var(--qti-danger-soft);
+    color: var(--qti-on-danger-soft);
+
+    &:hover:not(:disabled) {
+      border-color: currentColor;
+    }
+  }
+
+  /* Square icon-only button; pair with a title or aria-label. */
+  .btn-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.5rem;
+    padding: 0.375rem;
+    color: var(--qti-fg-muted);
+    cursor: pointer;
+    transition:
+      background-color 120ms ease,
+      color 120ms ease;
+
+    &:hover:not(:disabled) {
+      background-color: var(--qti-surface-muted);
+      color: var(--qti-fg);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--qti-focus);
+      outline-offset: 2px;
+    }
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.55;
+    }
+  }
+
+  /* ---------- Status chips ---------- */
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    border-radius: 9999px;
+    padding: 0.125rem 0.625rem;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.125rem;
+    white-space: nowrap;
+  }
+
+  .chip-warning {
+    background-color: var(--qti-warning-soft);
+    color: var(--qti-on-warning-soft);
+  }
+
+  .chip-info {
+    background-color: var(--qti-info-soft);
+    color: var(--qti-on-info-soft);
+  }
+
+  .chip-neutral {
+    background-color: var(--qti-neutral-soft);
+    color: var(--qti-on-neutral-soft);
+  }
+
+  .chip-success {
+    background-color: var(--qti-success-soft);
+    color: var(--qti-on-success-soft);
+  }
+
+  .chip-danger {
+    background-color: var(--qti-danger-soft);
+    color: var(--qti-on-danger-soft);
+  }
+
+  /* ---------- Surfaces ---------- */
+
+  .card {
+    border: 1px solid var(--qti-border);
+    border-radius: 0.75rem;
+    background-color: var(--qti-surface);
+    box-shadow: var(--qti-shadow-card);
+  }
+
+  /* Summary or info box inside a card (the mockup's owner/audience block). */
+  .card-muted {
+    border: 1px solid var(--qti-border-strong);
+    border-radius: 0.75rem;
+    background-color: var(--qti-surface-muted);
+  }
+
+  /* No display value: pair with `flex` or `block` as the row needs. */
+  .list-row {
+    width: 100%;
+    border: 1px solid var(--qti-border);
+    border-radius: 0.75rem;
+    background-color: var(--qti-surface);
+    padding: 0.75rem 1rem;
+    text-align: left;
+    color: var(--qti-fg);
+    transition:
+      background-color 120ms ease,
+      border-color 120ms ease;
+
+    &:hover {
+      background-color: var(--qti-surface-muted);
+    }
+  }
+
+  .list-row-selected {
+    border-color: var(--qti-border-selected);
+    background-color: var(--qti-surface-selected);
+
+    &:hover {
+      background-color: var(--qti-surface-selected);
+    }
+  }
+
+  .filter-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    border: 1px solid var(--qti-border-strong);
+    border-radius: 9999px;
+    background-color: var(--qti-surface);
+    padding: 0.25rem 0.875rem;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--qti-primary);
+    cursor: pointer;
+
+    &:hover {
+      background-color: var(--qti-surface-muted);
+    }
+  }
+
+  .filter-pill-active {
+    border-color: var(--qti-border-selected);
+    background-color: var(--qti-surface-selected);
+    /* `primary` on the selected tint is below 4.5:1 in dark. */
+    color: var(--qti-on-primary-soft);
+  }
+
+  /* ---------- Forms ---------- */
+
+  .field {
+    width: 100%;
+    border: 1px solid var(--qti-border);
+    border-radius: 0.5rem;
+    background-color: var(--qti-surface);
+    padding: 0.5rem 0.75rem;
+    font-size: 13px;
+    color: var(--qti-fg);
+    outline: none;
+
+    &::placeholder {
+      color: var(--qti-fg-muted);
+    }
+
+    &:focus {
+      border-color: var(--qti-border-selected);
+      box-shadow: 0 0 0 2px var(--qti-surface-selected);
+    }
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+  }
+
+  .field-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--qti-fg-muted);
+  }
+
+  /* ---------- Page and section headers ---------- */
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    border-bottom: 1px solid var(--qti-border);
+    padding: 1rem 1.75rem;
+  }
+
+  .section-title {
+    font-size: 22px;
+    font-weight: 400;
+    line-height: 1.75rem;
+    color: var(--qti-fg-strong);
+  }
+
+  /* ---------- Menus and popovers ---------- */
+
+  .menu {
+    border: 1px solid var(--qti-border);
+    border-radius: 0.75rem;
+    background-color: var(--qti-surface);
+    padding: 0.25rem;
+    box-shadow:
+      0 10px 15px -3px rgb(0 0 0 / 0.12),
+      0 4px 6px -4px rgb(0 0 0 / 0.12);
+  }
+
+  .menu-item {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: 0.625rem;
+    border-radius: 0.5rem;
+    padding: 0.375rem 0.625rem;
+    text-align: left;
+    font-size: 13px;
+    color: var(--qti-fg);
+
+    &:hover {
+      background-color: var(--qti-surface-muted);
+    }
+  }
+}

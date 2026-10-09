@@ -1,19 +1,19 @@
 <div class="flex flex-col gap-3">
   <div class="mb-1">
-    <h1 class="text-[15px] font-semibold text-zinc-100">Testing Data</h1>
-    <p class="mt-1 text-[12px] text-zinc-500">
+    <h2 class="text-[15px] font-semibold text-fg-strong">Testing Data</h2>
+    <p class="mt-1 text-[12px] text-fg-muted">
       Bundled sample datasets you can load into a PostgreSQL database to
       power local testing and evals.
     </p>
   </div>
 
   @if (statusLoading() && fixtures().length === 0) {
-    <p class="flex items-center gap-2 text-[12px] text-zinc-500">
+    <p class="flex items-center gap-2 text-[12px] text-fg-muted">
       <lucide-angular [img]="Loader2" [size]="13" class="animate-spin" />
       <span>Loading fixtures…</span>
     </p>
   } @else if (fixtures().length === 0) {
-    <p class="text-[13px] text-zinc-500">
+    <p class="text-[13px] text-fg-muted">
       No testing data fixtures are registered.
     </p>
   } @else {
@@ -22,15 +22,15 @@
         <div
           [attr.data-testid]="'testing-data-fixture-' + fixture.id"
           class="rounded-xl border"
-          [class.border-zinc-300]="selectedFixtureId() === fixture.id"
-          [class.border-white/10]="selectedFixtureId() !== fixture.id"
+          [class.border-border-selected]="selectedFixtureId() === fixture.id"
+          [class.border-border]="selectedFixtureId() !== fixture.id"
         >
           <!-- Card header: click to expand/collapse, mirrors the "Question sets" list -->
           <button
             type="button"
             (click)="selectFixture(fixture.id)"
-            class="flex w-full flex-col gap-1 rounded-xl px-3 py-2.5 text-left hover:bg-white/5"
-            [class.bg-white/5]="selectedFixtureId() === fixture.id"
+            class="flex w-full flex-col gap-1 rounded-xl px-3 py-2.5 text-left hover:bg-surface-muted"
+            [class.bg-surface-muted]="selectedFixtureId() === fixture.id"
           >
             <span class="flex items-center gap-2">
               <lucide-angular
@@ -39,14 +39,14 @@
                 class="shrink-0 transition-transform"
                 [class.rotate-90]="selectedFixtureId() === fixture.id"
               />
-              <span class="text-[13px] font-medium text-zinc-200">{{
+              <span class="text-[13px] font-medium text-fg">{{
                 fixture.name
               }}</span>
               <span
                 [attr.data-testid]="'testing-data-status-' + fixture.id"
                 class="flex items-center gap-1 text-[11px]"
-                [class.text-emerald-400]="fixture.status.loaded"
-                [class.text-zinc-500]="!fixture.status.loaded"
+                [class.text-on-success-soft]="fixture.status.loaded"
+                [class.text-fg-muted]="!fixture.status.loaded"
               >
                 <lucide-angular
                   [img]="fixture.status.loaded ? CircleCheck : CircleX"
@@ -60,11 +60,11 @@
                 >
               </span>
             </span>
-            <span class="ml-6 max-w-[80ch] text-[12px] text-zinc-500">{{
+            <span class="ml-6 max-w-[80ch] text-[12px] text-fg-muted">{{
               fixture.description
             }}</span>
             @if (fixture.status.loaded && fixture.status.connection; as c) {
-              <span class="ml-6 font-mono text-[11px] text-zinc-600"
+              <span class="ml-6 font-mono text-[11px] text-fg-muted"
                 >{{ c.host }}:{{ c.port }}/{{ c.database }}</span
               >
             }
@@ -73,22 +73,22 @@
           <!-- Expanded contents: this fixture's own connection form + actions -->
           @if (selectedFixtureId() === fixture.id) {
             <div
-              class="flex flex-col gap-3 border-t border-white/10 bg-[#232323] p-4"
+              class="flex flex-col gap-3 border-t border-border bg-surface p-4"
             >
               @if (errorFor(fixture.id); as error) {
                 <p
                   [attr.data-testid]="'testing-data-error-' + fixture.id"
-                  class="whitespace-pre-wrap rounded-md bg-red-500/10 px-3 py-2.5 text-[12px] text-red-400"
+                  class="whitespace-pre-wrap rounded-md bg-danger-soft px-3 py-2.5 text-[12px] text-on-danger-soft"
                 >
                   {{ error }}
                 </p>
               }
 
-              <p class="text-[13px] font-medium text-zinc-200">Connection</p>
+              <p class="text-[13px] font-medium text-fg">Connection</p>
 
               <div class="grid grid-cols-3 gap-3">
                 <label class="col-span-2 flex flex-col gap-1">
-                  <span class="text-[11px] font-medium text-zinc-500"
+                  <span class="field-label"
                     >Host</span
                   >
                   <input
@@ -99,11 +99,11 @@
                     (input)="
                       patch(fixture.id, { host: $any($event.target).value })
                     "
-                    class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                    class="field"
                   />
                 </label>
                 <label class="flex flex-col gap-1">
-                  <span class="text-[11px] font-medium text-zinc-500"
+                  <span class="field-label"
                     >Port</span
                   >
                   <input
@@ -116,13 +116,13 @@
                         port: +$any($event.target).value,
                       })
                     "
-                    class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                    class="field"
                   />
                 </label>
               </div>
 
               <label class="flex flex-col gap-1">
-                <span class="text-[11px] font-medium text-zinc-500"
+                <span class="field-label"
                   >Database</span
                 >
                 <input
@@ -132,13 +132,13 @@
                   (input)="
                     patch(fixture.id, { database: $any($event.target).value })
                   "
-                  class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                  class="field"
                 />
               </label>
 
               <div class="grid grid-cols-2 gap-3">
                 <label class="flex flex-col gap-1">
-                  <span class="text-[11px] font-medium text-zinc-500"
+                  <span class="field-label"
                     >User</span
                   >
                   <input
@@ -149,11 +149,11 @@
                     (input)="
                       patch(fixture.id, { user: $any($event.target).value })
                     "
-                    class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                    class="field"
                   />
                 </label>
                 <label class="flex flex-col gap-1">
-                  <span class="text-[11px] font-medium text-zinc-500"
+                  <span class="field-label"
                     >Password</span
                   >
                   <input
@@ -166,19 +166,19 @@
                         password: $any($event.target).value,
                       })
                     "
-                    class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                    class="field"
                   />
                 </label>
               </div>
 
-              <label class="flex items-center gap-2 text-[12px] text-zinc-400">
+              <label class="flex items-center gap-2 text-[12px] text-fg-muted">
                 <input
                   type="checkbox"
                   [checked]="connectionFor(fixture.id).ssl"
                   (change)="
                     patch(fixture.id, { ssl: $any($event.target).checked })
                   "
-                  class="h-3.5 w-3.5 accent-emerald-500"
+                  class="h-3.5 w-3.5 accent-primary"
                 />
                 <span>Use SSL</span>
               </label>
@@ -186,8 +186,8 @@
               @if (testResultFor(fixture.id); as result) {
                 <p
                   class="whitespace-pre-wrap text-[12px]"
-                  [class.text-emerald-400]="result.ok"
-                  [class.text-red-400]="!result.ok"
+                  [class.text-on-success-soft]="result.ok"
+                  [class.text-on-danger-soft]="!result.ok"
                 >
                   {{ result.message }}
                 </p>
@@ -201,7 +201,7 @@
                   [disabled]="
                     busy(fixture.id) || !requiredFieldsFilled(fixture.id)
                   "
-                  class="flex flex-1 items-center justify-center gap-2 rounded-md bg-zinc-200 px-3 py-1.5 font-medium text-zinc-900 hover:bg-white disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+                  class="btn btn-primary flex-1"
                 >
                   @if (testingFor(fixture.id)) {
                     <lucide-angular
@@ -222,7 +222,7 @@
                   [disabled]="
                     busy(fixture.id) || !requiredFieldsFilled(fixture.id)
                   "
-                  class="flex flex-1 items-center justify-center gap-2 rounded-md bg-emerald-600 px-3 py-1.5 font-medium text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+                  class="btn btn-primary flex-1"
                 >
                   @if (loadingFor(fixture.id)) {
                     <lucide-angular
@@ -249,7 +249,7 @@
               @if (confirmingLoadFor(fixture.id)) {
                 <div
                   [attr.data-testid]="'testing-data-confirm-panel-' + fixture.id"
-                  class="flex flex-col gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-[12px] text-amber-200"
+                  class="flex flex-col gap-2 rounded-md border border-on-warning-soft/30 bg-warning-soft px-3 py-2.5 text-[12px] text-on-warning-soft"
                 >
                   <p class="flex items-start gap-2">
                     <lucide-angular
@@ -260,7 +260,7 @@
                     @if (fixture.seedable) {
                       <span>
                         This drops and recreates schema
-                        <code class="rounded bg-white/10 px-1 py-0.5">{{
+                        <code class="rounded bg-surface-muted px-1 py-0.5">{{
                           fixture.schema
                         }}</code>
                         on
@@ -291,14 +291,14 @@
                       type="button"
                       [attr.data-testid]="'testing-data-confirm-' + fixture.id"
                       (click)="confirmLoad(fixture.id)"
-                      class="rounded-md bg-amber-500 px-3 py-1.5 font-medium text-zinc-900 hover:bg-amber-400"
+                      class="btn btn-primary"
                     >
                       Confirm
                     </button>
                     <button
                       type="button"
                       (click)="cancelLoad(fixture.id)"
-                      class="rounded-md px-3 py-1.5 text-zinc-300 hover:bg-white/5"
+                      class="btn btn-ghost"
                     >
                       Cancel
                     </button>
@@ -309,10 +309,10 @@
 
             <!-- Remove -->
             <div
-              class="flex flex-col gap-2 border-t border-white/10 bg-[#232323] p-4"
+              class="flex flex-col gap-2 border-t border-border bg-surface p-4"
             >
-              <p class="text-[13px] font-medium text-zinc-200">Remove</p>
-              <p class="text-[12px] text-zinc-500">
+              <p class="text-[13px] font-medium text-fg">Remove</p>
+              <p class="text-[12px] text-fg-muted">
                 Deletes the "{{ fixture.name }}" datasource and dataset
                 records from the app only. It does not touch the database
                 itself.
@@ -322,7 +322,7 @@
                 [attr.data-testid]="'testing-data-remove-' + fixture.id"
                 (click)="requestRemove(fixture.id)"
                 [disabled]="busy(fixture.id) || !fixture.status.loaded"
-                class="flex w-fit items-center justify-center gap-2 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-1.5 font-medium text-red-400 hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                class="btn btn-danger w-fit"
               >
                 @if (removingFor(fixture.id)) {
                   <lucide-angular
@@ -339,7 +339,7 @@
 
               @if (confirmingRemoveFor(fixture.id)) {
                 <div
-                  class="flex flex-col gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-[12px] text-amber-200"
+                  class="flex flex-col gap-2 rounded-md border border-on-warning-soft/30 bg-warning-soft px-3 py-2.5 text-[12px] text-on-warning-soft"
                 >
                   <p class="flex items-start gap-2">
                     <lucide-angular
@@ -358,14 +358,14 @@
                       type="button"
                       [attr.data-testid]="'testing-data-confirm-' + fixture.id"
                       (click)="confirmRemove(fixture.id)"
-                      class="rounded-md bg-amber-500 px-3 py-1.5 font-medium text-zinc-900 hover:bg-amber-400"
+                      class="btn btn-primary"
                     >
                       Confirm
                     </button>
                     <button
                       type="button"
                       (click)="cancelRemove(fixture.id)"
-                      class="rounded-md px-3 py-1.5 text-zinc-300 hover:bg-white/5"
+                      class="btn btn-ghost"
                     >
                       Cancel
                     </button>

@@ -1,0 +1,11 @@
+check-specs:
+ALL CHECKS PASSED
+
+backend: build ok; jest
+Tests:       747 passed, 747 total
+backend lint (eslint, no --fix):
+✖ 231 problems (221 errors, 10 warnings)
+(234 on the pre-merge base; the merge adds none)
+
+frontend: ng build ok; ng test (ChromeHeadless, --window-size=1440,900):
+TOTAL: 102 SUCCESS

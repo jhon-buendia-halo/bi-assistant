@@ -154,12 +154,12 @@ export class SystemLogsPanel {
 
   levelClasses(entry: DiagnosticEntry): string {
     if (entry.level === 'error')
-      return 'border-red-500/25 bg-red-500/10 text-red-300';
+      return 'border-on-danger-soft/30 bg-danger-soft text-on-danger-soft';
     if (entry.level === 'warn')
-      return 'border-amber-500/25 bg-amber-500/10 text-amber-300';
+      return 'border-on-warning-soft/30 bg-warning-soft text-on-warning-soft';
     if (entry.level === 'debug')
-      return 'border-sky-500/20 bg-sky-500/10 text-sky-300';
-    return 'border-white/10 bg-white/5 text-zinc-400';
+      return 'border-accent/30 bg-info-soft text-accent';
+    return 'border-border bg-surface-muted text-fg-muted';
   }
 
   explainSource(source: string): string {

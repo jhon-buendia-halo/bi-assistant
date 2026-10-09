@@ -1,35 +1,41 @@
 <div class="flex flex-col">
-  <h1 class="font-serif text-[28px] font-semibold text-zinc-100">
+  <h2 class="text-[24px] leading-8 font-light tracking-[0.12px] text-fg-strong">
     Datasets
-  </h1>
+  </h2>
 
   <!-- Filters + actions -->
   <div class="mt-5 flex items-center gap-1">
     @for (filter of filters; track filter) {
       <button
         (click)="activeFilter.set(filter)"
-        class="rounded-lg px-3 py-1.5 text-[13px] hover:text-zinc-200"
-        [class.bg-white/10]="activeFilter() === filter"
-        [class.text-zinc-200]="activeFilter() === filter"
-        [class.text-zinc-400]="activeFilter() !== filter"
+        class="rounded-lg px-3 py-1.5 text-[13px] hover:text-fg"
+        [class.bg-surface-selected]="activeFilter() === filter"
+        [class.text-fg]="activeFilter() === filter"
+        [class.text-fg-muted]="activeFilter() !== filter"
       >
         {{ filter }}
       </button>
     }
     <div class="ml-auto flex items-center gap-2">
       <button
-        class="rounded-lg p-2 text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
+        type="button"
+        title="Search datasets"
+        aria-label="Search datasets"
+        class="btn-icon p-2"
       >
         <lucide-angular [img]="Search" [size]="16" />
       </button>
       <button
-        class="rounded-lg border border-white/15 p-2 text-zinc-300 hover:bg-white/5"
+        type="button"
+        title="Change layout"
+        aria-label="Change layout"
+        class="btn-icon border border-border-strong p-2 text-fg"
       >
         <lucide-angular [img]="LayoutGrid" [size]="16" />
       </button>
       <button
         (click)="newDataset.emit()"
-        class="flex items-center gap-1.5 rounded-lg bg-zinc-200 px-3.5 py-2 text-[13px] font-medium text-zinc-900 hover:bg-white"
+        class="btn btn-primary"
       >
         <lucide-angular [img]="Plus" [size]="14" />
         <span>New dataset</span>
@@ -38,27 +44,27 @@
   </div>
 
   @if (loading()) {
-    <div class="mt-10 flex items-center gap-2.5 text-zinc-400">
+    <div class="mt-10 flex items-center gap-2.5 text-fg-muted">
       <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
       <span>Loading datasets…</span>
     </div>
   } @else if (error(); as err) {
     <p
-      class="mt-8 rounded-md bg-red-500/10 px-3 py-2.5 text-[13px] text-red-400"
+      class="mt-8 rounded-md bg-danger-soft px-3 py-2.5 text-[13px] text-on-danger-soft"
     >
       {{ err }}
     </p>
   } @else if (sections().length === 0) {
-    <p class="mt-10 text-[13px] text-zinc-500">
+    <p class="mt-10 text-[13px] text-fg-muted">
       No datasets yet — create one with “New dataset”.
     </p>
   } @else {
     @for (section of sections(); track section.label) {
-      <p class="mt-7 text-[12px] text-zinc-500">{{ section.label }}</p>
+      <p class="mt-7 text-[12px] text-fg-muted">{{ section.label }}</p>
       <div class="mt-2 flex flex-col">
         @for (item of section.items; track item.name) {
           <div
-            class="group flex items-center gap-3.5 rounded-xl px-2 py-2.5 hover:bg-white/5"
+            class="group flex items-center gap-3.5 rounded-xl px-2 py-2.5 hover:bg-surface-muted"
           >
             <button
               [attr.data-testid]="'dataset-' + item.name"
@@ -66,15 +72,15 @@
               class="flex min-w-0 flex-1 items-center gap-3.5 text-left"
             >
               <span
-                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/5 text-zinc-400"
+                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface-muted text-fg-muted"
               >
                 <lucide-angular [img]="Workflow" [size]="17" />
               </span>
-              <span class="truncate text-[14px] text-zinc-200">{{
+              <span class="truncate text-[14px] text-fg">{{
                 item.name
               }}</span>
               <span
-                class="ml-auto flex shrink-0 items-center gap-1.5 text-[12px] text-zinc-500"
+                class="ml-auto flex shrink-0 items-center gap-1.5 text-[12px] text-fg-muted"
               >
                 <lucide-angular [img]="Lock" [size]="13" />
                 <span>·</span>
@@ -83,8 +89,11 @@
             </button>
             <div class="relative">
               <button
+                type="button"
                 (click)="toggleMenu(item.name)"
-                class="rounded p-1 text-zinc-500 hover:bg-white/10 hover:text-zinc-300"
+                title="Dataset options"
+                [attr.aria-label]="'Options for ' + item.name"
+                class="btn-icon"
               >
                 <lucide-angular [img]="EllipsisVertical" [size]="15" />
               </button>
@@ -95,11 +104,11 @@
                   (click)="menuOpen.set(null)"
                 ></div>
                 <div
-                  class="absolute top-full right-0 z-20 mt-1 w-44 rounded-lg border border-white/10 bg-[#2a2a2a] p-1 shadow-xl"
+                  class="absolute top-full right-0 z-20 mt-1 w-44 menu"
                 >
                   <button
                     (click)="deleteDataset(item)"
-                    class="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] text-red-400 hover:bg-white/10"
+                    class="menu-item text-on-danger-soft"
                   >
                     <lucide-angular [img]="Trash2" [size]="14" />
                     <span>Delete dataset</span>

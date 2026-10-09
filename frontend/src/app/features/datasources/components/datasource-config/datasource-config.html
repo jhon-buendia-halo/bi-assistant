@@ -1,10 +1,10 @@
 <div class="flex flex-col gap-4">
   <div class="flex items-start justify-between gap-4">
     <div>
-      <h1 class="text-[15px] font-semibold text-zinc-100">
+      <h2 class="text-[15px] font-semibold text-fg-strong">
         Datasource Configuration
-      </h1>
-      <p class="mt-1 text-[12px] text-zinc-500">
+      </h2>
+      <p class="mt-1 text-[12px] text-fg-muted">
         Connect the data platforms your datasets draw from — Databricks SQL
         warehouses, PostgreSQL databases or REST APIs.
       </p>
@@ -13,7 +13,7 @@
       <button
         type="button"
         (click)="startNew()"
-        class="flex shrink-0 items-center gap-1.5 rounded-md bg-zinc-200 px-3 py-1.5 text-[13px] font-medium text-zinc-900 hover:bg-white"
+        class="btn btn-primary shrink-0"
       >
         <lucide-angular [img]="Plus" [size]="14" />
         <span>New datasource</span>
@@ -23,17 +23,17 @@
 
   <!-- Saved datasources -->
   @if (loading()) {
-    <div class="flex items-center gap-2 text-[12px] text-zinc-500">
+    <div class="flex items-center gap-2 text-[12px] text-fg-muted">
       <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
       <span>Loading datasources…</span>
     </div>
   } @else if (loadError(); as error) {
-    <p class="rounded-md bg-red-500/10 px-3 py-2.5 text-[12px] text-red-400">
+    <p class="rounded-md bg-danger-soft px-3 py-2.5 text-[12px] text-on-danger-soft">
       {{ error }}
     </p>
   } @else if (datasources().length === 0 && !formOpen()) {
     <p
-      class="rounded-md border border-dashed border-white/10 px-3 py-4 text-center text-[12px] text-zinc-500"
+      class="rounded-md border border-dashed border-border px-3 py-4 text-center text-[12px] text-fg-muted"
     >
       No datasources yet. Add one to start building datasets.
     </p>
@@ -42,25 +42,25 @@
       @for (ds of datasources(); track ds.id) {
         <div
           [attr.data-testid]="'datasource-' + ds.id"
-          class="flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2.5"
-          [class.border-white/25]="editingId() === ds.id"
+          class="flex items-center gap-3 rounded-lg border border-border bg-surface-muted px-3 py-2.5"
+          [class.border-border-strong]="editingId() === ds.id"
         >
           <span
-            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/5 text-zinc-400"
+            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-muted text-fg-muted"
           >
             <lucide-angular [img]="Database" [size]="15" />
           </span>
           <span class="flex min-w-0 flex-1 flex-col">
             <span class="flex items-center gap-2">
-              <span class="truncate text-[13px] text-zinc-200">{{
+              <span class="truncate text-[13px] text-fg">{{
                 ds.name
               }}</span>
               <span
-                class="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-zinc-400"
+                class="chip chip-neutral shrink-0 text-[10px] px-1.5 py-0.5"
                 >{{ kindLabel(ds.kind) }}</span
               >
             </span>
-            <span class="truncate font-mono text-[11px] text-zinc-500">{{
+            <span class="truncate font-mono text-[11px] text-fg-muted">{{
               ds.summary
             }}</span>
           </span>
@@ -68,7 +68,7 @@
             type="button"
             title="Edit"
             (click)="startEdit(ds)"
-            class="rounded p-1.5 text-zinc-500 hover:bg-white/10 hover:text-zinc-200"
+            class="btn-icon"
           >
             <lucide-angular [img]="Pencil" [size]="14" />
           </button>
@@ -77,7 +77,7 @@
             title="Delete"
             (click)="remove(ds)"
             [disabled]="deleting() === ds.id"
-            class="rounded p-1.5 text-zinc-500 hover:bg-white/10 hover:text-red-400 disabled:opacity-50"
+            class="btn-icon hover:text-on-danger-soft"
           >
             @if (deleting() === ds.id) {
               <lucide-angular
@@ -97,33 +97,33 @@
   <!-- Form -->
   @if (formOpen()) {
     <div
-      class="flex flex-col gap-3 rounded-xl border border-white/10 bg-[#232323] p-4"
+      class="card flex flex-col gap-3 p-4"
     >
-      <p class="text-[13px] font-medium text-zinc-200">
+      <p class="text-[13px] font-medium text-fg">
         {{ editingId() ? "Edit datasource" : "New datasource" }}
       </p>
 
       <label class="flex flex-col gap-1">
-        <span class="text-[11px] font-medium text-zinc-500">Name</span>
+        <span class="field-label">Name</span>
         <input
           type="text"
           placeholder="Claims warehouse"
           [value]="name()"
           (input)="name.set($any($event.target).value)"
-          class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+          class="field"
         />
       </label>
 
       <label class="flex flex-col gap-1">
-        <span class="text-[11px] font-medium text-zinc-500">Kind</span>
+        <span class="field-label">Kind</span>
         <select
           [value]="kind()"
           [disabled]="!!editingId()"
           (change)="setKind($any($event.target).value)"
-          class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none focus:border-white/25 disabled:opacity-60"
+          class="field disabled:opacity-60"
         >
           @for (k of kinds; track k.value) {
-            <option [value]="k.value" class="bg-[#232323]">
+            <option [value]="k.value" class="bg-surface">
               {{ k.label }}
             </option>
           }
@@ -132,7 +132,7 @@
 
       @if (kind() === "databricks") {
         <label class="flex flex-col gap-1">
-          <span class="text-[11px] font-medium text-zinc-500"
+          <span class="field-label"
             >Server hostname</span
           >
           <input
@@ -140,11 +140,11 @@
             placeholder="adb-1234567890.1.azuredatabricks.net"
             [value]="databricks().host"
             (input)="patchDatabricks({ host: $any($event.target).value })"
-            class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+            class="field"
           />
         </label>
         <label class="flex flex-col gap-1">
-          <span class="text-[11px] font-medium text-zinc-500"
+          <span class="field-label"
             >Personal access token</span
           >
           <input
@@ -152,11 +152,11 @@
             placeholder="dapi…"
             [value]="databricks().token"
             (input)="patchDatabricks({ token: $any($event.target).value })"
-            class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+            class="field"
           />
         </label>
         <label class="flex flex-col gap-1">
-          <span class="text-[11px] font-medium text-zinc-500"
+          <span class="field-label"
             >SQL warehouse ID</span
           >
           <input
@@ -166,99 +166,99 @@
             (input)="
               patchDatabricks({ warehouseId: $any($event.target).value })
             "
-            class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+            class="field"
           />
         </label>
       } @else if (kind() === "postgres") {
         <div class="grid grid-cols-3 gap-3">
           <label class="col-span-2 flex flex-col gap-1">
-            <span class="text-[11px] font-medium text-zinc-500">Host</span>
+            <span class="field-label">Host</span>
             <input
               type="text"
               placeholder="db.example.com"
               [value]="postgres().host"
               (input)="patchPostgres({ host: $any($event.target).value })"
-              class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+              class="field"
             />
           </label>
           <label class="flex flex-col gap-1">
-            <span class="text-[11px] font-medium text-zinc-500">Port</span>
+            <span class="field-label">Port</span>
             <input
               type="number"
               placeholder="5432"
               [value]="postgres().port"
               (input)="patchPostgres({ port: +$any($event.target).value })"
-              class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+              class="field"
             />
           </label>
         </div>
         <label class="flex flex-col gap-1">
-          <span class="text-[11px] font-medium text-zinc-500">Database</span>
+          <span class="field-label">Database</span>
           <input
             type="text"
             placeholder="analytics"
             [value]="postgres().database"
             (input)="patchPostgres({ database: $any($event.target).value })"
-            class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+            class="field"
           />
         </label>
         <div class="grid grid-cols-2 gap-3">
           <label class="flex flex-col gap-1">
-            <span class="text-[11px] font-medium text-zinc-500">User</span>
+            <span class="field-label">User</span>
             <input
               type="text"
               placeholder="readonly_user"
               [value]="postgres().user"
               (input)="patchPostgres({ user: $any($event.target).value })"
-              class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+              class="field"
             />
           </label>
           <label class="flex flex-col gap-1">
-            <span class="text-[11px] font-medium text-zinc-500">Password</span>
+            <span class="field-label">Password</span>
             <input
               type="password"
               placeholder="••••••••"
               [value]="postgres().password"
               (input)="patchPostgres({ password: $any($event.target).value })"
-              class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+              class="field"
             />
           </label>
         </div>
-        <label class="flex items-center gap-2 text-[12px] text-zinc-400">
+        <label class="flex items-center gap-2 text-[12px] text-fg-muted">
           <input
             type="checkbox"
             [checked]="postgres().ssl"
             (change)="patchPostgres({ ssl: $any($event.target).checked })"
-            class="h-3.5 w-3.5 accent-emerald-500"
+            class="h-3.5 w-3.5 accent-primary"
           />
           <span>Use SSL</span>
         </label>
       } @else {
         <label class="flex flex-col gap-1">
-          <span class="text-[11px] font-medium text-zinc-500">Base URL</span>
+          <span class="field-label">Base URL</span>
           <input
             type="text"
             placeholder="https://api.example.com"
             [value]="rest().baseUrl"
             (input)="patchRest({ baseUrl: $any($event.target).value })"
-            class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+            class="field"
           />
         </label>
 
         <label class="flex flex-col gap-1">
-          <span class="text-[11px] font-medium text-zinc-500"
+          <span class="field-label"
             >Authentication</span
           >
           <select
             [value]="rest().auth.type"
             (change)="patchRestAuth({ type: $any($event.target).value })"
-            class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none focus:border-white/25"
+            class="field"
           >
             @for (a of authTypes; track a.value) {
               <option
                 [value]="a.value"
                 [selected]="a.value === rest().auth.type"
-                class="bg-[#232323]"
+                class="bg-surface"
               >
                 {{ a.label }}
               </option>
@@ -268,20 +268,20 @@
         @switch (rest().auth.type) {
           @case ("bearer") {
             <label class="flex flex-col gap-1">
-              <span class="text-[11px] font-medium text-zinc-500">Token</span>
+              <span class="field-label">Token</span>
               <input
                 type="password"
                 placeholder="Bearer token"
                 [value]="rest().auth.token ?? ''"
                 (input)="patchRestAuth({ token: $any($event.target).value })"
-                class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                class="field"
               />
             </label>
           }
           @case ("api-key-header") {
             <div class="grid grid-cols-2 gap-3">
               <label class="flex flex-col gap-1">
-                <span class="text-[11px] font-medium text-zinc-500"
+                <span class="field-label"
                   >Header name</span
                 >
                 <input
@@ -291,17 +291,17 @@
                   (input)="
                     patchRestAuth({ headerName: $any($event.target).value })
                   "
-                  class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                  class="field"
                 />
               </label>
               <label class="flex flex-col gap-1">
-                <span class="text-[11px] font-medium text-zinc-500">Key</span>
+                <span class="field-label">Key</span>
                 <input
                   type="password"
                   placeholder="API key"
                   [value]="rest().auth.token ?? ''"
                   (input)="patchRestAuth({ token: $any($event.target).value })"
-                  class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                  class="field"
                 />
               </label>
             </div>
@@ -309,7 +309,7 @@
           @case ("basic") {
             <div class="grid grid-cols-2 gap-3">
               <label class="flex flex-col gap-1">
-                <span class="text-[11px] font-medium text-zinc-500"
+                <span class="field-label"
                   >Username</span
                 >
                 <input
@@ -318,11 +318,11 @@
                   (input)="
                     patchRestAuth({ username: $any($event.target).value })
                   "
-                  class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                  class="field"
                 />
               </label>
               <label class="flex flex-col gap-1">
-                <span class="text-[11px] font-medium text-zinc-500"
+                <span class="field-label"
                   >Password</span
                 >
                 <input
@@ -332,7 +332,7 @@
                   (input)="
                     patchRestAuth({ password: $any($event.target).value })
                   "
-                  class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                  class="field"
                 />
               </label>
             </div>
@@ -341,11 +341,11 @@
 
         <div class="flex flex-col gap-2">
           <div class="flex items-center justify-between">
-            <span class="text-[11px] font-medium text-zinc-500">Endpoints</span>
+            <span class="field-label">Endpoints</span>
             <button
               type="button"
               (click)="addEndpoint()"
-              class="flex items-center gap-1 rounded px-2 py-1 text-[12px] text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
+              class="btn btn-ghost"
             >
               <lucide-angular [img]="Plus" [size]="12" />
               <span>Add endpoint</span>
@@ -361,14 +361,14 @@
               [value]="specUrl()"
               (input)="specUrl.set($any($event.target).value)"
               (keydown.enter)="discover()"
-              class="min-w-0 flex-1 rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+              class="field min-w-0 flex-1"
             />
             <button
               type="button"
               (click)="discover()"
               [disabled]="!canDiscover()"
               title="Read endpoints from the API's OpenAPI / Swagger spec"
-              class="flex shrink-0 items-center gap-1.5 rounded-md bg-white/10 px-3 py-1.5 text-[13px] font-medium text-zinc-200 hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50"
+              class="btn btn-secondary shrink-0"
             >
               @if (discovering()) {
                 <lucide-angular
@@ -386,10 +386,10 @@
 
           @if (discovery(); as review) {
             <div
-              class="flex flex-col gap-2 rounded-lg border border-white/10 bg-white/[0.02] p-3"
+              class="flex flex-col gap-2 rounded-lg border border-border bg-surface-muted p-3"
             >
               <div class="flex items-center justify-between gap-3">
-                <span class="min-w-0 truncate text-[12px] text-zinc-300">
+                <span class="min-w-0 truncate text-[12px] text-fg">
                   {{ review.endpoints.length }}
                   {{ review.endpoints.length === 1 ? "endpoint" : "endpoints" }}
                   found{{ review.title ? " in " + review.title : "" }}
@@ -398,15 +398,15 @@
                   <button
                     type="button"
                     (click)="selectAllDiscovered()"
-                    class="text-zinc-400 hover:text-zinc-200"
+                    class="text-fg-muted hover:text-fg"
                   >
                     Select all
                   </button>
-                  <span class="text-zinc-700">·</span>
+                  <span class="text-fg-muted">·</span>
                   <button
                     type="button"
                     (click)="selectNoneDiscovered()"
-                    class="text-zinc-400 hover:text-zinc-200"
+                    class="text-fg-muted hover:text-fg"
                   >
                     Select none
                   </button>
@@ -416,7 +416,7 @@
               <div class="flex max-h-72 flex-col overflow-y-auto">
                 @for (d of review.endpoints; track $index; let i = $index) {
                   <label
-                    class="flex items-start gap-2.5 rounded px-1.5 py-1.5 hover:bg-white/5"
+                    class="flex items-start gap-2.5 rounded px-1.5 py-1.5 hover:bg-surface-muted"
                     [class.opacity-50]="isDiscoveredAdded(d)"
                     [class.cursor-pointer]="!isDiscoveredAdded(d)"
                   >
@@ -427,17 +427,17 @@
                       "
                       [disabled]="isDiscoveredAdded(d)"
                       (change)="toggleDiscovered(i)"
-                      class="mt-0.5 h-3.5 w-3.5 shrink-0 accent-emerald-500"
+                      class="mt-0.5 h-3.5 w-3.5 shrink-0 accent-primary"
                     />
                     <span class="flex min-w-0 flex-1 flex-col gap-0.5">
                       <span class="flex items-center gap-2">
                         <span
-                          class="shrink-0 font-mono text-[12px] text-zinc-200"
+                          class="shrink-0 font-mono text-[12px] text-fg"
                           >{{ d.endpoint.name }}</span
                         >
                         @if (d.endpoint.group) {
                           <span
-                            class="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-zinc-400"
+                            class="chip chip-neutral shrink-0 text-[10px] px-1.5 py-0.5"
                             >{{ d.endpoint.group }}</span
                           >
                         }
@@ -446,33 +446,33 @@
                           d.endpoint.pagination?.style !== "none"
                         ) {
                           <span
-                            class="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-zinc-400"
+                            class="chip chip-neutral shrink-0 text-[10px] px-1.5 py-0.5"
                             >{{ d.endpoint.pagination?.style }}</span
                           >
                         }
                         @if (d.fields !== undefined) {
-                          <span class="shrink-0 text-[10px] text-zinc-500"
+                          <span class="shrink-0 text-[10px] text-fg-muted"
                             >{{ d.fields }}
                             {{ d.fields === 1 ? "field" : "fields" }}</span
                           >
                         }
                         @if (isDiscoveredAdded(d)) {
-                          <span class="shrink-0 text-[10px] text-zinc-500"
+                          <span class="shrink-0 text-[10px] text-fg-muted"
                             >already added</span
                           >
                         } @else if (!d.listResponse) {
-                          <span class="shrink-0 text-[10px] text-amber-500/80"
+                          <span class="shrink-0 text-[10px] text-on-warning-soft"
                             >not a list</span
                           >
                         }
                       </span>
                       <span
-                        class="truncate font-mono text-[11px] text-zinc-500"
+                        class="truncate font-mono text-[11px] text-fg-muted"
                         [title]="d.method + ' ' + d.endpoint.path"
                         >{{ d.endpoint.path }}</span
                       >
                       @if (d.summary) {
-                        <span class="truncate text-[11px] text-zinc-500">{{
+                        <span class="truncate text-[11px] text-fg-muted">{{
                           d.summary
                         }}</span>
                       }
@@ -482,9 +482,9 @@
               </div>
 
               @if (review.skipped.length > 0) {
-                <details class="text-[11px] text-zinc-500">
+                <details class="text-[11px] text-fg-muted">
                   <summary
-                    class="cursor-pointer hover:text-zinc-300"
+                    class="cursor-pointer hover:text-fg"
                     [title]="skippedTooltip(review.skipped)"
                   >
                     {{ review.skipped.length }}
@@ -498,7 +498,7 @@
                   >
                     @for (s of review.skipped; track $index) {
                       <li class="truncate">
-                        <span class="font-mono text-zinc-400">{{
+                        <span class="font-mono text-fg-muted">{{
                           s.path
                         }}</span>
                         — {{ s.reason }}
@@ -513,7 +513,7 @@
                   type="button"
                   (click)="addDiscovered()"
                   [disabled]="discoverySelectedCount() === 0"
-                  class="rounded-md bg-zinc-200 px-3 py-1.5 text-[13px] font-medium text-zinc-900 hover:bg-white disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+                  class="btn btn-primary"
                 >
                   Add {{ discoverySelectedCount() }}
                   {{
@@ -523,7 +523,7 @@
                 <button
                   type="button"
                   (click)="closeDiscovery()"
-                  class="rounded-md px-3 py-1.5 text-[13px] text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
+                  class="btn btn-ghost"
                 >
                   Cancel
                 </button>
@@ -532,12 +532,12 @@
           }
           @for (ep of rest().endpoints; track $index; let i = $index) {
             <div
-              class="flex flex-col gap-2.5 rounded-lg border border-white/10 bg-white/[0.02] p-3"
+              class="flex flex-col gap-2.5 rounded-lg border border-border bg-surface-muted p-3"
             >
               <div class="flex items-start gap-3">
                 <div class="grid flex-1 grid-cols-3 gap-3">
                   <label class="flex flex-col gap-1">
-                    <span class="text-[11px] font-medium text-zinc-500"
+                    <span class="field-label"
                       >Name</span
                     >
                     <input
@@ -547,11 +547,11 @@
                       (input)="
                         patchEndpoint(i, { name: $any($event.target).value })
                       "
-                      class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                      class="field"
                     />
                   </label>
                   <label class="flex flex-col gap-1 col-span-2">
-                    <span class="text-[11px] font-medium text-zinc-500"
+                    <span class="field-label"
                       >Path</span
                     >
                     <input
@@ -561,7 +561,7 @@
                       (input)="
                         patchEndpoint(i, { path: $any($event.target).value })
                       "
-                      class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                      class="field"
                     />
                   </label>
                 </div>
@@ -569,14 +569,14 @@
                   type="button"
                   title="Remove endpoint"
                   (click)="removeEndpoint(i)"
-                  class="mt-5 rounded p-1.5 text-zinc-500 hover:bg-white/10 hover:text-red-400"
+                  class="btn-icon mt-5 hover:text-on-danger-soft"
                 >
                   <lucide-angular [img]="Trash2" [size]="14" />
                 </button>
               </div>
               <div class="grid grid-cols-3 gap-3">
                 <label class="flex flex-col gap-1">
-                  <span class="text-[11px] font-medium text-zinc-500"
+                  <span class="field-label"
                     >Group (optional)</span
                   >
                   <input
@@ -586,11 +586,11 @@
                     (input)="
                       patchEndpoint(i, { group: $any($event.target).value })
                     "
-                    class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                    class="field"
                   />
                 </label>
                 <label class="flex flex-col gap-1 col-span-2">
-                  <span class="text-[11px] font-medium text-zinc-500"
+                  <span class="field-label"
                     >Rows pointer (optional)</span
                   >
                   <input
@@ -602,16 +602,16 @@
                         rowsPointer: $any($event.target).value,
                       })
                     "
-                    class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                    class="field"
                   />
                 </label>
               </div>
-              <p class="-mt-1 text-[11px] text-zinc-600">
+              <p class="-mt-1 text-[11px] text-fg-muted">
                 Rows pointer: JSON pointer to the array of rows; leave empty if
                 the response is the array.
               </p>
               <label class="flex flex-col gap-1">
-                <span class="text-[11px] font-medium text-zinc-500"
+                <span class="field-label"
                   >Pagination</span
                 >
                 <select
@@ -619,13 +619,13 @@
                   (change)="
                     patchPagination(i, { style: $any($event.target).value })
                   "
-                  class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none focus:border-white/25"
+                  class="field"
                 >
                   @for (p of paginationStyles; track p.value) {
                     <option
                       [value]="p.value"
                       [selected]="p.value === (ep.pagination?.style ?? 'none')"
-                      class="bg-[#232323]"
+                      class="bg-surface"
                     >
                       {{ p.label }}
                     </option>
@@ -636,7 +636,7 @@
                 @case ("page") {
                   <div class="grid grid-cols-3 gap-3">
                     <label class="flex flex-col gap-1">
-                      <span class="text-[11px] font-medium text-zinc-500"
+                      <span class="field-label"
                         >Page param</span
                       >
                       <input
@@ -648,11 +648,11 @@
                             pageParam: $any($event.target).value,
                           })
                         "
-                        class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                        class="field"
                       />
                     </label>
                     <label class="flex flex-col gap-1">
-                      <span class="text-[11px] font-medium text-zinc-500"
+                      <span class="field-label"
                         >Size param</span
                       >
                       <input
@@ -664,11 +664,11 @@
                             sizeParam: $any($event.target).value,
                           })
                         "
-                        class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                        class="field"
                       />
                     </label>
                     <label class="flex flex-col gap-1">
-                      <span class="text-[11px] font-medium text-zinc-500"
+                      <span class="field-label"
                         >Page size</span
                       >
                       <input
@@ -680,7 +680,7 @@
                             pageSize: +$any($event.target).value || undefined,
                           })
                         "
-                        class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                        class="field"
                       />
                     </label>
                   </div>
@@ -688,7 +688,7 @@
                 @case ("offset") {
                   <div class="grid grid-cols-3 gap-3">
                     <label class="flex flex-col gap-1">
-                      <span class="text-[11px] font-medium text-zinc-500"
+                      <span class="field-label"
                         >Offset param</span
                       >
                       <input
@@ -700,11 +700,11 @@
                             offsetParam: $any($event.target).value,
                           })
                         "
-                        class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                        class="field"
                       />
                     </label>
                     <label class="flex flex-col gap-1">
-                      <span class="text-[11px] font-medium text-zinc-500"
+                      <span class="field-label"
                         >Size param</span
                       >
                       <input
@@ -716,11 +716,11 @@
                             sizeParam: $any($event.target).value,
                           })
                         "
-                        class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                        class="field"
                       />
                     </label>
                     <label class="flex flex-col gap-1">
-                      <span class="text-[11px] font-medium text-zinc-500"
+                      <span class="field-label"
                         >Page size</span
                       >
                       <input
@@ -732,7 +732,7 @@
                             pageSize: +$any($event.target).value || undefined,
                           })
                         "
-                        class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                        class="field"
                       />
                     </label>
                   </div>
@@ -740,7 +740,7 @@
                 @case ("cursor") {
                   <div class="grid grid-cols-3 gap-3">
                     <label class="flex flex-col gap-1">
-                      <span class="text-[11px] font-medium text-zinc-500"
+                      <span class="field-label"
                         >Cursor param</span
                       >
                       <input
@@ -752,11 +752,11 @@
                             cursorParam: $any($event.target).value,
                           })
                         "
-                        class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                        class="field"
                       />
                     </label>
                     <label class="flex flex-col gap-1">
-                      <span class="text-[11px] font-medium text-zinc-500"
+                      <span class="field-label"
                         >Cursor pointer</span
                       >
                       <input
@@ -768,11 +768,11 @@
                             cursorPointer: $any($event.target).value,
                           })
                         "
-                        class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                        class="field"
                       />
                     </label>
                     <label class="flex flex-col gap-1">
-                      <span class="text-[11px] font-medium text-zinc-500"
+                      <span class="field-label"
                         >Page size</span
                       >
                       <input
@@ -784,7 +784,7 @@
                             pageSize: +$any($event.target).value || undefined,
                           })
                         "
-                        class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+                        class="field"
                       />
                     </label>
                   </div>
@@ -799,7 +799,7 @@
         <button
           (click)="testConnection()"
           [disabled]="!canTest()"
-          class="flex flex-1 items-center justify-center gap-2 rounded-md bg-zinc-200 px-3 py-1.5 font-medium text-zinc-900 hover:bg-white disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+          class="btn btn-secondary flex-1"
         >
           @if (testing()) {
             <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
@@ -812,7 +812,7 @@
           (click)="save()"
           [disabled]="!testedOk() || saving() || name().trim() === ''"
           title="Test the connection successfully before saving"
-          class="flex flex-1 items-center justify-center gap-2 rounded-md bg-emerald-600 px-3 py-1.5 font-medium text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+          class="btn btn-primary flex-1"
         >
           @if (saving()) {
             <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
@@ -824,7 +824,7 @@
         <button
           type="button"
           (click)="cancel()"
-          class="rounded-md px-3 py-1.5 text-[13px] text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
+          class="btn btn-ghost"
         >
           Cancel
         </button>

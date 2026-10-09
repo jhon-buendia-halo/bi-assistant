@@ -329,14 +329,22 @@ test('deleting an agent asks first', async ({ page }) => {
   await expect(page.getByTestId(`agent-card-${claimsId}`)).toHaveCount(0);
 });
 
-test('the hub has no detectable accessibility violations', async ({ page }) => {
+test('the hub has no detectable accessibility violations in either theme', async ({
+  page,
+}) => {
   await openHub(page);
   await button(page, 'Show more (2)').click();
   await expect(cards(section(page, 'system'))).toHaveCount(5);
 
   await page.addScriptTag({ content: axe.source });
-  const results = await page.evaluate(async () => {
-    return (window as unknown as { axe: typeof axe }).axe.run(document);
-  });
-  expect(results.violations).toEqual([]);
+  for (const theme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: theme });
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+    // Let the theme's colour transitions finish before axe reads colours.
+    await page.waitForTimeout(500);
+    const results = await page.evaluate(async () => {
+      return (window as unknown as { axe: typeof axe }).axe.run(document);
+    });
+    expect(results.violations, theme).toEqual([]);
+  }
 });

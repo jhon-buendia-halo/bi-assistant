@@ -1,0 +1,87 @@
+<!doctype html>
+<!--
+  Token review page for roadmap 1.8.2 (BA-143). It renders the mockup's
+  "Publish requests" layout with the real theme tokens, so the light and the
+  derived navy dark palettes can be judged in context before the shell and
+  screens are restyled (1.8.3–1.8.7). Open with ?theme=light or ?theme=dark.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Theme token preview</title>
+  <link rel="stylesheet" href="../../frontend/src/styles/tokens.css">
+  <script>
+    document.documentElement.dataset.theme =
+      new URLSearchParams(location.search).get("theme") === "dark" ? "dark" : "light";
+  </script>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 14px/1.45 "Noto Sans", system-ui, sans-serif; color: var(--qti-fg); }
+    .frame { min-height: 100vh; padding: 16px; display: flex; gap: 16px; background: var(--frame-gradient); }
+    .rail { width: 76px; border-radius: 20px; background: var(--qti-rail); display: flex; flex-direction: column; align-items: center; gap: 22px; padding: 22px 0; }
+    .rail i { width: 22px; height: 22px; border-radius: 6px; background: var(--qti-accent); opacity: .85; display: block; }
+    .rail .on { background: var(--qti-surface-selected); padding: 12px; border-radius: 12px; }
+    .rail .avatar { margin-top: auto; width: 36px; height: 36px; border-radius: 50%; background: var(--qti-primary); color: var(--qti-on-primary); display: grid; place-items: center; font-weight: 600; font-size: 13px; }
+    .main { flex: 1; border-radius: 20px; background: var(--qti-canvas); padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+    .banner { border-radius: 16px; background: var(--banner-gradient); color: #fff; padding: 40px 36px; font-size: 40px; font-weight: 600; }
+    .page { border-radius: 16px; background: var(--qti-surface); border: 1px solid var(--qti-border); box-shadow: var(--qti-shadow-card); flex: 1; }
+    .head { display: flex; align-items: center; justify-content: space-between; padding: 18px 28px; border-bottom: 1px solid var(--qti-border); }
+    .head h1 { margin: 0; font-size: 24px; font-weight: 400; color: var(--qti-fg-strong); }
+    .btn { border-radius: 999px; padding: 8px 18px; font: inherit; font-weight: 500; border: 1px solid transparent; }
+    .outline { background: var(--qti-surface); border-color: var(--qti-border-strong); color: var(--qti-primary); }
+    .soft { background: var(--qti-primary-soft); color: var(--qti-on-primary-soft); }
+    .primary { background: var(--qti-primary); color: var(--qti-on-primary); }
+    .body { display: grid; grid-template-columns: 340px 1fr; gap: 24px; padding: 24px 28px; }
+    .pills { display: flex; gap: 8px; margin-bottom: 14px; }
+    .pill { border-radius: 999px; padding: 6px 14px; border: 1px solid var(--qti-border-strong); color: var(--qti-primary); }
+    .pill.on { background: var(--qti-surface-selected); border-color: var(--qti-border-selected); }
+    .row { border: 1px solid var(--qti-border); border-radius: 10px; padding: 12px 16px; margin-bottom: 10px; }
+    .row.on { background: var(--qti-surface-selected); border-color: var(--qti-border-selected); }
+    .row b { color: var(--qti-fg-strong); font-weight: 600; }
+    .row div { display: flex; justify-content: space-between; align-items: center; }
+    .muted { color: var(--qti-fg-muted); }
+    .chip { border-radius: 999px; padding: 2px 10px; font-size: 12px; }
+    .warn { background: var(--qti-warning-soft); color: var(--qti-on-warning-soft); }
+    .info { background: var(--qti-info-soft); color: var(--qti-on-info-soft); }
+    .neutral { background: var(--qti-neutral-soft); color: var(--qti-on-neutral-soft); }
+    .ok { background: var(--qti-success-soft); color: var(--qti-on-success-soft); }
+    .bad { background: var(--qti-danger-soft); color: var(--qti-on-danger-soft); }
+    .detail { border: 1px solid var(--qti-border); border-radius: 12px; padding: 20px; }
+    .detail h2 { margin: 0; font-size: 22px; font-weight: 400; color: var(--qti-fg-strong); }
+    .facts { margin-top: 14px; background: var(--qti-surface-muted); border: 1px solid var(--qti-border-strong); border-radius: 10px; padding: 12px 16px; display: grid; grid-template-columns: 160px 1fr; gap: 6px; }
+    .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+    .card { border: 1px solid var(--qti-border); border-radius: 10px; padding: 14px; }
+    .card h3 { margin: 0 0 10px; font-size: 14px; color: var(--qti-fg-strong); }
+    .actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <nav class="rail"><i></i><i></i><i></i><span class="on"><i></i></span><span class="avatar">JB</span></nav>
+    <div class="main">
+      <div class="banner">Agentic Hub</div>
+      <section class="page">
+        <div class="head"><h1>Publish requests</h1><button class="btn outline">Export</button></div>
+        <div class="body">
+          <div>
+            <div class="pills"><span class="pill on">Pending review · 2</span><span class="pill">Pending update · 1</span></div>
+            <div class="row on"><div><b>Policies Assistant</b><span class="chip warn">Pending review</span></div><span class="muted">v3 · Claims Analytics · whole organization</span></div>
+            <div class="row"><div><b>Cost Explainer</b><span class="chip warn">Pending review</span></div><span class="muted">v1 · Platform · whole organization</span></div>
+            <div class="row"><div><b>SLA Watcher</b><span class="chip info">Pending update</span></div><span class="muted">v2 update · Operations</span></div>
+          </div>
+          <div class="detail">
+            <div style="display:flex;justify-content:space-between"><h2>Policies Assistant</h2><span class="chip warn">Pending review</span></div>
+            <span class="muted">Version 3 · requested by Claims Analytics · 2 days ago</span>
+            <div class="facts"><span class="muted">Owner</span><span>Claims Analytics team</span><span class="muted">Evaluation</span><span>88% pass · 42 cases</span></div>
+            <div class="cards">
+              <div class="card"><h3>Data sources</h3><div class="row"><div>Policies volume <span class="chip warn">Restricted</span></div></div></div>
+              <div class="card"><h3>Tools</h3><div class="row"><div>Search policies <span class="chip neutral">Read</span></div></div><div class="row"><div>Run checks <span class="chip ok">Passed</span></div></div><div class="row"><div>Delete ticket <span class="chip bad">Blocked</span></div></div></div>
+            </div>
+            <div class="actions"><button class="btn outline">Reject</button><button class="btn soft">Request changes</button><button class="btn primary">Approve and publish</button></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+</body>
+</html>

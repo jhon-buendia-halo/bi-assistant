@@ -51,7 +51,7 @@ Promotion from verified queries
 
 ## UI
 
-Lives at the bottom of the dataset editor ("New dataset" / "Edit dataset", opened from the **Datasets** sidebar item), under a divider below the catalog browser (see [../../system/ui.md](../../system/ui.md)). The panel re-reads whenever the set of included entities changes.
+Lives at the bottom of the dataset editor ("New dataset" / "Edit dataset", opened from the **Datasets** rail item), under a divider below the catalog browser (see [../../system/ui.md](../../system/ui.md)). The panel re-reads whenever the set of included entities changes.
 
 - Header "Metrics" with the text "Curated definitions for the entities included above. Answers reuse these expressions verbatim instead of re-deriving the number each turn." and a "New metric" button (hidden while the form is open).
 - States: loading ("Loading metrics…"), error, empty (two variants above), populated.

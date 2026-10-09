@@ -71,7 +71,7 @@ Exporting logs (active setting on)
 
 ## UI
 
-Settings sidebar, **Developer** row, after Testing Data ([../app-shell/spec.md](../app-shell/spec.md), [../../system/ui.md](../../system/ui.md) §4.12). The form, top to bottom:
+Settings area, **Developer** row, after Testing Data ([../app-shell/spec.md](../app-shell/spec.md), [../../system/ui.md](../../system/ui.md) §4.12). The form, top to bottom:
 - Heading "Developer", subtitle "Tools for developing this app. Everything here is off by default."
 - A switch "Developer observability" with the description "Export agent traces to Arize Phoenix and backend traces, metrics and logs to an OpenTelemetry endpoint. Traces are still kept in the local store."
 - **Phoenix endpoint** and **OTLP endpoint** text fields, each with a **Test** button ("Testing…" while it runs) and its inline result.

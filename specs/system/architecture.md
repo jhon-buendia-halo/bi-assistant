@@ -311,6 +311,24 @@ flowchart LR
 - **Decision:** `create_visual` / `update_visual` tools drive a designer sub-agent; each edit writes a new `v<N>` directory; revert moves a pointer; a fixed, transcript-derived frame provides readable context.
 - **Consequences:** Readability does not depend on designer-model output; storage grows per version.
 
+#### ADR-0007 — Themeable renderer: semantic design tokens, a bundled webfont and a System / Light / Dark preference
+- **Status:** Accepted
+- **Date:** 2026-10-09
+- **Context:**
+  - The renderer is dark-only. Its colours are hardcoded per component as Tailwind arbitrary values (`bg-[#232323]`, `zinc-*`), and it has no theme file and no CSS variables ([ui.md](ui.md) §6).
+  - The Agentic Hub look and feel ([BA-141](https://halo-powered.atlassian.net/browse/BA-141)) needs a light theme and a navy dark theme derived from it, switchable at runtime. With hardcoded values, each theme would need a second class on every element.
+  - The renderer loads over `file://` in the desktop app and must work offline, so it can't fetch fonts from a CDN.
+- **Decision:**
+  - **Semantic tokens.** Colours, radii and shadows become CSS custom properties named by role (surface, card, text, border, primary, status), not by value. A `data-theme="light" | "dark"` attribute on the root element selects one of two token sets. The tokens are mapped into Tailwind v4 through `@theme`, so components use role utilities (`bg-surface`, `text-muted`), never hex values or palette shades.
+  - **Preference.** System (the default), Light or Dark, stored on the renderer like the right-panel width. System follows `prefers-color-scheme` and updates live when the OS changes. The resolved theme is set before first paint, so there is no flash of the wrong theme. The Electron window background matches the resolved theme.
+  - **Webfont.** One open-licence sans-serif family is bundled with the renderer as local assets and loaded with `@font-face`. The system font stack stays as the fallback.
+- **Consequences:**
+  - Every component that uses hardcoded colours must move to tokens. The BA-141 stories do this screen by screen, and finished screens must have no arbitrary colour values left.
+  - Both themes have to pass the axe scan, and visual baselines are captured per theme.
+  - The renderer bundle grows by the font files.
+  - The theme preference is a new persisted renderer key that [data-model.md](data-model.md) must record.
+  - The theme is per renderer origin, so the desktop app and the npm CLI's browser tab can hold different preferences.
+
 #### ADR-0008 — User-built agents are stored configurations of the assistant
 - **Status:** Accepted
 - **Date:** 2026-10-09

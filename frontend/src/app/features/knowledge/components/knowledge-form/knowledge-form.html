@@ -1,15 +1,15 @@
 <div
-  class="flex flex-col gap-3 rounded-xl border border-white/10 bg-[#232323] p-4"
+  class="flex flex-col gap-3 rounded-xl border border-border bg-surface-muted p-4"
 >
   <div class="flex items-center justify-between">
-    <p class="text-[13px] font-medium text-zinc-200">
+    <p class="text-[13px] font-medium text-fg">
       {{ snippet() ? "Edit snippet" : "New snippet" }}
     </p>
     <button
       type="button"
       title="Close"
       (click)="cancel()"
-      class="rounded p-1 text-zinc-500 hover:bg-white/10 hover:text-zinc-200"
+      class="btn-icon"
     >
       <lucide-angular [img]="X" [size]="14" />
     </button>
@@ -17,37 +17,37 @@
 
   <div class="grid grid-cols-2 gap-3">
     <label class="flex flex-col gap-1">
-      <span class="text-[11px] font-medium text-zinc-500">Kind</span>
+      <span class="field-label">Kind</span>
       <select
         [value]="kind()"
         [title]="kindDescription(kind())"
         (change)="kind.set($any($event.target).value)"
-        class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none focus:border-white/25"
+        class="field"
       >
         @for (option of kinds; track option.value) {
           <option
             [value]="option.value"
             [title]="option.description"
-            class="bg-[#232323]"
+            class="bg-surface"
           >
             {{ option.label }}
           </option>
         }
       </select>
-      <span class="text-[11px] leading-snug text-zinc-500">{{
+      <span class="text-[11px] leading-snug text-fg-muted">{{
         kindDescription(kind())
       }}</span>
     </label>
     <label class="flex flex-col gap-1">
-      <span class="text-[11px] font-medium text-zinc-500">Scope</span>
+      <span class="field-label">Scope</span>
       <select
         [value]="datasetScope()"
         (change)="datasetScope.set($any($event.target).value)"
-        class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none focus:border-white/25"
+        class="field"
       >
-        <option value="" class="bg-[#232323]">Global</option>
+        <option value="" class="bg-surface">Global</option>
         @for (dataset of datasets(); track dataset.name) {
-          <option [value]="dataset.name" class="bg-[#232323]">
+          <option [value]="dataset.name" class="bg-surface">
             {{ dataset.name }}
           </option>
         }
@@ -56,30 +56,30 @@
   </div>
 
   <label class="flex flex-col gap-1">
-    <span class="text-[11px] font-medium text-zinc-500">Title</span>
+    <span class="field-label">Title</span>
     <input
       type="text"
       placeholder="Always exclude test accounts"
       [value]="title()"
       (input)="title.set($any($event.target).value)"
-      class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+      class="field"
     />
   </label>
 
   <label class="flex flex-col gap-1">
-    <span class="text-[11px] font-medium text-zinc-500">Body</span>
+    <span class="field-label">Body</span>
     <textarea
       rows="4"
       placeholder="Plain-text instruction, definition or default filter the assistant should apply."
       [value]="body()"
       (input)="body.set($any($event.target).value)"
-      class="resize-y rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+      class="field resize-y"
     ></textarea>
   </label>
 
   @if (kind() === "term") {
     <label class="flex flex-col gap-1">
-      <span class="text-[11px] font-medium text-zinc-500"
+      <span class="field-label"
         >Synonyms (comma separated)</span
       >
       <input
@@ -87,13 +87,13 @@
         placeholder="churn, attrition, cancellation"
         [value]="synonyms()"
         (input)="synonyms.set($any($event.target).value)"
-        class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+        class="field"
       />
     </label>
   }
 
   <label class="flex flex-col gap-1">
-    <span class="text-[11px] font-medium text-zinc-500"
+    <span class="field-label"
       >Entities (optional, comma separated)</span
     >
     <input
@@ -101,7 +101,7 @@
       placeholder="claims, members"
       [value]="entities()"
       (input)="entities.set($any($event.target).value)"
-      class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+      class="field"
     />
   </label>
 
@@ -109,7 +109,7 @@
     <button
       type="button"
       (click)="cancel()"
-      class="flex flex-1 items-center justify-center rounded-md border border-white/10 px-3 py-1.5 font-medium text-zinc-300 hover:bg-white/5"
+      class="btn btn-outline flex-1"
     >
       Cancel
     </button>
@@ -119,7 +119,7 @@
       (click)="save()"
       [disabled]="!canSave()"
       title="Title and body are required"
-      class="flex flex-1 items-center justify-center gap-2 rounded-md bg-emerald-600 px-3 py-1.5 font-medium text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+      class="btn btn-primary flex-1"
     >
       @if (saving()) {
         <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />

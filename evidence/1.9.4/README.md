@@ -15,4 +15,11 @@ Tested on the web target (BA-156). **Desktop not run.**
 | [hub-no-match.png](hub-no-match.png) | The no-match state for a search. |
 | [agent-detail-draft-actions.png](agent-detail-draft-actions.png) | A draft agent's detail view with Publish and Delete. |
 
+**Merge of `main` (v0.25.0, BA-141) into the branch, 2026-10-09.**
+
+| Artifact | Shows |
+|---|---|
+| [merge-main-e2e-results.txt](merge-main-e2e-results.txt) | First full web run after the merge: 53 passed and 1 failed (axe: the dark active filter pill at 4.34:1). Full run after the fix: 54 passed, 2 skipped (desktop only, not run). |
+| [merge-main-checks.txt](merge-main-checks.txt) | `check-specs.py`, backend build, Jest and eslint, frontend build and unit tests after the merge. |
+
 The delete confirmation uses the native dialog, so there is no screenshot of it. The E2E test asserts its text.

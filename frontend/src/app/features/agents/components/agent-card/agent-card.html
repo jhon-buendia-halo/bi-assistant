@@ -1,7 +1,7 @@
 @let a = agent();
 <div
   [attr.data-testid]="'agent-card-' + a.key"
-  class="relative flex h-full rounded-xl border border-white/10 bg-[#232323] hover:border-white/15 has-[.agent-open:focus-visible]:outline has-[.agent-open:focus-visible]:outline-1 has-[.agent-open:focus-visible]:outline-white/25"
+  class="card relative flex h-full hover:border-border-strong has-[.agent-open:focus-visible]:outline-2 has-[.agent-open:focus-visible]:outline-offset-2 has-[.agent-open:focus-visible]:outline-focus"
 >
   <button
     type="button"
@@ -12,40 +12,35 @@
     <!-- The tile row also holds the pin toggle (absolutely placed), so the
          name gets the card's full width even three cards to a row. -->
     <span
-      class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/5 text-zinc-400"
+      class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-on-primary-soft"
     >
       <lucide-angular [img]="Sparkles" [size]="15" />
     </span>
-    <span class="truncate text-[14px] font-medium text-zinc-200">{{
+    <span class="truncate text-[14px] font-medium text-fg-strong">{{
       a.name
     }}</span>
     @if (a.description) {
-      <span class="line-clamp-2 text-[12px] leading-relaxed text-zinc-400">{{
+      <span class="line-clamp-2 text-[12px] leading-relaxed text-fg-muted">{{
         a.description
       }}</span>
     }
     <span class="mt-auto flex flex-wrap items-center gap-2 pt-1">
-      <span class="text-[11px] text-zinc-400">Owner: {{ owner() }}</span>
+      <span class="text-[12px] text-fg-muted">Owner: {{ owner() }}</span>
       @if (isUser()) {
         <span
           [attr.data-testid]="'agent-status-' + a.key"
-          class="rounded-full px-2 py-0.5 text-[10px] font-medium"
-          [class.bg-emerald-500/10]="a.status === 'live'"
-          [class.text-emerald-400]="a.status === 'live'"
-          [class.bg-white/5]="a.status !== 'live'"
-          [class.text-zinc-400]="a.status !== 'live'"
+          class="chip"
+          [class.chip-success]="a.status === 'live'"
+          [class.chip-neutral]="a.status !== 'live'"
           >{{ a.status === "live" ? "Live" : "Draft" }}</span
         >
         @if (a.hasUnpublishedChanges) {
-          <span
-            class="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-300"
-            >Unpublished changes</span
-          >
+          <span class="chip chip-warning">Unpublished changes</span>
         }
       }
     </span>
     @if (missing()) {
-      <span class="flex items-center gap-1.5 text-[11px] text-amber-400">
+      <span class="chip chip-warning w-fit whitespace-normal">
         <lucide-angular [img]="TriangleAlert" [size]="12" class="shrink-0" />
         <span>Missing dataset: {{ missing() }}</span>
       </span>
@@ -57,11 +52,8 @@
     (click)="togglePin.emit()"
     [attr.aria-pressed]="!!a.pinned"
     [attr.aria-label]="(a.pinned ? 'Unpin ' : 'Pin ') + a.name"
-    class="group/pin absolute top-[22px] right-3 flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px]"
-    [class.bg-white/10]="a.pinned"
-    [class.text-zinc-200]="a.pinned"
-    [class.text-zinc-400]="!a.pinned"
-    [class.hover:text-zinc-200]="!a.pinned"
+    class="group/pin absolute top-[22px] right-3 flex items-center gap-1 rounded-full px-2 py-0.5 text-[12px] font-medium text-primary hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-focus"
+    [class.bg-surface-selected]="a.pinned"
   >
     @if (a.pinned) {
       <lucide-angular
