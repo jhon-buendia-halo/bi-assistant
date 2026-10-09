@@ -20,7 +20,7 @@ Layout and navigation
 - R2. On launch the sidebar SHALL be expanded, the details panel SHALL be expanded and the main view SHALL be home (an empty main area). Collapse state of the sidebar and of the details panel SHALL NOT be remembered between launches.
 - R3. The primary sidebar SHALL offer, under "Workspace navigation": **Datasets**, **Agents** and **Knowledge**; and under "Sessions navigation": a **Sessions** heading with a **New conversation** (plus) button, followed by one row per existing session. Selecting a navigation item shows that main view and marks the item active; selecting the already-active item SHALL return to home.
 - R4. The primary sidebar footer SHALL offer two icon buttons: **Open system logs** (tooltip "System logs and diagnostics") and **Settings**. The system-logs button SHALL show a red badge with the number of error and warning entries currently retained when that number is above zero, capped at "99+".
-- R5. Choosing Settings SHALL replace the primary sidebar with the Settings sidebar. It SHALL have a **Back** button that returns to the primary sidebar, and four sections: **Datasource Configuration**, **LLM Configuration**, **Testing Data** and **Developer** ([../developer-settings/spec.md](../developer-settings/spec.md)). Choosing a section SHALL show it in the main area and mark it active; choosing the active section again SHALL deselect it.
+- R5. Choosing Settings SHALL replace the primary sidebar with the Settings sidebar. It SHALL have a **Back** button that returns to the primary sidebar, and five sections: **Datasource Configuration**, **LLM Configuration**, **Testing Data**, **Developer** ([../developer-settings/spec.md](../developer-settings/spec.md)) and **Appearance** (R39–R45). Choosing a section SHALL show it in the main area and mark it active; choosing the active section again SHALL deselect it.
 - R6. The system SHALL provide a **Collapse sidebar** control on the primary sidebar. When collapsed, the sidebar SHALL disappear, and the top bar SHALL show an **Expand sidebar** control followed by the app logo. The Settings sidebar SHALL NOT offer a collapse control.
 - R7. The main area SHALL contain exactly one level-one heading, visually hidden, reading "Questions to Insights".
 - R8. The sidebar and details panel SHALL keep a fixed minimum usable width for the main area (see R12) so the main content is never squeezed to nothing.
@@ -57,7 +57,16 @@ Toasts
 App identity and version
 - R32. The Settings sidebar footer SHALL show the build identity: the text "Halo BI Assistant" followed by `v` and the shipped version, for example "Halo BI Assistant v0.20.3". The version SHALL be the same number the installer and release tag carry.
 - R33. The window title and the operating-system app name SHALL be "Halo BI Assistant".
-- R34. The desktop window SHALL open at 1440 × 900, SHALL NOT shrink below 960 × 600, SHALL use a dark background (`#1c1c1c`) before the page paints, and on macOS SHALL use an inset title bar so the sidebar header clears the window controls.
+- R34. The desktop window SHALL open at 1440 × 900, SHALL NOT shrink below 960 × 600, SHALL use the canvas colour of the operating system's theme as its background until the page reports its resolved theme (R44), and on macOS SHALL use an inset title bar so the sidebar header clears the window controls.
+
+Appearance
+- R39. The Appearance section SHALL offer a single choice labelled **Theme** with three options: **System**, **Light** and **Dark**. Exactly one is selected. The default, when nothing has been chosen, is System.
+- R40. Choosing an option SHALL apply it at once, without a reload, and SHALL remember it for the next launch.
+- R41. The **resolved theme** is Light or Dark: the chosen option, or for System the operating system's current light/dark setting. While System is chosen, a change of the operating-system setting SHALL restyle the open app without a reload.
+- R42. The resolved theme SHALL be applied before the page first paints, so the app never shows a frame in the other theme on launch.
+- R43. The remembered choice SHALL be stored in browser-local storage under the key `questions-to-insights:theme` as `system`, `light` or `dark`. A missing or unknown value SHALL mean System. If the storage cannot be read or written, the choice SHALL still apply for the current run.
+- R44. In the desktop app, the window's own background (shown while resizing and before paint) SHALL follow the resolved theme.
+- R45. Both themes SHALL produce zero violations in the automated accessibility scan (R35), and text colours SHALL meet WCAG AA contrast (4.5:1) against the surfaces they are used on.
 
 Accessibility and visual stability
 - R35. The application shell, in its initial state, SHALL produce zero violations when scanned by an automated accessibility engine (axe-core, all default rules).
@@ -74,13 +83,15 @@ Accessibility and visual stability
 - While the status is `restarting` or `down`, calls to the backend fail; each surfaces as its own error toast ("Backend unreachable" unless the backend provided a message) and so appears in diagnostics.
 - The account row ("Demo User"), the Settings search box ("Search settings", hint "⌘ F"), the search icon on the Agents screen and the empty chat input shape on the home view are visual placeholders with no behaviour yet.
 - The `down` banner has no retry button; the instruction in it is the only remedy.
+- A stored theme of `Dark` (wrong case), `blue` or an empty string means System. With browser storage blocked, the chosen theme applies until the app closes and the next launch starts on System.
+- Until the BA-141 restyle stories land, only the page background and the Appearance section follow the theme; the other screens keep their dark colours.
 - Missing backend entry file (a broken installation): no backend starts, an error diagnostic ("Backend entry file is missing") is recorded and the window opens after the readiness deadline.
 
 ## Contracts
 
-- Desktop bridge `desktop.onBackendStatus` (status events) and the readiness probe: [../../system/api.md](../../system/api.md) (desktop IPC bridge).
+- Desktop bridge `desktop.onBackendStatus` (status events), `desktop.setWindowTheme` (R44) and the readiness probe: [../../system/api.md](../../system/api.md) (desktop IPC bridge).
 - Sessions list used by the sidebar and the readiness probe: [../../system/api.md](../../system/api.md).
-- Right-panel width key and any other browser-stored preference: [../../system/data-model.md](../../system/data-model.md) (client-side storage).
+- Right-panel width key, theme key and any other browser-stored preference: [../../system/data-model.md](../../system/data-model.md) (client-side storage).
 - Layout, tokens, panel dimensions and state visuals: [../../system/ui.md](../../system/ui.md).
 - Version and release flow: [../../system/delivery.md](../../system/delivery.md).
 
@@ -124,6 +135,40 @@ Feature: Layout and accessibility
   Scenario: Matches the stable application-shell visual baseline
     When I view the application shell
     Then it looks the same as the approved "application-shell" screenshot
+```
+
+E2E: `frontend/e2e/appearance.spec.ts` for the Feature below.
+
+```gherkin
+Feature: Appearance
+
+  Scenario: Follows the operating system theme by default
+    Given the operating system uses a light theme
+    And I have never chosen a theme
+    When I open Settings and choose "Appearance"
+    Then "System" is selected under "Theme"
+    And the app is shown in the light theme
+    When the operating system switches to a dark theme
+    Then the app is shown in the dark theme without reloading
+
+  Scenario: Forces a theme regardless of the operating system
+    Given the operating system uses a light theme
+    When I open Settings, choose "Appearance" and select "Dark"
+    Then the app is shown in the dark theme
+    When the operating system switches to a dark theme and back to light
+    Then the app is still shown in the dark theme
+    When I select "Light"
+    Then the app is shown in the light theme
+
+  Scenario: Remembers the chosen theme after a restart
+    Given I selected "Dark" under "Theme"
+    When I restart the app
+    Then the app is shown in the dark theme from its first frame
+    And "Dark" is selected under "Theme"
+
+  Scenario: Has no automatically detectable accessibility violations in either theme
+    When I open the Appearance section in the light theme and in the dark theme
+    Then an automated accessibility scan of the section finds no violations in either
 ```
 
 E2E: none yet for the Feature below.

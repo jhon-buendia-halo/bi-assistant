@@ -5,6 +5,15 @@ Running log of every meaningful change, newest first. See *Logging convention* a
 ## 2026-10-09
 
 ### Added
+- **Light and dark themes with an Appearance setting** (roadmap 1.8.2, [BA-143](https://halo-powered.atlassian.net/browse/BA-143), epic [BA-141](https://halo-powered.atlassian.net/browse/BA-141)):
+  - Settings → **Appearance** (fifth section) offers System, Light and Dark. System is the default and follows the OS live. The choice applies at once and is kept in `localStorage` under `questions-to-insights:theme`.
+  - Semantic theme tokens with a light set and an approved navy dark set, in [frontend/src/styles/tokens.css](frontend/src/styles/tokens.css), mapped into Tailwind v4 with `@theme inline` (ADR-0007). Every text pair meets WCAG AA in both themes.
+  - An inline boot script in `index.html` applies the theme before the app renders. `ThemeService` keeps it in sync. The desktop window background follows the theme through the new `desktop.setWindowTheme` / `window:theme` IPC.
+  - Noto Sans (`@fontsource/noto-sans` 5.3.0) is bundled and is now the app's font.
+  - Only the page background and the Appearance section use the tokens so far. The other screens move over in 1.8.3–1.8.7.
+  - Specs: app-shell R39–R45 and Feature "Appearance" (`frontend/e2e/appearance.spec.ts`, new), [ui.md](specs/system/ui.md) §4.16, §6.0 and §6.5, and updates to [data-model.md](specs/system/data-model.md), [api.md](specs/system/api.md), [tech-stack.md](specs/system/tech-stack.md) and [non-functional.md](specs/product/non-functional.md) N64.
+  - The E2E helper `createWorldCupDatasource` honours `WORLD_CUP_DB_PORT`, so a worktree can run the suite against its own compose stack.
+  - Evidence: [evidence/1.8.2/](evidence/1.8.2/).
 - **Agentic Hub look and feel planned** (roadmap 1.8.1, [BA-142](https://halo-powered.atlassian.net/browse/BA-142), epic [BA-141](https://halo-powered.atlassian.net/browse/BA-141)):
   - New epic spec [specs/epics/BA-141/spec.md](specs/epics/BA-141/spec.md), confirmed by the user. It plans a light theme and a navy dark theme (System by default), a gradient frame, an "Agentic Hub" banner, an icon rail, a sessions list pane and pill and chip components. Only the look changes.
   - ADR-0007 in [specs/system/architecture.md](specs/system/architecture.md): semantic design tokens mapped into Tailwind v4, a System / Light / Dark preference applied before first paint, and a bundled webfont.

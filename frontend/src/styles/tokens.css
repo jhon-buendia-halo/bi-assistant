@@ -1,0 +1,119 @@
+/*
+ * Theme tokens (specs/system/ui.md §6.0, ADR-0007).
+ * The resolved theme is set on <html data-theme="light|dark"> by the boot
+ * script in index.html and kept in sync by ThemeService. Components use the
+ * Tailwind utilities mapped below (bg-surface, text-fg-muted, …), never hex.
+ */
+
+:root,
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --qti-canvas: #f3f6fa;
+  --qti-rail: #eef2f8;
+  --qti-surface: #ffffff;
+  --qti-surface-muted: #f4f8fd;
+  --qti-surface-selected: #eaf2fe;
+  --qti-border: #dbe3ee;
+  --qti-border-strong: #b9cbe6;
+  --qti-border-selected: #2f5fbf;
+  --qti-fg: #1f2a37;
+  --qti-fg-strong: #0d2747;
+  --qti-fg-muted: #5a6b80;
+  --qti-primary: #0d3fa6;
+  --qti-primary-hover: #0a3388;
+  --qti-on-primary: #ffffff;
+  --qti-primary-soft: #e6effc;
+  --qti-on-primary-soft: #0d3fa6;
+  --qti-accent: #2b7de0;
+  --qti-focus: #2f6fe0;
+  --qti-warning-soft: #fbe5d4;
+  --qti-on-warning-soft: #92400e;
+  --qti-info-soft: #e2ebfa;
+  --qti-on-info-soft: #1d4ea8;
+  --qti-neutral-soft: #edf0f4;
+  --qti-on-neutral-soft: #374151;
+  --qti-success-soft: #dcf3e8;
+  --qti-on-success-soft: #116444;
+  --qti-danger-soft: #fde3e3;
+  --qti-on-danger-soft: #a2232a;
+
+  --qti-shadow-card: 0 1px 2px rgb(13 39 71 / 0.06);
+  --frame-gradient: linear-gradient(135deg, #0b5f8f 0%, #1d8fca 55%, #3cb7ee 100%);
+  --banner-gradient: linear-gradient(180deg, #05698f 0%, #04506f 55%, #02354a 100%);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --qti-canvas: #0b1626;
+  --qti-rail: #0d1a2c;
+  --qti-surface: #12233a;
+  --qti-surface-muted: #16294a;
+  --qti-surface-selected: #1a3357;
+  --qti-border: #24384f;
+  --qti-border-strong: #34507a;
+  --qti-border-selected: #5b8fe8;
+  --qti-fg: #d5dfec;
+  --qti-fg-strong: #eef4fc;
+  --qti-fg-muted: #93a6bf;
+  --qti-primary: #5b95ff;
+  --qti-primary-hover: #78a8ff;
+  --qti-on-primary: #061426;
+  --qti-primary-soft: #1b345a;
+  --qti-on-primary-soft: #b7d0ff;
+  --qti-accent: #6aa8ff;
+  --qti-focus: #7fb0ff;
+  --qti-warning-soft: #45290f;
+  --qti-on-warning-soft: #ffcf9e;
+  --qti-info-soft: #1a3561;
+  --qti-on-info-soft: #b3cdff;
+  --qti-neutral-soft: #243246;
+  --qti-on-neutral-soft: #c9d4e3;
+  --qti-success-soft: #123d2e;
+  --qti-on-success-soft: #8fe0bb;
+  --qti-danger-soft: #4a1c22;
+  --qti-on-danger-soft: #ffb3b8;
+
+  --qti-shadow-card: 0 1px 2px rgb(0 0 0 / 0.4);
+  --frame-gradient: linear-gradient(135deg, #031421 0%, #08304d 60%, #0c4a73 100%);
+  --banner-gradient: linear-gradient(180deg, #0b3a5c 0%, #061f33 100%);
+}
+
+@theme inline {
+  --font-sans: "Noto Sans", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, Helvetica, Arial, sans-serif;
+
+  --color-canvas: var(--qti-canvas);
+  --color-rail: var(--qti-rail);
+  --color-surface: var(--qti-surface);
+  --color-surface-muted: var(--qti-surface-muted);
+  --color-surface-selected: var(--qti-surface-selected);
+  --color-border: var(--qti-border);
+  --color-border-strong: var(--qti-border-strong);
+  --color-border-selected: var(--qti-border-selected);
+  --color-fg: var(--qti-fg);
+  --color-fg-strong: var(--qti-fg-strong);
+  --color-fg-muted: var(--qti-fg-muted);
+  --color-primary: var(--qti-primary);
+  --color-primary-hover: var(--qti-primary-hover);
+  --color-on-primary: var(--qti-on-primary);
+  --color-primary-soft: var(--qti-primary-soft);
+  --color-on-primary-soft: var(--qti-on-primary-soft);
+  --color-accent: var(--qti-accent);
+  --color-focus: var(--qti-focus);
+  --color-warning-soft: var(--qti-warning-soft);
+  --color-on-warning-soft: var(--qti-on-warning-soft);
+  --color-info-soft: var(--qti-info-soft);
+  --color-on-info-soft: var(--qti-on-info-soft);
+  --color-neutral-soft: var(--qti-neutral-soft);
+  --color-on-neutral-soft: var(--qti-on-neutral-soft);
+  --color-success-soft: var(--qti-success-soft);
+  --color-on-success-soft: var(--qti-on-success-soft);
+  --color-danger-soft: var(--qti-danger-soft);
+  --color-on-danger-soft: var(--qti-on-danger-soft);
+
+  --radius-card: 1rem;
+  --radius-frame: 1.25rem;
+  --shadow-card: var(--qti-shadow-card);
+}

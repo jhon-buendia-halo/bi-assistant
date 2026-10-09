@@ -25,6 +25,7 @@ Versions are taken from `frontend/package.json` and `backend/package.json`. A ba
 | RxJS | ~7.8.0 | HTTP and stream plumbing alongside signals. |
 | Tailwind CSS + `@tailwindcss/postcss` | 4.3.3 (both) | Styling (v4, via PostCSS). `postcss` is 8.5.28. |
 | lucide-angular | 1.0.0 | Icons. |
+| `@fontsource/noto-sans` | 5.3.0 | The bundled Noto Sans webfont (OFL-1.1), Latin subset, weights 400/500/600/700, listed in the `styles` of `angular.json` so the font files ship with the renderer ([ui.md](ui.md) §6.2). |
 | marked | 18.0.13 | Renders assistant markdown in the chat (`shared/pipes/markdown.pipe.ts`). |
 | DOMPurify | 3.4.15 | Sanitises the HTML `marked` produces before it is bound into the page. |
 | tslib | ^2.3.0 | TypeScript helpers (`importHelpers`). |
@@ -121,7 +122,7 @@ Current state versus the target above (verified against the code):
 - The app is **not routed yet**: `app.routes.ts` exports an empty `Routes` array and the shell (`app.ts`) imports each feature's components directly. When the first routed view is introduced, adopt the `pages/` + lazy `<feature>.routes.ts` convention for it.
 - Existing features: `agents`, `datasets`, `datasources`, `developer`, `knowledge`, `llm`, `sessions`, `testing-data`. They have `components/`, `services/` and (except `agents` and `testing-data`) `models/`; none has `pages/`, `store/` or a routes file.
 - The metrics UI (`metrics-panel` component, `metrics-api.service`) lives inside `features/datasets`, not in a feature of its own.
-- Populated `core/` folders: `config` (`api.config.ts`, `app-version.ts`), `backend-status`, `diagnostics`, `toast`. `core/api`, `auth`, `guards`, `interceptors` exist as empty placeholders.
+- Populated `core/` folders: `config` (`api.config.ts`, `app-version.ts`), `backend-status`, `diagnostics`, `theme` (`theme.service.ts`: the Appearance choice, the resolved theme and the `data-theme` attribute), `toast`. The theme tokens live in `src/styles/tokens.css`, imported by `src/styles.scss`; the pre-boot theme script is inline in `src/index.html`. `core/api`, `auth`, `guards`, `interceptors` exist as empty placeholders.
 - Populated `shared/` folders: `components` (`app-logo`, `backend-status-banner`, `system-logs-panel`, `toast-container`) and `pipes` (`markdown.pipe.ts`); `directives` and `utils` are empty placeholders.
 
 ### Backend: feature-based modules

@@ -10,11 +10,11 @@ Capability specs referenced below: [app-shell](../capabilities/app-shell/spec.md
 
 ### 1.1 Window
 
-- Desktop window, default 1440 x 900 px, minimum 960 x 600 px, window background `#1c1c1c` (so there is no white flash before first paint).
+- Desktop window, default 1440 x 900 px, minimum 960 x 600 px. The window background starts as the operating system theme's canvas colour (`#f3f6fa` light, `#0b1626` dark) and switches to the resolved theme's canvas colour as soon as the page reports it (app-shell R34, R44). The page itself paints in the resolved theme from its first frame (R42).
 - Native title bar is hidden with the traffic-light controls inset (macOS `hiddenInset`); the app draws its own top bar and treats it as a window-drag region. Interactive children of a drag region (buttons, inputs) opt out of dragging.
 - The window title and the HTML `<title>` are "Halo BI Assistant". The visible product wordmark is "HALO BI" (see 3.4). A visually hidden `<h1>` "Questions to Insights" is the page heading.
 - The renderer has no router; nothing is addressable by URL. All navigation is view state (1.4).
-- Dark theme only. There is no light theme and no theme switch.
+- Two themes, Light and Dark, chosen under Settings → Appearance (4.16); System, the default, follows the operating system. See 6.5. Until the BA-141 restyle stories land, only the page background and the Appearance section use the theme tokens; every other surface still uses the dark values in 6.1.
 
 ### 1.2 Regions
 
@@ -71,11 +71,12 @@ Capability specs referenced below: [app-shell](../capabilities/app-shell/spec.md
 1. Header: a **Back** button (arrow-left icon + "Back") right-aligned; returns to the primary sidebar and to whatever main view was showing.
 2. The same static account row ("Demo User").
 3. A "Search settings" field (search icon, placeholder `Search settings`, a `⌘ F` key hint). Non-functional placeholder today.
-4. `nav aria-label="Settings navigation"` with four rows (icon + label), selecting one shows its form in the main column; selecting the active one again deselects it (main column returns to the empty content area):
+4. `nav aria-label="Settings navigation"` with five rows (icon + label), selecting one shows its form in the main column; selecting the active one again deselects it (main column returns to the empty content area):
    - **Datasource Configuration** (database icon) -> 4.10
    - **LLM Configuration** (bot icon) -> 4.9
    - **Testing Data** (test-tube icon) -> 4.11
    - **Developer** (wrench icon) -> 4.12
+   - **Appearance** (sun-moon icon) -> 4.16
 5. Footer: "Halo BI Assistant" then `v<version>` (muted; `data-testid="app-version"`). The version is the shipped package version.
 
 Opening the settings sidebar does not clear the current main view; selecting a settings section takes precedence over the main view while the sidebar is in settings mode. Leaving settings (Back) restores the main view that was underneath.
@@ -96,7 +97,7 @@ The main column renders exactly one of these views, held in a single "main view"
 | `knowledge` | sidebar **Knowledge** | Knowledge list (4.8) | Entity details |
 | `conversation-new` | the "+" next to **Sessions** | New-session composer (4.7) | Entity details |
 | `session-chat` | clicking a session row, or creating a session | Session chat (4.12) | Interactive visual panel (4.13) |
-| settings section `datasources` / `llm` / `testing-data` | settings sidebar rows | the matching config form (4.9-4.11), centred column | Entity details |
+| settings section `datasources` / `llm` / `testing-data` / `developer` / `appearance` | settings sidebar rows | the matching config form (4.9-4.12, 4.16), centred column | Entity details |
 
 - Content views (everything except the chat) sit in a vertically scrolling, horizontally centred column with 32 px horizontal / 40 px vertical padding and a max width of 960 px (settings forms: 560 px for datasources and testing data, 480 px for LLM, 24 px horizontal padding).
 - Opening a session loads the datasources used by that session (for the top bar) and its most recent visual (for the right panel); deleting the open session returns to `home`.
@@ -329,6 +330,15 @@ Shows the current catalog/schema/entity selection. Empty: "Select a catalog, sch
 
 Capability: [metrics](../capabilities/metrics/spec.md). Heading "Metrics" with the text "Curated definitions for the entities included above. Answers reuse these expressions verbatim instead of re-deriving the number each turn." and a primary **New metric** button (`new-metric`; disabled with tooltip "Include at least one entity first"). Rows (`metric-<name>`): gauge tile, label, a monospace name chip, entity, the expression (monospace, one line) and "by <dimensions>"; Edit (title "Edit") and Delete (title "Delete") icon buttons. States: `Loading metrics…`; inline error; empty dashed card ("Include entities above to define metrics over them." or "No metrics yet for these entities — define one so “denial rate” always means the same thing."). "Promote a verified answer" row of pill buttons (sparkles icon, label, tooltip = the SQL) prefills a draft. Form ("New metric" / "Edit metric", Close X): **Label** (`Denial rate`), **Name** (monospace, `denial_rate`), **Entity** select (`No entities included` when empty), **Expression** textarea (monospace, placeholder `SUM(CASE WHEN status = 'denied' THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0)`), **Dimensions (comma separated)** (`month, provider, plan`), **Description** (`Share of submitted claims denied in the period.`), **Cancel** and **Create metric** / **Save changes** (`save-metric`; tooltip "Label, name, entity and expression are required").
 
+### 4.16 Appearance (settings)
+
+Capability: [app-shell](../capabilities/app-shell/spec.md) R39–R45.
+
+- Centred column, max width 560 px, like Developer. The section uses the theme tokens (6.0) for every colour.
+- Title "Appearance", subtitle "Choose how the app looks. System follows your operating system's light or dark setting."
+- A card holding one `radiogroup` labelled **Theme** with three options, each a native radio input with a visible label and an icon: **System** (`monitor`), **Light** (`sun`), **Dark** (`moon`). The options sit side by side as pill buttons (radius full, 1 px `border` token). The selected one has the `primary-soft` fill, `on-primary-soft` text and a `border-selected` outline. Keyboard: arrow keys move the selection, as for any native radio group.
+- No Save button: a choice applies and is remembered at once.
+
 ## 5. Cross-cutting behaviour
 
 ### 5.1 State that survives view changes
@@ -345,9 +355,48 @@ Every action failure surfaces as an error toast with the server's `message` (or 
 
 ## 6. Design tokens
 
-The app is dark-only and built from a small, fixed set of values. Colours are the Tailwind v4 default palette plus a handful of arbitrary greys; there is **no custom theme file** and no CSS variables beyond Tailwind's own. sRGB equivalents are given for rebuilds on other stacks.
+Two layers coexist while the BA-141 restyle is under way:
 
-### 6.1 Colour
+- **Theme tokens (6.0)** — semantic, role-named colours with a Light and a Dark value, switched by the resolved theme (6.5). New and restyled UI uses only these (ADR-0007).
+- **Legacy dark values (6.1)** — the Tailwind default palette plus a handful of arbitrary greys, hardcoded per component. They are removed screen by screen as the BA-141 stories land.
+
+### 6.0 Theme tokens
+
+Each token is a CSS custom property set on the root element per theme and exposed to Tailwind v4 as a colour utility (`bg-<token>`, `text-<token>`, `border-<token>`). Values are exact sRGB hex.
+
+| Token | Light | Dark | Used for |
+|---|---|---|---|
+| `canvas` | `#f3f6fa` | `#0b1626` | Page background, window background |
+| `rail` | `#eef2f8` | `#0d1a2c` | Navigation rail |
+| `surface` | `#ffffff` | `#12233a` | Cards, panels, forms |
+| `surface-muted` | `#f4f8fd` | `#16294a` | Summary and info boxes inside a card |
+| `surface-selected` | `#eaf2fe` | `#1a3357` | Selected list row |
+| `border` | `#dbe3ee` | `#24384f` | Card and input borders, dividers |
+| `border-strong` | `#b9cbe6` | `#34507a` | Info-box borders, outline buttons |
+| `border-selected` | `#2f5fbf` | `#5b8fe8` | Selected row or option outline |
+| `fg` | `#1f2a37` | `#d5dfec` | Body text |
+| `fg-strong` | `#0d2747` | `#eef4fc` | Headings, titles |
+| `fg-muted` | `#5a6b80` | `#93a6bf` | Secondary text, captions, labels |
+| `primary` | `#0d3fa6` | `#5b95ff` | Primary buttons, links, outline-button text |
+| `primary-hover` | `#0a3388` | `#78a8ff` | Primary button hover |
+| `on-primary` | `#ffffff` | `#061426` | Text on `primary` |
+| `primary-soft` | `#e6effc` | `#1b345a` | Secondary buttons, selected options |
+| `on-primary-soft` | `#0d3fa6` | `#b7d0ff` | Text on `primary-soft` |
+| `accent` | `#2b7de0` | `#6aa8ff` | Decorative icons |
+| `focus` | `#2f6fe0` | `#7fb0ff` | Focus rings |
+| `warning-soft` / `on-warning-soft` | `#fbe5d4` / `#92400e` | `#45290f` / `#ffcf9e` | "Pending" and restricted chips |
+| `info-soft` / `on-info-soft` | `#e2ebfa` / `#1d4ea8` | `#1a3561` / `#b3cdff` | Informational chips |
+| `neutral-soft` / `on-neutral-soft` | `#edf0f4` / `#374151` | `#243246` / `#c9d4e3` | Neutral chips |
+| `success-soft` / `on-success-soft` | `#dcf3e8` / `#116444` | `#123d2e` / `#8fe0bb` | Success chips and messages |
+| `danger-soft` / `on-danger-soft` | `#fde3e3` / `#a2232a` | `#4a1c22` / `#ffb3b8` | Error chips and messages |
+
+Gradients (CSS custom properties, not colour utilities): `--frame-gradient` (Light `linear-gradient(135deg, #0b5f8f 0%, #1d8fca 55%, #3cb7ee 100%)`, Dark `linear-gradient(135deg, #031421 0%, #08304d 60%, #0c4a73 100%)`) for the window frame, and `--banner-gradient` (Light `linear-gradient(180deg, #05698f 0%, #04506f 55%, #02354a 100%)`, Dark `linear-gradient(180deg, #0b3a5c 0%, #061f33 100%)`) for the banner, whose text is white in both themes.
+
+Theme-independent: radii `card` 16 px and `frame` 20 px (plus the existing scale in 6.3); shadow `card` (Light `0 1px 2px rgb(13 39 71 / 0.06)`, Dark `0 1px 2px rgb(0 0 0 / 0.4)`).
+
+Contrast: every text token meets WCAG AA (4.5:1) on the surfaces it is used on in both themes (lowest pair 4.86:1 Light, 5.42:1 Dark), and `accent` meets 3:1 for icons.
+
+### 6.1 Legacy dark colour values
 
 Surfaces (hex, exact):
 
@@ -372,7 +421,7 @@ Scrollbars (webkit): 8 px, transparent track, thumb `rgb(255 255 255 / 0.15)` (h
 
 ### 6.2 Typography
 
-- Sans (all UI): system stack `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif`, antialiased. No webfont is loaded.
+- Sans (all UI): **Noto Sans**, bundled with the app (weights 400, 500, 600, 700; Latin subset; no network fetch), falling back to the system stack `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif`, antialiased.
 - Serif (page titles only): Tailwind default serif stack (`ui-serif, Georgia, Cambria, "Times New Roman", Times, serif`).
 - Monospace (identifiers, SQL, logs, expressions, kbd-like chips): Tailwind default mono stack (`ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace`).
 - Base text size 13 px. Scale in use (px): 8 and 9 (badges), 10 (micro labels, chips), 11 (labels, captions), 12 (secondary body, dense lists), **13 (default)**, 14 (list-row titles, composer name input, dialog title), 15 (settings titles, section headings), 26 (agent title), 28 (page titles). Weights: normal, medium (500) for buttons/labels, semibold (600) for titles. Uppercase micro-headings use ~0.08 em / "wider" tracking at 10-11 px. Chat prose line height 1.75; UI line heights follow Tailwind defaults (13 px -> 20 px).
@@ -388,16 +437,19 @@ Scrollbars (webkit): 8 px, transparent track, thumb `rgb(255 255 255 / 0.15)` (h
 
 [lucide](https://lucide.dev) outline icons only (line width 2 by default, `strokeWidth` 2.5 on the Stop square), sized 11-19 px (15 px in nav rows, 14 px in buttons, 16 px for toolbar/panel toggles). Names used, by area:
 
-- Shell / nav: `panel-left`, `panel-right`, `arrow-left`, `chevron-down`, `chevron-right`, `plus`, `search`, `ellipsis-vertical`, `trash-2`, `scroll-text`, `settings`, `flask-conical` (Datasets), `bot` (Agents, LLM config, agent tiles), `book-open` (Knowledge), `folder-kanban` (Sessions), `database` (Datasource config, catalogs, session datasource context), `test-tube` (Testing data), `workflow` (dataset tiles), `corner-down-left` (Create).
+- Shell / nav: `sun-moon` (Appearance), `monitor` / `sun` / `moon` (theme options), `panel-left`, `panel-right`, `arrow-left`, `chevron-down`, `chevron-right`, `plus`, `search`, `ellipsis-vertical`, `trash-2`, `scroll-text`, `settings`, `flask-conical` (Datasets), `bot` (Agents, LLM config, agent tiles), `book-open` (Knowledge), `folder-kanban` (Sessions), `database` (Datasource config, catalogs, session datasource context), `test-tube` (Testing data), `workflow` (dataset tiles), `corner-down-left` (Create).
 - Status / feedback: `loader-2` (spinners), `circle-check`, `circle-x`, `circle-alert`, `circle-minus`, `info`, `x`, `triangle-alert`, `lock`, `refresh-cw`, `download`, `copy`, `play`, `plug-zap`, `check`.
 - Data / catalog: `folder-tree` (schema), `table-2` (entity), `layout-grid`, `gauge` (metrics, checks, Evals tab), `list-checks` (question sets), `pencil`, `wand-2` (generate suggestions), `sparkle` / `sparkles` (AI, visuals, suggestions), `file-text` / `tag` / `filter` (knowledge kinds), `wrench` (tools), `brain` (Thinking, Memory tab), `cpu` (Model tab), `clock`.
 - Chat / visuals: `arrow-up` (send), `square` (stop), `thumbs-up`, `thumbs-down`, `badge-check` (Verified), `shield-check` / `shield-alert` / `shield-off` (cross-check, Careful mode), `telescope` (deep analysis), `bar-chart-3`, `history` (versions), `sliders-horizontal` (Tailor), `gallery-vertical-end` (saved visuals), `signal` (reasoning effort).
 
 ### 6.5 Theming
 
-Dark only; no `prefers-color-scheme` handling and no user setting. Native form controls inherit the dark surface (`<option>` backgrounds set to `#232323`).
+- The **resolved theme** is Light or Dark (app-shell R41). It is written to the root element as `data-theme="light|dark"` together with `color-scheme`, so native scrollbars and form controls follow it. The tokens in 6.0 hang off that attribute.
+- An inline script in the page head reads the stored choice (`questions-to-insights:theme`, see [data-model.md](data-model.md)) and the `prefers-color-scheme` media query, and sets `data-theme` before the app boots (R42). The app then keeps it in sync: on a new choice, and on a `prefers-color-scheme` change while System is chosen.
+- In the desktop app, every change of the resolved theme is also sent to the main process (`desktop.setWindowTheme`, [api.md](api.md) §4), which sets the window background to the `canvas` colour.
+- Legacy dark surfaces (6.1) do not respond to the theme until their screen is restyled. Native `<option>` backgrounds on those screens stay `#232323`.
 
-*Implementation note.* Tailwind CSS v4 through `@tailwindcss/postcss`, a single `@import "tailwindcss";` in `src/styles.scss`, no `tailwind.config`; arbitrary values (`bg-[#232323]`, `text-[13px]`) carry the surfaces and sizes above. `app.scss` holds only the resize-handle styles; `styles.scss` holds the drag-region utilities (`.app-drag`, `.app-no-drag`, `.pl-traffic-lights` = 76 px), `.option-active` and the scrollbar rules; chat prose lives in the chat component's stylesheet (`.prose-dark`). Icons are `lucide-angular`; components are standalone and signal-driven.
+*Implementation note.* Tailwind CSS v4 through `@tailwindcss/postcss`, `@import "tailwindcss";` in `src/styles.scss`, no `tailwind.config`. The theme tokens (6.0) are defined in `src/styles/tokens.css` as `--qti-*` custom properties under `:root[data-theme=light|dark]` and mapped with `@theme inline` to Tailwind colours, so `bg-surface` resolves to `var(--qti-surface)` at runtime. Legacy arbitrary values (`bg-[#232323]`, `text-[13px]`) carry the surfaces and sizes above. `app.scss` holds only the resize-handle styles; `styles.scss` holds the drag-region utilities (`.app-drag`, `.app-no-drag`, `.pl-traffic-lights` = 76 px), `.option-active` and the scrollbar rules; chat prose lives in the chat component's stylesheet (`.prose-dark`). Icons are `lucide-angular`; components are standalone and signal-driven.
 
 ## 7. Copy that tests or users rely on
 
@@ -410,7 +462,8 @@ Strings below are asserted by the Playwright suite or are user-facing contracts.
 | Sidebar rows | `Datasets`, `Agents`, `Knowledge`, `Sessions` |
 | Sidebar controls (titles) | `Collapse sidebar`, `Expand sidebar`, `New conversation`, `Session options`, `Settings`, `System logs and diagnostics` |
 | Sidebar aria-labels | `Primary sidebar`, `Settings sidebar`, `Workspace navigation`, `Sessions navigation`, `Settings navigation`, `Open system logs`, `Options for <session name>` |
-| Settings | `Back`, `Search settings`, `Datasource Configuration`, `LLM Configuration`, `Testing Data`, footer `Halo BI Assistant v<version>` |
+| Settings | `Back`, `Search settings`, `Datasource Configuration`, `LLM Configuration`, `Testing Data`, `Developer`, `Appearance`, footer `Halo BI Assistant v<version>` |
+| Appearance | `Appearance`, `Choose how the app looks. System follows your operating system's light or dark setting.`, group `Theme`, options `System`, `Light`, `Dark` |
 | Right panel | `Details panel`, `Resize right panel`, `Collapse right panel`, `Expand right panel`, `Drag to resize · Double-click to reset` |
 | Right panel empty | `Select a catalog, schema or entity to see its details.` / `Select a question in the Evals tab to see how it ran.` |
 | Banner | `Backend restarting…`, `Backend unavailable — restart the app` |

@@ -18,7 +18,8 @@ export async function createWorldCupDatasource(page: Page): Promise<void> {
   await page.getByLabel('Name', { exact: true }).fill(WORLD_CUP_DATASOURCE);
   await page.getByLabel('Kind').selectOption('postgres');
   await page.getByLabel('Host').fill('127.0.0.1');
-  await page.getByLabel('Port').fill('55432');
+  // Same override as docker-compose.yml, so a worktree can use its own stack.
+  await page.getByLabel('Port').fill(process.env['WORLD_CUP_DB_PORT'] ?? '55432');
   await page.getByLabel('Database').fill('world_cup');
   await page.getByLabel('User').fill('world_cup');
   await page.getByLabel('Password').fill('world_cup_dev');

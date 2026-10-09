@@ -108,6 +108,18 @@
               />
               <span>Developer</span>
             </button>
+            <button
+              (click)="selectSection('appearance')"
+              class="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-zinc-200 hover:bg-white/10"
+              [class.option-active]="settingsSection() === 'appearance'"
+            >
+              <lucide-angular
+                [img]="SunMoon"
+                [size]="15"
+                class="text-zinc-400"
+              />
+              <span>Appearance</span>
+            </button>
           </nav>
 
           <div class="flex-1"></div>
@@ -398,6 +410,12 @@
         } @else if (settingsOpen() && settingsSection() === "developer") {
           <div class="flex flex-1 justify-center overflow-y-auto px-6 py-10">
             <app-developer-settings class="w-full max-w-[560px]" />
+          </div>
+        } @else if (settingsOpen() && settingsSection() === "appearance") {
+          <div
+            class="flex flex-1 justify-center overflow-y-auto bg-canvas px-6 py-10"
+          >
+            <app-appearance-settings class="w-full max-w-[560px]" />
           </div>
         } @else if (mainView() === "dataset") {
           <div class="flex flex-1 justify-center overflow-y-auto px-8 py-10">

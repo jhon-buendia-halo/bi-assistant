@@ -214,7 +214,9 @@ Open question (gap): in web mode there is no desktop bridge. Diagnostics hold on
 - N62. Toggle controls SHALL expose their state (careful mode uses `aria-pressed`).
 - N63. Status that appears without a user action (deep analysis progress) SHALL have a labelled region.
 
-Open question: no colour-contrast, screen-reader or reduced-motion requirement is written down beyond the axe check. The UI is dark-theme only. Confirm whether a light theme or a contrast target is needed for the beta.
+- N64. The app SHALL offer a light and a dark theme, following the operating system by default (decided 2026-10-09 for epic BA-141). Text colours SHALL meet WCAG AA contrast (4.5:1) against their surfaces in both themes, and the axe check SHALL pass in both.
+
+Open question: no screen-reader or reduced-motion requirement is written down beyond the axe check.
 
 ## 9. Compatibility and upgrades
 

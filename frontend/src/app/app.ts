@@ -29,6 +29,7 @@ import {
   TestTube,
   Trash2,
   Workflow,
+  SunMoon,
   Wrench,
 } from 'lucide-angular';
 import { DatasourceConfig } from './features/datasources/components/datasource-config/datasource-config';
@@ -40,6 +41,8 @@ import { DatasourcesApiService } from './features/datasources/services/datasourc
 import { LlmConfig } from './features/llm/components/llm-config/llm-config';
 import { TestingDataConfig } from './features/testing-data/components/testing-data-config/testing-data-config';
 import { DeveloperSettingsConfig } from './features/developer/components/developer-settings/developer-settings';
+import { AppearanceSettings } from './features/appearance/components/appearance-settings/appearance-settings';
+import { ThemeService } from './core/theme/theme.service';
 import { DatasetList } from './features/datasets/components/dataset-list/dataset-list';
 import { AgentList } from './features/agents/components/agent-list/agent-list';
 import { AgentDetail } from './features/agents/components/agent-detail/agent-detail';
@@ -80,6 +83,7 @@ type SettingsSection =
   | 'llm'
   | 'testing-data'
   | 'developer'
+  | 'appearance'
   | null;
 type MainView =
   | 'home'
@@ -108,6 +112,7 @@ const RIGHT_PANEL_WIDTH_STORAGE_KEY = 'questions-to-insights:right-panel-width';
     LlmConfig,
     TestingDataConfig,
     DeveloperSettingsConfig,
+    AppearanceSettings,
     DatasetList,
     AgentList,
     AgentDetail,
@@ -147,6 +152,7 @@ export class App {
   readonly Sparkle = Sparkle;
   readonly TestTube = TestTube;
   readonly Wrench = Wrench;
+  readonly SunMoon = SunMoon;
   readonly Trash2 = Trash2;
   readonly Workflow = Workflow;
 
@@ -182,6 +188,8 @@ export class App {
   private readonly llmApi = inject(LlmApiService);
 
   private readonly toast = inject(ToastService);
+  // Created with the shell so the resolved theme is applied from start-up.
+  private readonly theme = inject(ThemeService);
   readonly diagnostics = inject(DiagnosticsService);
 
   /** Model from the saved LLM configuration, shown in the composer chip. */

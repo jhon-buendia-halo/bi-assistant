@@ -1,4 +1,10 @@
-const { app, BrowserWindow, dialog, ipcMain } = require("electron");
+const {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  nativeTheme,
+} = require("electron");
 const { spawn } = require("child_process");
 const crypto = require("crypto");
 const fs = require("fs");
@@ -207,6 +213,12 @@ function initializeDiagnostics() {
   }
 
   ipcMain.handle("diagnostics:list", () => diagnosticEntries);
+  // The renderer reports its resolved theme (app-shell R44).
+  ipcMain.on("window:theme", (event, theme) => {
+    const colour = THEME_CANVAS[theme];
+    if (!colour) return;
+    BrowserWindow.fromWebContents(event.sender)?.setBackgroundColor(colour);
+  });
   ipcMain.handle("backend:restart", () => {
     restartBackendOnRequest();
     return { ok: true };
@@ -666,6 +678,9 @@ function resolveAppIcon() {
   return candidates.find((candidate) => fs.existsSync(candidate));
 }
 
+// Canvas token per theme (specs/system/ui.md §6.0).
+const THEME_CANVAS = { light: "#f3f6fa", dark: "#0b1626" };
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1440,
@@ -674,7 +689,10 @@ function createWindow() {
     minHeight: 600,
     title: APP_DISPLAY_NAME,
     titleBarStyle: "hiddenInset",
-    backgroundColor: "#1c1c1c",
+    // Until the renderer reports its theme, follow the operating system.
+    backgroundColor: nativeTheme.shouldUseDarkColors
+      ? THEME_CANVAS.dark
+      : THEME_CANVAS.light,
     // Packaged macOS builds take the icon from the bundle; this covers the
     // window/taskbar icon everywhere else (dev runs, Windows, Linux).
     icon: resolveAppIcon(),

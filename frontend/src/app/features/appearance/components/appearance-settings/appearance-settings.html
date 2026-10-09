@@ -1,0 +1,43 @@
+<div class="flex flex-col gap-4">
+  <div class="mb-1">
+    <h2 class="text-[15px] font-semibold text-fg-strong">Appearance</h2>
+    <p class="mt-1 text-[12px] text-fg-muted">
+      Choose how the app looks. System follows your operating system's light
+      or dark setting.
+    </p>
+  </div>
+
+  <fieldset
+    role="radiogroup"
+    aria-labelledby="appearance-theme-label"
+    class="rounded-card border border-border bg-surface p-4 shadow-card"
+  >
+    <legend id="appearance-theme-label" class="sr-only">Theme</legend>
+    <p aria-hidden="true" class="mb-3 text-[12px] font-medium text-fg-muted">
+      Theme
+    </p>
+    <div class="flex flex-wrap gap-2">
+      @for (option of options; track option.value) {
+        <label
+          class="relative flex cursor-pointer items-center gap-2 rounded-full border px-4 py-1.5 text-[13px] font-medium transition-colors focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-focus"
+          [class]="
+            theme.preference() === option.value
+              ? 'border-border-selected bg-primary-soft text-on-primary-soft'
+              : 'border-border bg-surface text-fg hover:bg-surface-muted'
+          "
+        >
+          <input
+            type="radio"
+            name="appearance-theme"
+            class="absolute inset-0 cursor-pointer appearance-none rounded-full opacity-0"
+            [value]="option.value"
+            [checked]="theme.preference() === option.value"
+            (change)="theme.setPreference(option.value)"
+          />
+          <lucide-angular [img]="option.icon" [size]="14" aria-hidden="true" />
+          {{ option.label }}
+        </label>
+      }
+    </div>
+  </fieldset>
+</div>

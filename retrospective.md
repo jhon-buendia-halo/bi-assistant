@@ -14,6 +14,28 @@ Entry template:
 
 ---
 
+## 2026-10-09 — 1.8.2 Design tokens and light/dark theme switch (BA-143)
+
+### What went well
+- Checking contrast with a script before writing any CSS meant the token table went into `ui.md` already AA-clean, and the axe scan of the new section passed on the first green run.
+- A static preview of the mockup's layout using the real `tokens.css` let the user judge the derived dark palette in context, before any screen was restyled. The Appearance section alone would have shown only four tokens.
+- Running the failing unit test on a throwaway worktree of `main` proved that the 525/548 failure was there before this branch, instead of assuming it.
+
+### What went wrong
+- I didn't expect `emulateMedia` to be needed. Electron's `nativeTheme.themeSource` doesn't change `prefers-color-scheme` on Linux, which cost a probe run.
+- The radio inputs were `sr-only`, so Playwright couldn't check them. I had to rework them into invisible overlays.
+- The first screenshots were taken mid-way through the `transition-colors` animation and showed the wrong pill as selected. I almost reported a bug that wasn't there.
+- `npm run lint` in the backend runs `eslint --fix` and silently rewrote 29 untouched files. I only noticed because a later `git diff --stat main -- backend` was unexpectedly non-empty.
+- The environment had several gaps (`make`, `g++`, `libnss3`, `libasound2`, no Chromium for Karma), and each needed a separate round with the user.
+- The E2E helper hardcoded port 55432, so the isolated stack the user asked for couldn't work without a test-infrastructure change.
+
+### What to do differently
+- To simulate the OS theme in Electron E2E, use `page.emulateMedia({ colorScheme })`, not `nativeTheme.themeSource`.
+- For visually hidden form controls that tests drive, use a transparent overlay (`absolute inset-0 opacity-0`), not `sr-only`.
+- Before an evidence screenshot after a state change, move the pointer away and wait for transitions to finish (about 500 ms).
+- Run the backend lint as `npx eslint "{src,apps,libs,test}/**/*.ts"` (without `--fix`) when checking, and check `git status --short backend` afterwards.
+- On a fresh WSL machine, check the whole toolchain in one go before the first build: `make`, `g++`, `jq`, `ldd node_modules/electron/dist/electron | grep 'not found'`, and a Chromium for Karma. Then ask for one combined `apt install`.
+
 ## 2026-10-09 — 1.8.1 Agentic Hub look and feel: ADR, epic spec and roadmap (BA-142)
 
 ### What went well

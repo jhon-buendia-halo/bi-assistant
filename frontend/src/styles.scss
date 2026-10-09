@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./styles/tokens.css";
 
 html,
 body {
@@ -7,9 +8,10 @@ body {
 
 body {
   margin: 0;
-  font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
-    sans-serif;
+  font-family: var(--font-sans);
+  // Theme canvas (tokens.css); screens not yet restyled paint their own dark surfaces.
+  background-color: var(--qti-canvas);
+  color: var(--qti-fg);
   -webkit-font-smoothing: antialiased;
 }
 

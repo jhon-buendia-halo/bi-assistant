@@ -8,6 +8,20 @@
   <link rel="icon" type="image/x-icon" href="favicon.ico">
   <link rel="icon" type="image/svg+xml" href="brand/halo-bi-mark.svg">
   <link rel="apple-touch-icon" href="brand/icon.png">
+  <script>
+    // Applies the remembered theme before the app boots so the first paint
+    // is never in the other theme (app-shell R42). Mirrors ThemeService.
+    (function () {
+      var choice = "system";
+      try {
+        var stored = localStorage.getItem("questions-to-insights:theme");
+        if (stored === "light" || stored === "dark") choice = stored;
+      } catch (e) {}
+      var dark = choice === "dark" ||
+        (choice === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+      document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+    })();
+  </script>
 </head>
 <body>
   <app-root></app-root>

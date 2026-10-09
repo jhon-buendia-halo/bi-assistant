@@ -445,16 +445,26 @@ The app gets the Agentic Hub visual design: a gradient frame, an "Agentic Hub" b
   - `python3 scripts/check-specs.py` passes.
 - **Notes:** mockup reference: the "Publish requests" screen shared on 2026-10-09 (style only). The user confirmed the epic spec on 2026-10-09, kept `productName` and dropped the "Powered by LenAI" footer. Evidence: [evidence/1.8.1/](evidence/1.8.1/).
 
-#### 1.8.2 — Design tokens and light/dark theme switch ([BA-143](https://halo-powered.atlassian.net/browse/BA-143))  `📋 Planned`
+#### 1.8.2 — Design tokens and light/dark theme switch ([BA-143](https://halo-powered.atlassian.net/browse/BA-143))  `✅ Done`
 - **Intent:** the app can be shown in a light or a navy dark theme, and it follows the OS by default.
-- **Scope:** a semantic token layer (light and navy dark sets) mapped into Tailwind v4 `@theme`; a bundled webfont; an Appearance setting with System, Light and Dark, persisted on the renderer and applied before first paint; the Electron window background matches the theme; the dark token set is reviewed with screenshots before 1.8.3.
-- **Out of scope:** restyling individual screens (1.8.3–1.8.7).
-- **Acceptance:** switching Appearance, or the OS theme while on System, retheme the open app without a reload; the choice survives a restart; new Gherkin scenarios in [specs/capabilities/app-shell/spec.md](specs/capabilities/app-shell/spec.md) pass.
-- **Notes:** ADR-0007. Updates `ui.md` §6, `data-model.md`, `tech-stack.md` and `non-functional.md`.
+- **Scope:**
+  - A semantic token layer (light and navy dark sets) as CSS custom properties, mapped into Tailwind v4 with `@theme inline`.
+  - Noto Sans (400, 500, 600, 700; Latin) bundled from `@fontsource/noto-sans` and used as the app's sans font.
+  - A fifth Settings section, **Appearance**, after Developer, with a System / Light / Dark choice. System is the default.
+  - The choice is kept in renderer `localStorage` and applied before Angular boots, so the page never paints in the wrong theme. On System, the app follows the OS live.
+  - The Electron window background matches the resolved theme, through one preload call.
+  - The dark token set is reviewed with screenshots before 1.8.3.
+- **Out of scope:** restyling the shell and the screens (1.8.3–1.8.7). Until then only the page background and the Appearance section use the tokens, and the rest stays dark.
+- **Acceptance:**
+  - Choosing Light or Dark, or changing the OS theme while on System, retheme the open app without a reload.
+  - The choice survives a restart.
+  - The Appearance Gherkin in [specs/capabilities/app-shell/spec.md](specs/capabilities/app-shell/spec.md) passes as `frontend/e2e/appearance.spec.ts`.
+  - The axe scan is clean in both themes.
+- **Notes:** ADR-0007. Updates `ui.md` §1, §6 and §7, `data-model.md`, `tech-stack.md` and `non-functional.md`. The user chose the Settings section and Noto Sans on 2026-10-09 and approved both palettes from the token-preview screenshots the same day. The E2E simulates the OS theme with `emulateMedia`, because Electron's `nativeTheme.themeSource` doesn't reach `prefers-color-scheme` on Linux. Evidence: [evidence/1.8.2/](evidence/1.8.2/).
 
 #### 1.8.3 — App shell: gradient frame, Agentic Hub banner and icon rail ([BA-144](https://halo-powered.atlassian.net/browse/BA-144))  `📋 Planned`
 - **Intent:** the window has the Agentic Hub frame, banner and navigation rail.
-- **Scope:** gradient frame; "Agentic Hub" banner; an icon rail replacing the 296 px sidebar (Datasets, Agents, Knowledge, Sessions and Settings; avatar and system logs at the bottom); title bar and traffic-light handling; rename "Halo BI Assistant" to "Agentic Hub" in the window title, document title and settings footer.
+- **Scope:** gradient frame; "Agentic Hub" banner; an icon rail replacing the 296 px sidebar (Datasets, Agents, Knowledge, Sessions and Settings; avatar and system logs at the bottom); title bar and traffic-light handling; rename "Halo BI Assistant" to "Agentic Hub" in the window title, document title and settings footer; fix the existing axe contrast failures in the Settings sidebar (the `⌘ F` hint and the version footer, `zinc-500`/`zinc-600` on `#181818`, found in 1.8.2).
 - **Out of scope:** `productName`, installer names and the data directory, which stay "Halo BI Assistant"; the mockup's "Powered by LenAI" footer; the session list (1.8.5).
 - **Acceptance:** every rail destination opens the same view as the old sidebar row; the titles read "Agentic Hub"; the app-shell Gherkin and the E2E suite pass with selectors migrated.
 - **Notes:** depends on 1.8.2.
