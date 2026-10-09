@@ -1,6 +1,9 @@
 import { Page } from '@playwright/test';
 import { test, expect, RunningApp } from './fixtures/app.fixture';
-import { createWorldCupWorkspace } from './helpers/app-actions';
+import {
+  createWorldCupWorkspace,
+  openSessions,
+} from './helpers/app-actions';
 import { OtlpReceiver, startOtlpReceiver } from './helpers/otlp-receiver';
 
 // Mirrors the "Developer observability export" Feature in
@@ -101,7 +104,7 @@ test('agent runs reach Phoenix when observability is on', async ({
   const sessionId = await createWorldCupWorkspace(page);
   await saveAndRestart(app, true);
 
-  await page.getByRole('button', { name: 'Back' }).click();
+  await openSessions(page);
   await page.getByTestId(`session-${sessionId}`).click();
   await page.getByPlaceholder(/Ask a/).fill('Who won the 2022 World Cup?');
   await page.getByLabel('Send message').click();

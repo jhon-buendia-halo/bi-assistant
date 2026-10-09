@@ -171,7 +171,8 @@ Feature: Datasources, datasets, and sessions (World Cup database)
     Given I have created the "World Cup PostgreSQL" datasource, the "World Cup Core" dataset and the "World Cup analysis" session
     When I reload the application
     Then I see "Open system logs"
-    And I see the "World Cup analysis" session
+    When I click "Sessions" on the rail
+    Then I see the "World Cup analysis" session
     When I click "World Cup analysis"
     Then the header shows "World Cup PostgreSQL" and "PostgreSQL"
     And I see the "Ask a follow-up question…" box
@@ -195,7 +196,6 @@ Feature: Datasources, datasets, and sessions (World Cup database)
     And I click "Test connection"
     Then I see a "Postgres —" error message
     And "Save datasource" is disabled
-    When I click "Back"
     And I click "Open system logs"
     And I click "Issues"
     And I search the logs for "Postgres"

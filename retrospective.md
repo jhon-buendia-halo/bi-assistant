@@ -14,6 +14,120 @@ Entry template:
 
 ---
 
+## 2026-10-09 — 1.8.8 Align with the Insight Agent AI Figma design (BA-158)
+
+### What went well
+- The Figma MCP returned exact variables (colours, type, radii, shadows) and the assets. Tokens came straight from the design team's names, with the variable name in a comment next to each value.
+- The decisions that contradicted earlier answers (name, LenAI, layout) were settled in one four-question picker before any code, and the epic spec went back to Draft for re-confirmation, as the Epic gate requires.
+- A side-by-side image of the Figma frame and the running app made the review concrete. It caught the stretched sparks icon, the centred 860 px column and the all-blue rail icons, none of which a test would have flagged.
+- Contrast was checked with alpha compositing before shipping. It caught that Figma's own placeholder colour fails AA on the canvas and on selected rows.
+
+### What went wrong
+- The 1.8.1–1.8.7 work was built against a single image while the Figma file existed. A lot of the palette and layout work was then redone.
+- The Figma background photos were 8.4 MB of PNG. Without re-encoding they would have shipped in every installer and in the npm package.
+- My throwaway evidence script stalled twice for minutes, both times straight after a full suite run, while the same steps in the real suite passed. I never found the cause, because it passed on the reruns.
+- Moving the details panel to on demand broke an agents E2E and two unit tests that assumed it was open on launch. The step-6 impact analysis missed them, because I searched specs for shell selectors, not for the panel's default state.
+
+### What to do differently
+- At the start of any look-and-feel epic, ask whether a Figma file exists, and implement from its variables, not from screenshots.
+- Re-encode any raster asset over 500 KB (WebP at the same pixel size) before committing it under `public/`.
+- When changing a default state (open/closed, selected), grep the tests for the element's selectors (`Details panel`, `right-panel-resize-handle`), not just the specs, during the impact analysis.
+- Give evidence scripts a short `--timeout` (60 s) so a stall fails fast, and capture the error context before deleting the temp spec.
+
+## 2026-10-09 — 1.8.5–1.8.7 Sessions pane and full restyle (BA-146, BA-147, BA-148)
+
+### What went well
+- Three subagents restyled about 1,600 colour usages in parallel. Each had a disjoint file list, one shared mapping table, and a rule not to build, so no two agents fought over `dist/` or the same file.
+- I didn't trust the agents' self-reports. A script stripped every class attribute and diffed each template against HEAD: 0 non-class changes across 18 files. That is a cheap, strong check for any mechanical restyle.
+- The new axe scan of every screen in both themes found real, existing accessibility bugs: unnamed icon buttons, and toasts outside any landmark.
+- Reviewing the screenshots by eye caught layout regressions that the tests didn't: `field`'s `width: 100%` squeezing a header, and an input that lost its icon padding.
+
+### What went wrong
+- Moving the shared classes to `@layer components` broke every button and field. Angular inlines critical CSS ahead of the main stylesheet, and that inlined subset declared `components` before `base`. It took a probe in the browser, listing the matched rules and their layers, to find it.
+- My first decision to make the shared classes `@utility` caused the problem the agents patched with `!` overrides. The cascade design should have been settled in 1.8.4.
+- The agents' swap of classes for `field` silently changed widths and padding. "Classes only" doesn't mean "layout only".
+- Shared files (ui.md, the app-shell spec, the roadmap, the changelog) collected changes from three stories at once. Without interactive staging, they went into the last story's commit instead of each story's own.
+- Two unit tests and one E2E spec asserted colour class names, so they had to change with the restyle.
+
+### What to do differently
+- Put shared CSS component classes in `@layer components`, and declare the layer order in `index.html` before any style, whenever Angular's `inlineCritical` is on.
+- After a mechanical class swap, screenshot every screen in both themes and review them before running the suite. Check `width`, `padding` and `display` as well as colour.
+- Assert semantics in tests (role, `aria-pressed`, the result text), not colour class names.
+- When several stories land on one branch, commit each story as soon as it is green, before starting the next, so the shared spec files can be committed per story.
+
+## 2026-10-09 — 1.8.3 Agentic Hub shell (BA-144)
+
+### What went well
+- Keeping the accessible names the tests already used ("Datasets", "Agents", "Settings", "New conversation", `session-<id>`) on the rail limited the E2E churn to removing "Back" and opening Sessions first.
+- The axe scan of the initial shell found three real problems: content outside landmarks, multiple `h1`s, and colours read mid-transition. Each is now a rule or a fix rather than a lucky pass.
+- Generating the new template from line ranges of the old one kept every view block byte-identical, so only the shell changed.
+- When port 3000 turned out to belong to another worktree's app, I identified the owner from `/proc/<pid>/cwd` and moved this epic's app to 3141, instead of killing a process that wasn't mine.
+
+### What went wrong
+- My first template generator used a line range that was off by one. It failed an assertion, luckily before writing anything.
+- I wrote the first rail test against "All agents", which is the back link inside an agent's detail, not text on the list.
+- `requestAnimationFrame` was called unbound ("Illegal invocation"). The E2E passed anyway because the attribute was set before the throw. I only caught it on review.
+- `main` changed the E2E target in the middle of the story (BA-156). I had to stash, merge, port the spec and re-apply the work.
+
+### What to do differently
+- Before asserting on page text in a new test, grep the component templates for the string to see which view renders it.
+- Never pass DOM methods around detached (`const f = window.requestAnimationFrame`). Call them on `window`, and unit-test the code path that uses them.
+- At the start of each story on a long-lived epic branch, run `git fetch && git log HEAD..origin/main --oneline`, and merge `main` before writing code, not halfway through.
+- Before starting any app on a fixed port, check who owns it (`ss -ltnp`, `/proc/<pid>/cwd`) and pick a free port if it's another worktree's.
+
+## 2026-10-09 — 1.8.4 Shared component classes (BA-145)
+
+### What went well
+- Building the classes before the shell meant the screen stories only need to swap class names, which makes the parallel restyle in 1.8.6 and 1.8.7 practical.
+- Checking which classes landed in the built CSS caught that `chip`, `field` and `menu` were emitted without being used. That led to checking for name collisions before shipping, rather than finding them in a restyled screen.
+
+### What went wrong
+- I first read "present in the CSS" as proof that the classes were in use. Tailwind v4 emits any candidate name it finds in source text, including comments, so the check only proves the class compiles.
+- The full E2E suite needs port 3000, so testing meant stopping the user's running app again.
+
+### What to do differently
+- Give shared utility classes names that can't appear as plain words in comments, or search the templates for the bare class name before relying on the CSS output.
+- Batch the stories' E2E runs so the user's app is stopped as few times as possible, and say up front when it will be down.
+
+## 2026-10-09 — 1.8.2 Design tokens and light/dark theme switch (BA-143)
+
+### What went well
+- Checking contrast with a script before writing any CSS meant the token table went into `ui.md` already AA-clean, and the axe scan of the new section passed on the first green run.
+- A static preview of the mockup's layout using the real `tokens.css` let the user judge the derived dark palette in context, before any screen was restyled. The Appearance section alone would have shown only four tokens.
+- Running the failing unit test on a throwaway worktree of `main` proved that the 525/548 failure was there before this branch, instead of assuming it.
+
+### What went wrong
+- I didn't expect `emulateMedia` to be needed. Electron's `nativeTheme.themeSource` doesn't change `prefers-color-scheme` on Linux, which cost a probe run.
+- The radio inputs were `sr-only`, so Playwright couldn't check them. I had to rework them into invisible overlays.
+- The first screenshots were taken mid-way through the `transition-colors` animation and showed the wrong pill as selected. I almost reported a bug that wasn't there.
+- `npm run lint` in the backend runs `eslint --fix` and silently rewrote 29 untouched files. I only noticed because a later `git diff --stat main -- backend` was unexpectedly non-empty.
+- The environment had several gaps (`make`, `g++`, `libnss3`, `libasound2`, no Chromium for Karma), and each needed a separate round with the user.
+- The E2E helper hardcoded port 55432, so the isolated stack the user asked for couldn't work without a test-infrastructure change.
+
+### What to do differently
+- To simulate the OS theme in Electron E2E, use `page.emulateMedia({ colorScheme })`, not `nativeTheme.themeSource`.
+- For visually hidden form controls that tests drive, use a transparent overlay (`absolute inset-0 opacity-0`), not `sr-only`.
+- Before an evidence screenshot after a state change, move the pointer away and wait for transitions to finish (about 500 ms).
+- Run the backend lint as `npx eslint "{src,apps,libs,test}/**/*.ts"` (without `--fix`) when checking, and check `git status --short backend` afterwards.
+- On a fresh WSL machine, check the whole toolchain in one go before the first build: `make`, `g++`, `jq`, `ldd node_modules/electron/dist/electron | grep 'not found'`, and a Chromium for Karma. Then ask for one combined `apt install`.
+
+## 2026-10-09 — 1.8.1 Agentic Hub look and feel: ADR, epic spec and roadmap (BA-142)
+
+### What went well
+- Reading `ui.md` §6 before drafting showed the renderer has no tokens or CSS variables, only hardcoded greys. That made the theme switch an architectural decision (ADR-0007), not just restyling.
+- Checking `delivery.md` before writing up the rename found that `productName` also sets the Electron data directory. It went to the user as a decision instead of turning into a silent data move.
+- The epic was the first one started under the new one-branch-per-epic rule, so its branch and worktree were created once, for BA-142.
+
+### What went wrong
+- Jira took several rounds to unblock. The `.env` token had expired, `jq` was missing, `sudo` failed under the `!` prompt, and the Atlassian connector can only be authenticated from `/mcp`. Only the user's screenshot of the token page showed every token had expired.
+- The user's answers about the dark theme contradicted each other ("Keep current dark" in the picker, then "2. yes" to a derived dark theme typed during the same turn), which cost an extra round.
+- I asked several open questions in plain text and others in the picker, so answers arrived out of order and by number.
+
+### What to do differently
+- When Jira returns 401, have the user open https://id.atlassian.com/manage-profile/security/api-tokens straight away and check the token's expiry before any other diagnosis.
+- Ask every open question for one decision through a single picker call, not mixed with numbered questions in the text, so answers can't conflict.
+- For any rename, check `productName`, the data dir and the installer names in `delivery.md` first, and state which of them the rename covers.
+
 ## 2026-10-09 — 0.2.6 E2E and testing run against the web app; desktop only on request (BA-156)
 
 ### What went well

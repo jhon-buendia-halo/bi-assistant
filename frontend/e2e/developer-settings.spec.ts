@@ -184,7 +184,7 @@ test('tests an endpoint that accepts OTLP traces', async ({ page }) => {
     await page.getByRole('button', { name: 'Test Phoenix endpoint' }).click();
     const result = page.getByTestId('developer-phoenix-endpoint-result');
     await expect(result).toContainText('Reachable —');
-    await expect(result).toHaveClass(/text-emerald-400/);
+    await expect(result).toHaveClass(/text-on-success-soft/);
   } finally {
     await new Promise<void>((resolve) => receiver.close(() => resolve()));
   }
@@ -200,7 +200,7 @@ test('tests an endpoint that is not listening', async ({ page }) => {
   await page.getByRole('button', { name: 'Test OTLP endpoint' }).click();
   const result = page.getByTestId('developer-otlp-endpoint-result');
   await expect(result).toContainText('Unreachable —');
-  await expect(result).toHaveClass(/text-red-400/);
+  await expect(result).toHaveClass(/text-on-danger-soft/);
 
   await page
     .getByLabel('OTLP endpoint', { exact: true })

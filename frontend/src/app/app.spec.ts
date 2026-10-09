@@ -18,11 +18,15 @@ describe('App', () => {
     expect(app).toBeTruthy();
   });
 
-  it('should render the sessions navigation', () => {
+  it('should render the navigation rail', () => {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.textContent).toContain('Sessions');
+    expect(
+      compiled.querySelector(
+        '[aria-label="Navigation rail"] button[aria-label="Sessions"]',
+      ),
+    ).toBeTruthy();
     expect(
       compiled.querySelector('[aria-label="Open system logs"]'),
     ).toBeTruthy();
@@ -48,6 +52,9 @@ describe('App', () => {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
     const app = fixture.componentInstance;
+    // The details panel is closed on launch (app-shell R2).
+    app.rightPanelOpen.set(true);
+    fixture.detectChanges();
     const handle = fixture.nativeElement.querySelector(
       '.right-panel-resize-handle',
     ) as HTMLElement;
@@ -82,6 +89,9 @@ describe('App', () => {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
     const app = fixture.componentInstance;
+    // The details panel is closed on launch (app-shell R2).
+    app.rightPanelOpen.set(true);
+    fixture.detectChanges();
     const handle = fixture.nativeElement.querySelector(
       '.right-panel-resize-handle',
     ) as HTMLElement;

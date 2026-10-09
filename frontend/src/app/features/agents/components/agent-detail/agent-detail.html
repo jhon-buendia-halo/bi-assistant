@@ -1,20 +1,20 @@
 <div class="flex flex-col">
   <button
     (click)="back.emit()"
-    class="flex w-fit items-center gap-1.5 rounded-md px-2 py-1 text-[13px] text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
+    class="btn btn-ghost w-fit"
   >
     <lucide-angular [img]="ArrowLeft" [size]="15" />
     <span>All agents</span>
   </button>
 
   @if (loading()) {
-    <div class="mt-10 flex items-center gap-2.5 text-zinc-400">
+    <div class="mt-10 flex items-center gap-2.5 text-fg-muted">
       <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
       <span>Loading agent…</span>
     </div>
   } @else if (error(); as err) {
     <p
-      class="mt-8 rounded-md bg-red-500/10 px-3 py-2.5 text-[13px] text-red-400"
+      class="mt-8 rounded-md bg-danger-soft px-3 py-2.5 text-[13px] text-on-danger-soft"
     >
       {{ err }}
     </p>
@@ -22,35 +22,35 @@
     <!-- Header -->
     <div class="mt-4 flex items-start gap-3.5">
       <span
-        class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/5 text-zinc-400"
+        class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-surface-muted text-fg-muted"
       >
         <lucide-angular [img]="Bot" [size]="19" />
       </span>
       <div class="flex min-w-0 flex-col gap-1">
-        <h1 class="font-serif text-[26px] font-semibold text-zinc-100">
+        <h2 class="text-[24px] leading-8 font-light tracking-[0.12px] text-fg-strong">
           {{ agent.name }}
-        </h1>
-        <span class="font-mono text-[12px] text-zinc-500">{{ agent.id }}</span>
+        </h2>
+        <span class="font-mono text-[12px] text-fg-muted">{{ agent.id }}</span>
       </div>
     </div>
     @if (agent.description) {
-      <p class="mt-3 max-w-[70ch] text-[13px] leading-relaxed text-zinc-400">
+      <p class="mt-3 max-w-[70ch] text-[13px] leading-relaxed text-fg-muted">
         {{ agent.description }}
       </p>
     }
 
     <!-- Tabs -->
-    <div class="mt-6 flex items-center gap-1 border-b border-white/10">
+    <div class="mt-6 flex items-center gap-1 border-b border-border">
       @for (tab of tabs(); track tab.id) {
         <button
           [attr.data-testid]="'agent-tab-' + tab.id"
           (click)="activeTab.set(tab.id)"
           class="-mb-px flex items-center gap-2 border-b-2 px-3 py-2 text-[13px]"
-          [class.border-zinc-200]="activeTab() === tab.id"
-          [class.text-zinc-100]="activeTab() === tab.id"
+          [class.border-border-selected]="activeTab() === tab.id"
+          [class.text-fg-strong]="activeTab() === tab.id"
           [class.border-transparent]="activeTab() !== tab.id"
-          [class.text-zinc-400]="activeTab() !== tab.id"
-          [class.hover:text-zinc-200]="activeTab() !== tab.id"
+          [class.text-fg-muted]="activeTab() !== tab.id"
+          [class.hover:text-fg]="activeTab() !== tab.id"
         >
           <lucide-angular [img]="tab.icon" [size]="14" />
           <span>{{ tab.label }}</span>
@@ -64,10 +64,10 @@
         @case ("prompt") {
           @if (agent.instructions) {
             <pre
-              class="max-w-full overflow-x-auto rounded-xl bg-white/5 p-4 font-mono text-[12px] leading-relaxed whitespace-pre-wrap text-zinc-300"
+              class="max-w-full overflow-x-auto rounded-xl bg-surface-muted p-4 font-mono text-[12px] leading-relaxed whitespace-pre-wrap text-fg"
               >{{ agent.instructions }}</pre>
           } @else {
-            <p class="text-[13px] text-zinc-500">
+            <p class="text-[13px] text-fg-muted">
               This agent builds its prompt at request time, so there is no
               static template to show.
             </p>
@@ -75,26 +75,26 @@
         }
         @case ("tools") {
           @if (agent.toolDetails.length === 0) {
-            <p class="text-[13px] text-zinc-500">
+            <p class="text-[13px] text-fg-muted">
               This agent runs in a single step with no tools.
             </p>
           } @else {
             <div class="flex flex-col gap-2">
               @for (tool of agent.toolDetails; track tool.name) {
-                <div class="rounded-xl bg-white/5 px-4 py-3">
+                <div class="rounded-xl bg-surface-muted px-4 py-3">
                   <div class="flex items-center gap-2">
                     <lucide-angular
                       [img]="Wrench"
                       [size]="14"
-                      class="text-zinc-500"
+                      class="text-fg-muted"
                     />
-                    <span class="font-mono text-[13px] text-zinc-200">{{
+                    <span class="font-mono text-[13px] text-fg">{{
                       tool.name
                     }}</span>
                   </div>
                   @if (tool.description) {
                     <p
-                      class="mt-2 max-w-[80ch] text-[12px] leading-relaxed text-zinc-400"
+                      class="mt-2 max-w-[80ch] text-[12px] leading-relaxed text-fg-muted"
                     >
                       {{ tool.description }}
                     </p>
@@ -103,7 +103,7 @@
                     <div class="mt-2.5 flex flex-wrap items-center gap-1.5">
                       @for (input of tool.inputs; track input) {
                         <span
-                          class="rounded-md bg-white/5 px-2 py-0.5 font-mono text-[11px] text-zinc-400"
+                          class="rounded-md bg-surface-muted px-2 py-0.5 font-mono text-[11px] text-fg-muted"
                           >{{ input }}</span
                         >
                       }
@@ -117,41 +117,41 @@
         @case ("memory") {
           @if (agent.memory; as memory) {
             <div class="flex max-w-[520px] flex-col gap-2.5 text-[13px]">
-              <div class="flex justify-between border-b border-white/5 pb-2.5">
-                <span class="text-zinc-500">Recent messages replayed</span>
-                <span class="text-zinc-200">{{
+              <div class="flex justify-between border-b border-border pb-2.5">
+                <span class="text-fg-muted">Recent messages replayed</span>
+                <span class="text-fg">{{
                   lastMessagesLabel(memory.lastMessages)
                 }}</span>
               </div>
-              <div class="flex justify-between border-b border-white/5 pb-2.5">
-                <span class="text-zinc-500">Semantic recall</span>
-                <span class="text-zinc-200">{{
+              <div class="flex justify-between border-b border-border pb-2.5">
+                <span class="text-fg-muted">Semantic recall</span>
+                <span class="text-fg">{{
                   onOff(memory.semanticRecall)
                 }}</span>
               </div>
-              <div class="flex justify-between border-b border-white/5 pb-2.5">
-                <span class="text-zinc-500">Working memory</span>
-                <span class="text-zinc-200">{{
+              <div class="flex justify-between border-b border-border pb-2.5">
+                <span class="text-fg-muted">Working memory</span>
+                <span class="text-fg">{{
                   onOff(memory.workingMemory)
                 }}</span>
               </div>
-              <div class="flex justify-between border-b border-white/5 pb-2.5">
-                <span class="text-zinc-500">Auto-generated titles</span>
-                <span class="text-zinc-200">{{
+              <div class="flex justify-between border-b border-border pb-2.5">
+                <span class="text-fg-muted">Auto-generated titles</span>
+                <span class="text-fg">{{
                   onOff(memory.generateTitle)
                 }}</span>
               </div>
               @if (memory.storage) {
                 <div class="flex justify-between">
-                  <span class="text-zinc-500">Storage</span>
-                  <span class="font-mono text-zinc-200">{{
+                  <span class="text-fg-muted">Storage</span>
+                  <span class="font-mono text-fg">{{
                     memory.storage
                   }}</span>
                 </div>
               }
             </div>
           } @else {
-            <p class="text-[13px] text-zinc-500">
+            <p class="text-[13px] text-fg-muted">
               This agent is stateless — no memory is configured.
             </p>
           }
@@ -159,19 +159,19 @@
         @case ("model") {
           @if (agent.model; as model) {
             <div class="flex max-w-[520px] flex-col gap-2.5 text-[13px]">
-              <div class="flex justify-between border-b border-white/5 pb-2.5">
-                <span class="text-zinc-500">Model</span>
-                <span class="font-mono text-zinc-200">{{ model.id }}</span>
+              <div class="flex justify-between border-b border-border pb-2.5">
+                <span class="text-fg-muted">Model</span>
+                <span class="font-mono text-fg">{{ model.id }}</span>
               </div>
               <div class="flex justify-between">
-                <span class="text-zinc-500">Provider</span>
-                <span class="font-mono text-zinc-200">{{
+                <span class="text-fg-muted">Provider</span>
+                <span class="font-mono text-fg">{{
                   model.provider
                 }}</span>
               </div>
             </div>
           } @else {
-            <p class="text-[13px] text-zinc-500">
+            <p class="text-[13px] text-fg-muted">
               No model resolved — save an LLM configuration in Settings first.
             </p>
           }
@@ -184,10 +184,10 @@
                 data-testid="eval-subtab-questions"
                 (click)="selectEvalTab('questions')"
                 class="rounded-lg px-3 py-1.5 text-[13px]"
-                [class.bg-white/10]="evalTab() === 'questions'"
-                [class.text-zinc-200]="evalTab() === 'questions'"
-                [class.text-zinc-400]="evalTab() !== 'questions'"
-                [class.hover:text-zinc-200]="evalTab() !== 'questions'"
+                [class.bg-surface-selected]="evalTab() === 'questions'"
+                [class.text-fg]="evalTab() === 'questions'"
+                [class.text-fg-muted]="evalTab() !== 'questions'"
+                [class.hover:text-fg]="evalTab() !== 'questions'"
               >
                 Questions
               </button>
@@ -195,10 +195,10 @@
                 data-testid="eval-subtab-runs"
                 (click)="selectEvalTab('runs')"
                 class="rounded-lg px-3 py-1.5 text-[13px]"
-                [class.bg-white/10]="evalTab() === 'runs'"
-                [class.text-zinc-200]="evalTab() === 'runs'"
-                [class.text-zinc-400]="evalTab() !== 'runs'"
-                [class.hover:text-zinc-200]="evalTab() !== 'runs'"
+                [class.bg-surface-selected]="evalTab() === 'runs'"
+                [class.text-fg]="evalTab() === 'runs'"
+                [class.text-fg-muted]="evalTab() !== 'runs'"
+                [class.hover:text-fg]="evalTab() !== 'runs'"
               >
                 Executions
               </button>
@@ -207,7 +207,7 @@
 
           @if (evalTab() === "runs") {
             @if (evalRunsLoading()) {
-              <div class="flex items-center gap-2.5 text-zinc-400">
+              <div class="flex items-center gap-2.5 text-fg-muted">
                 <lucide-angular
                   [img]="Loader2"
                   [size]="16"
@@ -216,7 +216,7 @@
                 <span>Loading executions…</span>
               </div>
             } @else if (evalRuns().length === 0) {
-              <p class="text-[13px] text-zinc-500">
+              <p class="text-[13px] text-fg-muted">
                 No eval runs yet — run the suite from the Questions tab.
               </p>
             } @else {
@@ -224,7 +224,7 @@
                 @for (run of evalRuns(); track run.jobId) {
                   <div
                     [attr.data-testid]="'eval-run-' + run.jobId"
-                    class="rounded-xl bg-white/5 px-4 py-3"
+                    class="rounded-xl bg-surface-muted px-4 py-3"
                   >
                     <div class="flex items-center gap-3">
                       <button
@@ -236,25 +236,25 @@
                           <lucide-angular
                             [img]="Loader2"
                             [size]="14"
-                            class="shrink-0 animate-spin text-zinc-400"
+                            class="shrink-0 animate-spin text-fg-muted"
                           />
                         } @else if (passedIn(run) === run.totalCases) {
                           <lucide-angular
                             [img]="CircleCheck"
                             [size]="14"
-                            class="shrink-0 text-emerald-400"
+                            class="shrink-0 text-on-success-soft"
                           />
                         } @else {
                           <lucide-angular
                             [img]="CircleX"
                             [size]="14"
-                            class="shrink-0 text-red-400"
+                            class="shrink-0 text-on-danger-soft"
                           />
                         }
-                        <span class="text-[13px] text-zinc-200"
+                        <span class="text-[13px] text-fg"
                           >{{ passedIn(run) }}/{{ run.totalCases }} passed</span
                         >
-                        <span class="truncate text-[12px] text-zinc-500">
+                        <span class="truncate text-[12px] text-fg-muted">
                           {{ startedLabel(run) }} ·
                           {{ datasourceName(run.datasourceId) }} ·
                           {{ runDuration(run) }}
@@ -269,7 +269,7 @@
                         title="Download as Markdown"
                         (click)="downloadRun(run)"
                         [disabled]="downloadingRunId() === run.jobId"
-                        class="shrink-0 rounded p-1 text-zinc-600 hover:bg-white/10 hover:text-zinc-300 disabled:opacity-50"
+                        class="shrink-0 btn-icon hover:text-on-danger-soft"
                       >
                         @if (downloadingRunId() === run.jobId) {
                           <lucide-angular
@@ -286,7 +286,7 @@
                           type="button"
                           [attr.aria-label]="'Delete run ' + run.jobId"
                           (click)="deleteRun(run.jobId)"
-                          class="shrink-0 rounded p-1 text-zinc-600 hover:bg-white/10 hover:text-zinc-300"
+                          class="shrink-0 btn-icon hover:text-on-danger-soft"
                         >
                           <lucide-angular [img]="Trash2" [size]="14" />
                         </button>
@@ -294,7 +294,7 @@
                     </div>
 
                     @if (expandedRunId() === run.jobId) {
-                      <p class="mt-2 text-[12px] text-zinc-500">
+                      <p class="mt-2 text-[12px] text-fg-muted">
                         Scoped to {{ run.datasets.join(", ") }}
                       </p>
                       <div class="mt-2 flex flex-col gap-1">
@@ -305,21 +305,21 @@
                               'eval-run-result-' + run.jobId + '-' + result.id
                             "
                             (click)="selectRunResult(result)"
-                            class="flex items-start gap-2 rounded-md px-2 py-1.5 text-left hover:bg-white/5"
+                            class="flex items-start gap-2 rounded-md px-2 py-1.5 text-left hover:bg-surface-muted"
                           >
                             <lucide-angular
                               [img]="result.passed ? CircleCheck : CircleX"
                               [size]="12"
                               class="mt-1 shrink-0"
-                              [class.text-emerald-400]="result.passed"
-                              [class.text-red-400]="!result.passed"
+                              [class.text-on-success-soft]="result.passed"
+                              [class.text-on-danger-soft]="!result.passed"
                             />
                             <span
-                              class="min-w-0 flex-1 text-[12px] text-zinc-300"
+                              class="min-w-0 flex-1 text-[12px] text-fg"
                               >{{ result.question }}</span
                             >
                             <span
-                              class="shrink-0 font-mono text-[11px] text-zinc-600"
+                              class="shrink-0 font-mono text-[11px] text-fg-muted"
                               >{{ result.durationMs }}ms</span
                             >
                           </button>
@@ -331,7 +331,7 @@
               </div>
             }
           } @else if (evalsLoading()) {
-            <div class="flex items-center gap-2.5 text-zinc-400">
+            <div class="flex items-center gap-2.5 text-fg-muted">
               <lucide-angular
                 [img]="Loader2"
                 [size]="16"
@@ -341,17 +341,17 @@
             </div>
           } @else if (evalsError(); as err) {
             <p
-              class="rounded-md bg-red-500/10 px-3 py-2.5 text-[13px] text-red-400"
+              class="rounded-md bg-danger-soft px-3 py-2.5 text-[13px] text-on-danger-soft"
             >
               {{ err }}
             </p>
           } @else if (evalSets().length === 0) {
-            <p class="text-[13px] text-zinc-500">
+            <p class="text-[13px] text-fg-muted">
               No evals configured for this agent yet.
             </p>
           } @else {
             <!-- Question sets: each one is a fixture with its own questions -->
-            <p class="text-[11px] font-medium tracking-wide text-zinc-500 uppercase">
+            <p class="text-[11px] font-medium tracking-wide text-fg-muted uppercase">
               Question sets
             </p>
             <div class="mt-2 flex flex-col gap-2">
@@ -362,10 +362,10 @@
                   [attr.aria-pressed]="selectedSetId() === set.id"
                   (click)="selectSet(set.id)"
                   [disabled]="running() || runStarting()"
-                  class="rounded-xl border px-3 py-2.5 text-left hover:bg-white/5 disabled:opacity-50"
-                  [class.border-zinc-300]="selectedSetId() === set.id"
-                  [class.bg-white/5]="selectedSetId() === set.id"
-                  [class.border-white/10]="selectedSetId() !== set.id"
+                  class="rounded-xl border px-3 py-2.5 text-left hover:bg-surface-muted disabled:opacity-50"
+                  [class.border-border-selected]="selectedSetId() === set.id"
+                  [class.bg-surface-selected]="selectedSetId() === set.id"
+                  [class.border-border]="selectedSetId() !== set.id"
                 >
                   <span class="flex items-center gap-2">
                     <lucide-angular
@@ -375,13 +375,13 @@
                       [class.rotate-90]="selectedSetId() === set.id"
                     />
                     <lucide-angular [img]="ListChecks" [size]="14" />
-                    <span class="text-[13px] text-zinc-200">{{ set.name }}</span>
-                    <span class="text-[11px] text-zinc-500"
+                    <span class="text-[13px] text-fg">{{ set.name }}</span>
+                    <span class="text-[11px] text-fg-muted"
                       >{{ set.cases.length }} questions</span
                     >
                   </span>
                   <span
-                    class="mt-1 block max-w-[80ch] text-[12px] leading-relaxed text-zinc-500"
+                    class="mt-1 block max-w-[80ch] text-[12px] leading-relaxed text-fg-muted"
                     >{{ set.description }}</span
                   >
                 </button>
@@ -390,9 +390,9 @@
 
             <!-- Questions appear only once a set is opened -->
             @if (selectedSet(); as openSet) {
-            <p class="mt-4 text-[12px] text-zinc-500">
+            <p class="mt-4 text-[12px] text-fg-muted">
               {{ openSet.cases.length }} questions in
-              <span class="text-zinc-400">{{ openSet.name }}</span
+              <span class="text-fg-muted">{{ openSet.name }}</span
               >. Each check must score 1.0 for its question to pass.
             </p>
 
@@ -404,7 +404,7 @@
                 [value]="selectedDatasourceId()"
                 (change)="onDatasourceChange($event)"
                 [disabled]="running() || runStarting()"
-                class="rounded-lg border border-white/15 bg-[#232323] px-3 py-2 text-[13px] text-zinc-200 disabled:opacity-50"
+                class="field w-auto"
               >
                 @if (datasources().length === 0) {
                   <option value="">No datasources configured</option>
@@ -424,7 +424,7 @@
                   datasources().length === 0 ||
                   selectedCaseIds().size === 0
                 "
-                class="flex items-center gap-1.5 rounded-lg bg-zinc-200 px-3.5 py-2 text-[13px] font-medium text-zinc-900 hover:bg-white disabled:opacity-50"
+                class="btn btn-primary"
               >
                 @if (running() || runStarting()) {
                   <lucide-angular
@@ -439,7 +439,7 @@
                 }
               </button>
               @if (runStatus() !== "idle") {
-                <span class="text-[12px] text-zinc-500">
+                <span class="text-[12px] text-fg-muted">
                   {{ runResults().length }}/{{ evalCases().length }} done ·
                   {{ passedCount() }} passed
                 </span>
@@ -447,22 +447,22 @@
             </div>
 
             @if (runDatasets().length > 0) {
-              <p class="mt-2 text-[12px] text-zinc-500">
+              <p class="mt-2 text-[12px] text-fg-muted">
                 Scoped to
-                <span class="text-zinc-400">{{
+                <span class="text-fg-muted">{{
                   runDatasets().join(", ")
                 }}</span>
               </p>
             }
             @if (runError(); as err) {
               <p
-                class="mt-3 rounded-md bg-red-500/10 px-3 py-2.5 text-[13px] text-red-400"
+                class="mt-3 rounded-md bg-danger-soft px-3 py-2.5 text-[13px] text-on-danger-soft"
               >
                 {{ err }}
               </p>
             }
             <label
-              class="mt-5 flex w-fit cursor-pointer items-center gap-2 text-[12px] text-zinc-400"
+              class="mt-5 flex w-fit cursor-pointer items-center gap-2 text-[12px] text-fg-muted"
             >
               <input
                 type="checkbox"
@@ -470,7 +470,7 @@
                 [checked]="allCasesSelected()"
                 (change)="toggleAllCases()"
                 [disabled]="running() || runStarting()"
-                class="h-3.5 w-3.5 accent-zinc-300"
+                class="h-3.5 w-3.5 accent-primary"
               />
               <span>Select all</span>
             </label>
@@ -482,8 +482,8 @@
                 let i = $index
               ) {
                 <div
-                  class="flex items-start gap-2 rounded-xl border bg-white/5 px-3 py-3"
-                  [class.border-zinc-300]="selectedEvalCaseId() === evalCase.id"
+                  class="flex items-start gap-2 rounded-xl border bg-surface-muted px-3 py-3"
+                  [class.border-border-selected]="selectedEvalCaseId() === evalCase.id"
                   [class.border-transparent]="
                     selectedEvalCaseId() !== evalCase.id
                   "
@@ -495,23 +495,23 @@
                     [checked]="isCaseSelected(evalCase.id)"
                     (change)="toggleCase(evalCase.id)"
                     [disabled]="running() || runStarting()"
-                    class="mt-1 h-3.5 w-3.5 shrink-0 accent-zinc-300"
+                    class="mt-1 h-3.5 w-3.5 shrink-0 accent-primary"
                   />
                   <button
                     type="button"
                     [attr.data-testid]="'eval-case-' + evalCase.id"
                     [attr.aria-pressed]="selectedEvalCaseId() === evalCase.id"
                     (click)="selectEvalCase(evalCase)"
-                    class="min-w-0 flex-1 rounded-lg px-1 text-left hover:bg-white/5"
+                    class="min-w-0 flex-1 rounded-lg px-1 text-left hover:bg-surface-muted"
                   >
                     <div class="flex items-start gap-3">
                       <span
-                        class="mt-0.5 w-5 shrink-0 text-right font-mono text-[12px] text-zinc-500"
+                        class="mt-0.5 w-5 shrink-0 text-right font-mono text-[12px] text-fg-muted"
                         >{{ i + 1 }}</span
                       >
                       <div class="flex min-w-0 flex-col gap-1.5">
                         <span class="flex items-center gap-2">
-                          <span class="text-[13px] text-zinc-200">{{
+                          <span class="text-[13px] text-fg">{{
                             evalCase.question
                           }}</span>
                           @if (resultFor(evalCase.id); as result) {
@@ -520,7 +520,7 @@
                                 [attr.data-testid]="
                                   'eval-result-' + evalCase.id
                                 "
-                                class="flex items-center gap-1 text-[11px] text-emerald-400"
+                                class="flex items-center gap-1 text-[11px] text-on-success-soft"
                               >
                                 <lucide-angular
                                   [img]="CircleCheck"
@@ -533,7 +533,7 @@
                                 [attr.data-testid]="
                                   'eval-result-' + evalCase.id
                                 "
-                                class="flex items-center gap-1 text-[11px] text-red-400"
+                                class="flex items-center gap-1 text-[11px] text-on-danger-soft"
                               >
                                 <lucide-angular [img]="CircleX" [size]="12" />
                                 <span>failed</span>
@@ -543,7 +543,7 @@
                             runCurrentQuestion() === evalCase.question
                           ) {
                             <span
-                              class="flex items-center gap-1 text-[11px] text-zinc-400"
+                              class="flex items-center gap-1 text-[11px] text-fg-muted"
                             >
                               <lucide-angular
                                 [img]="Loader2"
@@ -555,12 +555,12 @@
                           }
                         </span>
                         <span
-                          class="max-w-[80ch] text-[12px] leading-relaxed text-zinc-500"
+                          class="max-w-[80ch] text-[12px] leading-relaxed text-fg-muted"
                           >{{ evalCase.intent }}</span
                         >
                         @if (resultFor(evalCase.id); as result) {
                           @if (result.error) {
-                            <span class="text-[12px] text-red-400">{{
+                            <span class="text-[12px] text-on-danger-soft">{{
                               result.error
                             }}</span>
                           }
@@ -569,16 +569,16 @@
                           @for (check of evalCase.checks; track check.id) {
                             <span
                               [title]="check.description"
-                              class="flex items-center gap-1.5 rounded-md bg-white/5 px-2 py-0.5 text-[11px] text-zinc-400"
+                              class="flex items-center gap-1.5 rounded-md bg-surface-muted px-2 py-0.5 text-[11px] text-fg-muted"
                             >
                               <lucide-angular [img]="Gauge" [size]="11" />
                               <span>{{ check.description }}</span>
                               @if (resultFor(evalCase.id); as result) {
                                 <span
-                                  [class.text-emerald-400]="
+                                  [class.text-on-success-soft]="
                                     result.scores[check.id] === 1
                                   "
-                                  [class.text-red-400]="
+                                  [class.text-on-danger-soft]="
                                     result.scores[check.id] !== 1
                                   "
                                   >{{ result.scores[check.id] ?? 0 }}</span

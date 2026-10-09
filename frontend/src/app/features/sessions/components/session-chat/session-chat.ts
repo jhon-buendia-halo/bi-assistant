@@ -695,11 +695,11 @@ export class SessionChat implements OnDestroy {
   /** Emerald when corroborated, amber when it differs, muted when it failed. */
   crossCheckClass(check: CrossCheck): string {
     if (check.status === 'agree') {
-      return 'border-emerald-400/20 bg-emerald-400/10 text-emerald-400';
+      return 'border-on-success-soft/30 bg-success-soft text-on-success-soft';
     }
     return check.status === 'disagree'
-      ? 'border-amber-400/20 bg-amber-400/10 text-amber-400'
-      : 'border-white/10 bg-white/[0.04] text-zinc-500';
+      ? 'border-on-warning-soft/30 bg-warning-soft text-on-warning-soft'
+      : 'border-border bg-surface-muted text-fg-muted';
   }
 
   /** Tooltip: the backend's note, or the verdict when it sent none. */

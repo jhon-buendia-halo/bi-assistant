@@ -1,657 +1,714 @@
 <div
-  class="flex h-screen flex-col bg-[#1c1c1c] text-[13px] text-zinc-300 select-none"
+  class="relative flex h-screen flex-col text-[13px] text-fg select-none"
+  style="background: var(--frame-gradient)"
   [class.resizing-right-panel]="rightPanelResizing()"
 >
-  <app-backend-status-banner />
+  <!-- Frame texture (Figma "Chat" background) -->
+  <img
+    src="brand/agentic-hub/frame-texture.webp"
+    alt=""
+    aria-hidden="true"
+    class="pointer-events-none absolute inset-0 h-full w-full object-cover mix-blend-multiply"
+    style="opacity: var(--frame-texture-opacity)"
+  />
 
-  <div class="flex min-h-0 flex-1">
-    @if (sidebarOpen()) {
-      @if (settingsOpen()) {
-        <!-- Settings panel -->
-        <aside
-          aria-label="Settings sidebar"
-          class="flex w-[296px] shrink-0 flex-col border-r border-white/5 bg-[#181818]"
+  <app-backend-status-banner class="relative" />
+
+  <div class="relative flex min-h-0 flex-1 gap-3 p-3">
+    <!-- Navigation rail; the menu button widens it into the drawer -->
+    <aside
+      aria-label="Navigation rail"
+      class="flex shrink-0 flex-col gap-3 overflow-hidden rounded-xl bg-rail px-2 pt-2 pb-4 transition-[width] duration-150"
+      [class.w-16]="!navExpanded()"
+      [class.w-60]="navExpanded()"
+    >
+      <!-- Clears the macOS traffic lights; drags the window -->
+      <div class="app-drag h-6 w-full shrink-0"></div>
+
+      <button
+        type="button"
+        (click)="navExpanded.set(!navExpanded())"
+        [title]="navExpanded() ? 'Collapse navigation' : 'Expand navigation'"
+        [attr.aria-label]="navExpanded() ? 'Collapse navigation' : 'Expand navigation'"
+        [attr.aria-expanded]="navExpanded()"
+        class="flex h-12 shrink-0 items-center rounded-lg px-3 text-icon hover:bg-surface-muted"
+      >
+        <lucide-angular [img]="Menu" [size]="24" />
+      </button>
+
+      <div class="flex shrink-0 items-center gap-3 px-3.5 py-0.5">
+        <span
+          class="flex size-7 shrink-0 items-center justify-center rounded-full"
+          style="background: var(--logo-gradient)"
         >
-          <!-- Header: back -->
-          <div class="app-drag flex h-11 items-center justify-end px-3 pt-3">
-            <button
-              (click)="settingsOpen.set(false)"
-              class="flex items-center gap-1.5 rounded-md px-2 py-1 text-zinc-300 hover:bg-white/5"
-            >
-              <lucide-angular [img]="ArrowLeft" [size]="15" />
-              <span>Back</span>
-            </button>
-          </div>
+          <img
+            src="brand/agentic-hub/logo-mark.svg"
+            alt=""
+            width="7"
+            height="21.24"
+          />
+        </span>
+        @if (navExpanded()) {
+          <span class="truncate text-[14px] font-semibold text-fg-strong"
+            >Agentic Hub</span
+          >
+        }
+      </div>
 
-          <!-- Account row -->
+      <nav
+        aria-label="Workspace navigation"
+        class="flex shrink-0 flex-col gap-2"
+      >
+        @for (item of railItems; track item.area) {
           <button
-            class="mx-2 mt-3 flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-white/5"
+            type="button"
+            (click)="selectArea(item.area)"
+            [title]="item.label"
+            [attr.aria-label]="item.label"
+            [attr.aria-current]="currentArea() === item.area ? 'page' : null"
+            class="flex h-12 items-center gap-3 rounded-lg px-3.5 text-icon transition-colors hover:bg-surface-muted"
+            [class.bg-surface-selected]="currentArea() === item.area"
+            [class.text-accent]="currentArea() === item.area"
           >
-            <span
-              class="flex h-5 w-5 items-center justify-center rounded-full bg-zinc-600 text-[10px] font-medium text-zinc-200"
-            >
-              D
-            </span>
-            <span class="truncate font-medium text-zinc-200">Demo User</span>
-            <lucide-angular
-              [img]="ChevronDown"
-              [size]="14"
-              class="shrink-0 text-zinc-500"
-            />
+            <lucide-angular class="shrink-0" [img]="item.icon" [size]="20" />
+            @if (navExpanded()) {
+              <span class="truncate text-[14px] font-medium text-fg" aria-hidden="true">{{
+                item.label
+              }}</span>
+            }
           </button>
+        }
+      </nav>
 
-          <!-- Search settings -->
-          <div
-            class="mx-3 mt-3 flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5"
-          >
-            <lucide-angular
-              [img]="Search"
-              [size]="14"
-              class="shrink-0 text-zinc-500"
-            />
-            <input
-              placeholder="Search settings"
-              class="w-full bg-transparent text-[13px] text-zinc-200 outline-none placeholder:text-zinc-500"
-            />
-            <kbd
-              class="shrink-0 rounded border border-white/10 px-1 py-0.5 text-[10px] text-zinc-500"
-              >⌘ F</kbd
-            >
-          </div>
-
-          <!-- Options -->
-          <nav
-            aria-label="Settings navigation"
-            class="mt-4 flex flex-col gap-0.5 px-2"
-          >
+      @if (navExpanded()) {
+        <!-- Sessions list (app-shell R46, R48) -->
+        <div class="flex min-h-0 flex-1 flex-col border-t border-border pt-3">
+          <div class="flex shrink-0 items-center justify-between pr-1 pl-3.5">
+            <h2 class="text-[13px] font-semibold text-fg-strong">Sessions</h2>
             <button
-              (click)="selectSection('datasources')"
-              class="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-zinc-200 hover:bg-white/10"
-              [class.option-active]="settingsSection() === 'datasources'"
+              type="button"
+              (click)="openComposer()"
+              title="New conversation"
+              class="btn-icon"
+              [class.bg-surface-selected]="mainView() === 'conversation-new'"
             >
-              <lucide-angular
-                [img]="Database"
-                [size]="15"
-                class="text-zinc-400"
-              />
-              <span>Datasource Configuration</span>
-            </button>
-            <button
-              (click)="selectSection('llm')"
-              class="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-zinc-200 hover:bg-white/10"
-              [class.option-active]="settingsSection() === 'llm'"
-            >
-              <lucide-angular [img]="Bot" [size]="15" class="text-zinc-400" />
-              <span>LLM Configuration</span>
-            </button>
-            <button
-              (click)="selectSection('testing-data')"
-              class="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-zinc-200 hover:bg-white/10"
-              [class.option-active]="settingsSection() === 'testing-data'"
-            >
-              <lucide-angular
-                [img]="TestTube"
-                [size]="15"
-                class="text-zinc-400"
-              />
-              <span>Testing Data</span>
-            </button>
-            <button
-              (click)="selectSection('developer')"
-              class="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-zinc-200 hover:bg-white/10"
-              [class.option-active]="settingsSection() === 'developer'"
-            >
-              <lucide-angular
-                [img]="Wrench"
-                [size]="15"
-                class="text-zinc-400"
-              />
-              <span>Developer</span>
-            </button>
-          </nav>
-
-          <div class="flex-1"></div>
-
-          <!-- Footer: which build this is -->
-          <div class="px-4 pb-3 pt-2">
-            <p class="text-[11px] text-zinc-600" data-testid="app-version">
-              Halo BI Assistant
-              <span class="text-zinc-500">v{{ appVersion }}</span>
-            </p>
-          </div>
-        </aside>
-      } @else {
-        <!-- Sidebar -->
-        <aside
-          aria-label="Primary sidebar"
-          class="flex w-[296px] shrink-0 flex-col border-r border-white/5 bg-[#181818]"
-        >
-          <!-- Header: logo sits next to the collapse toggle, clear of macOS traffic lights -->
-          <div
-            class="app-drag pl-traffic-lights flex h-11 items-center justify-end gap-2 pr-3"
-          >
-            <app-logo [height]="12" class="text-zinc-200" />
-            <button
-              (click)="sidebarOpen.set(false)"
-              title="Collapse sidebar"
-              class="rounded p-1 text-zinc-500 hover:bg-white/5 hover:text-zinc-300"
-            >
-              <lucide-angular [img]="PanelLeft" [size]="16" />
+              <lucide-angular [img]="Plus" [size]="16" />
             </button>
           </div>
-
-          <!-- Account row -->
-          <button
-            class="mx-2 mt-3 flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-white/5"
-          >
-            <span
-              class="flex h-5 w-5 items-center justify-center rounded-full bg-zinc-600 text-[10px] font-medium text-zinc-200"
-            >
-              D
-            </span>
-            <span class="truncate font-medium text-zinc-200">Demo User</span>
-            <lucide-angular
-              [img]="ChevronDown"
-              [size]="14"
-              class="shrink-0 text-zinc-500"
-            />
-          </button>
-
-          <!-- Top section -->
-          <nav
-            aria-label="Workspace navigation"
-            class="mt-2 flex flex-col gap-0.5 px-2 pb-3"
-          >
-            <button
-              (click)="
-                mainView.set(mainView() === 'dataset' ? 'home' : 'dataset')
-              "
-              class="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
-              [class.option-active]="mainView() === 'dataset'"
-            >
-              <lucide-angular [img]="FlaskConical" [size]="15" />
-              <span>Datasets</span>
-            </button>
-            <button
-              (click)="
-                mainView.set(mainView() === 'agents' ? 'home' : 'agents')
-              "
-              class="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
-              [class.option-active]="
-                mainView() === 'agents' || mainView() === 'agent-detail'
-              "
-            >
-              <lucide-angular [img]="Bot" [size]="15" />
-              <span>Agents</span>
-            </button>
-            <button
-              (click)="
-                mainView.set(mainView() === 'knowledge' ? 'home' : 'knowledge')
-              "
-              class="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
-              [class.option-active]="mainView() === 'knowledge'"
-            >
-              <lucide-angular [img]="BookOpen" [size]="15" />
-              <span>Knowledge</span>
-            </button>
-          </nav>
-
-          <!-- Divider -->
-          <div class="border-t border-white/5"></div>
-
-          <!-- Bottom section -->
           <nav
             aria-label="Sessions navigation"
-            class="mt-3 flex flex-col gap-0.5 px-2"
+            class="mt-2 flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto"
           >
-            <div
-              class="group flex items-center gap-2.5 rounded-md px-2 py-1.5 text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
-              [class.option-active]="mainView() === 'conversation-new'"
-            >
-              <lucide-angular [img]="FolderKanban" [size]="15" />
-              <span>Sessions</span>
-              <button
-                (click)="openComposer()"
-                title="New conversation"
-                class="ml-auto rounded p-0.5 text-zinc-500 opacity-0 group-hover:opacity-100 hover:bg-white/10 hover:text-zinc-200"
-                [class.opacity-100]="mainView() === 'conversation-new'"
-              >
-                <lucide-angular [img]="Plus" [size]="15" />
-              </button>
-            </div>
-            <!-- Session children -->
-            @for (session of sessions(); track session.id) {
-              <div
-                [attr.data-testid]="'session-' + session.id"
-                class="group relative ml-6 flex items-center rounded-md text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
-                [class.option-active]="
-                  mainView() === 'session-chat' &&
-                  activeSession()?.id === session.id
-                "
-              >
-                <button
-                  (click)="openSession(session)"
-                  [disabled]="deletingSession() === session.id"
-                  class="min-w-0 flex-1 truncate px-2 py-1.5 text-left text-[12px] disabled:opacity-50"
-                >
-                  {{ session.name }}
-                </button>
-                <button
-                  type="button"
-                  title="Session options"
-                  [attr.aria-label]="'Options for ' + session.name"
-                  (click)="toggleSessionMenu(session.id)"
-                  [disabled]="deletingSession() === session.id"
-                  class="mr-1 rounded p-0.5 text-zinc-500 opacity-0 hover:bg-white/10 hover:text-zinc-200 group-hover:opacity-100 disabled:cursor-not-allowed"
-                  [class.opacity-100]="sessionMenuOpen() === session.id"
-                >
-                  <lucide-angular [img]="EllipsisVertical" [size]="14" />
-                </button>
-                @if (sessionMenuOpen() === session.id) {
+                @for (session of sessions(); track session.id) {
                   <div
-                    class="fixed inset-0 z-20"
-                    (click)="sessionMenuOpen.set(null)"
-                  ></div>
-                  <div
-                    class="absolute top-full right-0 z-30 mt-1 w-44 rounded-lg border border-white/10 bg-[#2a2a2a] p-1 shadow-xl"
+                    [attr.data-testid]="'session-' + session.id"
+                    class="list-row group relative flex items-center p-0"
+                    [class.list-row-selected]="
+                      mainView() === 'session-chat' &&
+                      activeSession()?.id === session.id
+                    "
                   >
                     <button
                       type="button"
-                      (click)="deleteSession(session)"
-                      class="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] text-red-400 hover:bg-white/10"
+                      (click)="openSession(session)"
+                      [disabled]="deletingSession() === session.id"
+                      class="flex min-w-0 flex-1 flex-col px-3 py-2.5 text-left disabled:opacity-50"
                     >
-                      <lucide-angular [img]="Trash2" [size]="14" />
-                      <span>Delete session</span>
+                      <span class="truncate text-[13px] font-medium text-fg">{{
+                        session.name
+                      }}</span>
+                      @if (session.datasets.length > 0) {
+                        <span class="truncate text-[12px] text-fg-muted">{{
+                          session.datasets.join(" · ")
+                        }}</span>
+                      }
                     </button>
-                  </div>
-                }
-              </div>
-            }
-          </nav>
-
-          <!-- Empty body -->
-          <div class="flex-1"></div>
-
-          <!-- Footer -->
-          <div
-            class="flex items-center justify-end gap-1 px-3 pb-3 text-zinc-500"
-          >
-            <button
-              type="button"
-              (click)="systemLogsOpen.set(true)"
-              title="System logs and diagnostics"
-              aria-label="Open system logs"
-              class="relative rounded p-1.5 hover:bg-white/5 hover:text-zinc-300"
-            >
-              <lucide-angular [img]="ScrollText" [size]="15" />
-              @if (diagnostics.issueCount() > 0) {
-                <span
-                  class="absolute -top-1 -right-1 flex min-w-3.5 items-center justify-center rounded-full bg-red-500 px-1 text-[8px] font-semibold leading-3.5 text-white"
-                  >{{
-                    diagnostics.issueCount() > 99
-                      ? "99+"
-                      : diagnostics.issueCount()
-                  }}</span
-                >
-              }
-            </button>
-            <button
-              (click)="settingsOpen.set(true)"
-              title="Settings"
-              class="rounded p-1.5 hover:bg-white/5 hover:text-zinc-300"
-            >
-              <lucide-angular [img]="Settings" [size]="15" />
-            </button>
-          </div>
-        </aside>
-      }
-    }
-
-    <div class="flex min-w-0 flex-1 flex-col">
-      <!-- Top bar -->
-      <header
-        class="app-drag flex h-12 shrink-0 items-center border-b border-white/5 pr-3"
-        [class.pl-3]="sidebarOpen()"
-        [class.pl-traffic-lights]="!sidebarOpen()"
-      >
-        @if (!sidebarOpen()) {
-          <button
-            (click)="sidebarOpen.set(true)"
-            title="Expand sidebar"
-            class="rounded p-1 text-zinc-500 hover:bg-white/5 hover:text-zinc-300"
-          >
-            <lucide-angular [img]="PanelLeft" [size]="16" />
-          </button>
-          <app-logo [height]="12" class="ml-3 text-zinc-300" />
-        }
-        @if (mainView() === "session-chat" && activeSession()) {
-          <div
-            class="ml-3 flex min-w-0 items-center gap-2"
-            [class.ml-0]="sidebarOpen()"
-          >
-            <lucide-angular
-              [img]="Database"
-              [size]="14"
-              class="shrink-0 text-zinc-500"
-            />
-            <span
-              class="shrink-0 text-[10px] font-medium tracking-[0.08em] text-zinc-600 uppercase"
-              >Datasource</span
-            >
-            @if (loadingSessionDatasources()) {
-              <span class="h-4 w-24 animate-pulse rounded bg-white/5"></span>
-            } @else if (activeSessionDatasources().length > 0) {
-              <div class="flex min-w-0 items-center gap-1.5">
-                @for (
-                  datasource of activeSessionDatasources();
-                  track datasource.id
-                ) {
-                  <span
-                    class="flex min-w-0 items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.03] px-2 py-1"
-                    [title]="datasource.summary"
-                  >
-                    <span class="max-w-40 truncate text-[12px] text-zinc-300">{{
-                      datasource.name
-                    }}</span>
-                    <span class="shrink-0 text-[10px] text-zinc-500">{{
-                      datasourceKindLabel(datasource.kind)
-                    }}</span>
-                  </span>
-                }
-              </div>
-            } @else {
-              <span class="truncate text-[12px] text-zinc-500"
-                >Unavailable</span
-              >
-            }
-          </div>
-        }
-        @if (!rightPanelOpen()) {
-          <button
-            (click)="rightPanelOpen.set(true)"
-            title="Expand right panel"
-            class="ml-auto rounded p-1 text-zinc-500 hover:bg-white/5 hover:text-zinc-300"
-          >
-            <lucide-angular [img]="PanelRight" [size]="16" />
-          </button>
-        }
-      </header>
-
-      <!-- Tab strip -->
-      <div class="h-10 shrink-0 border-b border-white/5"></div>
-
-      <!-- Content area -->
-      <main class="flex min-h-0 flex-1 flex-col">
-        <h1 class="sr-only">Questions to Insights</h1>
-        @if (settingsOpen() && settingsSection() === "datasources") {
-          <div class="flex flex-1 justify-center overflow-y-auto px-6 py-10">
-            <app-datasource-config class="w-full max-w-[560px]" />
-          </div>
-        } @else if (settingsOpen() && settingsSection() === "llm") {
-          <div class="flex flex-1 justify-center overflow-y-auto px-6 py-10">
-            <app-llm-config class="w-full max-w-[480px]" />
-          </div>
-        } @else if (settingsOpen() && settingsSection() === "testing-data") {
-          <div class="flex flex-1 justify-center overflow-y-auto px-6 py-10">
-            <app-testing-data-config class="w-full max-w-[560px]" />
-          </div>
-        } @else if (settingsOpen() && settingsSection() === "developer") {
-          <div class="flex flex-1 justify-center overflow-y-auto px-6 py-10">
-            <app-developer-settings class="w-full max-w-[560px]" />
-          </div>
-        } @else if (mainView() === "dataset") {
-          <div class="flex flex-1 justify-center overflow-y-auto px-8 py-10">
-            <app-dataset-list
-              class="w-full max-w-[960px]"
-              (newDataset)="openDatasetEditor(null)"
-              (openDataset)="openDatasetEditor($event)"
-            />
-          </div>
-        } @else if (mainView() === "dataset-new") {
-          <div class="flex flex-1 justify-center overflow-y-auto px-8 py-10">
-            <app-catalog-browser
-              class="w-full max-w-[960px]"
-              [initial]="editingDataset()"
-              (saved)="mainView.set('dataset')"
-            />
-          </div>
-        } @else if (mainView() === "agents") {
-          <div class="flex flex-1 justify-center overflow-y-auto px-8 py-10">
-            <app-agent-list
-              class="w-full max-w-[960px]"
-              (openAgent)="openAgent($event)"
-            />
-          </div>
-        } @else if (mainView() === "agent-detail" && activeAgentKey()) {
-          <div class="flex flex-1 justify-center overflow-y-auto px-8 py-10">
-            <app-agent-detail
-              class="w-full max-w-[960px]"
-              [agentKey]="activeAgentKey()!"
-              (back)="mainView.set('agents')"
-            />
-          </div>
-        } @else if (mainView() === "knowledge") {
-          <div class="flex flex-1 justify-center overflow-y-auto px-8 py-10">
-            <app-knowledge-list class="w-full max-w-[960px]" />
-          </div>
-        } @else if (mainView() === "session-chat" && activeSession()) {
-          <app-session-chat
-            class="min-h-0 flex-1"
-            [session]="activeSession()!"
-            [visualGenerating]="
-              generatingVisualSession() === activeSession()!.id
-            "
-            [activeVisualizationId]="activeVisualization()?.id ?? null"
-            [dataPointSelection]="selectedDataPoint()"
-            (generateVisual)="generateInteractiveVisual($event)"
-            (visualUpdated)="onVisualUpdated($event)"
-            (viewVisual)="showVisualization($event, $event.version)"
-            (sessionUpdated)="onSessionUpdated($event)"
-          />
-        } @else if (mainView() === "conversation-new") {
-          <!-- New conversation composer -->
-          <div
-            class="flex flex-1 flex-col items-center overflow-y-auto px-6 pt-10 pb-8"
-          >
-            <div
-              class="w-full max-w-[920px] rounded-2xl border border-white/10 bg-[#232323] p-4 shadow-lg"
-            >
-              <label class="flex flex-col gap-1.5">
-                <span class="text-[11px] font-medium text-zinc-500"
-                  >Session name</span
-                >
-                <input
-                  type="text"
-                  placeholder="My new session"
-                  [value]="composerName()"
-                  (input)="composerName.set($any($event.target).value)"
-                  class="rounded-md border border-white/10 bg-white/5 px-3 py-2 text-[14px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
-                />
-              </label>
-              <div class="mt-4 flex items-center justify-between">
-                <div class="flex items-center gap-3">
-                  <button
-                    class="flex items-center gap-1.5 rounded-md px-1.5 py-1 hover:bg-white/5"
-                    [class.text-zinc-300]="llmModel()"
-                    [class.text-zinc-500]="!llmModel()"
-                  >
-                    <lucide-angular [img]="Sparkle" [size]="13" />
-                    <span>{{ llmModel() ?? "No model configured" }}</span>
-                  </button>
-                  <div class="relative">
                     <button
-                      (click)="effortMenuOpen.set(!effortMenuOpen())"
-                      title="Reasoning effort"
-                      class="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-zinc-400 capitalize hover:bg-white/5"
+                      type="button"
+                      title="Session options"
+                      [attr.aria-label]="'Options for ' + session.name"
+                      (click)="toggleSessionMenu(session.id)"
+                      [disabled]="deletingSession() === session.id"
+                      class="btn-icon mr-1 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                      [class.opacity-100]="sessionMenuOpen() === session.id"
                     >
-                      <lucide-angular [img]="Signal" [size]="13" />
-                      <span>{{ llmEffort() }}</span>
+                      <lucide-angular [img]="EllipsisVertical" [size]="14" />
                     </button>
-                    @if (effortMenuOpen()) {
+                    @if (sessionMenuOpen() === session.id) {
                       <div
-                        class="fixed inset-0 z-10"
-                        (click)="effortMenuOpen.set(false)"
+                        class="fixed inset-0 z-20"
+                        (click)="sessionMenuOpen.set(null)"
                       ></div>
-                      <div
-                        class="absolute bottom-full left-0 z-20 mb-1 w-36 rounded-lg border border-white/10 bg-[#2a2a2a] p-1 shadow-xl"
-                      >
-                        @for (effort of reasoningEfforts; track effort) {
-                          <button
-                            (click)="setEffort(effort)"
-                            class="flex w-full items-center rounded-md px-2.5 py-1.5 text-left text-[13px] capitalize hover:bg-white/10"
-                            [class.text-zinc-100]="llmEffort() === effort"
-                            [class.text-zinc-400]="llmEffort() !== effort"
+                      <div class="menu absolute top-full right-0 z-30 mt-1 w-44">
+                        <button
+                          type="button"
+                          (click)="deleteSession(session)"
+                          class="menu-item text-on-danger-soft"
+                        >
+                          <lucide-angular [img]="Trash2" [size]="14" />
+                          <span>Delete session</span>
+                        </button>
+                      </div>
+                    }
+                  </div>
+                } @empty {
+                  <p class="px-1 text-[12px] text-fg-muted">No sessions yet.</p>
+                }
+          </nav>
+        </div>
+      } @else {
+        <div class="flex-1"></div>
+      }
+
+      <div class="flex shrink-0 flex-col gap-3" [class.items-center]="!navExpanded()">
+        <span
+          title="Demo User"
+          class="mx-2 flex size-8 items-center justify-center rounded-full bg-primary text-[14px] font-semibold text-on-primary"
+          >D</span
+        >
+        <button
+          type="button"
+          (click)="systemLogsOpen.set(true)"
+          title="System logs and diagnostics"
+          aria-label="Open system logs"
+          class="relative flex h-12 w-full items-center gap-3 rounded-lg px-3.5 text-icon transition-colors hover:bg-surface-muted"
+        >
+          <lucide-angular class="shrink-0" [img]="ScrollText" [size]="20" />
+          @if (navExpanded()) {
+            <span class="text-[14px] font-medium text-fg" aria-hidden="true">System logs</span>
+          }
+          @if (diagnostics.issueCount() > 0) {
+            <span
+              class="absolute top-1.5 left-7 flex min-w-4 items-center justify-center rounded-full bg-danger-soft px-1 text-[9px] font-semibold leading-4 text-on-danger-soft"
+              >{{
+                diagnostics.issueCount() > 99
+                  ? "99+"
+                  : diagnostics.issueCount()
+              }}</span
+            >
+          }
+        </button>
+        <button
+          type="button"
+          (click)="selectArea('settings')"
+          title="Settings"
+          aria-label="Settings"
+          [attr.aria-current]="currentArea() === 'settings' ? 'page' : null"
+          class="flex h-12 w-full items-center gap-3 rounded-lg px-3.5 text-icon transition-colors hover:bg-surface-muted"
+          [class.bg-surface-selected]="currentArea() === 'settings'"
+        >
+          <lucide-angular class="shrink-0" [img]="Settings" [size]="20" />
+          @if (navExpanded()) {
+            <span class="text-[14px] font-medium text-fg" aria-hidden="true">Settings</span>
+          }
+        </button>
+        <div class="h-px w-full bg-border"></div>
+        <div
+          class="flex flex-col items-center gap-1 pt-1"
+          title="Powered by LenAI"
+        >
+          <span class="flex size-[38px] items-center justify-center overflow-hidden rounded">
+            <img
+              src="brand/agentic-hub/lenai-mark.svg"
+              alt=""
+              width="49.0621"
+              height="41.284"
+              class="lenai-art max-w-none"
+            />
+          </span>
+          <img
+            src="brand/agentic-hub/powered-by-lenai.svg"
+            alt="Powered by LenAI"
+            class="lenai-art"
+            width="44.5923"
+            height="20.5212"
+          />
+        </div>
+      </div>
+    </aside>
+
+    <!-- Canvas: banner above the page and the details panel -->
+    <div
+      class="flex min-w-0 flex-1 flex-col gap-3 rounded-xl bg-canvas p-4"
+    >
+      <div
+        role="banner"
+        class="app-drag relative flex min-h-[136px] shrink-0 items-center overflow-hidden rounded-xl px-8 pt-6 pb-8 shadow-subtle"
+        style="background: var(--banner-base)"
+      >
+        <img
+          src="brand/agentic-hub/banner.webp"
+          alt=""
+          aria-hidden="true"
+          class="pointer-events-none absolute inset-0 h-full w-full object-cover"
+          style="opacity: var(--banner-image-opacity)"
+        />
+        <div
+          aria-hidden="true"
+          class="pointer-events-none absolute inset-0"
+          style="background: var(--banner-shade)"
+        ></div>
+        <h1
+          class="relative text-[40px] leading-[48px] font-semibold tracking-[0.2px] text-white"
+        >
+          Agentic Hub
+        </h1>
+      </div>
+
+      <div class="flex min-h-0 flex-1 gap-3">
+        <main class="card relative flex min-w-0 flex-1 overflow-hidden">
+          @if (currentArea() === "settings") {
+            <!-- Settings list pane -->
+            <div
+              class="flex w-[260px] shrink-0 flex-col border-r border-border"
+            >
+              <div class="p-3">
+                <div class="field flex items-center gap-2 py-1.5">
+                  <lucide-angular
+                    [img]="Search"
+                    [size]="14"
+                    class="shrink-0 text-fg-muted"
+                  />
+                  <input
+                    placeholder="Search settings"
+                    aria-label="Search settings"
+                    class="w-full bg-transparent text-[13px] text-fg outline-none placeholder:text-fg-muted"
+                  />
+                  <kbd class="shrink-0 font-sans text-[11px] text-fg-muted"
+                    >⌘ F</kbd
+                  >
+                </div>
+              </div>
+              <nav
+                aria-label="Settings navigation"
+                class="flex flex-col gap-1.5 px-3"
+              >
+                @for (section of settingsSections; track section.key) {
+                  <button
+                    type="button"
+                    (click)="selectSection(section.key)"
+                    [attr.aria-current]="
+                      settingsSection() === section.key ? 'page' : null
+                    "
+                    class="list-row flex items-center gap-2.5 py-2 text-[13px]"
+                    [class.list-row-selected]="settingsSection() === section.key"
+                  >
+                    <lucide-angular
+                      [img]="section.icon"
+                      [size]="15"
+                      class="text-accent"
+                    />
+                    <span>{{ section.label }}</span>
+                  </button>
+                }
+              </nav>
+              <div class="flex-1"></div>
+              <!-- prettier-ignore -->
+              <p class="px-4 pt-2 pb-3 text-[12px] text-fg-muted" data-testid="app-version">Agentic Hub v{{ appVersion }}</p>
+            </div>
+          }
+
+          <div class="flex min-w-0 flex-1 flex-col">
+            @if (currentArea() === "sessions") {
+              <!-- Page header (Figma AgentHeader; app-shell R49) -->
+              <header
+                class="flex shrink-0 items-start justify-between gap-4 border-b border-border px-8 py-4"
+              >
+                <div class="flex min-w-0 flex-1 items-center gap-3">
+                  <img
+                    src="brand/agentic-hub/page-header-icon.svg"
+                    alt=""
+                    width="36"
+                    height="36"
+                  />
+                  <div class="min-w-0 flex-1">
+                    <h2
+                      class="truncate text-[24px] leading-8 font-light tracking-[0.12px] text-fg-strong"
+                    >
+                      {{ pageTitle() }}
+                    </h2>
+                    @if (showSessionContext()) {
+                      <div class="mt-1 flex min-w-0 items-center gap-2">
+                        <lucide-angular
+                          [img]="Database"
+                          [size]="14"
+                          class="shrink-0 text-fg-muted"
+                        />
+                        <span
+                          class="shrink-0 text-[10px] font-medium tracking-[0.08em] text-fg-muted uppercase"
+                          >Datasource</span
+                        >
+                        @if (loadingSessionDatasources()) {
+                          <span
+                            class="h-4 w-24 animate-pulse rounded bg-surface-muted"
+                          ></span>
+                        } @else if (activeSessionDatasources().length > 0) {
+                          <div class="flex min-w-0 items-center gap-1.5">
+                            @for (
+                              datasource of activeSessionDatasources();
+                              track datasource.id
+                            ) {
+                              <span
+                                class="chip chip-neutral min-w-0"
+                                [title]="datasource.summary"
+                              >
+                                <span class="max-w-40 truncate">{{
+                                  datasource.name
+                                }}</span>
+                                <span class="shrink-0 text-[10px] font-normal">{{
+                                  datasourceKindLabel(datasource.kind)
+                                }}</span>
+                              </span>
+                            }
+                          </div>
+                        } @else {
+                          <span class="truncate text-[12px] text-fg-muted"
+                            >Unavailable</span
                           >
-                            {{ effort }}
+                        }
+                      </div>
+                    }
+                  </div>
+                </div>
+                <div class="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    (click)="openComposer()"
+                    class="btn btn-secondary"
+                  >
+                    <lucide-angular [img]="SquarePen" [size]="20" />
+                    <span>Start New Conversation</span>
+                  </button>
+                  @if (!rightPanelOpen()) {
+                    <button
+                      type="button"
+                      (click)="rightPanelOpen.set(true)"
+                      title="Expand right panel"
+                      class="btn-icon"
+                    >
+                      <lucide-angular [img]="PanelRight" [size]="16" />
+                    </button>
+                  }
+                </div>
+              </header>
+            } @else if (!rightPanelOpen()) {
+              <button
+                type="button"
+                (click)="rightPanelOpen.set(true)"
+                title="Expand right panel"
+                class="btn-icon absolute top-2 right-2 z-10"
+              >
+                <lucide-angular [img]="PanelRight" [size]="16" />
+              </button>
+            }
+
+            <!-- Content area -->
+            <div class="flex min-h-0 flex-1 flex-col">
+              @if (settingsOpen()) {
+                @switch (settingsSection()) {
+                  @case ("datasources") {
+                    <div
+                      class="flex flex-1 justify-center overflow-y-auto px-6 py-10"
+                    >
+                      <app-datasource-config class="w-full max-w-[560px]" />
+                    </div>
+                  }
+                  @case ("llm") {
+                    <div
+                      class="flex flex-1 justify-center overflow-y-auto px-6 py-10"
+                    >
+                      <app-llm-config class="w-full max-w-[480px]" />
+                    </div>
+                  }
+                  @case ("testing-data") {
+                    <div
+                      class="flex flex-1 justify-center overflow-y-auto px-6 py-10"
+                    >
+                      <app-testing-data-config class="w-full max-w-[560px]" />
+                    </div>
+                  }
+                  @case ("developer") {
+                    <div
+                      class="flex flex-1 justify-center overflow-y-auto px-6 py-10"
+                    >
+                      <app-developer-settings class="w-full max-w-[560px]" />
+                    </div>
+                  }
+                  @case ("appearance") {
+                    <div
+                      class="flex flex-1 justify-center overflow-y-auto px-6 py-10"
+                    >
+                      <app-appearance-settings class="w-full max-w-[560px]" />
+                    </div>
+                  }
+                  @default {
+                    <div
+                      class="flex flex-1 items-center justify-center px-6 text-center text-[13px] text-fg-muted"
+                    >
+                      Choose a settings section.
+                    </div>
+                  }
+                }
+              } @else if (mainView() === "dataset") {
+                <div class="flex flex-1 justify-center overflow-y-auto px-8 py-10">
+                  <app-dataset-list
+                    class="w-full max-w-[960px]"
+                    (newDataset)="openDatasetEditor(null)"
+                    (openDataset)="openDatasetEditor($event)"
+                  />
+                </div>
+              } @else if (mainView() === "dataset-new") {
+                <div class="flex flex-1 justify-center overflow-y-auto px-8 py-10">
+                  <app-catalog-browser
+                    class="w-full max-w-[960px]"
+                    [initial]="editingDataset()"
+                    (saved)="mainView.set('dataset')"
+                  />
+                </div>
+              } @else if (mainView() === "agents") {
+                <div class="flex flex-1 justify-center overflow-y-auto px-8 py-10">
+                  <app-agent-list
+                    class="w-full max-w-[960px]"
+                    (openAgent)="openAgent($event)"
+                  />
+                </div>
+              } @else if (mainView() === "agent-detail" && activeAgentKey()) {
+                <div class="flex flex-1 justify-center overflow-y-auto px-8 py-10">
+                  <app-agent-detail
+                    class="w-full max-w-[960px]"
+                    [agentKey]="activeAgentKey()!"
+                    (back)="mainView.set('agents')"
+                  />
+                </div>
+              } @else if (mainView() === "knowledge") {
+                <div class="flex flex-1 justify-center overflow-y-auto px-8 py-10">
+                  <app-knowledge-list class="w-full max-w-[960px]" />
+                </div>
+              } @else if (mainView() === "session-chat" && activeSession()) {
+                <app-session-chat
+                  class="min-h-0 flex-1"
+                  [session]="activeSession()!"
+                  [visualGenerating]="
+                    generatingVisualSession() === activeSession()!.id
+                  "
+                  [activeVisualizationId]="activeVisualization()?.id ?? null"
+                  [dataPointSelection]="selectedDataPoint()"
+                  (generateVisual)="generateInteractiveVisual($event)"
+                  (visualUpdated)="onVisualUpdated($event)"
+                  (viewVisual)="showVisualization($event, $event.version)"
+                  (sessionUpdated)="onSessionUpdated($event)"
+                />
+              } @else if (mainView() === "conversation-new") {
+                <!-- New conversation composer -->
+                <div
+                  class="flex flex-1 flex-col items-center overflow-y-auto px-6 pt-10 pb-8"
+                >
+                  <div
+                    class="card w-full max-w-[920px] p-4"
+                  >
+                    <label class="flex flex-col gap-1.5">
+                      <span class="field-label">Session name</span>
+                      <input
+                        type="text"
+                        placeholder="My new session"
+                        [value]="composerName()"
+                        (input)="composerName.set($any($event.target).value)"
+                        class="field text-[14px]"
+                      />
+                    </label>
+                    <div class="mt-4 flex items-center justify-between">
+                      <div class="flex items-center gap-3">
+                        <button
+                          class="flex items-center gap-1.5 rounded-md px-1.5 py-1 hover:bg-surface-muted"
+                          [class.text-fg]="llmModel()"
+                          [class.text-fg-muted]="!llmModel()"
+                        >
+                          <lucide-angular [img]="Sparkle" [size]="13" />
+                          <span>{{ llmModel() ?? "No model configured" }}</span>
+                        </button>
+                        <div class="relative">
+                          <button
+                            (click)="effortMenuOpen.set(!effortMenuOpen())"
+                            title="Reasoning effort"
+                            class="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-fg-muted capitalize hover:bg-surface-muted"
+                          >
+                            <lucide-angular [img]="Signal" [size]="13" />
+                            <span>{{ llmEffort() }}</span>
+                          </button>
+                          @if (effortMenuOpen()) {
+                            <div
+                              class="fixed inset-0 z-10"
+                              (click)="effortMenuOpen.set(false)"
+                            ></div>
+                            <div
+                              class="menu absolute bottom-full left-0 z-20 mb-1 w-36"
+                            >
+                              @for (effort of reasoningEfforts; track effort) {
+                                <button
+                                  (click)="setEffort(effort)"
+                                  class="menu-item capitalize"
+                                  [class.font-semibold]="llmEffort() === effort"
+                                  [class.text-fg-strong]="llmEffort() === effort"
+                                  [class.text-fg-muted]="llmEffort() !== effort"
+                                >
+                                  {{ effort }}
+                                </button>
+                              }
+                            </div>
+                          }
+                        </div>
+                      </div>
+                      <div class="flex items-center gap-3">
+                        <button
+                          (click)="createSession()"
+                          [disabled]="
+                            creatingSession() ||
+                            selectedDatasets().size === 0 ||
+                            composerName().trim() === ''
+                          "
+                          title="Name the session and select at least one dataset"
+                          class="btn btn-primary"
+                        >
+                          @if (creatingSession()) {
+                            <span>Creating…</span>
+                          } @else {
+                            <span>Create</span>
+                            <lucide-angular [img]="CornerDownLeft" [size]="14" />
+                          }
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Dataset selection: the session needs at least one -->
+                  <div class="mt-8 w-full max-w-[920px]">
+                    <p class="field-label">
+                      Select at least one dataset for this session
+                    </p>
+                    @if (composerDatasets().length === 0) {
+                      <p class="mt-3 text-[13px] text-fg-muted">
+                        No datasets yet — create one in Datasets first.
+                      </p>
+                    } @else {
+                      <div class="mt-2 flex flex-col gap-2">
+                        @for (dataset of composerDatasets(); track dataset.name) {
+                          <button
+                            (click)="toggleDatasetSelection(dataset.name)"
+                            class="list-row flex items-center gap-3 px-3 py-2.5"
+                            [class.list-row-selected]="
+                              selectedDatasets().has(dataset.name)
+                            "
+                          >
+                            <span
+                              class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-muted text-accent"
+                            >
+                              <lucide-angular [img]="Workflow" [size]="15" />
+                            </span>
+                            <span class="truncate text-[13px] font-medium text-fg">{{
+                              dataset.name
+                            }}</span>
+                            <span class="text-[12px] text-fg-muted"
+                              >{{ dataset.tables.length }} entities</span
+                            >
+                            @if (selectedDatasets().has(dataset.name)) {
+                              <lucide-angular
+                                [img]="CircleCheck"
+                                [size]="16"
+                                class="ml-auto shrink-0 text-primary"
+                              />
+                            }
                           </button>
                         }
                       </div>
                     }
                   </div>
                 </div>
-                <div class="flex items-center gap-3">
-                  <button
-                    (click)="createSession()"
-                    [disabled]="
-                      creatingSession() ||
-                      selectedDatasets().size === 0 ||
-                      composerName().trim() === ''
-                    "
-                    title="Name the session and select at least one dataset"
-                    class="flex items-center gap-1.5 rounded-lg bg-zinc-200 px-3.5 py-2 text-[13px] font-medium text-zinc-900 hover:bg-white disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
-                  >
-                    @if (creatingSession()) {
-                      <span>Creating…</span>
-                    } @else {
-                      <span>Create</span>
-                      <lucide-angular [img]="CornerDownLeft" [size]="14" />
-                    }
-                  </button>
+              } @else if (mainView() === "sessions") {
+                <div
+                  class="flex flex-1 items-center justify-center px-6 text-center text-[13px] text-fg-muted"
+                >
+                  Select a session or start a new conversation.
                 </div>
-              </div>
-            </div>
-
-            <!-- Dataset selection: the session needs at least one -->
-            <div class="mt-8 w-full max-w-[920px]">
-              <p class="text-[12px] text-zinc-500">
-                Select at least one dataset for this session
-              </p>
-              @if (composerDatasets().length === 0) {
-                <p class="mt-3 text-[13px] text-zinc-500">
-                  No datasets yet — create one in Datasets first.
-                </p>
               } @else {
-                <div class="mt-2 flex flex-col gap-1">
-                  @for (dataset of composerDatasets(); track dataset.name) {
-                    <button
-                      (click)="toggleDatasetSelection(dataset.name)"
-                      class="flex items-center gap-3 rounded-xl border px-3 py-2.5 text-left hover:bg-white/5"
-                      [class.border-emerald-500/40]="
-                        selectedDatasets().has(dataset.name)
-                      "
-                      [class.bg-emerald-500/5]="
-                        selectedDatasets().has(dataset.name)
-                      "
-                      [class.border-white/10]="
-                        !selectedDatasets().has(dataset.name)
-                      "
-                    >
-                      <span
-                        class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/5 text-zinc-400"
-                      >
-                        <lucide-angular [img]="Workflow" [size]="15" />
-                      </span>
-                      <span class="truncate text-[13px] text-zinc-200">{{
-                        dataset.name
-                      }}</span>
-                      <span class="text-[12px] text-zinc-500"
-                        >{{ dataset.tables.length }} entities</span
-                      >
-                      @if (selectedDatasets().has(dataset.name)) {
-                        <lucide-angular
-                          [img]="CircleCheck"
-                          [size]="16"
-                          class="ml-auto shrink-0 text-emerald-400"
-                        />
-                      }
-                    </button>
-                  }
+                <div class="flex-1"></div>
+
+                <!-- Chat input placeholder -->
+                <div class="flex justify-center px-6 pb-6">
+                  <div class="card h-28 w-full max-w-[860px]"></div>
                 </div>
               }
             </div>
           </div>
-        } @else {
-          <div class="flex-1"></div>
+        </main>
 
-          <!-- Chat input container -->
-          <div class="flex justify-center px-6 pb-6">
-            <div
-              class="h-28 w-full max-w-[860px] rounded-2xl border border-white/10 bg-[#232323]"
-            ></div>
-          </div>
-        }
-      </main>
-    </div>
-
-    <!-- Right panel -->
-    @if (rightPanelOpen()) {
-      <aside
-        aria-label="Details panel"
-        class="relative flex shrink-0 flex-col border-l border-white/5 bg-[#161616]"
-        [style.width.px]="rightPanelWidth()"
-      >
-        <div
-          class="right-panel-resize-handle"
-          role="separator"
-          tabindex="0"
-          aria-label="Resize right panel"
-          aria-orientation="vertical"
-          [attr.aria-valuemin]="rightPanelMinWidth"
-          [attr.aria-valuemax]="rightPanelMaxWidth()"
-          [attr.aria-valuenow]="rightPanelWidth()"
-          title="Drag to resize · Double-click to reset"
-          (pointerdown)="startRightPanelResize($event)"
-          (keydown)="resizeRightPanelWithKeyboard($event)"
-          (dblclick)="resetRightPanelWidth()"
-        ></div>
-
-        <!-- Panel header: collapse -->
-        <div class="app-drag flex h-12 shrink-0 items-center justify-end px-3">
-          <button
-            (click)="rightPanelOpen.set(false)"
-            title="Collapse right panel"
-            class="rounded p-1 text-zinc-500 hover:bg-white/5 hover:text-zinc-300"
+        <!-- Right panel -->
+        @if (rightPanelOpen()) {
+          <aside
+            aria-label="Details panel"
+            class="card relative flex shrink-0 flex-col"
+            [style.width.px]="rightPanelWidth()"
           >
-            <lucide-angular [img]="PanelRight" [size]="16" />
-          </button>
-        </div>
+            <div
+              class="right-panel-resize-handle"
+              role="separator"
+              tabindex="0"
+              aria-label="Resize right panel"
+              aria-orientation="vertical"
+              [attr.aria-valuemin]="rightPanelMinWidth"
+              [attr.aria-valuemax]="rightPanelMaxWidth()"
+              [attr.aria-valuenow]="rightPanelWidth()"
+              title="Drag to resize · Double-click to reset"
+              (pointerdown)="startRightPanelResize($event)"
+              (keydown)="resizeRightPanelWithKeyboard($event)"
+              (dblclick)="resetRightPanelWidth()"
+            ></div>
 
-        <!-- Panel body -->
-        @if (mainView() === "session-chat" && activeSession()) {
-          <app-interactive-visual-panel
-            class="min-h-0 flex-1"
-            [sessionId]="activeSession()!.id"
-            [visualization]="activeVisualization()"
-            [visualizations]="activeSession()!.visualizations ?? []"
-            [loading]="generatingVisualSession() === activeSession()!.id"
-            [error]="visualizationError()"
-            [downloading]="
-              downloadingVisualization() === activeVisualization()?.id
-            "
-            (viewVisual)="showVisualization($event)"
-            (downloadVisual)="downloadVisualization($event)"
-            (selectVersion)="selectVisualVersion($event)"
-            (revertVersion)="revertVisualVersion($event)"
-            (visualRefreshed)="onVisualRefreshed($event)"
-            (dataPointSelected)="onDataPointSelected($event)"
-          />
-        } @else if (mainView() === "agent-detail") {
-          <app-eval-trace class="min-h-0 flex-1 overflow-y-auto" />
-        } @else {
-          <app-entity-details class="min-h-0 flex-1 overflow-y-auto" />
+            <!-- Panel header: collapse -->
+            <div
+              class="flex h-12 shrink-0 items-center justify-end border-b border-border px-3"
+            >
+              <button
+                type="button"
+                (click)="rightPanelOpen.set(false)"
+                title="Collapse right panel"
+                class="btn-icon"
+              >
+                <lucide-angular [img]="PanelRight" [size]="16" />
+              </button>
+            </div>
+
+            <!-- Panel body -->
+            <div
+              class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-b-card"
+            >
+              @if (mainView() === "session-chat" && activeSession()) {
+                <app-interactive-visual-panel
+                  class="min-h-0 flex-1"
+                  [sessionId]="activeSession()!.id"
+                  [visualization]="activeVisualization()"
+                  [visualizations]="activeSession()!.visualizations ?? []"
+                  [loading]="generatingVisualSession() === activeSession()!.id"
+                  [error]="visualizationError()"
+                  [downloading]="
+                    downloadingVisualization() === activeVisualization()?.id
+                  "
+                  (viewVisual)="showVisualization($event)"
+                  (downloadVisual)="downloadVisualization($event)"
+                  (selectVersion)="selectVisualVersion($event)"
+                  (revertVersion)="revertVisualVersion($event)"
+                  (visualRefreshed)="onVisualRefreshed($event)"
+                  (dataPointSelected)="onDataPointSelected($event)"
+                />
+              } @else if (mainView() === "agent-detail") {
+                <app-eval-trace class="min-h-0 flex-1 overflow-y-auto" />
+              } @else {
+                <app-entity-details class="min-h-0 flex-1 overflow-y-auto" />
+              }
+            </div>
+          </aside>
         }
-      </aside>
-    }
+      </div>
+    </div>
   </div>
 
   @if (systemLogsOpen()) {

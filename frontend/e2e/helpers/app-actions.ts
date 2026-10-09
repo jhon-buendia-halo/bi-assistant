@@ -18,7 +18,8 @@ export async function createWorldCupDatasource(page: Page): Promise<void> {
   await page.getByLabel('Name', { exact: true }).fill(WORLD_CUP_DATASOURCE);
   await page.getByLabel('Kind').selectOption('postgres');
   await page.getByLabel('Host').fill('127.0.0.1');
-  await page.getByLabel('Port').fill('55432');
+  // Same override as docker-compose.yml, so a worktree can use its own stack.
+  await page.getByLabel('Port').fill(process.env['WORLD_CUP_DB_PORT'] ?? '55432');
   await page.getByLabel('Database').fill('world_cup');
   await page.getByLabel('User').fill('world_cup');
   await page.getByLabel('Password').fill('world_cup_dev');
@@ -37,7 +38,6 @@ export async function createWorldCupDataset(
   page: Page,
   tables: string[] = ['matches'],
 ): Promise<void> {
-  await page.getByRole('button', { name: 'Back' }).click();
   await page.getByRole('button', { name: 'Datasets' }).click();
   await expect(page.getByRole('heading', { name: 'Datasets' })).toBeVisible();
   await page.getByRole('button', { name: 'New dataset' }).click();
@@ -70,7 +70,16 @@ export async function createWorldCupDataset(
   ).toBeVisible();
 }
 
+/** Shows the Sessions area, where the session list lives. */
+export async function openSessions(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Sessions', exact: true }).click();
+  await expect(
+    page.getByRole('navigation', { name: 'Sessions navigation' }),
+  ).toBeVisible();
+}
+
 export async function createWorldCupSession(page: Page): Promise<string> {
+  await openSessions(page);
   await page.getByTitle('New conversation').click();
   await expect(page.getByPlaceholder('My new session')).toBeVisible();
   await page.getByPlaceholder('My new session').fill(WORLD_CUP_SESSION);
@@ -80,12 +89,12 @@ export async function createWorldCupSession(page: Page): Promise<string> {
   await page.getByRole('button', { name: /^Create$/ }).click();
 
   await expect(
-    page.getByText(WORLD_CUP_SESSION, { exact: true }),
+    page.getByRole('heading', { name: WORLD_CUP_SESSION }),
   ).toBeVisible();
   await expect(page.locator('header')).toContainText(WORLD_CUP_DATASOURCE);
   await expect(page.locator('header')).toContainText('PostgreSQL');
 
-  // Scope to the sidebar: the chat pane's welcome card also carries a
+  // Scope to the session list: the chat pane's welcome card also carries a
   // `session-*` test id and shows the session name.
   const session = page
     .getByRole('navigation', { name: 'Sessions navigation' })

@@ -1,0 +1,3 @@
+Chrome Headless 153.0.0.0 (Linux 0.0.0) App should support keyboard resizing from the separator FAILED
+	Expected 525 to be 548.
+TOTAL: 1 FAILED, 88 SUCCESS

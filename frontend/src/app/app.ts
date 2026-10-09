@@ -1,6 +1,7 @@
 import {
   Component,
   HostListener,
+  computed,
   effect,
   inject,
   signal,
@@ -8,6 +9,7 @@ import {
 import { forkJoin, retry, timer } from 'rxjs';
 import {
   LucideAngularModule,
+  LucideIconData,
   ArrowLeft,
   Bot,
   BookOpen,
@@ -19,6 +21,8 @@ import {
   FlaskConical,
   FolderKanban,
   PanelLeft,
+  Menu,
+  SquarePen,
   PanelRight,
   Plus,
   Search,
@@ -29,6 +33,7 @@ import {
   TestTube,
   Trash2,
   Workflow,
+  SunMoon,
   Wrench,
 } from 'lucide-angular';
 import { DatasourceConfig } from './features/datasources/components/datasource-config/datasource-config';
@@ -40,6 +45,8 @@ import { DatasourcesApiService } from './features/datasources/services/datasourc
 import { LlmConfig } from './features/llm/components/llm-config/llm-config';
 import { TestingDataConfig } from './features/testing-data/components/testing-data-config/testing-data-config';
 import { DeveloperSettingsConfig } from './features/developer/components/developer-settings/developer-settings';
+import { AppearanceSettings } from './features/appearance/components/appearance-settings/appearance-settings';
+import { ThemeService } from './core/theme/theme.service';
 import { DatasetList } from './features/datasets/components/dataset-list/dataset-list';
 import { AgentList } from './features/agents/components/agent-list/agent-list';
 import { AgentDetail } from './features/agents/components/agent-detail/agent-detail';
@@ -49,7 +56,7 @@ import { KnowledgeList } from './features/knowledge/components/knowledge-list/kn
 import { CatalogBrowser } from './features/datasets/components/catalog-browser/catalog-browser';
 import { EntityDetails } from './features/datasets/components/entity-details/entity-details';
 import { DatasetSelectionService } from './features/datasets/services/dataset-selection.service';
-import { AppLogo } from './shared/components/app-logo/app-logo';
+import { EvalSelectionService } from './features/agents/services/eval-selection.service';
 import { BackendStatusBanner } from './shared/components/backend-status-banner/backend-status-banner';
 import { ToastContainer } from './shared/components/toast-container/toast-container';
 import { SystemLogsPanel } from './shared/components/system-logs-panel/system-logs-panel';
@@ -80,6 +87,7 @@ type SettingsSection =
   | 'llm'
   | 'testing-data'
   | 'developer'
+  | 'appearance'
   | null;
 type MainView =
   | 'home'
@@ -88,8 +96,31 @@ type MainView =
   | 'agents'
   | 'agent-detail'
   | 'knowledge'
+  | 'sessions'
   | 'conversation-new'
   | 'session-chat';
+
+/** What the navigation rail selects (app-shell R3–R5, R46). */
+type Area = 'datasets' | 'agents' | 'knowledge' | 'sessions' | 'settings';
+
+/** The view each workspace area opens on. */
+const AREA_ROOT: Record<Exclude<Area, 'settings'>, MainView> = {
+  datasets: 'dataset',
+  agents: 'agents',
+  knowledge: 'knowledge',
+  sessions: 'sessions',
+};
+
+const AREA_OF_VIEW: Partial<Record<MainView, Area>> = {
+  dataset: 'datasets',
+  'dataset-new': 'datasets',
+  agents: 'agents',
+  'agent-detail': 'agents',
+  knowledge: 'knowledge',
+  sessions: 'sessions',
+  'conversation-new': 'sessions',
+  'session-chat': 'sessions',
+};
 
 const DEFAULT_RIGHT_PANEL_WIDTH = 572;
 const MIN_RIGHT_PANEL_WIDTH = 360;
@@ -102,12 +133,12 @@ const RIGHT_PANEL_WIDTH_STORAGE_KEY = 'questions-to-insights:right-panel-width';
   selector: 'app-root',
   imports: [
     LucideAngularModule,
-    AppLogo,
     BackendStatusBanner,
     DatasourceConfig,
     LlmConfig,
     TestingDataConfig,
     DeveloperSettingsConfig,
+    AppearanceSettings,
     DatasetList,
     AgentList,
     AgentDetail,
@@ -138,6 +169,8 @@ export class App {
   readonly FlaskConical = FlaskConical;
   readonly FolderKanban = FolderKanban;
   readonly PanelLeft = PanelLeft;
+  readonly Menu = Menu;
+  readonly SquarePen = SquarePen;
   readonly PanelRight = PanelRight;
   readonly Plus = Plus;
   readonly Search = Search;
@@ -147,13 +180,14 @@ export class App {
   readonly Sparkle = Sparkle;
   readonly TestTube = TestTube;
   readonly Wrench = Wrench;
+  readonly SunMoon = SunMoon;
   readonly Trash2 = Trash2;
   readonly Workflow = Workflow;
 
-  readonly sidebarOpen = signal(true);
   readonly settingsOpen = signal(false);
   readonly settingsSection = signal<SettingsSection>(null);
-  readonly rightPanelOpen = signal(true);
+  /** Closed on launch; opens on demand (app-shell R2, R10). */
+  readonly rightPanelOpen = signal(false);
   readonly rightPanelResizing = signal(false);
   readonly rightPanelWidth = signal(this.readRightPanelWidth());
   readonly rightPanelMinWidth = MIN_RIGHT_PANEL_WIDTH;
@@ -179,9 +213,12 @@ export class App {
   }
 
   private readonly datasetSelection = inject(DatasetSelectionService);
+  private readonly evalSelection = inject(EvalSelectionService);
   private readonly llmApi = inject(LlmApiService);
 
   private readonly toast = inject(ToastService);
+  // Created with the shell so the resolved theme is applied from start-up.
+  private readonly theme = inject(ThemeService);
   readonly diagnostics = inject(DiagnosticsService);
 
   /** Model from the saved LLM configuration, shown in the composer chip. */
@@ -634,7 +671,7 @@ export class App {
           this.activeSession.set(null);
           this.activeVisualization.set(null);
           this.visualizationError.set(null);
-          this.mainView.set('home');
+          this.mainView.set('sessions');
         }
         this.toast.success(res.message);
       },
@@ -716,7 +753,72 @@ export class App {
     effect(() => {
       if (this.datasetSelection.selection()) this.rightPanelOpen.set(true);
     });
+    // Selecting an eval question reveals how it ran (R10).
+    effect(() => {
+      if (this.evalSelection.selection()) this.rightPanelOpen.set(true);
+    });
     this.loadSessions();
+  }
+
+  /** The rail area that is shown, or null on home. */
+  readonly currentArea = computed<Area | null>(() =>
+    this.settingsOpen() ? 'settings' : (AREA_OF_VIEW[this.mainView()] ?? null),
+  );
+
+  readonly railItems: { area: Exclude<Area, 'settings'>; label: string; icon: LucideIconData }[] = [
+    { area: 'datasets', label: 'Datasets', icon: FlaskConical },
+    { area: 'agents', label: 'Agents', icon: Bot },
+    { area: 'knowledge', label: 'Knowledge', icon: BookOpen },
+    { area: 'sessions', label: 'Sessions', icon: FolderKanban },
+  ];
+
+  readonly settingsSections: {
+    key: Exclude<SettingsSection, null>;
+    label: string;
+    icon: LucideIconData;
+  }[] = [
+    { key: 'datasources', label: 'Datasource Configuration', icon: Database },
+    { key: 'llm', label: 'LLM Configuration', icon: Bot },
+    { key: 'testing-data', label: 'Testing Data', icon: TestTube },
+    { key: 'developer', label: 'Developer', icon: Wrench },
+    { key: 'appearance', label: 'Appearance', icon: SunMoon },
+  ];
+
+  /** The rail's drawer with labels and the session list (app-shell R48). */
+  readonly navExpanded = signal(false);
+
+  /** Title of the Sessions area's page header (app-shell R49). */
+  readonly pageTitle = computed(() => {
+    if (this.mainView() === 'session-chat') {
+      return this.activeSession()?.name ?? 'Sessions';
+    }
+    return this.mainView() === 'conversation-new'
+      ? 'New conversation'
+      : 'Sessions';
+  });
+
+  /** The page header shows the session's datasources while a chat is open. */
+  readonly showSessionContext = computed(
+    () =>
+      !this.settingsOpen() &&
+      this.mainView() === 'session-chat' &&
+      this.activeSession() !== null,
+  );
+
+  /**
+   * Shows a rail area. An area that is already shown keeps its current view;
+   * otherwise it opens on its main screen. Settings keeps its chosen section.
+   */
+  selectArea(area: Area): void {
+    if (area === 'settings') {
+      this.settingsOpen.set(true);
+      return;
+    }
+    const alreadyShown = this.currentArea() === area;
+    this.settingsOpen.set(false);
+    // The session list lives in the drawer, so Sessions opens it (R3).
+    if (area === 'sessions') this.navExpanded.set(true);
+    if (!alreadyShown) this.mainView.set(AREA_ROOT[area]);
   }
 
   selectSection(section: Exclude<SettingsSection, null>): void {

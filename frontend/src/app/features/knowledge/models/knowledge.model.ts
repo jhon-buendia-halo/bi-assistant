@@ -69,10 +69,10 @@ export function kindDescription(kind: KnowledgeSnippetKind): string {
 export function kindAccentClass(kind: KnowledgeSnippetKind): string {
   switch (kind) {
     case 'instruction':
-      return 'text-sky-400';
+      return 'text-accent';
     case 'term':
-      return 'text-amber-400';
+      return 'text-on-warning-soft';
     case 'default_filter':
-      return 'text-emerald-400';
+      return 'text-on-success-soft';
   }
 }

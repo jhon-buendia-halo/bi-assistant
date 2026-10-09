@@ -42,7 +42,7 @@ Retention and persistence
 - R19. New entries SHALL be pushed to the open interface live; entries with an id already shown SHALL replace rather than duplicate. The list SHALL always be ordered by timestamp, oldest first.
 
 System logs panel
-- R20. The system SHALL provide an **Open system logs** button in the primary sidebar footer. It SHALL open the System logs panel as a modal dialog over the app, dimming the content behind it. The panel SHALL be labelled "System logs", show a "LIVE" indicator and the subtitle "Desktop, interface, backend, and AI runtime diagnostics".
+- R20. The system SHALL provide an **Open system logs** button at the bottom of the navigation rail. It SHALL open the System logs panel as a modal dialog over the app, dimming the content behind it. The panel SHALL be labelled "System logs", show a "LIVE" indicator and the subtitle "Desktop, interface, backend, and AI runtime diagnostics".
 - R21. The panel SHALL close with its **Close system logs** button or by clicking the dimmed area outside it. Closing SHALL discard the panel's view state: reopening starts fresh (tab All, empty search, Group by run on, Follow on).
 - R22. The panel SHALL offer an **All** tab (with the total entry count) and an **Issues** tab (with the issue count), and SHALL show the number of errors and the number of warnings.
 - R23. The panel SHALL offer a search box ("Search messages or sources", labelled "Search system logs"). It SHALL match, ignoring case and surrounding whitespace, against the source, the message and the text of the details together. The Issues tab and the search SHALL combine.
@@ -53,7 +53,7 @@ System logs panel
 - R28. Each entry row SHALL show its time, level badge, source and message. Expanding a row SHALL show a plain-language explanation of its source and, when present, its details as formatted JSON. Explanations: `user-visible` → "An operation shown in the app failed."; `backend:mastra…` → "The AI agent runtime reported this event."; `backend…` → "The local data and backend service reported this event."; a source containing `renderer` → "The application interface reported this event."; `electron…` → "The desktop application shell reported this event."; anything else → "A system component reported this event."
 - R29. When any issue exists, the panel SHALL show a "Latest issue" banner with its time, message and source explanation.
 - R30. The panel footer SHALL read "Up to 2,000 recent entries are retained. Logs are redacted before export." and "Expand a row for context and stack details."
-- R31. The sidebar's Open system logs button SHALL carry a live badge with the issue count (R4 of [../app-shell/spec.md](../app-shell/spec.md)).
+- R31. The rail's Open system logs button SHALL carry a live badge with the issue count (R4 of [../app-shell/spec.md](../app-shell/spec.md)).
 - R32. The app SHALL NOT show a Help button.
 
 Export
@@ -89,7 +89,7 @@ Export
 
 ## UI
 
-The panel is a modal overlay above the whole app, reached from the sidebar footer: [../../system/ui.md](../../system/ui.md). States: empty, loading (refresh spinner), populated flat, populated grouped by run, filtered, exporting, and with a "Latest issue" banner.
+The panel is a modal overlay above the whole app, reached from the bottom of the navigation rail: [../../system/ui.md](../../system/ui.md). States: empty, loading (refresh spinner), populated flat, populated grouped by run, filtered, exporting, and with a "Latest issue" banner.
 
 ## Flows
 
@@ -158,7 +158,7 @@ Feature: Diagnostics behaviour not yet covered by Playwright
     Given a datasource connection test fails and an error toast is shown
     When I open "System logs" and click "Issues"
     Then I see an entry with source "user-visible" and the toast text
-    And the sidebar badge on "Open system logs" counts it
+    And the rail badge on "Open system logs" counts it
 
   Scenario: Redacts a connection string password
     Given the backend logs "postgres://qti:s3cret@localhost:5432/db"

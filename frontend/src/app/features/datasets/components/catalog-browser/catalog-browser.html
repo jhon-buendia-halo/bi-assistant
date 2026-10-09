@@ -1,33 +1,33 @@
 <div class="flex flex-col">
-  <div class="flex items-start justify-between gap-4">
-    <div>
-      <h1 class="font-serif text-[28px] font-semibold text-zinc-100">
+  <div class="flex flex-wrap items-start justify-between gap-4">
+    <div class="min-w-[240px] flex-1">
+      <h2 class="text-[24px] leading-8 font-light tracking-[0.12px] text-fg-strong">
         {{ initial() ? "Edit dataset" : "New dataset" }}
-      </h1>
-      <p class="mt-1 text-[13px] text-zinc-500">
+      </h2>
+      <p class="mt-1 text-[13px] text-fg-muted">
         Catalogs, schemas and entities available through the selected
         datasource.
       </p>
       @if (updatedLabel(); as updated) {
-        <p class="mt-1 text-[12px] text-zinc-600">Updated {{ updated }}</p>
+        <p class="mt-1 text-[12px] text-fg-muted">Updated {{ updated }}</p>
       }
     </div>
-    <div class="flex shrink-0 items-center gap-2">
+    <div class="flex flex-wrap items-center gap-2">
       <select
         aria-label="Datasource"
         [value]="datasourceId()"
         [disabled]="datasources().length === 0"
         (change)="changeDatasource($any($event.target).value)"
-        class="max-w-[220px] rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[13px] text-zinc-200 outline-none focus:border-white/25 disabled:opacity-50"
+        class="field w-auto max-w-[220px]"
       >
         @if (datasources().length === 0) {
-          <option value="" class="bg-[#232323]">No datasources</option>
+          <option value="" class="bg-surface">No datasources</option>
         }
         @for (datasource of datasources(); track datasource.id) {
           <option
             [value]="datasource.id"
             [selected]="datasource.id === datasourceId()"
-            class="bg-[#232323]"
+            class="bg-surface"
           >
             {{ datasource.name }} ·
             {{ datasource.kind === "postgres" ? "PostgreSQL" : "Databricks" }}
@@ -40,7 +40,7 @@
         title="Re-read catalogs, schemas and entities from the datasource"
         (click)="refreshInventory()"
         [disabled]="loading() || !selectedDatasource()"
-        class="flex shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5 p-2 text-zinc-300 hover:bg-white/10 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
+        class="btn btn-outline shrink-0 p-2"
       >
         <lucide-angular
           [img]="RefreshCw"
@@ -53,7 +53,7 @@
         placeholder="Dataset name"
         [value]="datasetName()"
         (input)="datasetName.set($any($event.target).value)"
-        class="w-[220px] rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+        class="field w-[220px]"
       />
       <button
         (click)="saveDataset()"
@@ -64,7 +64,7 @@
           datasetName().trim() === ''
         "
         title="Name the dataset and include at least one element"
-        class="flex items-center justify-center gap-2 rounded-lg bg-zinc-200 px-3.5 py-2 text-[13px] font-medium text-zinc-900 hover:bg-white disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+        class="btn btn-primary"
       >
         @if (saving()) {
           <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
@@ -79,10 +79,10 @@
   @if (awaitingChoice()) {
     <div class="mt-10 flex flex-col items-start gap-3">
       <div class="flex flex-col gap-1">
-        <p class="text-[13px] text-zinc-400">
+        <p class="text-[13px] text-fg-muted">
           Pick the datasource you want to browse, then load its entities.
         </p>
-        <p class="text-[12px] text-zinc-600">
+        <p class="text-[12px] text-fg-muted">
           Nothing is read until you load, so a sleeping Databricks warehouse
           never blocks switching to another datasource.
         </p>
@@ -92,7 +92,7 @@
         data-testid="load-inventory"
         (click)="loadSelected()"
         [disabled]="!selectedDatasource()"
-        class="flex items-center gap-2 rounded-lg bg-zinc-200 px-3.5 py-2 text-[13px] font-medium text-zinc-900 hover:bg-white disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+        class="btn btn-primary"
       >
         <lucide-angular [img]="Play" [size]="14" />
         <span>Load entities from {{ datasourceLabel() }}</span>
@@ -100,50 +100,50 @@
     </div>
   } @else if (loading()) {
     <div class="mt-10 flex flex-col items-start gap-1.5">
-      <div class="flex items-center gap-2.5 text-zinc-400">
+      <div class="flex items-center gap-2.5 text-fg-muted">
         <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
         <span>Loading inventory from {{ datasourceLabel() }}…</span>
       </div>
-      <p class="pl-[26px] text-[12px] text-zinc-600">
+      <p class="pl-[26px] text-[12px] text-fg-muted">
         The first load can take a while if the Databricks warehouse is starting
         up. You can switch datasource above at any time.
       </p>
       <button
         type="button"
         (click)="cancelLoad()"
-        class="ml-[26px] mt-1 rounded-md border border-white/10 px-2.5 py-1 text-[12px] text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
+        class="btn btn-outline ml-[26px] mt-1"
       >
         Cancel
       </button>
     </div>
   } @else if (error(); as err) {
     <p
-      class="mt-8 rounded-md bg-red-500/10 px-3 py-2.5 text-[13px] text-red-400"
+      class="mt-8 rounded-md bg-danger-soft px-3 py-2.5 text-[13px] text-on-danger-soft"
     >
       {{ err }}
     </p>
   } @else if (catalogs().length === 0) {
-    <p class="mt-8 text-[13px] text-zinc-500">No accessible catalogs found.</p>
+    <p class="mt-8 text-[13px] text-fg-muted">No accessible catalogs found.</p>
   } @else {
     <div class="relative mt-6">
       <lucide-angular
         [img]="Search"
         [size]="15"
-        class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-zinc-500"
+        class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-fg-muted"
       />
       <input
         type="text"
         placeholder="Filter catalogs, schemas and entities…"
         [value]="search()"
         (input)="search.set($any($event.target).value)"
-        class="w-full rounded-lg border border-white/10 bg-white/5 py-2 pr-9 pl-10 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+        class="field w-full pr-9 pl-10"
       />
       @if (search().trim()) {
         <button
           type="button"
           aria-label="Clear filter"
           (click)="search.set('')"
-          class="absolute top-1/2 right-2.5 -translate-y-1/2 rounded p-1 text-zinc-500 hover:bg-white/10 hover:text-zinc-300"
+          class="absolute top-1/2 right-2.5 -translate-y-1/2 btn-icon p-1"
         >
           <lucide-angular [img]="X" [size]="14" />
         </button>
@@ -151,7 +151,7 @@
     </div>
 
     @if (filteredCatalogs().length === 0) {
-      <p class="mt-8 text-[13px] text-zinc-500">
+      <p class="mt-8 text-[13px] text-fg-muted">
         No catalogs, schemas or entities match “{{ search().trim() }}”.
       </p>
     } @else {
@@ -161,44 +161,44 @@
           <button
             [attr.data-testid]="'catalog-' + catalog.name"
             (click)="selectCatalog(catalog)"
-            class="flex items-center gap-2.5 rounded-lg px-2 py-2 text-left hover:bg-white/5"
+            class="flex items-center gap-2.5 rounded-lg px-2 py-2 text-left hover:bg-surface-muted"
             [class.option-active]="selectedKey() === catalog.name"
             [class.is-locked]="isCatalogLocked(catalog)"
           >
             <lucide-angular
               [img]="ChevronRight"
               [size]="14"
-              class="shrink-0 text-zinc-500 transition-transform"
+              class="shrink-0 text-fg-muted transition-transform"
               [class.rotate-90]="isExpanded(catalog.name)"
             />
             <lucide-angular
               [img]="Database"
               [size]="15"
-              class="shrink-0 text-sky-400"
+              class="shrink-0 text-accent"
             />
-            <span class="font-mono text-[13px] text-zinc-200">{{
+            <span class="font-mono text-[13px] text-fg">{{
               catalog.name
             }}</span>
-            <span class="text-[12px] text-zinc-500"
+            <span class="text-[12px] text-fg-muted"
               >{{ catalog.schemas.length }} schemas</span
             >
             @if (isCatalogLocked(catalog)) {
               <lucide-angular
                 [img]="Lock"
                 [size]="13"
-                class="ml-auto shrink-0 text-zinc-500"
+                class="ml-auto shrink-0 text-fg-muted"
               />
             } @else if (catalogState(catalog) === "full") {
               <lucide-angular
                 [img]="CircleCheck"
                 [size]="14"
-                class="ml-auto shrink-0 text-emerald-400"
+                class="ml-auto shrink-0 text-on-success-soft"
               />
             } @else if (catalogState(catalog) === "partial") {
               <lucide-angular
                 [img]="CircleMinus"
                 [size]="14"
-                class="ml-auto shrink-0 text-amber-400"
+                class="ml-auto shrink-0 text-on-warning-soft"
               />
             }
           </button>
@@ -211,7 +211,7 @@
                   'schema-' + catalog.name + '-' + schema.name
                 "
                 (click)="selectSchema(catalog.name, schema)"
-                class="ml-6 flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-left hover:bg-white/5"
+                class="ml-6 flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-left hover:bg-surface-muted"
                 [class.option-active]="
                   selectedKey() === catalog.name + '.' + schema.name
                 "
@@ -220,7 +220,7 @@
                 <lucide-angular
                   [img]="ChevronRight"
                   [size]="14"
-                  class="shrink-0 text-zinc-500 transition-transform"
+                  class="shrink-0 text-fg-muted transition-transform"
                   [class.rotate-90]="
                     isExpanded(catalog.name + '.' + schema.name)
                   "
@@ -228,31 +228,31 @@
                 <lucide-angular
                   [img]="FolderTree"
                   [size]="14"
-                  class="shrink-0 text-amber-400"
+                  class="shrink-0 text-on-warning-soft"
                 />
-                <span class="font-mono text-[12px] text-zinc-300">{{
+                <span class="font-mono text-[12px] text-fg">{{
                   schema.name
                 }}</span>
-                <span class="text-[12px] text-zinc-500"
+                <span class="text-[12px] text-fg-muted"
                   >{{ schema.tables.length }} entities</span
                 >
                 @if (isSchemaLocked(schema)) {
                   <lucide-angular
                     [img]="Lock"
                     [size]="13"
-                    class="ml-auto shrink-0 text-zinc-500"
+                    class="ml-auto shrink-0 text-fg-muted"
                   />
                 } @else if (schemaState(catalog.name, schema) === "full") {
                   <lucide-angular
                     [img]="CircleCheck"
                     [size]="14"
-                    class="ml-auto shrink-0 text-emerald-400"
+                    class="ml-auto shrink-0 text-on-success-soft"
                   />
                 } @else if (schemaState(catalog.name, schema) === "partial") {
                   <lucide-angular
                     [img]="CircleMinus"
                     [size]="14"
-                    class="ml-auto shrink-0 text-amber-400"
+                    class="ml-auto shrink-0 text-on-warning-soft"
                   />
                 }
               </button>
@@ -270,7 +270,7 @@
                       table.name
                     "
                     (click)="selectTable(catalog.name, schema.name, table)"
-                    class="ml-14 flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-left hover:bg-white/5"
+                    class="ml-14 flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-left hover:bg-surface-muted"
                     [class.option-active]="
                       selectedKey() ===
                       catalog.name + '.' + schema.name + '.' + table.name
@@ -280,19 +280,19 @@
                     <lucide-angular
                       [img]="Table2"
                       [size]="14"
-                      class="shrink-0 text-emerald-400"
+                      class="shrink-0 text-on-success-soft"
                     />
-                    <span class="font-mono text-[12px] text-zinc-300">{{
+                    <span class="font-mono text-[12px] text-fg">{{
                       table.name
                     }}</span>
-                    <span class="text-[12px] text-zinc-500"
+                    <span class="text-[12px] text-fg-muted"
                       >{{ table.columns.length }} columns</span
                     >
                     @if (isTableLocked(table)) {
                       <lucide-angular
                         [img]="Lock"
                         [size]="13"
-                        class="ml-auto shrink-0 text-zinc-500"
+                        class="ml-auto shrink-0 text-fg-muted"
                       />
                     } @else if (
                       isTableIncluded(catalog.name, schema.name, table)
@@ -300,7 +300,7 @@
                       <lucide-angular
                         [img]="CircleCheck"
                         [size]="14"
-                        class="ml-auto shrink-0 text-emerald-400"
+                        class="ml-auto shrink-0 text-on-success-soft"
                       />
                     }
                   </button>
@@ -314,7 +314,7 @@
   }
 
   <!-- Curated metrics over the included entities -->
-  <div class="mt-8 border-t border-white/10 pt-6">
+  <div class="mt-8 border-t border-border pt-6">
     <app-metrics-panel
       [entities]="includedEntities()"
       [datasourceId]="datasourceId() || null"

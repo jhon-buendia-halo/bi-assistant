@@ -1,10 +1,10 @@
 <div class="flex flex-col">
   <div class="flex items-start justify-between gap-4">
     <div>
-      <h1 class="font-serif text-[28px] font-semibold text-zinc-100">
+      <h2 class="text-[24px] leading-8 font-light tracking-[0.12px] text-fg-strong">
         Knowledge
-      </h1>
-      <p class="mt-1 max-w-xl text-[13px] text-zinc-500">
+      </h2>
+      <p class="mt-1 max-w-xl text-[13px] text-fg-muted">
         Instructions, glossary terms and default filters the assistant uses when
         answering. Only enabled snippets are applied.
       </p>
@@ -13,7 +13,7 @@
       <button
         type="button"
         (click)="openGenerate()"
-        class="flex items-center gap-1.5 rounded-lg border border-white/15 px-3.5 py-2 text-[13px] text-zinc-200 hover:bg-white/5"
+        class="btn btn-outline"
       >
         <lucide-angular [img]="Wand2" [size]="14" />
         <span>Generate suggestions</span>
@@ -22,7 +22,7 @@
         type="button"
         data-testid="new-knowledge-snippet"
         (click)="openNew()"
-        class="flex items-center gap-1.5 rounded-lg bg-zinc-200 px-3.5 py-2 text-[13px] font-medium text-zinc-900 hover:bg-white"
+        class="btn btn-primary"
       >
         <lucide-angular [img]="Plus" [size]="14" />
         <span>New snippet</span>
@@ -36,10 +36,10 @@
       type="button"
       title="Every snippet, whatever its kind."
       (click)="setKindFilter('all')"
-      class="rounded-lg px-3 py-1.5 text-[13px] hover:text-zinc-200"
-      [class.bg-white/10]="!pendingOnly() && kindFilter() === 'all'"
-      [class.text-zinc-200]="!pendingOnly() && kindFilter() === 'all'"
-      [class.text-zinc-400]="pendingOnly() || kindFilter() !== 'all'"
+      class="rounded-lg px-3 py-1.5 text-[13px] hover:text-fg"
+      [class.bg-surface-muted]="!pendingOnly() && kindFilter() === 'all'"
+      [class.text-fg]="!pendingOnly() && kindFilter() === 'all'"
+      [class.text-fg-muted]="pendingOnly() || kindFilter() !== 'all'"
     >
       All
     </button>
@@ -48,10 +48,10 @@
         type="button"
         [title]="k.description"
         (click)="setKindFilter(k.value)"
-        class="rounded-lg px-3 py-1.5 text-[13px] hover:text-zinc-200"
-        [class.bg-white/10]="!pendingOnly() && kindFilter() === k.value"
-        [class.text-zinc-200]="!pendingOnly() && kindFilter() === k.value"
-        [class.text-zinc-400]="pendingOnly() || kindFilter() !== k.value"
+        class="rounded-lg px-3 py-1.5 text-[13px] hover:text-fg"
+        [class.bg-surface-muted]="!pendingOnly() && kindFilter() === k.value"
+        [class.text-fg]="!pendingOnly() && kindFilter() === k.value"
+        [class.text-fg-muted]="pendingOnly() || kindFilter() !== k.value"
       >
         {{ k.label }}
       </button>
@@ -61,11 +61,11 @@
       aria-label="Filter by dataset"
       [value]="datasetFilter()"
       (change)="setDatasetFilter($any($event.target).value)"
-      class="ml-1 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-300 outline-none focus:border-white/25"
+      class="field"
     >
-      <option value="all" class="bg-[#232323]">All datasets</option>
+      <option value="all" class="bg-surface">All datasets</option>
       @for (dataset of datasets(); track dataset.name) {
-        <option [value]="dataset.name" class="bg-[#232323]">
+        <option [value]="dataset.name" class="bg-surface">
           {{ dataset.name }}
         </option>
       }
@@ -80,15 +80,15 @@
         class="flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px]"
         [class]="
           pendingOnly()
-            ? 'border-violet-400/30 bg-violet-400/10 text-violet-300'
-            : 'border-white/10 bg-white/[0.04] text-zinc-400 hover:border-white/20 hover:bg-white/[0.08] hover:text-zinc-200'
+            ? 'border-border-selected bg-surface-selected text-on-primary-soft'
+            : 'border-border bg-surface-muted text-fg-muted hover:border-border-strong hover:bg-surface-muted hover:text-fg'
         "
       >
         <lucide-angular [img]="Sparkles" [size]="12" class="shrink-0" />
         <span>Pending suggestions</span>
         @if (pendingCount() > 0) {
           <span
-            class="flex h-4 min-w-4 items-center justify-center rounded-full bg-violet-400/20 px-1 text-[10px] font-semibold text-violet-200"
+            class="flex h-4 min-w-4 items-center justify-center rounded-full bg-info-soft px-1 text-[10px] font-semibold text-on-info-soft"
             >{{ pendingCount() }}</span
           >
         }
@@ -97,27 +97,27 @@
   </div>
 
   @if (loading()) {
-    <div class="mt-10 flex items-center gap-2.5 text-zinc-400">
+    <div class="mt-10 flex items-center gap-2.5 text-fg-muted">
       <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
       <span>Loading knowledge…</span>
     </div>
   } @else if (error(); as err) {
     <p
-      class="mt-8 rounded-md bg-red-500/10 px-3 py-2.5 text-[13px] text-red-400"
+      class="mt-8 rounded-md bg-danger-soft px-3 py-2.5 text-[13px] text-on-danger-soft"
     >
       {{ err }}
     </p>
   } @else if (snippets().length === 0) {
     <div
-      class="mt-8 flex flex-col items-start gap-3 rounded-xl border border-dashed border-white/10 px-6 py-8"
+      class="mt-8 flex flex-col items-start gap-3 rounded-xl border border-dashed border-border px-6 py-8"
     >
       <span
-        class="flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 text-zinc-400"
+        class="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-muted text-fg-muted"
       >
         <lucide-angular [img]="BookOpen" [size]="17" />
       </span>
-      <p class="text-[13px] text-zinc-300">No knowledge yet</p>
-      <p class="max-w-md text-[12px] leading-relaxed text-zinc-500">
+      <p class="text-[13px] text-fg">No knowledge yet</p>
+      <p class="max-w-md text-[12px] leading-relaxed text-fg-muted">
         Snippets are plain-text instructions, glossary terms and default filters
         the assistant applies when answering. Write one by hand, or generate
         suggestions from a dataset and approve the ones worth keeping.
@@ -126,7 +126,7 @@
         <button
           type="button"
           (click)="openNew()"
-          class="flex items-center gap-1.5 rounded-lg bg-zinc-200 px-3.5 py-2 text-[13px] font-medium text-zinc-900 hover:bg-white"
+          class="btn btn-primary"
         >
           <lucide-angular [img]="Plus" [size]="14" />
           <span>New snippet</span>
@@ -134,7 +134,7 @@
         <button
           type="button"
           (click)="openGenerate()"
-          class="flex items-center gap-1.5 rounded-lg border border-white/15 px-3.5 py-2 text-[13px] text-zinc-200 hover:bg-white/5"
+          class="btn btn-outline"
         >
           <lucide-angular [img]="Wand2" [size]="14" />
           <span>Generate suggestions</span>
@@ -142,7 +142,7 @@
       </div>
     </div>
   } @else if (filteredSnippets().length === 0) {
-    <p class="mt-10 text-[13px] text-zinc-500">
+    <p class="mt-10 text-[13px] text-fg-muted">
       @if (pendingOnly()) {
         No pending suggestions right now — generate some or check back later.
       } @else {
@@ -154,37 +154,37 @@
       @for (item of filteredSnippets(); track item.id) {
         <div
           [attr.data-testid]="'knowledge-' + item.id"
-          class="flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2.5"
+          class="flex items-center gap-3 rounded-lg border border-border bg-surface-muted px-3 py-2.5"
         >
           <span
-            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/5"
+            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-muted"
             [class]="kindAccentClass(item.kind)"
           >
             <lucide-angular [img]="kindIcon(item.kind)" [size]="15" />
           </span>
           <span class="flex min-w-0 flex-1 flex-col gap-0.5">
             <span class="flex items-center gap-2">
-              <span class="truncate text-[13px] text-zinc-200">{{
+              <span class="truncate text-[13px] text-fg">{{
                 item.title
               }}</span>
               <span
                 [title]="kindDescription(item.kind)"
-                class="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-zinc-400"
+                class="shrink-0 rounded bg-surface-muted px-1.5 py-0.5 text-[10px] text-fg-muted"
                 >{{ kindLabel(item.kind) }}</span
               >
               @if (item.source === "mined") {
                 <span
-                  class="flex shrink-0 items-center gap-1 rounded-full border border-violet-400/30 bg-violet-400/10 px-1.5 py-0.5 text-[10px] text-violet-300"
+                  class="chip chip-info shrink-0 px-1.5 py-0.5 text-[10px]"
                 >
                   <lucide-angular [img]="Sparkles" [size]="10" />
                   <span>Mined</span>
                 </span>
               }
             </span>
-            <span class="truncate text-[11px] text-zinc-500">{{
+            <span class="truncate text-[11px] text-fg-muted">{{
               item.body
             }}</span>
-            <span class="flex items-center gap-1.5 text-[11px] text-zinc-600">
+            <span class="flex items-center gap-1.5 text-[11px] text-fg-muted">
               <span>{{ scopeLabel(item) }}</span>
               <span>·</span>
               <span>Updated {{ updatedLabel(item) }}</span>
@@ -197,7 +197,7 @@
               data-testid="accept-suggestion"
               (click)="toggleEnabled(item)"
               [disabled]="togglingId() === item.id || deletingId() === item.id"
-              class="flex shrink-0 items-center gap-1.5 rounded-md bg-emerald-600 px-2.5 py-1.5 text-[12px] font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+              class="btn btn-primary shrink-0"
             >
               @if (togglingId() === item.id) {
                 <lucide-angular
@@ -213,7 +213,7 @@
               data-testid="reject-suggestion"
               (click)="rejectSuggestion(item)"
               [disabled]="togglingId() === item.id || deletingId() === item.id"
-              class="flex shrink-0 items-center gap-1.5 rounded-md border border-white/10 px-2.5 py-1.5 text-[12px] text-red-400 hover:bg-white/10 disabled:opacity-50"
+              class="btn btn-danger shrink-0"
             >
               @if (deletingId() === item.id) {
                 <lucide-angular
@@ -226,14 +226,14 @@
             </button>
           } @else {
             <label
-              class="flex shrink-0 items-center gap-1.5 text-[11px] text-zinc-500"
+              class="flex shrink-0 items-center gap-1.5 text-[11px] text-fg-muted"
             >
               <input
                 type="checkbox"
                 [checked]="item.enabled"
                 [disabled]="togglingId() === item.id"
                 (change)="toggleEnabled(item)"
-                class="h-3.5 w-3.5 accent-emerald-500"
+                class="h-3.5 w-3.5 accent-primary"
               />
               <span>{{ item.enabled ? "Enabled" : "Disabled" }}</span>
             </label>
@@ -241,7 +241,7 @@
               type="button"
               title="Edit"
               (click)="openEdit(item)"
-              class="shrink-0 rounded p-1.5 text-zinc-500 hover:bg-white/10 hover:text-zinc-200"
+              class="shrink-0 btn-icon hover:text-on-danger-soft"
             >
               <lucide-angular [img]="Pencil" [size]="14" />
             </button>
@@ -250,7 +250,7 @@
               title="Delete"
               (click)="deleteSnippet(item)"
               [disabled]="deletingId() === item.id"
-              class="shrink-0 rounded p-1.5 text-zinc-500 hover:bg-white/10 hover:text-red-400 disabled:opacity-50"
+              class="shrink-0 btn-icon hover:text-on-danger-soft"
             >
               @if (deletingId() === item.id) {
                 <lucide-angular
@@ -281,39 +281,39 @@
 
   @if (generateOpen()) {
     <div
-      class="mt-6 flex flex-col gap-3 rounded-xl border border-white/10 bg-[#232323] p-4"
+      class="mt-6 flex flex-col gap-3 rounded-xl border border-border bg-surface-muted p-4"
     >
       <div class="flex items-center justify-between">
-        <p class="text-[13px] font-medium text-zinc-200">
+        <p class="text-[13px] font-medium text-fg">
           Generate suggestions
         </p>
         <button
           type="button"
           title="Close"
           (click)="cancelGenerate()"
-          class="rounded p-1 text-zinc-500 hover:bg-white/10 hover:text-zinc-200"
+          class="btn-icon"
         >
           <lucide-angular [img]="X" [size]="14" />
         </button>
       </div>
-      <p class="text-[12px] text-zinc-500">
+      <p class="text-[12px] text-fg-muted">
         The assistant reviews the dataset and drafts instructions, terms and
         default filters as pending suggestions — nothing is applied until you
         approve it. This can take up to a minute.
       </p>
       <label class="flex flex-col gap-1">
-        <span class="text-[11px] font-medium text-zinc-500">Dataset</span>
+        <span class="field-label">Dataset</span>
         <select
           [value]="generateDatasetId()"
           (change)="generateDatasetId.set($any($event.target).value)"
           [disabled]="generating() || datasets().length === 0"
-          class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none focus:border-white/25 disabled:opacity-50"
+          class="field"
         >
           @if (datasets().length === 0) {
-            <option value="" class="bg-[#232323]">No datasets yet</option>
+            <option value="" class="bg-surface">No datasets yet</option>
           }
           @for (dataset of datasets(); track dataset.name) {
-            <option [value]="dataset.name" class="bg-[#232323]">
+            <option [value]="dataset.name" class="bg-surface">
               {{ dataset.name }}
             </option>
           }
@@ -324,7 +324,7 @@
           type="button"
           (click)="cancelGenerate()"
           [disabled]="generating()"
-          class="flex flex-1 items-center justify-center rounded-md border border-white/10 px-3 py-1.5 font-medium text-zinc-300 hover:bg-white/5 disabled:opacity-50"
+          class="btn btn-outline flex-1"
         >
           Cancel
         </button>
@@ -334,7 +334,7 @@
           (click)="generateSuggestions()"
           [disabled]="generating() || !generateDatasetId()"
           title="Pick a dataset first"
-          class="flex flex-1 items-center justify-center gap-2 rounded-md bg-emerald-600 px-3 py-1.5 font-medium text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+          class="btn btn-primary flex-1"
         >
           @if (generating()) {
             <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
@@ -349,24 +349,24 @@
         <ol
           data-testid="generate-progress"
           aria-live="polite"
-          class="mt-1 flex flex-col gap-1.5 rounded-md border border-white/10 bg-white/[0.03] px-3 py-2.5"
+          class="mt-1 flex flex-col gap-1.5 rounded-md border border-border bg-surface-muted px-3 py-2.5"
         >
           @for (step of finishedSteps(); track step.key) {
-            <li class="flex items-center gap-2 text-[12px] text-zinc-500">
+            <li class="flex items-center gap-2 text-[12px] text-fg-muted">
               <lucide-angular
                 [img]="Check"
                 [size]="12"
-                class="shrink-0 text-emerald-500"
+                class="shrink-0 text-on-success-soft"
               />
               <span>{{ step.message }}</span>
             </li>
           }
           @if (currentStep(); as step) {
-            <li class="flex items-center gap-2 text-[12px] text-zinc-300">
+            <li class="flex items-center gap-2 text-[12px] text-fg">
               <lucide-angular
                 [img]="Loader2"
                 [size]="12"
-                class="shrink-0 animate-spin text-zinc-400"
+                class="shrink-0 animate-spin text-fg-muted"
               />
               <span>{{ step.message }}…</span>
             </li>

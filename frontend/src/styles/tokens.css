@@ -1,0 +1,141 @@
+/*
+ * Theme tokens (specs/system/ui.md §6.0, ADR-0007).
+ * The resolved theme is set on <html data-theme="light|dark"> by the boot
+ * script in index.html and kept in sync by ThemeService. Components use the
+ * Tailwind utilities mapped below (bg-surface, text-fg-muted, …), never hex.
+ */
+
+:root,
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  /* Values from the Insight Agent AI Figma variables (BA-158). */
+  --qti-canvas: rgb(255 255 255 / 0.95); /* color/contrast-light/095 */
+  --qti-rail: rgb(255 255 255 / 0.95);
+  --qti-surface: #ffffff; /* layer/neutral/01 */
+  --qti-surface-muted: #f8fafc; /* color/blue-gray/050 */
+  --qti-surface-selected: rgb(11 65 173 / 0.1); /* background/brand/soft-hover */
+  --qti-border: rgb(0 0 0 / 0.1); /* border/divider */
+  --qti-border-strong: #bbd2ff; /* border/brand-soft */
+  --qti-border-selected: #0b41ad;
+  --qti-fg: rgb(0 0 0 / 0.85); /* text/default */
+  --qti-fg-strong: #001f52; /* text/primary/main */
+  --qti-fg-muted: rgb(0 0 0 / 0.6); /* Figma uses 0.55; 0.6 meets AA on every surface */
+  --qti-placeholder: rgb(0 0 0 / 0.55); /* text/placeholder */
+  --qti-primary: #0b41ad; /* background/brand/strong-rest */
+  --qti-primary-hover: #08348c;
+  --qti-on-primary: #ffffff;
+  --qti-primary-soft: #eaf1ff; /* background/brand/rest */
+  --qti-on-primary-soft: #08348c; /* text/helper/brand */
+  --qti-accent: #0b41ad; /* icon/brand */
+  --qti-icon: #565656; /* icon/neutral */
+  --qti-focus: #0b41ad;
+  --qti-warning-soft: #fbe5d4;
+  --qti-on-warning-soft: #92400e;
+  --qti-info-soft: #e2ebfa;
+  --qti-on-info-soft: #1d4ea8;
+  --qti-neutral-soft: #edf0f4;
+  --qti-on-neutral-soft: #374151;
+  --qti-success-soft: #dcf3e8;
+  --qti-on-success-soft: #116444;
+  --qti-danger-soft: #fde3e3;
+  --qti-on-danger-soft: #a2232a;
+
+  --qti-shadow-card: 0 2px 7.5px rgb(11 65 173 / 0.15);
+  --qti-shadow-subtle: 0 2px 15px rgb(11 65 173 / 0.15); /* subtle-shadow */
+  --qti-shadow-input: 1px 1px 10px rgb(11 65 173 / 0.3), 0 2px 5px rgb(11 65 173 / 0.1);
+  --frame-gradient: linear-gradient(39.31deg, #004c6c 8.15%, #0077a0 43.41%, #3bb8f0 96.3%); /* gradient/blue-teal */
+  --frame-texture-opacity: 0.3;
+  --banner-base: #006286; /* color/teal/600 */
+  --banner-image-opacity: 0.2;
+  --banner-shade: linear-gradient(180deg, rgb(0 0 0 / 0) 38.79%, rgb(0 0 0 / 0.5) 100%);
+  --logo-gradient: linear-gradient(45deg, #009de0 0%, #008ac0 60%, #0077a0 100%);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --qti-canvas: rgb(11 22 38 / 0.95);
+  --qti-rail: rgb(13 26 44 / 0.95);
+  --qti-surface: #12233a;
+  --qti-surface-muted: #16294a;
+  --qti-surface-selected: #1a3357;
+  --qti-border: #24384f;
+  --qti-border-strong: #34507a;
+  --qti-border-selected: #5b8fe8;
+  --qti-fg: #d5dfec;
+  --qti-fg-strong: #eef4fc;
+  --qti-fg-muted: #93a6bf;
+  --qti-primary: #5b95ff;
+  --qti-primary-hover: #78a8ff;
+  --qti-on-primary: #061426;
+  --qti-primary-soft: #1b345a;
+  --qti-on-primary-soft: #b7d0ff;
+  --qti-accent: #6aa8ff;
+  --qti-focus: #7fb0ff;
+  --qti-warning-soft: #45290f;
+  --qti-on-warning-soft: #ffcf9e;
+  --qti-info-soft: #1a3561;
+  --qti-on-info-soft: #b3cdff;
+  --qti-neutral-soft: #243246;
+  --qti-on-neutral-soft: #c9d4e3;
+  --qti-success-soft: #123d2e;
+  --qti-on-success-soft: #8fe0bb;
+  --qti-danger-soft: #4a1c22;
+  --qti-on-danger-soft: #ffb3b8;
+
+  --qti-placeholder: #93a6bf;
+  --qti-icon: #a9b8cc;
+  --qti-shadow-card: 0 2px 7.5px rgb(0 0 0 / 0.35);
+  --qti-shadow-subtle: 0 2px 15px rgb(0 0 0 / 0.35);
+  --qti-shadow-input: 1px 1px 10px rgb(91 149 255 / 0.25), 0 2px 5px rgb(0 0 0 / 0.3);
+  /* Derived from the Figma light frame: the same teal family, darker. */
+  --frame-gradient: linear-gradient(39.31deg, #021c28 8.15%, #003a52 43.41%, #0b5f86 96.3%);
+  --frame-texture-opacity: 0.25;
+  --banner-base: #003a52;
+  --banner-image-opacity: 0.15;
+  --banner-shade: linear-gradient(180deg, rgb(0 0 0 / 0) 38.79%, rgb(0 0 0 / 0.6) 100%);
+  --logo-gradient: linear-gradient(45deg, #009de0 0%, #008ac0 60%, #0077a0 100%);
+}
+
+@theme inline {
+  --font-sans: "Noto Sans", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, Helvetica, Arial, sans-serif;
+
+  --color-canvas: var(--qti-canvas);
+  --color-rail: var(--qti-rail);
+  --color-surface: var(--qti-surface);
+  --color-surface-muted: var(--qti-surface-muted);
+  --color-surface-selected: var(--qti-surface-selected);
+  --color-border: var(--qti-border);
+  --color-border-strong: var(--qti-border-strong);
+  --color-border-selected: var(--qti-border-selected);
+  --color-fg: var(--qti-fg);
+  --color-fg-strong: var(--qti-fg-strong);
+  --color-fg-muted: var(--qti-fg-muted);
+  --color-primary: var(--qti-primary);
+  --color-primary-hover: var(--qti-primary-hover);
+  --color-on-primary: var(--qti-on-primary);
+  --color-primary-soft: var(--qti-primary-soft);
+  --color-on-primary-soft: var(--qti-on-primary-soft);
+  --color-accent: var(--qti-accent);
+  --color-icon: var(--qti-icon);
+  --color-placeholder: var(--qti-placeholder);
+  --color-focus: var(--qti-focus);
+  --color-warning-soft: var(--qti-warning-soft);
+  --color-on-warning-soft: var(--qti-on-warning-soft);
+  --color-info-soft: var(--qti-info-soft);
+  --color-on-info-soft: var(--qti-on-info-soft);
+  --color-neutral-soft: var(--qti-neutral-soft);
+  --color-on-neutral-soft: var(--qti-on-neutral-soft);
+  --color-success-soft: var(--qti-success-soft);
+  --color-on-success-soft: var(--qti-on-success-soft);
+  --color-danger-soft: var(--qti-danger-soft);
+  --color-on-danger-soft: var(--qti-on-danger-soft);
+
+  --radius-card: 0.75rem; /* radius/large */
+  --radius-frame: 0.75rem;
+  --shadow-card: var(--qti-shadow-card);
+  --shadow-subtle: var(--qti-shadow-subtle);
+  --shadow-input: var(--qti-shadow-input);
+}

@@ -30,6 +30,10 @@
               }
             ],
             "styles": [
+              "@fontsource/noto-sans/latin-400.css",
+              "@fontsource/noto-sans/latin-500.css",
+              "@fontsource/noto-sans/latin-600.css",
+              "@fontsource/noto-sans/latin-700.css",
               "src/styles.scss"
             ]
           },
@@ -88,6 +92,10 @@
               }
             ],
             "styles": [
+              "@fontsource/noto-sans/latin-400.css",
+              "@fontsource/noto-sans/latin-500.css",
+              "@fontsource/noto-sans/latin-600.css",
+              "@fontsource/noto-sans/latin-700.css",
               "src/styles.scss"
             ]
           }

@@ -1,0 +1,8 @@
+  ✓ appearance.spec.ts › follows the operating system theme by default
+  ✓ appearance.spec.ts › forces a theme regardless of the operating system
+  ✓ appearance.spec.ts › remembers the chosen theme after a restart
+  ✓ appearance.spec.ts › has no automatically detectable accessibility violations in either theme
+  ✓ layout-accessibility.spec.ts › supports keyboard layout controls and persists the right-panel width
+  ✓ layout-accessibility.spec.ts › has no automatically detectable accessibility violations in the application shell
+  ✘ layout-accessibility.spec.ts › matches the stable application-shell visual baseline (no -linux.png baseline)
+  6 passed, 1 failed (16.1s), 2026-10-09, E2E_SKIP_DOCKER=1

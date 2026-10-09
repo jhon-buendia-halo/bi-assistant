@@ -8,6 +8,7 @@ import {
   createWorldCupDataset,
   createWorldCupWorkspace,
   openDatasourceSettings,
+  openSessions,
 } from './helpers/app-actions';
 
 test('creates a PostgreSQL datasource, dataset, and session using the real World Cup database', async ({
@@ -27,6 +28,7 @@ test('creates a PostgreSQL datasource, dataset, and session using the real World
     await page.reload();
   }
   await expect(page.getByLabel('Open system logs')).toBeVisible();
+  await openSessions(page);
   await expect(
     page.getByText(WORLD_CUP_SESSION, { exact: true }),
   ).toBeVisible();
@@ -83,7 +85,6 @@ test('surfaces a failed connection in both the form and system diagnostics', asy
     page.getByRole('button', { name: 'Save datasource' }),
   ).toBeDisabled();
 
-  await page.getByRole('button', { name: 'Back' }).click();
   await page.getByLabel('Open system logs').click();
   await page.getByRole('button', { name: /^Issues/ }).click();
   await page.getByLabel('Search system logs').fill('Postgres');

@@ -1,4 +1,10 @@
-const { app, BrowserWindow, dialog, ipcMain } = require("electron");
+const {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  nativeTheme,
+} = require("electron");
 const { spawn } = require("child_process");
 const crypto = require("crypto");
 const fs = require("fs");
@@ -6,6 +12,9 @@ const http = require("http");
 const path = require("path");
 
 const APP_DISPLAY_NAME = "Halo BI Assistant";
+// The window shows the Agentic Hub product name; the OS app name, installers
+// and data directory keep APP_DISPLAY_NAME (app-shell R33).
+const WINDOW_TITLE = "Agentic Hub";
 // The productName every release before the rename shipped with.
 const LEGACY_APP_NAME = "Questions to Insights";
 const DEV_URL = process.env.ELECTRON_DEV_URL;
@@ -207,6 +216,12 @@ function initializeDiagnostics() {
   }
 
   ipcMain.handle("diagnostics:list", () => diagnosticEntries);
+  // The renderer reports its resolved theme (app-shell R44).
+  ipcMain.on("window:theme", (event, theme) => {
+    const colour = THEME_CANVAS[theme];
+    if (!colour) return;
+    BrowserWindow.fromWebContents(event.sender)?.setBackgroundColor(colour);
+  });
   ipcMain.handle("backend:restart", () => {
     restartBackendOnRequest();
     return { ok: true };
@@ -666,15 +681,21 @@ function resolveAppIcon() {
   return candidates.find((candidate) => fs.existsSync(candidate));
 }
 
+// Frame colour per theme, under the gradient (specs/system/ui.md §6.0).
+const THEME_CANVAS = { light: "#0077a0", dark: "#003a52" };
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1440,
     height: 900,
     minWidth: 960,
     minHeight: 600,
-    title: APP_DISPLAY_NAME,
+    title: WINDOW_TITLE,
     titleBarStyle: "hiddenInset",
-    backgroundColor: "#1c1c1c",
+    // Until the renderer reports its theme, follow the operating system.
+    backgroundColor: nativeTheme.shouldUseDarkColors
+      ? THEME_CANVAS.dark
+      : THEME_CANVAS.light,
     // Packaged macOS builds take the icon from the bundle; this covers the
     // window/taskbar icon everywhere else (dev runs, Windows, Linux).
     icon: resolveAppIcon(),

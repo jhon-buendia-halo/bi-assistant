@@ -18,4 +18,5 @@ contextBridge.exposeInMainWorld("desktop", {
     return () => ipcRenderer.removeListener("backend-status", handler);
   },
   restartBackend: () => ipcRenderer.invoke("backend:restart"),
+  setWindowTheme: (theme) => ipcRenderer.send("window:theme", theme),
 });
