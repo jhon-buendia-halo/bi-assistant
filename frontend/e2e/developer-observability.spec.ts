@@ -1,5 +1,5 @@
 import { Page } from '@playwright/test';
-import { test, expect } from './fixtures/electron.fixture';
+import { test, expect, RunningApp } from './fixtures/app.fixture';
 import { createWorldCupWorkspace } from './helpers/app-actions';
 import { OtlpReceiver, startOtlpReceiver } from './helpers/otlp-receiver';
 
@@ -36,8 +36,12 @@ async function openDeveloperSettings(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { name: 'Developer' })).toBeVisible();
 }
 
-/** Points both endpoints at the receivers, saves, and restarts the backend. */
-async function saveAndRestart(page: Page, observabilityOn: boolean) {
+/**
+ * Points both endpoints at the receivers, saves, and restarts the backend:
+ * the "Restart backend" button on desktop, a CLI restart in a browser.
+ */
+async function saveAndRestart(app: RunningApp, observabilityOn: boolean) {
+  const { page } = app;
   await openDeveloperSettings(page);
   await page.getByLabel('OTLP endpoint', { exact: true }).fill(otlp.url);
   await page.getByLabel('Phoenix endpoint', { exact: true }).fill(phoenix.url);
@@ -46,7 +50,13 @@ async function saveAndRestart(page: Page, observabilityOn: boolean) {
   }
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   const notice = page.getByTestId('developer-restart-notice');
-  await notice.getByRole('button', { name: 'Restart backend' }).click();
+  if (app.target === 'desktop') {
+    await notice.getByRole('button', { name: 'Restart backend' }).click();
+  } else {
+    await expect(notice).toContainText('Restart the CLI to apply');
+    await app.restartCli();
+    await openDeveloperSettings(page);
+  }
   await expect(notice).toHaveCount(0, { timeout: 45_000 });
 }
 
@@ -67,9 +77,10 @@ function payloadOf(receiver: OtlpReceiver, path: string): string {
 }
 
 test('backend traces reach the OTLP endpoint when observability is on', async ({
+  app,
   page,
 }) => {
-  await saveAndRestart(page, true);
+  await saveAndRestart(app, true);
   await openLlmConfiguration(page);
 
   await expect
@@ -83,9 +94,12 @@ test('backend traces reach the OTLP endpoint when observability is on', async ({
   expect(payload).toContain('/llm/settings');
 });
 
-test('agent runs reach Phoenix when observability is on', async ({ page }) => {
+test('agent runs reach Phoenix when observability is on', async ({
+  app,
+  page,
+}) => {
   const sessionId = await createWorldCupWorkspace(page);
-  await saveAndRestart(page, true);
+  await saveAndRestart(app, true);
 
   await page.getByRole('button', { name: 'Back' }).click();
   await page.getByTestId(`session-${sessionId}`).click();
@@ -102,9 +116,10 @@ test('agent runs reach Phoenix when observability is on', async ({ page }) => {
 });
 
 test('backend logs reach the OTLP endpoint when observability is on', async ({
+  app,
   page,
 }) => {
-  await saveAndRestart(page, true);
+  await saveAndRestart(app, true);
 
   await expect
     .poll(() => payloadOf(otlp, '/v1/logs'), { timeout: 20_000 })
@@ -115,8 +130,8 @@ test('backend logs reach the OTLP endpoint when observability is on', async ({
   expect(payloadOf(otlp, '/v1/logs')).toContain('questions-to-insights');
 });
 
-test('nothing is exported when observability is off', async ({ page }) => {
-  await saveAndRestart(page, false);
+test('nothing is exported when observability is off', async ({ app, page }) => {
+  await saveAndRestart(app, false);
   await openLlmConfiguration(page);
 
   // Longer than the trace batch delay (5 s) and the metric interval (10 s).

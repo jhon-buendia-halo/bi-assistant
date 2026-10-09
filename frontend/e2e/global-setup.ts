@@ -1,34 +1,9 @@
 import { execFileSync } from 'node:child_process';
-import { createConnection } from 'node:net';
 import path from 'node:path';
 
 const repositoryRoot = path.resolve(__dirname, '../..');
 
-function portIsOpen(port: number): Promise<boolean> {
-  return new Promise((resolve) => {
-    const socket = createConnection({ host: '127.0.0.1', port });
-    socket.setTimeout(500);
-    socket.once('connect', () => {
-      socket.destroy();
-      resolve(true);
-    });
-    const unavailable = () => {
-      socket.destroy();
-      resolve(false);
-    };
-    socket.once('error', unavailable);
-    socket.once('timeout', unavailable);
-  });
-}
-
 export default async function globalSetup(): Promise<void> {
-  const backendPort = Number(process.env['E2E_BACKEND_PORT'] ?? '3000');
-  if (await portIsOpen(backendPort)) {
-    throw new Error(
-      `Port ${backendPort} is already in use. Close the running Questions to Insights app, or set E2E_BACKEND_PORT to a free port, before running the Electron integration suite.`,
-    );
-  }
-
   if (process.env['E2E_SKIP_DOCKER'] === '1') return;
 
   try {

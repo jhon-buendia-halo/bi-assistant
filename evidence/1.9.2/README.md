@@ -8,6 +8,7 @@ This is a backend and API change with no UI, so there are no screenshots. The Ag
 | [backend-e2e.txt](backend-e2e.txt) | `backend/test/user-agents.e2e-spec.ts`: 9/9 green, one test per scenario of the Feature "Agent definitions (API)", including a real backend restart on the same data dir. |
 | [unit-tests.txt](unit-tests.txt) | Backend unit suite green, with 23 new tests in `user-agents.service.spec.ts` and `agents.service.spec.ts`. |
 | [playwright-agents.txt](playwright-agents.txt) | `frontend/e2e/agents.spec.ts` 9/9 green on `E2E_BACKEND_PORT=3100`, a regression check for the Agents screen. |
+| [playwright-agents-web.txt](playwright-agents-web.txt) | The same 9/9 green on the web target after merging BA-156's web E2E harness from `main`. |
 | [get-agents-sample.json](get-agents-sample.json) | `GET /agents` after creating, publishing and pinning one user agent: the six built-ins plus the user agent, with `kind`, `status`, `owner`, `pinned` and `missingDatasets`. |
 | [check-specs.txt](check-specs.txt) | `python3 scripts/check-specs.py` passing, with 60 routes and 10 collections. |
 

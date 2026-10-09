@@ -55,6 +55,24 @@ Entry template:
 - From a worktree, call Jira through the main checkout's script (`/home/jhonbuendia/projects/bi-assistant/.claude/skills/jira/scripts/jira.sh`), or symlink `.env` into the worktree first.
 - Link a sibling epic's spec only once it is on `main`. Until then, link its Jira issue.
 - Create epic worktrees from the local `main` ref (`git worktree add … -b <branch> main`), as the convention shows, or run `git branch --unset-upstream` right after creating from `origin/main`.
+## 2026-10-09 — 0.2.6 E2E and testing run against the web app; desktop only on request (BA-156)
+
+### What went well
+- Before asking questions, I read the fixture and the specs. That showed the suite was Electron-only, so the questions offered "rule + web harness" rather than a rule nobody could follow.
+- The web harness reuses the npm CLI, which has the same app-secret and data-dir semantics as the Electron main process. The LLM-settings secret-migration tests passed on web unchanged, apart from how they launch the app.
+- Branching per target inside the fixture (`app.target`, `restartCli()`, `desktopOnly()`) kept the Gherkin target-neutral where the user's action is the same ("reload the application") and split it only where the UI differs (the restart notice).
+- The full web suite takes about 2 minutes and needs no free port 3000, so it never collided with the other worktrees' running apps.
+
+### What went wrong
+- The worktree had no `node_modules`, so my first `npx prettier` and `npx tsc` pulled packages from the registry. `tsc` resolved to an unrelated package. I had to re-run prettier with the repo's own version.
+- `npm ci` refused both lockfiles under npm 11.19 ("Missing: … from lock file"). I used `npm install` and restored the lockfiles. The installed tree may differ slightly from the lockfile, and npm 11 blocked install scripts (including Electron's binary download), so a desktop run from this worktree may need `npm rebuild electron` first.
+- I changed desktop code paths (the fixture's Electron launch, the port check, the `file://` reload) without running them. The user asked for that, but those paths are now only type-checked.
+- `world-cup-workflow.spec.ts` hid a desktop-only step (navigating to the `file://` entry) inside a target-neutral scenario. The first web run found it, not the code reading.
+
+### What to do differently
+- In a fresh worktree, install dependencies before running any `npx` tool. If `npm ci` fails on lockfile sync, use `npm install` and then `git checkout -- */package-lock.json`, and say so in the evidence.
+- When adding a second Playwright target, grep the specs for target-specific navigation (`file://`, `pathToFileURL`, `electronApp`, `window.desktop`) before the first run.
+- For any change to desktop-target E2E code, ask whether to do one desktop run before shipping. Otherwise list exactly which desktop paths are only type-checked.
 
 ## 2026-10-09 — 0.2.5 One branch and one PR per epic (BA-149)
 

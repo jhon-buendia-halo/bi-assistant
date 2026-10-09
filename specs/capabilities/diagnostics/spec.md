@@ -93,11 +93,12 @@ The panel is a modal overlay above the whole app, reached from the sidebar foote
 
 ## Flows
 
-E2E: `frontend/e2e/diagnostics.spec.ts` for the Feature below (moved verbatim from the repository `gherkin.md`).
+E2E: `frontend/e2e/diagnostics.spec.ts` for the Feature below (moved verbatim from the repository `gherkin.md`). Scenarios tagged `@desktop-only` rely on the desktop shell (shell-side redaction, the native save dialog) and run only in the Playwright `desktop` project. The `web` project skips them (see *Test target convention* in [CLAUDE.md](../../../CLAUDE.md)).
 
 ```gherkin
 Feature: Diagnostics
 
+  @desktop-only
   Scenario: Captures live renderer failures, filters issues, and exports a redacted LLM-readable report
     Given the app has recorded a renderer error containing a password, a token and a bearer authorization
     And an interface exception "Controlled interface exception" has occurred
