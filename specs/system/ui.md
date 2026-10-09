@@ -527,9 +527,11 @@ Targets and the automated gate: [../product/non-functional.md](../product/non-fu
 
 ## 9. Visual baseline
 
-`frontend/e2e/layout-accessibility.spec.ts` captures the shell at the default window size as `application-shell` (`application-shell-darwin.png`, updated only with `npm run test:e2e:update` when a visual change is intended). The committed baseline shows: sidebar 296 px with the logo and collapse icon, the "Demo User" row, two top-level rows and one section row, the logs and settings icons at the bottom with a red count badge; the main column with the top bar, empty 40 px tab strip and the placeholder composer at the bottom; and the right panel at 572 px with the centred message "Select a catalog, schema or entity to see its details." with its collapse icon top-right.
+`frontend/e2e/layout-accessibility.spec.ts` captures the shell at the default window size (1440×900) as `application-shell`: `application-shell-web-linux.png` for the web target and `application-shell-darwin.png` for the desktop target. Each is updated only with `npm run test:e2e:update` / `test:e2e:desktop:update` when a visual change is intended. The web baseline (2026-10-09) shows the current navigation labels. The committed desktop baseline shows: sidebar 296 px with the logo and collapse icon, the "Demo User" row, two top-level rows and one section row, the logs and settings icons at the bottom with a red count badge; the main column with the top bar, empty 40 px tab strip and the placeholder composer at the bottom; and the right panel at 572 px with the centred message "Select a catalog, schema or entity to see its details." with its collapse icon top-right.
 
-Open question: the committed baseline PNG pre-dates the current navigation labels (it shows "Data Sandbox" and "Projects" where the code now renders "Datasets", "Agents", "Knowledge" and "Sessions"); the baseline should be regenerated, and until then the code, not the image, is the reference for labels.
+The web baseline shows the same layout with the current labels and no log-count badge (no issues logged yet).
+
+Open question: the committed desktop baseline PNG pre-dates the current navigation labels (it shows "Data Sandbox" and "Projects" where the code now renders "Datasets", "Agents", "Knowledge" and "Sessions"); the baseline should be regenerated, and until then the code, not the image, is the reference for labels.
 
 ## 10. Open questions and gaps
 

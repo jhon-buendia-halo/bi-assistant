@@ -51,10 +51,13 @@ Electron loads the renderer from `file://`. An absolute base (`/`) would resolve
 | `build:web` | `ng build` | Same as `build`; named so the backend's `build:web` can call it. |
 | `watch` | `ng build --watch --configuration development` | Rebuild on change. |
 | `test` | `ng test` | Karma + Jasmine unit tests. |
-| `test:e2e:prepare` | `tsc -p e2e/tsconfig.json && npm --prefix ../backend run build && ng build --base-href ./` | Type-check the e2e code, build the backend, build the Angular app for Electron. |
-| `test:e2e` | prepare + `playwright test` | The full Playwright suite against the real Electron app. |
-| `test:e2e:ui` | prepare + `playwright test --ui` | Same, in Playwright's UI mode. |
-| `test:e2e:update` | prepare + `playwright test --update-snapshots` | Regenerate visual baselines; only for an intended visual change. |
+| `test:e2e:prepare` | `tsc -p e2e/tsconfig.json && npm --prefix ../backend run build:all` | Type-check the e2e code, build the backend and the web UI into `backend/public/`. |
+| `test:e2e:prepare:desktop` | `tsc -p e2e/tsconfig.json && npm --prefix ../backend run build && ng build --base-href ./` | Type-check the e2e code, build the backend, build the Angular app for Electron. |
+| `test:e2e` | prepare + `playwright test --project=web` | The full Playwright suite against the web app (the default target). |
+| `test:e2e:ui` | prepare + `playwright test --project=web --ui` | Same, in Playwright's UI mode. |
+| `test:e2e:update` | prepare + `playwright test --project=web --update-snapshots` | Regenerate the web visual baselines; only for an intended visual change. |
+| `test:e2e:desktop` | desktop prepare + `playwright test --project=desktop` | The same suite against the real Electron app. Run only when a desktop run is requested. |
+| `test:e2e:desktop:update` | desktop prepare + `playwright test --project=desktop --update-snapshots` | Regenerate the desktop visual baselines. |
 | `brand:electron` | `bash scripts/brand-electron.sh` | See above. |
 | `electron` | `brand:electron`, backend build, `ng build --base-href ./`, `electron .` | Production-style run: builds everything, opens the app. |
 | `electron:dev` | `brand:electron`, then `ELECTRON_DEV_URL=http://localhost:4200 electron .` | Window pointed at `ng serve` for live reload. Run `npm start` first; the backend spawns from `backend/dist`, so build it once. |
@@ -104,7 +107,7 @@ cd backend && npm run build:all && npm run start:web # web mode from the working
 | `frontend/` | `npm test`, `npm run build`, `npm run test:e2e` |
 | `backend/` | `npm test`, `npm run build`, lint on the files you touched |
 
-`test:e2e` builds the backend and the Angular app and then drives the real Electron app; its global setup starts the World Cup Postgres itself (see section 6) and refuses to run if port 3000 is taken.
+`test:e2e` builds the backend with the web UI and drives the web app; its global setup starts the World Cup Postgres itself (see section 6). The desktop target (`test:e2e:desktop`) runs only when a desktop run is requested, and refuses to launch the app if port 3000 is taken. Which target to test, and how skipped desktop-only scenarios are reported, is the *Test target convention* in [CLAUDE.md](../../CLAUDE.md).
 
 ## 3. Desktop packaging (electron-builder)
 

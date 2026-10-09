@@ -107,6 +107,22 @@ How work is planned, specified, built, verified and traced. It covers the repo's
   - This change is merged through a PR from the BA-89 epic branch `docs/BA-89-delivery-process`.
 - **Notes:** the first branch made under the new rule. Evidence: [evidence/0.2.5/](evidence/0.2.5/).
 
+#### 0.2.6 — E2E and testing run against the web app; desktop only on request ([BA-156](https://halo-powered.atlassian.net/browse/BA-156))  `✅ Done`
+- **Intent:** while an epic is developed, its changes are tested in the web app built from the epic branch, which is faster and needs no free port 3000. The Electron desktop app is tested only when the user asks.
+- **Scope:**
+  - CLAUDE.md *Test target convention*. Workflow step 9, the Evidence and E2E conventions point at the web target.
+  - Playwright `web` project (default) and `desktop` project, sharing one fixture (`e2e/fixtures/app.fixture.ts`). The web project starts the npm CLI per test on a free port and a temp data dir, drives it in Chromium at 1440×900, and can restart the CLI on the same data dir.
+  - Scripts: `test:e2e` (web), `test:e2e:desktop`, and their `:ui` and `:update` variants. Global setup checks port 3000 only for desktop runs.
+  - Desktop-only scenarios are skipped on web with the reason `Desktop only`. In the Gherkin, the restart scenarios gain a browser variant ("Restart the CLI to apply").
+  - A web visual baseline for the application shell.
+  - Specs: delivery.md, tech-stack.md, ui.md, the developer-settings, diagnostics and app-shell capability specs.
+- **Out of scope:** CI running E2E; changing app behaviour; removing the desktop suite.
+- **Acceptance:**
+  - `npm run test:e2e` runs every spec against the web app and passes, with desktop-only tests reported as skipped.
+  - `npm run test:e2e:desktop` still selects the Electron project.
+  - CLAUDE.md states the rule. `python3 scripts/check-specs.py` passes.
+- **Notes:** made on the BA-89 epic branch `test/BA-89-delivery-process`. Evidence: [evidence/0.2.6/](evidence/0.2.6/).
+
 ### Milestone 0.3 — Local Development Observability ([BA-111](https://halo-powered.atlassian.net/browse/BA-111))
 
 Developer tooling for seeing what the backend and agents are doing: agent and LLM traces, HTTP and database traces, metrics and linked logs. Switched on by a Developer toggle in Settings. With it off, which is the default, end-user installs behave exactly as before. Epic spec: [specs/epics/BA-111/spec.md](specs/epics/BA-111/spec.md). Decision: ADR-0006 in [specs/system/architecture.md](specs/system/architecture.md).

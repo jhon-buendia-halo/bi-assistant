@@ -96,7 +96,8 @@ Test:
 ```bash
 cd backend && npm test        # jest
 cd frontend && npm test       # karma
-cd frontend && npm run test:e2e   # Playwright driving the real Electron app
+cd frontend && npm run test:e2e   # Playwright driving the web app (default target)
+cd frontend && npm run test:e2e:desktop   # the real Electron app, only on request
 ```
 
 To see traces, metrics and logs of your local runs in Phoenix and Grafana, follow [docs/observability.md](docs/observability.md). It is off by default.
