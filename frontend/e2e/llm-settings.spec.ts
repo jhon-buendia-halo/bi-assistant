@@ -2,13 +2,8 @@ import fs from 'node:fs';
 import http from 'node:http';
 import { AddressInfo } from 'node:net';
 import path from 'node:path';
-import { ElectronApplication, Page } from '@playwright/test';
-import {
-  test,
-  expect,
-  launchElectronApp,
-  readyWindow,
-} from './fixtures/electron.fixture';
+import { Page } from '@playwright/test';
+import { test, expect } from './fixtures/app.fixture';
 
 // Mirrors the "LLM settings" Feature in specs/capabilities/llm-settings/spec.md
 // (the scenarios that need no real provider), against a local stub of the
@@ -106,32 +101,14 @@ async function saveLenaiConfiguration(
 }
 
 let stub: LenaiStub;
-let extraApps: ElectronApplication[] = [];
 
 test.beforeEach(async () => {
   stub = await startLenaiStub();
 });
 
 test.afterEach(async () => {
-  for (const app of extraApps) await app.close().catch(() => undefined);
-  extraApps = [];
   await stub.close();
 });
-
-/** Launches the app on `appDataDir` and closes it after the test. */
-async function launch(
-  appDataDir: string,
-  env: Record<string, string | undefined> = {},
-): Promise<{ app: ElectronApplication; page: Page }> {
-  const app = await launchElectronApp(appDataDir, env);
-  extraApps.push(app);
-  return { app, page: await readyWindow(app) };
-}
-
-async function quit(app: ElectronApplication): Promise<void> {
-  await app.close();
-  extraApps = extraApps.filter((candidate) => candidate !== app);
-}
 
 test('LenAI needs a deployment name and a base URL', async ({ page }) => {
   await openLlmConfiguration(page);
@@ -167,17 +144,18 @@ test('never shows the stored key', async ({ page }) => {
 
 test('keeps a key saved under the former development secret', async ({
   appDataDir,
+  launchApp,
 }, testInfo) => {
   // An app that ran before the secret was persisted encrypted with the fixed
   // development secret.
-  const before = await launch(appDataDir, {
+  const before = await launchApp(appDataDir, {
     APP_SECRET: FORMER_DEVELOPMENT_SECRET,
   });
   await saveLenaiConfiguration(before.page, stub, 'sk-legacy-1a2b');
-  await quit(before.app);
+  await before.close();
   expect(fs.existsSync(path.join(appDataDir, '.app-secret'))).toBe(false);
 
-  const after = await launch(appDataDir, { APP_SECRET: undefined });
+  const after = await launchApp(appDataDir, { APP_SECRET: undefined });
   expect(fs.existsSync(path.join(appDataDir, '.app-secret'))).toBe(true);
   await openLlmConfiguration(after.page);
 
@@ -195,17 +173,18 @@ test('keeps a key saved under the former development secret', async ({
 
 test('asks for the key again when the app secret changed', async ({
   appDataDir,
+  launchApp,
 }, testInfo) => {
-  const before = await launch(appDataDir, { APP_SECRET: undefined });
+  const before = await launchApp(appDataDir, { APP_SECRET: undefined });
   await saveLenaiConfiguration(before.page, stub, 'sk-first-7c7c');
-  await quit(before.app);
+  await before.close();
 
   // A different install secret: the saved key can no longer be decrypted.
   fs.writeFileSync(path.join(appDataDir, '.app-secret'), 'f'.repeat(64), {
     mode: 0o600,
   });
 
-  const after = await launch(appDataDir, { APP_SECRET: undefined });
+  const after = await launchApp(appDataDir, { APP_SECRET: undefined });
   await openLlmConfiguration(after.page);
 
   await expect(keyUnreadableNotice(after.page)).toHaveText(
