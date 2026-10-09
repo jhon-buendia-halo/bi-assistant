@@ -94,6 +94,19 @@ How work is planned, specified, built, verified and traced. It covers the repo's
   - `specs/system/delivery.md` describes both rulesets and the deploy-key release push.
 - **Notes:** follows 0.2.3. The probe on a throwaway branch confirmed that deploy-key bypass works on a personal-account repo. The first release (v0.20.7) passed, but its deploy-key tag push started an installer build; the follow-up pushes the tag with `GITHUB_TOKEN`. Evidence: [evidence/0.2.4/](evidence/0.2.4/).
 
+#### 0.2.5 — One branch and one PR per epic ([BA-149](https://halo-powered.atlassian.net/browse/BA-149))  `✅ Done`
+- **Intent:** all the stories of an epic are built on one branch in one worktree and reviewed and merged as one PR, instead of one branch and PR per story.
+- **Scope:**
+  - CLAUDE.md *Branching convention* rewritten: branch `<type>/<EPIC-ID>-<short-description>`, with the type being the highest-impact commit type in the epic; one worktree per epic, reused by every story; commits scoped to their story; the PR title names the epic and the description lists every story; one PR when the epic's stories are done.
+  - Bugs: a Bug whose epic has an open branch is fixed there. A Bug against shipped work keeps its own `fix/<BUG-ID>` branch and PR.
+  - Workflow step 3 and the Epic gate point at the epic branch. `specs/system/delivery.md` explains how one PR with mixed commit types is bumped.
+- **Out of scope:** changing `version-on-merge.yml` or the rulesets on `main`; renaming branches already open under the old rule.
+- **Acceptance:**
+  - CLAUDE.md states the one-branch-per-epic rule and no longer requires one branch per issue.
+  - `python3 scripts/check-specs.py` passes.
+  - This change is merged through a PR from the BA-89 epic branch `docs/BA-89-delivery-process`.
+- **Notes:** the first branch made under the new rule. Evidence: [evidence/0.2.5/](evidence/0.2.5/).
+
 ### Milestone 0.3 — Local Development Observability ([BA-111](https://halo-powered.atlassian.net/browse/BA-111))
 
 Developer tooling for seeing what the backend and agents are doing: agent and LLM traces, HTTP and database traces, metrics and linked logs. Switched on by a Developer toggle in Settings. With it off, which is the default, end-user installs behave exactly as before. Epic spec: [specs/epics/BA-111/spec.md](specs/epics/BA-111/spec.md). Decision: ADR-0006 in [specs/system/architecture.md](specs/system/architecture.md).

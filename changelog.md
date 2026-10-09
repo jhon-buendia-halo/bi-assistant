@@ -2,6 +2,15 @@
 
 Running log of every meaningful change, newest first. See *Logging convention* and *Evidence convention* in [CLAUDE.md](CLAUDE.md). Release versions come from Conventional Commits (`version-on-merge.yml`); this file records what shipped and links to the evidence.
 
+## 2026-10-09
+
+### Changed
+- **One branch, one worktree and one PR per epic** (roadmap 0.2.5, [BA-149](https://halo-powered.atlassian.net/browse/BA-149), epic [BA-89](https://halo-powered.atlassian.net/browse/BA-89)):
+  - CLAUDE.md *Branching convention*: all of an epic's stories are built on one branch, `<type>/<EPIC-ID>-<short-description>`, in one worktree, and ship as one PR that lists every story. Commits stay scoped to their story. The branch type is the highest-impact commit type in the epic.
+  - Bugs: a Bug whose epic has an open branch is fixed there. A Bug against shipped work keeps its own `fix/<BUG-ID>` branch and PR.
+  - Workflow step 3 and the Epic gate now point at the epic branch. [specs/system/delivery.md](specs/system/delivery.md) explains the version bump for a mixed-type epic PR. Story added to [specs/epics/BA-89/spec.md](specs/epics/BA-89/spec.md).
+  - Evidence: [evidence/0.2.5/](evidence/0.2.5/).
+
 ## 2026-10-05
 
 ### Added

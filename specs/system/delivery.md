@@ -197,7 +197,7 @@ All release workflows run on Node 22 and live in `.github/workflows/`. The one p
 | Permissions | `contents: write` (the tag push), `statuses: write` (the spec-check status). Branch pushes use the deploy key. |
 | Chaining | Pushes made with the deploy key do trigger workflows. The bump commit starts `spec-checks.yml` on `main` and a `version-on-merge.yml` run that skips itself (see *Skipped when*). `build-desktop.yml` runs on any pushed `v*` tag, so the tag is pushed with `GITHUB_TOKEN`, whose pushes start no workflows. That keeps merge-time tagging from starting builds; a tag pushed by hand still builds. |
 
-Conventional Commit subjects therefore drive the bump, which is why a branch's type should match its PR's main commit type (see *Branching convention* in [CLAUDE.md](../../CLAUDE.md)).
+Conventional Commit subjects therefore drive the bump, Because the bump reads every commit since the last tag, an epic's single PR with mixed `feat`/`fix`/`docs` commits still bumps at the highest level it contains. The epic branch's type names that highest-impact type (see *Branching convention* in [CLAUDE.md](../../CLAUDE.md)).
 
 ### `build-desktop.yml` — Build desktop installers
 

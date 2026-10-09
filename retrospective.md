@@ -14,6 +14,21 @@ Entry template:
 
 ---
 
+## 2026-10-09 — 0.2.5 One branch and one PR per epic (BA-149)
+
+### What went well
+- Reading `version-on-merge.yml` before asking the questions showed the bump reads every commit since the last tag. So one epic PR with mixed commit types needed no workflow change, only a naming rule for the branch type.
+- Four multiple-choice questions settled naming, traceability, bugs and Jira tracking in one round, before any file was touched.
+- This change was itself made on the BA-89 epic branch, so the new rule was used from its first commit.
+
+### What went wrong
+- `jq` isn't installed in this WSL environment, so `jira.sh` failed on the first call. A static `jq` binary had to be fetched into the session scratchpad.
+- The request said "design epic". I read it as "any epic" (probably a dictation slip) and never confirmed it. None of the four questions asked about it, so the rule assumes it covers every epic.
+
+### What to do differently
+- At the start of a Jira task, run `command -v jq` along with `jira.sh whoami`. If `jq` is missing, put the static jq-1.7.1 binary on `PATH` for the session before any Jira call.
+- Before starting any story, look for its epic's open branch (`git branch -a --list '*/<EPIC-ID>-*'`, `git worktree list`) and continue there. Only create a branch for the epic's first story.
+
 ## 2026-10-05 — 1.7.9 Fixed default APP_SECRET fallback (BA-106)
 
 ### What went well
