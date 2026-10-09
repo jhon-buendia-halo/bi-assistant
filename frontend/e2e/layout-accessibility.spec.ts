@@ -1,5 +1,5 @@
 import axe from 'axe-core';
-import { test, expect } from './fixtures/electron.fixture';
+import { test, expect } from './fixtures/app.fixture';
 
 test('supports keyboard layout controls and persists the right-panel width', async ({
   page,

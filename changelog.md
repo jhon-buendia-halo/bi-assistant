@@ -5,6 +5,13 @@ Running log of every meaningful change, newest first. See *Logging convention* a
 ## 2026-10-09
 
 ### Changed
+- **E2E and testing run against the web app; the desktop app only on request** (roadmap 0.2.6, [BA-156](https://halo-powered.atlassian.net/browse/BA-156), epic [BA-89](https://halo-powered.atlassian.net/browse/BA-89)):
+  - CLAUDE.md *Test target convention*: during epic development, E2E, evidence screenshots and manual checks use the web app built from the epic branch. Desktop runs only when the user asks; otherwise the evidence and PR list desktop as not run. Workflow step 9, the Evidence and E2E conventions point at it.
+  - Playwright now has two projects sharing [`e2e/fixtures/app.fixture.ts`](frontend/e2e/fixtures/app.fixture.ts), which replaces `electron.fixture.ts`. `web` (the default, `npm run test:e2e`) starts the npm CLI per test on a free port and a temp data dir and drives it in Chromium at 1440×900. `desktop` (`npm run test:e2e:desktop`) launches Electron as before. The port-3000 check moved into the desktop launch, so web runs never need that port.
+  - Desktop-only tests are skipped on web with "Desktop only: …": the diagnostics redaction and export test, and the "Restart backend" test. New browser scenarios cover the "Restart the CLI to apply" notice and a CLI restart. The observability export and LLM-settings relaunch tests restart or relaunch according to the target.
+  - New web visual baseline `application-shell-web-linux.png`.
+  - Specs: Gherkin in [developer-settings](specs/capabilities/developer-settings/spec.md) and [diagnostics](specs/capabilities/diagnostics/spec.md) (`@desktop-only` tags), plus [delivery.md](specs/system/delivery.md), [tech-stack.md](specs/system/tech-stack.md), [ui.md](specs/system/ui.md) and the READMEs.
+  - Web suite: 35 passed, 2 skipped (desktop only). Desktop not run. Evidence: [evidence/0.2.6/](evidence/0.2.6/).
 - **One branch, one worktree and one PR per epic** (roadmap 0.2.5, [BA-149](https://halo-powered.atlassian.net/browse/BA-149), epic [BA-89](https://halo-powered.atlassian.net/browse/BA-89)):
   - CLAUDE.md *Branching convention*: all of an epic's stories are built on one branch, `<type>/<EPIC-ID>-<short-description>`, in one worktree, and ship as one PR that lists every story. Commits stay scoped to their story. The branch type is the highest-impact commit type in the epic.
   - Bugs: a Bug whose epic has an open branch is fixed there. A Bug against shipped work keeps its own `fix/<BUG-ID>` branch and PR.

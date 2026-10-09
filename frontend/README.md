@@ -46,12 +46,17 @@ ng test
 
 ## Running end-to-end tests
 
-The Playwright suite launches the real Electron shell and its child NestJS
-backend in an isolated user-data directory. It also starts the seeded World Cup
-PostgreSQL service from the repository's `docker-compose.yml`.
+The Playwright suite has two targets (projects). The default, `web`, builds the
+backend with the web UI, starts the npm CLI for each test on a free port with a
+temporary data directory, and drives it in Chromium. The `desktop` target
+launches the real Electron shell in an isolated user-data directory. Run it only
+when a desktop run is wanted (see *Test target convention* in the repository
+`CLAUDE.md`). Both start the seeded World Cup PostgreSQL service from the
+repository's `docker-compose.yml`.
 
 ```bash
-npm run test:e2e
+npm run test:e2e           # web (default)
+npm run test:e2e:desktop   # Electron, on request
 ```
 
 Docker must be running. If an equivalent World Cup database is already
@@ -61,13 +66,16 @@ available at `127.0.0.1:55432`, skip Compose startup with:
 E2E_SKIP_DOCKER=1 npm run test:e2e
 ```
 
-Port 3000 must be free because every test launches its own backend. The suite
-runs with one worker to keep that port exclusive and attaches Electron output,
-diagnostic logs, screenshots, videos, and traces when a test fails.
+The web target never uses port 3000. The desktop target needs it free, because
+the Electron app's backend always listens there. The suite runs with one worker
+and attaches the app's output, diagnostic logs, screenshots, videos, and traces
+when a test fails. Tests that need the desktop shell are skipped on web with the
+reason "Desktop only".
 
 Use `npm run test:e2e:ui` for Playwright's interactive runner. When an intended
-UI change affects the checked-in visual baseline, update it with
-`npm run test:e2e:update` and review the resulting PNG before keeping it.
+UI change affects a checked-in visual baseline, update it with
+`npm run test:e2e:update` (web) or `npm run test:e2e:desktop:update` and review
+the resulting PNG before keeping it.
 
 ## Additional Resources
 

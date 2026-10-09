@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { test, expect } from './fixtures/electron.fixture';
+import { test, expect } from './fixtures/app.fixture';
 import {
   WORLD_CUP_DATASOURCE,
   WORLD_CUP_SESSION,
@@ -11,14 +11,21 @@ import {
 } from './helpers/app-actions';
 
 test('creates a PostgreSQL datasource, dataset, and session using the real World Cup database', async ({
+  app,
   page,
 }) => {
   await createWorldCupWorkspace(page);
 
-  const entryUrl = pathToFileURL(
-    path.resolve(process.cwd(), 'dist/frontend/browser/index.html'),
-  ).href;
-  await page.goto(entryUrl);
+  // Reload the application: the desktop shell loads its built entry file,
+  // the browser reloads the app URL.
+  if (app.target === 'desktop') {
+    const entryUrl = pathToFileURL(
+      path.resolve(process.cwd(), 'dist/frontend/browser/index.html'),
+    ).href;
+    await page.goto(entryUrl);
+  } else {
+    await page.reload();
+  }
   await expect(page.getByLabel('Open system logs')).toBeVisible();
   await expect(
     page.getByText(WORLD_CUP_SESSION, { exact: true }),

@@ -1,5 +1,5 @@
 import { Page } from '@playwright/test';
-import { test, expect } from './fixtures/electron.fixture';
+import { test, expect } from './fixtures/app.fixture';
 import {
   WORLD_CUP_SESSION,
   WORLD_CUP_DATASET,

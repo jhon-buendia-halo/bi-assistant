@@ -84,7 +84,7 @@ States: defaults (nothing saved), saved, restart required (desktop or browser), 
 
 ### Feature: Developer settings
 
-E2E: `frontend/e2e/developer-settings.spec.ts`
+E2E: `frontend/e2e/developer-settings.spec.ts`. The Playwright `web` project runs the browser variants (R11). The `desktop` project runs the `@desktop-only` scenarios with the "Restart backend" button. In a browser, "restart the CLI" means stopping and starting the CLI process on the same data dir and reloading the page.
 
 ```gherkin
 Feature: Developer settings
@@ -102,13 +102,29 @@ Feature: Developer settings
     When I turn on "Developer observability" and click "Save"
     Then I see "Developer settings saved — restart to apply"
     And I see "Restart to apply" with "The running backend has developer observability off"
-    And I see "Restart backend"
 
+  @desktop-only
+  Scenario: The desktop app offers to restart the backend
+    Given I saved "Developer observability" on in the desktop app
+    Then I see "Restart backend"
+
+  Scenario: In a browser, the notice asks me to restart the CLI
+    Given I saved "Developer observability" on in a browser
+    Then I see "Restart the CLI to apply"
+    And I do not see "Restart backend"
+
+  @desktop-only
   Scenario: Restarting the backend applies the saved setting
     Given I saved "Developer observability" on and I see "Restart to apply"
     When I click "Restart backend"
     Then the backend restarts
     And the "Developer observability" switch is still on
+    And I no longer see "Restart to apply"
+
+  Scenario: Restarting the CLI applies the saved setting
+    Given I saved "Developer observability" on in a browser and I see "Restart to apply"
+    When I restart the CLI and reload the page
+    Then the "Developer observability" switch is still on
     And I no longer see "Restart to apply"
 
   Scenario: Turning it back off before restarting needs no restart
@@ -145,24 +161,25 @@ Feature: Developer observability export
   Background:
     Given an OTLP receiver and a Phoenix receiver are listening
     And I set the OTLP and Phoenix endpoints to them in "Developer"
+    # "restart the backend" = click "Restart backend" in the desktop app, or restart the CLI and reload in a browser.
 
   Scenario: Backend traces reach the OTLP endpoint when observability is on
-    When I turn on "Developer observability", click "Save" and click "Restart backend"
+    When I turn on "Developer observability", click "Save" and restart the backend
     And I open "LLM Configuration"
     Then the OTLP receiver gets trace data from the service "questions-to-insights"
 
   Scenario: Agent runs reach Phoenix when observability is on
     Given a session on the World Cup dataset and no model is configured
-    When I turn on "Developer observability", click "Save" and click "Restart backend"
+    When I turn on "Developer observability", click "Save" and restart the backend
     And I ask a question in the session
     Then the Phoenix receiver gets trace data for the "assistant" agent
 
   Scenario: Backend logs reach the OTLP endpoint when observability is on
-    When I turn on "Developer observability", click "Save" and click "Restart backend"
+    When I turn on "Developer observability", click "Save" and restart the backend
     Then the OTLP receiver gets log records including "Nest application successfully started"
 
   Scenario: Nothing is exported when observability is off
-    When I click "Save" with "Developer observability" off and click "Restart backend"
+    When I click "Save" with "Developer observability" off and restart the backend
     And I open "LLM Configuration"
     Then neither receiver gets data
 ```
