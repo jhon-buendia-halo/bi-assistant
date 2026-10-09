@@ -26,12 +26,13 @@ Every change to Questions to Insights is planned, specified, built, verified and
 | [BA-90](https://halo-powered.atlassian.net/browse/BA-90) | Rebuildable system specs in `specs/` | 0.2.2 |
 | [BA-108](https://halo-powered.atlassian.net/browse/BA-108) | Require the spec check before merging to `main` | 0.2.3 |
 | [BA-110](https://halo-powered.atlassian.net/browse/BA-110) | Require PR approval on `main`; only the repo admin may merge without one | 0.2.4 |
+| [BA-149](https://halo-powered.atlassian.net/browse/BA-149) | One branch and one PR per epic | 0.2.5 |
 
 ## Specs touched
 
 - [specs/README.md](../../README.md): layout, formats, lifecycle, rebuild prompt.
 - Every file under [product/](../../product/), [system/](../../system/) and [capabilities/](../../capabilities/), created by the BA-90 backfill.
-- [system/delivery.md](../../system/delivery.md): the release workflow and the branch rulesets on `main` (BA-108, BA-110).
+- [system/delivery.md](../../system/delivery.md): the release workflow and the branch rulesets on `main` (BA-108, BA-110), and how one epic PR with mixed commit types is bumped (BA-149).
 
 ## Acceptance
 
