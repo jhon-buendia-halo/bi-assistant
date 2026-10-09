@@ -150,7 +150,7 @@ describe('SessionChat trust UX', () => {
       '[title="independent re-derivation returned the same results"]',
     );
     expect(chip?.textContent?.trim()).toBe('Cross-checked');
-    expect(chip?.className).toContain('text-emerald-400');
+    expect(chip?.className).toContain('text-on-success-soft');
     expect(
       agreed.querySelector('[title="Matches an approved query"]'),
     ).toBeTruthy();
@@ -164,13 +164,13 @@ describe('SessionChat trust UX', () => {
       '[title="results differ — treat with care"]',
     );
     expect(amber?.textContent?.trim()).toBe('Cross-check differs');
-    expect(amber?.className).toContain('text-amber-400');
+    expect(amber?.className).toContain('text-on-warning-soft');
 
     TestBed.resetTestingModule();
     const failed = await render({ ...answer, crossCheck: { status: 'error' } });
     const muted = failed.querySelector('[title="Cross-check failed"]');
     expect(muted?.textContent?.trim()).toBe('Cross-check failed');
-    expect(muted?.className).toContain('text-zinc-500');
+    expect(muted?.className).toContain('text-fg-muted');
   });
 
   it('shows no cross-check chip on an ordinary answer', async () => {
@@ -194,7 +194,7 @@ describe('SessionChat trust UX', () => {
     chip.click();
     fixture.detectChanges();
     expect(chip.getAttribute('aria-pressed')).toBe('true');
-    expect(chip.className).toContain('text-emerald-400');
+    expect(chip.className).toContain('text-on-primary-soft');
 
     fixture.componentInstance.stop();
     fixture.componentInstance.draft.set('And denied ones?');

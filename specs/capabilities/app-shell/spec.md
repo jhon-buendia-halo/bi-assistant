@@ -51,7 +51,7 @@ Backend status banner
 Toasts
 - R28. The system SHALL show short messages as toasts stacked at the bottom-right of the window, newest last, above all other content, without blocking the content beneath them.
 - R29. A toast SHALL be one of three kinds: `success`, `error` or `info`, each with its own icon (check, alert, info) and colour. Success and info toasts SHALL disappear after 4 seconds; error toasts SHALL disappear after 8 seconds.
-- R30. Each toast SHALL have a dismiss button that removes it immediately. Several toasts MAY be visible at once; there is no de-duplication.
+- R30. Each toast SHALL have a dismiss button, named "Dismiss notification", that removes it immediately. The toasts SHALL sit in a region named "Notifications" that assistive technology announces politely. Several toasts MAY be visible at once; there is no de-duplication.
 - R31. Every error toast SHALL also be recorded as an error entry with source `user-visible` in diagnostics (see [../diagnostics/spec.md](../diagnostics/spec.md)).
 
 App identity and version
@@ -60,7 +60,8 @@ App identity and version
 - R34. The desktop window SHALL open at 1440 × 900, SHALL NOT shrink below 960 × 600, SHALL use the canvas colour of the operating system's theme as its background until the page reports its resolved theme (R44), and on macOS SHALL use an inset title bar so the sidebar header clears the window controls.
 
 Sessions area
-- R46. Choosing **Sessions** on the rail SHALL show a list pane with a **Sessions** heading, a **New conversation** (plus) button and, under "Sessions navigation", one row per existing session, newest activity first. With no session open the content shows "Select a session or start a new conversation." Selecting a row SHALL open that session's chat; **New conversation** SHALL open the new-session composer. Deleting the open session SHALL return to the Sessions area with nothing open.
+- R46. Choosing **Sessions** on the rail SHALL show a list pane with a **Sessions** heading, a **New conversation** (plus) button and, under "Sessions navigation", one row per existing session, newest activity first. With no session open the content shows "Select a session or start a new conversation." Selecting a row SHALL open that session's chat; **New conversation** SHALL open the new-session composer. Deleting the open session SHALL return to the Sessions area with nothing open. Each row SHALL show the session name and, beneath it, the names of its datasets. An empty list SHALL read "No sessions yet."
+- R47. The Sessions list pane SHALL offer **Collapse session list**. While it is collapsed, the page header SHALL offer **Expand session list**, which brings it back. The collapse state SHALL NOT be remembered between launches, and SHALL NOT close the open session.
 
 Appearance
 - R39. The Appearance section SHALL offer a single choice labelled **Theme** with three options: **System**, **Light** and **Dark**. Exactly one is selected. The default, when nothing has been chosen, is System.
@@ -74,7 +75,7 @@ Appearance
 Accessibility and visual stability
 - R35. The application shell, in its initial state, SHALL produce zero violations when scanned by an automated accessibility engine (axe-core, all default rules).
 - R36. The system SHALL expose labelled landmarks: "Navigation rail" (complementary), "Workspace navigation", "Sessions navigation" (in the Sessions area), "Settings navigation" (in the Settings area), and "Details panel".
-- R37. Every icon-only control in the shell SHALL have an accessible name (a title or label), including the rail buttons (Datasets, Agents, Knowledge, Sessions, Open system logs, Settings), Collapse right panel, Expand right panel, New conversation and Session options.
+- R37. Every icon-only control in the shell SHALL have an accessible name (a title or label), including the rail buttons (Datasets, Agents, Knowledge, Sessions, Open system logs, Settings), Collapse right panel, Expand right panel, Collapse session list, Expand session list, New conversation and Session options.
 - R38. The application shell in its initial state SHALL match the approved `application-shell` screenshot baseline. The baseline SHALL be changed only deliberately, together with an intended visual change.
 
 ## Edge cases and errors
@@ -87,7 +88,6 @@ Accessibility and visual stability
 - The rail's account avatar ("D", titled "Demo User"), the Settings search box ("Search settings", hint "⌘ F"), the search icon on the Agents screen and the empty chat input shape on the home view are visual placeholders with no behaviour yet.
 - The `down` banner has no retry button; the instruction in it is the only remedy.
 - A stored theme of `Dark` (wrong case), `blue` or an empty string means System. With browser storage blocked, the chosen theme applies until the app closes and the next launch starts on System.
-- Until the BA-141 restyle stories land, only the page background and the Appearance section follow the theme; the other screens keep their dark colours.
 - Missing backend entry file (a broken installation): no backend starts, an error diagnostic ("Backend entry file is missing") is recorded and the window opens after the readiness deadline.
 
 ## Contracts
@@ -131,6 +131,11 @@ Feature: Layout and accessibility
     When an automated accessibility scan runs on the application shell
     Then it finds no violations
 
+  Scenario: Has no automatically detectable accessibility violations on any screen in either theme
+    Given the World Cup datasource and dataset exist
+    When an automated accessibility scan runs in the light theme and in the dark theme on: Datasets, the dataset editor, Agents, an agent's detail, Knowledge, the Sessions area, the new-session composer, and each Settings section
+    Then it finds no violations
+
   Scenario: Matches the stable application-shell visual baseline
     When I view the application shell
     Then it looks the same as the approved "application-shell" screenshot
@@ -153,6 +158,14 @@ Feature: Navigation rail
     When I click "Sessions" on the rail
     Then I see "Sessions navigation" with a "New conversation" button
     And I see "Select a session or start a new conversation."
+
+  Scenario: Collapses and expands the session list
+    Given I am in the Sessions area
+    When I click "Collapse session list"
+    Then "Sessions navigation" is hidden
+    And I see "Expand session list"
+    When I click "Expand session list"
+    Then I see "Sessions navigation" again
 
   Scenario: Opens Settings as an area with a section list
     When I click "Settings" on the rail

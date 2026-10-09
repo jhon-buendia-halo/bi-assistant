@@ -5,6 +5,23 @@ Running log of every meaningful change, newest first. See *Logging convention* a
 ## 2026-10-09
 
 ### Added
+- **Chat, visual panel, system logs and toasts in both themes** (roadmap 1.8.7, [BA-148](https://halo-powered.atlassian.net/browse/BA-148), epic [BA-141](https://halo-powered.atlassian.net/browse/BA-141)):
+  - The session chat (including its `.prose-dark` Markdown styles and tooltips), the interactive visual panel frame, the system logs dialog, toasts and the backend banner now use theme tokens and the shared classes.
+  - Toasts sit in a "Notifications" region (`aria-live="polite"`) with a "Dismiss notification" button (app-shell R30).
+  - `SessionChat` unit tests assert token classes.
+  - ui.md is synced to tokens throughout: §2 conventions, §3 shared components, §4 screens, §6.1 colour usage (the legacy dark palette section is retired) and §8.
+  - Evidence: [evidence/1.8.7/](evidence/1.8.7/).
+- **Feature screens in both themes** (roadmap 1.8.6, [BA-147](https://halo-powered.atlassian.net/browse/BA-147), epic [BA-141](https://halo-powered.atlassian.net/browse/BA-141)):
+  - These screens now use only theme tokens and the shared `btn`, `chip`, `card`, `field`, `menu` and `list-row` classes: datasets, the catalog browser, metrics, entity details, agents (list, detail, eval trace), knowledge, and the datasource, LLM, testing-data and developer settings. The dataset editor header now wraps.
+  - New E2E scenario: axe finds no violations on any screen in Light or Dark.
+  - Fixed along the way: names for the Datasets and Agents search, layout and row-options buttons.
+  - Evidence: [evidence/1.8.6/](evidence/1.8.6/).
+- **Collapsible Sessions list pane** (roadmap 1.8.5, [BA-146](https://halo-powered.atlassian.net/browse/BA-146), epic [BA-141](https://halo-powered.atlassian.net/browse/BA-141)):
+  - The pane has "Collapse session list" / "Expand session list" (not remembered between launches).
+  - Rows show the session's datasets under its name, and the empty list reads "No sessions yet."
+  - The new-session composer uses tokens and shared classes.
+  - Specs: app-shell R46, R47 and R37, plus the Navigation rail scenario "Collapses and expands the session list".
+  - Evidence: [evidence/1.8.5/](evidence/1.8.5/).
 - **Agentic Hub shell: gradient frame, banner and navigation rail** (roadmap 1.8.3, [BA-144](https://halo-powered.atlassian.net/browse/BA-144), epic [BA-141](https://halo-powered.atlassian.net/browse/BA-141)):
   - The 296 px sidebar is replaced by a gradient frame. The always-visible icon rail holds Datasets, Agents, Knowledge and Sessions at the top, and the avatar, system logs and Settings at the bottom. Beside it, a canvas card holds the 72 px "Agentic Hub" banner (the page's only `h1`) over the page card (`main`) and the details panel card. The collapse and expand sidebar controls are gone.
   - **Sessions** is now a rail area, with a list pane beside the composer or chat.
@@ -33,6 +50,12 @@ Running log of every meaningful change, newest first. See *Logging convention* a
   - Milestone 1.8 in [roadmap.md](roadmap.md), with one feature per story (1.8.1–1.8.7), and the epic row in [specs/README.md](specs/README.md).
   - Decisions: `productName`, the installers and the data directory stay "Halo BI Assistant"; only the window title, document title and settings footer become "Agentic Hub". The mockup's "Powered by LenAI" footer is left out.
   - Evidence: [evidence/1.8.1/](evidence/1.8.1/).
+
+### Fixed
+- **Shared component classes could lose to Tailwind's base reset** (roadmap 1.8.4, [BA-145](https://halo-powered.atlassian.net/browse/BA-145)):
+  - The classes in `frontend/src/styles/components.css` moved from `@utility` to `@layer components` and now reference the raw `--qti-*` tokens, so utilities on the same element override them without `!`.
+  - `index.html` declares `@layer theme, base, components, utilities;` before anything else. Otherwise Angular's inlined critical CSS can name `components` first, and Tailwind's button reset then wins.
+  - Evidence: the screenshots in [evidence/1.8.6/](evidence/1.8.6/).
 
 ### Changed
 - **E2E and testing run against the web app; the desktop app only on request** (roadmap 0.2.6, [BA-156](https://halo-powered.atlassian.net/browse/BA-156), epic [BA-89](https://halo-powered.atlassian.net/browse/BA-89)):

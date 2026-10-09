@@ -515,26 +515,37 @@ The app gets the Agentic Hub visual design: a gradient frame, an "Agentic Hub" b
 - **Out of scope:** adopting them on every screen (1.8.3, 1.8.5–1.8.7).
 - **Acceptance:** the classes compile into the app's CSS from tokens only (no hex or palette colours); the Appearance E2E stays green with the section built from them; ui.md §3 documents each class.
 - **Notes:** built before 1.8.3 so the shell can use the classes. Depends on 1.8.2. Evidence: [evidence/1.8.4/](evidence/1.8.4/).
-#### 1.8.5 — Sessions master-detail list pane ([BA-146](https://halo-powered.atlassian.net/browse/BA-146))  `📋 Planned`
-- **Intent:** sessions are browsed in a list pane beside the content, as in the mockup's request list.
-- **Scope:** move the session list from the sidebar into a list pane; keep new session, select, delete and its confirm, newest-first order and the existing `data-testid`s.
-- **Out of scope:** changes to the session data or its order (see 1.7.19).
-- **Acceptance:** the session Gherkin in [specs/capabilities/sessions-chat/spec.md](specs/capabilities/sessions-chat/spec.md) passes with the list in its new place.
-- **Notes:** depends on 1.8.3 and 1.8.4.
-
-#### 1.8.6 — Restyle feature screens: datasets, catalog, agents, knowledge and settings ([BA-147](https://halo-powered.atlassian.net/browse/BA-147))  `📋 Planned`
+#### 1.8.5 — Sessions master-detail list pane ([BA-146](https://halo-powered.atlassian.net/browse/BA-146))  `✅ Done`
+- **Intent:** sessions are browsed in a list pane beside the content, as in the mockup's request list, and the pane can step aside to give the chat room.
+- **Scope:**
+  - The Sessions list pane from 1.8.3 gets a **Collapse session list** button. While collapsed, the page header shows **Expand session list**. The state is not remembered between launches.
+  - Each row shows the session name and, under it, its datasets (`fg-muted`), like the mockup's rows.
+  - "No sessions yet." when the list is empty.
+  - The new-session composer moves to tokens and shared components.
+- **Out of scope:** changes to the session data or its order (see 1.7.19); the chat itself (1.8.7).
+- **Acceptance:** the new scenario "Collapses and expands the session list" in the Navigation rail Feature and the existing session flows (`world-cup-workflow.spec.ts`, `chat-and-visuals.spec.ts`, `developer-observability.spec.ts`) pass on web.
+- **Notes:** the user chose a collapsible pane on 2026-10-09. Depends on 1.8.3 and 1.8.4. Evidence: [evidence/1.8.5/](evidence/1.8.5/).
+#### 1.8.6 — Restyle feature screens: datasets, catalog, agents, knowledge and settings ([BA-147](https://halo-powered.atlassian.net/browse/BA-147))  `✅ Done`
 - **Intent:** the feature screens match the design in both themes.
 - **Scope:** datasets list, catalog browser, agents list and detail, knowledge list and form, and the settings forms move to tokens and shared components.
 - **Out of scope:** behaviour and copy changes.
-- **Acceptance:** no hardcoded colours remain on these screens; their E2E specs pass unchanged apart from moved navigation.
-- **Notes:** depends on 1.8.4.
+- **Acceptance:** no hardcoded colours remain on these screens; their E2E specs pass unchanged apart from moved navigation and the colour-class assertions in `developer-settings.spec.ts`; the new scenario "no accessibility violations on any screen in either theme" passes.
+- **Notes:**
+  - Depends on 1.8.4.
+  - Built by two parallel subagents, then checked with a class-stripping diff against HEAD (0 non-class changes).
+  - Also gave names to the unnamed Datasets and Agents search, layout and row-options buttons, which the new axe scan flagged.
+  - Evidence: [evidence/1.8.6/](evidence/1.8.6/).
 
-#### 1.8.7 — Restyle chat, visual panel, system logs and toasts; regenerate the visual baseline ([BA-148](https://halo-powered.atlassian.net/browse/BA-148))  `📋 Planned`
+#### 1.8.7 — Restyle chat, visual panel, system logs and toasts; regenerate the visual baseline ([BA-148](https://halo-powered.atlassian.net/browse/BA-148))  `✅ Done`
 - **Intent:** the rest of the app matches the design, and the visual tests guard both themes.
 - **Scope:** session chat and composer, the interactive visual panel frame, the right panel, system logs and toasts move to tokens; Playwright visual baselines are regenerated for Light and Dark.
 - **Out of scope:** the generated visuals' own styling inside the iframe.
 - **Acceptance:** no hardcoded colours remain in the renderer; the axe scan is clean in both themes; baselines for both themes are committed.
-- **Notes:** depends on 1.8.4. Closes the stale-baseline gap in [specs/system/ui.md](specs/system/ui.md) §9.
+- **Notes:**
+  - Depends on 1.8.4.
+  - The web baseline was regenerated in 1.8.3 and still matches. The desktop (`-darwin`) baseline is regenerated only on a requested desktop run.
+  - Also: toasts became a "Notifications" live region with a named dismiss button; `index.html` declares the cascade-layer order first; ui.md §2, §3, §4, §6 and §8 were synced to tokens.
+  - Evidence: [evidence/1.8.7/](evidence/1.8.7/).
 
 ## Backlog
 

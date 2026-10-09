@@ -8,17 +8,17 @@
     >
       <div class="flex flex-col items-center gap-1.5 px-2 py-1">
         @for (item of historyItems(); track item.index) {
-          <span class="h-0.5 w-4 rounded-full bg-zinc-600"></span>
+          <span class="h-0.5 w-4 rounded-full bg-border-strong"></span>
         }
       </div>
       @if (historyOpen()) {
         <div
-          class="absolute top-0 right-8 max-h-[70vh] w-[300px] overflow-y-auto rounded-xl border border-white/10 bg-[#2a2a2a] p-1.5 shadow-xl"
+          class="absolute top-0 right-8 max-h-[70vh] w-[300px] overflow-y-auto menu"
         >
           @for (item of historyItems(); track item.index) {
             <button
               (click)="scrollToMessage(item.index)"
-              class="w-full truncate rounded-lg px-2.5 py-1.5 text-left text-[13px] text-zinc-300 hover:bg-white/10"
+              class="w-full truncate rounded-lg px-2.5 py-1.5 text-left text-[13px] text-fg hover:bg-surface-muted"
             >
               {{ item.message.content }}
             </button>
@@ -38,30 +38,30 @@
         -->
         <div
           data-testid="session-welcome"
-          class="flex flex-col gap-3 rounded-2xl border border-white/10 bg-[#232323] p-5"
+          class="flex flex-col gap-3 card p-5"
         >
           <div class="flex items-center gap-2.5">
             <span
-              class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/5 text-zinc-300"
+              class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-muted text-fg"
             >
               <lucide-angular [img]="Sparkles" [size]="15" />
             </span>
-            <span class="text-[14px] font-medium text-zinc-100">
+            <span class="text-[14px] font-medium text-fg-strong">
               {{ session().name }} is ready
             </span>
           </div>
-          <p class="text-[13px] leading-6 text-zinc-400">
+          <p class="text-[13px] leading-6 text-fg-muted">
             Ask a question in plain English and I will query your data, explain
             how I got the answer and turn it into an interactive visual.
             @if (welcomeDatasets().length > 0) {
-              <span class="text-zinc-500">
+              <span class="text-fg-muted">
                 Connected to
                 {{ welcomeDatasets().join(", ") }}.
               </span>
             }
           </p>
           <div class="flex flex-col gap-1.5">
-            <span class="text-[11px] font-medium tracking-wide text-zinc-500">
+            <span class="text-[11px] font-medium tracking-wide text-fg-muted">
               Try one of these:
             </span>
             <div class="flex flex-wrap gap-2">
@@ -69,7 +69,7 @@
                 <button
                   type="button"
                   (click)="useStarterPrompt(prompt)"
-                  class="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-left text-[12px] text-zinc-300 hover:border-white/20 hover:bg-white/[0.08]"
+                  class="rounded-full border border-border bg-surface-muted px-3 py-1.5 text-left text-[12px] text-fg hover:border-border-strong hover:bg-surface-selected"
                 >
                   {{ prompt }}
                 </button>
@@ -88,12 +88,12 @@
             <button
               (click)="copyMessage(message.content)"
               title="Copy message"
-              class="mb-1 rounded p-1 text-zinc-500 opacity-0 group-hover:opacity-100 hover:bg-white/10 hover:text-zinc-300"
+              class="mb-1 rounded p-1 text-fg-muted opacity-0 group-hover:opacity-100 hover:bg-surface-muted hover:text-fg"
             >
               <lucide-angular [img]="Copy" [size]="14" />
             </button>
             <p
-              class="max-w-[70%] rounded-xl bg-white/10 px-4 py-2.5 text-[13px] leading-6 whitespace-pre-wrap text-zinc-200"
+              class="max-w-[70%] rounded-xl bg-surface-muted px-4 py-2.5 text-[13px] leading-6 whitespace-pre-wrap text-fg"
             >
               {{ message.content }}
             </p>
@@ -106,20 +106,20 @@
             instead of duplicating it.
           -->
           <div
-            class="flex items-start gap-3 rounded-2xl border border-red-400/20 bg-red-400/[0.06] p-4"
+            class="flex items-start gap-3 rounded-2xl border border-on-danger-soft/30 bg-danger-soft p-4"
             [id]="'msg-' + i"
           >
             <span
-              class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-red-400/10 text-red-400"
+              class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-danger-soft text-on-danger-soft"
             >
               <lucide-angular [img]="TriangleAlert" [size]="15" />
             </span>
             <span class="flex min-w-0 flex-1 flex-col gap-1">
-              <span class="text-[13px] font-medium text-red-400"
+              <span class="text-[13px] font-medium text-on-danger-soft"
                 >Something went wrong</span
               >
               <span
-                class="text-[13px] leading-6 whitespace-pre-wrap text-zinc-300"
+                class="text-[13px] leading-6 whitespace-pre-wrap text-fg"
                 >{{ message.content }}</span
               >
             </span>
@@ -130,7 +130,7 @@
                 [disabled]="sending()"
                 title="Retry"
                 aria-label="Retry"
-                class="shrink-0 rounded-lg border border-white/10 px-2.5 py-1 text-[12px] text-zinc-300 hover:border-white/20 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+                class="shrink-0 rounded-lg border border-border px-2.5 py-1 text-[12px] text-fg hover:border-border-strong hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Retry
               </button>
@@ -138,8 +138,8 @@
           </div>
         } @else if (message.clarification; as clarification) {
           <!-- Clarification card, Claude-style -->
-          <div class="rounded-2xl border border-white/10 bg-[#232323] p-4">
-            <p class="text-[14px] font-medium text-zinc-100">
+          <div class="card p-4">
+            <p class="text-[14px] font-medium text-fg-strong">
               {{ clarification.question }}
             </p>
             <div class="mt-3 flex flex-col gap-1">
@@ -151,19 +151,19 @@
                 <button
                   (click)="pickOption(option.label)"
                   [disabled]="!isLatest(i) || sending()"
-                  class="flex items-start gap-3 rounded-xl border border-transparent px-3 py-2.5 text-left hover:border-white/15 hover:bg-white/5 disabled:cursor-default disabled:opacity-60 disabled:hover:border-transparent disabled:hover:bg-transparent"
+                  class="flex items-start gap-3 rounded-xl border border-transparent px-3 py-2.5 text-left hover:border-border-strong hover:bg-surface-muted disabled:cursor-default disabled:opacity-60 disabled:hover:border-transparent disabled:hover:bg-transparent"
                 >
                   <span
-                    class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded bg-white/10 text-[11px] text-zinc-400"
+                    class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded bg-surface-muted text-[11px] text-fg-muted"
                   >
                     {{ n + 1 }}
                   </span>
                   <span class="flex min-w-0 flex-col">
-                    <span class="text-[13px] text-zinc-200">{{
+                    <span class="text-[13px] text-fg">{{
                       option.label
                     }}</span>
                     @if (option.description) {
-                      <span class="text-[12px] text-zinc-500">{{
+                      <span class="text-[12px] text-fg-muted">{{
                         option.description
                       }}</span>
                     }
@@ -187,7 +187,7 @@
             @if (isLatest(i)) {
               @if (customAnswerOpen()) {
                 <div
-                  class="mt-3 flex items-center gap-2 rounded-xl border border-white/15 bg-black/10 p-2 focus-within:border-white/30"
+                  class="mt-3 flex items-center gap-2 rounded-xl border border-border-strong bg-surface-muted p-2 focus-within:border-border-selected"
                 >
                   <input
                     id="custom-answer"
@@ -198,7 +198,7 @@
                     [disabled]="sending()"
                     (input)="customAnswer.set($any($event.target).value)"
                     (keydown)="onCustomAnswerKeydown($event)"
-                    class="min-w-0 flex-1 bg-transparent px-1 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600"
+                    class="min-w-0 flex-1 bg-transparent px-1 text-[13px] text-fg outline-none placeholder:text-fg-muted"
                   />
                   <button
                     type="button"
@@ -206,21 +206,21 @@
                     aria-label="Send custom answer"
                     (click)="sendCustomAnswer()"
                     [disabled]="sending() || customAnswer().trim() === ''"
-                    class="rounded-md bg-zinc-200 p-1.5 text-zinc-900 hover:bg-white disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+                    class="rounded-md bg-primary p-1.5 text-on-primary hover:bg-primary-hover disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-fg-muted"
                   >
                     <lucide-angular [img]="ArrowUp" [size]="14" />
                   </button>
                 </div>
               }
               <div
-                class="mt-2 flex items-center justify-between border-t border-white/5 pt-2.5"
+                class="mt-2 flex items-center justify-between border-t border-border pt-2.5"
               >
                 <button
                   type="button"
                   (click)="toggleCustomAnswer()"
                   [disabled]="sending()"
                   [attr.aria-expanded]="customAnswerOpen()"
-                  class="rounded-lg px-2.5 py-1.5 text-[13px] text-zinc-500 hover:bg-white/5 hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-60"
+                  class="rounded-lg px-2.5 py-1.5 text-[13px] text-fg-muted hover:bg-surface-muted hover:text-fg disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {{
                     customAnswerOpen()
@@ -232,7 +232,7 @@
                   type="button"
                   (click)="skipClarification()"
                   [disabled]="sending()"
-                  class="rounded-lg border border-white/15 px-3 py-1.5 text-[13px] text-zinc-300 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
+                  class="rounded-lg border border-border-strong px-3 py-1.5 text-[13px] text-fg hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Skip
                 </button>
@@ -242,20 +242,20 @@
         } @else if (message.report; as report) {
           <!-- Deep analysis report: title, executive summary, download -->
           <div
-            class="rounded-2xl border border-white/10 bg-[#232323] p-4"
+            class="card p-4"
             [id]="'msg-' + i"
           >
             <div class="flex items-start gap-3">
               <span
-                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/5 text-zinc-300"
+                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-muted text-fg"
               >
                 <lucide-angular [img]="Telescope" [size]="15" />
               </span>
               <span class="flex min-w-0 flex-1 flex-col">
-                <span class="truncate text-[14px] font-medium text-zinc-100">
+                <span class="truncate text-[14px] font-medium text-fg-strong">
                   {{ report.title }}
                 </span>
-                <span class="text-[12px] text-zinc-500">
+                <span class="text-[12px] text-fg-muted">
                   Deep analysis · {{ report.angles }}
                   {{ report.angles === 1 ? "angle" : "angles" }} investigated
                 </span>
@@ -266,7 +266,7 @@
                 [disabled]="reportDownloading() === report.jobId"
                 title="Download the full report (.md)"
                 aria-label="Download report"
-                class="flex shrink-0 items-center gap-1.5 rounded-lg border border-white/10 px-2.5 py-1 text-[12px] text-zinc-300 hover:border-white/20 hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+                class="flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 text-[12px] text-fg hover:border-border-strong hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50"
               >
                 @if (reportDownloading() === report.jobId) {
                   <lucide-angular
@@ -290,21 +290,21 @@
         } @else if (message.visual; as visual) {
           <!-- Visual event card -->
           <div class="group">
-            <div class="flex items-center gap-3 rounded-xl border border-white/10 bg-[#232323] px-3 py-2.5">
-              <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/5 text-zinc-300">
+            <div class="flex items-center gap-3 rounded-xl border border-border bg-surface-muted px-3 py-2.5">
+              <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-muted text-fg">
                 <lucide-angular [img]="BarChart3" [size]="15" />
               </span>
               <span class="flex min-w-0 flex-col">
-                <span class="truncate text-[13px] text-zinc-200">
+                <span class="truncate text-[13px] text-fg">
                   {{ visual.action === "created" ? "Created" : visual.action === "updated" ? "Updated" : "Reverted" }}
                   <span class="font-medium">{{ visual.title }}</span>
                 </span>
-                <span class="text-[12px] text-zinc-500">Version {{ visual.version }}</span>
+                <span class="text-[12px] text-fg-muted">Version {{ visual.version }}</span>
               </span>
               <button
                 type="button"
                 (click)="viewVisual.emit(visual)"
-                class="ml-auto shrink-0 rounded-lg border border-white/10 px-2.5 py-1 text-[12px] text-zinc-300 hover:border-white/20 hover:bg-white/5"
+                class="ml-auto shrink-0 rounded-lg border border-border px-2.5 py-1 text-[12px] text-fg hover:border-border-strong hover:bg-surface-muted"
               >
                 View
               </button>
@@ -327,7 +327,7 @@
             @if (message.interpretation) {
               <!-- Deterministic provenance caption, built server-side -->
               <div
-                class="mt-2 flex items-center gap-1.5 text-[11px] text-zinc-500"
+                class="mt-2 flex items-center gap-1.5 text-[11px] text-fg-muted"
                 [title]="message.interpretation"
               >
                 <lucide-angular [img]="Info" [size]="12" class="shrink-0" />
@@ -343,7 +343,7 @@
                 <!-- Answer's SQL matches a query in the verified library -->
                 <span
                   title="Matches an approved query"
-                  class="mr-1 flex items-center gap-1 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2 py-0.5 text-[11px] font-medium text-emerald-400"
+                  class="mr-1 flex items-center gap-1 rounded-full border border-on-success-soft/30 bg-success-soft px-2 py-0.5 text-[11px] font-medium text-on-success-soft"
                 >
                   <lucide-angular [img]="BadgeCheck" [size]="12" />
                   Verified
@@ -363,7 +363,7 @@
               <button
                 (click)="copyMessage(message.content)"
                 title="Copy message"
-                class="rounded p-1 text-zinc-500 opacity-0 group-hover:opacity-100 hover:bg-white/10 hover:text-zinc-300"
+                class="rounded p-1 text-fg-muted opacity-0 group-hover:opacity-100 hover:bg-surface-muted hover:text-fg"
               >
                 <lucide-angular [img]="Copy" [size]="14" />
               </button>
@@ -383,8 +383,8 @@
                   class="rounded p-1 disabled:cursor-not-allowed disabled:opacity-40"
                   [class]="
                     message.feedback === 'up'
-                      ? 'qti-rating-on bg-emerald-400/10 text-emerald-400'
-                      : 'text-zinc-500 opacity-0 group-hover:opacity-100 hover:bg-white/10 hover:text-zinc-300'
+                      ? 'qti-rating-on bg-success-soft text-on-success-soft'
+                      : 'text-fg-muted opacity-0 group-hover:opacity-100 hover:bg-surface-muted hover:text-fg'
                   "
                 >
                   <lucide-angular [img]="ThumbsUp" [size]="14" />
@@ -403,8 +403,8 @@
                   class="rounded p-1 disabled:cursor-not-allowed disabled:opacity-40"
                   [class]="
                     message.feedback === 'down'
-                      ? 'qti-rating-on bg-red-400/10 text-red-400'
-                      : 'text-zinc-500 opacity-0 group-hover:opacity-100 hover:bg-white/10 hover:text-zinc-300'
+                      ? 'qti-rating-on bg-danger-soft text-on-danger-soft'
+                      : 'text-fg-muted opacity-0 group-hover:opacity-100 hover:bg-surface-muted hover:text-fg'
                   "
                 >
                   <lucide-angular [img]="ThumbsDown" [size]="14" />
@@ -417,7 +417,7 @@
                   type="button"
                   (click)="requestVisualization(message)"
                   [disabled]="sending() || visualGenerating()"
-                  class="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[12px] text-zinc-300 hover:border-white/20 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
+                  class="flex items-center gap-2 rounded-lg border border-border bg-surface-muted px-3 py-2 text-[12px] text-fg hover:border-border-strong hover:bg-surface-selected disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   @if (visualGenerating()) {
                     <lucide-angular
@@ -444,12 +444,12 @@
             <lucide-angular
               [img]="Brain"
               [size]="15"
-              class="shrink-0 text-zinc-400"
+              class="shrink-0 text-fg-muted"
             />
-            <span class="text-[13px] font-medium text-zinc-200">Thinking</span>
+            <span class="text-[13px] font-medium text-fg">Thinking</span>
             @if (reasoningSnippet) {
               <span
-                class="truncate rounded bg-white/5 px-2 py-0.5 text-[12px] text-zinc-500"
+                class="truncate rounded bg-surface-muted px-2 py-0.5 text-[12px] text-fg-muted"
               >
                 {{ reasoningSnippet }}
               </span>
@@ -457,32 +457,32 @@
           </div>
           @for (tool of toolCalls(); track $index) {
             <div class="ml-0.5 flex flex-col gap-1">
-              <div class="flex items-center gap-2.5 text-zinc-400">
+              <div class="flex items-center gap-2.5 text-fg-muted">
                 <lucide-angular [img]="Wrench" [size]="13" class="shrink-0" />
                 <span class="font-mono text-[12px]">{{ tool.name }}</span>
                 @if (tool.error) {
-                  <span class="text-[12px] text-red-400">failed</span>
+                  <span class="text-[12px] text-on-danger-soft">failed</span>
                 } @else if (tool.rowCount !== undefined) {
-                  <span class="text-[12px] text-zinc-500">{{ tool.rowCount }} rows</span>
+                  <span class="text-[12px] text-fg-muted">{{ tool.rowCount }} rows</span>
                 } @else {
-                  <lucide-angular [img]="Loader2" [size]="11" class="animate-spin text-zinc-600" />
+                  <lucide-angular [img]="Loader2" [size]="11" class="animate-spin text-fg-muted" />
                 }
               </div>
               @if (tool.rationale) {
                 <!-- The thought behind the call, forming as it streams -->
-                <p class="ml-6 text-[12px] leading-5 text-zinc-500">
+                <p class="ml-6 text-[12px] leading-5 text-fg-muted">
                   {{ tool.rationale }}
                 </p>
               }
               @if (tool.input) {
-                <pre class="ml-6 max-h-24 overflow-auto rounded bg-black/30 px-2.5 py-1.5 font-mono text-[11px] leading-5 whitespace-pre-wrap text-zinc-500">{{ tool.input }}</pre>
+                <pre class="ml-6 max-h-24 overflow-auto rounded bg-surface-muted px-2.5 py-1.5 font-mono text-[11px] leading-5 whitespace-pre-wrap text-fg-muted">{{ tool.input }}</pre>
               }
             </div>
           }
           @if (streamingText()) {
             <div class="prose-dark" [innerHTML]="streamingText() | markdown"></div>
           }
-          <div class="flex items-center gap-2 text-zinc-500">
+          <div class="flex items-center gap-2 text-fg-muted">
             <lucide-angular [img]="Loader2" [size]="13" class="animate-spin" />
             <span class="font-mono text-[12px]"
               >{{ elapsed().toFixed(1) }}s</span
@@ -494,12 +494,12 @@
       @if (deepAnalysisJob(); as job) {
         <!-- Background deep analysis: local card, polled, chat stays usable -->
         <div
-          class="flex items-start gap-3 rounded-2xl border border-white/10 bg-[#232323] p-4"
+          class="flex items-start gap-3 card p-4"
           aria-label="Deep analysis status"
         >
           <span
-            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/5"
-            [class]="job.status === 'error' ? 'text-red-400' : 'text-zinc-300'"
+            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-muted"
+            [class]="job.status === 'error' ? 'text-on-danger-soft' : 'text-fg'"
           >
             @if (job.status === "error") {
               <lucide-angular [img]="Telescope" [size]="15" />
@@ -508,7 +508,7 @@
             }
           </span>
           <span class="flex min-w-0 flex-1 flex-col">
-            <span class="text-[13px] text-zinc-200">
+            <span class="text-[13px] text-fg">
               {{
                 job.status === "error"
                   ? "Deep analysis failed"
@@ -516,7 +516,7 @@
               }}
               — {{ deepAnalysisLine(job) }}
             </span>
-            <span class="truncate text-[12px] text-zinc-500">
+            <span class="truncate text-[12px] text-fg-muted">
               {{ job.question }}
             </span>
           </span>
@@ -526,7 +526,7 @@
               (click)="dismissDeepAnalysis()"
               title="Dismiss"
               aria-label="Dismiss deep analysis"
-              class="shrink-0 rounded-full p-1.5 text-zinc-500 hover:bg-white/10 hover:text-zinc-300"
+              class="shrink-0 rounded-full p-1.5 text-fg-muted hover:bg-surface-muted hover:text-fg"
             >
               <lucide-angular [img]="X" [size]="13" />
             </button>
@@ -544,13 +544,13 @@
         class="mb-2 flex w-full max-w-[860px] flex-wrap items-center gap-2"
         aria-label="Follow-up suggestions"
       >
-        <span class="text-[11px] font-medium tracking-wide text-zinc-500">
+        <span class="text-[11px] font-medium tracking-wide text-fg-muted">
           Suggested questions — click to ask:
         </span>
         <button
           type="button"
           (click)="useDrillPrompt()"
-          class="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[12px] text-zinc-300 hover:border-white/20 hover:bg-white/[0.08]"
+          class="flex items-center gap-1.5 rounded-full border border-border bg-surface-muted px-3 py-1.5 text-[12px] text-fg hover:border-border-strong hover:bg-surface-selected"
         >
           <lucide-angular [img]="BarChart3" [size]="12" class="shrink-0" />
           <span class="max-w-[320px] truncate">Drill into "{{ followUpLabel() }}"</span>
@@ -558,7 +558,7 @@
         <button
           type="button"
           (click)="useWhyPrompt()"
-          class="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[12px] text-zinc-300 hover:border-white/20 hover:bg-white/[0.08]"
+          class="flex items-center gap-1.5 rounded-full border border-border bg-surface-muted px-3 py-1.5 text-[12px] text-fg hover:border-border-strong hover:bg-surface-selected"
         >
           <lucide-angular [img]="Sparkles" [size]="12" class="shrink-0" />
           <span class="max-w-[320px] truncate">Why "{{ followUpLabel() }}"?</span>
@@ -568,14 +568,14 @@
           (click)="dismissFollowUps()"
           title="Dismiss follow-ups"
           aria-label="Dismiss follow-ups"
-          class="rounded-full p-1.5 text-zinc-500 hover:bg-white/10 hover:text-zinc-300"
+          class="rounded-full p-1.5 text-fg-muted hover:bg-surface-muted hover:text-fg"
         >
           <lucide-angular [img]="X" [size]="13" />
         </button>
       </div>
     }
     <div
-      class="w-full max-w-[860px] rounded-2xl border border-white/10 bg-[#232323] p-3"
+      class="w-full max-w-[860px] card p-3"
     >
       <textarea
         #composer
@@ -584,7 +584,7 @@
         [value]="draft()"
         (input)="draft.set($any($event.target).value)"
         (keydown)="onKeydown($event)"
-        class="w-full resize-none bg-transparent text-[13px] text-zinc-200 outline-none placeholder:text-zinc-500"
+        class="w-full resize-none bg-transparent text-[13px] text-fg outline-none placeholder:text-fg-muted"
       ></textarea>
       <div class="mt-1 flex items-center justify-between gap-2">
         <div class="flex items-center gap-2">
@@ -602,8 +602,8 @@
           class="qti-tip flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px]"
           [class]="
             careful()
-              ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-400'
-              : 'border-white/10 bg-white/[0.04] text-zinc-400 hover:border-white/20 hover:bg-white/[0.08] hover:text-zinc-200'
+              ? 'border-border-selected bg-primary-soft text-on-primary-soft'
+              : 'border-border bg-surface-muted text-fg-muted hover:border-border-strong hover:bg-surface-selected hover:text-fg'
           "
         >
           <lucide-angular [img]="ShieldCheck" [size]="12" class="shrink-0" />
@@ -620,7 +620,7 @@
               ? 'A deep analysis is already running for this session.'
               : 'Deep analysis: investigate the typed question from several angles in the background and deliver a downloadable report. Takes a few minutes; chat stays usable.'
           "
-          class="qti-tip flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[12px] text-zinc-400 hover:border-white/20 hover:bg-white/[0.08] hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-white/10 disabled:hover:bg-white/[0.04] disabled:hover:text-zinc-400"
+          class="qti-tip flex items-center gap-1.5 rounded-full border border-border bg-surface-muted px-2.5 py-1 text-[12px] text-fg-muted hover:border-border-strong hover:bg-surface-selected hover:text-fg disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-border disabled:hover:bg-surface-muted disabled:hover:text-fg-muted"
         >
           <lucide-angular [img]="Telescope" [size]="12" class="shrink-0" />
           Deep analysis
@@ -632,7 +632,7 @@
             (click)="stop()"
             title="Stop response"
             aria-label="Stop response"
-            class="rounded-md bg-zinc-200 p-1.5 text-zinc-900 hover:bg-white"
+            class="rounded-md bg-primary p-1.5 text-on-primary hover:bg-primary-hover"
           >
             <lucide-angular [img]="Square" [size]="15" [strokeWidth]="2.5" />
           </button>
@@ -643,7 +643,7 @@
             [disabled]="draft().trim() === ''"
             title="Send message"
             aria-label="Send message"
-            class="rounded-md bg-zinc-200 p-1.5 text-zinc-900 hover:bg-white disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+            class="rounded-md bg-primary p-1.5 text-on-primary hover:bg-primary-hover disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-fg-muted"
           >
             <lucide-angular [img]="ArrowUp" [size]="15" />
           </button>
@@ -660,26 +660,26 @@
 <ng-template #reasoningTrail let-message>
   @if (message.reasoning?.length) {
     <details
-      class="mt-2 rounded-lg border border-white/5 bg-white/[0.02] text-[12px]"
+      class="mt-2 rounded-lg border border-border bg-surface-muted text-[12px]"
     >
       <summary
-        class="cursor-pointer px-3 py-1.5 text-zinc-500 select-none hover:text-zinc-300"
+        class="cursor-pointer px-3 py-1.5 text-fg-muted select-none hover:text-fg"
       >
         How I worked this out ({{ message.reasoning.length }}
         {{ message.reasoning.length === 1 ? "step" : "steps" }})
       </summary>
-      <ol class="flex flex-col gap-2 border-t border-white/5 px-3 py-2">
+      <ol class="flex flex-col gap-2 border-t border-border px-3 py-2">
         @for (step of message.reasoning; track $index) {
           <li class="flex gap-2.5">
-            <span class="shrink-0 font-mono text-[11px] leading-5 text-zinc-600">
+            <span class="shrink-0 font-mono text-[11px] leading-5 text-fg-muted">
               {{ step.step }}.
             </span>
             <span class="flex min-w-0 flex-col">
-              <span class="leading-5 text-zinc-300">{{ step.rationale }}</span>
+              <span class="leading-5 text-fg">{{ step.rationale }}</span>
               @if (reasoningOutcome(step); as outcome) {
                 <span
                   class="text-[11px] leading-5"
-                  [class]="step.error ? 'text-red-400/80' : 'text-zinc-500'"
+                  [class]="step.error ? 'text-on-danger-soft' : 'text-fg-muted'"
                 >
                   {{ outcome }}
                 </span>
@@ -702,14 +702,14 @@
 <ng-template #knowledgeApplied let-message>
   @if (message.knowledge?.length) {
     <details
-      class="mt-2 rounded-lg border border-white/5 bg-white/[0.02] text-[12px]"
+      class="mt-2 rounded-lg border border-border bg-surface-muted text-[12px]"
     >
       <summary
-        class="cursor-pointer px-3 py-1.5 text-zinc-500 select-none hover:text-zinc-300"
+        class="cursor-pointer px-3 py-1.5 text-fg-muted select-none hover:text-fg"
       >
         Knowledge in context ({{ message.knowledge.length }})
       </summary>
-      <ul class="flex flex-col gap-2 border-t border-white/5 px-3 py-2">
+      <ul class="flex flex-col gap-2 border-t border-border px-3 py-2">
         @for (item of message.knowledge; track item.id) {
           <li class="flex min-w-0 flex-col gap-0.5">
             <span class="flex flex-wrap items-center gap-1.5">
@@ -719,16 +719,16 @@
                 [title]="knowledgeDescription(item.kind)"
                 >{{ knowledgeKindLabel(item.kind) }}</span
               >
-              <span class="text-zinc-300">{{ item.title }}</span>
-              <span class="text-[11px] text-zinc-600">{{
+              <span class="text-fg">{{ item.title }}</span>
+              <span class="text-[11px] text-fg-muted">{{
                 item.datasetId ?? "global"
               }}</span>
             </span>
-            <span class="leading-5 text-zinc-500">{{ item.body }}</span>
+            <span class="leading-5 text-fg-muted">{{ item.body }}</span>
           </li>
         }
       </ul>
-      <p class="border-t border-white/5 px-3 py-1.5 text-[11px] text-zinc-600">
+      <p class="border-t border-border px-3 py-1.5 text-[11px] text-fg-muted">
         Curated knowledge the assistant was given before answering. Edit it
         under Knowledge; disabled snippets are never included.
       </p>
@@ -744,12 +744,12 @@
 <ng-template #dataProvenance let-message>
   @if (message.entities?.length) {
     <div class="mt-2 flex flex-wrap items-center gap-1.5">
-      <span class="text-[11px] font-medium tracking-wide text-zinc-500 uppercase">
+      <span class="text-[11px] font-medium tracking-wide text-fg-muted uppercase">
         Data entities
       </span>
       @for (entity of message.entities; track entity) {
         <span
-          class="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 font-mono text-[11px] text-zinc-300"
+          class="rounded-full border border-border bg-surface-muted px-2 py-0.5 font-mono text-[11px] text-fg"
         >
           {{ entity }}
         </span>
@@ -757,20 +757,20 @@
     </div>
   }
   @if (message.data?.length) {
-    <details class="mt-2 rounded-lg border border-white/5 bg-white/[0.02] text-[12px]">
-      <summary class="cursor-pointer px-3 py-1.5 text-zinc-500 select-none hover:text-zinc-300">
+    <details class="mt-2 rounded-lg border border-border bg-surface-muted text-[12px]">
+      <summary class="cursor-pointer px-3 py-1.5 text-fg-muted select-none hover:text-fg">
         Data used ({{ message.data.length }}
         {{ message.data.length === 1 ? "query" : "queries" }})
       </summary>
-      <div class="flex flex-col gap-2 border-t border-white/5 px-3 py-2">
+      <div class="flex flex-col gap-2 border-t border-border px-3 py-2">
         @for (record of message.data; track $index) {
           <div class="group/record">
-            <div class="flex items-center gap-2 text-zinc-400">
+            <div class="flex items-center gap-2 text-fg-muted">
               <lucide-angular [img]="Wrench" [size]="12" class="shrink-0" />
-              <span class="font-mono" [class.text-red-400]="record.error">{{ dataLabel(record) }}</span>
+              <span class="font-mono" [class.text-on-danger-soft]="record.error">{{ dataLabel(record) }}</span>
               @if (record.truncated) {
                 <span
-                  class="shrink-0 text-amber-400/80"
+                  class="shrink-0 text-on-warning-soft"
                   title="Row cap reached — counts may be incomplete"
                 >
                   (truncated)
@@ -782,7 +782,7 @@
                   (click)="copySql(record)"
                   title="Copy SQL"
                   aria-label="Copy SQL"
-                  class="ml-auto shrink-0 rounded p-1 text-zinc-500 opacity-0 group-hover/record:opacity-100 hover:bg-white/10 hover:text-zinc-300"
+                  class="ml-auto shrink-0 rounded p-1 text-fg-muted opacity-0 group-hover/record:opacity-100 hover:bg-surface-muted hover:text-fg"
                 >
                   <lucide-angular [img]="Copy" [size]="12" />
                 </button>
@@ -790,14 +790,14 @@
             </div>
             @if (record.rationale) {
               <!-- Why this query was run, before the query itself -->
-              <p class="mt-1 text-[11px] leading-5 text-zinc-500">
+              <p class="mt-1 text-[11px] leading-5 text-fg-muted">
                 {{ record.rationale }}
               </p>
             }
             @for (warning of record.warnings; track $index) {
               <!-- A fault in the query itself: louder than the rationale,
                    because the figures above it may not mean what they say -->
-              <p class="mt-1 flex items-start gap-1.5 text-[11px] leading-5 text-amber-400/90">
+              <p class="mt-1 flex items-start gap-1.5 text-[11px] leading-5 text-on-warning-soft">
                 <lucide-angular
                   [img]="TriangleAlert"
                   [size]="12"
@@ -807,10 +807,10 @@
               </p>
             }
             @if (record.input) {
-              <pre class="mt-1 overflow-x-auto rounded bg-black/30 px-2.5 py-1.5 font-mono text-[11px] leading-5 whitespace-pre-wrap text-zinc-400">{{ record.input }}</pre>
+              <pre class="mt-1 overflow-x-auto rounded bg-surface-muted px-2.5 py-1.5 font-mono text-[11px] leading-5 whitespace-pre-wrap text-fg-muted">{{ record.input }}</pre>
             }
             @if (record.error) {
-              <p class="mt-1 text-red-400/80">{{ record.error }}</p>
+              <p class="mt-1 text-on-danger-soft">{{ record.error }}</p>
             }
           </div>
         }

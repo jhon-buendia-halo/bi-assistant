@@ -40,9 +40,9 @@ body {
   padding-left: 76px;
 }
 
-// Selected state for sidebar option rows
+// Selected state for list rows (catalog browser)
 .option-active {
-  background: rgb(255 255 255 / 0.05);
+  background: var(--qti-surface-selected);
 }
 
 // Conductor-style scrollbars: thin rounded grey thumb, no track
@@ -56,12 +56,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgb(255 255 255 / 0.15);
+  background: color-mix(in srgb, var(--qti-fg-muted) 40%, transparent);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgb(255 255 255 / 0.25);
+  background: color-mix(in srgb, var(--qti-fg-muted) 65%, transparent);
 }
 
 ::-webkit-scrollbar-corner {

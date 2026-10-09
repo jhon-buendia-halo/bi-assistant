@@ -1,26 +1,33 @@
-<div class="pointer-events-none fixed right-4 bottom-4 z-50 flex w-[360px] flex-col gap-2">
+<section
+  aria-label="Notifications"
+  aria-live="polite"
+  class="pointer-events-none fixed right-4 bottom-4 z-50 flex w-[360px] flex-col gap-2"
+>
   @for (toast of toastService.toasts(); track toast.id) {
     <div
-      class="pointer-events-auto flex items-start gap-2.5 rounded-xl border border-white/10 bg-[#2a2a2a] px-3.5 py-3 shadow-xl"
+      class="pointer-events-auto flex items-start gap-2.5 rounded-xl border border-border bg-surface px-3.5 py-3 shadow-xl"
     >
       @switch (toast.kind) {
         @case ('success') {
-          <lucide-angular [img]="CircleCheck" [size]="16" class="mt-px shrink-0 text-emerald-400" />
+          <lucide-angular [img]="CircleCheck" [size]="16" class="mt-px shrink-0 text-on-success-soft" />
         }
         @case ('error') {
-          <lucide-angular [img]="CircleAlert" [size]="16" class="mt-px shrink-0 text-red-400" />
+          <lucide-angular [img]="CircleAlert" [size]="16" class="mt-px shrink-0 text-on-danger-soft" />
         }
         @case ('info') {
-          <lucide-angular [img]="Info" [size]="16" class="mt-px shrink-0 text-sky-400" />
+          <lucide-angular [img]="Info" [size]="16" class="mt-px shrink-0 text-accent" />
         }
       }
-      <p class="min-w-0 flex-1 text-[13px] leading-5 text-zinc-200">{{ toast.message }}</p>
+      <p class="min-w-0 flex-1 text-[13px] leading-5 text-fg">{{ toast.message }}</p>
       <button
+        type="button"
         (click)="toastService.dismiss(toast.id)"
-        class="shrink-0 rounded p-0.5 text-zinc-500 hover:bg-white/10 hover:text-zinc-300"
+        title="Dismiss notification"
+        aria-label="Dismiss notification"
+        class="shrink-0 rounded p-0.5 text-fg-muted hover:bg-surface-muted hover:text-fg"
       >
         <lucide-angular [img]="X" [size]="14" />
       </button>
     </div>
   }
-</div>
+</section>

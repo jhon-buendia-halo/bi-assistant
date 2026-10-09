@@ -1,7 +1,7 @@
 <button
   type="button"
   aria-label="Close system logs"
-  class="fixed inset-0 z-40 cursor-default bg-black/55 backdrop-blur-[1px]"
+  class="fixed inset-0 z-40 cursor-default bg-fg-strong/40 backdrop-blur-[1px]"
   (click)="dismiss.emit()"
 ></button>
 
@@ -9,13 +9,13 @@
   role="dialog"
   aria-modal="true"
   aria-labelledby="system-logs-title"
-  class="fixed inset-x-6 top-16 bottom-6 z-50 mx-auto flex max-w-[1100px] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#191919] shadow-2xl"
+  class="fixed inset-x-6 top-16 bottom-6 z-50 mx-auto flex max-w-[1100px] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl"
 >
   <header
-    class="flex shrink-0 items-center gap-3 border-b border-white/10 px-4 py-3"
+    class="flex shrink-0 items-center gap-3 border-b border-border px-4 py-3"
   >
     <span
-      class="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-zinc-300"
+      class="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-muted text-fg"
     >
       <lucide-angular [img]="ScrollText" [size]="16" />
     </span>
@@ -23,16 +23,16 @@
       <div class="flex items-center gap-2">
         <h2
           id="system-logs-title"
-          class="text-[14px] font-medium text-zinc-100"
+          class="text-[14px] font-medium text-fg-strong"
         >
           System logs
         </h2>
-        <span class="flex items-center gap-1 text-[10px] text-emerald-400">
-          <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+        <span class="flex items-center gap-1 text-[10px] text-on-success-soft">
+          <span class="h-1.5 w-1.5 rounded-full bg-on-success-soft"></span>
           LIVE
         </span>
       </div>
-      <p class="text-[11px] text-zinc-500">
+      <p class="text-[11px] text-fg-muted">
         Desktop, interface, backend, and AI runtime diagnostics
       </p>
     </div>
@@ -43,7 +43,7 @@
         title="Refresh logs"
         aria-label="Refresh logs"
         (click)="diagnostics.refresh()"
-        class="rounded-lg border border-white/10 p-2 text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
+        class="rounded-lg border border-border p-2 text-fg-muted hover:bg-surface-muted hover:text-fg"
       >
         <lucide-angular
           [img]="RefreshCw"
@@ -55,7 +55,7 @@
         type="button"
         (click)="exportForLlm()"
         [disabled]="exporting()"
-        class="flex items-center gap-2 rounded-lg bg-zinc-100 px-3 py-2 text-[12px] font-medium text-zinc-900 hover:bg-white disabled:opacity-60"
+        class="flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-[12px] font-medium text-on-primary hover:bg-primary-hover disabled:opacity-60"
       >
         <lucide-angular [img]="Download" [size]="14" />
         <span>{{ exporting() ? "Exporting…" : "Export" }}</span>
@@ -65,7 +65,7 @@
         title="Close"
         aria-label="Close system logs"
         (click)="dismiss.emit()"
-        class="rounded-lg p-2 text-zinc-500 hover:bg-white/5 hover:text-zinc-200"
+        class="rounded-lg p-2 text-fg-muted hover:bg-surface-muted hover:text-fg"
       >
         <lucide-angular [img]="X" [size]="16" />
       </button>
@@ -73,15 +73,15 @@
   </header>
 
   <div
-    class="flex shrink-0 items-center gap-2 border-b border-white/5 px-4 py-2.5"
+    class="flex shrink-0 items-center gap-2 border-b border-border px-4 py-2.5"
   >
     <button
       type="button"
       (click)="filter.set('all')"
       class="rounded-md px-2.5 py-1 text-[11px]"
-      [class.bg-white/10]="filter() === 'all'"
-      [class.text-zinc-200]="filter() === 'all'"
-      [class.text-zinc-500]="filter() !== 'all'"
+      [class.bg-surface-selected]="filter() === 'all'"
+      [class.text-fg]="filter() === 'all'"
+      [class.text-fg-muted]="filter() !== 'all'"
     >
       All {{ diagnostics.entries().length }}
     </button>
@@ -89,24 +89,24 @@
       type="button"
       (click)="filter.set('issues')"
       class="rounded-md px-2.5 py-1 text-[11px]"
-      [class.bg-white/10]="filter() === 'issues'"
-      [class.text-zinc-200]="filter() === 'issues'"
-      [class.text-zinc-500]="filter() !== 'issues'"
+      [class.bg-surface-selected]="filter() === 'issues'"
+      [class.text-fg]="filter() === 'issues'"
+      [class.text-fg-muted]="filter() !== 'issues'"
     >
       Issues {{ errorCount() + warningCount() }}
     </button>
-    <span class="text-[11px] text-red-400">{{ errorCount() }} errors</span>
-    <span class="text-[11px] text-amber-400"
+    <span class="text-[11px] text-on-danger-soft">{{ errorCount() }} errors</span>
+    <span class="text-[11px] text-on-warning-soft"
       >{{ warningCount() }} warnings</span
     >
 
     <label
-      class="ml-auto flex w-64 items-center gap-2 rounded-lg border border-white/10 bg-black/10 px-2.5 py-1.5"
+      class="ml-auto flex w-64 items-center gap-2 rounded-lg border border-border bg-surface-muted px-2.5 py-1.5"
     >
       <lucide-angular
         [img]="Search"
         [size]="13"
-        class="shrink-0 text-zinc-500"
+        class="shrink-0 text-fg-muted"
       />
       <input
         type="search"
@@ -114,27 +114,27 @@
         aria-label="Search system logs"
         [value]="query()"
         (input)="query.set($any($event.target).value)"
-        class="min-w-0 flex-1 bg-transparent text-[11px] text-zinc-300 outline-none placeholder:text-zinc-600"
+        class="min-w-0 flex-1 bg-transparent text-[11px] text-fg outline-none placeholder:text-fg-muted"
       />
     </label>
     <label
-      class="flex items-center gap-1.5 text-[11px] text-zinc-500"
+      class="flex items-center gap-1.5 text-[11px] text-fg-muted"
       title="Group entries by backend process run"
     >
       <input
         type="checkbox"
         [checked]="grouped()"
         (change)="grouped.set($any($event.target).checked)"
-        class="accent-zinc-400"
+        class="accent-primary"
       />
       Group by run
     </label>
-    <label class="flex items-center gap-1.5 text-[11px] text-zinc-500">
+    <label class="flex items-center gap-1.5 text-[11px] text-fg-muted">
       <input
         type="checkbox"
         [checked]="follow()"
         (change)="follow.set($any($event.target).checked)"
-        class="accent-zinc-400"
+        class="accent-primary"
       />
       Follow
     </label>
@@ -142,21 +142,21 @@
 
   @if (latestIssue(); as issue) {
     <div
-      class="mx-4 mt-3 flex shrink-0 items-start gap-2.5 rounded-xl border border-amber-500/20 bg-amber-500/[0.06] px-3 py-2.5"
+      class="mx-4 mt-3 flex shrink-0 items-start gap-2.5 rounded-xl border border-on-warning-soft/30 bg-warning-soft px-3 py-2.5"
     >
       <lucide-angular
         [img]="TriangleAlert"
         [size]="15"
-        class="mt-0.5 shrink-0 text-amber-400"
+        class="mt-0.5 shrink-0 text-on-warning-soft"
       />
       <div class="min-w-0">
-        <p class="text-[11px] font-medium text-amber-200">
+        <p class="text-[11px] font-medium text-on-warning-soft">
           Latest issue · {{ formatTime(issue.timestamp) }}
         </p>
-        <p class="mt-0.5 truncate text-[12px] text-zinc-300">
+        <p class="mt-0.5 truncate text-[12px] text-fg">
           {{ issue.message }}
         </p>
-        <p class="mt-0.5 text-[10px] text-zinc-500">
+        <p class="mt-0.5 text-[10px] text-fg-muted">
           {{ explainSource(issue.source) }}
         </p>
       </div>
@@ -166,9 +166,9 @@
   <div #scroller class="min-h-0 flex-1 overflow-auto px-4 py-3 font-mono">
     @if (visibleEntries().length === 0) {
       <div class="flex h-full flex-col items-center justify-center text-center">
-        <lucide-angular [img]="ScrollText" [size]="22" class="text-zinc-600" />
-        <p class="mt-2 text-[12px] text-zinc-400">No matching log entries</p>
-        <p class="mt-1 max-w-sm font-sans text-[11px] text-zinc-600">
+        <lucide-angular [img]="ScrollText" [size]="22" class="text-fg-muted" />
+        <p class="mt-2 text-[12px] text-fg-muted">No matching log entries</p>
+        <p class="mt-1 max-w-sm font-sans text-[11px] text-fg-muted">
           New application events will appear here automatically.
         </p>
       </div>
@@ -197,36 +197,36 @@
       @for (run of visibleGroups().runs; track run.ordinal) {
         <details
           [open]="isRunOpen(run)"
-          class="mt-2 rounded-xl border border-white/[0.07] bg-white/[0.015] first:mt-0"
+          class="mt-2 rounded-xl border border-border bg-surface-muted first:mt-0"
         >
           <summary
-            class="flex cursor-pointer list-none flex-wrap items-center gap-2 px-3 py-2 font-sans text-[11px] hover:bg-white/[0.03]"
+            class="flex cursor-pointer list-none flex-wrap items-center gap-2 px-3 py-2 font-sans text-[11px] hover:bg-surface-muted"
           >
-            <span class="font-medium text-zinc-300">Run {{ run.ordinal }}</span>
-            <span class="text-zinc-600">PID {{ run.pid }}</span>
-            <span class="text-zinc-500">{{ runSpan(run) }}</span>
-            <span class="text-zinc-600">{{ run.entries.length }} shown</span>
+            <span class="font-medium text-fg">Run {{ run.ordinal }}</span>
+            <span class="text-fg-muted">PID {{ run.pid }}</span>
+            <span class="text-fg-muted">{{ runSpan(run) }}</span>
+            <span class="text-fg-muted">{{ run.entries.length }} shown</span>
             @if (run.errorCount) {
               <span
-                class="rounded border border-red-500/25 bg-red-500/10 px-1.5 text-[10px] leading-4 text-red-300"
+                class="rounded border border-on-danger-soft/30 bg-danger-soft px-1.5 text-[10px] leading-4 text-on-danger-soft"
                 >{{ run.errorCount }} errors</span
               >
             }
             @if (run.warningCount) {
               <span
-                class="rounded border border-amber-500/25 bg-amber-500/10 px-1.5 text-[10px] leading-4 text-amber-300"
+                class="rounded border border-on-warning-soft/30 bg-warning-soft px-1.5 text-[10px] leading-4 text-on-warning-soft"
                 >{{ run.warningCount }} warnings</span
               >
             }
             @if (!run.booted) {
               <span
-                class="text-[10px] text-zinc-600"
+                class="text-[10px] text-fg-muted"
                 title="This run's startup aged out of the retained entries"
                 >started before this window</span
               >
             }
           </summary>
-          <div class="flex flex-col gap-1 border-t border-white/5 px-2 py-2">
+          <div class="flex flex-col gap-1 border-t border-border px-2 py-2">
             @for (entry of run.entries; track entry.id) {
               <ng-container
                 [ngTemplateOutlet]="row"
@@ -241,12 +241,12 @@
 
   <ng-template #row let-entry>
     <details
-      class="group rounded-lg border border-transparent px-2 py-1.5 hover:border-white/5 hover:bg-white/[0.025]"
+      class="group rounded-lg border border-transparent px-2 py-1.5 hover:border-border hover:bg-surface-muted"
     >
       <summary
         class="flex cursor-pointer list-none items-start gap-2 text-[11px] leading-5"
       >
-        <span class="w-[86px] shrink-0 text-zinc-600">{{
+        <span class="w-[86px] shrink-0 text-fg-muted">{{
           formatTime(entry.timestamp)
         }}</span>
         <span
@@ -255,21 +255,21 @@
           >{{ entry.level.toUpperCase() }}</span
         >
         <span
-          class="w-32 shrink-0 truncate text-zinc-500"
+          class="w-32 shrink-0 truncate text-fg-muted"
           [title]="entry.source"
           >{{ entry.source }}</span
         >
-        <span class="min-w-0 flex-1 break-words text-zinc-300">{{
+        <span class="min-w-0 flex-1 break-words text-fg">{{
           entry.message
         }}</span>
       </summary>
       <div
-        class="ml-[230px] mt-1 border-l border-white/10 pl-3 font-sans text-[11px] text-zinc-500"
+        class="ml-[230px] mt-1 border-l border-border pl-3 font-sans text-[11px] text-fg-muted"
       >
         <p>{{ explainSource(entry.source) }}</p>
         @if (entry.details !== undefined) {
           <pre
-            class="mt-2 max-h-56 overflow-auto rounded-lg bg-black/25 p-2.5 font-mono text-[10px] leading-4 whitespace-pre-wrap text-zinc-400"
+            class="mt-2 max-h-56 overflow-auto rounded-lg bg-surface-muted p-2.5 font-mono text-[10px] leading-4 whitespace-pre-wrap text-fg-muted"
             >{{ formatDetails(entry.details) }}</pre>
         }
       </div>
@@ -277,7 +277,7 @@
   </ng-template>
 
   <footer
-    class="flex shrink-0 items-center justify-between border-t border-white/5 px-4 py-2 text-[10px] text-zinc-600"
+    class="flex shrink-0 items-center justify-between border-t border-border px-4 py-2 text-[10px] text-fg-muted"
   >
     <span
       >Up to 2,000 recent entries are retained. Logs are redacted before

@@ -14,6 +14,27 @@ Entry template:
 
 ---
 
+## 2026-10-09 — 1.8.5–1.8.7 Sessions pane and full restyle (BA-146, BA-147, BA-148)
+
+### What went well
+- Three subagents restyled about 1,600 colour usages in parallel. Each had a disjoint file list, one shared mapping table, and a rule not to build, so no two agents fought over `dist/` or the same file.
+- I didn't trust the agents' self-reports. A script stripped every class attribute and diffed each template against HEAD: 0 non-class changes across 18 files. That is a cheap, strong check for any mechanical restyle.
+- The new axe scan of every screen in both themes found real, existing accessibility bugs: unnamed icon buttons, and toasts outside any landmark.
+- Reviewing the screenshots by eye caught layout regressions that the tests didn't: `field`'s `width: 100%` squeezing a header, and an input that lost its icon padding.
+
+### What went wrong
+- Moving the shared classes to `@layer components` broke every button and field. Angular inlines critical CSS ahead of the main stylesheet, and that inlined subset declared `components` before `base`. It took a probe in the browser, listing the matched rules and their layers, to find it.
+- My first decision to make the shared classes `@utility` caused the problem the agents patched with `!` overrides. The cascade design should have been settled in 1.8.4.
+- The agents' swap of classes for `field` silently changed widths and padding. "Classes only" doesn't mean "layout only".
+- Shared files (ui.md, the app-shell spec, the roadmap, the changelog) collected changes from three stories at once. Without interactive staging, they went into the last story's commit instead of each story's own.
+- Two unit tests and one E2E spec asserted colour class names, so they had to change with the restyle.
+
+### What to do differently
+- Put shared CSS component classes in `@layer components`, and declare the layer order in `index.html` before any style, whenever Angular's `inlineCritical` is on.
+- After a mechanical class swap, screenshot every screen in both themes and review them before running the suite. Check `width`, `padding` and `display` as well as colour.
+- Assert semantics in tests (role, `aria-pressed`, the result text), not colour class names.
+- When several stories land on one branch, commit each story as soon as it is green, before starting the next, so the shared spec files can be committed per story.
+
 ## 2026-10-09 — 1.8.3 Agentic Hub shell (BA-144)
 
 ### What went well

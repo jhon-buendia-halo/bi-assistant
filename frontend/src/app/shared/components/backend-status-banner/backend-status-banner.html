@@ -1,10 +1,10 @@
 @if (visible()) {
   <div
-    class="flex h-7 shrink-0 items-center justify-center border-b border-white/5 px-3 text-[12px] font-medium"
-    [class.bg-amber-500/15]="status() === 'restarting'"
-    [class.text-amber-300]="status() === 'restarting'"
-    [class.bg-red-500/15]="status() === 'down'"
-    [class.text-red-300]="status() === 'down'"
+    class="flex h-7 shrink-0 items-center justify-center border-b border-border px-3 text-[12px] font-medium"
+    [class.bg-warning-soft]="status() === 'restarting'"
+    [class.text-on-warning-soft]="status() === 'restarting'"
+    [class.bg-danger-soft]="status() === 'down'"
+    [class.text-on-danger-soft]="status() === 'down'"
   >
     @if (status() === 'restarting') {
       <span>Backend restarting…</span>
