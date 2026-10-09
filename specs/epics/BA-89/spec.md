@@ -28,6 +28,7 @@ Every change to Questions to Insights is planned, specified, built, verified and
 | [BA-110](https://halo-powered.atlassian.net/browse/BA-110) | Require PR approval on `main`; only the repo admin may merge without one | 0.2.4 |
 | [BA-149](https://halo-powered.atlassian.net/browse/BA-149) | One branch and one PR per epic | 0.2.5 |
 | [BA-156](https://halo-powered.atlassian.net/browse/BA-156) | E2E and testing run against the web app; desktop only on request | 0.2.6 |
+| [BA-157](https://halo-powered.atlassian.net/browse/BA-157) | Local test deploys: check the default ports first and keep deploy tweaks out of commits | 0.2.7 |
 
 ## Specs touched
 

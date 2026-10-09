@@ -5,6 +5,9 @@ Running log of every meaningful change, newest first. See *Logging convention* a
 ## 2026-10-09
 
 ### Changed
+- **Local test deploys check the default ports first** (roadmap 0.2.7, [BA-157](https://halo-powered.atlassian.net/browse/BA-157), epic [BA-89](https://halo-powered.atlassian.net/browse/BA-89)):
+  - CLAUDE.md *Worktree deploy convention* gains a rule. Before starting the app for the user, check the default ports (3000, 55432, 6006, 3001, 4317, 4318) and reuse the shared World Cup Postgres. Work around any other busy port with flags or environment variables only. Keep tracked-file tweaks made only to run locally out of every commit. Stop processes by PID, never with `pkill -f`.
+  - Evidence: [evidence/0.2.7/](evidence/0.2.7/).
 - **E2E and testing run against the web app; the desktop app only on request** (roadmap 0.2.6, [BA-156](https://halo-powered.atlassian.net/browse/BA-156), epic [BA-89](https://halo-powered.atlassian.net/browse/BA-89)):
   - CLAUDE.md *Test target convention*: during epic development, E2E, evidence screenshots and manual checks use the web app built from the epic branch. Desktop runs only when the user asks; otherwise the evidence and PR list desktop as not run. Workflow step 9, the Evidence and E2E conventions point at it.
   - Playwright now has two projects sharing [`e2e/fixtures/app.fixture.ts`](frontend/e2e/fixtures/app.fixture.ts), which replaces `electron.fixture.ts`. `web` (the default, `npm run test:e2e`) starts the npm CLI per test on a free port and a temp data dir and drives it in Chromium at 1440×900. `desktop` (`npm run test:e2e:desktop`) launches Electron as before. The port-3000 check moved into the desktop launch, so web runs never need that port.

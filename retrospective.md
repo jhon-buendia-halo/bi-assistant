@@ -14,6 +14,20 @@ Entry template:
 
 ---
 
+## 2026-10-09 — 0.2.7 Local test deploys check the default ports first (BA-157)
+
+### What went well
+- The rule came straight from an incident in the same session: a subagent's `pkill -f "dist/main.js"` also matched its own shell. It was written while the details were fresh.
+- The rule was set aside as a patch file, not left as an edit on the Agent Hub epic branch. So it ships under its own epic (BA-89), as the branching convention requires, and the epic branch could merge `main` on a clean tree.
+
+### What went wrong
+- The rule was first written straight into the BA-150 worktree's CLAUDE.md, on the wrong epic's branch. Its own Jira story only came afterwards.
+- The BA-89 epic branch had been merged and deleted, so a second branch with the same name was opened for one small story.
+
+### What to do differently
+- When the user asks for a CLAUDE.md or process rule in the middle of another epic, create the BA-89 story and its branch before editing CLAUDE.md, rather than editing on the current epic's branch.
+- Before starting any local server for the user, follow the new rule: check the default ports and record the PID you'll stop.
+
 ## 2026-10-09 — 0.2.6 E2E and testing run against the web app; desktop only on request (BA-156)
 
 ### What went well
