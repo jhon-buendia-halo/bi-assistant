@@ -18,11 +18,15 @@ describe('App', () => {
     expect(app).toBeTruthy();
   });
 
-  it('should render the sessions navigation', () => {
+  it('should render the navigation rail', () => {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.textContent).toContain('Sessions');
+    expect(
+      compiled.querySelector(
+        '[aria-label="Navigation rail"] button[aria-label="Sessions"]',
+      ),
+    ).toBeTruthy();
     expect(
       compiled.querySelector('[aria-label="Open system logs"]'),
     ).toBeTruthy();

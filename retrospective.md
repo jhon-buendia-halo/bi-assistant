@@ -14,6 +14,26 @@ Entry template:
 
 ---
 
+## 2026-10-09 — 1.8.3 Agentic Hub shell (BA-144)
+
+### What went well
+- Keeping the accessible names the tests already used ("Datasets", "Agents", "Settings", "New conversation", `session-<id>`) on the rail limited the E2E churn to removing "Back" and opening Sessions first.
+- The axe scan of the initial shell found three real problems: content outside landmarks, multiple `h1`s, and colours read mid-transition. Each is now a rule or a fix rather than a lucky pass.
+- Generating the new template from line ranges of the old one kept every view block byte-identical, so only the shell changed.
+- When port 3000 turned out to belong to another worktree's app, I identified the owner from `/proc/<pid>/cwd` and moved this epic's app to 3141, instead of killing a process that wasn't mine.
+
+### What went wrong
+- My first template generator used a line range that was off by one. It failed an assertion, luckily before writing anything.
+- I wrote the first rail test against "All agents", which is the back link inside an agent's detail, not text on the list.
+- `requestAnimationFrame` was called unbound ("Illegal invocation"). The E2E passed anyway because the attribute was set before the throw. I only caught it on review.
+- `main` changed the E2E target in the middle of the story (BA-156). I had to stash, merge, port the spec and re-apply the work.
+
+### What to do differently
+- Before asserting on page text in a new test, grep the component templates for the string to see which view renders it.
+- Never pass DOM methods around detached (`const f = window.requestAnimationFrame`). Call them on `window`, and unit-test the code path that uses them.
+- At the start of each story on a long-lived epic branch, run `git fetch && git log HEAD..origin/main --oneline`, and merge `main` before writing code, not halfway through.
+- Before starting any app on a fixed port, check who owns it (`ss -ltnp`, `/proc/<pid>/cwd`) and pick a free port if it's another worktree's.
+
 ## 2026-10-09 — 1.8.4 Shared component classes (BA-145)
 
 ### What went well

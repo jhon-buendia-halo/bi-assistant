@@ -217,7 +217,7 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
 
 Shell placement and tokens are in [ui.md](../../system/ui.md).
 
-- **Sidebar, "Sessions navigation"**:
+- **Sessions area list pane, "Sessions navigation"** (the **Sessions** rail item, app-shell R46):
   - A "Sessions" heading with a "+" button (title "New conversation") that opens the new-session screen.
   - Below it, one entry per session, showing its name and marked when active.
   - Each entry has an options button (title "Session options", label "Options for <name>") whose menu holds "Delete session". The confirm dialog reads: `Delete “<name>”?` / `This permanently removes its conversation, agent memory, and workspace files.`
@@ -455,7 +455,7 @@ Feature: Chat answers and reliability signals
 - Deleting a session leaves no transcript, memory thread or workspace directory behind.
 - Stopping a turn before the model answers leaves the question in the transcript after a reload.
 - Known gaps to settle (see the Open questions):
-  - the sidebar order is fetched only at startup and after creating a session, so it does not re-sort after a turn;
+  - the session list order is fetched only at startup and after creating a session, so it does not re-sort after a turn;
   - there is no rename;
   - datasets cannot be edited after creation.
 

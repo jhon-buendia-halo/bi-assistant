@@ -136,7 +136,6 @@ test('runs only the ticked questions', async ({ page }) => {
   // The run button is also gated on having a datasource, so give it one — the
   // assertions below are about the ticks, not the dropdown.
   await createWorldCupDatasource(page);
-  await page.getByRole('button', { name: 'Back' }).click();
 
   await page.getByRole('button', { name: 'Agents' }).click();
   await page.getByTestId('agent-assistant').click();
@@ -166,7 +165,6 @@ test('refuses to run against a datasource with no datasets', async ({
   page,
 }) => {
   await createWorldCupDatasource(page);
-  await page.getByRole('button', { name: 'Back' }).click();
 
   await page.getByRole('button', { name: 'Agents' }).click();
   await page.getByTestId('agent-assistant').click();

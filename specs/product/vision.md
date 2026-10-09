@@ -48,7 +48,7 @@ The product SHALL follow these principles. Capability specs turn them into testa
 
 - Not a data warehouse, ETL tool or data modelling tool. It reads from sources; it never loads, writes or transforms them.
 - Not a dashboard builder. Visuals belong to a conversation, not to a shared board. Open question: no sharing or publishing of visuals exists beyond local export.
-- Not multi-user. There is no login, no roles and no shared server. The visible "Demo User" in the sidebar is a placeholder.
+- Not multi-user. There is no login, no roles and no shared server. The "Demo User" avatar on the navigation rail is a placeholder.
 - Not a SQL editor. Users read and learn from the SQL but do not author it in the product. Open question: confirm there is no manual "run SQL" surface (none was found).
 - Not a hosted service. It makes no calls to a Halo-operated backend.
 - Not tied to one LLM vendor. OpenAI, Anthropic and an OpenAI-compatible gateway (LenAI) are supported. Claude subscription logins are not a supported provider.

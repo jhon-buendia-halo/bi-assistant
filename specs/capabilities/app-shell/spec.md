@@ -1,28 +1,28 @@
 # App shell
 
-The app shell is the frame every other capability lives in: a left sidebar for navigation (or for Settings), a main area, a collapsible and resizable right-hand details panel, a status banner that tells the user when the local backend is not healthy, transient toast messages, and the system logs overlay. It must stay usable from the keyboard, free of automatically detectable accessibility violations, and visually stable. Detailed layout, spacing and design tokens belong to [../../system/ui.md](../../system/ui.md); this file owns the behaviour.
+The app shell is the frame every other capability lives in: a navigation rail, an "Agentic Hub" banner, a main area, a collapsible and resizable right-hand details panel, a status banner that tells the user when the local backend is not healthy, transient toast messages, and the system logs overlay. It must stay usable from the keyboard, free of automatically detectable accessibility violations, and visually stable. Detailed layout, spacing and design tokens belong to [../../system/ui.md](../../system/ui.md); this file owns the behaviour.
 
 ## Concepts
 
 Defined in [../../product/glossary.md](../../product/glossary.md): session, dataset, datasource, entity, diagnostics (System logs), eval run.
 
 Capability-local vocabulary, used only for UI words:
-- **Primary sidebar** — the left column in normal mode: navigation, the session list, and a footer with the system-logs and Settings buttons.
-- **Settings sidebar** — the left column in Settings mode, replacing the primary sidebar.
-- **Main view** — what the central area shows: home (empty), Datasets, dataset editor, Agents, an agent's detail, Knowledge, new-session composer, or a session's chat.
+- **Navigation rail** — the narrow, always-visible left column of icon buttons: the four workspace areas at the top, and the account avatar, system logs and Settings at the bottom.
+- **Area** — what the rail selects: Datasets, Agents, Knowledge, Sessions or Settings. Sessions and Settings show a list pane beside their content.
+- **Main view** — what the central area shows: home (empty), Datasets, dataset editor, Agents, an agent's detail, Knowledge, the Sessions area (with nothing open), new-session composer, a session's chat, or a Settings section.
 - **Details panel** — the right-hand column. What it shows depends on the main view (see R14).
 - **Backend status** — one of `starting`, `ready`, `restarting`, `down`, reported by the desktop shell's backend supervisor.
 
 ## Rules
 
 Layout and navigation
-- R1. The system SHALL present, left to right: a sidebar, the main area, and the details panel; the main area SHALL carry a top bar above the content.
-- R2. On launch the sidebar SHALL be expanded, the details panel SHALL be expanded and the main view SHALL be home (an empty main area). Collapse state of the sidebar and of the details panel SHALL NOT be remembered between launches.
-- R3. The primary sidebar SHALL offer, under "Workspace navigation": **Datasets**, **Agents** and **Knowledge**; and under "Sessions navigation": a **Sessions** heading with a **New conversation** (plus) button, followed by one row per existing session. Selecting a navigation item shows that main view and marks the item active; selecting the already-active item SHALL return to home.
-- R4. The primary sidebar footer SHALL offer two icon buttons: **Open system logs** (tooltip "System logs and diagnostics") and **Settings**. The system-logs button SHALL show a red badge with the number of error and warning entries currently retained when that number is above zero, capped at "99+".
-- R5. Choosing Settings SHALL replace the primary sidebar with the Settings sidebar. It SHALL have a **Back** button that returns to the primary sidebar, and five sections: **Datasource Configuration**, **LLM Configuration**, **Testing Data**, **Developer** ([../developer-settings/spec.md](../developer-settings/spec.md)) and **Appearance** (R39–R45). Choosing a section SHALL show it in the main area and mark it active; choosing the active section again SHALL deselect it.
-- R6. The system SHALL provide a **Collapse sidebar** control on the primary sidebar. When collapsed, the sidebar SHALL disappear, and the top bar SHALL show an **Expand sidebar** control followed by the app logo. The Settings sidebar SHALL NOT offer a collapse control.
-- R7. The main area SHALL contain exactly one level-one heading, visually hidden, reading "Questions to Insights".
+- R1. The system SHALL present, left to right: the navigation rail, then a column holding the "Agentic Hub" banner above the page and the details panel side by side. Everything sits inside a gradient frame.
+- R2. On launch the details panel SHALL be expanded and the main view SHALL be home (an empty main area). The details panel's collapse state SHALL NOT be remembered between launches. The rail is always visible.
+- R3. The rail SHALL offer, under "Workspace navigation", one icon button each, named by its title and accessible name: **Datasets**, **Agents**, **Knowledge** and **Sessions**. Choosing one SHALL show that area and mark its button current (`aria-current="page"`). Choosing the area that is already shown SHALL keep it. Agents stays current while an agent's detail is open, Datasets while the dataset editor is open, and Sessions while the composer or a chat is open.
+- R4. The bottom of the rail SHALL offer the account avatar (a static "D", titled "Demo User"), **Open system logs** (tooltip "System logs and diagnostics") and **Settings**. The system-logs button SHALL show a red badge with the number of error and warning entries currently retained when that number is above zero, capped at "99+".
+- R5. Choosing **Settings** on the rail SHALL show the Settings area: a list pane with "Settings navigation" offering five sections, **Datasource Configuration**, **LLM Configuration**, **Testing Data**, **Developer** ([../developer-settings/spec.md](../developer-settings/spec.md)) and **Appearance** (R39–R45), beside the chosen section's form. Choosing a section SHALL show it and mark it current; choosing the current section again SHALL deselect it and show the prompt "Choose a settings section." Choosing another rail area SHALL leave Settings; coming back SHALL show the section that was chosen.
+- R6. Removed in roadmap 1.8.3: the rail cannot be collapsed. (Previously: the Collapse sidebar and Expand sidebar controls.)
+- R7. The banner SHALL be the page's only level-one heading and SHALL read "Agentic Hub". Screen titles ("Datasets", "Agents", a settings section…) are level-two headings.
 - R8. The sidebar and details panel SHALL keep a fixed minimum usable width for the main area (see R12) so the main content is never squeezed to nothing.
 
 Details panel: collapse and resize
@@ -55,9 +55,12 @@ Toasts
 - R31. Every error toast SHALL also be recorded as an error entry with source `user-visible` in diagnostics (see [../diagnostics/spec.md](../diagnostics/spec.md)).
 
 App identity and version
-- R32. The Settings sidebar footer SHALL show the build identity: the text "Halo BI Assistant" followed by `v` and the shipped version, for example "Halo BI Assistant v0.20.3". The version SHALL be the same number the installer and release tag carry.
-- R33. The window title and the operating-system app name SHALL be "Halo BI Assistant".
+- R32. The Settings list pane SHALL end with the build identity: the text "Agentic Hub" followed by `v` and the shipped version, for example "Agentic Hub v0.24.3". The version SHALL be the same number the installer and release tag carry.
+- R33. The window title and the document title SHALL be "Agentic Hub". The operating-system app name (the macOS menu bar and Dock, the installers and the data directory) SHALL stay "Halo BI Assistant".
 - R34. The desktop window SHALL open at 1440 × 900, SHALL NOT shrink below 960 × 600, SHALL use the canvas colour of the operating system's theme as its background until the page reports its resolved theme (R44), and on macOS SHALL use an inset title bar so the sidebar header clears the window controls.
+
+Sessions area
+- R46. Choosing **Sessions** on the rail SHALL show a list pane with a **Sessions** heading, a **New conversation** (plus) button and, under "Sessions navigation", one row per existing session, newest activity first. With no session open the content shows "Select a session or start a new conversation." Selecting a row SHALL open that session's chat; **New conversation** SHALL open the new-session composer. Deleting the open session SHALL return to the Sessions area with nothing open.
 
 Appearance
 - R39. The Appearance section SHALL offer a single choice labelled **Theme** with three options: **System**, **Light** and **Dark**. Exactly one is selected. The default, when nothing has been chosen, is System.
@@ -70,8 +73,8 @@ Appearance
 
 Accessibility and visual stability
 - R35. The application shell, in its initial state, SHALL produce zero violations when scanned by an automated accessibility engine (axe-core, all default rules).
-- R36. The system SHALL expose labelled landmarks: "Primary sidebar" or "Settings sidebar" (complementary), "Workspace navigation", "Sessions navigation", "Settings navigation", and "Details panel".
-- R37. Every icon-only control in the shell SHALL have an accessible name (a title or label), including Collapse sidebar, Expand sidebar, Collapse right panel, Expand right panel, Open system logs, Settings, New conversation and Session options.
+- R36. The system SHALL expose labelled landmarks: "Navigation rail" (complementary), "Workspace navigation", "Sessions navigation" (in the Sessions area), "Settings navigation" (in the Settings area), and "Details panel".
+- R37. Every icon-only control in the shell SHALL have an accessible name (a title or label), including the rail buttons (Datasets, Agents, Knowledge, Sessions, Open system logs, Settings), Collapse right panel, Expand right panel, New conversation and Session options.
 - R38. The application shell in its initial state SHALL match the approved `application-shell` screenshot baseline. The baseline SHALL be changed only deliberately, together with an intended visual change.
 
 ## Edge cases and errors
@@ -81,7 +84,7 @@ Accessibility and visual stability
 - Pressing a mouse button other than the primary one on the separator does nothing.
 - Loading the session list at startup retries up to 12 times with a growing delay (200 ms steps, capped at 1 s) because the backend may still be starting. If it still fails the sidebar keeps whatever it had and shows the error toast "Could not load sessions".
 - While the status is `restarting` or `down`, calls to the backend fail; each surfaces as its own error toast ("Backend unreachable" unless the backend provided a message) and so appears in diagnostics.
-- The account row ("Demo User"), the Settings search box ("Search settings", hint "⌘ F"), the search icon on the Agents screen and the empty chat input shape on the home view are visual placeholders with no behaviour yet.
+- The rail's account avatar ("D", titled "Demo User"), the Settings search box ("Search settings", hint "⌘ F"), the search icon on the Agents screen and the empty chat input shape on the home view are visual placeholders with no behaviour yet.
 - The `down` banner has no retry button; the instruction in it is the only remedy.
 - A stored theme of `Dark` (wrong case), `blue` or an empty string means System. With browser storage blocked, the chosen theme applies until the app closes and the next launch starts on System.
 - Until the BA-141 restyle stories land, only the page background and the Appearance section follow the theme; the other screens keep their dark colours.
@@ -99,7 +102,7 @@ Accessibility and visual stability
 
 Lives in the shell itself: [../../system/ui.md](../../system/ui.md). States:
 - Banner: hidden (starting, ready), amber (restarting), red (down).
-- Sidebar: expanded primary, collapsed, expanded settings.
+- Rail: one current area (Datasets, Agents, Knowledge, Sessions or Settings), or none on home.
 - Details panel: expanded at the remembered width, collapsed.
 - Toasts: success, info, error, several stacked.
 
@@ -123,10 +126,6 @@ Feature: Layout and accessibility
     Then the separator is hidden
     When I click "Expand right panel"
     Then the separator is visible
-    When I click "Collapse sidebar"
-    Then I see "Expand sidebar"
-    When I click "Expand sidebar"
-    Then I see "Open system logs"
 
   Scenario: Has no automatically detectable accessibility violations in the application shell
     When an automated accessibility scan runs on the application shell
@@ -135,6 +134,42 @@ Feature: Layout and accessibility
   Scenario: Matches the stable application-shell visual baseline
     When I view the application shell
     Then it looks the same as the approved "application-shell" screenshot
+```
+
+E2E: `frontend/e2e/navigation.spec.ts` for the Feature below.
+
+```gherkin
+Feature: Navigation rail
+
+  Scenario: Moves between areas from the rail
+    When I click "Datasets" on the rail
+    Then I see the "Datasets" page and "Datasets" is the current rail item
+    When I click "Agents" on the rail
+    Then I see the "Agents" page and "Agents" is the current rail item
+    When I click "Agents" on the rail again
+    Then I still see the "Agents" page
+    When I click "Knowledge" on the rail
+    Then "Knowledge" is the current rail item
+    When I click "Sessions" on the rail
+    Then I see "Sessions navigation" with a "New conversation" button
+    And I see "Select a session or start a new conversation."
+
+  Scenario: Opens Settings as an area with a section list
+    When I click "Settings" on the rail
+    Then I see "Settings navigation" with five sections
+    And I see "Choose a settings section."
+    When I choose "Appearance"
+    Then I see the "Appearance" section
+    When I click "Datasets" on the rail
+    Then "Settings navigation" is no longer shown
+    When I click "Settings" on the rail
+    Then the "Appearance" section is still shown
+
+  Scenario: Shows the product name
+    Then the page's level-one heading reads "Agentic Hub"
+    And the document title is "Agentic Hub"
+    When I click "Settings" on the rail
+    Then the settings list ends with "Agentic Hub v" followed by the version
 ```
 
 E2E: `frontend/e2e/appearance.spec.ts` for the Feature below.
@@ -213,15 +248,10 @@ Feature: App shell behaviour not yet covered by Playwright
     And I can close it early with its dismiss button
     And the failure also appears in the system logs as a "user-visible" error
 
-  Scenario: Shows the build version in Settings
-    When I click "Settings"
-    Then I see "Halo BI Assistant" followed by the version, for example "v0.20.3"
-    And clicking "Back" returns to the primary sidebar
-
   Scenario: Remembers nothing about collapse between launches
-    Given I collapsed the sidebar and the right panel
+    Given I collapsed the right panel
     When I reopen the app
-    Then both are expanded again
+    Then it is expanded again
 ```
 
 ## Acceptance

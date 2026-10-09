@@ -12,102 +12,102 @@ Capability specs referenced below: [app-shell](../capabilities/app-shell/spec.md
 
 - Desktop window, default 1440 x 900 px, minimum 960 x 600 px. The window background starts as the operating system theme's canvas colour (`#f3f6fa` light, `#0b1626` dark) and switches to the resolved theme's canvas colour as soon as the page reports it (app-shell R34, R44). The page itself paints in the resolved theme from its first frame (R42).
 - Native title bar is hidden with the traffic-light controls inset (macOS `hiddenInset`); the app draws its own top bar and treats it as a window-drag region. Interactive children of a drag region (buttons, inputs) opt out of dragging.
-- The window title and the HTML `<title>` are "Halo BI Assistant". The visible product wordmark is "HALO BI" (see 3.4). A visually hidden `<h1>` "Questions to Insights" is the page heading.
+- The window title and the HTML `<title>` are "Agentic Hub". The operating-system app name (macOS menu bar and Dock, installers, data directory) stays "Halo BI Assistant". The banner's "Agentic Hub" is the page's only `<h1>`.
 - The renderer has no router; nothing is addressable by URL. All navigation is view state (1.4).
 - Two themes, Light and Dark, chosen under Settings → Appearance (4.16); System, the default, follows the operating system. See 6.5. Until the BA-141 restyle stories land, only the page background and the Appearance section use the theme tokens; every other surface still uses the dark values in 6.1.
 
 ### 1.2 Regions
 
 ```
-+--------------------------------------------------------------------------+
-| [backend status banner - only while restarting / down]  h 28             |
-+-----------+------------------------------------------+-------------------+
-| Sidebar   | Top bar (h 48)                           | Right panel       |
-| w 296     |  [expand-sidebar+logo] [session context] | w 572 (360-960)   |
-|           |                          [expand-right]  |  header h 48      |
-| logo      +------------------------------------------+  [collapse]       |
-| collapse  | Tab strip (h 40, empty placeholder)      |                   |
-| account   +------------------------------------------+  body: depends on |
-| nav       | Main content                             |  main view (1.5)  |
-| sessions  |  (centered column, scrolls vertically)   |                   |
-| footer    |                                          |                   |
-+-----------+------------------------------------------+-------------------+
++--------------------------------------------------------------------------------+
+| [backend status banner - only while restarting / down]  h 28                    |
++--------------------------------------------------------------------------------+
+| frame (--frame-gradient), padding 12, gap 12                                    |
+| +------+ +---------------------------------------------------------------------+ |
+| | rail | | canvas card (bg canvas, radius frame 20, padding 12, gap 12)        | |
+| | w 76 | | +-----------------------------------------------------------------+ | |
+| |      | | | banner h 72 (--banner-gradient, radius card): "Agentic Hub" h1  | | |
+| | Data | | +-----------------------------------------------------------------+ | |
+| | Agnt | | +-------------------------------------------+ +-------------------+ | |
+| | Know | | | page card (card)                          | | details panel     | | |
+| | Sess | | |  [list pane: Sessions / Settings areas]   | | (card) w 572      | | |
+| |      | | |  [header h 48: session context, expand]   | | 360-960           | | |
+| |  D   | | |  main content                             | |                   | | |
+| | logs | | +-------------------------------------------+ +-------------------+ | |
+| | gear | | +-----------------------------------------------------------------+ | |
+| +------+ +---------------------------------------------------------------------+ |
++--------------------------------------------------------------------------------+
    toast stack: fixed bottom-right over everything; system logs: modal overlay
 ```
 
-- The whole app is one full-height flex column: optional banner on top, then a row of three regions: left sidebar, main column, right panel. The root sets `user-select: none` for the whole app and no content area overrides it (inputs and textareas remain editable); copying chat text is done through the Copy buttons. Open question: whether message bodies and SQL should be selectable.
-- **Left sidebar** (296 px, `#181818`, 1 px right border `white/5`): either the *primary sidebar* (workspace navigation) or the *settings sidebar* (1.3). Hidden entirely when collapsed.
-- **Main column** (flex 1, min width 0): top bar, empty 40 px tab strip (a reserved, currently unused strip with a bottom border), then the content area.
-- **Right panel** (`#161616`, 1 px left border `white/5`): a *details panel* whose body depends on the current main view (1.5). Hidden when collapsed.
-- **Top bar**: 48 px high, bottom border `white/5`. Contents, left to right:
-  - When the sidebar is collapsed: an *Expand sidebar* icon button (left padding 76 px to clear the traffic lights) followed by the logo (height 12).
-  - When a session chat is open: the *session context* — a database icon, the uppercase micro-label "Datasource", then one chip per datasource used by the session (name, plus kind label small and muted; tooltip = the datasource summary). While loading: a 96 x 16 px pulsing placeholder. If none can be resolved: the muted text "Unavailable".
-  - When the right panel is collapsed: an *Expand right panel* icon button pushed to the far right.
-- The home state of the main column (no feature view selected) is an empty area with a decorative empty composer box at the bottom (max width 860, height 112, radius 16, fill `#232323`, border `white/10`). It is a placeholder with no behaviour.
+- The whole app is one full-height column: the optional backend banner, then the frame. The frame paints `--frame-gradient` and holds two rounded cards 12 px apart: the rail and the canvas card. The root sets `user-select: none`, and no content area overrides it (inputs and textareas stay editable). Copying chat text is done through the Copy buttons. Open question: whether message bodies and SQL should be selectable.
+- **Rail** (76 px, `rail` fill, radius `frame`): see 1.3.
+- **Canvas card** (`canvas` fill, radius `frame`, 12 px padding): the banner on top, then a row with the page card and the details panel, 12 px apart.
+- **Banner** (`role="banner"`, 72 px, `--banner-gradient`, radius `card`, 28 px horizontal padding, window-drag region): the `<h1>` "Agentic Hub", 26 px semibold white. No other content. Screen titles inside the page are `<h2>`.
+- **Page card** (the `<main>` landmark; `card`, flex 1, min width 0, clipped): in the Sessions and Settings areas, a list pane on the left (1.3); then a column with the optional header and the main content.
+  - **Header** (48 px, bottom `border`), shown only while a session chat is open or the details panel is collapsed. Left: the *session context* — a database icon, the uppercase micro-label "Datasource" (`fg-muted`), then one `chip chip-neutral` per datasource used by the session (name, plus kind label; tooltip = the datasource summary). While loading: a 96 x 16 px pulsing `surface-muted` placeholder. If none can be resolved: the muted text "Unavailable". Right: the *Expand right panel* button when the details panel is collapsed.
+- **Details panel** (`card`): see 1.5.
+- The home state of the main column (no area chosen) is an empty area with a decorative empty composer box at the bottom (max width 860, height 112, `card`). It is a placeholder with no behaviour.
 
-### 1.3 Sidebars
+### 1.3 Rail and list panes
 
-**Primary sidebar** (`aria-label="Primary sidebar"`), top to bottom:
+**Rail** (`aside aria-label="Navigation rail"`), top to bottom, centred:
 
-1. Header (48 px, drag region): logo (cap height 12, `zinc-200`) then the *Collapse sidebar* icon button (panel-left icon), right-aligned, left padding 76 px.
-2. Account row: a 20 px circular avatar with the letter "D" (`zinc-600` fill) + "Demo User" + a chevron-down. Static placeholder: no menu, no behaviour yet.
-3. `nav aria-label="Workspace navigation"`: three rows, each icon (15 px) + label; muted `zinc-400`, hover `white/5` + `zinc-200`, selected row has a `white/5` fill:
-   - **Datasets** (flask icon) — toggles the dataset area.
-   - **Agents** (bot icon) — toggles the agent area (stays selected while an agent detail is open).
-   - **Knowledge** (book-open icon) — toggles the knowledge area.
-   Clicking the already-selected row returns to the home state.
-4. Divider (1 px, `white/5`).
-5. `nav aria-label="Sessions navigation"`:
-   - Row **Sessions** (folder-kanban icon) with a *New conversation* "+" icon button on the right (visible on row hover, always visible while the composer is open). The "+" opens the new-session composer (4.7).
-   - One child row per session, indented 24 px, newest activity first as returned by the backend, label = session name truncated to one line (12 px). The row is selected while that session is open. A "more" (vertical ellipsis) button, `aria-label="Options for <session name>"`, title "Session options", appears on hover/while open and opens a small menu (width 176) with one red item **Delete session** (trash icon). Both the row and its menu are disabled while a delete is in flight. Row `data-testid="session-<id>"`.
-   - Delete asks a native confirm: `Delete “<name>”?` newline newline `This permanently removes its conversation, agent memory, and workspace files.`
-6. Flexible spacer.
-7. Footer (right-aligned icon buttons, `zinc-500`):
-   - **Open system logs** (scroll-text icon; `aria-label="Open system logs"`, title "System logs and diagnostics") with a red count badge (top-right of the icon) showing the number of error + warning log entries, capped at "99+", hidden at zero. Opens the system logs panel (5.2).
-   - **Settings** (gear icon, title "Settings") — switches the sidebar to the settings sidebar.
+1. A 44 px window-drag spacer that clears the macOS traffic lights.
+2. `nav aria-label="Workspace navigation"`: four 44 x 44 icon buttons, radius 12, 20 px `accent` icons, each with `title` and `aria-label` equal to its name, 8 px apart:
+   - **Datasets** (flask icon), **Agents** (bot icon), **Knowledge** (book-open icon), **Sessions** (folder-kanban icon).
+   - Hover: `surface-muted` fill. Current area: `surface-selected` fill and `aria-current="page"`.
+3. Flexible spacer.
+4. Bottom group, 8 px apart:
+   - The account avatar: a 36 px `primary` circle with the letter "D" in `on-primary`, titled "Demo User". A static placeholder with no menu.
+   - **Open system logs** (scroll-text icon; `aria-label="Open system logs"`, title "System logs and diagnostics"), with a red count badge (`danger` palette, top-right of the icon) showing the number of error + warning log entries, capped at "99+", hidden at zero. Opens the system logs panel (3.2).
+   - **Settings** (gear icon, title and `aria-label` "Settings"), marked current while the Settings area is shown.
 
-**Settings sidebar** (`aria-label="Settings sidebar"`, same width and fill), replaces the primary sidebar in place:
+**Sessions area list pane** (280 px, right `border`, `surface`) — see app-shell R46, and 4.7 and 4.12 for its content:
 
-1. Header: a **Back** button (arrow-left icon + "Back") right-aligned; returns to the primary sidebar and to whatever main view was showing.
-2. The same static account row ("Demo User").
-3. A "Search settings" field (search icon, placeholder `Search settings`, a `⌘ F` key hint). Non-functional placeholder today.
-4. `nav aria-label="Settings navigation"` with five rows (icon + label), selecting one shows its form in the main column; selecting the active one again deselects it (main column returns to the empty content area):
+- Header row: "Sessions" (14 px semibold `fg-strong`) and a *New conversation* `btn-icon` ("+", title "New conversation").
+- `nav aria-label="Sessions navigation"`: one row per session, newest activity first as returned by the backend. Each row is a `list-row` (`list-row-selected` while that session is open) with the session name truncated to one line (13 px) and a "more" (vertical ellipsis) `btn-icon`, `aria-label="Options for <session name>"`, title "Session options", visible on hover and while its menu is open. The menu (`menu`, width 176) has one item, **Delete session** (trash icon, `on-danger-soft` text). Both the row and its menu are disabled while a delete is in flight. Row `data-testid="session-<id>"`.
+- Delete asks a native confirm: `Delete “<name>”?` newline newline `This permanently removes its conversation, agent memory, and workspace files.`
+
+**Settings area list pane** (260 px, right `border`, `surface`):
+
+1. A "Search settings" `field` (search icon, placeholder `Search settings`, a `⌘ F` key hint in `fg-muted`). A non-functional placeholder today.
+2. `nav aria-label="Settings navigation"` with five `list-row` buttons (icon + label; `list-row-selected` and `aria-current="page"` for the chosen one). Choosing one shows its form beside the pane; choosing the chosen one again deselects it and the content shows "Choose a settings section." (`fg-muted`, centred).
    - **Datasource Configuration** (database icon) -> 4.10
    - **LLM Configuration** (bot icon) -> 4.9
    - **Testing Data** (test-tube icon) -> 4.11
    - **Developer** (wrench icon) -> 4.12
    - **Appearance** (sun-moon icon) -> 4.16
-5. Footer: "Halo BI Assistant" then `v<version>` (muted; `data-testid="app-version"`). The version is the shipped package version.
+3. Flexible spacer, then the footer: "Agentic Hub" then `v<version>` (12 px `fg-muted`; `data-testid="app-version"`). The version is the shipped package version.
 
-Opening the settings sidebar does not clear the current main view; selecting a settings section takes precedence over the main view while the sidebar is in settings mode. Leaving settings (Back) restores the main view that was underneath.
-
-**Collapse / expand.** The *Collapse sidebar* button (title "Collapse sidebar") hides the sidebar of either mode; *Expand sidebar* (title "Expand sidebar") in the top bar brings it back in the mode it was in. Collapsing does not reset the main view or session.
+Leaving Settings (choosing another rail area) keeps the chosen section, so coming back shows it again.
 
 ### 1.4 Navigation model (no router)
 
-The main column renders exactly one of these views, held in a single "main view" state, with the settings section as an overriding secondary state.
+The main column renders exactly one of these views, held in a single "main view" state. The Settings area overrides it while it is shown.
 
-| Main view state | Reached by | Main column content | Right panel body |
-|---|---|---|---|
-| `home` (default) | start-up; clicking an active sidebar row again; deleting the open session | empty area + placeholder composer | Entity details (empty state) |
-| `dataset` | sidebar **Datasets** | Datasets list (4.2) | Entity details |
-| `dataset-new` | **New dataset** or opening a dataset in the list | Catalog browser: "New dataset" / "Edit dataset" (4.3) | Entity details |
-| `agents` | sidebar **Agents** | Agents list (4.4) | Entity details |
-| `agent-detail` | clicking an agent row | Agent detail (4.5) | Eval trace (4.6) |
-| `knowledge` | sidebar **Knowledge** | Knowledge list (4.8) | Entity details |
-| `conversation-new` | the "+" next to **Sessions** | New-session composer (4.7) | Entity details |
-| `session-chat` | clicking a session row, or creating a session | Session chat (4.12) | Interactive visual panel (4.13) |
-| settings section `datasources` / `llm` / `testing-data` / `developer` / `appearance` | settings sidebar rows | the matching config form (4.9-4.12, 4.16), centred column | Entity details |
+| Main view state | Reached by | Rail current | Main column content | Right panel body |
+|---|---|---|---|---|
+| `home` (default) | start-up | none | empty area + placeholder composer | Entity details (empty state) |
+| `dataset` | rail **Datasets** | Datasets | Datasets list (4.2) | Entity details |
+| `dataset-new` | **New dataset** or opening a dataset in the list | Datasets | Catalog browser: "New dataset" / "Edit dataset" (4.3) | Entity details |
+| `agents` | rail **Agents** | Agents | Agents list (4.4) | Entity details |
+| `agent-detail` | clicking an agent row | Agents | Agent detail (4.5) | Eval trace (4.6) |
+| `knowledge` | rail **Knowledge** | Knowledge | Knowledge list (4.8) | Entity details |
+| `sessions` | rail **Sessions**; deleting the open session | Sessions | list pane + "Select a session or start a new conversation." | Entity details |
+| `conversation-new` | **New conversation** in the Sessions list pane | Sessions | list pane + New-session composer (4.7) | Entity details |
+| `session-chat` | a session row, or creating a session | Sessions | list pane + Session chat (4.12) | Interactive visual panel (4.13) |
+| Settings area, section `datasources` / `llm` / `testing-data` / `developer` / `appearance` | rail **Settings**, then a section | Settings | list pane + the matching form (4.9-4.12, 4.16), centred column | Entity details |
 
-- Content views (everything except the chat) sit in a vertically scrolling, horizontally centred column with 32 px horizontal / 40 px vertical padding and a max width of 960 px (settings forms: 560 px for datasources and testing data, 480 px for LLM, 24 px horizontal padding).
-- Opening a session loads the datasources used by that session (for the top bar) and its most recent visual (for the right panel); deleting the open session returns to `home`.
+- Content views (everything except the chat) sit in a vertically scrolling, horizontally centred column with 32 px horizontal / 40 px vertical padding and a max width of 960 px (settings forms: 560 px for datasources, testing data, developer and appearance, 480 px for LLM, 24 px horizontal padding).
+- Opening a session loads the datasources used by that session (for the header) and its most recent visual (for the right panel).
 - Selecting a catalog/schema/entity in the catalog browser, generating or viewing a visual, always re-opens the right panel if it was collapsed.
 - A transient failure to load the session list is retried up to 12 times (200 ms steps, capped at 1 s) before the toast "Could not load sessions" is shown; already-loaded sessions are kept.
 
 ### 1.5 Right panel
 
 - `aria-label="Details panel"`; default width **572 px**, minimum **360**, maximum **960** (also never wider than the viewport minus 240 px reserved for the main column, and never below 360).
-- Header (48 px, drag region): the *Collapse right panel* icon button (panel-right icon, title "Collapse right panel") right-aligned. When collapsed, the top bar shows *Expand right panel* (same icon).
+- The panel is a `card` beside the page card. Header (48 px): the *Collapse right panel* `btn-icon` (panel-right icon, title "Collapse right panel") right-aligned. When collapsed, the page card's header shows *Expand right panel* (same icon).
 - **Resize handle**: a 10 px wide invisible hit zone straddling the panel's left edge (5 px outside), `cursor: col-resize`, showing a 2 px `zinc-500/75` line on hover, keyboard focus or while dragging. Exposed as `role="separator"`, `aria-orientation="vertical"`, `aria-label="Resize right panel"`, `aria-valuemin` (360), `aria-valuemax` (current maximum), `aria-valuenow` (current width), `tabindex=0`, title "Drag to resize · Double-click to reset".
   - Drag: primary button, pointer capture; moving left widens the panel (`width = startWidth + startX - pointerX`), clamped to the min/max. While dragging the whole window forces `col-resize` and embedded frames stop capturing the pointer.
   - Keyboard (when the handle has focus): Left arrow widens by 24 px, Right arrow narrows by 24 px, Home = minimum (360), End = current maximum (960 on a wide window). Each key press persists.
@@ -172,7 +172,7 @@ Toasts stack in creation order; the X dismisses immediately. Every **error** toa
 
 ### 3.4 App logo
 
-The "HALO BI" wordmark as a vector drawn with 13-unit strokes in `currentColor` (butt caps, mitre joins) in a 573 x 113 viewBox: H, a crossbar-less A (chevron), L, an O with a small "halo" notch/gap at the lower right, B, I. Rendered by cap height (`height` input, default 14; width = round(height x 573 / 113)); `role="img"`, `aria-label="Halo BI"`. Used at height 12 in the sidebar header (`zinc-200`) and in the top bar when the sidebar is collapsed (`zinc-300`). Brand files in `public/brand/`: `halo-bi-wordmark.svg`, `halo-bi-mark.svg` (1024 square, `#1c1c1c` rounded square r=185 with a white halo ring and the letters "BI" inside), `icon.png` (apple-touch / app icon); the page favicon is `favicon.ico` plus the SVG mark.
+The "HALO BI" wordmark as a vector drawn with 13-unit strokes in `currentColor` (butt caps, mitre joins) in a 573 x 113 viewBox: H, a crossbar-less A (chevron), L, an O with a small "halo" notch/gap at the lower right, B, I. Rendered by cap height (`height` input, default 14; width = round(height x 573 / 113)); `role="img"`, `aria-label="Halo BI"`. No longer shown in the shell since roadmap 1.8.3, where the banner's "Agentic Hub" text replaced it. The component stays for the brand files. Brand files in `public/brand/`: `halo-bi-wordmark.svg`, `halo-bi-mark.svg` (1024 square, `#1c1c1c` rounded square r=185 with a white halo ring and the letters "BI" inside), `icon.png` (apple-touch / app icon); the page favicon is `favicon.ico` plus the SVG mark.
 
 ### 3.5 Markdown rendering
 
@@ -470,6 +470,7 @@ Scrollbars (webkit): 8 px, transparent track, thumb `rgb(255 255 255 / 0.15)` (h
 
 - The **resolved theme** is Light or Dark (app-shell R41). It is written to the root element as `data-theme="light|dark"` together with `color-scheme`, so native scrollbars and form controls follow it. The tokens in 6.0 hang off that attribute.
 - An inline script in the page head reads the stored choice (`questions-to-insights:theme`, see [data-model.md](data-model.md)) and the `prefers-color-scheme` media query, and sets `data-theme` before the app boots (R42). The app then keeps it in sync: on a new choice, and on a `prefers-color-scheme` change while System is chosen.
+- A theme change is instant: for the frame in which `data-theme` changes, the root carries `theme-switching`, which turns off all transitions, so no surface fades between themes.
 - In the desktop app, every change of the resolved theme is also sent to the main process (`desktop.setWindowTheme`, [api.md](api.md) §4), which sets the window background to the `canvas` colour.
 - Legacy dark surfaces (6.1) do not respond to the theme until their screen is restyled. Native `<option>` backgrounds on those screens stay `#232323`.
 
@@ -481,12 +482,12 @@ Strings below are asserted by the Playwright suite or are user-facing contracts.
 
 | Where | String |
 |---|---|
-| Page heading (hidden) | `Questions to Insights` |
-| Window / document title | `Halo BI Assistant` |
-| Sidebar rows | `Datasets`, `Agents`, `Knowledge`, `Sessions` |
-| Sidebar controls (titles) | `Collapse sidebar`, `Expand sidebar`, `New conversation`, `Session options`, `Settings`, `System logs and diagnostics` |
-| Sidebar aria-labels | `Primary sidebar`, `Settings sidebar`, `Workspace navigation`, `Sessions navigation`, `Settings navigation`, `Open system logs`, `Options for <session name>` |
-| Settings | `Back`, `Search settings`, `Datasource Configuration`, `LLM Configuration`, `Testing Data`, `Developer`, `Appearance`, footer `Halo BI Assistant v<version>` |
+| Page heading (banner `h1`) | `Agentic Hub` |
+| Window / document title | `Agentic Hub` (OS app name stays `Halo BI Assistant`) |
+| Rail buttons (title and aria-label) | `Datasets`, `Agents`, `Knowledge`, `Sessions`, `Settings`; `Open system logs` (title `System logs and diagnostics`); avatar title `Demo User` |
+| Sessions area | `Sessions`, `New conversation`, `Session options`, `Options for <session name>`, `Select a session or start a new conversation.` |
+| Shell aria-labels | `Navigation rail`, `Workspace navigation`, `Sessions navigation`, `Settings navigation`, `Details panel` |
+| Settings | `Search settings`, `Datasource Configuration`, `LLM Configuration`, `Testing Data`, `Developer`, `Appearance`, `Choose a settings section.`, footer `Agentic Hub v<version>` |
 | Appearance | `Appearance`, `Choose how the app looks. System follows your operating system's light or dark setting.`, group `Theme`, options `System`, `Light`, `Dark` |
 | Right panel | `Details panel`, `Resize right panel`, `Collapse right panel`, `Expand right panel`, `Drag to resize · Double-click to reset` |
 | Right panel empty | `Select a catalog, schema or entity to see its details.` / `Select a question in the Evals tab to see how it ran.` |
@@ -516,8 +517,8 @@ Strings below are asserted by the Playwright suite or are user-facing contracts.
 
 Targets and the automated gate: [../product/non-functional.md](../product/non-functional.md) and [../capabilities/app-shell/spec.md](../capabilities/app-shell/spec.md). The Playwright suite loads `axe-core` into the running app shell and **fails on any automatically detectable violation**; new screens must keep that scan clean (this is the acceptance bar, not a best effort).
 
-- **Landmarks**: the three sidebars/panels are `aside` elements with accessible names (`Primary sidebar` / `Settings sidebar`, `Details panel`); navigation groups are `nav` with names (`Workspace navigation`, `Sessions navigation`, `Settings navigation`); the content area is `main` with a visually hidden `h1` ("Questions to Insights"); the system logs panel is a `dialog` (`aria-modal`, labelled by its `h2`).
-- **Names for icon-only controls**: every icon-only button has a `title` and, where tests or assistive technology rely on it, an `aria-label` (`Open system logs`, `Close system logs`, `Refresh logs`, `Options for <session>`, `Send message`, `Stop response`, `Retry`, `Copy SQL`, `Careful mode`, `Deep analysis`, `Save as verified query`, `Mark answer as wrong`, `Refresh inventory`, `Clear filter`, `Refresh data`, `Download bundle`, `Download run <id> as Markdown`, `Delete run <id>`, `Dismiss deep analysis`, `Dismiss follow-ups`, `Send custom answer`). Sidebar collapse/expand and panel toggles carry titles ("Collapse sidebar", …) used as their accessible names.
+- **Landmarks**: the rail and the details panel are `aside` elements with accessible names (`Navigation rail`, `Details panel`); navigation groups are `nav` with names (`Workspace navigation`, `Sessions navigation`, `Settings navigation`); the banner (`role="banner"`) holds the only `h1` ("Agentic Hub"); the page card is `main`; the system logs panel is a `dialog` (`aria-modal`, labelled by its `h2`).
+- **Names for icon-only controls**: every icon-only button has a `title` and, where tests or assistive technology rely on it, an `aria-label` (`Open system logs`, `Close system logs`, `Refresh logs`, `Options for <session>`, `Send message`, `Stop response`, `Retry`, `Copy SQL`, `Careful mode`, `Deep analysis`, `Save as verified query`, `Mark answer as wrong`, `Refresh inventory`, `Clear filter`, `Refresh data`, `Download bundle`, `Download run <id> as Markdown`, `Delete run <id>`, `Dismiss deep analysis`, `Dismiss follow-ups`, `Send custom answer`). Rail buttons carry both a title and an `aria-label`; the panel toggles carry titles ("Collapse right panel", …) used as their accessible names. The current rail button has `aria-current="page"`.
 - **State**: toggles expose `aria-pressed` (Careful, thumbs, eval set / case rows, pending-suggestions filter); disclosure buttons expose `aria-expanded` (version, tailor and visual menus, custom answer); the resize separator exposes `aria-valuemin/max/now` and `aria-orientation`.
 - **Keyboard**: everything interactive is a native `button`, `input`, `select`, `textarea` or `details/summary`, so Tab / Shift+Tab / Enter / Space work by default. Specific keys: the resize separator (Left/Right = 24 px, Home/End = min/max; focusable, `tabindex=0`); chat composer (Enter send, Shift+Enter newline; the custom-answer input has its own Enter handler); the OpenAPI discovery input (Enter runs Discover); tooltips on the composer mode buttons also show on keyboard focus (`:focus-visible`). The resize handle shows its guide line on `:focus-visible`.
 - **Focus handling**: inputs show a visible border change on focus (`white/25`); the resize handle and tooltips respond to keyboard focus. Open question: the system logs dialog does not currently trap focus or restore it to the opener on close, nor close on Escape; rebuilds should add this if the axe/WCAG bar is raised.
@@ -527,16 +528,13 @@ Targets and the automated gate: [../product/non-functional.md](../product/non-fu
 
 ## 9. Visual baseline
 
-`frontend/e2e/layout-accessibility.spec.ts` captures the shell at the default window size (1440×900) as `application-shell`: `application-shell-web-linux.png` for the web target and `application-shell-darwin.png` for the desktop target. Each is updated only with `npm run test:e2e:update` / `test:e2e:desktop:update` when a visual change is intended. The web baseline (2026-10-09) shows the current navigation labels. The committed desktop baseline shows: sidebar 296 px with the logo and collapse icon, the "Demo User" row, two top-level rows and one section row, the logs and settings icons at the bottom with a red count badge; the main column with the top bar, empty 40 px tab strip and the placeholder composer at the bottom; and the right panel at 572 px with the centred message "Select a catalog, schema or entity to see its details." with its collapse icon top-right.
+`frontend/e2e/layout-accessibility.spec.ts` captures the shell at the default window size (1440×900) as `application-shell`: `application-shell-web-linux.png` for the web target and `application-shell-darwin.png` for the desktop target. Each is updated only with `npm run test:e2e:update` / `test:e2e:desktop:update` when a visual change is intended. The web baseline shows the Agentic Hub shell in the light theme (the E2E browser reports a light OS theme): the gradient frame, the rail with Datasets, Agents, Knowledge and Sessions at the top and the avatar, system logs and Settings at the bottom, the "Agentic Hub" banner, the page card with the placeholder composer, and the details panel at 572 px with "Select a catalog, schema or entity to see its details." The desktop baseline predates the Agentic Hub shell and is regenerated only on a requested desktop run.
 
-The web baseline shows the same layout with the current labels and no log-count badge (no issues logged yet).
-
-Open question: the committed desktop baseline PNG pre-dates the current navigation labels (it shows "Data Sandbox" and "Projects" where the code now renders "Datasets", "Agents", "Knowledge" and "Sessions"); the baseline should be regenerated, and until then the code, not the image, is the reference for labels.
 
 ## 10. Open questions and gaps
 
 - Account row ("Demo User", avatar "D"), settings search and its `⌘ F` hint, the Datasets list filter pills (Pinned / Yours / Shared with you), the search icons on the Datasets and Agents lists, the layout-grid button and the empty 40 px tab strip are non-functional placeholders; intended behaviour is undefined.
-- The 76 px traffic-light left padding is applied on every platform; on Windows/Linux (no inset controls) this leaves empty space. Intended cross-platform title-bar treatment is undefined.
+- The rail's 44 px window-drag spacer that clears the macOS traffic lights is applied on every platform; on Windows/Linux (no inset controls) it leaves a small empty space at the top of the rail. Intended cross-platform title-bar treatment is undefined.
 - Right-panel collapse state and sidebar collapse state are not persisted; only the panel width is.
 - No Escape / focus-trap handling for the system logs dialog and the popover menus; toasts lack live-region roles (see 8).
 - Date formatting uses the user's locale for times (`toLocaleTimeString`) but fixed `en-US` for dataset month headings; there is no localisation layer and all copy is English.

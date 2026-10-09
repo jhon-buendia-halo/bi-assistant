@@ -101,7 +101,7 @@ Defined once in [the glossary](../../product/glossary.md); used here as follows.
 
 ## UI
 
-Reached from the sidebar item **Datasets** (main area; toggles with Home) — see [ui.md](../../system/ui.md).
+Reached from the rail item **Datasets** (main area) — see [ui.md](../../system/ui.md).
 
 **Dataset list** — heading "Datasets"; filter chips and icons (inert); **New dataset** button; month sections of rows (see R35).
 

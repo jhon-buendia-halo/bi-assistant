@@ -27,11 +27,6 @@ test('supports keyboard layout controls and persists the right-panel width', asy
   await expect(separator).toBeHidden();
   await page.getByTitle('Expand right panel').click();
   await expect(separator).toBeVisible();
-
-  await page.getByTitle('Collapse sidebar').click();
-  await expect(page.getByTitle('Expand sidebar')).toBeVisible();
-  await page.getByTitle('Expand sidebar').click();
-  await expect(page.getByLabel('Open system logs')).toBeVisible();
 });
 
 test('has no automatically detectable accessibility violations in the application shell', async ({

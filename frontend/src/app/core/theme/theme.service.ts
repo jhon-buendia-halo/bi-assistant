@@ -63,11 +63,29 @@ export class ThemeService {
 
     effect(() => {
       const theme = this.resolved();
-      this.document.documentElement.setAttribute('data-theme', theme);
+      this.applyTheme(theme);
       const desktop = (this.window as { desktop?: DesktopThemeBridge } | null)
         ?.desktop;
       desktop?.setWindowTheme?.(theme);
     });
+  }
+
+  /**
+   * Switches the root theme attribute with transitions suppressed for one
+   * frame, so every surface changes at once instead of fading (ui.md §6.5).
+   */
+  private applyTheme(theme: ResolvedTheme): void {
+    const root = this.document.documentElement;
+    if (root.getAttribute('data-theme') === theme) return;
+    root.classList.add('theme-switching');
+    root.setAttribute('data-theme', theme);
+    void root.offsetHeight; // flush styles while transitions are off
+    const restore = () => root.classList.remove('theme-switching');
+    if (this.window?.requestAnimationFrame) {
+      this.window.requestAnimationFrame(restore);
+    } else {
+      setTimeout(restore, 0);
+    }
   }
 
   setPreference(preference: ThemePreference): void {

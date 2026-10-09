@@ -24,7 +24,7 @@
 .right-panel-resize-handle:hover::after,
 .right-panel-resize-handle:focus-visible::after,
 .resizing-right-panel .right-panel-resize-handle::after {
-  background: rgb(113 113 122 / 0.75);
+  background: var(--qti-border-selected);
 }
 
 .resizing-right-panel,

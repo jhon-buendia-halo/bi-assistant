@@ -49,4 +49,17 @@ describe('ThemeService', () => {
     expect(service.resolved()).toBe('light');
     expect(document.documentElement.getAttribute('data-theme')).toBe('light');
   });
+
+  it('suppresses transitions only for the frame of a theme change', async () => {
+    const service = TestBed.inject(ThemeService);
+    TestBed.tick();
+    const next = service.resolved() === 'dark' ? 'light' : 'dark';
+    service.setPreference(next);
+    TestBed.tick();
+
+    const root = document.documentElement;
+    expect(root.classList.contains('theme-switching')).toBeTrue();
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(root.classList.contains('theme-switching')).toBeFalse();
+  });
 });

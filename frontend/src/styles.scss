@@ -16,6 +16,14 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+// Theme switches apply at once: ThemeService sets this for one frame.
+.theme-switching,
+.theme-switching *,
+.theme-switching *::before,
+.theme-switching *::after {
+  transition: none !important;
+}
+
 // Electron window dragging (title bar is hidden)
 .app-drag {
   -webkit-app-region: drag;

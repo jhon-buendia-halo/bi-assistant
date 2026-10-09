@@ -478,13 +478,33 @@ The app gets the Agentic Hub visual design: a gradient frame, an "Agentic Hub" b
   - The axe scan is clean in both themes.
 - **Notes:** ADR-0007. Updates `ui.md` §1, §6 and §7, `data-model.md`, `tech-stack.md` and `non-functional.md`. The user chose the Settings section and Noto Sans on 2026-10-09 and approved both palettes from the token-preview screenshots the same day. The E2E simulates the OS theme with `emulateMedia`, because Electron's `nativeTheme.themeSource` doesn't reach `prefers-color-scheme` on Linux. Evidence: [evidence/1.8.2/](evidence/1.8.2/).
 
-#### 1.8.3 — App shell: gradient frame, Agentic Hub banner and icon rail ([BA-144](https://halo-powered.atlassian.net/browse/BA-144))  `📋 Planned`
-- **Intent:** the window has the Agentic Hub frame, banner and navigation rail.
-- **Scope:** gradient frame; "Agentic Hub" banner; an icon rail replacing the 296 px sidebar (Datasets, Agents, Knowledge, Sessions and Settings; avatar and system logs at the bottom); title bar and traffic-light handling; rename "Halo BI Assistant" to "Agentic Hub" in the window title, document title and settings footer; fix the existing axe contrast failures in the Settings sidebar (the `⌘ F` hint and the version footer, `zinc-500`/`zinc-600` on `#181818`, found in 1.8.2).
-- **Out of scope:** `productName`, installer names and the data directory, which stay "Halo BI Assistant"; the mockup's "Powered by LenAI" footer; the session list (1.8.5).
-- **Acceptance:** every rail destination opens the same view as the old sidebar row; the titles read "Agentic Hub"; the app-shell Gherkin and the E2E suite pass with selectors migrated.
-- **Notes:** depends on 1.8.2.
-
+#### 1.8.3 — App shell: gradient frame, Agentic Hub banner and icon rail ([BA-144](https://halo-powered.atlassian.net/browse/BA-144))  `✅ Done`
+- **Intent:** the window has the Agentic Hub frame, banner and navigation rail, in both themes.
+- **Scope:**
+  - Gradient frame around a rail card and a canvas card.
+  - A compact (72 px) "Agentic Hub" banner, which is the page's level-one heading.
+  - Page content and the details panel as `card`s side by side.
+  - An always-visible icon rail replaces the 296 px sidebar. Datasets, Agents, Knowledge and Sessions are at the top; the account avatar, system logs and Settings are at the bottom. The collapse and expand sidebar controls are removed.
+  - Sessions becomes a rail destination with a list pane (refined in 1.8.5).
+  - Settings becomes a rail destination with a section list beside the chosen form, replacing the settings sidebar and its Back button.
+  - "Halo BI Assistant" becomes "Agentic Hub" in the window title, the document title and the settings footer.
+  - Fix the existing axe contrast failures in the old Settings sidebar (the `⌘ F` hint and the version footer), found in 1.8.2.
+  - The right-panel empty states, which are visible in the shell's initial state, move to tokens.
+- **Out of scope:**
+  - `productName`, installer names and the data directory, which stay "Halo BI Assistant".
+  - The mockup's "Powered by LenAI" footer.
+  - Collapsing the session list and restyling its rows (1.8.5).
+  - Restyling the screens inside the cards (1.8.6, 1.8.7).
+- **Acceptance:**
+  - Every rail destination opens the same view the old sidebar did.
+  - The titles read "Agentic Hub".
+  - The new Feature "Navigation rail" (`frontend/e2e/navigation.spec.ts`) and the updated layout scenario pass, with the E2E helpers moved off "Back".
+  - The axe scan of the initial shell is clean in the light theme.
+- **Notes:** decided with the user on 2026-10-09: a compact banner, Settings as a rail destination with a section list, and no collapse control. Depends on 1.8.2 and 1.8.4. Also done here:
+  - nine screen titles demoted from `h1` to `h2`, so the banner is the only `h1` (R7);
+  - theme switches suppress transitions for one frame, because the axe run caught rows mid-fade;
+  - the page card became the `<main>` landmark, for the axe `region` rule.
+  Evidence: [evidence/1.8.3/](evidence/1.8.3/).
 #### 1.8.4 — Shared components: pill buttons, status chips, cards and list rows ([BA-145](https://halo-powered.atlassian.net/browse/BA-145))  `✅ Done`
 - **Intent:** the building blocks every screen uses match the design in both themes, so the screen stories only swap classes.
 - **Scope:** Tailwind v4 `@utility` classes in `frontend/src/styles/components.css`, built only from the 1.8.2 tokens:

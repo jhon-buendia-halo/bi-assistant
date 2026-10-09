@@ -5,6 +5,15 @@ Running log of every meaningful change, newest first. See *Logging convention* a
 ## 2026-10-09
 
 ### Added
+- **Agentic Hub shell: gradient frame, banner and navigation rail** (roadmap 1.8.3, [BA-144](https://halo-powered.atlassian.net/browse/BA-144), epic [BA-141](https://halo-powered.atlassian.net/browse/BA-141)):
+  - The 296 px sidebar is replaced by a gradient frame. The always-visible icon rail holds Datasets, Agents, Knowledge and Sessions at the top, and the avatar, system logs and Settings at the bottom. Beside it, a canvas card holds the 72 px "Agentic Hub" banner (the page's only `h1`) over the page card (`main`) and the details panel card. The collapse and expand sidebar controls are gone.
+  - **Sessions** is now a rail area, with a list pane beside the composer or chat.
+  - **Settings** is now a rail area, with a section list beside the chosen form. "Back" is gone, and leaving and returning keeps the chosen section.
+  - The window and document titles read "Agentic Hub". The OS app name, installers and data directory stay "Halo BI Assistant".
+  - Theme switches suppress transitions for one frame, so every surface changes at once. Screen titles are now `h2`.
+  - Specs: app-shell R1–R7, R32, R33, R36, R37 and R46, the new Feature "Navigation rail" (`frontend/e2e/navigation.spec.ts`), [ui.md](specs/system/ui.md) §1, §3.4, §7, §8, §9 and §10, and the sidebar references in the datasets, knowledge, metrics, diagnostics, sessions-chat, llm-settings, developer-settings and datasources specs, plus vision.md and non-functional N59/N60.
+  - The web visual baseline is regenerated. Merged `main` (BA-156, E2E on the web target) and moved the Appearance spec to `app.fixture`.
+  - Evidence: [evidence/1.8.3/](evidence/1.8.3/).
 - **Shared component classes** (roadmap 1.8.4, [BA-145](https://halo-powered.atlassian.net/browse/BA-145), epic [BA-141](https://halo-powered.atlassian.net/browse/BA-141)):
   - Tailwind v4 `@utility` classes in [frontend/src/styles/components.css](frontend/src/styles/components.css), built from the theme tokens only: pill buttons (`btn` with primary, secondary, outline, ghost and danger variants, plus `btn-icon`), status chips (`chip-warning|info|neutral|success|danger`), `card`, `card-muted`, `list-row`, `filter-pill`, `field`, `field-label`, `section-header`/`section-title` and `menu`/`menu-item`.
   - Documented in [ui.md](specs/system/ui.md) §3.6. The Appearance section now uses `card` and `field-label`.

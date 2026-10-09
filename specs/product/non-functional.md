@@ -208,8 +208,8 @@ Open question (gap): in web mode there is no desktop bridge. Diagnostics hold on
 ## 8. Accessibility
 
 - N58. The application shell SHALL have no automatically detectable accessibility violations (checked with axe in the end-to-end suite).
-- N59. Landmark regions SHALL have labels ("Primary sidebar", "Workspace navigation", "Sessions navigation", "Settings sidebar", "Settings navigation"). The page SHALL have a visually hidden level-one heading.
-- N60. Icon-only buttons SHALL have an accessible name or title (collapse and expand sidebar, collapse and expand right panel, open system logs, session options, careful mode, deep analysis).
+- N59. Landmark regions SHALL have labels ("Navigation rail", "Workspace navigation", "Sessions navigation", "Settings navigation", "Details panel"). The page SHALL have one level-one heading (the "Agentic Hub" banner).
+- N60. Icon-only buttons SHALL have an accessible name or title (the rail buttons, collapse and expand right panel, open system logs, session options, careful mode, deep analysis).
 - N61. The right-panel divider SHALL be a keyboard-operable separator named "Resize right panel", with its current width exposed. Arrow keys SHALL change it by 24 px, Home SHALL set the minimum (360 px), End SHALL set the maximum (960 px, less room kept for the main content, at least 240 px), and a double-click SHALL reset it to 572 px. The width SHALL be remembered.
 - N62. Toggle controls SHALL expose their state (careful mode uses `aria-pressed`).
 - N63. Status that appears without a user action (deep analysis progress) SHALL have a labelled region.

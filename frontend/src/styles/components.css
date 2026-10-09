@@ -167,8 +167,8 @@
   background-color: var(--color-surface-muted);
 }
 
+/* No display value: pair with `flex` or `block` as the row needs. */
 @utility list-row {
-  display: block;
   width: 100%;
   border: 1px solid var(--color-border);
   border-radius: 0.75rem;

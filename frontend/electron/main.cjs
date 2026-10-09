@@ -12,6 +12,9 @@ const http = require("http");
 const path = require("path");
 
 const APP_DISPLAY_NAME = "Halo BI Assistant";
+// The window shows the Agentic Hub product name; the OS app name, installers
+// and data directory keep APP_DISPLAY_NAME (app-shell R33).
+const WINDOW_TITLE = "Agentic Hub";
 // The productName every release before the rename shipped with.
 const LEGACY_APP_NAME = "Questions to Insights";
 const DEV_URL = process.env.ELECTRON_DEV_URL;
@@ -687,7 +690,7 @@ function createWindow() {
     height: 900,
     minWidth: 960,
     minHeight: 600,
-    title: APP_DISPLAY_NAME,
+    title: WINDOW_TITLE,
     titleBarStyle: "hiddenInset",
     // Until the renderer reports its theme, follow the operating system.
     backgroundColor: nativeTheme.shouldUseDarkColors
