@@ -1,13 +1,16 @@
 <div class="flex flex-col">
-  <h2 class="font-serif text-[28px] font-semibold text-zinc-100">Agents</h2>
+  <h2 class="text-[26px] font-normal text-fg-strong">Agents</h2>
 
   <div class="mt-5 flex items-center gap-1">
-    <p class="text-[13px] text-zinc-500">
+    <p class="text-[13px] text-fg-muted">
       The agents registered in the harness.
     </p>
     <div class="ml-auto flex items-center gap-2">
       <button
-        class="rounded-lg p-2 text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
+        type="button"
+        title="Search agents"
+        aria-label="Search agents"
+        class="btn-icon p-2"
       >
         <lucide-angular [img]="Search" [size]="16" />
       </button>
@@ -15,18 +18,18 @@
   </div>
 
   @if (loading()) {
-    <div class="mt-10 flex items-center gap-2.5 text-zinc-400">
+    <div class="mt-10 flex items-center gap-2.5 text-fg-muted">
       <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
       <span>Loading agents…</span>
     </div>
   } @else if (error(); as err) {
     <p
-      class="mt-8 rounded-md bg-red-500/10 px-3 py-2.5 text-[13px] text-red-400"
+      class="mt-8 rounded-md bg-danger-soft px-3 py-2.5 text-[13px] text-on-danger-soft"
     >
       {{ err }}
     </p>
   } @else if (agents().length === 0) {
-    <p class="mt-10 text-[13px] text-zinc-500">No agents registered.</p>
+    <p class="mt-10 text-[13px] text-fg-muted">No agents registered.</p>
   } @else {
     <div class="mt-6 flex flex-col">
       @for (agent of agents(); track agent.key) {
@@ -34,25 +37,25 @@
           type="button"
           [attr.data-testid]="'agent-' + agent.key"
           (click)="openAgent.emit(agent)"
-          class="group flex w-full items-start gap-3.5 rounded-xl px-2 py-3 text-left hover:bg-white/5"
+          class="group flex w-full items-start gap-3.5 rounded-xl px-2 py-3 text-left hover:bg-surface-muted"
         >
           <span
-            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/5 text-zinc-400"
+            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface-muted text-fg-muted"
           >
             <lucide-angular [img]="Bot" [size]="17" />
           </span>
           <div class="flex min-w-0 flex-1 flex-col gap-1">
-            <span class="truncate text-[14px] text-zinc-200">{{
+            <span class="truncate text-[14px] text-fg">{{
               agent.name
             }}</span>
             @if (agent.description) {
-              <span class="text-[12px] leading-relaxed text-zinc-500">{{
+              <span class="text-[12px] leading-relaxed text-fg-muted">{{
                 agent.description
               }}</span>
             }
           </div>
           <span
-            class="mt-1 flex shrink-0 items-center gap-1.5 text-[12px] text-zinc-500"
+            class="mt-1 flex shrink-0 items-center gap-1.5 text-[12px] text-fg-muted"
           >
             <lucide-angular [img]="Wrench" [size]="13" />
             <span>{{ toolsLabel(agent) }}</span>

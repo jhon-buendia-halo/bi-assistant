@@ -3,7 +3,7 @@
 // Browse-only objects (no query access) render greyed — a gray background
 // plus dimmed content, mirroring data-readiness-agent's Catalog Explorer look.
 .is-locked {
-  background-color: rgba(255, 255, 255, 0.05);
+  background-color: var(--qti-surface-muted);
   opacity: 0.55;
 
   &:hover {

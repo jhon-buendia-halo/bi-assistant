@@ -1,8 +1,8 @@
 <div class="flex flex-col gap-3">
   <div class="flex items-start justify-between gap-4">
     <div>
-      <h2 class="text-[15px] font-semibold text-zinc-100">Metrics</h2>
-      <p class="mt-1 text-[12px] text-zinc-500">
+      <h2 class="text-[15px] font-semibold text-fg-strong">Metrics</h2>
+      <p class="mt-1 text-[12px] text-fg-muted">
         Curated definitions for the entities included above. Answers reuse these
         expressions verbatim instead of re-deriving the number each turn.
       </p>
@@ -14,7 +14,7 @@
         (click)="startNew()"
         [disabled]="entities().length === 0"
         title="Include at least one entity first"
-        class="flex shrink-0 items-center gap-1.5 rounded-md bg-zinc-200 px-3 py-1.5 text-[13px] font-medium text-zinc-900 hover:bg-white disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+        class="btn btn-primary shrink-0"
       >
         <lucide-angular [img]="Plus" [size]="14" />
         <span>New metric</span>
@@ -23,17 +23,17 @@
   </div>
 
   @if (loading()) {
-    <div class="flex items-center gap-2 text-[12px] text-zinc-500">
+    <div class="flex items-center gap-2 text-[12px] text-fg-muted">
       <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
       <span>Loading metrics…</span>
     </div>
   } @else if (loadError(); as error) {
-    <p class="rounded-md bg-red-500/10 px-3 py-2.5 text-[12px] text-red-400">
+    <p class="rounded-md bg-danger-soft px-3 py-2.5 text-[12px] text-on-danger-soft">
       {{ error }}
     </p>
   } @else if (metrics().length === 0) {
     <p
-      class="rounded-md border border-dashed border-white/10 px-3 py-4 text-center text-[12px] text-zinc-500"
+      class="rounded-md border border-dashed border-border px-3 py-4 text-center text-[12px] text-fg-muted"
     >
       @if (entities().length === 0) {
         Include entities above to define metrics over them.
@@ -47,32 +47,32 @@
       @for (metric of metrics(); track metric.id) {
         <div
           [attr.data-testid]="'metric-' + metric.name"
-          class="flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2.5"
-          [class.border-white/25]="editingId() === metric.id"
+          class="flex items-center gap-3 rounded-lg border border-border bg-surface-muted px-3 py-2.5"
+          [class.border-border-strong]="editingId() === metric.id"
         >
           <span
-            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/5 text-emerald-400"
+            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-muted text-on-success-soft"
           >
             <lucide-angular [img]="Gauge" [size]="15" />
           </span>
           <span class="flex min-w-0 flex-1 flex-col">
             <span class="flex items-center gap-2">
-              <span class="truncate text-[13px] text-zinc-200">{{
+              <span class="truncate text-[13px] text-fg">{{
                 metric.label
               }}</span>
               <span
-                class="shrink-0 rounded bg-white/10 px-1.5 py-0.5 font-mono text-[10px] text-zinc-400"
+                class="shrink-0 rounded bg-surface-muted px-1.5 py-0.5 font-mono text-[10px] text-fg-muted"
                 >{{ metric.name }}</span
               >
-              <span class="shrink-0 text-[11px] text-zinc-500">{{
+              <span class="shrink-0 text-[11px] text-fg-muted">{{
                 entityLabel(metric.entity)
               }}</span>
             </span>
-            <span class="truncate font-mono text-[11px] text-zinc-500">{{
+            <span class="truncate font-mono text-[11px] text-fg-muted">{{
               metric.expression
             }}</span>
             @if (metric.dimensions?.length) {
-              <span class="truncate text-[11px] text-zinc-600"
+              <span class="truncate text-[11px] text-fg-muted"
                 >by {{ metric.dimensions!.join(", ") }}</span
               >
             }
@@ -81,7 +81,7 @@
             type="button"
             title="Edit"
             (click)="startEdit(metric)"
-            class="rounded p-1.5 text-zinc-500 hover:bg-white/10 hover:text-zinc-200"
+            class="btn-icon"
           >
             <lucide-angular [img]="Pencil" [size]="14" />
           </button>
@@ -90,7 +90,7 @@
             title="Delete"
             (click)="remove(metric)"
             [disabled]="deleting() === metric.id"
-            class="rounded p-1.5 text-zinc-500 hover:bg-white/10 hover:text-red-400 disabled:opacity-50"
+            class="btn-icon hover:text-on-danger-soft disabled:opacity-50"
           >
             @if (deleting() === metric.id) {
               <lucide-angular
@@ -110,7 +110,7 @@
   <!-- Promotion path: approved answers offered as prefilled drafts -->
   @if (!formOpen() && candidates().length > 0) {
     <div class="flex flex-col gap-1.5">
-      <p class="text-[11px] font-medium text-zinc-500">
+      <p class="field-label">
         Promote a verified answer
       </p>
       <div class="flex flex-wrap gap-1.5">
@@ -119,12 +119,12 @@
             type="button"
             [title]="candidate.sql"
             (click)="startFromCandidate(candidate)"
-            class="flex max-w-full items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[12px] text-zinc-300 hover:border-white/25 hover:text-zinc-100"
+            class="flex max-w-full items-center gap-1.5 rounded-full border border-border bg-surface-muted px-2.5 py-1 text-[12px] text-fg hover:border-border-strong hover:text-fg-strong"
           >
             <lucide-angular
               [img]="Sparkles"
               [size]="12"
-              class="shrink-0 text-emerald-400"
+              class="shrink-0 text-on-success-soft"
             />
             <span class="truncate">{{ candidate.label }}</span>
           </button>
@@ -136,17 +136,17 @@
   <!-- Form -->
   @if (formOpen()) {
     <div
-      class="flex flex-col gap-3 rounded-xl border border-white/10 bg-[#232323] p-4"
+      class="flex flex-col gap-3 rounded-xl border border-border bg-surface-muted p-4"
     >
       <div class="flex items-center justify-between">
-        <p class="text-[13px] font-medium text-zinc-200">
+        <p class="text-[13px] font-medium text-fg">
           {{ editingId() ? "Edit metric" : "New metric" }}
         </p>
         <button
           type="button"
           title="Close"
           (click)="cancel()"
-          class="rounded p-1 text-zinc-500 hover:bg-white/10 hover:text-zinc-200"
+          class="btn-icon"
         >
           <lucide-angular [img]="X" [size]="14" />
         </button>
@@ -154,56 +154,56 @@
 
       <div class="grid grid-cols-2 gap-3">
         <label class="flex flex-col gap-1">
-          <span class="text-[11px] font-medium text-zinc-500">Label</span>
+          <span class="field-label">Label</span>
           <input
             type="text"
             placeholder="Denial rate"
             [value]="label()"
             (input)="label.set($any($event.target).value)"
-            class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+            class="field"
           />
         </label>
         <label class="flex flex-col gap-1">
-          <span class="text-[11px] font-medium text-zinc-500">Name</span>
+          <span class="field-label">Name</span>
           <input
             type="text"
             placeholder="denial_rate"
             [value]="name()"
             (input)="name.set($any($event.target).value)"
-            class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 font-mono text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+            class="field font-mono"
           />
         </label>
       </div>
 
       <label class="flex flex-col gap-1">
-        <span class="text-[11px] font-medium text-zinc-500">Entity</span>
+        <span class="field-label">Entity</span>
         <select
           [value]="entity()"
           (change)="entity.set($any($event.target).value)"
-          class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 font-mono text-[13px] text-zinc-200 outline-none focus:border-white/25"
+          class="field font-mono"
         >
           @if (entityOptions().length === 0) {
-            <option value="" class="bg-[#232323]">No entities included</option>
+            <option value="" class="bg-surface">No entities included</option>
           }
           @for (option of entityOptions(); track option) {
-            <option [value]="option" class="bg-[#232323]">{{ option }}</option>
+            <option [value]="option" class="bg-surface">{{ option }}</option>
           }
         </select>
       </label>
 
       <label class="flex flex-col gap-1">
-        <span class="text-[11px] font-medium text-zinc-500">Expression</span>
+        <span class="field-label">Expression</span>
         <textarea
           rows="3"
           placeholder="SUM(CASE WHEN status = 'denied' THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0)"
           [value]="expression()"
           (input)="expression.set($any($event.target).value)"
-          class="resize-y rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 font-mono text-[12px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+          class="field resize-y font-mono text-[12px]"
         ></textarea>
       </label>
 
       <label class="flex flex-col gap-1">
-        <span class="text-[11px] font-medium text-zinc-500"
+        <span class="field-label"
           >Dimensions (comma separated)</span
         >
         <input
@@ -211,18 +211,18 @@
           placeholder="month, provider, plan"
           [value]="dimensions()"
           (input)="dimensions.set($any($event.target).value)"
-          class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+          class="field"
         />
       </label>
 
       <label class="flex flex-col gap-1">
-        <span class="text-[11px] font-medium text-zinc-500">Description</span>
+        <span class="field-label">Description</span>
         <textarea
           rows="2"
           placeholder="Share of submitted claims denied in the period."
           [value]="description()"
           (input)="description.set($any($event.target).value)"
-          class="resize-y rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[12px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+          class="field resize-y text-[12px]"
         ></textarea>
       </label>
 
@@ -230,7 +230,7 @@
         <button
           type="button"
           (click)="cancel()"
-          class="flex flex-1 items-center justify-center rounded-md border border-white/10 px-3 py-1.5 font-medium text-zinc-300 hover:bg-white/5"
+          class="btn btn-outline flex-1"
         >
           Cancel
         </button>
@@ -240,7 +240,7 @@
           (click)="save()"
           [disabled]="!canSave()"
           title="Label, name, entity and expression are required"
-          class="flex flex-1 items-center justify-center gap-2 rounded-md bg-emerald-600 px-3 py-1.5 font-medium text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+          class="btn btn-primary flex-1"
         >
           @if (saving()) {
             <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />

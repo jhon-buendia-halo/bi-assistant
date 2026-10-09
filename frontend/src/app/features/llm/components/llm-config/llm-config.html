@@ -1,26 +1,26 @@
 <div class="flex flex-col gap-3">
   <div class="mb-2">
-    <h2 class="text-[15px] font-semibold text-zinc-100">LLM Configuration</h2>
-    <p class="mt-1 text-[12px] text-zinc-500">
+    <h2 class="text-[15px] font-semibold text-fg-strong">LLM Configuration</h2>
+    <p class="mt-1 text-[12px] text-fg-muted">
       Configure the language-model provider and verify the credentials.
     </p>
   </div>
 
   <label class="flex flex-col gap-1">
-    <span class="text-[11px] font-medium text-zinc-500">Provider</span>
+    <span class="field-label">Provider</span>
     <select
       [value]="provider()"
       (change)="provider.set($any($event.target).value); onFieldChange()"
-      class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none focus:border-white/25"
+      class="field"
     >
-      <option value="openai" class="bg-[#232323]">OpenAI</option>
-      <option value="anthropic" class="bg-[#232323]">Anthropic</option>
-      <option value="lenai" class="bg-[#232323]">LenAI (Halo gateway)</option>
+      <option value="openai" class="bg-surface">OpenAI</option>
+      <option value="anthropic" class="bg-surface">Anthropic</option>
+      <option value="lenai" class="bg-surface">LenAI (Halo gateway)</option>
     </select>
   </label>
 
   <label class="flex flex-col gap-1">
-    <span class="text-[11px] font-medium text-zinc-500">
+    <span class="field-label">
       {{ provider() === 'lenai' ? 'Deployment name' : 'Model' }}
     </span>
     <input
@@ -28,21 +28,21 @@
       [placeholder]="provider() === 'lenai' ? 'my-deployment' : provider() === 'anthropic' ? 'claude-sonnet-5-5' : 'gpt-4o-mini'"
       [value]="model()"
       (input)="model.set($any($event.target).value); onFieldChange()"
-      class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+      class="field"
     />
   </label>
 
   @if (provider() === 'lenai') {
     <label class="flex flex-col gap-1">
-      <span class="text-[11px] font-medium text-zinc-500">Base URL</span>
+      <span class="field-label">Base URL</span>
       <input
         type="text"
         placeholder="https://lenai.example.com"
         [value]="baseUrl()"
         (input)="baseUrl.set($any($event.target).value); onFieldChange()"
-        class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+        class="field"
       />
-      <span class="text-[10px] leading-4 text-zinc-600">
+      <span class="text-[10px] leading-4 text-fg-muted">
         Gateway root; requests use
         &lt;base URL&gt;/openai/v1/deployments/&lt;deployment&gt;.
       </span>
@@ -50,20 +50,20 @@
   }
 
   <label class="flex flex-col gap-1">
-    <span class="text-[11px] font-medium text-zinc-500">API key</span>
+    <span class="field-label">API key</span>
     <input
       type="password"
       [placeholder]="apiKeyPlaceholder()"
       [value]="apiKey()"
       (input)="apiKey.set($any($event.target).value); onFieldChange()"
-      class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1.5 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-white/25"
+      class="field"
     />
   </label>
 
   @if (keyUnreadable()) {
     <p
       data-testid="llm-key-unreadable-notice"
-      class="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-[12px] text-amber-200"
+      class="flex items-start gap-2 rounded-md border border-on-warning-soft/30 bg-warning-soft px-3 py-2.5 text-[12px] text-on-warning-soft"
     >
       <lucide-angular
         [img]="TriangleAlert"
@@ -80,7 +80,7 @@
   <button
     (click)="testConnection()"
     [disabled]="!canTest"
-    class="mt-1 flex items-center justify-center gap-2 rounded-md bg-zinc-200 px-3 py-1.5 font-medium text-zinc-900 hover:bg-white disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+    class="btn btn-secondary mt-1"
   >
     @if (testing()) {
       <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
@@ -94,7 +94,7 @@
     (click)="saveConnection()"
     [disabled]="!testedOk() || saving()"
     title="Test the connection successfully before saving"
-    class="flex items-center justify-center gap-2 rounded-md bg-emerald-600 px-3 py-1.5 font-medium text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+    class="btn btn-primary"
   >
     @if (saving()) {
       <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
