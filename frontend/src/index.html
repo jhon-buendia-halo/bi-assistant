@@ -2,6 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <!-- Fixes the cascade-layer order before Angular's inlined critical CSS can
+       name a layer first; otherwise `base` would beat `components`. -->
+  <style>@layer theme, base, components, utilities;</style>
   <title>Agentic Hub</title>
   <base href="/">
   <meta name="viewport" content="width=device-width, initial-scale=1">
