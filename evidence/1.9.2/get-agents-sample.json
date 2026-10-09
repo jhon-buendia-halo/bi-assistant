@@ -1,0 +1,131 @@
+{
+    "agents": [
+        {
+            "key": "assistant-eval-judge",
+            "id": "assistant-eval-judge",
+            "name": "Assistant Eval Judge",
+            "description": "Grades one assistant eval case's tool calls and final answer against a rubric.",
+            "tools": [],
+            "kind": "system",
+            "status": "builtin",
+            "pinned": false,
+            "owner": "System",
+            "hasUnpublishedChanges": false,
+            "missingDatasets": [],
+            "datasets": [],
+            "starterQuestions": []
+        },
+        {
+            "key": "8f5c79df-5a7b-4cc7-9882-f890c1f7fe1f",
+            "id": "8f5c79df-5a7b-4cc7-9882-f890c1f7fe1f",
+            "name": "Health plan analyst",
+            "description": "Answers health plan questions",
+            "tools": [
+                "ask_clarification",
+                "create_visual",
+                "describe_entity",
+                "list_entities",
+                "run_readonly_sql",
+                "sample_rows",
+                "update_visual"
+            ],
+            "kind": "user",
+            "status": "live",
+            "pinned": true,
+            "owner": "You",
+            "hasUnpublishedChanges": false,
+            "missingDatasets": [
+                "World Cup Core"
+            ],
+            "datasets": [
+                "World Cup Core"
+            ],
+            "starterQuestions": [
+                "Which plan grew fastest?"
+            ]
+        },
+        {
+            "key": "visualization",
+            "id": "interactive-visual-designer",
+            "name": "Interactive Visual Designer",
+            "description": "Turns a completed analysis answer into an interactive visual, and tailors it on request.",
+            "tools": [],
+            "kind": "system",
+            "status": "builtin",
+            "pinned": false,
+            "owner": "System",
+            "hasUnpublishedChanges": false,
+            "missingDatasets": [],
+            "datasets": [],
+            "starterQuestions": []
+        },
+        {
+            "key": "knowledge-bootstrap",
+            "id": "knowledge-bootstrap",
+            "name": "Knowledge Bootstrap",
+            "description": "Mines business-glossary terms, instructions and coverage facts from a dataset's schema and sample rows.",
+            "tools": [],
+            "kind": "system",
+            "status": "builtin",
+            "pinned": false,
+            "owner": "System",
+            "hasUnpublishedChanges": false,
+            "missingDatasets": [],
+            "datasets": [],
+            "starterQuestions": []
+        },
+        {
+            "key": "assistant",
+            "id": "assistant",
+            "name": "Questions to Insights Assistant",
+            "description": "Answers business questions over a session's datasets \u2014 plans the analysis, writes and runs the SQL, and explains the result.",
+            "tools": [
+                "ask_clarification",
+                "create_visual",
+                "describe_entity",
+                "list_entities",
+                "run_readonly_sql",
+                "sample_rows",
+                "update_visual"
+            ],
+            "kind": "official",
+            "status": "builtin",
+            "pinned": false,
+            "owner": "Official",
+            "hasUnpublishedChanges": false,
+            "missingDatasets": [],
+            "datasets": [],
+            "starterQuestions": []
+        },
+        {
+            "key": "sql-fixer",
+            "id": "sql-fixer",
+            "name": "SQL Fixer",
+            "description": "Repairs a SQL statement that failed to execute, using the engine error as the signal.",
+            "tools": [],
+            "kind": "system",
+            "status": "builtin",
+            "pinned": false,
+            "owner": "System",
+            "hasUnpublishedChanges": false,
+            "missingDatasets": [],
+            "datasets": [],
+            "starterQuestions": []
+        },
+        {
+            "key": "sql-verifier",
+            "id": "sql-verifier",
+            "name": "SQL Verifier",
+            "description": "Careful mode's second opinion \u2014 re-derives the SQL for a question independently to corroborate the answer.",
+            "tools": [],
+            "kind": "system",
+            "status": "builtin",
+            "pinned": false,
+            "owner": "System",
+            "hasUnpublishedChanges": false,
+            "missingDatasets": [],
+            "datasets": [],
+            "starterQuestions": []
+        }
+    ]
+}

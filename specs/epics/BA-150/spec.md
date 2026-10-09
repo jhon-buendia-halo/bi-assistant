@@ -84,7 +84,7 @@ All stories are built on one branch, `feat/BA-150-agent-hub`, and ship as one PR
 - **Timing.** This epic is inside the 1.0 Beta (due 2026-10-31) and competes with BA-141 and milestones 1.1–1.7 for the same window. If the window closes, the fallback is to ship 1.9.2–1.9.4 and move the preview chat (part of 1.9.5) out.
 - **ADR numbering.** BA-141's unmerged branch claims ADR-0007, so this epic uses ADR-0008. Whichever merges second keeps its number.
 - **Prompt injection by design.** User instructions go into the assistant's context. They SHALL be placed after the base rules and labelled as user-supplied, and the guard and grounding checks stay in code, not in the prompt. Eval coverage of a user agent is out of scope, so a user agent's answer quality is not measured.
-- **Dataset references are by name** ([data-model.md](../../system/data-model.md) §3.12). Renaming or deleting a dataset leaves an agent pointing at a missing name. The hub should flag such an agent rather than fail at chat time.
+- **Dataset references are by name** ([data-model.md](../../system/data-model.md) §3.13). Renaming or deleting a dataset leaves an agent pointing at a missing name. The hub should flag such an agent rather than fail at chat time.
 - **Open: who owns a user agent?** Every user agent reads "Owner: You" until there is a sharing backend. The mockup's team owners ("Claims Analytics", "Platform") are deferred with *My team* and *Whole org*.
 - **Open: the Official owner label.** The mockup has no Official card. "Official" is proposed.
 - **Related:** [BA-82](../BA-82/spec.md) Agent Routines (still undefined) may later run user agents on a schedule.

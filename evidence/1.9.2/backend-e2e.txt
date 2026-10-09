@@ -1,0 +1,21 @@
+# 1.9.2 (BA-152) backend e2e, 2026-10-09
+# cd backend && npm run build && npx jest --config ./test/jest-e2e.json test/user-agents.e2e-spec.ts
+# Drives the built backend (node dist/main.js) on a free port with a fresh APP_DATA_DIR; restarts it once.
+
+test/user-agents.e2e-spec.ts
+   ✓ Agent definitions (API) > Creating an agent stores a draft (30 ms)
+   ✓ Agent definitions (API) > Publishing makes the draft Live (7 ms)
+   ✓ Agent definitions (API) > Editing a Live agent keeps serving the Live version (8 ms)
+   ✓ Agent definitions (API) > Names must be unique and publishing needs a dataset (8 ms)
+   ✓ Agent definitions (API) > Built-in agents are read-only (4 ms)
+   ✓ Agent definitions (API) > Pins apply to user and built-in agents and survive a restart (1329 ms)
+   ✓ Agent definitions (API) > A user agent's detail reports the assistant's tools with its draft and Live version (7 ms)
+   ✓ Agent definitions (API) > Unknown ids are reported as not found (7 ms)
+   ✓ Agent definitions (API) > Deleting an agent (4 ms)
+
+Tests: 9 passed, 0 failed, 9 total
+Test Suites: 1 passed, 1 total
+Tests:       9 passed, 9 total
+Snapshots:   0 total
+Time:        3.045 s
+Ran all test suites matching test/user-agents.e2e-spec.ts.

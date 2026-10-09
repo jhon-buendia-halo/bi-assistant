@@ -4,9 +4,11 @@ The Agents screen lets the user inspect every agent the app runs (its prompt, to
 
 ## Concepts
 
-Defined in [../../product/glossary.md](../../product/glossary.md): agent, assistant, eval set, eval case, eval check, eval run, sample fixture, dataset, datasource, entity, tool call, knowledge entry, session.
+Defined in [../../product/glossary.md](../../product/glossary.md): agent, user agent, official agent, system agent, draft (agent), Live (agent), pin, assistant, eval set, eval case, eval check, eval run, sample fixture, dataset, datasource, entity, tool call, knowledge entry, session.
 
 Capability-local vocabulary:
+- **Agent definition** — a user agent's stored configuration (`AgentConfig`): name, description, instructions, datasets, starter questions and optional model and reasoning effort; shape in [../../system/data-model.md](../../system/data-model.md) section 3.10.
+- **Unpublished changes** — a Live agent whose draft differs from its Live version.
 - **Questions** and **Executions** — the two sub-tabs inside an agent's Evals tab: the suite, and the history of runs.
 - **Regression comparison** — the per-question diff between a finished run and the previous comparable run; see R32.
 - **Details panel** — the right-hand panel ([../app-shell/spec.md](../app-shell/spec.md)); on an agent's detail view it shows one question's scoring and trace.
@@ -115,6 +117,18 @@ Formula 1 set (`formula-1`), ids all prefixed `f1-`:
 | `f1-out-of-scope-motogp` | Who won the 2023 MotoGP world championship? | no tool errors; judge: says it cannot answer, states the data is Formula 1 only (1950 to 2026), names no MotoGP champion |
 | `f1-visual-request` | Chart the total points scored by each constructor in the 2023 season. | tools in order `run_readonly_sql` then `create_visual`; called `create_visual`; no tool errors; judge: a visual tool succeeded and plausibly charts constructor points for 2023 |
 
+User agents (definitions)
+- R43. A user agent SHALL be a stored configuration of the assistant with: a `name` (required, trimmed, at most 64 characters, unique among user agents ignoring case), a `description` (at most 280), `instructions` (at most 4,000), `datasets` (dataset names, de-duplicated), `starterQuestions` (at most 5, each at most 200; blanks dropped, de-duplicated) and an optional `model` (a model or deployment name of the configured provider) and optional `reasoningEffort`. Over-long text SHALL be clipped to the limit.
+- R44. Every user agent SHALL have a **draft**. Publishing SHALL copy the draft to the **Live** version and record when. The status SHALL be `live` when a Live version exists, else `draft`. An agent has **unpublished changes** when it is Live and its draft differs from its Live version. Saving a draft SHALL NOT change the Live version.
+- R45. Publishing SHALL require a name and at least one dataset, else `Select at least one dataset to publish`. Creating a draft SHALL require only a name, else `Agent name is required`. A name already used by another user agent SHALL be refused with `An agent named "<name>" already exists`.
+- R46. Built-in agents SHALL NOT be created, edited, published or deleted through these operations: `Built-in agents can't be edited` and `Built-in agents can't be deleted`.
+- R47. Any agent, built-in or user-built, SHALL be pinnable and unpinnable. A user agent's pin SHALL be stored with it and a built-in agent's pin in the app settings, so pins survive a restart.
+- R48. The agent catalogue SHALL list built-in and user agents together. Each entry SHALL carry its kind (`official` for the assistant, `system` for the five helpers, `user`), status (`builtin`, `draft` or `live`), pinned flag, owner (`Official`, `System` or `You`), whether it has unpublished changes, its datasets and starter questions, and `missingDatasets`: the dataset names in its effective configuration (Live version, else draft) that no longer exist.
+- R49. Requesting one agent SHALL resolve the key as a built-in agent first, then as a user-agent id. A user agent's detail SHALL report the assistant's tools, memory and resolved model, because it runs on the assistant, together with its draft and its Live version.
+- R50. Deleting a user agent SHALL remove only its definition. Sessions that reference it SHALL keep their transcript (their behaviour is in [../sessions-chat/spec.md](../sessions-chat/spec.md)).
+- R51. Saving a draft, publishing, deleting or pinning an agent that does not exist SHALL fail with `Agent "<id>" not found` (an `ok: false` answer); requesting the detail of one SHALL fail with HTTP 404 as in R8.
+- R52. User agents SHALL persist across restarts of the backend.
+
 ## Edge cases and errors
 
 - Starting with zero ticked questions is blocked in the UI (button disabled); a direct request with an explicit empty list is refused with "Pick at least one question to run" and SHALL NOT be read as "run everything". A request with no list at all selects every question of every set (and so fails R19.6 when the sets span several samples).
@@ -129,6 +143,8 @@ Formula 1 set (`formula-1`), ids all prefixed `f1-`:
 
 ## Contracts
 
+- Agent definition endpoints `POST /agents`, `PUT /agents/:id/draft`, `POST /agents/:id/publish`, `DELETE /agents/:id`, `PUT /agents/:key/pin`, and the merged `GET /agents` / `GET /agents/:key`: [../../system/api.md](../../system/api.md) section 2.6.
+- The `agents` collection (user agents) and the built-in pins document: [../../system/data-model.md](../../system/data-model.md) sections 3.10 and 3.2; decision ADR-0008 in [../../system/architecture.md](../../system/architecture.md).
 - Endpoints `GET /agents`, `GET /agents/:key`, `GET /agents/:key/evals`, `POST /agents/:key/evals/run`, `GET /agents/:key/evals/runs`, `GET|DELETE /agents/:key/evals/runs/:jobId`, `GET /agents/:key/evals/runs/:jobId/download`: [../../system/api.md](../../system/api.md).
 - Eval run documents (run, per-question result, check result, tool call, regression summary): [../../system/data-model.md](../../system/data-model.md).
 - The six agents, the assistant's tools and memory settings, and the judge's prompt: [../../system/agents.md](../../system/agents.md).
@@ -316,6 +332,50 @@ Feature: Agents and evals behaviour not yet covered by Playwright
   Scenario: Reports an unknown agent
     When I open an agent that no longer exists
     Then I see 'Agent "<key>" not found'
+```
+
+E2E: none yet
+
+The Feature below is API-level. It is covered by the backend e2e `backend/test/user-agents.e2e-spec.ts`, not by Playwright.
+
+```gherkin
+Feature: Agent definitions (API)
+
+  Scenario: Creating an agent stores a draft
+    When I create an agent named "Health plan analyst" with instructions and the "World Cup Core" dataset
+    Then the agent is listed as "Draft", owner "You", not pinned
+
+  Scenario: Publishing makes the draft Live
+    Given a draft agent "Health plan analyst" with one dataset
+    When I publish it
+    Then it is listed as "Live" and its Live version equals the draft
+
+  Scenario: Editing a Live agent keeps serving the Live version
+    Given a Live agent "Health plan analyst"
+    When I change its draft instructions
+    Then the agent shows "Unpublished changes" and its Live version is unchanged
+    When I publish it again
+    Then the Live version carries the new instructions
+
+  Scenario: Names must be unique and publishing needs a dataset
+    Given a user agent named "Health plan analyst" exists
+    When I create another agent named "health plan analyst"
+    Then I see 'An agent named "health plan analyst" already exists'
+    When I publish a draft with no datasets
+    Then I see "Select at least one dataset to publish"
+
+  Scenario: Pins apply to user and built-in agents and survive a restart
+    When I pin the assistant and a user agent
+    And the backend restarts
+    Then both are still pinned
+
+  Scenario: Built-in agents are read-only
+    When I edit, publish or delete "sql-fixer"
+    Then I see "Built-in agents can't be edited" or "Built-in agents can't be deleted"
+
+  Scenario: Deleting an agent
+    When I delete "Health plan analyst"
+    Then it is no longer listed
 ```
 
 ## Acceptance

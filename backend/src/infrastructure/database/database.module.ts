@@ -2,6 +2,7 @@ import { Global, Module, Provider } from '@nestjs/common';
 import { mkdirSync } from 'fs';
 import { join } from 'path';
 import {
+  AGENTS_STORE,
   CONNECTIONS_STORE,
   DATASOURCE_INVENTORIES_STORE,
   METRICS_STORE,
@@ -35,6 +36,7 @@ const COLLECTIONS = [
   { token: METRICS_STORE, table: 'metrics' },
   { token: EVAL_RUNS_STORE, table: 'eval_runs' },
   { token: KNOWLEDGE_STORE, table: 'knowledge_snippets' },
+  { token: AGENTS_STORE, table: 'agents' },
 ];
 
 const sqliteDbProvider: Provider = {

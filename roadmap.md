@@ -445,12 +445,12 @@ Users build their own data agents on top of the assistant (instructions, dataset
   - `python3 scripts/check-specs.py` passes.
 - **Notes:** mockup reference: the "Agentic Hub — Agents" screen shared on 2026-10-09. Decisions taken with the user on 2026-10-09: user-built agents plus built-ins; local only, with My team and Whole org deferred; the hub replaces the Agents list; inside the 1.0 Beta; agents configure instructions, datasets, starter questions and a model override; chats start from an agent; Draft → Publish → Live; helpers in a System section. ADR-0008, because BA-141's branch holds ADR-0007. The user confirmed the epic spec on 2026-10-09 and chose to build the hub screen and editor with today's styles (BA-141's 1.8.6 restyles them later). Evidence: [evidence/1.9.1/](evidence/1.9.1/).
 
-#### 1.9.2 — Agent definitions: storage and API ([BA-152](https://halo-powered.atlassian.net/browse/BA-152))  `📋 Planned`
+#### 1.9.2 — Agent definitions: storage and API ([BA-152](https://halo-powered.atlassian.net/browse/BA-152))  `✅ Done`
 - **Intent:** user agents and pins are stored locally and can be managed through the API.
 - **Scope:** an `agents` collection with a `draft` and an optional `live` configuration (name, description, instructions, dataset names, starter questions, optional model or reasoning-effort override) and `pinned`; pin state for built-in agents; endpoints to list (built-ins merged with user agents, each with its kind (official, system or user), status and pin), get, create, update the draft, publish, delete and pin or unpin; validation (name required and unique among user agents, at least one dataset to publish).
 - **Out of scope:** running an agent (1.9.3); any UI (1.9.4, 1.9.5).
 - **Acceptance:** backend e2e covers create → publish → edit draft → republish → delete, and pin or unpin for user and built-in agents; data survives a backend restart; `data-model.md`, `api.md`, the glossary and the agents-evals rules are updated.
-- **Notes:** ADR-0008. New collection token per CLAUDE.md *Backend*; no migration (new collection).
+- **Notes:** ADR-0008. New collection token per CLAUDE.md *Backend*; no migration (new collection). `GET /agents` keeps its existing sort by name across built-in and user agents (api.md). The backend e2e starts the built `dist/main.js` as a child process, because Jest can't load `AppModule` (ESM-only packages under Mastra and the Databricks driver). Also adds `E2E_BACKEND_PORT` to the Playwright harness. Evidence: [evidence/1.9.2/](evidence/1.9.2/).
 
 #### 1.9.3 — Start a session from an agent ([BA-153](https://halo-powered.atlassian.net/browse/BA-153))  `📋 Planned`
 - **Intent:** a user chats with an agent and gets answers shaped by its instructions, over its datasets.

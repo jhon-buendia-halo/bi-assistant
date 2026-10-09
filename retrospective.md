@@ -14,6 +14,30 @@ Entry template:
 
 ---
 
+## 2026-10-09 — 1.9.2 Agent definitions: storage and API (BA-152)
+
+### What went well
+- A Fable plan written from the code before any edit caught the `AgentsModule` → `SessionsModule` import cycle. It also caught that `agentContext()` is the single insertion point, which shapes 1.9.3. The user-agent module was built as a shared leaf from the start.
+- Specs came first (step 5) in their own pass, so the tests had a fixed contract. Where the plan and api.md disagreed (sort order, the duplicate-name message), the implementer followed the spec.
+- The unit tests caught a real bug before any UI existed: re-pinning a pinned built-in moved it to the end of the pin list.
+- Spawning the built `dist/main.js` in the backend e2e makes "survives a restart" a real process restart, not a module reload.
+- A test-only `E2E_BACKEND_PORT` with a renderer route let Playwright run beside the user's app without touching product code (BA-109 stays its own bug). It was proven with nothing on 3000, where a broken redirect would show "Backend unreachable".
+
+### What went wrong
+- `npm ci` failed in the fresh worktree: `main`'s lockfiles are out of sync with `package.json` for npm 11.19 (`Missing: @hono/node-server`). I used `npm install` and restored the lockfiles so the churn stays out of the epic.
+- Jest can't boot `AppModule`, because ESM-only packages (`@sindresorhus/slugify`, `uuid` through `thrift`) sit under Mastra and the Databricks driver. The plan's in-process e2e pattern didn't work and the e2e had to spawn the built server.
+- The implementing subagent ran `pkill -f "dist/main.js"`, which also matched its own shell. It hit nothing else only because port 3000 was already free.
+- `docker compose up` from the worktree recreated the shared Postgres container, because the compose file path differs from the main checkout's. The named volume kept the data (15 tables checked afterwards).
+- The user stopped the implementing agent mid-task and its unverified state was reported as partial. It then resumed and finished, so its report had to be re-verified gate by gate.
+- `agents.service.ts` and `agents.controller.ts` weren't prettier-clean or eslint-clean at base (eight pre-existing errors, six still on unchanged lines). This hides real issues in the touched files.
+
+### What to do differently
+- Run backend e2e tests that need the full app against `node dist/main.js` started on a free port with a temp `APP_DATA_DIR`, after `npm run build`. Don't try `Test.createTestingModule({ imports: [AppModule] })`.
+- Stop a process you started by the PID you captured (`$!`), never with `pkill -f <path>`.
+- In a new worktree, run `npm install` and then `git checkout -- */package-lock.json` instead of `npm ci`, until the lockfile drift on `main` is fixed in its own change.
+- Expect `docker compose up` from a worktree to recreate the shared container. Check `docker ps` and run a `psql` table count afterwards rather than assuming the data survived.
+- When a stopped subagent resumes and reports, re-run its gates before committing (build, unit tests for the touched modules, the story's e2e, `check-specs.py`).
+
 ## 2026-10-09 — 1.9.1 Agent Hub: ADR, epic spec and roadmap (BA-151)
 
 ### What went well

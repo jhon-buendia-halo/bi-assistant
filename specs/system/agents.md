@@ -50,6 +50,8 @@ All agents are registered once in a single framework instance and looked up by *
 
 Lookup of an unknown key throws. The catalogue lists agents sorted by display name.
 
+**User agents** are not registry entries. They are stored documents ([data-model.md](data-model.md) section 3.10) and run on the `assistant`; the decision is ADR-0008 in [architecture.md](architecture.md). The catalogue endpoint merges them with the six registered agents ([api.md](api.md) section 2.6). How a user agent's instructions, datasets and model override are applied to a turn is specified with BA-153.
+
 Not registered (never listed in the catalogue):
 
 - **LLM connection probe** (`llm-connection-probe`, "LLM connection probe", instructions `You answer connection probes exactly as asked.`) — a throwaway agent built per test on the *submitted, not yet saved* Anthropic settings. See [llm-settings](../capabilities/llm-settings/spec.md).

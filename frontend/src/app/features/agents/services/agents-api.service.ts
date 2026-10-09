@@ -3,13 +3,38 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { API_BASE_URL } from '../../../core/config/api.config';
 
+/** `official` = the assistant, `system` = the five helpers, `user` = built in the hub. */
+export type AgentKind = 'official' | 'system' | 'user';
+export type AgentStatus = 'builtin' | 'draft' | 'live';
+export type AgentOwner = 'Official' | 'System' | 'You';
+
+/** A user agent's stored configuration (draft or Live version). */
+export interface AgentConfig {
+  name: string;
+  description: string;
+  instructions: string;
+  datasets: string[];
+  starterQuestions: string[];
+  model?: string;
+  reasoningEffort?: 'low' | 'medium' | 'high';
+}
+
 export interface Agent {
-  /** Registry key the agent is registered under in the harness. */
+  /** Registry key of a built-in agent, or a user agent's id. */
   key: string;
   id: string;
   name: string;
   description: string;
   tools: string[];
+  kind?: AgentKind;
+  status?: AgentStatus;
+  pinned?: boolean;
+  owner?: AgentOwner;
+  hasUnpublishedChanges?: boolean;
+  /** Dataset names in the effective configuration that no longer exist. */
+  missingDatasets?: string[];
+  datasets?: string[];
+  starterQuestions?: string[];
 }
 
 export interface AgentToolDetail {
@@ -27,6 +52,9 @@ export interface AgentMemoryDetail {
 }
 
 export interface AgentDetail extends Agent {
+  /** User agents only: the working copy and the published copy. */
+  draft?: AgentConfig;
+  live?: AgentConfig;
   /** The agent's prompt template, flattened to text. */
   instructions: string;
   toolDetails: AgentToolDetail[];

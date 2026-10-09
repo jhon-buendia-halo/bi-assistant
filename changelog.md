@@ -5,6 +5,13 @@ Running log of every meaningful change, newest first. See *Logging convention* a
 ## 2026-10-09
 
 ### Added
+- **Agent definitions: storage and API** (roadmap 1.9.2, [BA-152](https://halo-powered.atlassian.net/browse/BA-152), epic [BA-150](https://halo-powered.atlassian.net/browse/BA-150)):
+  - New `agents` collection and `user-agents` backend module. A user agent keeps a draft and an optional Live version (name, description, instructions, datasets, starter questions, an optional model and reasoning effort) and a pin. Built-in pins live in a `builtin-agent-pins` settings document. No migration.
+  - New endpoints: `POST /agents`, `PUT /agents/:id/draft`, `POST /agents/:id/publish`, `DELETE /agents/:id` and `PUT /agents/:key/pin`. `GET /agents` lists built-in and user agents together, with kind, status, owner, pin, unpublished changes and missing datasets. `GET /agents/:key` also resolves user-agent ids. Built-in agents can't be edited or deleted.
+  - Specs: rules R43–R52 and the Feature "Agent definitions (API)" in [specs/capabilities/agents-evals/spec.md](specs/capabilities/agents-evals/spec.md); [api.md](specs/system/api.md) endpoints 41–45 (later ones renumbered 46–57); [data-model.md](specs/system/data-model.md) §3.2 and §3.10; glossary terms for user, official and system agents, draft, Live and pin.
+  - Tests: backend e2e `backend/test/user-agents.e2e-spec.ts` (9 tests, including a real backend restart on the same data dir) and 23 new unit tests. The Agents screen is unchanged; `agents.spec.ts` still passes 9/9.
+  - Test harness: `E2E_BACKEND_PORT` lets the Playwright suite run beside a desktop app that holds port 3000 ([tech-stack.md](specs/system/tech-stack.md)).
+  - Evidence: [evidence/1.9.2/](evidence/1.9.2/).
 - **Agent Hub planned** (roadmap 1.9.1, [BA-151](https://halo-powered.atlassian.net/browse/BA-151), epic [BA-150](https://halo-powered.atlassian.net/browse/BA-150)):
   - New epic spec [specs/epics/BA-150/spec.md](specs/epics/BA-150/spec.md), confirmed by the user. Users build agents on top of the assistant (instructions, datasets, starter questions, model override), test them as drafts, publish them, pin them and start chats from them. The Agents screen becomes a hub with the filters All, Pinned, Official and Mine, plus a System section for the helper agents.
   - ADR-0008 in [specs/system/architecture.md](specs/system/architecture.md): a user agent is a stored configuration (a draft and a Live version) applied to the assistant on each turn, not an agent registered at runtime. So the read-only guard and the grounding checks always hold.
