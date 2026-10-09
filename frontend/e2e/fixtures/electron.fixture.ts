@@ -18,10 +18,16 @@ interface ElectronFixtures {
 const frontendRoot = path.resolve(__dirname, '../..');
 
 /**
+ * Port the app's backend listens on during the suite. Set `E2E_BACKEND_PORT`
+ * to run beside a desktop app that already holds 3000.
+ */
+export const E2E_BACKEND_PORT = process.env['E2E_BACKEND_PORT'] ?? '3000';
+
+/**
  * Launches the desktop app on `appDataDir`. `env` is layered over the test
  * defaults; a value of `undefined` removes an inherited variable.
  */
-export function launchElectronApp(
+export async function launchElectronApp(
   appDataDir: string,
   env: Record<string, string | undefined> = {},
 ): Promise<ElectronApplication> {
@@ -31,15 +37,31 @@ export function launchElectronApp(
     NODE_ENV: 'test',
     ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
     QUESTIONS_TO_INSIGHTS_USER_DATA_DIR: appDataDir,
+    BACKEND_PORT: E2E_BACKEND_PORT,
     ...env,
   })) {
     if (value !== undefined) merged[name] = value;
   }
-  return electron.launch({
+  const application = await electron.launch({
     args: [frontendRoot],
     cwd: frontendRoot,
     env: merged,
   });
+  const port = merged['BACKEND_PORT'];
+  if (port !== '3000') {
+    // Under file:// the renderer always calls localhost:3000 (BA-109). The
+    // window opens only once the backend is ready, so this route is in place
+    // before the renderer's first request.
+    await application.context().route(/^http:\/\/localhost:3000\//, (route) =>
+      route.continue({
+        url: route
+          .request()
+          .url()
+          .replace('http://localhost:3000/', `http://localhost:${port}/`),
+      }),
+    );
+  }
+  return application;
 }
 
 /** The main window, once the app shell has rendered. */

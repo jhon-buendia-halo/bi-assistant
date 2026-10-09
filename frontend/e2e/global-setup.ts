@@ -22,9 +22,10 @@ function portIsOpen(port: number): Promise<boolean> {
 }
 
 export default async function globalSetup(): Promise<void> {
-  if (await portIsOpen(3000)) {
+  const backendPort = Number(process.env['E2E_BACKEND_PORT'] ?? '3000');
+  if (await portIsOpen(backendPort)) {
     throw new Error(
-      'Port 3000 is already in use. Close the running Questions to Insights app before running the Electron integration suite.',
+      `Port ${backendPort} is already in use. Close the running Questions to Insights app, or set E2E_BACKEND_PORT to a free port, before running the Electron integration suite.`,
     );
   }
 
