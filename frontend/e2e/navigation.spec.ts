@@ -42,20 +42,46 @@ test('moves between areas from the rail', async ({ page }) => {
   ).toBeVisible();
 });
 
-test('collapses and expands the session list', async ({ page }) => {
-  await railItem(page, 'Sessions').click();
+test('expands the rail into a drawer with labels and sessions', async ({
+  page,
+}) => {
   const sessionsNav = page.getByRole('navigation', {
     name: 'Sessions navigation',
   });
-  await expect(sessionsNav).toBeVisible();
+  await expect(sessionsNav).toHaveCount(0);
+  const menu = page.getByRole('button', { name: 'Expand navigation' });
+  await expect(menu).toHaveAttribute('aria-expanded', 'false');
 
-  await page.getByTitle('Collapse session list').click();
-  await expect(sessionsNav).toBeHidden();
-  await expect(page.getByTitle('Expand session list')).toBeVisible();
-
-  await page.getByTitle('Expand session list').click();
+  await menu.click();
+  const workspace = page.getByRole('navigation', {
+    name: 'Workspace navigation',
+  });
+  for (const label of ['Datasets', 'Agents', 'Knowledge', 'Sessions']) {
+    await expect(workspace.getByText(label, { exact: true })).toBeVisible();
+  }
   await expect(sessionsNav).toBeVisible();
-  await expect(page.getByTitle('Expand session list')).toBeHidden();
+  await expect(page.getByTitle('New conversation')).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Collapse navigation' }),
+  ).toHaveAttribute('aria-expanded', 'true');
+
+  await page.getByRole('button', { name: 'Collapse navigation' }).click();
+  await expect(sessionsNav).toHaveCount(0);
+
+  await railItem(page, 'Sessions').click();
+  await expect(sessionsNav).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Collapse navigation' }),
+  ).toBeVisible();
+});
+
+test('shows the details panel only on demand', async ({ page }) => {
+  const panel = page.getByRole('complementary', { name: 'Details panel' });
+  await expect(panel).toHaveCount(0);
+  await page.getByTitle('Expand right panel').click();
+  await expect(panel).toBeVisible();
+  await page.getByTitle('Collapse right panel').click();
+  await expect(panel).toHaveCount(0);
 });
 
 test('opens Settings as an area with a section list', async ({ page }) => {

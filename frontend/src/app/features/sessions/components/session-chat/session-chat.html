@@ -29,8 +29,8 @@
   }
 
   <!-- Messages -->
-  <div #scroller class="min-h-0 flex-1 overflow-y-auto px-6 py-6">
-    <div class="mx-auto flex w-full max-w-[860px] flex-col gap-5">
+  <div #scroller class="min-h-0 flex-1 overflow-y-auto px-8 pt-8 pb-6">
+    <div class="flex w-full flex-col gap-6">
       @if (showWelcome()) {
         <!--
           Opening message for an empty session. Client-side only: it is never
@@ -92,11 +92,20 @@
             >
               <lucide-angular [img]="Copy" [size]="14" />
             </button>
-            <p
-              class="max-w-[70%] rounded-xl bg-surface-muted px-4 py-2.5 text-[13px] leading-6 whitespace-pre-wrap text-fg"
+            <div
+              class="flex max-w-[800px] items-start gap-3 rounded-xl rounded-tr-[2px] bg-surface-selected p-3"
             >
-              {{ message.content }}
-            </p>
+              <span
+                class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-[14px] leading-5 font-semibold text-on-primary"
+                aria-hidden="true"
+                >D</span
+              >
+              <p
+                class="min-w-0 text-right text-[16px] leading-6 whitespace-pre-wrap text-fg"
+              >
+                {{ message.content }}
+              </p>
+            </div>
           </div>
         } @else if (message.error) {
           <!--
@@ -314,7 +323,15 @@
             }
           </div>
         } @else {
-          <div class="group">
+          <div class="group flex max-w-[800px] gap-3">
+            <img
+              src="brand/agentic-hub/sparks.svg"
+              alt=""
+              width="24"
+              height="24"
+              class="size-6 shrink-0 self-start"
+            />
+            <div class="flex min-w-0 flex-1 flex-col gap-4">
             <div class="prose-dark" [innerHTML]="message.content | markdown"></div>
             <ng-container
               [ngTemplateOutlet]="reasoningTrail"
@@ -338,7 +355,7 @@
               [ngTemplateOutlet]="dataProvenance"
               [ngTemplateOutletContext]="{ $implicit: message }"
             />
-            <div class="mt-1 flex items-center gap-1">
+            <div class="flex min-h-5 items-center">
               @if (message.verified) {
                 <!-- Answer's SQL matches a query in the verified library -->
                 <span
@@ -363,9 +380,9 @@
               <button
                 (click)="copyMessage(message.content)"
                 title="Copy message"
-                class="rounded p-1 text-fg-muted opacity-0 group-hover:opacity-100 hover:bg-surface-muted hover:text-fg"
+                class="rounded-full p-1.5 text-icon hover:bg-surface-muted"
               >
-                <lucide-angular [img]="Copy" [size]="14" />
+                <lucide-angular [img]="Copy" [size]="16" />
               </button>
               @if (message.data?.length) {
                 <!-- Answer rating: thumbs-up saves the query as verified -->
@@ -380,14 +397,14 @@
                       : 'Save as verified query'
                   "
                   aria-label="Save as verified query"
-                  class="rounded p-1 disabled:cursor-not-allowed disabled:opacity-40"
+                  class="rounded-full p-1.5 disabled:cursor-not-allowed disabled:opacity-40"
                   [class]="
                     message.feedback === 'up'
                       ? 'qti-rating-on bg-success-soft text-on-success-soft'
-                      : 'text-fg-muted opacity-0 group-hover:opacity-100 hover:bg-surface-muted hover:text-fg'
+                      : 'text-icon hover:bg-surface-muted'
                   "
                 >
-                  <lucide-angular [img]="ThumbsUp" [size]="14" />
+                  <lucide-angular [img]="ThumbsUp" [size]="16" />
                 </button>
                 <button
                   type="button"
@@ -400,14 +417,14 @@
                       : 'Mark answer as wrong'
                   "
                   aria-label="Mark answer as wrong"
-                  class="rounded p-1 disabled:cursor-not-allowed disabled:opacity-40"
+                  class="rounded-full p-1.5 disabled:cursor-not-allowed disabled:opacity-40"
                   [class]="
                     message.feedback === 'down'
                       ? 'qti-rating-on bg-danger-soft text-on-danger-soft'
-                      : 'text-fg-muted opacity-0 group-hover:opacity-100 hover:bg-surface-muted hover:text-fg'
+                      : 'text-icon hover:bg-surface-muted'
                   "
                 >
-                  <lucide-angular [img]="ThumbsDown" [size]="14" />
+                  <lucide-angular [img]="ThumbsDown" [size]="16" />
                 </button>
               }
             </div>
@@ -433,6 +450,7 @@
                 </button>
               </div>
             }
+            </div>
           </div>
         }
       }
@@ -537,11 +555,11 @@
   </div>
 
   <!-- Input -->
-  <div class="flex flex-col items-center px-6 pb-6">
+  <div class="flex flex-col items-center px-8 pb-6">
     @if (followUpVisible()) {
       <!-- Follow-ups for the data mark just clicked in the visual -->
       <div
-        class="mb-2 flex w-full max-w-[860px] flex-wrap items-center gap-2"
+        class="mb-2 flex w-full flex-wrap items-center gap-2"
         aria-label="Follow-up suggestions"
       >
         <span class="text-[11px] font-medium tracking-wide text-fg-muted">
@@ -575,7 +593,7 @@
       </div>
     }
     <div
-      class="w-full max-w-[860px] card p-3"
+      class="w-full rounded-lg border border-border-strong bg-surface px-2 py-3 shadow-input"
     >
       <textarea
         #composer
@@ -584,7 +602,7 @@
         [value]="draft()"
         (input)="draft.set($any($event.target).value)"
         (keydown)="onKeydown($event)"
-        class="w-full resize-none bg-transparent text-[13px] text-fg outline-none placeholder:text-fg-muted"
+        class="w-full resize-none border-0 bg-transparent text-[14px] leading-5 text-fg outline-none placeholder:text-placeholder"
       ></textarea>
       <div class="mt-1 flex items-center justify-between gap-2">
         <div class="flex items-center gap-2">
@@ -602,8 +620,8 @@
           class="qti-tip flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px]"
           [class]="
             careful()
-              ? 'border-border-selected bg-primary-soft text-on-primary-soft'
-              : 'border-border bg-surface-muted text-fg-muted hover:border-border-strong hover:bg-surface-selected hover:text-fg'
+              ? 'border-border-strong bg-primary-soft text-on-primary-soft'
+              : 'border-border text-fg-muted hover:bg-surface-muted'
           "
         >
           <lucide-angular [img]="ShieldCheck" [size]="12" class="shrink-0" />
@@ -620,7 +638,7 @@
               ? 'A deep analysis is already running for this session.'
               : 'Deep analysis: investigate the typed question from several angles in the background and deliver a downloadable report. Takes a few minutes; chat stays usable.'
           "
-          class="qti-tip flex items-center gap-1.5 rounded-full border border-border bg-surface-muted px-2.5 py-1 text-[12px] text-fg-muted hover:border-border-strong hover:bg-surface-selected hover:text-fg disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-border disabled:hover:bg-surface-muted disabled:hover:text-fg-muted"
+          class="qti-tip flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-[12px] text-fg-muted hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
         >
           <lucide-angular [img]="Telescope" [size]="12" class="shrink-0" />
           Deep analysis
@@ -632,9 +650,9 @@
             (click)="stop()"
             title="Stop response"
             aria-label="Stop response"
-            class="rounded-md bg-primary p-1.5 text-on-primary hover:bg-primary-hover"
+            class="rounded-full p-1.5 text-accent hover:bg-surface-muted"
           >
-            <lucide-angular [img]="Square" [size]="15" [strokeWidth]="2.5" />
+            <lucide-angular [img]="Square" [size]="20" [strokeWidth]="2.5" />
           </button>
         } @else {
           <button
@@ -643,13 +661,19 @@
             [disabled]="draft().trim() === ''"
             title="Send message"
             aria-label="Send message"
-            class="rounded-md bg-primary p-1.5 text-on-primary hover:bg-primary-hover disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-fg-muted"
+            class="rounded-full p-1.5 text-accent hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
           >
-            <lucide-angular [img]="ArrowUp" [size]="15" />
+            <lucide-angular [img]="ArrowUp" [size]="20" />
           </button>
         }
       </div>
     </div>
+    <p
+      class="mt-4 w-full text-center text-[12px] leading-4 text-fg-muted"
+    >
+      Responses are generated by AI (Powered by LenAI) and may be inaccurate or
+      incomplete. Please verify against source data before sharing.
+    </p>
   </div>
 </div>
 
@@ -757,10 +781,20 @@
     </div>
   }
   @if (message.data?.length) {
-    <details class="mt-2 rounded-lg border border-border bg-surface-muted text-[12px]">
-      <summary class="cursor-pointer px-3 py-1.5 text-fg-muted select-none hover:text-fg">
-        Data used ({{ message.data.length }}
-        {{ message.data.length === 1 ? "query" : "queries" }})
+    <details class="qti-data-used w-full rounded-lg border border-border bg-surface text-[12px]">
+      <summary class="flex cursor-pointer items-center gap-2 p-3 text-[16px] leading-6 text-on-primary-soft select-none">
+        <img
+          src="brand/agentic-hub/data-sources.svg"
+          alt=""
+          width="24"
+          height="24"
+          class="shrink-0"
+        />
+        <span class="min-w-0 flex-1">
+          Data used ({{ message.data.length }}
+          {{ message.data.length === 1 ? "query" : "queries" }})
+        </span>
+        <span class="qti-chevron shrink-0 text-icon" aria-hidden="true"></span>
       </summary>
       <div class="flex flex-col gap-2 border-t border-border px-3 py-2">
         @for (record of message.data; track $index) {

@@ -200,8 +200,9 @@ test('opens a question in the right panel with what it is scored on', async ({
   await page.getByTestId('agent-tab-evals').click();
   await openWorldCupSet(page);
 
+  // The details panel is closed until a question is selected (on demand).
   const panel = page.getByLabel('Details panel');
-  await expect(panel).toContainText('Select a question in the Evals tab');
+  await expect(panel).toHaveCount(0);
 
   await page.getByTestId('eval-case-champion-2022').click();
   await expect(panel).toContainText('Who won the 2022 World Cup?');

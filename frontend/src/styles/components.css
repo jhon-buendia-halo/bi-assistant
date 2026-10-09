@@ -17,10 +17,11 @@
     gap: 0.375rem;
     border: 1px solid transparent;
     border-radius: 9999px;
-    padding: 0.375rem 1rem;
-    font-size: 13px;
+    padding: 0.5625rem 1rem; /* 40 px with the 1 px border (Figma button/medium) */
+    font-size: 14px;
     font-weight: 500;
     line-height: 1.25rem;
+    letter-spacing: 0.07px;
     white-space: nowrap;
     cursor: pointer;
     transition:
@@ -60,7 +61,7 @@
   .btn-outline {
     border-color: var(--qti-border-strong);
     background-color: var(--qti-surface);
-    color: var(--qti-primary);
+    color: var(--qti-on-primary-soft);
 
     &:hover:not(:disabled) {
       background-color: var(--qti-surface-muted);
@@ -158,7 +159,7 @@
 
   .card {
     border: 1px solid var(--qti-border);
-    border-radius: 1rem;
+    border-radius: 0.75rem;
     background-color: var(--qti-surface);
     box-shadow: var(--qti-shadow-card);
   }

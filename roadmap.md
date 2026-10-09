@@ -547,6 +547,26 @@ The app gets the Agentic Hub visual design: a gradient frame, an "Agentic Hub" b
   - Also: toasts became a "Notifications" live region with a named dismiss button; `index.html` declares the cascade-layer order first; ui.md §2, §3, §4, §6 and §8 were synced to tokens.
   - Evidence: [evidence/1.8.7/](evidence/1.8.7/).
 
+#### 1.8.8 — Align with the Insight Agent AI Figma design ([BA-158](https://halo-powered.atlassian.net/browse/BA-158))  `✅ Done`
+- **Intent:** the app matches the Figma the design team owns (file `qW41gtAbnTcqoqpEKajqZX`, Chat frame `2154:31891`), not just a mockup's visual language, while keeping the name "Agentic Hub".
+- **Scope:**
+  - Light tokens from the Figma variables, with the dark set re-derived. Frame gradient and texture, rail and banner sizes, and shadows as in the Figma.
+  - Rail: hamburger, logo, workspace items, avatar, system logs, Settings, a divider and the LenAI footer. The hamburger toggles a 240 px drawer with labels and the session list, replacing the 1.8.5 pane.
+  - Each page gets a header (icon, 24 px light title, soft action). In a session that's the session name and "Start New Conversation".
+  - Chat restyled to the frame: user bubble with avatar, the answer with the sparks mark at 16/24 px, bordered tables with a `#F8FAFC` header row, "Data Sources" (today's "Data used"), the thumbs and copy actions, the prompt input with the send icon, and the disclaimer.
+  - The visual panel opens on demand.
+  - Figma brand assets live in `frontend/public/brand/agentic-hub/`; the two photos are re-encoded as WebP, 504 KB instead of 8.4 MB.
+- **Out of scope:** the "Insight Agent AI" name, the logout button, and new features. Generic icons stay `lucide-angular`.
+- **Acceptance:**
+  - A side-by-side screenshot of the Figma frame and the running chat in the evidence.
+  - Navigation rail scenarios for the drawer (open, choose a session, close) and the on-demand visual panel.
+  - The full web suite passes, and axe is clean on every screen in both themes.
+- **Notes:**
+  - Decided with the user on 2026-10-09: keep "Agentic Hub", include both LenAI marks, drawer plus on-demand panel, and track as a new story. The user re-confirmed the epic spec ("implement the full epic").
+  - The chat restyle was done by a subagent in parallel with the shell.
+  - `fg-muted` is `rgba(0,0,0,.6)` rather than Figma's `.55`, for AA.
+  - Evidence: [evidence/1.8.8/](evidence/1.8.8/).
+
 ## Backlog
 
 Not yet sequenced into a release. The detailed phase plans below predate this roadmap; when work on one resumes, split it into features under a milestone here and link back to the plan.

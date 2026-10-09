@@ -5,6 +5,17 @@ Running log of every meaningful change, newest first. See *Logging convention* a
 ## 2026-10-09
 
 ### Added
+- **Aligned with the Insight Agent AI Figma design** (roadmap 1.8.8, [BA-158](https://halo-powered.atlassian.net/browse/BA-158), epic [BA-141](https://halo-powered.atlassian.net/browse/BA-141)):
+  - Light tokens now come from the Figma variables (brand `#0B41AD`, text `rgba(0,0,0,.85)`, headings `#001F52`, radius 12, Figma shadows), and the navy dark set is re-derived from them.
+  - Shell: the Figma's teal gradient frame with its texture, a 64 px translucent rail (menu, logo, workspace items, avatar, system logs, Settings, divider, LenAI mark and "Powered by LenAI"), and a 136 px banner with the Figma image, still reading "Agentic Hub".
+  - The menu button expands the rail into a 240 px drawer with labels and the session list. This replaces the 1.8.5 session pane; choosing Sessions opens it.
+  - The Sessions area has a page header: an icon, a 24 px light title, the datasource context and "Start New Conversation".
+  - The details panel is closed on launch and opens on demand: a dataset element, an eval question, a visual, or "Expand right panel".
+  - Chat restyled to the Figma: the user bubble with an avatar, answers with the sparks mark at 16/24 px, Figma tables, "Data used" styled as the Data Sources row, feedback icons always visible, the bordered prompt, and the AI disclaimer.
+  - Buttons are 40 px tall at 14 px. Screen titles are 24 px light.
+  - The 19 Figma assets are in `frontend/public/brand/agentic-hub/`, with the photos re-encoded as WebP (8.4 MB → 0.5 MB).
+  - Specs: app-shell R1–R4, R10, R37 and R46–R49 with new Navigation rail scenarios; agents-evals R37 and its scenario; [ui.md](specs/system/ui.md) §1, §3, §4.12, §6, §7 and §9; sessions-chat UI; api.md `window:theme`; tech-stack.md.
+  - Evidence (with a side-by-side against the Figma): [evidence/1.8.8/](evidence/1.8.8/).
 - **Chat, visual panel, system logs and toasts in both themes** (roadmap 1.8.7, [BA-148](https://halo-powered.atlassian.net/browse/BA-148), epic [BA-141](https://halo-powered.atlassian.net/browse/BA-141)):
   - The session chat (including its `.prose-dark` Markdown styles and tooltips), the interactive visual panel frame, the system logs dialog, toasts and the backend banner now use theme tokens and the shared classes.
   - Toasts sit in a "Notifications" region (`aria-live="polite"`) with a "Dismiss notification" button (app-shell R30).

@@ -89,7 +89,7 @@ export async function createWorldCupSession(page: Page): Promise<string> {
   await page.getByRole('button', { name: /^Create$/ }).click();
 
   await expect(
-    page.getByText(WORLD_CUP_SESSION, { exact: true }),
+    page.getByRole('heading', { name: WORLD_CUP_SESSION }),
   ).toBeVisible();
   await expect(page.locator('header')).toContainText(WORLD_CUP_DATASOURCE);
   await expect(page.locator('header')).toContainText('PostgreSQL');

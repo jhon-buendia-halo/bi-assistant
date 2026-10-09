@@ -11,11 +11,11 @@
 // piercing, every rule below the `.prose-dark` host — tables, code, lists —
 // silently fell back to the browser default.
 :host ::ng-deep .prose-dark {
-  font-size: 13px;
-  line-height: 1.75;
+  font-size: 16px;
+  line-height: 24px;
   color: var(--qti-fg);
 
-  p { margin: 0 0 0.75em; }
+  p { margin: 0 0 8px; }
   p:last-child { margin-bottom: 0; }
   strong { color: var(--qti-fg-strong); font-weight: 600; }
   em { color: var(--qti-fg); }
@@ -61,23 +61,56 @@
   table {
     width: 100%;
     margin: 0.5em 0 1em;
-    border-collapse: collapse;
-    font-size: 12px;
-    display: block;
-    overflow-x: auto;
+    border-collapse: separate;
+    border-spacing: 0;
+    border: 1px solid var(--qti-border);
+    border-radius: 12px;
+    overflow: hidden;
+    font-size: 14px;
+    line-height: 20px;
   }
   th, td {
-    padding: 0.4em 0.7em;
-    border: 1px solid var(--qti-border);
+    height: 48px;
+    padding: 0 16px;
+    border-bottom: 1px solid var(--qti-border);
+    border-right: 1px solid var(--qti-border);
     text-align: left;
     white-space: nowrap;
   }
+  th:last-child, td:last-child { border-right: 0; }
+  tbody tr:last-child td { border-bottom: 0; }
   th {
     background: var(--qti-surface-muted);
     color: var(--qti-fg);
-    font-weight: 600;
+    font-size: 14px;
+    line-height: 18px;
+    font-weight: 500;
   }
-  tbody tr:nth-child(even) td { background: var(--qti-surface-muted); }
+  td { font-weight: 400; color: var(--qti-fg); }
+  tbody td:first-child { font-weight: 600; }
+}
+
+// "Data used" disclosure: Figma "Data Sources" row with a trailing chevron.
+.qti-data-used > summary {
+  list-style: none;
+
+  &::-webkit-details-marker { display: none; }
+}
+
+.qti-chevron {
+  width: 8px;
+  height: 8px;
+  margin: 0 4px 3px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform 120ms ease;
+}
+
+.qti-data-used[open] .qti-chevron {
+  margin-bottom: 0;
+  margin-top: 3px;
+  transform: rotate(225deg);
 }
 
 // Instant styled tooltip for the composer mode buttons (native `title` is

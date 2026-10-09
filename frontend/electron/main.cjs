@@ -681,8 +681,8 @@ function resolveAppIcon() {
   return candidates.find((candidate) => fs.existsSync(candidate));
 }
 
-// Canvas token per theme (specs/system/ui.md §6.0).
-const THEME_CANVAS = { light: "#f3f6fa", dark: "#0b1626" };
+// Frame colour per theme, under the gradient (specs/system/ui.md §6.0).
+const THEME_CANVAS = { light: "#0077a0", dark: "#003a52" };
 
 function createWindow() {
   const win = new BrowserWindow({

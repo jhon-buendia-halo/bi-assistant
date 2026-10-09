@@ -9,24 +9,27 @@
 :root[data-theme="light"] {
   color-scheme: light;
 
-  --qti-canvas: #f3f6fa;
-  --qti-rail: #eef2f8;
-  --qti-surface: #ffffff;
-  --qti-surface-muted: #f4f8fd;
-  --qti-surface-selected: #eaf2fe;
-  --qti-border: #dbe3ee;
-  --qti-border-strong: #b9cbe6;
-  --qti-border-selected: #2f5fbf;
-  --qti-fg: #1f2a37;
-  --qti-fg-strong: #0d2747;
-  --qti-fg-muted: #5a6b80;
-  --qti-primary: #0d3fa6;
-  --qti-primary-hover: #0a3388;
+  /* Values from the Insight Agent AI Figma variables (BA-158). */
+  --qti-canvas: rgb(255 255 255 / 0.95); /* color/contrast-light/095 */
+  --qti-rail: rgb(255 255 255 / 0.95);
+  --qti-surface: #ffffff; /* layer/neutral/01 */
+  --qti-surface-muted: #f8fafc; /* color/blue-gray/050 */
+  --qti-surface-selected: rgb(11 65 173 / 0.1); /* background/brand/soft-hover */
+  --qti-border: rgb(0 0 0 / 0.1); /* border/divider */
+  --qti-border-strong: #bbd2ff; /* border/brand-soft */
+  --qti-border-selected: #0b41ad;
+  --qti-fg: rgb(0 0 0 / 0.85); /* text/default */
+  --qti-fg-strong: #001f52; /* text/primary/main */
+  --qti-fg-muted: rgb(0 0 0 / 0.6); /* Figma uses 0.55; 0.6 meets AA on every surface */
+  --qti-placeholder: rgb(0 0 0 / 0.55); /* text/placeholder */
+  --qti-primary: #0b41ad; /* background/brand/strong-rest */
+  --qti-primary-hover: #08348c;
   --qti-on-primary: #ffffff;
-  --qti-primary-soft: #e6effc;
-  --qti-on-primary-soft: #0d3fa6;
-  --qti-accent: #2b7de0;
-  --qti-focus: #2f6fe0;
+  --qti-primary-soft: #eaf1ff; /* background/brand/rest */
+  --qti-on-primary-soft: #08348c; /* text/helper/brand */
+  --qti-accent: #0b41ad; /* icon/brand */
+  --qti-icon: #565656; /* icon/neutral */
+  --qti-focus: #0b41ad;
   --qti-warning-soft: #fbe5d4;
   --qti-on-warning-soft: #92400e;
   --qti-info-soft: #e2ebfa;
@@ -38,16 +41,22 @@
   --qti-danger-soft: #fde3e3;
   --qti-on-danger-soft: #a2232a;
 
-  --qti-shadow-card: 0 1px 2px rgb(13 39 71 / 0.06);
-  --frame-gradient: linear-gradient(135deg, #0b5f8f 0%, #1d8fca 55%, #3cb7ee 100%);
-  --banner-gradient: linear-gradient(180deg, #05698f 0%, #04506f 55%, #02354a 100%);
+  --qti-shadow-card: 0 2px 7.5px rgb(11 65 173 / 0.15);
+  --qti-shadow-subtle: 0 2px 15px rgb(11 65 173 / 0.15); /* subtle-shadow */
+  --qti-shadow-input: 1px 1px 10px rgb(11 65 173 / 0.3), 0 2px 5px rgb(11 65 173 / 0.1);
+  --frame-gradient: linear-gradient(39.31deg, #004c6c 8.15%, #0077a0 43.41%, #3bb8f0 96.3%); /* gradient/blue-teal */
+  --frame-texture-opacity: 0.3;
+  --banner-base: #006286; /* color/teal/600 */
+  --banner-image-opacity: 0.2;
+  --banner-shade: linear-gradient(180deg, rgb(0 0 0 / 0) 38.79%, rgb(0 0 0 / 0.5) 100%);
+  --logo-gradient: linear-gradient(45deg, #009de0 0%, #008ac0 60%, #0077a0 100%);
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
 
-  --qti-canvas: #0b1626;
-  --qti-rail: #0d1a2c;
+  --qti-canvas: rgb(11 22 38 / 0.95);
+  --qti-rail: rgb(13 26 44 / 0.95);
   --qti-surface: #12233a;
   --qti-surface-muted: #16294a;
   --qti-surface-selected: #1a3357;
@@ -75,9 +84,18 @@
   --qti-danger-soft: #4a1c22;
   --qti-on-danger-soft: #ffb3b8;
 
-  --qti-shadow-card: 0 1px 2px rgb(0 0 0 / 0.4);
-  --frame-gradient: linear-gradient(135deg, #031421 0%, #08304d 60%, #0c4a73 100%);
-  --banner-gradient: linear-gradient(180deg, #0b3a5c 0%, #061f33 100%);
+  --qti-placeholder: #93a6bf;
+  --qti-icon: #a9b8cc;
+  --qti-shadow-card: 0 2px 7.5px rgb(0 0 0 / 0.35);
+  --qti-shadow-subtle: 0 2px 15px rgb(0 0 0 / 0.35);
+  --qti-shadow-input: 1px 1px 10px rgb(91 149 255 / 0.25), 0 2px 5px rgb(0 0 0 / 0.3);
+  /* Derived from the Figma light frame: the same teal family, darker. */
+  --frame-gradient: linear-gradient(39.31deg, #021c28 8.15%, #003a52 43.41%, #0b5f86 96.3%);
+  --frame-texture-opacity: 0.25;
+  --banner-base: #003a52;
+  --banner-image-opacity: 0.15;
+  --banner-shade: linear-gradient(180deg, rgb(0 0 0 / 0) 38.79%, rgb(0 0 0 / 0.6) 100%);
+  --logo-gradient: linear-gradient(45deg, #009de0 0%, #008ac0 60%, #0077a0 100%);
 }
 
 @theme inline {
@@ -101,6 +119,8 @@
   --color-primary-soft: var(--qti-primary-soft);
   --color-on-primary-soft: var(--qti-on-primary-soft);
   --color-accent: var(--qti-accent);
+  --color-icon: var(--qti-icon);
+  --color-placeholder: var(--qti-placeholder);
   --color-focus: var(--qti-focus);
   --color-warning-soft: var(--qti-warning-soft);
   --color-on-warning-soft: var(--qti-on-warning-soft);
@@ -113,7 +133,9 @@
   --color-danger-soft: var(--qti-danger-soft);
   --color-on-danger-soft: var(--qti-on-danger-soft);
 
-  --radius-card: 1rem;
-  --radius-frame: 1.25rem;
+  --radius-card: 0.75rem; /* radius/large */
+  --radius-frame: 0.75rem;
   --shadow-card: var(--qti-shadow-card);
+  --shadow-subtle: var(--qti-shadow-subtle);
+  --shadow-input: var(--qti-shadow-input);
 }

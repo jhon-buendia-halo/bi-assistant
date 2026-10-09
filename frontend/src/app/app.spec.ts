@@ -52,6 +52,9 @@ describe('App', () => {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
     const app = fixture.componentInstance;
+    // The details panel is closed on launch (app-shell R2).
+    app.rightPanelOpen.set(true);
+    fixture.detectChanges();
     const handle = fixture.nativeElement.querySelector(
       '.right-panel-resize-handle',
     ) as HTMLElement;
@@ -86,6 +89,9 @@ describe('App', () => {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
     const app = fixture.componentInstance;
+    // The details panel is closed on launch (app-shell R2).
+    app.rightPanelOpen.set(true);
+    fixture.detectChanges();
     const handle = fixture.nativeElement.querySelector(
       '.right-panel-resize-handle',
     ) as HTMLElement;

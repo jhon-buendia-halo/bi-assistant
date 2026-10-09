@@ -24,6 +24,11 @@ body {
   transition: none !important;
 }
 
+// The LenAI artwork has its colours baked in; invert it on dark surfaces.
+:root[data-theme="dark"] .lenai-art {
+  filter: invert(1) hue-rotate(180deg);
+}
+
 // Electron window dragging (title bar is hidden)
 .app-drag {
   -webkit-app-region: drag;

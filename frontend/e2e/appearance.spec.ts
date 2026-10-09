@@ -6,8 +6,8 @@ type Theme = 'light' | 'dark';
 
 /** Canvas and surface tokens per theme (specs/system/ui.md §6.0). */
 const THEME_COLOURS: Record<Theme, { canvas: string; surface: string }> = {
-  light: { canvas: 'rgb(243, 246, 250)', surface: 'rgb(255, 255, 255)' },
-  dark: { canvas: 'rgb(11, 22, 38)', surface: 'rgb(18, 35, 58)' },
+  light: { canvas: 'rgba(255, 255, 255, 0.95)', surface: 'rgb(255, 255, 255)' },
+  dark: { canvas: 'rgba(11, 22, 38, 0.95)', surface: 'rgb(18, 35, 58)' },
 };
 
 /**
@@ -77,14 +77,14 @@ test('follows the operating system theme by default', async ({
 
   await expect(themeOption(page, 'System')).toBeChecked();
   await expectTheme(page, 'light');
-  await expectWindowBackground(app, '#f3f6fa');
+  await expectWindowBackground(app, '#0077a0');
 
   const url = page.url();
   await setOsTheme(page, 'dark');
   await expectTheme(page, 'dark');
   expect(page.url()).toBe(url);
   await expect(themeOption(page, 'System')).toBeChecked();
-  await expectWindowBackground(app, '#0b1626');
+  await expectWindowBackground(app, '#003a52');
 });
 
 test('forces a theme regardless of the operating system', async ({
@@ -96,7 +96,7 @@ test('forces a theme regardless of the operating system', async ({
 
   await themeOption(page, 'Dark').check();
   await expectTheme(page, 'dark');
-  await expectWindowBackground(app, '#0b1626');
+  await expectWindowBackground(app, '#003a52');
 
   await setOsTheme(page, 'dark');
   await setOsTheme(page, 'light');
@@ -104,7 +104,7 @@ test('forces a theme regardless of the operating system', async ({
 
   await themeOption(page, 'Light').check();
   await expectTheme(page, 'light');
-  await expectWindowBackground(app, '#f3f6fa');
+  await expectWindowBackground(app, '#0077a0');
 });
 
 test('remembers the chosen theme after a restart', async ({
@@ -129,7 +129,7 @@ test('remembers the chosen theme after a restart', async ({
   }
   // Set by the inline boot script, before the app has rendered.
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-  await expectWindowBackground(restarted, '#0b1626');
+  await expectWindowBackground(restarted, '#003a52');
 
   await openAppearance(page);
   await expect(themeOption(page, 'Dark')).toBeChecked();

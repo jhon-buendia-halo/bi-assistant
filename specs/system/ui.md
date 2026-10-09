@@ -10,7 +10,7 @@ Capability specs referenced below: [app-shell](../capabilities/app-shell/spec.md
 
 ### 1.1 Window
 
-- Desktop window, default 1440 x 900 px, minimum 960 x 600 px. The window background starts as the operating system theme's canvas colour (`#f3f6fa` light, `#0b1626` dark) and switches to the resolved theme's canvas colour as soon as the page reports it (app-shell R34, R44). The page itself paints in the resolved theme from its first frame (R42).
+- Desktop window, default 1440 x 900 px, minimum 960 x 600 px. The window background starts as the frame's teal for the operating system theme (`#0077a0` light, `#003a52` dark) and switches to the resolved theme's frame teal as soon as the page reports it (app-shell R34, R44), so a resize or a slow first paint never flashes a different colour behind the textured frame (1.2). The page itself paints in the resolved theme from its first frame (R42).
 - Native title bar is hidden with the traffic-light controls inset (macOS `hiddenInset`); the app draws its own top bar and treats it as a window-drag region. Interactive children of a drag region (buttons, inputs) opt out of dragging.
 - The window title and the HTML `<title>` are "Agentic Hub". The operating-system app name (macOS menu bar and Dock, installers, data directory) stays "Halo BI Assistant". The banner's "Agentic Hub" is the page's only `<h1>`.
 - The renderer has no router; nothing is addressable by URL. All navigation is view state (1.4).
@@ -22,55 +22,66 @@ Capability specs referenced below: [app-shell](../capabilities/app-shell/spec.md
 +--------------------------------------------------------------------------------+
 | [backend status banner - only while restarting / down]  h 28                    |
 +--------------------------------------------------------------------------------+
-| frame (--frame-gradient), padding 12, gap 12                                    |
+| frame (--frame-gradient + frame texture), padding 12, gap 12                    |
 | +------+ +---------------------------------------------------------------------+ |
-| | rail | | canvas card (bg canvas, radius frame 20, padding 12, gap 12)        | |
-| | w 76 | | +-----------------------------------------------------------------+ | |
-| |      | | | banner h 72 (--banner-gradient, radius card): "Agentic Hub" h1  | | |
-| | Data | | +-----------------------------------------------------------------+ | |
-| | Agnt | | +-------------------------------------------+ +-------------------+ | |
-| | Know | | | page card (card)                          | | details panel     | | |
-| | Sess | | |  [list pane: Sessions / Settings areas]   | | (card) w 572      | | |
-| |      | | |  [header h 48: session context, expand]   | | 360-960           | | |
-| |  D   | | |  main content                             | |                   | | |
-| | logs | | +-------------------------------------------+ +-------------------+ | |
-| | gear | | +-----------------------------------------------------------------+ | |
-| +------+ +---------------------------------------------------------------------+ |
+| | rail | | canvas card (bg canvas, radius 12, padding 16, gap 12)              | |
+| | w 64 | | +-----------------------------------------------------------------+ | |
+| | or   | | | banner h 136 (base + image + shade): "Agentic Hub" h1 40/48      | | |
+| | 240  | | +-----------------------------------------------------------------+ | |
+| |      | | +-------------------------------------------+ +-------------------+ | |
+| | menu | | | page card (card)                          | | details panel     | | |
+| | logo | | |  [Settings list pane, Settings area only] | | (card) w 572      | | |
+| | nav  | | |  [page header: Sessions area only]        | | 360-960, closed   | | |
+| | (Ses | | |  main content                             | | on launch         | | |
+| | sions| | +-------------------------------------------+ +-------------------+ | |
+| | list)| +---------------------------------------------------------------------+ |
+| |  D   |                                                                          |
+| | logs |                                                                          |
+| | gear |                                                                          |
+| | LenAI|                                                                          |
+| +------+                                                                          |
 +--------------------------------------------------------------------------------+
    toast stack: fixed bottom-right over everything; system logs: modal overlay
 ```
 
-- The whole app is one full-height column: the optional backend banner, then the frame. The frame paints `--frame-gradient` and holds two rounded cards 12 px apart: the rail and the canvas card. The root sets `user-select: none`, and no content area overrides it (inputs and textareas stay editable). Copying chat text is done through the Copy buttons. Open question: whether message bodies and SQL should be selectable.
-- **Rail** (76 px, `rail` fill, radius `frame`): see 1.3.
-- **Canvas card** (`canvas` fill, radius `frame`, 12 px padding): the banner on top, then a row with the page card and the details panel, 12 px apart.
-- **Banner** (`role="banner"`, 72 px, `--banner-gradient`, radius `card`, 28 px horizontal padding, window-drag region): the `<h1>` "Agentic Hub", 26 px semibold white. No other content. Screen titles inside the page are `<h2>`.
-- **Page card** (the `<main>` landmark; `card`, flex 1, min width 0, clipped): in the Sessions and Settings areas, a list pane on the left (1.3); then a column with the optional header and the main content.
-  - **Header** (48 px, bottom `border`), shown only while a session chat is open, the session list is collapsed, or the details panel is collapsed. It starts with *Expand session list* while the list is collapsed. Left: the *session context* — a database icon, the uppercase micro-label "Datasource" (`fg-muted`), then one `chip chip-neutral` per datasource used by the session (name, plus kind label; tooltip = the datasource summary). While loading: a 96 x 16 px pulsing `surface-muted` placeholder. If none can be resolved: the muted text "Unavailable". Right: the *Expand right panel* button when the details panel is collapsed.
-- **Details panel** (`card`): see 1.5.
+- The whole app is one full-height column: the optional backend banner, then the frame. The frame paints `--frame-gradient` with the frame texture (`brand/agentic-hub/frame-texture.webp`, covering the frame, `mix-blend-mode: multiply`, `--frame-texture-opacity`, 30 % Light) over it, and holds two rounded cards 12 px apart: the rail and the canvas card. The root sets `user-select: none`, and no content area overrides it (inputs and textareas stay editable). Copying chat text is done through the Copy buttons. Open question: whether message bodies and SQL should be selectable.
+- **Rail** (64 px collapsed, 240 px expanded as the drawer; `rail` fill, radius 12, `transition: width` 150 ms): see 1.3.
+- **Canvas card** (`canvas` fill, radius 12, 16 px padding): the banner on top, then a row with the page card and the details panel, 12 px apart.
+- **Banner** (`role="banner"`, min height 136 px, radius 12, `shadow-subtle`, 32 px horizontal padding, window-drag region): three layers, bottom to top: `--banner-base` fill, the banner image (`brand/agentic-hub/banner.webp`, covering the banner, `--banner-image-opacity`, 20 % Light) and `--banner-shade` (a transparent-to-black bottom fade); then the `<h1>` "Agentic Hub", 40 px / 48 px line height, semibold, 0.2 px letter spacing, white. No other content. Screen titles inside the page are `<h2>`.
+- **Page card** (the `<main>` landmark; `card`, flex 1, min width 0, clipped, positioned for the floating expand button): in the Settings area, the Settings list pane on the left (1.3); then a column with the optional page header and the main content.
+  - **Page header** (Sessions area only; 32 px horizontal / 16 px vertical padding, bottom `border`), always shown there, whether a chat, the New-session composer or the empty Sessions view is open. Left: `brand/agentic-hub/page-header-icon.svg` (36 px) and the title `h2` (24 px / 32 px line height, light weight, 0.12 px tracking, `fg-strong`, one line truncated): the session name while a chat is open, "New conversation" in the composer, otherwise "Sessions". While a chat is open, under the title: the *session context* — a database icon, the uppercase micro-label "Datasource" (`fg-muted`), then one `chip chip-neutral` per datasource used by the session (name, plus kind label; tooltip = the datasource summary). While loading: a 96 x 16 px pulsing `surface-muted` placeholder. If none can be resolved: the muted text "Unavailable". Right: a `btn btn-secondary` **Start New Conversation** (square-pen icon, 20 px; opens the New-session composer) and, while the details panel is closed, the *Expand right panel* `btn-icon`.
+  - **Other areas** (Datasets, Agents, Knowledge, Settings) have no page header. While the details panel is closed, the *Expand right panel* `btn-icon` floats at the page card's top-right (8 px inset).
+- **Details panel** (`card`): see 1.5. Closed on launch, so the first screen is the page card alone.
 - The home state of the main column (no area chosen) is an empty area with a decorative empty composer box at the bottom (max width 860, height 112, `card`). It is a placeholder with no behaviour.
 
-### 1.3 Rail and list panes
+### 1.3 Rail and drawer
 
-**Rail** (`aside aria-label="Navigation rail"`), top to bottom, centred:
+**Rail** (`aside aria-label="Navigation rail"`; `rail` fill, 8 px side padding, 12 px gap between groups). Collapsed it is 64 px wide and shows icons only; the menu button widens it to the 240 px **drawer**, which adds labels and the Sessions list. Not remembered between launches (app-shell R47); the drawer is collapsed on launch. Top to bottom:
 
-1. A 44 px window-drag spacer that clears the macOS traffic lights.
-2. `nav aria-label="Workspace navigation"`: four 44 x 44 icon buttons, radius 12, 20 px `accent` icons, each with `title` and `aria-label` equal to its name, 8 px apart:
+1. A 24 px window-drag spacer that clears the macOS traffic lights.
+2. The **menu button** (menu icon, 24 px, `icon` colour, 48 px tall, radius 8): `aria-label` and title "Expand navigation" while collapsed, "Collapse navigation" while expanded, with `aria-expanded`.
+3. The logo: a 28 px circle filled with `--logo-gradient` holding `brand/agentic-hub/logo-mark.svg`; when expanded, beside it the label "Agentic Hub" (14 px semibold `fg-strong`).
+4. `nav aria-label="Workspace navigation"`: four 48 px tall buttons (radius 8, 8 px apart), each a 20 px `accent` icon and, when expanded, a 14 px medium `fg` label. Each has `title` and `aria-label` equal to its name:
    - **Datasets** (flask icon), **Agents** (bot icon), **Knowledge** (book-open icon), **Sessions** (folder-kanban icon).
    - Hover: `surface-muted` fill. Current area: `surface-selected` fill and `aria-current="page"`.
-3. Flexible spacer.
-4. Bottom group, 8 px apart:
-   - The account avatar: a 36 px `primary` circle with the letter "D" in `on-primary`, titled "Demo User". A static placeholder with no menu.
-   - **Open system logs** (scroll-text icon; `aria-label="Open system logs"`, title "System logs and diagnostics"), with a red count badge (`danger` palette, top-right of the icon) showing the number of error + warning log entries, capped at "99+", hidden at zero. Opens the system logs panel (3.2).
-   - **Settings** (gear icon, title and `aria-label` "Settings"), marked current while the Settings area is shown.
+5. When expanded, the **Sessions list** (app-shell R46, R48), below a `border` rule and filling the free height (scrolls); when collapsed, a flexible spacer. See below.
+6. Bottom group, 12 px apart (centred while collapsed):
+   - The account avatar: a 32 px `primary` circle with the letter "D" in `on-primary` (14 px semibold), titled "Demo User". A static placeholder with no menu.
+   - **System logs** (scroll-text icon, `icon` colour; `aria-label="Open system logs"`, title "System logs and diagnostics"; label "System logs" when expanded), with a red count badge (`danger` palette, top-right of the icon) showing the number of error + warning log entries, capped at "99+", hidden at zero. Opens the system logs panel (3.2).
+   - **Settings** (gear icon, `icon` colour, title and `aria-label` "Settings"; label "Settings" when expanded), marked current (`surface-selected`, `aria-current="page"`) while the Settings area is shown.
+   - A 1 px `border` divider.
+   - **LenAI**: the LenAI mark (`brand/agentic-hub/lenai-mark.svg`, 38 px tile) above the "Powered by LenAI" artwork (`powered-by-lenai.svg`, `alt="Powered by LenAI"`), centred, tooltip "Powered by LenAI". Both are inverted in the Dark theme (`.lenai-art`).
 
-**Sessions area list pane** (280 px, right `border`, `surface`) — see app-shell R46, and 4.7 and 4.12 for its content:
+Choosing **Sessions** opens the drawer (the list is part of it); choosing another area leaves the drawer as it is.
 
-- Header row: "Sessions" (14 px semibold `fg-strong`), then a *New conversation* `btn-icon` ("+", title "New conversation") and a *Collapse session list* `btn-icon` (panel-left-close icon). While collapsed, the pane is gone and the page header starts with an *Expand session list* `btn-icon` (panel-left-open icon). Not remembered between launches (app-shell R47).
+**Sessions list** (in the drawer) — see app-shell R46, R48, and 4.7 for the composer it opens:
+
+- Header row: the heading "Sessions" (13 px semibold `fg-strong`) and a *New conversation* `btn-icon` ("+", title "New conversation"; `surface-selected` while the New-session composer is open).
 - `nav aria-label="Sessions navigation"`: one row per session, newest activity first as returned by the backend. Each row is a `list-row` (`list-row-selected` while that session is open) with the session name truncated to one line (13 px medium `fg`), its dataset names beneath (12 px `fg-muted`, joined with " · ", one line), and a "more" (vertical ellipsis) `btn-icon`, `aria-label="Options for <session name>"`, title "Session options", visible on hover and while its menu is open. The menu (`menu`, width 176) has one item, **Delete session** (trash icon, `on-danger-soft` text). Both the row and its menu are disabled while a delete is in flight. Row `data-testid="session-<id>"`.
 - An empty list shows "No sessions yet." (12 px `fg-muted`).
 - Delete asks a native confirm: `Delete “<name>”?` newline newline `This permanently removes its conversation, agent memory, and workspace files.`
 
-**Settings area list pane** (260 px, right `border`, `surface`):
+**Settings area list pane** (260 px, right `border`, inside the page card, left of the settings form):
 
 1. A "Search settings" `field` (search icon, placeholder `Search settings`, a `⌘ F` key hint in `fg-muted`). A non-functional placeholder today.
 2. `nav aria-label="Settings navigation"` with five `list-row` buttons (icon + label; `list-row-selected` and `aria-current="page"` for the chosen one). Choosing one shows its form beside the pane; choosing the chosen one again deselects it and the content shows "Choose a settings section." (`fg-muted`, centred).
@@ -95,27 +106,27 @@ The main column renders exactly one of these views, held in a single "main view"
 | `agents` | rail **Agents** | Agents | Agents list (4.4) | Entity details |
 | `agent-detail` | clicking an agent row | Agents | Agent detail (4.5) | Eval trace (4.6) |
 | `knowledge` | rail **Knowledge** | Knowledge | Knowledge list (4.8) | Entity details |
-| `sessions` | rail **Sessions**; deleting the open session | Sessions | list pane + "Select a session or start a new conversation." | Entity details |
-| `conversation-new` | **New conversation** in the Sessions list pane | Sessions | list pane + New-session composer (4.7) | Entity details |
-| `session-chat` | a session row, or creating a session | Sessions | list pane + Session chat (4.12) | Interactive visual panel (4.13) |
-| Settings area, section `datasources` / `llm` / `testing-data` / `developer` / `appearance` | rail **Settings**, then a section | Settings | list pane + the matching form (4.9-4.12, 4.16), centred column | Entity details |
+| `sessions` | rail **Sessions** (also opens the drawer); deleting the open session | Sessions | page header ("Sessions") + "Select a session or start a new conversation."; list in the drawer | Entity details |
+| `conversation-new` | **New conversation** in the drawer, or **Start New Conversation** in the page header | Sessions | page header ("New conversation") + New-session composer (4.7); list in the drawer | Entity details |
+| `session-chat` | a session row in the drawer, or creating a session | Sessions | page header (session name + datasource context) + Session chat (4.12); list in the drawer | Interactive visual panel (4.13) |
+| Settings area, section `datasources` / `llm` / `testing-data` / `developer` / `appearance` | rail **Settings**, then a section | Settings | Settings list pane + the matching form (4.9-4.12, 4.16), centred column | Entity details |
 
 - Content views (everything except the chat) sit in a vertically scrolling, horizontally centred column with 32 px horizontal / 40 px vertical padding and a max width of 960 px (settings forms: 560 px for datasources, testing data, developer and appearance, 480 px for LLM, 24 px horizontal padding).
 - Opening a session loads the datasources used by that session (for the header) and its most recent visual (for the right panel).
-- Selecting a catalog/schema/entity in the catalog browser, generating or viewing a visual, always re-opens the right panel if it was collapsed.
+- Selecting a catalog/schema/entity in the catalog browser, selecting an eval question, generating or viewing a visual, always opens the right panel if it was closed.
 - A transient failure to load the session list is retried up to 12 times (200 ms steps, capped at 1 s) before the toast "Could not load sessions" is shown; already-loaded sessions are kept.
 
 ### 1.5 Right panel
 
 - `aria-label="Details panel"`; default width **572 px**, minimum **360**, maximum **960** (also never wider than the viewport minus 240 px reserved for the main column, and never below 360).
-- The panel is a `card` beside the page card. Header (48 px): the *Collapse right panel* `btn-icon` (panel-right icon, title "Collapse right panel") right-aligned. When collapsed, the page card's header shows *Expand right panel* (same icon).
+- The panel is a `card` beside the page card. It is **closed on launch**. It opens on demand: when a dataset element (catalog, schema, entity) is selected, when an eval question is selected, when a visual is generated or viewed, or through the *Expand right panel* button (same icon as the collapse button): in the Sessions area's page header next to *Start New Conversation*, elsewhere floating at the page card's top-right (1.2). Header (48 px): the *Collapse right panel* `btn-icon` (panel-right icon, title "Collapse right panel") right-aligned.
 - **Resize handle**: a 10 px wide invisible hit zone straddling the panel's left edge (5 px outside), `cursor: col-resize`, showing a 2 px `border-selected` line on hover, keyboard focus or while dragging. Exposed as `role="separator"`, `aria-orientation="vertical"`, `aria-label="Resize right panel"`, `aria-valuemin` (360), `aria-valuemax` (current maximum), `aria-valuenow` (current width), `tabindex=0`, title "Drag to resize · Double-click to reset".
   - Drag: primary button, pointer capture; moving left widens the panel (`width = startWidth + startX - pointerX`), clamped to the min/max. While dragging the whole window forces `col-resize` and embedded frames stop capturing the pointer.
   - Keyboard (when the handle has focus): Left arrow widens by 24 px, Right arrow narrows by 24 px, Home = minimum (360), End = current maximum (960 on a wide window). Each key press persists.
   - Double-click: reset to 572 and persist.
   - Window resize re-clamps the width.
   - Persistence: `localStorage` key `questions-to-insights:right-panel-width`, value the integer pixel width as a string; written when a drag ends and on every keyboard/reset change; read once at start-up (non-numeric or missing -> 572; out-of-range values clamped).
-- Right panel bodies by main view: see the table in 1.4. Collapse state is session-only (not persisted); the panel is open on every launch.
+- Right panel bodies by main view: see the table in 1.4. Open/closed state is session-only (not persisted); only the width is remembered.
 
 ## 2. Loading, empty, error and confirmation conventions
 
@@ -145,7 +156,7 @@ Status comes from the desktop bridge's `backend-status` events (see [api.md](api
 
 ### 3.2 System logs panel
 
-Modal overlay opened from the sidebar footer button; behaviour and redaction rules in [../capabilities/diagnostics/spec.md](../capabilities/diagnostics/spec.md).
+Modal overlay opened from the rail's System logs button; behaviour and redaction rules in [../capabilities/diagnostics/spec.md](../capabilities/diagnostics/spec.md).
 
 - A full-screen scrim (`fg-strong` at 40 % opacity, 1 px blur; the scrim itself is a button `aria-label="Close system logs"`) and a dialog (`role="dialog"`, `aria-modal="true"`, `aria-labelledby` the title) positioned 24 px from left/right/bottom and 64 px from the top, centred, max width 1100, `surface` fill, `border` border, radius 16, `shadow-2xl`.
 - **Header**: 32 px rounded `surface-muted` tile with the scroll-text icon (`fg`); `h2` "System logs" (14 px medium `fg-strong`) with a dot + "LIVE" (10 px, `on-success-soft`); caption "Desktop, interface, backend, and AI runtime diagnostics" (11 px, `fg-muted`). Right: **Refresh logs** icon button (`aria-label`/title "Refresh logs", the icon spins while loading), **Export** button (`primary` fill, `on-primary` text, 12 px medium; download icon, label "Export", becomes "Exporting…" and disables while running), **Close system logs** icon button (X, title "Close").
@@ -177,7 +188,7 @@ The "HALO BI" wordmark as a vector drawn with 13-unit strokes in `currentColor` 
 
 ### 3.5 Markdown rendering
 
-Assistant text, report bodies and visual cards render Markdown (GitHub-flavoured: tables, task lists, strikethrough; single newlines become line breaks) to HTML, then sanitise it with an HTML allow-list sanitiser (standard HTML profile; scripts, event-handler attributes and unknown protocols are stripped) before it is inserted into the page. Raw HTML in the source is therefore never executed. Styling ("prose-dark", name kept; it follows the theme): 13 px, line height 1.75, `fg` text; strong `fg-strong`/600; links `primary` underlined; h1 16, h2 15, h3/h4 14 px (600, `fg-strong`, 1.1 em top margin); lists 1.4 em indent (disc / decimal); inline code 12 px monospace on `surface-muted`, radius 4; code blocks on `surface-muted` with a `border` border, radius 8, horizontal scroll; blockquote with a 2 px `border` left rule and `fg-muted` text; tables full width, 12 px, `border` cell borders, header `surface-muted` fill and `fg` 600 text, zebra rows `surface-muted`, no wrapping (horizontal scroll). The visual frame inside the sandboxed iframe uses its own stylesheet; see [../capabilities/visuals/spec.md](../capabilities/visuals/spec.md).
+Assistant text, report bodies and visual cards render Markdown (GitHub-flavoured: tables, task lists, strikethrough; single newlines become line breaks) to HTML, then sanitise it with an HTML allow-list sanitiser (standard HTML profile; scripts, event-handler attributes and unknown protocols are stripped) before it is inserted into the page. Raw HTML in the source is therefore never executed. Styling ("prose-dark", name kept; it follows the theme): 16 px, line height 24 px, `fg` text; strong `fg-strong`/600; links `primary` underlined; h1 16, h2 15, h3/h4 14 px (600, `fg-strong`, 1.1 em top margin); lists 1.4 em indent (disc / decimal); inline code 12 px monospace on `surface-muted`, radius 4; code blocks on `surface-muted` with a `border` border, radius 8, horizontal scroll; blockquote with a 2 px `border` left rule and `fg-muted` text; tables full width, 14 px / 20 px, a 1 px `border` frame with radius 12 and `border` cell rules, 48 px rows with 16 px cell padding, header `surface-muted` fill and `fg` 500 text, first column 600, no wrapping. The visual frame inside the sandboxed iframe uses its own stylesheet; see [../capabilities/visuals/spec.md](../capabilities/visuals/spec.md).
 
 ### 3.6 Shared component classes
 
@@ -185,14 +196,14 @@ Pieces every restyled screen uses, defined as Tailwind v4 `@utility` classes in 
 
 | Class | Looks like | Use for |
 |---|---|---|
-| `btn` + `btn-primary` | Pill (radius full, 6 × 16 px padding, 13 px medium), `primary` fill, `on-primary` text, `primary-hover` on hover | The main action of a view ("Approve and publish", "Save", "Create") |
+| `btn` + `btn-primary` | Pill (radius full, 40 px tall, 16 px horizontal padding, 14 px medium, 0.07 px letter spacing), `primary` fill, `on-primary` text, `primary-hover` on hover | The main action of a view ("Approve and publish", "Save", "Create") |
 | `btn` + `btn-secondary` | Pill, `primary-soft` fill, `on-primary-soft` text | Secondary actions ("Request changes", "Test connection") |
-| `btn` + `btn-outline` | Pill, `surface` fill, `border-strong` border, `primary` text | Tertiary actions ("Reject", "Export") |
+| `btn` + `btn-outline` | Pill, `surface` fill, `border-strong` border, `on-primary-soft` text | Tertiary actions ("Reject", "Export") |
 | `btn` + `btn-ghost` | Pill, no fill, `fg-muted` text, `surface-muted` on hover | Low-emphasis actions in toolbars |
 | `btn` + `btn-danger` | Pill, `danger-soft` fill, `on-danger-soft` text | Destructive actions ("Delete") |
 | `btn-icon` | Square 6 px padding, radius 8, `fg-muted` icon, `surface-muted` on hover | Icon-only controls; always with a title or `aria-label` |
 | `chip` + `chip-warning` / `chip-info` / `chip-neutral` / `chip-success` / `chip-danger` | Pill, 12 px medium, the matching `*-soft` fill and `on-*-soft` text | Statuses ("Pending review", "Restricted", "Read", "Passed", "Failed") |
-| `card` | `surface` fill, 1 px `border`, radius `card` (16), `card` shadow | Page cards, panels, form groups |
+| `card` | `surface` fill, 1 px `border`, radius `card` (12), `card` shadow | Page cards, panels, form groups |
 | `card-muted` | `surface-muted` fill, 1 px `border-strong`, radius 12 | Summary boxes inside a card |
 | `list-row` / `list-row-selected` | Full-width row, 1 px `border`, radius 12, `surface-muted` on hover; selected: `surface-selected` fill, `border-selected` border | Master-detail lists (sessions, settings sections, agents) |
 | `filter-pill` / `filter-pill-active` | Pill, `border-strong` border, `primary` text; active: `surface-selected` fill, `border-selected` border | Filters and counts ("Pending review · 2") |
@@ -201,11 +212,13 @@ Pieces every restyled screen uses, defined as Tailwind v4 `@utility` classes in 
 | `section-header` / `section-title` | Row with a bottom `border`, 16 × 28 px padding; title 22 px normal `fg-strong` | Page headers ("Datasets" + its actions) |
 | `menu` / `menu-item` | `surface` popover, 1 px `border`, radius 12, soft shadow; items 13 px `fg`, `surface-muted` on hover | Dropdowns and context menus |
 
+Page titles use 24 px / 32 px line height, light weight, `fg-strong` (the Figma `heading/medium-alt` style); see the page header in 1.2.
+
 Focus: buttons show a 2 px `focus` outline offset by 2 px on keyboard focus. Disabled buttons and fields drop to 55–60 % opacity with a not-allowed cursor.
 
 ## 4. Screens and panels
 
-Page titles on content views are `h2` elements, sans, 26 px, normal weight, `fg-strong` (agent detail too). Settings form titles are `h2` sans 15 px semibold `fg-strong` with a 12 px `fg-muted` subtitle. Buttons are the shared `btn` pills (3.6) unless stated.
+Page titles on content views are `h2` elements, sans, 24 px / 32 px, light weight, `fg-strong` (agent detail too; same style as the Sessions page header, 1.2). Settings form titles are `h2` sans 15 px semibold `fg-strong` with a 12 px `fg-muted` subtitle. Buttons are the shared `btn` pills (3.6) unless stated.
 
 ### 4.1 Home (empty)
 
@@ -243,7 +256,7 @@ Header "Agents", subtitle "The agents registered in the harness." and a (placeho
 
 Capability: [agents-evals](../capabilities/agents-evals/spec.md); agent catalogue in [agents.md](agents.md).
 
-- A **All agents** `btn btn-ghost` back button (arrow-left icon), then a header: 44 px `surface-muted` bot tile, page title `h2` (agent name, 26 px) with the agent id in monospace beneath, and the description (max 70 ch). States: `Loading agent…`, error inline.
+- A **All agents** `btn btn-ghost` back button (arrow-left icon), then a header: 44 px `surface-muted` bot tile, page title `h2` (agent name, 24 px light) with the agent id in monospace beneath, and the description (max 70 ch). States: `Loading agent…`, error inline.
 - Underlined tab strip (bottom `border`; the active tab has a `border-selected` underline and `fg-strong` text, others `fg-muted`), each tab icon + label, `data-testid="agent-tab-<id>"`: **Prompt template** (`prompt`, scroll-text), **Tools (<n>)** (`tools`, wrench), **Memory** (`memory`, brain), **Model** (`model`, cpu), **Evals** (`evals`, gauge). Default tab Prompt template.
   - *Prompt template*: the agent's static instructions in a monospace pre block on `surface-muted`; if none: "This agent builds its prompt at request time, so there is no static template to show."
   - *Tools*: a `surface-muted` box per tool (wrench, monospace name, description, input names as chips); none: "This agent runs in a single step with no tools."
@@ -263,7 +276,7 @@ Shown while an agent detail is open. With nothing selected: "Select a question i
 
 Capability: [sessions-chat](../capabilities/sessions-chat/spec.md).
 
-A centred `card` (max width 920, padding 16) with a **Session name** `field` (14 px; label `field-label`; placeholder `My new session`), then a controls row: a model chip (sparkle icon + the configured model id in `fg`, or `No model configured` in `fg-muted` when none), a **Reasoning effort** dropdown button (title "Reasoning effort", signal icon + `low` / `medium` / `high` capitalised in `fg-muted`, a `menu` of the three values opening upward, the current one `fg-strong` semibold; choosing one saves it immediately: toast `<server message>`), and the `btn btn-primary` **Create** button (corner-down-left icon; shows `Creating…`; disabled until a name is typed and at least one dataset selected; title "Name the session and select at least one dataset"). Below the card: caption "Select at least one dataset for this session" and a list of dataset `list-row`s (36 px `surface-muted` tile with a workflow icon in `accent`, name, "<n> entities"; a selected row is `list-row-selected` with a trailing circle-check in `primary`). Empty: `No datasets yet — create one in Datasets first.` On success: toast with the server message, the session list reloads and the new session opens (4.12).
+A centred `card` (radius 12, max width 920, padding 16) with a **Session name** `field` (14 px; label `field-label`; placeholder `My new session`), then a controls row: a model chip (sparkle icon + the configured model id in `fg`, or `No model configured` in `fg-muted` when none), a **Reasoning effort** dropdown button (title "Reasoning effort", signal icon + `low` / `medium` / `high` capitalised in `fg-muted`, a `menu` of the three values opening upward, the current one `fg-strong` semibold; choosing one saves it immediately: toast `<server message>`), and the `btn btn-primary` **Create** button (corner-down-left icon; shows `Creating…`; disabled until a name is typed and at least one dataset selected; title "Name the session and select at least one dataset"). Below the card: caption "Select at least one dataset for this session" and a list of dataset `list-row`s (36 px `surface-muted` tile with a workflow icon in `accent`, name, "<n> entities"; a selected row is `list-row-selected` with a trailing circle-check in `primary`). Empty: `No datasets yet — create one in Datasets first.` On success: toast with the server message, the session list reloads and the new session opens (4.12).
 
 ### 4.8 Knowledge list and form
 
@@ -320,13 +333,13 @@ Capability: [developer-settings](../capabilities/developer-settings/spec.md).
 
 Capability: [sessions-chat](../capabilities/sessions-chat/spec.md); deep analysis in [deep-analysis](../capabilities/deep-analysis/spec.md); verification badges in [verified-queries](../capabilities/verified-queries/spec.md).
 
-Layout: a scrolling transcript column (max width 860, centred, 20 px gaps) above a composer pinned at the bottom; a **history navigator** at the top-right of the transcript (one small tick per user message; hovering opens a 300 px list of the user messages, clicking one scrolls to it).
+Layout (Figma "Chat" frame): the chat fills the page card under the page header (1.2), which carries the session name and datasource context. A scrolling, full-width transcript (padding 32 px left/right, 32 px top, 24 px bottom; 24 px gaps between items) above the composer pinned at the bottom (32 px side padding, 24 px bottom); a **history navigator** at the top-right of the transcript (one small tick per user message; hovering opens a 300 px list of the user messages, clicking one scrolls to it).
 
 Transcript items, in order of appearance:
 
 - **Welcome card** (a `card`; empty session only, never persisted nor sent to the model; `data-testid="session-welcome"`): sparkle icon + "<session name> is ready", the text "Ask a question in plain English and I will query your data, explain how I got the answer and turn it into an interactive visual." plus "Connected to <datasets>." and "Try one of these:" with three starter chips (pills, `surface-muted` fill, `border`, `fg` text): "What data is available here? Summarise the tables and the key metrics.", "What stands out in this data right now? Give me the headline numbers.", "How have the main metrics moved over the last 12 months?" Clicking a chip fills the composer; the user sends it.
-- **User message**: right-aligned bubble (max 70 % width, `surface-muted` fill, `fg` text, radius 12, 13 px, pre-wrapped) with a hover **Copy message** icon button (title "Copy message"; toast `Copied to clipboard`, `Copy failed`).
-- **Assistant answer**: the Markdown body (3.5) set directly on the transcript background, not in a card, then optional blocks: **How I worked this out (<n> step(s))** collapsible numbered list (each step's rationale plus a muted outcome: "<n> rows" or "failed — <error>"); **Knowledge in context (<n>)** collapsible (kind label, title, dataset or "global", body, footnote "Curated knowledge the assistant was given before answering. Edit it under Knowledge; disabled snippets are never included."); an interpretation caption (info icon + one line, tooltip = full text); **Data entities** chips; **Data used (<n> query/queries)** collapsible with, per call, the tool label ("<tool> — <n> row(s)" or "<tool> — failed"), "(truncated)" flag, a **Copy SQL** icon button (`aria-label="Copy SQL"`), the rationale, any warnings (`on-warning-soft` triangle), the SQL in a pre block and an error line. Then the action row: a **Verified** badge (badge-check icon, title "Matches an approved query"), a cross-check badge (**Cross-checked** `success-soft` / `on-success-soft` with shield-check, **Cross-check differs** `warning-soft` / `on-warning-soft` with shield-alert, **Cross-check failed** `surface-muted` / `fg-muted` with shield-off; tooltip = the check's note), copy, and — only when the answer has data — thumbs-up (`aria-label="Save as verified query"`, title "Save as verified query" -> "Saved as verified query" once on) and thumbs-down (`aria-label="Mark answer as wrong"`, title "Mark answer as wrong" -> "Marked as wrong"; both `aria-pressed`, filled when active in `success-soft` / `on-success-soft` (up) or `danger-soft` / `on-danger-soft` (down), hidden until row hover otherwise). Below: **Generate interactive visuals** (sparkles icon; `Generating interactive visuals…` with spinner; disabled while sending or generating) when the answer has text.
+- **User message**: right-aligned bubble (max width 800, `surface-selected` fill, radius 12 with a 2 px top-right corner, 12 px padding, 12 px gap) holding a 32 px `primary` circle avatar with the letter "D" (14 px semibold `on-primary`) and the text (16 px / 24 px, `fg`, pre-wrapped, right-aligned), with a hover **Copy message** icon button to its left (title "Copy message"; toast `Copied to clipboard`, `Copy failed`).
+- **Assistant answer**: a row (max width 800) with the 24 px sparks mark (`brand/agentic-hub/sparks.svg`) at the top-left and, beside it, a column (16 px gap) holding the Markdown body (3.5; 16 px / 24 px prose, tables per the Figma table: 1 px `border` frame with radius 12, 48 px rows, 16 px cell padding, 14 px text, `surface-muted` 500-weight header, first column semibold) set directly on the transcript background, not in a card, then optional blocks: **How I worked this out (<n> step(s))** collapsible numbered list (each step's rationale plus a muted outcome: "<n> rows" or "failed — <error>"); **Knowledge in context (<n>)** collapsible (kind label, title, dataset or "global", body, footnote "Curated knowledge the assistant was given before answering. Edit it under Knowledge; disabled snippets are never included."); an interpretation caption (info icon + one line, tooltip = full text); **Data entities** chips; **Data used (<n> query/queries)** collapsible styled as the Figma "Data Sources" row (`surface` fill, 1 px `border`, radius 8; summary 16 px / 24 px `on-primary-soft` text with the 24 px `data-sources.svg` icon at the left and a chevron at the right that flips when open) with, per call, the tool label ("<tool> — <n> row(s)" or "<tool> — failed"), "(truncated)" flag, a **Copy SQL** icon button (`aria-label="Copy SQL"`), the rationale, any warnings (`on-warning-soft` triangle), the SQL in a pre block and an error line. Then the action row: a **Verified** badge (badge-check icon, title "Matches an approved query"), a cross-check badge (**Cross-checked** `success-soft` / `on-success-soft` with shield-check, **Cross-check differs** `warning-soft` / `on-warning-soft` with shield-alert, **Cross-check failed** `surface-muted` / `fg-muted` with shield-off; tooltip = the check's note), copy, and — only when the answer has data — thumbs-up (`aria-label="Save as verified query"`, title "Save as verified query" -> "Saved as verified query" once on) and thumbs-down (`aria-label="Mark answer as wrong"`, title "Mark answer as wrong" -> "Marked as wrong"; both `aria-pressed`, filled when active in `success-soft` / `on-success-soft` (up) or `danger-soft` / `on-danger-soft` (down), otherwise `icon`-coloured and always visible). The copy and feedback buttons are round 16 px icon buttons (`surface-muted` on hover). Below: **Generate interactive visuals** (sparkles icon; `Generating interactive visuals…` with spinner; disabled while sending or generating) when the answer has text.
 - **Error bubble**: `danger-soft` card (`on-danger-soft` border at 30 % opacity, radius 16), triangle-alert icon (`on-danger-soft`), "Something went wrong" + the message, and on the latest turn a **Retry** button (`aria-label="Retry"`). Client-only, never persisted.
 - **Clarification card**: the question, numbered option buttons (`surface-muted` number badge, label, description), then — on the latest message — **Something else** (toggles to **Cancel custom answer**; reveals an input `aria-label="Custom answer"`, placeholder `Type your own answer…`, plus a **Send custom answer** arrow-up button) and **Skip**. The same reasoning / knowledge / data blocks as an answer appear under it. Older clarifications are disabled.
 - **Deep-analysis report card** (a `card`): telescope tile, report title, "Deep analysis · <n> angle(s) investigated", a **Download report** button (title "Download the full report (.md)", label "Report"), then the Markdown executive summary.
@@ -334,7 +347,7 @@ Transcript items, in order of appearance:
 - **Thinking block** (while a turn streams): brain icon + "Thinking" with the live reasoning tail (last 90 characters), one card per tool call (wrench, name, then a spinner -> "<n> rows" or "failed", the rationale as it forms, the input), the streamed answer so far (Markdown), and a spinner with elapsed seconds (`<s>.<d>s`, 100 ms ticks).
 - **Deep-analysis status card** (a `card`; `aria-label="Deep analysis status"`): while a background job runs, a spinner + "Deep analysis running — <progress>" and the question; on failure "Deep analysis failed — <progress>" with a **Dismiss deep analysis** X button. The chat stays usable.
 
-Composer (a `card`, max width 860, padding 12): a 2-row textarea (placeholder `Ask a follow-up question…`; Enter sends, Shift+Enter inserts a newline), left mode toggles **Careful** (shield-check icon, `aria-label="Careful mode"`, `aria-pressed`; pill, `primary-soft` fill with `on-primary-soft` text and a `border-selected` border when on, otherwise `surface-muted` and `fg-muted`) and **Deep analysis** (telescope icon, `aria-label="Deep analysis"`, disabled with an empty draft or while a job runs), each with an instant styled tooltip (`data-tip`, shown on hover and keyboard focus; text in section 7), and the right-aligned **Send message** (a `primary` fill / `on-primary` icon button with radius 6; arrow-up; `aria-label`/title "Send message"; disabled for an empty draft) which becomes **Stop response** (square icon) while a turn streams. When the user clicks a data mark in a visual, a pill chip row `aria-label="Follow-up suggestions"` appears above the composer: "Suggested questions — click to ask:", **Drill into "<label>"**, **Why "<label>"?** (both prefill the composer, never send) and a **Dismiss follow-ups** X.
+Composer (full width of the chat column; `surface` fill, 1 px `border-strong` border, radius 8, `shadow-input`, padding 12 px vertical / 8 px horizontal): a 2-row textarea (14 px, placeholder `Ask a follow-up question…` in `placeholder`; Enter sends, Shift+Enter inserts a newline), left mode toggles **Careful** (shield-check icon, `aria-label="Careful mode"`, `aria-pressed`; pill, `primary-soft` fill with `on-primary-soft` text and a `border-selected` border when on, otherwise `surface-muted` and `fg-muted`) and **Deep analysis** (telescope icon, `aria-label="Deep analysis"`, disabled with an empty draft or while a job runs), each with an instant styled tooltip (`data-tip`, shown on hover and keyboard focus; text in section 7), and the right-aligned **Send message** (a round `accent` 20 px arrow-up icon button, `surface-muted` on hover; `aria-label`/title "Send message"; disabled for an empty draft) which becomes **Stop response** (square icon, same style) while a turn streams. Below the composer, a centred 12 px `fg-muted` disclaimer (copy in section 7). When the user clicks a data mark in a visual, a pill chip row `aria-label="Follow-up suggestions"` appears above the composer: "Suggested questions — click to ask:", **Drill into "<label>"**, **Why "<label>"?** (both prefill the composer, never send) and a **Dismiss follow-ups** X.
 
 Toasts used here: `Deep analysis report ready`, `Report downloaded`, `Report download failed`, `Could not start deep analysis`, `Could not save feedback`, `Feedback saved`, plus server messages.
 
@@ -388,39 +401,47 @@ Each token is a CSS custom property set on the root element per theme and expose
 
 | Token | Light | Dark | Used for |
 |---|---|---|---|
-| `canvas` | `#f3f6fa` | `#0b1626` | Page background, window background |
-| `rail` | `#eef2f8` | `#0d1a2c` | Navigation rail |
+| `canvas` | `rgb(255 255 255 / 0.95)` | `rgb(11 22 38 / 0.95)` | Canvas card behind the banner and page card (translucent so the frame shows through) |
+| `rail` | `rgb(255 255 255 / 0.95)` | `rgb(13 26 44 / 0.95)` | Navigation rail and drawer |
 | `surface` | `#ffffff` | `#12233a` | Cards, panels, forms |
-| `surface-muted` | `#f4f8fd` | `#16294a` | Summary and info boxes inside a card |
-| `surface-selected` | `#eaf2fe` | `#1a3357` | Selected list row |
-| `border` | `#dbe3ee` | `#24384f` | Card and input borders, dividers |
-| `border-strong` | `#b9cbe6` | `#34507a` | Info-box borders, outline buttons |
-| `border-selected` | `#2f5fbf` | `#5b8fe8` | Selected row or option outline |
-| `fg` | `#1f2a37` | `#d5dfec` | Body text |
-| `fg-strong` | `#0d2747` | `#eef4fc` | Headings, titles |
-| `fg-muted` | `#5a6b80` | `#93a6bf` | Secondary text, captions, labels |
-| `primary` | `#0d3fa6` | `#5b95ff` | Primary buttons, links, outline-button text |
-| `primary-hover` | `#0a3388` | `#78a8ff` | Primary button hover |
+| `surface-muted` | `#f8fafc` | `#16294a` | Summary and info boxes inside a card |
+| `surface-selected` | `rgb(11 65 173 / 0.1)` | `#1a3357` | Selected list row, user message bubble |
+| `border` | `rgb(0 0 0 / 0.1)` | `#24384f` | Card and input borders, dividers |
+| `border-strong` | `#bbd2ff` | `#34507a` | Info-box borders, outline buttons, composer border |
+| `border-selected` | `#0b41ad` | `#5b8fe8` | Selected row or option outline |
+| `fg` | `rgb(0 0 0 / 0.85)` | `#d5dfec` | Body text |
+| `fg-strong` | `#001f52` | `#eef4fc` | Headings, titles |
+| `fg-muted` | `rgb(0 0 0 / 0.6)` | `#93a6bf` | Secondary text, captions, labels |
+| `placeholder` | `rgb(0 0 0 / 0.55)` | `#93a6bf` | Input placeholder text |
+| `primary` | `#0b41ad` | `#5b95ff` | Primary buttons, links |
+| `primary-hover` | `#08348c` | `#78a8ff` | Primary button hover |
 | `on-primary` | `#ffffff` | `#061426` | Text on `primary` |
-| `primary-soft` | `#e6effc` | `#1b345a` | Secondary buttons, selected options |
-| `on-primary-soft` | `#0d3fa6` | `#b7d0ff` | Text on `primary-soft` |
-| `accent` | `#2b7de0` | `#6aa8ff` | Decorative icons |
-| `focus` | `#2f6fe0` | `#7fb0ff` | Focus rings |
+| `primary-soft` | `#eaf1ff` | `#1b345a` | Secondary buttons, selected options |
+| `on-primary-soft` | `#08348c` | `#b7d0ff` | Text on `primary-soft`, outline-button text |
+| `accent` | `#0b41ad` | `#6aa8ff` | Decorative and action icons (rail, send) |
+| `icon` | `#565656` | `#a9b8cc` | Neutral icons (menu, system logs, Settings, message actions) |
+| `focus` | `#0b41ad` | `#7fb0ff` | Focus rings |
 | `warning-soft` / `on-warning-soft` | `#fbe5d4` / `#92400e` | `#45290f` / `#ffcf9e` | "Pending" and restricted chips |
 | `info-soft` / `on-info-soft` | `#e2ebfa` / `#1d4ea8` | `#1a3561` / `#b3cdff` | Informational chips |
 | `neutral-soft` / `on-neutral-soft` | `#edf0f4` / `#374151` | `#243246` / `#c9d4e3` | Neutral chips |
 | `success-soft` / `on-success-soft` | `#dcf3e8` / `#116444` | `#123d2e` / `#8fe0bb` | Success chips and messages |
 | `danger-soft` / `on-danger-soft` | `#fde3e3` / `#a2232a` | `#4a1c22` / `#ffb3b8` | Error chips and messages |
 
-Gradients (CSS custom properties, not colour utilities): `--frame-gradient` (Light `linear-gradient(135deg, #0b5f8f 0%, #1d8fca 55%, #3cb7ee 100%)`, Dark `linear-gradient(135deg, #031421 0%, #08304d 60%, #0c4a73 100%)`) for the window frame, and `--banner-gradient` (Light `linear-gradient(180deg, #05698f 0%, #04506f 55%, #02354a 100%)`, Dark `linear-gradient(180deg, #0b3a5c 0%, #061f33 100%)`) for the banner, whose text is white in both themes.
+The Light values come from the "Insight Agent AI" Figma variables (named in comments in `tokens.css`, e.g. `background/brand/strong-rest`); the Dark values are derived from the same hues.
 
-Theme-independent: radii `card` 16 px and `frame` 20 px (plus the existing scale in 6.3); shadow `card` (Light `0 1px 2px rgb(13 39 71 / 0.06)`, Dark `0 1px 2px rgb(0 0 0 / 0.4)`).
+Gradients and imagery (CSS custom properties, not colour utilities):
 
-Contrast: every text token meets WCAG AA (4.5:1) on the surfaces it is used on in both themes (lowest pair 4.86:1 Light, 5.42:1 Dark), and `accent` meets 3:1 for icons.
+- `--frame-gradient` (Light `linear-gradient(39.31deg, #004c6c 8.15%, #0077a0 43.41%, #3bb8f0 96.3%)`, Dark `linear-gradient(39.31deg, #021c28 8.15%, #003a52 43.41%, #0b5f86 96.3%)`) paints the window frame; the frame texture image is laid over it with multiply blending at `--frame-texture-opacity` (Light 0.3, Dark 0.25).
+- The banner is `--banner-base` (Light `#006286`, Dark `#003a52`), the banner image at `--banner-image-opacity` (Light 0.2, Dark 0.15), and `--banner-shade` (Light `linear-gradient(180deg, transparent 38.79%, rgb(0 0 0 / 0.5) 100%)`, Dark the same with 0.6); its text is white in both themes.
+- `--logo-gradient` (`linear-gradient(45deg, #009de0 0%, #008ac0 60%, #0077a0 100%)`, both themes) fills the rail's logo circle.
+
+Theme-independent: radii `card` and `frame` 12 px (plus the existing scale in 6.3); shadows `card` (Light `0 2px 7.5px rgb(11 65 173 / 0.15)`, Dark `0 2px 7.5px rgb(0 0 0 / 0.35)`), `subtle` (banner; Light `0 2px 15px rgb(11 65 173 / 0.15)`, Dark `0 2px 15px rgb(0 0 0 / 0.35)`) and `input` (chat composer; Light `1px 1px 10px rgb(11 65 173 / 0.3), 0 2px 5px rgb(11 65 173 / 0.1)`, Dark `1px 1px 10px rgb(91 149 255 / 0.25), 0 2px 5px rgb(0 0 0 / 0.3)`).
+
+Contrast: `fg-muted` is `rgba(0,0,0,.6)` (Figma's `.55` is kept only for `placeholder`); every text token pair meets WCAG AA (4.5:1) on the surfaces it is used on in both themes, and `accent` and `icon` meet 3:1 for icons.
 
 ### 6.1 Colour usage
 
-- Page background `canvas`; navigation rail `rail`; cards, panels and dialogs `surface`; boxes nested in a card `surface-muted`; selected rows `surface-selected` with a `border-selected` outline.
+- Canvas card `canvas` over the textured frame; navigation rail `rail`; cards, panels and dialogs `surface`; boxes nested in a card `surface-muted`; selected rows `surface-selected` with a `border-selected` outline.
 - Text `fg` (body), `fg-strong` (titles, emphasis), `fg-muted` (secondary, captions, icons); text on a `primary` fill is `on-primary`.
 - Status pairs: success `success-soft`/`on-success-soft`, error `danger-soft`/`on-danger-soft`, warning `warning-soft`/`on-warning-soft`, info and AI `info-soft`/`on-info-soft`, neutral `neutral-soft`/`on-neutral-soft`. Decorative icons `accent`. Entity types: catalog `accent`, schema `on-warning-soft`, entity `on-success-soft`.
 - Scrollbars (webkit): 8 px, transparent track, thumb `fg-muted` at 40 % (65 % on hover), fully rounded, transparent corner.
@@ -429,20 +450,20 @@ Contrast: every text token meets WCAG AA (4.5:1) on the surfaces it is used on i
 
 - Sans (all UI): **Noto Sans**, bundled with the app (weights 400, 500, 600, 700; Latin subset; no network fetch), falling back to the system stack `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif`, antialiased.
 - Monospace (identifiers, SQL, logs, expressions, kbd-like chips): Tailwind default mono stack (`ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace`).
-- Base text size 13 px. Scale in use (px): 8 and 9 (badges), 10 (micro labels, chips), 11 (labels, captions), 12 (secondary body, dense lists), **13 (default)**, 14 (list-row titles, composer name input, dialog title), 15 (settings titles, section headings), 26 (page titles, normal weight, `h2`). Weights: normal, medium (500) for buttons/labels, semibold (600) for titles. Uppercase micro-headings use ~0.08 em / "wider" tracking at 10-11 px. Chat prose line height 1.75; UI line heights follow Tailwind defaults (13 px -> 20 px).
+- Base text size 13 px. Scale in use (px): 8 and 9 (badges), 10 (micro labels, chips), 11 (labels, captions), 12 (secondary body, dense lists), **13 (default)**, 14 (buttons, rail labels, list-row titles, composer name input, dialog title), 16 (chat prose and user messages), 15 (settings titles, section headings), 24 (page titles, light weight, `h2`), 40 (banner `h1`, semibold). Weights: light (300) for page titles, normal, medium (500) for buttons/labels, semibold (600) for titles. Uppercase micro-headings use ~0.08 em / "wider" tracking at 10-11 px. Chat prose line height 1.75; UI line heights follow Tailwind defaults (13 px -> 20 px).
 
 ### 6.3 Spacing, radii, shadows, motion
 
-- Spacing: Tailwind 4 px base grid. Recurrent: sidebar width 296, top bar 48, tab strip 40, banner 28, window-drag padding for traffic lights 76, content column padding 32/40 (pages) or 24/40 (settings), chat column max width 860, composer card max width 920 (new session) / 860 (chat), page column max width 960.
-- Radii: 4 (code chips), 6 (inputs, small buttons; `rounded-md`), 8 (`rounded-lg`: page buttons, rows, menus), 12 (`rounded-xl`: cards, toasts, icon tiles 40 px), 16 (`rounded-2xl`: composers, dialogs, chat cards), full (badges, avatar, pills).
-- Shadows: `shadow-xl` on popovers/toasts, `shadow-lg` on the new-session card, `shadow-2xl` on the logs dialog. Otherwise flat: depth comes from surface greys and borders.
+- Spacing: Tailwind 4 px base grid. Recurrent: rail 64 / drawer 240, banner 136, backend status strip 28, window-drag spacer for traffic lights 24 (rail) / 76 (`.pl-traffic-lights`), content column padding 32/40 (pages) or 24/40 (settings), chat column max width 860, composer card max width 920 (new session) / 860 (chat), page column max width 960.
+- Radii: 4 (code chips), 6 (inputs, small buttons; `rounded-md`), 8 (`rounded-lg`: page buttons, rows, menus), 12 (`rounded-xl`: cards, frame, canvas card, banner, rail, toasts, icon tiles 40 px, user bubble), 16 (`rounded-2xl`: composers, dialogs, chat cards), full (badges, avatar, pills).
+- Shadows: `shadow-card` on cards, `shadow-subtle` on the banner, `shadow-input` on the chat composer, `shadow-xl` on popovers/toasts, `shadow-lg` on the new-session card, `shadow-2xl` on the logs dialog. Otherwise flat: depth comes from surface greys and borders.
 - Motion: spinners (`animate-spin`) on loaders; 120 ms opacity/transform transitions on the composer tooltips and the resize-handle line; chevrons rotate 90 degrees on expand; a pulsing skeleton for the top-bar datasource loading state. Tooltips' motion is disabled under `prefers-reduced-motion: reduce`.
 
 ### 6.4 Icons
 
-[lucide](https://lucide.dev) outline icons only (line width 2 by default, `strokeWidth` 2.5 on the Stop square), sized 11-19 px (15 px in nav rows, 14 px in buttons, 16 px for toolbar/panel toggles). Names used, by area:
+Brand imagery comes from the Figma assets in `frontend/public/brand/agentic-hub/`: `frame-texture.webp`, `banner.webp`, `logo-mark.svg`, `lenai-mark.svg`, `powered-by-lenai.svg`, `sparks.svg` (assistant mark), `page-header-icon.svg` and `data-sources.svg`; the folder also keeps the other exported Figma icons (`rail-*.svg`, `new-conversation.svg`, `send.svg`, `copy.svg`, `download.svg`, `thumb-up.svg`, `thumb-down.svg`, `chevron-down.svg`), unused, for reference. Every generic icon stays [lucide](https://lucide.dev) outline (line width 2 by default, `strokeWidth` 2.5 on the Stop square), sized 11-19 px (15 px in nav rows, 14 px in buttons, 16 px for toolbar/panel toggles). Names used, by area:
 
-- Shell / nav: `sun-moon` (Appearance), `monitor` / `sun` / `moon` (theme options), `panel-left`, `panel-right`, `arrow-left`, `chevron-down`, `chevron-right`, `plus`, `search`, `ellipsis-vertical`, `trash-2`, `scroll-text`, `settings`, `flask-conical` (Datasets), `bot` (Agents, LLM config, agent tiles), `book-open` (Knowledge), `folder-kanban` (Sessions), `database` (Datasource config, catalogs, session datasource context), `test-tube` (Testing data), `workflow` (dataset tiles), `corner-down-left` (Create).
+- Shell / nav: `sun-moon` (Appearance), `monitor` / `sun` / `moon` (theme options), `panel-right`, `arrow-left`, `chevron-down`, `chevron-right`, `plus`, `search`, `ellipsis-vertical`, `trash-2`, `scroll-text`, `settings`, `menu` (drawer toggle), `square-pen` (Start New Conversation), `flask-conical` (Datasets), `bot` (Agents, LLM config, agent tiles), `book-open` (Knowledge), `folder-kanban` (Sessions), `database` (Datasource config, catalogs, session datasource context), `test-tube` (Testing data), `workflow` (dataset tiles), `corner-down-left` (Create).
 - Status / feedback: `loader-2` (spinners), `circle-check`, `circle-x`, `circle-alert`, `circle-minus`, `info`, `x`, `triangle-alert`, `lock`, `refresh-cw`, `download`, `copy`, `play`, `plug-zap`, `check`.
 - Data / catalog: `folder-tree` (schema), `table-2` (entity), `layout-grid`, `gauge` (metrics, checks, Evals tab), `list-checks` (question sets), `pencil`, `wand-2` (generate suggestions), `sparkle` / `sparkles` (AI, visuals, suggestions), `file-text` / `tag` / `filter` (knowledge kinds), `wrench` (tools), `brain` (Thinking, Memory tab), `cpu` (Model tab), `clock`.
 - Chat / visuals: `arrow-up` (send), `square` (stop), `thumbs-up`, `thumbs-down`, `badge-check` (Verified), `shield-check` / `shield-alert` / `shield-off` (cross-check, Careful mode), `telescope` (deep analysis), `bar-chart-3`, `history` (versions), `sliders-horizontal` (Tailor), `gallery-vertical-end` (saved visuals), `signal` (reasoning effort).
@@ -466,8 +487,9 @@ Strings below are asserted by the Playwright suite or are user-facing contracts.
 |---|---|
 | Page heading (banner `h1`) | `Agentic Hub` |
 | Window / document title | `Agentic Hub` (OS app name stays `Halo BI Assistant`) |
-| Rail buttons (title and aria-label) | `Datasets`, `Agents`, `Knowledge`, `Sessions`, `Settings`; `Open system logs` (title `System logs and diagnostics`); avatar title `Demo User` |
-| Sessions area | `Sessions`, `New conversation`, `Collapse session list`, `Expand session list`, `Session options`, `Options for <session name>`, `No sessions yet.`, `Select a session or start a new conversation.` |
+| Rail buttons (title and aria-label) | `Expand navigation` / `Collapse navigation` (menu button), `Datasets`, `Agents`, `Knowledge`, `Sessions`, `Settings`; `Open system logs` (title `System logs and diagnostics`); avatar title `Demo User` |
+| Drawer labels | `Agentic Hub`, `System logs`, `Settings`; LenAI mark `Powered by LenAI` |
+| Sessions area | `Sessions`, `New conversation`, `Start New Conversation`, `Session options`, `Options for <session name>`, `No sessions yet.`, `Select a session or start a new conversation.` |
 | Shell aria-labels | `Navigation rail`, `Workspace navigation`, `Sessions navigation`, `Settings navigation`, `Details panel` |
 | Settings | `Search settings`, `Datasource Configuration`, `LLM Configuration`, `Testing Data`, `Developer`, `Appearance`, `Choose a settings section.`, footer `Agentic Hub v<version>` |
 | Appearance | `Appearance`, `Choose how the app looks. System follows your operating system's light or dark setting.`, group `Theme`, options `System`, `Light`, `Dark` |
@@ -487,7 +509,7 @@ Strings below are asserted by the Playwright suite or are user-facing contracts.
 | Knowledge | `New snippet`, `Generate suggestions`, `Pending suggestions`, `Accept`, `Reject`, `No knowledge yet`, `Create snippet`, `Save changes` |
 | Metrics | `New metric`, `Create metric`, `Save changes` |
 | New session | `Session name`, placeholder `My new session`, `Create`, `No model configured`, `Reasoning effort`, `Select at least one dataset for this session`, `No datasets yet — create one in Datasets first.` |
-| Chat composer | placeholder `Ask a follow-up question…`, `Send message`, `Stop response`, `Careful`, `Careful mode`, `Deep analysis`, `Type your own answer…`, `Custom answer`, `Send custom answer`, `Something else`, `Cancel custom answer`, `Skip`, `Retry`, `Something went wrong`, `Thinking` |
+| Chat composer | placeholder `Ask a follow-up question…`, disclaimer `Responses are generated by AI (Powered by LenAI) and may be inaccurate or incomplete. Please verify against source data before sharing.`, `Send message`, `Stop response`, `Careful`, `Careful mode`, `Deep analysis`, `Type your own answer…`, `Custom answer`, `Send custom answer`, `Something else`, `Cancel custom answer`, `Skip`, `Retry`, `Something went wrong`, `Thinking` |
 | Chat answer | `Generate interactive visuals`, `Generating interactive visuals…`, `Verified`, `Cross-checked`, `Cross-check differs`, `Cross-check failed`, `Save as verified query`, `Mark answer as wrong`, `Copy message`, `Copy SQL`, `Data used (<n> query)` / `(<n> queries)`, `Data entities`, `How I worked this out (<n> step(s))`, `Knowledge in context (<n>)`, `Download report`, `View`, `Created` / `Updated` / `Reverted` + `Version <n>` |
 | Chat tooltips (Careful on / off) | on: `Careful mode is on: every answer is re-checked by an independent query and gets an agree/disagree badge. Slower per answer.`; off: `Careful mode: re-check each answer with an independent query and show an agree/disagree badge. Slower per answer.` |
 | Chat tooltips (Deep analysis) | idle: `Deep analysis: investigate the typed question from several angles in the background and deliver a downloadable report. Takes a few minutes; chat stays usable.`; running: `A deep analysis is already running for this session.` |
@@ -510,14 +532,14 @@ Targets and the automated gate: [../product/non-functional.md](../product/non-fu
 
 ## 9. Visual baseline
 
-`frontend/e2e/layout-accessibility.spec.ts` captures the shell at the default window size (1440×900) as `application-shell`: `application-shell-web-linux.png` for the web target and `application-shell-darwin.png` for the desktop target. Each is updated only with `npm run test:e2e:update` / `test:e2e:desktop:update` when a visual change is intended. The web baseline shows the Agentic Hub shell in the light theme (the E2E browser reports a light OS theme): the gradient frame, the rail with Datasets, Agents, Knowledge and Sessions at the top and the avatar, system logs and Settings at the bottom, the "Agentic Hub" banner, the page card with the placeholder composer, and the details panel at 572 px with "Select a catalog, schema or entity to see its details." The desktop baseline predates the Agentic Hub shell and is regenerated only on a requested desktop run.
+`frontend/e2e/layout-accessibility.spec.ts` captures the shell at the default window size (1440×900) as `application-shell`: `application-shell-web-linux.png` for the web target and `application-shell-darwin.png` for the desktop target. Each is updated only with `npm run test:e2e:update` / `test:e2e:desktop:update` when a visual change is intended. The web baseline shows the Figma-aligned Agentic Hub shell in the light theme (the E2E browser reports a light OS theme) on the home view: the textured teal gradient frame, the collapsed 64 px rail (menu button, logo, Datasets, Agents, Knowledge and Sessions icons; avatar, system logs, Settings, divider and LenAI mark at the bottom), the 136 px "Agentic Hub" banner with its image, and the page card with the placeholder composer. The drawer is collapsed and the details panel is closed. The desktop baseline predates the Agentic Hub shell and is regenerated only on a requested desktop run.
 
 
 ## 10. Open questions and gaps
 
 - Account row ("Demo User", avatar "D"), settings search and its `⌘ F` hint, the Datasets list filter pills (Pinned / Yours / Shared with you), the search icons on the Datasets and Agents lists, the layout-grid button and the empty 40 px tab strip are non-functional placeholders; intended behaviour is undefined.
 - The rail's 44 px window-drag spacer that clears the macOS traffic lights is applied on every platform; on Windows/Linux (no inset controls) it leaves a small empty space at the top of the rail. Intended cross-platform title-bar treatment is undefined.
-- Right-panel collapse state and sidebar collapse state are not persisted; only the panel width is.
+- Right-panel open state and drawer state are not persisted; only the panel width is.
 - No Escape / focus-trap handling for the system logs dialog and the popover menus; toasts lack live-region roles (see 8).
 - Date formatting uses the user's locale for times (`toLocaleTimeString`) but fixed `en-US` for dataset month headings; there is no localisation layer and all copy is English.
 - The visual frame's own typography/colours (inside the sandboxed iframe) are specified with the visuals capability, not here.

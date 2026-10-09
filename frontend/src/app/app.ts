@@ -21,8 +21,8 @@ import {
   FlaskConical,
   FolderKanban,
   PanelLeft,
-  PanelLeftClose,
-  PanelLeftOpen,
+  Menu,
+  SquarePen,
   PanelRight,
   Plus,
   Search,
@@ -56,6 +56,7 @@ import { KnowledgeList } from './features/knowledge/components/knowledge-list/kn
 import { CatalogBrowser } from './features/datasets/components/catalog-browser/catalog-browser';
 import { EntityDetails } from './features/datasets/components/entity-details/entity-details';
 import { DatasetSelectionService } from './features/datasets/services/dataset-selection.service';
+import { EvalSelectionService } from './features/agents/services/eval-selection.service';
 import { BackendStatusBanner } from './shared/components/backend-status-banner/backend-status-banner';
 import { ToastContainer } from './shared/components/toast-container/toast-container';
 import { SystemLogsPanel } from './shared/components/system-logs-panel/system-logs-panel';
@@ -168,8 +169,8 @@ export class App {
   readonly FlaskConical = FlaskConical;
   readonly FolderKanban = FolderKanban;
   readonly PanelLeft = PanelLeft;
-  readonly PanelLeftClose = PanelLeftClose;
-  readonly PanelLeftOpen = PanelLeftOpen;
+  readonly Menu = Menu;
+  readonly SquarePen = SquarePen;
   readonly PanelRight = PanelRight;
   readonly Plus = Plus;
   readonly Search = Search;
@@ -185,7 +186,8 @@ export class App {
 
   readonly settingsOpen = signal(false);
   readonly settingsSection = signal<SettingsSection>(null);
-  readonly rightPanelOpen = signal(true);
+  /** Closed on launch; opens on demand (app-shell R2, R10). */
+  readonly rightPanelOpen = signal(false);
   readonly rightPanelResizing = signal(false);
   readonly rightPanelWidth = signal(this.readRightPanelWidth());
   readonly rightPanelMinWidth = MIN_RIGHT_PANEL_WIDTH;
@@ -211,6 +213,7 @@ export class App {
   }
 
   private readonly datasetSelection = inject(DatasetSelectionService);
+  private readonly evalSelection = inject(EvalSelectionService);
   private readonly llmApi = inject(LlmApiService);
 
   private readonly toast = inject(ToastService);
@@ -750,6 +753,10 @@ export class App {
     effect(() => {
       if (this.datasetSelection.selection()) this.rightPanelOpen.set(true);
     });
+    // Selecting an eval question reveals how it ran (R10).
+    effect(() => {
+      if (this.evalSelection.selection()) this.rightPanelOpen.set(true);
+    });
     this.loadSessions();
   }
 
@@ -777,11 +784,18 @@ export class App {
     { key: 'appearance', label: 'Appearance', icon: SunMoon },
   ];
 
-  /** Sessions list pane; session-only, like the details panel (app-shell R47). */
-  readonly sessionListOpen = signal(true);
-  readonly sessionListCollapsed = computed(
-    () => this.currentArea() === 'sessions' && !this.sessionListOpen(),
-  );
+  /** The rail's drawer with labels and the session list (app-shell R48). */
+  readonly navExpanded = signal(false);
+
+  /** Title of the Sessions area's page header (app-shell R49). */
+  readonly pageTitle = computed(() => {
+    if (this.mainView() === 'session-chat') {
+      return this.activeSession()?.name ?? 'Sessions';
+    }
+    return this.mainView() === 'conversation-new'
+      ? 'New conversation'
+      : 'Sessions';
+  });
 
   /** The page header shows the session's datasources while a chat is open. */
   readonly showSessionContext = computed(
@@ -802,6 +816,8 @@ export class App {
     }
     const alreadyShown = this.currentArea() === area;
     this.settingsOpen.set(false);
+    // The session list lives in the drawer, so Sessions opens it (R3).
+    if (area === 'sessions') this.navExpanded.set(true);
     if (!alreadyShown) this.mainView.set(AREA_ROOT[area]);
   }
 

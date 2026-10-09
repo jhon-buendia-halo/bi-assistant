@@ -1,12 +1,14 @@
 # BA-141 — Agentic Hub Look and Feel
 
-- **Jira:** [BA-141](https://halo-powered.atlassian.net/browse/BA-141) · **Roadmap:** Milestone 1.8 · **Status:** Confirmed
+- **Jira:** [BA-141](https://halo-powered.atlassian.net/browse/BA-141) · **Roadmap:** Milestone 1.8 · **Status:** Confirmed (re-confirmed 2026-10-09 for the Figma alignment, BA-158)
 
 ## Goal
 
 The app looks like the Agentic Hub design. A blue gradient frame surrounds the window. Content sits in white rounded cards under an "Agentic Hub" banner. A narrow icon rail handles navigation. Buttons are pill-shaped and statuses are coloured chips. Users can pick a light theme, matching the mockup, or a navy dark theme derived from it. By default the app follows the OS. Only the look changes: every feature works as it does today.
 
-The reference mockup is a "Publish requests" screen. It is used only for its visual language. The publish-review workflow it shows is not part of this epic.
+The first reference was a "Publish requests" mockup, used only for its visual language. Its publish-review workflow is not part of this epic.
+
+The authoritative reference is now the **Insight Agent AI Figma** "Chat" frame (file `qW41gtAbnTcqoqpEKajqZX`, node `2154:31891`, received 2026-10-09). Its variables (colours, type, radii, shadows) and assets define the light theme and the shell, and its chat defines the session chat. The app keeps the name "Agentic Hub". Screens the Figma doesn't show follow its visual language.
 
 ## Scope
 
@@ -14,8 +16,17 @@ The reference mockup is a "Publish requests" screen. It is used only for its vis
 - **App shell.**
   - A gradient frame around the window.
   - An "Agentic Hub" banner header.
-  - A narrow icon rail replaces the 296 px sidebar. It holds Datasets, Agents, Knowledge, Sessions and Settings at the top, and the account avatar and system logs at the bottom. The mockup's "Powered by LenAI" footer is left out.
+  - A narrow icon rail replaces the 296 px sidebar. It holds Datasets, Agents, Knowledge, Sessions and Settings at the top, and the account avatar and system logs at the bottom.
   - The title bar and traffic-light spacing are reworked for the rail.
+- **Figma alignment ([BA-158](https://halo-powered.atlassian.net/browse/BA-158)).**
+  - The light palette, shadows and type follow the Figma variables (brand `#0B41AD`, text `rgba(0,0,0,.85)`, headings `#001F52`), and the navy dark set is re-derived from them.
+  - The frame uses the Figma gradient with its texture image.
+  - The rail is 64 px and translucent white, with a hamburger, the logo, the avatar, system logs, Settings and the LenAI footer.
+  - The hamburger expands the rail into a 240 px drawer with labels and the session list, replacing the session pane.
+  - The banner is 136 px with the Figma background image. Each page has a header with an icon, a light 24 px title and a soft action button (for example "Start New Conversation").
+  - The chat is full width: user bubbles with an avatar, answers with the sparks mark, bordered tables, a "Data Sources" row, feedback actions, the prompt input and the AI disclaimer ("Powered by LenAI").
+  - The visual panel opens only when a visual is generated or opened.
+  - Generic UI icons stay `lucide-angular`. Brand imagery (texture, banner, logo, LenAI marks, sparks) uses the Figma assets.
 - **Rename.** "Halo BI Assistant" becomes "Agentic Hub" in the window title, the document title and the settings footer.
 - **Sessions master-detail.** The session list moves out of the sidebar into a list pane beside the content. New, select and delete work as today.
 - **Shared components.** Pill buttons in primary, secondary and tertiary variants, status chips, cards, list rows, filter pills and section headers with icons.
@@ -26,9 +37,9 @@ The reference mockup is a "Publish requests" screen. It is used only for its vis
 
 - The "Publish requests" agent review and approval workflow, and any other new feature.
 - Behaviour, endpoint or data changes, apart from the theme preference.
-- Copy changes other than the rename.
+- Copy changes other than the rename, the chat's AI disclaimer and the Figma's "Start New Conversation" label.
 - Renaming `productName`, the installers, the Dock or menu-bar name, or the data directory. `productName` stays "Halo BI Assistant" (decided 2026-10-09).
-- A "Powered by LenAI" footer, which the mockup shows.
+- The Figma's "Insight Agent AI" name, and its logout button (the app has no sign-in).
 
 ## Stories
 
@@ -41,6 +52,7 @@ The reference mockup is a "Publish requests" screen. It is used only for its vis
 | [BA-146](https://halo-powered.atlassian.net/browse/BA-146) | Sessions master-detail list pane | 1.8.5 |
 | [BA-147](https://halo-powered.atlassian.net/browse/BA-147) | Restyle feature screens: datasets, catalog, agents, knowledge and settings | 1.8.6 |
 | [BA-148](https://halo-powered.atlassian.net/browse/BA-148) | Restyle chat, visual panel, system logs and toasts; regenerate the visual baseline | 1.8.7 |
+| [BA-158](https://halo-powered.atlassian.net/browse/BA-158) | Align with the Insight Agent AI Figma design | 1.8.8 |
 
 All stories are built on one branch, `feat/BA-141-agentic-hub-look-and-feel`, and ship as one PR.
 
@@ -63,7 +75,8 @@ All stories are built on one branch, `feat/BA-141-agentic-hub-look-and-feel`, an
 ## Acceptance
 
 - Every screen renders in Light and Dark with no hardcoded colour values left in components. Switching the Appearance setting, or the OS theme while on System, restyles the open app without a reload.
-- The shell matches the mockup's structure: gradient frame, "Agentic Hub" banner, icon rail, and sessions in a list pane.
+- The shell and the session chat match the Insight Agent AI Figma frame, with a side-by-side screenshot in the evidence: the textured gradient frame, the 64 px rail with the LenAI footer, the 136 px image banner reading "Agentic Hub", the page header, the full-width chat and the prompt with its disclaimer.
+- The hamburger opens the 240 px drawer with the session list. The visual panel appears only once a visual is generated or opened.
 - The window and document titles read "Agentic Hub". The data directory and installers are unchanged.
 - Every existing E2E flow passes. The only test changes are for moved navigation (the rail, the sessions pane) and the rename.
 - The axe scan is clean and visual baselines are committed for both themes.

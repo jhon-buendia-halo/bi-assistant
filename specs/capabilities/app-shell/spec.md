@@ -16,10 +16,10 @@ Capability-local vocabulary, used only for UI words:
 ## Rules
 
 Layout and navigation
-- R1. The system SHALL present, left to right: the navigation rail, then a column holding the "Agentic Hub" banner above the page and the details panel side by side. Everything sits inside a gradient frame.
-- R2. On launch the details panel SHALL be expanded and the main view SHALL be home (an empty main area). The details panel's collapse state SHALL NOT be remembered between launches. The rail is always visible.
-- R3. The rail SHALL offer, under "Workspace navigation", one icon button each, named by its title and accessible name: **Datasets**, **Agents**, **Knowledge** and **Sessions**. Choosing one SHALL show that area and mark its button current (`aria-current="page"`). Choosing the area that is already shown SHALL keep it. Agents stays current while an agent's detail is open, Datasets while the dataset editor is open, and Sessions while the composer or a chat is open.
-- R4. The bottom of the rail SHALL offer the account avatar (a static "D", titled "Demo User"), **Open system logs** (tooltip "System logs and diagnostics") and **Settings**. The system-logs button SHALL show a red badge with the number of error and warning entries currently retained when that number is above zero, capped at "99+".
+- R1. The system SHALL present, left to right: the navigation rail (expandable into a drawer, R48), then a column holding the "Agentic Hub" banner above the page and, when open, the details panel. Everything sits inside a textured gradient frame.
+- R2. On launch the navigation drawer SHALL be collapsed, the details panel SHALL be collapsed and the main view SHALL be home. Neither the drawer nor the details panel state SHALL be remembered between launches.
+- R3. The rail SHALL offer, under "Workspace navigation", one icon button each, named by its title and accessible name: **Datasets**, **Agents**, **Knowledge** and **Sessions**. Choosing one SHALL show that area and mark its button current (`aria-current="page"`). Choosing the area that is already shown SHALL keep it. Agents stays current while an agent's detail is open, Datasets while the dataset editor is open, and Sessions while the composer or a chat is open. Choosing **Sessions** SHALL also expand the drawer, so the session list is visible.
+- R4. Below the workspace items the rail SHALL offer the account avatar (a static "D", titled "Demo User"), **Open system logs** (tooltip "System logs and diagnostics") and **Settings**, then a divider and the LenAI mark with "Powered by LenAI". The system-logs button SHALL show a red badge with the number of error and warning entries currently retained when that number is above zero, capped at "99+".
 - R5. Choosing **Settings** on the rail SHALL show the Settings area: a list pane with "Settings navigation" offering five sections, **Datasource Configuration**, **LLM Configuration**, **Testing Data**, **Developer** ([../developer-settings/spec.md](../developer-settings/spec.md)) and **Appearance** (R39–R45), beside the chosen section's form. Choosing a section SHALL show it and mark it current; choosing the current section again SHALL deselect it and show the prompt "Choose a settings section." Choosing another rail area SHALL leave Settings; coming back SHALL show the section that was chosen.
 - R6. Removed in roadmap 1.8.3: the rail cannot be collapsed. (Previously: the Collapse sidebar and Expand sidebar controls.)
 - R7. The banner SHALL be the page's only level-one heading and SHALL read "Agentic Hub". Screen titles ("Datasets", "Agents", a settings section…) are level-two headings.
@@ -27,7 +27,7 @@ Layout and navigation
 
 Details panel: collapse and resize
 - R9. The system SHALL provide a **Collapse right panel** control inside the details panel. When collapsed, the panel and its resize separator SHALL be hidden and the top bar SHALL show an **Expand right panel** control at its right edge.
-- R10. The details panel SHALL open (if collapsed) whenever the user selects a dataset element for detail, opens or generates a visual, or switches the visual being shown.
+- R10. The details panel SHALL open (if collapsed) whenever the user selects a dataset element for detail, selects an eval question, opens or generates a visual, or switches the visual being shown. Otherwise it stays as the user left it.
 - R11. The details panel width SHALL default to 572 px and SHALL always lie between a minimum of 360 px and a maximum of 960 px, as whole pixels.
 - R12. The maximum SHALL additionally be limited to the viewport width minus 240 px (the minimum main-content width), but SHALL never fall below the 360 px minimum. The system SHALL re-apply this limit whenever the window is resized; a resize SHALL NOT change the remembered width.
 - R13. The details panel SHALL have a vertical separator on its left edge, labelled **Resize right panel**, focusable, exposing its current, minimum and maximum width as value-now, value-min and value-max. Its tooltip SHALL read "Drag to resize · Double-click to reset".
@@ -60,8 +60,10 @@ App identity and version
 - R34. The desktop window SHALL open at 1440 × 900, SHALL NOT shrink below 960 × 600, SHALL use the canvas colour of the operating system's theme as its background until the page reports its resolved theme (R44), and on macOS SHALL use an inset title bar so the sidebar header clears the window controls.
 
 Sessions area
-- R46. Choosing **Sessions** on the rail SHALL show a list pane with a **Sessions** heading, a **New conversation** (plus) button and, under "Sessions navigation", one row per existing session, newest activity first. With no session open the content shows "Select a session or start a new conversation." Selecting a row SHALL open that session's chat; **New conversation** SHALL open the new-session composer. Deleting the open session SHALL return to the Sessions area with nothing open. Each row SHALL show the session name and, beneath it, the names of its datasets. An empty list SHALL read "No sessions yet."
-- R47. The Sessions list pane SHALL offer **Collapse session list**. While it is collapsed, the page header SHALL offer **Expand session list**, which brings it back. The collapse state SHALL NOT be remembered between launches, and SHALL NOT close the open session.
+- R46. In the Sessions area the content shows the open session's chat, the new-session composer, or, with nothing open, "Select a session or start a new conversation." The session list lives in the expanded drawer (R48) under a **Sessions** heading with a **New conversation** (plus) button and, under "Sessions navigation", one row per session, newest activity first, showing the session name and, beneath it, its datasets. An empty list SHALL read "No sessions yet." Selecting a row SHALL open that session's chat; **New conversation** SHALL open the composer. Deleting the open session SHALL return to the Sessions area with nothing open.
+- R47. Removed in roadmap 1.8.8: the separate, collapsible session list pane is replaced by the drawer (R48).
+- R48. The rail SHALL start with a menu button, **Expand navigation** (when collapsed) / **Collapse navigation** (when expanded), exposing `aria-expanded`. Expanding widens the rail into a 240 px drawer that shows each item's label beside its icon and the Sessions list (R46). Collapsing returns to the 64 px icon rail. Expanding or collapsing SHALL NOT change the main view or close the open session.
+- R49. In the Sessions area the page SHALL start with a header: an icon, then the title — the open session's name, "New conversation" in the composer, or "Sessions" — with the session's datasource context under the title while a chat is open, and a **Start New Conversation** button that opens the composer.
 
 Appearance
 - R39. The Appearance section SHALL offer a single choice labelled **Theme** with three options: **System**, **Light** and **Dark**. Exactly one is selected. The default, when nothing has been chosen, is System.
@@ -75,7 +77,7 @@ Appearance
 Accessibility and visual stability
 - R35. The application shell, in its initial state, SHALL produce zero violations when scanned by an automated accessibility engine (axe-core, all default rules).
 - R36. The system SHALL expose labelled landmarks: "Navigation rail" (complementary), "Workspace navigation", "Sessions navigation" (in the Sessions area), "Settings navigation" (in the Settings area), and "Details panel".
-- R37. Every icon-only control in the shell SHALL have an accessible name (a title or label), including the rail buttons (Datasets, Agents, Knowledge, Sessions, Open system logs, Settings), Collapse right panel, Expand right panel, Collapse session list, Expand session list, New conversation and Session options.
+- R37. Every icon-only control in the shell SHALL have an accessible name (a title or label), including the rail buttons (Datasets, Agents, Knowledge, Sessions, Open system logs, Settings), Expand navigation, Collapse navigation, Collapse right panel, Expand right panel, New conversation and Session options.
 - R38. The application shell in its initial state SHALL match the approved `application-shell` screenshot baseline. The baseline SHALL be changed only deliberately, together with an intended visual change.
 
 ## Edge cases and errors
@@ -114,7 +116,8 @@ E2E: `frontend/e2e/layout-accessibility.spec.ts` for the Feature below (moved ve
 Feature: Layout and accessibility
 
   Scenario: Supports keyboard layout controls and persists the right-panel width
-    Given the "Resize right panel" separator is at its default width of 572
+    Given I click "Expand right panel"
+    And the "Resize right panel" separator is at its default width of 572
     When I focus the separator and press Home
     Then the width is 360
     And the width 360 is remembered for next time
@@ -159,13 +162,23 @@ Feature: Navigation rail
     Then I see "Sessions navigation" with a "New conversation" button
     And I see "Select a session or start a new conversation."
 
-  Scenario: Collapses and expands the session list
-    Given I am in the Sessions area
-    When I click "Collapse session list"
+  Scenario: Expands the rail into a drawer with labels and sessions
+    Given the navigation drawer is collapsed
+    When I click "Expand navigation"
+    Then I see the labels "Datasets", "Agents", "Knowledge" and "Sessions" next to their icons
+    And I see "Sessions navigation" with a "New conversation" button
+    When I click "Collapse navigation"
     Then "Sessions navigation" is hidden
-    And I see "Expand session list"
-    When I click "Expand session list"
-    Then I see "Sessions navigation" again
+    When I click "Sessions" on the rail
+    Then the drawer is expanded and I see "Sessions navigation"
+
+  Scenario: Shows the details panel only on demand
+    When the app opens
+    Then the details panel is hidden and I see "Expand right panel"
+    When I click "Expand right panel"
+    Then I see the "Details panel"
+    When I click "Collapse right panel"
+    Then the details panel is hidden
 
   Scenario: Opens Settings as an area with a section list
     When I click "Settings" on the rail
@@ -262,9 +275,9 @@ Feature: App shell behaviour not yet covered by Playwright
     And the failure also appears in the system logs as a "user-visible" error
 
   Scenario: Remembers nothing about collapse between launches
-    Given I collapsed the right panel
+    Given I expanded the details panel and the navigation drawer
     When I reopen the app
-    Then it is expanded again
+    Then both are collapsed again
 ```
 
 ## Acceptance

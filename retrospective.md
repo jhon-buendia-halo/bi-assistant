@@ -14,6 +14,26 @@ Entry template:
 
 ---
 
+## 2026-10-09 — 1.8.8 Align with the Insight Agent AI Figma design (BA-158)
+
+### What went well
+- The Figma MCP returned exact variables (colours, type, radii, shadows) and the assets. Tokens came straight from the design team's names, with the variable name in a comment next to each value.
+- The decisions that contradicted earlier answers (name, LenAI, layout) were settled in one four-question picker before any code, and the epic spec went back to Draft for re-confirmation, as the Epic gate requires.
+- A side-by-side image of the Figma frame and the running app made the review concrete. It caught the stretched sparks icon, the centred 860 px column and the all-blue rail icons, none of which a test would have flagged.
+- Contrast was checked with alpha compositing before shipping. It caught that Figma's own placeholder colour fails AA on the canvas and on selected rows.
+
+### What went wrong
+- The 1.8.1–1.8.7 work was built against a single image while the Figma file existed. A lot of the palette and layout work was then redone.
+- The Figma background photos were 8.4 MB of PNG. Without re-encoding they would have shipped in every installer and in the npm package.
+- My throwaway evidence script stalled twice for minutes, both times straight after a full suite run, while the same steps in the real suite passed. I never found the cause, because it passed on the reruns.
+- Moving the details panel to on demand broke an agents E2E and two unit tests that assumed it was open on launch. The step-6 impact analysis missed them, because I searched specs for shell selectors, not for the panel's default state.
+
+### What to do differently
+- At the start of any look-and-feel epic, ask whether a Figma file exists, and implement from its variables, not from screenshots.
+- Re-encode any raster asset over 500 KB (WebP at the same pixel size) before committing it under `public/`.
+- When changing a default state (open/closed, selected), grep the tests for the element's selectors (`Details panel`, `right-panel-resize-handle`), not just the specs, during the impact analysis.
+- Give evidence scripts a short `--timeout` (60 s) so a stall fails fast, and capture the error context before deleting the temp spec.
+
 ## 2026-10-09 — 1.8.5–1.8.7 Sessions pane and full restyle (BA-146, BA-147, BA-148)
 
 ### What went well

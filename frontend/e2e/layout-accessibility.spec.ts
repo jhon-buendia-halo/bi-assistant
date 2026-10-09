@@ -8,6 +8,7 @@ import {
 test('supports keyboard layout controls and persists the right-panel width', async ({
   page,
 }) => {
+  await page.getByTitle('Expand right panel').click();
   const separator = page.getByRole('separator', { name: 'Resize right panel' });
   await expect(separator).toHaveAttribute('aria-valuenow', '572');
 
