@@ -4,6 +4,14 @@ Running log of every meaningful change, newest first. See *Logging convention* a
 
 ## 2026-10-09
 
+### Added
+- **Agent Hub planned** (roadmap 1.9.1, [BA-151](https://halo-powered.atlassian.net/browse/BA-151), epic [BA-150](https://halo-powered.atlassian.net/browse/BA-150)):
+  - New epic spec [specs/epics/BA-150/spec.md](specs/epics/BA-150/spec.md), confirmed by the user. Users build agents on top of the assistant (instructions, datasets, starter questions, model override), test them as drafts, publish them, pin them and start chats from them. The Agents screen becomes a hub with the filters All, Pinned, Official and Mine, plus a System section for the helper agents.
+  - ADR-0008 in [specs/system/architecture.md](specs/system/architecture.md): a user agent is a stored configuration (a draft and a Live version) applied to the assistant on each turn, not an agent registered at runtime. So the read-only guard and the grounding checks always hold.
+  - Milestone 1.9 in [roadmap.md](roadmap.md), with one feature per story (1.9.1–1.9.5), and the epic row in [specs/README.md](specs/README.md).
+  - Decisions: teams, the org and sharing are out (the app stays local-first); the epic is inside the 1.0 Beta; the hub UI is built with today's styles and restyled later by BA-141.
+  - Evidence: [evidence/1.9.1/](evidence/1.9.1/).
+
 ### Changed
 - **One branch, one worktree and one PR per epic** (roadmap 0.2.5, [BA-149](https://halo-powered.atlassian.net/browse/BA-149), epic [BA-89](https://halo-powered.atlassian.net/browse/BA-89)):
   - CLAUDE.md *Branching convention*: all of an epic's stories are built on one branch, `<type>/<EPIC-ID>-<short-description>`, in one worktree, and ship as one PR that lists every story. Commits stay scoped to their story. The branch type is the highest-impact commit type in the epic.

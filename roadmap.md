@@ -183,6 +183,7 @@ Timeline (from the Jira timeline):
 | 1.5 Data Connectors | [BA-5](https://halo-powered.atlassian.net/browse/BA-5) | Sep 30 – Oct 23 |
 | 1.6 User Testing | [BA-10](https://halo-powered.atlassian.net/browse/BA-10) | Oct 19 – Oct 23 |
 | 1.7 Bug Fixes | [BA-11](https://halo-powered.atlassian.net/browse/BA-11) | Oct 26 – Oct 30 |
+| 1.9 Agent Hub | [BA-150](https://halo-powered.atlassian.net/browse/BA-150) | No dates in Jira yet; due with the beta |
 
 Evals come first in the order even though they run in parallel: every other milestone is measured against them.
 
@@ -429,6 +430,48 @@ Bugs found by the spec backfill (0.2.2), security first. Details: [evidence/0.2.
   - A Playwright scenario in `frontend/e2e/` launches Electron with a non-default `BACKEND_PORT` and asserts the shell loads data (new Gherkin scenario in [specs/capabilities/app-shell/spec.md](specs/capabilities/app-shell/spec.md)).
   - The `API_BASE_URL` sentence in CLAUDE.md ("Known gap") is updated.
 - **Notes:** moved from 0.1.1 on 2026-10-04 so the bug sits under a Jira epic (BA-11). Found while drawing the C4 container diagram ([specs/system/architecture.md](specs/system/architecture.md), Level 2). Related to ADR-0001.
+
+### Milestone 1.9 — Agent Hub ([BA-150](https://halo-powered.atlassian.net/browse/BA-150))
+
+Users build their own data agents on top of the assistant (instructions, datasets, starter questions, an optional model override), test them as drafts, publish them, pin them and start chats from them. The Agents screen becomes a searchable hub of cards with the filters All, Pinned, Official and Mine. The built-in helper agents move to a System section. Teams, the org and sharing are out: the app stays local-first. Builds on the look and feel of Milestone 1.8 ([BA-141](https://halo-powered.atlassian.net/browse/BA-141)). All stories are built on the branch `feat/BA-150-agent-hub` and ship as one PR. Epic spec: [specs/epics/BA-150/spec.md](specs/epics/BA-150/spec.md). Decision: ADR-0008 in [specs/system/architecture.md](specs/system/architecture.md).
+
+#### 1.9.1 — ADR, epic spec and roadmap ([BA-151](https://halo-powered.atlassian.net/browse/BA-151))  `✅ Done`
+- **Intent:** the Agent Hub is scoped and its runtime approach decided before any code, so each later story can be built and reviewed on its own.
+- **Scope:** ADR-0008 in `specs/system/architecture.md`; the BA-150 epic spec; this milestone with one feature per story; the epic row in `specs/README.md`.
+- **Out of scope:** product code, and capability, system or glossary spec changes for behaviour that hasn't shipped yet. Each later story updates those itself.
+- **Acceptance:**
+  - ADR-0008 records that user agents are stored configurations of the assistant (draft and Live versions, applied per turn), not runtime-registered agents.
+  - `specs/epics/BA-150/spec.md` exists and the user has confirmed it (`Status: Confirmed`).
+  - `python3 scripts/check-specs.py` passes.
+- **Notes:** mockup reference: the "Agentic Hub — Agents" screen shared on 2026-10-09. Decisions taken with the user on 2026-10-09: user-built agents plus built-ins; local only, with My team and Whole org deferred; the hub replaces the Agents list; inside the 1.0 Beta; agents configure instructions, datasets, starter questions and a model override; chats start from an agent; Draft → Publish → Live; helpers in a System section. ADR-0008, because BA-141's branch holds ADR-0007. The user confirmed the epic spec on 2026-10-09 and chose to build the hub screen and editor with today's styles (BA-141's 1.8.6 restyles them later). Evidence: [evidence/1.9.1/](evidence/1.9.1/).
+
+#### 1.9.2 — Agent definitions: storage and API ([BA-152](https://halo-powered.atlassian.net/browse/BA-152))  `📋 Planned`
+- **Intent:** user agents and pins are stored locally and can be managed through the API.
+- **Scope:** an `agents` collection with a `draft` and an optional `live` configuration (name, description, instructions, dataset names, starter questions, optional model or reasoning-effort override) and `pinned`; pin state for built-in agents; endpoints to list (built-ins merged with user agents, each with its kind (official, system or user), status and pin), get, create, update the draft, publish, delete and pin or unpin; validation (name required and unique among user agents, at least one dataset to publish).
+- **Out of scope:** running an agent (1.9.3); any UI (1.9.4, 1.9.5).
+- **Acceptance:** backend e2e covers create → publish → edit draft → republish → delete, and pin or unpin for user and built-in agents; data survives a backend restart; `data-model.md`, `api.md`, the glossary and the agents-evals rules are updated.
+- **Notes:** ADR-0008. New collection token per CLAUDE.md *Backend*; no migration (new collection).
+
+#### 1.9.3 — Start a session from an agent ([BA-153](https://halo-powered.atlassian.net/browse/BA-153))  `📋 Planned`
+- **Intent:** a user chats with an agent and gets answers shaped by its instructions, over its datasets.
+- **Scope:** create a session from a Live agent (stores the agent id and copies its datasets); each turn adds the agent's Live instructions as a labelled system context block after the base prompt and knowledge, and applies its model or effort override; starter questions in an empty session; the agent's name in the session list and session header; a deleted agent falls back to the plain assistant.
+- **Out of scope:** switching agents inside a session; drafts in real sessions (the preview chat is 1.9.5).
+- **Acceptance:** a Playwright flow starts a chat from a Live agent, clicks a starter question, and the answer follows the agent's instructions; publishing a new version changes the next turn; the read-only guard still rejects writes under instructions that ask for them; `agents.md`, `api.md` and the sessions-chat spec are updated.
+- **Notes:** depends on 1.9.2. The base prompt's identity line and its E2E assertion are unchanged.
+
+#### 1.9.4 — Agent Hub screen ([BA-154](https://halo-powered.atlassian.net/browse/BA-154))  `📋 Planned`
+- **Intent:** users find, filter and pin agents, and open them, from one screen that matches the mockup.
+- **Scope:** the Agents screen becomes the hub: header with **New agent**, search over name and description, filter pills All, Pinned, Official and Mine, sections of cards with **Show more**, card name, description, owner ("You" or "Official"), Pin or Pinned and Draft or Live chip; a System section for the helper agents; a card opens today's detail view (tabs unchanged) with Start chat, Edit, Publish and Delete for user agents; empty, loading, error and no-match states; a warning on agents whose datasets are missing.
+- **Out of scope:** My team and Whole org; the editor form (1.9.5).
+- **Acceptance:** Playwright covers search, each filter, pin and unpin, Show more and opening an agent; the existing `agents.spec.ts` eval flows pass; the axe scan is clean; `ui.md` and the agents-evals rules R1–R9 and Gherkin are rewritten for the hub.
+- **Notes:** depends on 1.9.2 and on BA-141's shared components (1.8.4).
+
+#### 1.9.5 — Agent editor: create, test, publish and delete ([BA-155](https://halo-powered.atlassian.net/browse/BA-155))  `📋 Planned`
+- **Intent:** users build and change agents safely, testing a draft before it reaches their sessions.
+- **Scope:** an editor for name, description, instructions, datasets, starter questions and model override, opened by **New agent** or **Edit**; Save keeps a Draft; a preview chat runs the draft and is not saved to the session list; Publish makes it Live; editing a Live agent shows "Unpublished changes" while the Live version keeps serving; Delete with confirmation; built-in agents are read-only.
+- **Out of scope:** duplicating agents; version history beyond one draft and one Live version.
+- **Acceptance:** Playwright covers create → preview → publish → edit → republish → delete, and that a preview chat leaves no session behind; `ui.md` and the agents-evals spec are updated.
+- **Notes:** depends on 1.9.3 and 1.9.4. If the beta window closes, the preview chat is the first thing to move out (see the epic spec).
 
 ## Backlog
 

@@ -14,6 +14,24 @@ Entry template:
 
 ---
 
+## 2026-10-09 — 1.9.1 Agent Hub: ADR, epic spec and roadmap (BA-151)
+
+### What went well
+- Searching Jira for existing epics before proposing one found BA-141 ("Agentic Hub look and feel"). Its spec rules out new features, which confirmed the hub needed its own epic and showed which components to build on.
+- Checking the mockup against `vision.md` before drafting surfaced a conflict: "My team", "Whole org" and owners need people, and the app is "not multi-user". Two rounds of multiple-choice questions settled the agent model, sharing, lifecycle and placement before anything was written. That applied the BA-112 lesson of asking how a feature is scoped before drafting the epic.
+- Reading agents.md §4.1 (per-turn system context blocks) before writing ADR-0008 gave a concrete seam for user instructions that keeps the prompt's identity line and the code-level guards intact.
+
+### What went wrong
+- `jq` was missing again, as recorded in the 0.2.5 entry, and had to be fetched into the scratchpad.
+- In the new worktree, `jira.sh` failed: `.env` lives only in the main checkout. Evidence capture needed a second run with the main checkout's script.
+- The first spec check failed: the epic spec linked to `../BA-141/spec.md`, which exists only on BA-141's unmerged branch.
+- `git worktree add -b … origin/main` set the epic branch to track `origin/main`, so a bare `git push` could have targeted main. I had to unset it.
+
+### What to do differently
+- From a worktree, call Jira through the main checkout's script (`/home/jhonbuendia/projects/bi-assistant/.claude/skills/jira/scripts/jira.sh`), or symlink `.env` into the worktree first.
+- Link a sibling epic's spec only once it is on `main`. Until then, link its Jira issue.
+- Create epic worktrees from the local `main` ref (`git worktree add … -b <branch> main`), as the convention shows, or run `git branch --unset-upstream` right after creating from `origin/main`.
+
 ## 2026-10-09 — 0.2.5 One branch and one PR per epic (BA-149)
 
 ### What went well
