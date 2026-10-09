@@ -183,6 +183,7 @@ Timeline (from the Jira timeline):
 | 1.5 Data Connectors | [BA-5](https://halo-powered.atlassian.net/browse/BA-5) | Sep 30 – Oct 23 |
 | 1.6 User Testing | [BA-10](https://halo-powered.atlassian.net/browse/BA-10) | Oct 19 – Oct 23 |
 | 1.7 Bug Fixes | [BA-11](https://halo-powered.atlassian.net/browse/BA-11) | Oct 26 – Oct 30 |
+| 1.8 Agentic Hub Look and Feel | [BA-141](https://halo-powered.atlassian.net/browse/BA-141) | No dates in Jira yet |
 
 Evals come first in the order even though they run in parallel: every other milestone is measured against them.
 
@@ -429,6 +430,62 @@ Bugs found by the spec backfill (0.2.2), security first. Details: [evidence/0.2.
   - A Playwright scenario in `frontend/e2e/` launches Electron with a non-default `BACKEND_PORT` and asserts the shell loads data (new Gherkin scenario in [specs/capabilities/app-shell/spec.md](specs/capabilities/app-shell/spec.md)).
   - The `API_BASE_URL` sentence in CLAUDE.md ("Known gap") is updated.
 - **Notes:** moved from 0.1.1 on 2026-10-04 so the bug sits under a Jira epic (BA-11). Found while drawing the C4 container diagram ([specs/system/architecture.md](specs/system/architecture.md), Level 2). Related to ADR-0001.
+
+### Milestone 1.8 — Agentic Hub Look and Feel ([BA-141](https://halo-powered.atlassian.net/browse/BA-141))
+
+The app gets the Agentic Hub visual design: a gradient frame, an "Agentic Hub" banner, white rounded cards, an icon rail, pill buttons and status chips. There is a light theme and a navy dark theme derived from it, and the app follows the OS by default. Only the look changes. All stories are built on the branch `feat/BA-141-agentic-hub-look-and-feel` and ship as one PR. Epic spec: [specs/epics/BA-141/spec.md](specs/epics/BA-141/spec.md). Decision: ADR-0007 in [specs/system/architecture.md](specs/system/architecture.md).
+
+#### 1.8.1 — ADR, epic spec and roadmap ([BA-142](https://halo-powered.atlassian.net/browse/BA-142))  `✅ Done`
+- **Intent:** the restyle is planned and its theming approach decided before any code, so each later story can be built and reviewed on its own.
+- **Scope:** ADR-0007 in `specs/system/architecture.md`; the BA-141 epic spec; this milestone with one feature per story; the epic row in `specs/README.md`.
+- **Out of scope:** product code, and capability or system spec changes for behaviour that hasn't shipped yet. Each later story updates those itself.
+- **Acceptance:**
+  - ADR-0007 records the semantic tokens, the System / Light / Dark preference and the bundled webfont.
+  - `specs/epics/BA-141/spec.md` exists and the user has confirmed it (`Status: Confirmed`).
+  - `python3 scripts/check-specs.py` passes.
+- **Notes:** mockup reference: the "Publish requests" screen shared on 2026-10-09 (style only). The user confirmed the epic spec on 2026-10-09, kept `productName` and dropped the "Powered by LenAI" footer. Evidence: [evidence/1.8.1/](evidence/1.8.1/).
+
+#### 1.8.2 — Design tokens and light/dark theme switch ([BA-143](https://halo-powered.atlassian.net/browse/BA-143))  `📋 Planned`
+- **Intent:** the app can be shown in a light or a navy dark theme, and it follows the OS by default.
+- **Scope:** a semantic token layer (light and navy dark sets) mapped into Tailwind v4 `@theme`; a bundled webfont; an Appearance setting with System, Light and Dark, persisted on the renderer and applied before first paint; the Electron window background matches the theme; the dark token set is reviewed with screenshots before 1.8.3.
+- **Out of scope:** restyling individual screens (1.8.3–1.8.7).
+- **Acceptance:** switching Appearance, or the OS theme while on System, retheme the open app without a reload; the choice survives a restart; new Gherkin scenarios in [specs/capabilities/app-shell/spec.md](specs/capabilities/app-shell/spec.md) pass.
+- **Notes:** ADR-0007. Updates `ui.md` §6, `data-model.md`, `tech-stack.md` and `non-functional.md`.
+
+#### 1.8.3 — App shell: gradient frame, Agentic Hub banner and icon rail ([BA-144](https://halo-powered.atlassian.net/browse/BA-144))  `📋 Planned`
+- **Intent:** the window has the Agentic Hub frame, banner and navigation rail.
+- **Scope:** gradient frame; "Agentic Hub" banner; an icon rail replacing the 296 px sidebar (Datasets, Agents, Knowledge, Sessions and Settings; avatar and system logs at the bottom); title bar and traffic-light handling; rename "Halo BI Assistant" to "Agentic Hub" in the window title, document title and settings footer.
+- **Out of scope:** `productName`, installer names and the data directory, which stay "Halo BI Assistant"; the mockup's "Powered by LenAI" footer; the session list (1.8.5).
+- **Acceptance:** every rail destination opens the same view as the old sidebar row; the titles read "Agentic Hub"; the app-shell Gherkin and the E2E suite pass with selectors migrated.
+- **Notes:** depends on 1.8.2.
+
+#### 1.8.4 — Shared components: pill buttons, status chips, cards and list rows ([BA-145](https://halo-powered.atlassian.net/browse/BA-145))  `📋 Planned`
+- **Intent:** the building blocks every screen uses match the design in both themes.
+- **Scope:** pill buttons (primary, secondary, tertiary), status chips, cards, list rows, filter pills and section headers with icons, all using tokens only.
+- **Out of scope:** adopting the components on every screen (1.8.6, 1.8.7).
+- **Acceptance:** each component renders in both themes with no hardcoded colours; the axe scan is clean.
+- **Notes:** depends on 1.8.2.
+
+#### 1.8.5 — Sessions master-detail list pane ([BA-146](https://halo-powered.atlassian.net/browse/BA-146))  `📋 Planned`
+- **Intent:** sessions are browsed in a list pane beside the content, as in the mockup's request list.
+- **Scope:** move the session list from the sidebar into a list pane; keep new session, select, delete and its confirm, newest-first order and the existing `data-testid`s.
+- **Out of scope:** changes to the session data or its order (see 1.7.19).
+- **Acceptance:** the session Gherkin in [specs/capabilities/sessions-chat/spec.md](specs/capabilities/sessions-chat/spec.md) passes with the list in its new place.
+- **Notes:** depends on 1.8.3 and 1.8.4.
+
+#### 1.8.6 — Restyle feature screens: datasets, catalog, agents, knowledge and settings ([BA-147](https://halo-powered.atlassian.net/browse/BA-147))  `📋 Planned`
+- **Intent:** the feature screens match the design in both themes.
+- **Scope:** datasets list, catalog browser, agents list and detail, knowledge list and form, and the settings forms move to tokens and shared components.
+- **Out of scope:** behaviour and copy changes.
+- **Acceptance:** no hardcoded colours remain on these screens; their E2E specs pass unchanged apart from moved navigation.
+- **Notes:** depends on 1.8.4.
+
+#### 1.8.7 — Restyle chat, visual panel, system logs and toasts; regenerate the visual baseline ([BA-148](https://halo-powered.atlassian.net/browse/BA-148))  `📋 Planned`
+- **Intent:** the rest of the app matches the design, and the visual tests guard both themes.
+- **Scope:** session chat and composer, the interactive visual panel frame, the right panel, system logs and toasts move to tokens; Playwright visual baselines are regenerated for Light and Dark.
+- **Out of scope:** the generated visuals' own styling inside the iframe.
+- **Acceptance:** no hardcoded colours remain in the renderer; the axe scan is clean in both themes; baselines for both themes are committed.
+- **Notes:** depends on 1.8.4. Closes the stale-baseline gap in [specs/system/ui.md](specs/system/ui.md) §9.
 
 ## Backlog
 

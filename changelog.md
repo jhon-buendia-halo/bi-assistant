@@ -4,6 +4,14 @@ Running log of every meaningful change, newest first. See *Logging convention* a
 
 ## 2026-10-09
 
+### Added
+- **Agentic Hub look and feel planned** (roadmap 1.8.1, [BA-142](https://halo-powered.atlassian.net/browse/BA-142), epic [BA-141](https://halo-powered.atlassian.net/browse/BA-141)):
+  - New epic spec [specs/epics/BA-141/spec.md](specs/epics/BA-141/spec.md), confirmed by the user. It plans a light theme and a navy dark theme (System by default), a gradient frame, an "Agentic Hub" banner, an icon rail, a sessions list pane and pill and chip components. Only the look changes.
+  - ADR-0007 in [specs/system/architecture.md](specs/system/architecture.md): semantic design tokens mapped into Tailwind v4, a System / Light / Dark preference applied before first paint, and a bundled webfont.
+  - Milestone 1.8 in [roadmap.md](roadmap.md), with one feature per story (1.8.1–1.8.7), and the epic row in [specs/README.md](specs/README.md).
+  - Decisions: `productName`, the installers and the data directory stay "Halo BI Assistant"; only the window title, document title and settings footer become "Agentic Hub". The mockup's "Powered by LenAI" footer is left out.
+  - Evidence: [evidence/1.8.1/](evidence/1.8.1/).
+
 ### Changed
 - **One branch, one worktree and one PR per epic** (roadmap 0.2.5, [BA-149](https://halo-powered.atlassian.net/browse/BA-149), epic [BA-89](https://halo-powered.atlassian.net/browse/BA-89)):
   - CLAUDE.md *Branching convention*: all of an epic's stories are built on one branch, `<type>/<EPIC-ID>-<short-description>`, in one worktree, and ship as one PR that lists every story. Commits stay scoped to their story. The branch type is the highest-impact commit type in the epic.

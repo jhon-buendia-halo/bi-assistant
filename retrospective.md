@@ -14,6 +14,23 @@ Entry template:
 
 ---
 
+## 2026-10-09 — 1.8.1 Agentic Hub look and feel: ADR, epic spec and roadmap (BA-142)
+
+### What went well
+- Reading `ui.md` §6 before drafting showed the renderer has no tokens or CSS variables, only hardcoded greys. That made the theme switch an architectural decision (ADR-0007), not just restyling.
+- Checking `delivery.md` before writing up the rename found that `productName` also sets the Electron data directory. It went to the user as a decision instead of turning into a silent data move.
+- The epic was the first one started under the new one-branch-per-epic rule, so its branch and worktree were created once, for BA-142.
+
+### What went wrong
+- Jira took several rounds to unblock. The `.env` token had expired, `jq` was missing, `sudo` failed under the `!` prompt, and the Atlassian connector can only be authenticated from `/mcp`. Only the user's screenshot of the token page showed every token had expired.
+- The user's answers about the dark theme contradicted each other ("Keep current dark" in the picker, then "2. yes" to a derived dark theme typed during the same turn), which cost an extra round.
+- I asked several open questions in plain text and others in the picker, so answers arrived out of order and by number.
+
+### What to do differently
+- When Jira returns 401, have the user open https://id.atlassian.com/manage-profile/security/api-tokens straight away and check the token's expiry before any other diagnosis.
+- Ask every open question for one decision through a single picker call, not mixed with numbered questions in the text, so answers can't conflict.
+- For any rename, check `productName`, the data dir and the installer names in `delivery.md` first, and state which of them the rename covers.
+
 ## 2026-10-09 — 0.2.5 One branch and one PR per epic (BA-149)
 
 ### What went well

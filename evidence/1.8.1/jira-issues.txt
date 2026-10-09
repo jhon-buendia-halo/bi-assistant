@@ -1,0 +1,9 @@
+# Jira issues for epic BA-141 (read with jira.sh issue, 2026-10-09)
+BA-141	Epic	In Progress	parent=-	Agentic Hub look and feel
+BA-142	Story	In Progress	parent=BA-141	Agentic Hub look and feel: ADR, epic spec and roadmap
+BA-143	Story	To Do	parent=BA-141	Design tokens and light/dark theme switch
+BA-144	Story	To Do	parent=BA-141	App shell: gradient frame, Agentic Hub banner and icon rail
+BA-145	Story	To Do	parent=BA-141	Shared components: pill buttons, status chips, cards and list rows
+BA-146	Story	To Do	parent=BA-141	Sessions master-detail list pane
+BA-147	Story	To Do	parent=BA-141	Restyle feature screens: datasets, catalog, agents, knowledge and settings
+BA-148	Story	To Do	parent=BA-141	Restyle chat, visual panel, system logs and toasts; regenerate visual baseline
