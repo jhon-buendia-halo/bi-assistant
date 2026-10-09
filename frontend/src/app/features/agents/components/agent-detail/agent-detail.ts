@@ -24,6 +24,7 @@ import {
   Download,
   Play,
   ScrollText,
+  Upload,
   Wrench,
 } from 'lucide-angular';
 import {
@@ -67,6 +68,7 @@ export class AgentDetail implements OnDestroy {
   readonly Play = Play;
   readonly Trash2 = Trash2;
   readonly ScrollText = ScrollText;
+  readonly Upload = Upload;
   readonly Wrench = Wrench;
 
   private readonly api = inject(AgentsApiService);
@@ -91,6 +93,8 @@ export class AgentDetail implements OnDestroy {
   /** Registry key of the agent to show. */
   readonly agentKey = input.required<string>();
   readonly back = output<void>();
+  /** Emitted after a user agent is deleted; the app returns to the hub. */
+  readonly deleted = output<void>();
 
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
@@ -141,16 +145,90 @@ export class AgentDetail implements OnDestroy {
       this.evalRuns.set([]);
       this.expandedRunId.set(null);
       this.evalSelection.clear();
-      this.api.getAgent(key).subscribe({
-        next: (agent) => {
-          this.agent.set(agent);
-          this.loading.set(false);
-        },
-        error: (err) => {
-          this.error.set(err?.error?.message ?? 'Backend unreachable');
-          this.loading.set(false);
-        },
-      });
+      this.publishing.set(false);
+      this.deleting.set(false);
+      this.loadAgent(key);
+    });
+  }
+
+  private loadAgent(key: string): void {
+    this.api.getAgent(key).subscribe({
+      next: (agent) => {
+        this.agent.set(agent);
+        this.loading.set(false);
+      },
+      error: (err) => {
+        this.error.set(err?.error?.message ?? 'Backend unreachable');
+        this.loading.set(false);
+      },
+    });
+  }
+
+  /** User agents only; built-in agents offer no actions (R5). */
+  readonly isUserAgent = computed(() => this.agent()?.kind === 'user');
+
+  /** Publish shows when there is no Live version or it has unpublished changes. */
+  readonly canPublish = computed(() => {
+    const agent = this.agent();
+    return (
+      agent?.kind === 'user' &&
+      (agent.status !== 'live' || !!agent.hasUnpublishedChanges)
+    );
+  });
+
+  /** The user agent's own instructions: Live version, else draft (R6). */
+  readonly agentInstructions = computed(() => {
+    const agent = this.agent();
+    return (agent?.live ?? agent?.draft)?.instructions ?? '';
+  });
+
+  readonly publishing = signal(false);
+  readonly deleting = signal(false);
+
+  publish(): void {
+    const agent = this.agent();
+    if (!agent || this.publishing()) return;
+    this.publishing.set(true);
+    this.api.publish(agent.key).subscribe({
+      next: (res) => {
+        this.publishing.set(false);
+        if (!res.ok) {
+          this.toast.error(res.message);
+          return;
+        }
+        this.toast.success(res.message);
+        if (this.agentKey() === agent.key) this.loadAgent(agent.key);
+      },
+      error: (err) => {
+        this.publishing.set(false);
+        this.toast.error(err?.error?.message ?? 'Backend unreachable');
+      },
+    });
+  }
+
+  /** Ask first; on success return to the hub, on failure stay here (R5). */
+  deleteAgent(): void {
+    const agent = this.agent();
+    if (!agent || this.deleting()) return;
+    const confirmed = window.confirm(
+      `Delete "${agent.name}"?\n\nIts sessions keep their transcripts and continue with the assistant.`,
+    );
+    if (!confirmed) return;
+    this.deleting.set(true);
+    this.api.deleteAgent(agent.key).subscribe({
+      next: (res) => {
+        this.deleting.set(false);
+        if (!res.ok) {
+          this.toast.error(res.message);
+          return;
+        }
+        this.toast.success(res.message);
+        this.deleted.emit();
+      },
+      error: (err) => {
+        this.deleting.set(false);
+        this.toast.error(err?.error?.message ?? 'Backend unreachable');
+      },
     });
   }
 

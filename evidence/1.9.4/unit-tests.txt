@@ -1,0 +1,16 @@
+# 1.9.4 frontend unit tests (Karma + Jasmine, ng test), 2026-10-09
+
+New: src/app/features/agents/services/agent-hub.util.spec.ts (12 specs: matchesQuery, buildHubSections, visibleCards, hubEmptyMessage).
+
+## CHROME_BIN=<playwright chromium-1243> npx ng test --watch=false --karma-config=<ChromeHeadless --window-size=1440,900>
+TOTAL: 96 SUCCESS
+
+## CHROME_BIN=<playwright chromium-1243> npx ng test --watch=false --browsers=ChromeHeadless (default 800x600 headless window)
+TOTAL: 1 FAILED, 95 SUCCESS
+Chrome Headless 153.0.0.0 (Linux 0.0.0) App should support keyboard resizing from the separator FAILED
+	Expected 525 to be 548.
+
+The one failure at the default window size is app.spec.ts 'should support keyboard resizing from the separator': the right panel width is clamped to viewport - 240 px in an 800 px window, so 572 -> 525 instead of 548. app.spec.ts and the right panel are untouched by 1.9.4; the test passes in a 1440x900 window.
+
+## npx ng build
+Output location: frontend

@@ -1,0 +1,115 @@
+<div class="flex flex-col">
+  <!-- Header -->
+  <div class="flex items-center">
+    <h1 class="font-serif text-[28px] font-semibold text-zinc-100">Agents</h1>
+    <button
+      type="button"
+      disabled
+      [title]="newAgentHint"
+      aria-describedby="agent-hub-new-hint"
+      class="ml-auto flex cursor-not-allowed items-center gap-1.5 rounded-lg bg-zinc-700 px-3.5 py-2 text-[13px] font-medium text-zinc-400"
+    >
+      <lucide-angular [img]="Plus" [size]="14" />
+      <span>New agent</span>
+    </button>
+    <span id="agent-hub-new-hint" class="sr-only">{{ newAgentHint }}</span>
+  </div>
+
+  <!-- Search: a full-width row under the header -->
+  <div class="relative mt-5">
+    <lucide-angular
+      [img]="Search"
+      [size]="15"
+      class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-zinc-500"
+    />
+    <input
+      type="search"
+      data-testid="agent-search"
+      placeholder="Search agents by name or description"
+      aria-label="Search agents by name or description"
+      [value]="query()"
+      (input)="onSearch($event)"
+      class="w-full rounded-lg border border-white/10 bg-white/5 py-2 pr-3 pl-10 text-[13px] text-zinc-200 outline-none placeholder:text-zinc-500 focus:border-white/25"
+    />
+  </div>
+
+  <!-- Filters -->
+  <div
+    role="group"
+    aria-label="Filter agents"
+    class="mt-3 flex items-center gap-1"
+  >
+    @for (item of filters; track item.id) {
+      <button
+        type="button"
+        (click)="filter.set(item.id)"
+        [attr.aria-pressed]="filter() === item.id"
+        class="rounded-lg px-3 py-1.5 text-[13px] hover:text-zinc-200"
+        [class.bg-white/10]="filter() === item.id"
+        [class.text-zinc-200]="filter() === item.id"
+        [class.text-zinc-400]="filter() !== item.id"
+      >
+        {{ item.label }}
+      </button>
+    }
+  </div>
+
+  @if (loading()) {
+    <div class="mt-10 flex items-center gap-2.5 text-zinc-400">
+      <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
+      <span>Loading agents…</span>
+    </div>
+  } @else if (error(); as err) {
+    <p
+      class="mt-8 rounded-md bg-red-500/10 px-3 py-2.5 text-[13px] text-red-400"
+    >
+      {{ err }}
+    </p>
+  } @else if (emptyMessage(); as message) {
+    <p class="mt-10 text-[13px] text-zinc-500">{{ message }}</p>
+  } @else {
+    <div class="mt-6 flex flex-col gap-6">
+      @for (section of sections(); track section.id) {
+        <section
+          [attr.data-testid]="'agent-section-' + section.id"
+          [attr.aria-labelledby]="'agent-section-heading-' + section.id"
+        >
+          <h2
+            [id]="'agent-section-heading-' + section.id"
+            class="text-[11px] font-medium tracking-wider text-zinc-400 uppercase"
+          >
+            {{ section.label }}
+          </h2>
+          <div class="mt-3 grid grid-cols-3 gap-3">
+            @for (agent of section.shown; track agent.key) {
+              <app-agent-card
+                [agent]="agent"
+                (open)="openAgent.emit(agent)"
+                (togglePin)="togglePin(agent)"
+              />
+            }
+          </div>
+          @if (section.hidden > 0) {
+            <button
+              type="button"
+              [attr.data-testid]="'agent-show-more-' + section.id"
+              [attr.aria-expanded]="section.expanded"
+              (click)="toggleSection(section.id)"
+              class="mt-3 flex items-center gap-1 text-[12px] text-zinc-400 hover:text-zinc-200"
+            >
+              <lucide-angular
+                [img]="section.expanded ? ChevronUp : ChevronDown"
+                [size]="14"
+              />
+              <span>{{
+                section.expanded
+                  ? "Show less"
+                  : "Show more (" + section.hidden + ")"
+              }}</span>
+            </button>
+          }
+        </section>
+      }
+    </div>
+  }
+</div>

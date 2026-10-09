@@ -1,28 +1,34 @@
 # Agents and evals
 
-The Agents screen lets the user inspect every agent the app runs (its prompt, tools, memory and model) and measure the main assistant against curated question suites. The user picks a suite, ticks the questions to run, chooses a datasource, and watches the run finish question by question. Every question is scored by explicit checks; a failed question explains why and shows the exact steps the assistant took. Past executions are kept, can be downloaded as a Markdown report and are compared with the previous comparable run to surface regressions.
+The Agents screen is the **Agent Hub**: the user finds, filters and pins agents, built-in or their own, and opens any of them. An agent's detail view shows its prompt, tools, memory and model, lets the user publish or delete their own agents, and lets the user measure the main assistant against curated question suites. The user picks a suite, ticks the questions to run, chooses a datasource, and watches the run finish question by question. Every question is scored by explicit checks; a failed question explains why and shows the exact steps the assistant took. Past executions are kept, can be downloaded as a Markdown report and are compared with the previous comparable run to surface regressions.
 
 ## Concepts
 
-Defined in [../../product/glossary.md](../../product/glossary.md): agent, user agent, official agent, system agent, draft (agent), Live (agent), pin, assistant, eval set, eval case, eval check, eval run, sample fixture, dataset, datasource, entity, tool call, knowledge entry, session.
+Defined in [../../product/glossary.md](../../product/glossary.md): agent, Agent Hub, user agent, official agent, system agent, draft (agent), Live (agent), pin, assistant, eval set, eval case, eval check, eval run, sample fixture, dataset, datasource, entity, tool call, knowledge entry, session.
 
 Capability-local vocabulary:
 - **Agent definition** — a user agent's stored configuration (`AgentConfig`): name, description, instructions, datasets, starter questions and optional model and reasoning effort; shape in [../../system/data-model.md](../../system/data-model.md) section 3.10.
 - **Unpublished changes** — a Live agent whose draft differs from its Live version.
+- **Section** — a group of agent cards on the hub, one per kind of agent: **Official**, **Mine** or **System**. The **Pinned** filter shows a single **Pinned** section instead.
+- **Filter** — one of the hub's pills (**All**, **Pinned**, **Official**, **Mine**) that limits which agents and sections show.
 - **Questions** and **Executions** — the two sub-tabs inside an agent's Evals tab: the suite, and the history of runs.
 - **Regression comparison** — the per-question diff between a finished run and the previous comparable run; see R32.
 - **Details panel** — the right-hand panel ([../app-shell/spec.md](../app-shell/spec.md)); on an agent's detail view it shows one question's scoring and trace.
 
 ## Rules
 
-Agent catalogue
-- R1. The system SHALL list every registered agent on the **Agents** screen, alphabetical by display name. Each row SHALL show the display name, the description (when present), the number of tools ("No tools", "1 tool", "N tools") and the agent's id.
-- R2. Loading SHALL show "Loading agents…"; an empty list "No agents registered."; a failure the backend's message or "Backend unreachable".
-- R3. Selecting an agent SHALL open its detail view with an **All agents** back button, the display name as heading, the id, the description, and five tabs: **Prompt template**, **Tools (N)**, **Memory**, **Model**, **Evals**. The Prompt template tab SHALL be selected first. Opening a different agent SHALL reset all tab, selection and run state.
-- R4. The Prompt template tab SHALL show the agent's instructions as plain text. If the agent builds its prompt at request time and has no static text, it SHALL say "This agent builds its prompt at request time, so there is no static template to show."
-- R5. The Tools tab SHALL list each tool alphabetically with its name, description and the names of its input parameters. An agent with no tools SHALL show "This agent runs in a single step with no tools."
-- R6. The Memory tab SHALL show, for an agent with memory: "Recent messages replayed" (`<N> messages`, "Disabled" or "Default"), "Semantic recall", "Working memory" and "Auto-generated titles" (each "Enabled" or "Disabled"), and "Storage" when known. An agent with no memory SHALL show "This agent is stateless — no memory is configured." For the assistant: 40 messages replayed, semantic recall off, titles off.
-- R7. The Model tab SHALL show the model identifier and provider the agent currently resolves to; with none resolved it SHALL say "No model resolved — save an LLM configuration in Settings first." (see [../llm-settings/spec.md](../llm-settings/spec.md)).
+Agent Hub and agent detail
+- R1. The **Agents** screen SHALL be the Agent Hub. It SHALL show the heading "Agents"; a **New agent** button, shown but disabled with the description "The agent editor arrives with BA-155" until BA-155 (roadmap 1.9.5) enables it; a search field with the placeholder `Search agents by name or description`; a group of filter pills labelled `Filter agents`: **All** (selected when the hub opens), **Pinned**, **Official** and **Mine**; and the agents as cards in sections. Under All the sections SHALL be, in this order, **Official** (`official`), **Mine** (`user`) and **System** (`system`), and each agent SHALL appear in the section of its kind, pinned or not; there is no Pinned section under All. A section with no agents SHALL be omitted, so Mine is omitted when there are no user agents. Within a section, pinned cards SHALL come first, then the others, each group alphabetical by name. In every view each agent SHALL appear exactly once. Each card SHALL show a sparkles icon, the name, a pin toggle (R4), the description clipped to two lines and the owner (`Owner: You`, `Owner: Official` or `Owner: System`). A user agent's card SHALL also show a status chip `Draft` or `Live`, the badge `Unpublished changes` when it has unpublished changes (R44), and the note `Missing dataset: <names>` (comma-separated) when its `missingDatasets` is not empty (R48). Cards SHALL NOT show tools or the id.
+- R2. Search SHALL match the trimmed query, case-insensitively, as a substring of the agent's name or description, and SHALL apply as the user types. The filters SHALL show: All, the sections of R1; Pinned, a single **Pinned** section holding every pinned agent of any kind, ordered by kind (Official, Mine, System) and then by name; Official, only the assistant, in the Official section; Mine, only user agents, pinned or not, in the Mine section (pinned first, R1). The System section SHALL show only under All. Search and filter combine. States: while loading, "Loading agents…"; on failure, the backend's message or "Backend unreachable"; a non-empty query that matches nothing, `No agents match "<query>"`; otherwise the Pinned filter with nothing pinned shows `No pinned agents yet.` and the Mine filter with no user agents shows `No agents of yours yet.`. Under All with no user agents, the Mine section is omitted.
+- R3. Each section SHALL show its first row of 3 cards. When more of its agents match the search and filter, a `Show more (<n>)` control SHALL follow, where n is the number of hidden cards. Clicking it SHALL show every card of the section and turn the control into `Show less`, which collapses the section to its first row again. Each section expands on its own. The search text, the filter and the expanded sections SHALL reset each time the hub opens, including on return from a detail view.
+- R4. Each card's pin toggle SHALL read `Pin`, with the accessible name `Pin <name>`, or `Pinned`, with the accessible name `Unpin <name>`, and SHALL expose its pressed state. Clicking it SHALL NOT open the agent. The change SHALL show on the hub at once: the toggle flips and the card re-orders within its own section (pinned cards first, R1). It SHALL NOT move the card to another section or hide a section. Under the Pinned filter, unpinning removes the card from the Pinned section. The change is then saved (R47), so it survives a restart. If saving fails, the card SHALL return to its previous state and an error toast SHALL show the backend's message or "Backend unreachable". A successful pin or unpin raises no toast.
+- R5. Clicking a card anywhere but its pin toggle SHALL open the agent's detail view. The view SHALL show an **All agents** back button to the hub, the name as heading, the id, the description and, for a user agent, its `Draft` or `Live` chip and `Unpublished changes` badge; then five tabs: **Prompt template**, **Tools (N)**, **Memory**, **Model**, **Evals**, with Prompt template selected first. Opening a different agent SHALL reset all tab, selection and run state. A user agent's detail SHALL offer two actions:
+  - **Publish**, shown only when the agent has no Live version or has unpublished changes. It publishes the draft (R44, R45) and shows the backend's message as a toast: `Agent "<name>" is Live`, or the refusal, such as `Select at least one dataset to publish`. On success the detail reloads, so the button disappears and the chip reads `Live`.
+  - **Delete**, which first asks `Delete "<name>"?` with the explanation `Its sessions keep their transcripts and continue with the assistant.`. Cancelling changes nothing. Confirming deletes the agent (R50), shows the toast `Agent "<name>" deleted` and returns to the hub, which no longer lists it. A failure shows the backend's message as a toast and stays on the detail.
+
+  Built-in agents (Official and System) SHALL offer neither action. Starting a chat from an agent arrives with BA-153 (roadmap 1.9.3), and editing one with BA-155 (roadmap 1.9.5).
+- R6. The Prompt template tab SHALL show the agent's instructions as plain text. If the agent builds its prompt at request time and has no static text, it SHALL say "This agent builds its prompt at request time, so there is no static template to show." For a user agent the tab SHALL show the assistant's prompt, then, under the label `Agent instructions`, the agent's own instructions (Live version, else draft), or `No instructions yet.` when they are empty. The Tools tab SHALL list each tool alphabetically with its name, description and the names of its input parameters. An agent with no tools SHALL show "This agent runs in a single step with no tools." A user agent lists the assistant's tools (R49).
+- R7. The Memory tab SHALL show, for an agent with memory: "Recent messages replayed" (`<N> messages`, "Disabled" or "Default"), "Semantic recall", "Working memory" and "Auto-generated titles" (each "Enabled" or "Disabled"), and "Storage" when known. An agent with no memory SHALL show "This agent is stateless — no memory is configured." For the assistant: 40 messages replayed, semantic recall off, titles off. The Model tab SHALL show the model identifier and provider the agent currently resolves to; with none resolved it SHALL say "No model resolved — save an LLM configuration in Settings first." (see [../llm-settings/spec.md](../llm-settings/spec.md)). For a user agent both tabs describe the assistant (R49).
 - R8. Requesting an agent that does not exist SHALL fail with `Agent "<key>" not found` (HTTP 404), shown in the detail view.
 - R9. The system SHALL tolerate an agent whose prompt, tools, memory or model cannot be read: that facet is simply empty, the rest still loads.
 
@@ -131,6 +137,12 @@ User agents (definitions)
 
 ## Edge cases and errors
 
+- Pinning while the backend is unreachable: the card moves, then moves back, and the error toast reads "Backend unreachable".
+- A search typed under the Pinned or Mine filter that matches nothing shows `No agents match "<query>"`, not the filter's empty message.
+- Pinning an agent under All keeps it in its own section and moves it to the front of that section; unpinning puts it back in alphabetical order after the pinned cards.
+- Deleting an agent that another window or the API already deleted shows the toast `Agent "<id>" not found` (R51) and stays on the detail; **All agents** returns to a hub without it.
+- Publishing a Live agent with no unpublished changes is not offered (no **Publish** button).
+
 - Starting with zero ticked questions is blocked in the UI (button disabled); a direct request with an explicit empty list is refused with "Pick at least one question to run" and SHALL NOT be read as "run everything". A request with no list at all selects every question of every set (and so fails R19.6 when the sets span several samples).
 - A run started while another is active for the agent is refused with the conflict message; the UI shows it under the run controls.
 - A dataset-less datasource: "has no datasets" message, no run recorded, Executions stays empty ("No eval runs yet").
@@ -153,19 +165,20 @@ User agents (definitions)
 
 ## UI
 
-Main view "Agents" and an agent's detail view, with the Details panel on the right ([../../system/ui.md](../../system/ui.md), [../app-shell/spec.md](../app-shell/spec.md)). Agent list: loading, error, empty, populated. Agent detail: loading, error, five tabs. Evals tab: loading ("Loading evals…"), error, no evals, set list, open set (idle, starting/running, finished), Executions (loading, empty, populated, expanded).
+Main view "Agents" (the Agent Hub) and an agent's detail view, with the Details panel on the right ([../../system/ui.md](../../system/ui.md) sections 4.4 and 4.5, [../app-shell/spec.md](../app-shell/spec.md)). Agent Hub: loading, error, populated (Official, Mine and System sections, pinned cards first, Show more), the Pinned filter's single Pinned section, no match, empty Pinned filter, empty Mine filter. Agent detail: loading, error, five tabs, and for user agents the Publish and Delete actions and the delete confirmation. Evals tab: loading ("Loading evals…"), error, no evals, set list, open set (idle, starting/running, finished), Executions (loading, empty, populated, expanded).
 
 ## Flows
 
-E2E: `frontend/e2e/agents.spec.ts` for the Feature below (moved verbatim from the repository `gherkin.md`).
+E2E: `frontend/e2e/agents.spec.ts` for the Feature below (first moved from the repository `gherkin.md`; the System steps now open "Show more", R3).
 
 ```gherkin
 Feature: Agents
 
   Scenario: Opens an agent from the Agents list and switches between its tabs
     When I click "Agents"
-    Then I see "Questions to Insights Assistant" in the agent list
-    And I see the "sql-fixer" agent in the list
+    Then I see "Questions to Insights Assistant" in the Official section
+    When I click "Show more" in the System section
+    Then I see the "sql-fixer" agent in the System section
     When I open the "Questions to Insights Assistant" agent
     Then I see the heading "Questions to Insights Assistant"
     And the Prompt tab is shown, containing "You are the Questions to Insights assistant"
@@ -186,10 +199,12 @@ Feature: Agents
     When I click the open "world-cup" set again
     Then no questions are listed
     When I click "All agents"
-    Then I see the "sql-verifier" agent in the list
+    And I click "Show more" in the System section
+    Then I see the "sql-verifier" agent in the System section
 
   Scenario: Shows the stateless, no-tool agents accurately
     When I click "Agents"
+    And I click "Show more" in the System section
     And I open the "sql-fixer" agent
     And I open the Tools tab
     Then I see "This agent runs in a single step with no tools."
@@ -276,6 +291,115 @@ Feature: Agents
     And the report contains "# Eval run — assistant"
     And the report contains "## Summary"
     And the report contains "Who won the 2022 World Cup?"
+```
+
+E2E: `frontend/e2e/agent-hub.spec.ts`
+
+The Background's dataset and user agents are seeded through the backend API before the hub opens. "The app restarts" restarts the backend on the same data directory (on the web target, the CLI).
+
+```gherkin
+Feature: Agent Hub
+
+  Background:
+    Given a "World Cup Core" dataset exists
+    And a Live user agent "Health plan analyst", described as "Answers questions about the 2026 health plan", over "World Cup Core"
+    And a draft user agent "Claims triage", described as "Sorts incoming claims by urgency", with no datasets
+
+  Scenario: Shows the built-in agents and mine in sections
+    When I click "Agents"
+    Then I see the sections "Official", "Mine" and "System", in that order, and no "Pinned" section
+    And the "New agent" button is disabled
+    And the Official section shows "Questions to Insights Assistant" with "Owner: Official"
+    And the Mine section shows "Health plan analyst" with "Owner: You" and the chip "Live"
+    And the Mine section shows "Claims triage" with the chip "Draft"
+    And the System section shows 3 cards and "Show more (2)"
+    When I click "Show more (2)"
+    Then the System section shows 5 cards, including "SQL Verifier"
+    When I click "Show less"
+    Then the System section shows 3 cards
+
+  Scenario: Search narrows the agents by name or description
+    When I click "Agents"
+    And I type "urgency" into "Search agents by name or description"
+    Then I see "Claims triage" and not "Health plan analyst"
+    When I type "HEALTH PLAN" into "Search agents by name or description"
+    Then I see "Health plan analyst" and not "Claims triage"
+    When I type "nothing here" into "Search agents by name or description"
+    Then I see 'No agents match "nothing here"'
+
+  Scenario: Filters limit the hub to one kind of agent
+    When I click "Agents"
+    And I click the "Mine" filter
+    Then I see only "Claims triage" and "Health plan analyst"
+    When I click the "Official" filter
+    Then I see only "Questions to Insights Assistant"
+    When I click the "Pinned" filter
+    Then I see "No pinned agents yet."
+    When I click the "All" filter
+    Then I see the System section again
+
+  Scenario: Pinned agents come first in their own section and survive a restart
+    When I click "Agents"
+    And I click "Pin Health plan analyst"
+    And I click "Pin Questions to Insights Assistant"
+    Then the Official section shows "Questions to Insights Assistant" first, reading "Pinned"
+    And the Mine section shows "Health plan analyst" first, reading "Pinned"
+    And there is no "Pinned" section
+    When I click the "Pinned" filter
+    Then the Pinned section shows "Questions to Insights Assistant" and "Health plan analyst"
+    When the app restarts
+    And I click "Agents"
+    And I click the "Pinned" filter
+    Then the Pinned section still shows "Questions to Insights Assistant" and "Health plan analyst"
+    When I click "Unpin Health plan analyst"
+    Then the Pinned section shows only "Questions to Insights Assistant"
+    When I click the "All" filter
+    Then the Mine section shows "Health plan analyst" reading "Pin"
+
+  Scenario: Flags an agent whose dataset no longer exists
+    Given the draft of "Claims triage" uses the dataset "Gone"
+    When I click "Agents"
+    Then the "Claims triage" card shows "Missing dataset: Gone"
+    And the "Health plan analyst" card shows no missing-dataset note
+
+  Scenario: A card opens the agent's detail view with its actions
+    When I click "Agents"
+    And I open "Claims triage"
+    Then I see the heading "Claims triage"
+    And I see the buttons "Publish" and "Delete"
+    When I click "All agents"
+    And I open "Health plan analyst"
+    Then I see the button "Delete" and no "Publish" button
+    When I click "All agents"
+    And I open "Questions to Insights Assistant"
+    Then I see neither "Publish" nor "Delete"
+
+  Scenario: Publishing a draft makes it Live
+    When I click "Agents"
+    And I open "Claims triage" and click "Publish"
+    Then I see the toast "Select at least one dataset to publish"
+    Given the draft of "Claims triage" uses the dataset "World Cup Core"
+    When I click "All agents"
+    And I open "Claims triage" and click "Publish"
+    Then I see the toast 'Agent "Claims triage" is Live'
+    And the "Publish" button is gone
+    When I click "All agents"
+    Then the Mine section shows "Claims triage" with the chip "Live"
+
+  Scenario: Deleting an agent asks first
+    When I click "Agents"
+    And I open "Claims triage" and click "Delete"
+    Then I am asked 'Delete "Claims triage"?'
+    When I cancel
+    Then I still see the heading "Claims triage"
+    When I click "Delete" and confirm
+    Then I see the toast 'Agent "Claims triage" deleted'
+    And I am back on the Agent Hub, which no longer lists "Claims triage"
+
+  Scenario: The hub has no detectable accessibility violations
+    When I click "Agents"
+    And I click "Show more (2)"
+    Then the axe scan reports no violations
 ```
 
 E2E: none yet for the Feature below.
@@ -380,7 +504,7 @@ Feature: Agent definitions (API)
 
 ## Acceptance
 
-- The nine `agents.spec.ts` scenarios pass.
+- The nine `agents.spec.ts` scenarios pass, and the nine `agent-hub.spec.ts` scenarios pass, with the axe scan of the hub clean.
 - Running the `world-cup` set against the bundled sample with a working model finishes, records one result per ticked question, and every question's Details panel shows its checks and executed steps.
 - A second completed run on the same datasource and datasets produces a Markdown report with a "Compared to previous run" section; a run on a different datasource or dataset set does not.
 - Starting against a datasource with no datasets, or with datasets missing required entities, never spends model tokens and never leaves a run in history.
@@ -394,6 +518,5 @@ Feature: Agent definitions (API)
 - The browser saves the report as `eval-run-<agent>-<8-char id>.md` (no date) while the server's attachment name includes the date and time. The gherkin file pattern "eval-run-assistant-…" matches both.
 - A code comment says runs are in-memory and forgotten on restart; in fact they are persisted and survive restarts (R25). The spec follows the behaviour.
 - A failed (not just partial) run or a partial pass is drawn with the same red cross in Executions.
-- The Agents screen's search icon is a placeholder with no behaviour.
 
-<!-- sources: backend/src/modules/agents/{agents.controller,agents.service,eval-runs.service,eval-regression,eval-report}.ts, backend/src/modules/agents/repositories/eval-runs.repository.ts, backend/src/mastra/evals/{assistant.evals,assistant-eval-datasets,result-set-check,run-assistant-evals}.ts, backend/src/mastra/agents/eval-judge.agent.ts, backend/src/modules/sessions/result-compare.ts, backend/src/modules/testing-data/fixtures/registry.ts, frontend/src/app/features/agents/, frontend/e2e/agents.spec.ts -->
+<!-- sources: backend/src/modules/agents/{agents.controller,agents.service,eval-runs.service,eval-regression,eval-report}.ts, backend/src/modules/agents/repositories/eval-runs.repository.ts, backend/src/mastra/evals/{assistant.evals,assistant-eval-datasets,result-set-check,run-assistant-evals}.ts, backend/src/mastra/agents/eval-judge.agent.ts, backend/src/modules/sessions/result-compare.ts, backend/src/modules/testing-data/fixtures/registry.ts, frontend/src/app/features/agents/, frontend/e2e/agents.spec.ts, frontend/e2e/agent-hub.spec.ts -->

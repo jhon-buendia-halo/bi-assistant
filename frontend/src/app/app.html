@@ -417,7 +417,7 @@
           </div>
         } @else if (mainView() === "agents") {
           <div class="flex flex-1 justify-center overflow-y-auto px-8 py-10">
-            <app-agent-list
+            <app-agent-hub
               class="w-full max-w-[960px]"
               (openAgent)="openAgent($event)"
             />
@@ -428,6 +428,7 @@
               class="w-full max-w-[960px]"
               [agentKey]="activeAgentKey()!"
               (back)="mainView.set('agents')"
+              (deleted)="mainView.set('agents')"
             />
           </div>
         } @else if (mainView() === "knowledge") {

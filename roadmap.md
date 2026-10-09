@@ -475,12 +475,12 @@ Users build their own data agents on top of the assistant (instructions, dataset
 - **Acceptance:** a Playwright flow starts a chat from a Live agent, clicks a starter question, and the answer follows the agent's instructions; publishing a new version changes the next turn; the read-only guard still rejects writes under instructions that ask for them; `agents.md`, `api.md` and the sessions-chat spec are updated.
 - **Notes:** depends on 1.9.2. The base prompt's identity line and its E2E assertion are unchanged.
 
-#### 1.9.4 — Agent Hub screen ([BA-154](https://halo-powered.atlassian.net/browse/BA-154))  `📋 Planned`
+#### 1.9.4 — Agent Hub screen ([BA-154](https://halo-powered.atlassian.net/browse/BA-154))  `✅ Done`
 - **Intent:** users find, filter and pin agents, and open them, from one screen that matches the mockup.
-- **Scope:** the Agents screen becomes the hub: header with **New agent**, search over name and description, filter pills All, Pinned, Official and Mine, sections of cards with **Show more**, card name, description, owner ("You" or "Official"), Pin or Pinned and Draft or Live chip; a System section for the helper agents; a card opens today's detail view (tabs unchanged) with Start chat, Edit, Publish and Delete for user agents; empty, loading, error and no-match states; a warning on agents whose datasets are missing.
-- **Out of scope:** My team and Whole org; the editor form (1.9.5).
+- **Scope:** the Agents screen becomes the hub: header with **New agent**, search over name and description, filter pills All, Pinned, Official and Mine, sections of cards with **Show more**, card name, description, owner ("You" or "Official"), Pin or Pinned and Draft or Live chip; a System section for the helper agents; a card opens today's detail view (tabs unchanged) with Publish and Delete for user agents (Start chat arrives with 1.9.3 and Edit with 1.9.5); empty, loading, error and no-match states; a warning on agents whose datasets are missing.
+- **Out of scope:** My team and Whole org; the editor form (1.9.5): **New agent** is shown but disabled until 1.9.5; Start chat (1.9.3).
 - **Acceptance:** Playwright covers search, each filter, pin and unpin, Show more and opening an agent; the existing `agents.spec.ts` eval flows pass; the axe scan is clean; `ui.md` and the agents-evals rules R1–R9 and Gherkin are rewritten for the hub.
-- **Notes:** depends on 1.9.2 and on BA-141's shared components (1.8.4).
+- **Notes:** depends on 1.9.2. Built with today's styles, not BA-141's components (decided 2026-10-09); BA-141 restyles it later. Moved ahead of 1.9.3 on 2026-10-09 so the user can see the hub sooner. E2E runs on the web target (BA-156). Shipped to the mockup: under All, pinned cards stay first in their own section (Official, Mine, System), Pinned is a filter, and the search is a full-width row. Card text is `zinc-400` for axe contrast. Desktop not run. Evidence: [evidence/1.9.4/](evidence/1.9.4/).
 
 #### 1.9.5 — Agent editor: create, test, publish and delete ([BA-155](https://halo-powered.atlassian.net/browse/BA-155))  `📋 Planned`
 - **Intent:** users build and change agents safely, testing a draft before it reaches their sessions.

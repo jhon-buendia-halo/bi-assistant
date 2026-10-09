@@ -6,7 +6,9 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Active visual.** The visual currently open in the right-hand panel. The assistant tailors it by default when the user asks for a change. See *Visual*.
 
-**Agent.** A configured LLM role with its own instructions, optional tools and optional memory. The product ships six built-in agents (the assistant, the visual designer, the SQL fixer, the SQL verifier, the knowledge bootstrap agent and the eval judge), and users can build their own (*user agent*). See [../system/agents.md](../system/agents.md). The Agents screen lists them all.
+**Agent.** A configured LLM role with its own instructions, optional tools and optional memory. The product ships six built-in agents (the assistant, the visual designer, the SQL fixer, the SQL verifier, the knowledge bootstrap agent and the eval judge), and users can build their own (*user agent*). See [../system/agents.md](../system/agents.md). The *Agent Hub* lists them all.
+
+**Agent Hub.** The Agents screen. It shows every agent as a card, grouped in sections (Official, Mine and System, pinned cards first), with a search over name and description, filter pills (All, Pinned, Official and Mine) and a *pin* on each card. A card opens the agent's detail view. See [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md).
 
 **Angle.** One sub-question of a *deep analysis*. A plan has between 3 and 5 angles (hard cap 5). Each is investigated on its own.
 

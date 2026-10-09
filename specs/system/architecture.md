@@ -245,7 +245,7 @@ flowchart LR
     datasources["datasources<br/>(datasource-config, datasources-api)"]
     knowledge["knowledge<br/>(knowledge-list, knowledge-form)"]
     llm["llm<br/>(llm-config, llm-api)"]
-    agents["agents<br/>(agent-list, agent-detail, eval-trace)"]
+    agents["agents<br/>(agent-hub, agent-card, agent-detail, eval-trace)"]
     testing["testing-data<br/>(testing-data-config)"]
   end
 

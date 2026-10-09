@@ -72,7 +72,7 @@ Accessibility and visual stability
 - Pressing a mouse button other than the primary one on the separator does nothing.
 - Loading the session list at startup retries up to 12 times with a growing delay (200 ms steps, capped at 1 s) because the backend may still be starting. If it still fails the sidebar keeps whatever it had and shows the error toast "Could not load sessions".
 - While the status is `restarting` or `down`, calls to the backend fail; each surfaces as its own error toast ("Backend unreachable" unless the backend provided a message) and so appears in diagnostics.
-- The account row ("Demo User"), the Settings search box ("Search settings", hint "⌘ F"), the search icon on the Agents screen and the empty chat input shape on the home view are visual placeholders with no behaviour yet.
+- The account row ("Demo User"), the Settings search box ("Search settings", hint "⌘ F") and the empty chat input shape on the home view are visual placeholders with no behaviour yet.
 - The `down` banner has no retry button; the instruction in it is the only remedy.
 - Missing backend entry file (a broken installation): no backend starts, an error diagnostic ("Backend entry file is missing") is recorded and the window opens after the readiness deadline.
 

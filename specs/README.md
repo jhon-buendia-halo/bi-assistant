@@ -42,7 +42,7 @@ specs/
 | [verified-queries](capabilities/verified-queries/spec.md) | Saved, trusted question → SQL pairs | — |
 | [metrics](capabilities/metrics/spec.md) | Metric definitions and the metrics panel | — |
 | [deep-analysis](capabilities/deep-analysis/spec.md) | Multi-step deep analysis runs | — |
-| [agents-evals](capabilities/agents-evals/spec.md) | Agent catalogue, eval sets, eval runs and reports | Agents (`agents.spec.ts`) |
+| [agents-evals](capabilities/agents-evals/spec.md) | Agent Hub, agent catalogue and user agents, eval sets, eval runs and reports | Agents (`agents.spec.ts`), Agent Hub (`agent-hub.spec.ts`) |
 
 A Gherkin Feature that spans capabilities lives in the capability that owns its main outcome; the others link to it.
 

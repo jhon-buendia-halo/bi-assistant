@@ -366,9 +366,9 @@ Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra regi
 | 40 | `DELETE /agents/:key/evals/runs/:jobId` | Delete a finished run | yes |
 | 41 | `POST /agents` | Create a user agent (as a draft) | no |
 | 42 | `PUT /agents/:id/draft` | Save a user agent's draft | no |
-| 43 | `POST /agents/:id/publish` | Publish the draft (makes it Live) | no |
-| 44 | `DELETE /agents/:id` | Delete a user agent | no |
-| 45 | `PUT /agents/:key/pin` | Pin or unpin any agent | no |
+| 43 | `POST /agents/:id/publish` | Publish the draft (makes it Live) | yes |
+| 44 | `DELETE /agents/:id` | Delete a user agent | yes |
+| 45 | `PUT /agents/:key/pin` | Pin or unpin any agent | yes |
 
 #### 33. `GET /agents`
 - Response `200`: `{ agents: AgentSummary[] }` sorted by `name`, built-in and user agents together.

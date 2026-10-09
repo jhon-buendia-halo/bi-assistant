@@ -41,7 +41,7 @@ import { LlmConfig } from './features/llm/components/llm-config/llm-config';
 import { TestingDataConfig } from './features/testing-data/components/testing-data-config/testing-data-config';
 import { DeveloperSettingsConfig } from './features/developer/components/developer-settings/developer-settings';
 import { DatasetList } from './features/datasets/components/dataset-list/dataset-list';
-import { AgentList } from './features/agents/components/agent-list/agent-list';
+import { AgentHub } from './features/agents/components/agent-hub/agent-hub';
 import { AgentDetail } from './features/agents/components/agent-detail/agent-detail';
 import { EvalTrace } from './features/agents/components/eval-trace/eval-trace';
 import { Agent } from './features/agents/services/agents-api.service';
@@ -109,7 +109,7 @@ const RIGHT_PANEL_WIDTH_STORAGE_KEY = 'questions-to-insights:right-panel-width';
     TestingDataConfig,
     DeveloperSettingsConfig,
     DatasetList,
-    AgentList,
+    AgentHub,
     AgentDetail,
     EvalTrace,
     KnowledgeList,

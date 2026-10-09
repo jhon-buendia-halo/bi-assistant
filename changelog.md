@@ -5,6 +5,18 @@ Running log of every meaningful change, newest first. See *Logging convention* a
 ## 2026-10-09
 
 ### Added
+- **Agent Hub screen** (roadmap 1.9.4, [BA-154](https://halo-powered.atlassian.net/browse/BA-154), epic [BA-150](https://halo-powered.atlassian.net/browse/BA-150)):
+  - The Agents screen is now the Agent Hub, following the mockup:
+    - a full-width search over name and description;
+    - the filter pills All, Pinned, Official and Mine;
+    - card sections Official, Mine and System, three cards to a row with `Show more (<n>)`.
+  - Cards show the name, description, owner (`You`, `Official` or `System`), the `Draft`/`Live` chip, `Unpublished changes` and `Missing dataset: <names>`.
+  - Pins apply at once, put the card first in its own section, survive a restart, and revert with a toast if saving fails.
+  - The detail view gains Publish and Delete (with confirmation) for user agents. **New agent** is shown but disabled until the editor (1.9.5). Start chat arrives with 1.9.3.
+  - The old agent list component is removed.
+  - Specs: agents-evals R1–R9 rewritten, plus the Feature "Agent Hub"; [ui.md](specs/system/ui.md) §4.4–4.5; glossary.
+  - Tests: new `frontend/e2e/agent-hub.spec.ts` (9 scenarios, including an axe scan); `agents.spec.ts` updated for Show more; 12 unit tests for the section and filter logic. Full web suite: 44 passed, 2 skipped (desktop only). Desktop not run.
+  - Evidence: [evidence/1.9.4/](evidence/1.9.4/).
 - **Agent definitions: storage and API** (roadmap 1.9.2, [BA-152](https://halo-powered.atlassian.net/browse/BA-152), epic [BA-150](https://halo-powered.atlassian.net/browse/BA-150)):
   - New `agents` collection and `user-agents` backend module. A user agent keeps a draft and an optional Live version (name, description, instructions, datasets, starter questions, an optional model and reasoning effort) and a pin. Built-in pins live in a `builtin-agent-pins` settings document. No migration.
   - New endpoints: `POST /agents`, `PUT /agents/:id/draft`, `POST /agents/:id/publish`, `DELETE /agents/:id` and `PUT /agents/:key/pin`. `GET /agents` lists built-in and user agents together, with kind, status, owner, pin, unpublished changes and missing datasets. `GET /agents/:key` also resolves user-agent ids. Built-in agents can't be edited or deleted.

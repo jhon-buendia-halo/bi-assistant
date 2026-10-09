@@ -14,6 +14,25 @@ Entry template:
 
 ---
 
+## 2026-10-09 — 1.9.4 Agent Hub screen (BA-154)
+
+### What went well
+- Comparing the spec draft against the mockup before writing any tests caught a design slip. The draft moved pinned agents into a Pinned section under All, while the mockup keeps them in place and treats Pinned as a filter. The fix cost one spec revision, not a rework of tests and code.
+- Moving the hub ahead of 1.9.3 when the user wanted to see it was cheap. Story boundaries were clear (Start chat and Edit hidden, New agent disabled), and one epic PR means the interim state never reaches `main`.
+- Running axe on the new screen found contrast failures (`zinc-500` on the card background, 3.25:1) that had never been seen, because axe only ever scanned the home shell.
+- Looking at the evidence screenshots before committing caught the clipped search placeholder. Moving the search to the mockup's full-width row fixed it.
+
+### What went wrong
+- The plan's card layout (name beside the icon) truncated names to one letter at 1440×900 with the right panel open. That was only discovered in implementation, so ui.md had to be corrected afterwards.
+- The user stopped the implementing agent twice, mid-step, to ask for status. Each time it resumed from the user's message, so its report reached the orchestrator later than the user's question. One old agent also reported a stale status ("the CLAUDE.md rule is gone") after the rule had moved to its own BA-89 branch.
+- Karma has no Chrome configured in this WSL environment. The frontend unit tests needed `CHROME_BIN` pointed at Playwright's Chromium and a scratch config. At the default 800×600 size, the existing `app.spec.ts` keyboard-resize test fails (548 expected, 525), unrelated to this change.
+
+### What to do differently
+- Before writing UI specs from a mockup, list each mockup element and say whether it is a section, a filter or a state, then check the spec draft against that list.
+- Size card layouts against the narrowest real main column (1440 wide minus the sidebar and the 572 px right panel ≈ 572 px) before fixing them in ui.md.
+- Run the axe scan on every new screen, not only the home shell. Treat `zinc-500` text on raised surfaces as suspect.
+- When the user asks a running subagent for status, give the orchestrator's view of the whole epic, not the subagent's slice, because a subagent can't see later work.
+
 ## 2026-10-09 — 1.9.2 Agent definitions: storage and API (BA-152)
 
 ### What went well
