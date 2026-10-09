@@ -10,12 +10,10 @@
   <fieldset
     role="radiogroup"
     aria-labelledby="appearance-theme-label"
-    class="rounded-card border border-border bg-surface p-4 shadow-card"
+    class="card p-4"
   >
     <legend id="appearance-theme-label" class="sr-only">Theme</legend>
-    <p aria-hidden="true" class="mb-3 text-[12px] font-medium text-fg-muted">
-      Theme
-    </p>
+    <p aria-hidden="true" class="field-label mb-3">Theme</p>
     <div class="flex flex-wrap gap-2">
       @for (option of options; track option.value) {
         <label

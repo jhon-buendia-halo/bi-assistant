@@ -178,6 +178,30 @@ The "HALO BI" wordmark as a vector drawn with 13-unit strokes in `currentColor` 
 
 Assistant text, report bodies and visual cards render Markdown (GitHub-flavoured: tables, task lists, strikethrough; single newlines become line breaks) to HTML, then sanitise it with an HTML allow-list sanitiser (standard HTML profile; scripts, event-handler attributes and unknown protocols are stripped) before it is inserted into the page. Raw HTML in the source is therefore never executed. Styling ("prose-dark"): 13 px, line height 1.75, `zinc-300` text; strong `zinc-100`/600; links `sky-300` underlined; h1 16, h2 15, h3/h4 14 px (600, `zinc-100`, 1.1 em top margin); lists 1.4 em indent (disc / decimal); inline code 12 px monospace on `white/8`, radius 4; code blocks on `white/5` with a `white/8` border, radius 8, horizontal scroll; blockquote with a 2 px `white/15` left rule and `zinc-400` text; tables full width, 12 px, `white/8` cell borders, header `white/6` fill and `zinc-200` 600 text, zebra rows `white/2`, no wrapping (horizontal scroll). The visual frame inside the sandboxed iframe uses its own stylesheet; see [../capabilities/visuals/spec.md](../capabilities/visuals/spec.md).
 
+### 3.6 Shared component classes
+
+Pieces every restyled screen uses, defined as Tailwind v4 `@utility` classes in `frontend/src/styles/components.css`. They are built only from the theme tokens (6.0), so each one follows Light and Dark. Combine a base class with a variant.
+
+| Class | Looks like | Use for |
+|---|---|---|
+| `btn` + `btn-primary` | Pill (radius full, 6 × 16 px padding, 13 px medium), `primary` fill, `on-primary` text, `primary-hover` on hover | The main action of a view ("Approve and publish", "Save", "Create") |
+| `btn` + `btn-secondary` | Pill, `primary-soft` fill, `on-primary-soft` text | Secondary actions ("Request changes", "Test connection") |
+| `btn` + `btn-outline` | Pill, `surface` fill, `border-strong` border, `primary` text | Tertiary actions ("Reject", "Export") |
+| `btn` + `btn-ghost` | Pill, no fill, `fg-muted` text, `surface-muted` on hover | Low-emphasis actions in toolbars |
+| `btn` + `btn-danger` | Pill, `danger-soft` fill, `on-danger-soft` text | Destructive actions ("Delete") |
+| `btn-icon` | Square 6 px padding, radius 8, `fg-muted` icon, `surface-muted` on hover | Icon-only controls; always with a title or `aria-label` |
+| `chip` + `chip-warning` / `chip-info` / `chip-neutral` / `chip-success` / `chip-danger` | Pill, 12 px medium, the matching `*-soft` fill and `on-*-soft` text | Statuses ("Pending review", "Restricted", "Read", "Passed", "Failed") |
+| `card` | `surface` fill, 1 px `border`, radius `card` (16), `card` shadow | Page cards, panels, form groups |
+| `card-muted` | `surface-muted` fill, 1 px `border-strong`, radius 12 | Summary boxes inside a card |
+| `list-row` / `list-row-selected` | Full-width row, 1 px `border`, radius 12, `surface-muted` on hover; selected: `surface-selected` fill, `border-selected` border | Master-detail lists (sessions, settings sections, agents) |
+| `filter-pill` / `filter-pill-active` | Pill, `border-strong` border, `primary` text; active: `surface-selected` fill, `border-selected` border | Filters and counts ("Pending review · 2") |
+| `field` | `surface` fill, 1 px `border`, radius 8, `fg` text, `fg-muted` placeholder; focus: `border-selected` border and a 2 px `surface-selected` ring | Text inputs, selects, textareas |
+| `field-label` | 12 px medium `fg-muted` | Field and group labels |
+| `section-header` / `section-title` | Row with a bottom `border`, 16 × 28 px padding; title 22 px normal `fg-strong` | Page headers ("Datasets" + its actions) |
+| `menu` / `menu-item` | `surface` popover, 1 px `border`, radius 12, soft shadow; items 13 px `fg`, `surface-muted` on hover | Dropdowns and context menus |
+
+Focus: buttons show a 2 px `focus` outline offset by 2 px on keyboard focus. Disabled buttons and fields drop to 55–60 % opacity with a not-allowed cursor.
+
 ## 4. Screens and panels
 
 Page titles on content views are serif (Georgia-class stack), 28 px, semibold, `zinc-100` (agent detail 26 px). Settings form titles are sans 15 px semibold with a 12 px `zinc-500` subtitle.

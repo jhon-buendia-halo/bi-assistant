@@ -14,6 +14,20 @@ Entry template:
 
 ---
 
+## 2026-10-09 — 1.8.4 Shared component classes (BA-145)
+
+### What went well
+- Building the classes before the shell meant the screen stories only need to swap class names, which makes the parallel restyle in 1.8.6 and 1.8.7 practical.
+- Checking which classes landed in the built CSS caught that `chip`, `field` and `menu` were emitted without being used. That led to checking for name collisions before shipping, rather than finding them in a restyled screen.
+
+### What went wrong
+- I first read "present in the CSS" as proof that the classes were in use. Tailwind v4 emits any candidate name it finds in source text, including comments, so the check only proves the class compiles.
+- The full E2E suite needs port 3000, so testing meant stopping the user's running app again.
+
+### What to do differently
+- Give shared utility classes names that can't appear as plain words in comments, or search the templates for the bare class name before relying on the CSS output.
+- Batch the stories' E2E runs so the user's app is stopped as few times as possible, and say up front when it will be down.
+
 ## 2026-10-09 — 1.8.2 Design tokens and light/dark theme switch (BA-143)
 
 ### What went well

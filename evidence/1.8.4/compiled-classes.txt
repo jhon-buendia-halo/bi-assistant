@@ -1,0 +1,28 @@
+# Component classes present in the built renderer CSS (frontend/dist/.../styles-JBMETT54.css), 2026-10-09
+unused   .btn (tree-shaken until a template uses it)
+unused   .btn-primary (tree-shaken until a template uses it)
+unused   .btn-secondary (tree-shaken until a template uses it)
+unused   .btn-outline (tree-shaken until a template uses it)
+unused   .btn-ghost (tree-shaken until a template uses it)
+unused   .btn-danger (tree-shaken until a template uses it)
+unused   .btn-icon (tree-shaken until a template uses it)
+present  .chip
+unused   .chip-warning (tree-shaken until a template uses it)
+unused   .chip-info (tree-shaken until a template uses it)
+unused   .chip-neutral (tree-shaken until a template uses it)
+unused   .chip-success (tree-shaken until a template uses it)
+unused   .chip-danger (tree-shaken until a template uses it)
+present  .card
+unused   .card-muted (tree-shaken until a template uses it)
+unused   .list-row (tree-shaken until a template uses it)
+unused   .list-row-selected (tree-shaken until a template uses it)
+unused   .filter-pill (tree-shaken until a template uses it)
+unused   .filter-pill-active (tree-shaken until a template uses it)
+present  .field
+present  .field-label
+unused   .section-header (tree-shaken until a template uses it)
+unused   .section-title (tree-shaken until a template uses it)
+present  .menu
+unused   .menu-item (tree-shaken until a template uses it)
+
+# Hex colours in components.css: 0

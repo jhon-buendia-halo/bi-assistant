@@ -5,6 +5,10 @@ Running log of every meaningful change, newest first. See *Logging convention* a
 ## 2026-10-09
 
 ### Added
+- **Shared component classes** (roadmap 1.8.4, [BA-145](https://halo-powered.atlassian.net/browse/BA-145), epic [BA-141](https://halo-powered.atlassian.net/browse/BA-141)):
+  - Tailwind v4 `@utility` classes in [frontend/src/styles/components.css](frontend/src/styles/components.css), built from the theme tokens only: pill buttons (`btn` with primary, secondary, outline, ghost and danger variants, plus `btn-icon`), status chips (`chip-warning|info|neutral|success|danger`), `card`, `card-muted`, `list-row`, `filter-pill`, `field`, `field-label`, `section-header`/`section-title` and `menu`/`menu-item`.
+  - Documented in [ui.md](specs/system/ui.md) §3.6. The Appearance section now uses `card` and `field-label`.
+  - Evidence: [evidence/1.8.4/](evidence/1.8.4/).
 - **Light and dark themes with an Appearance setting** (roadmap 1.8.2, [BA-143](https://halo-powered.atlassian.net/browse/BA-143), epic [BA-141](https://halo-powered.atlassian.net/browse/BA-141)):
   - Settings → **Appearance** (fifth section) offers System, Light and Dark. System is the default and follows the OS live. The choice applies at once and is kept in `localStorage` under `questions-to-insights:theme`.
   - Semantic theme tokens with a light set and an approved navy dark set, in [frontend/src/styles/tokens.css](frontend/src/styles/tokens.css), mapped into Tailwind v4 with `@theme inline` (ADR-0007). Every text pair meets WCAG AA in both themes.

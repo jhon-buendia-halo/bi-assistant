@@ -469,13 +469,16 @@ The app gets the Agentic Hub visual design: a gradient frame, an "Agentic Hub" b
 - **Acceptance:** every rail destination opens the same view as the old sidebar row; the titles read "Agentic Hub"; the app-shell Gherkin and the E2E suite pass with selectors migrated.
 - **Notes:** depends on 1.8.2.
 
-#### 1.8.4 — Shared components: pill buttons, status chips, cards and list rows ([BA-145](https://halo-powered.atlassian.net/browse/BA-145))  `📋 Planned`
-- **Intent:** the building blocks every screen uses match the design in both themes.
-- **Scope:** pill buttons (primary, secondary, tertiary), status chips, cards, list rows, filter pills and section headers with icons, all using tokens only.
-- **Out of scope:** adopting the components on every screen (1.8.6, 1.8.7).
-- **Acceptance:** each component renders in both themes with no hardcoded colours; the axe scan is clean.
-- **Notes:** depends on 1.8.2.
-
+#### 1.8.4 — Shared components: pill buttons, status chips, cards and list rows ([BA-145](https://halo-powered.atlassian.net/browse/BA-145))  `✅ Done`
+- **Intent:** the building blocks every screen uses match the design in both themes, so the screen stories only swap classes.
+- **Scope:** Tailwind v4 `@utility` classes in `frontend/src/styles/components.css`, built only from the 1.8.2 tokens:
+  - buttons: `btn` with `btn-primary`, `btn-secondary`, `btn-outline`, `btn-ghost`, `btn-danger`, plus `btn-icon`;
+  - chips: `chip` with `chip-warning`, `chip-info`, `chip-neutral`, `chip-success`, `chip-danger`;
+  - `card`, `card-muted`, `list-row` / `list-row-selected`, `filter-pill` / `filter-pill-active`, `field` / `field-label`, `section-header` / `section-title`, `menu` / `menu-item`.
+  - The Appearance section adopts them.
+- **Out of scope:** adopting them on every screen (1.8.3, 1.8.5–1.8.7).
+- **Acceptance:** the classes compile into the app's CSS from tokens only (no hex or palette colours); the Appearance E2E stays green with the section built from them; ui.md §3 documents each class.
+- **Notes:** built before 1.8.3 so the shell can use the classes. Depends on 1.8.2. Evidence: [evidence/1.8.4/](evidence/1.8.4/).
 #### 1.8.5 — Sessions master-detail list pane ([BA-146](https://halo-powered.atlassian.net/browse/BA-146))  `📋 Planned`
 - **Intent:** sessions are browsed in a list pane beside the content, as in the mockup's request list.
 - **Scope:** move the session list from the sidebar into a list pane; keep new session, select, delete and its confirm, newest-first order and the existing `data-testid`s.
