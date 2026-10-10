@@ -641,6 +641,29 @@ interface DeveloperSettingsView {
 - Sends `POST <endpoint>/v1/traces`, `Content-Type: application/x-protobuf`, empty body (an empty OTLP export), 3 s timeout.
 - Response `200` (Style A): `{ ok:true, message:"Reachable — <endpoint> accepted an OTLP trace export in <ms>ms" }`; `{ ok:false, message:"Endpoint answered <status> — not an OTLP trace receiver" }`; `{ ok:false, message:"Unreachable — <detail>" }` (network error, or `timed out after 3s`).
 
+
+### 2.12 UI preferences
+
+Controller prefix `/ui-preferences`. Capability: app-shell (R39–R43, R50). One `settings` document per data directory (data-model 3.2; ADR-0009).
+
+| # | Method + path | Purpose | FE |
+|---|---|---|---|
+| 56 | `GET /ui-preferences` | Read the theme choice and drawer state | yes |
+| 57 | `PUT /ui-preferences` | Save one or both | yes |
+
+```ts
+type ThemePreference = 'system' | 'light' | 'dark';
+interface UiPreferences { theme: ThemePreference | null; navExpanded: boolean | null }   // null = never chosen
+```
+
+#### 56. `GET /ui-preferences`
+- Response `200`: `UiPreferences` (bare). Nothing stored: `{ theme:null, navExpanded:null }`; the renderer then uses Light and an expanded drawer. A stored value that is not valid reads as `null`.
+
+#### 57. `PUT /ui-preferences`
+- Body: `Partial<{ theme: ThemePreference; navExpanded: boolean }>`. Only the fields sent are changed.
+- Validation (Style A): `"theme must be one of: system, light, dark"`, `"navExpanded must be true or false"`.
+- Success: `{ ok:true, message:"Preferences saved", preferences: UiPreferences }`.
+
 ## 3. Streaming and long-running work
 
 Two Server-Sent-Events endpoints exist (chat, knowledge bootstrap). Both are POST, so they are read with `fetch` + `response.body.getReader()` and a `TextDecoder`, **not** `EventSource`. Two background-job patterns use start + poll instead of SSE (deep analysis, eval runs).

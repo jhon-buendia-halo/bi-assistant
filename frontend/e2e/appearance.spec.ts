@@ -1,6 +1,7 @@
 import axe from 'axe-core';
 import type { Page } from '@playwright/test';
 import { expect, RunningApp, test } from './fixtures/app.fixture';
+import { apiUrl } from './helpers/app-actions';
 
 type Theme = 'light' | 'dark';
 
@@ -68,12 +69,23 @@ async function expectWindowBackground(
     .toBe(colour);
 }
 
-test('follows the operating system theme by default', async ({
+test('opens in the light theme by default', async ({ app, page }) => {
+  await setOsTheme(page, 'dark');
+  await page.reload();
+  await expectTheme(page, 'light');
+  await expectWindowBackground(app, '#0077a0');
+
+  await openAppearance(page);
+  await expect(themeOption(page, 'Light')).toBeChecked();
+});
+
+test('follows the operating system theme when System is chosen', async ({
   app,
   page,
 }) => {
   await setOsTheme(page, 'light');
   await openAppearance(page);
+  await themeOption(page, 'System').check();
 
   await expect(themeOption(page, 'System')).toBeChecked();
   await expectTheme(page, 'light');
@@ -134,6 +146,39 @@ test('remembers the chosen theme after a restart', async ({
   await openAppearance(page);
   await expect(themeOption(page, 'Dark')).toBeChecked();
   await expectTheme(page, 'dark');
+});
+
+test('keeps the chosen theme in the database', async ({
+  app,
+  appDataDir,
+  launchApp,
+}) => {
+  await openAppearance(app.page);
+  await themeOption(app.page, 'Dark').check();
+  await expectTheme(app.page, 'dark');
+  await app.close();
+
+  // A fresh browser profile on the same data: only the database remembers.
+  const again = await launchApp(appDataDir);
+  await expectTheme(again.page, 'dark');
+  await openAppearance(again.page);
+  await expect(themeOption(again.page, 'Dark')).toBeChecked();
+});
+
+test('moves a theme chosen before the database stored it', async ({
+  page,
+}) => {
+  const url = apiUrl(page, '/ui-preferences');
+  expect((await (await page.request.get(url)).json()).theme).toBeNull();
+  await page.evaluate(() =>
+    localStorage.setItem('questions-to-insights:theme', 'dark'),
+  );
+
+  await page.reload();
+  await expectTheme(page, 'dark');
+  await expect
+    .poll(async () => (await (await page.request.get(url)).json()).theme)
+    .toBe('dark');
 });
 
 test('has no automatically detectable accessibility violations in either theme', async ({

@@ -49,6 +49,7 @@ import { TestingDataConfig } from './features/testing-data/components/testing-da
 import { DeveloperSettingsConfig } from './features/developer/components/developer-settings/developer-settings';
 import { AppearanceSettings } from './features/appearance/components/appearance-settings/appearance-settings';
 import { ThemeService } from './core/theme/theme.service';
+import { UiPreferencesService } from './core/preferences/ui-preferences.service';
 import { DatasetList } from './features/datasets/components/dataset-list/dataset-list';
 import { AgentHub } from './features/agents/components/agent-hub/agent-hub';
 import { AgentDetail } from './features/agents/components/agent-detail/agent-detail';
@@ -859,6 +860,7 @@ export class App {
       if (this.evalSelection.selection()) this.rightPanelOpen.set(true);
     });
     this.loadSessions();
+    this.uiPreferences.load();
   }
 
   /** The rail area that is shown, or null on home. */
@@ -885,8 +887,18 @@ export class App {
     { key: 'appearance', label: 'Appearance', icon: SunMoon },
   ];
 
-  /** The rail's drawer with labels and the session list (app-shell R48). */
-  readonly navExpanded = signal(false);
+  private readonly uiPreferences = inject(UiPreferencesService);
+
+  /**
+   * The rail's drawer with labels and the session list (app-shell R48).
+   * Expanded unless the user last collapsed it (R2, R50).
+   */
+  readonly navExpanded = this.uiPreferences.navExpanded;
+
+  /** The Expand / Collapse navigation button; remembered (R50). */
+  toggleNav(): void {
+    this.uiPreferences.setNavExpanded(!this.navExpanded());
+  }
 
   /** Title of the Sessions area's page header (app-shell R49). */
   readonly pageTitle = computed(() => {

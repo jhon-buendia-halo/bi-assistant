@@ -14,6 +14,23 @@ Entry template:
 
 ---
 
+## 2026-10-10 — 1.10.2 Light theme and open drawer by default, remembered in the database (BA-168)
+
+### What went well
+- Four questions up front (epic, keep System, database plus first-paint cache, which "left bar") settled every design choice before the specs; nothing was reworked.
+- Testing persistence with `launchApp(appDataDir)` (a fresh browser profile on the same data dir) proves the database remembers, not the browser copy.
+- Checking the failed visual baseline image before regenerating it confirmed the only change was the expanded drawer.
+
+### What went wrong
+- A scripted multi-file edit failed on a non-unique anchor in `app.ts` (`this.loadSessions();` appears twice), after earlier files in the same script had been written. Same lesson as BA-155's retrospective, again.
+- `npm run test:e2e:update -- <spec> -g …` doesn't scope: the extra arguments land after `--update-snapshots` and are rejected. I scoped the update with `npx playwright test --update-snapshots=changed <spec> -g …` on the already-prepared build.
+- Three axe-scan tests silently depended on the System default (they switch themes through the emulated OS setting). Changing a default needs a grep for every test that relies on it.
+
+### What to do differently
+- In multi-file edit scripts, check every anchor's count before writing any file.
+- To regenerate one visual baseline, run `npm run test:e2e:prepare`, then `npx playwright test --project=web --update-snapshots=changed <spec> -g "<title>"`, and look at the actual image first.
+- Before changing a default, grep the E2E for what produces the old default (here `emulateMedia({ colorScheme`) and decide each case in the step-6 list.
+
 ## 2026-10-10 — 1.10.1 Per-model reasoning effort in LLM Settings (BA-160)
 
 ### What went well
