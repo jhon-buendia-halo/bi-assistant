@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { test, expect } from './fixtures/app.fixture';
+import { WORLD_CUP_CATALOG } from './helpers/world-cup-db';
 import {
   WORLD_CUP_DATASOURCE,
   WORLD_CUP_SESSION,
@@ -101,9 +102,9 @@ test('shows the real catalog schema and column metadata before a dataset is save
   await createWorldCupDataset(page);
 
   await page.getByTestId('dataset-World Cup Core').click();
-  await page.getByTestId('catalog-world_cup').click();
-  await page.getByTestId('schema-world_cup-world_cup').click();
-  await page.getByTestId('table-world_cup-world_cup-goals').click();
+  await page.getByTestId(`catalog-${WORLD_CUP_CATALOG}`).click();
+  await page.getByTestId(`schema-${WORLD_CUP_CATALOG}-world_cup`).click();
+  await page.getByTestId(`table-${WORLD_CUP_CATALOG}-world_cup-goals`).click();
   await expect(
     page.getByText('scorer_player_id', { exact: true }),
   ).toBeVisible();

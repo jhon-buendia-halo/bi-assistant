@@ -1,5 +1,3 @@
-import { execFileSync } from 'node:child_process';
-import path from 'node:path';
 import type { Locator, Page } from '@playwright/test';
 import { test, expect } from './fixtures/app.fixture';
 import { WORLD_CUP_DATASET, openSessions } from './helpers/app-actions';
@@ -21,6 +19,7 @@ import {
   systemTexts,
   turnRequests,
 } from './helpers/llm-stub';
+import { worldCupScalar } from './helpers/world-cup-db';
 
 /**
  * Mirrors the Feature "Sessions started from an agent" in
@@ -85,9 +84,7 @@ async function startChatFromCard(page: Page, name: string): Promise<void> {
   await openHub(page);
   await startChatButton(page, name).click();
   await expect(page.getByText(`Session "${name}" created`)).toBeVisible();
-  await expect(
-    page.getByRole('heading', { name, exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
 }
 
 function composer(page: Page): Locator {
@@ -102,7 +99,9 @@ async function send(page: Page, question: string): Promise<void> {
 /** Waits until `question` has been answered `answers` times in the chat. */
 async function expectAnswered(page: Page, answers: number): Promise<void> {
   await expect(page.getByText(STUB_ANSWER)).toHaveCount(answers);
-  await expect(page.getByRole('button', { name: 'Send message' })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Send message' }),
+  ).toBeVisible();
 }
 
 /** The first streamed request of the turn that asked `question`. */
@@ -121,30 +120,9 @@ function sessionRow(page: Page, name: string): Locator {
     .filter({ hasText: name });
 }
 
-/** Rows of `world_cup.matches`, or undefined when Docker can't be reached. */
-function matchRowCount(): number | undefined {
-  try {
-    const out = execFileSync(
-      'docker',
-      [
-        'compose',
-        'exec',
-        '-T',
-        'postgres',
-        'psql',
-        '-U',
-        'world_cup',
-        '-d',
-        'world_cup',
-        '-tAc',
-        'select count(*) from world_cup.matches',
-      ],
-      { cwd: path.resolve(__dirname, '../..'), encoding: 'utf8' },
-    );
-    return Number(out.trim());
-  } catch {
-    return undefined;
-  }
+/** Rows of `world_cup.matches` in the suite's World Cup database. */
+async function matchRowCount(): Promise<number> {
+  return Number(await worldCupScalar('select count(*) from world_cup.matches'));
 }
 
 test('start chat on an agent card opens a session bound to the agent', async ({
@@ -303,7 +281,7 @@ test("instructions can't switch off the read-only guard", async ({ page }) => {
             },
           },
         };
-  const rowsBefore = matchRowCount();
+  const rowsBefore = await matchRowCount();
 
   await startChatFromCard(page, 'Cleaner');
   await send(page, 'Tidy up the data');
@@ -317,16 +295,8 @@ test("instructions can't switch off the read-only guard", async ({ page }) => {
     }),
   ).toBeVisible();
 
-  const rowsAfter = matchRowCount();
-  if (rowsBefore === undefined || rowsAfter === undefined) {
-    test.info().annotations.push({
-      type: 'not checked',
-      description: 'Row count: Docker compose unreachable from the test.',
-    });
-  } else {
-    expect(rowsBefore).toBeGreaterThan(0);
-    expect(rowsAfter).toBe(rowsBefore);
-  }
+  expect(rowsBefore).toBeGreaterThan(0);
+  expect(await matchRowCount()).toBe(rowsBefore);
 });
 
 test('deleting the agent keeps its sessions on the plain assistant', async ({

@@ -1,5 +1,6 @@
 import { expect, Page } from '@playwright/test';
 import { WORLD_CUP_DATASET, WORLD_CUP_DATASOURCE } from './app-actions';
+import { WORLD_CUP_DB, worldCupKey } from './world-cup-db';
 
 /**
  * Seeds data through the backend API rather than the UI, so a test can start
@@ -47,14 +48,7 @@ export async function seedWorldCupDataset(page: Page): Promise<string> {
     {
       kind: 'postgres',
       name: WORLD_CUP_DATASOURCE,
-      config: {
-        host: '127.0.0.1',
-        port: 55432,
-        database: 'world_cup',
-        user: 'world_cup',
-        password: 'world_cup_dev',
-        ssl: false,
-      },
+      config: { ...WORLD_CUP_DB, ssl: false },
     },
   );
   await seedDataset(page, WORLD_CUP_DATASET, datasource.id);
@@ -67,7 +61,7 @@ export async function seedDataset(
   name: string,
   datasourceId: string,
 ): Promise<void> {
-  const key = 'world_cup.world_cup.matches';
+  const key = worldCupKey('matches');
   await call(page, 'POST', '/datasets', {
     name,
     tables: [key],

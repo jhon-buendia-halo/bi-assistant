@@ -5,6 +5,8 @@ const repositoryRoot = path.resolve(__dirname, '../..');
 
 export default async function globalSetup(): Promise<void> {
   if (process.env['E2E_SKIP_DOCKER'] === '1') return;
+  // An external World Cup database (E2E_WORLD_CUP_DB_HOST) needs no Docker.
+  if (process.env['E2E_WORLD_CUP_DB_HOST']) return;
 
   try {
     execFileSync('docker', ['compose', 'up', '-d', '--wait', 'postgres'], {
