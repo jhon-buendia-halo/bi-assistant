@@ -221,6 +221,8 @@ A conversation. The largest document; the whole transcript is embedded.
 | `name` | string | yes | Trimmed, non-empty, truncated to 64 characters. |
 | `workspaceId` | string | no | `session-<id>`; the Mastra workspace owned one-to-one by this session. |
 | `datasets` | string[] | yes | Names of the datasets the session works over (at least one at creation). Renamed from `sandboxes` (section 6). |
+| `agentId` | uuid | no | The user agent the session was started from (section 3.10). Absent for a plain-assistant session. Set at creation, never changed. No migration: absent means the plain assistant (ADR-0008). |
+| `agentName` | string | no | Present with `agentId`. The agent's Live name, stamped at creation and re-stamped by every turn that applies the agent, so a deleted agent's sessions can still name it. |
 | `messages` | `ChatMessage[]` | yes | Transcript in order. Empty at creation. |
 | `visualizations` | `SessionVisualization[]` | no | Visual metadata (section 3.4.3); `[]` at creation. |
 | `createdAt`, `updatedAt` | ISO | yes | Store-maintained. **Every** write to the document (a message, a rating, a visual change) bumps `updatedAt`, which orders the session list. |
@@ -427,6 +429,7 @@ Deep-analysis jobs exist only in process memory (bounded history; a backend rest
 | `metrics` | `datasourceId`, `sourceVerifiedQueryId` | `connections.id`, `verified_queries.id` | Provenance only, may dangle (a verified query id also rotates on re-approval). |
 | `eval_runs` | `datasourceId`, `datasets[]` | `connections.id`, `datasets.name` | Scope snapshot, may dangle. |
 | `agents` | `draft.datasets[]`, `live.datasets[]` | `datasets.name` | By name, no cascade. May dangle; the hub flags the agent as having a missing dataset. |
+| `sessions` | `agentId` | `agents.id` | By value, no cascade. Deleting the agent leaves the session pointing at a missing id; it then runs as the plain assistant and is shown with `agentName` (sessions-chat R59). |
 | `sessions[].visualizations[]` | `id`, `path` | `workspaces/session-<id>/visuals/<id>/` | Files under the session workspace; both removed with the session. |
 | `sessions[].messages[]` | `visual.visualId`, `report.jobId` | visual id / report file | By value. |
 | session | `id` | agent memory thread id and resource id; workspace `session-<id>` | See section 5. |

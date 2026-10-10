@@ -1,0 +1,78 @@
+# 1.9.3 red run (workflow step 7) — 2026-10-09, before any production code
+
+## Backend API e2e: backend/test/agent-sessions.e2e-spec.ts + user-agents.e2e-spec.ts
+  ● Sessions started from an agent (API) › refuses an agent that is not Live yet
+    - Expected  - 1
+    + Received  + 1
+    -   "message": "Publish \"Cup historian\" before starting a chat",
+    +   "message": "session name is required",
+  ● Sessions started from an agent (API) › refuses unknown ids and built-in agents
+    - Expected  - 1
+    + Received  + 1
+    -   "message": "Agent \"no-such-agent\" not found",
+    +   "message": "session name is required",
+  ● Sessions started from an agent (API) › creates a session from the Live agent, dropping missing datasets and ignoring the body's name and datasets
+    - Expected  - 15
+    + Received  +  3
+    -   "message": "Session \"Cup historian\" created",
+    +   "message": "Session \"Ignored\" created",
+  ● Sessions started from an agent (API) › refuses an agent none of whose datasets exist
+    - Expected  - 1
+    + Received  + 1
+    -   "message": "None of this agent's datasets exist",
+    +   "message": "session name is required",
+  ● Sessions started from an agent (API) › shows the Live name, never the draft, and keeps the session name
+    Expected: "Cup historian"
+    Received: undefined
+  ● Sessions started from an agent (API) › marks the agent deleted once it is gone, and survives a restart
+Tests:       6 failed, 10 passed, 16 total
+
+## Playwright (web): agent-sessions, agent-hub, llm-settings
+  ✓   1 [web] › e2e/agent-hub.spec.ts:92:5 › shows the built-in agents and mine in sections (2.5s)
+  ✓   2 [web] › e2e/agent-hub.spec.ts:143:5 › search narrows the agents by name or description (2.0s)
+  ✓   3 [web] › e2e/agent-hub.spec.ts:159:5 › filters limit the hub to one kind of agent (2.0s)
+  ✓   4 [web] › e2e/agent-hub.spec.ts:181:5 › pinned agents come first in their own section and survive a restart (3.7s)
+  ✓   5 [web] › e2e/agent-hub.spec.ts:241:5 › flags an agent whose dataset no longer exists (2.0s)
+  ✘   6 [web] › e2e/agent-hub.spec.ts:258:5 › a card opens the agent's detail view with its actions (12.4s)
+  ✓   7 [web] › e2e/agent-hub.spec.ts:281:5 › publishing a draft makes it Live (2.4s)
+  ✓   8 [web] › e2e/agent-hub.spec.ts:307:5 › deleting an agent asks first (1.9s)
+  ✓   9 [web] › e2e/agent-hub.spec.ts:335:5 › the hub has no detectable accessibility violations in either theme (3.6s)
+  ✘  10 [web] › e2e/agent-sessions.spec.ts:143:5 › start chat on an agent card opens a session bound to the agent (30.2s)
+  ✘  11 [web] › e2e/agent-sessions.spec.ts:169:5 › only Live agents and the Official agent offer Start chat (11.9s)
+  ✘  12 [web] › e2e/agent-sessions.spec.ts:203:5 › start chat is unavailable when none of the agent's datasets exist (11.9s)
+  ✘  13 [web] › e2e/agent-sessions.spec.ts:223:5 › the agent's Live instructions and model shape every turn (30.2s)
+  ✘  14 [web] › e2e/agent-sessions.spec.ts:269:5 › instructions can't switch off the read-only guard (30.2s)
+  ✘  15 [web] › e2e/agent-sessions.spec.ts:315:5 › deleting the agent keeps its sessions on the plain assistant (30.2s)
+  ✓  16 [web] › e2e/llm-settings.spec.ts:72:5 › LenAI needs a deployment name and a base URL (1.8s)
+  ✓  17 [web] › e2e/llm-settings.spec.ts:85:5 › never shows the stored key (1.9s)
+  ✓  18 [web] › e2e/llm-settings.spec.ts:104:5 › keeps a key saved under the former development secret (3.8s)
+  ✓  19 [web] › e2e/llm-settings.spec.ts:133:5 › asks for the key again when the app secret changed (3.7s)
+  1) [web] › e2e/agent-hub.spec.ts:258:5 › a card opens the agent's detail view with its actions ───
+    Error: expect(locator).toBeVisible() failed
+    Locator: getByRole('button', { name: 'Start chat', exact: true })
+      - waiting for getByRole('button', { name: 'Start chat', exact: true })
+    test-results/agent-hub-a-card-opens-the-ed91f-etail-view-with-its-actions-web/test-failed-1.png
+  2) [web] › e2e/agent-sessions.spec.ts:143:5 › start chat on an agent card opens a session bound to the agent 
+      - waiting for getByRole('button', { name: 'Start chat with Cup historian' })
+    test-results/agent-sessions-start-chat--2bce9--session-bound-to-the-agent-web/test-failed-1.png
+  3) [web] › e2e/agent-sessions.spec.ts:169:5 › only Live agents and the Official agent offer Start chat 
+    Error: expect(locator).toBeVisible() failed
+    Locator: getByRole('button', { name: 'Start chat with Questions to Insights Assistant' })
+      - waiting for getByRole('button', { name: 'Start chat with Questions to Insights Assistant' })
+    test-results/agent-sessions-only-Live-a-36b8c-cial-agent-offer-Start-chat-web/test-failed-1.png
+  4) [web] › e2e/agent-sessions.spec.ts:203:5 › start chat is unavailable when none of the agent's datasets exist 
+    Error: expect(locator).toBeDisabled() failed
+    Locator: getByRole('button', { name: 'Start chat with Scratch analyst' })
+      - waiting for getByRole('button', { name: 'Start chat with Scratch analyst' })
+    test-results/agent-sessions-start-chat--ad60c--the-agent-s-datasets-exist-web/test-failed-1.png
+  5) [web] › e2e/agent-sessions.spec.ts:223:5 › the agent's Live instructions and model shape every turn 
+      - waiting for getByRole('button', { name: 'Start chat with Cup historian' })
+    test-results/agent-sessions-the-agent-s-e364c--and-model-shape-every-turn-web/test-failed-1.png
+  6) [web] › e2e/agent-sessions.spec.ts:269:5 › instructions can't switch off the read-only guard ──
+      - waiting for getByRole('button', { name: 'Start chat with Cleaner' })
+    test-results/agent-sessions-instruction-61c61-tch-off-the-read-only-guard-web/test-failed-1.png
+  7) [web] › e2e/agent-sessions.spec.ts:315:5 › deleting the agent keeps its sessions on the plain assistant 
+      - waiting for getByRole('button', { name: 'Start chat with Cup historian' })
+    test-results/agent-sessions-deleting-th-089e1-ions-on-the-plain-assistant-web/test-failed-1.png
+  7 failed
+  12 passed (3.2m)

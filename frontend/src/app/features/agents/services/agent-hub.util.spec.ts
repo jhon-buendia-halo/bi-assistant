@@ -1,9 +1,12 @@
 import { Agent } from './agents-api.service';
 import {
   HUB_ROW_SIZE,
+  NO_DATASETS_LEFT,
   buildHubSections,
+  canStartChat,
   hubEmptyMessage,
   matchesQuery,
+  startChatBlockedReason,
   visibleCards,
 } from './agent-hub.util';
 
@@ -194,5 +197,45 @@ describe('hubEmptyMessage', () => {
     expect(
       hubEmptyMessage('all', 'sql', buildHubSections(all, 'all', 'sql')),
     ).toBeNull();
+  });
+});
+
+describe('canStartChat', () => {
+  const live: Agent = { ...health, status: 'live', datasets: ['Core'] };
+
+  it('offers Start chat for the Official agent and Live user agents', () => {
+    expect(canStartChat(assistant)).toBeTrue();
+    expect(canStartChat(live)).toBeTrue();
+    expect(canStartChat({ ...live, hasUnpublishedChanges: true })).toBeTrue();
+  });
+
+  it('never offers it for drafts or System agents', () => {
+    expect(canStartChat(health)).toBeFalse();
+    for (const helper of system) expect(canStartChat(helper)).toBeFalse();
+  });
+});
+
+describe('startChatBlockedReason', () => {
+  const live: Agent = {
+    ...health,
+    status: 'live',
+    datasets: ['Core', 'Claims'],
+  };
+
+  it('blocks a user agent none of whose datasets exist', () => {
+    expect(
+      startChatBlockedReason({ ...live, missingDatasets: ['Core', 'Claims'] }),
+    ).toBe(NO_DATASETS_LEFT);
+  });
+
+  it('allows a user agent with at least one dataset left', () => {
+    expect(startChatBlockedReason(live)).toBeNull();
+    expect(
+      startChatBlockedReason({ ...live, missingDatasets: ['Claims'] }),
+    ).toBeNull();
+  });
+
+  it('never blocks the Official agent, which has no datasets', () => {
+    expect(startChatBlockedReason(assistant)).toBeNull();
   });
 });

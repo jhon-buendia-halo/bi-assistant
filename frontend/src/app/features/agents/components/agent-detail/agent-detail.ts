@@ -20,6 +20,7 @@ import {
   Gauge,
   Loader2,
   ListChecks,
+  MessageSquarePlus,
   ChevronRight,
   Download,
   Play,
@@ -36,6 +37,10 @@ import {
   EvalRunView,
 } from '../../services/agents-api.service';
 import { EvalSelectionService } from '../../services/eval-selection.service';
+import {
+  canStartChat,
+  startChatBlockedReason,
+} from '../../services/agent-hub.util';
 import { ToastService } from '../../../../core/toast/toast.service';
 import {
   Datasource,
@@ -63,6 +68,7 @@ export class AgentDetail implements OnDestroy {
   readonly Gauge = Gauge;
   readonly Loader2 = Loader2;
   readonly ListChecks = ListChecks;
+  readonly MessageSquarePlus = MessageSquarePlus;
   readonly ChevronRight = ChevronRight;
   readonly Download = Download;
   readonly Play = Play;
@@ -95,6 +101,10 @@ export class AgentDetail implements OnDestroy {
   readonly back = output<void>();
   /** Emitted after a user agent is deleted; the app returns to the hub. */
   readonly deleted = output<void>();
+  /** Start chat; the shell creates or composes the session (R53). */
+  readonly startChat = output<AgentDetailModel>();
+  /** True while a session is being created from this agent. */
+  readonly starting = input(false);
 
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
@@ -164,8 +174,19 @@ export class AgentDetail implements OnDestroy {
     });
   }
 
-  /** User agents only; built-in agents offer no actions (R5). */
+  /** User agents only; built-in agents offer neither Publish nor Delete (R5). */
   readonly isUserAgent = computed(() => this.agent()?.kind === 'user');
+
+  /** The Official agent and Live user agents offer Start chat (R53). */
+  readonly showStartChat = computed(() => {
+    const agent = this.agent();
+    return !!agent && canStartChat(agent);
+  });
+  /** Set when none of the agent's datasets exist; disables Start chat. */
+  readonly startChatBlockedReason = computed(() => {
+    const agent = this.agent();
+    return agent ? startChatBlockedReason(agent) : null;
+  });
 
   /** Publish shows when there is no Live version or it has unpublished changes. */
   readonly canPublish = computed(() => {

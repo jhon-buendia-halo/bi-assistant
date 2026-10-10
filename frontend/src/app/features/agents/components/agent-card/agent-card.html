@@ -8,6 +8,7 @@
     [attr.data-testid]="'agent-' + a.key"
     (click)="open.emit()"
     class="agent-open flex min-w-0 flex-1 flex-col gap-2.5 rounded-xl p-4 text-left outline-none"
+    [class.pb-14]="showStartChat()"
   >
     <!-- The tile row also holds the pin toggle (absolutely placed), so the
          name gets the card's full width even three cards to a row. -->
@@ -72,4 +73,24 @@
       <span>Pin</span>
     }
   </button>
+
+  @if (showStartChat()) {
+    <!-- Bottom-right; the open control keeps room for it (pb-14). -->
+    <button
+      type="button"
+      [attr.data-testid]="'agent-start-chat-' + a.key"
+      (click)="startChat.emit()"
+      [disabled]="starting() || !!blockedReason()"
+      [attr.title]="blockedReason()"
+      [attr.aria-label]="'Start chat with ' + a.name"
+      class="btn btn-secondary absolute right-4 bottom-4 px-3 py-1 text-[12px]"
+    >
+      @if (starting()) {
+        <lucide-angular [img]="Loader2" [size]="12" class="animate-spin" />
+      } @else {
+        <lucide-angular [img]="MessageSquarePlus" [size]="12" />
+      }
+      <span>Start chat</span>
+    </button>
+  }
 </div>

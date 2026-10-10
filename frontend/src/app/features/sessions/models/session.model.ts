@@ -174,15 +174,53 @@ export interface InteractiveVisualization extends SessionVisualization {
   version: number;
 }
 
+/**
+ * The agent a session was started from (sessions-chat R52-R59), derived by
+ * the backend from the agent's current Live version. `deleted` sessions keep
+ * the name the agent last had and run on the plain assistant.
+ */
+export interface SessionAgent {
+  id: string;
+  name: string;
+  deleted: boolean;
+  description: string;
+  starterQuestions: string[];
+}
+
 export interface Session {
   id: string;
   name: string;
   workspaceId?: string;
   datasets: string[];
+  /** Set when the session was started from a user agent. */
+  agentId?: string;
+  /** The agent's name as last seen for this session. */
+  agentName?: string;
+  /** Present exactly when `agentId` is. */
+  agent?: SessionAgent;
   messages: ChatMessage[];
   visualizations?: SessionVisualization[];
   createdAt?: string;
   updatedAt?: string;
+}
+
+/**
+ * The agent's name as the page header chip shows it (sessions-chat R57),
+ * marked once the agent is gone (R59).
+ */
+export function sessionAgentLabel(agent: SessionAgent): string {
+  return agent.deleted ? `${agent.name} · agent deleted` : agent.name;
+}
+
+/**
+ * The line under a session's name in the session list: its datasets, led by
+ * the agent's name for a session bound to an agent, or `<name> · agent
+ * deleted` once the agent is gone (R57, R59). Empty when there is nothing.
+ */
+export function sessionListSubtitle(session: Session): string {
+  const agent = session.agent;
+  if (agent?.deleted) return sessionAgentLabel(agent);
+  return [...(agent ? [agent.name] : []), ...session.datasets].join(' · ');
 }
 
 export interface SessionActionResult {

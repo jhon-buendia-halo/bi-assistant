@@ -183,8 +183,24 @@ export interface SessionDoc {
   workspaceId?: string;
   /** Names of the datasets this session works over. */
   datasets: string[];
+  /** The user agent the session was started from (sessions-chat R52). */
+  agentId?: string;
+  /** The agent's Live name, re-stamped by each turn that applies it (R59). */
+  agentName?: string;
   messages: ChatMessage[];
   visualizations?: SessionVisualization[];
   createdAt?: string;
   updatedAt?: string;
 }
+
+/** The agent a session was started from, as the API shows it (api.md 2.1). */
+export interface SessionAgentRef {
+  id: string;
+  name: string;
+  deleted: boolean;
+  description: string;
+  starterQuestions: string[];
+}
+
+/** A session on the wire: the stored document plus its derived `agent`. */
+export type SessionView = SessionDoc & { agent?: SessionAgentRef };

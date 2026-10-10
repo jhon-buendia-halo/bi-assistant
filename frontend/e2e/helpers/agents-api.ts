@@ -35,8 +35,11 @@ async function call<T extends StyleA>(
   return body;
 }
 
-/** Saves the World Cup datasource and a "World Cup Core" dataset over `matches`. */
-export async function seedWorldCupDataset(page: Page): Promise<void> {
+/**
+ * Saves the World Cup datasource and a "World Cup Core" dataset over
+ * `matches`, and returns the datasource id.
+ */
+export async function seedWorldCupDataset(page: Page): Promise<string> {
   const { datasource } = await call<StyleA & { datasource: { id: string } }>(
     page,
     'POST',
@@ -54,9 +57,19 @@ export async function seedWorldCupDataset(page: Page): Promise<void> {
       },
     },
   );
+  await seedDataset(page, WORLD_CUP_DATASET, datasource.id);
+  return datasource.id;
+}
+
+/** Saves a dataset named `name` over the World Cup `matches` table. */
+export async function seedDataset(
+  page: Page,
+  name: string,
+  datasourceId: string,
+): Promise<void> {
   const key = 'world_cup.world_cup.matches';
   await call(page, 'POST', '/datasets', {
-    name: WORLD_CUP_DATASET,
+    name,
     tables: [key],
     entities: [
       {
@@ -64,8 +77,27 @@ export async function seedWorldCupDataset(page: Page): Promise<void> {
         columns: [{ name: 'match_number', type: 'integer', nullable: false }],
       },
     ],
-    datasourceId: datasource.id,
+    datasourceId,
     datasourceKind: 'postgres',
+  });
+}
+
+/** Deletes a dataset by name. */
+export async function deleteDataset(page: Page, name: string): Promise<void> {
+  await call(page, 'DELETE', `/datasets/${encodeURIComponent(name)}`);
+}
+
+/** Saves a LenAI configuration whose gateway is `baseUrl` (an LLM stub). */
+export async function saveLenaiSettings(
+  page: Page,
+  baseUrl: string,
+  deployment = 'stub-deployment',
+): Promise<void> {
+  await call(page, 'PUT', '/llm/settings', {
+    provider: 'lenai',
+    model: deployment,
+    baseUrl,
+    apiKey: 'sk-stub',
   });
 }
 
@@ -74,6 +106,9 @@ export interface UserAgentInput {
   description?: string;
   instructions?: string;
   datasets?: string[];
+  starterQuestions?: string[];
+  model?: string;
+  reasoningEffort?: 'low' | 'medium' | 'high';
 }
 
 /** Creates a user agent as a draft and returns its id. */

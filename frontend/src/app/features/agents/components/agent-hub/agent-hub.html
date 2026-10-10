@@ -88,6 +88,8 @@
                 [agent]="agent"
                 (open)="openAgent.emit(agent)"
                 (togglePin)="togglePin(agent)"
+                [starting]="startingAgentKey() === agent.key"
+                (startChat)="startChat.emit(agent)"
               />
             }
           </div>

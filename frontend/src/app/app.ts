@@ -30,6 +30,7 @@ import {
   Settings,
   Signal,
   Sparkle,
+  Sparkles,
   TestTube,
   Trash2,
   Workflow,
@@ -52,6 +53,7 @@ import { AgentHub } from './features/agents/components/agent-hub/agent-hub';
 import { AgentDetail } from './features/agents/components/agent-detail/agent-detail';
 import { EvalTrace } from './features/agents/components/eval-trace/eval-trace';
 import { Agent } from './features/agents/services/agents-api.service';
+import { agentKind } from './features/agents/services/agent-hub.util';
 import { KnowledgeList } from './features/knowledge/components/knowledge-list/knowledge-list';
 import { CatalogBrowser } from './features/datasets/components/catalog-browser/catalog-browser';
 import { EntityDetails } from './features/datasets/components/entity-details/entity-details';
@@ -77,6 +79,8 @@ import {
   SessionActionResult,
   SessionVisualization,
   VisualEvent,
+  sessionAgentLabel,
+  sessionListSubtitle,
 } from './features/sessions/models/session.model';
 import { ReasoningEffort } from './features/llm/models/llm.model';
 import { ToastService } from './core/toast/toast.service';
@@ -178,6 +182,7 @@ export class App {
   readonly Settings = Settings;
   readonly Signal = Signal;
   readonly Sparkle = Sparkle;
+  readonly Sparkles = Sparkles;
   readonly TestTube = TestTube;
   readonly Wrench = Wrench;
   readonly SunMoon = SunMoon;
@@ -210,6 +215,52 @@ export class App {
   openAgent(agent: Agent): void {
     this.activeAgentKey.set(agent.key);
     this.mainView.set('agent-detail');
+  }
+
+  readonly agentLabel = sessionAgentLabel;
+  readonly sessionSubtitle = sessionListSubtitle;
+
+  /**
+   * Back to the hub after deleting a user agent. Its sessions now read
+   * `<name> · agent deleted` (sessions-chat R59), so the list is reloaded.
+   */
+  onAgentDeleted(): void {
+    this.mainView.set('agents');
+    this.loadSessions();
+  }
+
+  /** Key of the agent a session is being created from, while in flight. */
+  readonly startingAgentKey = signal<string | null>(null);
+
+  /**
+   * Start chat on a hub card or an agent's detail (agents-evals R53). The
+   * Official agent has no datasets of its own, so it opens the New-session
+   * composer; a Live user agent gets its session created and opened at once
+   * (sessions-chat R52). A refusal keeps the user where they are.
+   */
+  startChatWithAgent(agent: Agent): void {
+    if (agentKind(agent) === 'official') {
+      this.openComposer();
+      return;
+    }
+    if (this.startingAgentKey()) return;
+    this.startingAgentKey.set(agent.key);
+    this.sessionsApi.createFromAgent(agent.key).subscribe({
+      next: (res) => {
+        this.startingAgentKey.set(null);
+        if (res.ok && res.session) {
+          this.toast.success(res.message);
+          this.loadSessions();
+          this.openSession(res.session);
+        } else {
+          this.toast.error(res.message);
+        }
+      },
+      error: (err) => {
+        this.startingAgentKey.set(null);
+        this.toast.error(err?.error?.message ?? 'Backend unreachable');
+      },
+    });
   }
 
   private readonly datasetSelection = inject(DatasetSelectionService);

@@ -22,7 +22,13 @@ export type AgentModelConfig =
       headers?: Record<string, string>;
     };
 
-export type AgentModelResolver = () => Promise<AgentModelConfig>;
+/**
+ * Resolves the persisted model. `modelOverride` replaces the saved model or
+ * deployment name for one call (a user agent's override, agents.md 1.3).
+ */
+export type AgentModelResolver = (
+  modelOverride?: string,
+) => Promise<AgentModelConfig>;
 
 let resolver: AgentModelResolver | null = null;
 
@@ -30,10 +36,33 @@ export function setAgentModelResolver(fn: AgentModelResolver): void {
   resolver = fn;
 }
 
-export async function resolveAgentModel(): Promise<AgentModelConfig> {
+export async function resolveAgentModel(
+  modelOverride?: string,
+): Promise<AgentModelConfig> {
   if (resolver) {
-    return resolver();
+    return resolver(modelOverride);
   }
   // Fallback: env-bound string router (OPENAI_API_KEY) when no settings exist.
   return 'openai/gpt-4o-mini';
+}
+
+/**
+ * requestContext key carrying a user agent's model and reasoning-effort
+ * overrides for the assistant's calls in a session bound to that agent
+ * (agents.md 4.2). Only the assistant's model function reads it.
+ */
+export const AGENT_OVERRIDES_CONTEXT_KEY = 'agent-overrides';
+
+export interface AgentOverrides {
+  model?: string;
+  reasoningEffort?: 'low' | 'medium' | 'high';
+}
+
+/** The model override on a call's requestContext, if any. */
+export function modelOverrideFrom(requestContext?: {
+  get(key: string): unknown;
+}): string | undefined {
+  const overrides = requestContext?.get(AGENT_OVERRIDES_CONTEXT_KEY) as
+    AgentOverrides | undefined;
+  return overrides?.model || undefined;
 }

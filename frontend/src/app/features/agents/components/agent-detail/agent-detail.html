@@ -55,15 +55,40 @@
           }
         </div>
       </div>
-      @if (isUserAgent()) {
+      @if (showStartChat() || isUserAgent()) {
         <div class="ml-auto flex shrink-0 items-center gap-2">
+          @if (showStartChat()) {
+            <button
+              type="button"
+              data-testid="agent-start-chat"
+              (click)="startChat.emit(agent)"
+              [disabled]="starting() || !!startChatBlockedReason()"
+              [attr.title]="startChatBlockedReason()"
+              class="btn btn-primary"
+            >
+              @if (starting()) {
+                <lucide-angular
+                  [img]="Loader2"
+                  [size]="14"
+                  class="animate-spin"
+                />
+                <span>Starting…</span>
+              } @else {
+                <lucide-angular [img]="MessageSquarePlus" [size]="14" />
+                <span>Start chat</span>
+              }
+            </button>
+          }
           @if (canPublish()) {
+            <!-- Secondary beside Start chat: one primary action (ui.md 4.5). -->
             <button
               type="button"
               data-testid="agent-publish"
               (click)="publish()"
               [disabled]="publishing()"
-              class="btn btn-primary"
+              class="btn"
+              [class.btn-primary]="!showStartChat()"
+              [class.btn-secondary]="showStartChat()"
             >
               @if (publishing()) {
                 <lucide-angular
@@ -78,25 +103,27 @@
               }
             </button>
           }
-          <button
-            type="button"
-            data-testid="agent-delete"
-            (click)="deleteAgent()"
-            [disabled]="deleting()"
-            class="btn btn-danger"
-          >
-            @if (deleting()) {
-              <lucide-angular
-                [img]="Loader2"
-                [size]="14"
-                class="animate-spin"
-              />
-              <span>Deleting…</span>
-            } @else {
-              <lucide-angular [img]="Trash2" [size]="14" />
-              <span>Delete</span>
-            }
-          </button>
+          @if (isUserAgent()) {
+            <button
+              type="button"
+              data-testid="agent-delete"
+              (click)="deleteAgent()"
+              [disabled]="deleting()"
+              class="btn btn-danger"
+            >
+              @if (deleting()) {
+                <lucide-angular
+                  [img]="Loader2"
+                  [size]="14"
+                  class="animate-spin"
+                />
+                <span>Deleting…</span>
+              } @else {
+                <lucide-angular [img]="Trash2" [size]="14" />
+                <span>Delete</span>
+              }
+            </button>
+          }
         </div>
       }
     </div>

@@ -120,6 +120,8 @@ Controller prefix `/sessions`. Capability: sessions-chat, visuals.
 | 13 | `POST /sessions/:id/visualizations/:vid/repair` | One-shot silent auto-repair | yes |
 | 14 | `GET /sessions/:id/visualizations/:vid/download` | Zip bundle | yes |
 
+The session on the wire (endpoints 1-3, and the `done` event of 5) is the stored `SessionDoc` (data-model 3.4) plus, for a session with an `agentId`, a derived `agent: { id: string; name: string; deleted: boolean; description: string; starterQuestions: string[] }`. While the agent exists, `name`, `description` and `starterQuestions` come from its Live version and `deleted` is `false`. Once it is deleted, `name` is the stored `agentName`, `deleted` is `true`, and `description` and `starterQuestions` are empty (sessions-chat R57-R59). It is computed on every read, never stored.
+
 #### 1. `GET /sessions`
 - Response `200`: `{ sessions: SessionDoc[] }`. Ordering is the repository's (most recently updated first; see data-model). No pagination; full documents including messages are returned.
 - Errors: none expected.
@@ -130,11 +132,12 @@ Controller prefix `/sessions`. Capability: sessions-chat, visuals.
 - Errors: `404 "Session <id> not found"` (Style B).
 
 #### 3. `POST /sessions`
-- Body: `{ name: string; datasets: string[] }`. `name` required (trimmed, non-empty, **truncated to 64 chars**); `datasets` must be a non-empty array of dataset **names**.
+- Body: `{ name: string; datasets: string[] }` or `{ agentId: string }`. `name` required (trimmed, non-empty, **truncated to 64 chars**); `datasets` must be a non-empty array of dataset **names**.
+- With `agentId` (a user-agent id; sessions-chat R52): `name` and `datasets` in the body are ignored. The session takes the agent's Live name and those of its Live datasets that exist, and stores `agentId` and `agentName` (data-model 3.4).
 - Success: `{ ok:true, message:"Session \"<name>\" created", session: SessionDoc }` with `messages: []`, `visualizations: []`, a generated UUID `id`, and a contained Mastra workspace created and linked (`workspaceId`).
-- Failures (Style A): `"session name is required"`, `"select at least one dataset"`.
+- Failures (Style A): `"session name is required"`, `"select at least one dataset"`. With `agentId`: `"Agent \"<id>\" not found"` (unknown id, or a built-in agent's key), `"Publish \"<name>\" before starting a chat"` (no Live version), `"None of this agent's datasets exist"`.
 - Side effects: persists the session; creates the workspace directory `workspaces/session-<id>`.
-- Does not verify the named datasets exist (see G7).
+- Without `agentId`, does not verify the named datasets exist (see G7).
 
 #### 4. `DELETE /sessions/:id`
 - Success: `{ ok:true, message:"Session \"<name>\" deleted" }`.
@@ -418,7 +421,7 @@ Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra regi
 - Failures (Style A): `"Agent \"<id>\" not found"`; `"Select at least one dataset to publish"`; `"Agent name is required"`; `"Built-in agents can't be edited"`.
 
 #### 44. `DELETE /agents/:id`
-- Success: `{ ok:true, message:"Agent \"<name>\" deleted" }`. Sessions that reference the agent are not touched.
+- Success: `{ ok:true, message:"Agent \"<name>\" deleted" }`. Sessions that reference the agent are not touched; they read as `agent.deleted: true` from then on (section 2.1).
 - Failures (Style A): `"Agent \"<id>\" not found"`; `"Built-in agents can't be deleted"`.
 
 #### 45. `PUT /agents/:key/pin`

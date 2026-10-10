@@ -3,6 +3,7 @@ import {
   OnInit,
   computed,
   inject,
+  input,
   output,
   signal,
 } from '@angular/core';
@@ -27,7 +28,7 @@ import { ToastService } from '../../../../core/toast/toast.service';
 import { AgentCard } from '../agent-card/agent-card';
 
 /**
- * The Agents screen (agents-evals R1-R4, ui.md 4.4). Search, filter and
+ * The Agents screen (agents-evals R1-R4, R53, ui.md 4.4). Search, filter and
  * expanded sections live in this component, so they reset each time the hub
  * opens.
  */
@@ -51,6 +52,10 @@ export class AgentHub implements OnInit {
   private readonly toast = inject(ToastService);
 
   readonly openAgent = output<Agent>();
+  /** Start chat on a card; the shell creates or composes the session (R53). */
+  readonly startChat = output<Agent>();
+  /** Key of the agent whose session is being created, if any. */
+  readonly startingAgentKey = input<string | null>(null);
 
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);

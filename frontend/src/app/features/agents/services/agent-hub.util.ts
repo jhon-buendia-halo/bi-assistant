@@ -126,3 +126,29 @@ export function hubEmptyMessage(
   if (filter === 'mine') return 'No agents of yours yet.';
   return null;
 }
+
+/**
+ * Start chat is offered for the Official agent and Live user agents, never
+ * for drafts or System agents (agents-evals R53). A Live agent with
+ * unpublished changes still offers it; the session uses the Live version.
+ */
+export function canStartChat(agent: Agent): boolean {
+  const kind = agentKind(agent);
+  return kind === 'official' || (kind === 'user' && agent.status === 'live');
+}
+
+/** Title of a disabled Start chat (R53, sessions-chat R52). */
+export const NO_DATASETS_LEFT = "None of this agent's datasets exist";
+
+/**
+ * Why Start chat is disabled for an agent that offers it, or null when it can
+ * run: a user agent none of whose datasets still exist (R53).
+ */
+export function startChatBlockedReason(agent: Agent): string | null {
+  if (agentKind(agent) !== 'user') return null;
+  const datasets = agent.datasets ?? [];
+  const missing = agent.missingDatasets ?? [];
+  return datasets.length > 0 && missing.length >= datasets.length
+    ? NO_DATASETS_LEFT
+    : null;
+}

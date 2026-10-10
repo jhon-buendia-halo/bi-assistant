@@ -1,6 +1,6 @@
 import { Agent } from '@mastra/core/agent';
 import { Memory } from '@mastra/memory';
-import { resolveAgentModel } from '../model-resolver';
+import { modelOverrideFrom, resolveAgentModel } from '../model-resolver';
 import { datasetTools } from '../tools/dataset.tools';
 import { askClarificationTool } from '../tools/clarification.tool';
 import { visualTools } from '../tools/visual.tools';
@@ -139,8 +139,10 @@ export const assistantAgent = new Agent({
     '  and re-run before answering, rather than passing it to the user.',
   ].join('\n'),
   // Dynamic model resolved at call time from the persisted LLM settings
-  // (provider / model / runtime API key); see ../model-resolver.
-  model: async () => resolveAgentModel(),
+  // (provider / model / runtime API key); see ../model-resolver. A session
+  // bound to a user agent may override the model name for this agent only.
+  model: async ({ requestContext }) =>
+    resolveAgentModel(modelOverrideFrom(requestContext)),
   memory: new Memory({
     options: {
       // Keep enough recent session context for follow-up analysis without

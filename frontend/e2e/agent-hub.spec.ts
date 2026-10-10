@@ -263,14 +263,17 @@ test("a card opens the agent's detail view with its actions", async ({
   await openAgent(page, claimsId, CLAIMS);
   await expect(button(page, 'Publish')).toBeVisible();
   await expect(button(page, 'Delete')).toBeVisible();
+  await expect(button(page, 'Start chat')).toHaveCount(0);
 
   await button(page, 'All agents').click();
   await openAgent(page, healthId, HEALTH);
+  await expect(button(page, 'Start chat')).toBeVisible();
   await expect(button(page, 'Delete')).toBeVisible();
   await expect(button(page, 'Publish')).toHaveCount(0);
 
   await button(page, 'All agents').click();
   await openAgent(page, 'assistant', ASSISTANT);
+  await expect(button(page, 'Start chat')).toBeVisible();
   await expect(button(page, 'Publish')).toHaveCount(0);
   await expect(button(page, 'Delete')).toHaveCount(0);
 });

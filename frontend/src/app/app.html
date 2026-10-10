@@ -117,9 +117,9 @@
                       <span class="truncate text-[13px] font-medium text-fg">{{
                         session.name
                       }}</span>
-                      @if (session.datasets.length > 0) {
+                      @if (sessionSubtitle(session); as subtitle) {
                         <span class="truncate text-[12px] text-fg-muted">{{
-                          session.datasets.join(" · ")
+                          subtitle
                         }}</span>
                       }
                     </button>
@@ -329,6 +329,25 @@
                     </h2>
                     @if (showSessionContext()) {
                       <div class="mt-1 flex min-w-0 items-center gap-2">
+                        @if (activeSession()?.agent; as agent) {
+                          <!-- Agent first, then 12 px before the datasources (R57). -->
+                          <lucide-angular
+                            [img]="Sparkles"
+                            [size]="14"
+                            class="shrink-0 text-fg-muted"
+                          />
+                          <span
+                            class="shrink-0 text-[10px] font-medium tracking-[0.08em] text-fg-muted uppercase"
+                            >Agent</span
+                          >
+                          <span
+                            data-testid="session-agent"
+                            class="chip chip-neutral mr-1 min-w-0"
+                            ><span class="max-w-48 truncate">{{
+                              agentLabel(agent)
+                            }}</span></span
+                          >
+                        }
                         <lucide-angular
                           [img]="Database"
                           [size]="14"
@@ -470,6 +489,8 @@
                   <app-agent-hub
                     class="w-full max-w-[960px]"
                     (openAgent)="openAgent($event)"
+                    [startingAgentKey]="startingAgentKey()"
+                    (startChat)="startChatWithAgent($event)"
                   />
                 </div>
               } @else if (mainView() === "agent-detail" && activeAgentKey()) {
@@ -478,7 +499,9 @@
                     class="w-full max-w-[960px]"
                     [agentKey]="activeAgentKey()!"
                     (back)="mainView.set('agents')"
-                    (deleted)="mainView.set('agents')"
+                    (deleted)="onAgentDeleted()"
+                    [starting]="startingAgentKey() === activeAgentKey()"
+                    (startChat)="startChatWithAgent($event)"
                   />
                 </div>
               } @else if (mainView() === "knowledge") {

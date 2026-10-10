@@ -118,6 +118,13 @@ export class SessionsApiService {
     });
   }
 
+  /** Start a session bound to a Live user agent, named after it (R52). */
+  createFromAgent(agentId: string): Observable<SessionActionResult> {
+    return this.http.post<SessionActionResult>(`${API_BASE_URL}/sessions`, {
+      agentId,
+    });
+  }
+
   delete(id: string): Observable<SessionActionResult> {
     return this.http.delete<SessionActionResult>(
       `${API_BASE_URL}/sessions/${encodeURIComponent(id)}`,

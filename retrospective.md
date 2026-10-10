@@ -14,6 +14,26 @@ Entry template:
 
 ---
 
+## 2026-10-09 — 1.9.3 Start a session from an agent (BA-153)
+
+### What went well
+- Four multiple-choice questions settled the behaviour before any spec was written: create the session at once; Start chat on the card and in the detail; republish changes instructions and model but not datasets; a deleted agent's sessions show its name. The rules, Gherkin and tests then followed without rework.
+- A local OpenAI-compatible stub that records requests turned "the answer follows the agent's instructions" into an exact check: which system messages the model got, in what order, and which deployment it was called as. It also scripted the `DELETE` tool call for the read-only guard scenario.
+- Splitting the frontend to a parallel agent, against a contract fixed in the specs and the E2E file, let both halves land in one pass. The agent found a real stale-copy bug (reopening a session showed it as before that visit's turns) by running the deletion scenario.
+- Moving the backend process harness into `test/backend-process.ts` kept the second API test from copying 60 lines. Re-running `user-agents.e2e-spec.ts` confirmed the refactor.
+
+### What went wrong
+- The first version of the instructions scenario asserted that the agent block was the *last* system message. Mastra appends its own workspace and skills messages after the app's context, so the assertion was wrong, not the code. I had not looked at a real request before writing it.
+- The guard scenario's error-text locator matched twice (the summary line and the detail), a strict-mode failure that `{ exact: true }` fixed.
+- The agent's description ran straight into "Connected to …" with no full stop. Only the screenshot showed it; the unit test checked `toContain(description)`.
+- I repeated the `### Fixed` multiple-match mistake from the BA-141 merge, an hour after writing the lesson down. The assertion caught it, but one edit had already been applied.
+
+### What to do differently
+- Before asserting the order or position of anything sent to the model, dump one real request from the stub (as `model-request-system-messages.json` now does) and write the assertion against it. Assert relative order against the app's own blocks, never "last".
+- For changelog edits, insert under the date with a first-occurrence search bounded by the next `## ` date heading, not a unique-match replace on `### Fixed` / `### Added`.
+- When welcome or summary copy concatenates user-written text with fixed text, add a unit test on the exact rendered string, not `toContain`.
+- In a subagent brief for UI work, ask it to screenshot the changed screens in both themes, so copy and spacing issues surface before the evidence step.
+
 ## 2026-10-09 — 1.9.4 follow-up: merging BA-141's restyle into the Agent Hub branch (BA-154)
 
 ### What went well

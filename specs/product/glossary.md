@@ -104,7 +104,9 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Schema.** The middle level of an *entity* name.
 
-**Session.** One conversation with the assistant, bound to one or more *datasets*. Holds the transcript, the visuals, and owns one *workspace* and one memory thread. Needs a name and at least one dataset. Legacy name: *project* (collection `projects`, workspace folders `project-<id>`).
+**Session.** One conversation with the assistant, bound to one or more *datasets*. Holds the transcript, the visuals, and owns one *workspace* and one memory thread. Needs a name and at least one dataset. A session started from a *Live* *user agent* is bound to that agent and runs with its instructions (see [../capabilities/sessions-chat/spec.md](../capabilities/sessions-chat/spec.md), R52-R59). Legacy name: *project* (collection `projects`, workspace folders `project-<id>`).
+
+**Starter question.** One of up to five example questions a *user agent* carries. An empty session started from the agent offers them in its welcome block; clicking one fills the composer without sending it.
 
 **SQL repair.** When a statement fails with an engine error, the *SQL fixer* agent rewrites it and it is re-run, up to 2 repair attempts. The corrected SQL is what gets cited. Guard rejections and transport or auth failures are not repaired.
 

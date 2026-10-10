@@ -5,6 +5,14 @@ Running log of every meaningful change, newest first. See *Logging convention* a
 ## 2026-10-09
 
 ### Added
+- **Start a session from an agent** (roadmap 1.9.3, [BA-153](https://halo-powered.atlassian.net/browse/BA-153), epic [BA-150](https://halo-powered.atlassian.net/browse/BA-150)):
+  - **Start chat** sits on the Official card, on every Live user agent's card and in their detail views. On a Live agent it creates the session at once, named after the agent, over those of its datasets that still exist. On the Official agent it opens the new-session screen. It is disabled when none of the agent's datasets exist.
+  - Every turn applies the agent's current Live version: its instructions as a labelled, user-supplied context block after every other block, and its model and reasoning-effort overrides, which apply to the assistant only. This covers chat turns, the grounding pass and deep analysis. A draft never applies. The read-only guard still rejects writes the instructions ask for.
+  - The page header shows an **Agent** chip, the session row reads `<agent> · <datasets>`, and the welcome block offers the agent's description and starter questions. When the agent is deleted, its sessions keep their transcript, continue with the plain assistant and read `<name> · agent deleted`.
+  - API and data: `POST /sessions` accepts `{ agentId }`; sessions gain optional `agentId` and `agentName` (no migration); every session the API returns carries a derived `agent`. The model resolver takes an optional model override, read by the assistant from the new `agent-overrides` requestContext key.
+  - Specs: sessions-chat R52–R59 and the Feature "Sessions started from an agent"; agents-evals R1, R5 and R53; [api.md](specs/system/api.md) §2.1 and endpoint 3; [data-model.md](specs/system/data-model.md) §3.4 and §3.13; [agents.md](specs/system/agents.md) §1.2–1.4 and §4.1–4.2 (Block 5); [ui.md](specs/system/ui.md) §1.2, §1.3, §4.4, §4.5 and §4.12; app-shell R49; glossary.
+  - Tests: new `frontend/e2e/agent-sessions.spec.ts` (6 scenarios, driven by a recording LLM stub, `e2e/helpers/llm-stub.ts`, which `llm-settings.spec.ts` now shares); the hub's detail-actions scenario updated; new backend API test `backend/test/agent-sessions.e2e-spec.ts` (7, including a restart), with the backend process harness moved to `test/backend-process.ts`; 10 backend and 17 frontend unit tests. Full web suite: 60 passed, 2 skipped (desktop only). Desktop not run.
+  - Evidence: [evidence/1.9.3/](evidence/1.9.3/).
 - **Agent Hub screen** (roadmap 1.9.4, [BA-154](https://halo-powered.atlassian.net/browse/BA-154), epic [BA-150](https://halo-powered.atlassian.net/browse/BA-150)):
   - The Agents screen is now the Agent Hub, following the mockup:
     - a full-width search over name and description;
@@ -88,6 +96,7 @@ Running log of every meaningful change, newest first. See *Logging convention* a
   - Evidence: [evidence/1.8.1/](evidence/1.8.1/).
 
 ### Fixed
+- **Reopening a session showed its transcript as it was before that visit's turns** (found while building roadmap 1.9.3, [BA-153](https://halo-powered.atlassian.net/browse/BA-153)): the session list kept the copy loaded before the first turn. A finished turn now refreshes the shell's copies (`SessionChat` emits `sessionUpdated`; same id, so an in-flight stream is never disturbed). Covered by `agent-sessions.spec.ts` "deleting the agent keeps its sessions on the plain assistant". Evidence: [evidence/1.9.3/](evidence/1.9.3/).
 - **Agent Hub's active filter pill readable in dark** (roadmap 1.9.4, [BA-154](https://halo-powered.atlassian.net/browse/BA-154), epic [BA-150](https://halo-powered.atlassian.net/browse/BA-150)):
   - Merging `main` (v0.25.0, BA-141) moved the hub onto the theme tokens. The shared `filter-pill-active` kept `primary` text, which is 4.34:1 on the selected fill in dark, so the axe scan failed. It now uses `on-primary-soft` in both themes (`components.css`, [ui.md](specs/system/ui.md) §3).
   - Full web suite after the merge: 54 passed, 2 skipped (desktop only). Desktop not run.

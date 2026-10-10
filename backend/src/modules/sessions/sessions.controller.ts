@@ -22,12 +22,28 @@ export class SessionsController {
 
   @Get()
   async list(): Promise<{ sessions: SessionDoc[] }> {
-    return { sessions: await this.sessionsService.list() };
+    return {
+      sessions: await this.sessionsService.toViews(
+        await this.sessionsService.list(),
+      ),
+    };
   }
 
   @Get(':id')
-  get(@Param('id') id: string): Promise<SessionDoc> {
-    return this.sessionsService.get(id);
+  async get(@Param('id') id: string): Promise<SessionDoc> {
+    return this.sessionsService.toView(await this.sessionsService.get(id));
+  }
+
+  /** Every session leaving this controller carries its `agent` (api.md 2.1). */
+  private async withView<T extends { session?: SessionDoc }>(
+    result: T,
+  ): Promise<T> {
+    return result.session
+      ? {
+          ...result,
+          session: await this.sessionsService.toView(result.session),
+        }
+      : result;
   }
 
   @Get(':id/visualizations/:visualizationId')
@@ -63,7 +79,7 @@ export class SessionsController {
       return {
         ok: true,
         message: `Reverted to version ${result.visualization.version}`,
-        ...result,
+        ...(await this.withView(result)),
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -92,7 +108,7 @@ export class SessionsController {
       return {
         ok: true,
         message: `Repaired as version ${result.visualization.version}`,
-        ...result,
+        ...(await this.withView(result)),
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -120,7 +136,7 @@ export class SessionsController {
       return {
         ok: true,
         message: `Updated to version ${result.visualization.version}`,
-        ...result,
+        ...(await this.withView(result)),
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -146,7 +162,7 @@ export class SessionsController {
       return {
         ok: true,
         message: `Refreshed data for version ${result.visualization.version}`,
-        ...result,
+        ...(await this.withView(result)),
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -191,17 +207,21 @@ export class SessionsController {
 
   @Post()
   async create(
-    @Body() body: { name?: string; datasets?: string[] },
+    @Body() body: { name?: string; datasets?: string[]; agentId?: string },
   ): Promise<{ ok: boolean; message: string; session?: SessionDoc }> {
     try {
-      const session = await this.sessionsService.create(
-        body?.name ?? '',
-        body?.datasets ?? [],
-      );
+      // With an agent, the agent decides the name and datasets (R52).
+      const session =
+        typeof body?.agentId === 'string' && body.agentId
+          ? await this.sessionsService.createFromAgent(body.agentId)
+          : await this.sessionsService.create(
+              body?.name ?? '',
+              body?.datasets ?? [],
+            );
       return {
         ok: true,
         message: `Session "${session.name}" created`,
-        session,
+        session: await this.sessionsService.toView(session),
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -227,7 +247,7 @@ export class SessionsController {
       return {
         ok: true,
         message: 'Interactive visual generated',
-        ...result,
+        ...(await this.withView(result)),
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -296,7 +316,7 @@ export class SessionsController {
           body?.rating === 'up'
             ? 'Answer saved as a verified query'
             : 'Answer marked as wrong',
-        session,
+        session: await this.sessionsService.toView(session),
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -314,7 +334,11 @@ export class SessionsController {
         id,
         body?.content ?? '',
       );
-      return { ok: true, message: 'Message sent', session };
+      return {
+        ok: true,
+        message: 'Message sent',
+        session: await this.sessionsService.toView(session),
+      };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return { ok: false, message };

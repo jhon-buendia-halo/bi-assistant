@@ -10,7 +10,11 @@ import {
 import { of } from 'rxjs';
 import { ChatMessage, Session } from '../../models/session.model';
 import { SessionsApiService } from '../../services/sessions-api.service';
-import { SessionChat } from './session-chat';
+import {
+  GENERIC_STARTER_PROMPTS,
+  GENERIC_WELCOME_DESCRIPTION,
+  SessionChat,
+} from './session-chat';
 
 function sessionWith(message: ChatMessage): Session {
   return {
@@ -610,4 +614,60 @@ describe('SessionChat welcome message', () => {
     expect(fixture.componentInstance.sending()).toBeFalse();
     flush();
   }));
+
+  const agent = {
+    id: 'u-historian',
+    name: 'Cup historian',
+    deleted: false,
+    description: 'Answers questions about World Cup history',
+    starterQuestions: ['Who won in 2014?', 'Which country hosted in 2002?'],
+  };
+
+  function starterTexts(el: HTMLElement): string[] {
+    return Array.from(
+      el.querySelectorAll('[data-testid="session-welcome"] button'),
+    ).map((button) => button.textContent!.trim());
+  }
+
+  it("uses the agent's description and starter questions (R58)", async () => {
+    const el = await render({ ...emptySession, agentId: agent.id, agent });
+    const welcome = el.querySelector('[data-testid="session-welcome"]');
+    expect(welcome?.textContent).toContain(`${agent.description}.`);
+    expect(welcome?.textContent).not.toContain(GENERIC_WELCOME_DESCRIPTION);
+    expect(welcome?.textContent).toContain('Claims 2025');
+    expect(starterTexts(el)).toEqual(agent.starterQuestions);
+  });
+
+  it('shows at most five of the agent\'s starter questions', async () => {
+    const starterQuestions = ['1?', '2?', '3?', '4?', '5?', '6?'];
+    const el = await render({
+      ...emptySession,
+      agentId: agent.id,
+      agent: { ...agent, starterQuestions },
+    });
+    expect(starterTexts(el)).toEqual(starterQuestions.slice(0, 5));
+  });
+
+  it('falls back to the generic text and prompts when the agent has none', async () => {
+    const el = await render({
+      ...emptySession,
+      agentId: agent.id,
+      agent: { ...agent, description: '', starterQuestions: [] },
+    });
+    const welcome = el.querySelector('[data-testid="session-welcome"]');
+    expect(welcome?.textContent).toContain(GENERIC_WELCOME_DESCRIPTION);
+    expect(starterTexts(el)).toEqual([...GENERIC_STARTER_PROMPTS]);
+  });
+
+  it('falls back to the generic welcome once the agent is deleted (R59)', async () => {
+    const el = await render({
+      ...emptySession,
+      agentId: agent.id,
+      agent: { ...agent, deleted: true },
+    });
+    const welcome = el.querySelector('[data-testid="session-welcome"]');
+    expect(welcome?.textContent).toContain(GENERIC_WELCOME_DESCRIPTION);
+    expect(welcome?.textContent).not.toContain(agent.description);
+    expect(starterTexts(el)).toEqual([...GENERIC_STARTER_PROMPTS]);
+  });
 });

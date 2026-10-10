@@ -162,6 +162,42 @@ describe('LenAI provider contract', () => {
       headers: { 'X-Api-Key': 'len-saved' },
     });
   });
+
+  // A user agent's model override (agents.md 1.3, sessions-chat R56).
+  it("swaps in a user agent's model override, keeping the saved provider and key", async () => {
+    const service = serviceWith({
+      settings: {
+        key: 'llm',
+        provider: 'lenai',
+        model: 'gpt-5-deployment',
+        baseUrl: 'https://lenai.example.com',
+        apiKeyCiphertext: 'encrypted',
+      },
+      decryptedKey: 'len-saved',
+    });
+
+    await service.onModuleInit();
+
+    await expect(resolveAgentModel('historian-deployment')).resolves.toEqual({
+      id: 'lenai/historian-deployment',
+      url: 'https://lenai.example.com/openai/v1/deployments/historian-deployment',
+      apiKey: 'len-saved',
+      headers: { 'X-Api-Key': 'len-saved' },
+    });
+    await expect(resolveAgentModel(' ')).resolves.toMatchObject({
+      id: 'lenai/gpt-5-deployment',
+    });
+  });
+
+  it('ignores a model override when no LLM settings are saved', async () => {
+    const service = serviceWith({ settings: null });
+
+    await service.onModuleInit();
+
+    await expect(resolveAgentModel('historian-deployment')).resolves.toBe(
+      'openai/gpt-4o-mini',
+    );
+  });
 });
 
 describe('testConnection mirrors the agent request', () => {
