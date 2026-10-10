@@ -25,6 +25,7 @@ import {
   SquarePen,
   PanelRight,
   Plus,
+  RotateCcw,
   Search,
   ScrollText,
   Settings,
@@ -52,6 +53,9 @@ import { DatasetList } from './features/datasets/components/dataset-list/dataset
 import { AgentHub } from './features/agents/components/agent-hub/agent-hub';
 import { AgentDetail } from './features/agents/components/agent-detail/agent-detail';
 import { EvalTrace } from './features/agents/components/eval-trace/eval-trace';
+import { AgentEditor } from './features/agents/components/agent-editor/agent-editor';
+import { AgentPreview } from './features/agents/components/agent-preview/agent-preview';
+import { AgentEditorService } from './features/agents/services/agent-editor.service';
 import { Agent } from './features/agents/services/agents-api.service';
 import { agentKind } from './features/agents/services/agent-hub.util';
 import { KnowledgeList } from './features/knowledge/components/knowledge-list/knowledge-list';
@@ -99,6 +103,7 @@ type MainView =
   | 'dataset-new'
   | 'agents'
   | 'agent-detail'
+  | 'agent-editor'
   | 'knowledge'
   | 'sessions'
   | 'conversation-new'
@@ -120,6 +125,7 @@ const AREA_OF_VIEW: Partial<Record<MainView, Area>> = {
   'dataset-new': 'datasets',
   agents: 'agents',
   'agent-detail': 'agents',
+  'agent-editor': 'agents',
   knowledge: 'knowledge',
   sessions: 'sessions',
   'conversation-new': 'sessions',
@@ -147,6 +153,8 @@ const RIGHT_PANEL_WIDTH_STORAGE_KEY = 'questions-to-insights:right-panel-width';
     AgentHub,
     AgentDetail,
     EvalTrace,
+    AgentEditor,
+    AgentPreview,
     KnowledgeList,
     CatalogBrowser,
     EntityDetails,
@@ -177,6 +185,7 @@ export class App {
   readonly SquarePen = SquarePen;
   readonly PanelRight = PanelRight;
   readonly Plus = Plus;
+  readonly RotateCcw = RotateCcw;
   readonly Search = Search;
   readonly ScrollText = ScrollText;
   readonly Settings = Settings;
@@ -205,6 +214,7 @@ export class App {
   readonly editingDataset = signal<Dataset | null>(null);
 
   openDatasetEditor(dataset: Dataset | null): void {
+    if (!this.confirmLeaveAgentEditor()) return;
     this.editingDataset.set(dataset);
     this.mainView.set('dataset-new');
   }
@@ -213,8 +223,45 @@ export class App {
   readonly activeAgentKey = signal<string | null>(null);
 
   openAgent(agent: Agent): void {
+    if (!this.confirmLeaveAgentEditor()) return;
     this.activeAgentKey.set(agent.key);
     this.mainView.set('agent-detail');
+  }
+
+  readonly agentEditor = inject(AgentEditorService);
+  /** The user agent open in the editor; null = a new agent. */
+  readonly editingAgentId = signal<string | null>(null);
+
+  /** New agent on the hub, or Edit in a user agent's detail (R54). */
+  openAgentEditor(agentId: string | null): void {
+    this.editingAgentId.set(agentId);
+    this.mainView.set('agent-editor');
+  }
+
+  /**
+   * Back from the editor: to the agent's detail, or to the hub for an agent
+   * that was never saved (R59).
+   */
+  closeAgentEditor(): void {
+    if (!this.confirmLeaveAgentEditor()) return;
+    const id = this.agentEditor.agentId();
+    if (id) {
+      this.activeAgentKey.set(id);
+      this.mainView.set('agent-detail');
+    } else {
+      this.mainView.set('agents');
+    }
+  }
+
+  /**
+   * Every way out of the agent editor (Back, the rail, the drawer, Settings)
+   * asks first when the form has unsaved changes; cancelling stays put
+   * (R59). Leaving destroys the editor, which discards its preview (R61).
+   */
+  private confirmLeaveAgentEditor(): boolean {
+    if (this.settingsOpen() || this.mainView() !== 'agent-editor') return true;
+    if (!this.agentEditor.changed()) return true;
+    return window.confirm('Discard unsaved changes?');
   }
 
   readonly agentLabel = sessionAgentLabel;
@@ -434,6 +481,7 @@ export class App {
   }
 
   openSession(session: Session): void {
+    if (!this.confirmLeaveAgentEditor()) return;
     this.sessionMenuOpen.set(null);
     this.selectedDataPoint.set(null);
     this.activeSession.set(session);
@@ -722,7 +770,8 @@ export class App {
           this.activeSession.set(null);
           this.activeVisualization.set(null);
           this.visualizationError.set(null);
-          this.mainView.set('sessions');
+          // The agent editor is never left without asking (agents-evals R59).
+          if (this.mainView() !== 'agent-editor') this.mainView.set('sessions');
         }
         this.toast.success(res.message);
       },
@@ -760,6 +809,7 @@ export class App {
   }
 
   openComposer(): void {
+    if (!this.confirmLeaveAgentEditor()) return;
     this.mainView.set('conversation-new');
     this.selectedDatasets.set(new Set());
     this.llmApi.getSettings().subscribe({
@@ -861,11 +911,19 @@ export class App {
    * otherwise it opens on its main screen. Settings keeps its chosen section.
    */
   selectArea(area: Area): void {
+    // The rail is a way out of the agent editor, Agents included: it returns
+    // to the hub (agents-evals R59).
+    const leavingEditor =
+      !this.settingsOpen() && this.mainView() === 'agent-editor';
+    const alreadyShown = this.currentArea() === area && !leavingEditor;
+    if (!alreadyShown && !this.confirmLeaveAgentEditor()) return;
     if (area === 'settings') {
+      // Settings covers the main view; the editor closes rather than wait
+      // behind it, so its preview never shows beside a settings form.
+      if (this.mainView() === 'agent-editor') this.mainView.set('agents');
       this.settingsOpen.set(true);
       return;
     }
-    const alreadyShown = this.currentArea() === area;
     this.settingsOpen.set(false);
     // The session list lives in the drawer, so Sessions opens it (R3).
     if (area === 'sessions') this.navExpanded.set(true);

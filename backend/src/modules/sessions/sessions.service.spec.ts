@@ -1709,6 +1709,17 @@ describe('SessionsService sessions from a user agent (R52, api.md 2.1)', () => {
       insert: jest
         .fn()
         .mockImplementation((doc: SessionDoc) => Promise.resolve(doc)),
+      get: jest.fn().mockResolvedValue(null),
+      update: jest.fn(),
+      delete: jest.fn(),
+    };
+    const mastra = {
+      ensureSessionWorkspace: jest
+        .fn()
+        .mockImplementation((id: string) =>
+          Promise.resolve({ id: `session-${id}` }),
+        ),
+      deleteSessionResources: jest.fn().mockResolvedValue(undefined),
     };
     const userAgents = {
       get: jest.fn().mockResolvedValue(agent),
@@ -1717,13 +1728,7 @@ describe('SessionsService sessions from a user agent (R52, api.md 2.1)', () => {
     };
     const service = new SessionsService(
       repository as never,
-      {
-        ensureSessionWorkspace: jest
-          .fn()
-          .mockImplementation((id: string) =>
-            Promise.resolve({ id: `session-${id}` }),
-          ),
-      } as never,
+      mastra as never,
       {} as never,
       {} as never,
       {} as never,
@@ -1733,7 +1738,7 @@ describe('SessionsService sessions from a user agent (R52, api.md 2.1)', () => {
       {} as never,
       userAgents as never,
     );
-    return { service, repository };
+    return { service, repository, mastra };
   }
 
   it('names the session after the Live agent and keeps only existing datasets', async () => {
@@ -1801,6 +1806,44 @@ describe('SessionsService sessions from a user agent (R52, api.md 2.1)', () => {
       deleted: true,
       description: '',
       starterQuestions: [],
+    });
+  });
+
+  describe('preview sessions (agents-evals R60, R61)', () => {
+    it('runs the draft in memory and is never stored', async () => {
+      const { service, repository, mastra } = build(
+        { id: 'agent-1', draft: { ...live, name: 'Draft name' } },
+        ['World Cup Core'],
+      );
+
+      const preview = await service.createPreview('agent-1');
+
+      expect(preview).toMatchObject({
+        name: 'Preview: Draft name',
+        datasets: ['World Cup Core'],
+        agentId: 'agent-1',
+        preview: true,
+      });
+      expect(preview.id).toMatch(/^preview-/);
+      expect(repository.insert).not.toHaveBeenCalled();
+      expect(await service.get(preview.id)).toMatchObject({ preview: true });
+      expect((await service.toView(preview)).agent?.name).toBe('Draft name');
+
+      await service.delete(preview.id);
+      expect(mastra.deleteSessionResources).toHaveBeenCalledWith(preview.id);
+      expect(repository.delete).not.toHaveBeenCalled();
+      await expect(service.get(preview.id)).rejects.toThrow('not found');
+    });
+
+    it('refuses an unknown agent and a draft with no existing dataset', async () => {
+      await expect(
+        build(null, []).service.createPreview('nope'),
+      ).rejects.toThrow('Agent "nope" not found');
+      await expect(
+        build({ id: 'agent-1', draft: live }, []).service.createPreview(
+          'agent-1',
+        ),
+      ).rejects.toThrow('Select at least one dataset to preview');
     });
   });
 });

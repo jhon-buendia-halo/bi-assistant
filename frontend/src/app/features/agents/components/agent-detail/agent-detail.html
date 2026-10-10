@@ -79,6 +79,17 @@
               }
             </button>
           }
+          @if (isUserAgent()) {
+            <button
+              type="button"
+              data-testid="agent-edit"
+              (click)="edit.emit(agent)"
+              class="btn btn-secondary"
+            >
+              <lucide-angular [img]="Pencil" [size]="14" />
+              <span>Edit</span>
+            </button>
+          }
           @if (canPublish()) {
             <!-- Secondary beside Start chat: one primary action (ui.md 4.5). -->
             <button

@@ -671,3 +671,49 @@ describe('SessionChat welcome message', () => {
     expect(starterTexts(el)).toEqual([...GENERIC_STARTER_PROMPTS]);
   });
 });
+
+describe('SessionChat beforeSend', () => {
+  let fixture: ComponentFixture<SessionChat>;
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [SessionChat],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+    fixture = TestBed.createComponent(SessionChat);
+    fixture.componentRef.setInput('session', {
+      id: 'preview-1',
+      name: 'Preview: Cup historian',
+      datasets: [],
+      messages: [],
+    } satisfies Session);
+  });
+
+  it('sends only after the hook agrees, and keeps the draft on a refusal', async () => {
+    let answer = false;
+    const hook = jasmine
+      .createSpy('beforeSend')
+      .and.callFake(() => Promise.resolve(answer));
+    fixture.componentRef.setInput('beforeSend', hook);
+    fixture.detectChanges();
+    const api = TestBed.inject(SessionsApiService);
+    const stream = spyOn(api, 'streamMessage').and.resolveTo();
+    const chat = fixture.componentInstance;
+
+    chat.draft.set('Who won in 2014?');
+    chat.send();
+    expect(chat.preparing()).toBeTrue();
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(hook).toHaveBeenCalledTimes(1);
+    expect(stream).not.toHaveBeenCalled();
+    expect(chat.draft()).toBe('Who won in 2014?');
+    expect(chat.preparing()).toBeFalse();
+
+    answer = true;
+    chat.send();
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(stream).toHaveBeenCalledTimes(1);
+    expect(stream.calls.mostRecent().args[1]).toBe('Who won in 2014?');
+    expect(chat.draft()).toBe('');
+  });
+});

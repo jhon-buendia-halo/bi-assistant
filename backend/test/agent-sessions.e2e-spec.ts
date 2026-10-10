@@ -5,12 +5,13 @@
  * built-in, unpublished and dataset-less agents, and every session read
  * carries the derived `agent` field, including after the agent is deleted
  * and after a backend restart. The turns themselves are proven by the
- * Playwright spec `frontend/e2e/agent-sessions.spec.ts`.
+ * Playwright spec `frontend/e2e/agent-sessions.spec.ts`. Preview sessions
+ * (agents-evals R60, R61; data-model 3.12) are covered here too.
  *
  * Needs no Postgres: the datasource points at a closed port, and saving a
  * dataset only samples it on a best-effort basis.
  */
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import request from 'supertest';
@@ -34,6 +35,7 @@ interface SessionView {
   datasets: string[];
   agentId?: string;
   agentName?: string;
+  preview?: boolean;
   agent?: AgentRef;
 }
 
@@ -221,6 +223,77 @@ describe('Sessions started from an agent (API)', () => {
     });
   });
 
+  const workspaceOf = (id: string) =>
+    join(dataDir, 'workspaces', `session-${id}`);
+  const startPreview = async (agentId: string) =>
+    (await http().post('/sessions').send({ agentId, preview: true }))
+      .body as Answer;
+  let previewerId = '';
+
+  it('starts a preview of the draft that is never listed', async () => {
+    previewerId = (
+      await ok('post', '/agents', {
+        name: 'Previewer',
+        description: 'Tries things out',
+        instructions: 'Answer in one sentence.',
+        datasets: ['World Cup Core', 'Gone'],
+        starterQuestions: ['What changed?'],
+      })
+    ).agent!.id;
+
+    const answer = await startPreview(previewerId);
+    expect(answer).toMatchObject({
+      ok: true,
+      message: 'Preview started',
+      session: {
+        name: 'Preview: Previewer',
+        datasets: ['World Cup Core'],
+        preview: true,
+        agentId: previewerId,
+        agent: {
+          id: previewerId,
+          name: 'Previewer',
+          deleted: false,
+          description: 'Tries things out',
+          starterQuestions: ['What changed?'],
+        },
+      },
+    });
+    const preview = answer.session!;
+    expect(preview.id).toMatch(/^preview-/);
+    expect((await getSession(preview.id)).name).toBe('Preview: Previewer');
+    expect(await listed(preview.id)).toBeUndefined();
+    expect(existsSync(workspaceOf(preview.id))).toBe(true);
+
+    // The preview follows the draft as it is saved.
+    await ok('put', `/agents/${previewerId}/draft`, {
+      name: 'Previewer',
+      datasets: ['World Cup Core'],
+      starterQuestions: ['And now?'],
+    });
+    expect((await getSession(preview.id)).agent?.starterQuestions).toEqual([
+      'And now?',
+    ]);
+
+    expect(
+      (await http().delete(`/sessions/${preview.id}`)).body as Answer,
+    ).toEqual({ ok: true, message: 'Preview discarded' });
+    await http().get(`/sessions/${preview.id}`).expect(404);
+    expect(existsSync(workspaceOf(preview.id))).toBe(false);
+  });
+
+  it('refuses a preview without datasets or for a built-in agent', async () => {
+    const emptyId = (await ok('post', '/agents', { name: 'Empty' })).agent!.id;
+    expect(await startPreview(emptyId)).toEqual({
+      ok: false,
+      message: 'Select at least one dataset to preview',
+    });
+    expect(await startPreview('assistant')).toEqual({
+      ok: false,
+      message: 'Agent "assistant" not found',
+    });
+  });
+
   it('marks the agent deleted once it is gone, and survives a restart', async () => {
     const shortLivedId = (
       await ok('post', '/agents', {
@@ -243,9 +316,15 @@ describe('Sessions started from an agent (API)', () => {
     };
     expect((await getSession(doomed.id)).agent).toEqual(deleted);
     expect((await listed(doomed.id))?.agent).toEqual(deleted);
+    // A preview left open when the backend stops is swept at the next start.
+    const orphan = (await startPreview(previewerId)).session!;
+    expect(existsSync(workspaceOf(orphan.id))).toBe(true);
 
     await stop(backend);
     backend = await boot(dataDir);
+
+    await http().get(`/sessions/${orphan.id}`).expect(404);
+    expect(existsSync(workspaceOf(orphan.id))).toBe(false);
 
     expect(await getSession(doomed.id)).toMatchObject({
       agentId: shortLivedId,

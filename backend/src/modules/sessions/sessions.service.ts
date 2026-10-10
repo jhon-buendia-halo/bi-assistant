@@ -31,7 +31,10 @@ import {
   SESSION_ID_CONTEXT_KEY,
   TURN_RECORDS_CONTEXT_KEY,
 } from '../../mastra/tools/visual.tools';
-import { SESSION_WORKSPACE_CONTEXT_KEY } from '../../mastra/session-workspaces';
+import {
+  SESSION_WORKSPACE_CONTEXT_KEY,
+  listSessionWorkspaceIds,
+} from '../../mastra/session-workspaces';
 import type { KnowledgeUse } from '../knowledge/entities/knowledge-snippet.entity';
 import {
   entityOrientationLines,
@@ -110,9 +113,18 @@ export type StreamEvent = {
   session?: SessionDoc;
 };
 
+/** Id prefix of an agent editor's preview session (agents-evals R60). */
+const PREVIEW_ID_PREFIX = 'preview-';
+
 @Injectable()
 export class SessionsService implements OnModuleInit {
   private readonly logger = new Logger(SessionsService.name);
+
+  /**
+   * Preview sessions of the agent editor, held in memory only and never in
+   * the sessions collection (agents-evals R61, data-model 3.12).
+   */
+  private readonly previews = new Map<string, SessionDoc>();
 
   /**
    * Provider options filed under the bucket the configured model actually
@@ -178,6 +190,10 @@ export class SessionsService implements OnModuleInit {
       },
     });
 
+    // A preview left open when the app stopped has no session left to own
+    // its memory and workspace (agents-evals R61).
+    await this.sweepPreviews();
+
     // Backfill workspaces for sessions created before workspace support and
     // restore their registrations after every process restart.
     const sessions = await this.repository.list();
@@ -213,6 +229,10 @@ export class SessionsService implements OnModuleInit {
     abortSignal?: AbortSignal,
     activeVisualId?: string,
   ) {
+    // A session started from a user agent runs with the agent's current Live
+    // version (sessions-chat R54), a preview with its draft (agents-evals
+    // R60); once the agent is gone it is the plain assistant (R59).
+    const agent = await this.agentConfigFor(session);
     const datasets = await this.boundDatasets(session.datasets);
     const visualLines = (session.visualizations ?? []).map(
       (v) =>
@@ -245,10 +265,6 @@ export class SessionsService implements OnModuleInit {
     // Threaded on requestContext rather than returned alongside the options,
     // because the options object is spread straight into the agent call.
     requestContext.set(KNOWLEDGE_USED_CONTEXT_KEY, knowledge.used);
-    // A session started from a user agent runs with the agent's current Live
-    // version (sessions-chat R54); once the agent is gone it is the plain
-    // assistant (R59).
-    const agent = await this.liveAgentFor(session);
     const overrides: AgentOverrides = {
       ...(agent?.model ? { model: agent.model } : {}),
       ...(agent?.reasoningEffort
@@ -301,18 +317,26 @@ export class SessionsService implements OnModuleInit {
   }
 
   /**
-   * The Live version of the agent a session was started from, or undefined
-   * for a plain session or a deleted agent. Re-stamps the session's
-   * `agentName` when the agent was renamed, so a later deletion still names
-   * it (R59).
+   * The configuration a session's turns apply: the Live version of the agent
+   * it was started from, or the draft for a preview; undefined for a plain
+   * session or a deleted agent. A preview's datasets follow its draft. A
+   * session re-stamps `agentName` when the agent was renamed, so a later
+   * deletion still names it (R59).
    */
-  private async liveAgentFor(
+  private async agentConfigFor(
     session: SessionDoc,
   ): Promise<AgentConfig | undefined> {
     if (!session.agentId) return undefined;
-    const live = (await this.userAgents.get(session.agentId))?.live;
+    const doc = await this.userAgents.get(session.agentId);
+    if (session.preview) {
+      if (!doc) return undefined;
+      session.datasets = await this.existingDatasets(doc.draft.datasets);
+      await this.updateDoc(session.id, { datasets: session.datasets });
+      return doc.draft;
+    }
+    const live = doc?.live;
     if (live && session.agentName !== live.name) {
-      await this.repository.update(session.id, { agentName: live.name });
+      await this.updateDoc(session.id, { agentName: live.name });
       session.agentName = live.name;
     }
     return live;
@@ -365,9 +389,7 @@ export class SessionsService implements OnModuleInit {
       ...fresh.messages,
       { role: 'assistant', at: new Date().toISOString(), ...message },
     ];
-    return (
-      (await this.repository.update(id, { messages })) ?? { ...fresh, messages }
-    );
+    return (await this.updateDoc(id, { messages })) ?? { ...fresh, messages };
   }
 
   /**
@@ -733,6 +755,8 @@ export class SessionsService implements OnModuleInit {
   }
 
   async get(id: string): Promise<SessionDoc> {
+    const preview = this.previews.get(id);
+    if (preview) return { ...preview };
     const session = await this.repository.get(id);
     if (!session) throw new NotFoundException(`Session ${id} not found`);
     return session;
@@ -742,6 +766,10 @@ export class SessionsService implements OnModuleInit {
   async delete(id: string): Promise<SessionDoc> {
     const session = await this.get(id);
     await this.mastra.deleteSessionResources(id);
+    if (session.preview) {
+      this.previews.delete(id);
+      return session;
+    }
     const removed = await this.repository.delete(id);
     if (removed === 0) throw new NotFoundException(`Session ${id} not found`);
     return session;
@@ -770,8 +798,7 @@ export class SessionsService implements OnModuleInit {
         `Publish "${agent.draft.name}" before starting a chat`,
       );
     }
-    const existing = await this.userAgents.datasetNames();
-    const datasets = agent.live.datasets.filter((name) => existing.has(name));
+    const datasets = await this.existingDatasets(agent.live.datasets);
     if (!datasets.length) {
       throw new BadRequestException("None of this agent's datasets exist");
     }
@@ -779,6 +806,82 @@ export class SessionsService implements OnModuleInit {
       agentId,
       agentName: agent.live.name,
     });
+  }
+
+  /**
+   * The agent editor's preview chat (agents-evals R60, R61): an in-memory
+   * session that runs the agent's saved draft, with its own memory thread
+   * and workspace, never stored with the sessions.
+   */
+  async createPreview(agentId: string): Promise<SessionDoc> {
+    const agent = await this.userAgents.get(agentId);
+    if (!agent) throw new NotFoundException(`Agent "${agentId}" not found`);
+    const datasets = await this.existingDatasets(agent.draft.datasets);
+    if (!datasets.length) {
+      throw new BadRequestException('Select at least one dataset to preview');
+    }
+    const id = `${PREVIEW_ID_PREFIX}${randomUUID()}`;
+    const name = `Preview: ${agent.draft.name}`.slice(0, 64);
+    const workspace = await this.mastra.ensureSessionWorkspace(id, name);
+    const now = new Date().toISOString();
+    const preview: SessionDoc = {
+      id,
+      name,
+      workspaceId: workspace.id,
+      datasets,
+      agentId,
+      agentName: agent.draft.name,
+      preview: true,
+      messages: [],
+      visualizations: [],
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.previews.set(id, preview);
+    return { ...preview };
+  }
+
+  /** Discard what previews left behind when the app last stopped (R61). */
+  private async sweepPreviews(): Promise<void> {
+    let ids: string[] = [];
+    try {
+      ids = listSessionWorkspaceIds().filter((id) =>
+        id.startsWith(PREVIEW_ID_PREFIX),
+      );
+    } catch {
+      return;
+    }
+    for (const id of ids) {
+      try {
+        await this.mastra.deleteSessionResources(id);
+      } catch (error) {
+        this.logger.warn(
+          `Could not discard the preview ${id}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+  }
+
+  /** `names` without the datasets that no longer exist, in order. */
+  private async existingDatasets(names: string[]): Promise<string[]> {
+    const existing = await this.userAgents.datasetNames();
+    return names.filter((name) => existing.has(name));
+  }
+
+  /** Persist a patch: in memory for a preview, else in the sessions store. */
+  private async updateDoc(
+    id: string,
+    patch: Partial<SessionDoc>,
+  ): Promise<SessionDoc | null> {
+    const preview = this.previews.get(id);
+    if (!preview) return this.repository.update(id, patch);
+    const updated = {
+      ...preview,
+      ...patch,
+      updatedAt: new Date().toISOString(),
+    };
+    this.previews.set(id, updated);
+    return { ...updated };
   }
 
   private async insertSession(
@@ -805,8 +908,10 @@ export class SessionsService implements OnModuleInit {
    */
   async toView(session: SessionDoc): Promise<SessionView> {
     if (!session.agentId) return session;
-    const live = (await this.userAgents.get(session.agentId))?.live;
-    return { ...session, agent: agentRef(session, live) };
+    const doc = await this.userAgents.get(session.agentId);
+    // A preview shows the draft it runs (api.md 2.1).
+    const config = session.preview ? doc?.draft : doc?.live;
+    return { ...session, agent: agentRef(session, config) };
   }
 
   /** `toView` for a list, reading the agents once. */
@@ -1010,7 +1115,7 @@ export class SessionsService implements OnModuleInit {
         },
       ];
     }
-    return (await this.repository.update(session.id, patch)) ?? fresh;
+    return (await this.updateDoc(session.id, patch)) ?? fresh;
   }
 
   private toolResult(metadata: SessionVisualization) {
@@ -1043,7 +1148,7 @@ export class SessionsService implements OnModuleInit {
       ...(reasoning ? { reasoning } : {}),
       ...(knowledge ? { knowledge } : {}),
     });
-    const updated = await this.repository.update(id, {
+    const updated = await this.updateDoc(id, {
       messages: session.messages,
     });
     return updated ?? session;
@@ -1071,7 +1176,7 @@ export class SessionsService implements OnModuleInit {
     this.appendUserMessage(session, trimmed);
     // Persist the prompt before model startup. A user can stop while the
     // provider is still connecting, and that turn should survive a reload.
-    await this.repository.update(id, { messages: session.messages });
+    await this.updateDoc(id, { messages: session.messages });
 
     const agent = this.mastra.getAgent('assistant');
     const input = await this.agentInput(agent, session);
@@ -1309,7 +1414,7 @@ export class SessionsService implements OnModuleInit {
         ...(crossChecked ? { crossCheck: crossChecked } : {}),
       });
     }
-    const updated = await this.repository.update(id, { messages });
+    const updated = await this.updateDoc(id, { messages });
     if (!turn.signal.aborted || clarification) {
       emit({ type: 'done', session: await this.toView(updated ?? fresh) });
     }
@@ -1451,7 +1556,7 @@ export class SessionsService implements OnModuleInit {
         });
       }
     }
-    const updated = await this.repository.update(id, { messages });
+    const updated = await this.updateDoc(id, { messages });
     return updated ?? { ...session, messages };
   }
 

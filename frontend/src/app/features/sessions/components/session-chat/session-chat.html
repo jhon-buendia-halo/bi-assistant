@@ -657,7 +657,7 @@
           <button
             type="button"
             (click)="send()"
-            [disabled]="draft().trim() === ''"
+            [disabled]="draft().trim() === '' || preparing()"
             title="Send message"
             aria-label="Send message"
             class="rounded-full p-1.5 text-accent hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"

@@ -18,15 +18,15 @@ Capability-local vocabulary:
 ## Rules
 
 Agent Hub and agent detail
-- R1. The **Agents** screen SHALL be the Agent Hub. It SHALL show the heading "Agents"; a **New agent** button, shown but disabled with the description "The agent editor arrives with BA-155" until BA-155 (roadmap 1.9.5) enables it; a search field with the placeholder `Search agents by name or description`; a group of filter pills labelled `Filter agents`: **All** (selected when the hub opens), **Pinned**, **Official** and **Mine**; and the agents as cards in sections. Under All the sections SHALL be, in this order, **Official** (`official`), **Mine** (`user`) and **System** (`system`), and each agent SHALL appear in the section of its kind, pinned or not; there is no Pinned section under All. A section with no agents SHALL be omitted, so Mine is omitted when there are no user agents. Within a section, pinned cards SHALL come first, then the others, each group alphabetical by name. In every view each agent SHALL appear exactly once. Each card SHALL show a sparkles icon, the name, a pin toggle (R4), the description clipped to two lines and the owner (`Owner: You`, `Owner: Official` or `Owner: System`). A user agent's card SHALL also show a status chip `Draft` or `Live`, the badge `Unpublished changes` when it has unpublished changes (R44), and the note `Missing dataset: <names>` (comma-separated) when its `missingDatasets` is not empty (R48). The Official card and the card of every Live user agent SHALL also show a **Start chat** button with the accessible name `Start chat with <name>` (R53). Cards SHALL NOT show tools or the id.
+- R1. The **Agents** screen SHALL be the Agent Hub. It SHALL show the heading "Agents"; a **New agent** button, which opens the agent editor for a new agent (R54); a search field with the placeholder `Search agents by name or description`; a group of filter pills labelled `Filter agents`: **All** (selected when the hub opens), **Pinned**, **Official** and **Mine**; and the agents as cards in sections. Under All the sections SHALL be, in this order, **Official** (`official`), **Mine** (`user`) and **System** (`system`), and each agent SHALL appear in the section of its kind, pinned or not; there is no Pinned section under All. A section with no agents SHALL be omitted, so Mine is omitted when there are no user agents. Within a section, pinned cards SHALL come first, then the others, each group alphabetical by name. In every view each agent SHALL appear exactly once. Each card SHALL show a sparkles icon, the name, a pin toggle (R4), the description clipped to two lines and the owner (`Owner: You`, `Owner: Official` or `Owner: System`). A user agent's card SHALL also show a status chip `Draft` or `Live`, the badge `Unpublished changes` when it has unpublished changes (R44), and the note `Missing dataset: <names>` (comma-separated) when its `missingDatasets` is not empty (R48). The Official card and the card of every Live user agent SHALL also show a **Start chat** button with the accessible name `Start chat with <name>` (R53). Cards SHALL NOT show tools or the id.
 - R2. Search SHALL match the trimmed query, case-insensitively, as a substring of the agent's name or description, and SHALL apply as the user types. The filters SHALL show: All, the sections of R1; Pinned, a single **Pinned** section holding every pinned agent of any kind, ordered by kind (Official, Mine, System) and then by name; Official, only the assistant, in the Official section; Mine, only user agents, pinned or not, in the Mine section (pinned first, R1). The System section SHALL show only under All. Search and filter combine. States: while loading, "Loading agents…"; on failure, the backend's message or "Backend unreachable"; a non-empty query that matches nothing, `No agents match "<query>"`; otherwise the Pinned filter with nothing pinned shows `No pinned agents yet.` and the Mine filter with no user agents shows `No agents of yours yet.`. Under All with no user agents, the Mine section is omitted.
 - R3. Each section SHALL show its first row of 3 cards. When more of its agents match the search and filter, a `Show more (<n>)` control SHALL follow, where n is the number of hidden cards. Clicking it SHALL show every card of the section and turn the control into `Show less`, which collapses the section to its first row again. Each section expands on its own. The search text, the filter and the expanded sections SHALL reset each time the hub opens, including on return from a detail view.
 - R4. Each card's pin toggle SHALL read `Pin`, with the accessible name `Pin <name>`, or `Pinned`, with the accessible name `Unpin <name>`, and SHALL expose its pressed state. Clicking it, or a card's **Start chat**, SHALL NOT open the agent. The change SHALL show on the hub at once: the toggle flips and the card re-orders within its own section (pinned cards first, R1). It SHALL NOT move the card to another section or hide a section. Under the Pinned filter, unpinning removes the card from the Pinned section. The change is then saved (R47), so it survives a restart. If saving fails, the card SHALL return to its previous state and an error toast SHALL show the backend's message or "Backend unreachable". A successful pin or unpin raises no toast.
-- R5. Clicking a card anywhere but its pin toggle or its **Start chat** SHALL open the agent's detail view. The view SHALL show an **All agents** back button to the hub, the name as heading, the id, the description and, for a user agent, its `Draft` or `Live` chip and `Unpublished changes` badge; then five tabs: **Prompt template**, **Tools (N)**, **Memory**, **Model**, **Evals**, with Prompt template selected first. Opening a different agent SHALL reset all tab, selection and run state. A Live user agent's detail and the Official agent's detail SHALL offer **Start chat** (R53). A user agent's detail SHALL also offer two actions:
+- R5. Clicking a card anywhere but its pin toggle or its **Start chat** SHALL open the agent's detail view. The view SHALL show an **All agents** back button to the hub, the name as heading, the id, the description and, for a user agent, its `Draft` or `Live` chip and `Unpublished changes` badge; then five tabs: **Prompt template**, **Tools (N)**, **Memory**, **Model**, **Evals**, with Prompt template selected first. Opening a different agent SHALL reset all tab, selection and run state. A Live user agent's detail and the Official agent's detail SHALL offer **Start chat** (R53). A user agent's detail SHALL also offer **Edit**, which opens the agent editor on its draft (R54), and two more actions:
   - **Publish**, shown only when the agent has no Live version or has unpublished changes. It publishes the draft (R44, R45) and shows the backend's message as a toast: `Agent "<name>" is Live`, or the refusal, such as `Select at least one dataset to publish`. On success the detail reloads, so the button disappears and the chip reads `Live`.
   - **Delete**, which first asks `Delete "<name>"?` with the explanation `Its sessions keep their transcripts and continue with the assistant.`. Cancelling changes nothing. Confirming deletes the agent (R50), shows the toast `Agent "<name>" deleted` and returns to the hub, which no longer lists it. A failure shows the backend's message as a toast and stays on the detail.
 
-  Built-in agents (Official and System) SHALL offer neither Publish nor Delete. System agents SHALL NOT offer Start chat. Editing an agent arrives with BA-155 (roadmap 1.9.5).
+  Built-in agents (Official and System) SHALL offer neither Edit, Publish nor Delete. System agents SHALL NOT offer Start chat.
 - R6. The Prompt template tab SHALL show the agent's instructions as plain text. If the agent builds its prompt at request time and has no static text, it SHALL say "This agent builds its prompt at request time, so there is no static template to show." For a user agent the tab SHALL show the assistant's prompt, then, under the label `Agent instructions`, the agent's own instructions (Live version, else draft), or `No instructions yet.` when they are empty. The Tools tab SHALL list each tool alphabetically with its name, description and the names of its input parameters. An agent with no tools SHALL show "This agent runs in a single step with no tools." A user agent lists the assistant's tools (R49).
 - R7. The Memory tab SHALL show, for an agent with memory: "Recent messages replayed" (`<N> messages`, "Disabled" or "Default"), "Semantic recall", "Working memory" and "Auto-generated titles" (each "Enabled" or "Disabled"), and "Storage" when known. An agent with no memory SHALL show "This agent is stateless — no memory is configured." For the assistant: 40 messages replayed, semantic recall off, titles off. The Model tab SHALL show the model identifier and provider the agent currently resolves to; with none resolved it SHALL say "No model resolved — save an LLM configuration in Settings first." (see [../llm-settings/spec.md](../llm-settings/spec.md)). For a user agent both tabs describe the assistant (R49).
 - R8. Requesting an agent that does not exist SHALL fail with `Agent "<key>" not found` (HTTP 404), shown in the detail view.
@@ -136,6 +136,27 @@ User agents (definitions)
 - R52. User agents SHALL persist across restarts of the backend.
 - R53. **Start chat** SHALL be offered for the Official agent and for Live user agents, on the hub card and in the detail view, and never for draft-only or System agents. On a Live user agent it SHALL create and open a session bound to the agent; on the Official agent it SHALL open the new-session screen. How such a session is created and runs is in [../sessions-chat/spec.md](../sessions-chat/spec.md) (R52-R59). When none of a Live agent's datasets exist, **Start chat** SHALL be disabled with the title `None of this agent's datasets exist`. While the session is being created the button SHALL be disabled; a refusal SHALL show the backend's message, or "Backend unreachable", as an error toast.
 
+### Agent editor
+
+- R54. **New agent** on the hub and **Edit** in a user agent's detail SHALL open the **agent editor**, a full page in the Agents area. New agent opens it empty with the title `New agent`; Edit opens it on the agent's draft with the title `Edit <name>`. Built-in agents SHALL have no editor (R46).
+- R55. The editor SHALL hold these fields, which enforce the R43 limits as the user types:
+  - **Name** (required, at most 64 characters);
+  - **Description** (at most 280);
+  - **Instructions** (multi-line, at most 4,000), with the hint `Added to the assistant's context in every turn. The assistant's own rules and the read-only guard still apply.`;
+  - **Datasets**: one checkbox per existing dataset, by name. A dataset in the draft that no longer exists SHALL stay listed, ticked, as `<name> (missing)`, so the user can untick it. With no datasets at all: `No datasets yet — create one in Datasets first.`;
+  - **Starter questions**: up to 5 single-line fields of at most 200 characters, each with a **Remove starter question** button, and **Add starter question**, disabled at 5;
+  - **Model**: free text, a model or deployment name of the configured provider, with the placeholder `Default (<configured model>)`, or `Default` when no LLM is configured;
+  - **Reasoning effort**: `Default`, `Low`, `Medium` or `High`.
+- R56. **Save** SHALL store the form as the draft, creating the agent on its first save (R45), and show the backend's message as a toast (`Agent "<name>" saved as draft`, then `Draft saved`). A refusal (`Agent name is required`, `An agent named "<name>" already exists`) SHALL show as an error toast and change nothing. Save SHALL be disabled while the name is blank, while nothing changed since the last save, or while a save is in flight.
+- R57. **Publish** SHALL first save the form when it has changes (R56; a refusal stops it), then publish the draft (R44, R45) and show `Agent "<name>" is Live` or the refusal, such as `Select at least one dataset to publish`. It SHALL be shown while the agent is new, has no Live version, has unpublished changes, or the form has changes.
+- R58. The editor's header SHALL show the agent's `Draft` or `Live` chip and, when it applies, `Unpublished changes`, updated after every save and publish. Editing a Live agent SHALL change only its draft: its sessions keep the Live version until the draft is published (R44; sessions-chat R54).
+- R59. **Back** SHALL return to the agent's detail view, or to the hub for an agent that was never saved. Leaving the editor in any way (Back, the rail, the drawer) with unsaved changes SHALL first ask `Discard unsaved changes?`. Cancelling SHALL keep the editor open with its changes.
+- R60. **Preview** SHALL open the **preview chat** in the right Details panel, beside the form (app-shell R10). While the editor is open, the Details panel SHALL always hold the preview chat, however it is opened. The preview SHALL behave like a session started from the agent (sessions-chat R54, R55, R58), titled `Preview`, except that it runs the saved **draft**:
+  - sending a preview message SHALL first save the form when it has changes (R56; a refusal stops the send), so the preview always runs what Save stored;
+  - each preview turn SHALL use the draft's current instructions, model and effort overrides, and those of its datasets that exist;
+  - with no existing dataset in the draft, the panel SHALL say `Select at least one dataset to preview` and the composer SHALL be disabled.
+- R61. A preview conversation SHALL NOT be listed with the sessions or stored in the sessions collection. **Reset preview** SHALL discard it and start an empty one. Leaving the editor, or closing the Details panel, SHALL discard it together with its agent memory and workspace files. Preview conversations left behind when the app stopped SHALL be discarded at the next backend start.
+
 ## Edge cases and errors
 
 - Pinning while the backend is unreachable: the card moves, then moves back, and the error toast reads "Backend unreachable".
@@ -167,7 +188,7 @@ User agents (definitions)
 
 ## UI
 
-Main view "Agents" (the Agent Hub) and an agent's detail view, with the Details panel on the right ([../../system/ui.md](../../system/ui.md) sections 4.4 and 4.5, [../app-shell/spec.md](../app-shell/spec.md)). Agent Hub: loading, error, populated (Official, Mine and System sections, pinned cards first, Show more), the Pinned filter's single Pinned section, no match, empty Pinned filter, empty Mine filter. Hub cards and agent detail also carry **Start chat** (R53). Agent detail: loading, error, five tabs, and for user agents the Publish and Delete actions and the delete confirmation. Evals tab: loading ("Loading evals…"), error, no evals, set list, open set (idle, starting/running, finished), Executions (loading, empty, populated, expanded).
+Main view "Agents" (the Agent Hub) and an agent's detail view, with the Details panel on the right ([../../system/ui.md](../../system/ui.md) sections 4.4 and 4.5, [../app-shell/spec.md](../app-shell/spec.md)). Agent Hub: loading, error, populated (Official, Mine and System sections, pinned cards first, Show more), the Pinned filter's single Pinned section, no match, empty Pinned filter, empty Mine filter. Hub cards and agent detail also carry **Start chat** (R53); a user agent's detail carries **Edit**. Agent editor (R54-R61): new and edit titles, the form, saving, publishing, the unsaved-changes confirmation, and the preview chat in the Details panel (empty, no-dataset, running, reset). Agent detail: loading, error, five tabs, and for user agents the Publish and Delete actions and the delete confirmation. Evals tab: loading ("Loading evals…"), error, no evals, set list, open set (idle, starting/running, finished), Executions (loading, empty, populated, expanded).
 
 ## Flows
 
@@ -310,7 +331,7 @@ Feature: Agent Hub
   Scenario: Shows the built-in agents and mine in sections
     When I click "Agents"
     Then I see the sections "Official", "Mine" and "System", in that order, and no "Pinned" section
-    And the "New agent" button is disabled
+    And the "New agent" button is enabled
     And the Official section shows "Questions to Insights Assistant" with "Owner: Official"
     And the Mine section shows "Health plan analyst" with "Owner: You" and the chip "Live"
     And the Mine section shows "Claims triage" with the chip "Draft"
@@ -368,13 +389,13 @@ Feature: Agent Hub
     When I click "Agents"
     And I open "Claims triage"
     Then I see the heading "Claims triage"
-    And I see the buttons "Publish" and "Delete" and no "Start chat" button
+    And I see the buttons "Edit", "Publish" and "Delete" and no "Start chat" button
     When I click "All agents"
     And I open "Health plan analyst"
-    Then I see the buttons "Start chat" and "Delete" and no "Publish" button
+    Then I see the buttons "Start chat", "Edit" and "Delete" and no "Publish" button
     When I click "All agents"
     And I open "Questions to Insights Assistant"
-    Then I see the button "Start chat" and neither "Publish" nor "Delete"
+    Then I see the button "Start chat" and none of "Edit", "Publish" or "Delete"
 
   Scenario: Publishing a draft makes it Live
     When I click "Agents"
@@ -461,6 +482,112 @@ Feature: Agents and evals behaviour not yet covered by Playwright
     Then I see 'Agent "<key>" not found'
 ```
 
+### Feature: Agent editor
+
+E2E: `frontend/e2e/agent-editor.spec.ts`
+
+The model is the recording LLM stub described under the Feature "Sessions started from an agent" in [../sessions-chat/spec.md](../sessions-chat/spec.md).
+
+```gherkin
+Feature: Agent editor
+
+  Background:
+    Given a "World Cup Core" dataset exists
+    And the model is the recording stub
+
+  Scenario: Creates an agent, previews it, publishes it and deletes it
+    When I click "Agents"
+    And I click "New agent"
+    Then I see the heading "New agent"
+    And "Save" is disabled
+    When I type "Cup historian" into "Name"
+    And I type "Always name the tournament year." into "Instructions"
+    And I tick "World Cup Core"
+    And I add the starter question "Who won in 2014?"
+    And I click "Save"
+    Then I see the toast 'Agent "Cup historian" saved as draft'
+    And the editor shows the chip "Draft"
+    When I click "Preview"
+    Then the Details panel shows "Preview" and the starter question "Who won in 2014?"
+    When I send "Who won in 2014?" in the preview
+    Then I see the stub's answer in the preview
+    And the model received "Always name the tournament year." as the agent's instructions
+    And "Cup historian" is not listed in "Sessions navigation"
+    When I click "Publish"
+    Then I see the toast 'Agent "Cup historian" is Live'
+    And the editor shows the chip "Live"
+    When I click "Back"
+    Then I see the agent's detail view with the heading "Cup historian"
+    When I click "Delete" and confirm
+    Then I am back on the Agent Hub, which no longer lists "Cup historian"
+
+  Scenario: Editing a Live agent keeps its sessions on the Live version until republished
+    Given a Live user agent "Cup historian" over "World Cup Core" with the instructions "Answer in one sentence."
+    And I started a chat with "Cup historian"
+    When I open "Cup historian" from "Agents" and click "Edit"
+    Then I see the heading "Edit Cup historian"
+    When I replace the instructions with "Talk like a pirate."
+    And I click "Save"
+    Then the editor shows the chips "Live" and "Unpublished changes"
+    When I open the "Cup historian" session and send "Who won in 2014?"
+    Then the model received "Answer in one sentence." and not "Talk like a pirate."
+    When I open "Cup historian" from "Agents", click "Edit" and click "Publish"
+    Then the editor shows "Live" without "Unpublished changes"
+    When I open the "Cup historian" session and send "And in 2010?"
+    Then the model received "Talk like a pirate."
+
+  Scenario: Sending in the preview saves the form first
+    Given a draft user agent "Cup historian" over "World Cup Core" with the instructions "Answer in one sentence."
+    When I open "Cup historian" from "Agents" and click "Edit"
+    And I click "Preview"
+    And I replace the instructions with "Talk like a pirate."
+    And I send "Who won in 2014?" in the preview
+    Then I see the toast "Draft saved"
+    And the model received "Talk like a pirate."
+
+  Scenario: Reset and leaving the editor discard the preview
+    Given a draft user agent "Cup historian" over "World Cup Core"
+    When I open "Cup historian" from "Agents" and click "Edit"
+    And I click "Preview" and send "Who won in 2014?" in the preview
+    And I click "Reset preview"
+    Then the preview shows no messages
+    When I send "And in 2010?" in the preview
+    And I click "Back"
+    Then the preview's memory and workspace are gone
+    And no session was created
+
+  Scenario: Preview needs a dataset, and names must be unique
+    Given a Live user agent "Health plan analyst" over "World Cup Core"
+    When I click "Agents" and click "New agent"
+    And I type "Cup historian" into "Name"
+    And I click "Preview"
+    Then the preview says "Select at least one dataset to preview"
+    When I replace the name with "Health plan analyst"
+    And I click "Save"
+    Then I see the toast 'An agent named "Health plan analyst" already exists'
+
+  Scenario: Leaving with unsaved changes asks first
+    When I click "Agents" and click "New agent"
+    And I type "Cup historian" into "Name"
+    And I click "Back" and dismiss the confirmation "Discard unsaved changes?"
+    Then I still see the heading "New agent"
+    When I click "Back" and confirm
+    Then I am back on the Agent Hub, which does not list "Cup historian"
+
+  Scenario: A dataset that no longer exists stays visible in the editor
+    Given a draft user agent "Cup historian" over "World Cup Core" and "Gone"
+    When I open "Cup historian" from "Agents" and click "Edit"
+    Then "World Cup Core" and "Gone (missing)" are ticked
+    When I untick "Gone (missing)" and click "Save"
+    Then the "Cup historian" card no longer shows a missing-dataset note
+
+  Scenario: The editor has no detectable accessibility violations in either theme
+    When I click "Agents" and click "New agent"
+    And I click "Preview"
+    Then the axe scan reports no violations in the Light theme
+    And the axe scan reports no violations in the Dark theme
+```
+
 E2E: none yet
 
 The Feature below is API-level. It is covered by the backend e2e `backend/test/user-agents.e2e-spec.ts`, not by Playwright.
@@ -507,7 +634,7 @@ Feature: Agent definitions (API)
 
 ## Acceptance
 
-- The nine `agents.spec.ts` scenarios pass, and the nine `agent-hub.spec.ts` scenarios pass, with the axe scan of the hub clean in both themes.
+- The nine `agents.spec.ts` scenarios pass, the nine `agent-hub.spec.ts` scenarios pass, and the eight `agent-editor.spec.ts` scenarios pass, with the axe scans of the hub and the editor clean in both themes.
 - Running the `world-cup` set against the bundled sample with a working model finishes, records one result per ticked question, and every question's Details panel shows its checks and executed steps.
 - A second completed run on the same datasource and datasets produces a Markdown report with a "Compared to previous run" section; a run on a different datasource or dataset set does not.
 - Starting against a datasource with no datasets, or with datasets missing required entities, never spends model tokens and never leaves a run in history.

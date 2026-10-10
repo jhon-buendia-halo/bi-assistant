@@ -198,6 +198,11 @@ export interface Session {
   agentName?: string;
   /** Present exactly when `agentId` is. */
   agent?: SessionAgent;
+  /**
+   * An agent editor's preview conversation: held in memory by the backend,
+   * never listed with the sessions (agents-evals R60, R61).
+   */
+  preview?: boolean;
   messages: ChatMessage[];
   visualizations?: SessionVisualization[];
   createdAt?: string;

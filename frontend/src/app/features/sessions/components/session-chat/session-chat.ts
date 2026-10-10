@@ -177,6 +177,14 @@ export class SessionChat implements OnDestroy {
    * the host's copies. Same id, so the chat does not re-sync from it.
    */
   readonly sessionUpdated = output<Session>();
+  /**
+   * Runs before a message is sent; resolving `false` cancels the send and
+   * keeps the draft. The agent editor's preview uses it to save the form
+   * first (agents-evals R60). Without it, sending starts at once.
+   */
+  readonly beforeSend = input<(() => Promise<boolean>) | null>(null);
+  /** True while `beforeSend` runs; the composer waits for it. */
+  readonly preparing = signal(false);
 
   readonly messages = signal<ChatMessage[]>([]);
   readonly draft = signal('');
@@ -371,7 +379,26 @@ export class SessionChat implements OnDestroy {
 
   send(): void {
     const content = this.draft().trim();
-    if (!content || this.sending()) return;
+    if (!content || this.sending() || this.preparing()) return;
+    const guard = this.beforeSend();
+    if (!guard) {
+      this.startTurn(content);
+      return;
+    }
+    const sessionId = this.session().id;
+    this.preparing.set(true);
+    void guard()
+      .catch(() => false)
+      .then((proceed) => {
+        this.preparing.set(false);
+        // A refusal, or another session opened meanwhile, keeps the draft.
+        if (proceed && this.session().id === sessionId && !this.sending()) {
+          this.startTurn(content);
+        }
+      });
+  }
+
+  private startTurn(content: string): void {
     this.dismissFollowUps();
     this.draft.set('');
     this.sending.set(true);

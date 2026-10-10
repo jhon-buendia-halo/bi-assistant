@@ -21,6 +21,7 @@ import {
   Loader2,
   ListChecks,
   MessageSquarePlus,
+  Pencil,
   ChevronRight,
   Download,
   Play,
@@ -69,6 +70,7 @@ export class AgentDetail implements OnDestroy {
   readonly Loader2 = Loader2;
   readonly ListChecks = ListChecks;
   readonly MessageSquarePlus = MessageSquarePlus;
+  readonly Pencil = Pencil;
   readonly ChevronRight = ChevronRight;
   readonly Download = Download;
   readonly Play = Play;
@@ -103,6 +105,8 @@ export class AgentDetail implements OnDestroy {
   readonly deleted = output<void>();
   /** Start chat; the shell creates or composes the session (R53). */
   readonly startChat = output<AgentDetailModel>();
+  /** Edit a user agent; the shell opens the agent editor on its draft (R54). */
+  readonly edit = output<AgentDetailModel>();
   /** True while a session is being created from this agent. */
   readonly starting = input(false);
 

@@ -187,6 +187,8 @@ export interface SessionDoc {
   agentId?: string;
   /** The agent's Live name, re-stamped by each turn that applies it (R59). */
   agentName?: string;
+  /** An agent editor's preview, held in memory only (agents-evals R60). */
+  preview?: boolean;
   messages: ChatMessage[];
   visualizations?: SessionVisualization[];
   createdAt?: string;

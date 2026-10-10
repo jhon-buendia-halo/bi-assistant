@@ -45,13 +45,13 @@ export class AgentHub implements OnInit {
   readonly Search = Search;
 
   readonly filters = HUB_FILTERS;
-  /** Shown while New agent is disabled, until BA-155 enables it. */
-  readonly newAgentHint = 'The agent editor arrives with BA-155';
 
   private readonly api = inject(AgentsApiService);
   private readonly toast = inject(ToastService);
 
   readonly openAgent = output<Agent>();
+  /** New agent; the shell opens the agent editor (R54). */
+  readonly newAgent = output<void>();
   /** Start chat on a card; the shell creates or composes the session (R53). */
   readonly startChat = output<Agent>();
   /** Key of the agent whose session is being created, if any. */

@@ -14,6 +14,26 @@ Entry template:
 
 ---
 
+## 2026-10-09 — 1.9.5 Agent editor with a preview chat (BA-155)
+
+### What went well
+- Making the preview an in-memory session that the sessions service resolves by id gave it streaming, memory, visuals and the chat component for free. It also kept ADR-0008's "not stored as a session", with no new ADR. Routing every document write through one `updateDoc` was the only intrusive change.
+- The user's database choice became a reusable harness rather than a one-off: `E2E_WORLD_CUP_DB_*` in `.env.e2e.local`, seeded through the app's own testing-data loader. The full suite was green on the MCP database before any story code, which separated harness failures from feature failures.
+- Writing the sweep test as a real backend restart (create a preview, stop, boot, check the directory) proved the crash path, not just the discard path.
+- The frontend agent reported its spec conflicts (rail Agents vs app-shell R3, a label that collides with `getByLabel`, what the panel shows when opened without Preview) instead of silently picking. All three became spec text.
+
+### What went wrong
+- My first database edit used a `this.repository.update(id, {` pattern that was a prefix of two other lines, so the assertion stopped the script. The third time this session a non-unique anchor bit me.
+- I sourced `.env.e2e.local` and started the backend in one `&&` chain ending in `&`. The whole chain ran in the background subshell, and the seed request went out with empty variables.
+- ui.md specified `aria-label="Remove starter question <n>"`, which Playwright's non-exact `getByLabel('Starter question 1')` would also match. I wrote the label and the test without checking them against each other.
+- The editor rules first landed above R53, out of numeric order, because I anchored the insertion on R53 itself.
+
+### What to do differently
+- For code edits by script, anchor on whole lines and assert the count. Use a line-number-scoped replace when the same call appears many times.
+- Start background processes on their own line, after sourcing env files in the current shell.
+- When a spec names an accessible label, grep the E2E for `getByLabel` calls using a substring of it, and use visually hidden text or `exact` locators where they collide.
+- Insert new numbered rules after the last existing rule, not before the next one.
+
 ## 2026-10-09 — 1.9.3 Start a session from an agent (BA-153)
 
 ### What went well

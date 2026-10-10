@@ -685,7 +685,7 @@ Agent instructions (user-supplied by whoever built the agent "<agent Live name>"
 </agent-instructions>
 ```
 
-No budget beyond the 4,000-character limit on instructions (agents-evals R43). It is the last per-turn block, so the base prompt and every curated block come first; only the grounding pass's own nudge (5.6) follows it. The agent framework may still add its own system messages after the per-turn blocks, such as its workspace, available-skills and skills-usage messages (section 7); those are not per-turn blocks. The tool-only synthesis pass (5.5) sends no context blocks, so it carries no Block 5, but it runs with the turn's requestContext and provider options, so the agent's model and effort overrides still apply. The read-only guard, dataset scoping and the grounding pass are enforced in code (section 5), so nothing in this block can switch them off. The Live version is read when the call starts; a draft is never used.
+No budget beyond the 4,000-character limit on instructions (agents-evals R43). It is the last per-turn block, so the base prompt and every curated block come first; only the grounding pass's own nudge (5.6) follows it. The agent framework may still add its own system messages after the per-turn blocks, such as its workspace, available-skills and skills-usage messages (section 7); those are not per-turn blocks. The tool-only synthesis pass (5.5) sends no context blocks, so it carries no Block 5, but it runs with the turn's requestContext and provider options, so the agent's model and effort overrides still apply. The read-only guard, dataset scoping and the grounding pass are enforced in code (section 5), so nothing in this block can switch them off. The Live version is read when the call starts. A draft is used only by a **preview session** (agents-evals R60): there Block 5 and the overrides come from the agent's current draft instead.
 
 The eval harness (8.5) sends only Block 1's dataset half (no visuals lines) plus Block 3.
 
@@ -699,7 +699,7 @@ The eval harness (8.5) sends only Block 1's dataset half (no visuals lines) plus
 | `turn-data-records` | streamed chat turn (fresh empty array per turn), evals | **live** array of this turn's captured data records, appended as tool results arrive | `create_visual` / `update_visual` (merge into the visual's data) |
 | `session-workspace-id` | every session-scoped call; designer calls | `session-<id>` | workspace resolver (7.1) |
 | `knowledge-used` | every session-scoped call | the knowledge snippets put in Block 3 | persistence of the answer's `knowledge` field |
-| `agent-overrides` | session-scoped assistant calls, only for a session bound to a user agent that still exists and whose Live version sets an override | `{ model?: string; reasoningEffort?: 'low'\|'medium'\|'high' }` from the Live version | the `assistant`'s model function (1.3); the turn's provider options (1.4) |
+| `agent-overrides` | session-scoped assistant calls, only for a session bound to a user agent that still exists and whose Live version (for a preview session, its draft) sets an override | `{ model?: string; reasoningEffort?: 'low'\|'medium'\|'high' }` from the Live version | the `assistant`'s model function (1.3); the turn's provider options (1.4) |
 
 A fresh context object is created per call, so nothing leaks between turns or sessions.
 

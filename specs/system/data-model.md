@@ -416,6 +416,7 @@ Deep-analysis jobs exist only in process memory (bounded history; a backend rest
 
 - REST datasource queries are executed by materialising the referenced endpoints into a throwaway in-memory SQLite database per call; nothing of it is written to disk.
 - Eval runs also keep an in-memory map for in-flight runs (section 3.8 is the durable copy).
+- **Preview sessions** (agents-evals R60, R61) live only in the backend's memory: a `SessionDoc`-shaped object with `id` `preview-<uuid>`, `preview: true` and `agentId`, never written to `sessions`. While one exists its agent memory thread (id = the session id) and its workspace `workspaces/session-preview-<uuid>/` exist like a session's (sections 4 and 5). Discarding the preview deletes all three. A backend restart forgets the in-memory object, and at start-up the backend deletes every `session-preview-*` workspace and the matching memory thread, so a crash leaves nothing behind.
 
 ### 3.13 Relationships and referential rules
 

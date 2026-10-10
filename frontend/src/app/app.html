@@ -489,6 +489,7 @@
                   <app-agent-hub
                     class="w-full max-w-[960px]"
                     (openAgent)="openAgent($event)"
+                    (newAgent)="openAgentEditor(null)"
                     [startingAgentKey]="startingAgentKey()"
                     (startChat)="startChatWithAgent($event)"
                   />
@@ -500,8 +501,18 @@
                     [agentKey]="activeAgentKey()!"
                     (back)="mainView.set('agents')"
                     (deleted)="onAgentDeleted()"
+                    (edit)="openAgentEditor($event.key)"
                     [starting]="startingAgentKey() === activeAgentKey()"
                     (startChat)="startChatWithAgent($event)"
+                  />
+                </div>
+              } @else if (mainView() === "agent-editor") {
+                <div class="flex flex-1 justify-center overflow-y-auto px-8 py-10">
+                  <app-agent-editor
+                    class="w-full max-w-[960px]"
+                    [agentId]="editingAgentId()"
+                    (back)="closeAgentEditor()"
+                    (preview)="rightPanelOpen.set(true)"
                   />
                 </div>
               } @else if (mainView() === "knowledge") {
@@ -687,15 +698,35 @@
               (dblclick)="resetRightPanelWidth()"
             ></div>
 
-            <!-- Panel header: collapse -->
+            <!-- Panel header: collapse; the agent editor's preview adds its title and Reset -->
             <div
-              class="flex h-12 shrink-0 items-center justify-end border-b border-border px-3"
+              class="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3"
             >
+              @if (mainView() === "agent-editor") {
+                <h3
+                  class="pl-3 text-[12px] font-medium tracking-wider text-fg-muted uppercase"
+                >
+                  Preview
+                </h3>
+                <button
+                  type="button"
+                  data-testid="agent-preview-reset"
+                  (click)="agentEditor.resetPreview()"
+                  [disabled]="
+                    agentEditor.preview().kind !== 'ready' &&
+                    agentEditor.preview().kind !== 'error'
+                  "
+                  class="btn btn-ghost"
+                >
+                  <lucide-angular [img]="RotateCcw" [size]="14" />
+                  <span>Reset preview</span>
+                </button>
+              }
               <button
                 type="button"
                 (click)="rightPanelOpen.set(false)"
                 title="Collapse right panel"
-                class="btn-icon"
+                class="btn-icon ml-auto"
               >
                 <lucide-angular [img]="PanelRight" [size]="16" />
               </button>
@@ -723,6 +754,8 @@
                   (visualRefreshed)="onVisualRefreshed($event)"
                   (dataPointSelected)="onDataPointSelected($event)"
                 />
+              } @else if (mainView() === "agent-editor") {
+                <app-agent-preview class="min-h-0 flex-1" />
               } @else if (mainView() === "agent-detail") {
                 <app-eval-trace class="min-h-0 flex-1 overflow-y-auto" />
               } @else {

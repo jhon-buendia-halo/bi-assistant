@@ -8,15 +8,13 @@
     </h2>
     <button
       type="button"
-      disabled
-      [title]="newAgentHint"
-      aria-describedby="agent-hub-new-hint"
+      data-testid="agent-new"
+      (click)="newAgent.emit()"
       class="btn btn-primary ml-auto"
     >
       <lucide-angular [img]="Plus" [size]="14" />
       <span>New agent</span>
     </button>
-    <span id="agent-hub-new-hint" class="sr-only">{{ newAgentHint }}</span>
   </div>
 
   <!-- Search: a full-width row under the header -->

@@ -198,7 +198,12 @@ export class SessionsController {
   ): Promise<{ ok: boolean; message: string }> {
     try {
       const session = await this.sessionsService.delete(id);
-      return { ok: true, message: `Session "${session.name}" deleted` };
+      return {
+        ok: true,
+        message: session.preview
+          ? 'Preview discarded'
+          : `Session "${session.name}" deleted`,
+      };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return { ok: false, message };
@@ -207,20 +212,32 @@ export class SessionsController {
 
   @Post()
   async create(
-    @Body() body: { name?: string; datasets?: string[]; agentId?: string },
+    @Body()
+    body: {
+      name?: string;
+      datasets?: string[];
+      agentId?: string;
+      preview?: boolean;
+    },
   ): Promise<{ ok: boolean; message: string; session?: SessionDoc }> {
     try {
-      // With an agent, the agent decides the name and datasets (R52).
-      const session =
-        typeof body?.agentId === 'string' && body.agentId
-          ? await this.sessionsService.createFromAgent(body.agentId)
-          : await this.sessionsService.create(
-              body?.name ?? '',
-              body?.datasets ?? [],
-            );
+      const agentId =
+        typeof body?.agentId === 'string' && body.agentId ? body.agentId : '';
+      // With an agent, the agent decides the name and datasets (R52); a
+      // preview runs its draft (agents-evals R60).
+      const session = !agentId
+        ? await this.sessionsService.create(
+            body?.name ?? '',
+            body?.datasets ?? [],
+          )
+        : body?.preview === true
+          ? await this.sessionsService.createPreview(agentId)
+          : await this.sessionsService.createFromAgent(agentId);
       return {
         ok: true,
-        message: `Session "${session.name}" created`,
+        message: session.preview
+          ? 'Preview started'
+          : `Session "${session.name}" created`,
         session: await this.sessionsService.toView(session),
       };
     } catch (err) {
