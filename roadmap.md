@@ -610,6 +610,60 @@ Users build their own data agents on top of the assistant (instructions, dataset
 - **Acceptance:** Playwright covers create → preview → publish → edit → republish → delete, and that a preview chat leaves no session behind; `ui.md` and the agents-evals spec are updated.
 - **Notes:** depends on 1.9.3 and 1.9.4. If the beta window closes, the preview chat is the first thing to move out (see the epic spec). Decisions taken with the user on 2026-10-09: the editor is a full page in the Agents area; the preview chat sits in the right Details panel beside the form; sending a preview message first saves the form as the draft, so the preview always runs the saved draft; the preview conversation, its memory and its workspace are discarded when the editor closes, and **Reset** starts it over. Also decided: the preview is an in-memory session (never in the `sessions` collection, as ADR-0008 says), created through `POST /sessions` with `{ agentId, preview: true }` and streamed and discarded through the existing session routes, so the chat component is reused; leftovers from a crash are swept at the next backend start; the model override is a free-text field (a deployment name can't be listed) and the effort a Default/Low/Medium/High select; leaving the editor with unsaved changes asks first. The E2E runs against a per-worktree World Cup database created with the infra MCP service (`.env.e2e.local`, harness in [tech-stack.md](specs/system/tech-stack.md)). Desktop not run. Evidence: [evidence/1.9.5/](evidence/1.9.5/).
 
+## Release 2 — Multi-user  (no target date yet)
+
+The app becomes multi-user. An organisation self-hosts it as an org server, with sign-in, roles and an admin panel. Local mode stays the default. Direction: [specs/product/vision.md](specs/product/vision.md). Not part of the 1.0 Beta.
+
+### Milestone 2.1 — Admin Panel ([BA-161](https://halo-powered.atlassian.net/browse/BA-161))
+
+Org server mode with Entra ID sign-in, SCIM directory sync and five roles enforced by the backend. Datasources and datasets are shared across the organisation, and everything else is private to its owner. Platform admins get an admin panel with Overview, Users & groups, Edit a user, and Roles & permissions (Figma board *Agent Hub — E2E lifecycle (proposed)*, screens P1–P4). Requests, Registry, Policies and Audit log are out. All stories are built on the branch `feat/BA-161-admin-panel` and ship as one PR. Epic spec: [specs/epics/BA-161/spec.md](specs/epics/BA-161/spec.md). Decision: ADR-0009 in [specs/system/architecture.md](specs/system/architecture.md).
+
+#### 2.1.1 — ADR, epic spec, vision and roadmap ([BA-162](https://halo-powered.atlassian.net/browse/BA-162))  `🚧 In progress`
+- **Intent:** the move to multi-user is decided and scoped before any code, so each later story can be built and reviewed on its own.
+- **Scope:** ADR-0009 in `specs/system/architecture.md`; the vision rewritten for local and org server modes; the BA-161 epic spec; this release and milestone, with one feature per story; the epic row in `specs/README.md`.
+- **Out of scope:** product code, and changes to the capability, system, non-functional or glossary specs for behaviour that hasn't shipped. Each later story updates those itself.
+- **Acceptance:**
+  - ADR-0009 records the two modes, OIDC with Entra ID, SCIM inbound, server-enforced roles, per-user ownership and SQLite.
+  - `vision.md` no longer says "Not multi-user", and describes both modes.
+  - The user has confirmed `specs/epics/BA-161/spec.md` (`Status: Confirmed`), and ADR-0009 is `Accepted`.
+  - `python3 scripts/check-specs.py` passes.
+- **Notes:** decisions taken with the user on 2026-10-10: real multi-user; screens P1–P4 only; the organisation self-hosts; local mode stays; only datasources and datasets are shared; SQLite everywhere. The branch was renamed from the desktop app's worktree branch. Milestone 1.10 belongs to BA-159's branch, so this work is in Release 2.
+
+#### 2.1.2 — Sign-in with Entra ID, directory sync, roles and enforcement ([BA-163](https://halo-powered.atlassian.net/browse/BA-163))  `📋 Planned`
+- **Intent:** on an org server, people sign in with their company account and can only see and do what their role allows.
+- **Scope:** org server mode configuration; OIDC sign-in and sign-out with a backend session cookie; the sign-in page; SCIM 2.0 Users and Groups endpoints; just-in-time users; the five roles, the permission matrix and group-to-role mappings resolved per request; a global permission guard on every route; `GET /me`; `ownerId` scoping on private collections and memory; the rail avatar showing the signed-in user; an Admin rail item for Platform admins; local mode unchanged.
+- **Out of scope:** the admin screens (2.1.3–2.1.6); a desktop app as a client of an org server; other identity providers.
+- **Acceptance:** a Playwright org-server project signs in through a local OIDC stub, and sign-out works; two users can't reach each other's private data through the UI or the API; a User gets 403 on Maker and admin endpoints; SCIM create, update and deactivate change the directory; the existing local-mode suite passes unchanged.
+- **Notes:** ADR-0009. Highest-risk story: owner scoping on every repository. Coordinate per-user LLM configuration with BA-159.
+
+#### 2.1.3 — Admin overview (P1) ([BA-164](https://halo-powered.atlassian.net/browse/BA-164))  `📋 Planned`
+- **Intent:** a Platform admin sees at a glance how the org server is used and what needs attention.
+- **Scope:** tiles for active users (30 days) and agents live; Needs attention rows (agents without an active owner → Assign, agents with errors in 7 days → Inspect, inactive Makers → Clean up); a Weekly active users chart (8 weeks); Recent activity; Export report (CSV); the admin panel frame and its tab bar.
+- **Out of scope:** the publish-request and data-access-request tiles and rows (Requests epic).
+- **Acceptance:** Playwright seeds activity and checks each tile, row, action target and the chart's data; the CSV export; the axe scan in both themes.
+- **Notes:** depends on 2.1.2, and reads data from 2.1.4–2.1.6. Built last.
+
+#### 2.1.4 — Users & groups (P2) ([BA-165](https://halo-powered.atlassian.net/browse/BA-165))  `📋 Planned`
+- **Intent:** a Platform admin finds any user or group and sees their roles, groups, agents and activity.
+- **Scope:** Users and Groups tabs with counts; search over name, email and group; role filter chips; a users table (name and email, roles, IdP groups, agents owned, last active, status); a groups list; pagination; the last-sync note; Assign role.
+- **Out of scope:** editing users or groups from the directory (they are read-only); a Microsoft Graph pull sync.
+- **Acceptance:** Playwright covers search, each filter chip, pagination and the statuses (Active, Inactive, Not signed in) over SCIM-seeded users; the axe scan.
+- **Notes:** depends on 2.1.2. The "Sync from Entra ID" button is an open question in the epic spec.
+
+#### 2.1.5 — Edit a user (P3) ([BA-166](https://halo-powered.atlassian.net/browse/BA-166))  `📋 Planned`
+- **Intent:** a Platform admin changes what one person can do, and hands their agents to someone else.
+- **Scope:** a detail panel next to the users list with identity and status, role checkboxes with their descriptions (Data owner picks a datasource), read-only groups, agents owned with their status, Transfer ownership and Save changes; a role that comes from a group mapping is shown as inherited and can't be unticked.
+- **Out of scope:** deactivating users (the directory does that).
+- **Acceptance:** Playwright assigns and removes roles and checks that the user's permissions change on their next request; transfers an agent and checks that the new owner sees it; the axe scan.
+- **Notes:** depends on 2.1.4.
+
+#### 2.1.6 — Roles & permissions (P4) ([BA-167](https://halo-powered.atlassian.net/browse/BA-167))  `📋 Planned`
+- **Intent:** a Platform admin sees what each role can do and lets directory groups grant roles automatically.
+- **Scope:** the read-only permission matrix of the five roles; the list of Entra ID group → role mappings, with Add mapping and remove.
+- **Out of scope:** Add role, custom roles and editing the matrix.
+- **Acceptance:** Playwright adds a mapping and checks that a member of the group gets the role; removes it and checks that the role is gone; the axe scan.
+- **Notes:** depends on 2.1.2.
+
 ## Backlog
 
 Not yet sequenced into a release. The detailed phase plans below predate this roadmap; when work on one resumes, split it into features under a milestone here and link back to the plan.

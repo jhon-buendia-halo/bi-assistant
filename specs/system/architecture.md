@@ -151,6 +151,46 @@ flowchart TB
   - The developer-settings file is a new persisted shape under `APP_DATA_DIR` that the data model must record. A new dependency set (OpenTelemetry SDK, Phoenix exporter, `nestjs-pino`) ships in the package but stays unloaded by default.
   - Unreachable endpoints must never fail startup or requests. Exporters drop data instead.
 
+#### ADR-0009 — Multi-user org server mode with Entra ID sign-in and server-enforced roles
+- **Status:** Proposed
+- **Date:** 2026-10-10
+- **Context:**
+  - The vision used to rule out multi-user use ("no login, no roles and no shared server"). The Admin Panel epic ([BA-161](https://halo-powered.atlassian.net/browse/BA-161)) reverses that, from the Figma board "Agent Hub — E2E lifecycle (proposed)", section *Admin panel (draft)*.
+  - Decisions taken with the user on 2026-10-10:
+    - the organisation self-hosts the server, and Halo operates nothing;
+    - today's single-user local mode stays;
+    - only datasources and datasets are shared across users;
+    - the server keeps SQLite.
+  - The backend already runs as a standalone web server through the npm CLI (ADR-0002) and stores everything behind `DocStore<T>` (ADR-0003). Neither has a notion of a user.
+  - ADR-0008 tied a user agent's owner to "this machine" and deferred any sharing that needs a new container or sync format.
+- **Decision:**
+  - **Two modes, one build.** The same backend and renderer run in either mode, chosen at startup.
+    - **Local mode** is the default and today's behaviour: no sign-in, and one implicit local user who holds every permission. The desktop app always runs in local mode.
+    - **Org server mode** is enabled by server configuration: the identity provider's issuer, client id and secret, the public base URL, and the SCIM token. It is started through the npm CLI or its container image.
+  - **No new container.** The org server is the existing web-mode backend, which serves the UI and the API from one origin. TLS and the public hostname are the organisation's reverse proxy's job. Users reach the org server from a browser. A desktop app connecting to a remote org server is out of scope for BA-161.
+  - **Identity: OpenID Connect against Microsoft Entra ID**, authorization code flow with PKCE, run by the backend.
+    - The backend issues its own session as an `HttpOnly`, `Secure`, `SameSite=Lax` cookie. No tokens are held in the renderer.
+    - Generic OIDC is used, so another provider can follow without a new ADR.
+  - **Directory: SCIM 2.0 inbound.** The backend exposes `/scim/v2/Users` and `/scim/v2/Groups`, protected by a bearer token, and Entra ID's provisioning service pushes to them.
+    - A user who signs in before being provisioned is created just in time from their ID token claims.
+    - Groups from the directory are read-only in the app.
+  - **Authorization: roles and permissions in the backend.**
+    - Five built-in roles: User, Maker, Data owner (scoped to one datasource), Approver and Platform admin. A fixed permission matrix maps roles to permissions.
+    - A user's roles are the union of direct assignments and group-to-role mappings.
+    - Every route declares the permission it needs, and one global guard checks it. The renderer reads the caller's permissions only to show or hide controls.
+  - **Data ownership.**
+    - Private documents gain an `ownerId`: sessions, visuals and their workspaces, memory threads, agents, knowledge, verified queries, metrics and eval runs. Repositories scope every read and write to the caller.
+    - Datasources and datasets are org-wide, with no owner filter.
+    - In local mode, every document belongs to the local user, so existing data needs no rewrite: a missing `ownerId` reads as the local user.
+  - **Storage stays SQLite (ADR-0003).** New collections hold users, groups, group memberships, role assignments, group-to-role mappings, sign-in sessions and activity events. Activity events feed the admin overview's active-user counts and recent activity.
+- **Consequences:**
+  - ADR-0008's "owner is this machine" becomes "owner is a user". Agent ownership can be transferred. Sharing agents beyond their owner stays out of scope, for a later Requests/Registry epic.
+  - Every repository must apply the owner scope. A missed one leaks one user's data to another, so an API test per collection must prove isolation between two users.
+  - SQLite has a single writer, which limits concurrency. That is acceptable for one organisation's server at expected team sizes. Moving to PostgreSQL behind `DocStore<T>` would need its own ADR.
+  - The server now accepts traffic beyond `127.0.0.1`, so the web-mode binding (non-functional N3) gains an org-server setting. CSRF protection and secure cookies become requirements.
+  - The per-user LLM configuration and the agent memory store (Mastra) must also be scoped per user. LLM configuration is coordinated with [BA-159](https://halo-powered.atlassian.net/browse/BA-159).
+  - The E2E harness needs a local OIDC stub and a SCIM client to drive org server mode without a real Entra ID tenant.
+
 ## Level 3 — Components
 
 **Backend**
