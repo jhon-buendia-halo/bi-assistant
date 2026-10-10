@@ -1,9 +1,8 @@
 import fs from 'node:fs';
-import http from 'node:http';
-import { AddressInfo } from 'node:net';
 import path from 'node:path';
 import { Page } from '@playwright/test';
 import { test, expect } from './fixtures/app.fixture';
+import { LlmStub, startLlmStub } from './helpers/llm-stub';
 
 // Mirrors the "LLM settings" Feature in specs/capabilities/llm-settings/spec.md
 // (the scenarios that need no real provider), against a local stub of the
@@ -14,46 +13,6 @@ const DEPLOYMENT = 'stub-deployment';
 const FORMER_DEVELOPMENT_SECRET = 'insecure-dev-secret';
 const KEY_UNREADABLE_NOTICE =
   "Your saved API key can't be read because the app secret changed. Enter the key again, test and save.";
-
-interface LenaiStub {
-  baseUrl: string;
-  /** `X-Api-Key` of every chat-completion request, oldest first. */
-  apiKeys: string[];
-  close(): Promise<void>;
-}
-
-/** An OpenAI-compatible gateway that answers the connection probe with `ok`. */
-async function startLenaiStub(): Promise<LenaiStub> {
-  const apiKeys: string[] = [];
-  const server = http.createServer((req, res) => {
-    req.resume();
-    req.on('end', () => {
-      if (req.method !== 'POST' || !req.url?.endsWith('/chat/completions')) {
-        res.writeHead(404).end();
-        return;
-      }
-      apiKeys.push(String(req.headers['x-api-key'] ?? ''));
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(
-        JSON.stringify({
-          choices: [
-            {
-              finish_reason: 'stop',
-              message: { role: 'assistant', content: '{"status":"ok"}' },
-            },
-          ],
-        }),
-      );
-    });
-  });
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
-  const { port } = server.address() as AddressInfo;
-  return {
-    baseUrl: `http://127.0.0.1:${port}`,
-    apiKeys,
-    close: () => new Promise((resolve) => server.close(() => resolve())),
-  };
-}
 
 async function openLlmConfiguration(page: Page): Promise<void> {
   await page.getByTitle('Settings').click();
@@ -87,7 +46,7 @@ async function testConnection(page: Page): Promise<void> {
 /** Fills a LenAI configuration pointing at the stub, tests and saves it. */
 async function saveLenaiConfiguration(
   page: Page,
-  stub: LenaiStub,
+  stub: LlmStub,
   apiKey: string,
 ): Promise<void> {
   await openLlmConfiguration(page);
@@ -100,10 +59,10 @@ async function saveLenaiConfiguration(
   await expect(page.getByText('Configuration saved')).toBeVisible();
 }
 
-let stub: LenaiStub;
+let stub: LlmStub;
 
 test.beforeEach(async () => {
-  stub = await startLenaiStub();
+  stub = await startLlmStub();
 });
 
 test.afterEach(async () => {

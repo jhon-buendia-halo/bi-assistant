@@ -1,0 +1,13 @@
+PASS every product and system spec exists
+PASS specs/README.md lists exactly the capability specs on disk
+PASS specs/README.md lists exactly the epic specs on disk
+PASS relative links in 40 files resolve
+PASS every capability spec has the required sections
+PASS 13 Playwright specs each mirror a Feature in exactly one capability spec
+PASS 60 backend routes appear in specs/system/api.md
+PASS 10 collections appear in specs/system/data-model.md
+PASS 6 registered agents appear in specs/system/agents.md
+PASS 11 roadmap milestone epics have a spec in specs/epics/
+PASS every epic spec has a Status of Draft or Confirmed
+
+ALL CHECKS PASSED

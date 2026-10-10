@@ -4,7 +4,7 @@ The complete contract between the renderer (or any HTTP client) and the backend,
 
 Contents: [1 Conventions](#1-conventions) · [2 Endpoints](#2-endpoints) · [3 Streaming and long-running work](#3-streaming-and-long-running-work) · [4 Desktop bridge (IPC)](#4-desktop-bridge-ipc) · [5 CLI contract](#5-cli-contract) · [6 Environment variables](#6-environment-variables) · [7 Gaps and open questions](#7-gaps-and-open-questions)
 
-Endpoint total: **52 HTTP route handlers** across 9 controllers (sessions 14, datasources 6, metrics 5, llm 4, datasets 3, agents 8, deep analysis 3, testing data 3, knowledge 6). Verified queries have **no** HTTP surface (they are created and removed as a side effect of message feedback, and read by the metrics promotion path).
+Endpoint total: **57 HTTP route handlers** across 9 controllers (sessions 14, datasources 6, metrics 5, llm 4, datasets 3, agents 13, deep analysis 3, testing data 3, knowledge 6). Verified queries have **no** HTTP surface (they are created and removed as a side effect of message feedback, and read by the metrics promotion path).
 
 ---
 
@@ -120,6 +120,10 @@ Controller prefix `/sessions`. Capability: sessions-chat, visuals.
 | 13 | `POST /sessions/:id/visualizations/:vid/repair` | One-shot silent auto-repair | yes |
 | 14 | `GET /sessions/:id/visualizations/:vid/download` | Zip bundle | yes |
 
+The session on the wire (endpoints 1-3, and the `done` event of 5) is the stored `SessionDoc` (data-model 3.4), or a preview session (endpoint 3), plus, for a session with an `agentId`, a derived `agent: { id: string; name: string; deleted: boolean; description: string; starterQuestions: string[] }`. While the agent exists, `name`, `description` and `starterQuestions` come from its Live version and `deleted` is `false`. Once it is deleted, `name` is the stored `agentName`, `deleted` is `true`, and `description` and `starterQuestions` are empty (sessions-chat R57-R59). For a preview session, `name`, `description` and `starterQuestions` come from the agent's **draft**, read at each request. It is computed on every read, never stored.
+
+Preview sessions answer endpoints 2 and 4 to 14 like any session (a turn runs with the draft, sessions-chat R54) but are never in endpoint 1's list. Endpoint 4 on a preview discards it (memory thread and workspace included) and answers `{ ok:true, message:"Preview discarded" }`.
+
 #### 1. `GET /sessions`
 - Response `200`: `{ sessions: SessionDoc[] }`. Ordering is the repository's (most recently updated first; see data-model). No pagination; full documents including messages are returned.
 - Errors: none expected.
@@ -130,11 +134,13 @@ Controller prefix `/sessions`. Capability: sessions-chat, visuals.
 - Errors: `404 "Session <id> not found"` (Style B).
 
 #### 3. `POST /sessions`
-- Body: `{ name: string; datasets: string[] }`. `name` required (trimmed, non-empty, **truncated to 64 chars**); `datasets` must be a non-empty array of dataset **names**.
+- Body: `{ name: string; datasets: string[] }` or `{ agentId: string }`. `name` required (trimmed, non-empty, **truncated to 64 chars**); `datasets` must be a non-empty array of dataset **names**.
+- With `agentId` (a user-agent id; sessions-chat R52): `name` and `datasets` in the body are ignored. The session takes the agent's Live name and those of its Live datasets that exist, and stores `agentId` and `agentName` (data-model 3.4).
+- With `{ agentId, preview: true }` (agents-evals R60, R61): starts a **preview session** of the agent's draft. It is held in memory only (data-model 3.12), never listed and never written to the `sessions` collection. Its `id` is `preview-<uuid>`, its `name` `Preview: <draft name>`, its `datasets` those of the draft that exist, and it carries `preview: true` and `agentId`. Its derived `agent` comes from the draft. Success message `Preview started`. Failures: `"Agent \"<id>\" not found"` (also for a built-in key), `"Select at least one dataset to preview"`.
 - Success: `{ ok:true, message:"Session \"<name>\" created", session: SessionDoc }` with `messages: []`, `visualizations: []`, a generated UUID `id`, and a contained Mastra workspace created and linked (`workspaceId`).
-- Failures (Style A): `"session name is required"`, `"select at least one dataset"`.
+- Failures (Style A): `"session name is required"`, `"select at least one dataset"`. With `agentId`: `"Agent \"<id>\" not found"` (unknown id, or a built-in agent's key), `"Publish \"<name>\" before starting a chat"` (no Live version), `"None of this agent's datasets exist"`.
 - Side effects: persists the session; creates the workspace directory `workspaces/session-<id>`.
-- Does not verify the named datasets exist (see G7).
+- Without `agentId`, does not verify the named datasets exist (see G7).
 
 #### 4. `DELETE /sessions/:id`
 - Success: `{ ok:true, message:"Session \"<name>\" deleted" }`.
@@ -350,9 +356,9 @@ interface LlmSettingsView {
 - Body: `SaveLlmSettingsDto` (same rules as save, nothing persisted). Sends one cheap fixed prompt using the candidate settings; 30 s timeout.
 - Success: `{ ok:true, message:"Connection successful — <provider>/<model> replied \"<reply>\" in <ms>ms" }`. Failure: `{ ok:false, message }` (validation errors, provider HTTP errors, `"LLM request timed out after 30s"`).
 
-### 2.6 Agents and evals
+### 2.6 Agents, hub and evals
 
-Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra registry key (`assistant`, `interactive-visual-designer`, `sql-fixer`, `sql-verifier`, `knowledge-bootstrap`, `assistant-eval-judge`; see [agents.md](agents.md)).
+Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra registry key (`assistant`, `interactive-visual-designer`, `sql-fixer`, `sql-verifier`, `knowledge-bootstrap`, `assistant-eval-judge`; see [agents.md](agents.md)) **or** the id of a user agent ([data-model.md](data-model.md) section 3.10); the registry is checked first. `:id` is always a user-agent id. The catalogue merges both kinds. Rules: R43-R52 in [agents-evals](../capabilities/agents-evals/spec.md). The user-agent routes are declared before `GET /agents/:key`.
 
 | # | Method + path | Purpose | FE |
 |---|---|---|---|
@@ -364,13 +370,21 @@ Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra regi
 | 38 | `GET /agents/:key/evals/runs/:jobId` | Poll one run | yes |
 | 39 | `GET /agents/:key/evals/runs/:jobId/download` | Run report as Markdown | yes |
 | 40 | `DELETE /agents/:key/evals/runs/:jobId` | Delete a finished run | yes |
+| 41 | `POST /agents` | Create a user agent (as a draft) | no |
+| 42 | `PUT /agents/:id/draft` | Save a user agent's draft | no |
+| 43 | `POST /agents/:id/publish` | Publish the draft (makes it Live) | yes |
+| 44 | `DELETE /agents/:id` | Delete a user agent | yes |
+| 45 | `PUT /agents/:key/pin` | Pin or unpin any agent | yes |
 
 #### 33. `GET /agents`
-- Response `200`: `{ agents: AgentSummary[] }` sorted by `name`. `AgentSummary = { key, id, name, description, tools: string[] /* sorted tool names */ }`.
+- Response `200`: `{ agents: AgentSummary[] }` sorted by `name`, built-in and user agents together.
+- `AgentSummary = { key, id, name, description, tools: string[] /* sorted tool names; a user agent shows the assistant's */, kind: 'official'|'system'|'user', status: 'builtin'|'draft'|'live', pinned: boolean, owner: 'Official'|'System'|'You', hasUnpublishedChanges: boolean, missingDatasets: string[], datasets: string[], starterQuestions: string[] }`.
+- For a user agent `key` equals `id`, and `name`, `description`, `datasets` and `starterQuestions` come from the Live version when there is one, else the draft. For a built-in agent `status` is `builtin`, `hasUnpublishedChanges` is `false` and `datasets`, `starterQuestions` and `missingDatasets` are empty. `kind` is `official` for `assistant` and `system` for the other five.
 
 #### 34. `GET /agents/:key`
-- Response `200`: `AgentDetail = AgentSummary & { instructions: string /* prompt flattened to text */; toolDetails: { name, description, inputs: string[] /* top-level input param names */ }[]; memory: { storage: string|null; lastMessages: number|false|null; semanticRecall: boolean; workingMemory: boolean; generateTitle: boolean } | null; model: { id: string; provider: string } | null /* null when no LLM settings saved */ }`.
-- Errors (Style B): `404 "Agent \"<key>\" not found"`.
+- Response `200`: `AgentDetail = AgentSummary & { draft?: AgentConfig; live?: AgentConfig /* user agents only; shapes in data-model 3.10 */; instructions: string /* prompt flattened to text */; toolDetails: { name, description, inputs: string[] /* top-level input param names */ }[]; memory: { storage: string|null; lastMessages: number|false|null; semanticRecall: boolean; workingMemory: boolean; generateTitle: boolean } | null; model: { id: string; provider: string } | null /* null when no LLM settings saved */ }`.
+- A user agent runs on the assistant, so its `instructions`, `toolDetails`, `memory` and `model` describe the assistant. Its own instructions are in `draft` and `live`.
+- Errors (Style B): `404 "Agent \"<key>\" not found"`. `:key` is resolved as a registry key first, then as a user-agent id.
 
 #### 35. `GET /agents/:key/evals`
 - Response `200`: `{ sets: AgentEvalSet[] }`. Only `assistant` has sets; any other key returns `{ sets: [] }` (no 404). `AgentEvalSet = { id, name, description, cases: { id, question, intent, checks: { id, name, description }[] }[] }`.
@@ -393,6 +407,30 @@ Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra regi
 
 #### 40. `DELETE /agents/:key/evals/runs/:jobId`
 - Success: `{ ok:true, message:"Run deleted" }`. A run still `running`, or an unknown id, returns `{ ok:false, message:"Cannot delete a run that is still going" }` (the same message for both cases).
+
+#### 41. `POST /agents`
+- Body: `{ name: string; description?: string; instructions?: string; datasets?: string[]; starterQuestions?: string[]; model?: string; reasoningEffort?: 'low'|'medium'|'high' }`. Limits and normalisation: R43.
+- Success: `{ ok:true, message:"Agent \"<name>\" saved as draft", agent: AgentSummary }`. The agent is a draft, not pinned.
+- Failures (Style A): `"Agent name is required"`; `"An agent named \"<name>\" already exists"`.
+
+#### 42. `PUT /agents/:id/draft`
+- Body: as endpoint 41. Replaces the whole draft; a Live version is untouched.
+- Success: `{ ok:true, message:"Draft saved", agent: AgentSummary }`.
+- Failures (Style A): `"Agent \"<id>\" not found"`; `"Agent name is required"`; `"An agent named \"<name>\" already exists"`; `"Built-in agents can't be edited"` (`:id` is a registry key).
+
+#### 43. `POST /agents/:id/publish`
+- No body. Copies the draft to the Live version and stamps `publishedAt`.
+- Success: `{ ok:true, message:"Agent \"<name>\" is Live", agent: AgentSummary }`.
+- Failures (Style A): `"Agent \"<id>\" not found"`; `"Select at least one dataset to publish"`; `"Agent name is required"`; `"Built-in agents can't be edited"`.
+
+#### 44. `DELETE /agents/:id`
+- Success: `{ ok:true, message:"Agent \"<name>\" deleted" }`. Sessions that reference the agent are not touched; they read as `agent.deleted: true` from then on (section 2.1).
+- Failures (Style A): `"Agent \"<id>\" not found"`; `"Built-in agents can't be deleted"`.
+
+#### 45. `PUT /agents/:key/pin`
+- Body: `{ pinned: boolean }`. `:key` is a registry key or a user-agent id. A user agent's pin is stored on its document; a built-in agent's in the settings document `builtin-agent-pins` (data-model 3.2).
+- Success: `{ ok:true, message:"Pinned" | "Unpinned", agent: AgentSummary }`.
+- Failures (Style A): `"Agent \"<key>\" not found"`.
 
 `EvalRunView` (wire shape; `comparison` is present on the wire but absent from the frontend type, see G5):
 
@@ -424,20 +462,20 @@ Controller prefix `/sessions` (same prefix as 2.1, separate controller). Capabil
 
 | # | Method + path | Purpose | FE |
 |---|---|---|---|
-| 41 | `POST /sessions/:id/deep-analysis` | Start a job | yes |
-| 42 | `GET /sessions/:id/deep-analysis/:jobId` | Poll a job | yes |
-| 43 | `GET /sessions/:id/deep-analysis/:jobId/download` | Report as Markdown | yes |
+| 46 | `POST /sessions/:id/deep-analysis` | Start a job | yes |
+| 47 | `GET /sessions/:id/deep-analysis/:jobId` | Poll a job | yes |
+| 48 | `GET /sessions/:id/deep-analysis/:jobId/download` | Report as Markdown | yes |
 
-#### 41. `POST /sessions/:id/deep-analysis`
+#### 46. `POST /sessions/:id/deep-analysis`
 - Body: `{ question: string }` (required, trimmed non-empty).
 - Success: `{ ok:true, message:"Deep analysis started", jobId }`. Returns immediately; one running job per session.
 - Failures (Style A): `"question is required"`, `"Session <id> not found"`, conflict `{ ok:false, message:"A deep analysis is already running for this session", jobId:<running job> }`.
 - Side effects: runs in the background (see [3.2](#32-deep-analysis)); on completion appends an assistant message to the session carrying `report: { jobId, title, path, angles }` whose `content` is the executive summary; on failure appends an assistant message `Deep analysis of "<question>" could not be completed — <detail>`.
 
-#### 42. `GET /sessions/:id/deep-analysis/:jobId`
+#### 47. `GET /sessions/:id/deep-analysis/:jobId`
 - Response `200`: `{ ok:true, message: progress ?? status, jobId, status, progress?, step?, steps?, title?, error? }` where `status ∈ planning | investigating | writing | done | error`. Unknown job or a job belonging to another session: `{ ok:false, message:"Deep analysis <jobId> not found" }`. After a backend restart every old job is unknown, but the report stays downloadable (43).
 
-#### 43. `GET /sessions/:id/deep-analysis/:jobId/download`
+#### 48. `GET /sessions/:id/deep-analysis/:jobId/download`
 - Response `200`: `text/markdown; charset=utf-8`, `Content-Disposition: attachment; filename="<slug-of-title>.md"` (fallback `deep-analysis-<first 8 of jobId>.md`; after a restart the title is unknown so the fallback applies).
 - Errors (Style B): `400 "invalid deep analysis id"` (jobId must match `^[a-zA-Z0-9-]+$`), `404 "No deep analysis report for <jobId>"`, session not found.
 - Reads the stored report from the workspace (`reports/` directory) by id, independent of in-memory state.
@@ -448,42 +486,42 @@ Controller prefix `/knowledge`. Capability: knowledge. **Style B throughout** (r
 
 | # | Method + path | Purpose | FE |
 |---|---|---|---|
-| 44 | `GET /knowledge` | List snippets (filterable) | yes |
-| 45 | `POST /knowledge` | Create a user snippet | yes |
-| 46 | `PATCH /knowledge/:id` | Partial update | yes |
-| 47 | `DELETE /knowledge/:id` | Delete (204) | yes |
-| 48 | `POST /knowledge/bootstrap` | Draft snippets from a dataset (one shot) | **no** |
-| 49 | `POST /knowledge/bootstrap/stream` | Same run, streamed progress (SSE) | yes |
+| 49 | `GET /knowledge` | List snippets (filterable) | yes |
+| 50 | `POST /knowledge` | Create a user snippet | yes |
+| 51 | `PATCH /knowledge/:id` | Partial update | yes |
+| 52 | `DELETE /knowledge/:id` | Delete (204) | yes |
+| 53 | `POST /knowledge/bootstrap` | Draft snippets from a dataset (one shot) | **no** |
+| 54 | `POST /knowledge/bootstrap/stream` | Same run, streamed progress (SSE) | yes |
 
 Route order: `bootstrap` and `bootstrap/stream` are POST-only literals and do not collide with `PATCH/DELETE :id`.
 
-#### 44. `GET /knowledge`
+#### 49. `GET /knowledge`
 - Query (all optional, lenient: an unrecognised value is dropped, not rejected): `datasetId` (that dataset's snippets **plus every global one**), `kind` (`instruction | term | default_filter`), `source` (`user | mined`), `enabled` (`true | false`).
 - Response `200`: **`KnowledgeSnippet[]`** (a bare array, unlike the other list endpoints), `updatedAt` descending.
 
-#### 45. `POST /knowledge`
+#### 50. `POST /knowledge`
 - Body: `{ kind; title: string; body: string; scope?: { datasetId?: string; datasourceId?: string } | null; synonyms?: string[]; entities?: string[]; enabled?: boolean }`.
 - Validation: `400` `"kind must be one of: instruction, term, default_filter"`, `"title is required"`, `"body is required"` (title/body trimmed). `scope` is normalised: non-object, or an object with neither id, becomes `null` (global). `synonyms`/`entities` are trimmed and de-blanked. `enabled` defaults to `true`.
 - Response `201`: the created `KnowledgeSnippet` (`source:"user"`, `id` generated, timestamps set).
 
-#### 46. `PATCH /knowledge/:id`
+#### 51. `PATCH /knowledge/:id`
 - Body: any subset of the create fields. **Only fields present on the body are applied**; absent fields are untouched. A present `scope: null` makes the snippet global; a present `synonyms: []` clears them.
 - Validation: `400` on invalid `kind`, `"title must not be empty"`, `"body must not be empty"`. `404 "Knowledge snippet <id> not found"`.
 - Response `200`: the updated `KnowledgeSnippet`.
 
-#### 47. `DELETE /knowledge/:id`
+#### 52. `DELETE /knowledge/:id`
 - Response `204` (empty). `404 "Knowledge snippet <id> not found"`.
 
-#### 48. `POST /knowledge/bootstrap`
+#### 53. `POST /knowledge/bootstrap`
 - Body: `{ datasetId: string }` (the dataset's **name**).
 - Response `201`: `{ created: KnowledgeSnippet[] }`.
 - Errors: `400 "datasetId is required"`, `400 "Dataset \"<id>\" not found"`, `400 "Knowledge bootstrap failed: <reason>"` (LLM error, malformed output, no usable drafts). Never a raw 500 by design.
-- Not called by the frontend; the streamed variant (49) replaced it for UX (G3).
+- Not called by the frontend; the streamed variant (54) replaced it for UX (G3).
 
-#### 49. `POST /knowledge/bootstrap/stream`
+#### 54. `POST /knowledge/bootstrap/stream`
 See [section 3.4](#34-knowledge-bootstrap-stream-post-knowledgebootstrapstream).
 
-Bootstrap semantics shared by 48 and 49: the `knowledge-bootstrap` agent drafts kinds `instruction | term | default_filter` from the dataset's stored schema snapshot plus a sample of rows (see [agents.md](agents.md)); at most `MAX_BOOTSTRAP_DRAFTS` drafts are kept; a draft is skipped when its title (case-insensitive) already exists for that dataset or in the same batch; survivors are persisted with `scope: { datasetId }`, `source: "mined"`, **`enabled: false`** for human review.
+Bootstrap semantics shared by 53 and 54: the `knowledge-bootstrap` agent drafts kinds `instruction | term | default_filter` from the dataset's stored schema snapshot plus a sample of rows (see [agents.md](agents.md)); at most `MAX_BOOTSTRAP_DRAFTS` drafts are kept; a draft is skipped when its title (case-insensitive) already exists for that dataset or in the same batch; survivors are persisted with `scope: { datasetId }`, `source: "mined"`, **`enabled: false`** for human review.
 
 ### 2.9 Testing data
 
@@ -491,11 +529,11 @@ Controller prefix `/testing-data`. Capability: testing-data. Provisions bundled 
 
 | # | Method + path | Purpose | FE |
 |---|---|---|---|
-| 50 | `GET /testing-data` | Fixture list and load status | yes |
-| 51 | `POST /testing-data/:fixtureId/load` | Seed / register a fixture | yes |
-| 52 | `DELETE /testing-data/:fixtureId` | Forget a fixture app-side | yes |
+| 55 | `GET /testing-data` | Fixture list and load status | yes |
+| 56 | `POST /testing-data/:fixtureId/load` | Seed / register a fixture | yes |
+| 57 | `DELETE /testing-data/:fixtureId` | Forget a fixture app-side | yes |
 
-#### 50. `GET /testing-data`
+#### 55. `GET /testing-data`
 - Response `200`: `{ fixtures: SampleFixtureView[] }`. Never fails: if the stores are unreadable it returns the same list with every fixture `loaded:false` (and logs a warning).
 
 ```ts
@@ -514,14 +552,14 @@ interface SampleFixtureView {
 interface PostgresConnection { host: string; port: number; database: string; user: string; password: string; ssl: boolean }
 ```
 
-#### 51. `POST /testing-data/:fixtureId/load`
+#### 56. `POST /testing-data/:fixtureId/load`
 - Body: `{ host, port, database, user, password?, ssl? }` (all coerced from untyped JSON). Required: non-empty `host`, `database`, `user`; `port` an integer 1..65535; `database` must not contain `"`. `password` defaults to `''`; `ssl` true only for `true` or `"true"`.
 - Response `200` (Style A): `{ ok, message, datasourceId?, datasetName?, entityCount?, createdDatabase?, seeded? }`.
   - Success messages: seedable `"Seeded <schema> on <host:port> and loaded <n> entities into dataset \"<name>\"[ — created the database]"`; register-only `"Registered <host:port>/<db> and loaded <n> entities into dataset \"<name>\" — the <name> sample ships no seed SQL, so nothing was written to the database"`.
   - Failure messages: unknown fixture (`Unknown sample fixture "<id>"`), REST-kind fixtures (registered by a script, not here), field validation, connection failure, missing database that cannot be created, seed failure, and `"Missing entities after seeding|registering: <list>. ..."` (returns `ok:false` but still includes `datasourceId`, `createdDatabase`, `seeded`).
 - Side effects (seedable): connects (8 s timeout); if the database is absent, creates it from the `postgres` maintenance database; **drops and recreates the sample's schema** (`DROP SCHEMA IF EXISTS "<schema>" CASCADE`) and runs the bundled SQL in batches (120 s statement timeout); upserts a datasource named after the fixture (reusing the existing id when present); forces an inventory refresh; saves the fixture's dataset (with sampled values and join graph, same as `POST /datasets`). Register-only fixtures skip the seed and require the data to exist already.
 
-#### 52. `DELETE /testing-data/:fixtureId`
+#### 57. `DELETE /testing-data/:fixtureId`
 - Response `200` (Style A): `{ ok:true, message:"Removed the <name> datasource and dataset from this app. The database itself was left untouched." }`, `{ ok:true, message:"Nothing to remove — the sample is not loaded" }`, or `{ ok:false, message:"Unknown sample fixture \"<id>\"" }`.
 - Side effects: deletes the fixture's dataset, then its datasource (and cached inventory). The target database is never touched.
 
@@ -657,7 +695,7 @@ interface StreamMessageRequest {
 
 ### 3.2 Deep analysis
 
-Pattern: **start, poll, then download**. Endpoints 41-43.
+Pattern: **start, poll, then download**. Endpoints 46-48.
 
 - State machine: `planning` → `investigating` (one step per angle, 1..`steps`, at most 5 angles, 3-5 planned) → `writing` → `done`; any failure → `error`. Not resumable.
 - Progress is observed by polling `GET /sessions/:id/deep-analysis/:jobId` (the shipped chat polls every **3000 ms**, gives up after 5 consecutive poll failures). `progress` is the human line for the pending card: `"Planning the investigation"`, `"Investigating angle <i> of <n>: <title>"`, `"Writing the report"`, `"Report ready — <n> angle(s) investigated"`, `"Deep analysis failed"`. `step`/`steps` are 1-based.
@@ -682,7 +720,7 @@ Pattern: **start, poll, list, download, delete**. Endpoints 36-40.
 |---|---|---|
 | `progress` | `{ type:"progress", key: "dataset"\|"schema"\|"sample"\|"draft"\|"save", message: string }` | A stage started. Messages: `Opening dataset “<name>”`, `Reading schema — <n> table(s)`, `Sampling rows — <done> of <total> table(s)` (repeats as tables complete), `Drafting instructions, terms and default filters`, `Saving <n> draft(s) for review`. |
 | `done` | `{ type:"done", created: KnowledgeSnippet[] }` | **Terminal, success.** Persisted drafts (disabled, `source:"mined"`). May be empty. |
-| `error` | `{ type:"error", message: string }` | **Terminal, failure.** Reasons as in endpoint 48. |
+| `error` | `{ type:"error", message: string }` | **Terminal, failure.** Reasons as in endpoint 53. |
 
 Note the error text is in **`message`** here but in **`content`** for the chat stream. Clients treat end-of-stream without a terminal event as failure. The shipped client's fallback texts: `"Backend unreachable"`, `"Could not generate suggestions (<status>)"`, `"Could not generate suggestions — try again shortly"`.
 

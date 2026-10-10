@@ -51,8 +51,7 @@
             </span>
           </div>
           <p class="text-[13px] leading-6 text-fg-muted">
-            Ask a question in plain English and I will query your data, explain
-            how I got the answer and turn it into an interactive visual.
+            {{ welcomeDescription() }}
             @if (welcomeDatasets().length > 0) {
               <span class="text-fg-muted">
                 Connected to
@@ -65,7 +64,7 @@
               Try one of these:
             </span>
             <div class="flex flex-wrap gap-2">
-              @for (prompt of starterPrompts; track prompt) {
+              @for (prompt of starterPrompts(); track prompt) {
                 <button
                   type="button"
                   (click)="useStarterPrompt(prompt)"
@@ -658,7 +657,7 @@
           <button
             type="button"
             (click)="send()"
-            [disabled]="draft().trim() === ''"
+            [disabled]="draft().trim() === '' || preparing()"
             title="Send message"
             aria-label="Send message"
             class="rounded-full p-1.5 text-accent hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"

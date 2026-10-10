@@ -1,0 +1,96 @@
+@let a = agent();
+<div
+  [attr.data-testid]="'agent-card-' + a.key"
+  class="card relative flex h-full hover:border-border-strong has-[.agent-open:focus-visible]:outline-2 has-[.agent-open:focus-visible]:outline-offset-2 has-[.agent-open:focus-visible]:outline-focus"
+>
+  <button
+    type="button"
+    [attr.data-testid]="'agent-' + a.key"
+    (click)="open.emit()"
+    class="agent-open flex min-w-0 flex-1 flex-col gap-2.5 rounded-xl p-4 text-left outline-none"
+    [class.pb-14]="showStartChat()"
+  >
+    <!-- The tile row also holds the pin toggle (absolutely placed), so the
+         name gets the card's full width even three cards to a row. -->
+    <span
+      class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-on-primary-soft"
+    >
+      <lucide-angular [img]="Sparkles" [size]="15" />
+    </span>
+    <span class="truncate text-[14px] font-medium text-fg-strong">{{
+      a.name
+    }}</span>
+    @if (a.description) {
+      <span class="line-clamp-2 text-[12px] leading-relaxed text-fg-muted">{{
+        a.description
+      }}</span>
+    }
+    <span class="mt-auto flex flex-wrap items-center gap-2 pt-1">
+      <span class="text-[12px] text-fg-muted">Owner: {{ owner() }}</span>
+      @if (isUser()) {
+        <span
+          [attr.data-testid]="'agent-status-' + a.key"
+          class="chip"
+          [class.chip-success]="a.status === 'live'"
+          [class.chip-neutral]="a.status !== 'live'"
+          >{{ a.status === "live" ? "Live" : "Draft" }}</span
+        >
+        @if (a.hasUnpublishedChanges) {
+          <span class="chip chip-warning">Unpublished changes</span>
+        }
+      }
+    </span>
+    @if (missing()) {
+      <span class="chip chip-warning w-fit whitespace-normal">
+        <lucide-angular [img]="TriangleAlert" [size]="12" class="shrink-0" />
+        <span>Missing dataset: {{ missing() }}</span>
+      </span>
+    }
+  </button>
+
+  <button
+    type="button"
+    (click)="togglePin.emit()"
+    [attr.aria-pressed]="!!a.pinned"
+    [attr.aria-label]="(a.pinned ? 'Unpin ' : 'Pin ') + a.name"
+    class="group/pin absolute top-[22px] right-3 flex items-center gap-1 rounded-full px-2 py-0.5 text-[12px] font-medium text-primary hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-focus"
+    [class.bg-surface-selected]="a.pinned"
+  >
+    @if (a.pinned) {
+      <lucide-angular
+        [img]="Pin"
+        [size]="12"
+        class="group-hover/pin:hidden group-focus-visible/pin:hidden"
+      />
+      <lucide-angular
+        [img]="PinOff"
+        [size]="12"
+        class="hidden group-hover/pin:inline-flex group-focus-visible/pin:inline-flex"
+      />
+      <span>Pinned</span>
+    } @else {
+      <lucide-angular [img]="Pin" [size]="12" />
+      <span>Pin</span>
+    }
+  </button>
+
+  @if (showStartChat()) {
+    <!-- Bottom-right; the open control keeps room for it (pb-14). -->
+    <button
+      type="button"
+      [attr.data-testid]="'agent-start-chat-' + a.key"
+      (click)="startChat.emit()"
+      [disabled]="starting() || !!blockedReason()"
+      [attr.title]="blockedReason()"
+      [attr.aria-label]="'Start chat with ' + a.name"
+      class="btn btn-secondary absolute right-4 bottom-4 px-3 py-1 text-[12px]"
+    >
+      @if (starting()) {
+        <lucide-angular [img]="Loader2" [size]="12" class="animate-spin" />
+      } @else {
+        <lucide-angular [img]="MessageSquarePlus" [size]="12" />
+      }
+      <span>Start chat</span>
+    </button>
+  }
+</div>

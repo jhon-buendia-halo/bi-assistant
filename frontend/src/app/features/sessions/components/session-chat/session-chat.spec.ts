@@ -10,7 +10,11 @@ import {
 import { of } from 'rxjs';
 import { ChatMessage, Session } from '../../models/session.model';
 import { SessionsApiService } from '../../services/sessions-api.service';
-import { SessionChat } from './session-chat';
+import {
+  GENERIC_STARTER_PROMPTS,
+  GENERIC_WELCOME_DESCRIPTION,
+  SessionChat,
+} from './session-chat';
 
 function sessionWith(message: ChatMessage): Session {
   return {
@@ -610,4 +614,106 @@ describe('SessionChat welcome message', () => {
     expect(fixture.componentInstance.sending()).toBeFalse();
     flush();
   }));
+
+  const agent = {
+    id: 'u-historian',
+    name: 'Cup historian',
+    deleted: false,
+    description: 'Answers questions about World Cup history',
+    starterQuestions: ['Who won in 2014?', 'Which country hosted in 2002?'],
+  };
+
+  function starterTexts(el: HTMLElement): string[] {
+    return Array.from(
+      el.querySelectorAll('[data-testid="session-welcome"] button'),
+    ).map((button) => button.textContent!.trim());
+  }
+
+  it("uses the agent's description and starter questions (R58)", async () => {
+    const el = await render({ ...emptySession, agentId: agent.id, agent });
+    const welcome = el.querySelector('[data-testid="session-welcome"]');
+    expect(welcome?.textContent).toContain(`${agent.description}.`);
+    expect(welcome?.textContent).not.toContain(GENERIC_WELCOME_DESCRIPTION);
+    expect(welcome?.textContent).toContain('Claims 2025');
+    expect(starterTexts(el)).toEqual(agent.starterQuestions);
+  });
+
+  it('shows at most five of the agent\'s starter questions', async () => {
+    const starterQuestions = ['1?', '2?', '3?', '4?', '5?', '6?'];
+    const el = await render({
+      ...emptySession,
+      agentId: agent.id,
+      agent: { ...agent, starterQuestions },
+    });
+    expect(starterTexts(el)).toEqual(starterQuestions.slice(0, 5));
+  });
+
+  it('falls back to the generic text and prompts when the agent has none', async () => {
+    const el = await render({
+      ...emptySession,
+      agentId: agent.id,
+      agent: { ...agent, description: '', starterQuestions: [] },
+    });
+    const welcome = el.querySelector('[data-testid="session-welcome"]');
+    expect(welcome?.textContent).toContain(GENERIC_WELCOME_DESCRIPTION);
+    expect(starterTexts(el)).toEqual([...GENERIC_STARTER_PROMPTS]);
+  });
+
+  it('falls back to the generic welcome once the agent is deleted (R59)', async () => {
+    const el = await render({
+      ...emptySession,
+      agentId: agent.id,
+      agent: { ...agent, deleted: true },
+    });
+    const welcome = el.querySelector('[data-testid="session-welcome"]');
+    expect(welcome?.textContent).toContain(GENERIC_WELCOME_DESCRIPTION);
+    expect(welcome?.textContent).not.toContain(agent.description);
+    expect(starterTexts(el)).toEqual([...GENERIC_STARTER_PROMPTS]);
+  });
+});
+
+describe('SessionChat beforeSend', () => {
+  let fixture: ComponentFixture<SessionChat>;
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [SessionChat],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+    fixture = TestBed.createComponent(SessionChat);
+    fixture.componentRef.setInput('session', {
+      id: 'preview-1',
+      name: 'Preview: Cup historian',
+      datasets: [],
+      messages: [],
+    } satisfies Session);
+  });
+
+  it('sends only after the hook agrees, and keeps the draft on a refusal', async () => {
+    let answer = false;
+    const hook = jasmine
+      .createSpy('beforeSend')
+      .and.callFake(() => Promise.resolve(answer));
+    fixture.componentRef.setInput('beforeSend', hook);
+    fixture.detectChanges();
+    const api = TestBed.inject(SessionsApiService);
+    const stream = spyOn(api, 'streamMessage').and.resolveTo();
+    const chat = fixture.componentInstance;
+
+    chat.draft.set('Who won in 2014?');
+    chat.send();
+    expect(chat.preparing()).toBeTrue();
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(hook).toHaveBeenCalledTimes(1);
+    expect(stream).not.toHaveBeenCalled();
+    expect(chat.draft()).toBe('Who won in 2014?');
+    expect(chat.preparing()).toBeFalse();
+
+    answer = true;
+    chat.send();
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(stream).toHaveBeenCalledTimes(1);
+    expect(stream.calls.mostRecent().args[1]).toBe('Who won in 2014?');
+    expect(chat.draft()).toBe('');
+  });
 });

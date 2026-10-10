@@ -118,6 +118,24 @@ export class SessionsApiService {
     });
   }
 
+  /** Start a session bound to a Live user agent, named after it (R52). */
+  createFromAgent(agentId: string): Observable<SessionActionResult> {
+    return this.http.post<SessionActionResult>(`${API_BASE_URL}/sessions`, {
+      agentId,
+    });
+  }
+
+  /**
+   * Start a preview conversation of a user agent's draft (agents-evals R60).
+   * It is never listed; `delete` discards it.
+   */
+  createPreview(agentId: string): Observable<SessionActionResult> {
+    return this.http.post<SessionActionResult>(`${API_BASE_URL}/sessions`, {
+      agentId,
+      preview: true,
+    });
+  }
+
   delete(id: string): Observable<SessionActionResult> {
     return this.http.delete<SessionActionResult>(
       `${API_BASE_URL}/sessions/${encodeURIComponent(id)}`,

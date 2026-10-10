@@ -1,0 +1,46 @@
+# 1.9.4 red run (workflow step 7), 2026-10-09, before any production code
+
+## Frontend unit test: npx ng test --watch=false --browsers=ChromeHeadless
+Fails to compile because the module under test does not exist yet:
+✘ [ERROR] Could not resolve "./agent-hub.util"
+✘ [ERROR] TS2307: Cannot find module './agent-hub.util' or its corresponding type declarations. [plugin angular-compiler]
+
+## Playwright (web): agent-hub.spec.ts (9 tests) + agents.spec.ts (the 2 updated tests), --timeout=30000
+Background seeding through the API succeeded in every test; each fails on the missing hub elements.
+("Target page, context or browser has been closed" = the 30 s test timeout hit while waiting for the element named on the next line.)
+
+  1) [web] › e2e/agent-hub.spec.ts:92:5 › shows the built-in agents and mine in sections ───────────
+    Error: expect(locator).toBeVisible() failed
+      - waiting for getByTestId('agent-section-system')
+  2) [web] › e2e/agent-hub.spec.ts:143:5 › search narrows the agents by name or description ────────
+    Error: locator.fill: Target page, context or browser has been closed
+      - waiting for getByLabel('Search agents by name or description', { exact: true })
+  3) [web] › e2e/agent-hub.spec.ts:159:5 › filters limit the hub to one kind of agent ──────────────
+    Error: locator.click: Target page, context or browser has been closed
+      - waiting for getByRole('group', { name: 'Filter agents' }).getByRole('button', { name: 'Mine', exact: true })
+  4) [web] › e2e/agent-hub.spec.ts:181:5 › pinned agents come first in their own section and survive a restart 
+    Error: locator.click: Target page, context or browser has been closed
+      - waiting for getByRole('button', { name: 'Pin Health plan analyst', exact: true })
+  5) [web] › e2e/agent-hub.spec.ts:241:5 › flags an agent whose dataset no longer exists ───────────
+    Error: expect(locator).toContainText(expected) failed
+      - waiting for getByTestId('agent-card-dbff5f6d-9f0c-45aa-8475-fb890cb95a4c')
+  6) [web] › e2e/agent-hub.spec.ts:258:5 › a card opens the agent's detail view with its actions ───
+    Error: expect(locator).toBeVisible() failed
+      - waiting for getByRole('button', { name: 'Publish', exact: true })
+  7) [web] › e2e/agent-hub.spec.ts:278:5 › publishing a draft makes it Live ────────────────────────
+    Error: locator.click: Target page, context or browser has been closed
+      - waiting for getByRole('button', { name: 'Publish', exact: true })
+  8) [web] › e2e/agent-hub.spec.ts:304:5 › deleting an agent asks first ────────────────────────────
+    Error: locator.click: Target page, context or browser has been closed
+      - waiting for getByRole('button', { name: 'Delete', exact: true })
+  9) [web] › e2e/agent-hub.spec.ts:332:5 › the hub has no detectable accessibility violations ──────
+    Error: locator.click: Target page, context or browser has been closed
+      - waiting for getByRole('button', { name: 'Show more (2)', exact: true })
+  10) [web] › e2e/agents.spec.ts:29:5 › opens an agent from the Agents list and switches between its tabs 
+    Error: expect(locator).toContainText(expected) failed
+      - waiting for getByTestId('agent-section-official').getByTestId('agent-assistant')
+  11) [web] › e2e/agents.spec.ts:98:5 › shows the stateless, no-tool agents accurately ─────────────
+    Error: locator.click: Target page, context or browser has been closed
+      - waiting for getByTestId('agent-show-more-system')
+
+  11 failed

@@ -117,9 +117,9 @@
                       <span class="truncate text-[13px] font-medium text-fg">{{
                         session.name
                       }}</span>
-                      @if (session.datasets.length > 0) {
+                      @if (sessionSubtitle(session); as subtitle) {
                         <span class="truncate text-[12px] text-fg-muted">{{
-                          session.datasets.join(" · ")
+                          subtitle
                         }}</span>
                       }
                     </button>
@@ -329,6 +329,25 @@
                     </h2>
                     @if (showSessionContext()) {
                       <div class="mt-1 flex min-w-0 items-center gap-2">
+                        @if (activeSession()?.agent; as agent) {
+                          <!-- Agent first, then 12 px before the datasources (R57). -->
+                          <lucide-angular
+                            [img]="Sparkles"
+                            [size]="14"
+                            class="shrink-0 text-fg-muted"
+                          />
+                          <span
+                            class="shrink-0 text-[10px] font-medium tracking-[0.08em] text-fg-muted uppercase"
+                            >Agent</span
+                          >
+                          <span
+                            data-testid="session-agent"
+                            class="chip chip-neutral mr-1 min-w-0"
+                            ><span class="max-w-48 truncate">{{
+                              agentLabel(agent)
+                            }}</span></span
+                          >
+                        }
                         <lucide-angular
                           [img]="Database"
                           [size]="14"
@@ -467,9 +486,12 @@
                 </div>
               } @else if (mainView() === "agents") {
                 <div class="flex flex-1 justify-center overflow-y-auto px-8 py-10">
-                  <app-agent-list
+                  <app-agent-hub
                     class="w-full max-w-[960px]"
                     (openAgent)="openAgent($event)"
+                    (newAgent)="openAgentEditor(null)"
+                    [startingAgentKey]="startingAgentKey()"
+                    (startChat)="startChatWithAgent($event)"
                   />
                 </div>
               } @else if (mainView() === "agent-detail" && activeAgentKey()) {
@@ -478,6 +500,19 @@
                     class="w-full max-w-[960px]"
                     [agentKey]="activeAgentKey()!"
                     (back)="mainView.set('agents')"
+                    (deleted)="onAgentDeleted()"
+                    (edit)="openAgentEditor($event.key)"
+                    [starting]="startingAgentKey() === activeAgentKey()"
+                    (startChat)="startChatWithAgent($event)"
+                  />
+                </div>
+              } @else if (mainView() === "agent-editor") {
+                <div class="flex flex-1 justify-center overflow-y-auto px-8 py-10">
+                  <app-agent-editor
+                    class="w-full max-w-[960px]"
+                    [agentId]="editingAgentId()"
+                    (back)="closeAgentEditor()"
+                    (preview)="rightPanelOpen.set(true)"
                   />
                 </div>
               } @else if (mainView() === "knowledge") {
@@ -663,15 +698,35 @@
               (dblclick)="resetRightPanelWidth()"
             ></div>
 
-            <!-- Panel header: collapse -->
+            <!-- Panel header: collapse; the agent editor's preview adds its title and Reset -->
             <div
-              class="flex h-12 shrink-0 items-center justify-end border-b border-border px-3"
+              class="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3"
             >
+              @if (mainView() === "agent-editor") {
+                <h3
+                  class="pl-3 text-[12px] font-medium tracking-wider text-fg-muted uppercase"
+                >
+                  Preview
+                </h3>
+                <button
+                  type="button"
+                  data-testid="agent-preview-reset"
+                  (click)="agentEditor.resetPreview()"
+                  [disabled]="
+                    agentEditor.preview().kind !== 'ready' &&
+                    agentEditor.preview().kind !== 'error'
+                  "
+                  class="btn btn-ghost"
+                >
+                  <lucide-angular [img]="RotateCcw" [size]="14" />
+                  <span>Reset preview</span>
+                </button>
+              }
               <button
                 type="button"
                 (click)="rightPanelOpen.set(false)"
                 title="Collapse right panel"
-                class="btn-icon"
+                class="btn-icon ml-auto"
               >
                 <lucide-angular [img]="PanelRight" [size]="16" />
               </button>
@@ -699,6 +754,8 @@
                   (visualRefreshed)="onVisualRefreshed($event)"
                   (dataPointSelected)="onDataPointSelected($event)"
                 />
+              } @else if (mainView() === "agent-editor") {
+                <app-agent-preview class="min-h-0 flex-1" />
               } @else if (mainView() === "agent-detail") {
                 <app-eval-trace class="min-h-0 flex-1 overflow-y-auto" />
               } @else {

@@ -1,0 +1,10 @@
+# Unit tests
+backend: npx jest
+Test Suites: 40 passed, 40 total
+Tests:       757 passed, 757 total
+
+frontend: ng test (ChromeHeadless, --window-size=1440,900)
+TOTAL: 119 SUCCESS
+
+backend lint (npx eslint, no --fix): ✖ 231 problems (221 errors, 10 warnings) — same as the base, none added
+builds: backend npm run build OK; frontend npm run build OK (initial bundle over its 500 kB budget, as on the base)

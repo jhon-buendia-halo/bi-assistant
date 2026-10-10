@@ -5,6 +5,47 @@ Running log of every meaningful change, newest first. See *Logging convention* a
 ## 2026-10-09
 
 ### Added
+- **Agent editor with a preview chat** (roadmap 1.9.5, [BA-155](https://halo-powered.atlassian.net/browse/BA-155), epic [BA-150](https://halo-powered.atlassian.net/browse/BA-150)):
+  - **New agent** on the hub and **Edit** on your own agents open a full-page editor: name, description, instructions, dataset checkboxes (a dataset that no longer exists stays listed as `<name> (missing)`), up to 5 starter questions, a model override and a reasoning effort.
+  - **Save** keeps a draft; **Publish** saves and makes it Live. Editing a Live agent shows `Unpublished changes`, and its sessions keep the Live version until you publish. Leaving with unsaved changes asks `Discard unsaved changes?`.
+  - **Preview** opens a chat in the Details panel that runs the saved draft. Sending saves the form first. **Reset preview** starts over. Leaving the editor discards the preview with its memory and workspace, and previews left by a crash are swept at the next start.
+  - Backend: a preview is an in-memory session (`POST /sessions { agentId, preview: true }`, `DELETE /sessions/:id` → `Preview discarded`), never in the sessions collection (ADR-0008). It runs through the normal chat routes, so the chat component is reused.
+  - Specs: agents-evals R1, R5 and R54–R61 and the Feature "Agent editor"; sessions-chat R54; app-shell R3 and R10; [api.md](specs/system/api.md) §2.1 and endpoint 3; [data-model.md](specs/system/data-model.md) §3.12; [agents.md](specs/system/agents.md) Block 5 and `agent-overrides`; [ui.md](specs/system/ui.md) §1.4, §4.4, §4.5 and the new §4.5.1; glossary.
+  - Tests: new `frontend/e2e/agent-editor.spec.ts` (8 scenarios, including an axe scan in both themes); two hub scenarios updated; preview tests added to `backend/test/agent-sessions.e2e-spec.ts` (now 9, including the sweep after a restart); 2 backend and 21 frontend unit tests. Full web suite: 68 passed, 2 skipped (desktop only). Desktop not run.
+  - Evidence: [evidence/1.9.5/](evidence/1.9.5/).
+- **Start a session from an agent** (roadmap 1.9.3, [BA-153](https://halo-powered.atlassian.net/browse/BA-153), epic [BA-150](https://halo-powered.atlassian.net/browse/BA-150)):
+  - **Start chat** sits on the Official card, on every Live user agent's card and in their detail views. On a Live agent it creates the session at once, named after the agent, over those of its datasets that still exist. On the Official agent it opens the new-session screen. It is disabled when none of the agent's datasets exist.
+  - Every turn applies the agent's current Live version: its instructions as a labelled, user-supplied context block after every other block, and its model and reasoning-effort overrides, which apply to the assistant only. This covers chat turns, the grounding pass and deep analysis. A draft never applies. The read-only guard still rejects writes the instructions ask for.
+  - The page header shows an **Agent** chip, the session row reads `<agent> · <datasets>`, and the welcome block offers the agent's description and starter questions. When the agent is deleted, its sessions keep their transcript, continue with the plain assistant and read `<name> · agent deleted`.
+  - API and data: `POST /sessions` accepts `{ agentId }`; sessions gain optional `agentId` and `agentName` (no migration); every session the API returns carries a derived `agent`. The model resolver takes an optional model override, read by the assistant from the new `agent-overrides` requestContext key.
+  - Specs: sessions-chat R52–R59 and the Feature "Sessions started from an agent"; agents-evals R1, R5 and R53; [api.md](specs/system/api.md) §2.1 and endpoint 3; [data-model.md](specs/system/data-model.md) §3.4 and §3.13; [agents.md](specs/system/agents.md) §1.2–1.4 and §4.1–4.2 (Block 5); [ui.md](specs/system/ui.md) §1.2, §1.3, §4.4, §4.5 and §4.12; app-shell R49; glossary.
+  - Tests: new `frontend/e2e/agent-sessions.spec.ts` (6 scenarios, driven by a recording LLM stub, `e2e/helpers/llm-stub.ts`, which `llm-settings.spec.ts` now shares); the hub's detail-actions scenario updated; new backend API test `backend/test/agent-sessions.e2e-spec.ts` (7, including a restart), with the backend process harness moved to `test/backend-process.ts`; 10 backend and 17 frontend unit tests. Full web suite: 60 passed, 2 skipped (desktop only). Desktop not run.
+  - Evidence: [evidence/1.9.3/](evidence/1.9.3/).
+- **Agent Hub screen** (roadmap 1.9.4, [BA-154](https://halo-powered.atlassian.net/browse/BA-154), epic [BA-150](https://halo-powered.atlassian.net/browse/BA-150)):
+  - The Agents screen is now the Agent Hub, following the mockup:
+    - a full-width search over name and description;
+    - the filter pills All, Pinned, Official and Mine;
+    - card sections Official, Mine and System, three cards to a row with `Show more (<n>)`.
+  - Cards show the name, description, owner (`You`, `Official` or `System`), the `Draft`/`Live` chip, `Unpublished changes` and `Missing dataset: <names>`.
+  - Pins apply at once, put the card first in its own section, survive a restart, and revert with a toast if saving fails.
+  - The detail view gains Publish and Delete (with confirmation) for user agents. **New agent** is shown but disabled until the editor (1.9.5). Start chat arrives with 1.9.3.
+  - The old agent list component is removed.
+  - Specs: agents-evals R1–R9 rewritten, plus the Feature "Agent Hub"; [ui.md](specs/system/ui.md) §4.4–4.5; glossary.
+  - Tests: new `frontend/e2e/agent-hub.spec.ts` (9 scenarios, including an axe scan); `agents.spec.ts` updated for Show more; 12 unit tests for the section and filter logic. Full web suite: 44 passed, 2 skipped (desktop only). Desktop not run.
+  - Evidence: [evidence/1.9.4/](evidence/1.9.4/).
+- **Agent definitions: storage and API** (roadmap 1.9.2, [BA-152](https://halo-powered.atlassian.net/browse/BA-152), epic [BA-150](https://halo-powered.atlassian.net/browse/BA-150)):
+  - New `agents` collection and `user-agents` backend module. A user agent keeps a draft and an optional Live version (name, description, instructions, datasets, starter questions, an optional model and reasoning effort) and a pin. Built-in pins live in a `builtin-agent-pins` settings document. No migration.
+  - New endpoints: `POST /agents`, `PUT /agents/:id/draft`, `POST /agents/:id/publish`, `DELETE /agents/:id` and `PUT /agents/:key/pin`. `GET /agents` lists built-in and user agents together, with kind, status, owner, pin, unpublished changes and missing datasets. `GET /agents/:key` also resolves user-agent ids. Built-in agents can't be edited or deleted.
+  - Specs: rules R43–R52 and the Feature "Agent definitions (API)" in [specs/capabilities/agents-evals/spec.md](specs/capabilities/agents-evals/spec.md); [api.md](specs/system/api.md) endpoints 41–45 (later ones renumbered 46–57); [data-model.md](specs/system/data-model.md) §3.2 and §3.10; glossary terms for user, official and system agents, draft, Live and pin.
+  - Tests: backend e2e `backend/test/user-agents.e2e-spec.ts` (9 tests, including a real backend restart on the same data dir) and 23 new unit tests. The Agents screen is unchanged; `agents.spec.ts` still passes 9/9.
+  - Test harness: `E2E_BACKEND_PORT` lets the Playwright suite run beside a desktop app that holds port 3000 ([tech-stack.md](specs/system/tech-stack.md)).
+  - Evidence: [evidence/1.9.2/](evidence/1.9.2/).
+- **Agent Hub planned** (roadmap 1.9.1, [BA-151](https://halo-powered.atlassian.net/browse/BA-151), epic [BA-150](https://halo-powered.atlassian.net/browse/BA-150)):
+  - New epic spec [specs/epics/BA-150/spec.md](specs/epics/BA-150/spec.md), confirmed by the user. Users build agents on top of the assistant (instructions, datasets, starter questions, model override), test them as drafts, publish them, pin them and start chats from them. The Agents screen becomes a hub with the filters All, Pinned, Official and Mine, plus a System section for the helper agents.
+  - ADR-0008 in [specs/system/architecture.md](specs/system/architecture.md): a user agent is a stored configuration (a draft and a Live version) applied to the assistant on each turn, not an agent registered at runtime. So the read-only guard and the grounding checks always hold.
+  - Milestone 1.9 in [roadmap.md](roadmap.md), with one feature per story (1.9.1–1.9.5), and the epic row in [specs/README.md](specs/README.md).
+  - Decisions: teams, the org and sharing are out (the app stays local-first); the epic is inside the 1.0 Beta; the hub UI is built with today's styles and restyled later by BA-141.
+  - Evidence: [evidence/1.9.1/](evidence/1.9.1/).
 - **Aligned with the Insight Agent AI Figma design** (roadmap 1.8.8, [BA-158](https://halo-powered.atlassian.net/browse/BA-158), epic [BA-141](https://halo-powered.atlassian.net/browse/BA-141)):
   - Light tokens now come from the Figma variables (brand `#0B41AD`, text `rgba(0,0,0,.85)`, headings `#001F52`, radius 12, Figma shadows), and the navy dark set is re-derived from them.
   - Shell: the Figma's teal gradient frame with its texture, a 64 px translucent rail (menu, logo, workspace items, avatar, system logs, Settings, divider, LenAI mark and "Powered by LenAI"), and a 136 px banner with the Figma image, still reading "Agentic Hub".
@@ -63,12 +104,19 @@ Running log of every meaningful change, newest first. See *Logging convention* a
   - Evidence: [evidence/1.8.1/](evidence/1.8.1/).
 
 ### Fixed
+- **Reopening a session showed its transcript as it was before that visit's turns** (found while building roadmap 1.9.3, [BA-153](https://halo-powered.atlassian.net/browse/BA-153)): the session list kept the copy loaded before the first turn. A finished turn now refreshes the shell's copies (`SessionChat` emits `sessionUpdated`; same id, so an in-flight stream is never disturbed). Covered by `agent-sessions.spec.ts` "deleting the agent keeps its sessions on the plain assistant". Evidence: [evidence/1.9.3/](evidence/1.9.3/).
+- **Agent Hub's active filter pill readable in dark** (roadmap 1.9.4, [BA-154](https://halo-powered.atlassian.net/browse/BA-154), epic [BA-150](https://halo-powered.atlassian.net/browse/BA-150)):
+  - Merging `main` (v0.25.0, BA-141) moved the hub onto the theme tokens. The shared `filter-pill-active` kept `primary` text, which is 4.34:1 on the selected fill in dark, so the axe scan failed. It now uses `on-primary-soft` in both themes (`components.css`, [ui.md](specs/system/ui.md) §3).
+  - Full web suite after the merge: 54 passed, 2 skipped (desktop only). Desktop not run.
+  - Evidence: [evidence/1.9.4/](evidence/1.9.4/) (`merge-main-*`).
 - **Shared component classes could lose to Tailwind's base reset** (roadmap 1.8.4, [BA-145](https://halo-powered.atlassian.net/browse/BA-145)):
   - The classes in `frontend/src/styles/components.css` moved from `@utility` to `@layer components` and now reference the raw `--qti-*` tokens, so utilities on the same element override them without `!`.
   - `index.html` declares `@layer theme, base, components, utilities;` before anything else. Otherwise Angular's inlined critical CSS can name `components` first, and Tailwind's button reset then wins.
   - Evidence: the screenshots in [evidence/1.8.6/](evidence/1.8.6/).
 
 ### Changed
+- **The E2E suite can run against any World Cup database** (with roadmap 1.9.5, [BA-155](https://halo-powered.atlassian.net/browse/BA-155)): `E2E_WORLD_CUP_DB_*`, loaded from a git-ignored `.env.e2e.local`, point the suite at a database such as a per-worktree one from the infra MCP service, and global setup then leaves Docker alone. The helpers derive catalog test ids and entity keys from the database name, and the read-only guard scenario counts rows over SQL instead of `docker exec`. Defaults are unchanged (the compose database). See [tech-stack.md](specs/system/tech-stack.md). Evidence: [evidence/1.9.5/](evidence/1.9.5/) (the whole run used such a database).
+- **Agent Hub branch synced with `main`** (epic [BA-150](https://halo-powered.atlassian.net/browse/BA-150)): merged BA-156's web E2E harness into `feat/BA-150-agent-hub`. The `E2E_BACKEND_PORT` option added under 1.9.2 is removed, because the web target already gives each test its own free port and data dir. 1.9.2's checks were re-run on the web target; see [evidence/1.9.2/](evidence/1.9.2/).
 - **E2E and testing run against the web app; the desktop app only on request** (roadmap 0.2.6, [BA-156](https://halo-powered.atlassian.net/browse/BA-156), epic [BA-89](https://halo-powered.atlassian.net/browse/BA-89)):
   - CLAUDE.md *Test target convention*: during epic development, E2E, evidence screenshots and manual checks use the web app built from the epic branch. Desktop runs only when the user asks; otherwise the evidence and PR list desktop as not run. Workflow step 9, the Evidence and E2E conventions point at it.
   - Playwright now has two projects sharing [`e2e/fixtures/app.fixture.ts`](frontend/e2e/fixtures/app.fixture.ts), which replaces `electron.fixture.ts`. `web` (the default, `npm run test:e2e`) starts the npm CLI per test on a free port and a temp data dir and drives it in Chromium at 1440×900. `desktop` (`npm run test:e2e:desktop`) launches Electron as before. The port-3000 check moved into the desktop launch, so web runs never need that port.

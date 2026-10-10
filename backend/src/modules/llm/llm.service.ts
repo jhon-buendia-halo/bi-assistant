@@ -129,7 +129,9 @@ export class LlmService implements OnModuleInit {
   async onModuleInit(): Promise<void> {
     // Install the Mastra agent-model resolver: agents call this at generate
     // time, so saved settings apply immediately without a restart.
-    setAgentModelResolver(() => this.resolveAgentModel());
+    setAgentModelResolver((modelOverride) =>
+      this.resolveAgentModel(modelOverride),
+    );
     // Retry 429/5xx from the provider instead of failing an agent turn
     // outright — see retry-fetch.ts for why this has to patch the process's
     // global fetch rather than the agent model config.
@@ -173,25 +175,32 @@ export class LlmService implements OnModuleInit {
     }
   }
 
-  /** Mastra model config from the persisted settings (decrypted key). */
-  private async resolveAgentModel(): Promise<AgentModelConfig> {
+  /**
+   * Mastra model config from the persisted settings (decrypted key).
+   * `modelOverride` (a user agent's model) replaces the saved model or
+   * deployment name; with nothing saved it is ignored.
+   */
+  private async resolveAgentModel(
+    modelOverride?: string,
+  ): Promise<AgentModelConfig> {
     const doc = await this.repository.get();
     if (!doc) {
       // No settings yet — env-bound string router keeps the harness bootable.
       return 'openai/gpt-4o-mini';
     }
     const apiKey = this.storedApiKey(doc);
+    const model = modelOverride?.trim() || doc.model;
     if (doc.provider === 'lenai') {
       return lenaiModelConfig({
-        model: doc.model,
+        model,
         baseUrl: doc.baseUrl,
         apiKey,
       });
     }
     if (doc.provider === 'anthropic') {
-      return { id: `anthropic/${doc.model}`, apiKey };
+      return { id: `anthropic/${model}`, apiKey };
     }
-    return { id: `openai/${doc.model}`, apiKey };
+    return { id: `openai/${model}`, apiKey };
   }
 
   async getView(): Promise<LlmSettingsView> {

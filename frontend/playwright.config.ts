@@ -1,5 +1,22 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { defineConfig } from '@playwright/test';
 import type { Target } from './e2e/fixtures/app.fixture';
+
+/**
+ * `.env.e2e.local` at the repository root (git-ignored) can point the suite
+ * at another World Cup database (`E2E_WORLD_CUP_DB_*`, see
+ * e2e/helpers/world-cup-db.ts). Variables already set in the environment win.
+ */
+const localEnv = path.resolve(__dirname, '../.env.e2e.local');
+if (fs.existsSync(localEnv)) {
+  for (const line of fs.readFileSync(localEnv, 'utf8').split(/\r?\n/)) {
+    const match = /^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/.exec(line);
+    if (match && process.env[match[1]] === undefined) {
+      process.env[match[1]] = match[2];
+    }
+  }
+}
 
 const snapshots = '{snapshotDir}/{testFileDir}/{testFileName}-snapshots/{arg}';
 

@@ -1,0 +1,241 @@
+<div class="flex flex-col">
+  <button type="button" (click)="back.emit()" class="btn btn-ghost w-fit">
+    <lucide-angular [img]="ArrowLeft" [size]="15" />
+    <span>Back</span>
+  </button>
+
+  <!-- Header: title and status, then the actions (ui.md 4.5.1) -->
+  <div class="mt-4 flex flex-wrap items-center gap-3">
+    <h2
+      class="min-w-0 truncate text-[24px] leading-8 font-light tracking-[0.12px] text-fg-strong"
+    >
+      {{ editor.title() }}
+    </h2>
+    @if (editor.agentId() !== null && editor.status(); as status) {
+      <span data-testid="agent-editor-status" class="flex items-center gap-2">
+        <span
+          class="chip"
+          [class.chip-success]="status === 'live'"
+          [class.chip-neutral]="status !== 'live'"
+          >{{ status === "live" ? "Live" : "Draft" }}</span
+        >
+        @if (editor.hasUnpublishedChanges()) {
+          <span class="chip chip-warning">Unpublished changes</span>
+        }
+      </span>
+    }
+    <div class="ml-auto flex shrink-0 items-center gap-2">
+      <button
+        type="button"
+        data-testid="agent-preview"
+        (click)="startPreview()"
+        [disabled]="editor.loading() || !!editor.loadError()"
+        class="btn btn-secondary"
+      >
+        <lucide-angular [img]="MessageSquare" [size]="14" />
+        <span>Preview</span>
+      </button>
+      <button
+        type="button"
+        data-testid="agent-save"
+        (click)="save()"
+        [disabled]="!editor.canSave()"
+        class="btn btn-secondary"
+      >
+        @if (editor.saving()) {
+          <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+          <span>Saving…</span>
+        } @else {
+          <lucide-angular [img]="Save" [size]="14" />
+          <span>Save</span>
+        }
+      </button>
+      @if (editor.showPublish()) {
+        <button
+          type="button"
+          data-testid="agent-editor-publish"
+          (click)="publish()"
+          [disabled]="
+            editor.publishing() || editor.loading() || !!editor.loadError()
+          "
+          class="btn btn-primary"
+        >
+          @if (editor.publishing()) {
+            <lucide-angular
+              [img]="Loader2"
+              [size]="14"
+              class="animate-spin"
+            />
+            <span>Publishing…</span>
+          } @else {
+            <lucide-angular [img]="Upload" [size]="14" />
+            <span>Publish</span>
+          }
+        </button>
+      }
+    </div>
+  </div>
+
+  @if (editor.loading()) {
+    <div class="mt-10 flex items-center gap-2.5 text-fg-muted">
+      <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
+      <span>Loading agent…</span>
+    </div>
+  } @else if (editor.loadError(); as err) {
+    <p
+      class="mt-8 rounded-md bg-danger-soft px-3 py-2.5 text-[13px] text-on-danger-soft"
+    >
+      {{ err }}
+    </p>
+  } @else {
+    <!-- Form (R55) -->
+    <div class="card mt-6 flex flex-col gap-5 p-6">
+      <div class="flex flex-col gap-1.5">
+        <label for="agent-editor-name" class="field-label">Name</label>
+        <input
+          id="agent-editor-name"
+          type="text"
+          [maxLength]="limits.name"
+          [value]="editor.form().name"
+          (input)="onText('name', $event)"
+          class="field"
+        />
+      </div>
+
+      <div class="flex flex-col gap-1.5">
+        <label for="agent-editor-description" class="field-label"
+          >Description</label
+        >
+        <input
+          id="agent-editor-description"
+          type="text"
+          [maxLength]="limits.description"
+          [value]="editor.form().description"
+          (input)="onText('description', $event)"
+          class="field"
+        />
+      </div>
+
+      <div class="flex flex-col gap-1.5">
+        <label for="agent-editor-instructions" class="field-label"
+          >Instructions</label
+        >
+        <textarea
+          id="agent-editor-instructions"
+          rows="8"
+          [maxLength]="limits.instructions"
+          [value]="editor.form().instructions"
+          (input)="onText('instructions', $event)"
+          aria-describedby="agent-editor-instructions-hint"
+          class="field resize-y font-mono text-[13px]"
+        ></textarea>
+        <p
+          id="agent-editor-instructions-hint"
+          class="text-[12px] text-fg-muted"
+        >
+          {{ instructionsHint }}
+        </p>
+      </div>
+
+      <fieldset class="flex flex-col gap-2">
+        <legend class="field-label mb-1.5">Datasets</legend>
+        @for (option of editor.datasetOptions(); track option.name) {
+          <label class="flex w-fit items-center gap-2 text-[13px] text-fg">
+            <input
+              type="checkbox"
+              [checked]="option.checked"
+              (change)="onDataset(option.name, $event)"
+              class="h-3.5 w-3.5 accent-primary"
+            />
+            @if (option.missing) {
+              <span class="text-on-warning-soft"
+                >{{ option.name }} (missing)</span
+              >
+            } @else {
+              <span>{{ option.name }}</span>
+            }
+          </label>
+        } @empty {
+          <p class="text-[13px] text-fg-muted">
+            No datasets yet — create one in Datasets first.
+          </p>
+        }
+      </fieldset>
+
+      <fieldset class="flex flex-col gap-2">
+        <legend class="field-label mb-1.5">Starter questions</legend>
+        @for (
+          question of editor.form().starterQuestions;
+          track $index;
+          let i = $index
+        ) {
+          <div class="flex items-center gap-2">
+            <input
+              type="text"
+              [attr.aria-label]="'Starter question ' + (i + 1)"
+              [maxLength]="limits.starterQuestion"
+              [value]="question"
+              (input)="onStarter(i, $event)"
+              class="field"
+            />
+            <!--
+              Named by its content rather than aria-label, so a lookup by the
+              label "Starter question <n>" finds only the field.
+            -->
+            <button
+              type="button"
+              (click)="editor.removeStarter(i)"
+              title="Remove starter question"
+              class="btn-icon shrink-0"
+            >
+              <lucide-angular [img]="X" [size]="14" />
+              <span class="sr-only">Remove starter question {{ i + 1 }}</span>
+            </button>
+          </div>
+        }
+        <button
+          type="button"
+          (click)="editor.addStarter()"
+          [disabled]="!canAddStarter()"
+          class="btn btn-ghost w-fit"
+        >
+          <lucide-angular [img]="Plus" [size]="14" />
+          <span>Add starter question</span>
+        </button>
+      </fieldset>
+
+      <div class="flex flex-wrap gap-5">
+        <div class="flex min-w-[220px] flex-1 flex-col gap-1.5">
+          <label for="agent-editor-model" class="field-label">Model</label>
+          <input
+            id="agent-editor-model"
+            type="text"
+            [placeholder]="modelPlaceholder()"
+            [value]="editor.form().model"
+            (input)="onText('model', $event)"
+            class="field"
+          />
+        </div>
+        <div class="flex min-w-[180px] flex-col gap-1.5">
+          <label for="agent-editor-effort" class="field-label"
+            >Reasoning effort</label
+          >
+          <select
+            id="agent-editor-effort"
+            (change)="onEffort($event)"
+            class="field"
+          >
+            @for (effort of efforts; track effort.value) {
+              <option
+                [value]="effort.value"
+                [selected]="editor.form().reasoningEffort === effort.value"
+              >
+                {{ effort.label }}
+              </option>
+            }
+          </select>
+        </div>
+      </div>
+    </div>
+  }
+</div>

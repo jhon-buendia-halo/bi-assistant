@@ -2,6 +2,7 @@
 // `SessionsService.streamMessage` (a real chat turn) and the assistant eval
 // harness — extracted so both measure/build the same way rather than
 // duplicating the logic.
+import type { RequestContext } from '@mastra/core/request-context';
 import type { Logger } from '@nestjs/common';
 import type { Agent } from '@mastra/core/agent';
 import type { ProviderOptions } from '../../mastra/model-compat';
@@ -149,6 +150,8 @@ export async function synthesizeToolOnlyTurn(
   abortSignal: AbortSignal,
   providerOptions: ProviderOptions,
   logger?: Logger,
+  /** The turn's context, so a user agent's model override still applies. */
+  requestContext?: RequestContext,
 ): Promise<string> {
   if (!data.length) return EMPTY_RESPONSE_FALLBACK;
 
@@ -174,6 +177,7 @@ export async function synthesizeToolOnlyTurn(
         toolChoice: 'none',
         abortSignal,
         providerOptions,
+        ...(requestContext ? { requestContext } : {}),
       },
     );
     return (result.text ?? '').trim() || EMPTY_RESPONSE_FALLBACK;

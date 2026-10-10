@@ -11,6 +11,7 @@ jest.mock('@mastra/core/request-context', () => ({
 }));
 jest.mock('../../mastra/mastra.service', () => ({ MastraService: class {} }));
 jest.mock('../../mastra/model-resolver', () => ({
+  AGENT_OVERRIDES_CONTEXT_KEY: 'agent-overrides',
   resolveAgentModel: jest.fn().mockResolvedValue('openai/gpt-4.1-mini'),
 }));
 jest.mock('../../mastra/tool-services', () => ({
@@ -65,6 +66,13 @@ jest.mock('./visualization-document', () => ({
 
 import { BadRequestException, Logger } from '@nestjs/common';
 import { resolveAgentModel } from '../../mastra/model-resolver';
+
+/** No session in these tests was started from a user agent. */
+const userAgentsStub = {
+  get: jest.fn().mockResolvedValue(null),
+  list: jest.fn().mockResolvedValue([]),
+  datasetNames: jest.fn().mockResolvedValue(new Set<string>()),
+};
 import { setDatasetToolServices } from '../../mastra/tool-services';
 import type { DatasetToolServices } from '../../mastra/tool-services';
 import { TURN_RECORDS_CONTEXT_KEY } from '../../mastra/tools/visual.tools';
@@ -90,6 +98,12 @@ describe('SessionsService streaming', () => {
         datasetId?: string;
       }[];
       tables?: string[];
+      /** The user agent the session was started from; `live: null` = deleted. */
+      userAgent?: {
+        id: string;
+        agentName?: string;
+        live: Record<string, unknown> | null;
+      };
       /** Careful mode: what the verifier replies and what its SQL returns. */
       crossCheck?: {
         sql?: string;
@@ -105,6 +119,12 @@ describe('SessionsService streaming', () => {
       datasets: ['football'],
       messages: [],
       visualizations: [],
+      ...(options.userAgent
+        ? {
+            agentId: options.userAgent.id,
+            agentName: options.userAgent.agentName ?? 'Cup historian',
+          }
+        : {}),
     };
     const repository = {
       get: jest.fn().mockResolvedValue(session),
@@ -112,6 +132,15 @@ describe('SessionsService streaming', () => {
         Object.assign(session, patch);
         return session;
       }),
+    };
+    const live = options.userAgent?.live;
+    const userAgents = {
+      ...userAgentsStub,
+      get: jest
+        .fn()
+        .mockResolvedValue(
+          live ? { id: options.userAgent!.id, draft: live, live } : null,
+        ),
     };
     const agent = {
       getMemory: jest.fn().mockResolvedValue({
@@ -202,6 +231,7 @@ describe('SessionsService streaming', () => {
       verifiedQueries as never,
       metrics as never,
       knowledge as never,
+      userAgents as never,
     );
     return {
       service,
@@ -212,6 +242,7 @@ describe('SessionsService streaming', () => {
       knowledge,
       verifier,
       datasources,
+      repository,
     };
   }
 
@@ -370,6 +401,118 @@ describe('SessionsService streaming', () => {
         block.content.includes('Governed metric definitions'),
       ),
     ).toBe(true);
+  });
+
+  describe('sessions started from a user agent (R54, R59)', () => {
+    const historian = {
+      name: 'Cup historian',
+      description: 'Answers questions about World Cup history',
+      instructions: 'Always name the tournament year.',
+      datasets: ['football'],
+      starterQuestions: [],
+    };
+    type TurnOptions = {
+      context: { role: string; content: string }[];
+      providerOptions: Record<string, Record<string, unknown>>;
+      requestContext: { get(key: string): unknown };
+    };
+    const turnOptions = (agent: { stream: jest.Mock }) =>
+      (agent.stream.mock.calls as unknown[][])[0][1] as TurnOptions;
+
+    it("adds the agent's Live instructions last, labelled as user-supplied", async () => {
+      const { service, agent } = buildStreaming(answerStream([]), {
+        knowledgeBlock: 'Curated dataset knowledge (user-authored — …)',
+        userAgent: { id: 'agent-1', live: historian },
+      });
+
+      await service.streamMessage('session-1', 'Who won in 2014?', () => {});
+
+      const { context } = turnOptions(agent);
+      const last = context[context.length - 1].content;
+      expect(last).toContain(
+        'Agent instructions (user-supplied by whoever built the agent "Cup historian")',
+      );
+      expect(last).toContain(
+        '<agent-instructions>\nAlways name the tournament year.\n</agent-instructions>',
+      );
+      expect(context[context.length - 2].content).toContain(
+        'Curated dataset knowledge',
+      );
+    });
+
+    it("passes the agent's model and effort overrides to the turn", async () => {
+      const { service, agent } = buildStreaming(answerStream([]), {
+        userAgent: {
+          id: 'agent-1',
+          live: {
+            ...historian,
+            model: 'historian-deployment',
+            reasoningEffort: 'low',
+          },
+        },
+      });
+
+      await service.streamMessage('session-1', 'Who won in 2014?', () => {});
+
+      const options = turnOptions(agent);
+      expect(options.requestContext.get('agent-overrides')).toEqual({
+        model: 'historian-deployment',
+        reasoningEffort: 'low',
+      });
+      expect(options.providerOptions).toEqual({
+        openai: { reasoningEffort: 'low' },
+      });
+      expect(resolveAgentModel).toHaveBeenCalledWith('historian-deployment');
+    });
+
+    it('runs as the plain assistant once the agent is deleted', async () => {
+      const { service, agent } = buildStreaming(answerStream([]), {
+        userAgent: { id: 'agent-1', live: null },
+      });
+
+      await service.streamMessage('session-1', 'Who won in 2014?', () => {});
+
+      const options = turnOptions(agent);
+      expect(
+        options.context.some((block) =>
+          block.content.includes('Agent instructions'),
+        ),
+      ).toBe(false);
+      expect(options.requestContext.get('agent-overrides')).toBeUndefined();
+      expect(options.providerOptions).toEqual({
+        openai: { reasoningEffort: 'medium' },
+      });
+    });
+
+    it('adds no block for an agent without instructions', async () => {
+      const { service, agent } = buildStreaming(answerStream([]), {
+        userAgent: { id: 'agent-1', live: { ...historian, instructions: ' ' } },
+      });
+
+      await service.streamMessage('session-1', 'Who won in 2014?', () => {});
+
+      expect(
+        turnOptions(agent).context.some((block) =>
+          block.content.includes('Agent instructions'),
+        ),
+      ).toBe(false);
+    });
+
+    it('re-stamps the agent name when the agent was renamed', async () => {
+      const { service, repository, session } = buildStreaming(
+        answerStream([]),
+        {
+          userAgent: { id: 'agent-1', agentName: 'Old name', live: historian },
+        },
+      );
+
+      await service.streamMessage('session-1', 'Who won in 2014?', () => {});
+
+      expect(repository.update).toHaveBeenCalledWith('session-1', {
+        agentName: 'Cup historian',
+      });
+      expect(session.agentName).toBe('Cup historian');
+    });
   });
 
   it('omits the metrics block when no curated metric covers the session', async () => {
@@ -868,6 +1011,7 @@ describe('SessionsService SQL self-correction', () => {
       {} as never,
       {} as never,
       {} as never,
+      userAgentsStub as never,
     );
     await service.onModuleInit();
     const calls = (setDatasetToolServices as jest.Mock).mock
@@ -1087,6 +1231,7 @@ describe('SessionsService visual tool bridge (turn records)', () => {
       {} as never,
       {} as never,
       {} as never,
+      userAgentsStub as never,
     );
     await service.onModuleInit();
     const calls = (setDatasetToolServices as jest.Mock).mock
@@ -1187,6 +1332,7 @@ describe('SessionsService answer feedback', () => {
       verifiedQueries as never,
       {} as never,
       {} as never,
+      userAgentsStub as never,
     );
     return { service, verifiedQueries };
   }
@@ -1465,6 +1611,7 @@ describe('SessionsService visual tailoring and repair', () => {
       {} as never,
       {} as never,
       {} as never,
+      userAgentsStub as never,
     );
     return { service, session, visuals };
   }
@@ -1545,5 +1692,158 @@ describe('SessionsService visual tailoring and repair', () => {
       ),
     ).rejects.toThrow(/Only the current version can be repaired/);
     expect(visuals.repair).not.toHaveBeenCalled();
+  });
+});
+
+describe('SessionsService sessions from a user agent (R52, api.md 2.1)', () => {
+  const live = {
+    name: 'Cup historian',
+    description: 'Answers questions about World Cup history',
+    instructions: 'Always name the tournament year.',
+    datasets: ['World Cup Core', 'Gone'],
+    starterQuestions: ['Who won in 2014?'],
+  };
+
+  function build(agent: Record<string, unknown> | null, datasets: string[]) {
+    const repository = {
+      insert: jest
+        .fn()
+        .mockImplementation((doc: SessionDoc) => Promise.resolve(doc)),
+      get: jest.fn().mockResolvedValue(null),
+      update: jest.fn(),
+      delete: jest.fn(),
+    };
+    const mastra = {
+      ensureSessionWorkspace: jest
+        .fn()
+        .mockImplementation((id: string) =>
+          Promise.resolve({ id: `session-${id}` }),
+        ),
+      deleteSessionResources: jest.fn().mockResolvedValue(undefined),
+    };
+    const userAgents = {
+      get: jest.fn().mockResolvedValue(agent),
+      list: jest.fn().mockResolvedValue(agent ? [agent] : []),
+      datasetNames: jest.fn().mockResolvedValue(new Set(datasets)),
+    };
+    const service = new SessionsService(
+      repository as never,
+      mastra as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      userAgents as never,
+    );
+    return { service, repository, mastra };
+  }
+
+  it('names the session after the Live agent and keeps only existing datasets', async () => {
+    const { service } = build(
+      { id: 'agent-1', draft: { ...live, name: 'Draft name' }, live },
+      ['World Cup Core'],
+    );
+
+    const session = await service.createFromAgent('agent-1');
+
+    expect(session).toMatchObject({
+      name: 'Cup historian',
+      datasets: ['World Cup Core'],
+      agentId: 'agent-1',
+      agentName: 'Cup historian',
+      messages: [],
+    });
+  });
+
+  it('refuses an unknown agent, a draft-only agent and one with no dataset left', async () => {
+    await expect(
+      build(null, []).service.createFromAgent('nope'),
+    ).rejects.toThrow('Agent "nope" not found');
+    await expect(
+      build({ id: 'agent-1', draft: live }, [
+        'World Cup Core',
+      ]).service.createFromAgent('agent-1'),
+    ).rejects.toThrow('Publish "Cup historian" before starting a chat');
+    await expect(
+      build({ id: 'agent-1', draft: live, live }, []).service.createFromAgent(
+        'agent-1',
+      ),
+    ).rejects.toThrow("None of this agent's datasets exist");
+  });
+
+  it('derives the agent from its Live version, or marks it deleted', async () => {
+    const session: SessionDoc = {
+      id: 's-1',
+      name: 'Cup historian',
+      datasets: ['World Cup Core'],
+      agentId: 'agent-1',
+      agentName: 'Cup historian',
+      messages: [],
+    };
+    const plain: SessionDoc = { ...session, id: 's-2', agentId: undefined };
+    delete plain.agentId;
+    delete plain.agentName;
+
+    const present = build({ id: 'agent-1', draft: live, live }, []).service;
+    expect((await present.toView(session)).agent).toEqual({
+      id: 'agent-1',
+      name: 'Cup historian',
+      deleted: false,
+      description: live.description,
+      starterQuestions: live.starterQuestions,
+    });
+    const [viewed, plainView] = await present.toViews([session, plain]);
+    expect(viewed.agent?.deleted).toBe(false);
+    expect(plainView).not.toHaveProperty('agent');
+
+    const gone = build(null, []).service;
+    expect((await gone.toView(session)).agent).toEqual({
+      id: 'agent-1',
+      name: 'Cup historian',
+      deleted: true,
+      description: '',
+      starterQuestions: [],
+    });
+  });
+
+  describe('preview sessions (agents-evals R60, R61)', () => {
+    it('runs the draft in memory and is never stored', async () => {
+      const { service, repository, mastra } = build(
+        { id: 'agent-1', draft: { ...live, name: 'Draft name' } },
+        ['World Cup Core'],
+      );
+
+      const preview = await service.createPreview('agent-1');
+
+      expect(preview).toMatchObject({
+        name: 'Preview: Draft name',
+        datasets: ['World Cup Core'],
+        agentId: 'agent-1',
+        preview: true,
+      });
+      expect(preview.id).toMatch(/^preview-/);
+      expect(repository.insert).not.toHaveBeenCalled();
+      expect(await service.get(preview.id)).toMatchObject({ preview: true });
+      expect((await service.toView(preview)).agent?.name).toBe('Draft name');
+
+      await service.delete(preview.id);
+      expect(mastra.deleteSessionResources).toHaveBeenCalledWith(preview.id);
+      expect(repository.delete).not.toHaveBeenCalled();
+      await expect(service.get(preview.id)).rejects.toThrow('not found');
+    });
+
+    it('refuses an unknown agent and a draft with no existing dataset', async () => {
+      await expect(
+        build(null, []).service.createPreview('nope'),
+      ).rejects.toThrow('Agent "nope" not found');
+      await expect(
+        build({ id: 'agent-1', draft: live }, []).service.createPreview(
+          'agent-1',
+        ),
+      ).rejects.toThrow('Select at least one dataset to preview');
+    });
   });
 });

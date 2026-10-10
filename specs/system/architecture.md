@@ -245,7 +245,7 @@ flowchart LR
     datasources["datasources<br/>(datasource-config, datasources-api)"]
     knowledge["knowledge<br/>(knowledge-list, knowledge-form)"]
     llm["llm<br/>(llm-config, llm-api)"]
-    agents["agents<br/>(agent-list, agent-detail, eval-trace)"]
+    agents["agents<br/>(agent-hub, agent-card, agent-detail, eval-trace)"]
     testing["testing-data<br/>(testing-data-config)"]
   end
 
@@ -328,6 +328,28 @@ flowchart LR
   - The renderer bundle grows by the font files.
   - The theme preference is a new persisted renderer key that [data-model.md](data-model.md) must record.
   - The theme is per renderer origin, so the desktop app and the npm CLI's browser tab can hold different preferences.
+
+#### ADR-0008 — User-built agents are stored configurations of the assistant
+- **Status:** Accepted
+- **Date:** 2026-10-09
+- **Context:**
+  - The Agent Hub ([BA-150](https://halo-powered.atlassian.net/browse/BA-150)) lets users build their own agents: a name, a description, instructions, datasets, starter questions and an optional model override. Each one is drafted, published and chatted with.
+  - Mastra agents are registered in code at startup (ADR-0004, `src/mastra/index.ts`). Registering an agent per user definition at runtime would mean re-registering on every edit and would bypass the assistant's tools, memory and guards.
+  - The assistant's safety comes from code that must hold whatever the prompt says: the read-only SQL guard, grounding checks, SQL repair and trust signals. Its prompt must still start with the fixed identity line, and an E2E asserts this.
+  - The app is local-first with no accounts, so "owner" can only mean "this machine".
+- **Decision:**
+  - A user agent is a **document** in a new `agents` collection, not a Mastra agent. Each document holds a `draft` and an optional `live` version of the configuration, plus `pinned`. Pin state for the built-in agents is stored separately, keyed by registry key.
+  - A session started from an agent stores the agent id. Each turn runs the existing `assistant` and applies the agent's **Live** configuration:
+    - its instructions as an extra, labelled per-turn system context block after the base prompt and the knowledge block;
+    - its datasets as the session's datasets;
+    - its model or reasoning-effort override through the turn's request context, read by `resolveAgentModel()`.
+  - A preview chat applies the **draft** the same way, against a thread that is not stored as a session.
+  - The built-in agents stay in the code registry. The hub merges them (Official: `assistant`; System: the helpers) with the user agents from the collection.
+- **Consequences:**
+  - User agents inherit every assistant tool, guard and fix automatically. They can't add tools or relax the guard.
+  - Editing a Live agent never changes a running session until it is published. Deleting an agent leaves sessions pointing at a missing id, so they fall back to the plain assistant.
+  - Adds a collection, and an optional field on `sessions` (no migration: absent means the plain assistant).
+  - Sharing across machines, teams and owners would need a new container or a sync format. That is deferred and would supersede the "this machine" ownership here.
 
 ## Level 4 — Code
 

@@ -1,0 +1,74 @@
+# 1.9.2 (BA-152) backend unit tests, 2026-10-09
+# cd backend && npm test
+
+PASS src/infrastructure/crypto/crypto.service.spec.ts (9 tests)
+PASS src/infrastructure/database/database.module.spec.ts (5 tests)
+PASS src/infrastructure/telemetry/developer-nest-logger.spec.ts (1 tests)
+PASS src/infrastructure/telemetry/developer-telemetry.spec.ts (3 tests)
+PASS src/mastra/developer-exporters.spec.ts (3 tests)
+PASS src/mastra/evals/assistant-eval-datasets.spec.ts (14 tests)
+PASS src/mastra/evals/result-set-check.spec.ts (27 tests)
+PASS src/mastra/model-compat.spec.ts (22 tests)
+PASS src/modules/agents/agents.service.spec.ts (6 tests)
+PASS src/modules/agents/eval-regression.spec.ts (7 tests)
+PASS src/modules/agents/eval-report.spec.ts (3 tests)
+PASS src/modules/agents/eval-runs.service.spec.ts (2 tests)
+PASS src/modules/agents/repositories/eval-runs.repository.spec.ts (2 tests)
+PASS src/modules/datasets/datasets.service.spec.ts (6 tests)
+PASS src/modules/datasets/relationships.spec.ts (35 tests)
+PASS src/modules/datasources/connectors/connector.spec.ts (25 tests)
+PASS src/modules/datasources/connectors/databricks.connector.spec.ts (12 tests)
+PASS src/modules/datasources/connectors/openapi-discovery.spec.ts (12 tests)
+PASS src/modules/datasources/connectors/postgres.connector.spec.ts (8 tests)
+PASS src/modules/datasources/connectors/rest.connector.spec.ts (38 tests)
+PASS src/modules/datasources/datasources.service.spec.ts (6 tests)
+PASS src/modules/deep-analysis/deep-analysis.service.spec.ts (11 tests)
+PASS src/modules/developer-settings/developer-settings.service.spec.ts (10 tests)
+PASS src/modules/knowledge/knowledge.service.spec.ts (31 tests)
+PASS src/modules/knowledge/repositories/knowledge.repository.spec.ts (6 tests)
+PASS src/modules/llm/llm.service.spec.ts (23 tests)
+PASS src/modules/llm/retry-fetch.spec.ts (7 tests)
+PASS src/modules/metrics/metrics.service.spec.ts (21 tests)
+PASS src/modules/sessions/chart-heuristic.spec.ts (35 tests)
+PASS src/modules/sessions/result-compare.spec.ts (18 tests)
+PASS src/modules/sessions/result-guards.spec.ts (41 tests)
+PASS src/modules/sessions/sessions.service.spec.ts (52 tests)
+PASS src/modules/sessions/visual-runtime.spec.ts (46 tests)
+PASS src/modules/sessions/visual-spec.spec.ts (38 tests)
+PASS src/modules/sessions/visualization-document.spec.ts (34 tests)
+PASS src/modules/sessions/visualization.service.spec.ts (63 tests)
+PASS src/modules/testing-data/sql-statements.spec.ts (13 tests)
+PASS src/modules/testing-data/testing-data.service.spec.ts (23 tests)
+PASS src/modules/user-agents/user-agents.service.spec.ts (17 tests)
+PASS src/modules/verified-queries/verified-queries.service.spec.ts (12 tests)
+
+Test Suites: 40 passed, 0 failed, 40 total
+Tests:       747 passed, 0 failed, 747 total
+
+## New specs in this story
+src/modules/agents/agents.service.spec.ts
+   ✓ AgentsService (built-in and user agents) > lists built-in agents with kind, owner and status
+   ✓ AgentsService (built-in and user agents) > merges user agents into the catalogue, sorted by name
+   ✓ AgentsService (built-in and user agents) > shows the Live version in the catalogue while the draft has unpublished changes
+   ✓ AgentsService (built-in and user agents) > resolves a registry key first, then a user-agent id
+   ✓ AgentsService (built-in and user agents) > refuses to edit, publish or delete a built-in agent
+   ✓ AgentsService (built-in and user agents) > pins built-in and user agents
+src/modules/user-agents/user-agents.service.spec.ts
+   ✓ normalizeAgentConfig > trims and clips text to the R43 limits
+   ✓ normalizeAgentConfig > de-duplicates datasets and keeps at most five non-blank starter questions
+   ✓ normalizeAgentConfig > clips a long starter question to 200 characters
+   ✓ normalizeAgentConfig > keeps model and a known reasoning effort, drops blanks and unknowns
+   ✓ hasUnpublishedChanges / missingDatasets > is false for a draft-only agent and for a Live agent equal to its draft
+   ✓ hasUnpublishedChanges / missingDatasets > is true when the Live version differs from the draft
+   ✓ hasUnpublishedChanges / missingDatasets > lists the configured dataset names that no longer exist
+   ✓ UserAgentsService > creates an unpinned draft with a generated id
+   ✓ UserAgentsService > requires a name
+   ✓ UserAgentsService > refuses a name already used by another user agent, ignoring case
+   ✓ UserAgentsService > publishes by copying the draft to Live and stamping publishedAt
+   ✓ UserAgentsService > keeps the Live version when the draft changes, until the next publish
+   ✓ UserAgentsService > refuses to publish without a dataset
+   ✓ UserAgentsService > answers "not found" for an unknown id on every mutation
+   ✓ UserAgentsService > pins and unpins a user agent and deletes it
+   ✓ UserAgentsService > stores built-in pins in one settings document without touching the LLM one
+   ✓ UserAgentsService > reports the dataset names that exist
+Tests: 23 passed, 0 failed

@@ -1,0 +1,20 @@
+ Container questions-to-insights-world-cup-postgres-1 Recreate 
+ Container questions-to-insights-world-cup-postgres-1 Recreated 
+ Container questions-to-insights-world-cup-postgres-1 Starting 
+ Container questions-to-insights-world-cup-postgres-1 Started 
+ Container questions-to-insights-world-cup-postgres-1 Waiting 
+ Container questions-to-insights-world-cup-postgres-1 Healthy 
+
+Running 9 tests using 1 worker
+
+  ✓  1 [web] › e2e/agents.spec.ts:29:5 › opens an agent from the Agents list and switches between its tabs (2.2s)
+  ✓  2 [web] › e2e/agents.spec.ts:89:5 › shows the stateless, no-tool agents accurately (1.7s)
+  ✓  3 [web] › e2e/agents.spec.ts:109:5 › offers the configured datasources and starts a run from the evals tab (3.6s)
+  ✓  4 [web] › e2e/agents.spec.ts:135:5 › runs only the ticked questions (2.3s)
+  ✓  5 [web] › e2e/agents.spec.ts:165:5 › refuses to run against a datasource with no datasets (2.2s)
+  ✓  6 [web] › e2e/agents.spec.ts:180:5 › explains an incomplete eval dataset without starting a run (2.6s)
+  ✓  7 [web] › e2e/agents.spec.ts:197:5 › opens a question in the right panel with what it is scored on (1.7s)
+  ✓  8 [web] › e2e/agents.spec.ts:222:5 › separates the question suite from past executions (3.9s)
+  ✓  9 [web] › e2e/agents.spec.ts:251:5 › downloads an execution as a Markdown report (3.9s)
+
+  9 passed (31.1s)

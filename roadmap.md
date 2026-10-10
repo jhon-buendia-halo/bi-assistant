@@ -200,6 +200,7 @@ Timeline (from the Jira timeline):
 | 1.6 User Testing | [BA-10](https://halo-powered.atlassian.net/browse/BA-10) | Oct 19 – Oct 23 |
 | 1.7 Bug Fixes | [BA-11](https://halo-powered.atlassian.net/browse/BA-11) | Oct 26 – Oct 30 |
 | 1.8 Agentic Hub Look and Feel | [BA-141](https://halo-powered.atlassian.net/browse/BA-141) | No dates in Jira yet |
+| 1.9 Agent Hub | [BA-150](https://halo-powered.atlassian.net/browse/BA-150) | No dates in Jira yet; due with the beta |
 
 Evals come first in the order even though they run in parallel: every other milestone is measured against them.
 
@@ -566,6 +567,48 @@ The app gets the Agentic Hub visual design: a gradient frame, an "Agentic Hub" b
   - The chat restyle was done by a subagent in parallel with the shell.
   - `fg-muted` is `rgba(0,0,0,.6)` rather than Figma's `.55`, for AA.
   - Evidence: [evidence/1.8.8/](evidence/1.8.8/).
+
+### Milestone 1.9 — Agent Hub ([BA-150](https://halo-powered.atlassian.net/browse/BA-150))
+
+Users build their own data agents on top of the assistant (instructions, datasets, starter questions, an optional model override), test them as drafts, publish them, pin them and start chats from them. The Agents screen becomes a searchable hub of cards with the filters All, Pinned, Official and Mine. The built-in helper agents move to a System section. Teams, the org and sharing are out: the app stays local-first. Builds on the look and feel of Milestone 1.8 ([BA-141](https://halo-powered.atlassian.net/browse/BA-141)). All stories are built on the branch `feat/BA-150-agent-hub` and ship as one PR. Epic spec: [specs/epics/BA-150/spec.md](specs/epics/BA-150/spec.md). Decision: ADR-0008 in [specs/system/architecture.md](specs/system/architecture.md).
+
+#### 1.9.1 — ADR, epic spec and roadmap ([BA-151](https://halo-powered.atlassian.net/browse/BA-151))  `✅ Done`
+- **Intent:** the Agent Hub is scoped and its runtime approach decided before any code, so each later story can be built and reviewed on its own.
+- **Scope:** ADR-0008 in `specs/system/architecture.md`; the BA-150 epic spec; this milestone with one feature per story; the epic row in `specs/README.md`.
+- **Out of scope:** product code, and capability, system or glossary spec changes for behaviour that hasn't shipped yet. Each later story updates those itself.
+- **Acceptance:**
+  - ADR-0008 records that user agents are stored configurations of the assistant (draft and Live versions, applied per turn), not runtime-registered agents.
+  - `specs/epics/BA-150/spec.md` exists and the user has confirmed it (`Status: Confirmed`).
+  - `python3 scripts/check-specs.py` passes.
+- **Notes:** mockup reference: the "Agentic Hub — Agents" screen shared on 2026-10-09. Decisions taken with the user on 2026-10-09: user-built agents plus built-ins; local only, with My team and Whole org deferred; the hub replaces the Agents list; inside the 1.0 Beta; agents configure instructions, datasets, starter questions and a model override; chats start from an agent; Draft → Publish → Live; helpers in a System section. ADR-0008, because BA-141's branch holds ADR-0007. The user confirmed the epic spec on 2026-10-09 and chose to build the hub screen and editor with today's styles (BA-141's 1.8.6 restyles them later). Evidence: [evidence/1.9.1/](evidence/1.9.1/).
+
+#### 1.9.2 — Agent definitions: storage and API ([BA-152](https://halo-powered.atlassian.net/browse/BA-152))  `✅ Done`
+- **Intent:** user agents and pins are stored locally and can be managed through the API.
+- **Scope:** an `agents` collection with a `draft` and an optional `live` configuration (name, description, instructions, dataset names, starter questions, optional model or reasoning-effort override) and `pinned`; pin state for built-in agents; endpoints to list (built-ins merged with user agents, each with its kind (official, system or user), status and pin), get, create, update the draft, publish, delete and pin or unpin; validation (name required and unique among user agents, at least one dataset to publish).
+- **Out of scope:** running an agent (1.9.3); any UI (1.9.4, 1.9.5).
+- **Acceptance:** backend e2e covers create → publish → edit draft → republish → delete, and pin or unpin for user and built-in agents; data survives a backend restart; `data-model.md`, `api.md`, the glossary and the agents-evals rules are updated.
+- **Notes:** ADR-0008. New collection token per CLAUDE.md *Backend*; no migration (new collection). `GET /agents` keeps its existing sort by name across built-in and user agents (api.md). The backend e2e starts the built `dist/main.js` as a child process, because Jest can't load `AppModule` (ESM-only packages under Mastra and the Databricks driver). Its `E2E_BACKEND_PORT` harness option was removed when the branch merged BA-156's web E2E harness, which already isolates ports. Evidence: [evidence/1.9.2/](evidence/1.9.2/).
+
+#### 1.9.3 — Start a session from an agent ([BA-153](https://halo-powered.atlassian.net/browse/BA-153))  `✅ Done`
+- **Intent:** a user chats with an agent and gets answers shaped by its instructions, over its datasets.
+- **Scope:** **Start chat** on Live user agents and on the Official agent, on the hub card and in the detail view; on a Live agent it creates a session at once, named after the agent, storing the agent id and copying its existing datasets (on the Official agent it opens the new-session screen); each turn adds the agent's current Live instructions as a labelled system context block after the other context blocks, and applies its model or effort override; the agent's description and starter questions in an empty session's welcome block; the agent's name in the session list and page header; a deleted agent falls back to the plain assistant and is shown as `<name> · agent deleted`.
+- **Out of scope:** switching agents inside a session; drafts in real sessions (the preview chat is 1.9.5).
+- **Acceptance:** a Playwright flow starts a chat from a Live agent, clicks a starter question, and the answer follows the agent's instructions; publishing a new version changes the next turn; the read-only guard still rejects writes under instructions that ask for them; `agents.md`, `api.md` and the sessions-chat spec are updated.
+- **Notes:** depends on 1.9.2. The base prompt's identity line and its E2E assertion are unchanged. Decisions taken with the user on 2026-10-09: Start chat creates the session at once (no form); it sits on the card and in the detail view; republishing changes the instructions and model of existing sessions from their next turn but never their datasets (sessions-chat R5); a deleted agent's sessions keep a copy of its name and show `<name> · agent deleted`. Also decided: draft and System agents offer no Start chat; a starter question fills the composer without sending (as R50); a session drops the agent's missing datasets, and Start chat is disabled when none exist. The E2E proves the instructions and model reach the model through a local OpenAI-compatible stub that records each request, since a real model's answers can't be asserted. E2E runs on the web target (BA-156). Desktop not run. Evidence: [evidence/1.9.3/](evidence/1.9.3/).
+
+#### 1.9.4 — Agent Hub screen ([BA-154](https://halo-powered.atlassian.net/browse/BA-154))  `✅ Done`
+- **Intent:** users find, filter and pin agents, and open them, from one screen that matches the mockup.
+- **Scope:** the Agents screen becomes the hub: header with **New agent**, search over name and description, filter pills All, Pinned, Official and Mine, sections of cards with **Show more**, card name, description, owner ("You" or "Official"), Pin or Pinned and Draft or Live chip; a System section for the helper agents; a card opens today's detail view (tabs unchanged) with Publish and Delete for user agents (Start chat arrives with 1.9.3 and Edit with 1.9.5); empty, loading, error and no-match states; a warning on agents whose datasets are missing.
+- **Out of scope:** My team and Whole org; the editor form (1.9.5): **New agent** is shown but disabled until 1.9.5; Start chat (1.9.3).
+- **Acceptance:** Playwright covers search, each filter, pin and unpin, Show more and opening an agent; the existing `agents.spec.ts` eval flows pass; the axe scan is clean; `ui.md` and the agents-evals rules R1–R9 and Gherkin are rewritten for the hub.
+- **Notes:** depends on 1.9.2. Built with today's styles, not BA-141's components (decided 2026-10-09). BA-141 then merged to `main` first, so the hub, card, detail and eval-trace templates moved onto BA-141's theme tokens and shared classes when `main` was merged into this branch (2026-10-09). Moved ahead of 1.9.3 on 2026-10-09 so the user can see the hub sooner. E2E runs on the web target (BA-156). Shipped to the mockup: under All, pinned cards stay first in their own section (Official, Mine, System), Pinned is a filter, and the search is a full-width row. Card text was `zinc-400` for axe contrast before the token move; the axe scan re-runs in both themes after it. Desktop not run. Evidence: [evidence/1.9.4/](evidence/1.9.4/).
+
+#### 1.9.5 — Agent editor: create, test, publish and delete ([BA-155](https://halo-powered.atlassian.net/browse/BA-155))  `✅ Done`
+- **Intent:** users build and change agents safely, testing a draft before it reaches their sessions.
+- **Scope:** an editor for name, description, instructions, datasets, starter questions and model override, opened by **New agent** or **Edit**; Save keeps a Draft; a preview chat runs the draft and is not saved to the session list; Publish makes it Live; editing a Live agent shows "Unpublished changes" while the Live version keeps serving; Delete with confirmation; built-in agents are read-only.
+- **Out of scope:** duplicating agents; version history beyond one draft and one Live version.
+- **Acceptance:** Playwright covers create → preview → publish → edit → republish → delete, and that a preview chat leaves no session behind; `ui.md` and the agents-evals spec are updated.
+- **Notes:** depends on 1.9.3 and 1.9.4. If the beta window closes, the preview chat is the first thing to move out (see the epic spec). Decisions taken with the user on 2026-10-09: the editor is a full page in the Agents area; the preview chat sits in the right Details panel beside the form; sending a preview message first saves the form as the draft, so the preview always runs the saved draft; the preview conversation, its memory and its workspace are discarded when the editor closes, and **Reset** starts it over. Also decided: the preview is an in-memory session (never in the `sessions` collection, as ADR-0008 says), created through `POST /sessions` with `{ agentId, preview: true }` and streamed and discarded through the existing session routes, so the chat component is reused; leftovers from a crash are swept at the next backend start; the model override is a free-text field (a deployment name can't be listed) and the effort a Default/Low/Medium/High select; leaving the editor with unsaved changes asks first. The E2E runs against a per-worktree World Cup database created with the infra MCP service (`.env.e2e.local`, harness in [tech-stack.md](specs/system/tech-stack.md)). Desktop not run. Evidence: [evidence/1.9.5/](evidence/1.9.5/).
 
 ## Backlog
 

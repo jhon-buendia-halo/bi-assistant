@@ -95,6 +95,18 @@ export const DEEP_ANALYSIS_POLL_MS = 3_000;
 /** Unanswered polls tolerated before the card stops watching the job. */
 const MAX_POLL_FAILURES = 5;
 
+/** The welcome block's text for a plain session (sessions-chat R50). */
+export const GENERIC_WELCOME_DESCRIPTION =
+  'Ask a question in plain English and I will query your data, explain how I got the answer and turn it into an interactive visual.';
+/** The welcome block's starter prompts for a plain session (R50). */
+export const GENERIC_STARTER_PROMPTS: readonly string[] = [
+  'What data is available here? Summarise the tables and the key metrics.',
+  'What stands out in this data right now? Give me the headline numbers.',
+  'How have the main metrics moved over the last 12 months?',
+];
+/** An agent's starter questions shown in the welcome block, at most (R58). */
+const MAX_AGENT_STARTERS = 5;
+
 /** One line describing where a running job is, for the pending card. */
 export function deepAnalysisProgressLine(job: DeepAnalysisActivity): string {
   if (job.progress?.trim()) return job.progress.trim();
@@ -160,8 +172,19 @@ export class SessionChat implements OnDestroy {
   /** A turn created/updated a visual; the host should refresh the panel. */
   readonly visualUpdated = output<VisualEvent>();
   readonly viewVisual = output<VisualEvent>();
-  /** The session was persisted out of band (answer feedback) — refresh copies. */
+  /**
+   * The session was persisted (a finished turn, answer feedback) — refresh
+   * the host's copies. Same id, so the chat does not re-sync from it.
+   */
   readonly sessionUpdated = output<Session>();
+  /**
+   * Runs before a message is sent; resolving `false` cancels the send and
+   * keeps the draft. The agent editor's preview uses it to save the form
+   * first (agents-evals R60). Without it, sending starts at once.
+   */
+  readonly beforeSend = input<(() => Promise<boolean>) | null>(null);
+  /** True while `beforeSend` runs; the composer waits for it. */
+  readonly preparing = signal(false);
 
   readonly messages = signal<ChatMessage[]>([]);
   readonly draft = signal('');
@@ -203,12 +226,32 @@ export class SessionChat implements OnDestroy {
   );
   /** Datasets wired to this session, named in the welcome block. */
   readonly welcomeDatasets = computed(() => this.session().datasets ?? []);
-  /** Starter questions offered with the welcome block. */
-  readonly starterPrompts: readonly string[] = [
-    'What data is available here? Summarise the tables and the key metrics.',
-    'What stands out in this data right now? Give me the headline numbers.',
-    'How have the main metrics moved over the last 12 months?',
-  ];
+  /**
+   * The welcome block's one-line description: the agent's Live description
+   * for a session bound to an agent that still exists, else the generic text
+   * (sessions-chat R50, R58, R59).
+   */
+  readonly welcomeDescription = computed(() => {
+    const agent = this.session().agent;
+    const description = agent && !agent.deleted ? agent.description.trim() : '';
+    if (!description) return GENERIC_WELCOME_DESCRIPTION;
+    // "Connected to …" follows in the same paragraph, so end the sentence.
+    return /[.!?…]$/.test(description) ? description : `${description}.`;
+  });
+  /**
+   * Starter questions offered with the welcome block: the agent's Live
+   * starter questions (up to 5) when it has any, else the generic three.
+   */
+  readonly starterPrompts = computed<readonly string[]>(() => {
+    const agent = this.session().agent;
+    const starters =
+      agent && !agent.deleted
+        ? (agent.starterQuestions ?? []).filter((q) => q.trim())
+        : [];
+    return starters.length > 0
+      ? starters.slice(0, MAX_AGENT_STARTERS)
+      : GENERIC_STARTER_PROMPTS;
+  });
 
   /** Chat-history navigator (Conductor-style tick strip). */
   readonly historyOpen = signal(false);
@@ -336,7 +379,26 @@ export class SessionChat implements OnDestroy {
 
   send(): void {
     const content = this.draft().trim();
-    if (!content || this.sending()) return;
+    if (!content || this.sending() || this.preparing()) return;
+    const guard = this.beforeSend();
+    if (!guard) {
+      this.startTurn(content);
+      return;
+    }
+    const sessionId = this.session().id;
+    this.preparing.set(true);
+    void guard()
+      .catch(() => false)
+      .then((proceed) => {
+        this.preparing.set(false);
+        // A refusal, or another session opened meanwhile, keeps the draft.
+        if (proceed && this.session().id === sessionId && !this.sending()) {
+          this.startTurn(content);
+        }
+      });
+  }
+
+  private startTurn(content: string): void {
     this.dismissFollowUps();
     this.draft.set('');
     this.sending.set(true);
@@ -407,7 +469,12 @@ export class SessionChat implements OnDestroy {
           this.stopTimer();
           this.sending.set(false);
           this.resetTurnState();
-          if (session) this.messages.set(session.messages);
+          if (session) {
+            this.messages.set(session.messages);
+            // Keep the host's copies current, so reopening the session from
+            // the list shows this turn.
+            this.sessionUpdated.emit(session);
+          }
           this.scrollToBottom();
         },
         onError: (message) => {

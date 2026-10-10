@@ -30,7 +30,7 @@ The directory is created (recursively) at backend start if it does not exist.
 
 | Store | Location (relative to app data dir) | Technology (see Implementation note) | What goes in it | Owner |
 |---|---|---|---|---|
-| **App document store** | `app.sqlite` | Embedded SQLite, one table per collection, one JSON document per row | The nine application collections in section 3: connections, settings, datasets, sessions, inventories, verified queries, metrics, eval runs, knowledge | App backend |
+| **App document store** | `app.sqlite` | Embedded SQLite, one table per collection, one JSON document per row | The ten application collections in section 3: connections, settings, datasets, sessions, inventories, verified queries, metrics, eval runs, knowledge, agents | App backend |
 | **Agent memory store** | `mastra.sqlite` | LibSQL file (Mastra runtime storage) | Conversation memory threads/messages for the `assistant` agent (section 5); any other Mastra runtime state | Agent framework |
 | **Observability store** | `observability.duckdb` | DuckDB (memory limit 512 MB, 2 threads) | Agent traces, metrics and logs written by the framework's storage exporter (service name `questions-to-insights`, log level `info`) | Agent framework |
 | **Session workspaces** | `workspaces/session-<session-id>/` | Plain directories, a contained filesystem root per session | Visual bundles, deep-analysis reports, seeded skills (section 4) | App backend + agents (agents can create/edit files there but cannot delete) |
@@ -40,7 +40,7 @@ The directory is created (recursively) at backend start if it does not exist.
 | **Renderer preference** (client) | Browser/Electron `localStorage` key `questions-to-insights:right-panel-width` | String holding a number | Right panel width in pixels; default 572, clamped to 360..960 (upper bound also limited by window width). Missing or non-numeric = default. See [ui.md](ui.md). | Frontend |
 | **Renderer preference** (client) | Browser/Electron `localStorage` key `questions-to-insights:theme` | String: `system`, `light` or `dark` | The Appearance choice. Missing or any other value = `system`. Read by an inline script before the app boots, so the first paint uses the right theme. See [../capabilities/app-shell/spec.md](../capabilities/app-shell/spec.md) R39–R45. | Frontend |
 
-Nothing else is persisted. Deep-analysis jobs and REST-datasource row materialisation are in-memory only (sections 3.10, 3.11).
+Nothing else is persisted. Deep-analysis jobs and REST-datasource row materialisation are in-memory only (sections 3.11, 3.12).
 
 **Implementation note.** The current implementation uses `better-sqlite3` for `app.sqlite`, `@mastra/libsql` for `mastra.sqlite` and `@mastra/duckdb` for `observability.duckdb` (see [tech-stack.md](tech-stack.md)). Only the *document shapes* and the *file layout under `workspaces/`* are contracts that matter across stacks; the agent memory and observability stores are opaque framework state.
 
@@ -108,8 +108,9 @@ Summary:
 | `metrics` | Curated metric definitions | `id`; `name` unique | `updatedAt` desc | [metrics](../capabilities/metrics/spec.md) |
 | `eval_runs` | Past and in-flight eval runs | `jobId` | `startedAt` desc (per agent) | [agents-evals](../capabilities/agents-evals/spec.md) |
 | `knowledge_snippets` | Curated knowledge entries | `id` | `updatedAt` desc | [knowledge](../capabilities/knowledge/spec.md) |
+| `agents` | User-built agents (a draft, an optional Live version, pin) | `id` | `updatedAt` desc | [agents-evals](../capabilities/agents-evals/spec.md) |
 
-Every document in every collection also carries `createdAt` and `updatedAt` (ISO), maintained by the store (section 2.1); they are listed per collection only where they matter. There are **no foreign-key constraints and no cascading deletes** between collections; references are by value (`name`, `id`) and may dangle (section 3.12).
+Every document in every collection also carries `createdAt` and `updatedAt` (ISO), maintained by the store (section 2.1); they are listed per collection only where they matter. There are **no foreign-key constraints and no cascading deletes** between collections; references are by value (`name`, `id`) and may dangle (section 3.13).
 
 ### 3.1 `connections` — datasources
 
@@ -170,7 +171,7 @@ The **inventory shape** every connector normalises to (used by section 3.5 and t
 
 ### 3.2 `settings` — LLM settings
 
-Exactly one document, upserted by `key = "llm"`. (Other keys are not used.)
+Exactly one LLM document, upserted by `key = "llm"`. A second document, `key = "builtin-agent-pins"`, holds `{ key, pinned: string[] }`: the registry keys of the pinned built-in agents (see section 3.10). LLM readers filter by `key`, so the two never mix.
 
 | Field | Type | Req | Meaning |
 |---|---|---|---|
@@ -220,6 +221,8 @@ A conversation. The largest document; the whole transcript is embedded.
 | `name` | string | yes | Trimmed, non-empty, truncated to 64 characters. |
 | `workspaceId` | string | no | `session-<id>`; the Mastra workspace owned one-to-one by this session. |
 | `datasets` | string[] | yes | Names of the datasets the session works over (at least one at creation). Renamed from `sandboxes` (section 6). |
+| `agentId` | uuid | no | The user agent the session was started from (section 3.10). Absent for a plain-assistant session. Set at creation, never changed. No migration: absent means the plain assistant (ADR-0008). |
+| `agentName` | string | no | Present with `agentId`. The agent's Live name, stamped at creation and re-stamped by every turn that applies the agent, so a deleted agent's sessions can still name it. |
 | `messages` | `ChatMessage[]` | yes | Transcript in order. Empty at creation. |
 | `visualizations` | `SessionVisualization[]` | no | Visual metadata (section 3.4.3); `[]` at creation. |
 | `createdAt`, `updatedAt` | ISO | yes | Store-maintained. **Every** write to the document (a message, a rating, a visual change) bumps `updatedAt`, which orders the session list. |
@@ -378,16 +381,44 @@ Bootstrap-created snippets are always `{source: "mined", enabled: false, scope: 
 
 `KnowledgeUse` (embedded in messages, not a collection): `id`, `kind`, `title`, `body` (exactly as it appeared in the block), `datasetId` (string, no; absent for a global snippet). Context assembly: enabled snippets whose scope is global or whose `datasetId` is among the session's datasets, ordered dataset-scoped before global then `updatedAt` desc, accumulated into a 2000-character block until the next entry would not fit; only those that fit are recorded as `knowledge`.
 
-### 3.10 Deep-analysis jobs (not persisted)
+### 3.10 `agents` — user agents
+
+User-built agents: a stored configuration of the assistant, with a working draft and an optional published (Live) version. Built-in agents are not stored here. Rules: [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) (R43-R52); decision: ADR-0008 in [architecture.md](architecture.md).
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `id` | uuid | yes | |
+| `draft` | `AgentConfig` | yes | The working copy. Always present. |
+| `live` | `AgentConfig` | no | The published copy. Absent until the first publish. |
+| `publishedAt` | ISO | no | Set at each publish. |
+| `pinned` | boolean | yes | `false` on create. |
+| `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
+
+`AgentConfig` (embedded, not a collection):
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `name` | string | yes | Trimmed, 1 to 64 characters, unique among user agents (case-insensitive). |
+| `description` | string | yes | Up to 280 characters; may be empty. |
+| `instructions` | string | yes | Up to 4,000 characters; may be empty. |
+| `datasets` | string[] | yes | Dataset **names**; de-duplicated. At least one to publish. |
+| `starterQuestions` | string[] | yes | Up to 5, each up to 200 characters; blank ones dropped, de-duplicated. |
+| `model` | string | no | A model or deployment name of the configured provider. |
+| `reasoningEffort` | enum | no | `low` \| `medium` \| `high`. |
+
+Saving a draft replaces the whole `draft` object. Publishing sets `live` to a copy of `draft`. "Unpublished changes" is derived (`live` exists and differs from `draft`), not stored.
+
+### 3.11 Deep-analysis jobs (not persisted)
 
 Deep-analysis jobs exist only in process memory (bounded history; a backend restart forgets them). Persisted outputs are the report file (`workspaces/session-<id>/reports/<jobId>.md`, section 4.5) and the assistant message carrying `report` (3.4.1). For completeness the in-memory job shape is: `id`, `sessionId`, `question`, `status` (`planning` \| `investigating` \| `writing` \| `done` \| `error`), `progress?`, `step?`, `steps?`, `title?`, `path?`, `error?`, `startedAt`, `finishedAt?`. The planner output schema is `{title: string, angles: [{title, question}] (3..5 intended, min 1)}` and the writer output `{title, executiveSummary, report}`; see [../capabilities/deep-analysis/spec.md](../capabilities/deep-analysis/spec.md) and [agents.md](agents.md).
 
-### 3.11 Other non-persisted data
+### 3.12 Other non-persisted data
 
 - REST datasource queries are executed by materialising the referenced endpoints into a throwaway in-memory SQLite database per call; nothing of it is written to disk.
 - Eval runs also keep an in-memory map for in-flight runs (section 3.8 is the durable copy).
+- **Preview sessions** (agents-evals R60, R61) live only in the backend's memory: a `SessionDoc`-shaped object with `id` `preview-<uuid>`, `preview: true` and `agentId`, never written to `sessions`. While one exists its agent memory thread (id = the session id) and its workspace `workspaces/session-preview-<uuid>/` exist like a session's (sections 4 and 5). Discarding the preview deletes all three. A backend restart forgets the in-memory object, and at start-up the backend deletes every `session-preview-*` workspace and the matching memory thread, so a crash leaves nothing behind.
 
-### 3.12 Relationships and referential rules
+### 3.13 Relationships and referential rules
 
 | From | Field | To | Rule |
 |---|---|---|---|
@@ -398,6 +429,8 @@ Deep-analysis jobs exist only in process memory (bounded history; a backend rest
 | `verified_queries` | `sourceSessionId`+`sourceMessageAt` | `sessions.id` + message `at` | No cascade on session deletion; removed explicitly on thumbs-down. |
 | `metrics` | `datasourceId`, `sourceVerifiedQueryId` | `connections.id`, `verified_queries.id` | Provenance only, may dangle (a verified query id also rotates on re-approval). |
 | `eval_runs` | `datasourceId`, `datasets[]` | `connections.id`, `datasets.name` | Scope snapshot, may dangle. |
+| `agents` | `draft.datasets[]`, `live.datasets[]` | `datasets.name` | By name, no cascade. May dangle; the hub flags the agent as having a missing dataset. |
+| `sessions` | `agentId` | `agents.id` | By value, no cascade. Deleting the agent leaves the session pointing at a missing id; it then runs as the plain assistant and is shown with `agentName` (sessions-chat R59). |
 | `sessions[].visualizations[]` | `id`, `path` | `workspaces/session-<id>/visuals/<id>/` | Files under the session workspace; both removed with the session. |
 | `sessions[].messages[]` | `visual.visualId`, `report.jobId` | visual id / report file | By value. |
 | session | `id` | agent memory thread id and resource id; workspace `session-<id>` | See section 5. |
@@ -560,6 +593,8 @@ Visuals created before versioning keep their **v1 files directly under `visuals/
 | M9 | Windows roaming to local data move | Electron startup, Windows only | See section 1.1 (moves `app.sqlite`, `mastra.sqlite`, `workspaces` once; rollback on failure). `.app-secret` is resolved in the *resulting* data dir so the secret and the data it protects travel together. |
 | M11 | LLM API key under the former development secret | LLM module init, at backend start | If the `settings` document `llm` exists and its `apiKeyCiphertext` does not decrypt with the current key but does with SHA-256(`insecure-dev-secret`), re-encrypt it with the current key and patch only `apiKeyCiphertext`. Idempotent (a second run finds it readable). Failures are logged and leave the document untouched. Covered by `llm.service.spec.ts`. |
 | M10 | Pre-versioning visuals; messages without `reasoning`; datasets without `sampleValues`/`references` | Read time | Tolerated by readers (section 4.7; reasoning derived from `data[].rationale`; absent snapshot fields simply omitted). No rewrite. |
+
+None for `agents`: it is a new collection, and the store creates the table on first open. The built-in pins document is a new `settings` key and needs no migration.
 
 Tests: the table/field renames (M1-M3) and M4/M5 are covered by `database.module.spec.ts` and the repository/workspace specs.
 

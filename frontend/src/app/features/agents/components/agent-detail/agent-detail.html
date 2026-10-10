@@ -30,8 +30,113 @@
         <h2 class="text-[24px] leading-8 font-light tracking-[0.12px] text-fg-strong">
           {{ agent.name }}
         </h2>
-        <span class="font-mono text-[12px] text-fg-muted">{{ agent.id }}</span>
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="font-mono text-[12px] text-fg-muted">{{
+            agent.id
+          }}</span>
+          @if (isUserAgent()) {
+            <span
+              data-testid="agent-detail-status"
+              class="flex items-center gap-2"
+            >
+              <span
+                class="chip"
+                [class.chip-success]="agent.status === 'live'"
+                [class.chip-neutral]="agent.status !== 'live'"
+                >{{ agent.status === "live" ? "Live" : "Draft" }}</span
+              >
+              @if (agent.hasUnpublishedChanges) {
+                <span
+                  class="chip chip-warning"
+                  >Unpublished changes</span
+                >
+              }
+            </span>
+          }
+        </div>
       </div>
+      @if (showStartChat() || isUserAgent()) {
+        <div class="ml-auto flex shrink-0 items-center gap-2">
+          @if (showStartChat()) {
+            <button
+              type="button"
+              data-testid="agent-start-chat"
+              (click)="startChat.emit(agent)"
+              [disabled]="starting() || !!startChatBlockedReason()"
+              [attr.title]="startChatBlockedReason()"
+              class="btn btn-primary"
+            >
+              @if (starting()) {
+                <lucide-angular
+                  [img]="Loader2"
+                  [size]="14"
+                  class="animate-spin"
+                />
+                <span>Starting…</span>
+              } @else {
+                <lucide-angular [img]="MessageSquarePlus" [size]="14" />
+                <span>Start chat</span>
+              }
+            </button>
+          }
+          @if (isUserAgent()) {
+            <button
+              type="button"
+              data-testid="agent-edit"
+              (click)="edit.emit(agent)"
+              class="btn btn-secondary"
+            >
+              <lucide-angular [img]="Pencil" [size]="14" />
+              <span>Edit</span>
+            </button>
+          }
+          @if (canPublish()) {
+            <!-- Secondary beside Start chat: one primary action (ui.md 4.5). -->
+            <button
+              type="button"
+              data-testid="agent-publish"
+              (click)="publish()"
+              [disabled]="publishing()"
+              class="btn"
+              [class.btn-primary]="!showStartChat()"
+              [class.btn-secondary]="showStartChat()"
+            >
+              @if (publishing()) {
+                <lucide-angular
+                  [img]="Loader2"
+                  [size]="14"
+                  class="animate-spin"
+                />
+                <span>Publishing…</span>
+              } @else {
+                <lucide-angular [img]="Upload" [size]="14" />
+                <span>Publish</span>
+              }
+            </button>
+          }
+          @if (isUserAgent()) {
+            <button
+              type="button"
+              data-testid="agent-delete"
+              (click)="deleteAgent()"
+              [disabled]="deleting()"
+              class="btn btn-danger"
+            >
+              @if (deleting()) {
+                <lucide-angular
+                  [img]="Loader2"
+                  [size]="14"
+                  class="animate-spin"
+                />
+                <span>Deleting…</span>
+              } @else {
+                <lucide-angular [img]="Trash2" [size]="14" />
+                <span>Delete</span>
+              }
+            </button>
+          }
+        </div>
+      }
     </div>
     @if (agent.description) {
       <p class="mt-3 max-w-[70ch] text-[13px] leading-relaxed text-fg-muted">
@@ -71,6 +176,20 @@
               This agent builds its prompt at request time, so there is no
               static template to show.
             </p>
+          }
+          @if (isUserAgent()) {
+            <h3
+              class="mt-6 text-[12px] font-medium tracking-wider text-fg-muted uppercase"
+            >
+              Agent instructions
+            </h3>
+            @if (agentInstructions()) {
+              <pre
+                class="mt-2 max-w-full overflow-x-auto rounded-xl bg-surface-muted p-4 font-mono text-[12px] leading-relaxed whitespace-pre-wrap text-fg"
+                >{{ agentInstructions() }}</pre>
+            } @else {
+              <p class="mt-2 text-[13px] text-fg-muted">No instructions yet.</p>
+            }
           }
         }
         @case ("tools") {

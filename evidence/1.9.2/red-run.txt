@@ -1,0 +1,27 @@
+# 1.9.2 (BA-152) red run, 2026-10-09, before implementation
+
+## Unit: npx jest src/modules/user-agents src/modules/agents/agents.service.spec.ts
+FAIL src/modules/agents/agents.service.spec.ts
+    Cannot find module '../user-agents/repositories/builtin-agent-pins.repository' from 'modules/agents/agents.service.spec.ts'
+FAIL src/modules/user-agents/user-agents.service.spec.ts
+    Cannot find module './repositories/builtin-agent-pins.repository' from 'modules/user-agents/user-agents.service.spec.ts'
+Test Suites: 2 failed, 2 total
+Tests:       0 total
+
+## Backend e2e: npx jest --config ./test/jest-e2e.json test/user-agents.e2e-spec.ts (against the pre-change dist/)
+  ● Agent definitions (API) › Creating an agent stores a draft
+    expected 201 "Created", got 404 "Not Found"
+  ● Agent definitions (API) › Publishing makes the draft Live
+    expected 201 "Created", got 404 "Not Found"
+  ● Agent definitions (API) › Editing a Live agent keeps serving the Live version
+  ● Agent definitions (API) › Names must be unique and publishing needs a dataset
+    expected 201 "Created", got 404 "Not Found"
+  ● Agent definitions (API) › Built-in agents are read-only
+    +   "message": "Cannot PUT /agents/sql-fixer/draft",
+  ● Agent definitions (API) › Pins apply to user and built-in agents and survive a restart
+  ● Agent definitions (API) › A user agent's detail reports the assistant's tools with its draft and Live version
+  ● Agent definitions (API) › Unknown ids are reported as not found
+    +   "message": "Cannot PUT /agents/00000000-0000-4000-8000-000000000000/draft",
+  ● Agent definitions (API) › Deleting an agent
+Test Suites: 1 failed, 1 total
+Tests:       9 failed, 9 total

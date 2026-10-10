@@ -1,4 +1,5 @@
 import { expect, Page } from '@playwright/test';
+import { WORLD_CUP_CATALOG, WORLD_CUP_DB } from './world-cup-db';
 
 export const WORLD_CUP_DATASOURCE = 'World Cup PostgreSQL';
 export const WORLD_CUP_DATASET = 'World Cup Core';
@@ -17,12 +18,11 @@ export async function createWorldCupDatasource(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'New datasource' }).click();
   await page.getByLabel('Name', { exact: true }).fill(WORLD_CUP_DATASOURCE);
   await page.getByLabel('Kind').selectOption('postgres');
-  await page.getByLabel('Host').fill('127.0.0.1');
-  // Same override as docker-compose.yml, so a worktree can use its own stack.
-  await page.getByLabel('Port').fill(process.env['WORLD_CUP_DB_PORT'] ?? '55432');
-  await page.getByLabel('Database').fill('world_cup');
-  await page.getByLabel('User').fill('world_cup');
-  await page.getByLabel('Password').fill('world_cup_dev');
+  await page.getByLabel('Host').fill(WORLD_CUP_DB.host);
+  await page.getByLabel('Port').fill(String(WORLD_CUP_DB.port));
+  await page.getByLabel('Database').fill(WORLD_CUP_DB.database);
+  await page.getByLabel('User').fill(WORLD_CUP_DB.user);
+  await page.getByLabel('Password').fill(WORLD_CUP_DB.password);
 
   await page.getByRole('button', { name: 'Test connection' }).click();
   await expect(page.getByText('Connection successful')).toBeVisible();
@@ -45,11 +45,14 @@ export async function createWorldCupDataset(
     page.getByRole('heading', { name: 'New dataset' }),
   ).toBeVisible();
 
-  await expect(page.getByTestId('catalog-world_cup')).toBeVisible();
-  await page.getByTestId('catalog-world_cup').click();
-  await page.getByTestId('schema-world_cup-world_cup').click();
+  const catalog = page.getByTestId(`catalog-${WORLD_CUP_CATALOG}`);
+  await expect(catalog).toBeVisible();
+  await catalog.click();
+  await page.getByTestId(`schema-${WORLD_CUP_CATALOG}-world_cup`).click();
   for (const table of tables) {
-    await page.getByTestId(`table-world_cup-world_cup-${table}`).click();
+    await page
+      .getByTestId(`table-${WORLD_CUP_CATALOG}-world_cup-${table}`)
+      .click();
     if (table === 'matches') {
       await expect(
         page.getByText('match_number', { exact: true }),

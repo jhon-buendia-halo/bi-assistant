@@ -14,6 +14,123 @@ Entry template:
 
 ---
 
+## 2026-10-09 — 1.9.5 Agent editor with a preview chat (BA-155)
+
+### What went well
+- Making the preview an in-memory session that the sessions service resolves by id gave it streaming, memory, visuals and the chat component for free. It also kept ADR-0008's "not stored as a session", with no new ADR. Routing every document write through one `updateDoc` was the only intrusive change.
+- The user's database choice became a reusable harness rather than a one-off: `E2E_WORLD_CUP_DB_*` in `.env.e2e.local`, seeded through the app's own testing-data loader. The full suite was green on the MCP database before any story code, which separated harness failures from feature failures.
+- Writing the sweep test as a real backend restart (create a preview, stop, boot, check the directory) proved the crash path, not just the discard path.
+- The frontend agent reported its spec conflicts (rail Agents vs app-shell R3, a label that collides with `getByLabel`, what the panel shows when opened without Preview) instead of silently picking. All three became spec text.
+
+### What went wrong
+- My first database edit used a `this.repository.update(id, {` pattern that was a prefix of two other lines, so the assertion stopped the script. The third time this session a non-unique anchor bit me.
+- I sourced `.env.e2e.local` and started the backend in one `&&` chain ending in `&`. The whole chain ran in the background subshell, and the seed request went out with empty variables.
+- ui.md specified `aria-label="Remove starter question <n>"`, which Playwright's non-exact `getByLabel('Starter question 1')` would also match. I wrote the label and the test without checking them against each other.
+- The editor rules first landed above R53, out of numeric order, because I anchored the insertion on R53 itself.
+
+### What to do differently
+- For code edits by script, anchor on whole lines and assert the count. Use a line-number-scoped replace when the same call appears many times.
+- Start background processes on their own line, after sourcing env files in the current shell.
+- When a spec names an accessible label, grep the E2E for `getByLabel` calls using a substring of it, and use visually hidden text or `exact` locators where they collide.
+- Insert new numbered rules after the last existing rule, not before the next one.
+
+## 2026-10-09 — 1.9.3 Start a session from an agent (BA-153)
+
+### What went well
+- Four multiple-choice questions settled the behaviour before any spec was written: create the session at once; Start chat on the card and in the detail; republish changes instructions and model but not datasets; a deleted agent's sessions show its name. The rules, Gherkin and tests then followed without rework.
+- A local OpenAI-compatible stub that records requests turned "the answer follows the agent's instructions" into an exact check: which system messages the model got, in what order, and which deployment it was called as. It also scripted the `DELETE` tool call for the read-only guard scenario.
+- Splitting the frontend to a parallel agent, against a contract fixed in the specs and the E2E file, let both halves land in one pass. The agent found a real stale-copy bug (reopening a session showed it as before that visit's turns) by running the deletion scenario.
+- Moving the backend process harness into `test/backend-process.ts` kept the second API test from copying 60 lines. Re-running `user-agents.e2e-spec.ts` confirmed the refactor.
+
+### What went wrong
+- The first version of the instructions scenario asserted that the agent block was the *last* system message. Mastra appends its own workspace and skills messages after the app's context, so the assertion was wrong, not the code. I had not looked at a real request before writing it.
+- The guard scenario's error-text locator matched twice (the summary line and the detail), a strict-mode failure that `{ exact: true }` fixed.
+- The agent's description ran straight into "Connected to …" with no full stop. Only the screenshot showed it; the unit test checked `toContain(description)`.
+- I repeated the `### Fixed` multiple-match mistake from the BA-141 merge, an hour after writing the lesson down. The assertion caught it, but one edit had already been applied.
+
+### What to do differently
+- Before asserting the order or position of anything sent to the model, dump one real request from the stub (as `model-request-system-messages.json` now does) and write the assertion against it. Assert relative order against the app's own blocks, never "last".
+- For changelog edits, insert under the date with a first-occurrence search bounded by the next `## ` date heading, not a unique-match replace on `### Fixed` / `### Added`.
+- When welcome or summary copy concatenates user-written text with fixed text, add a unit test on the exact rendered string, not `toContain`.
+- In a subagent brief for UI work, ask it to screenshot the changed screens in both themes, so copy and spacing issues surface before the evidence step.
+
+## 2026-10-09 — 1.9.4 follow-up: merging BA-141's restyle into the Agent Hub branch (BA-154)
+
+### What went well
+- The axe scan over every screen in both themes caught the one regression the merge introduced. The dark active filter pill was at 4.34:1, because the hub was the first screen to use a shared class whose active state had never been rendered.
+- Every check ran before the merge commit, so the merge and its fix land together and the branch never holds a red state.
+
+### What went wrong
+- I re-ran the targeted specs with `npx playwright test` after the CSS fix. That reused the stale `backend/dist` web UI, and the fix looked like it had failed. `test:e2e:prepare` rebuilds it; plain `playwright test` doesn't.
+- `ng test` failed at first because there is no Chrome binary in WSL. With Playwright's Chromium, one test still failed: headless Chrome opens about 765 px wide, which clamps the right panel below what `app.spec.ts` expects. That cost a diagnosis round.
+- The earlier session left the merge staged but uncommitted, with no note of what was still to be checked.
+
+### What to do differently
+- After any frontend change, run `npm run test:e2e:prepare` before a targeted `npx playwright test`, or use `npm run test:e2e -- <spec>`.
+- Run frontend unit tests in WSL with `CHROME_BIN` pointing to a wrapper script around Playwright's Chromium that adds `--window-size=1440,900`, using `--browsers=ChromeHeadless`.
+- When a shared component class gains its first user of a state (active, disabled, selected), add that screen to the axe scan in both themes in the same change.
+
+## 2026-10-09 — 1.9.4 Agent Hub screen (BA-154)
+
+### What went well
+- Comparing the spec draft against the mockup before writing any tests caught a design slip. The draft moved pinned agents into a Pinned section under All, while the mockup keeps them in place and treats Pinned as a filter. The fix cost one spec revision, not a rework of tests and code.
+- Moving the hub ahead of 1.9.3 when the user wanted to see it was cheap. Story boundaries were clear (Start chat and Edit hidden, New agent disabled), and one epic PR means the interim state never reaches `main`.
+- Running axe on the new screen found contrast failures (`zinc-500` on the card background, 3.25:1) that had never been seen, because axe only ever scanned the home shell.
+- Looking at the evidence screenshots before committing caught the clipped search placeholder. Moving the search to the mockup's full-width row fixed it.
+
+### What went wrong
+- The plan's card layout (name beside the icon) truncated names to one letter at 1440×900 with the right panel open. That was only discovered in implementation, so ui.md had to be corrected afterwards.
+- The user stopped the implementing agent twice, mid-step, to ask for status. Each time it resumed from the user's message, so its report reached the orchestrator later than the user's question. One old agent also reported a stale status ("the CLAUDE.md rule is gone") after the rule had moved to its own BA-89 branch.
+- Karma has no Chrome configured in this WSL environment. The frontend unit tests needed `CHROME_BIN` pointed at Playwright's Chromium and a scratch config. At the default 800×600 size, the existing `app.spec.ts` keyboard-resize test fails (548 expected, 525), unrelated to this change.
+
+### What to do differently
+- Before writing UI specs from a mockup, list each mockup element and say whether it is a section, a filter or a state, then check the spec draft against that list.
+- Size card layouts against the narrowest real main column (1440 wide minus the sidebar and the 572 px right panel ≈ 572 px) before fixing them in ui.md.
+- Run the axe scan on every new screen, not only the home shell. Treat `zinc-500` text on raised surfaces as suspect.
+- When the user asks a running subagent for status, give the orchestrator's view of the whole epic, not the subagent's slice, because a subagent can't see later work.
+
+## 2026-10-09 — 1.9.2 Agent definitions: storage and API (BA-152)
+
+### What went well
+- A Fable plan written from the code before any edit caught the `AgentsModule` → `SessionsModule` import cycle. It also caught that `agentContext()` is the single insertion point, which shapes 1.9.3. The user-agent module was built as a shared leaf from the start.
+- Specs came first (step 5) in their own pass, so the tests had a fixed contract. Where the plan and api.md disagreed (sort order, the duplicate-name message), the implementer followed the spec.
+- The unit tests caught a real bug before any UI existed: re-pinning a pinned built-in moved it to the end of the pin list.
+- Spawning the built `dist/main.js` in the backend e2e makes "survives a restart" a real process restart, not a module reload.
+- A test-only `E2E_BACKEND_PORT` with a renderer route let Playwright run beside the user's app without touching product code (BA-109 stays its own bug). It was proven with nothing on 3000, where a broken redirect would show "Backend unreachable".
+
+### What went wrong
+- `npm ci` failed in the fresh worktree: `main`'s lockfiles are out of sync with `package.json` for npm 11.19 (`Missing: @hono/node-server`). I used `npm install` and restored the lockfiles so the churn stays out of the epic.
+- Jest can't boot `AppModule`, because ESM-only packages (`@sindresorhus/slugify`, `uuid` through `thrift`) sit under Mastra and the Databricks driver. The plan's in-process e2e pattern didn't work and the e2e had to spawn the built server.
+- The implementing subagent ran `pkill -f "dist/main.js"`, which also matched its own shell. It hit nothing else only because port 3000 was already free.
+- `docker compose up` from the worktree recreated the shared Postgres container, because the compose file path differs from the main checkout's. The named volume kept the data (15 tables checked afterwards).
+- The user stopped the implementing agent mid-task and its unverified state was reported as partial. It then resumed and finished, so its report had to be re-verified gate by gate.
+- `agents.service.ts` and `agents.controller.ts` weren't prettier-clean or eslint-clean at base (eight pre-existing errors, six still on unchanged lines). This hides real issues in the touched files.
+
+### What to do differently
+- Run backend e2e tests that need the full app against `node dist/main.js` started on a free port with a temp `APP_DATA_DIR`, after `npm run build`. Don't try `Test.createTestingModule({ imports: [AppModule] })`.
+- Stop a process you started by the PID you captured (`$!`), never with `pkill -f <path>`.
+- In a new worktree, run `npm install` and then `git checkout -- */package-lock.json` instead of `npm ci`, until the lockfile drift on `main` is fixed in its own change.
+- Expect `docker compose up` from a worktree to recreate the shared container. Check `docker ps` and run a `psql` table count afterwards rather than assuming the data survived.
+- When a stopped subagent resumes and reports, re-run its gates before committing (build, unit tests for the touched modules, the story's e2e, `check-specs.py`).
+
+## 2026-10-09 — 1.9.1 Agent Hub: ADR, epic spec and roadmap (BA-151)
+
+### What went well
+- Searching Jira for existing epics before proposing one found BA-141 ("Agentic Hub look and feel"). Its spec rules out new features, which confirmed the hub needed its own epic and showed which components to build on.
+- Checking the mockup against `vision.md` before drafting surfaced a conflict: "My team", "Whole org" and owners need people, and the app is "not multi-user". Two rounds of multiple-choice questions settled the agent model, sharing, lifecycle and placement before anything was written. That applied the BA-112 lesson of asking how a feature is scoped before drafting the epic.
+- Reading agents.md §4.1 (per-turn system context blocks) before writing ADR-0008 gave a concrete seam for user instructions that keeps the prompt's identity line and the code-level guards intact.
+
+### What went wrong
+- `jq` was missing again, as recorded in the 0.2.5 entry, and had to be fetched into the scratchpad.
+- In the new worktree, `jira.sh` failed: `.env` lives only in the main checkout. Evidence capture needed a second run with the main checkout's script.
+- The first spec check failed: the epic spec linked to `../BA-141/spec.md`, which exists only on BA-141's unmerged branch.
+- `git worktree add -b … origin/main` set the epic branch to track `origin/main`, so a bare `git push` could have targeted main. I had to unset it.
+
+### What to do differently
+- From a worktree, call Jira through the main checkout's script (`/home/jhonbuendia/projects/bi-assistant/.claude/skills/jira/scripts/jira.sh`), or symlink `.env` into the worktree first.
+- Link a sibling epic's spec only once it is on `main`. Until then, link its Jira issue.
+- Create epic worktrees from the local `main` ref (`git worktree add … -b <branch> main`), as the convention shows, or run `git branch --unset-upstream` right after creating from `origin/main`.
+
 ## 2026-10-09 — 1.8.8 Align with the Insight Agent AI Figma design (BA-158)
 
 ### What went well

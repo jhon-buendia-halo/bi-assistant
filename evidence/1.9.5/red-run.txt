@@ -1,0 +1,70 @@
+# 1.9.5 red run (workflow step 7) — 2026-10-09, before any production code; World Cup DB: infra-MCP database
+
+## Backend API e2e: backend/test/agent-sessions.e2e-spec.ts
+  ● Sessions started from an agent (API) › starts a preview of the draft that is never listed
+    - Expected  - 19
+    + Received  +  2
+    -   "message": "Preview started",
+    +   "message": "Publish \"Previewer\" before starting a chat",
+  ● Sessions started from an agent (API) › refuses a preview without datasets or for a built-in agent
+    - Expected  - 1
+    + Received  + 1
+    -   "message": "Select at least one dataset to preview",
+    +   "message": "Publish \"Empty\" before starting a chat",
+  ● Sessions started from an agent (API) › marks the agent deleted once it is gone, and survives a restart
+Tests:       3 failed, 6 passed, 9 total
+
+## Playwright (web): agent-editor, agent-hub
+  ✘   1 [web] › e2e/agent-editor.spec.ts:122:5 › creates an agent, previews it, publishes it and deletes it (30.2s)
+  ✘   2 [web] › e2e/agent-editor.spec.ts:171:5 › editing a Live agent keeps its sessions on the Live version until republished (30.3s)
+  ✘   3 [web] › e2e/agent-editor.spec.ts:225:5 › sending in the preview saves the form first (30.2s)
+  ✘   4 [web] › e2e/agent-editor.spec.ts:244:5 › reset and leaving the editor discard the preview (30.2s)
+  ✘   5 [web] › e2e/agent-editor.spec.ts:273:5 › preview needs a dataset, and names must be unique (30.2s)
+  ✘   6 [web] › e2e/agent-editor.spec.ts:295:5 › leaving with unsaved changes asks first (30.2s)
+  ✘   7 [web] › e2e/agent-editor.spec.ts:318:5 › a dataset that no longer exists stays visible in the editor (30.2s)
+  ✘   8 [web] › e2e/agent-editor.spec.ts:340:5 › the editor has no detectable accessibility violations in either theme (30.2s)
+  ✘   9 [web] › e2e/agent-hub.spec.ts:92:5 › shows the built-in agents and mine in sections (11.8s)
+  ✓  10 [web] › e2e/agent-hub.spec.ts:143:5 › search narrows the agents by name or description (1.8s)
+  ✓  11 [web] › e2e/agent-hub.spec.ts:159:5 › filters limit the hub to one kind of agent (1.9s)
+  ✓  12 [web] › e2e/agent-hub.spec.ts:181:5 › pinned agents come first in their own section and survive a restart (3.4s)
+  ✓  13 [web] › e2e/agent-hub.spec.ts:241:5 › flags an agent whose dataset no longer exists (1.7s)
+  ✘  14 [web] › e2e/agent-hub.spec.ts:258:5 › a card opens the agent's detail view with its actions (11.8s)
+  ✓  15 [web] › e2e/agent-hub.spec.ts:284:5 › publishing a draft makes it Live (2.2s)
+  ✓  16 [web] › e2e/agent-hub.spec.ts:310:5 › deleting an agent asks first (1.9s)
+  ✓  17 [web] › e2e/agent-hub.spec.ts:338:5 › the hub has no detectable accessibility violations in either theme (3.3s)
+  1) [web] › e2e/agent-editor.spec.ts:122:5 › creates an agent, previews it, publishes it and deletes it 
+      - waiting for getByRole('button', { name: 'New agent', exact: true })
+    test-results/agent-editor-creates-an-ag-6f74e-publishes-it-and-deletes-it-web/test-failed-1.png
+  2) [web] › e2e/agent-editor.spec.ts:171:5 › editing a Live agent keeps its sessions on the Live version until republished 
+      - waiting for getByTestId('agent-edit')
+    test-results/agent-editor-editing-a-Liv-43143-e-version-until-republished-web/test-failed-1.png
+  3) [web] › e2e/agent-editor.spec.ts:225:5 › sending in the preview saves the form first ──────────
+      - waiting for getByTestId('agent-edit')
+    test-results/agent-editor-sending-in-the-preview-saves-the-form-first-web/test-failed-1.png
+  4) [web] › e2e/agent-editor.spec.ts:244:5 › reset and leaving the editor discard the preview ─────
+      - waiting for getByTestId('agent-edit')
+    test-results/agent-editor-reset-and-lea-5bea1--editor-discard-the-preview-web/test-failed-1.png
+  5) [web] › e2e/agent-editor.spec.ts:273:5 › preview needs a dataset, and names must be unique ────
+      - waiting for getByRole('button', { name: 'New agent', exact: true })
+    test-results/agent-editor-preview-needs-77e48-et-and-names-must-be-unique-web/test-failed-1.png
+  6) [web] › e2e/agent-editor.spec.ts:295:5 › leaving with unsaved changes asks first ──────────────
+      - waiting for getByRole('button', { name: 'New agent', exact: true })
+    test-results/agent-editor-leaving-with-unsaved-changes-asks-first-web/test-failed-1.png
+  7) [web] › e2e/agent-editor.spec.ts:318:5 › a dataset that no longer exists stays visible in the editor 
+      - waiting for getByTestId('agent-edit')
+    test-results/agent-editor-a-dataset-tha-b21cd-stays-visible-in-the-editor-web/test-failed-1.png
+  8) [web] › e2e/agent-editor.spec.ts:340:5 › the editor has no detectable accessibility violations in either theme 
+      - waiting for getByRole('button', { name: 'New agent', exact: true })
+    test-results/agent-editor-the-editor-ha-33308--violations-in-either-theme-web/test-failed-1.png
+  9) [web] › e2e/agent-hub.spec.ts:92:5 › shows the built-in agents and mine in sections ───────────
+    Error: expect(locator).toBeEnabled() failed
+    Locator:  getByRole('button', { name: 'New agent', exact: true })
+      - waiting for getByRole('button', { name: 'New agent', exact: true })
+    test-results/agent-hub-shows-the-built-in-agents-and-mine-in-sections-web/test-failed-1.png
+  10) [web] › e2e/agent-hub.spec.ts:258:5 › a card opens the agent's detail view with its actions ──
+    Error: expect(locator).toBeVisible() failed
+    Locator: getByRole('button', { name: 'Edit', exact: true })
+      - waiting for getByRole('button', { name: 'Edit', exact: true })
+    test-results/agent-hub-a-card-opens-the-ed91f-etail-view-with-its-actions-web/test-failed-1.png
+  10 failed
+  7 passed (4.8m)

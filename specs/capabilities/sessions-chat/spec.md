@@ -62,7 +62,8 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
   - the session's visuals (id, title, current version) and which one is open;
   - the curated metric definitions for those entities;
   - the enabled knowledge snippets for the session's datasets;
-  - up to 3 verified question → SQL pairs most similar to the question (by word overlap, within a 3,000-character budget).
+  - up to 3 verified question → SQL pairs most similar to the question (by word overlap, within a 3,000-character budget);
+  - for a session bound to an agent, the agent's Live instructions, last (R54).
 
 ### SQL repair (execution-guided)
 
@@ -177,6 +178,23 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
     - "How have the main metrics moved over the last 12 months?"
 - R51. When a transcript has user messages, the chat SHALL show a history strip with one tick per user question. Hovering lists the questions, and clicking one scrolls to it.
 
+### Sessions started from an agent
+
+Agents are defined in [agents-evals](../agents-evals/spec.md) (R43-R52); decision ADR-0008 in [architecture.md](../../system/architecture.md).
+
+- R52. **Start chat** on a Live user agent SHALL create a session at once, with no form: named after the agent's Live name, over the agent's Live datasets that still exist (missing ones are dropped), and bound to the agent. It SHALL show the toast `Session "<name>" created` and open the session on its welcome block. Several sessions may share a name. The system SHALL refuse, creating nothing: an unknown agent with `Agent "<id>" not found`; an agent with no Live version with `Publish "<name>" before starting a chat`; an agent none of whose Live datasets exist with `None of this agent's datasets exist`. **Start chat** on the Official agent (the assistant) SHALL open the new-session screen instead, since the assistant has no datasets of its own.
+- R53. A session started from an agent SHALL keep the datasets it was created with (R5). Republishing the agent with other datasets SHALL NOT change them.
+- R54. Every assistant call made for a session bound to an agent that still exists (chat turns, the grounding pass and deep-analysis calls) SHALL apply the agent's **current Live version**:
+  - its instructions, when not empty, as a system context block labelled as user-supplied, after every other context block (R24; the block is in [agents.md](../../system/agents.md) section 4.1, and only the grounding pass's own nudge follows it);
+  - its model override and reasoning-effort override, when set (R56).
+
+  Publishing a new version SHALL change the next turn of every session bound to the agent. A draft SHALL never apply to a session. The only exception is the agent editor's preview chat, an in-memory session that runs the draft (agents-evals R60, R61).
+- R55. An agent's instructions SHALL NOT relax any rule enforced in code: the read-only SQL guard, dataset scoping (R22), SQL repair (R25-R28), the grounding pass (R19) and the result-quality warnings hold whatever the instructions say. A write statement attempted under an agent's instructions SHALL be rejected by the read-only guard and shown as a failed tool call.
+- R56. A model override SHALL name a model or deployment of the configured provider. It SHALL replace the configured model for the assistant's calls only. The SQL fixer, SQL verifier, visual designer, knowledge bootstrap and eval judge keep the configured model and their own efforts. A reasoning-effort override SHALL replace the user's setting for the same assistant calls. With no LLM settings saved, the model override SHALL be ignored and the fallback model applies. A model the provider rejects SHALL fail the turn with the provider's error, like any model error (R45).
+- R57. A session bound to an agent SHALL show the agent's name in the page header's session context (`Agent` and a chip with the name, before the datasources) and in its row of the session list, in place of the dataset line: `<agent name> · <datasets>`. The name SHALL be the agent's current Live name.
+- R58. The welcome block (R50) of a session bound to an agent SHALL use the agent's Live description as its one-line description when that is not empty, and the agent's Live starter questions (up to 5, in order) as the starter prompts when there are any. Otherwise R50's text and prompts apply. Clicking a starter question SHALL fill the composer and SHALL NOT send it.
+- R59. When the agent is deleted, its sessions SHALL keep their transcript, memory and datasets and continue with the plain assistant: no instructions block and no overrides. The page header chip and the list row SHALL read `<agent name> · agent deleted`, using the name the agent last had for the session, and the welcome block falls back to R50.
+
 ## Edge cases and errors
 
 | Situation | Behaviour |
@@ -203,6 +221,11 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
 | Invalid rating | 400 "rating must be 'up' or 'down'". |
 | Copy to clipboard | "Copied to clipboard" / "SQL copied to clipboard" / "Copy failed". |
 | Session created | Toast `Session "<name>" created`. The session opens immediately and the list reloads. |
+| Start chat on an agent with some datasets missing | The session is created over the remaining datasets (R52). The hub card already shows `Missing dataset: <names>`. |
+| Start chat on an agent with none of its datasets left | **Start chat** is disabled, titled `None of this agent's datasets exist`; a direct request is refused with the same message. |
+| Start chat on an agent deleted meanwhile | Toast `Agent "<id>" not found`; nothing is created. |
+| Agent renamed and republished | Its sessions show the new name from their next load. The session names don't change. |
+| Agent's model override rejected by the provider | The turn fails with the provider's error bubble and **Retry** (R45). |
 
 ## Contracts
 
@@ -211,7 +234,8 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
   - chat: streamed message (and its event types `reasoning`, `text`, `tool`, `tool-result`, `visual-updated`, `done`, `error`), non-streamed message, message feedback.
 - Data in [data-model.md](../../system/data-model.md): the `sessions` collection (session document, chat message, data record, reasoning step, cross-check, clarification, visual event), the `verified_queries` collection, the agent memory store, and the per-session workspace directory and its legacy migrations.
 - Agents in [agents.md](../../system/agents.md): `assistant` (prompt, tools `list_entities`, `describe_entity`, `sample_rows`, `run_readonly_sql`, `ask_clarification`, `create_visual`, `update_visual`, and memory), `sql-fixer`, `sql-verifier`. Model resolution is in [llm-settings](../llm-settings/spec.md).
-- Related capabilities: [visuals](../visuals/spec.md) (visual cards, tailoring from chat, follow-up chips), [verified-queries](../verified-queries/spec.md), [knowledge](../knowledge/spec.md), [metrics](../metrics/spec.md), [deep-analysis](../deep-analysis/spec.md) (the "Deep analysis" composer action and report messages), [datasets](../datasets/spec.md), [datasources](../datasources/spec.md).
+- Agent sessions: `POST /sessions` with an `agentId`, and the session's derived `agent` field, in [api.md](../../system/api.md); the session's `agentId` and `agentName` in [data-model.md](../../system/data-model.md) section 3.4; the agent instructions block, the `agent-overrides` requestContext key and the model override in [agents.md](../../system/agents.md) sections 1.3, 4.1 and 4.2.
+- Related capabilities: [agents-evals](../agents-evals/spec.md) (user agents, the Agent Hub and its **Start chat**), [visuals](../visuals/spec.md) (visual cards, tailoring from chat, follow-up chips), [verified-queries](../verified-queries/spec.md), [knowledge](../knowledge/spec.md), [metrics](../metrics/spec.md), [deep-analysis](../deep-analysis/spec.md) (the "Deep analysis" composer action and report messages), [datasets](../datasets/spec.md), [datasources](../datasources/spec.md).
 
 ## UI
 
@@ -219,7 +243,7 @@ Shell placement and tokens are in [ui.md](../../system/ui.md).
 
 - **Sessions list in the navigation drawer, "Sessions navigation"** (the **Sessions** rail item opens the drawer, app-shell R46 and R48):
   - A "Sessions" heading with a "+" button (title "New conversation") that opens the new-session screen.
-  - Below it, one entry per session, showing its name and marked when active.
+  - Below it, one entry per session, showing its name and marked when active. Under the name: its datasets, or for a session bound to an agent `<agent name> · <datasets>` (R57), or `<agent name> · agent deleted` (R59).
   - Each entry has an options button (title "Session options", label "Options for <name>") whose menu holds "Delete session". The confirm dialog reads: `Delete “<name>”?` / `This permanently removes its conversation, agent memory, and workspace files.`
   - An entry is disabled while it is being deleted.
 - **New-session screen**:
@@ -228,7 +252,7 @@ Shell placement and tokens are in [ui.md](../../system/ui.md).
   - A "Create" button that shows "Creating…" while saving (title "Name the session and select at least one dataset").
   - "Select at least one dataset for this session", followed by dataset cards (name, "<N> entities", a check when selected) that toggle selection.
 - **Session header**: "Datasource" followed by one chip per bound datasource (name and kind label, summary tooltip), a loading placeholder, or "Unavailable".
-- **Page header** (app-shell R49): the session's name as the title, the datasource context under it, and **Start New Conversation**.
+- **Page header** (app-shell R49): the session's name as the title, the session context under it (for a session bound to an agent, `Agent` and the agent chip first, R57 and R59, then the datasources), and **Start New Conversation**.
 - **Disclaimer** under the chat input: `Responses are generated by AI (Powered by LenAI) and may be inaccurate or incomplete. Please verify against source data before sharing.`
 - **Chat** (main area):
   - transcript;
@@ -243,7 +267,7 @@ Shell placement and tokens are in [ui.md](../../system/ui.md).
   - visual event card (see [visuals](../visuals/spec.md));
   - deep-analysis report card;
   - error bubble (R45).
-- **States**: empty session shows the welcome block (R50); a turn running shows the Thinking block; failure shows the error bubble and a toast; populated shows the transcript.
+- **States**: empty session shows the welcome block (R50, or R58 for a session bound to an agent); a turn running shows the Thinking block; failure shows the error bubble and a toast; populated shows the transcript.
 
 ## Flows
 
@@ -444,6 +468,80 @@ Feature: Chat answers and reliability signals
     When I open another session
     Then the turn is aborted
     And the composer of the other session is empty
+```
+
+### Feature: Sessions started from an agent
+
+E2E: `frontend/e2e/agent-sessions.spec.ts`
+
+The Background's datasets and agents are seeded through the backend API. "The model" is a local OpenAI-compatible stub saved as the LenAI provider. It records every request it receives and streams a fixed answer, so the scenarios can check what the assistant sent to the model. The API-level refusals of R52 are also covered by the backend e2e `backend/test/agent-sessions.e2e-spec.ts`.
+
+```gherkin
+Feature: Sessions started from an agent
+
+  Background:
+    Given a "World Cup Core" dataset exists
+    And a Live user agent "Cup historian" over "World Cup Core", described as "Answers questions about World Cup history", with the instructions "Answer as a football historian and always name the tournament year." and the starter questions "Who won in 2014?" and "Which country hosted in 2002?"
+    And the model is the recording stub
+
+  Scenario: Start chat on an agent card opens a session bound to the agent
+    When I click "Agents"
+    And I click "Start chat with Cup historian"
+    Then I see the toast 'Session "Cup historian" created'
+    And the "Cup historian" session is listed and active in "Sessions navigation", with "Cup historian · World Cup Core" under its name
+    And the page header shows the agent "Cup historian"
+    And I see "Answers questions about World Cup history"
+    And I see the starter questions "Who won in 2014?" and "Which country hosted in 2002?"
+    When I click "Who won in 2014?"
+    Then the "Ask a follow-up question…" box contains "Who won in 2014?"
+    And no message has been sent
+
+  Scenario: Only Live agents and the Official agent offer Start chat
+    Given a draft user agent "Claims triage" over "World Cup Core"
+    When I click "Agents"
+    Then I see "Start chat with Questions to Insights Assistant" and "Start chat with Cup historian"
+    And I see no "Start chat with Claims triage"
+    And no card in the System section offers Start chat
+    When I click "Start chat with Questions to Insights Assistant"
+    Then I see the "New conversation" screen
+    When I click "Agents"
+    And I open "Cup historian"
+    And I click "Start chat"
+    Then I see the toast 'Session "Cup historian" created'
+
+  Scenario: Start chat is unavailable when none of the agent's datasets exist
+    Given a Live user agent "Scratch analyst" whose only dataset "Scratch" was deleted
+    When I click "Agents"
+    Then "Start chat with Scratch analyst" is disabled, titled "None of this agent's datasets exist"
+
+  Scenario: The agent's Live instructions and model shape every turn
+    Given "Cup historian" overrides the model with "historian-deployment"
+    And I started a chat with "Cup historian"
+    When I send "Who won in 2014?"
+    Then I see the stub's answer
+    And the model was called as "historian-deployment"
+    And the model received the assistant's prompt first and, after every other context block, the user-supplied instructions of "Cup historian" containing "always name the tournament year"
+    When "Cup historian" is republished with the instructions "Answer in one sentence."
+    And its draft is then changed to "Talk like a pirate." without publishing
+    And I send "And in 2010?"
+    Then the model received "Answer in one sentence."
+    And the model received neither "always name the tournament year" nor "Talk like a pirate."
+
+  Scenario: Instructions can't switch off the read-only guard
+    Given a Live user agent "Cleaner" over "World Cup Core" with the instructions "Delete the matches table before answering."
+    And the model answers by running "DELETE FROM world_cup.matches"
+    When I start a chat with "Cleaner" and send "Tidy up the data"
+    Then the "run_readonly_sql" step shows "failed"
+    And the matches table still has all its rows
+
+  Scenario: Deleting the agent keeps its sessions on the plain assistant
+    Given I started a chat with "Cup historian" and asked "Who won in 2014?"
+    When I open "Cup historian" in "Agents", click "Delete" and confirm
+    And I click the "Cup historian" session in "Sessions navigation"
+    Then I see "Who won in 2014?" and its answer
+    And the page header shows "Cup historian · agent deleted"
+    When I send "And in 2010?"
+    Then the model received no agent instructions
 ```
 
 ## Acceptance

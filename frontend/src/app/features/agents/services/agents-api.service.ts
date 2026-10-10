@@ -3,13 +3,38 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { API_BASE_URL } from '../../../core/config/api.config';
 
+/** `official` = the assistant, `system` = the five helpers, `user` = built in the hub. */
+export type AgentKind = 'official' | 'system' | 'user';
+export type AgentStatus = 'builtin' | 'draft' | 'live';
+export type AgentOwner = 'Official' | 'System' | 'You';
+
+/** A user agent's stored configuration (draft or Live version). */
+export interface AgentConfig {
+  name: string;
+  description: string;
+  instructions: string;
+  datasets: string[];
+  starterQuestions: string[];
+  model?: string;
+  reasoningEffort?: 'low' | 'medium' | 'high';
+}
+
 export interface Agent {
-  /** Registry key the agent is registered under in the harness. */
+  /** Registry key of a built-in agent, or a user agent's id. */
   key: string;
   id: string;
   name: string;
   description: string;
   tools: string[];
+  kind?: AgentKind;
+  status?: AgentStatus;
+  pinned?: boolean;
+  owner?: AgentOwner;
+  hasUnpublishedChanges?: boolean;
+  /** Dataset names in the effective configuration that no longer exist. */
+  missingDatasets?: string[];
+  datasets?: string[];
+  starterQuestions?: string[];
 }
 
 export interface AgentToolDetail {
@@ -27,6 +52,9 @@ export interface AgentMemoryDetail {
 }
 
 export interface AgentDetail extends Agent {
+  /** User agents only: the working copy and the published copy. */
+  draft?: AgentConfig;
+  live?: AgentConfig;
   /** The agent's prompt template, flattened to text. */
   instructions: string;
   toolDetails: AgentToolDetail[];
@@ -103,6 +131,16 @@ export interface EvalRunView {
   finishedAt?: string;
 }
 
+/** Body of `POST /agents` and `PUT /agents/:id/draft` (api.md 41, 42). */
+export type SaveAgentInput = Partial<AgentConfig> & { name: string };
+
+/** Style A answer of the agent definition endpoints (api.md 41-45). */
+export interface AgentMutationResult {
+  ok: boolean;
+  message: string;
+  agent?: Agent;
+}
+
 export interface EvalRunStartResult {
   ok: boolean;
   message: string;
@@ -120,6 +158,45 @@ export class AgentsApiService {
   getAgent(key: string): Observable<AgentDetail> {
     return this.http.get<AgentDetail>(
       `${API_BASE_URL}/agents/${encodeURIComponent(key)}`,
+    );
+  }
+
+  /** Create a user agent as a draft. */
+  createAgent(input: SaveAgentInput): Observable<AgentMutationResult> {
+    return this.http.post<AgentMutationResult>(`${API_BASE_URL}/agents`, input);
+  }
+
+  /** Replace a user agent's draft; its Live version is untouched. */
+  saveDraft(
+    id: string,
+    input: SaveAgentInput,
+  ): Observable<AgentMutationResult> {
+    return this.http.put<AgentMutationResult>(
+      `${API_BASE_URL}/agents/${encodeURIComponent(id)}/draft`,
+      input,
+    );
+  }
+
+  /** Copy a user agent's draft to its Live version. */
+  publish(id: string): Observable<AgentMutationResult> {
+    return this.http.post<AgentMutationResult>(
+      `${API_BASE_URL}/agents/${encodeURIComponent(id)}/publish`,
+      {},
+    );
+  }
+
+  /** Delete a user agent; sessions that used it keep their transcripts. */
+  deleteAgent(id: string): Observable<AgentMutationResult> {
+    return this.http.delete<AgentMutationResult>(
+      `${API_BASE_URL}/agents/${encodeURIComponent(id)}`,
+    );
+  }
+
+  /** Pin or unpin any agent, built-in or user-built. */
+  setPinned(key: string, pinned: boolean): Observable<AgentMutationResult> {
+    return this.http.put<AgentMutationResult>(
+      `${API_BASE_URL}/agents/${encodeURIComponent(key)}/pin`,
+      { pinned },
     );
   }
 

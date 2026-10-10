@@ -185,6 +185,15 @@ export async function deleteSessionWorkspaceDirectory(
   await rm(sessionWorkspacePath(sessionId), { recursive: true, force: true });
 }
 
+/** Ids of the sessions that have a workspace directory on disk. */
+export function listSessionWorkspaceIds(): string[] {
+  return readdirSync(workspacesDir, { withFileTypes: true })
+    .filter(
+      (entry) => entry.isDirectory() && entry.name.startsWith(WORKSPACE_PREFIX),
+    )
+    .map((entry) => entry.name.slice(WORKSPACE_PREFIX.length));
+}
+
 /** Restore filesystem workspaces that were created by earlier app processes. */
 export function discoverSessionWorkspaces(): Workspace[] {
   return readdirSync(workspacesDir, { withFileTypes: true })

@@ -6,7 +6,9 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Active visual.** The visual currently open in the right-hand panel. The assistant tailors it by default when the user asks for a change. See *Visual*.
 
-**Agent.** A single LLM role with its own instructions, optional tools and optional memory. The product has six: the assistant, the visual designer, the SQL fixer, the SQL verifier, the knowledge bootstrap agent and the eval judge. See [../system/agents.md](../system/agents.md). The Agents screen lists them and shows their prompts, tools, memory settings and model.
+**Agent.** A configured LLM role with its own instructions, optional tools and optional memory. The product ships six built-in agents (the assistant, the visual designer, the SQL fixer, the SQL verifier, the knowledge bootstrap agent and the eval judge), and users can build their own (*user agent*). See [../system/agents.md](../system/agents.md). The *Agent Hub* lists them all.
+
+**Agent Hub.** The Agents screen. It shows every agent as a card, grouped in sections (Official, Mine and System, pinned cards first), with a search over name and description, filter pills (All, Pinned, Official and Mine) and a *pin* on each card. A card opens the agent's detail view. See [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md).
 
 **Angle.** One sub-question of a *deep analysis*. A plan has between 3 and 5 angles (hard cap 5). Each is investigated on its own.
 
@@ -44,6 +46,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Dimension.** A column a *metric* is meaningfully grouped by.
 
+**Draft (agent).** The working copy of a *user agent*. It can be edited and tried in a preview chat, but cannot start sessions. Publishing it makes the agent *Live*. See [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md).
+
 **Entity.** A queryable table or view, named in full as `catalog.schema.table`. Every datasource kind is normalised to this three-level shape. The UI says "entities". An entity may be *browse-only* (visible but not queryable with the credentials); it is shown greyed.
 
 **Eval case.** One question in an *eval set*, with the intent it probes and a list of *eval checks* (for example "answer includes Argentina", result-set comparison, or an LLM-judge rubric).
@@ -70,6 +74,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Knowledge used.** The list of knowledge entries that were actually included in the context of one answer, recorded when the context was built. It shows what the model was given, not what it applied.
 
+**Live (agent).** The published version of a *user agent*. It is the version that starts sessions. Editing a Live agent changes only its *draft*, and the Live version keeps serving until the draft is published.
+
 **LLM provider.** The service the agents call. `openai`, `anthropic` or `lenai` (Halo's OpenAI-compatible gateway, which needs a base URL; the "model" field is then the deployment name). One global setting: provider, model, API key (stored encrypted, shown masked) and *reasoning effort*.
 
 **Message.** One entry in a session's transcript, from the `user` or the `assistant`, with a timestamp that doubles as its identity (`at`). Assistant messages may carry data records, entities, a clarification, a visual event, feedback, a cross-check, a reasoning trail, knowledge used or a report.
@@ -77,6 +83,12 @@ Names in `code font` are the identifiers used in persisted documents and the API
 **Metric.** A governed, named SQL aggregation expression over one entity (for example `denial_rate`), with a label, description and dimensions. The assistant reuses its expression verbatim instead of re-deriving it. Metrics are the app's lightweight semantic layer. A metric can be promoted from a *verified query*; the draft is a *metric candidate*.
 
 **Mined entry.** A *knowledge entry* with source `mined`.
+
+**Official agent.** The app's own *assistant*, shown in the agent hub as the Official agent. It is the only built-in agent that can start a chat.
+
+**Pin.** A user's mark on an agent, built-in or user-built, so it can be found quickly. Pins are stored locally and survive a restart.
+
+**Preview chat.** A conversation in the agent editor's Details panel that runs a *user agent*'s saved *draft*. It is held in memory only, never listed with the sessions, and discarded with its memory when the editor closes.
 
 **Reasoning effort.** `low`, `medium` or `high` (default `high`). A global setting passed to models that support it and dropped for models that reject it.
 
@@ -94,11 +106,15 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Schema.** The middle level of an *entity* name.
 
-**Session.** One conversation with the assistant, bound to one or more *datasets*. Holds the transcript, the visuals, and owns one *workspace* and one memory thread. Needs a name and at least one dataset. Legacy name: *project* (collection `projects`, workspace folders `project-<id>`).
+**Session.** One conversation with the assistant, bound to one or more *datasets*. Holds the transcript, the visuals, and owns one *workspace* and one memory thread. Needs a name and at least one dataset. A session started from a *Live* *user agent* is bound to that agent and runs with its instructions (see [../capabilities/sessions-chat/spec.md](../capabilities/sessions-chat/spec.md), R52-R59). Legacy name: *project* (collection `projects`, workspace folders `project-<id>`).
+
+**Starter question.** One of up to five example questions a *user agent* carries. An empty session started from the agent offers them in its welcome block; clicking one fills the composer without sending it.
 
 **SQL repair.** When a statement fails with an engine error, the *SQL fixer* agent rewrites it and it is re-run, up to 2 repair attempts. The corrected SQL is what gets cited. Guard rejections and transport or auth failures are not repaired.
 
 **SQL verifier.** The agent behind *careful mode*.
+
+**System agent.** One of the built-in helper agents (the visual designer, the SQL fixer, the SQL verifier, the knowledge bootstrap agent and the eval judge). It is read-only, runs inside the app's own flows and cannot start a chat.
 
 **System logs.** The UI name for *diagnostics*.
 
@@ -111,6 +127,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 **Tool call.** One invocation of a capability by the assistant during a turn. Data tools: `list_entities`, `describe_entity`, `sample_rows`, `run_readonly_sql`. Visual tools: `create_visual`, `update_visual`. UI tool: `ask_clarification`. Calls to the data tools are captured as *data records*.
 
 **Turn.** One user message and everything the assistant does in response, up to its final answer or a clarification. Includes streamed reasoning, tool calls and their results.
+
+**User agent.** An agent a user builds: a name, a description, instructions, the datasets it may query, starter questions and an optional model or reasoning-effort override. It runs on the *assistant* with the same tools and guards, and it has a *draft* and, once published, a *Live* version.
 
 **Verified answer.** An answer whose final SQL matches a stored *verified query*, or that the user thumbed up. Shown with a "Verified" badge.
 

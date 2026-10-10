@@ -219,6 +219,8 @@
   .filter-pill-active {
     border-color: var(--qti-border-selected);
     background-color: var(--qti-surface-selected);
+    /* `primary` on the selected tint is below 4.5:1 in dark. */
+    color: var(--qti-on-primary-soft);
   }
 
   /* ---------- Forms ---------- */

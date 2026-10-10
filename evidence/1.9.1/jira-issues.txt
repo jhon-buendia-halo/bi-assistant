@@ -1,0 +1,7 @@
+# Jira issues for epic BA-150 (read with jira.sh issue, 2026-10-09)
+BA-150	Epic	In Progress	parent=-	Agent Hub
+BA-151	Story	In Progress	parent=BA-150	Agent Hub: ADR, epic spec and roadmap
+BA-152	Story	To Do	parent=BA-150	Agent definitions: storage and API
+BA-153	Story	To Do	parent=BA-150	Start a session from an agent
+BA-154	Story	To Do	parent=BA-150	Agent Hub screen
+BA-155	Story	To Do	parent=BA-150	Agent editor: create, test, publish and delete
