@@ -139,11 +139,11 @@ Skip only for trivial, zero-risk edits. Never rewrite a past entry. When a recur
   - `<short-description>` is lowercase kebab-case, a few words, ASCII only, describing the epic.
   - Example: `feat/BA-111-local-observability`.
 - **One open branch per epic.** Before starting a story, check for the epic's branch (`git branch -a --list '*/<EPIC-ID>-*'`) and its worktree (`git worktree list`). If they exist, continue there; create them only for the epic's first story.
-- **Worktree:** one per epic branch, under `.claude/worktrees/`, named after the branch without the type:
+- **Worktree:** one per epic branch, under `.claude/worktrees/`. **The folder is named after the epic it builds: `<EPIC-ID>-<short-description>`, exactly the branch name without the type.** No other name is allowed (no session ids, no `wt-…`, no story ids):
   ```bash
   git worktree add .claude/worktrees/BA-111-local-observability -b feat/BA-111-local-observability main
   ```
-  When the Claude desktop app creates the worktree for the session, rename its branch to the convention (`git branch -m <type>/<EPIC-ID>-<short-description>`) before the first commit.
+  When the Claude desktop app creates the worktree for the session under another name (e.g. `.claude/worktrees/bridge-cse_…`), bring both to the convention before the first commit: rename the branch (`git branch -m <type>/<EPIC-ID>-<short-description>`) and move the folder (`git worktree move <current-path> .claude/worktrees/<EPIC-ID>-<short-description>`; a worktree the app has locked needs `git worktree unlock` first, or the move after the session ends).
 - **Bugs:** a Bug whose parent epic has an open branch is fixed on that branch, like a story. A Bug against work that already shipped, whose epic has no open branch, gets its own `fix/<BUG-ID>-<short-description>` branch, worktree and PR (e.g. `fix/BA-83-empty-session-thread`). The bug must still belong to an epic.
 - **Traceability:**
   - Each commit is scoped to the story (or bug) it implements: `feat(BA-115): …`.
@@ -152,7 +152,14 @@ Skip only for trivial, zero-risk edits. Never rewrite a past entry. When a recur
   - The PR description links the epic and lists every story and bug it includes, each with its Jira link and roadmap feature ID.
   - Open the PR when the epic's stories are done, not one PR per story.
 - **Review:** a PR into `main` needs one approving review. Only the repo owner (the only admin) can merge without one, through the ruleset bypass; nobody can push straight to `main`. Details: *Branch rulesets on `main`* in [delivery.md](specs/system/delivery.md).
-- **Cleanup:** after the PR merges, remove the worktree (`git worktree remove …`) and delete the branch.
+- **Cleanup — mandatory once the PR merges:** delete the epic's worktree folder and its branch. From the main checkout:
+  ```bash
+  git worktree remove .claude/worktrees/<EPIC-ID>-<short-description>   # deletes the folder
+  git worktree prune
+  git branch -d <type>/<EPIC-ID>-<short-description>
+  git push origin --delete <type>/<EPIC-ID>-<short-description>   # if GitHub didn't delete it on merge
+  ```
+  Then confirm with `git worktree list` that it is gone and that `.claude/worktrees/<EPIC-ID>-…` no longer exists on disk. `git worktree remove` refuses when the folder holds uncommitted or untracked files: look at them first, and never discard work that isn't in the merged PR without asking the user. Git-ignored local files (`.env`, `.env.*.local`, `node_modules/`, `dist/`) go with the folder; copy any you still need (such as `.env.llm.local`) before removing. Also tear down the worktree's isolated resources (an infra-mcp namespace, a `docker compose -p` stack, a temp data dir).
 - **Adopted 2026-10-09 ([BA-149](https://halo-powered.atlassian.net/browse/BA-149)).** Branches created earlier under the old one-issue-per-branch rule merge as they are.
 
 ## Worktree deploy convention — always ask which target
