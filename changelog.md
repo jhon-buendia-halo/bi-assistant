@@ -2,6 +2,16 @@
 
 Running log of every meaningful change, newest first. See *Logging convention* and *Evidence convention* in [CLAUDE.md](CLAUDE.md). Release versions come from Conventional Commits (`version-on-merge.yml`); this file records what shipped and links to the evidence.
 
+## 2026-10-10
+
+### Added
+- **Admin Panel epic: multi-user vision, ADR-0009 and epic spec** (roadmap 2.1.1, [BA-162](https://halo-powered.atlassian.net/browse/BA-162), epic [BA-161](https://halo-powered.atlassian.net/browse/BA-161)):
+  - The vision drops "Not multi-user". The app now has two modes: local mode (default, unchanged, no sign-in) and org server mode, which an organisation self-hosts. There are new principles on server-enforced permissions, private-by-default data and Entra ID as the identity owner, and a Platform admin persona. [vision.md](specs/product/vision.md).
+  - ADR-0009 (Accepted): one build for both modes; OIDC sign-in with Entra ID and a backend session cookie; SCIM 2.0 inbound; five roles enforced by a global permission guard; `ownerId` on private data; datasources, datasets and the LLM configuration org-wide; SQLite kept. [architecture.md](specs/system/architecture.md).
+  - The epic spec [specs/epics/BA-161/spec.md](specs/epics/BA-161/spec.md) (confirmed) covers screens P1–P4 of the Figma board *Agent Hub — E2E lifecycle (proposed)*. Requests, Registry, Policies, Audit log, custom roles and desktop-as-client are out of scope.
+  - A new Release 2 (Multi-user) with Milestone 2.1 and features 2.1.1–2.1.6 in [roadmap.md](roadmap.md), and the epic row in [specs/README.md](specs/README.md). Jira: epic BA-161 with stories BA-162 to BA-167.
+  - Evidence: [evidence/2.1.1/](evidence/2.1.1/). Planning only: no code, UI or test change.
+
 ## 2026-10-09
 
 ### Added

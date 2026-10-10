@@ -152,14 +152,14 @@ flowchart TB
   - Unreachable endpoints must never fail startup or requests. Exporters drop data instead.
 
 #### ADR-0009 — Multi-user org server mode with Entra ID sign-in and server-enforced roles
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-10-10
 - **Context:**
   - The vision used to rule out multi-user use ("no login, no roles and no shared server"). The Admin Panel epic ([BA-161](https://halo-powered.atlassian.net/browse/BA-161)) reverses that, from the Figma board "Agent Hub — E2E lifecycle (proposed)", section *Admin panel (draft)*.
   - Decisions taken with the user on 2026-10-10:
     - the organisation self-hosts the server, and Halo operates nothing;
     - today's single-user local mode stays;
-    - only datasources and datasets are shared across users;
+    - only datasources and datasets are shared across users, plus one org-wide LLM configuration set by Platform admins;
     - the server keeps SQLite.
   - The backend already runs as a standalone web server through the npm CLI (ADR-0002) and stores everything behind `DocStore<T>` (ADR-0003). Neither has a notion of a user.
   - ADR-0008 tied a user agent's owner to "this machine" and deferred any sharing that needs a new container or sync format.
@@ -188,7 +188,7 @@ flowchart TB
   - Every repository must apply the owner scope. A missed one leaks one user's data to another, so an API test per collection must prove isolation between two users.
   - SQLite has a single writer, which limits concurrency. That is acceptable for one organisation's server at expected team sizes. Moving to PostgreSQL behind `DocStore<T>` would need its own ADR.
   - The server now accepts traffic beyond `127.0.0.1`, so the web-mode binding (non-functional N3) gains an org-server setting. CSRF protection and secure cookies become requirements.
-  - The per-user LLM configuration and the agent memory store (Mastra) must also be scoped per user. LLM configuration is coordinated with [BA-159](https://halo-powered.atlassian.net/browse/BA-159).
+  - The agent memory store (Mastra) must also be scoped per user. In org server mode the LLM configuration is org-wide and only Platform admins can change it, coordinated with [BA-159](https://halo-powered.atlassian.net/browse/BA-159).
   - The E2E harness needs a local OIDC stub and a SCIM client to drive org server mode without a real Entra ID tenant.
 
 ## Level 3 — Components

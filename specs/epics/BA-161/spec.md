@@ -1,6 +1,6 @@
 # BA-161 — Admin Panel
 
-- **Jira:** [BA-161](https://halo-powered.atlassian.net/browse/BA-161) · **Roadmap:** Milestone 2.1 · **Status:** Draft
+- **Jira:** [BA-161](https://halo-powered.atlassian.net/browse/BA-161) · **Roadmap:** Milestone 2.1 · **Status:** Confirmed
 
 ## Goal
 
@@ -36,7 +36,8 @@ Visual reference: the Figma board [Agent Hub — E2E lifecycle (proposed)](https
   - A user's roles are their direct assignments plus their groups' mappings.
   - The backend enforces the matrix on every endpoint.
 - **Data ownership.**
-  - Datasources and datasets are shared org-wide. Only Platform admins create, edit and delete them.
+  - Datasources and datasets are shared org-wide. Only Platform admins create, edit and delete them, through a tenth permission, **Manage datasources and datasets**.
+  - One org-wide LLM configuration, set by Platform admins. Users don't enter their own provider or key.
   - Sessions, visuals, memory, agents, knowledge, verified queries, metrics and eval runs are private to their owner.
 - **Admin panel** (Platform admins only), a new **Admin** item on the rail with these tabs:
   - **Overview (P1).** Tiles:
@@ -53,7 +54,7 @@ Visual reference: the Figma board [Agent Hub — E2E lifecycle (proposed)](https
     - Users and Groups tabs with counts, and a search over name, email and group.
     - Role filter chips (All roles, Platform admins, Approvers, Data owners, Makers, Inactive 90d).
     - A table: name and email, roles, IdP groups, agents owned, last active, status.
-    - Pagination, the last-sync note and **Assign role**.
+    - Pagination, a "last sync <time>" note taken from the last SCIM request, and **Assign role**. The board's **Sync from Entra ID** button is dropped.
   - **Edit a user (P3).** Selecting a user opens a detail panel:
     - identity and status;
     - role checkboxes with their descriptions (Data owner names its datasource);
@@ -61,7 +62,7 @@ Visual reference: the Figma board [Agent Hub — E2E lifecycle (proposed)](https
     - agents owned with their status, and **Transfer ownership**;
     - **Save changes**.
   - **Roles & permissions (P4).**
-    - The permission matrix, read-only: the five built-in roles against the nine permissions on the board.
+    - The permission matrix, read-only: the five built-in roles against the nine permissions on the board, plus **Manage datasources and datasets** (Platform admin only).
     - **Role ← Entra ID group mappings**, with add and remove. Members of a mapped group get the role at their next sync or sign-in.
 
 ## Out of scope
@@ -120,10 +121,10 @@ All stories are built on one branch, `feat/BA-161-admin-panel`, and ship as one 
 - **Not in the 1.0 Beta.** This is Release 2 work. If it must be in the beta, it needs its own window and would compete with Milestones 1.1–1.10.
 - **Data isolation is the main risk.** Every repository must apply the owner scope, and one missed query leaks data between users. Mitigation: one owner-scope rule in the DocStore layer, plus an API test per private collection with two users.
 - **Mastra memory and workspaces** are keyed by session id today. They must be checked to be unreachable across users, since session ids aren't secrets.
-- **BA-159 LLM configuration** is in progress. Proposed: in org server mode each user keeps their own LLM configuration (it was not chosen as shared), and an org-wide default can come later. Confirm.
+- **BA-159 LLM configuration** is in progress. Decided 2026-10-10: in org server mode there is one org-wide LLM configuration, managed by Platform admins. BA-163 must align with whatever BA-159 ships for the settings shape.
 - **Board items that need epics this one excludes**: "Publish requests" and "Data access requests" (tiles and rows), and "Share agents with own team", "Request org-wide publishing" and "Approve org-wide publishing". They appear in the P4 matrix as permissions, but no screen uses them yet.
-- **Open: "Sync from Entra ID".** SCIM is pushed by Entra ID on its own cycle, so the app can't start a sync. Proposed: P2 shows the time of the last SCIM request instead of a sync button. Confirm, or add a Microsoft Graph pull (out of scope above).
-- **Open: datasource and dataset management.** Proposed: Platform admin only. The P4 matrix on the board has no "manage datasources" row, so it would add a tenth permission, "Manage datasources and datasets".
+- **Decided: no "Sync from Entra ID" button.** SCIM is pushed by Entra ID on its own cycle, so P2 shows the time of the last SCIM request instead (2026-10-10).
+- **Decided: datasource and dataset management is Platform admin only**, as a tenth permission in the P4 matrix (2026-10-10).
 - **Open: "Agents with errors in the last 7 days"** needs a definition of an agent error. Proposed: a turn in a session started from the agent that ended in an error.
 - **Open: E2E for SSO.** Playwright needs a local OIDC provider stub and a SCIM test client. The harness should run org server mode beside the existing local-mode suite, not replace it.
 - **Related:** [BA-150](../BA-150/spec.md) Agent Hub (agent ownership), [BA-82](../BA-82/spec.md) Agent Routines (whose identity a scheduled run uses).

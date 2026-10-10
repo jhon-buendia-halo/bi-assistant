@@ -50,7 +50,7 @@ The product SHALL follow these principles. Capability specs turn them into testa
 11. **Measured, not assumed.** Quality is checked with repeatable eval sets against known-correct answers.
 12. **Same app, every door.** One desktop installer, and one npm command that serves the same app in a browser, alone or as an organisation's server. There is no separate server product.
 13. **Permissions are enforced by the server.** In org server mode, every request is checked against the caller's roles on the backend. Hiding a button is never the only control.
-14. **Private by default, shared by design.** A person's sessions, visuals, memory, agents, knowledge and verified queries are theirs alone. Datasources and datasets are shared across the organisation and managed by the people whose role allows it.
+14. **Private by default, shared by design.** A person's sessions, visuals, memory, agents, knowledge and verified queries are theirs alone. Datasources, datasets and the LLM configuration are shared across the organisation and managed by Platform admins.
 15. **The identity provider owns identity.** Users and groups come from the organisation's identity provider (Microsoft Entra ID first). The app stores no passwords. It owns only role assignments and the mappings from groups to roles.
 
 ## What the product deliberately is not

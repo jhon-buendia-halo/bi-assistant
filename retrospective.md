@@ -14,6 +14,24 @@ Entry template:
 
 ---
 
+## 2026-10-10 — 2.1.1 Admin Panel: multi-user vision, ADR-0009 and epic spec (BA-162)
+
+### What went well
+- I checked the board against `vision.md` before drafting and found that "Not multi-user" was a direct conflict. Three rounds of multiple-choice questions then settled reality (real multi-user), deployment (self-hosted), local mode (kept), sharing (datasources, datasets and the LLM configuration), storage (SQLite), sync, and datasource governance before any spec text was final.
+- I read the FigJam section as plain node names (`grep` over the saved result) instead of images. That gave every label, column and permission row exactly, cheaply.
+- Before choosing numbers, I checked every remote branch for claimed ADR and milestone numbers. BA-159 holds Milestone 1.10, so this epic went to Release 2 / 2.1 instead of colliding.
+- Turning board items that don't fit the decisions (the Sync button, the request tiles, the sharing permissions) into explicit open questions let the user settle them in one picker.
+
+### What went wrong
+- I added two stories (spec and foundation) beyond the "one story per screen" the user had picked, and only said so after creating them in Jira. That was the right call, but it was a scope change made before telling the user.
+- The first round's option text said users reach the org server "from the browser or the desktop app". The ADR then scoped desktop-as-client out, so the option text implied more than the plan delivers.
+- `check-specs.py` failed once on the roadmap's link to `evidence/2.1.1/`, because I linked it before creating the folder.
+
+### What to do differently
+- When a requirement forces stories the user didn't list, propose them in the confirmation question before creating Jira issues, not after.
+- Keep option descriptions in clarifying questions to what the plan will deliver. If an option implies a sub-feature, say whether it is in or out.
+- Create `evidence/<id>/` before adding the roadmap's or changelog's link to it.
+
 ## 2026-10-09 — 1.9.5 Agent editor with a preview chat (BA-155)
 
 ### What went well
