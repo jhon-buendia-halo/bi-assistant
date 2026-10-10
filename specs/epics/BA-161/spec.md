@@ -37,7 +37,8 @@ Visual reference: the Figma board [Agent Hub — E2E lifecycle (proposed)](https
   - The backend enforces the matrix on every endpoint.
 - **Data ownership.**
   - Datasources and datasets are shared org-wide. Only Platform admins create, edit and delete them, through a tenth permission, **Manage datasources and datasets**.
-  - One org-wide LLM configuration, set by Platform admins. Users don't enter their own provider or key.
+  - One org-wide LLM configuration, set by Platform admins through an eleventh permission, **Manage LLM configuration**. Users don't enter their own provider or key, and the composer's Reasoning effort control is hidden from them.
+- **First admin.** The server configuration lists bootstrap admin emails (`ORG_BOOTSTRAP_ADMINS`). Those users always hold Platform admin when they sign in.
   - Sessions, visuals, memory, agents, knowledge, verified queries, metrics and eval runs are private to their owner.
 - **Admin panel** (Platform admins only), a new **Admin** item on the rail with these tabs:
   - **Overview (P1).** Tiles:
@@ -62,7 +63,7 @@ Visual reference: the Figma board [Agent Hub — E2E lifecycle (proposed)](https
     - agents owned with their status, and **Transfer ownership**;
     - **Save changes**.
   - **Roles & permissions (P4).**
-    - The permission matrix, read-only: the five built-in roles against the nine permissions on the board, plus **Manage datasources and datasets** (Platform admin only).
+    - The permission matrix, read-only: the five built-in roles against the nine permissions on the board, plus **Manage datasources and datasets** and **Manage LLM configuration** (both Platform admin only).
     - **Role ← Entra ID group mappings**, with add and remove. Members of a mapped group get the role at their next sync or sign-in.
 
 ## Out of scope

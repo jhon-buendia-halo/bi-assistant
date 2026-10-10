@@ -191,6 +191,28 @@ flowchart TB
   - The agent memory store (Mastra) must also be scoped per user. In org server mode the LLM configuration is org-wide and only Platform admins can change it, coordinated with [BA-159](https://halo-powered.atlassian.net/browse/BA-159).
   - The E2E harness needs a local OIDC stub and a SCIM client to drive org server mode without a real Entra ID tenant.
 
+#### ADR-0010 — Backend-run OIDC with `openid-client`, an opaque session cookie and an Origin check
+- **Status:** Accepted
+- **Date:** 2026-10-10
+- **Context:**
+  - ADR-0009 puts sign-in in the backend, and Entra ID is the first provider.
+  - The backend compiles to CommonJS and Jest can't load ESM-only packages (see the BA-152 retrospective).
+  - The renderer calls the API with `HttpClient` and with raw `fetch` for streams. It sends no custom header today.
+  - `openid-client@5` is already present through `@databricks/sql`, but that version is maintenance-only.
+- **Decision:**
+  - **OIDC client:** `openid-client@6`, imported lazily (`await import()`), the same way `cli.ts` and `main.ts` load ESM. It sits behind an `OidcClient` interface so unit tests mock it. The flow is the authorization code flow with PKCE, `state` and `nonce`, held during the round trip in a short-lived `HttpOnly` cookie.
+  - **Session:**
+    - The backend keeps no JWT. A session is an opaque 32-byte random id stored in an `auth_sessions` collection (SQLite, ADR-0003) and sent as an `HttpOnly; SameSite=Lax; Path=/` cookie.
+    - The cookie is `Secure` unless the public base URL is `http://` (development and E2E only).
+    - Behind the organisation's TLS proxy the app sets `trust proxy`.
+  - **CSRF:** `SameSite=Lax`, plus a check that every non-GET request in org mode carries an `Origin` (or `Referer`) matching the public base URL. SCIM is exempt, because it uses a bearer token and no cookie.
+  - **SCIM:** a hand-written controller covering the subset Entra ID's provisioning service sends. No library.
+  - **Current user:** propagated with `AsyncLocalStorage`, so tool calls, SSE streams and background jobs started inside a request run as the caller without request-scoped providers.
+- **Consequences:**
+  - One new runtime dependency (`openid-client`). The E2E tests use a hand-rolled OIDC stub on `node:http` and `node:crypto` instead of a full provider.
+  - A session can be revoked at once by deleting its document. Every request in org mode costs one store read.
+  - Background jobs must capture the owner when they start, and re-enter it if they outlive the request.
+
 ## Level 3 — Components
 
 **Backend**
