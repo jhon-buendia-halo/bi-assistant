@@ -1,0 +1,8 @@
+2026-10-10, branch feat/BA-159-llm-configuration
+
+Backend: new src/modules/ui-preferences/ui-preferences.service.spec.ts — 4 passed (never-chosen is null, invalid stored values read as null, partial save, validation messages).
+Backend lint on the new module and app.module.ts: clean (prettier applied to those files only).
+Frontend `ng test` (ChromeHeadless via Playwright's Chromium): Executed 145 of 145 SUCCESS
+  New: core/preferences/ui-preferences.service.spec.ts (backend wins over browser copies, one-time move M12,
+  nothing written when nothing chosen, a drawer click survives a late backend answer, parseNavExpanded);
+  theme.service.spec.ts: missing/unknown now parses as Light.

@@ -1,0 +1,26 @@
+  ✘   1 [web] › e2e/appearance.spec.ts:72:5 › opens in the light theme by default (11.6s)
+  ✓   2 [web] › e2e/appearance.spec.ts:82:5 › follows the operating system theme when System is chosen (1.8s)
+  ✓   3 [web] › e2e/appearance.spec.ts:102:5 › forces a theme regardless of the operating system (1.7s)
+  ✓   4 [web] › e2e/appearance.spec.ts:122:5 › remembers the chosen theme after a restart (2.9s)
+  ✘   5 [web] › e2e/appearance.spec.ts:151:5 › keeps the chosen theme in the database (13.0s)
+  ✘   6 [web] › e2e/appearance.spec.ts:168:5 › moves a theme chosen before the database stored it (1.5s)
+  ✓   7 [web] › e2e/appearance.spec.ts:184:5 › has no automatically detectable accessibility violations in either theme (2.1s)
+  ✓   8 [web] › e2e/navigation.spec.ts:14:5 › moves between areas from the rail (1.7s)
+  ✘   9 [web] › e2e/navigation.spec.ts:45:5 › opens with the navigation drawer expanded (11.4s)
+  ✘  10 [web] › e2e/navigation.spec.ts:56:5 › remembers a collapsed drawer after a restart (1.0m)
+  ✘  11 [web] › e2e/navigation.spec.ts:81:5 › expands the rail into a drawer with labels and sessions (1.0m)
+  ✓  12 [web] › e2e/navigation.spec.ts:116:5 › shows the details panel only on demand (1.6s)
+  ✓  13 [web] › e2e/navigation.spec.ts:125:5 › opens Settings as an area with a section list (1.7s)
+  ✓  14 [web] › e2e/navigation.spec.ts:153:5 › shows the product name (1.4s)
+    Error: expect(locator).toHaveAttribute(expected) failed
+    test-results/appearance-opens-in-the-light-theme-by-default-web/test-failed-1.png
+    Error: expect(locator).toHaveAttribute(expected) failed
+    test-results/appearance-keeps-the-chosen-theme-in-the-database-web/test-failed-1.png
+    test-results/appearance-keeps-the-chosen-theme-in-the-database-web/test-failed-2.png
+    test-results/appearance-moves-a-theme-c-e7a64-fore-the-database-stored-it-web/test-failed-1.png
+    Error: expect(locator).toHaveAttribute(expected) failed
+    test-results/navigation-opens-with-the-navigation-drawer-expanded-web/test-failed-1.png
+    test-results/navigation-remembers-a-collapsed-drawer-after-a-restart-web/test-failed-1.png
+    test-results/navigation-expands-the-rai-cce9b-er-with-labels-and-sessions-web/test-failed-1.png
+  6 failed
+  8 passed (2.9m)

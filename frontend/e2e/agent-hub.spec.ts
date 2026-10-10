@@ -1,7 +1,7 @@
 import axe from 'axe-core';
 import type { Locator, Page } from '@playwright/test';
 import { test, expect } from './fixtures/app.fixture';
-import { WORLD_CUP_DATASET } from './helpers/app-actions';
+import { WORLD_CUP_DATASET, followOsTheme } from './helpers/app-actions';
 import {
   createUserAgent,
   publishAgent,
@@ -338,6 +338,7 @@ test('deleting an agent asks first', async ({ page }) => {
 test('the hub has no detectable accessibility violations in either theme', async ({
   page,
 }) => {
+  await followOsTheme(page);
   await openHub(page);
   await button(page, 'Show more (2)').click();
   await expect(cards(section(page, 'system'))).toHaveCount(5);

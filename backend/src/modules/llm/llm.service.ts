@@ -15,9 +15,15 @@ import {
   type AgentModelConfig,
 } from '../../mastra/model-resolver';
 import { rejectsMaxTokens } from '../../mastra/model-compat';
+import {
+  defaultEffort,
+  effortLevelsFor,
+  isReasoningEffort,
+} from '../../mastra/effort-levels';
 import { installRetryFetch } from './retry-fetch';
 import { LlmSettingsRepository } from './repositories/llm-settings.repository';
 import {
+  EffortLevelsView,
   LlmProvider,
   LlmSettingsDoc,
   LlmSettingsView,
@@ -264,16 +270,55 @@ export class LlmService implements OnModuleInit {
     // which only surfaced as a user-visible 404 on the next agent turn.
     // testConnection throws with the same provider-error messages surfaced
     // by the dedicated test-connection endpoint, so save fails the same way.
-    await this.testConnection({ provider, model, baseUrl, apiKey });
     const existing = await this.repository.get();
+    const reasoningEffort = this.effortToSave(
+      model,
+      dto.reasoningEffort,
+      existing?.reasoningEffort,
+    );
+    await this.testConnection({ provider, model, baseUrl, apiKey });
     await this.repository.save({
       provider,
       model,
       baseUrl,
       apiKeyCiphertext: this.crypto.encrypt(apiKey),
-      reasoningEffort: existing?.reasoningEffort ?? 'high',
+      reasoningEffort,
     });
     return this.getView();
+  }
+
+  /** The effort levels `model` accepts, for the settings form. */
+  effortLevels(model: string | undefined): EffortLevelsView {
+    const levels = effortLevelsFor(model ?? '');
+    return {
+      levels,
+      defaultEffort: defaultEffort(levels),
+      probeEffort: levels[0] ?? null,
+    };
+  }
+
+  /**
+   * The effort a save stores: the chosen one, which must be among the
+   * model's levels; else the stored one when the model takes it; else the
+   * model's default. A model without levels keeps the stored value.
+   */
+  private effortToSave(
+    model: string,
+    chosen: unknown,
+    stored: ReasoningEffort | undefined,
+  ): ReasoningEffort {
+    const levels = effortLevelsFor(model);
+    if (chosen !== undefined && chosen !== null && chosen !== '') {
+      if (!isReasoningEffort(chosen) || !levels.includes(chosen)) {
+        throw new BadRequestException(
+          `reasoning effort must be one of: ${levels.join(', ') || 'none for this model'}`,
+        );
+      }
+      return chosen;
+    }
+    if (!levels.length) return stored ?? 'high';
+    if (stored && levels.includes(stored)) return stored;
+    return defaultEffort(levels) ?? 'high';
   }
 
   /**
@@ -306,8 +351,13 @@ export class LlmService implements OnModuleInit {
     const reasoning = rejectsMaxTokens(modelId);
     const capKey = reasoning ? 'max_completion_tokens' : 'max_tokens';
     const cap = reasoning ? TEST_REASONING_MAX_TOKENS : TEST_MAX_TOKENS;
+    // The probe proves the wiring, not reasoning depth: at the model's lowest
+    // level a reasoning model such as gpt-5 answers well inside the timeout.
+    const probeEffort = effortLevelsFor(model)[0];
 
-    this.logger.log(`[testConnection] ${provider}/${model} via ${url}`);
+    this.logger.log(
+      `[testConnection] ${provider}/${model} via ${url}${probeEffort ? ` (effort ${probeEffort})` : ''}`,
+    );
     const started = Date.now();
 
     const controller = new AbortController();
@@ -327,6 +377,7 @@ export class LlmService implements OnModuleInit {
           messages: [{ role: 'user', content: TEST_PROMPT }],
           response_format: TEST_RESPONSE_FORMAT,
           [capKey]: cap,
+          ...(probeEffort ? { reasoning_effort: probeEffort } : {}),
         }),
       });
     } catch (err) {
@@ -396,6 +447,7 @@ export class LlmService implements OnModuleInit {
     apiKey: string,
   ): Promise<LlmTestResult> {
     const modelId = `anthropic/${model}` as const;
+    const probeEffort = effortLevelsFor(model)[0];
     this.logger.log(`[testConnection] ${modelId}`);
     const probe = new Agent({
       id: 'llm-connection-probe',
@@ -411,6 +463,19 @@ export class LlmService implements OnModuleInit {
       const result = await probe.generate(TEST_PROMPT, {
         structuredOutput: { schema: ANTHROPIC_PROBE_SCHEMA },
         modelSettings: { maxOutputTokens: 512 },
+        ...(probeEffort
+          ? {
+              providerOptions: {
+                // Claude levels never include `none` or `minimal`.
+                anthropic: {
+                  effort: probeEffort as Exclude<
+                    ReasoningEffort,
+                    'none' | 'minimal'
+                  >,
+                },
+              },
+            }
+          : {}),
         abortSignal: controller.signal,
       });
       status = (result.object as { status?: unknown } | undefined)?.status;

@@ -30,7 +30,7 @@
             class="absolute inset-0 cursor-pointer appearance-none rounded-full opacity-0"
             [value]="option.value"
             [checked]="theme.preference() === option.value"
-            (change)="theme.setPreference(option.value)"
+            (change)="preferences.chooseTheme(option.value)"
           />
           <lucide-angular [img]="option.icon" [size]="14" aria-hidden="true" />
           {{ option.label }}

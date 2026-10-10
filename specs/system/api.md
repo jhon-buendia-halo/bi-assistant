@@ -322,11 +322,18 @@ Controller prefix `/llm`. Capability: llm-settings. One persisted singleton docu
 | 30 | `PUT /llm/settings` | Save settings (tests first) | yes |
 | 31 | `PUT /llm/reasoning` | Set reasoning effort only | yes |
 | 32 | `POST /llm/test-connection` | Test candidate settings | yes |
+| 32a | `GET /llm/effort-levels` | Effort levels a model accepts | yes |
 
 ```ts
 type LlmProvider = 'openai' | 'anthropic' | 'lenai';
-type ReasoningEffort = 'low' | 'medium' | 'high';
-interface SaveLlmSettingsDto { provider: LlmProvider; model: string; apiKey?: string; baseUrl?: string }
+// Ordered lowest to highest; each model accepts a subset (agents.md 1.4).
+type ReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+interface SaveLlmSettingsDto { provider: LlmProvider; model: string; apiKey?: string; baseUrl?: string; reasoningEffort?: ReasoningEffort }
+interface EffortLevelsView {
+  levels: ReasoningEffort[];              // lowest first; [] = the model has no reasoning effort
+  defaultEffort: ReasoningEffort | null;  // 'high' when offered, else the first level; null when levels is []
+  probeEffort: ReasoningEffort | null;    // the lowest level, sent by the connection probe; null when levels is []
+}
 interface LlmSettingsView {
   provider: LlmProvider | null; model: string | null; baseUrl: string | null;
   apiKeyMasked: string | null;   // "••••••••" + last 4 chars of the key
@@ -344,17 +351,22 @@ interface LlmSettingsView {
 - Body: `SaveLlmSettingsDto`. `apiKey` omitted or blank = use the stored key. For `lenai`, `model` is the deployment name and `baseUrl` is required. `anthropic` takes an API key only (no subscription logins).
 - Validation (Style A): `"provider must be one of: openai, anthropic, lenai"`, `"model is required"`, `"baseUrl is required for lenai"`, `"apiKey is required — none stored yet"`, and, with no `apiKey` and a stored key that cannot be decrypted, `"The saved API key can't be read because the app secret changed — enter it again in Settings → LLM Configuration"` (same for `POST /llm/test-connection`).
 - **The settings are tested against the provider before they are persisted**; a failing test fails the save with the provider's error text and nothing is stored.
-- Success: `{ ok:true, message:"Configuration saved", settings: LlmSettingsView }`. A re-save keeps the existing `reasoningEffort`, else defaults to `high`.
+- `reasoningEffort` (optional) must be one of the model's levels (32a), else the save fails with `"reasoning effort must be one of: <levels, comma-separated>"` before any provider call. Omitted: the stored effort is kept when the model offers it, else the model's `defaultEffort`; for a model with no levels the stored effort (or `high`) is kept unchanged.
+- Success: `{ ok:true, message:"Configuration saved", settings: LlmSettingsView }`.
 - Side effects: persists (key encrypted); subsequent agent turns resolve the model from these settings.
 
 #### 31. `PUT /llm/reasoning`
-- Body: `{ effort: "low"|"medium"|"high" }`.
+- Body: `{ effort: "low"|"medium"|"high" }`. This is the composer's menu; it still offers only these three.
 - Success: `{ ok:true, message:"Reasoning effort set to <effort>", settings }`. Failures: `"reasoning effort must be one of: low, medium, high"`, `"Configure and save the LLM first — no settings stored yet"`.
-- Applied per model: translated to the provider's native option and dropped for models that reject it.
+- Applied per model: mapped to the nearest level the model accepts, translated to the provider's native option, and dropped for Anthropic models that reject it (agents.md 1.4).
 
 #### 32. `POST /llm/test-connection`
-- Body: `SaveLlmSettingsDto` (same rules as save, nothing persisted). Sends one cheap fixed prompt using the candidate settings; 30 s timeout.
+- Body: `SaveLlmSettingsDto` (same rules as save, nothing persisted; `reasoningEffort` is ignored). Sends one cheap fixed prompt using the candidate settings at the model's `probeEffort` (32a; none sent when the model has no levels); 30 s timeout.
 - Success: `{ ok:true, message:"Connection successful — <provider>/<model> replied \"<reply>\" in <ms>ms" }`. Failure: `{ ok:false, message }` (validation errors, provider HTTP errors, `"LLM request timed out after 30s"`).
+
+#### 32a. `GET /llm/effort-levels`
+- Query: `provider` (`openai`|`anthropic`|`lenai`) and `model` (the model or deployment name, trimmed). Both optional; an empty model answers `{ levels: [], defaultEffort: null, probeEffort: null }`.
+- Response `200`: `EffortLevelsView` (bare), from the built-in table in [agents.md](agents.md) section 1.4. Pure lookup: no provider call, nothing stored.
 
 ### 2.6 Agents, hub and evals
 
@@ -628,6 +640,29 @@ interface DeveloperSettingsView {
 - Body: `{ endpoint: string }`. Same URL rule as the save (`"Endpoint must be an http(s) URL"`); nothing persisted.
 - Sends `POST <endpoint>/v1/traces`, `Content-Type: application/x-protobuf`, empty body (an empty OTLP export), 3 s timeout.
 - Response `200` (Style A): `{ ok:true, message:"Reachable — <endpoint> accepted an OTLP trace export in <ms>ms" }`; `{ ok:false, message:"Endpoint answered <status> — not an OTLP trace receiver" }`; `{ ok:false, message:"Unreachable — <detail>" }` (network error, or `timed out after 3s`).
+
+
+### 2.12 UI preferences
+
+Controller prefix `/ui-preferences`. Capability: app-shell (R39–R43, R50). One `settings` document per data directory (data-model 3.2; ADR-0009).
+
+| # | Method + path | Purpose | FE |
+|---|---|---|---|
+| 56 | `GET /ui-preferences` | Read the theme choice and drawer state | yes |
+| 57 | `PUT /ui-preferences` | Save one or both | yes |
+
+```ts
+type ThemePreference = 'system' | 'light' | 'dark';
+interface UiPreferences { theme: ThemePreference | null; navExpanded: boolean | null }   // null = never chosen
+```
+
+#### 56. `GET /ui-preferences`
+- Response `200`: `UiPreferences` (bare). Nothing stored: `{ theme:null, navExpanded:null }`; the renderer then uses Light and an expanded drawer. A stored value that is not valid reads as `null`.
+
+#### 57. `PUT /ui-preferences`
+- Body: `Partial<{ theme: ThemePreference; navExpanded: boolean }>`. Only the fields sent are changed.
+- Validation (Style A): `"theme must be one of: system, light, dark"`, `"navExpanded must be true or false"`.
+- Success: `{ ok:true, message:"Preferences saved", preferences: UiPreferences }`.
 
 ## 3. Streaming and long-running work
 

@@ -21,6 +21,14 @@ export interface StubRequest {
   messages: StubMessage[];
   /** The function names offered as tools. */
   tools: string[];
+  /** The body's `reasoning_effort`, when one was sent. */
+  reasoningEffort?: string;
+}
+
+/** A settings connection test (the probe), as the stub received it. */
+export interface StubProbe {
+  path: string;
+  reasoningEffort?: string;
 }
 
 export type StubReply =
@@ -33,6 +41,8 @@ export interface LlmStub {
   apiKeys: string[];
   /** Agent calls, oldest first (the connection test is not recorded). */
   requests: StubRequest[];
+  /** Connection tests, oldest first. */
+  probes: StubProbe[];
   /** Decides each agent call's reply; the default answers `STUB_ANSWER`. */
   reply: (request: StubRequest) => StubReply;
   close(): Promise<void>;
@@ -150,6 +160,7 @@ export async function startLlmStub(): Promise<LlmStub> {
     baseUrl: '',
     apiKeys: [],
     requests: [],
+    probes: [],
     reply: () => ({ text: STUB_ANSWER }),
     close: async () => undefined,
   };
@@ -167,6 +178,7 @@ export async function startLlmStub(): Promise<LlmStub> {
         messages?: StubMessage[];
         tools?: { function?: { name?: string } }[];
         response_format?: unknown;
+        reasoning_effort?: string;
       } = {};
       try {
         body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
@@ -175,6 +187,10 @@ export async function startLlmStub(): Promise<LlmStub> {
       }
       // The settings connection test asks for a JSON status object.
       if (body.response_format) {
+        stub.probes.push({
+          path: req.url,
+          reasoningEffort: body.reasoning_effort,
+        });
         respond(res, false, { text: '{"status":"ok"}' });
         return;
       }
@@ -183,6 +199,7 @@ export async function startLlmStub(): Promise<LlmStub> {
         stream: body.stream === true,
         messages: body.messages ?? [],
         tools: (body.tools ?? []).map((tool) => tool.function?.name ?? ''),
+        reasoningEffort: body.reasoning_effort,
       };
       stub.requests.push(request);
       respond(res, request.stream, stub.reply(request));

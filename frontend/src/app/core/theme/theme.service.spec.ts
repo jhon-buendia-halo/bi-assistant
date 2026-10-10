@@ -7,14 +7,15 @@ import {
 } from './theme.service';
 
 describe('parseThemePreference', () => {
-  it('keeps light and dark', () => {
+  it('keeps system, light and dark', () => {
+    expect(parseThemePreference('system')).toBe('system');
     expect(parseThemePreference('light')).toBe('light');
     expect(parseThemePreference('dark')).toBe('dark');
   });
 
-  it('treats missing or unknown values as system', () => {
-    for (const value of [null, undefined, '', 'Dark', 'blue', 'system']) {
-      expect(parseThemePreference(value)).toBe('system');
+  it('treats missing or unknown values as light', () => {
+    for (const value of [null, undefined, '', 'Dark', 'blue']) {
+      expect(parseThemePreference(value)).toBe('light');
     }
   });
 });

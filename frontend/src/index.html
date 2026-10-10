@@ -13,12 +13,13 @@
   <link rel="apple-touch-icon" href="brand/icon.png">
   <script>
     // Applies the remembered theme before the app boots so the first paint
-    // is never in the other theme (app-shell R42). Mirrors ThemeService.
+    // is never in the other theme (app-shell R42). Mirrors ThemeService:
+    // nothing remembered means Light (R39); the backend copy wins later.
     (function () {
-      var choice = "system";
+      var choice = "light";
       try {
         var stored = localStorage.getItem("questions-to-insights:theme");
-        if (stored === "light" || stored === "dark") choice = stored;
+        if (stored === "system" || stored === "dark") choice = stored;
       } catch (e) {}
       var dark = choice === "dark" ||
         (choice === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);

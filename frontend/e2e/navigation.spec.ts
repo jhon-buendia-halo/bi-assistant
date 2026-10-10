@@ -42,12 +42,50 @@ test('moves between areas from the rail', async ({ page }) => {
   ).toBeVisible();
 });
 
+test('opens with the navigation drawer expanded', async ({ page }) => {
+  await expect(
+    page.getByRole('button', { name: 'Collapse navigation' }),
+  ).toHaveAttribute('aria-expanded', 'true');
+  await expect(
+    page
+      .getByRole('navigation', { name: 'Workspace navigation' })
+      .getByText('Datasets', { exact: true }),
+  ).toBeVisible();
+});
+
+test('remembers a collapsed drawer after a restart', async ({
+  app,
+  appDataDir,
+  launchApp,
+}) => {
+  await app.page.getByRole('button', { name: 'Collapse navigation' }).click();
+  await expect(
+    app.page.getByRole('button', { name: 'Expand navigation' }),
+  ).toHaveAttribute('aria-expanded', 'false');
+  await app.close();
+
+  // A fresh browser profile on the same data: only the database remembers.
+  const second = await launchApp(appDataDir);
+  await expect(
+    second.page.getByRole('button', { name: 'Expand navigation' }),
+  ).toHaveAttribute('aria-expanded', 'false');
+  await second.page.getByRole('button', { name: 'Expand navigation' }).click();
+  await second.close();
+
+  const third = await launchApp(appDataDir);
+  await expect(
+    third.page.getByRole('button', { name: 'Collapse navigation' }),
+  ).toHaveAttribute('aria-expanded', 'true');
+});
+
 test('expands the rail into a drawer with labels and sessions', async ({
   page,
 }) => {
   const sessionsNav = page.getByRole('navigation', {
     name: 'Sessions navigation',
   });
+  // Given the navigation drawer is collapsed
+  await page.getByRole('button', { name: 'Collapse navigation' }).click();
   await expect(sessionsNav).toHaveCount(0);
   const menu = page.getByRole('button', { name: 'Expand navigation' });
   await expect(menu).toHaveAttribute('aria-expanded', 'false');

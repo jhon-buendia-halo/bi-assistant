@@ -3,6 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { API_BASE_URL } from '../../../core/config/api.config';
 import {
+  EffortLevelsView,
   LlmActionResult,
   LlmSettings,
   LlmSettingsView,
@@ -27,6 +28,12 @@ export class LlmApiService {
   saveReasoning(effort: ReasoningEffort): Observable<LlmActionResult> {
     return this.http.put<LlmActionResult>(`${API_BASE_URL}/llm/reasoning`, {
       effort,
+    });
+  }
+
+  effortLevels(model: string): Observable<EffortLevelsView> {
+    return this.http.get<EffortLevelsView>(`${API_BASE_URL}/llm/effort-levels`, {
+      params: { model },
     });
   }
 

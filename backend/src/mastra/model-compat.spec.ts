@@ -158,3 +158,29 @@ describe('providerOptionsFor on Anthropic', () => {
     });
   });
 });
+
+describe('reasoning effort per model', () => {
+  it('moves the effort to the nearest level the model accepts', () => {
+    expect(
+      providerOptionsFor(
+        { id: 'openai/gpt-5-pro', apiKey: 'k' },
+        { reasoningEffort: 'low' },
+      ),
+    ).toEqual({ openai: { reasoningEffort: 'high' } });
+    expect(
+      providerOptionsFor(
+        { id: 'openai/gpt-5.1', apiKey: 'k' },
+        { reasoningEffort: 'minimal' },
+      ),
+    ).toEqual({ openai: { reasoningEffort: 'low' } });
+  });
+
+  it('keeps effort on Claude Haiku 5.5, which accepts it', () => {
+    expect(
+      providerOptionsFor(
+        { id: 'anthropic/claude-haiku-5-5', apiKey: 'k' },
+        { reasoningEffort: 'xhigh' },
+      ),
+    ).toEqual({ anthropic: { effort: 'xhigh' } });
+  });
+});

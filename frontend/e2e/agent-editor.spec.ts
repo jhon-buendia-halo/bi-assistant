@@ -3,7 +3,11 @@ import path from 'node:path';
 import axe from 'axe-core';
 import type { Locator, Page } from '@playwright/test';
 import { test, expect } from './fixtures/app.fixture';
-import { WORLD_CUP_DATASET, openSessions } from './helpers/app-actions';
+import {
+  WORLD_CUP_DATASET,
+  followOsTheme,
+  openSessions,
+} from './helpers/app-actions';
 import {
   apiBase,
   createUserAgent,
@@ -340,6 +344,7 @@ test('a dataset that no longer exists stays visible in the editor', async ({
 test('the editor has no detectable accessibility violations in either theme', async ({
   page,
 }) => {
+  await followOsTheme(page);
   await openNewAgent(page);
   await page.getByTestId('agent-preview').click();
   await expect(detailsPanel(page)).toContainText(
