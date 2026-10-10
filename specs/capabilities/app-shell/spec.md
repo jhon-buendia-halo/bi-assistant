@@ -17,7 +17,7 @@ Capability-local vocabulary, used only for UI words:
 
 Layout and navigation
 - R1. The system SHALL present, left to right: the navigation rail (expandable into a drawer, R48), then a column holding the "Agentic Hub" banner above the page and, when open, the details panel. Everything sits inside a textured gradient frame.
-- R2. On launch the navigation drawer SHALL be collapsed, the details panel SHALL be collapsed and the main view SHALL be home. Neither the drawer nor the details panel state SHALL be remembered between launches.
+- R2. On launch the navigation drawer SHALL be expanded unless the user last collapsed it (R50), the details panel SHALL be collapsed and the main view SHALL be home. The details panel state SHALL NOT be remembered between launches.
 - R3. The rail SHALL offer, under "Workspace navigation", one icon button each, named by its title and accessible name: **Datasets**, **Agents**, **Knowledge** and **Sessions**. Choosing one SHALL show that area and mark its button current (`aria-current="page"`). Choosing the area that is already shown SHALL keep it, except in the agent editor: there, **Agents** SHALL return to the hub, after the unsaved-changes question (agents-evals R59). Agents stays current while an agent's detail is open, Datasets while the dataset editor is open, and Sessions while the composer or a chat is open. Choosing **Sessions** SHALL also expand the drawer, so the session list is visible.
 - R4. Below the workspace items the rail SHALL offer the account avatar (a static "D", titled "Demo User"), **Open system logs** (tooltip "System logs and diagnostics") and **Settings**, then a divider and the LenAI mark with "Powered by LenAI". The system-logs button SHALL show a red badge with the number of error and warning entries currently retained when that number is above zero, capped at "99+".
 - R5. Choosing **Settings** on the rail SHALL show the Settings area: a list pane with "Settings navigation" offering five sections, **Datasource Configuration**, **LLM Configuration**, **Testing Data**, **Developer** ([../developer-settings/spec.md](../developer-settings/spec.md)) and **Appearance** (R39–R45), beside the chosen section's form. Choosing a section SHALL show it and mark it current; choosing the current section again SHALL deselect it and show the prompt "Choose a settings section." Choosing another rail area SHALL leave Settings; coming back SHALL show the section that was chosen.
@@ -64,13 +64,14 @@ Sessions area
 - R47. Removed in roadmap 1.8.8: the separate, collapsible session list pane is replaced by the drawer (R48).
 - R48. The rail SHALL start with a menu button, **Expand navigation** (when collapsed) / **Collapse navigation** (when expanded), exposing `aria-expanded`. Expanding widens the rail into a 240 px drawer that shows each item's label beside its icon and the Sessions list (R46). Collapsing returns to the 64 px icon rail. Expanding or collapsing SHALL NOT change the main view or close the open session.
 - R49. In the Sessions area the page SHALL start with a header: an icon, then the title — the open session's name, "New conversation" in the composer, or "Sessions" — with the session's context under the title while a chat is open (its agent, when it was started from one, then its datasources; sessions-chat R57), and a **Start New Conversation** button that opens the composer.
+- R50. Clicking **Expand navigation** or **Collapse navigation** SHALL remember the new state in the backend's `ui-preferences` document (ADR-0009), with a browser-local copy under `questions-to-insights:nav-expanded` (`true` / `false`) applied before the first paint. Opening the drawer by choosing **Sessions** (R3) SHALL NOT change the remembered state. Nothing remembered means expanded; the backend wins over the copy.
 
 Appearance
-- R39. The Appearance section SHALL offer a single choice labelled **Theme** with three options: **System**, **Light** and **Dark**. Exactly one is selected. The default, when nothing has been chosen, is System.
+- R39. The Appearance section SHALL offer a single choice labelled **Theme** with three options: **System**, **Light** and **Dark**. Exactly one is selected. The default, when nothing has been chosen, is Light.
 - R40. Choosing an option SHALL apply it at once, without a reload, and SHALL remember it for the next launch.
 - R41. The **resolved theme** is Light or Dark: the chosen option, or for System the operating system's current light/dark setting. While System is chosen, a change of the operating-system setting SHALL restyle the open app without a reload.
 - R42. The resolved theme SHALL be applied before the page first paints, so the app never shows a frame in the other theme on launch.
-- R43. The remembered choice SHALL be stored in browser-local storage under the key `questions-to-insights:theme` as `system`, `light` or `dark`. A missing or unknown value SHALL mean System. If the storage cannot be read or written, the choice SHALL still apply for the current run.
+- R43. The remembered choice SHALL be stored in the backend's `ui-preferences` document (ADR-0009) as `system`, `light` or `dark`, and copied to browser-local storage under the key `questions-to-insights:theme` so it can apply before the first paint. A missing or unknown value in both SHALL mean Light. When the backend answers, its value SHALL win over the copy. A choice found only in browser storage (saved before this rule) SHALL be written to the backend once. If either store can't be read or written, the choice SHALL still apply for the current run.
 - R44. In the desktop app, the window's own background (shown while resizing and before paint) SHALL follow the resolved theme.
 - R45. Both themes SHALL produce zero violations in the automated accessibility scan (R35), and text colours SHALL meet WCAG AA contrast (4.5:1) against the surfaces they are used on.
 
@@ -162,6 +163,18 @@ Feature: Navigation rail
     Then I see "Sessions navigation" with a "New conversation" button
     And I see "Select a session or start a new conversation."
 
+  Scenario: Opens with the navigation drawer expanded
+    Given I have never collapsed the navigation drawer
+    When I open the app
+    Then the drawer is expanded and I see the label "Datasets" next to its icon
+
+  Scenario: Remembers a collapsed drawer after a restart
+    When I click "Collapse navigation"
+    And I restart the app in a fresh browser profile
+    Then the drawer is collapsed
+    When I click "Expand navigation" and restart the app again
+    Then the drawer is expanded
+
   Scenario: Expands the rail into a drawer with labels and sessions
     Given the navigation drawer is collapsed
     When I click "Expand navigation"
@@ -203,12 +216,18 @@ E2E: `frontend/e2e/appearance.spec.ts` for the Feature below.
 ```gherkin
 Feature: Appearance
 
-  Scenario: Follows the operating system theme by default
-    Given the operating system uses a light theme
+  Scenario: Opens in the light theme by default
+    Given the operating system uses a dark theme
     And I have never chosen a theme
+    When I open the app
+    Then the app is shown in the light theme
     When I open Settings and choose "Appearance"
-    Then "System" is selected under "Theme"
-    And the app is shown in the light theme
+    Then "Light" is selected under "Theme"
+
+  Scenario: Follows the operating system theme when System is chosen
+    Given the operating system uses a light theme
+    When I open Settings, choose "Appearance" and select "System"
+    Then the app is shown in the light theme
     When the operating system switches to a dark theme
     Then the app is shown in the dark theme without reloading
 
@@ -226,6 +245,18 @@ Feature: Appearance
     When I restart the app
     Then the app is shown in the dark theme from its first frame
     And "Dark" is selected under "Theme"
+
+  Scenario: Keeps the chosen theme in the database
+    Given I selected "Dark" under "Theme"
+    When I open the app in a fresh browser profile on the same data
+    Then the app is shown in the dark theme
+    And "Dark" is selected under "Theme"
+
+  Scenario: Moves a theme chosen before the database stored it
+    Given browser storage holds the theme "dark" and the database holds none
+    When I open the app
+    Then the app is shown in the dark theme
+    And the database holds the theme "dark"
 
   Scenario: Has no automatically detectable accessibility violations in either theme
     When I open the Appearance section in the light theme and in the dark theme
@@ -274,10 +305,10 @@ Feature: App shell behaviour not yet covered by Playwright
     And I can close it early with its dismiss button
     And the failure also appears in the system logs as a "user-visible" error
 
-  Scenario: Remembers nothing about collapse between launches
-    Given I expanded the details panel and the navigation drawer
+  Scenario: Does not remember the details panel between launches
+    Given I expanded the details panel
     When I reopen the app
-    Then both are collapsed again
+    Then the details panel is collapsed again
 ```
 
 ## Acceptance

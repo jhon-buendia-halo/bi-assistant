@@ -312,7 +312,7 @@ flowchart LR
 - **Consequences:** Readability does not depend on designer-model output; storage grows per version.
 
 #### ADR-0007 — Themeable renderer: semantic design tokens, a bundled webfont and a System / Light / Dark preference
-- **Status:** Accepted
+- **Status:** Accepted; its *Preference* storage and default superseded by ADR-0009
 - **Date:** 2026-10-09
 - **Context:**
   - The renderer is dark-only. Its colours are hardcoded per component as Tailwind arbitrary values (`bg-[#232323]`, `zinc-*`), and it has no theme file and no CSS variables ([ui.md](ui.md) §6).
@@ -351,6 +351,24 @@ flowchart LR
   - Adds a collection, and an optional field on `sessions` (no migration: absent means the plain assistant).
   - Sharing across machines, teams and owners would need a new container or a sync format. That is deferred and would supersede the "this machine" ownership here.
 
+
+#### ADR-0009 — UI preferences live in the backend, with a browser cache for the first paint
+- **Status:** Accepted
+- **Date:** 2026-10-10
+- **Context:**
+  - ADR-0007 stored the theme choice in the renderer's browser storage, defaulting to System, and the navigation drawer was never remembered (app-shell R2).
+  - The user wants the app to open in the Light theme with the drawer expanded, and any change the user makes to either to be stored in the database ([BA-168](https://halo-powered.atlassian.net/browse/BA-168)).
+  - Browser storage is per renderer origin and per port, so the desktop app, a CLI tab on another port and a fresh browser profile each lose the choice.
+  - The theme must still apply before the first paint (app-shell R42), which a backend round trip can't guarantee.
+- **Decision:**
+  - **Source of truth.** One `ui-preferences` document in the existing `settings` collection holds the theme choice and the drawer state, read and written through `GET` / `PUT /ui-preferences`. It belongs to the data directory, so every renderer on that data shares it.
+  - **Defaults.** Nothing stored means Light and an expanded drawer. System stays a choice, no longer the default.
+  - **First-paint cache.** The renderer keeps a browser-storage copy of the theme (and of the drawer state) and applies it before boot, then reconciles with the backend once it answers; the backend wins.
+  - **One-time move.** A theme chosen before this change, found in browser storage while the backend has none, is written to the backend once.
+- **Consequences:**
+  - A new `settings` key and two endpoints; no new collection and no table migration.
+  - A renderer whose cache disagrees with the backend (another renderer changed the choice) shows its cached theme for one frame, then switches.
+  - Existing users who never chose a theme move from System to Light.
 ## Level 4 — Code
 
 ```mermaid

@@ -1,0 +1,15 @@
+2026-10-10, branch feat/BA-159-llm-configuration
+
+Backend `npm test`:   Test Suites: 41 passed, 41 total — Tests: 804 passed, 804 total
+  New: src/mastra/effort-levels.spec.ts (level table, default, nearest level),
+       model-compat.spec.ts "reasoning effort per model" (nearest-level mapping, Haiku 5.5 keeps effort),
+       llm.service.spec.ts "reasoning effort per model" (probe at lowest level, none for gpt-4.1,
+       Claude probe effort, effort stored, unoffered effort rejected before any provider call,
+       stored effort kept or reset to the model default, levels lookup).
+Backend `npm run build`: OK.
+Backend `npm run lint`: not clean before or after this change (135 errors, all in files or lines this change
+  doesn't touch; e.g. llm.service.spec.ts lines 41, 46, 315, 334, 351 are on main). The new and changed
+  code has no lint findings. Note: `npm run lint` runs `--fix` and reformats ~30 unrelated files; those
+  edits were reverted, not committed.
+Frontend `ng test` (ChromeHeadless via Playwright's Chromium): Executed 140 of 140 SUCCESS.
+Frontend `npm run build`: OK (existing budget and Sass @import warnings only).

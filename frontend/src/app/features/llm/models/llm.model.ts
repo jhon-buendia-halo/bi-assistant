@@ -5,9 +5,25 @@ export interface LlmSettings {
   model: string;
   apiKey?: string;
   baseUrl?: string;
+  reasoningEffort?: ReasoningEffort;
 }
 
-export type ReasoningEffort = 'low' | 'medium' | 'high';
+/** Lowest first; each model accepts its own subset. */
+export type ReasoningEffort =
+  | 'none'
+  | 'minimal'
+  | 'low'
+  | 'medium'
+  | 'high'
+  | 'xhigh'
+  | 'max';
+
+/** `GET /llm/effort-levels` — the levels one model accepts. */
+export interface EffortLevelsView {
+  levels: ReasoningEffort[];
+  defaultEffort: ReasoningEffort | null;
+  probeEffort: ReasoningEffort | null;
+}
 
 export interface LlmSettingsView {
   provider: LlmProvider | null;

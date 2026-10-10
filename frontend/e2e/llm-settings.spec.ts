@@ -2,7 +2,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Page } from '@playwright/test';
 import { test, expect } from './fixtures/app.fixture';
-import { LlmStub, startLlmStub } from './helpers/llm-stub';
+import {
+  WORLD_CUP_SESSION,
+  createWorldCupSession,
+} from './helpers/app-actions';
+import { seedWorldCupDataset } from './helpers/agents-api';
+import { LlmStub, startLlmStub, turnRequests } from './helpers/llm-stub';
 
 // Mirrors the "LLM settings" Feature in specs/capabilities/llm-settings/spec.md
 // (the scenarios that need no real provider), against a local stub of the
@@ -33,14 +38,30 @@ const testButton = (page: Page) =>
   page.getByRole('button', { name: 'Test connection' });
 const saveButton = (page: Page) =>
   page.getByRole('button', { name: 'Save connection' });
+const effortSelect = (page: Page) => page.getByLabel('Reasoning effort');
 const keyUnreadableNotice = (page: Page) =>
   page.getByTestId('llm-key-unreadable-notice');
 
-async function testConnection(page: Page): Promise<void> {
+async function testConnection(
+  page: Page,
+  deployment = DEPLOYMENT,
+): Promise<void> {
   await testButton(page).click();
   await expect(
-    page.getByText(`Connection successful — lenai/${DEPLOYMENT} replied "ok"`),
+    page.getByText(`Connection successful — lenai/${deployment} replied "ok"`),
   ).toBeVisible();
+}
+
+/** Fills a LenAI configuration pointing at the stub, without testing it. */
+async function fillLenaiConfiguration(
+  page: Page,
+  deployment: string,
+): Promise<void> {
+  await openLlmConfiguration(page);
+  await providerSelect(page).selectOption('lenai');
+  await deploymentField(page).fill(deployment);
+  await baseUrlField(page).fill(stub.baseUrl);
+  await apiKeyField(page).fill('sk-effort-0e0e');
 }
 
 /** Fills a LenAI configuration pointing at the stub, tests and saves it. */
@@ -163,4 +184,90 @@ test('asks for the key again when the app secret changed', async ({
   await expect(after.page.getByText('Configuration saved')).toBeVisible();
   await expect(keyUnreadableNotice(after.page)).toHaveCount(0);
   expect(stub.apiKeys.at(-1)).toBe('sk-second-8d8d');
+});
+
+test('offers the effort levels of the chosen model', async ({ page }) => {
+  await fillLenaiConfiguration(page, 'gpt-5');
+
+  await expect(effortSelect(page).locator('option')).toHaveText([
+    'Minimal',
+    'Low',
+    'Medium',
+    'High',
+  ]);
+  await expect(effortSelect(page)).toHaveValue('high');
+  await expect(effortSelect(page)).toBeEnabled();
+  // Its name is the label alone, never the selected option's text.
+  await expect(effortSelect(page)).toHaveAccessibleName('Reasoning effort');
+  await expect(effortSelect(page)).toHaveAccessibleDescription(
+    'Used for answers. Test connection always uses the lowest level.',
+  );
+
+  await deploymentField(page).fill('gpt-4.1');
+  await expect(effortSelect(page)).toBeDisabled();
+  await expect(effortSelect(page).locator('option')).toHaveText([
+    'Default — not available for this model',
+  ]);
+  await expect(effortSelect(page)).toHaveAccessibleDescription(
+    "This model doesn't support a reasoning effort setting.",
+  );
+
+  await deploymentField(page).fill('');
+  await expect(effortSelect(page)).toBeDisabled();
+  await expect(effortSelect(page).locator('option')).toHaveText([
+    'Default — enter a model first',
+  ]);
+
+  await deploymentField(page).fill('my-deployment');
+  await expect(effortSelect(page).locator('option')).toHaveText([
+    'Low',
+    'Medium',
+    'High',
+  ]);
+});
+
+test('tests a reasoning model at its lowest effort', async ({ page }) => {
+  await fillLenaiConfiguration(page, 'gpt-5');
+  await effortSelect(page).selectOption('medium');
+
+  await testConnection(page, 'gpt-5');
+  expect(stub.probes.at(-1)?.reasoningEffort).toBe('minimal');
+
+  // The probe doesn't use the chosen effort, so changing it keeps the test.
+  await effortSelect(page).selectOption('low');
+  await expect(saveButton(page)).toBeEnabled();
+});
+
+test('saves the chosen effort and uses it on the next turn', async ({
+  page,
+}, testInfo) => {
+  await seedWorldCupDataset(page);
+  await fillLenaiConfiguration(page, 'gpt-5');
+  await testConnection(page, 'gpt-5');
+  await effortSelect(page).selectOption('medium');
+  await saveButton(page).click();
+  await expect(page.getByText('Configuration saved')).toBeVisible();
+
+  await page
+    .getByRole('navigation', { name: 'Settings navigation' })
+    .getByRole('button', { name: 'Datasource Configuration' })
+    .click();
+  await page
+    .getByRole('navigation', { name: 'Settings navigation' })
+    .getByRole('button', { name: 'LLM Configuration' })
+    .click();
+  await expect(effortSelect(page)).toHaveValue('medium');
+  await page.screenshot({
+    path: testInfo.outputPath('llm-effort-picker-gpt-5.png'),
+  });
+
+  await createWorldCupSession(page);
+  await expect(
+    page.getByRole('heading', { name: WORLD_CUP_SESSION }),
+  ).toBeVisible();
+  const question = 'How many matches were played in 2022?';
+  await page.getByPlaceholder('Ask a follow-up question…').fill(question);
+  await page.getByLabel('Send message').click();
+  await expect.poll(() => turnRequests(stub, question).length).toBeGreaterThan(0);
+  expect(turnRequests(stub, question)[0].reasoningEffort).toBe('medium');
 });

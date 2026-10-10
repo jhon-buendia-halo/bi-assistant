@@ -10,6 +10,7 @@ import {
   ThemePreference,
   ThemeService,
 } from '../../../../core/theme/theme.service';
+import { UiPreferencesService } from '../../../../core/preferences/ui-preferences.service';
 
 interface ThemeOption {
   value: ThemePreference;
@@ -24,6 +25,7 @@ interface ThemeOption {
 })
 export class AppearanceSettings {
   readonly theme = inject(ThemeService);
+  readonly preferences = inject(UiPreferencesService);
 
   readonly options: ThemeOption[] = [
     { value: 'system', label: 'System', icon: Monitor },

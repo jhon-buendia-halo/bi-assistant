@@ -6,6 +6,8 @@
 // behaviour so the framework still boots. Mirrored from data-readiness-agent
 // (its ADR-0010).
 
+import type { ReasoningEffort } from './effort-levels';
+
 /**
  * A Mastra model config. Either a router id string (`openai/gpt-4o-mini`,
  * which reads OPENAI_API_KEY from the env) or an OpenAI-compatible config
@@ -55,7 +57,7 @@ export const AGENT_OVERRIDES_CONTEXT_KEY = 'agent-overrides';
 
 export interface AgentOverrides {
   model?: string;
-  reasoningEffort?: 'low' | 'medium' | 'high';
+  reasoningEffort?: ReasoningEffort;
 }
 
 /** The model override on a call's requestContext, if any. */

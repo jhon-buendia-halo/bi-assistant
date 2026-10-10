@@ -535,3 +535,129 @@ describe('a stored key the app secret cannot read', () => {
     expect(jest.spyOn(crypto, 'encrypt')).toHaveBeenCalledWith('sk-new-key');
   });
 });
+
+describe('reasoning effort per model', () => {
+  const originalFetch = global.fetch;
+  const okFetch = () =>
+    jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: jest.fn().mockResolvedValue({
+        choices: [{ message: { content: '{"status":"ok"}' } }],
+      }),
+      text: jest.fn().mockResolvedValue(''),
+    }) as unknown as typeof fetch;
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    mockGenerate.mockReset();
+  });
+
+  it('probes a reasoning model at its lowest level, whatever effort was chosen', async () => {
+    const { body } = await probeWith(
+      {
+        provider: 'openai',
+        model: 'gpt-5',
+        apiKey: 'sk-key',
+        reasoningEffort: 'high',
+      },
+      {},
+    );
+
+    expect(body.reasoning_effort).toBe('minimal');
+  });
+
+  it('sends no effort to a model without levels', async () => {
+    const { body } = await probeWith(
+      { provider: 'openai', model: 'gpt-4.1', apiKey: 'sk-key' },
+      {},
+    );
+
+    expect(body).not.toHaveProperty('reasoning_effort');
+  });
+
+  it('probes Claude at its lowest effort through the agent runtime', async () => {
+    mockGenerate.mockResolvedValue({ object: { status: 'ok' } });
+
+    await serviceWith().testConnection({
+      provider: 'anthropic',
+      model: 'claude-sonnet-5-5',
+      apiKey: 'sk-ant-key',
+    });
+
+    const [, options] = mockGenerate.mock.calls[0] as [
+      unknown,
+      { providerOptions?: unknown },
+    ];
+    expect(options.providerOptions).toEqual({ anthropic: { effort: 'low' } });
+  });
+
+  it('stores the chosen effort with the connection', async () => {
+    global.fetch = okFetch();
+    const { service } = serviceWithMocks();
+
+    const view = await service.save({
+      provider: 'openai',
+      model: 'gpt-5',
+      apiKey: 'sk-key',
+      reasoningEffort: 'minimal',
+    });
+
+    expect(view.reasoningEffort).toBe('minimal');
+  });
+
+  it('rejects an effort the model does not offer before calling the provider', async () => {
+    global.fetch = okFetch();
+    const { service, repository } = serviceWithMocks();
+
+    await expect(
+      service.save({
+        provider: 'openai',
+        model: 'gpt-5.1',
+        apiKey: 'sk-key',
+        reasoningEffort: 'minimal',
+      }),
+    ).rejects.toThrow(
+      'reasoning effort must be one of: none, low, medium, high',
+    );
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(jest.spyOn(repository, 'save')).not.toHaveBeenCalled();
+  });
+
+  it("keeps a stored effort the new model offers, else uses the model's default", async () => {
+    global.fetch = okFetch();
+    const stored = {
+      key: 'llm' as const,
+      provider: 'openai' as const,
+      model: 'gpt-5',
+      baseUrl: '',
+      apiKeyCiphertext: 'enc(sk-key)',
+      reasoningEffort: 'minimal' as const,
+    };
+
+    const kept = await serviceWithMocks({ settings: stored }).service.save({
+      provider: 'openai',
+      model: 'gpt-5-mini',
+    });
+    expect(kept.reasoningEffort).toBe('minimal');
+
+    const reset = await serviceWithMocks({ settings: stored }).service.save({
+      provider: 'openai',
+      model: 'gpt-5.1',
+    });
+    expect(reset.reasoningEffort).toBe('high');
+  });
+
+  it('answers the levels lookup from the built-in table', () => {
+    expect(serviceWith().effortLevels('gpt-5')).toEqual({
+      levels: ['minimal', 'low', 'medium', 'high'],
+      defaultEffort: 'high',
+      probeEffort: 'minimal',
+    });
+    expect(serviceWith().effortLevels('gpt-4.1')).toEqual({
+      levels: [],
+      defaultEffort: null,
+      probeEffort: null,
+    });
+  });
+});

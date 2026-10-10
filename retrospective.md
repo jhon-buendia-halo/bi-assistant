@@ -14,6 +14,48 @@ Entry template:
 
 ---
 
+## 2026-10-10 — 1.10.2 Light theme and open drawer by default, remembered in the database (BA-168)
+
+### What went well
+- Four questions up front (epic, keep System, database plus first-paint cache, which "left bar") settled every design choice before the specs; nothing was reworked.
+- Testing persistence with `launchApp(appDataDir)` (a fresh browser profile on the same data dir) proves the database remembers, not the browser copy.
+- Checking the failed visual baseline image before regenerating it confirmed the only change was the expanded drawer.
+
+### What went wrong
+- A scripted multi-file edit failed on a non-unique anchor in `app.ts` (`this.loadSessions();` appears twice), after earlier files in the same script had been written. Same lesson as BA-155's retrospective, again.
+- `npm run test:e2e:update -- <spec> -g …` doesn't scope: the extra arguments land after `--update-snapshots` and are rejected. I scoped the update with `npx playwright test --update-snapshots=changed <spec> -g …` on the already-prepared build.
+- Three axe-scan tests silently depended on the System default (they switch themes through the emulated OS setting). Changing a default needs a grep for every test that relies on it.
+
+### What to do differently
+- In multi-file edit scripts, check every anchor's count before writing any file.
+- To regenerate one visual baseline, run `npm run test:e2e:prepare`, then `npx playwright test --project=web --update-snapshots=changed <spec> -g "<title>"`, and look at the actual image first.
+- Before changing a default, grep the E2E for what produces the old default (here `emulateMedia({ colorScheme`) and decide each case in the step-6 list.
+
+## 2026-10-10 — 1.10.1 Per-model reasoning effort in LLM Settings (BA-160)
+
+### What went well
+- Reading the probe code before proposing a fix showed the real cause: the 30 s limit applies to Test *and* Save, and the reasoning endpoint refuses until something is saved. That turned a "just raise the timeout" idea into the user's actual ask: pick from the levels each model accepts.
+- Checking the level table against the provider docs (Anthropic's Effort page, OpenAI's model pages) and the bundled Mastra provider schemas (which accept `none` to `max`) before writing it. It also surfaced a latent bug: the old Claude regex dropped effort for Haiku 5.5.
+- Extending the recording stub with `reasoning_effort` let the E2E prove both halves end to end: the probe sends `minimal`, the next chat turn sends `medium`.
+
+### What went wrong
+- I gave the user a curl workaround ("save directly, skip the test") without reading `save()`, which runs the same probe. I had to retract it a turn later.
+- I filed the story under BA-119 because the user picked it, before reading the epic's description; it covers the dev harness, not app features, so I had to ask again and create a new epic.
+- I ran `npm run build` in `backend/` while the full E2E suite was running in the background. `nest build` clears `dist/`, and 13 scenarios failed in a few milliseconds before I stopped the run and started over.
+- `npm run lint` in `backend/` runs `--fix` and reformatted ~30 unrelated files (and stripped two casts from a spec I touched). I had to revert them by hand.
+- The background web server from the start of the session hit the 2-hour limit and was killed; the user lost the running app mid-conversation.
+
+### What to do differently
+- Before suggesting a workaround through an endpoint, read that endpoint's service method end to end.
+- Before accepting an epic for a story, read the epic's Jira description and confirm it covers the kind of change; say so if it doesn't.
+- Never run `build` or `build:all` in `backend/` while Playwright is running; wait for the suite, or lint and unit-test only.
+- Lint the backend with `npx eslint <touched files>` (no `--fix`) to check a change, and run `git status` after any repo-wide lint.
+- When the user needs an app running for longer than the session's work, start it with the 2-hour maximum and tell them when it will stop.
+
+**Follow-up (always-visible select):** I specified the select as hidden for models without levels and the user found the setting undiscoverable: the first thing they saw was a form with no effort option, because the empty model field also hid it. Making it a wrapping `<label>` then gave it the accessible name "Reasoning effort Default — enter a model first", which a script's `getByLabel('Model')` matched.
+- For a new setting, keep its control visible and disabled with a reason instead of hiding it, so users can find it.
+- Label `select` elements with `<label for>`, not a wrapping label, and assert `toHaveAccessibleName` in the E2E.
+
 ## 2026-10-09 — 1.9.5 Agent editor with a preview chat (BA-155)
 
 ### What went well

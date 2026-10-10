@@ -62,6 +62,7 @@ A Gherkin Feature that spans capabilities lives in the capability that owns its 
 | BA-111 Local Development Observability | [epics/BA-111](epics/BA-111/spec.md) |
 | BA-141 Agentic Hub Look and Feel | [epics/BA-141](epics/BA-141/spec.md) |
 | BA-150 Agent Hub | [epics/BA-150](epics/BA-150/spec.md) |
+| BA-159 LLM configuration | [epics/BA-159](epics/BA-159/spec.md) |
 
 ## Stack neutrality
 

@@ -1,0 +1,16 @@
+Step 7 red run (tests first, before any production code), 2026-10-10.
+Transcribed from the terminal; `npx playwright test --project=web llm-settings` after `npm run test:e2e:prepare` on main's code:
+
+  ✓  1 [web] › e2e/llm-settings.spec.ts:93:5 › LenAI needs a deployment name and a base URL (3.0s)
+  ✓  2 [web] › e2e/llm-settings.spec.ts:106:5 › never shows the stored key (2.1s)
+  ✓  3 [web] › e2e/llm-settings.spec.ts:125:5 › keeps a key saved under the former development secret (3.9s)
+  ✓  4 [web] › e2e/llm-settings.spec.ts:154:5 › asks for the key again when the app secret changed (3.9s)
+  ✘  5 [web] › e2e/llm-settings.spec.ts:189:5 › offers the effort levels of the chosen model (11.7s)
+  ✘  6 [web] › e2e/llm-settings.spec.ts:211:5 › tests a reasoning model at its lowest effort (1.0m)
+  ✘  7 [web] › e2e/llm-settings.spec.ts:223:5 › saves the chosen effort and uses it on the next turn (1.0m)
+    Error: expect(locator).toHaveText(expected) failed      (no "Reasoning effort" select on the form)
+    Error: locator.selectOption: Target page, context or browser has been closed   (timed out waiting for the select)
+  3 failed
+  4 passed (2.5m)
+
+Right reason: the form had no Reasoning effort select yet.

@@ -1,6 +1,6 @@
 # LLM settings
 
-The user chooses which language model powers every agent in the app: a provider, a model (or deployment name), an API key and, for Halo's gateway, a base URL. The configuration is proven to work before it is saved, the key is stored encrypted and is never shown again, and the choice applies to the very next agent call without restarting anything. A single global reasoning-effort setting tunes how hard models that support it think.
+The user chooses which language model powers every agent in the app: a provider, a model (or deployment name), an API key and, for Halo's gateway, a base URL. The configuration is proven to work before it is saved, the key is stored encrypted and is never shown again, and the choice applies to the very next agent call without restarting anything. A single global reasoning-effort setting tunes how hard models that support it think, chosen from the levels the selected model accepts.
 
 ## Concepts
 
@@ -10,6 +10,7 @@ Capability-local vocabulary:
 - **Deployment name** — for `lenai`, the value of the "model" field; it names a deployment on the gateway rather than a model.
 - **Connection probe** — the fixed, cheap request used to test a configuration (see R13 to R19).
 - **Model route** — the provider-qualified identifier an agent call uses, `<provider>/<model>`.
+- **Effort levels** — the reasoning-effort values a model accepts, lowest first, from the built-in table in [../../system/agents.md](../../system/agents.md) 1.4 (see R36 to R41).
 
 ## Rules
 
@@ -20,7 +21,7 @@ Configuration
 - R4. For `lenai`, the base URL SHALL be required (`baseUrl is required for lenai`). It is the gateway root. Requests for a deployment SHALL go to `<base URL without trailing slashes>/openai/v1/deployments/<deployment>`, carrying the key both as a bearer credential and in an `X-Api-Key` header.
 - R5. For `openai` and `anthropic` the base URL SHALL NOT be required and SHALL NOT be used: `openai` goes to the provider's public API and `anthropic` to its native API.
 - R6. The API key SHALL be required the first time. When a request omits the key or sends a blank one, the system SHALL use the stored key; if none is stored, it SHALL fail with `apiKey is required — none stored yet`.
-- R7. Reasoning effort SHALL be one of `low`, `medium`, `high`, defaulting to `high`. Setting any other value SHALL fail with `reasoning effort must be one of: low, medium, high`. Setting it before any configuration has been saved SHALL fail with `Configure and save the LLM first — no settings stored yet`. Saving a new provider/model/key SHALL keep the stored effort.
+- R7. Reasoning effort SHALL default to `high`. The composer menu (R8) SHALL set only `low`, `medium` or `high`; setting any other value there SHALL fail with `reasoning effort must be one of: low, medium, high`, and setting it before any configuration has been saved SHALL fail with `Configure and save the LLM first — no settings stored yet`. Saving SHALL store the effort chosen in Settings (R38), or, when none is sent, keep the stored effort if the model accepts it and otherwise use the model's default (R36).
 - R8. The reasoning effort SHALL be changeable from the new-session composer (a small chip beside the model name) without opening Settings. Success shows "Reasoning effort set to <effort>".
 
 Key protection
@@ -36,7 +37,7 @@ Testing a connection
 - R13. The user SHALL be able to test a configuration without saving it. The system SHALL send the candidate configuration (not the saved one) through a probe and report the outcome.
 - R14. The probe SHALL ask the model for a JSON object `{ "status": "<non-empty string>" }` under a strict JSON schema, using the same structured-output request every agent makes. A model that answers in free text SHALL NOT pass.
 - R15. A pass SHALL be reported as `Connection successful — <provider>/<model> replied "<status>" in <N>ms`.
-- R16. The probe SHALL time out after 30 seconds (`LLM request timed out after 30s`).
+- R16. The probe SHALL time out after 30 seconds (`LLM request timed out after 30s`). It SHALL ask for the model's lowest effort level (R40), so a reasoning model answers within the limit.
 - R17. For OpenAI-compatible routes (`openai`, `lenai`) the probe SHALL cap output at 512 tokens, or 4,096 for models in the families that count hidden reasoning against the cap (gpt-5 and later, o1 to o4, written to survive gateway-mangled deployment names). Those families SHALL be sent the cap under the name `max_completion_tokens`; all others under `max_tokens`.
 - R18. Failures SHALL be reported in these words (the part after the dash varies):
   - network failure: `Provider unreachable — <detail>`
@@ -51,7 +52,7 @@ Testing a connection
 Saving
 - R21. Saving SHALL re-run the probe with the submitted configuration and SHALL persist only if it passes. A failed save SHALL leave the previous configuration untouched.
 - R22. The save and test endpoints SHALL answer with an ok flag and a message in the response body; a validation or probe failure SHALL NOT be an HTTP error. A successful save reports `Configuration saved`.
-- R23. The settings screen SHALL enable **Save connection** only after a successful **Test connection** with the current field values; editing any field SHALL withdraw that permission. **Test connection** SHALL be enabled when a model is entered (and a base URL for `lenai`) and no test is running, and SHALL read "Testing…" while it runs. **Save connection** SHALL read "Saving…" while it runs.
+- R23. The settings screen SHALL enable **Save connection** only after a successful **Test connection** with the current field values; editing any field except **Reasoning effort** SHALL withdraw that permission (the probe doesn't use the chosen effort, R40). **Test connection** SHALL be enabled when a model is entered (and a base URL for `lenai`) and no test is running, and SHALL read "Testing…" while it runs. **Save connection** SHALL read "Saving…" while it runs.
 
 Fallback
 - R24. When nothing has been saved, the settings view SHALL report `configured: false`, no provider, model, base URL or key, and reasoning effort `high`. The new-session composer SHALL then show "No model configured".
@@ -66,6 +67,15 @@ Applying the settings
 - R31. Provider responses of 429, 500, 502 or 503 SHALL be retried up to 3 times, waiting the `Retry-After` value when the response carries one (seconds or an HTTP date), else 1 s, 2 s, then 4 s. Other statuses and network errors SHALL NOT be retried. Retrying SHALL apply to every model request the process makes and SHALL be installed once.
 - R32. The visual-designer agent MAY use a different model from the configured one: the `VISUAL_MODEL` environment variable forces a route; otherwise a configured gpt-5 or o-series OpenAI route (not a gateway deployment) is replaced by `openai/gpt-4.1-mini`, and any route whose name contains the token `nano` is replaced by its `mini` sibling with a warning log. All other agents use the configured model unchanged.
 
+Effort levels
+- R36. The system SHALL know, for every model name, its effort levels: an ordered subset of `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, from the built-in table in [../../system/agents.md](../../system/agents.md) 1.4. A name the table doesn't know SHALL get `low`, `medium`, `high`; a model without reasoning SHALL get none. A model's default SHALL be `high` when offered, else its first level.
+- R37. The settings screen SHALL show a **Reasoning effort** select below the model (or deployment name) listing the levels of the model typed, lowest first, capitalised (`Minimal`, `Low`, `Medium`, `High`, `XHigh`, `Max`, `None`). It SHALL update as the model or provider changes, keep the selected effort when the new model accepts it, and otherwise select the new model's default. The select SHALL always be shown, so users can discover it: with an empty model field it SHALL be disabled with the single option `Default — enter a model first`, and for a model with no levels disabled with the single option `Default — not available for this model`. Its hint SHALL say why (R42).
+- R38. Saving SHALL store the selected effort with the connection. A selected effort the model doesn't accept SHALL fail the save with `reasoning effort must be one of: <levels>` and store nothing.
+- R39. When the settings screen opens on a saved configuration, the select SHALL show the stored effort (or the model's default when the stored one isn't among its levels).
+- R40. The connection probe (test and save) SHALL send the model's lowest level as its reasoning effort, and none for a model without levels. It SHALL NOT use the selected effort.
+- R41. Every model call SHALL map its effort to the nearest level the model accepts (ties to the higher level) before sending it. A model without levels SHALL keep today's behaviour (R29).
+- R42. The select's hint, linked to it as its accessible description, SHALL read `Used for answers. Test connection always uses the lowest level.` when the model has levels, `Enter a model to see the effort levels it supports.` when the model is empty, and `This model doesn't support a reasoning effort setting.` when it has none.
+
 ## Edge cases and errors
 
 - Switching provider in the form keeps the typed model and key; the placeholder example changes (`gpt-4o-mini`, `claude-sonnet-5-5`, `my-deployment`).
@@ -73,7 +83,8 @@ Applying the settings
 - If the app secret changes (a lost secret file on a new install, a different `APP_SECRET`), the stored key can no longer be decrypted. Only a key under the former development secret is recovered (R33); any other must be entered again (R34, R35).
 - Masking shows the last four characters; a key shorter than four characters would be shown whole. Open question: pad or fully hide very short keys.
 - A backend that is unreachable during load leaves the form empty and shows no toast.
-- The reasoning-effort control is only in the new-session composer; there is no effort field on the Settings screen. Open question: whether it should also appear there.
+- The composer menu offers only `low`, `medium`, `high`. An effort saved from Settings outside that list (such as `minimal`) shows as the current value but can't be re-selected there; extending the per-model levels to the composer and the agent editor is a possible follow-up (epic [BA-159](../../epics/BA-159/spec.md)).
+- The effort table is fixed in the app. A provider that adds or drops levels for a family needs a table update; until then the unknown-name fallback (R36) keeps new names usable.
 
 ## Contracts
 
@@ -84,11 +95,11 @@ Applying the settings
 
 ## UI
 
-Settings area, **LLM Configuration** ([../app-shell/spec.md](../app-shell/spec.md), [../../system/ui.md](../../system/ui.md)). The form, top to bottom: heading "LLM Configuration" with "Configure the language-model provider and verify the credentials."; **Provider** select; **Model** (or **Deployment name**) text box; for LenAI a **Base URL** box with the hint "Gateway root; requests use <base URL>/openai/v1/deployments/<deployment>."; **API key** password box; **Test connection** button; **Save connection** button (tooltip "Test the connection successfully before saving"). States: empty (nothing saved), populated (saved values, masked key placeholder), key unreadable (saved values without a key, plus the notice "Your saved API key can't be read because the app secret changed. Enter the key again, test and save."), testing, saving, tested-ok (Save enabled). Results appear as toasts. The new-session composer shows the saved model name (or "No model configured") and a reasoning-effort chip (Low, Medium, High).
+Settings area, **LLM Configuration** ([../app-shell/spec.md](../app-shell/spec.md), [../../system/ui.md](../../system/ui.md)). The form, top to bottom: heading "LLM Configuration" with "Configure the language-model provider and verify the credentials."; **Provider** select; **Model** (or **Deployment name**) text box; for LenAI a **Base URL** box with the hint "Gateway root; requests use <base URL>/openai/v1/deployments/<deployment>."; **Reasoning effort** select (always shown; disabled with a `Default — …` option when the model is empty or has no effort levels, R37); **API key** password box; **Test connection** button; **Save connection** button (tooltip "Test the connection successfully before saving"). States: empty (nothing saved), populated (saved values, masked key placeholder), key unreadable (saved values without a key, plus the notice "Your saved API key can't be read because the app secret changed. Enter the key again, test and save."), testing, saving, tested-ok (Save enabled). Results appear as toasts. The new-session composer shows the saved model name (or "No model configured") and a reasoning-effort chip (Low, Medium, High).
 
 ## Flows
 
-E2E: `frontend/e2e/llm-settings.spec.ts` covers "LenAI needs a deployment name and a base URL", "Never shows the stored key", "Keeps a key saved under the former development secret" and "Asks for the key again when the app secret changed", against a local stub of the LenAI gateway. The other scenarios need a real provider and are not automated yet.
+E2E: `frontend/e2e/llm-settings.spec.ts` covers "LenAI needs a deployment name and a base URL", "Never shows the stored key", "Keeps a key saved under the former development secret", "Asks for the key again when the app secret changed", "Offers the effort levels of the chosen model", "Tests a reasoning model at its lowest effort" and "Saves the chosen effort and uses it on the next turn", against a local stub of the LenAI gateway. The other scenarios need a real provider and are not automated yet.
 
 ```gherkin
 Feature: LLM settings
@@ -148,6 +159,36 @@ Feature: LLM settings
     Then I see the saved model name and the effort "high"
     When I choose "Low" from the reasoning effort menu
     Then I see "Reasoning effort set to low"
+
+  Scenario: Offers the effort levels of the chosen model
+    When I choose the provider "LenAI (Halo gateway)" and enter the deployment name "gpt-5"
+    Then the "Reasoning effort" select offers "Minimal", "Low", "Medium" and "High"
+    And "High" is selected
+    When I change the deployment name to "gpt-4.1"
+    Then the "Reasoning effort" select is disabled and shows "Default — not available for this model"
+    And I see "This model doesn't support a reasoning effort setting."
+    When I clear the deployment name
+    Then the "Reasoning effort" select is disabled and shows "Default — enter a model first"
+    When I change the deployment name to "my-deployment"
+    Then the "Reasoning effort" select offers "Low", "Medium" and "High"
+
+  Scenario: Tests a reasoning model at its lowest effort
+    Given the deployment name is "gpt-5"
+    And I choose "Medium" as the reasoning effort
+    When I click "Test connection"
+    Then I see 'Connection successful — lenai/gpt-5 replied "ok"'
+    And the probe asked the model for the effort "minimal"
+    When I choose "Low" as the reasoning effort
+    Then "Save connection" stays enabled
+
+  Scenario: Saves the chosen effort and uses it on the next turn
+    Given the deployment name is "gpt-5" and the test passed
+    When I choose "Medium" as the reasoning effort and click "Save connection"
+    Then I see "Configuration saved"
+    When I reopen "LLM Configuration"
+    Then "Medium" is selected
+    When I ask a question in a session
+    Then the model is asked for the effort "medium"
 
   Scenario: Shows that no model is configured
     Given nothing is configured
