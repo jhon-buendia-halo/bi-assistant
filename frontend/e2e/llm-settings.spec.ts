@@ -196,9 +196,27 @@ test('offers the effort levels of the chosen model', async ({ page }) => {
     'High',
   ]);
   await expect(effortSelect(page)).toHaveValue('high');
+  await expect(effortSelect(page)).toBeEnabled();
+  // Its name is the label alone, never the selected option's text.
+  await expect(effortSelect(page)).toHaveAccessibleName('Reasoning effort');
+  await expect(effortSelect(page)).toHaveAccessibleDescription(
+    'Used for answers. Test connection always uses the lowest level.',
+  );
 
   await deploymentField(page).fill('gpt-4.1');
-  await expect(effortSelect(page)).toHaveCount(0);
+  await expect(effortSelect(page)).toBeDisabled();
+  await expect(effortSelect(page).locator('option')).toHaveText([
+    'Default — not available for this model',
+  ]);
+  await expect(effortSelect(page)).toHaveAccessibleDescription(
+    "This model doesn't support a reasoning effort setting.",
+  );
+
+  await deploymentField(page).fill('');
+  await expect(effortSelect(page)).toBeDisabled();
+  await expect(effortSelect(page).locator('option')).toHaveText([
+    'Default — enter a model first',
+  ]);
 
   await deploymentField(page).fill('my-deployment');
   await expect(effortSelect(page).locator('option')).toHaveText([

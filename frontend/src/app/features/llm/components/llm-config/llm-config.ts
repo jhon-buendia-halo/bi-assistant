@@ -84,6 +84,23 @@ export class LlmConfig implements OnInit, OnDestroy {
     clearTimeout(this.levelsTimer);
   }
 
+  /** The select's single option while it is disabled (spec R37). */
+  get effortPlaceholder(): string {
+    return this.model().trim()
+      ? 'Default — not available for this model'
+      : 'Default — enter a model first';
+  }
+
+  /** The select's hint, also its accessible description (spec R42). */
+  get effortHint(): string {
+    if (this.effortLevels().length) {
+      return 'Used for answers. Test connection always uses the lowest level.';
+    }
+    return this.model().trim()
+      ? "This model doesn't support a reasoning effort setting."
+      : 'Enter a model to see the effort levels it supports.';
+  }
+
   onFieldChange(): void {
     // Editing invalidates the previous successful test.
     this.testedOk.set(false);

@@ -32,29 +32,34 @@
     />
   </label>
 
-  @if (effortLevels().length) {
-    <label class="flex flex-col gap-1">
-      <span class="field-label">Reasoning effort</span>
-      <select
-        [value]="reasoningEffort()"
-        (change)="onEffortChange($any($event.target).value)"
-        class="field"
-      >
-        @for (level of effortLevels(); track level) {
-          <option
-            [value]="level"
-            [selected]="level === reasoningEffort()"
-            class="bg-surface"
-          >
-            {{ effortLabels[level] }}
-          </option>
-        }
-      </select>
-      <span class="text-[10px] leading-4 text-fg-muted">
-        Used for answers. Test connection always uses the lowest level.
-      </span>
-    </label>
-  }
+  <!-- Always shown so it can be discovered; disabled when the model has no levels. -->
+  <!-- Not a wrapping <label>: its name would then include the option text. -->
+  <div class="flex flex-col gap-1">
+    <label for="llm-effort" class="field-label">Reasoning effort</label>
+    <select
+      id="llm-effort"
+      [value]="effortLevels().length ? reasoningEffort() : ''"
+      [disabled]="!effortLevels().length"
+      (change)="onEffortChange($any($event.target).value)"
+      aria-describedby="llm-effort-hint"
+      class="field disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      @for (level of effortLevels(); track level) {
+        <option
+          [value]="level"
+          [selected]="level === reasoningEffort()"
+          class="bg-surface"
+        >
+          {{ effortLabels[level] }}
+        </option>
+      } @empty {
+        <option value="" class="bg-surface">{{ effortPlaceholder }}</option>
+      }
+    </select>
+    <span id="llm-effort-hint" class="text-[10px] leading-4 text-fg-muted">
+      {{ effortHint }}
+    </span>
+  </div>
 
   @if (provider() === 'lenai') {
     <label class="flex flex-col gap-1">

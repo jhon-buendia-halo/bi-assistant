@@ -35,6 +35,10 @@ Entry template:
 - Lint the backend with `npx eslint <touched files>` (no `--fix`) to check a change, and run `git status` after any repo-wide lint.
 - When the user needs an app running for longer than the session's work, start it with the 2-hour maximum and tell them when it will stop.
 
+**Follow-up (always-visible select):** I specified the select as hidden for models without levels and the user found the setting undiscoverable: the first thing they saw was a form with no effort option, because the empty model field also hid it. Making it a wrapping `<label>` then gave it the accessible name "Reasoning effort Default — enter a model first", which a script's `getByLabel('Model')` matched.
+- For a new setting, keep its control visible and disabled with a reason instead of hiding it, so users can find it.
+- Label `select` elements with `<label for>`, not a wrapping label, and assert `toHaveAccessibleName` in the E2E.
+
 ## 2026-10-09 — 1.9.5 Agent editor with a preview chat (BA-155)
 
 ### What went well

@@ -69,11 +69,12 @@ Applying the settings
 
 Effort levels
 - R36. The system SHALL know, for every model name, its effort levels: an ordered subset of `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, from the built-in table in [../../system/agents.md](../../system/agents.md) 1.4. A name the table doesn't know SHALL get `low`, `medium`, `high`; a model without reasoning SHALL get none. A model's default SHALL be `high` when offered, else its first level.
-- R37. The settings screen SHALL show a **Reasoning effort** select below the model (or deployment name) listing the levels of the model typed, lowest first, capitalised (`Minimal`, `Low`, `Medium`, `High`, `XHigh`, `Max`, `None`). It SHALL update as the model or provider changes, keep the selected effort when the new model accepts it, and otherwise select the new model's default. A model with no levels, or an empty model field, SHALL show no select.
+- R37. The settings screen SHALL show a **Reasoning effort** select below the model (or deployment name) listing the levels of the model typed, lowest first, capitalised (`Minimal`, `Low`, `Medium`, `High`, `XHigh`, `Max`, `None`). It SHALL update as the model or provider changes, keep the selected effort when the new model accepts it, and otherwise select the new model's default. The select SHALL always be shown, so users can discover it: with an empty model field it SHALL be disabled with the single option `Default — enter a model first`, and for a model with no levels disabled with the single option `Default — not available for this model`. Its hint SHALL say why (R42).
 - R38. Saving SHALL store the selected effort with the connection. A selected effort the model doesn't accept SHALL fail the save with `reasoning effort must be one of: <levels>` and store nothing.
 - R39. When the settings screen opens on a saved configuration, the select SHALL show the stored effort (or the model's default when the stored one isn't among its levels).
 - R40. The connection probe (test and save) SHALL send the model's lowest level as its reasoning effort, and none for a model without levels. It SHALL NOT use the selected effort.
 - R41. Every model call SHALL map its effort to the nearest level the model accepts (ties to the higher level) before sending it. A model without levels SHALL keep today's behaviour (R29).
+- R42. The select's hint, linked to it as its accessible description, SHALL read `Used for answers. Test connection always uses the lowest level.` when the model has levels, `Enter a model to see the effort levels it supports.` when the model is empty, and `This model doesn't support a reasoning effort setting.` when it has none.
 
 ## Edge cases and errors
 
@@ -94,7 +95,7 @@ Effort levels
 
 ## UI
 
-Settings area, **LLM Configuration** ([../app-shell/spec.md](../app-shell/spec.md), [../../system/ui.md](../../system/ui.md)). The form, top to bottom: heading "LLM Configuration" with "Configure the language-model provider and verify the credentials."; **Provider** select; **Model** (or **Deployment name**) text box; for LenAI a **Base URL** box with the hint "Gateway root; requests use <base URL>/openai/v1/deployments/<deployment>."; **Reasoning effort** select (only when the model has effort levels, R37); **API key** password box; **Test connection** button; **Save connection** button (tooltip "Test the connection successfully before saving"). States: empty (nothing saved), populated (saved values, masked key placeholder), key unreadable (saved values without a key, plus the notice "Your saved API key can't be read because the app secret changed. Enter the key again, test and save."), testing, saving, tested-ok (Save enabled). Results appear as toasts. The new-session composer shows the saved model name (or "No model configured") and a reasoning-effort chip (Low, Medium, High).
+Settings area, **LLM Configuration** ([../app-shell/spec.md](../app-shell/spec.md), [../../system/ui.md](../../system/ui.md)). The form, top to bottom: heading "LLM Configuration" with "Configure the language-model provider and verify the credentials."; **Provider** select; **Model** (or **Deployment name**) text box; for LenAI a **Base URL** box with the hint "Gateway root; requests use <base URL>/openai/v1/deployments/<deployment>."; **Reasoning effort** select (always shown; disabled with a `Default — …` option when the model is empty or has no effort levels, R37); **API key** password box; **Test connection** button; **Save connection** button (tooltip "Test the connection successfully before saving"). States: empty (nothing saved), populated (saved values, masked key placeholder), key unreadable (saved values without a key, plus the notice "Your saved API key can't be read because the app secret changed. Enter the key again, test and save."), testing, saving, tested-ok (Save enabled). Results appear as toasts. The new-session composer shows the saved model name (or "No model configured") and a reasoning-effort chip (Low, Medium, High).
 
 ## Flows
 
@@ -164,7 +165,10 @@ Feature: LLM settings
     Then the "Reasoning effort" select offers "Minimal", "Low", "Medium" and "High"
     And "High" is selected
     When I change the deployment name to "gpt-4.1"
-    Then I see no "Reasoning effort" select
+    Then the "Reasoning effort" select is disabled and shows "Default — not available for this model"
+    And I see "This model doesn't support a reasoning effort setting."
+    When I clear the deployment name
+    Then the "Reasoning effort" select is disabled and shows "Default — enter a model first"
     When I change the deployment name to "my-deployment"
     Then the "Reasoning effort" select offers "Low", "Medium" and "High"
 
