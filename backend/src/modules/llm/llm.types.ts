@@ -1,3 +1,5 @@
+import type { ReasoningEffort } from '../../mastra/effort-levels';
+
 // LLM provider settings, mirrored from data-readiness-agent (its Feature
 // 1.5.3 / ADR-0026). OpenAI, Anthropic and LenAI (Halo's internal
 // OpenAI-compatible gateway) are wired; adding another provider later is a new
@@ -10,8 +12,12 @@ export const SUPPORTED_PROVIDERS: LlmProvider[] = [
   'lenai',
 ];
 
-export type ReasoningEffort = 'low' | 'medium' | 'high';
+export type { ReasoningEffort };
 
+/**
+ * The efforts the composer menu and agent overrides offer. Settings → LLM
+ * offers the model's own levels instead (`effortLevelsFor`).
+ */
 export const REASONING_EFFORTS: ReasoningEffort[] = ['low', 'medium', 'high'];
 
 /**
@@ -23,6 +29,15 @@ export interface SaveLlmSettingsDto {
   model: string;
   apiKey?: string;
   baseUrl?: string;
+  /** Saved with the connection; must be one of the model's levels. */
+  reasoningEffort?: ReasoningEffort;
+}
+
+/** The effort levels a model accepts (`GET /llm/effort-levels`). */
+export interface EffortLevelsView {
+  levels: ReasoningEffort[];
+  defaultEffort: ReasoningEffort | null;
+  probeEffort: ReasoningEffort | null;
 }
 
 /** API view — the key is always masked, never returned in plaintext. */

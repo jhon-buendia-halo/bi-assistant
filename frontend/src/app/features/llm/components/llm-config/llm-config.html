@@ -32,6 +32,30 @@
     />
   </label>
 
+  @if (effortLevels().length) {
+    <label class="flex flex-col gap-1">
+      <span class="field-label">Reasoning effort</span>
+      <select
+        [value]="reasoningEffort()"
+        (change)="onEffortChange($any($event.target).value)"
+        class="field"
+      >
+        @for (level of effortLevels(); track level) {
+          <option
+            [value]="level"
+            [selected]="level === reasoningEffort()"
+            class="bg-surface"
+          >
+            {{ effortLabels[level] }}
+          </option>
+        }
+      </select>
+      <span class="text-[10px] leading-4 text-fg-muted">
+        Used for answers. Test connection always uses the lowest level.
+      </span>
+    </label>
+  }
+
   @if (provider() === 'lenai') {
     <label class="flex flex-col gap-1">
       <span class="field-label">Base URL</span>

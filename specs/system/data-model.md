@@ -180,7 +180,7 @@ Exactly one LLM document, upserted by `key = "llm"`. A second document, `key = "
 | `model` | string | yes | Model id; for `lenai` it is the deployment name. |
 | `baseUrl` | string | yes | `""` for `openai`/`anthropic`; required non-empty for `lenai`. |
 | `apiKeyCiphertext` | string | yes | The API key encrypted per section 2.3. Never returned by the API; the view carries `apiKeyMasked` = `••••••••` + the key's last 4 characters. |
-| `reasoningEffort` | enum | no | `low` \| `medium` \| `high`; absent is read as `high`. Preserved across re-saves (a re-save writes the existing value, or `high`). Settable only once settings exist. |
+| `reasoningEffort` | enum | no | `none` \| `minimal` \| `low` \| `medium` \| `high` \| `xhigh` \| `max`, limited on save to the levels the model accepts ([agents.md](agents.md) 1.4); absent is read as `high`. A save without an effort keeps the stored value when the model offers it, else the model's default. Settable only once settings exist. Older documents hold only `low` / `medium` / `high`, which stay valid (no migration). |
 | `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
 
 No document stored = "not configured": agents fall back to model `openai/gpt-4o-mini` with the `OPENAI_API_KEY` env var. A save is only persisted after a live test call with the submitted settings succeeds. See [agents.md](agents.md) for model routing.

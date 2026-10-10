@@ -77,11 +77,35 @@ The same resolved model is used by every agent except the visual designer (1.5),
 
 ### 1.4 Per-call tuning (reasoning effort, token caps)
 
-**Reasoning effort.** The user picks `low | medium | high` (default `high`, stored on the settings document). The value is sent as a provider option named `reasoningEffort`, filed under the **provider bucket the resolved model actually reads** — the provider segment of the model id (`openai`, `lenai`, `anthropic`). Filing it under a hard-coded `openai` bucket silently drops it for `lenai/…` models; that must not happen.
+**Effort levels.** Each model accepts its own subset of `none < minimal < low < medium < high < xhigh < max`. A built-in table, matched case-insensitively against the model or deployment name (so it survives LenAI's mangled names, where `gpt-5.2` appears as `gpt-52`), gives the levels, lowest first. The first matching row wins:
+
+| Model name matches | Levels |
+|---|---|
+| `gpt-6…` containing `luna` (e.g. `gpt-6-luna`) | none, low, medium, high, xhigh, max |
+| other `gpt-6…` (e.g. `gpt-6-astra`, `gpt-6.1-sol`) | low, medium, high, xhigh, max |
+| `gpt-5.6` to `gpt-5.9` | none, low, medium, high, xhigh, max |
+| `gpt-5.2` to `gpt-5.5` with `pro` | medium, high, xhigh |
+| `gpt-5.2` to `gpt-5.5` | none, low, medium, high, xhigh |
+| `gpt-5.1` | none, low, medium, high |
+| `gpt-5` with `pro` | high |
+| `gpt-5` (incl. `-mini`, `-nano`, dated) | minimal, low, medium, high |
+| `gpt-4…`, `gpt-3…` | — (no reasoning effort) |
+| `o1` to `o4` (e.g. `o3`, `o4-mini`) | low, medium, high |
+| `claude-fable…`, `claude-mythos…`, `claude-opus-5…`, `claude-sonnet-5…`, `claude-haiku-5…`, `claude-opus-4-7`, `claude-opus-4-8` | low, medium, high, xhigh, max |
+| `claude-opus-4-6`, `claude-sonnet-4-6` | low, medium, high, max |
+| `claude-opus-4-5` | low, medium, high |
+| Claude models that reject `effort`: every older Haiku, the Claude 3 line, Sonnet 4 / 4.5, Opus 4 / 4.1 | — |
+| anything else | low, medium, high |
+
+GPT versions are read as `gpt-<major>[.<minor>]` or `gpt-<major><minor>` (a second digit straight after the first); a dated suffix such as `gpt-5-2025-08-07` has no minor. Sources: the OpenAI model pages and Anthropic's *Effort* page, checked 2026-10-10. A model's **default** is `high` when offered, else its first level. Its **probe effort** is its first (lowest) level: the connection probe ([llm-settings](../capabilities/llm-settings/spec.md) R13-R19) sends it, as `reasoning_effort` in the OpenAI-compatible body or as the Anthropic `effort` option, so a reasoning model answers the probe quickly. Lookup: `GET /llm/effort-levels` ([api.md](api.md) 32a).
+
+> Implementation note: `effortLevelsFor(model)` in `backend/src/mastra/effort-levels.ts`.
+
+**Reasoning effort.** The user picks one of the model's levels in Settings → LLM (default `high`, stored on the settings document); the composer menu sets `low | medium | high`. Before it is sent, an effort the model doesn't accept is mapped to the **nearest level it does** (ties go to the higher level), so a fixed `low` (SQL fixer, visual designer) still works on a model that only offers `high`. For a model with no levels the effort passes through unchanged on OpenAI-compatible routes, as before. The value is sent as a provider option named `reasoningEffort`, filed under the **provider bucket the resolved model actually reads** — the provider segment of the model id (`openai`, `lenai`, `anthropic`). Filing it under a hard-coded `openai` bucket silently drops it for `lenai/…` models; that must not happen.
 
 For `anthropic/…` models the bucket is translated:
 
-- `reasoningEffort` → `effort`, **except** for models that reject it with a 400. Rejecting models match (case-insensitive) `claude-(?:haiku-|3|sonnet-4-5|sonnet-4-\d{8}|opus-4-1|opus-4-\d{8})` — i.e. every Haiku, the Claude 3 line, Sonnet 4 / 4.5, Opus 4 / 4.1. For those, effort is dropped silently.
+- `reasoningEffort` → `effort`, **except** for models with no levels in the table above (they reject it with a 400): every Haiku before Haiku 5, the Claude 3 line, Sonnet 4 / 4.5, Opus 4 / 4.1, matched by `claude-(?:haiku-[1-4]|3|sonnet-4-5|sonnet-4-\d{8}|opus-4-1|opus-4-\d{8})`. For those, effort is dropped silently.
 - `max_completion_tokens` is dropped (OpenAI-only passthrough).
 - Any other option passes through unchanged.
 

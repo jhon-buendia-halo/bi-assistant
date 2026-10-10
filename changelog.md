@@ -2,6 +2,21 @@
 
 Running log of every meaningful change, newest first. See *Logging convention* and *Evidence convention* in [CLAUDE.md](CLAUDE.md). Release versions come from Conventional Commits (`version-on-merge.yml`); this file records what shipped and links to the evidence.
 
+## 2026-10-10
+
+### Added
+- **Per-model reasoning effort in LLM Settings** (roadmap 1.10.1, [BA-160](https://halo-powered.atlassian.net/browse/BA-160), epic [BA-159](https://halo-powered.atlassian.net/browse/BA-159)):
+  - Settings → LLM has a **Reasoning effort** select under the model. It lists only the levels the typed model accepts, for example `Minimal / Low / Medium / High` for `gpt-5`, and is hidden for models without reasoning (`gpt-4.1`). Unknown names get `Low / Medium / High`. Save stores the chosen effort with the connection.
+  - Fixed along the way: reasoning models such as `gpt-5` failed **Test connection** (and therefore Save) with `LLM request timed out after 30s`. The probe now asks for the model's lowest level (`minimal` on `gpt-5`), so it answers within the limit; answers use the chosen effort.
+  - Every model call maps its effort to the nearest level the model accepts, so fixed efforts such as the SQL fixer's `low` still work on models that only take `high`. Claude Haiku 5.5 now receives effort (it was dropped with the older Haiku models).
+  - Backend: a built-in level table in `backend/src/mastra/effort-levels.ts`, checked against the OpenAI model pages and Anthropic's *Effort* page; `GET /llm/effort-levels`; `PUT /llm/settings` accepts `reasoningEffort`. No migration: stored `low` / `medium` / `high` values stay valid.
+  - Specs: epic spec [specs/epics/BA-159](specs/epics/BA-159/spec.md); llm-settings R7, R16, R23 and new R36–R41 with three Gherkin scenarios; [agents.md](specs/system/agents.md) 1.4 (level table); [api.md](specs/system/api.md) 30–32a; [data-model.md](specs/system/data-model.md); [ui.md](specs/system/ui.md) 4.9; the glossary.
+  - Tests: three new scenarios in `frontend/e2e/llm-settings.spec.ts`; the LLM stub records probes and `reasoning_effort`; new backend unit tests for the table, the mapping, the probe and save.
+  - Evidence: [evidence/1.10.1/](evidence/1.10.1/).
+
+### Changed
+- **Worktree naming and cleanup rules** ([CLAUDE.md](CLAUDE.md) *Branching convention*, shipped with epic [BA-159](https://halo-powered.atlassian.net/browse/BA-159) at the user's request): a worktree folder must be named after its epic, `.claude/worktrees/<EPIC-ID>-<short-description>`, and an app-created worktree is moved to that name before the first commit; once the PR merges, deleting the worktree folder and branch (and the worktree's isolated resources) is mandatory, with the exact commands. This branch's own worktree keeps its app-given name (`bridge-cse_01DwV7bpMzhV2fENvvXtnvJo`), an exception the user chose. Evidence: documentation only, no app change.
+
 ## 2026-10-09
 
 ### Added

@@ -90,7 +90,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Preview chat.** A conversation in the agent editor's Details panel that runs a *user agent*'s saved *draft*. It is held in memory only, never listed with the sessions, and discarded with its memory when the editor closes.
 
-**Reasoning effort.** `low`, `medium` or `high` (default `high`). A global setting passed to models that support it and dropped for models that reject it.
+**Reasoning effort.** How hard a model reasons before answering: one of `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, of which each model accepts its own subset (its *effort levels*; default `high` when offered). A global setting chosen in Settings → LLM, passed to models that support it, mapped to the nearest level a model accepts, and dropped for models that reject it.
 
 **Reasoning trail.** The "How I worked this out" list on an answer: one step per data-gathering call, with the assistant's plain-language rationale, the statement used and the outcome. The prose is the model's; ordering and outcomes come from what actually ran.
 

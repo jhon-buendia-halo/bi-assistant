@@ -14,6 +14,27 @@ Entry template:
 
 ---
 
+## 2026-10-10 — 1.10.1 Per-model reasoning effort in LLM Settings (BA-160)
+
+### What went well
+- Reading the probe code before proposing a fix showed the real cause: the 30 s limit applies to Test *and* Save, and the reasoning endpoint refuses until something is saved. That turned a "just raise the timeout" idea into the user's actual ask: pick from the levels each model accepts.
+- Checking the level table against the provider docs (Anthropic's Effort page, OpenAI's model pages) and the bundled Mastra provider schemas (which accept `none` to `max`) before writing it. It also surfaced a latent bug: the old Claude regex dropped effort for Haiku 5.5.
+- Extending the recording stub with `reasoning_effort` let the E2E prove both halves end to end: the probe sends `minimal`, the next chat turn sends `medium`.
+
+### What went wrong
+- I gave the user a curl workaround ("save directly, skip the test") without reading `save()`, which runs the same probe. I had to retract it a turn later.
+- I filed the story under BA-119 because the user picked it, before reading the epic's description; it covers the dev harness, not app features, so I had to ask again and create a new epic.
+- I ran `npm run build` in `backend/` while the full E2E suite was running in the background. `nest build` clears `dist/`, and 13 scenarios failed in a few milliseconds before I stopped the run and started over.
+- `npm run lint` in `backend/` runs `--fix` and reformatted ~30 unrelated files (and stripped two casts from a spec I touched). I had to revert them by hand.
+- The background web server from the start of the session hit the 2-hour limit and was killed; the user lost the running app mid-conversation.
+
+### What to do differently
+- Before suggesting a workaround through an endpoint, read that endpoint's service method end to end.
+- Before accepting an epic for a story, read the epic's Jira description and confirm it covers the kind of change; say so if it doesn't.
+- Never run `build` or `build:all` in `backend/` while Playwright is running; wait for the suite, or lint and unit-test only.
+- Lint the backend with `npx eslint <touched files>` (no `--fix`) to check a change, and run `git status` after any repo-wide lint.
+- When the user needs an app running for longer than the session's work, start it with the 2-hour maximum and tell them when it will stop.
+
 ## 2026-10-09 — 1.9.5 Agent editor with a preview chat (BA-155)
 
 ### What went well
