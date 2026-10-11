@@ -229,14 +229,63 @@ The measurement baseline. Every change to the DSL, knowledge store or connectors
 
 ### Milestone 1.2 — Data Model DSL ([BA-2](https://halo-powered.atlassian.net/browse/BA-2))
 
-The structure the assistant reasons over, as a single, versionable source of truth.
+The structure the assistant reasons over, as a single, versionable source of truth. Decision record and alternatives: [docs/plans/ba-2-data-model-dsl-alternatives.md](docs/plans/ba-2-data-model-dsl-alternatives.md) (decided 2026-10-01: a storage-neutral DSL with per-datasource bindings, a logical query layer so the assistant reasons over abstract entities, and the Knowledge Store mapping question vocabulary onto DSL references). Beta datasources: Postgres, Databricks, REST API. Delivered on the single BA-2 epic branch (2026-10-02 strategy change: one branch per epic; the former stories BA-85/86/87 were deleted and their work is described in the epic). That branch (`ba-2-epic-kickoff`) predates the specs reorganisation and the org server, so 1.2.1–1.2.3 reach `main` through the port in 1.2.4, on `feat/BA-2-data-model-dsl`. Epic spec: [specs/epics/BA-2/spec.md](specs/epics/BA-2/spec.md). ADR-0012 and ADR-0013 in [specs/system/architecture.md](specs/system/architecture.md). Assignee: Jhon Buendia.
 
-#### 1.2.1 — Data Model DSL  `📋 Planned`
-- **Intent:** answers stop depending on what the model infers from raw schema alone.
-- **Scope:** a domain-specific language describing entities, columns, relationships and business metrics; versionable; used to ground SQL generation.
-- **Out of scope:** business meaning (synonyms, concepts). That belongs to the Knowledge Store, per the boundary set in 1.3.1.
-- **Acceptance:** *to be defined.* The Jira epic has only a description. Agree the acceptance criteria before starting.
-- **Notes:** architectural, so it needs an ADR in [specs/system/architecture.md](specs/system/architecture.md) before code. Overlaps the existing dataset metrics UI and the "semantic metrics layer" in [docs/plans/phase-4-strategic-bets.md](docs/plans/phase-4-strategic-bets.md) (item 13); reconcile the two. Assignee: Jhon Buendia.
+#### 1.2.1 — Data model DSL: schema, bindings, bootstrap and metrics migration  `🚧 In progress`
+- **Intent:** every dataset has one versioned, validated data model (entities, attributes, relationships, metrics, bindings) that exists without user work and that the assistant and the Knowledge Store can address.
+- **Scope:**
+  - `DataModel` types and Zod schema (JSON Schema exported); portable attribute types, roles, relationship cardinality, metrics in the portable aggregation core with a dialect-tagged `expressions.sql` escape hatch; bindings per datasource kind (`sql`, `rest` executable in the beta; `mongo`, `file` accepted by the schema, no adapter).
+  - YAML parse / serialize with line-and-column errors; semantic validation (unique names, resolvable relationship and metric targets, binding columns that exist).
+  - `data_models` collection, one document per dataset with immutable versions and a current pointer; revert.
+  - Automatic bootstrap of v1 from the physical snapshot on dataset save and, on startup, for every existing dataset without a model. A re-save merges newly included tables into a new version (additive only) and records a drift report for removed or changed attributes; user edits are never overwritten.
+  - Metrics: the shared `metrics` store was the metrics panel's editor of record until 1.2.3, which moved the panel onto the model directly (`/datasets/:name/model/metrics*`); every legacy-store write still mirrors into each model that binds the table (`syncMetric`/`removeMetric`), except for a metric name a model now manages itself — the model wins for names it has, the legacy store is only mirrored in for names it is missing. (1.2.4 makes the legacy store import-only.)
+  - Logical reference format (`entity`, `entity.attribute`, `metric:name`, `rel:from->to`) and a `resolveRef` API for the Knowledge Store (1.3.2).
+  - API: `GET/PUT /datasets/:name/model`, versions, revert, drift, resolve, JSON Schema.
+- **Out of scope:** the logical query layer and prompt rendering (1.2.2); editing UI (1.2.3); Mongo, CSV and JSON adapters (Backlog).
+- **Acceptance:**
+  - Every existing dataset has a model v1 after upgrade with no user action, and a newly saved dataset gets one immediately.
+  - A model whose attribute references a binding column that does not exist fails validation with a line and column.
+  - Metrics created before the change appear in the model and still ground answers; the metrics panel works unchanged.
+  - `resolveRef` resolves and rejects references against a given model version.
+  - A changed snapshot yields a drift report without altering the current model version.
+- **Notes:** backend-only; API-level flows live in `backend/test/data-models.e2e-spec.ts` (see [specs/capabilities/data-model/spec.md](specs/capabilities/data-model/spec.md) *Feature: Data model*). Must ship before 1.3.2 migrates knowledge snippets. Marked Done on the old branch on 2026-10-02; back to In progress until the 1.2.4 port merges. Evidence: [evidence/1.2.1/](evidence/1.2.1/).
+
+#### 1.2.2 — Logical query layer: the assistant reasons over abstract entities, measured by evals  `🚧 In progress`
+- **Intent:** answers are built from one definition of each entity, relationship and metric, regardless of where the data lives; the assistant never sees table names or SQL dialects.
+- **Scope:** logical query spec (from, select, portable filters, group_by, order_by, limit, traverse along declared relationships) constrained by JSON Schema; one SQL compiler for Postgres, Databricks SQL and SQLite with dialect differences in one place; REST entities through the existing materialise-to-SQLite path; `describe_entity`, `query_entities`, `sample_records` tools replace the table-level tools; one rendered model block replaces the orientation, join-hint and metrics blocks; raw SQL demoted to an internal fallback that flags the answer as outside the model; `sql-fixer` stays for runtime repair of compiled SQL, `query-fixer` / `query-verifier` replace `sql-verifier` at the logical level; eval run on both paths.
+- **Out of scope:** non-SQL adapters; editing UI.
+- **Acceptance:** no `catalog.schema.table` or dialect names in the prompt or tool calls; logical queries compile to valid SQL on Postgres, Databricks and the REST materialisation; unknown attributes or undeclared relationships are rejected before any database call; metrics are computed by the compiler; the eval report shows per-question results for both paths and the raw-SQL fallback count.
+- **Notes:** depends on 1.2.1 and, for the golden set, 1.1.1 (World Cup / F1 eval sets as stopgap). ADR-0013 (Accepted; numbered ADR-0007 on the old branch). Design brief: [docs/plans/ba-86-logical-query-layer.md](docs/plans/ba-86-logical-query-layer.md). No LLM key is available in this environment — the dual-path eval plumbing (path selection, agent selection, counters, report fields) is unit-tested with a stubbed agent; the two real comparison runs are documented in [evidence/1.2.2/README.md](evidence/1.2.2/README.md) for the team to run once a key is configured. Marked Done on the old branch on 2026-10-02; back to In progress until the 1.2.4 port merges.
+
+#### 1.2.3 — Data model editing, versioning and export  `🚧 In progress`
+- **Intent:** analysts curate the model, see its history and move it as a file.
+- **Scope:** Gherkin + E2E first; raw YAML editor with line/column errors; version list, diff and revert; export / import `.yaml`; structured forms for entities, attributes, relationships and metrics; the metrics panel reads and writes the model.
+- **Out of scope:** Ossie / Databricks Metric Views import (Backlog).
+- **Acceptance:** fixing a relationship's cardinality in the editor and saving changes the next answer; an invalid edit is rejected with the offending line highlighted and the current version untouched; reverting changes what the assistant sees on the next turn; an exported file re-imports identically apart from the version header (`model`/`version` are doc-level truth `appendVersion` always rewrites; every entity, relationship and metric matches byte-for-byte).
+- **Notes:** depends on 1.2.1. Design brief: [docs/plans/ba-87-model-editing.md](docs/plans/ba-87-model-editing.md). Backend: export/import/serialize + model-scoped metrics CRUD on `DataModelsController`, a new `GET /datasets/:name/model/versions` list endpoint, and the `syncMetric`/`removeMetric` merge-rule flip (`localMetricNames` — the model wins for names it manages itself; `deletedMetricNames` tombstones an explicit delete against `rebootstrap`/`mergeSnapshot`/`syncMetric`). Frontend: new `features/data-model/` (api service, models, `data-model-view` + `model-yaml-editor` + `model-versions` + `entity-editor` + `model-metrics-panel`), `shared/utils/line-diff.ts`; the legacy `features/datasets/components/metrics-panel` and its service/model are deleted. The `model-metrics-panel`'s `where` builder supports one `{attr, op, value}` condition, not the DSL's full boolean tree — documented as a scope reduction; a metric shape the form cannot represent opens read-only instead. `MetricsService.definitionBlock` (the governed-metrics prompt block) reads the current data model for any table it binds, falling back to the legacy store only for tables no model binds — a panel edit/delete now actually reaches answers. History: on the old branch it was verified Done only after `frontend/e2e/data-model-editing.spec.ts` ran green (7/7) against the real Electron app, following a code-review round that fixed two real Playwright failures (`<select>` option binding, Electron download handling) plus 10 further findings. 1.2.4 moves that spec to the web app fixture. Flows: [specs/capabilities/data-model/spec.md](specs/capabilities/data-model/spec.md) *Feature: Data model editing*. Evidence: [evidence/1.2.3/](evidence/1.2.3/).
+
+#### 1.2.4 — Port onto main: org permissions, cross-owner metrics import, restyle, web E2E  `🚧 In progress`
+- **Intent:** the data model built in 1.2.1–1.2.3 ships on `main` and works there: in local and org server mode, in main's look, tested on the web app.
+- **Scope:**
+  - Merge the old branch's implementation onto `main` and renumber its ADRs to ADR-0012 (data model DSL) and ADR-0013 (logical query layer); `main` had taken 0006 and 0007 meanwhile.
+  - **Org server permissions.** A data model is shared like its dataset. Reads (the JSON Schema, model, versions, one version, drift, export, model metrics and metric candidates; resolve, compile, query and serialize) need *Use agents in the gallery and chat* (`use-agents`). Writes (save, revert, bootstrap, import, and creating, editing or deleting a model metric) need *Manage datasources and datasets* (`manage-datasources`). Local mode is unchanged. The data model view hides its edit controls from a caller without `manage-datasources`.
+  - **Metrics import across owners.** At startup, the legacy metrics of every owner are imported into the model of the dataset that covers them, with `author` set to the owner's id (absent in local mode). When two metrics share a lowercase name, the first by `createdAt`, then id, wins; the rest are listed in the model's metrics-import report (`lastMetricsImport`, returned by drift as `metricsImport`). A later legacy `/metrics` write of a name the model already has from another author is skipped and added to the report. The legacy `/metrics` store becomes import-only.
+  - **Agent lists.** `assistant-legacy` is hidden from `GET /agents` and the Agent Hub; it stays reachable at `GET /agents/assistant-legacy` and through the eval `legacy` path. The Hub's System section shows `query-verifier` in place of `sql-verifier`, plus `query-fixer`.
+  - **Restyle.** `features/data-model/` moves to main's semantic tokens and shared component classes (ADR-0007, [specs/system/ui.md](specs/system/ui.md)).
+  - **Web E2E.** `frontend/e2e/data-model-editing.spec.ts` runs on the web app fixture; a new org-permissions scenario and `backend/test/data-models-org.e2e-spec.ts` cover the permissions and the metrics import; the agent hub and agent sessions specs follow the model vocabulary.
+  - **Specs.** A new [data-model capability spec](specs/capabilities/data-model/spec.md), and the system and capability specs the model path touches (see the epic spec).
+- **Out of scope:** a desktop E2E run (not requested); an eval accuracy threshold; the two real eval comparison runs, which need an LLM key; non-SQL adapters and Ossie import (Backlog).
+- **Acceptance:**
+  - Every existing dataset gets a model on upgrade with no user action; a new dataset gets one on save.
+  - An invalid edit is rejected with its line and column, and the current version is untouched; revert changes what the assistant sees on the next turn.
+  - No table names or SQL dialects appear in the assistant prompt or tool calls; logical queries compile on all beta datasources.
+  - Exported models re-import identically.
+  - In org server mode, a User can read a dataset's data model, sees no edit controls, and gets 403 on every model write, which leaves the current version unchanged.
+  - Two owners' legacy metrics with the same name end up as one model metric, the earliest, with its author; the other is listed in the drift response's `metricsImport`.
+  - `GET /agents` and the Agent Hub don't list `assistant-legacy`.
+  - `grep -rE "zinc|white/|red-|amber-|emerald-" frontend/src/app/features/data-model` finds nothing.
+  - `python3 scripts/check-specs.py` passes; backend and frontend unit tests, builds and the web E2E suites (`npm run test:e2e`, `npm run test:e2e:org`) are green.
+- **Notes:** decisions taken with the user on 2026-10-11 are in the [epic spec](specs/epics/BA-2/spec.md). Eval runs are evidence, not acceptance. The E2E Postgres runs as an isolated `docker compose -p qti-ba2` stack with `E2E_SKIP_DOCKER=1`. Evidence: [evidence/1.2.4/](evidence/1.2.4/).
 
 ### Milestone 1.3 — Knowledge Store ([BA-4](https://halo-powered.atlassian.net/browse/BA-4))
 
@@ -720,4 +769,5 @@ Not yet sequenced into a release. The detailed phase plans below predate this ro
 - Trust UX — [docs/plans/phase-2-trust-ux.md](docs/plans/phase-2-trust-ux.md)
 - Visual quality + interactivity — [docs/plans/phase-3-visual-quality-interactivity.md](docs/plans/phase-3-visual-quality-interactivity.md)
 - Strategic bets — [docs/plans/phase-4-strategic-bets.md](docs/plans/phase-4-strategic-bets.md)
+- Data model: non-SQL adapters (MongoDB aggregation, CSV / JSON files via SQLite materialisation) and Ossie / Databricks Metric Views import — [docs/plans/ba-2-data-model-dsl-alternatives.md](docs/plans/ba-2-data-model-dsl-alternatives.md) section 5, story 4. Needs connector stories under BA-5 first.
 - Agent Routines ([BA-82](https://halo-powered.atlassian.net/browse/BA-82)): an epic in Jira with no description, dates or fix version. Promote it into a release once it's defined.

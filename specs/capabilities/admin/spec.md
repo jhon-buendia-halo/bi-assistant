@@ -1,10 +1,10 @@
 # Admin
 
-An organisation can run the app on its own server for many people. People sign in with their company Microsoft account, share the organisation's datasources, datasets and LLM configuration, keep their own sessions, agents and knowledge private, and can do only what their roles allow. The directory of people and groups is pushed from the identity provider. Platform admins get an **Admin** area. This spec owns the two modes, sign-in, the directory, roles and permissions, their enforcement, and data ownership. The Admin area's three tabs, Overview, Users & groups (with the user detail panel) and Roles & permissions, are the screens P1–P4 of epic [BA-161](../../epics/BA-161/spec.md). Decision: ADR-0010 and ADR-0011 in [../../system/architecture.md](../../system/architecture.md).
+An organisation can run the app on its own server for many people. People sign in with their company Microsoft account, share the organisation's datasources, datasets (with their data models) and LLM configuration, keep their own sessions, agents and knowledge private, and can do only what their roles allow. The directory of people and groups is pushed from the identity provider. Platform admins get an **Admin** area. This spec owns the two modes, sign-in, the directory, roles and permissions, their enforcement, and data ownership. The Admin area's three tabs, Overview, Users & groups (with the user detail panel) and Roles & permissions, are the screens P1–P4 of epic [BA-161](../../epics/BA-161/spec.md). Decision: ADR-0010 and ADR-0011 in [../../system/architecture.md](../../system/architecture.md).
 
 ## Concepts
 
-Defined in [../../product/glossary.md](../../product/glossary.md): local mode, org server mode, local user, owner, bootstrap admin, role, permission, group mapping, User (role), Maker, Data owner, Approver, Platform admin, user status, agent error, ownership transfer, session, agent, user agent, live (agent), draft (agent), datasource, dataset, knowledge entry, verified query, metric, eval run.
+Defined in [../../product/glossary.md](../../product/glossary.md): local mode, org server mode, local user, owner, bootstrap admin, role, permission, group mapping, User (role), Maker, Data owner, Approver, Platform admin, user status, agent error, ownership transfer, session, agent, user agent, live (agent), draft (agent), datasource, dataset, data model, knowledge entry, verified query, metric, eval run.
 
 Capability-local vocabulary:
 - **Sign-in page** — the only screen an unauthenticated browser sees in org server mode.
@@ -79,10 +79,10 @@ Capability-local vocabulary:
 
 ### Ownership and privacy
 
-- R28. In org server mode, datasources, datasets and the LLM configuration SHALL be shared: every signed-in user SHALL see and use the same ones, and only holders of the matching permission (Manage datasources and datasets, Manage LLM configuration) SHALL create, change or delete them.
-- R29. Everything else a user creates SHALL be private to its **owner**, the user who created it: sessions with their transcripts, visuals, reports, workspace files and agent memory; user agents and their pins; knowledge entries; verified queries; metrics; eval runs; and pins of built-in agents. Another user SHALL NOT see, list, open, change or delete it, through the UI or the API.
+- R28. In org server mode, datasources, datasets, each dataset's data model (with its metrics) and the LLM configuration SHALL be shared: every signed-in user SHALL see and use the same ones, and only holders of the matching permission (Manage datasources and datasets, Manage LLM configuration) SHALL create, change or delete them. A data model is read with Use agents and changed with Manage datasources and datasets ([../data-model/spec.md](../data-model/spec.md) R37-R40).
+- R29. Everything else a user creates SHALL be private to its **owner**, the user who created it: sessions with their transcripts, visuals, reports, workspace files and agent memory; user agents and their pins; knowledge entries; verified queries; legacy metrics (the import-only store that predates data models, [../metrics/spec.md](../metrics/spec.md) R15); eval runs; and pins of built-in agents. Another user SHALL NOT see, list, open, change or delete it, through the UI or the API.
 - R30. A request for another user's private item by its id SHALL be answered exactly as for an item that does not exist (HTTP 404, or the endpoint's usual not-found answer), so ids reveal nothing.
-- R31. Uniqueness rules on private items SHALL apply per owner: two users MAY each have a user agent or a metric with the same name.
+- R31. Uniqueness rules on private items SHALL apply per owner: two users MAY each have a user agent or a legacy metric with the same name. When legacy metrics of several owners share a name over one data model, the metrics import keeps the earliest and reports the others ([../data-model/spec.md](../data-model/spec.md) R34, R35); metric names are unique within a data model.
 - R32. Work that outlives its request (a streamed chat turn, a deep analysis, an eval run, a knowledge bootstrap) SHALL run as the user who started it and SHALL write only to that user's items. Its progress and results SHALL be visible only to that user.
 - R33. In local mode every item SHALL belong to the local user, including items stored before org server mode existed. Items stored without an owner SHALL NOT be visible to any user of an org server.
 
@@ -219,6 +219,7 @@ These rules cover the three tabs of the Admin area (R35): Overview (P1, [BA-164]
 
 - Mode configuration, the auth routes (`GET /auth/login`, `GET /auth/callback`, `POST /auth/logout`), `GET /me`, the SCIM routes, the admin routes (role assignments, overview and CSV export, users, user roles, agent transfer, groups, group mappings), the 401/403 bodies, the Origin check and the permission each route needs: [../../system/api.md](../../system/api.md) sections 1.9, 2.13-2.15 and 6.
 - The `users`, `groups`, `group_members`, `role_assignments`, `group_role_mappings`, `auth_sessions` and `activity_events` collections, the activity event types, how the admin figures (status, last activity, agents live, agent errors, last sync) are derived, agent ownership transfer, and `ownerId` on private collections: [../../system/data-model.md](../../system/data-model.md) sections 3.10, 3.14 and 3.15.
+- The shared `data_models` collection and the permission of each data model route: [../../system/data-model.md](../../system/data-model.md) section 3.15 and [../../system/api.md](../../system/api.md) sections 1.9 and 2.16; the rules in [../data-model/spec.md](../data-model/spec.md) R37-R40.
 - Agent memory and workspaces reached only through an owner-scoped session; the org-wide LLM configuration: [../../system/agents.md](../../system/agents.md) sections 1.3 and 7.1.
 - How to run an org server and register it with Entra ID: [../../system/delivery.md](../../system/delivery.md) section 4.1.
 - Security requirements (binding, cookies, CSRF, SCIM token, isolation): [../../product/non-functional.md](../../product/non-functional.md) section 3.
@@ -320,6 +321,17 @@ Feature: Permissions in the app
     And I don't see "Admin" on the rail
     When I start a new conversation
     Then I don't see the "Reasoning effort" control
+
+  Scenario: A User can read a dataset's data model but not change it
+    Given I am signed in as "user@contoso.test", who holds only the User role
+    When I click "Datasets" on the rail and click "Data model" on "World Cup Core"
+    Then I see the version badge "v1 · bootstrap" and the "Overview", "YAML", "Versions" and "Metrics" tabs
+    And I see the "Export" button
+    And I don't see the "Bootstrap from snapshot" or "Import" buttons
+    When I open the "YAML" tab
+    Then the editor is read-only and I don't see "Save as new version"
+    When I open the "Metrics" tab
+    Then I don't see the "New metric" button
 
   Scenario: A Maker can create an agent
     Given "maker@contoso.test" holds the Maker role
@@ -468,6 +480,8 @@ Feature: Org server API
     When I call "GET /me"
     Then it answers mode "local", the user "Demo User" and every permission
 ```
+
+The data model's own org server scenarios are API-level too and live in [data-model, Feature: Data model](../data-model/spec.md#feature-data-model) (`backend/test/data-models-org.e2e-spec.ts`): "Metrics of every user are imported into the shared model at startup", "A name clash keeps the first metric and reports the rest" and "A caller without Manage datasources cannot change a model". "Every route refuses a caller without its permission" above covers the seven data model write routes, which need Manage datasources and datasets, through the route list of `backend/test/org-auth.e2e-spec.ts`.
 
 The four Features below run in the Playwright `org` project like the three above. Their Backgrounds seed the directory through the SCIM test client, roles, mappings and shared data through the admin API, and agents through each person's own API session; people are signed in through the OpenID Connect stub, which makes them active that day. What has no endpoint is written to the running app's store through the org harness (`org.sql`, `frontend/e2e/helpers/admin-actions.ts`): past activity (for example "last active 95 days ago" sets the user's `lastSignInAt` and `lastActiveAt` and adds a `user.active` event that day) and agent errors (an `agent.turn-failed` event for a real session started from the agent). "Avery Admin" (`admin@contoso.test`) is a bootstrap admin in every Feature. The API-level parts (every admin route's 403 for a non-admin, transfer conflicts, the CSV content, save atomicity) are also covered by `backend/test/org-admin.e2e-spec.ts`.
 

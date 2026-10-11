@@ -34,13 +34,14 @@ specs/
 | [llm-settings](capabilities/llm-settings/spec.md) | LLM provider configuration, encrypted keys, model resolution | — |
 | [datasources](capabilities/datasources/spec.md) | Connections (PostgreSQL, Databricks, REST/OpenAPI), testing, discovery, read-only execution | Datasources, datasets, and sessions (`world-cup-workflow.spec.ts`) |
 | [datasets](capabilities/datasets/spec.md) | Catalog browser, entity selection, entity details, relationships | — (covered by the datasources Feature) |
+| [data-model](capabilities/data-model/spec.md) | Each dataset's versioned data model: the DSL, bootstrap, re-save merge and drift, YAML and form editing, versions and revert, export and import, logical queries, the metrics import, sharing and permissions | Data model editing (`data-model-editing.spec.ts`); Data model (API-level, `backend/test/data-models.e2e-spec.ts` and `backend/test/data-models-org.e2e-spec.ts`) |
 | [testing-data](capabilities/testing-data/spec.md) | Sample / test data setup | — |
 | [developer-settings](capabilities/developer-settings/spec.md) | Developer observability switch, endpoints, restart to apply | Developer settings (`developer-settings.spec.ts`), Developer observability export (`developer-observability.spec.ts`) |
 | [sessions-chat](capabilities/sessions-chat/spec.md) | Sessions, streamed chat, tools, SQL repair and verification, clarification, memory | Chat and visuals (`chat-and-visuals.spec.ts`) |
 | [visuals](capabilities/visuals/spec.md) | Interactive visuals: create, tailor, version, revert, refresh, repair, export | — (covered by the Chat and visuals Feature) |
 | [knowledge](capabilities/knowledge/spec.md) | Knowledge entries and bootstrap from data | — |
 | [verified-queries](capabilities/verified-queries/spec.md) | Saved, trusted question → SQL pairs | — |
-| [metrics](capabilities/metrics/spec.md) | Metric definitions and the metrics panel | — |
+| [metrics](capabilities/metrics/spec.md) | Metric definitions in a dataset's data model, the Metrics tab, promotion from verified answers, the import-only legacy store | Metrics tab (none yet; its "Defines a metric in the Metrics tab" scenario runs in Data model editing) |
 | [deep-analysis](capabilities/deep-analysis/spec.md) | Multi-step deep analysis runs | — |
 | [agents-evals](capabilities/agents-evals/spec.md) | Agent Hub, agent catalogue and user agents, eval sets, eval runs and reports | Agents (`agents.spec.ts`), Agent Hub (`agent-hub.spec.ts`) |
 | [admin](capabilities/admin/spec.md) | Local and org server modes, sign-in with Entra ID, SCIM directory, roles and permissions, enforcement, data ownership, the Admin area (Overview, Users & groups, Edit a user, Roles & permissions) | Sign in to an org server (`org-sign-in.spec.ts`), Permissions in the app (`org-permissions.spec.ts`), Private and shared data (`org-isolation.spec.ts`), Admin overview (`org-admin-overview.spec.ts`), Users and groups (`org-admin-users.spec.ts`), Edit a user (`org-admin-edit-user.spec.ts`), Roles and permissions (`org-admin-roles.spec.ts`), all in the Playwright `org` project |

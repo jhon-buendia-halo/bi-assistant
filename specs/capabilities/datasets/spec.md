@@ -1,6 +1,6 @@
 # Datasets
 
-A dataset is a named selection of entities (tables and views) from one datasource. The user browses a datasource's catalogs, schemas and entities, ticks what the assistant should be able to see, names the selection and saves it. Saving captures a schema snapshot of the chosen entities, enriched with real sample values and with how the entities join, so that the assistant can ground its answers without a live round trip. A session is created from one or more datasets, and those datasets define what the assistant is told it may query.
+A dataset is a named selection of entities (tables and views) from one datasource. The user browses a datasource's catalogs, schemas and entities, ticks what the assistant should be able to see, names the selection and saves it. Saving captures a schema snapshot of the chosen entities, enriched with real sample values and with how the entities join, and gives the dataset its **data model**: a versioned, logical description of its entities, attributes, relationships and metrics, bootstrapped from the snapshot ([data-model](../data-model/spec.md)). A session is created from one or more datasets, and those datasets' data models define what the assistant is told it may query; the assistant reasons over the model, never over the physical snapshot.
 
 ## Concepts
 
@@ -13,6 +13,7 @@ Defined once in [the glossary](../../product/glossary.md); used here as follows.
 - **Schema snapshot** — per included entity, its columns (name, type, nullable) as of save time, plus enrichment.
 - **Sample values** — up to five distinct stored values per column, captured at save time.
 - **Reference** — for a key column, the entity and column it joins to, marked `declared` (from the datasource's own constraints) or `inferred` (from naming).
+- **Data model** — the dataset's versioned logical model (entities, attributes, relationships, metrics, bindings to the physical tables). Owned by [data-model](../data-model/spec.md).
 - **Session scope** — the datasets a session was created with.
 
 ## Rules
@@ -44,6 +45,7 @@ Defined once in [the glossary](../../product/glossary.md); used here as follows.
 - R17. On save the system SHALL store the schema snapshot the browser sent (columns of the included entities only, since the browser sends only those). The backend does not re-read the columns; an included key with no snapshot entry is kept in the dataset without columns.
 - R18. On save the system SHALL enrich each snapshotted entity with sample values: it reads up to 50 rows per entity (four entities in flight, one shared connection where the kind allows), and for each column keeps up to five distinct non-empty values, each trimmed and cut to 40 characters plus `…`. Enrichment is best effort: an entity that cannot be sampled keeps its snapshot as is and the failure is logged; a sampling failure SHALL NOT fail the save.
 - R19. On save the system SHALL attach relationships to the snapshot (R23–R29) and persist the dataset. Datasets saved before enrichment existed are not back-filled until they are saved again; the same applies to schema drift on the datasource — the snapshot is only refreshed by re-saving.
+- R19a. After persisting, the system SHALL give the dataset its data model: the first save bootstraps version 1 from the snapshot; a later save merges newly included entities into a new model version and records drift for removed or changed ones, never overwriting what the user edited. Datasets that have no model are bootstrapped at startup. Rules: [data-model](../data-model/spec.md).
 - R20. A successful save SHALL toast `Dataset "<name>" saved — <n> entities`, close the browser and return to the dataset list; a failure toasts the message and stays in the browser.
 
 ### Entity details
@@ -63,16 +65,16 @@ Defined once in [the glossary](../../product/glossary.md); used here as follows.
 
 ### Scoping what the assistant can use
 
-- R30. A session SHALL be created from at least one dataset (`select at least one dataset`; the composer says "Select at least one dataset for this session" and, with no datasets, "No datasets yet — create one in Datasets first."). The session's datasets define its scope; the assistant's per-turn context lists the dataset names, every entity key with its datasource kind and id, and the join hints of every column that has a reference (`->` declared, `~>` inferred; truncated to a fixed character budget).
-- R31. The assistant's entity tools SHALL only act on entities of the session's datasets. Listing returns each entity with column count, datasource id/kind and dataset; describing returns columns with types, nullability, sample values, description (when the datasource supplied a column comment) and reference, or a note to sample the entity when no snapshot exists; sampling returns up to 100 rows (default 10) live. An entity outside the scope yields `Entity "<entity>" is not part of this session's datasets`; the same key in several datasources yields `Entity "<entity>" exists in several datasources — pass datasourceId. Options: <ids>`; an entity of an unbound dataset yields `Entity "<entity>" has no datasource bound — re-save its dataset`.
-- R32. The assistant's SQL tool SHALL run on one datasource: the one named by the call if it is used by the session's datasets (`Datasource "<id>" is not used by this session's datasets` otherwise), else the only one in scope; with none bound it answers `No datasource is bound to this session's datasets`, with several `Several datasources are in scope — pass datasourceId. Options: <id (kind)>`. SQL dialect follows the kind: Databricks SQL, PostgreSQL, or SQLite for REST.
-- R33. Open question: the SQL tool does not parse the statement, so a query that names an entity outside the session's datasets is not rejected by the system (the restriction is stated in the tool description). Decide whether to enforce scope in SQL.
+- R30. A session SHALL be created from at least one dataset (`select at least one dataset`; the composer says "Select at least one dataset for this session" and, with no datasets, "No datasets yet — create one in Datasets first."). The session's datasets define its scope; the assistant's per-turn context is the session's data model — the current model version of each dataset, composed into one block of logical entities with their attributes (with up to 3 sample values each), relationships and metrics, within a fixed character budget. It names no physical table, datasource or SQL dialect. Format: [agents.md](../../system/agents.md) section 4.1.
+- R31. The assistant's entity tools SHALL only act on the logical entities of the session's data model. Listing returns each entity with its description, attribute count and dataset; describing returns its attributes (type, role, description, sample values), the relationships in and out of it and its metrics; sampling returns up to 50 records (default 10) through the same compiler as any query. An entity outside the model yields `Entity "<entity>" is not part of this session's model`. When two datasets bind the same entity name to different tables, both are offered, renamed `<dataset>__<entity>`.
+- R32. The assistant's query tool SHALL take a logical query and compile it for the datasource of the entity it starts from: PostgreSQL or Databricks SQL for an entity bound to a table of that datasource kind, SQLite for an entity bound to a REST endpoint. A query that references anything the model does not declare is rejected before it runs, and a query whose entities live on more than one datasource is refused. Compilation rules: [data-model](../data-model/spec.md).
+- R33. A logical query can only reach the tables the model binds. The raw SQL fallback (sessions-chat R62) runs on a named entity's datasource and does not parse the statement, so it is not limited to the session's tables. Open question: decide whether to enforce scope there.
 - R34. Datasets that carry no datasource binding (created before datasources existed) SHALL be bound at read time to the default datasource ([datasources](../datasources/spec.md) R50); the binding is not persisted until the dataset is saved again.
 
 ### Listing and deleting
 
-- R35. The dataset list SHALL group datasets by the month of their last update (month name; "Earlier" when there is no date) and show for each: name, a lock icon, and `Edited <Mon D> · <kind> · <n> entities`. Opening a row opens the browser in edit mode; a "⋮" menu offers "Delete dataset".
-- R36. Deleting a dataset SHALL be by name and immediate (no confirmation), toast `Dataset "<name>" deleted`, and remove the row; an unknown name answers `Dataset "<name>" not found`. Sessions that listed the deleted dataset silently lose it from their scope. Open question: decide whether delete needs a confirmation and whether it should warn when sessions use the dataset.
+- R35. The dataset list SHALL group datasets by the month of their last update (month name; "Earlier" when there is no date) and show for each: name, a lock icon, and `Edited <Mon D> · <kind> · <n> entities`. Opening a row opens the browser in edit mode; a **Data model** icon button (accessible name `Data model of <name>`, shown when the row is hovered or focused) opens the dataset's data model view ([data-model](../data-model/spec.md)); a "⋮" menu offers "Delete dataset".
+- R36. Deleting a dataset SHALL be by name and immediate (no confirmation), toast `Dataset "<name>" deleted`, and remove the row, and SHALL delete the dataset's data model with it; an unknown name answers `Dataset "<name>" not found`. Sessions that listed the deleted dataset silently lose it from their scope. Open question: decide whether delete needs a confirmation and whether it should warn when sessions use the dataset.
 - R37. Editing a dataset SHALL open the browser with its name and entities prefilled and its datasource selected. If that datasource no longer exists the system SHALL toast `The dataset datasource is no longer available. Choose entities from another datasource.`, clear the inclusion and select another datasource.
 
 ### Legacy
@@ -81,7 +83,7 @@ Defined once in [the glossary](../../product/glossary.md); used here as follows.
 
 ### Sharing and permissions (org server mode)
 
-- R39. In org server mode datasets SHALL be shared by every signed-in user, and every user's sessions and agents can use any of them. Listing datasets needs Use agents; saving and deleting a dataset need Manage datasources and datasets, and **New dataset**, **Delete dataset**, the dataset name field and **Save dataset** are hidden without it. A user without it can still open a dataset in the browser to see its entities and work on their own metrics. Rules: [../admin/spec.md](../admin/spec.md) R21, R25, R28.
+- R39. In org server mode datasets SHALL be shared by every signed-in user, and every user's sessions and agents can use any of them. Listing datasets needs Use agents; saving and deleting a dataset need Manage datasources and datasets, and **New dataset**, **Delete dataset**, the dataset name field and **Save dataset** are hidden without it. A user without it can still open a dataset in the browser to see its entities, and open its data model read-only. The data model, metrics included, is shared like its dataset: reading it needs Use agents and changing it needs Manage datasources and datasets ([data-model](../data-model/spec.md)). Rules: [../admin/spec.md](../admin/spec.md) R21, R25, R28.
 
 ## Edge cases and errors
 
@@ -99,23 +101,26 @@ Defined once in [the glossary](../../product/glossary.md); used here as follows.
 
 - Endpoints: list, create/upsert and delete datasets: [api.md](../../system/api.md), section Datasets. Inventory and sampling come from the datasources endpoints.
 - Collections: `datasets` (legacy name `sandbox_selections`) and the session field `datasets`: [data-model.md](../../system/data-model.md).
-- Assistant tools (`list_entities`, `describe_entity`, `sample_rows`, `run_readonly_sql`) and the per-turn dataset block: [agents.md](../../system/agents.md), assistant agent.
-- Datasource behaviour (inventory, sampling, foreign keys, read-only SQL): [datasources](../datasources/spec.md). Session creation: [sessions-chat](../sessions-chat/spec.md). Metrics shown under the browser: [metrics](../metrics/spec.md).
+- Assistant tools (`list_entities`, `describe_entity`, `sample_records`, `query_entities`, `run_raw_sql`) and the per-turn model block: [agents.md](../../system/agents.md), sections 3 and 4.1.
+- The dataset's data model (bootstrap, versions, drift, editing, metrics, logical queries): [data-model](../data-model/spec.md); decisions ADR-0012 and ADR-0013 in [architecture.md](../../system/architecture.md).
+- Datasource behaviour (inventory, sampling, foreign keys, read-only SQL): [datasources](../datasources/spec.md). Session creation: [sessions-chat](../sessions-chat/spec.md). Metrics, defined in the data model: [metrics](../metrics/spec.md).
 - Terms: [glossary](../../product/glossary.md).
 
 ## UI
 
 Reached from the rail item **Datasets** (main area) — see [ui.md](../../system/ui.md).
 
-**Dataset list** — heading "Datasets"; filter chips and icons (inert); **New dataset** button; month sections of rows (see R35).
+**Dataset list** — heading "Datasets"; filter chips and icons (inert); **New dataset** button; month sections of rows, each with its **Data model** button (see R35).
 
-**Catalog browser** — heading "New dataset" or "Edit dataset"; subtitle "Catalogs, schemas and entities available through the selected datasource."; "Updated <date>" when known. Header controls: a "Datasource" picker, a "Refresh inventory" icon button (tooltip "Re-read catalogs, schemas and entities from the datasource", disabled while loading), a "Dataset name" input, and **Save dataset (N)** ("Saving…" while running; tooltip "Name the dataset and include at least one element"). Body states: choose-datasource prompt (R7), loading with Cancel, error, empty, or the tree with a filter box (placeholder "Filter catalogs, schemas and entities…", with a clear button). Rows: database icon + `<n> schemas` for catalogs, folder icon + `<n> entities` for schemas, table icon + `<n> columns` for entities. Beneath the tree the metrics panel curates metric definitions over the included entities ([metrics](../metrics/spec.md)).
+**Catalog browser** — heading "New dataset" or "Edit dataset"; subtitle "Catalogs, schemas and entities available through the selected datasource."; "Updated <date>" when known. Header controls: a "Datasource" picker, a "Refresh inventory" icon button (tooltip "Re-read catalogs, schemas and entities from the datasource", disabled while loading), a "Dataset name" input, and **Save dataset (N)** ("Saving…" while running; tooltip "Name the dataset and include at least one element"). Body states: choose-datasource prompt (R7), loading with Cancel, error, empty, or the tree with a filter box (placeholder "Filter catalogs, schemas and entities…", with a clear button). Rows: database icon + `<n> schemas` for catalogs, folder icon + `<n> entities` for schemas, table icon + `<n> columns` for entities. Beneath the tree a dashed note reads `Metrics are defined in the dataset's data model after saving.` ([metrics](../metrics/spec.md)).
 
 **Entity details** — the default content of the right panel outside a session and outside agent detail. Top button: "Include item", "Include item (partially included)" or "Included — click to remove" (R12); then the catalog / schema / entity block (R21).
 
 ## Flows
 
 ### Feature: Datasources, datasets, and sessions (World Cup database)
+
+The data model a save creates, and the **Data model** button that opens it, are specified with their scenarios in [data-model](../data-model/spec.md#feature-data-model) ("A saved dataset gets a bootstrapped data model") and [Data model editing](../data-model/spec.md#feature-data-model-editing).
 
 Covered scenarios live in the datasources capability: [Datasources, datasets, and sessions (World Cup database)](../datasources/spec.md#feature-datasources-datasets-and-sessions-world-cup-database) — creating the "World Cup Core" dataset and a session from it, and "Shows the real catalog schema and column metadata before a dataset is saved". E2E: `frontend/e2e/world-cup-workflow.spec.ts`.
 
@@ -213,7 +218,8 @@ Feature: Dataset management
 1. The datasources Feature scenarios that involve datasets pass (dataset creation against the seeded World Cup database; catalog schema and column metadata visible before saving).
 2. The "Dataset management" scenarios above behave as written once automated.
 3. After saving a dataset over the World Cup tables, the stored snapshot of `goals` has sample values for its text/number columns and references such as `goals.scoring_team_id → teams.id` and `goals.match_id → matches.id` (declared by PostgreSQL's constraints; each marked `declared`), and, for a datasource without constraints, inferred references (`~>`) for the same pairs.
-4. A session created from the dataset lists the dataset's entities and join hints in its context, can describe and sample only those entities, and answers questions through the datasource named by the dataset (checked in [sessions-chat](../sessions-chat/spec.md)).
-5. Deleting the dataset removes it from the list; sessions that used it keep working on their remaining datasets.
+4. Saving a new dataset gives it data model version 1; re-saving never overwrites a model edit ([data-model](../data-model/spec.md)).
+5. A session created from the dataset lists the model's logical entities, attributes, relationships and metrics in its context (and no physical table name), can describe and sample only those entities, and answers questions through the datasource named by the dataset (checked in [sessions-chat](../sessions-chat/spec.md)).
+6. Deleting the dataset removes it and its data model; sessions that used it keep working on their remaining datasets.
 
-<!-- sources: backend/src/modules/datasets/**, backend/src/mastra/tools/dataset.tools.ts, backend/src/mastra/context-blocks.ts, backend/src/modules/sessions/sessions.service.ts (boundDatasets, agentContext), backend/src/infrastructure/database/database.module.ts (legacy renames), frontend/src/app/features/datasets/** (excluding metrics-panel), frontend/src/app/app.html (Datasets navigation, right panel), frontend/e2e/world-cup-workflow.spec.ts -->
+<!-- sources: backend/src/modules/datasets/**, backend/src/modules/data-models/{data-models.service,session-model}.ts, backend/src/mastra/tools/model.tools.ts, backend/src/mastra/tools/dataset.tools.ts, backend/src/mastra/context-blocks.ts, backend/src/modules/sessions/sessions.service.ts (boundDatasets, agentContext), backend/src/infrastructure/database/database.module.ts (legacy renames), frontend/src/app/features/datasets/**, frontend/src/app/app.html (Datasets navigation, right panel), frontend/e2e/world-cup-workflow.spec.ts -->

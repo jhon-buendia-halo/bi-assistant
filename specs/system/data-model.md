@@ -110,6 +110,7 @@ Summary:
 | `eval_runs` | Past and in-flight eval runs | `jobId` | `startedAt` desc (per agent) | [agents-evals](../capabilities/agents-evals/spec.md) |
 | `knowledge_snippets` | Curated knowledge entries | `id` | `updatedAt` desc | [knowledge](../capabilities/knowledge/spec.md) |
 | `agents` | User-built agents (a draft, an optional Live version, pin) | `id` | `updatedAt` desc | [agents-evals](../capabilities/agents-evals/spec.md) |
+| `data_models` | One versioned data model per dataset (entities, relationships, metrics) | `dataset` (= `datasets.name`, upsert key) | n/a | [data-model](../capabilities/data-model/spec.md) |
 | `users` | Directory users (org server mode) | `id`; `userName` unique | `displayName` asc | [admin](../capabilities/admin/spec.md) |
 | `groups` | Directory groups (org server mode) | `id`; `displayName` unique | `displayName` asc | [admin](../capabilities/admin/spec.md) |
 | `group_members` | Group memberships (org server mode) | `id`; `(groupId, userId)` unique | n/a | [admin](../capabilities/admin/spec.md) |
@@ -118,7 +119,7 @@ Summary:
 | `auth_sessions` | Signed-in browsers (org server mode) | `id` = SHA-256 of the cookie token | n/a | [admin](../capabilities/admin/spec.md) |
 | `activity_events` | Sign-ins, daily activity, SCIM syncs, role and status changes (org server mode) | `id` | `at` desc | [admin](../capabilities/admin/spec.md) |
 
-Every document in every collection also carries `createdAt` and `updatedAt` (ISO), maintained by the store (section 2.1); they are listed per collection only where they matter. `sessions`, `verified_queries`, `metrics`, `eval_runs`, `knowledge_snippets` and `agents` are **private** and carry `ownerId` in org server mode; `connections`, `settings`, `datasets` and `datasource_inventories` are **shared** (section 3.15). In local mode the seven identity and access collections stay empty. There are **no foreign-key constraints and no cascading deletes** between collections; references are by value (`name`, `id`) and may dangle (section 3.13).
+Every document in every collection also carries `createdAt` and `updatedAt` (ISO), maintained by the store (section 2.1); they are listed per collection only where they matter. `sessions`, `verified_queries`, `metrics`, `eval_runs`, `knowledge_snippets` and `agents` are **private** and carry `ownerId` in org server mode; `connections`, `settings`, `datasets`, `data_models` and `datasource_inventories` are **shared** (section 3.15). In local mode the seven identity and access collections stay empty. There are **no foreign-key constraints and no cascading deletes** between collections; references are by value (`name`, `id`) and may dangle (section 3.13).
 
 ### 3.1 `connections` — datasources
 
@@ -356,6 +357,8 @@ Curated, app-owned metric definitions (a lightweight semantic layer).
 
 An update that omits an optional field removes it from the stored document (`unset`), so no stale description/dimensions survive an edit. Prefilled drafts (`MetricCandidate`: `verifiedQueryId`, `name`, `label`, `entity`, `datasourceId?`, `sql`) are computed from verified queries and never stored.
 
+**Legacy, import-only.** Metrics are now edited on the dataset's data model (`Metric` in 3.16). This collection is read at startup, by `MetricsService` mirroring and by the legacy `/metrics` routes ([api.md](api.md) 2.4); the startup import (M13) copies every owner's documents into the models and never deletes them.
+
 ### 3.8 `eval_runs`
 
 Persisted record of an eval run (the assistant's regression suite). Rewritten wholesale (`update` by `jobId` with upsert) after each question lands and at the end, so a crash mid-suite still leaves finished questions. The in-flight copy in process memory is authoritative while a run is running.
@@ -452,6 +455,7 @@ Deep-analysis jobs exist only in process memory (bounded history; a backend rest
 | `datasets` | `datasourceId` | `connections.id` | By value, no cascade. Deleting a datasource leaves its datasets (they then fail at use). |
 | `sessions` | `datasets[]` | `datasets.name` | By name. Deleting or renaming a dataset leaves sessions pointing at a missing name. |
 | `knowledge_snippets` | `scope.datasetId` | `datasets.name` | By name, no cascade. |
+| `data_models` | `dataset` | `datasets.name` | 1:1 by name; the model is deleted with its dataset. `versions[].model.entities[].bindings[].datasource` and the model's metrics' `sourceVerifiedQueryId` are by value and may dangle. |
 | `datasource_inventories` | `id` | `connections.id` | 1:1; deleted explicitly with the datasource. |
 | `verified_queries` | `sourceSessionId`+`sourceMessageAt` | `sessions.id` + message `at` | No cascade on session deletion; removed explicitly on thumbs-down. |
 | `metrics` | `datasourceId`, `sourceVerifiedQueryId` | `connections.id`, `verified_queries.id` | Provenance only, may dangle (a verified query id also rotates on re-approval). |
@@ -600,14 +604,59 @@ Reads walk `users`, `agents` and `activity_events` across all owners, so the adm
 Rules: [../capabilities/admin/spec.md](../capabilities/admin/spec.md) R28-R33.
 
 - **Private collections:** `sessions`, `verified_queries`, `metrics`, `eval_runs`, `knowledge_snippets`, `agents`, plus the per-user built-in pins and UI preferences documents in `settings` (3.2, 3.2.1). Everything hanging off a session is private through it: visual metadata and files, reports, the session workspace (section 4) and its agent memory thread (section 5).
-- **Shared collections:** `connections`, `datasets`, `datasource_inventories`, and the `llm` document in `settings`.
+- **Shared collections:** `connections`, `datasets`, `data_models`, `datasource_inventories`, and the `llm` document in `settings`. A data model is shared like its dataset: it carries no `ownerId`, every caller sees the same model, and the data model service reads the raw (not owner-scoped) `datasets` and `metrics` stores so the startup import can walk every owner.
 - **Org server mode:** every insert into a private collection stamps `ownerId` with the caller's id, and every find, update, unset and delete ANDs `ownerId = <caller>` into its filter. A document with another `ownerId`, or none, is invisible to the caller. Upserts carry `ownerId`, so they can never take over another owner's document.
 - **Local mode:** no `ownerId` is written and no owner filter is applied: every document belongs to the local user, whether it was stored before or after org server mode existed.
 - **Uniqueness and dedupe** on private collections apply per owner: agent names, metric names, the verified-query key `(sourceSessionId, sourceMessageAt)`.
 - **In-memory state** keyed by id (preview sessions, in-flight eval runs, deep-analysis jobs) records the owner's id (`local` for the local user) when it is created, and lookups filter by it: another user's entry answers as not found. The one-running-eval-run guard is kept per agent and owner. Work that outlives its request (eval runs, deep analysis) captures the user when it starts and re-enters it for every later step.
-- **Startup work** that walks a private collection across all owners (the verified-query field migration M4, the workspace backfill) reads the store without the owner filter.
+- **Startup work** that walks a private collection across all owners (the verified-query field migration M4, the workspace backfill, the data-model bootstrap and metrics import M13) reads the store without the owner filter.
 
 *Implementation note.* An `OwnedDocStore<T>` wrapper around `DocStore<T>` adds the stamp and the filter from the current user (`AsyncLocalStorage`, ADR-0011); the auth module provides it under an owned token per private collection. Repositories of private collections inject the owned token; the raw token stays for startup work (the sessions repository's workspace backfill and the verified-query migration) and for one request-time reader: the admin module's agents repository, which lists agents across owners and moves one to another owner ([api.md](api.md) 81-87; every route reaching it needs `manage-users`). The wrapper reads the caller on every call and fails closed (401) when nobody is signed in; a patch can't change `ownerId` and `ownerId` can't be unset. The built-in pins and UI preferences documents are scoped by their `key` instead (3.2, 3.2.1).
+
+### 3.16 `data_models`
+
+One document per dataset: the versioned data model (ADR-0012). Shared (3.15), upserted by `dataset`; deleted with its dataset. A model is created when a dataset is saved and, for datasets saved before the feature, at backend start (M13). Rules: [../capabilities/data-model/spec.md](../capabilities/data-model/spec.md).
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `dataset` | string | yes | The dataset's `name` (3.3). Upsert key. |
+| `currentVersion` | integer | yes | The `version` the assistant and every read use. Moves on save and on revert; never past the last version. |
+| `versions` | `DataModelVersion[]` | yes | Append-only history, oldest first. A version is never edited. |
+| `lastDrift` | `DriftReport` | no | The report recorded by the last bootstrap or snapshot merge (shape in [api.md](api.md) 98). Absent on a model that never re-saved; reads then compute one against the stored snapshot. |
+| `localMetricNames` | string[] | no | Lowercase metric names authored directly on the model (through the model-metrics endpoints). The legacy mirror skips these names. |
+| `deletedMetricNames` | string[] | no | Lowercase names deleted on the model (tombstones). Bootstrap, snapshot merge and the legacy mirror never bring them back; creating or updating a metric of that name clears the tombstone. |
+| `lastMetricsImport` | `MetricsImportReport` | no | The report of the last metrics import into this model (below). Exposed as `metricsImport` in the drift response ([api.md](api.md) 98). Absent when no import has run. |
+| `createdAt`, `updatedAt` | ISO | yes | Maintained by the data model service. |
+
+`DataModelVersion`:
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `version` | integer | yes | 1-based, increasing. |
+| `createdAt` | ISO | yes | |
+| `source` | enum | yes | `bootstrap` (derived from the snapshot, or a machine merge) \| `user` (a YAML save or a model-metric write) \| `import` (an uploaded YAML). |
+| `note` | string | no | Set on machine-written and metric-write versions, e.g. `metric <name> added`, `metric <name> updated`, `metric <name> removed`. |
+| `yaml` | string | yes | The version as saved, verbatim: what export returns and what the editor shows. |
+| `model` | `DataModel` | yes | The parsed, validated form of `yaml`. |
+
+`DataModel`: `{ model: string /* the model's name */; version: integer; description?: string; entities: Entity[]; relationships: Relationship[]; metrics: Metric[] }`.
+
+- `Entity`: `{ name /* logical, unique, what the assistant sees */; label?; description?; key?: string[]; bindings: Binding[]; attributes: Attribute[] }`.
+- `Attribute`: `{ name; type: 'string'|'integer'|'number'|'boolean'|'date'|'datetime'|'time'|'json'|'unknown'; role?: 'key'|'dimension'|'measure'|'time'; nullable?; description?; samples?: (string|number|boolean)[] }`.
+- `Binding` (the only place physical names appear): `{ kind:'sql'; datasource; table /* catalog.schema.table */; columns?: Record<attribute, column> }` \| `{ kind:'rest'; datasource; endpoint; recordPath?; columns? }` \| `{ kind:'mongo'; datasource; collection }` \| `{ kind:'file'; datasource?; path; format:'csv'|'json'|'ndjson'; recordPath? }`. Only `sql` and `rest` compile today.
+- `Relationship`: `{ name?; from /* entity.attribute */; to; cardinality: 'one_to_one'|'many_to_one'|'one_to_many'|'many_to_many'; source: 'declared'|'inferred'|'user'; description? }`.
+- `Metric`: `{ name /* lowercase, unique in the model, ^[a-z][a-z0-9_]*$ */; label; description?; entity /* logical */; agg?: 'sum'|'count'|'count_distinct'|'avg'|'min'|'max'|'ratio'; of?; numerator?; denominator? /* metric names, ratio only */; where?: Predicate; dimensions?: string[]; expressions?: { sql?: string }; sourceVerifiedQueryId?; author?: string }`. **`author`** is the id of the user who owned the legacy metric it was imported from; absent for metrics created on the model and in local mode. It is round-tripped through the YAML.
+- `Predicate`: `{ and: Predicate[] } | { or: Predicate[] } | { not: Predicate } | { attr; op: 'eq'|'ne'|'gt'|'gte'|'lt'|'lte'|'in'|'not_in'|'between'|'is_null'|'not_null'|'contains'|'starts_with'; value? }`.
+
+`MetricsImportReport`:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `importedAt` | ISO | When the import ran. |
+| `imported` | `{ name; entity; author?; sourceId }[]` | Legacy metrics copied into the model: lowercase `name`, logical `entity`, the legacy owner's id as `author` (absent in local mode), the legacy document `id` as `sourceId`. |
+| `skipped` | `{ name; author?; sourceId; reason: 'name_clash'; keptSourceId }[]` | Legacy metrics not copied because a metric of the same lowercase name already won: the earliest `createdAt`, then the lowest `id`, wins. `keptSourceId` is the winner's legacy id. A later legacy write of a name the model already holds from another author is skipped and appended here too. |
+
+Version rules: a save, import, metric write or machine merge appends a version and sets `currentVersion` to it; revert only sets `currentVersion`. A snapshot merge adds entities for new tables only and never overwrites an existing entity, attribute or metric.
 
 ## 4. Files on disk
 
@@ -765,8 +814,11 @@ Visuals created before versioning keep their **v1 files directly under `visuals/
 | M8 | Electron profile directory rename | Electron startup (desktop app) | If the current `userData` directory does not exist but a sibling `Questions to Insights` directory does, keep using the legacy directory. |
 | M9 | Windows roaming to local data move | Electron startup, Windows only | See section 1.1 (moves `app.sqlite`, `mastra.sqlite`, `workspaces` once; rollback on failure). `.app-secret` is resolved in the *resulting* data dir so the secret and the data it protects travel together. |
 | M11 | LLM API key under the former development secret | LLM module init, at backend start | If the `settings` document `llm` exists and its `apiKeyCiphertext` does not decrypt with the current key but does with SHA-256(`insecure-dev-secret`), re-encrypt it with the current key and patch only `apiKeyCiphertext`. Idempotent (a second run finds it readable). Failures are logged and leave the document untouched. Covered by `llm.service.spec.ts`. |
+| M13 | Datasets without a data model; legacy metrics of every owner | Data models module init (backend start), after the stores are built | For each `datasets` row (raw store, all datasets) with no `data_models` document, derive and store version 1 from its snapshot (`source: bootstrap`). Then import the legacy `metrics` documents of **every owner** (raw store, no owner filter) into the model of the dataset whose bound table covers each metric's `entity`: lowercase name, `author` = the document's `ownerId` (absent in local mode), ordered by `createdAt` then `id`, the first of a lowercase name wins, the rest go to `lastMetricsImport.skipped`. Idempotent: a second run finds the models and the names already there and adds no version. Legacy documents are never changed or deleted. A new dataset gets its model on save, not here. Covered by `bootstrap.spec.ts` and `data-models.service.spec.ts`. |
 | M10 | Pre-versioning visuals; messages without `reasoning`; datasets without `sampleValues`/`references` | Read time | Tolerated by readers (section 4.7; reasoning derived from `data[].rationale`; absent snapshot fields simply omitted). No rewrite. |
 | M12 | Theme choice saved only in browser storage (before ADR-0009) | Renderer start, once the backend answers | If `GET /ui-preferences` returns `theme: null` and `localStorage` holds `system`, `light` or `dark` under `questions-to-insights:theme`, the renderer saves it with `PUT /ui-preferences`. Idempotent: afterwards the backend holds a value. Covered by `theme.service.spec.ts` and the appearance E2E. |
+
+None for `data_models` beyond M13: it is a new collection, and the store creates the table on first open.
 
 None for `agents`: it is a new collection, and the store creates the table on first open. The built-in pins document is a new `settings` key and needs no migration.
 

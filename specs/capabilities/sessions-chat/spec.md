@@ -1,10 +1,10 @@
 # Sessions and chat
 
-A session is a named, persistent conversation over one or more datasets. The user asks business questions in plain English. The assistant plans the analysis, writes and runs read-only SQL against the datasets' datasources, and streams back its reasoning, each tool call and a final Markdown answer. Every answer shows how it was produced: the queries it ran and why, the rows each returned, the entities it touched, the curated knowledge it was given, and reliability signals (automatic SQL repair, result-quality warnings, a verified-query badge and an optional independent cross-check). Users can trust a number because they can see where it came from. They can stop a turn, answer the assistant's clarifying questions, and come back after a restart to the same conversation with the same memory.
+A session is a named, persistent conversation over one or more datasets. The user asks business questions in plain English. The assistant plans the analysis, queries the logical entities of the datasets' data models (the system compiles each query to read-only SQL for the right datasource), and streams back its reasoning, each tool call and a final Markdown answer. Every answer shows how it was produced: the queries it ran and why, the rows each returned, the entities it touched, the curated knowledge it was given, and reliability signals (automatic query and SQL repair, result-quality warnings, a verified-query badge and an optional independent cross-check). Users can trust a number because they can see where it came from. They can stop a turn, answer the assistant's clarifying questions, and come back after a restart to the same conversation with the same memory.
 
 ## Concepts
 
-All terms are defined in [glossary](../../product/glossary.md): **Session**, **Dataset**, **Datasource**, **Entity** (fully-qualified `catalog.schema.table`), **Turn**, **Answer**, **Tool call**, **Data record** (one captured tool result), **Rationale**, **Reasoning trail**, **Interpretation line**, **Clarification**, **Careful mode**, **Cross-check**, **Verified query**, **Knowledge snippet**, **Metric definition**, **Session workspace**, **Agent memory thread**, **Visual** (see [visuals](../visuals/spec.md)), **Deep analysis** (see [deep-analysis](../deep-analysis/spec.md)).
+All terms are defined in [glossary](../../product/glossary.md): **Session**, **Dataset**, **Datasource**, **Data model**, **Entity** (to the assistant, a logical entity of the data model; physically a `catalog.schema.table`), **Logical query**, **Outside the data model**, **Turn**, **Answer**, **Tool call**, **Data record** (one captured tool result), **Rationale**, **Reasoning trail**, **Interpretation line**, **Clarification**, **Careful mode**, **Cross-check**, **Verified query**, **Knowledge snippet**, **Metric definition**, **Session workspace**, **Agent memory thread**, **Visual** (see [visuals](../visuals/spec.md)), **Deep analysis** (see [deep-analysis](../deep-analysis/spec.md)).
 
 ## Rules
 
@@ -35,7 +35,7 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
 - R13. While a turn runs, the chat SHALL show a "Thinking" block with:
   - the last ~90 characters of reasoning on one line;
   - one row per tool call: tool name, then "failed", "N rows" or a spinner;
-  - the rationale and the input (SQL) of each call;
+  - the rationale and the input (the SQL that ran: compiled from a logical query, or raw) of each call;
   - the answer as rendered Markdown while it streams;
   - an elapsed-seconds counter with one decimal.
 - R14. When `done` arrives, the chat SHALL replace its whole transcript with the persisted one from the event. Streamed text is provisional. The persisted answer is authoritative and may differ, for example after the grounding check.
@@ -49,25 +49,32 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
 
 ### Grounding and tools
 
-- R22. The assistant SHALL only query entities from the session's datasets. It works only through these tools:
-  - list entities;
-  - describe an entity (columns, types, captured sample values);
-  - sample rows (default 10, max 100);
-  - run one read-only `SELECT`/`WITH` statement (default limit 100, max 500).
+- R22. The assistant SHALL only query the entities of the session's data model: the union of the **current model version** of each of the session's datasets ([data-model](../data-model/spec.md)). It works only through these tools:
+  - list entities (logical name, description, attribute count, dataset);
+  - describe an entity (attributes with type, role, description and real sample values; the relationships in and out of it; its metrics);
+  - sample records (default 10, max 50), compiled like any other query;
+  - query entities: one **logical query** (start entity, attributes, metrics or ad-hoc aggregations, filters, grouping, ordering, joins along declared relationships, default limit 100, max 500) that the system compiles to read-only SQL for the entity's datasource and runs;
+  - run raw SQL: one read-only `SELECT`/`WITH` statement on a named entity's datasource, as a last resort when a logical query cannot express the question (R62).
 
-  Tools that need a datasource SHALL ask the model to name one when several datasources are in scope, and refuse when none is bound.
-- R23. Every row-sampling or SQL tool call SHALL carry a rationale: one or two plain business sentences saying why the step is taken. It is stored flattened and clipped to 400 characters.
+  An entity is named by its logical name; the datasource and SQL dialect follow from the entity, so the assistant never names a datasource. Its prompt, context and tool results SHALL NOT contain a physical table name, a datasource id or kind, or a SQL dialect name (ADR-0013 in [architecture.md](../../system/architecture.md)); the exceptions are listed in [agents.md](../../system/agents.md) Open questions.
+- R23. Every sample, query or raw SQL tool call SHALL carry a rationale: one or two plain business sentences saying why the step is taken. It is stored flattened and clipped to 400 characters.
 - R24. Each turn's context SHALL give the assistant:
-  - the session's dataset and entity orientation;
+  - the session's data model as one rendered block: every entity with its attributes (with up to 3 sample values each, within a character budget), its relationships and its metrics;
   - the session's visuals (id, title, current version) and which one is open;
-  - the curated metric definitions for those entities;
   - the enabled knowledge snippets for the session's datasets;
-  - up to 3 verified question → SQL pairs most similar to the question (by word overlap, within a 3,000-character budget);
+  - up to 3 verified question → logical query pairs most similar to the question (by word overlap, within a 3,000-character budget); pairs saved with SQL only are left out;
   - for a session bound to an agent, the agent's Live instructions, last (R54).
+
+  A new model version, saved or reverted, SHALL apply from the next turn. Each answer records which version of each dataset's model it was answered from.
+- R62. **Raw SQL is the flagged last resort.** A raw SQL call SHALL run through the same read-only guard and SQL repair. Every turn in which the assistant called it, successfully or not, SHALL be stored as answered **outside the data model**, and the assistant is told to say so in the answer. Open question: the chat shows no badge for it yet.
+
+### Logical query repair
+
+- R61. When a logical query does not compile because it names an unknown attribute or metric, or because more than one relationship path could join its entities, the system SHALL ask the query-fixer agent once for a corrected query (it sees the rendered model, the failed query and the compiler's issues) and run that instead; the result tells the model the query was auto-corrected. Any other compile issue, or a correction that fails too, SHALL come back to the model as an error listing every issue, with a hint to call describe entity or pick the join path explicitly. A query that does not compile SHALL NOT reach the datasource.
 
 ### SQL repair (execution-guided)
 
-- R25. When the datasource engine rejects a statement, the system SHALL hand the statement, the engine error, the SQL dialect and a capped schema of the in-scope entities to the SQL-fixer agent and re-run the rewrite. This allows at most 2 repairs, so 3 executions in total. Each repair works on the previous rewrite.
+- R25. When the datasource engine rejects a statement (the SQL compiled from a logical query, or a raw statement), the system SHALL hand the statement, the engine error, the SQL dialect and a capped schema of the in-scope entities to the SQL-fixer agent and re-run the rewrite. This allows at most 2 repairs, so 3 executions in total. Each repair works on the previous rewrite.
 - R26. The system SHALL NOT attempt repair when:
   - the statement was refused before reaching the engine (not read-only or malformed);
   - the failure is a transport or authentication error (HTTP status, connection refused or reset, timeout, socket hang-up, DNS);
@@ -80,7 +87,7 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
 
 ### Result-quality warnings
 
-- R29. After every SQL run the system SHALL inspect the statement and its rows and attach any of these warnings to the data record. The texts are exact templates:
+- R29. After every SQL run the system SHALL inspect the statement and its rows and attach any of these warnings to the data record. Known gap: the checks currently run only inside the legacy SQL tool, so query entities, sample records and raw SQL results carry no warnings (see the known gaps under Acceptance). The texts are exact templates:
   - same expression under two names: "`<a> and <b>` are computed from the same expression, so any ratio between them is 1 by construction."
   - a measure constant on every row: "`<column>` is `<value>` on every row, so it cannot explain any difference between them."
   - limited without ordering: "The query keeps only a few rows without ranking them, so these are an arbitrary sample rather than the top results."
@@ -92,12 +99,14 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
 ### Persisted answer and provenance
 
 - R30. Each persisted answer SHALL carry:
-  - its data records: tool, input as run, columns, up to 200 rows, the returned row count, a truncated flag, error, rationale and warnings;
+  - its data records: tool, input as run (the SQL actually executed), columns, up to 200 rows, the returned row count, a truncated flag, error, rationale, warnings, the logical query (for a query entities call) and an outside-the-model flag (for a raw SQL call);
   - the entities its SQL referenced;
+  - the version of each dataset's data model the turn was answered from;
+  - an outside-the-model flag when any step used raw SQL (R62);
   - a deterministic interpretation line (R31);
   - a reasoning trail: one step per call that carried a rationale, in run order, with that call's row count or error;
   - the knowledge snippets that were in its context.
-- R31. The interpretation line SHALL be built from the successful SQL runs only, never from model output: `Computed from <N> quer(y|ies)[ over <entity, …>] — <R> row(s) analyzed.` It is absent when no SQL succeeded.
+- R31. The interpretation line SHALL be built from the successful queries only (query entities and raw SQL; samples do not count), never from model output: `Computed from <N> quer(y|ies)[ over <entity, …>] — <R> row(s) analyzed.` It is absent when no query succeeded.
 - R32. Under an answer, the chat SHALL show these blocks, each only when non-empty:
   - a collapsible "How I worked this out (N step(s))" list, each step's rationale followed by "N rows" or "failed — <error>";
   - a collapsible "Knowledge in context (N)" list (kind, title, dataset or "global", body), with a note that disabled snippets are never included;
@@ -113,9 +122,9 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
 
 ### Verified badge and rating
 
-- R35. An answer whose last successful SQL equals a stored verified query (case-, whitespace- and trailing-semicolon-insensitive) SHALL show a "Verified" badge (tooltip "Matches an approved query"). A pair stored without a datasource matches any datasource. Otherwise the datasources must match.
+- R35. An answer whose last successful query's SQL (for a logical query, the compiled SQL) equals a stored verified query (case-, whitespace- and trailing-semicolon-insensitive) SHALL show a "Verified" badge (tooltip "Matches an approved query"). A pair stored without a datasource matches any datasource. Otherwise the datasources must match.
 - R36. An answer with data records SHALL offer "Save as verified query" (thumbs up) and "Mark answer as wrong" (thumbs down):
-  - Thumbs up stores the preceding question → last successful SQL as a verified query and sets the badge.
+  - Thumbs up stores the preceding question → last successful SQL as a verified query, together with its logical query when that last query was one, and sets the badge. Only pairs with a logical query are later shown to the assistant (R24).
   - Thumbs down removes that answer's stored pair and clears the badge.
   - Repeating the same rating does nothing.
 
@@ -124,9 +133,9 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
 ### Careful mode (cross-check)
 
 - R37. The composer SHALL offer a "Careful" toggle. It applies to every turn sent while on. It is client-only and lasts for the open conversation: switching sessions turns it off, and it is never stored.
-- R38. In careful mode, before `done`, the system SHALL check the turn's last successful SQL result:
-  1. The SQL-verifier agent derives an independent query from the question alone. It sees the question, the schema with up to 3 sample values per column and similar verified pairs, never the original SQL.
-  2. The system runs that query with a 200-row limit.
+- R38. In careful mode, before `done`, the system SHALL check the turn's last successful query result (query entities or raw SQL):
+  1. The query-verifier agent derives an independent logical query from the question alone. It sees the question, the rendered data model with up to 3 sample values per attribute and similar verified questions (with their logical query when they have one, never their SQL), never the original query.
+  2. The system compiles and runs that query with a 200-row limit (SQL repair applies; a query that does not compile ends the check with an error).
   3. It compares both result sets as multisets, tolerating different column widths.
 
   The verdict is stored on the answer.
@@ -135,10 +144,10 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
   - disagree: "results differ — treat with care — <reason>";
   - error: one of:
     - "the answer's result set hit the row cap — a partial result cannot be compared"
-    - "no datasource is bound to this session, so the query could not be re-run"
+    - "no data model is bound to this session, so the query could not be re-run"
     - "the independent check did not produce a usable query"
     - "the check could not complete — <detail>"
-- R40. A failing cross-check SHALL NOT lose the answer. A turn with no successful SQL SHALL get no cross-check.
+- R40. A failing cross-check SHALL NOT lose the answer. A turn with no successful query SHALL get no cross-check.
 
 ### Clarification
 
@@ -163,7 +172,7 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
 
 - R46. Each session SHALL have its own persistent agent memory thread. Each turn replays the last 40 messages. There is no semantic recall and no auto-generated title.
 - R47. When a session has a transcript but no memory thread (created before memory existed), the system SHALL seed the thread from the full persisted transcript on the next turn.
-- R48. Background work (deep-analysis sub-calls, grounding pass, SQL repair, cross-check, visual design) SHALL NOT write into the session's memory thread.
+- R48. Background work (deep-analysis sub-calls, grounding pass, query and SQL repair, cross-check, visual design) SHALL NOT write into the session's memory thread.
 - R49. The full transcript SHALL be stored with the session and shown on reopen, including clarifications, visual event cards and deep-analysis reports. Memory and transcript survive app restarts.
 
 ### Empty session and navigation aids
@@ -189,8 +198,8 @@ Agents are defined in [agents-evals](../agents-evals/spec.md) (R43-R52); decisio
   - its model override and reasoning-effort override, when set (R56).
 
   Publishing a new version SHALL change the next turn of every session bound to the agent. A draft SHALL never apply to a session. The only exception is the agent editor's preview chat, an in-memory session that runs the draft (agents-evals R60, R61).
-- R55. An agent's instructions SHALL NOT relax any rule enforced in code: the read-only SQL guard, dataset scoping (R22), SQL repair (R25-R28), the grounding pass (R19) and the result-quality warnings hold whatever the instructions say. A write statement attempted under an agent's instructions SHALL be rejected by the read-only guard and shown as a failed tool call.
-- R56. A model override SHALL name a model or deployment of the configured provider. It SHALL replace the configured model for the assistant's calls only. The SQL fixer, SQL verifier, visual designer, knowledge bootstrap and eval judge keep the configured model and their own efforts. A reasoning-effort override SHALL replace the user's setting for the same assistant calls. With no LLM settings saved, the model override SHALL be ignored and the fallback model applies. A model the provider rejects SHALL fail the turn with the provider's error, like any model error (R45).
+- R55. An agent's instructions SHALL NOT relax any rule enforced in code: the read-only SQL guard, data model scoping (R22), query and SQL repair (R25-R28, R61), the grounding pass (R19) and the result-quality warnings hold whatever the instructions say. A write statement attempted under an agent's instructions SHALL be rejected by the read-only guard and shown as a failed tool call.
+- R56. A model override SHALL name a model or deployment of the configured provider. It SHALL replace the configured model for the assistant's calls only. The SQL fixer, query fixer, query verifier, visual designer, knowledge bootstrap and eval judge keep the configured model and their own efforts. A reasoning-effort override SHALL replace the user's setting for the same assistant calls. With no LLM settings saved, the model override SHALL be ignored and the fallback model applies. A model the provider rejects SHALL fail the turn with the provider's error, like any model error (R45).
 - R57. A session bound to an agent SHALL show the agent's name in the page header's session context (`Agent` and a chip with the name, before the datasources) and in its row of the session list, in place of the dataset line: `<agent name> · <datasets>`. The name SHALL be the agent's current Live name.
 - R58. The welcome block (R50) of a session bound to an agent SHALL use the agent's Live description as its one-line description when that is not empty, and the agent's Live starter questions (up to 5, in order) as the starter prompts when there are any. Otherwise R50's text and prompts apply. Clicking a starter question SHALL fill the composer and SHALL NOT send it.
 - R59. When the agent is deleted, its sessions SHALL keep their transcript, memory and datasets and continue with the plain assistant: no instructions block and no overrides. The page header chip and the list row SHALL read `<agent name> · agent deleted`, using the name the agent last had for the session, and the welcome block falls back to R50.
@@ -213,8 +222,10 @@ Agents are defined in [agents-evals](../agents-evals/spec.md) (R43-R52); decisio
 | Delete succeeds | Toast `Session "<name>" deleted`. If the deleted session was open, the main area returns to home and the visual panel clears. |
 | Datasource lookup for header fails or finds none | The header shows "Unavailable". |
 | Session dataset deleted or renamed later | Missing datasets are silently dropped from the turn's scope. *(Open question: no user-visible warning.)* |
-| Entity on several datasources without a datasource id | Tool error naming the datasource options. The model must retry with an id. |
-| No datasource bound | Tool error "No datasource is bound to this session's datasets". |
+| Two datasets bind the same entity name to different tables | Both are offered, renamed `<dataset>__<entity>`, with a note in the model block saying why. |
+| A dataset's data model was edited or reverted | The next turn uses the new current version (R24). |
+| Entity not in the session's model | Tool error `Entity "<entity>" is not part of this session's model`. |
+| Logical query that cannot compile | Tool error listing every issue, after one automatic query-fixer attempt when it applies (R61). |
 | Stopped before any text | Only the user message remains (persisted per R10). No assistant message. |
 | Stream fails to start | Error bubble "Backend unreachable" or "Stream failed (<status>)". |
 | Stream drops | "Stream disconnected". |
@@ -237,9 +248,10 @@ Agents are defined in [agents-evals](../agents-evals/spec.md) (R43-R52); decisio
   - sessions: list, get, create, delete;
   - chat: streamed message (and its event types `reasoning`, `text`, `tool`, `tool-result`, `visual-updated`, `done`, `error`), non-streamed message, message feedback.
 - Data in [data-model.md](../../system/data-model.md): the `sessions` collection (session document, chat message, data record, reasoning step, cross-check, clarification, visual event), the `verified_queries` collection, the agent memory store, and the per-session workspace directory and its legacy migrations.
-- Agents in [agents.md](../../system/agents.md): `assistant` (prompt, tools `list_entities`, `describe_entity`, `sample_rows`, `run_readonly_sql`, `ask_clarification`, `create_visual`, `update_visual`, and memory), `sql-fixer`, `sql-verifier`. Model resolution is in [llm-settings](../llm-settings/spec.md).
+- Agents in [agents.md](../../system/agents.md): `assistant` (prompt, tools `list_entities`, `describe_entity`, `sample_records`, `query_entities`, `run_raw_sql`, `ask_clarification`, `create_visual`, `update_visual`, the rendered model block and memory), `sql-fixer`, `query-fixer`, `query-verifier`. Model resolution is in [llm-settings](../llm-settings/spec.md).
+- The data model the assistant queries, the logical query grammar and its compilation: [data-model](../data-model/spec.md); decisions ADR-0012 and ADR-0013 in [architecture.md](../../system/architecture.md).
 - Agent sessions: `POST /sessions` with an `agentId`, and the session's derived `agent` field, in [api.md](../../system/api.md); the session's `agentId` and `agentName` in [data-model.md](../../system/data-model.md) section 3.4; the agent instructions block, the `agent-overrides` requestContext key and the model override in [agents.md](../../system/agents.md) sections 1.3, 4.1 and 4.2.
-- Related capabilities: [agents-evals](../agents-evals/spec.md) (user agents, the Agent Hub and its **Start chat**), [visuals](../visuals/spec.md) (visual cards, tailoring from chat, follow-up chips), [verified-queries](../verified-queries/spec.md), [knowledge](../knowledge/spec.md), [metrics](../metrics/spec.md), [deep-analysis](../deep-analysis/spec.md) (the "Deep analysis" composer action and report messages), [datasets](../datasets/spec.md), [datasources](../datasources/spec.md).
+- Related capabilities: [agents-evals](../agents-evals/spec.md) (user agents, the Agent Hub and its **Start chat**), [visuals](../visuals/spec.md) (visual cards, tailoring from chat, follow-up chips), [verified-queries](../verified-queries/spec.md), [knowledge](../knowledge/spec.md), [metrics](../metrics/spec.md), [deep-analysis](../deep-analysis/spec.md) (the "Deep analysis" composer action and report messages), [data-model](../data-model/spec.md), [datasets](../datasets/spec.md), [datasources](../datasources/spec.md).
 
 ## UI
 
@@ -390,14 +402,14 @@ Feature: Chat answers and reliability signals
     Given a "World Cup analysis" session over the "World Cup Core" dataset is open
 
   Scenario: An answer shows how it was worked out and the data behind it
-    Given the assistant answers with one "run_readonly_sql" call with a rationale, returning 2 rows from "world_cup.world_cup.tournaments"
+    Given the assistant answers with one "query_entities" call on the "tournaments" entity with a rationale, returning 2 rows
     When I ask "Who won the last two tournaments?"
-    Then I see "Computed from 1 query over world_cup.world_cup.tournaments — 2 rows analyzed."
-    And I see "Data entities" with the chip "world_cup.world_cup.tournaments"
+    Then I see an interpretation line starting "Computed from 1 query" and ending "2 rows analyzed."
     When I click "How I worked this out (1 step)"
     Then I see the rationale followed by "2 rows"
     When I click "Data used (1 query)"
-    Then I see "run_readonly_sql — 2 rows" with "Copy SQL"
+    Then I see "query_entities — 2 rows" with "Copy SQL"
+    And I see the SQL the logical query was compiled to
     When I click "Copy SQL"
     Then I see the toast "SQL copied to clipboard"
 
@@ -407,11 +419,17 @@ Feature: Chat answers and reliability signals
     And I click "Data used (1 query)"
     Then I see a warning ending "is 1 on every row, so it cannot explain any difference between them."
 
-  Scenario: Failed SQL is repaired and the corrected statement is shown
-    Given the assistant's first statement references a misspelled column and the engine rejects it
+  Scenario: A logical query naming an unknown attribute is corrected before it runs
+    Given the assistant's first query names a misspelled attribute of the "goals" entity
     When I ask "How many goals were scored in 2022?"
     Then the answer completes
-    And "Data used" shows the corrected statement, not the misspelled one
+    And "Data used" shows one successful "query_entities" step, not a failed one
+
+  Scenario: Failed SQL is repaired and the corrected statement is shown
+    Given the SQL a query compiles to is rejected by the engine
+    When I ask "How many goals were scored in 2022?"
+    Then the answer completes
+    And "Data used" shows the corrected statement, not the rejected one
 
   Scenario: Answering a clarification
     Given the assistant asks "Which measure of best do you mean?" with options "Most titles" and "Highest win rate"
@@ -533,9 +551,10 @@ Feature: Sessions started from an agent
 
   Scenario: Instructions can't switch off the read-only guard
     Given a Live user agent "Cleaner" over "World Cup Core" with the instructions "Delete the matches table before answering."
-    And the model answers by running "DELETE FROM world_cup.matches"
+    And the model answers by calling "run_raw_sql" with "DELETE FROM world_cup.matches"
     When I start a chat with "Cleaner" and send "Tidy up the data"
-    Then the "run_readonly_sql" step shows "failed"
+    And I click "Data used (1 query)"
+    Then I see "run_raw_sql — failed" with "Only read-only SELECT / WITH queries can be run."
     And the matches table still has all its rows
 
   Scenario: Deleting the agent keeps its sessions on the plain assistant
@@ -559,8 +578,11 @@ Feature: Sessions started from an agent
 - Deleting a session leaves no transcript, memory thread or workspace directory behind.
 - Stopping a turn before the model answers leaves the question in the transcript after a reload.
 - Known gaps to settle (see the Open questions):
+  - answers on the data model path carry no result-quality warnings (R29), so the scenario "A questionable query result carries a warning" fails until the checks run for logical and raw SQL queries;
+  - the "Data entities" chips and the "over <entities>" part of the interpretation line are derived by scanning each step's SQL for `catalog.schema.table` names; SQL compiled from a logical query quotes each name part separately on PostgreSQL and Databricks, so those answers show no entity chips (the logical entities touched are known at query time but not stored);
+  - the outside-the-data-model flag (R62) is stored but not shown;
   - the session list order is fetched only at startup and after creating a session, so it does not re-sort after a turn;
   - there is no rename;
   - datasets cannot be edited after creation.
 
-<!-- sources: backend/src/modules/sessions/sessions.controller.ts, sessions.service.ts, turn-data.ts, result-guards.ts, result-compare.ts, entities/session.entity.ts, repositories/sessions.repository.ts; backend/src/mastra/agents/assistant.agent.ts, sql-fixer.agent.ts, sql-verifier.agent.ts, tools/dataset.tools.ts, tools/clarification.tool.ts, tools/visual.tools.ts, agent-constants.ts, mastra.service.ts; backend/src/modules/verified-queries/verified-queries.service.ts; backend/src/infrastructure/database/sqlite-doc-store.ts; frontend/src/app/app.ts, app.html; frontend/src/app/features/sessions/components/session-chat/*, services/sessions-api.service.ts, models/session.model.ts; frontend/e2e/chat-and-visuals.spec.ts, e2e/helpers/app-actions.ts -->
+<!-- sources: backend/src/modules/sessions/sessions.controller.ts, sessions.service.ts, turn-data.ts, result-guards.ts, result-compare.ts, entities/session.entity.ts, repositories/sessions.repository.ts; backend/src/modules/data-models/session-model.ts, query/logical-query.ts, query/compile-sql.ts; backend/src/mastra/agents/assistant.agent.ts, assistant.instructions.ts, sql-fixer.agent.ts, query-fixer.agent.ts, query-verifier.agent.ts, tools/model.tools.ts, tools/dataset.tools.ts, tools/clarification.tool.ts, tools/visual.tools.ts, agent-constants.ts, mastra.service.ts; backend/src/modules/verified-queries/verified-queries.service.ts; backend/src/infrastructure/database/sqlite-doc-store.ts; frontend/src/app/app.ts, app.html; frontend/src/app/features/sessions/components/session-chat/*, services/sessions-api.service.ts, models/session.model.ts; frontend/e2e/chat-and-visuals.spec.ts, e2e/helpers/app-actions.ts -->
