@@ -4,7 +4,7 @@ The contract for how the app looks and behaves as a single window: shell layout,
 
 Stack-neutral wording; *Implementation notes* name the current Angular/Tailwind realisation (see [tech-stack.md](tech-stack.md)). The shell-level rules (R-numbered, testable) are in [../capabilities/app-shell/spec.md](../capabilities/app-shell/spec.md); this file is the visual and structural reference that spec points at.
 
-Capability specs referenced below: [app-shell](../capabilities/app-shell/spec.md), [diagnostics](../capabilities/diagnostics/spec.md), [llm-settings](../capabilities/llm-settings/spec.md), [datasources](../capabilities/datasources/spec.md), [datasets](../capabilities/datasets/spec.md), [testing-data](../capabilities/testing-data/spec.md), [sessions-chat](../capabilities/sessions-chat/spec.md), [visuals](../capabilities/visuals/spec.md), [knowledge](../capabilities/knowledge/spec.md), [verified-queries](../capabilities/verified-queries/spec.md), [metrics](../capabilities/metrics/spec.md), [deep-analysis](../capabilities/deep-analysis/spec.md), [agents-evals](../capabilities/agents-evals/spec.md).
+Capability specs referenced below: [app-shell](../capabilities/app-shell/spec.md), [diagnostics](../capabilities/diagnostics/spec.md), [llm-settings](../capabilities/llm-settings/spec.md), [datasources](../capabilities/datasources/spec.md), [datasets](../capabilities/datasets/spec.md), [testing-data](../capabilities/testing-data/spec.md), [sessions-chat](../capabilities/sessions-chat/spec.md), [visuals](../capabilities/visuals/spec.md), [knowledge](../capabilities/knowledge/spec.md), [verified-queries](../capabilities/verified-queries/spec.md), [metrics](../capabilities/metrics/spec.md), [deep-analysis](../capabilities/deep-analysis/spec.md), [agents-evals](../capabilities/agents-evals/spec.md), [admin](../capabilities/admin/spec.md).
 
 ## 1. App shell
 
@@ -66,7 +66,10 @@ Capability specs referenced below: [app-shell](../capabilities/app-shell/spec.md
    - Hover: `surface-muted` fill. Current area: `surface-selected` fill and `aria-current="page"`.
 5. When expanded, the **Sessions list** (app-shell R46, R48), below a `border` rule and filling the free height (scrolls); when collapsed, a flexible spacer. See below.
 6. Bottom group, 12 px apart (centred while collapsed):
-   - The account avatar: a 32 px `primary` circle with the letter "D" in `on-primary` (14 px semibold), titled "Demo User". A static placeholder with no menu.
+   - **Admin** (org server mode, users with `manage-users` only; admin R34): `shield` icon, `icon` colour, title and `aria-label` "Admin", label "Admin" when expanded. Marked current (`surface-selected`, `aria-current="page"`) while the Admin area (4.18) is shown.
+   - The account avatar: a 32 px `primary` circle with initials in `on-primary` (14 px semibold).
+     - **Local mode:** the letter "D", titled "Demo User". A static placeholder with no menu.
+     - **Org server mode** (admin R10): a `button` with the signed-in user's initials, title the display name, `aria-label="Account menu"`, `aria-haspopup="menu"` and `aria-expanded`. Initials: the first letter of the given name and of the family name; else of the first two words of the display name; else the first letter of the email; uppercase, at most two. Clicking it opens a `menu` (width 240) beside the rail, above the avatar: the display name (13 px semibold `fg-strong`), the email (12 px `fg-muted`, truncated), a `border` rule, and the `menu-item` **Sign out** (`log-out` icon). Escape or a click outside closes it. While sign-out runs the item reads "Signing out…" and is disabled.
    - **System logs** (scroll-text icon, `icon` colour; `aria-label="Open system logs"`, title "System logs and diagnostics"; label "System logs" when expanded), with a red count badge (`danger` palette, top-right of the icon) showing the number of error + warning log entries, capped at "99+", hidden at zero. Opens the system logs panel (3.2).
    - **Settings** (gear icon, `icon` colour, title and `aria-label` "Settings"; label "Settings" when expanded), marked current (`surface-selected`, `aria-current="page"`) while the Settings area is shown.
    - A 1 px `border` divider.
@@ -111,6 +114,7 @@ The main column renders exactly one of these views, held in a single "main view"
 | `conversation-new` | **New conversation** in the drawer, or **Start New Conversation** in the page header | Sessions | page header ("New conversation") + New-session composer (4.7); list in the drawer | Entity details |
 | `session-chat` | a session row in the drawer, or creating a session | Sessions | page header (session name + datasource context) + Session chat (4.12); list in the drawer | Interactive visual panel (4.13) |
 | Settings area, section `datasources` / `llm` / `testing-data` / `developer` / `appearance` | rail **Settings**, then a section | Settings | Settings list pane + the matching form (4.9-4.12, 4.16), centred column | Entity details |
+| `admin` (org server mode only) | rail **Admin** | Admin | Admin area (4.18) | Entity details |
 
 - Content views (everything except the chat) sit in a vertically scrolling, horizontally centred column with 32 px horizontal / 40 px vertical padding and a max width of 960 px (settings forms: 560 px for datasources, testing data, developer and appearance, 480 px for LLM, 24 px horizontal padding).
 - Opening a session loads the datasources used by that session (for the header) and its most recent visual (for the right panel).
@@ -128,6 +132,25 @@ The main column renders exactly one of these views, held in a single "main view"
   - Window resize re-clamps the width.
   - Persistence: `localStorage` key `questions-to-insights:right-panel-width`, value the integer pixel width as a string; written when a drag ends and on every keyboard/reset change; read once at start-up (non-numeric or missing -> 572; out-of-range values clamped).
 - Right panel bodies by main view: see the table in 1.4. Open/closed state is session-only (not persisted); only the width is remembered.
+
+### 1.6 Modes and permission-based visibility
+
+Rules: [../capabilities/admin/spec.md](../capabilities/admin/spec.md) R2, R5, R24-R26 and [../capabilities/app-shell/spec.md](../capabilities/app-shell/spec.md) R50.
+
+- **Local mode:** the shell opens at once and every control below is shown.
+- **Org server mode:** the renderer loads the current user (`GET /me`, [api.md](api.md) 2.12) before anything else. A 401 shows the sign-in page (4.17) in place of the whole shell; otherwise the shell renders with the user's permissions. Any later 401 replaces the shell with the sign-in page.
+- Controls hidden, not disabled, when the user lacks the permission:
+
+  | Permission | Hidden without it |
+  |---|---|
+  | `create-agents` | Agent Hub **New agent** (4.4); in a user agent's detail **Edit**, **Publish** and **Delete** (4.5); in the Evals tab the question checkboxes, **Select all**, **Run <n> selected** and the **Executions** sub-tab (the question list stays readable) |
+  | `manage-datasources` | Datasets list **New dataset** and the row menu's **Delete dataset** (4.2); in the catalog browser the **Dataset name** field and **Save dataset (<n>)** (4.3; rows still open it, so metrics stay reachable); Settings **Datasource Configuration** and **Testing Data** |
+  | `manage-llm` | Settings **LLM Configuration**; the New-session composer's **Reasoning effort** dropdown (4.7) |
+  | `edit-policies` | Settings **Developer** |
+  | `manage-users` | Rail **Admin** (1.3) |
+
+  The Settings list keeps its order with the hidden sections left out; **Appearance** is always there. A Settings section that becomes hidden while chosen falls back to "Choose a settings section.".
+- **403:** any call answered with HTTP 403 raises the error toast `You don't have permission to do this.` (instead of the server message) and leaves the view as it is.
 
 ## 2. Loading, empty, error and confirmation conventions
 
@@ -303,7 +326,7 @@ Shown while an agent detail is open. With nothing selected: "Select a question i
 
 Capability: [sessions-chat](../capabilities/sessions-chat/spec.md).
 
-A centred `card` (radius 12, max width 920, padding 16) with a **Session name** `field` (14 px; label `field-label`; placeholder `My new session`), then a controls row: a model chip (sparkle icon + the configured model id in `fg`, or `No model configured` in `fg-muted` when none), a **Reasoning effort** dropdown button (title "Reasoning effort", signal icon + `low` / `medium` / `high` capitalised in `fg-muted`, a `menu` of the three values opening upward, the current one `fg-strong` semibold; choosing one saves it immediately: toast `<server message>`), and the `btn btn-primary` **Create** button (corner-down-left icon; shows `Creating…`; disabled until a name is typed and at least one dataset selected; title "Name the session and select at least one dataset"). Below the card: caption "Select at least one dataset for this session" and a list of dataset `list-row`s (36 px `surface-muted` tile with a workflow icon in `accent`, name, "<n> entities"; a selected row is `list-row-selected` with a trailing circle-check in `primary`). Empty: `No datasets yet — create one in Datasets first.` On success: toast with the server message, the session list reloads and the new session opens (4.12).
+A centred `card` (radius 12, max width 920, padding 16) with a **Session name** `field` (14 px; label `field-label`; placeholder `My new session`), then a controls row: a model chip (sparkle icon + the configured model id in `fg`, or `No model configured` in `fg-muted` when none), a **Reasoning effort** dropdown button (hidden without `manage-llm` in org server mode, 1.6; title "Reasoning effort", signal icon + `low` / `medium` / `high` capitalised in `fg-muted`, a `menu` of the three values opening upward, the current one `fg-strong` semibold; choosing one saves it immediately: toast `<server message>`), and the `btn btn-primary` **Create** button (corner-down-left icon; shows `Creating…`; disabled until a name is typed and at least one dataset selected; title "Name the session and select at least one dataset"). Below the card: caption "Select at least one dataset for this session" and a list of dataset `list-row`s (36 px `surface-muted` tile with a workflow icon in `accent`, name, "<n> entities"; a selected row is `list-row-selected` with a trailing circle-check in `primary`). Empty: `No datasets yet — create one in Datasets first.` On success: toast with the server message, the session list reloads and the new session opens (4.12).
 
 ### 4.8 Knowledge list and form
 
@@ -404,6 +427,26 @@ Capability: [app-shell](../capabilities/app-shell/spec.md) R39–R45.
 - A card holding one `radiogroup` labelled **Theme** with three options, each a native radio input with a visible label and an icon: **System** (`monitor`), **Light** (`sun`), **Dark** (`moon`). The options sit side by side as pill buttons (radius full, 1 px `border` token). The selected one has the `primary-soft` fill, `on-primary-soft` text and a `border-selected` outline. Keyboard: arrow keys move the selection, as for any native radio group.
 - No Save button: a choice applies and is remembered at once.
 
+### 4.17 Sign-in page (org server mode)
+
+Capability: [admin](../capabilities/admin/spec.md) R5-R7, R16.
+
+- Replaces the whole shell: no rail, no banner card, no details panel, no system-logs button. The frame (1.2: gradient and texture) fills the window and holds one centred `card` (width 400, padding 32, radius 12, `main` landmark), top to bottom, 16 px apart:
+  - the logo (1.3, 40 px) and the `h1` "Agentic Hub" (24 px semibold `fg-strong`);
+  - the subtitle "Sign in with your organisation account to continue." (14 px `fg-muted`);
+  - when the round trip failed, an inline error block (section 2) reading `Sign-in failed. Try again.` or `Your account is deactivated. Contact your administrator.`;
+  - the full-width `btn btn-primary` **Sign in with Microsoft** (`log-in` icon). Clicking it navigates the window to `/auth/login` (a full page load, not a request) and reads `Signing in…`, disabled, until the page unloads.
+- The error to show comes from the `signInError` query parameter of the page URL (`failed` or `deactivated`, [api.md](api.md) 2.12); the page removes it from the address bar once shown.
+- Theme: follows the Appearance choice stored in the browser (6.5). axe-clean in both themes.
+
+### 4.18 Admin area (org server mode)
+
+Capability: [admin](../capabilities/admin/spec.md) R34, R35.
+
+- Content view (1.4), max width 960. Header: `h2` "Admin" (page-title style, 4) and the subtitle "Manage people, roles and access for your organisation." (13 px `fg-muted`).
+- A `tablist` (`aria-label="Admin sections"`) with three `tab`s, in this order: **Overview**, **Users & groups**, **Roles & permissions**. 14 px medium; the selected tab has `fg-strong` text and a 2 px `primary` bottom border, the others `fg-muted`. Overview is selected each time the area opens. Arrow keys move between tabs.
+- Each `tabpanel` (labelled by its tab) holds, until its story ships, one `fg-muted` 13 px line: `Overview arrives with BA-164.`, `Users & groups arrives with BA-165.`, `Roles & permissions arrives with BA-167.` Later stories replace these placeholders with the P1, P2 and P4 screens of epic BA-161.
+
 ## 5. Cross-cutting behaviour
 
 ### 5.1 State that survives view changes
@@ -416,7 +459,7 @@ The dataset browser's inclusion set and the current tree selection are shell-wid
 
 ### 5.3 Toast policy
 
-Every action failure surfaces as an error toast with the server's `message` (or `Backend unreachable` when the request itself failed); every successful mutating action surfaces a success toast carrying the server's message. Exception: pinning or unpinning an agent shows its result on the card at once and toasts only on failure (4.4). Errors persist 8 s, others 4 s (3.3).
+Every action failure surfaces as an error toast with the server's `message` (or `Backend unreachable` when the request itself failed; `You don't have permission to do this.` for any HTTP 403, 1.6); every successful mutating action surfaces a success toast carrying the server's message. Exception: pinning or unpinning an agent shows its result on the card at once and toasts only on failure (4.4). Errors persist 8 s, others 4 s (3.3).
 
 ## 6. Design tokens
 
@@ -490,7 +533,7 @@ Contrast: `fg-muted` is `rgba(0,0,0,.6)` (Figma's `.55` is kept only for `placeh
 
 Brand imagery comes from the Figma assets in `frontend/public/brand/agentic-hub/`: `frame-texture.webp`, `banner.webp`, `logo-mark.svg`, `lenai-mark.svg`, `powered-by-lenai.svg`, `sparks.svg` (assistant mark), `page-header-icon.svg` and `data-sources.svg`; the folder also keeps the other exported Figma icons (`rail-*.svg`, `new-conversation.svg`, `send.svg`, `copy.svg`, `download.svg`, `thumb-up.svg`, `thumb-down.svg`, `chevron-down.svg`), unused, for reference. Every generic icon stays [lucide](https://lucide.dev) outline (line width 2 by default, `strokeWidth` 2.5 on the Stop square), sized 11-19 px (15 px in nav rows, 14 px in buttons, 16 px for toolbar/panel toggles). Names used, by area:
 
-- Shell / nav: `sun-moon` (Appearance), `monitor` / `sun` / `moon` (theme options), `panel-right`, `arrow-left`, `chevron-down`, `chevron-up` (Show less), `chevron-right`, `plus`, `search`, `ellipsis-vertical`, `trash-2`, `scroll-text`, `settings`, `menu` (drawer toggle), `square-pen` (Start New Conversation), `flask-conical` (Datasets), `bot` (Agents, LLM config, agent tiles), `book-open` (Knowledge), `folder-kanban` (Sessions), `database` (Datasource config, catalogs, session datasource context), `test-tube` (Testing data), `workflow` (dataset tiles), `corner-down-left` (Create).
+- Shell / nav: `shield` (Admin), `log-in` (Sign in with Microsoft), `log-out` (Sign out), `sun-moon` (Appearance), `monitor` / `sun` / `moon` (theme options), `panel-right`, `arrow-left`, `chevron-down`, `chevron-up` (Show less), `chevron-right`, `plus`, `search`, `ellipsis-vertical`, `trash-2`, `scroll-text`, `settings`, `menu` (drawer toggle), `square-pen` (Start New Conversation), `flask-conical` (Datasets), `bot` (Agents, LLM config, agent tiles), `book-open` (Knowledge), `folder-kanban` (Sessions), `database` (Datasource config, catalogs, session datasource context), `test-tube` (Testing data), `workflow` (dataset tiles), `corner-down-left` (Create).
 - Status / feedback: `loader-2` (spinners), `circle-check`, `circle-x`, `circle-alert`, `circle-minus`, `info`, `x`, `triangle-alert`, `lock`, `refresh-cw`, `download`, `copy`, `play`, `plug-zap`, `check`.
 - Data / catalog: `folder-tree` (schema), `table-2` (entity), `layout-grid`, `gauge` (metrics, checks, Evals tab), `list-checks` (question sets), `pencil`, `wand-2` (generate suggestions), `sparkle` / `sparkles` (AI, visuals, suggestions, agent cards), `pin` / `pin-off` (agent pin toggle), `upload` (Publish), `file-text` / `tag` / `filter` (knowledge kinds), `wrench` (tools), `brain` (Thinking, Memory tab), `cpu` (Model tab), `clock`.
 - Chat / visuals: `arrow-up` (send), `square` (stop), `thumbs-up`, `thumbs-down`, `badge-check` (Verified), `shield-check` / `shield-alert` / `shield-off` (cross-check, Careful mode), `telescope` (deep analysis), `bar-chart-3`, `history` (versions), `sliders-horizontal` (Tailor), `gallery-vertical-end` (saved visuals), `signal` (reasoning effort).
@@ -514,7 +557,11 @@ Strings below are asserted by the Playwright suite or are user-facing contracts.
 |---|---|
 | Page heading (banner `h1`) | `Agentic Hub` |
 | Window / document title | `Agentic Hub` (OS app name stays `Halo BI Assistant`) |
-| Rail buttons (title and aria-label) | `Expand navigation` / `Collapse navigation` (menu button), `Datasets`, `Agents`, `Knowledge`, `Sessions`, `Settings`; `Open system logs` (title `System logs and diagnostics`); avatar title `Demo User` |
+| Rail buttons (title and aria-label) | `Expand navigation` / `Collapse navigation` (menu button), `Datasets`, `Agents`, `Knowledge`, `Sessions`, `Settings`; `Open system logs` (title `System logs and diagnostics`); avatar title `Demo User` (local mode) or the user's display name with `aria-label` `Account menu` (org server mode); `Admin` (org server mode) |
+| Sign-in page | `Agentic Hub`, `Sign in with your organisation account to continue.`, `Sign in with Microsoft`, `Signing in…`, `Sign-in failed. Try again.`, `Your account is deactivated. Contact your administrator.` |
+| Account menu | `Sign out`, `Signing out…` |
+| Admin area | `Admin`, `Manage people, roles and access for your organisation.`, tablist `Admin sections`, tabs `Overview`, `Users & groups`, `Roles & permissions`, `Overview arrives with BA-164.`, `Users & groups arrives with BA-165.`, `Roles & permissions arrives with BA-167.` |
+| Permission toast | `You don't have permission to do this.` |
 | Drawer labels | `Agentic Hub`, `System logs`, `Settings`; LenAI mark `Powered by LenAI` |
 | Sessions area | `Sessions`, `New conversation`, `Start New Conversation`, `Session options`, `Options for <session name>`, `No sessions yet.`, `Select a session or start a new conversation.` |
 | Shell aria-labels | `Navigation rail`, `Workspace navigation`, `Sessions navigation`, `Settings navigation`, `Details panel` |
@@ -566,7 +613,7 @@ Targets and the automated gate: [../product/non-functional.md](../product/non-fu
 
 ## 10. Open questions and gaps
 
-- Account row ("Demo User", avatar "D"), settings search and its `⌘ F` hint, the Datasets list filter pills (Pinned / Yours / Shared with you), the search icon on the Datasets list, the layout-grid button and the empty 40 px tab strip are non-functional placeholders; intended behaviour is undefined.
+- Local mode's account avatar ("Demo User", "D"), settings search and its `⌘ F` hint, the Datasets list filter pills (Pinned / Yours / Shared with you), the search icon on the Datasets list, the layout-grid button and the empty 40 px tab strip are non-functional placeholders; intended behaviour is undefined.
 - The rail's 44 px window-drag spacer that clears the macOS traffic lights is applied on every platform; on Windows/Linux (no inset controls) it leaves a small empty space at the top of the rail. Intended cross-platform title-bar treatment is undefined.
 - Right-panel open state and drawer state are not persisted; only the panel width is.
 - No Escape / focus-trap handling for the system logs dialog and the popover menus; toasts lack live-region roles (see 8).

@@ -4,7 +4,7 @@ The complete contract between the renderer (or any HTTP client) and the backend,
 
 Contents: [1 Conventions](#1-conventions) · [2 Endpoints](#2-endpoints) · [3 Streaming and long-running work](#3-streaming-and-long-running-work) · [4 Desktop bridge (IPC)](#4-desktop-bridge-ipc) · [5 CLI contract](#5-cli-contract) · [6 Environment variables](#6-environment-variables) · [7 Gaps and open questions](#7-gaps-and-open-questions)
 
-Endpoint total: **57 HTTP route handlers** across 9 controllers (sessions 14, datasources 6, metrics 5, llm 4, datasets 3, agents 13, deep analysis 3, testing data 3, knowledge 6). Verified queries have **no** HTTP surface (they are created and removed as a side effect of message feedback, and read by the metrics promotion path).
+Endpoint total: **57 HTTP route handlers** across 9 controllers (sessions 14, datasources 6, metrics 5, llm 4, datasets 3, agents 13, deep analysis 3, testing data 3, knowledge 6). Verified queries have **no** HTTP surface (they are created and removed as a side effect of message feedback, and read by the metrics promotion path). Org server mode adds the auth and current-user routes (2.12), the SCIM routes (2.13) and the admin routes (2.14); in local mode those answer 404, except `GET /me`.
 
 ---
 
@@ -18,7 +18,7 @@ Endpoint total: **57 HTTP route handlers** across 9 controllers (sessions 14, da
 | Desktop (Electron renderer, `file://`) | Client uses `http://localhost:3000` (hardcoded). The backend child process listens on `PORT`, which the main process sets from `BACKEND_PORT` (default `3000`). See gap G1: a non-default `BACKEND_PORT` breaks the renderer. |
 | Dev (`ng serve` / `electron:dev`, page served from `http://localhost:4200`) | Protocol is `http:`, so the client uses relative URLs against the dev server. No proxy or override exists in the repo (G13). |
 
-The client rule is: `API_BASE_URL = (window.location.protocol === 'file:') ? 'http://localhost:3000' : ''`. All paths below are relative to that base. There is no API prefix, no versioning and no authentication.
+The client rule is: `API_BASE_URL = (window.location.protocol === 'file:') ? 'http://localhost:3000' : ''`. All paths below are relative to that base. There is no API prefix and no versioning. Authentication exists only in org server mode (1.9); in local mode there is none.
 
 ### 1.2 Wire format
 
@@ -74,6 +74,7 @@ POST handlers return the framework default **201 Created**; GET/PUT/DELETE retur
 |---|---|
 | Desktop (`main.ts`, Electron-spawned backend) | **Enabled** (`app.enableCors()`, allow-all) because the renderer's origin is `file://` (`Origin: null`). |
 | Web / CLI | **Disabled**. Same-origin only. |
+| Org server (CLI in org server mode) | **Disabled**. Same-origin only, plus the Origin check of 1.9. |
 
 ### 1.7 Static web UI and SPA fallback
 
@@ -92,6 +93,65 @@ Everything else keeps the default 404 body (`{statusCode:404, message:"Cannot GE
 - Mutating calls return the refreshed document (e.g. `session`) so the UI replaces local state rather than patching it.
 - `message` strings from Style A are surfaced directly to the user.
 - Secrets never come back in plaintext: datasource secrets are masked as `••••••••` (8 U+2022 bullets), the LLM key as `••••••••` + last 4 characters. A client may send the mask back unchanged to mean "keep the stored secret" (see 2.2, 2.5).
+
+### 1.9 Authentication, authorization and CSRF (org server mode)
+
+Rules: [admin](../capabilities/admin/spec.md) R1-R36. Decisions: ADR-0009 and ADR-0010 in [architecture.md](architecture.md).
+
+**Mode.** The server runs in org server mode when every required `ORG_*` variable (6.1) is set, and in local mode when none is. Some but not all is a startup error naming the missing ones. The Electron-spawned backend is always local (4.3).
+
+**Local mode.** No cookie, no 401, no 403, no Origin check. Every request runs as the local user (id `local`), who holds every permission. Auth routes (2.12, except `GET /me`), SCIM (2.13) and admin (2.14) routes answer `404 { statusCode:404, message:"Not available in local mode", error:"Not Found" }`.
+
+**Cookies** (org server mode). Both `HttpOnly`, `SameSite=Lax`, and `Secure` unless `ORG_PUBLIC_BASE_URL` starts with `http://`.
+
+| Cookie | Path | Holds | Lifetime |
+|---|---|---|---|
+| `qti_session` | `/` | The auth-session token: 32 random bytes, base64url. The server stores only its SHA-256 ([data-model.md](data-model.md) 3.14.6). | Session cookie (no `Max-Age`); the server ends it after 8 h idle or 7 days (admin R9). |
+| `qti_oidc` | `/auth` | The sign-in round trip: `state`, `nonce`, the PKCE verifier and `returnTo`, sealed with the app secret (AES-256-GCM, as in [data-model.md](data-model.md) 2.3). | `Max-Age=600`; cleared by the callback. |
+
+**Unauthenticated.** Any route other than the public ones below, called without a valid `qti_session`, answers:
+
+```json
+{ "statusCode": 401, "message": "Sign in required", "error": "Unauthorized" }
+```
+
+The check runs before the handler, so Style A endpoints (1.3) also answer a real 401. The static web UI (1.7) is public: the SPA loads, calls `GET /me`, gets 401 and shows the sign-in page.
+
+**Forbidden.** A signed-in caller without the route's permission gets, before the handler runs and with nothing changed:
+
+```json
+{ "statusCode": 403, "message": "Missing permission: <permission id>", "error": "Forbidden" }
+```
+
+The renderer shows its own toast for any 403 (`You don't have permission to do this.`, [ui.md](ui.md) 1.6), not this message.
+
+**CSRF.** In org server mode every request whose method is not `GET` or `HEAD` must carry `Origin` (else `Referer`) whose origin equals `ORG_PUBLIC_BASE_URL`; otherwise `403 { statusCode:403, message:"Cross-site request refused", error:"Forbidden" }`. SCIM routes are exempt.
+
+**Proxy.** In org server mode the app trusts the first proxy hop (`X-Forwarded-Proto`, `X-Forwarded-For`, `X-Forwarded-Host`), so redirects and the `Secure` cookie work behind the organisation's TLS proxy.
+
+**Current user.** Each request in org server mode reads its auth session (one store read), checks that the user is still active, resolves their roles and permissions (admin R20, R21) and runs the handler as that user. Work started by the request (streams, deep analysis, eval runs, knowledge bootstrap) keeps that user (admin R32).
+
+**Permission per route.** Every route declares exactly one requirement; a route with none stops the server at startup (admin R23). Private collections are also filtered by owner (admin R29, R30): another user's item answers as not found.
+
+| Routes | Requirement |
+|---|---|
+| Every `/sessions` route (2.1), including the chat stream, feedback, visuals and deep analysis (2.7) | `use-agents` |
+| `GET /agents`, `GET /agents/:key`, `GET /agents/:key/evals`, `PUT /agents/:key/pin` | `use-agents` |
+| `POST /agents`, `PUT /agents/:id/draft`, `POST /agents/:id/publish`, `DELETE /agents/:id`, `POST /agents/:key/evals/run`, `GET /agents/:key/evals/runs`, `GET /agents/:key/evals/runs/:jobId`, `GET /agents/:key/evals/runs/:jobId/download`, `DELETE /agents/:key/evals/runs/:jobId` | `create-agents` |
+| Every `/knowledge` route (2.8) and every `/metrics` route (2.4) | `use-agents` |
+| `GET /datasources`, `GET /datasources/:id/inventory` | `use-agents` |
+| `POST /datasources`, `POST /datasources/test-connection`, `POST /datasources/rest/discover`, `DELETE /datasources/:id` | `manage-datasources` |
+| `GET /datasets` | `use-agents` |
+| `POST /datasets`, `DELETE /datasets/:name` | `manage-datasources` |
+| Every `/testing-data` route (2.9) | `manage-datasources` |
+| `GET /llm/settings` | `use-agents` |
+| `PUT /llm/settings`, `PUT /llm/reasoning`, `POST /llm/test-connection` | `manage-llm` |
+| Every `/developer-settings` route (2.11) | `edit-policies` |
+| `GET /auth/login`, `GET /auth/callback`, `POST /auth/logout`, `GET /me` (2.12) | public: no permission checked (`GET /me` answers 401 itself without an auth session) |
+| Every `/scim/v2` route (2.13) | the SCIM bearer token, no auth session |
+| Every `/admin` route (2.14) | `manage-users` |
+
+`GET /llm/settings` leaves out `apiKeyMasked` (sends `null`) for a caller without `manage-llm`.
 
 ---
 
@@ -629,6 +689,110 @@ interface DeveloperSettingsView {
 - Sends `POST <endpoint>/v1/traces`, `Content-Type: application/x-protobuf`, empty body (an empty OTLP export), 3 s timeout.
 - Response `200` (Style A): `{ ok:true, message:"Reachable — <endpoint> accepted an OTLP trace export in <ms>ms" }`; `{ ok:false, message:"Endpoint answered <status> — not an OTLP trace receiver" }`; `{ ok:false, message:"Unreachable — <detail>" }` (network error, or `timed out after 3s`).
 
+### 2.12 Auth and current user
+
+Controllers `/auth` and `/me`. Capability: [admin](../capabilities/admin/spec.md). Requirement: public (1.9).
+
+| # | Method + path | Purpose | FE |
+|---|---|---|---|
+| 61 | `GET /auth/login` | Start sign-in (redirect to the identity provider) | yes (full-page navigation) |
+| 62 | `GET /auth/callback` | Finish sign-in (redirect target registered with the identity provider) | no (the identity provider redirects here) |
+| 63 | `POST /auth/logout` | Sign out | yes |
+| 64 | `GET /me` | The current user, roles and permissions | yes |
+
+```ts
+type RoleId = 'user' | 'maker' | 'data-owner' | 'approver' | 'platform-admin';
+type PermissionId = 'use-agents' | 'create-agents' | 'share-agents-team' | 'request-publishing' | 'approve-publishing'
+  | 'approve-datasource-access' | 'manage-users' | 'edit-policies' | 'view-audit-log' | 'manage-datasources' | 'manage-llm';
+interface HeldRole {
+  role: RoleId;
+  source: 'implicit' | 'direct' | 'group' | 'bootstrap';
+  datasourceId?: string;   // data-owner only
+  groupId?: string;        // source 'group' only
+  assignmentId?: string;   // source 'direct' only; the id DELETE /admin/role-assignments/:id takes
+}
+interface MeView {
+  mode: 'local' | 'org';
+  user: { id: string; displayName: string; email: string | null; initials: string };
+  roles: HeldRole[];
+  permissions: PermissionId[];   // sorted, de-duplicated
+}
+```
+
+#### 61. `GET /auth/login`
+- Query: `returnTo` (optional). Kept only when it is a path starting with `/` and not `//`; otherwise `/`.
+- Response `302` to the identity provider's authorization endpoint (from its discovery document) with `response_type=code`, `scope=openid profile email`, `client_id`, `redirect_uri=<ORG_PUBLIC_BASE_URL>/auth/callback`, a random `state` and `nonce`, and `code_challenge` (S256). Sets `qti_oidc` (1.9).
+- Identity provider unreachable: `302 /?signInError=failed`.
+
+#### 62. `GET /auth/callback`
+- Query: `code` and `state`, or `error` from the identity provider.
+- Checks: `qti_oidc` present and unsealed, `state` matches, code exchanged with the PKCE verifier, ID token signature, issuer, audience, expiry and `nonce` valid.
+- Then finds or creates the directory user (admin R12, R13): match by stored `oidcSubject` (`tid` + `oid` claims for Entra ID, else `sub`), else by `preferred_username` or `email` against `userName` / `email`, case-insensitive. Updates `displayName`, `email`, `lastSignInAt`. A user with `active: false` is refused.
+- Success: creates an `auth_sessions` document, sets `qti_session`, clears `qti_oidc`, records `sign-in` ([data-model.md](data-model.md) 3.14.7), `302` to the kept `returnTo`.
+- Failure: clears `qti_oidc`, `302 /?signInError=deactivated` for a deactivated user, `302 /?signInError=failed` for anything else. No auth session.
+
+#### 63. `POST /auth/logout`
+- Origin check applies (1.9). Deletes the caller's auth session if any, clears `qti_session` (`Max-Age=0`), records `sign-out`.
+- Response `200`: `{ ok:true, message:"Signed out", endSessionUrl: string | null }`: the identity provider's end-session endpoint with `client_id` and `post_logout_redirect_uri=<ORG_PUBLIC_BASE_URL>/`, or `null` when the provider has none. The renderer navigates there, or to `/` when `null`.
+- Without an auth session it still answers `200` (signing out twice is harmless).
+
+#### 64. `GET /me`
+- Local mode: `200 { mode:"local", user:{ id:"local", displayName:"Demo User", email:null, initials:"D" }, roles:[{role:"user",source:"implicit"},{role:"platform-admin",source:"implicit"}], permissions:<all eleven> }`.
+- Org server mode, signed in: `200 MeView` with `mode:"org"`. `initials` per [ui.md](ui.md) 1.3.
+- Org server mode, not signed in: `401` (1.9).
+
+### 2.13 SCIM 2.0 (directory provisioning)
+
+Controller prefix `/scim/v2`. Capability: [admin](../capabilities/admin/spec.md) R14-R17. Org server mode only. The subset Microsoft Entra ID's provisioning service sends; hand-written (ADR-0010). Shapes map to [data-model.md](data-model.md) 3.14.1-3.14.3.
+
+| # | Method + path | Purpose |
+|---|---|---|
+| 65 | `GET /scim/v2/ServiceProviderConfig` | Capabilities: `patch` supported, `filter` supported (max 100), `bulk`, `changePassword`, `sort` and `etag` not supported, auth scheme `oauthbearertoken` |
+| 66 | `GET /scim/v2/ResourceTypes` | `User` and `Group` |
+| 67 | `GET /scim/v2/Schemas` | The core User and Group schemas, listing only the supported attributes |
+| 68 | `GET /scim/v2/Users` | List or filter users |
+| 69 | `POST /scim/v2/Users` | Create a user |
+| 70 | `GET /scim/v2/Users/:id` | Read a user |
+| 71 | `PUT /scim/v2/Users/:id` | Replace a user |
+| 72 | `PATCH /scim/v2/Users/:id` | Change attributes (including `active`) |
+| 73 | `DELETE /scim/v2/Users/:id` | Remove a user (deactivates, see below) |
+| 74 | `GET /scim/v2/Groups` | List or filter groups |
+| 75 | `POST /scim/v2/Groups` | Create a group |
+| 76 | `GET /scim/v2/Groups/:id` | Read a group with its members |
+| 77 | `PATCH /scim/v2/Groups/:id` | Rename, add or remove members |
+| 78 | `DELETE /scim/v2/Groups/:id` | Delete a group, its memberships and its group mappings |
+
+- **Auth:** `Authorization: Bearer <ORG_SCIM_TOKEN>`, compared in constant time. Missing or wrong: `401`. No cookie, no Origin check. Every SCIM request records at most one `scim.request` activity event per minute.
+- **Media type:** responses are `application/scim+json`; requests are accepted as `application/scim+json` or `application/json`.
+- **User resource:** `{ schemas:["urn:ietf:params:scim:schemas:core:2.0:User"], id, externalId?, userName, name:{ givenName?, familyName?, formatted? }, displayName?, emails:[{ value, type:"work", primary:true }], active, meta:{ resourceType:"User", created, lastModified, location } }`. Supported attributes: `userName` (required, unique case-insensitively), `externalId`, `active`, `displayName`, `name.givenName`, `name.familyName`, `name.formatted`, `emails[type eq "work"].value`. Others are accepted and ignored.
+- **Group resource:** `{ schemas:["urn:ietf:params:scim:schemas:core:2.0:Group"], id, externalId?, displayName, members:[{ value:<user id>, display? }], meta }`. `excludedAttributes=members` leaves `members` out.
+- **Filters:** `userName eq "<v>"` and `externalId eq "<v>"` on Users; `displayName eq "<v>"` and `externalId eq "<v>"` on Groups. Anything else: `400`, `scimType:"invalidFilter"`.
+- **Lists:** `{ schemas:["urn:ietf:params:scim:api:messages:2.0:ListResponse"], totalResults, startIndex, itemsPerPage, Resources }`; `startIndex` 1-based (default 1), `count` default and maximum 100. Users removed with `DELETE` are left out.
+- **PATCH:** `{ schemas:["urn:ietf:params:scim:api:messages:2.0:PatchOp"], Operations:[{ op, path?, value? }] }`. `op` is case-insensitive (`add`, `replace`, `remove`); boolean values may arrive as the strings `"True"` / `"False"`. Users: `replace` / `add` on any supported attribute, or without `path` with an object of attributes. Groups: `add` with `path:"members"` and a list of `{ value }`; `remove` with `path:'members[value eq "<id>"]'` or `path:"members"` and a list; `replace` on `displayName` or `externalId`.
+- **Deactivation:** setting `active` to `false` ends all the user's auth sessions and records `user.deactivated`; back to `true` records `user.reactivated`.
+- **`DELETE /scim/v2/Users/:id`:** sets `active:false` and `scimDeleted:true`, ends the user's auth sessions and removes their group memberships. The user stays in the directory, with their data and ownership, but SCIM reads of them answer `404`. A later `POST` with the same `userName` reactivates them under the same id.
+- **Responses:** `POST` `201` with the resource and a `Location` header; `GET`, `PUT`, `PATCH` `200` with the resource; `DELETE` `204`.
+- **Errors:** `{ schemas:["urn:ietf:params:scim:api:messages:2.0:Error"], status:"<code>", scimType?, detail }`: `400` (`invalidValue`, `invalidSyntax`, `invalidFilter`), `401`, `404` unknown id, `409` (`uniqueness`) for a duplicate `userName` or group `displayName`.
+
+### 2.14 Admin
+
+Controller prefix `/admin`. Capability: [admin](../capabilities/admin/spec.md) R22. Requirement: `manage-users` (1.9). Org server mode only. Later stories of epic BA-161 add the overview, users, ownership-transfer, group-mapping and export routes here.
+
+| # | Method + path | Purpose | FE |
+|---|---|---|---|
+| 79 | `POST /admin/role-assignments` | Assign a role to a user | no (used by tests until BA-166) |
+| 80 | `DELETE /admin/role-assignments/:id` | Remove a direct role assignment | no (used by tests until BA-166) |
+
+#### 79. `POST /admin/role-assignments`
+- Body: `{ userId: string; role: RoleId; datasourceId?: string }`. `datasourceId` is required for `data-owner` and refused for any other role.
+- Success `201`: `{ ok:true, message:"Role assigned", assignment: RoleAssignmentDoc }` ([data-model.md](data-model.md) 3.14.4). If the user already holds the same direct assignment: `200 { ok:true, message:"Role already assigned", assignment }`, nothing written.
+- Errors (Style B): `400` `"Unknown role: <role>"`, `"The User role is implicit"`, `"Data owner needs a datasource"`, `"Only Data owner takes a datasource"`; `404` `"User <id> not found"`, `"Datasource <id> not found"`.
+- Records `role.assigned`.
+
+#### 80. `DELETE /admin/role-assignments/:id`
+- Success `200`: `{ ok:true, message:"Role removed" }`. Records `role.removed`.
+- Errors: `404` `"Role assignment <id> not found"`. Bootstrap and group-mapped roles have no assignment id and cannot be removed here.
+
 ## 3. Streaming and long-running work
 
 Two Server-Sent-Events endpoints exist (chat, knowledge bootstrap). Both are POST, so they are read with `fetch` + `response.body.getReader()` and a `TextDecoder`, **not** `EventSource`. Two background-job patterns use start + poll instead of SSE (deep analysis, eval runs).
@@ -782,7 +946,7 @@ Entry `id` is `<epoch ms>-<sequence>`; `timestamp` ISO. Entries are appended as 
 
 | Item | Value |
 |---|---|
-| Spawn | Electron's own binary with `ELECTRON_RUN_AS_NODE=1` running `backend/dist/main.js` (packaged: `<resources>/backend/dist/main.js`); `stdio` piped; env passes `PORT`, `APP_DATA_DIR`, `APP_SECRET`. Missing entry file records an error diagnostic and does not start. |
+| Spawn | Electron's own binary with `ELECTRON_RUN_AS_NODE=1` running `backend/dist/main.js` (packaged: `<resources>/backend/dist/main.js`); `stdio` piped; env passes `PORT`, `APP_DATA_DIR`, `APP_SECRET`, and drops every `ORG_*` variable, so the desktop backend always runs in local mode (1.9). Missing entry file records an error diagnostic and does not start. |
 | Readiness probe | `GET http://127.0.0.1:<BACKEND_PORT>/sessions`, **ready iff status 200**; 500 ms request timeout; retried every 100 ms until a **30 s** deadline. |
 | Startup | status `starting` → spawn → probe. Ready → `ready`. Deadline missed → error diagnostic, **window opens anyway**, probing continues in the background and pushes `ready` when it succeeds. |
 | Crash handling | Any exit not caused by app quit → status `restarting`, restart after back-off **1 s, 2 s, 4 s** (3 attempts), re-probing after each start. Attempts exhausted → status `down` (error diagnostic, no further restarts). |
@@ -808,7 +972,7 @@ Binary `questions-to-insights` (`backend/src/cli.ts` compiled to `dist/cli.js`),
 | Flag | Argument | Default | Notes |
 |---|---|---|---|
 | `--port` | integer 0..65535 | `3000` | `0` = let the OS pick. Invalid value → exit 1 `invalid --port "<v>" (expected 0-65535)`. |
-| `--host` | string | `127.0.0.1` | Interface to bind. |
+| `--host` | string | `127.0.0.1` | Interface to bind. An org server behind the organisation's TLS proxy binds the interface the proxy reaches, typically `0.0.0.0` ([delivery.md](delivery.md) 4.1). |
 | `--data-dir` | path | `$QTI_DATA_DIR`, else `$APP_DATA_DIR`, else `~/.questions-to-insights` | Resolved to an absolute path; created (`mkdir -p`). Deliberately separate from the Electron `userData` dir so both can run at once. |
 | `--no-open` | none | opens the browser | Parsed as the negation of a boolean `open` option. |
 | `-h`, `--help` | none | | Prints usage to stdout, exit 0. |
@@ -832,6 +996,7 @@ Argument parsing is **strict**: an unknown flag or malformed argument prints `qu
   Questions to Insights <version>
   URL:      http://<host>:<port>          # host shown as `localhost` when bound to 0.0.0.0/::, IPv6 in brackets
   Data dir: <absolute path>
+  Mode:     org server, <ORG_PUBLIC_BASE_URL>   # only in org server mode
   Press Ctrl+C to stop.
 (blank)
 ```
@@ -858,6 +1023,12 @@ Argument parsing is **strict**: an unknown flag or malformed argument prints `qu
 | `VISUAL_MODEL` | visual designer agent | Forces the designer model (router id `provider/model`). Unset: reasoning-family models are swapped for `openai/gpt-4.1-mini` and `nano` models upgraded to their `mini` sibling; others kept. | unset |
 | `OPENAI_API_KEY` | Mastra's env-bound model router (via model resolver) | Fallback model credential (`openai/gpt-4o-mini`) when no LLM settings are saved. | unset |
 | `WORLD_CUP_DB_PORT` | testing-data fixture registry | Port of the sample PostgreSQL server in the form prefill and compose stack. | `55432` |
+| `ORG_OIDC_ISSUER` | org server config ([admin](../capabilities/admin/spec.md) R3) | The identity provider's issuer URL; its discovery document is read from `<issuer>/.well-known/openid-configuration`. For Entra ID: `https://login.microsoftonline.com/<tenant id>/v2.0`. Required for org server mode. | unset (local mode) |
+| `ORG_OIDC_CLIENT_ID` | org server config | The app registration's client id. Required for org server mode. | unset |
+| `ORG_OIDC_CLIENT_SECRET` | org server config | The app registration's client secret. Required for org server mode. Never logged. | unset |
+| `ORG_PUBLIC_BASE_URL` | org server config | The URL people open, as the proxy serves it, e.g. `https://insights.contoso.com`; trailing slashes removed. Builds the redirect URI (`<url>/auth/callback`), the Origin check and the cookie `Secure` flag. Must be `https://` except for development and tests. Required for org server mode. | unset |
+| `ORG_SCIM_TOKEN` | org server config | The SCIM bearer token given to the identity provider. At least 32 characters (shorter is a startup error). Required for org server mode. Never logged. | unset |
+| `ORG_BOOTSTRAP_ADMINS` | org server config | Comma-separated emails that always hold Platform admin (admin R18). Optional; blanks ignored, case-insensitive. | unset |
 | `EVAL_DATASETS` | `mastra/evals/run-assistant-evals.ts` (CLI eval script only) | Comma-separated dataset names to run the assistant evals against. Required by that script. | none |
 
 ### 6.2 CLI-only
@@ -898,7 +1069,7 @@ No environment variables. The only runtime switch is the page protocol (`file:` 
 - **G7. `POST /sessions` does not verify the named datasets exist.** Open question whether that is intended.
 - **G8. Error-style inconsistency.** Style A (`200 { ok:false }`) vs Style B (real 4xx) is endpoint-specific and also differs in list shapes (`{ sessions }`, `{ datasources }`, `{ metrics }`, `{ datasets }`, bare array for knowledge, bare `SessionDoc`). Several read endpoints (`GET /datasources`, eval-run listing) can still return a framework 500.
 - **G9. Request body size.** No explicit JSON body limit is configured, so the framework default (about 100 kB) applies; large dataset snapshots in `POST /datasets` could exceed it. Not verified against a real large dataset.
-- **G10. Desktop backend bind address.** `main.ts` calls `createApp` without a host, so the Electron-spawned backend listens on **all interfaces** with CORS enabled and no authentication; only the CLI binds `127.0.0.1` by default. Open question whether the desktop backend should bind loopback only.
+- **G10. Desktop backend bind address.** (Unchanged by org server mode: the desktop app is always local, 1.9.) `main.ts` calls `createApp` without a host, so the Electron-spawned backend listens on **all interfaces** with CORS enabled and no authentication; only the CLI binds `127.0.0.1` by default. Open question whether the desktop backend should bind loopback only.
 - **G11. `message` timing on feedback.** `POST …/messages/feedback` with `up` reports `"Answer saved as a verified query"` even when the answer had no SQL and nothing was saved.
 - **G12. Spec of `PUT /metrics/:id` not-found** is thrown as a 400-class exception but surfaced inside the `ok:false` envelope, so clients cannot distinguish "not found" from validation by status.
 - **G13. Dev-mode API routing.** For `ng serve` the client uses relative URLs and the repo has no Angular proxy config, so API calls from a bare `ng serve` page hit the dev server, not the backend. Under `electron:dev` the window loads `http://localhost:4200` (protocol `http:`), so the same relative-URL problem applies. Open question: how the live-reload dev flow reaches the backend (no proxy or `API_BASE_URL` override found).

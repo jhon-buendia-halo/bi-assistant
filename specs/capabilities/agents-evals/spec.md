@@ -157,6 +157,10 @@ User agents (definitions)
   - with no existing dataset in the draft, the panel SHALL say `Select at least one dataset to preview` and the composer SHALL be disabled.
 - R61. A preview conversation SHALL NOT be listed with the sessions or stored in the sessions collection. **Reset preview** SHALL discard it and start an empty one. Leaving the editor, or closing the Details panel, SHALL discard it together with its agent memory and workspace files. Preview conversations left behind when the app stopped SHALL be discarded at the next backend start.
 
+### Ownership and permissions (org server mode)
+
+- R62. In org server mode user agents, their pins, pins of built-in agents and eval runs SHALL belong to the user who created them: each user sees only their own user agents (the Mine section) and their own pins and eval runs, and agent names are unique per owner. Viewing the hub, an agent's detail, its eval questions, Start chat and pinning need Use agents; New agent, Edit, Save, Publish, Delete and running, listing, downloading or deleting eval runs need Create, test and version agents, and their controls are hidden without it. Rules: [../admin/spec.md](../admin/spec.md) R21, R25, R29-R31.
+
 ## Edge cases and errors
 
 - Pinning while the backend is unreachable: the card moves, then moves back, and the error toast reads "Backend unreachable".

@@ -43,6 +43,7 @@ specs/
 | [metrics](capabilities/metrics/spec.md) | Metric definitions and the metrics panel | — |
 | [deep-analysis](capabilities/deep-analysis/spec.md) | Multi-step deep analysis runs | — |
 | [agents-evals](capabilities/agents-evals/spec.md) | Agent Hub, agent catalogue and user agents, eval sets, eval runs and reports | Agents (`agents.spec.ts`), Agent Hub (`agent-hub.spec.ts`) |
+| [admin](capabilities/admin/spec.md) | Local and org server modes, sign-in with Entra ID, SCIM directory, roles and permissions, enforcement, data ownership, the Admin area | Sign in to an org server (`org-sign-in.spec.ts`), Permissions in the app (`org-permissions.spec.ts`), Private and shared data (`org-isolation.spec.ts`), all in the Playwright `org` project |
 
 A Gherkin Feature that spans capabilities lives in the capability that owns its main outcome; the others link to it.
 

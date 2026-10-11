@@ -34,6 +34,9 @@ Promotion to metrics
 Migration
 - R16. Verified queries stored under the former source-project field SHALL be rewritten to the source-session field on startup, so they are still found for dedupe and not duplicated by the next thumbs-up.
 
+Ownership (org server mode)
+- R17. In org server mode a verified query SHALL belong to the owner of the session it came from. Only that user's verified queries SHALL be retrieved into their turns, mark their answers as Verified or be offered as their metric drafts. Rules: [../admin/spec.md](../admin/spec.md) R29.
+
 ## Edge cases and errors
 
 - Re-clicking an already-selected thumb does nothing in the UI. Via the API, a second thumbs-up for the same answer replaces the stored pair (R4).

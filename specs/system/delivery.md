@@ -56,6 +56,7 @@ Electron loads the renderer from `file://`. An absolute base (`/`) would resolve
 | `test:e2e` | prepare + `playwright test --project=web` | The full Playwright suite against the web app (the default target). |
 | `test:e2e:ui` | prepare + `playwright test --project=web --ui` | Same, in Playwright's UI mode. |
 | `test:e2e:update` | prepare + `playwright test --project=web --update-snapshots` | Regenerate the web visual baselines; only for an intended visual change. |
+| `test:e2e:org` | prepare + `playwright test --project=org` | The org server Features (`e2e/org-*.spec.ts`) against the web app in org server mode, with the OIDC stub and the SCIM client ([tech-stack.md](tech-stack.md)). Needs no Entra ID tenant. |
 | `test:e2e:desktop` | desktop prepare + `playwright test --project=desktop` | The same suite against the real Electron app. Run only when a desktop run is requested. |
 | `test:e2e:desktop:update` | desktop prepare + `playwright test --project=desktop --update-snapshots` | Regenerate the desktop visual baselines. |
 | `brand:electron` | `bash scripts/brand-electron.sh` | See above. |
@@ -104,8 +105,8 @@ cd backend && npm run build:all && npm run start:web # web mode from the working
 
 | Where | Commands |
 |---|---|
-| `frontend/` | `npm test`, `npm run build`, `npm run test:e2e` |
-| `backend/` | `npm test`, `npm run build`, lint on the files you touched |
+| `frontend/` | `npm test`, `npm run build`, `npm run test:e2e`, and `npm run test:e2e:org` when a change touches sign-in, roles, permissions, ownership or the Admin area |
+| `backend/` | `npm test`, `npm run build`, lint on the files you touched, and `npm run test:e2e` (includes the org server API tests) |
 
 `test:e2e` builds the backend with the web UI and drives the web app; its global setup starts the World Cup Postgres itself (see section 6). The desktop target (`test:e2e:desktop`) runs only when a desktop run is requested, and refuses to launch the app if port 3000 is taken. Which target to test, and how skipped desktop-only scenarios are reported, is the *Test target convention* in [CLAUDE.md](../../CLAUDE.md).
 
@@ -179,6 +180,39 @@ Startup order matters: the CLI creates the data directory, sets `APP_DATA_DIR`, 
 **Data layout the CLI creates** under the data dir: `app.sqlite`, `mastra.sqlite`, `observability.duckdb`, `workspaces/`, `.app-secret` (see [data-model.md](data-model.md)). The native modules (better-sqlite3, DuckDB, LibSQL) arrive as prebuilt binaries; if npm starts compiling them, the Node version is unsupported or a toolchain is missing.
 
 First run needs an LLM provider in Settings (or `OPENAI_API_KEY` in the environment, which makes the backend fall back to `openai/gpt-4o-mini` when no settings are saved).
+
+### 4.1 Running an org server
+
+An org server is the same npm package started with the `ORG_*` configuration (ADR-0009, [api.md](api.md) 1.9 and 6.1). Rules: [admin](../capabilities/admin/spec.md). The desktop app never runs as an org server.
+
+1. **Register the app in Entra ID** (Microsoft Entra admin center → App registrations → New registration):
+   - Supported account types: this organisation only.
+   - Redirect URI, platform **Web**: `<public base URL>/auth/callback`, for example `https://insights.contoso.com/auth/callback`.
+   - Front-channel logout URL: none needed. Add `<public base URL>/` as an allowed post-logout redirect URI.
+   - Certificates & secrets → new client secret. Note the **Application (client) id**, the **Directory (tenant) id** and the secret.
+   - API permissions: the default `openid`, `profile`, `email` (Microsoft Graph delegated). No Graph application permission is needed.
+2. **Set up provisioning** (Enterprise applications → the app → Provisioning → Automatic):
+   - Tenant URL: `<public base URL>/scim/v2`.
+   - Secret token: the value of `ORG_SCIM_TOKEN` (a long random string, at least 32 characters, for example `openssl rand -hex 32`).
+   - Test the connection, map users and groups (the default attribute mappings work: `userPrincipalName` → `userName`, `mail` → `emails[type eq "work"].value`, `displayName`, `givenName`, `surname`, `objectId` → `externalId`), assign the users and groups in scope, and start provisioning. Entra ID then pushes changes on its own cycle (about every 40 minutes).
+3. **Put a TLS reverse proxy in front** (nginx, Caddy, a cloud load balancer) that serves the public hostname over HTTPS and forwards to the app with `X-Forwarded-Proto`, `X-Forwarded-For` and `X-Forwarded-Host`. The app trusts one proxy hop. Streaming responses (`text/event-stream`) must not be buffered.
+4. **Start the server** on the machine behind the proxy:
+
+   ```bash
+   export ORG_OIDC_ISSUER=https://login.microsoftonline.com/<tenant id>/v2.0
+   export ORG_OIDC_CLIENT_ID=<application id>
+   export ORG_OIDC_CLIENT_SECRET=<client secret>
+   export ORG_PUBLIC_BASE_URL=https://insights.contoso.com
+   export ORG_SCIM_TOKEN=<the provisioning secret token>
+   export ORG_BOOTSTRAP_ADMINS=alice@contoso.com,bob@contoso.com   # optional
+   questions-to-insights --host 0.0.0.0 --port 3000 --data-dir /srv/questions-to-insights --no-open
+   ```
+
+   Bind only the interface the proxy reaches (`0.0.0.0` when the proxy is on another host, `127.0.0.1` when it is on the same one), and keep the port closed to everyone but the proxy. The banner prints `Mode: org server, <public base URL>`. A missing variable stops startup with an error naming it.
+5. **First sign-in.** A bootstrap admin signs in at the public URL and holds Platform admin at once. Other people hold the User role until they get more roles (today through `POST /admin/role-assignments`; the Users & groups screen arrives with BA-165).
+6. **Secrets and backups.** Keep `ORG_OIDC_CLIENT_SECRET` and `ORG_SCIM_TOKEN` out of the data directory and out of logs (an environment file readable only by the service account). Back up the data directory with its `.app-secret`, as in local mode. Rotating `ORG_SCIM_TOKEN` means updating it in Entra ID and restarting the server.
+
+For development and the E2E suite, `ORG_PUBLIC_BASE_URL` may be `http://127.0.0.1:<port>` and the issuer a local stub; cookies then drop `Secure`. `npm run test:e2e:org` in `frontend/` does this for you.
 
 ## 5. Versioning and releases
 
@@ -332,6 +366,7 @@ Defaults are shared state: the desktop app uses Electron's `userData` directory 
 | Sample Postgres | project `questions-to-insights-world-cup`, port 55432 | `docker compose -p <name>` plus `WORLD_CUP_DB_PORT=<port>`; the e2e fixtures read the same variable (and `WORLD_CUP_DB_HOST`) |
 | Observability profile | same project; ports 6006, 3001, 4317, 4318 | `docker compose -p <name>` plus `PHOENIX_PORT`, `GRAFANA_PORT`, `OTLP_GRPC_PORT`, `OTLP_HTTP_PORT` (see *Observability profile* above) |
 | Playwright | needs port 3000 free | one e2e run at a time per machine; each test already gets its own temp profile |
+| Org server (CLI) | the CLI's data dir and port | same as the CLI, plus its own `ORG_*` variables; the E2E `org` project picks free ports for the app and the OIDC stub |
 
 The project rule: when work happens in a worktree, ask which target (shared or isolated) before starting the app or the Compose stack. See *Worktree deploy convention* in [CLAUDE.md](../../CLAUDE.md).
 

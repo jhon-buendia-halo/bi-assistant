@@ -30,7 +30,7 @@ The directory is created (recursively) at backend start if it does not exist.
 
 | Store | Location (relative to app data dir) | Technology (see Implementation note) | What goes in it | Owner |
 |---|---|---|---|---|
-| **App document store** | `app.sqlite` | Embedded SQLite, one table per collection, one JSON document per row | The ten application collections in section 3: connections, settings, datasets, sessions, inventories, verified queries, metrics, eval runs, knowledge, agents | App backend |
+| **App document store** | `app.sqlite` | Embedded SQLite, one table per collection, one JSON document per row | The application collections in section 3: connections, settings, datasets, sessions, inventories, verified queries, metrics, eval runs, knowledge, agents; and the seven identity and access collections used in org server mode (section 3.14): users, groups, group members, role assignments, group role mappings, auth sessions, activity events | App backend |
 | **Agent memory store** | `mastra.sqlite` | LibSQL file (Mastra runtime storage) | Conversation memory threads/messages for the `assistant` agent (section 5); any other Mastra runtime state | Agent framework |
 | **Observability store** | `observability.duckdb` | DuckDB (memory limit 512 MB, 2 threads) | Agent traces, metrics and logs written by the framework's storage exporter (service name `questions-to-insights`, log level `info`) | Agent framework |
 | **Session workspaces** | `workspaces/session-<session-id>/` | Plain directories, a contained filesystem root per session | Visual bundles, deep-analysis reports, seeded skills (section 4) | App backend + agents (agents can create/edit files there but cannot delete) |
@@ -109,8 +109,15 @@ Summary:
 | `eval_runs` | Past and in-flight eval runs | `jobId` | `startedAt` desc (per agent) | [agents-evals](../capabilities/agents-evals/spec.md) |
 | `knowledge_snippets` | Curated knowledge entries | `id` | `updatedAt` desc | [knowledge](../capabilities/knowledge/spec.md) |
 | `agents` | User-built agents (a draft, an optional Live version, pin) | `id` | `updatedAt` desc | [agents-evals](../capabilities/agents-evals/spec.md) |
+| `users` | Directory users (org server mode) | `id`; `userName` unique | `displayName` asc | [admin](../capabilities/admin/spec.md) |
+| `groups` | Directory groups (org server mode) | `id`; `displayName` unique | `displayName` asc | [admin](../capabilities/admin/spec.md) |
+| `group_members` | Group memberships (org server mode) | `id`; `(groupId, userId)` unique | n/a | [admin](../capabilities/admin/spec.md) |
+| `role_assignments` | Direct role assignments (org server mode) | `id`; `(userId, role, datasourceId)` unique | n/a | [admin](../capabilities/admin/spec.md) |
+| `group_role_mappings` | Group-to-role mappings (org server mode) | `id`; `(groupId, role, datasourceId)` unique | n/a | [admin](../capabilities/admin/spec.md) |
+| `auth_sessions` | Signed-in browsers (org server mode) | `id` = SHA-256 of the cookie token | n/a | [admin](../capabilities/admin/spec.md) |
+| `activity_events` | Sign-ins, daily activity, SCIM syncs, role and status changes (org server mode) | `id` | `at` desc | [admin](../capabilities/admin/spec.md) |
 
-Every document in every collection also carries `createdAt` and `updatedAt` (ISO), maintained by the store (section 2.1); they are listed per collection only where they matter. There are **no foreign-key constraints and no cascading deletes** between collections; references are by value (`name`, `id`) and may dangle (section 3.13).
+Every document in every collection also carries `createdAt` and `updatedAt` (ISO), maintained by the store (section 2.1); they are listed per collection only where they matter. `sessions`, `verified_queries`, `metrics`, `eval_runs`, `knowledge_snippets` and `agents` are **private** and carry `ownerId` in org server mode; `connections`, `settings`, `datasets` and `datasource_inventories` are **shared** (section 3.15). In local mode the seven identity and access collections stay empty. There are **no foreign-key constraints and no cascading deletes** between collections; references are by value (`name`, `id`) and may dangle (section 3.13).
 
 ### 3.1 `connections` — datasources
 
@@ -171,7 +178,7 @@ The **inventory shape** every connector normalises to (used by section 3.5 and t
 
 ### 3.2 `settings` — LLM settings
 
-Exactly one LLM document, upserted by `key = "llm"`. A second document, `key = "builtin-agent-pins"`, holds `{ key, pinned: string[] }`: the registry keys of the pinned built-in agents (see section 3.10). LLM readers filter by `key`, so the two never mix.
+Exactly one LLM document, upserted by `key = "llm"`. A second kind of document holds pins of built-in agents, per user: `{ key, pinned: string[] }`, the registry keys a user pinned (see section 3.10). Its `key` is `builtin-agent-pins` for the local user and `builtin-agent-pins:<user id>` for a user of an org server, so pins are private (section 3.15) without a migration. LLM readers filter by `key`, so the kinds never mix. The `llm` document is shared by every user of an org server and only callers with `manage-llm` change it ([api.md](api.md) 1.9).
 
 | Field | Type | Req | Meaning |
 |---|---|---|---|
@@ -225,6 +232,7 @@ A conversation. The largest document; the whole transcript is embedded.
 | `agentName` | string | no | Present with `agentId`. The agent's Live name, stamped at creation and re-stamped by every turn that applies the agent, so a deleted agent's sessions can still name it. |
 | `messages` | `ChatMessage[]` | yes | Transcript in order. Empty at creation. |
 | `visualizations` | `SessionVisualization[]` | no | Visual metadata (section 3.4.3); `[]` at creation. |
+| `ownerId` | string | no | The owning user's id in org server mode; absent in local mode (section 3.15). |
 | `createdAt`, `updatedAt` | ISO | yes | Store-maintained. **Every** write to the document (a message, a rating, a visual change) bumps `updatedAt`, which orders the session list. |
 
 Deleting a session deletes the document, its agent memory thread and its workspace directory (section 5). It does **not** delete verified queries sourced from it.
@@ -311,6 +319,7 @@ Question to SQL pairs approved with a thumbs-up, retrieved by lexical similarity
 | `entities` | string[] | yes | Entities the answer drew on (the message's `entities`, else `[]`). |
 | `sourceSessionId` | string | yes | Session the pair came from. Renamed from `sourceProjectId` (section 6). |
 | `sourceMessageAt` | ISO | yes | `at` of the source assistant message. |
+| `ownerId` | string | no | The owning user's id in org server mode; absent in local mode (section 3.15). |
 | `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
 
 Dedupe key `(sourceSessionId, sourceMessageAt)`: saving upserts on it, so re-rating the same message never forks. Thumbs-down deletes all pairs with that key. Exact-match "is this SQL verified" compares normalised SQL text.
@@ -322,7 +331,7 @@ Curated, app-owned metric definitions (a lightweight semantic layer).
 | Field | Type | Req | Meaning |
 |---|---|---|---|
 | `id` | uuid | yes | |
-| `name` | string | yes | Slug handle, unique across the collection: lowercased, 1..64 chars, regex `^[a-z][a-z0-9_]*$` (e.g. `denial_rate`). |
+| `name` | string | yes | Slug handle, unique per owner (across the collection in local mode): lowercased, 1..64 chars, regex `^[a-z][a-z0-9_]*$` (e.g. `denial_rate`). |
 | `label` | string | yes | Human label (`Denial rate`), trimmed, non-empty. |
 | `description` | string | no | Business meaning, caveats, units. Omitted when blank. |
 | `entity` | string | yes | Fully-qualified `catalog.schema.table` the expression computes over. |
@@ -330,6 +339,7 @@ Curated, app-owned metric definitions (a lightweight semantic layer).
 | `expression` | string | yes | A single SQL aggregation expression; must not contain `;`. |
 | `dimensions` | string[] | no | Columns it is meaningfully grouped by; omitted when empty. |
 | `sourceVerifiedQueryId` | string | no | Verified query it was promoted from (provenance). |
+| `ownerId` | string | no | The owning user's id in org server mode; absent in local mode (section 3.15). |
 | `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
 
 An update that omits an optional field removes it from the stored document (`unset`), so no stale description/dimensions survive an edit. Prefilled drafts (`MetricCandidate`: `verifiedQueryId`, `name`, `label`, `entity`, `datasourceId?`, `sql`) are computed from verified queries and never stored.
@@ -353,6 +363,7 @@ Persisted record of an eval run (the assistant's regression suite). Rewritten wh
 | `startedAt` | ISO | yes | Sort key (desc) for listings. |
 | `finishedAt` | ISO | no | Set when the run ends. |
 | `comparison` | `EvalRegressionSummary` | no | Set when a run completes and a previous completed run with the same agent, `datasourceId` and the same set of datasets (order-insensitive) exists. Absent on older records and when no comparable run exists. |
+| `ownerId` | string | no | The owning user's id in org server mode; absent in local mode (section 3.15). |
 | `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
 
 `AssistantEvalCaseResult`: `id` (string, case id), `question` (string), `scores` (map<string, number 0..1>, per scorer id; empty when the run threw), `checkResults` (`EvalCheckResult[]`), `answer` (string), `toolCalls` (`EvalToolCall[]`), `passed` (boolean; every scorer scored 1), `error` (string, no; agent run failure), `durationMs` (number).
@@ -375,6 +386,7 @@ Curated business-glossary terms, standing instructions and default filters injec
 | `entities` | string[] | no | Fully-qualified bindings `catalog.schema.table`; same omission rule. |
 | `enabled` | boolean | yes | Only enabled snippets are injected. Default `true` on user create. |
 | `source` | enum | yes | `user` (created through the API) \| `mined` (drafted by the bootstrap agent). |
+| `ownerId` | string | no | The owning user's id in org server mode; absent in local mode (section 3.15). |
 | `createdAt`, `updatedAt` | ISO | yes | Both set by the service at insert, then store-maintained. |
 
 Bootstrap-created snippets are always `{source: "mined", enabled: false, scope: {datasetId: <dataset name>}}`, capped at the agent's draft limit, and a draft whose case-insensitive trimmed title already exists in that dataset's scope is skipped.
@@ -392,13 +404,14 @@ User-built agents: a stored configuration of the assistant, with a working draft
 | `live` | `AgentConfig` | no | The published copy. Absent until the first publish. |
 | `publishedAt` | ISO | no | Set at each publish. |
 | `pinned` | boolean | yes | `false` on create. |
+| `ownerId` | string | no | The owning user's id in org server mode; absent in local mode (section 3.15). |
 | `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
 
 `AgentConfig` (embedded, not a collection):
 
 | Field | Type | Req | Meaning |
 |---|---|---|---|
-| `name` | string | yes | Trimmed, 1 to 64 characters, unique among user agents (case-insensitive). |
+| `name` | string | yes | Trimmed, 1 to 64 characters, unique among the owner's user agents (case-insensitive). |
 | `description` | string | yes | Up to 280 characters; may be empty. |
 | `instructions` | string | yes | Up to 4,000 characters; may be empty. |
 | `datasets` | string[] | yes | Dataset **names**; de-duplicated. At least one to publish. |
@@ -434,8 +447,118 @@ Deep-analysis jobs exist only in process memory (bounded history; a backend rest
 | `sessions[].visualizations[]` | `id`, `path` | `workspaces/session-<id>/visuals/<id>/` | Files under the session workspace; both removed with the session. |
 | `sessions[].messages[]` | `visual.visualId`, `report.jobId` | visual id / report file | By value. |
 | session | `id` | agent memory thread id and resource id; workspace `session-<id>` | See section 5. |
+| `group_members` | `groupId`, `userId` | `groups.id`, `users.id` | Deleted with the group, and with the user's SCIM delete. |
+| `role_assignments` | `userId`, `datasourceId` | `users.id`, `connections.id` | Kept when the user is deactivated. May dangle when the datasource is deleted; a dangling Data owner assignment grants nothing. |
+| `group_role_mappings` | `groupId`, `datasourceId` | `groups.id`, `connections.id` | Deleted with the group. Same datasource rule as `role_assignments`. |
+| `auth_sessions` | `userId` | `users.id` | All deleted when the user is deactivated or deleted through SCIM. |
+| private collections | `ownerId` | `users.id` | Kept when the owner is deactivated (admin R16). |
 
 ---
+
+### 3.14 Identity and access collections (org server mode)
+
+Rules: [../capabilities/admin/spec.md](../capabilities/admin/spec.md). Decisions: ADR-0009 and ADR-0010 in [architecture.md](architecture.md). Written only in org server mode. Endpoints: [api.md](api.md) 2.12-2.14.
+
+#### 3.14.1 `users`
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `id` | uuid | yes | The user id: `ownerId` on private documents, the SCIM `id`. The local user's id is the constant `local` and is never stored here. |
+| `userName` | string | yes | Sign-in name (Entra ID: the UPN), stored lowercased; unique. |
+| `email` | string | no | Work email, lowercased. |
+| `displayName` | string | yes | Shown name. SCIM `displayName`, else `name.formatted`, else `givenName familyName`, else `userName`. |
+| `givenName`, `familyName` | string | no | From SCIM `name` or the ID token claims; used for initials. |
+| `externalId` | string | no | The identity provider's id for the user, from SCIM. |
+| `oidcSubject` | string | no | Stable sign-in subject, `<tid>:<oid>` for Entra ID, else the `sub` claim. Set at first sign-in; matched first at later sign-ins. |
+| `active` | boolean | yes | `false` = deactivated: cannot sign in. |
+| `scimDeleted` | boolean | no | `true` after a SCIM `DELETE`: hidden from SCIM reads. |
+| `source` | enum | yes | `scim` (provisioned) \| `jit` (created at first sign-in). A `jit` user later seen by SCIM becomes `scim`. |
+| `lastSignInAt` | ISO | no | Absent until the first sign-in. |
+| `lastActiveAt` | ISO | no | The last day the user made a request (updated with the daily `user.active` event, 3.14.7). |
+| `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
+
+#### 3.14.2 `groups`
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `id` | uuid | yes | The SCIM `id`. |
+| `displayName` | string | yes | Unique (case-insensitive). |
+| `externalId` | string | no | The identity provider's id for the group. |
+| `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
+
+#### 3.14.3 `group_members`
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `id` | uuid | yes | |
+| `groupId` | uuid | yes | `groups.id`. |
+| `userId` | uuid | yes | `users.id`. |
+| `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
+
+#### 3.14.4 `role_assignments`
+
+`RoleAssignmentDoc`. Direct assignments only; the implicit User role and bootstrap Platform admin are never stored.
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `id` | uuid | yes | |
+| `userId` | uuid | yes | `users.id`. |
+| `role` | enum | yes | `maker` \| `data-owner` \| `approver` \| `platform-admin`. |
+| `datasourceId` | string | no | Required for `data-owner`, absent otherwise. |
+| `assignedBy` | uuid | yes | The admin who assigned it. |
+| `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
+
+#### 3.14.5 `group_role_mappings`
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `id` | uuid | yes | |
+| `groupId` | uuid | yes | `groups.id`. |
+| `role` | enum | yes | As in 3.14.4. |
+| `datasourceId` | string | no | Required for `data-owner`, absent otherwise. |
+| `createdBy` | uuid | yes | The admin who added it. |
+| `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
+
+#### 3.14.6 `auth_sessions`
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `id` | string | yes | SHA-256 hex of the `qti_session` cookie token ([api.md](api.md) 1.9). The token itself is never stored, so reading the store does not give a way to sign in. |
+| `userId` | uuid | yes | `users.id`. |
+| `lastSeenAt` | ISO | yes | Bumped by a request at most once a minute. The session ends 8 hours after it. |
+| `expiresAt` | ISO | yes | Sign-in time + 7 days; the session ends then whatever its activity. |
+| `userAgent` | string | no | The browser's `User-Agent`, truncated to 200 characters. |
+| `createdAt`, `updatedAt` | ISO | yes | Store-maintained; `createdAt` is the sign-in time. |
+
+Ended sessions (idle, expired, signed out, user deactivated) are deleted. Expired ones are also swept at startup.
+
+#### 3.14.7 `activity_events`
+
+Append-only. Read by the admin overview and Users & groups in later stories (admin R36).
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `id` | uuid | yes | |
+| `type` | enum | yes | `sign-in` \| `sign-out` \| `user.active` (first request of a UTC day) \| `scim.request` (at most one per minute) \| `role.assigned` \| `role.removed` \| `user.deactivated` \| `user.reactivated`. Later stories add types. |
+| `at` | ISO | yes | When it happened. Sort key (desc). |
+| `actorId` | string | no | The user who caused it; absent for SCIM. |
+| `subjectId` | string | no | The user, assignment or group it is about. |
+| `details` | object | no | Small type-specific data, e.g. `{ role, datasourceId }` for role events. Never secrets. |
+| `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
+
+### 3.15 Ownership (`ownerId`)
+
+Rules: [../capabilities/admin/spec.md](../capabilities/admin/spec.md) R28-R33.
+
+- **Private collections:** `sessions`, `verified_queries`, `metrics`, `eval_runs`, `knowledge_snippets`, `agents`, plus the per-user built-in pins document in `settings` (3.2). Everything hanging off a session is private through it: visual metadata and files, reports, the session workspace (section 4) and its agent memory thread (section 5).
+- **Shared collections:** `connections`, `datasets`, `datasource_inventories`, and the `llm` document in `settings`.
+- **Org server mode:** every insert into a private collection stamps `ownerId` with the caller's id, and every find, update, unset and delete ANDs `ownerId = <caller>` into its filter. A document with another `ownerId`, or none, is invisible to the caller. Upserts carry `ownerId`, so they can never take over another owner's document.
+- **Local mode:** no `ownerId` is written and no owner filter is applied: every document belongs to the local user, whether it was stored before or after org server mode existed.
+- **Uniqueness and dedupe** on private collections apply per owner: agent names, metric names, the verified-query key `(sourceSessionId, sourceMessageAt)`.
+- **In-memory state** keyed by id (preview sessions, in-flight eval runs, deep-analysis jobs) records the owner when it is created, and lookups filter by it.
+- **Startup work** that walks a private collection across all owners (the verified-query field migration M4, the workspace backfill) reads the store without the owner filter.
+
+*Implementation note.* An `OwnedDocStore<T>` wrapper around `DocStore<T>` adds the stamp and the filter from the current user (`AsyncLocalStorage`, ADR-0010). Repositories of private collections inject the owned token; the raw token stays for startup work.
 
 ## 4. Files on disk
 
@@ -572,6 +695,7 @@ Visuals created before versioning keep their **v1 files directly under `visuals/
 - What is stored: the user/assistant turns of chat as the framework records them (the framework writes new turns itself once the thread exists). Background jobs that fire many internal sub-calls (deep analysis) and the other agents (SQL repair, verifier, designer, knowledge bootstrap, eval judge) run **without** the memory thread so they never pollute the history a later chat question is answered from.
 - **Bootstrap of legacy transcripts.** When a turn is about to run and the thread does not yet exist (sessions created before memory was enabled, or a brand-new session), the agent input is the entire persisted transcript mapped to plain `{role, content}` text messages (structured fields such as `data` are not replayed); the framework then creates the thread from it. When the thread exists, the input is only the latest user message — except when the previous assistant message was a clarification (it ended its turn before memory saw the question), in which case the clarification text (as an assistant message) and the user's answer are both sent.
 - On session deletion the thread is deleted (`deleteThread(session id)`), the workspace is unregistered and destroyed, and the workspace directory is removed.
+- **Ownership.** Memory threads and workspaces carry no owner of their own. They are reached only through a session the caller owns (section 3.15): every route and tool that touches a thread or workspace first loads the session through the owner-scoped store, and another owner's session id answers as not found. Session ids are random UUIDs but are not treated as secrets.
 - The session document's `messages` remain the source of truth for display and for everything with structured fields; memory is only the model's conversational context.
 
 ---
@@ -595,6 +719,8 @@ Visuals created before versioning keep their **v1 files directly under `visuals/
 | M10 | Pre-versioning visuals; messages without `reasoning`; datasets without `sampleValues`/`references` | Read time | Tolerated by readers (section 4.7; reasoning derived from `data[].rationale`; absent snapshot fields simply omitted). No rewrite. |
 
 None for `agents`: it is a new collection, and the store creates the table on first open. The built-in pins document is a new `settings` key and needs no migration.
+
+None for org server mode (BA-163): the seven identity and access collections are new, `ownerId` is absent on every document stored before it (and in local mode, which means the local user, section 3.15), and the local user's pins keep the `builtin-agent-pins` key.
 
 Tests: the table/field renames (M1-M3) and M4/M5 are covered by `database.module.spec.ts` and the repository/workspace specs.
 

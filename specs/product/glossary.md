@@ -16,7 +16,11 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **App secret.** The key material from which the key that encrypts stored LLM API keys is derived. On desktop it is generated once and kept in a file in the data directory. See [non-functional.md](non-functional.md).
 
+**Approver.** A *role* that approves org-wide publishing of agents (*Approve org-wide publishing*, *View audit log*). Nothing uses it yet; the Requests epic does. See [../capabilities/admin/spec.md](../capabilities/admin/spec.md).
+
 **Assistant.** The main agent. It answers business questions over a session's datasets, runs SQL, calls the visual tools and asks clarifying questions.
+
+**Bootstrap admin.** A person whose email is in the org server's bootstrap admin list (`ORG_BOOTSTRAP_ADMINS`). They hold *Platform admin* whenever they are signed in, without a stored assignment, so a new org server always has an admin. See [../capabilities/admin/spec.md](../capabilities/admin/spec.md).
 
 **Careful mode.** An opt-in per-turn setting in the chat. After the assistant answers, a second agent (the *SQL verifier*) re-derives the SQL independently, runs it, and compares its result set with the answer's. The answer gets an agree, disagree or error badge. Slower per answer. See *Cross-check*.
 
@@ -27,6 +31,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 **Cross-check.** The result of *careful mode* on one answer: status `agree` (same results), `disagree` (results differ) or `error` (the check could not finish), plus a short note.
 
 **Data directory.** The folder holding all app data: application database, agent memory, observability data, per-session *workspaces* and the *app secret* file. Desktop and web mode use different data directories on purpose.
+
+**Data owner.** A *role* scoped to one *datasource*. It will approve access requests to that datasource (*Approve access to a data source*); until the Requests epic it guards nothing.
 
 **Developer observability.** An opt-in developer setting, off by default. When it is on, the backend exports agent traces to Arize Phoenix and backend traces, metrics and logs to an OpenTelemetry (OTLP) endpoint, in addition to the local observability store. It takes effect when the backend restarts. See [../capabilities/developer-settings/spec.md](../capabilities/developer-settings/spec.md).
 
@@ -66,6 +72,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Freeform visual.** A *visual* whose bundle is generated HTML, CSS and JavaScript, used when a *visual spec* cannot be produced. Tailoring a freeform visual stays freeform. Contrast *spec visual*.
 
+**Group mapping.** A rule that gives every member of an identity-provider group a *role* (for *Data owner*, on one datasource). Members get the role on their next request. Groups themselves come from the identity provider and are read-only in the app. See [../capabilities/admin/spec.md](../capabilities/admin/spec.md).
+
 **Interpretation.** A one-line, deterministic summary of how an answer was produced (which entities, what kind of query), built by the system at save time. Never model output.
 
 **Knowledge entry.** A curated piece of business knowledge the assistant treats as authoritative. Three kinds: `term` (glossary definition, with optional synonyms and entity bindings), `instruction` (a standing rule) and `default_filter`. Scoped globally, to a dataset or to a datasource. Only enabled entries reach the assistant, within a size budget per turn. Source is `user` or `mined` (drafted by the bootstrap agent, saved disabled for review). The UI says "Knowledge". Code and Jira call these *snippets*.
@@ -78,6 +86,12 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **LLM provider.** The service the agents call. `openai`, `anthropic` or `lenai` (Halo's OpenAI-compatible gateway, which needs a base URL; the "model" field is then the deployment name). One global setting: provider, model, API key (stored encrypted, shown masked) and *reasoning effort*.
 
+**Local mode.** The default way the app runs: one person on their own machine, no sign-in, every permission (the *local user*). The desktop app always runs in local mode. Opposite of *org server mode*. See [../capabilities/admin/spec.md](../capabilities/admin/spec.md).
+
+**Local user.** The single implicit user of *local mode* (id `local`, shown as "Demo User"). Owns every item in local mode, including items stored before *org server mode* existed.
+
+**Maker.** A *role* that can create, test, version and publish *user agents* (*Create, test and version agents*), and later share them.
+
 **Message.** One entry in a session's transcript, from the `user` or the `assistant`, with a timestamp that doubles as its identity (`at`). Assistant messages may carry data records, entities, a clarification, a visual event, feedback, a cross-check, a reasoning trail, knowledge used or a report.
 
 **Metric.** A governed, named SQL aggregation expression over one entity (for example `denial_rate`), with a label, description and dimensions. The assistant reuses its expression verbatim instead of re-deriving it. Metrics are the app's lightweight semantic layer. A metric can be promoted from a *verified query*; the draft is a *metric candidate*.
@@ -86,7 +100,15 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Official agent.** The app's own *assistant*, shown in the agent hub as the Official agent. It is the only built-in agent that can start a chat.
 
+**Org server mode.** The app run by an organisation on its own server for many people: they sign in with Microsoft Entra ID, the directory is pushed by SCIM, *roles* decide what each person can do, and private data is kept per *owner*. Turned on by server configuration. Opposite of *local mode*. See [../capabilities/admin/spec.md](../capabilities/admin/spec.md).
+
+**Owner.** The user who created a private item (a session with its visuals and memory, a user agent, a pin, a knowledge entry, a verified query, a metric, an eval run). Only the owner can see or change it. Datasources, datasets and the LLM configuration have no owner: they are shared org-wide. Stored as `ownerId`; absent means the *local user*.
+
+**Permission.** One action a *role* allows, such as *Use agents in the gallery and chat* (`use-agents`) or *Manage datasources and datasets* (`manage-datasources`). Eleven in a fixed matrix; the server checks one on every request. See [../capabilities/admin/spec.md](../capabilities/admin/spec.md).
+
 **Pin.** A user's mark on an agent, built-in or user-built, so it can be found quickly. Pins are stored locally and survive a restart.
+
+**Platform admin.** The *role* that holds every *permission*: manages users, roles, group mappings, policies, datasources, datasets and the LLM configuration, and sees the Admin area.
 
 **Preview chat.** A conversation in the agent editor's Details panel that runs a *user agent*'s saved *draft*. It is held in memory only, never listed with the sessions, and discarded with its memory when the editor closes.
 
@@ -97,6 +119,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 **Report.** The markdown output of a *deep analysis*: title, executive summary, findings by angle, data appendix.
 
 **Result guard.** A deterministic check on a query result that attaches a *warning*: a ratio of a sum to itself, a metric constant on every row, an unordered "top N".
+
+**Role.** A named set of *permissions* given to a user in *org server mode*: **User** (implicit for everyone signed in), *Maker*, *Data owner*, *Approver* or *Platform admin*. Roles are fixed and additive; a user's roles are their direct assignments plus their *group mappings*. See [../capabilities/admin/spec.md](../capabilities/admin/spec.md).
 
 **Row cap.** A limit on rows returned or stored. See [non-functional.md](non-functional.md). A result clipped by a cap is marked *truncated*.
 

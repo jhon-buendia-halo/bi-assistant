@@ -19,8 +19,8 @@ Layout and navigation
 - R1. The system SHALL present, left to right: the navigation rail (expandable into a drawer, R48), then a column holding the "Agentic Hub" banner above the page and, when open, the details panel. Everything sits inside a textured gradient frame.
 - R2. On launch the navigation drawer SHALL be collapsed, the details panel SHALL be collapsed and the main view SHALL be home. Neither the drawer nor the details panel state SHALL be remembered between launches.
 - R3. The rail SHALL offer, under "Workspace navigation", one icon button each, named by its title and accessible name: **Datasets**, **Agents**, **Knowledge** and **Sessions**. Choosing one SHALL show that area and mark its button current (`aria-current="page"`). Choosing the area that is already shown SHALL keep it, except in the agent editor: there, **Agents** SHALL return to the hub, after the unsaved-changes question (agents-evals R59). Agents stays current while an agent's detail is open, Datasets while the dataset editor is open, and Sessions while the composer or a chat is open. Choosing **Sessions** SHALL also expand the drawer, so the session list is visible.
-- R4. Below the workspace items the rail SHALL offer the account avatar (a static "D", titled "Demo User"), **Open system logs** (tooltip "System logs and diagnostics") and **Settings**, then a divider and the LenAI mark with "Powered by LenAI". The system-logs button SHALL show a red badge with the number of error and warning entries currently retained when that number is above zero, capped at "99+".
-- R5. Choosing **Settings** on the rail SHALL show the Settings area: a list pane with "Settings navigation" offering five sections, **Datasource Configuration**, **LLM Configuration**, **Testing Data**, **Developer** ([../developer-settings/spec.md](../developer-settings/spec.md)) and **Appearance** (R39–R45), beside the chosen section's form. Choosing a section SHALL show it and mark it current; choosing the current section again SHALL deselect it and show the prompt "Choose a settings section." Choosing another rail area SHALL leave Settings; coming back SHALL show the section that was chosen.
+- R4. Below the workspace items the rail SHALL offer the account avatar, **Open system logs** (tooltip "System logs and diagnostics") and **Settings**, then a divider and the LenAI mark with "Powered by LenAI". The system-logs button SHALL show a red badge with the number of error and warning entries currently retained when that number is above zero, capped at "99+". In local mode the avatar SHALL be a static "D", titled "Demo User", with no menu. In org server mode it SHALL show the signed-in user's initials and open the account menu with **Sign out** ([../admin/spec.md](../admin/spec.md) R10), and users with the Manage users permission SHALL also see an **Admin** item above the avatar (admin R34, R35).
+- R5. Choosing **Settings** on the rail SHALL show the Settings area: a list pane with "Settings navigation" offering five sections (fewer in org server mode, R50), **Datasource Configuration**, **LLM Configuration**, **Testing Data**, **Developer** ([../developer-settings/spec.md](../developer-settings/spec.md)) and **Appearance** (R39–R45), beside the chosen section's form. Choosing a section SHALL show it and mark it current; choosing the current section again SHALL deselect it and show the prompt "Choose a settings section." Choosing another rail area SHALL leave Settings; coming back SHALL show the section that was chosen.
 - R6. Removed in roadmap 1.8.3: the rail cannot be collapsed. (Previously: the Collapse sidebar and Expand sidebar controls.)
 - R7. The banner SHALL be the page's only level-one heading and SHALL read "Agentic Hub". Screen titles ("Datasets", "Agents", a settings section…) are level-two headings.
 - R8. The sidebar and details panel SHALL keep a fixed minimum usable width for the main area (see R12) so the main content is never squeezed to nothing.
@@ -65,6 +65,9 @@ Sessions area
 - R48. The rail SHALL start with a menu button, **Expand navigation** (when collapsed) / **Collapse navigation** (when expanded), exposing `aria-expanded`. Expanding widens the rail into a 240 px drawer that shows each item's label beside its icon and the Sessions list (R46). Collapsing returns to the 64 px icon rail. Expanding or collapsing SHALL NOT change the main view or close the open session.
 - R49. In the Sessions area the page SHALL start with a header: an icon, then the title — the open session's name, "New conversation" in the composer, or "Sessions" — with the session's context under the title while a chat is open (its agent, when it was started from one, then its datasources; sessions-chat R57), and a **Start New Conversation** button that opens the composer.
 
+Modes and permissions
+- R50. In org server mode the shell SHALL appear only after sign-in ([../admin/spec.md](../admin/spec.md) R5) and SHALL hide the controls the signed-in user has no permission for (admin R25). In the Settings area that means: **Datasource Configuration** and **Testing Data** need Manage datasources and datasets, **LLM Configuration** needs Manage LLM configuration, **Developer** needs Edit policies and templates, and **Appearance** is always offered. In local mode every control SHALL show, as before.
+
 Appearance
 - R39. The Appearance section SHALL offer a single choice labelled **Theme** with three options: **System**, **Light** and **Dark**. Exactly one is selected. The default, when nothing has been chosen, is System.
 - R40. Choosing an option SHALL apply it at once, without a reload, and SHALL remember it for the next launch.
@@ -77,7 +80,7 @@ Appearance
 Accessibility and visual stability
 - R35. The application shell, in its initial state, SHALL produce zero violations when scanned by an automated accessibility engine (axe-core, all default rules).
 - R36. The system SHALL expose labelled landmarks: "Navigation rail" (complementary), "Workspace navigation", "Sessions navigation" (in the Sessions area), "Settings navigation" (in the Settings area), and "Details panel".
-- R37. Every icon-only control in the shell SHALL have an accessible name (a title or label), including the rail buttons (Datasets, Agents, Knowledge, Sessions, Open system logs, Settings), Expand navigation, Collapse navigation, Collapse right panel, Expand right panel, New conversation and Session options.
+- R37. Every icon-only control in the shell SHALL have an accessible name (a title or label), including the rail buttons (Datasets, Agents, Knowledge, Sessions, Open system logs, Settings, and in org server mode Admin and the account avatar), Expand navigation, Collapse navigation, Collapse right panel, Expand right panel, New conversation and Session options.
 - R38. The application shell in its initial state SHALL match the approved `application-shell` screenshot baseline. The baseline SHALL be changed only deliberately, together with an intended visual change.
 
 ## Edge cases and errors
@@ -87,7 +90,7 @@ Accessibility and visual stability
 - Pressing a mouse button other than the primary one on the separator does nothing.
 - Loading the session list at startup retries up to 12 times with a growing delay (200 ms steps, capped at 1 s) because the backend may still be starting. If it still fails the sidebar keeps whatever it had and shows the error toast "Could not load sessions".
 - While the status is `restarting` or `down`, calls to the backend fail; each surfaces as its own error toast ("Backend unreachable" unless the backend provided a message) and so appears in diagnostics.
-- The rail's account avatar ("D", titled "Demo User"), the Settings search box ("Search settings", hint "⌘ F") and the empty chat input shape on the home view are visual placeholders with no behaviour yet.
+- In local mode the rail's account avatar ("D", titled "Demo User") is a placeholder with no menu; in org server mode it opens the account menu (R4). The Settings search box ("Search settings", hint "⌘ F") and the empty chat input shape on the home view are visual placeholders with no behaviour yet.
 - The `down` banner has no retry button; the instruction in it is the only remedy.
 - A stored theme of `Dark` (wrong case), `blue` or an empty string means System. With browser storage blocked, the chosen theme applies until the app closes and the next launch starts on System.
 - Missing backend entry file (a broken installation): no backend starts, an error diagnostic ("Backend entry file is missing") is recorded and the window opens after the readiness deadline.
@@ -99,6 +102,7 @@ Accessibility and visual stability
 - Right-panel width key, theme key and any other browser-stored preference: [../../system/data-model.md](../../system/data-model.md) (client-side storage).
 - Layout, tokens, panel dimensions and state visuals: [../../system/ui.md](../../system/ui.md).
 - Version and release flow: [../../system/delivery.md](../../system/delivery.md).
+- Modes, sign-in, the account menu, the Admin item and permission-based hiding: [../admin/spec.md](../admin/spec.md).
 
 ## UI
 
@@ -196,6 +200,12 @@ Feature: Navigation rail
     And the document title is "Agentic Hub"
     When I click "Settings" on the rail
     Then the settings list ends with "Agentic Hub v" followed by the version
+
+  Scenario: Local mode has no sign-in and no Admin item
+    When the app opens in local mode
+    Then I see the app shell without signing in
+    And the rail avatar shows "D" titled "Demo User"
+    And I don't see "Admin" on the rail
 ```
 
 E2E: `frontend/e2e/appearance.spec.ts` for the Feature below.

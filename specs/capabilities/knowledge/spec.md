@@ -48,6 +48,9 @@ Bootstrap (drafting from data)
 - R27. A bootstrap run SHALL report progress by stage: opening the dataset, reading schema (with table count), sampling rows (n of total tables), drafting, saving (with draft count). It SHALL end with exactly one terminal event, either the created snippets or an error message.
 - R28. Mined snippets SHALL never be sent to the assistant until a human enables them (Accept, or the Enabled toggle).
 
+Ownership (org server mode)
+- R29. In org server mode knowledge entries, including mined suggestions, SHALL belong to the user who created them or ran the bootstrap. Only that user's enabled entries SHALL be injected into that user's turns, even though datasets are shared. Every knowledge action needs Use agents. Rules: [../admin/spec.md](../admin/spec.md) R29, R30, R32.
+
 ## Edge cases and errors
 
 - Empty library: the screen shows "No knowledge yet" with a hint and both "New snippet" and "Generate suggestions" actions.

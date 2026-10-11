@@ -20,10 +20,14 @@ The ADRs below marked *retroactive* document decisions already in place when thi
 ```mermaid
 flowchart LR
   analyst["Analyst<br/>(person)"]
+  member["Organisation member<br/>(person, browser; org server mode)"]
+  admin["Platform admin<br/>(person; org server mode)"]
 
   subgraph qti["Questions to Insights"]
-    system["Questions to Insights<br/>(Electron desktop app or npx web app)"]
+    system["Questions to Insights<br/>(Electron desktop app, npx web app,<br/>or self-hosted org server)"]
   end
+
+  idp["Microsoft Entra ID<br/>(OIDC sign-in, SCIM provisioning;<br/>org server mode only)"]
 
   subgraph sources["User datasources"]
     pg[("PostgreSQL")]
@@ -43,6 +47,11 @@ flowchart LR
   end
 
   analyst -->|"asks questions, tailors visuals"| system
+  member -->|"signs in, asks questions (HTTPS via the org's TLS proxy)"| system
+  admin -->|"manages users and roles"| system
+  member -->|"authenticates"| idp
+  system -->|"OIDC: discovery, code exchange, JWKS"| idp
+  idp -->|"SCIM 2.0: users, groups, memberships (bearer token)"| system
   analyst -->|"downloads installer"| releases
   analyst -->|"npx / npm i -g (read:packages PAT)"| packages
   system -->|"read-only SQL, schema discovery, sample rows"| pg
@@ -53,10 +62,10 @@ flowchart LR
   system -->|"chat completions (HTTPS)"| openai
 ```
 
-*System context: the analyst uses Questions to Insights, which queries the user's datasources (PostgreSQL, Databricks, REST/OpenAPI), calls the configured LLM provider, and is distributed through GitHub Releases and GitHub Packages.*
+*System context: the analyst uses Questions to Insights, which queries the user's datasources (PostgreSQL, Databricks, REST/OpenAPI), calls the configured LLM provider, and is distributed through GitHub Releases and GitHub Packages. In org server mode, organisation members reach a self-hosted server from a browser and sign in with Microsoft Entra ID, which also pushes the directory to the server through SCIM.*
 
 
-The user asks questions of their data in plain language; Questions to Insights answers with SQL, results, and interactive visuals. External systems: the user's datasources (PostgreSQL, Databricks SQL, REST/OpenAPI), an LLM provider (OpenAI-compatible / LenAI, Anthropic, OpenAI), GitHub (releases, GitHub Packages).
+The user asks questions of their data in plain language; Questions to Insights answers with SQL, results, and interactive visuals. External systems: the user's datasources (PostgreSQL, Databricks SQL, REST/OpenAPI), an LLM provider (OpenAI-compatible / LenAI, Anthropic, OpenAI), GitHub (releases, GitHub Packages), and in org server mode the identity provider (Microsoft Entra ID, for OpenID Connect sign-in and SCIM 2.0 provisioning). Two modes run the same build (ADR-0009): **local mode**, single-user with no sign-in (the desktop app always, the npx web app by default), and **org server mode**, many users of one organisation on a server it hosts.
 
 ## Level 2 — Containers
 
@@ -75,10 +84,17 @@ flowchart TB
     cli["npm CLI<br/>(backend/src/cli.ts)"]
   end
 
+  subgraph org["Org server mode (same npm CLI, ORG_* configuration)"]
+    member["Organisation member's browser"]
+    proxy["Organisation's reverse proxy<br/>(TLS, public hostname)"]
+  end
+
+  entra["Microsoft Entra ID<br/>(OIDC provider, SCIM client)"]
+
   backend["NestJS backend<br/>(backend/src, createApp)<br/>API + Mastra agents"]
 
   subgraph data["APP_DATA_DIR (userData, or ~/.questions-to-insights for the CLI)"]
-    appdb[("app.sqlite<br/>(better-sqlite3 DocStore)")]
+    appdb[("app.sqlite<br/>(better-sqlite3 DocStore;<br/>org mode adds users, groups,<br/>roles, auth sessions, activity)")]
     mastradb[("mastra.sqlite<br/>(LibSQL memory, threads)")]
     obsdb[("observability.duckdb<br/>(Mastra traces)")]
     ws["workspaces/session-id<br/>(filesystem: skills, visuals)"]
@@ -99,6 +115,11 @@ flowchart TB
   browser -->|"HTTP same-origin: UI (public/), API, SSE"| cli
   cli -->|"in-process createApp()<br/>--port (default 3000), --host 127.0.0.1"| backend
   cli -->|"opens URL (unless --no-open)"| browser
+  member -->|"HTTPS: UI, API, SSE<br/>(qti_session cookie)"| proxy
+  proxy -->|"HTTP + X-Forwarded-*<br/>(--host 0.0.0.0)"| cli
+  member -->|"sign-in redirect"| entra
+  backend -->|"OIDC discovery, token exchange, JWKS"| entra
+  entra -->|"SCIM 2.0 over HTTPS via the proxy<br/>(bearer token)"| proxy
   backend -->|"SQL (better-sqlite3)"| appdb
   backend -->|"LibSQL (@mastra/libsql)"| mastradb
   backend -->|"DuckDB (@mastra/duckdb)"| obsdb
@@ -108,13 +129,13 @@ flowchart TB
   backend -.->|"agent traces (OpenInference),<br/>only when developer observability is on"| phoenix
 ```
 
-*Containers: the two delivery modes (Electron spawning the backend as a child process, or the npm CLI serving backend + bundled UI to a browser) share one NestJS backend and its on-disk stores under `APP_DATA_DIR`.*
+*Containers: the two delivery modes (Electron spawning the backend as a child process, or the npm CLI serving backend + bundled UI to a browser) share one NestJS backend and its on-disk stores under `APP_DATA_DIR`. In org server mode the same CLI runs behind the organisation's TLS proxy, and the backend talks to Entra ID for sign-in and receives SCIM pushes from it.*
 
 
 - **Electron main process** (`frontend/electron/main.cjs`) — window shell; spawns and kills the backend.
 - **Angular renderer** (`frontend/src/`) — the UI.
 - **NestJS backend** (`backend/src/`) — API, Mastra agents, SQLite app store, per-session workspaces.
-- **npm CLI** (`backend/src/cli.ts`) — serves the same backend + bundled UI in a browser.
+- **npm CLI** (`backend/src/cli.ts`) — serves the same backend + bundled UI in a browser. With the `ORG_*` configuration it is the **org server** (ADR-0009): no new container, the backend gains an auth module (OIDC sign-in, SCIM, roles, owner scoping; ADR-0010) and is reached through the organisation's reverse proxy. How to run it: [delivery.md](delivery.md) section 4.1.
 
 #### ADR-0001 — Electron desktop app with an Angular renderer and a NestJS child-process backend *(retroactive)*
 - **Status:** Accepted

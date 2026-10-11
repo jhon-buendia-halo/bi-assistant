@@ -53,6 +53,10 @@ Defined once in [the glossary](../../product/glossary.md); used here as follows.
 - R18. Removing a fixture SHALL delete its dataset (first) and its datasource from the app only. It SHALL NOT touch the database. Answers: `Removed the <name> datasource and dataset from this app. The database itself was left untouched.`, or `Nothing to remove — the sample is not loaded` when neither existed; unknown id as in R8.
 - R19. Because fixtures are matched to records by **name**, a datasource or dataset the user created by hand with a fixture's name is treated as that fixture's: loading overwrites the datasource's configuration and removing deletes it. Open question: the E2E suite and users commonly create a datasource called "World Cup PostgreSQL" by hand; decide whether to mark fixture-owned records instead of matching by name.
 
+### Org server mode
+
+- R20. In org server mode every testing-data action SHALL need Manage datasources and datasets, because it creates and removes shared datasources and datasets; the Testing Data section is hidden without it. Rules: [../admin/spec.md](../admin/spec.md) R21, R25.
+
 ## Edge cases and errors
 
 - **Server not running:** R11's message, with the compose hint.
