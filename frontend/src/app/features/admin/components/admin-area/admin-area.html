@@ -34,6 +34,16 @@
           }
         </button>
       }
+      @case ("users") {
+        <button
+          type="button"
+          class="btn btn-primary"
+          (click)="assigning.set(true)"
+        >
+          <lucide-angular [img]="UserPlus" [size]="14" />
+          <span>Assign role</span>
+        </button>
+      }
     }
   </div>
 </div>
@@ -78,5 +88,15 @@
     @case ("overview") {
       <app-admin-overview />
     }
+    @case ("users") {
+      <app-admin-users />
+    }
   }
 </div>
+
+@if (assigning()) {
+  <app-assign-role-dialog
+    (cancel)="assigning.set(false)"
+    (done)="onAssigned()"
+  />
+}

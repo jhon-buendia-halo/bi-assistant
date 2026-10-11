@@ -117,7 +117,9 @@ test('a bootstrap admin sees the Admin area', async ({ page, signInAs }) => {
   await expect(
     page.getByRole('tabpanel', { name: 'Users & groups', exact: true }),
   ).toBeVisible();
-  // TODO(BA-165): Then I see the "Search users" field (the tab's content, P2).
+  await expect(
+    page.getByRole('searchbox', { name: 'Search users', exact: true }),
+  ).toBeVisible();
 
   await expectNoAxeViolations(page);
 });

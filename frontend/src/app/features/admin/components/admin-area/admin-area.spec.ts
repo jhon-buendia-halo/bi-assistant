@@ -86,12 +86,38 @@ describe('AdminArea', () => {
     expect(selected()).toEqual(['Overview']);
   });
 
-  it('shows Export report on Overview only (admin R37)', () => {
+  it("shows each tab's own header action (admin R37)", () => {
     const { fixture, tabs, headerActions } = render();
     expect(headerActions()).toEqual(['Export report']);
+    tabs()[1].click();
+    fixture.detectChanges();
+    expect(headerActions()).toEqual(['Assign role']);
     tabs()[2].click();
     fixture.detectChanges();
     expect(headerActions()).toEqual([]);
+  });
+
+  it('opens Assign role and reloads the users table once assigned (admin R56)', () => {
+    const { fixture, element, tabs } = render();
+    tabs()[1].click();
+    fixture.detectChanges();
+    http.expectOne((req) => req.url === '/admin/users').flush({
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 25,
+      counts: { users: 0, groups: 0, platformAdmins: 0, approvers: 0, dataOwners: 0, makers: 0, inactive: 0 },
+      lastSyncAt: null,
+    });
+    element.querySelector<HTMLButtonElement>('.ml-auto > button')!.click();
+    fixture.detectChanges();
+    http.expectOne('/datasources').flush({ datasources: [] });
+    expect(element.querySelector('[role="dialog"] h2')?.textContent?.trim()).toBe('Assign role');
+
+    fixture.componentInstance.onAssigned();
+    fixture.detectChanges();
+    expect(element.querySelector('[role="dialog"]')).toBeNull();
+    http.expectOne((req) => req.url === '/admin/users');
   });
 
   it('downloads the report under the server file name (admin R48)', () => {

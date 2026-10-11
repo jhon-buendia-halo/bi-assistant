@@ -1,11 +1,19 @@
 import { DOCUMENT } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, ElementRef, inject, signal, viewChildren } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  inject,
+  signal,
+  viewChild,
+  viewChildren,
+} from '@angular/core';
 import {
   Download,
   LayoutDashboard,
   Loader2,
   LucideAngularModule,
+  UserPlus,
 } from 'lucide-angular';
 import { ToastService } from '../../../../core/toast/toast.service';
 import { AdminApiService } from '../../services/admin-api.service';
@@ -15,6 +23,8 @@ import {
   errorMessage,
 } from '../../services/admin-format';
 import { AdminOverviewTab } from '../admin-overview/admin-overview';
+import { AdminUsersTab } from '../admin-users/admin-users';
+import { AssignRoleDialog } from '../assign-role-dialog/assign-role-dialog';
 
 export type AdminTab = 'overview' | 'users' | 'roles';
 
@@ -46,7 +56,12 @@ async function blobErrorMessage(error: unknown): Promise<string> {
  */
 @Component({
   selector: 'app-admin-area',
-  imports: [AdminOverviewTab, LucideAngularModule],
+  imports: [
+    AdminOverviewTab,
+    AdminUsersTab,
+    AssignRoleDialog,
+    LucideAngularModule,
+  ],
   templateUrl: './admin-area.html',
   host: { class: 'flex flex-col' },
 })
@@ -54,9 +69,12 @@ export class AdminArea {
   readonly Download = Download;
   readonly LayoutDashboard = LayoutDashboard;
   readonly Loader2 = Loader2;
+  readonly UserPlus = UserPlus;
   readonly tabs = ADMIN_TABS;
   readonly selected = signal<AdminTab>('overview');
   readonly exporting = signal(false);
+  /** The Assign role dialog (admin R56). */
+  readonly assigning = signal(false);
 
   private readonly api = inject(AdminApiService);
   private readonly toast = inject(ToastService);
@@ -64,6 +82,7 @@ export class AdminArea {
 
   private readonly tabButtons =
     viewChildren<ElementRef<HTMLButtonElement>>('tabButton');
+  private readonly usersTab = viewChild(AdminUsersTab);
 
   select(tab: AdminTab): void {
     this.selected.set(tab);
@@ -109,6 +128,12 @@ export class AdminArea {
         this.toast.error(await blobErrorMessage(err));
       },
     });
+  }
+
+  /** A role was assigned: the users table shows it. */
+  onAssigned(): void {
+    this.assigning.set(false);
+    this.usersTab()?.reload();
   }
 
   private save(blob: Blob, name: string): void {

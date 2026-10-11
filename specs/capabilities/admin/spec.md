@@ -299,7 +299,7 @@ Feature: Sign in to an org server
 
 ### Feature: Permissions in the app
 
-E2E: `frontend/e2e/org-permissions.spec.ts` (Playwright `org` project). In "A bootstrap admin sees the Admin area", the step `I see the "Search users" field` checks the Users & groups tab's content, which arrives with BA-165; until then the spec marks it `TODO(BA-165)`.
+E2E: `frontend/e2e/org-permissions.spec.ts` (Playwright `org` project).
 
 ```gherkin
 Feature: Permissions in the app
@@ -548,7 +548,7 @@ Feature: Admin overview
 
 ### Feature: Users and groups
 
-E2E: none yet. Its spec, `frontend/e2e/org-admin-users.spec.ts`, is written in step 7 of BA-165.
+E2E: `frontend/e2e/org-admin-users.spec.ts` (Playwright `org` project).
 
 ```gherkin
 Feature: Users and groups
@@ -577,6 +577,8 @@ Feature: Users and groups
     Then the table lists only "Ada Lovelace"
     When I type "turing" in "Search users"
     Then the table lists only "Alan Turing"
+    When I type "GRACE@contoso" in "Search users"
+    Then the table lists only "Grace Hopper"
     When I type "nobody" in "Search users"
     Then I see "No users match your search."
 
