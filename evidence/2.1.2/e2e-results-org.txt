@@ -1,15 +1,86 @@
-npm run test:e2e:org (frontend/, Playwright project org, web app in org server mode) — BA-163 slice S4, 2026-10-10
-Specs: e2e/org-sign-in.spec.ts, e2e/org-permissions.spec.ts, e2e/org-isolation.spec.ts (admin spec Features 'Sign in to an org server', 'Permissions in the app', 'Private and shared data')
+
+> frontend@0.27.0 test:e2e:org
+> npm run test:e2e:prepare && playwright test --project=org
+
+
+> frontend@0.27.0 test:e2e:prepare
+> tsc -p e2e/tsconfig.json && npm --prefix ../backend run build:all
+
+
+> @jhon-buendia-halo/questions-to-insights@0.27.0 build:all
+> npm run build && npm run build:web
+
+
+> @jhon-buendia-halo/questions-to-insights@0.27.0 build
+> nest build
+
+
+> @jhon-buendia-halo/questions-to-insights@0.27.0 build:web
+> npm --prefix ../frontend run build:web && node scripts/copy-web.js
+
+
+> frontend@0.27.0 build:web
+> ng build
+
+❯ Building...
+✔ Building...
+Initial chunk files   | Names         |  Raw size | Estimated transfer size
+main-7KRTKNZY.js      | main          | 703.92 kB |               162.02 kB
+styles-3D46E7JH.css   | styles        |  41.15 kB |                 7.42 kB
+polyfills-5CFQRCPP.js | polyfills     |  34.59 kB |                11.33 kB
+
+                      | Initial total | 779.65 kB |               180.77 kB
+
+Application bundle generation complete. [4.457 seconds] - 2026-10-11T01:48:20.937Z
+
+▲ [WARNING] NG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed. [plugin angular-compiler]
+
+    src/app/features/agents/components/agent-detail/agent-detail.html:711:38:
+      711 │ ...                        >{{ result.scores[check.id] ?? 0 }}</span
+          ╵                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+  Warning occurs in the template of component AgentDetail.
+
+    src/app/features/agents/components/agent-detail/agent-detail.ts:60:15:
+      60 │   templateUrl: './agent-detail.html',
+         ╵                ~~~~~~~~~~~~~~~~~~~~~
+
+
+▲ [WARNING] Deprecation [plugin angular-sass]
+
+    src/styles.scss:1:8:
+      1 │ @import "tailwindcss";
+        ╵         ^
+
+
+  Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+  
+  More info and automated migrator: https://sass-lang.com/d/import
+
+  The plugin "angular-sass" was triggered by this import
+
+    angular:styles/global:styles:5:8:
+      5 │ @import 'src/styles.scss';
+        ╵         ~~~~~~~~~~~~~~~~~
+
+
+▲ [WARNING] bundle initial exceeded maximum budget. Budget 500.00 kB was not met by 279.65 kB with a total of 779.65 kB.
+
+
+Output location: /home/jhonbuendia/projects/bi-assistant/.claude/worktrees/BA-161-admin-panel/frontend/dist/frontend
+
+copy-web: copied /home/jhonbuendia/projects/bi-assistant/.claude/worktrees/BA-161-admin-panel/frontend/dist/frontend/browser -> /home/jhonbuendia/projects/bi-assistant/.claude/worktrees/BA-161-admin-panel/backend/public
 
 Running 16 tests using 1 worker
+
   ✓   1 [org] › e2e/org-isolation.spec.ts:34:5 › users share datasources and datasets (2.4s)
-  ✓   2 [org] › e2e/org-isolation.spec.ts:48:5 › sessions are private to their owner (2.3s)
+  ✓   2 [org] › e2e/org-isolation.spec.ts:48:5 › sessions are private to their owner (2.4s)
   ✓   3 [org] › e2e/org-isolation.spec.ts:68:5 › agents and pins are private to their owner (2.5s)
   ✓   4 [org] › e2e/org-isolation.spec.ts:110:5 › knowledge is private to its owner (2.3s)
-  ✓   5 [org] › e2e/org-permissions.spec.ts:46:5 › a User sees no maker, data or admin controls (2.2s)
+  ✓   5 [org] › e2e/org-permissions.spec.ts:46:5 › a User sees no maker, data or admin controls (2.3s)
   ✓   6 [org] › e2e/org-permissions.spec.ts:73:5 › a Maker can create an agent (2.0s)
-  ✓   7 [org] › e2e/org-permissions.spec.ts:86:5 › a bootstrap admin sees the Admin area (3.5s)
-  ✓   8 [org] › e2e/org-permissions.spec.ts:123:5 › a Platform admin manages shared settings (1.9s)
+  ✓   7 [org] › e2e/org-permissions.spec.ts:86:5 › a bootstrap admin sees the Admin area (3.3s)
+  ✓   8 [org] › e2e/org-permissions.spec.ts:123:5 › a Platform admin manages shared settings (2.0s)
   ✓   9 [org] › e2e/org-permissions.spec.ts:139:5 › an action the user lost the right to is refused (2.0s)
   ✓  10 [org] › e2e/org-sign-in.spec.ts:25:5 › an unauthenticated visitor sees only the sign-in page (2.9s)
   ✓  11 [org] › e2e/org-sign-in.spec.ts:42:5 › signing in opens the app as that user (1.6s)
@@ -18,4 +89,6 @@ Running 16 tests using 1 worker
   ✓  14 [org] › e2e/org-sign-in.spec.ts:105:5 › a failed sign-in shows an error (1.7s)
   ✓  15 [org] › e2e/org-sign-in.spec.ts:116:5 › deactivating a user ends their session and blocks sign-in (1.9s)
   ✓  16 [org] › e2e/org-sign-in.spec.ts:135:5 › an expired session shows the sign-in page (1.8s)
+
   16 passed (35.4s)
+exit=0

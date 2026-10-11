@@ -14,7 +14,26 @@ Entry template:
 
 ---
 
-## 2026-10-10 — 2.1.1 Admin Panel: multi-user vision, ADR-0011 and epic spec (BA-162)
+## 2026-10-10 — 2.1.2 Org server mode: sign-in, directory, roles and enforcement (BA-163)
+
+### What went well
+- Building in slices (S1 guard, S2 owner scoping, S3 org backend, S4 frontend), each committed green before the next, kept the local-mode suite green at every step. Local mode was the safety net for a change that touched every route and every private repository.
+- The startup self-check (every route must carry a requirement) turns a forgotten decorator into a boot failure instead of an open route.
+- Work that would collide ran in separate scratch worktrees with their own `dist/`: the admin screen specs, the UPN fix and the admin API. That kept builds away from the epic worktree while its Playwright suite ran (the BA-160 lesson), and each merged back cleanly.
+- An agent flagged that matching users and bootstrap admins by the `email` claim is open to the "nOAuth" takeover. A failing API test proved it (a spoofed email landed on the bootstrap admin's account) before the fix, and the user chose subject + UPN.
+
+### What went wrong
+- Merging `main` into the epic branch collided on ADR-0009: BA-168 had shipped its own ADR-0009 while this epic's ADRs were still unmerged. Renumbering by script double-shifted a few lines (changelog, roadmap and the BA-162 retrospective heading said ADR-0011 for the org decision), and S1 found an "ADR-0011 and ADR-0011" typo. Both were caught only by later reads.
+- The worktree's E2E database question had to be asked twice: the user picked the shared Docker Postgres, but Docker Desktop wasn't running and the WSL distro had no Docker integration.
+- The specs (R13, R18) asked for matching by email; the security problem was found during implementation, not when the spec was written.
+- `app.e2e-spec.ts` still fails on an ESM import and the `llm.service.spec.ts` type errors from `main` remain; every gate report has to explain them.
+
+### What to do differently
+- Before writing an ADR number on an epic branch, check `main` and every open branch for the next free number again at merge time, and renumber with a reviewed list of (file, line) pairs, then grep the result for every ADR id before committing.
+- Before offering "the shared Postgres" for E2E, check it is reachable (`ss -ltn | grep 55432`, `docker ps`) and say so in the question.
+- When a spec says how to identify a person from an identity token, name the claim and check the provider's guidance on whether it is verified before confirming the spec.
+
+## 2026-10-10 — 2.1.1 Admin Panel: multi-user vision, ADR-0010 and epic spec (BA-162)
 
 ### What went well
 - I checked the board against `vision.md` before drafting and found that "Not multi-user" was a direct conflict. Three rounds of multiple-choice questions then settled reality (real multi-user), deployment (self-hosted), local mode (kept), sharing (datasources, datasets and the LLM configuration), storage (SQLite), sync, and datasource governance before any spec text was final.
