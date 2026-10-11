@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <title>CU2 · Agents: discover, pin, Start chat</title>
+  <meta name="wf-status" content="as-built">
+  <meta name="wf-version" content="v0.29.0">
+  <meta name="wf-role" content="user">
+  <meta name="wf-spec" content="specs/system/ui.md#44-agent-hub">
+  <link rel="stylesheet" href="../../_kit/hub.css">
+  <script src="../../_kit/icons.js"></script>
+  <script src="../../_kit/shell.js" defer></script>
+</head>
+<!-- A User (also Data owner, Approver): no New agent, no Mine section. Pin applies at once (PUT /agents/:key/pin). -->
+<body data-area="Agents" data-role="user" data-mode="org" data-initials="JB"
+      data-sessions='[["Cup historian","Cup historian · World Cup Core"],["Q3 claims review","Questions to Insights Assistant · Claims"]]'>
+  <main class="narrow">
+    <h2 class="h2">Agents</h2>
+    <div class="field row" style="padding:9px 12px"><i data-lucide="search"></i><span style="color:var(--qti-placeholder)">Search agents by name or description</span></div>
+    <div class="row">
+      <span class="filter-pill filter-pill-active">All</span><span class="filter-pill">Pinned</span><span class="filter-pill">Official</span><span class="filter-pill">Mine</span>
+    </div>
+    <div class="micro">Official</div>
+    <div class="grid3">
+      <div class="card col g12 p16">
+        <div class="row between"><span class="wf-tile" style="width:32px;height:32px;border-radius:8px"><i data-lucide="sparkles"></i></span><span class="row g4 link small"><i data-lucide="pin" data-size="14"></i>Pinned</span></div>
+        <div class="title">Questions to Insights Assistant</div>
+        <div class="small muted">Answers business questions over a session's datasets — plans the analysis, writes and runs the SQL.</div>
+        <div class="row between"><span class="small muted">Owner: Official</span><span class="btn btn-secondary" style="padding:5px 12px;font-size:13px"><i data-lucide="message-square-plus" data-size="14"></i>Start chat</span></div>
+      </div>
+    </div>
+    <div class="micro">System</div>
+    <div class="grid3">
+      <div class="card col g12 p16">
+        <div class="row between"><span class="wf-tile" style="width:32px;height:32px;border-radius:8px"><i data-lucide="sparkles"></i></span><span class="row g4 link small"><i data-lucide="pin" data-size="14"></i>Pin</span></div>
+        <div class="title">Assistant Eval Judge</div>
+        <div class="small muted">Grades one assistant eval case's tool calls and final answer against a rubric.</div>
+        <span class="small muted">Owner: System</span>
+      </div>
+      <div class="card col g12 p16">
+        <div class="row between"><span class="wf-tile" style="width:32px;height:32px;border-radius:8px"><i data-lucide="sparkles"></i></span><span class="row g4 link small"><i data-lucide="pin" data-size="14"></i>Pin</span></div>
+        <div class="title">Interactive Visual Designer</div>
+        <div class="small muted">Turns a completed analysis answer into an interactive visual, and tailors it on request.</div>
+        <span class="small muted">Owner: System</span>
+      </div>
+      <div class="card col g12 p16">
+        <div class="row between"><span class="wf-tile" style="width:32px;height:32px;border-radius:8px"><i data-lucide="sparkles"></i></span><span class="row g4 link small"><i data-lucide="pin" data-size="14"></i>Pin</span></div>
+        <div class="title">Knowledge Bootstrap</div>
+        <div class="small muted">Mines business-glossary terms, instructions and coverage facts from a dataset's schema.</div>
+        <span class="small muted">Owner: System</span>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

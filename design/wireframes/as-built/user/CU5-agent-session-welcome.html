@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <title>CU5 · Agent session: welcome card and composer</title>
+  <meta name="wf-status" content="as-built">
+  <meta name="wf-version" content="v0.29.0">
+  <meta name="wf-role" content="user">
+  <meta name="wf-spec" content="specs/system/ui.md#412-session-chat specs/system/ui.md#12-regions">
+  <link rel="stylesheet" href="../../_kit/hub.css">
+  <script src="../../_kit/icons.js"></script>
+  <script src="../../_kit/shell.js" defer></script>
+  <style>
+    /* Kit gap: in the Sessions area the Expand right panel button sits in the page header, not floating on the page card. */
+    .wf-page > span[title="Expand right panel"] { display: none !important; }
+    /* Page-local: session-context micro-labels, starter chips and the chat composer (radius 8, not the kit's 16). */
+    .sc-label { font-size: 10px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--qti-fg-muted); }
+    .sc-starter { border-radius: 999px; border: 1px solid var(--qti-border); background: var(--qti-surface-muted); padding: 6px 12px; font-size: 12px; line-height: 18px; color: var(--qti-fg); }
+    .sc-composer { width: 100%; border: 1px solid var(--qti-border-strong); border-radius: 8px; background: var(--qti-surface); box-shadow: var(--qti-shadow-input); padding: 12px 8px; }
+    .sc-toggle { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; border: 1px solid var(--qti-border); padding: 4px 10px; font-size: 12px; line-height: 16px; color: var(--qti-fg-muted); }
+  </style>
+</head>
+<!--
+  Workflow step: "Start chat" on a Live agent (Agent Hub card or agent detail) creates the session at once:
+  POST /sessions { agentId } -> toast 'Session "Cup historian" created', the drawer reloads (GET /sessions) and the chat opens.
+  The page header shows the session name, the AGENT chip and the DATASOURCE chip(s) (GET /datasources).
+  The welcome card is client-only (never persisted, never sent to the model): the agent's Live description and its
+  Live starter questions; clicking a chip fills the composer, the user sends it (POST /sessions/:id/messages/stream, CU6).
+  Careful / Deep analysis toggles, Send disabled while the draft is empty.
+-->
+<body data-area="Sessions" data-role="user" data-mode="org" data-initials="JB"
+      data-sessions='[["Cup historian","Cup historian · World Cup Core",true],["World Cup analysis","World Cup Core"]]'>
+  <main class="flush">
+    <header class="wf-page-header" style="align-items:flex-start">
+      <img src="../../../../frontend/public/brand/agentic-hub/page-header-icon.svg" width="36" height="36" alt="" style="margin-top:2px">
+      <div class="grow">
+        <h2 class="h2">Cup historian</h2>
+        <div class="row" style="margin-top:4px">
+          <span class="muted" style="display:flex"><i data-lucide="sparkles" data-size="14"></i></span>
+          <span class="sc-label">Agent</span>
+          <span class="chip chip-neutral" style="margin-right:4px">Cup historian</span>
+          <span class="muted" style="display:flex"><i data-lucide="database" data-size="14"></i></span>
+          <span class="sc-label">Datasource</span>
+          <span class="chip chip-neutral">World Cup PostgreSQL <span style="font-size:10px;font-weight:400">PostgreSQL</span></span>
+        </div>
+      </div>
+      <span class="btn btn-secondary"><i data-lucide="square-pen" data-size="20"></i><span>Start New Conversation</span></span>
+      <span class="btn-icon" title="Expand right panel" style="margin-top:8px"><i data-lucide="panel-right" data-size="16"></i></span>
+    </header>
+
+    <div class="grow" style="padding:32px 32px 24px">
+      <div class="card col g12" style="padding:20px">
+        <div class="row" style="gap:10px">
+          <span style="width:32px;height:32px;border-radius:8px;background:var(--qti-surface-muted);color:var(--qti-fg);display:grid;place-items:center;flex:none"><i data-lucide="sparkles" data-size="15"></i></span>
+          <span style="font-size:14px;font-weight:500;color:var(--qti-fg-strong)">Cup historian is ready</span>
+        </div>
+        <p style="margin:0;font-size:13px;line-height:24px" class="muted">Answers questions about World Cup history. Connected to World Cup Core.</p>
+        <div class="col g6">
+          <span style="font-size:11px;font-weight:500;letter-spacing:0.025em" class="muted">Try one of these:</span>
+          <div class="row wrap">
+            <span class="sc-starter">Who won the 2022 World Cup?</span>
+            <span class="sc-starter">Who scored the most goals in the 2022 World Cup, and how many?</span>
+            <span class="sc-starter">Which knockout matches went to a penalty shootout?</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col" style="align-items:center;padding:0 32px 24px;gap:0">
+      <div class="sc-composer">
+        <div style="height:40px;font-size:14px;line-height:20px;color:var(--qti-placeholder)">Ask a follow-up question…</div>
+        <div class="row between" style="margin-top:4px">
+          <div class="row">
+            <span class="sc-toggle" title="Careful mode: re-check each answer with an independent query and show an agree/disagree badge. Slower per answer."><i data-lucide="shield-check" data-size="12"></i>Careful</span>
+            <span class="sc-toggle" style="opacity:0.4"><i data-lucide="telescope" data-size="12"></i>Deep analysis</span>
+          </div>
+          <span style="color:var(--qti-accent);display:flex;padding:6px;opacity:0.4" title="Send message"><i data-lucide="arrow-up" data-size="20"></i></span>
+        </div>
+      </div>
+      <p class="small muted" style="margin:16px 0 0;font-size:12px;line-height:16px;text-align:center">Responses are generated by AI (Powered by LenAI) and may be inaccurate or incomplete. Please verify against source data before sharing.</p>
+    </div>
+  </main>
+
+  <div class="wf-overlay">
+    <div class="wf-toast"><span style="color:var(--qti-on-success-soft);display:flex"><i data-lucide="circle-check" data-size="16"></i></span><span>Session "Cup historian" created</span><span class="muted" style="display:flex;margin-left:24px"><i data-lucide="x" data-size="14"></i></span></div>
+  </div>
+</body>
+</html>

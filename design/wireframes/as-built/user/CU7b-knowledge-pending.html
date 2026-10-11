@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <title>CU7b · Knowledge: review pending suggestions</title>
+  <meta name="wf-status" content="as-built">
+  <meta name="wf-version" content="v0.29.0">
+  <meta name="wf-role" content="user">
+  <meta name="wf-spec" content="specs/system/ui.md#48-knowledge-list-and-form">
+  <link rel="stylesheet" href="../../_kit/hub.css">
+  <script src="../../_kit/icons.js"></script>
+  <script src="../../_kit/shell.js" defer></script>
+  <style>
+    /* Kit gap: the collapsed rail clips the 56 px "Powered by LenAI" artwork. */
+    .wf-rail.collapsed .wf-powered img { max-width: 100%; }
+    /* Page-local: the knowledge filter pills and rows are utilities in knowledge-list.html (not the kit's filter-pill). */
+    .kn-pill { padding: 6px 12px; border-radius: 8px; font-size: 13px; color: var(--qti-fg-muted); }
+    .kn-pill.on { background: var(--qti-surface-muted); color: var(--qti-fg); }
+    .kn-pending { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; border: 1px solid var(--qti-border); background: var(--qti-surface-muted); padding: 4px 10px; font-size: 12px; line-height: 16px; color: var(--qti-fg-muted); }
+    .kn-pending.on { border-color: var(--qti-border-selected); background: var(--qti-surface-selected); color: var(--qti-on-primary-soft); }
+    .kn-count { min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: var(--qti-info-soft); color: var(--qti-on-info-soft); font-size: 10px; font-weight: 600; display: grid; place-items: center; }
+    .kn-row { display: flex; align-items: center; gap: 12px; border: 1px solid var(--qti-border); border-radius: 8px; background: var(--qti-surface-muted); padding: 10px 12px; }
+    .kn-tile { width: 32px; height: 32px; border-radius: 8px; background: var(--qti-surface-muted); display: grid; place-items: center; flex: none; }
+    .kn-kind { flex: none; border-radius: 4px; background: var(--qti-surface-muted); padding: 2px 6px; font-size: 10px; line-height: 14px; color: var(--qti-fg-muted); }
+    .kn-mined { font-size: 10px; padding: 2px 6px; gap: 4px; }
+    .kn-body { font-size: 11px; line-height: 16px; color: var(--qti-fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .kn-check { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--qti-fg-muted); flex: none; }
+    .kn-check .wf-check { width: 14px; height: 14px; border-radius: 3px; }
+  </style>
+</head>
+<!--
+  Workflow step: after "Generate suggestions" (POST /knowledge/bootstrap/stream, SSE) the list switches to the
+  Pending suggestions view: Mined snippets that are still disabled. GET /knowledge, filtered client-side.
+  Accept = PATCH /knowledge/:id { enabled: true } (the snippet joins the applied knowledge; toast "Snippet enabled").
+  Reject asks 'Reject "<title>"?' + "This permanently removes the suggestion." then DELETE /knowledge/:id.
+  While this toggle is on, no kind pill is highlighted.
+-->
+<body data-area="Knowledge" data-role="user" data-mode="org" data-initials="JB" data-drawer="collapsed"
+      data-sessions='[["Cup historian","Cup historian · World Cup Core"]]'>
+  <main class="narrow" style="gap:0">
+    <div class="row top between" style="gap:16px">
+      <div>
+        <h2 class="h2">Knowledge</h2>
+        <p style="margin:4px 0 0;max-width:576px;font-size:13px;line-height:20px" class="muted">Instructions, glossary terms and default filters the assistant uses when answering. Only enabled snippets are applied.</p>
+      </div>
+      <div class="row" style="flex:none">
+        <span class="btn btn-outline"><i data-lucide="wand-sparkles" data-size="14"></i><span>Generate suggestions</span></span>
+        <span class="btn btn-primary"><i data-lucide="plus" data-size="14"></i><span>New snippet</span></span>
+      </div>
+    </div>
+
+    <div class="row wrap" style="margin-top:20px;gap:6px">
+      <span class="kn-pill" title="Every snippet, whatever its kind.">All</span>
+      <span class="kn-pill">Instruction</span>
+      <span class="kn-pill">Term</span>
+      <span class="kn-pill">Default filter</span>
+      <span class="field row" style="width:auto;gap:24px;padding:7px 12px" aria-label="Filter by dataset">All datasets<i data-lucide="chevron-down" data-size="14"></i></span>
+      <span class="grow"></span>
+      <span class="kn-pending on" aria-pressed="true"><i data-lucide="sparkles" data-size="12"></i>Pending suggestions<span class="kn-count">2</span></span>
+    </div>
+
+    <div class="col" style="margin-top:24px;gap:6px">
+      <div class="kn-row">
+        <span class="kn-tile" style="color:var(--qti-accent)"><i data-lucide="file-text" data-size="15"></i></span>
+        <span class="col grow" style="gap:2px">
+          <span class="row"><span style="font-size:13px">Attendance can be missing</span><span class="kn-kind">Instruction</span><span class="chip chip-info kn-mined"><i data-lucide="sparkles" data-size="10"></i><span>Mined</span></span></span>
+          <span class="kn-body">matches.attendance is null for some matches; treat it as unknown, never as zero, and leave those matches out of averages.</span>
+          <span class="row g6" style="font-size:11px;line-height:16px;color:var(--qti-fg-muted)">World Cup Core<span>·</span>Updated Oct 11</span>
+        </span>
+        <span class="btn btn-primary" style="flex:none">Accept</span>
+        <span class="btn btn-danger" style="flex:none">Reject</span>
+      </div>
+      <div class="kn-row">
+        <span class="kn-tile" style="color:var(--qti-on-warning-soft)"><i data-lucide="tag" data-size="15"></i></span>
+        <span class="col grow" style="gap:2px">
+          <span class="row"><span style="font-size:13px">Champion</span><span class="kn-kind">Term</span><span class="chip chip-info kn-mined"><i data-lucide="sparkles" data-size="10"></i><span>Mined</span></span></span>
+          <span class="kn-body">The tournament winner: tournaments.champion_team_id joined to teams.common_name. Synonyms: winner, title holder.</span>
+          <span class="row g6" style="font-size:11px;line-height:16px;color:var(--qti-fg-muted)">World Cup Core<span>·</span>Updated Oct 11</span>
+        </span>
+        <span class="btn btn-primary" style="flex:none">Accept</span>
+        <span class="btn btn-danger" style="flex:none">Reject</span>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

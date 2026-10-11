@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <title>CA6 · Admin: User detail panel</title>
+  <meta name="wf-status" content="as-built">
+  <meta name="wf-version" content="v0.29.0">
+  <meta name="wf-role" content="admin">
+  <meta name="wf-spec" content="specs/system/ui.md#4184-user-detail-panel-p3 specs/system/ui.md#4183-users--groups-p2">
+  <link rel="stylesheet" href="../../_kit/hub.css">
+  <script src="../../_kit/icons.js"></script>
+  <script src="../../_kit/shell.js" defer></script>
+  <style>
+    .wf-tab { font-weight: 500; }
+    .wf-tab.current { color: var(--qti-fg-strong); }
+    .wf-table th { font-size: 13px; color: var(--qti-fg-strong); padding: 12px 16px; }
+    .wf-table td { height: 64px; padding: 8px 16px; font-size: 13px; }
+    .wf-table tr.sel td { background: var(--qti-surface-selected); }
+    .wf-av { width: 32px; height: 32px; border-radius: 999px; background: var(--qti-primary); color: var(--qti-on-primary); display: grid; place-items: center; font-size: 12px; font-weight: 600; flex: none; }
+    .wf-name { font-size: 14px; font-weight: 600; color: var(--qti-fg-strong); line-height: 20px; }
+    .wf-role { display: flex; align-items: flex-start; gap: 12px; }
+    .wf-role input { width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--qti-primary); flex: none; }
+    .wf-role b { display: block; font-size: 14px; font-weight: 600; color: var(--qti-fg-strong); }
+    .wf-role p { margin: 0; font-size: 12px; line-height: 18px; color: var(--qti-fg-muted); }
+    .wf-h4 { margin: 16px 0 0; font-size: 14px; font-weight: 600; color: var(--qti-fg-strong); }
+    select.field { height: 38px; }
+  </style>
+</head>
+<!--
+  Workflow: Users & groups -> click a user's name (Ada Lovelace) -> the user detail panel opens beside the compact table
+  (Name, Roles, Last active); the row is selected. Data: GET /admin/users/:id (api 84).
+  Roles: Approver is a direct assignment (ticked); Maker comes from the Entra ID group Analysts (ticked, disabled,
+  reason "From group Analysts"); Data owner (to add one) reveals the Datasource select. Save changes -> PUT /admin/users/:id/roles
+  (api 85), disabled here, titled "No changes to save". Transfer ownership -> dialog -> POST /admin/agents/transfer (api 86).
+  The panel is taller than the screen under the Admin header, tabs, view switch and role chips, so this frame shows the
+  page scrolled down to the panel's footer (those rows are above the fold).
+-->
+<body data-area="Admin" data-role="admin" data-mode="org" data-initials="AA">
+  <main style="padding:40px 32px;gap:0">
+    <div style="margin-top:-252px">
+      <div class="row g12">
+        <span class="wf-tile" style="width:32px;height:32px;border-radius:8px"><i data-lucide="layout-dashboard" data-size="16"></i></span>
+        <div>
+          <h2 class="h2">Admin</h2>
+          <div class="muted" style="font-size:13px">Manage people, roles and access for your organisation.</div>
+        </div>
+        <span class="grow"></span>
+        <span class="btn btn-primary"><i data-lucide="user-plus" data-size="14"></i>Assign role</span>
+      </div>
+      <div class="wf-tabs" style="margin-top:24px">
+        <span class="wf-tab">Overview</span><span class="wf-tab current">Users &amp; groups</span><span class="wf-tab">Roles &amp; permissions</span>
+      </div>
+      <div style="margin-top:24px">
+        <div class="row g12">
+          <span class="filter-pill filter-pill-active">Users · 7</span><span class="filter-pill">Groups · 2</span>
+          <span class="grow"></span>
+          <div class="field row" style="width:360px;padding:8px 12px;gap:8px"><i data-lucide="search" data-size="15" style="color:var(--qti-fg-muted)"></i><span class="muted">Search name, email or group</span></div>
+        </div>
+        <div class="row wrap" style="margin-top:12px">
+          <span class="filter-pill filter-pill-active">All roles</span><span class="filter-pill">Platform admins · 1</span><span class="filter-pill">Approvers · 3</span><span class="filter-pill">Data owners · 1</span><span class="filter-pill">Makers · 6</span><span class="filter-pill">Inactive 90d · 1</span>
+        </div>
+
+        <div class="row top g24" style="margin-top:16px">
+          <!-- Compact users table -->
+          <div class="grow" style="min-width:480px">
+            <table class="wf-table">
+              <thead><tr><th>Name</th><th>Roles</th><th>Last active</th></tr></thead>
+              <tbody>
+                <tr class="sel"><td><div class="row g12"><span class="wf-av">AL</span><div><div class="wf-name" style="text-decoration:underline">Ada Lovelace</div><div class="small muted">ada@contoso.test</div></div></div></td>
+                  <td><span class="chip chip-warning">Approver</span> <span class="chip chip-info">Maker</span></td><td>Today</td></tr>
+                <tr><td><div class="row g12"><span class="wf-av">AT</span><div><div class="wf-name">Alan Turing</div><div class="small muted">alan@contoso.test</div></div></div></td>
+                  <td><span class="chip chip-warning">Approver</span> <span class="chip chip-info">Maker</span></td><td>95 days ago</td></tr>
+                <tr><td><div class="row g12"><span class="wf-av">AA</span><div><div class="wf-name">Avery Admin</div><div class="small muted">admin@contoso.test</div></div></div></td>
+                  <td><span class="chip chip-danger">Platform admin</span></td><td>Today</td></tr>
+                <tr><td><div class="row g12"><span class="wf-av">ED</span><div><div class="wf-name">Edsger Dijkstra</div><div class="small muted">edsger@contoso.test</div></div></div></td>
+                  <td><span class="chip chip-info">Maker</span></td><td>Never</td></tr>
+                <tr><td><div class="row g12"><span class="wf-av">GH</span><div><div class="wf-name">Grace Hopper</div><div class="small muted">grace@contoso.test</div></div></div></td>
+                  <td><span class="chip chip-warning">Approver</span> <span class="chip chip-info">Maker</span></td><td>3 days ago</td></tr>
+                <tr><td><div class="row g12"><span class="wf-av">KJ</span><div><div class="wf-name">Katherine Johnson</div><div class="small muted">katherine@contoso.test</div></div></div></td>
+                  <td><span class="chip chip-info">Maker</span></td><td>Today</td></tr>
+                <tr><td><div class="row g12"><span class="wf-av">MH</span><div><div class="wf-name">Margaret Hamilton</div><div class="small muted">margaret@contoso.test</div></div></div></td>
+                  <td><span class="chip chip-success">Data owner</span> <span class="chip chip-info">Maker</span></td><td>Today</td></tr>
+              </tbody>
+            </table>
+            <div class="row g16" style="margin-top:16px">
+              <div class="small muted grow">Users and groups come from Entra ID via SCIM · last sync just now. Roles are assigned here or mapped from groups.</div>
+              <span class="small muted" style="flex:none">1–7 of 7</span>
+              <span class="row g4" style="flex:none">
+                <span class="btn-icon" style="opacity:0.55"><i data-lucide="chevron-left" data-size="16"></i></span>
+                <span class="btn-icon" style="opacity:0.55"><i data-lucide="chevron-right" data-size="16"></i></span>
+              </span>
+            </div>
+          </div>
+
+          <!-- User detail panel (section aria-label="User details") -->
+          <section class="card" style="position:relative;width:520px;flex:none;padding:24px">
+            <span class="btn-icon" style="position:absolute;top:16px;right:16px" title="Close user details"><i data-lucide="x" data-size="16"></i></span>
+            <div class="row top g16" style="padding-right:40px">
+              <span class="wf-av" style="width:48px;height:48px;font-size:16px">AL</span>
+              <div class="grow">
+                <div style="font-size:20px;line-height:28px;color:var(--qti-fg-strong)">Ada Lovelace</div>
+                <div class="muted" style="font-size:13px">ada@contoso.test</div>
+              </div>
+              <span class="chip chip-success" style="margin-top:4px">Active</span>
+            </div>
+
+            <div style="margin-top:16px;font-size:14px;font-weight:600;color:var(--qti-fg-strong)">Roles</div>
+            <div class="card-muted col" style="margin-top:8px;padding:12px 16px;gap:8px">
+              <label class="wf-role"><input type="checkbox"><span><b>Platform admin</b><p>Manage users, roles, policies and settings</p></span></label>
+              <label class="wf-role"><input type="checkbox" checked><span><b>Approver</b><p>Approve org-wide publishing</p></span></label>
+              <label class="wf-role"><input type="checkbox" checked disabled><span><b>Maker</b><p>Create, test and share agents with their team<span style="display:block">From group Analysts</span></p></span></label>
+              <div class="wf-role"><input type="checkbox"><span class="grow"><b>Data owner</b><p>Approves access requests to this data source</p>
+                <span style="display:block;margin-top:8px"><span class="field-label">Datasource</span>
+                <select class="field" style="margin-top:4px" disabled><option>Choose a datasource</option></select></span></span></div>
+            </div>
+
+            <h4 class="wf-h4">Groups (from Entra ID, read-only)</h4>
+            <div class="row g4" style="margin-top:8px"><span class="chip chip-neutral">Analysts</span></div>
+
+            <h4 class="wf-h4">Agents owned</h4>
+            <div class="col" style="margin-top:8px;gap:8px">
+              <div class="list-row row g12" style="padding:10px 12px"><span class="grow" style="font-size:14px">Card counter</span><span class="chip chip-neutral">Draft</span></div>
+              <div class="list-row row g12" style="padding:10px 12px"><span class="grow" style="font-size:14px">Goal analyst</span><span class="chip chip-success">Live</span></div>
+            </div>
+
+            <div class="row end" style="margin-top:24px">
+              <span class="btn btn-outline">Transfer ownership</span>
+              <span class="btn btn-primary" style="opacity:0.55" title="No changes to save">Save changes</span>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <title>CA1 · Datasets: New dataset (catalog browser)</title>
+  <meta name="wf-status" content="as-built">
+  <meta name="wf-version" content="v0.29.0">
+  <meta name="wf-role" content="admin">
+  <meta name="wf-spec" content="specs/system/ui.md#43-catalog-browser-new-dataset--edit-dataset specs/system/ui.md#414-entity-details-right-panel-default">
+  <link rel="stylesheet" href="../../_kit/hub.css">
+  <script src="../../_kit/icons.js"></script>
+  <script src="../../_kit/shell.js" defer></script>
+  <style>
+    /* Tree rows (ui.md 4.3): catalog, schema +24 px, entity +56 px; the selected row is option-active. */
+    .wf-node { display: flex; align-items: center; gap: 10px; border-radius: 8px; padding: 6px 8px; }
+    .wf-node.cat { padding: 8px; }
+    .wf-node.sch { margin-left: 24px; }
+    .wf-node.ent { margin-left: 56px; }
+    .wf-node.active { background: var(--qti-surface-selected); }
+    .wf-node .n { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; color: var(--qti-fg); }
+    .wf-node.cat .n { font-size: 13px; }
+    .wf-node .c { font-size: 12px; color: var(--qti-fg-muted); }
+    .wf-node .st { margin-left: auto; display: flex; }
+    .wf-col { display: flex; align-items: center; justify-content: space-between; gap: 8px; border-radius: 6px; background: var(--qti-surface-muted); padding: 6px 10px; }
+    .wf-col .n { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+    .wf-col .t { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; color: var(--qti-fg-muted); }
+    select.field, input.field { height: 38px; }
+  </style>
+</head>
+<!--
+  Workflow: Datasets -> New dataset. The admin picked the datasource, clicked "Load entities from World Cup PostgreSQL · PostgreSQL"
+  (the awaiting-choice state, ui.md 4.3: nothing is read until requested; GET /datasources/:id/inventory, api 20),
+  expanded world_cup > world_cup, included matches, teams and tournaments from the right panel, and typed a name.
+  Save dataset (3) -> POST /datasets (api 22), then back to the Datasets list. Refresh inventory re-reads the inventory.
+  The selected entity (matches) is shown in the right panel (Entity details, ui.md 4.14) with its inclusion toggle
+  "Included — click to remove" (an entity not yet included shows the btn-primary "Include item").
+  Datasource list: GET /datasources (api 15). Name field and Save need manage-datasources (ui.md 1.6).
+  Below the fold (page scrolls): the Metrics panel (ui.md 4.15). The right panel's column list scrolls: 16 columns, the first 13 shown.
+-->
+<body data-area="Datasets" data-role="admin" data-mode="org" data-initials="AA" data-drawer="collapsed">
+  <main style="padding:40px 32px;gap:0">
+    <div class="row top between g16 wrap">
+      <div style="min-width:240px" class="grow">
+        <h2 class="h2">New dataset</h2>
+        <div class="muted" style="margin-top:4px;font-size:13px">Catalogs, schemas and entities available through the selected datasource.</div>
+      </div>
+      <div class="row">
+        <select class="field" aria-label="Datasource" style="width:auto;max-width:220px"><option>World Cup PostgreSQL · PostgreSQL</option></select>
+        <span class="btn btn-outline" style="padding:8px" title="Re-read catalogs, schemas and entities from the datasource"><i data-lucide="refresh-cw" data-size="15"></i></span>
+        <input class="field" style="width:220px" placeholder="Dataset name" value="World Cup Core">
+        <span class="btn btn-primary">Save dataset (3)</span>
+      </div>
+    </div>
+
+    <div class="field row" style="margin-top:24px;padding:8px 12px;gap:10px"><i data-lucide="search" data-size="15" style="color:var(--qti-fg-muted)"></i><span class="muted">Filter catalogs, schemas and entities…</span></div>
+
+    <div class="col" style="margin-top:12px;gap:2px">
+      <div class="wf-node cat"><i data-lucide="chevron-right" data-size="14" style="color:var(--qti-fg-muted);transform:rotate(90deg)"></i><i data-lucide="database" data-size="15" style="color:var(--qti-accent)"></i><span class="n">world_cup</span><span class="c">1 schemas</span><span class="st" style="color:var(--qti-on-warning-soft)"><i data-lucide="circle-minus" data-size="14"></i></span></div>
+      <div class="wf-node sch"><i data-lucide="chevron-right" data-size="14" style="color:var(--qti-fg-muted);transform:rotate(90deg)"></i><i data-lucide="folder-tree" data-size="14" style="color:var(--qti-on-warning-soft)"></i><span class="n">world_cup</span><span class="c">12 entities</span><span class="st" style="color:var(--qti-on-warning-soft)"><i data-lucide="circle-minus" data-size="14"></i></span></div>
+      <div class="wf-node ent"><i data-lucide="table-2" data-size="14" style="color:var(--qti-on-success-soft)"></i><span class="n">confederations</span><span class="c">2 columns</span></div>
+      <div class="wf-node ent"><i data-lucide="table-2" data-size="14" style="color:var(--qti-on-success-soft)"></i><span class="n">countries</span><span class="c">3 columns</span></div>
+      <div class="wf-node ent"><i data-lucide="table-2" data-size="14" style="color:var(--qti-on-success-soft)"></i><span class="n">disciplinary_events</span><span class="c">8 columns</span></div>
+      <div class="wf-node ent"><i data-lucide="table-2" data-size="14" style="color:var(--qti-on-success-soft)"></i><span class="n">goals</span><span class="c">10 columns</span></div>
+      <div class="wf-node ent"><i data-lucide="table-2" data-size="14" style="color:var(--qti-on-success-soft)"></i><span class="n">match_team_statistics</span><span class="c">11 columns</span></div>
+      <div class="wf-node ent active"><i data-lucide="table-2" data-size="14" style="color:var(--qti-on-success-soft)"></i><span class="n">matches</span><span class="c">16 columns</span><span class="st" style="color:var(--qti-on-success-soft)"><i data-lucide="circle-check" data-size="14"></i></span></div>
+      <div class="wf-node ent"><i data-lucide="table-2" data-size="14" style="color:var(--qti-on-success-soft)"></i><span class="n">players</span><span class="c">5 columns</span></div>
+      <div class="wf-node ent"><i data-lucide="table-2" data-size="14" style="color:var(--qti-on-success-soft)"></i><span class="n">squad_members</span><span class="c">4 columns</span></div>
+      <div class="wf-node ent"><i data-lucide="table-2" data-size="14" style="color:var(--qti-on-success-soft)"></i><span class="n">teams</span><span class="c">4 columns</span><span class="st" style="color:var(--qti-on-success-soft)"><i data-lucide="circle-check" data-size="14"></i></span></div>
+      <div class="wf-node ent"><i data-lucide="table-2" data-size="14" style="color:var(--qti-on-success-soft)"></i><span class="n">tournament_teams</span><span class="c">6 columns</span></div>
+      <div class="wf-node ent"><i data-lucide="table-2" data-size="14" style="color:var(--qti-on-success-soft)"></i><span class="n">tournaments</span><span class="c">8 columns</span><span class="st" style="color:var(--qti-on-success-soft)"><i data-lucide="circle-check" data-size="14"></i></span></div>
+      <div class="wf-node ent"><i data-lucide="table-2" data-size="14" style="color:var(--qti-on-success-soft)"></i><span class="n">venues</span><span class="c">5 columns</span></div>
+    </div>
+  </main>
+
+  <!-- Right panel: Entity details (ui.md 4.14) for the selected entity -->
+  <aside data-panel="" data-width="572">
+    <div class="col g16" style="padding:0 0 0 0">
+      <span class="btn" style="background:var(--qti-success-soft);color:var(--qti-on-success-soft);padding-top:6px;padding-bottom:6px"><i data-lucide="circle-check" data-size="14"></i>Included — click to remove</span>
+      <div class="row" style="gap:10px"><i data-lucide="table-2" data-size="16" style="color:var(--qti-on-success-soft)"></i><span class="mono" style="font-size:14px;font-weight:500;color:var(--qti-fg-strong)">matches</span></div>
+      <div class="mono muted" style="font-size:11px">world_cup.world_cup.matches</div>
+      <div class="row between" style="font-size:13px"><span class="muted">Columns</span><span>16</span></div>
+      <div class="micro" style="margin-top:8px;font-weight:400">Columns</div>
+      <div class="col g4" style="margin-top:-12px">
+        <div class="wf-col"><span class="n">id</span><span class="t">bigint · not null</span></div>
+        <div class="wf-col"><span class="n">tournament_id</span><span class="t">bigint · not null</span></div>
+        <div class="wf-col"><span class="n">match_number</span><span class="t">integer · not null</span></div>
+        <div class="wf-col"><span class="n">stage</span><span class="t">text · not null</span></div>
+        <div class="wf-col"><span class="n">group_letter</span><span class="t">character(1)</span></div>
+        <div class="wf-col"><span class="n">kicked_off_at</span><span class="t">timestamp with time zone · not null</span></div>
+        <div class="wf-col"><span class="n">venue_id</span><span class="t">bigint · not null</span></div>
+        <div class="wf-col"><span class="n">home_team_id</span><span class="t">bigint · not null</span></div>
+        <div class="wf-col"><span class="n">away_team_id</span><span class="t">bigint · not null</span></div>
+        <div class="wf-col"><span class="n">home_goals</span><span class="t">integer · not null</span></div>
+        <div class="wf-col"><span class="n">away_goals</span><span class="t">integer · not null</span></div>
+        <div class="wf-col"><span class="n">went_to_extra_time</span><span class="t">boolean · not null</span></div>
+        <div class="wf-col"><span class="n">home_penalties</span><span class="t">integer</span></div>
+      </div>
+    </div>
+  </aside>
+</body>
+</html>

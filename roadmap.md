@@ -135,6 +135,20 @@ How work is planned, specified, built, verified and traced. It covers the repo's
 - **Acceptance:** CLAUDE.md states the rule; `python3 scripts/check-specs.py` passes.
 - **Notes:** requested by the user on 2026-10-09 during the Agent Hub epic (BA-150), after a subagent's `pkill -f "dist/main.js"` matched more than intended. Branch `docs/BA-89-delivery-process`. Evidence: [evidence/0.2.7/](evidence/0.2.7/).
 
+#### 0.2.8 — Wireframes skill: co-design future UI and keep as-built wireframes in sync ([BA-172](https://halo-powered.atlassian.net/browse/BA-172))  `✅ Done`
+- **Intent:** every screen of the app has a wireframe that matches what users see today, and new UI is drawn and agreed with the user before it is specified, without spending Figma MCP calls (the Collab seat's limit stopped the Figma board update on 2026-10-11).
+- **Scope:**
+  - `design/wireframes/`: a kit that imports the app's `tokens.css` and `components.css` and draws the shell (`_kit/`), one HTML page per screen at 1440 × 960, an index, and the as-built flows per role compared with the proposed Figma board.
+  - The v0.29.0 as-built baseline: User CU1–CU7, Maker CM1–CM4, Platform admin CA1–CA7.
+  - The `wireframes` skill in `.claude/skills/wireframes/`: co-design proposed pages, sync as-built pages after a UI change, render them with Playwright, get them into Figma (html.to.design or PNGs). Scripts `render.mjs` and `build-icons.mjs`.
+  - CLAUDE.md *Wireframe convention*: proposed wireframes before specs for new UI (step 5), as-built wireframes updated in the same PR (step 10).
+  - `scripts/check-specs.py` check 9: page metas, folders and index coverage.
+- **Out of scope:** application changes; drawing the wireframes in Figma through the MCP; a pixel diff between the pages and the app.
+- **Acceptance:**
+  - Each as-built page renders without missing icons and matches the evidence screenshots of its screen.
+  - CLAUDE.md states the rule and links the skill; `python3 scripts/check-specs.py` passes, and fails when a page is left out of the index.
+- **Notes:** requested by the user on 2026-10-11 after the Figma board update hit the seat's MCP limit. Branch `docs/BA-89-delivery-process`. Evidence: [evidence/0.2.8/](evidence/0.2.8/).
+
 ### Milestone 0.3 — Local Development Observability ([BA-111](https://halo-powered.atlassian.net/browse/BA-111))
 
 Developer tooling for seeing what the backend and agents are doing: agent and LLM traces, HTTP and database traces, metrics and linked logs. Switched on by a Developer toggle in Settings. With it off, which is the default, end-user installs behave exactly as before. Epic spec: [specs/epics/BA-111/spec.md](specs/epics/BA-111/spec.md). Decision: ADR-0006 in [specs/system/architecture.md](specs/system/architecture.md).

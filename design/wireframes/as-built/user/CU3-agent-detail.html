@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <title>CU3 · Agent detail: Official agent, Evals read-only</title>
+  <meta name="wf-status" content="as-built">
+  <meta name="wf-version" content="v0.29.0">
+  <meta name="wf-role" content="user">
+  <meta name="wf-spec" content="specs/system/ui.md#45-agent-detail specs/system/ui.md#46-eval-trace-right-panel">
+  <link rel="stylesheet" href="../../_kit/hub.css">
+  <script src="../../_kit/icons.js"></script>
+  <script src="../../_kit/shell.js" defer></script>
+  <style>
+    /* Page-local: the agent-detail tab strip and eval rows are built with utilities in the app, not kit classes. */
+    .ad-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--qti-border); }
+    .ad-tab { display: flex; align-items: center; gap: 8px; padding: 8px 12px; margin-bottom: -1px; font-size: 13px; color: var(--qti-fg-muted); border-bottom: 2px solid transparent; }
+    .ad-tab.on { color: var(--qti-fg-strong); border-bottom-color: var(--qti-border-selected); }
+    .ad-subtab { padding: 6px 12px; border-radius: 8px; font-size: 13px; color: var(--qti-fg-muted); }
+    .ad-subtab.on { background: var(--qti-surface-selected); color: var(--qti-fg); }
+    .ad-set { border: 1px solid var(--qti-border); border-radius: 12px; padding: 10px 12px; }
+    .ad-set.on { background: var(--qti-surface-selected); border-color: var(--qti-border-selected); }
+    .ad-case { display: flex; gap: 12px; align-items: flex-start; border: 1px solid transparent; border-radius: 12px; background: var(--qti-surface-muted); padding: 12px 16px; }
+    .ad-case.on { border-color: var(--qti-border-selected); }
+    .ad-check { display: inline-flex; align-items: center; gap: 6px; border-radius: 6px; background: var(--qti-surface-muted); padding: 2px 8px; font-size: 11px; line-height: 16px; color: var(--qti-fg-muted); }
+    .ad-case .ad-check { background: var(--qti-surface); }
+    /* Kit gap: the collapsed rail clips the 56 px "Powered by LenAI" artwork. */
+    .wf-rail.collapsed .wf-powered img { max-width: 100%; }
+  </style>
+</head>
+<!--
+  Workflow step: a User opens the Official agent from the Agent Hub (GET /agents/:key, GET /agents/:key/evals).
+  Only "Start chat" is shown (opens the New-session composer, CU4). Without create-agents the Evals tab is read-only:
+  no question checkboxes, no Select all, no datasource picker or "Run <n> selected", no Executions sub-tab
+  (POST /agents/:key/evals/run and GET /agents/:key/evals/runs need create-agents).
+  Selecting a question opens the Eval trace in the details panel; it never has a result for a User.
+-->
+<body data-area="Agents" data-role="user" data-mode="org" data-initials="JB" data-drawer="collapsed"
+      data-sessions='[["Cup historian","Cup historian · World Cup Core"]]'>
+  <main class="narrow" style="gap:0;position:relative">
+    <span class="btn btn-ghost" style="width:fit-content;padding-left:12px"><i data-lucide="arrow-left" data-size="15"></i><span>All agents</span></span>
+
+    <div class="row top" style="margin-top:16px;gap:14px">
+      <span style="width:44px;height:44px;border-radius:12px;background:var(--qti-surface-muted);color:var(--qti-fg-muted);display:grid;place-items:center;flex:none"><i data-lucide="bot" data-size="19"></i></span>
+      <div class="col grow" style="gap:4px">
+        <h2 class="h2">Questions to Insights Assistant</h2>
+        <span class="mono muted">assistant</span>
+      </div>
+      <span class="btn btn-primary"><i data-lucide="message-square-plus" data-size="14"></i><span>Start chat</span></span>
+    </div>
+    <p style="margin:12px 0 0;max-width:70ch;font-size:13px;line-height:21px;color:var(--qti-fg-muted)">Answers business questions over a session's datasets — plans the analysis, writes and runs the SQL, and explains the result.</p>
+
+    <div class="ad-tabs" style="margin-top:24px">
+      <span class="ad-tab"><i data-lucide="scroll-text" data-size="14"></i>Prompt template</span>
+      <span class="ad-tab"><i data-lucide="wrench" data-size="14"></i>Tools (7)</span>
+      <span class="ad-tab"><i data-lucide="brain" data-size="14"></i>Memory</span>
+      <span class="ad-tab"><i data-lucide="cpu" data-size="14"></i>Model</span>
+      <span class="ad-tab on"><i data-lucide="gauge" data-size="14"></i>Evals</span>
+    </div>
+
+    <div style="margin-top:24px" class="col g4">
+      <!-- Executions sub-tab hidden without create-agents -->
+      <div class="row g4" style="margin-bottom:16px"><span class="ad-subtab on">Questions</span></div>
+
+      <p class="micro" style="margin:0;font-size:11px;letter-spacing:0.025em">Question sets</p>
+      <div class="col" style="margin-top:4px">
+        <div class="ad-set on">
+          <span class="row"><i data-lucide="chevron-down" data-size="14"></i><i data-lucide="list-checks" data-size="14"></i><span style="font-size:13px">World Cup</span><span style="font-size:11px" class="muted">10 questions</span></span>
+          <span class="small muted" style="display:block;margin-top:4px">Questions against the bundled World Cup sample (2018 and 2022). Select its PostgreSQL datasource with a saved dataset containing the world_cup tables and views.</span>
+        </div>
+        <div class="ad-set">
+          <span class="row"><i data-lucide="chevron-right" data-size="14"></i><i data-lucide="list-checks" data-size="14"></i><span style="font-size:13px">World Cup (REST API)</span><span style="font-size:11px" class="muted">10 questions</span></span>
+        </div>
+        <div class="ad-set">
+          <span class="row"><i data-lucide="chevron-right" data-size="14"></i><i data-lucide="list-checks" data-size="14"></i><span style="font-size:13px">Formula 1</span><span style="font-size:11px" class="muted">10 questions</span></span>
+        </div>
+      </div>
+
+      <p class="small muted" style="margin:12px 0 4px">10 questions in World Cup. Each check must score 1.0 for its question to pass.</p>
+      <!-- No Select all, no checkboxes, no datasource picker, no Run button for a User -->
+      <div class="col">
+        <div class="ad-case on">
+          <span class="mono muted" style="width:20px;text-align:right;flex:none">1</span>
+          <div class="col" style="gap:6px">
+            <span style="font-size:13px">Who won the 2022 World Cup?</span>
+            <span class="small muted">Single-hop lookup against tournaments — the simplest happy path.</span>
+            <div class="row wrap g6" style="margin-top:2px">
+              <span class="ad-check"><i data-lucide="gauge" data-size="11"></i>Checks if output includes "Argentina"</span>
+              <span class="ad-check"><i data-lucide="gauge" data-size="11"></i>Checks that "run_readonly_sql" was called</span>
+              <span class="ad-check"><i data-lucide="gauge" data-size="11"></i>Checks that no tool calls resulted in errors</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Questions 2-10 follow below the fold; the content column scrolls. -->
+  </main>
+
+  <aside data-panel="" data-width="572">
+    <div class="col" style="gap:16px;margin:-4px -8px">
+      <div class="col" style="gap:6px">
+        <p class="micro" style="margin:0;font-weight:400;letter-spacing:0.05em">Question</p>
+        <p style="margin:0;font-size:13px">Who won the 2022 World Cup?</p>
+        <p class="small muted" style="margin:0">Single-hop lookup against tournaments — the simplest happy path.</p>
+      </div>
+      <div class="col" style="gap:6px">
+        <p class="micro" style="margin:0;font-weight:400;letter-spacing:0.05em">Checks it will be scored on</p>
+        <div class="row top" style="border-radius:6px;background:var(--qti-surface-muted);padding:6px 10px"><span class="muted" style="display:flex;margin-top:3px"><i data-lucide="gauge" data-size="12"></i></span><span class="small muted">Checks if output includes "Argentina"</span></div>
+        <div class="row top" style="border-radius:6px;background:var(--qti-surface-muted);padding:6px 10px"><span class="muted" style="display:flex;margin-top:3px"><i data-lucide="gauge" data-size="12"></i></span><span class="small muted">Checks that "run_readonly_sql" was called</span></div>
+        <div class="row top" style="border-radius:6px;background:var(--qti-surface-muted);padding:6px 10px"><span class="muted" style="display:flex;margin-top:3px"><i data-lucide="gauge" data-size="12"></i></span><span class="small muted">Checks that no tool calls resulted in errors</span></div>
+      </div>
+      <p class="small muted" style="margin:0">Run the evals to see the steps the agent executed for this question.</p>
+    </div>
+  </aside>
+</body>
+</html>

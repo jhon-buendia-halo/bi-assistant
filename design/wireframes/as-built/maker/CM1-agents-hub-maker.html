@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <title>CM1 · Agents hub as a Maker: New agent, Mine, Start chat</title>
+  <meta name="wf-status" content="as-built">
+  <meta name="wf-version" content="v0.29.0">
+  <meta name="wf-role" content="maker">
+  <meta name="wf-spec" content="specs/system/ui.md#44-agent-hub">
+  <link rel="stylesheet" href="../../_kit/hub.css">
+  <script src="../../_kit/icons.js"></script>
+  <script src="../../_kit/shell.js" defer></script>
+  <style>
+    /* Hub card as built (agent-card.html): the open control has pb-14 when Start chat shows,
+       Start chat sits absolutely at the card's bottom-right, the pin toggle at top-right. */
+    .ag-card { position: relative; display: flex; }
+    .ag-open { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; padding: 16px; }
+    .ag-open.has-start { padding-bottom: 56px; }
+    .ag-tile { width: 32px; height: 32px; border-radius: 8px; background: var(--qti-primary-soft); color: var(--qti-on-primary-soft); display: grid; place-items: center; flex: none; }
+    .ag-name { font-size: 14px; font-weight: 500; color: var(--qti-fg-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ag-desc { font-size: 12px; line-height: 19.5px; color: var(--qti-fg-muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .ag-foot { margin-top: auto; padding-top: 4px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .ag-pin { position: absolute; top: 22px; right: 12px; display: flex; align-items: center; gap: 4px; border-radius: 999px; padding: 2px 8px; font-size: 12px; font-weight: 500; color: var(--qti-primary); }
+    .ag-pin.on { background: var(--qti-surface-selected); }
+    /* Kit gaps worked around here: .narrow counts its padding inside max-width (the app's
+       content column is 960 px wide inside px-8 py-10), and the collapsed rail clips the LenAI lockup. */
+    main.wf-page-content.narrow { max-width: 1024px; padding: 40px 32px; }
+    .wf-rail.collapsed .wf-powered img { max-width: 100%; }
+    .ag-start { position: absolute; right: 16px; bottom: 16px; padding: 4px 12px; font-size: 12px; }
+  </style>
+</head>
+<body data-area="Agents" data-role="maker" data-mode="org" data-initials="JB" data-drawer="collapsed"
+      data-sessions='[["Cup historian","Cup historian · World Cup Core"],["Q3 claims review","Questions to Insights Assistant · Claims"]]'>
+<!--
+  Workflow: Maker opens Agents (step 1 of "create, preview, publish an agent").
+  Endpoints: GET /agents (catalogue), PUT /agents/:key/pin (pin toggle),
+  POST /sessions {agentId} (Start chat on a Live agent; the Official card opens the New-session composer instead).
+  New agent (create-agents) opens the editor (CM2); the agent is created on its first Save: POST /agents.
+  Mine shows the Maker's own agents: Draft (no Start chat), Live, Live + Unpublished changes (Start chat uses the Live version).
+  Missing dataset note: Claims triage's draft names a dataset ("Claims 2025") that was deleted (missingDatasets reads the
+  effective config: Live version, else draft). Cup historian is Live with a newer draft (Unpublished changes); Start chat
+  still runs the Live version.
+  Frame: the page is shown scrolled to the top (the real page scrolls, px-8 py-10, 960 px column). The SYSTEM section's
+  cards (Assistant Eval Judge, Interactive Visual Designer, Knowledge Bootstrap, then "Show more (2)") sit below the
+  fold; they are drawn in CU2 and in evidence/1.9.4/hub-all.png.
+-->
+  <main class="narrow" style="gap:0">
+    <div class="row">
+      <h2 class="h2">Agents</h2>
+      <span class="btn btn-primary" style="margin-left:auto"><i data-lucide="plus" data-size="14"></i>New agent</span>
+    </div>
+    <div class="field row" style="margin-top:20px;padding:9px 12px;gap:13px"><i data-lucide="search" data-size="15" style="color:var(--qti-fg-muted)"></i><span style="color:var(--qti-fg-muted)">Search agents by name or description</span></div>
+    <div class="row" style="margin-top:12px">
+      <span class="filter-pill filter-pill-active">All</span><span class="filter-pill">Pinned</span><span class="filter-pill">Official</span><span class="filter-pill">Mine</span>
+    </div>
+
+    <div class="col" style="margin-top:24px;gap:24px">
+      <!-- OFFICIAL -->
+      <section>
+        <div class="micro" style="font-size:12px">Official</div>
+        <div class="grid3" style="margin-top:12px;gap:12px">
+          <div class="card ag-card">
+            <div class="ag-open has-start">
+              <span class="ag-tile"><i data-lucide="sparkles" data-size="15"></i></span>
+              <span class="ag-name">Questions to Insights Assistant</span>
+              <span class="ag-desc">Answers business questions over a session's datasets — plans the analysis, writes and runs the SQL, and explains the result.</span>
+              <span class="ag-foot"><span class="small muted">Owner: Official</span></span>
+            </div>
+            <span class="ag-pin on"><i data-lucide="pin" data-size="12"></i>Pinned</span>
+            <span class="btn btn-secondary ag-start"><i data-lucide="message-square-plus" data-size="12"></i>Start chat</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- MINE: pinned first, then alphabetical -->
+      <section>
+        <div class="micro" style="font-size:12px">Mine</div>
+        <div class="grid3" style="margin-top:12px;gap:12px">
+          <div class="card ag-card">
+            <div class="ag-open has-start">
+              <span class="ag-tile"><i data-lucide="sparkles" data-size="15"></i></span>
+              <span class="ag-name">Health plan analyst</span>
+              <span class="ag-desc">Answers questions about the 2026 health plan</span>
+              <span class="ag-foot"><span class="small muted">Owner: You</span><span class="chip chip-success">Live</span></span>
+            </div>
+            <span class="ag-pin on"><i data-lucide="pin" data-size="12"></i>Pinned</span>
+            <span class="btn btn-secondary ag-start"><i data-lucide="message-square-plus" data-size="12"></i>Start chat</span>
+          </div>
+          <div class="card ag-card">
+            <div class="ag-open">
+              <span class="ag-tile"><i data-lucide="sparkles" data-size="15"></i></span>
+              <span class="ag-name">Claims triage</span>
+              <span class="ag-desc">Sorts incoming claims by urgency</span>
+              <span class="ag-foot"><span class="small muted">Owner: You</span><span class="chip chip-neutral">Draft</span></span>
+              <span class="chip chip-warning" style="width:fit-content;gap:4px"><i data-lucide="triangle-alert" data-size="12"></i>Missing dataset: Claims 2025</span>
+            </div>
+            <span class="ag-pin"><i data-lucide="pin" data-size="12"></i>Pin</span>
+          </div>
+          <div class="card ag-card">
+            <div class="ag-open has-start">
+              <span class="ag-tile"><i data-lucide="sparkles" data-size="15"></i></span>
+              <span class="ag-name">Cup historian</span>
+              <span class="ag-desc">Answers questions about World Cup history</span>
+              <span class="ag-foot"><span class="small muted">Owner: You</span><span class="chip chip-success">Live</span><span class="chip chip-warning">Unpublished changes</span></span>
+            </div>
+            <span class="ag-pin"><i data-lucide="pin" data-size="12"></i>Pin</span>
+            <span class="btn btn-secondary ag-start"><i data-lucide="message-square-plus" data-size="12"></i>Start chat</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- SYSTEM: no Start chat, no status chips -->
+      <section>
+        <div class="micro" style="font-size:12px">System</div>
+        <div class="grid3" style="margin-top:12px;gap:12px">
+          <div class="card ag-card">
+            <div class="ag-open">
+              <span class="ag-tile"><i data-lucide="sparkles" data-size="15"></i></span>
+              <span class="ag-name">Assistant Eval Judge</span>
+              <span class="ag-desc">Grades one assistant eval case's tool calls and final answer against a rubric.</span>
+              <span class="ag-foot"><span class="small muted">Owner: System</span></span>
+            </div>
+            <span class="ag-pin"><i data-lucide="pin" data-size="12"></i>Pin</span>
+          </div>
+          <div class="card ag-card">
+            <div class="ag-open">
+              <span class="ag-tile"><i data-lucide="sparkles" data-size="15"></i></span>
+              <span class="ag-name">Interactive Visual Designer</span>
+              <span class="ag-desc">Turns a completed analysis answer into an interactive visual, and tailors it on request.</span>
+              <span class="ag-foot"><span class="small muted">Owner: System</span></span>
+            </div>
+            <span class="ag-pin"><i data-lucide="pin" data-size="12"></i>Pin</span>
+          </div>
+          <div class="card ag-card">
+            <div class="ag-open">
+              <span class="ag-tile"><i data-lucide="sparkles" data-size="15"></i></span>
+              <span class="ag-name">Knowledge Bootstrap</span>
+              <span class="ag-desc">Mines business-glossary terms, instructions and coverage facts from a dataset's schema.</span>
+              <span class="ag-foot"><span class="small muted">Owner: System</span></span>
+            </div>
+            <span class="ag-pin"><i data-lucide="pin" data-size="12"></i>Pin</span>
+          </div>
+        </div>
+        <span class="btn btn-ghost" style="margin-top:12px;padding:4px 8px;font-size:12px"><i data-lucide="chevron-down" data-size="14"></i>Show more (2)</span>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

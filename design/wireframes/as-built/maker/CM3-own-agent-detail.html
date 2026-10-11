@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <title>CM3 · Own Live agent: Start chat, Edit, Publish, Delete</title>
+  <meta name="wf-status" content="as-built">
+  <meta name="wf-version" content="v0.29.0">
+  <meta name="wf-role" content="maker">
+  <meta name="wf-spec" content="specs/system/ui.md#45-agent-detail">
+  <link rel="stylesheet" href="../../_kit/hub.css">
+  <script src="../../_kit/icons.js"></script>
+  <script src="../../_kit/shell.js" defer></script>
+  <style>
+    /* The app's content column: px-8 py-10, max 960 (the kit's .narrow counts padding inside max-width). */
+    main.wf-page-content.narrow { max-width: 1024px; padding: 40px 32px; gap: 0; }
+    .wf-rail.collapsed .wf-powered img { max-width: 100%; }
+    .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--qti-border); }
+    .tab { display: flex; align-items: center; gap: 8px; padding: 8px 12px; font-size: 13px; color: var(--qti-fg-muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+    .tab.on { color: var(--qti-fg-strong); border-color: var(--qti-border-selected); }
+    pre.tpl { margin: 0; border-radius: 12px; background: var(--qti-surface-muted); padding: 16px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; line-height: 19.5px; white-space: pre-wrap; color: var(--qti-fg); }
+    /* Wireframe-only elision marker (not app UI): the assistant's prompt runs ~150 more lines. */
+    .elide { display: block; margin-top: 8px; padding-top: 6px; border-top: 1px dashed var(--qti-border-strong); font-family: "Noto Sans", sans-serif; font-style: italic; font-size: 11px; color: var(--qti-fg-muted); text-align: center; }
+    /* Native window.confirm, drawn Chrome-style at the top of the viewport (web target). */
+    .native { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); width: 448px; background: #fff; color: #1f1f1f; border-radius: 12px; box-shadow: 0 4px 16px rgb(0 0 0 / .28), 0 0 0 1px rgb(0 0 0 / .06); padding: 22px 24px 18px; font-family: system-ui, "Noto Sans", sans-serif; }
+    .native b { display: block; font-size: 15px; font-weight: 500; margin-bottom: 14px; }
+    .native p { margin: 0; font-size: 13px; line-height: 19px; }
+    .native .nb { padding: 7px 18px; border-radius: 999px; font-size: 13px; font-weight: 500; }
+  </style>
+</head>
+<body data-area="Agents" data-role="maker" data-mode="org" data-initials="JB" data-drawer="collapsed">
+<!--
+  Workflow: Maker reviews an own Live agent that has unpublished changes, then republishes or deletes it
+  (step 4 of "create, preview, publish an agent").
+  Endpoints: GET /agents/:key (detail; Tools, Memory, Model tabs read the same answer), POST /sessions {agentId}
+  (Start chat -> toast "Session \"<name>\" created"), Edit opens the editor (CM2: PUT /agents/:id/draft),
+  POST /agents/:id/publish (Publish -> "Agent \"Cup historian\" is Live", then the detail reloads and Publish hides),
+  DELETE /agents/:id (Delete -> "Agent \"Cup historian\" deleted", back to the hub), GET /agents/:key/evals (Evals tab:
+  user agents have no sets -> "No evals configured for this agent yet."; Questions/Executions sub-tabs do not show).
+  Buttons: Start chat is the one primary; Publish shows because the draft differs from Live and turns secondary beside
+  Start chat; Edit, Publish and Delete need create-agents.
+  Prompt template for a user agent: the assistant's prompt (static) in the first block, then "Agent instructions" with the
+  Live version's instructions ("Answer as a football historian, in one sentence."), not the newer draft shown in CM2.
+  Frame: the dashed "…" marker inside the first block is a wireframe elision, not app UI; the real block runs to the end
+  of the assistant's prompt (~165 lines) before "Agent instructions".
+  Overlay: the native confirm raised by Delete (window.confirm; Chrome draws it at the top of the viewport, Electron uses
+  an OS dialog). OK deletes; Cancel keeps the agent.
+-->
+  <main class="narrow">
+    <span class="btn btn-ghost" style="width:fit-content"><i data-lucide="arrow-left" data-size="15"></i>All agents</span>
+    <div class="row top" style="margin-top:16px;gap:14px">
+      <span style="width:44px;height:44px;border-radius:12px;background:var(--qti-surface-muted);color:var(--qti-fg-muted);display:grid;place-items:center;flex:none"><i data-lucide="bot" data-size="19"></i></span>
+      <div class="col g4" style="min-width:0">
+        <h2 class="h2">Cup historian</h2>
+        <div class="row wrap"><span class="mono muted">64d6e43c-d747-4455-bb65-7d5f399e64fc</span><span class="chip chip-success">Live</span><span class="chip chip-warning">Unpublished changes</span></div>
+      </div>
+      <div class="row" style="margin-left:auto;flex:none">
+        <span class="btn btn-primary"><i data-lucide="message-square-plus" data-size="14"></i>Start chat</span>
+        <span class="btn btn-secondary"><i data-lucide="pencil" data-size="14"></i>Edit</span>
+        <span class="btn btn-secondary"><i data-lucide="upload" data-size="14"></i>Publish</span>
+        <span class="btn btn-danger"><i data-lucide="trash-2" data-size="14"></i>Delete</span>
+      </div>
+    </div>
+    <p style="margin:12px 0 0;font-size:13px;line-height:21px;color:var(--qti-fg-muted)">Answers questions about World Cup history</p>
+
+    <div class="tabs" style="margin-top:24px">
+      <span class="tab on"><i data-lucide="scroll-text" data-size="14"></i>Prompt template</span>
+      <span class="tab"><i data-lucide="wrench" data-size="14"></i>Tools (7)</span>
+      <span class="tab"><i data-lucide="brain" data-size="14"></i>Memory</span>
+      <span class="tab"><i data-lucide="cpu" data-size="14"></i>Model</span>
+      <span class="tab"><i data-lucide="gauge" data-size="14"></i>Evals</span>
+    </div>
+
+    <div style="margin-top:24px">
+<pre class="tpl">You are the Questions to Insights assistant — a data analyst working over
+the catalogs, schemas and entities in the user's session datasets. Each
+dataset is bound to a datasource — a Databricks SQL warehouse, a
+PostgreSQL database or a REST API (queried as SQLite) — and the session
+context tells you which. Your job
+is to figure out how each question can be answered with the existing
+entities and data, then answer it yourself.
+
+Call ask_clarification only when interpretations diverge materially —
+the metric or meaning itself is undefined ("best", "performed well",
+"top") or the choice would fundamentally change the analysis. In that
+case, ask first: one short question with 2-4 concrete options grounded<span class="elide">… the assistant's prompt continues (wireframe elision) …</span></pre>
+      <h3 style="margin:24px 0 0;font-size:12px;font-weight:500;letter-spacing:.05em;text-transform:uppercase;color:var(--qti-fg-muted)">Agent instructions</h3>
+<pre class="tpl" style="margin-top:8px">Answer as a football historian, in one sentence.</pre>
+    </div>
+  </main>
+
+  <div class="wf-overlay">
+    <div class="native">
+      <b>localhost:3000 says</b>
+      <p>Delete "Cup historian"?</p>
+      <p>&nbsp;</p>
+      <p>Its sessions keep their transcripts and continue with the assistant.</p>
+      <div class="row end" style="margin-top:20px;gap:8px">
+        <span class="nb" style="background:#0b57d0;color:#fff">OK</span>
+        <span class="nb" style="border:1px solid #747775;color:#0b57d0">Cancel</span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

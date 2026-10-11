@@ -2,7 +2,8 @@ name: Spec checks
 
 # Fails when specs/ drifts from the code: a new backend route, collection,
 # agent, Playwright spec, capability or roadmap epic without its spec, or a
-# broken link. See "Spec convention" in CLAUDE.md and specs/README.md.
+# broken link, or a wireframe page missing its metas or its index entry.
+# See "Spec convention" and "Wireframe convention" in CLAUDE.md and specs/README.md.
 on:
   pull_request:
   push:

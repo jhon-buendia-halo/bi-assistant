@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <title>CU6 · Answer with evidence, feedback and interactive visual</title>
+  <meta name="wf-status" content="as-built">
+  <meta name="wf-version" content="v0.29.0">
+  <meta name="wf-role" content="user">
+  <meta name="wf-spec" content="specs/system/ui.md#412-session-chat specs/system/ui.md#413-interactive-visual-panel-right-panel-in-a-session">
+  <link rel="stylesheet" href="../../_kit/hub.css">
+  <script src="../../_kit/icons.js"></script>
+  <script src="../../_kit/shell.js" defer></script>
+  <style>
+    /* Kit gap: the collapsed rail clips the 56 px "Powered by LenAI" artwork. */
+    .wf-rail.collapsed .wf-powered img { max-width: 100%; }
+    /* Page-local: chat pieces the app builds with utilities (session-chat.html, interactive-visual-panel.html). */
+    .sc-label { font-size: 10px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--qti-fg-muted); }
+    .sc-composer { width: 100%; border: 1px solid var(--qti-border-strong); border-radius: 8px; background: var(--qti-surface); box-shadow: var(--qti-shadow-input); padding: 12px 8px; }
+    .sc-toggle { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; border: 1px solid var(--qti-border); padding: 4px 10px; font-size: 12px; line-height: 16px; color: var(--qti-fg-muted); }
+    .sc-toggle.on { border-color: var(--qti-border-strong); background: var(--qti-primary-soft); color: var(--qti-on-primary-soft); }
+    .sc-bubble { display: flex; align-items: flex-start; gap: 12px; max-width: 800px; border-radius: 12px 2px 12px 12px; background: var(--qti-surface-selected); padding: 12px; }
+    .sc-avatar { width: 32px; height: 32px; border-radius: 999px; background: var(--qti-primary); color: var(--qti-on-primary); display: grid; place-items: center; font-size: 14px; font-weight: 600; flex: none; }
+    .sc-details { border: 1px solid var(--qti-border); border-radius: 8px; background: var(--qti-surface-muted); font-size: 12px; }
+    .sc-details summary { padding: 6px 12px; color: var(--qti-fg-muted); }
+    .sc-data { display: flex; align-items: center; gap: 8px; border: 1px solid var(--qti-border); border-radius: 8px; background: var(--qti-surface); padding: 12px; font-size: 16px; line-height: 24px; color: var(--qti-on-primary-soft); }
+    .sc-entity { border-radius: 999px; border: 1px solid var(--qti-border); background: var(--qti-surface-muted); padding: 2px 8px; font-size: 11px; line-height: 16px; }
+    .sc-badge { display: inline-flex; align-items: center; gap: 4px; margin-right: 4px; border-radius: 999px; border: 1px solid; padding: 2px 8px; font-size: 11px; line-height: 16px; font-weight: 500; }
+    .sc-badge.ok { border-color: color-mix(in srgb, var(--qti-on-success-soft) 30%, transparent); background: var(--qti-success-soft); color: var(--qti-on-success-soft); }
+    .sc-act { display: flex; padding: 6px; border-radius: 999px; color: var(--qti-icon); }
+    .sc-ghost { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--qti-border); border-radius: 8px; background: var(--qti-surface-muted); padding: 8px 12px; font-size: 12px; line-height: 18px; }
+    .vp-btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--qti-border); border-radius: 8px; background: var(--qti-surface-muted); padding: 6px 10px; font-size: 12px; line-height: 16px; color: var(--qti-fg); }
+    .vp-icon { display: inline-flex; border: 1px solid var(--qti-border); border-radius: 8px; background: var(--qti-surface-muted); padding: 6px; color: var(--qti-fg); }
+    .vz-row { display: grid; grid-template-columns: 110px 1fr 16px; align-items: center; gap: 12px; font-size: 12px; }
+    .vz-bar { height: 20px; border-radius: 0 4px 4px 0; background: var(--qti-info-soft); }
+    .vz-bar.peak { background: var(--qti-primary); }
+  </style>
+</head>
+<!--
+  Workflow step: the user asked a question (POST /sessions/:id/messages/stream, SSE) with Careful mode on; the answer
+  carries its evidence: "How I worked this out", "Knowledge in context", Data entities, "Data used" (each query, Copy SQL inside),
+  a Verified badge (the SQL matches an approved query) and a Cross-checked badge (Careful mode re-ran it independently).
+  Feedback: thumbs up = "Save as verified query", thumbs down = "Mark answer as wrong" (POST /sessions/:id/messages/feedback).
+  "Generate interactive visuals" -> POST /sessions/:id/visualizations; the right panel opens on the visual
+  (GET /sessions/:id/visualizations/:vid). Panel controls: Version history (POST .../revert), Tailor (POST .../tailor),
+  Refresh data (POST .../refresh), Download bundle (GET .../download), saved visuals in this session.
+  The transcript is scrolled up to the answer: below it sits the 'Created "Top scorers…" · Version 1' event card.
+  The user bubble's avatar reads "D" in every mode (hard-coded in session-chat.html).
+-->
+<body data-area="Sessions" data-role="user" data-mode="org" data-initials="JB" data-drawer="collapsed"
+      data-sessions='[["Cup historian","Cup historian · World Cup Core",true]]'>
+  <main class="flush">
+    <header class="wf-page-header" style="align-items:flex-start">
+      <img src="../../../../frontend/public/brand/agentic-hub/page-header-icon.svg" width="36" height="36" alt="" style="margin-top:2px">
+      <div class="grow" style="min-width:0">
+        <h2 class="h2">Cup historian</h2>
+        <div class="row" style="margin-top:4px;min-width:0;overflow:hidden">
+          <span class="muted" style="display:flex"><i data-lucide="sparkles" data-size="14"></i></span>
+          <span class="sc-label" style="flex:none">Agent</span>
+          <span class="chip chip-neutral" style="margin-right:4px;flex:none">Cup historian</span>
+          <span class="muted" style="display:flex"><i data-lucide="database" data-size="14"></i></span>
+          <span class="sc-label" style="flex:none">Datasource</span>
+          <span class="chip chip-neutral" style="min-width:0" title="World Cup PostgreSQL"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">World Cup PostgreSQL</span> <span style="font-size:10px;font-weight:400;flex:none">PostgreSQL</span></span>
+        </div>
+      </div>
+      <span class="btn btn-secondary"><i data-lucide="square-pen" data-size="20"></i><span>Start New Conversation</span></span>
+      <!-- Expand right panel button hidden: the panel is open -->
+    </header>
+
+    <div class="grow" style="position:relative;padding:32px 32px 24px;min-height:0;overflow:hidden">
+      <!-- History navigator: one tick per user message -->
+      <div class="col" style="position:absolute;top:16px;right:14px;gap:6px"><span style="width:16px;height:2px;border-radius:2px;background:var(--qti-border-strong)"></span></div>
+      <div class="col" style="gap:24px">
+        <div class="row end" style="gap:8px">
+          <div class="sc-bubble"><span class="sc-avatar">D</span><p style="margin:0;font-size:16px;line-height:24px;text-align:right">Who scored the most goals in the 2022 World Cup, and how many?</p></div>
+        </div>
+
+        <div class="row top" style="gap:12px;max-width:800px">
+          <img src="../../../../frontend/public/brand/agentic-hub/sparks.svg" width="24" height="24" alt="" style="flex:none">
+          <div class="col grow" style="gap:16px">
+            <p style="margin:0;font-size:16px;line-height:24px"><b>Lionel Messi</b> scored the most — <b>4 goals</b>, three of them penalties.</p>
+            <details class="sc-details" style="margin-top:-8px"><summary>How I worked this out (2 steps)</summary></details>
+            <details class="sc-details" style="margin-top:-8px"><summary>Knowledge in context (2)</summary></details>
+            <div class="row wrap g6">
+              <span style="font-size:11px;font-weight:500;letter-spacing:0.025em;text-transform:uppercase" class="muted">Data entities</span>
+              <span class="sc-entity mono">world_cup.v_player_goal_totals</span>
+            </div>
+            <div class="sc-data">
+              <img src="../../../../frontend/public/brand/agentic-hub/data-sources.svg" width="24" height="24" alt="">
+              <span class="grow">Data used (1 query)</span>
+              <span style="color:var(--qti-icon);display:flex"><i data-lucide="chevron-down" data-size="16"></i></span>
+            </div>
+            <div class="row" style="gap:0;min-height:20px">
+              <span class="sc-badge ok" title="Matches an approved query"><i data-lucide="badge-check" data-size="12"></i>Verified</span>
+              <span class="sc-badge ok" title="Both queries agree: Lionel Messi, 4 goals."><i data-lucide="shield-check" data-size="12"></i>Cross-checked</span>
+              <span class="sc-act" title="Copy message"><i data-lucide="copy" data-size="16"></i></span>
+              <span class="sc-act" title="Save as verified query"><i data-lucide="thumbs-up" data-size="16"></i></span>
+              <span class="sc-act" title="Mark answer as wrong"><i data-lucide="thumbs-down" data-size="16"></i></span>
+            </div>
+            <div class="row" style="margin-top:-8px"><span class="sc-ghost"><i data-lucide="sparkles" data-size="14"></i>Generate interactive visuals</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col" style="align-items:center;padding:0 32px 24px;gap:0">
+      <div class="sc-composer">
+        <div style="height:40px;font-size:14px;line-height:20px;color:var(--qti-placeholder)">Ask a follow-up question…</div>
+        <div class="row between" style="margin-top:4px">
+          <div class="row">
+            <span class="sc-toggle on" title="Careful mode is on: every answer is re-checked by an independent query and gets an agree/disagree badge. Slower per answer."><i data-lucide="shield-check" data-size="12"></i>Careful</span>
+            <span class="sc-toggle" style="opacity:0.4"><i data-lucide="telescope" data-size="12"></i>Deep analysis</span>
+          </div>
+          <span style="color:var(--qti-accent);display:flex;padding:6px;opacity:0.4" title="Send message"><i data-lucide="arrow-up" data-size="20"></i></span>
+        </div>
+      </div>
+      <p class="muted" style="margin:16px 0 0;font-size:12px;line-height:16px;text-align:center">Responses are generated by AI (Powered by LenAI) and may be inaccurate or incomplete. Please verify against source data before sharing.</p>
+    </div>
+  </main>
+
+  <aside data-panel="" data-width="480">
+    <div class="col" style="margin:-16px -20px;gap:0;flex:1;min-height:0">
+      <div class="row" style="height:48px;flex:none;padding:0 12px;border-bottom:1px solid var(--qti-border);white-space:nowrap">
+        <span class="muted" style="display:flex"><i data-lucide="chart-column" data-size="15"></i></span>
+        <span style="font-size:13px;font-weight:500">Visuals</span>
+        <span class="grow"></span>
+        <span class="vp-btn" title="Version history"><i data-lucide="history" data-size="13"></i>v1<i data-lucide="chevron-down" data-size="12"></i></span>
+        <span class="vp-btn" title="Tailor this visual"><i data-lucide="sliders-horizontal" data-size="13"></i>Tailor</span>
+        <span class="vp-icon" title="Refresh data (re-run the stored query)"><i data-lucide="refresh-cw" data-size="14"></i></span>
+        <span class="vp-icon" title="Download bundle (HTML, CSS, JS, answer.md, data.json)"><i data-lucide="download" data-size="14"></i></span>
+        <span class="vp-btn" title="Saved visuals in this session"><i data-lucide="gallery-vertical-end" data-size="13"></i>1<i data-lucide="chevron-down" data-size="12"></i></span>
+      </div>
+      <!-- Sandboxed frame "Interactive visualization": the generated HTML/CSS/JS bundle, drawn here as a plain bar chart -->
+      <div style="flex:1;min-height:0;padding:12px 12px 0">
+        <div class="col" style="height:100%;border:1px solid var(--qti-border);border-radius:12px;background:var(--qti-surface);padding:24px;gap:16px" title="Interactive visualization">
+          <div class="col g4">
+            <span style="font-size:18px;line-height:26px;font-weight:600;color:var(--qti-fg-strong)">Top scorers, 2022 World Cup</span>
+            <span class="small muted">Goals from the quarter-finals to the final, own goals excluded</span>
+          </div>
+          <div class="row g12">
+            <div class="card-muted col" style="flex:1;padding:12px 14px;gap:2px;border-radius:12px"><span class="small muted">Top scorer</span><span style="font-size:20px;line-height:28px;font-weight:600">Messi</span></div>
+            <div class="card-muted col" style="flex:1;padding:12px 14px;gap:2px;border-radius:12px"><span class="small muted">Goals</span><span style="font-size:20px;line-height:28px;font-weight:600">4</span></div>
+            <div class="card-muted col" style="flex:1;padding:12px 14px;gap:2px;border-radius:12px"><span class="small muted">From penalties</span><span style="font-size:20px;line-height:28px;font-weight:600">3</span></div>
+          </div>
+          <div class="col" style="gap:10px;margin-top:4px">
+            <div class="vz-row"><span style="text-align:right">Lionel Messi</span><div class="vz-bar peak" style="width:100%"></div><span>4</span></div>
+            <div class="vz-row"><span style="text-align:right">Kylian Mbappe</span><div class="vz-bar" style="width:75%"></div><span>3</span></div>
+            <div class="vz-row"><span style="text-align:right">Julian Alvarez</span><div class="vz-bar" style="width:50%"></div><span>2</span></div>
+            <div class="vz-row"><span style="text-align:right">Wout Weghorst</span><div class="vz-bar" style="width:50%"></div><span>2</span></div>
+            <div class="vz-row"><span style="text-align:right">Olivier Giroud</span><div class="vz-bar" style="width:25%"></div><span>1</span></div>
+            <div class="vz-row"><span style="text-align:right">Harry Kane</span><div class="vz-bar" style="width:25%"></div><span>1</span></div>
+            <div class="vz-row"><span style="text-align:right">Angel Di Maria</span><div class="vz-bar" style="width:25%"></div><span>1</span></div>
+          </div>
+          <div class="grow"></div>
+          <p class="small muted" style="margin:0">Messi scored in the semi-final and twice in the final; Mbappe's hat-trick came in the final alone.</p>
+        </div>
+      </div>
+      <div class="row between" style="flex:none;padding:10px 16px;gap:12px">
+        <span class="small muted" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Top scorers, 2022 World Cup</span>
+        <span class="mono muted" style="font-size:10px;flex:none">visuals/9b2e41c7-5d0a-4f3e-a1b8-2c6f0e7d4a19/v1</span>
+      </div>
+    </div>
+  </aside>
+</body>
+</html>

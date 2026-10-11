@@ -6,6 +6,7 @@ Desktop application (Electron) with an Angular frontend and a NestJS backend.
 frontend/   Angular app (Electron renderer) + Electron main process
 backend/    NestJS API
 specs/      the complete specification of the app
+design/     wireframes of every screen, as built and proposed
 ```
 
 **What the app does and how it works is specified in [specs/](specs/README.md), not here.** Start there for any question about behaviour, endpoints, stored data, agents, UI, build or release. This file holds the rules for working in the repo.
@@ -17,6 +18,7 @@ Process documents (see **Workflow** below):
 - [specs/](specs/README.md) — the product, system, capability and epic specs; an LLM given only this folder can rebuild the app. Architecture and ADRs are in [specs/system/architecture.md](specs/system/architecture.md); user flows in Gherkin are in each capability spec. See **Spec convention**, **Architecture convention** and **Epic gate**.
 - [retrospective.md](retrospective.md) — what went well and wrong on each completed change. See **Retrospective convention**.
 - [evidence/](evidence/) — verifiable artifacts for each shipped change, linked from the changelog. See **Evidence convention**.
+- [design/wireframes/](design/wireframes/README.md) — one HTML wireframe per screen: *as-built* pages that match the shipped app per role, and *proposed* pages co-designed for an epic. See **Wireframe convention**.
 
 ## Workflow — order of operations
 
@@ -28,12 +30,12 @@ Every meaningful change follows this eleven-step workflow, in order. Do not skip
 2. **Ask clarifying questions until the goal is 100% understood** — scope, behaviour, edge cases, acceptance criteria. Do not proceed to step 3 with unresolved questions.
 3. **Update roadmap** — find or add the feature in [roadmap.md](roadmap.md) with `Intent`, `Scope`, `Acceptance` filled in; set status to `🚧 In progress`. See **Planning convention**. Before any file changes, confirm the user story belongs to a Jira epic (see **Epic gate**), then work on the epic's branch and git worktree: reuse it if the epic already has one open, otherwise create it. See **Branching convention**.
 4. **Update architecture** — if the change involves an architectural decision, record it as an ADR in [specs/system/architecture.md](specs/system/architecture.md) under the relevant C4 level *before* any code is written.
-5. **Update specs** — before any test or code, update every spec the change affects: the epic spec, the capability spec's Rules and Gherkin Flows, and the system specs for any endpoint, persisted shape, prompt, UI or delivery change. The Gherkin is the executable spec the implementation is measured against. See **Spec convention**.
+5. **Update specs** — before any test or code, update every spec the change affects: the epic spec, the capability spec's Rules and Gherkin Flows, and the system specs for any endpoint, persisted shape, prompt, UI or delivery change. The Gherkin is the executable spec the implementation is measured against. If the change adds or changes UI, first co-design the *proposed* wireframes with the user and get them confirmed; the UI spec and Gherkin then describe what they show. See **Spec convention** and **Wireframe convention**.
 6. **Component impact-based analysis on E2E** — for every component / page / service / backend module touched, enumerate the Gherkin scenarios (in the capability specs) that exercise it and decide per scenario: *add / update / delete / re-run-as-is*. Produce the explicit list before writing any test or implementation code.
 7. **Implement / update / delete E2E** — apply the step-6 decisions to [frontend/e2e/](frontend/e2e/) (and backend `test/*.e2e-spec.ts` where the flow is API-level) *first*. Run them and confirm they fail for the right reason.
 8. **Implement changes** — only now is production code touched, built against the Acceptance criteria and the step-7 specs.
 9. **Run E2E and fix until green** — `npm run test:e2e` in [frontend/](frontend/) (builds the backend with the web UI, then drives the **web app** in Chromium through `e2e/fixtures/app.fixture`; global setup starts the World Cup Postgres with `docker compose up -d --wait postgres` unless `E2E_SKIP_DOCKER=1`). Run `npm run test:e2e:desktop` only when the user asks for a desktop run. See **Test target convention**. Also run `python3 scripts/check-specs.py` at the repo root, `npm test` / `npm run lint` / `npm run build` in [backend/](backend/) and `npm test` / `npm run build` in [frontend/](frontend/). Diagnose root causes; fix the test if the test was wrong, the implementation if it was wrong. Repeat until every spec is green.
-10. **Update changelog with evidence** — only after step 9 is green, add a dated entry to [changelog.md](changelog.md) and capture the evidence under [evidence/](evidence/) (E2E summary, screenshots of the running app, exports). Mark the roadmap entry `✅ Done`. Confirm the specs touched in step 5 describe what actually shipped, and fix them in the same PR if not. See **Logging convention** and **Evidence convention**.
+10. **Update changelog with evidence** — only after step 9 is green, add a dated entry to [changelog.md](changelog.md) and capture the evidence under [evidence/](evidence/) (E2E summary, screenshots of the running app, exports). Mark the roadmap entry `✅ Done`. Confirm the specs touched in step 5 describe what actually shipped, and fix them in the same PR if not. Bring the *as-built* wireframes in line with what shipped and fold in any *proposed* ones. See **Logging convention**, **Evidence convention** and **Wireframe convention**.
 11. **Retrospective** — add a dated entry to [retrospective.md](retrospective.md): what went well, what went wrong, what to do differently. Step 1 of the *next* change reads it.
 
 Versioning stays automatic (see **Versioning** under **Code rules**): the changelog is the human-readable record of *what* shipped, Conventional Commit subjects still drive the version bump.
@@ -90,6 +92,18 @@ Architectural: choosing or replacing a framework, splitting/merging containers (
 - **Each fact lives in one file.** Link to it; never copy it.
 - **CI enforces coverage.** `.github/workflows/spec-checks.yml` runs `python3 scripts/check-specs.py` on every PR, and a ruleset on `main` makes it a required check, so a PR with drifting specs cannot merge. It fails when a route, collection, agent, Playwright spec, capability or roadmap epic has no spec, or when a link breaks. Run it locally before pushing. It proves coverage, not correctness.
 - **Gherkin:** every user-facing flow is a `Scenario:` under a `Feature:` in the Flows section of the capability spec that owns it, in standard Gherkin (`Given / When / Then / And`). It covers navigation, dialogs, panels, toasts, form submits, chat/stream behaviour and visual tailoring, but not purely visual tweaks or internal refactors. Write from the user's point of view (`When I click "New session"`), not the implementation's. Each Feature names its Playwright spec file, or says `E2E: none yet`.
+
+## Wireframe convention — every screen has a wireframe, and it matches the app
+
+**[design/wireframes/](design/wireframes/README.md) holds one HTML wireframe per screen (1440 × 960), built from the app's own theme tokens and component classes. The `wireframes` skill ([.claude/skills/wireframes/SKILL.md](.claude/skills/wireframes/SKILL.md)) is the procedure: load it for any wireframe work.**
+
+- **New UI is co-designed before it is specified** (workflow step 5). A change that adds a screen, panel, dialog or flow, or changes what one shows, starts with *proposed* wireframes in `design/wireframes/proposed/<EPIC-ID>/`. Draft them, render them, show the user, iterate until the user confirms. Open decisions are numbered notes on the page. Only then write the UI spec and the Gherkin, which describe what the confirmed pages show. Skip only for changes with no visible UI.
+- **As-built wireframes change with the UI, in the same PR** (step 10), like specs. Any change to what a user sees updates the matching pages in `design/wireframes/as-built/<role>/`, for every role that can see it. That includes templates or styles under `frontend/src/`, brand assets, and the screen and copy sections of `specs/system/ui.md`. Proposed pages are folded into as-built to match what really shipped, and the epic's `proposed/` folder is deleted. The PR says which pages changed, or "Wireframes: no visible change on any page".
+- **The app is the truth for as-built pages.** Match the running app and its evidence screenshots, not the spec text alone; when they disagree, fix the spec too.
+- **Evidence:** renders of the touched pages (`node .claude/skills/wireframes/scripts/render.mjs`) go in `evidence/<feature-id>/wireframes/`. Look at every render before closing the step.
+- **Figma** gets them through the html.to.design import or the PNG renders (see the skill). Don't spend Figma MCP calls drawing screens by hand: Collab seats have a low call limit.
+- **CI enforces the bookkeeping.** `scripts/check-specs.py` (check 9) fails when a page lacks its `wf-` metas, sits in the wrong folder or is missing from `design/wireframes/index.html`. It can't tell whether a page matches the app; review does that.
+- **Adopted 2026-10-11 ([BA-172](https://halo-powered.atlassian.net/browse/BA-172)).**
 
 ## E2E test convention — every flow change triggers an impact analysis on Playwright
 

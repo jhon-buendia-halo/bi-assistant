@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <title>CA7 · Admin: Roles &amp; permissions</title>
+  <meta name="wf-status" content="as-built">
+  <meta name="wf-version" content="v0.29.0">
+  <meta name="wf-role" content="admin">
+  <meta name="wf-spec" content="specs/system/ui.md#4185-roles--permissions-p4">
+  <link rel="stylesheet" href="../../_kit/hub.css">
+  <script src="../../_kit/icons.js"></script>
+  <script src="../../_kit/shell.js" defer></script>
+  <style>
+    .wf-tab { font-weight: 500; }
+    .wf-tab.current { color: var(--qti-fg-strong); }
+    /* Permission matrix (ui.md 4.18.5): rows 44 px, role columns centred. */
+    .wf-table th { font-size: 13px; color: var(--qti-fg-strong); padding: 12px 12px; text-align: center; }
+    .wf-table th:first-child { text-align: left; padding-left: 16px; }
+    .wf-table td { height: 44px; padding: 8px 12px; text-align: center; color: var(--qti-accent); }
+    .wf-table td:first-child { text-align: left; padding-left: 16px; color: var(--qti-fg); font-size: 13px; }
+    .wf-table td.no { color: var(--qti-fg-muted); }
+  </style>
+</head>
+<!--
+  Workflow: Admin -> Roles & permissions. The permission matrix is read-only and built into the renderer (admin R21, R65).
+  Mappings: GET /admin/role-mappings (api 88); Add mapping opens the Add mapping dialog (Entra ID group picker via
+  GET /admin/groups, api 87; Role; Datasource) -> POST /admin/role-mappings (api 89); the X asks a native confirm, then
+  DELETE /admin/role-mappings/:id (api 90). No header action on this tab.
+  Drawer collapsed: the main column is wider than 1100 px, so the matrix and the mappings card sit side by side
+  (the evidence, taken with the drawer open, shows them stacked).
+-->
+<body data-area="Admin" data-role="admin" data-mode="org" data-initials="AA" data-drawer="collapsed">
+  <main style="padding:40px 32px;gap:0">
+    <div class="row g12">
+      <span class="wf-tile" style="width:32px;height:32px;border-radius:8px"><i data-lucide="layout-dashboard" data-size="16"></i></span>
+      <div>
+        <h2 class="h2">Admin</h2>
+        <div class="muted" style="font-size:13px">Manage people, roles and access for your organisation.</div>
+      </div>
+      <span class="grow"></span>
+      <span style="height:40px"></span>
+    </div>
+
+    <div class="wf-tabs" style="margin-top:24px">
+      <span class="wf-tab">Overview</span><span class="wf-tab">Users &amp; groups</span><span class="wf-tab current">Roles &amp; permissions</span>
+    </div>
+
+    <div class="row top g24" style="margin-top:24px">
+      <!-- Permission matrix -->
+      <table class="wf-table grow" style="width:auto">
+        <thead><tr><th>Permission</th><th>User</th><th>Maker</th><th>Data owner</th><th>Approver</th><th>Platform admin</th></tr></thead>
+        <tbody>
+          <tr><td>Use agents in the gallery and chat</td><td><i data-lucide="check"></i></td><td><i data-lucide="check"></i></td><td><i data-lucide="check"></i></td><td><i data-lucide="check"></i></td><td><i data-lucide="check"></i></td></tr>
+          <tr><td>Create, test and version agents</td><td class="no">—</td><td><i data-lucide="check"></i></td><td class="no">—</td><td class="no">—</td><td><i data-lucide="check"></i></td></tr>
+          <tr><td>Share agents with own team</td><td class="no">—</td><td><i data-lucide="check"></i></td><td class="no">—</td><td class="no">—</td><td><i data-lucide="check"></i></td></tr>
+          <tr><td>Request org-wide publishing</td><td class="no">—</td><td><i data-lucide="check"></i></td><td class="no">—</td><td class="no">—</td><td><i data-lucide="check"></i></td></tr>
+          <tr><td>Approve org-wide publishing</td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td><i data-lucide="check"></i></td><td><i data-lucide="check"></i></td></tr>
+          <tr><td>Approve access to a data source</td><td class="no">—</td><td class="no">—</td><td><i data-lucide="check"></i></td><td class="no">—</td><td><i data-lucide="check"></i></td></tr>
+          <tr><td>Manage users, roles and group mappings</td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td><i data-lucide="check"></i></td></tr>
+          <tr><td>Edit policies and templates</td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td><i data-lucide="check"></i></td></tr>
+          <tr><td>View audit log</td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td><i data-lucide="check"></i></td><td><i data-lucide="check"></i></td></tr>
+          <tr><td>Manage datasources and datasets</td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td><i data-lucide="check"></i></td></tr>
+          <tr><td>Manage LLM configuration</td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td><i data-lucide="check"></i></td></tr>
+        </tbody>
+      </table>
+
+      <!-- Role <- Entra ID group mappings -->
+      <div class="card p20" style="width:360px;flex:none">
+        <h3 class="h3">Role ← Entra ID group mappings</h3>
+        <div class="small muted" style="margin-top:4px">Members of these groups get the role automatically.</div>
+        <div class="col" style="margin-top:16px;gap:8px">
+          <div class="list-row row g12" style="padding:10px 12px"><span class="grow" style="font-size:14px">Analysts</span><span class="chip chip-info">Maker</span><span class="btn-icon" title="Remove mapping Analysts → Maker"><i data-lucide="x" data-size="16"></i></span></div>
+          <div class="list-row row g12" style="padding:10px 12px"><span class="grow" style="font-size:14px">Engineers</span><span class="chip chip-warning">Approver</span><span class="btn-icon" title="Remove mapping Engineers → Approver"><i data-lucide="x" data-size="16"></i></span></div>
+        </div>
+        <span class="btn btn-secondary" style="margin-top:16px"><i data-lucide="plus" data-size="14"></i>Add mapping</span>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

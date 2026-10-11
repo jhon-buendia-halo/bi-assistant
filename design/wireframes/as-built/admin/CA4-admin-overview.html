@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <title>CA4 · Admin: Overview</title>
+  <meta name="wf-status" content="as-built">
+  <meta name="wf-version" content="v0.29.0">
+  <meta name="wf-role" content="admin">
+  <meta name="wf-spec" content="specs/system/ui.md#4181-frame specs/system/ui.md#4182-overview-p1">
+  <link rel="stylesheet" href="../../_kit/hub.css">
+  <script src="../../_kit/icons.js"></script>
+  <script src="../../_kit/shell.js" defer></script>
+  <style>
+    /* Admin tab bar (ui.md 4.18.1): every tab 14 px medium, the selected one fg-strong. */
+    .wf-tab { font-weight: 500; }
+    .wf-tab.current { color: var(--qti-fg-strong); }
+  </style>
+</head>
+<!--
+  Workflow: Platform admin opens the Admin area (rail "Admin"); Overview is selected each time the area opens.
+  Endpoints: GET /admin/overview (api 81) fills the tiles, Needs attention, Weekly active users and Recent activity;
+  Export report downloads GET /admin/overview/export (api 82). Assign -> "Assign an owner" dialog (POST /admin/agents/transfer, api 86);
+  Inspect -> "Agents with errors" dialog; Clean up -> "Inactive makers" dialog (DELETE /admin/role-assignments/:id, api 80).
+  Drawer collapsed (its launch state): the main column is then wider than 1100 px, so the body shows its two columns
+  (Needs attention | Weekly active users + Recent activity), which is how the shipped layout fits one 960 px screen.
+  Recent activity shows its first 2 of up to 10 items here; the card grows (and the page scrolls) with more.
+-->
+<body data-area="Admin" data-role="admin" data-mode="org" data-initials="AA" data-drawer="collapsed">
+  <main style="padding:40px 32px;gap:0">
+    <div class="row g12">
+      <span class="wf-tile" style="width:32px;height:32px;border-radius:8px"><i data-lucide="layout-dashboard" data-size="16"></i></span>
+      <div>
+        <h2 class="h2">Admin</h2>
+        <div class="muted" style="font-size:13px">Manage people, roles and access for your organisation.</div>
+      </div>
+      <span class="grow"></span>
+      <span class="btn btn-outline"><i data-lucide="download" data-size="14"></i>Export report</span>
+    </div>
+
+    <div class="wf-tabs" style="margin-top:24px">
+      <span class="wf-tab current">Overview</span><span class="wf-tab">Users &amp; groups</span><span class="wf-tab">Roles &amp; permissions</span>
+    </div>
+
+    <!-- Tabpanel: tiles, then the two-column body -->
+    <div style="margin-top:24px">
+      <div class="grid2">
+        <div class="card" style="padding:16px 20px">
+          <div style="font-size:32px;line-height:40px;font-weight:300;color:var(--qti-on-success-soft)">5</div>
+          <div class="muted" style="font-size:13px">Active users · 30 days</div>
+        </div>
+        <div class="card" style="padding:16px 20px">
+          <div style="font-size:32px;line-height:40px;font-weight:300;color:var(--qti-fg-strong)">3</div>
+          <div class="muted" style="font-size:13px">Agents live</div>
+        </div>
+      </div>
+
+      <div class="row top g24" style="margin-top:24px">
+        <!-- Needs attention (admin R42) -->
+        <div class="card grow p20">
+          <h3 class="h3">Needs attention</h3>
+          <div class="col" style="margin-top:16px;gap:8px">
+            <div class="list-row row g12" style="padding:12px 16px">
+              <span style="font-size:14px">Agents without an active owner</span><span class="grow"></span>
+              <span class="chip chip-danger">1 agent</span>
+              <span class="btn btn-secondary" style="height:32px;padding-top:0;padding-bottom:0">Assign</span>
+            </div>
+            <div class="list-row row g12" style="padding:12px 16px">
+              <span style="font-size:14px">Agents with errors in the last 7 days</span><span class="grow"></span>
+              <span class="chip chip-danger">2 agents</span>
+              <span class="btn btn-secondary" style="height:32px;padding-top:0;padding-bottom:0">Inspect</span>
+            </div>
+            <div class="list-row row g12" style="padding:12px 16px">
+              <span style="font-size:14px">Users inactive for 90+ days with Maker role</span><span class="grow"></span>
+              <span class="chip chip-neutral">1 user</span>
+              <span class="btn btn-secondary" style="height:32px;padding-top:0;padding-bottom:0">Clean up</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="col g16" style="width:420px;flex:none">
+          <!-- Weekly active users (admin R46) -->
+          <div class="card p20">
+            <h3 class="h3">Weekly active users</h3>
+            <div class="row" style="margin-top:16px;height:120px;align-items:flex-end;gap:16px">
+              <div style="width:32px;height:24px;border-radius:4px 4px 0 0;background:var(--qti-border-strong)"></div>
+              <div style="width:32px;height:48px;border-radius:4px 4px 0 0;background:var(--qti-border-strong)"></div>
+              <div style="width:32px;height:48px;border-radius:4px 4px 0 0;background:var(--qti-border-strong)"></div>
+              <div style="width:32px;height:72px;border-radius:4px 4px 0 0;background:var(--qti-border-strong)"></div>
+              <div style="width:32px;height:72px;border-radius:4px 4px 0 0;background:var(--qti-border-strong)"></div>
+              <div style="width:32px;height:96px;border-radius:4px 4px 0 0;background:var(--qti-border-strong)"></div>
+              <div style="width:32px;height:72px;border-radius:4px 4px 0 0;background:var(--qti-border-strong)"></div>
+              <div style="width:32px;height:120px;border-radius:4px 4px 0 0;background:var(--qti-primary)"></div>
+            </div>
+            <div class="small muted" style="margin-top:12px">Last 8 weeks · peak 5 this week</div>
+          </div>
+
+          <!-- Recent activity (admin R47) -->
+          <div class="card p20">
+            <h3 class="h3">Recent activity</h3>
+            <div class="col" style="margin-top:12px;gap:12px">
+              <div><div style="font-size:13px">Entra ID deactivated Katherine Johnson</div><div class="small muted">just now</div></div>
+              <div><div style="font-size:13px">Avery Admin mapped Engineers to Approver</div><div class="small muted">just now</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</body>
+</html>
