@@ -8,7 +8,7 @@ Implementation plan for roadmap 2.1.2 ([BA-163](https://halo-powered.atlassian.n
 - OIDC sign-in with Entra ID, SCIM 2.0 inbound, SQLite kept.
 - Datasources, datasets and the LLM configuration are org-wide and managed by Platform admins. Everything else is private to its owner.
 - No "Sync from Entra ID" button: P2 shows the time of the last SCIM request.
-- **First admin:** `ORG_BOOTSTRAP_ADMINS` holds a comma-separated list of emails. Those users hold Platform admin whenever they sign in (an implicit assignment, not a stored one).
+- **First admin:** `ORG_BOOTSTRAP_ADMINS` holds a comma-separated list of user names (Entra ID UPNs; never matched against the email claim, decided 2026-10-10). Those users hold Platform admin whenever they sign in (an implicit assignment, not a stored one).
 - **Permissions:** 11 in all: the 9 on the Figma P4 board, plus *Manage datasources and datasets* and *Manage LLM configuration*, both Platform admin only.
 - **Composer Reasoning effort:** hidden for anyone without *Manage LLM configuration*. Revisit with BA-159.
 

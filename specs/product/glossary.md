@@ -22,7 +22,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Assistant.** The main agent. It answers business questions over a session's datasets, runs SQL, calls the visual tools and asks clarifying questions.
 
-**Bootstrap admin.** A person whose email is in the org server's bootstrap admin list (`ORG_BOOTSTRAP_ADMINS`). They hold *Platform admin* whenever they are signed in, without a stored assignment, so a new org server always has an admin. See [../capabilities/admin/spec.md](../capabilities/admin/spec.md).
+**Bootstrap admin.** A person whose user name (for Entra ID the UPN, which usually looks like an email) is in the org server's bootstrap admin list (`ORG_BOOTSTRAP_ADMINS`). They hold *Platform admin* whenever they are signed in, without a stored assignment, so a new org server always has an admin. See [../capabilities/admin/spec.md](../capabilities/admin/spec.md).
 
 **Careful mode.** An opt-in per-turn setting in the chat. After the assistant answers, a second agent (the *SQL verifier*) re-derives the SQL independently, runs it, and compares its result set with the answer's. The answer gets an agree, disagree or error badge. Slower per answer. See *Cross-check*.
 

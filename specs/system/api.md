@@ -762,8 +762,8 @@ interface MeView {
 
 #### 62. `GET /auth/callback`
 - Query: `code` and `state`, or `error` from the identity provider.
-- Checks: `qti_oidc` present and unsealed, `state` matches, code exchanged with the PKCE verifier, ID token signature, issuer, audience, expiry and `nonce` valid.
-- Then finds or creates the directory user (admin R12, R13): match by stored `oidcSubject` (`tid` + `oid` claims for Entra ID, else `sub`), else by `preferred_username` or `email` against `userName` / `email`, case-insensitive. Updates `displayName`, `email`, `lastSignInAt`. A user with `active: false` is refused.
+- Checks: `qti_oidc` present and unsealed, `state` matches, code exchanged with the PKCE verifier, ID token signature, issuer, audience, expiry and `nonce` valid. When the issuer's first path segment is a tenant id (a GUID, as in `https://login.microsoftonline.com/<tenant id>/v2.0`), a `tid` claim that differs from it (case-insensitive) fails the sign-in (admin R7).
+- Then finds or creates the directory user (admin R12, R13): match by stored `oidcSubject` (`tid` + `oid` claims for Entra ID, else `sub`), else by `preferred_username` against `userName`, case-insensitive. The `email` claim is never used to match a user or to resolve roles; it is stored for display only. A just-in-time user gets `userName` = `preferred_username`, else the subject (both lowercased). Updates `displayName`, `email`, `lastSignInAt`. A user with `active: false` is refused.
 - Success: creates an `auth_sessions` document, sets `qti_session`, clears `qti_oidc`, records `sign-in` ([data-model.md](data-model.md) 3.14.7), `302` to the kept `returnTo`.
 - Failure: clears `qti_oidc`, `302 /?signInError=deactivated` for a deactivated user, `302 /?signInError=failed` for anything else. No auth session.
 
@@ -913,7 +913,7 @@ interface ActivityItem { id: string; type: string; at: string; text: string }   
     groupList: UserRef[];           // the user's groups ({ id, displayName })
     agents: { id: string; name: string; status: 'live' | 'draft' }[];   // sorted by name
     isSelf: boolean;                // the caller (admin R61)
-    isBootstrap: boolean;           // email in ORG_BOOTSTRAP_ADMINS (admin R18)
+    isBootstrap: boolean;           // userName in ORG_BOOTSTRAP_ADMINS (admin R18)
   }
   ```
 - Errors: `404` `"User <id> not found"`.
@@ -1180,12 +1180,12 @@ Argument parsing is **strict**: an unknown flag or malformed argument prints `qu
 | `VISUAL_MODEL` | visual designer agent | Forces the designer model (router id `provider/model`). Unset: reasoning-family models are swapped for `openai/gpt-4.1-mini` and `nano` models upgraded to their `mini` sibling; others kept. | unset |
 | `OPENAI_API_KEY` | Mastra's env-bound model router (via model resolver) | Fallback model credential (`openai/gpt-4o-mini`) when no LLM settings are saved. | unset |
 | `WORLD_CUP_DB_PORT` | testing-data fixture registry | Port of the sample PostgreSQL server in the form prefill and compose stack. | `55432` |
-| `ORG_OIDC_ISSUER` | org server config ([admin](../capabilities/admin/spec.md) R3) | The identity provider's issuer URL; its discovery document is read from `<issuer>/.well-known/openid-configuration`. For Entra ID: `https://login.microsoftonline.com/<tenant id>/v2.0`. Required for org server mode. | unset (local mode) |
+| `ORG_OIDC_ISSUER` | org server config ([admin](../capabilities/admin/spec.md) R3) | The identity provider's issuer URL; its discovery document is read from `<issuer>/.well-known/openid-configuration`. For Entra ID: `https://login.microsoftonline.com/<tenant id>/v2.0`; it must name one tenant, so a first path segment of `common`, `organizations` or `consumers` (any case) is a startup error: `ORG_OIDC_ISSUER must name one tenant (https://login.microsoftonline.com/<tenant id>/v2.0), not "<segment>"`. Required for org server mode. | unset (local mode) |
 | `ORG_OIDC_CLIENT_ID` | org server config | The app registration's client id. Required for org server mode. | unset |
 | `ORG_OIDC_CLIENT_SECRET` | org server config | The app registration's client secret. Required for org server mode. Never logged. | unset |
 | `ORG_PUBLIC_BASE_URL` | org server config | The URL people open, as the proxy serves it, e.g. `https://insights.contoso.com`; trailing slashes removed. Builds the redirect URI (`<url>/auth/callback`), the Origin check and the cookie `Secure` flag. Must be `https://` except for development and tests. Required for org server mode. | unset |
 | `ORG_SCIM_TOKEN` | org server config | The SCIM bearer token given to the identity provider. At least 32 characters (shorter is a startup error). Required for org server mode. Never logged. | unset |
-| `ORG_BOOTSTRAP_ADMINS` | org server config | Comma-separated emails that always hold Platform admin (admin R18). Optional; blanks ignored, case-insensitive. | unset |
+| `ORG_BOOTSTRAP_ADMINS` | org server config | Comma-separated user names that always hold Platform admin (admin R18), matched against the directory `userName`: for Entra ID the UPN (`preferred_username`, SCIM `userName`), which usually looks like an email. Never matched against the email. Optional; blanks ignored, case-insensitive. | unset |
 | `EVAL_DATASETS` | `mastra/evals/run-assistant-evals.ts` (CLI eval script only) | Comma-separated dataset names to run the assistant evals against. Required by that script. | none |
 
 ### 6.2 CLI-only

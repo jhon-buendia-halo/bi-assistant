@@ -59,6 +59,7 @@ These apply only in org server mode ([../capabilities/admin/spec.md](../capabili
 - N74. Every API route SHALL declare the permission it needs, and the server SHALL refuse to start if one does not. A missing permission SHALL answer 403 and change nothing.
 - N75. One user's private data (sessions with their visuals, reports, workspace files and agent memory; agents; knowledge; verified queries; metrics; eval runs; pins) SHALL NEVER be returned to, changed by or deleted by another user. A request for another user's item SHALL look exactly like a request for one that does not exist. An automated test SHALL prove this for each private collection with two users.
 - N76. The LLM API key SHALL be shared org-wide and SHALL be readable by no user, not even masked, unless they hold Manage LLM configuration.
+- N77. Sign-in SHALL identify a person only by the identity provider's subject or their sign-in name (for Entra ID the UPN), NEVER by the email claim, which an identity provider can send unverified; the bootstrap admin list SHALL be matched the same way. The server SHALL accept one tenant only: the issuer SHALL name it (Entra ID's shared `common`, `organizations` and `consumers` endpoints are a startup error), and an ID token from another tenant SHALL fail sign-in.
 
 ### Read-only access to data
 
@@ -88,7 +89,7 @@ Open question: PostgreSQL connections with SSL turned on do not verify the serve
 - N28. Diagnostics SHALL be redacted before they are stored or exported (see section 7).
 - N29. The Databricks driver's own telemetry SHALL be turned off.
 
-Open question: in local mode the backend has no authentication (org server mode has, N67-N76). On desktop it listens without a host restriction (all interfaces) on port 3000 with cross-origin access open; only the web command binds to `127.0.0.1` by default. Anyone who can reach the port can read data and use the stored LLM key. Confirm the intended boundary (bind desktop to `127.0.0.1`, add a per-launch token, or accept) before the beta.
+Open question: in local mode the backend has no authentication (org server mode has, N67-N77). On desktop it listens without a host restriction (all interfaces) on port 3000 with cross-origin access open; only the web command binds to `127.0.0.1` by default. Anyone who can reach the port can read data and use the stored LLM key. Confirm the intended boundary (bind desktop to `127.0.0.1`, add a per-launch token, or accept) before the beta.
 
 Open question: the desktop main window has no explicit restriction on navigation or on opening new windows. Confirm.
 

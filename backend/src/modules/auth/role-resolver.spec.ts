@@ -71,15 +71,36 @@ describe('RoleResolver (admin R18-R21)', () => {
     expect(resolved.initials).toBe('AL');
   });
 
-  it('adds Platform admin for a bootstrap email', async () => {
+  it('adds Platform admin for a bootstrap user name (the UPN)', async () => {
     const resolver = new RoleResolver(directory, roles, {
       bootstrapAdmins: ['ada@contoso.test'],
     } as never);
-    const resolved = await resolver.currentUserFor(user);
+    const resolved = await resolver.currentUserFor({
+      ...user,
+      email: 'ada.lovelace@elsewhere.test',
+    });
     expect(resolved.roles[1]).toEqual({
       role: 'platform-admin',
       source: 'bootstrap',
     });
     expect(resolved.permissions).toContain('manage-users');
+    expect(resolver.isBootstrapAdmin({ userName: 'ADA@Contoso.test' })).toBe(
+      true,
+    );
+  });
+
+  it('never makes a bootstrap admin by email (admin R18, N77)', async () => {
+    const resolver = new RoleResolver(directory, roles, {
+      bootstrapAdmins: ['admin@contoso.test'],
+    } as never);
+    const mallory: UserDoc = {
+      ...user,
+      id: 'u2',
+      userName: 'mallory@contoso.test',
+      email: 'admin@contoso.test',
+    };
+    expect(resolver.isBootstrapAdmin(mallory)).toBe(false);
+    const resolved = await resolver.currentUserFor(mallory);
+    expect(resolved.roles.map((r) => r.role)).not.toContain('platform-admin');
   });
 });

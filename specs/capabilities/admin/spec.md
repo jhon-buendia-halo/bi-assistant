@@ -23,14 +23,14 @@ Capability-local vocabulary:
 
 - R1. The system SHALL run in exactly one of two modes, chosen at startup: **local mode** (the default) or **org server mode**. The mode SHALL NOT change while the server runs.
 - R2. Local mode SHALL behave exactly as the app did before org server mode existed: no sign-in page, no sign-out, one implicit **local user** who holds every permission (R21), and no **Admin** rail item. The rail avatar SHALL stay the static "D" titled "Demo User" (app-shell R4). The desktop app SHALL always run in local mode.
-- R3. Org server mode SHALL be turned on by server configuration naming the identity provider's issuer, client id and client secret, the server's public base URL and the SCIM token. Configuring some but not all of these SHALL be a startup error that names the missing settings; the server SHALL NOT start in local mode by accident. The bootstrap admin list (R18) is optional.
+- R3. Org server mode SHALL be turned on by server configuration naming the identity provider's issuer, client id and client secret, the server's public base URL and the SCIM token. Configuring some but not all of these SHALL be a startup error that names the missing settings; the server SHALL NOT start in local mode by accident. The bootstrap admin list (R18) is optional. The issuer SHALL name one tenant: an issuer whose tenant segment is one of Entra ID's shared endpoints (`common`, `organizations`, `consumers`, in any case) SHALL be a startup error that names `ORG_OIDC_ISSUER`.
 - R4. In org server mode the public base URL SHALL be an `https://` URL, except for development and automated tests, which MAY use `http://`.
 
 ### Sign-in and sign-out
 
 - R5. In org server mode, a browser without a valid auth session SHALL see the sign-in page and nothing else: no rail, no data, no list of sessions. The page SHALL show "Agentic Hub" and one **Sign in with Microsoft** button.
 - R6. **Sign in with Microsoft** SHALL send the browser to the identity provider. After the person authenticates there, the browser SHALL come back to the app signed in, on the home view.
-- R7. The sign-in round trip SHALL be protected against replay and code interception (a one-time `state`, a `nonce` and a PKCE verifier, held only for the round trip, at most 10 minutes). A round trip that fails any check, or that the identity provider reports as an error, SHALL return to the sign-in page with "Sign-in failed. Try again." and SHALL NOT create an auth session.
+- R7. The sign-in round trip SHALL be protected against replay and code interception (a one-time `state`, a `nonce` and a PKCE verifier, held only for the round trip, at most 10 minutes). A round trip that fails any check, or that the identity provider reports as an error, SHALL return to the sign-in page with "Sign-in failed. Try again." and SHALL NOT create an auth session. When the issuer names a tenant id, an ID token whose tenant (`tid`) is a different one SHALL fail the same way.
 - R8. A successful sign-in SHALL create an auth session and set it as an `HttpOnly`, `SameSite=Lax` cookie, `Secure` unless the public base URL is `http://`. The browser SHALL hold no identity-provider token.
 - R9. An auth session SHALL end after 8 hours without a request, or 7 days after sign-in, whichever comes first. A request with an ended or unknown auth session SHALL be treated as unauthenticated (R11).
 - R10. In org server mode the rail avatar SHALL show the signed-in user's initials, titled with their display name. Clicking it SHALL open a menu with their display name, their email and **Sign out**. **Sign out** SHALL end the auth session on the server, clear the cookie, end the identity-provider session, and return the browser to the sign-in page. Reloading or going back afterwards SHALL show the sign-in page.
@@ -38,13 +38,13 @@ Capability-local vocabulary:
 
 ### Directory
 
-- R12. A person who signs in and is not yet in the directory SHALL be added at that moment (**just in time**) from their sign-in claims: display name, email and user name. They start with no assigned roles, so they hold the User role only (R19).
-- R13. A person who signs in and is already in the directory SHALL be matched to their directory user, first by the identity provider's subject recorded at an earlier sign-in, else by user name or email (case-insensitive). Their display name and email SHALL be refreshed from the claims.
+- R12. A person who signs in and is not yet in the directory SHALL be added at that moment (**just in time**) from their sign-in claims: display name, email and user name. The user name SHALL be the identity provider's sign-in name (`preferred_username`; for Entra ID the UPN), else the subject. They start with no assigned roles, so they hold the User role only (R19).
+- R13. A person who signs in and is already in the directory SHALL be matched to their directory user, first by the identity provider's subject recorded at an earlier sign-in, else by their sign-in name (`preferred_username`; for Entra ID the UPN) against the directory user name, case-insensitive. The email claim SHALL NEVER be used to match a user or to grant a role (R18), because an identity provider can send it unverified. Their display name and email SHALL be refreshed from the claims; the email is kept for display and search only.
 - R14. The identity provider SHALL be able to create, read, update and deactivate users, and create, read, update and delete groups and their memberships, through SCIM 2.0 endpoints authenticated by the SCIM bearer token. A missing or wrong token SHALL be refused with HTTP 401. SCIM requests SHALL NOT use or need an auth session.
 - R15. A user provisioned through SCIM who has not signed in yet SHALL be in the directory, with no sign-in time. When they first sign in they SHALL be matched to that user, not duplicated (R13).
 - R16. A deactivated user SHALL NOT be able to sign in: the round trip SHALL return to the sign-in page with "Your account is deactivated. Contact your administrator." Deactivating a user SHALL end all their auth sessions at once, so their next request is refused (R11). Deactivation SHALL keep their data and ownership. Reactivating them SHALL let them sign in again.
 - R17. Groups SHALL be read-only in the app: they and their members change only through SCIM. Deleting a group SHALL remove its memberships and its group mappings.
-- R18. Every email in the bootstrap admin list SHALL hold the Platform admin role whenever that person is signed in, without a stored assignment. The match SHALL be case-insensitive. This role SHALL NOT be removable in the app; it goes away only when the email leaves the list and the server restarts.
+- R18. Every user name in the bootstrap admin list (for Entra ID a UPN, which usually looks like an email) SHALL hold the Platform admin role whenever that person is signed in, without a stored assignment. The list SHALL be matched against the directory user name (R12, R13), case-insensitively, and never against the email. This role SHALL NOT be removable in the app; it goes away only when the user name leaves the list and the server restarts.
 
 ### Roles and permissions
 
@@ -184,6 +184,10 @@ These rules cover the three tabs of the Admin area (R35): Overview (P1, [BA-164]
 ## Edge cases and errors
 
 - Org server configuration with an issuer but no SCIM token: the server exits at startup with an error naming `ORG_SCIM_TOKEN`.
+- An issuer for a shared Entra ID endpoint, such as `https://login.microsoftonline.com/common/v2.0`: the server exits at startup with an error naming `ORG_OIDC_ISSUER` (R3).
+- An ID token from another tenant than the issuer's: "Sign-in failed. Try again.", no auth session (R7).
+- A person whose email claim equals another user's email, or a bootstrap admin's, but whose sign-in name differs: they are matched or added by their own sign-in name only. They never land on the other user's account and don't get Platform admin (R13, R18).
+- A token without `preferred_username`: the person is matched by subject only, and a just-in-time user takes the subject as user name (R12).
 - The identity provider is unreachable when **Sign in with Microsoft** is clicked: the sign-in page shows "Sign-in failed. Try again."
 - A sign-in that returns after more than 10 minutes, or with a `state` that doesn't match: "Sign-in failed. Try again.", no auth session.
 - A return address that points outside the app after sign-in is ignored; the browser lands on the home view.
@@ -395,6 +399,18 @@ E2E: API-level, not Playwright: `backend/test/org-auth.e2e-spec.ts` (the 401, 40
 
 ```gherkin
 Feature: Org server API
+
+  Scenario: An email claim never matches a user or grants a role
+    Given the app runs in org server mode with "admin@contoso.test" as a bootstrap admin
+    And "admin@contoso.test" (Avery Admin) has signed in
+    When I sign in as "mallory@contoso.test" with the email claim "admin@contoso.test"
+    Then "GET /me" answers a user other than Avery Admin, with the User role only
+    And "GET /me" as Avery Admin still answers "Avery Admin" with Platform admin
+
+  Scenario: Bootstrap admins are matched by sign-in name
+    Given the app runs in org server mode with "root@contoso.test" as a bootstrap admin
+    When I sign in as "root@contoso.test" with the email claim "root.mail@elsewhere.test"
+    Then "GET /me" lists the Platform admin role from the bootstrap list
 
   Scenario: Every route refuses an unauthenticated request
     Given the app runs in org server mode

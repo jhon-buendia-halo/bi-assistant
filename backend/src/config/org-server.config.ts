@@ -1,5 +1,6 @@
 /**
- * Org server configuration (admin R1-R4, R18; api.md 1.9 and 6.1; ADR-0010).
+ * Org server configuration (admin R1-R4, R18; api.md 1.9 and 6.1; ADR-0010;
+ * non-functional N77).
  * Read once at startup from the `ORG_*` environment. None of the required
  * variables set means local mode; some but not all is a startup error that
  * names the missing ones, so a server never falls back to local mode by
@@ -10,8 +11,15 @@
 export const ORG_SERVER_CONFIG = 'ORG_SERVER_CONFIG';
 
 export interface OrgServerConfig {
-  /** `ORG_OIDC_ISSUER`, without trailing slashes. */
+  /** `ORG_OIDC_ISSUER`, without trailing slashes. Names one tenant (R3). */
   issuer: string;
+  /**
+   * The tenant id the issuer names: its first path segment when that is a
+   * GUID (Entra ID, `https://login.microsoftonline.com/<tenant id>/v2.0`),
+   * lowercased; `null` for another issuer. A token whose `tid` differs fails
+   * sign-in (R7).
+   */
+  tenantId: string | null;
   clientId: string;
   /** Never logged. */
   clientSecret: string;
@@ -23,7 +31,10 @@ export interface OrgServerConfig {
   secureCookies: boolean;
   /** Never logged. */
   scimToken: string;
-  /** `ORG_BOOTSTRAP_ADMINS`, lowercased, blanks dropped (R18). */
+  /**
+   * `ORG_BOOTSTRAP_ADMINS`: user names (Entra ID UPNs), lowercased, blanks
+   * dropped (R18). Matched against `userName`, never the email.
+   */
   bootstrapAdmins: string[];
 }
 
@@ -37,6 +48,11 @@ export const REQUIRED_ORG_SETTINGS = [
 
 /** The SCIM token's minimum length (non-functional N73). */
 export const MIN_SCIM_TOKEN_LENGTH = 32;
+
+/** Entra ID's shared endpoints, which accept any tenant's accounts (N77). */
+const MULTI_TENANT_SEGMENTS = new Set(['common', 'organizations', 'consumers']);
+
+const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export class OrgServerConfigError extends Error {
   constructor(message: string) {
@@ -75,7 +91,14 @@ export function loadOrgServerConfig(
   }
 
   const issuer = read('ORG_OIDC_ISSUER')!.replace(/\/+$/, '');
-  httpUrl('ORG_OIDC_ISSUER', issuer);
+  const issuerUrl = httpUrl('ORG_OIDC_ISSUER', issuer);
+  // The tenant segment of a login.microsoftonline.com-style issuer.
+  const tenant = issuerUrl.pathname.split('/').find(Boolean) ?? '';
+  if (MULTI_TENANT_SEGMENTS.has(tenant.toLowerCase())) {
+    throw new OrgServerConfigError(
+      `ORG_OIDC_ISSUER must name one tenant (https://login.microsoftonline.com/<tenant id>/v2.0), not "${tenant}"`,
+    );
+  }
   const publicBaseUrl = read('ORG_PUBLIC_BASE_URL')!.replace(/\/+$/, '');
   const base = httpUrl('ORG_PUBLIC_BASE_URL', publicBaseUrl);
   const scimToken = read('ORG_SCIM_TOKEN')!;
@@ -87,6 +110,7 @@ export function loadOrgServerConfig(
 
   return {
     issuer,
+    tenantId: GUID.test(tenant) ? tenant.toLowerCase() : null,
     clientId: read('ORG_OIDC_CLIENT_ID')!,
     clientSecret: read('ORG_OIDC_CLIENT_SECRET')!,
     publicBaseUrl,
@@ -95,7 +119,7 @@ export function loadOrgServerConfig(
     scimToken,
     bootstrapAdmins: (env.ORG_BOOTSTRAP_ADMINS ?? '')
       .split(',')
-      .map((email) => email.trim().toLowerCase())
+      .map((userName) => userName.trim().toLowerCase())
       .filter(Boolean),
   };
 }

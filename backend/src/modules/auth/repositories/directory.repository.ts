@@ -43,23 +43,14 @@ export class DirectoryRepository {
     return this.users.findOne({ oidcSubject: subject });
   }
 
-  /** By user name, case-insensitively. */
+  /**
+   * By user name, case-insensitively. Sign-in matches on this, never on the
+   * email (admin R13).
+   */
   async userByUserName(userName: string): Promise<UserDoc | null> {
     const wanted = lower(userName);
     return (
       (await this.users.find()).find((u) => lower(u.userName) === wanted) ??
-      null
-    );
-  }
-
-  /** By user name or email, case-insensitively (admin R13). */
-  async userByNameOrEmail(values: string[]): Promise<UserDoc | null> {
-    const wanted = new Set(values.map(lower).filter(Boolean));
-    if (!wanted.size) return null;
-    const all = await this.users.find({}, { sort: { createdAt: 1 } });
-    return (
-      all.find((u) => wanted.has(lower(u.userName))) ??
-      all.find((u) => u.email !== undefined && wanted.has(lower(u.email))) ??
       null
     );
   }

@@ -204,11 +204,11 @@ An org server is the same npm package started with the `ORG_*` configuration (AD
    export ORG_OIDC_CLIENT_SECRET=<client secret>
    export ORG_PUBLIC_BASE_URL=https://insights.contoso.com
    export ORG_SCIM_TOKEN=<the provisioning secret token>
-   export ORG_BOOTSTRAP_ADMINS=alice@contoso.com,bob@contoso.com   # optional
+   export ORG_BOOTSTRAP_ADMINS=alice@contoso.com,bob@contoso.com   # optional: UPNs, not emails
    questions-to-insights --host 0.0.0.0 --port 3000 --data-dir /srv/questions-to-insights --no-open
    ```
 
-   Bind only the interface the proxy reaches (`0.0.0.0` when the proxy is on another host, `127.0.0.1` when it is on the same one), and keep the port closed to everyone but the proxy. The banner prints `Mode: org server, <public base URL>`. A missing variable stops startup with an error naming it.
+   Bind only the interface the proxy reaches (`0.0.0.0` when the proxy is on another host, `127.0.0.1` when it is on the same one), and keep the port closed to everyone but the proxy. The banner prints `Mode: org server, <public base URL>`. A missing variable stops startup with an error naming it. The issuer must carry your tenant id: the shared `common`, `organizations` and `consumers` endpoints are refused at startup. `ORG_BOOTSTRAP_ADMINS` lists user principal names (UPNs), the sign-in names Entra ID sends as `preferred_username` and SCIM as `userName`; a person's email is never used to recognise them.
 5. **First sign-in.** A bootstrap admin signs in at the public URL and holds Platform admin at once. Other people hold the User role until they get more roles (in the Admin area's Users & groups tab, or through group mappings on Roles & permissions).
 6. **Secrets and backups.** Keep `ORG_OIDC_CLIENT_SECRET` and `ORG_SCIM_TOKEN` out of the data directory and out of logs (an environment file readable only by the service account). Back up the data directory with its `.app-secret`, as in local mode. Rotating `ORG_SCIM_TOKEN` means updating it in Entra ID and restarting the server.
 

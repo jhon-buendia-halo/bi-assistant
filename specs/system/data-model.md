@@ -478,8 +478,8 @@ Rules: [../capabilities/admin/spec.md](../capabilities/admin/spec.md). Decisions
 | Field | Type | Req | Meaning |
 |---|---|---|---|
 | `id` | uuid | yes | The user id: `ownerId` on private documents, the SCIM `id`. The local user's id is the constant `local` and is never stored here. |
-| `userName` | string | yes | Sign-in name (Entra ID: the UPN), stored lowercased; unique. |
-| `email` | string | no | Work email, lowercased. |
+| `userName` | string | yes | Sign-in name (Entra ID: the UPN), stored lowercased; unique. From SCIM `userName`, or for a just-in-time user the `preferred_username` claim, else the subject. Sign-in matches on it after `oidcSubject`, and the bootstrap admin list is compared with it (admin R13, R18). |
+| `email` | string | no | Work email, lowercased. For display and search only: never used to match a sign-in or to resolve roles, since the email claim can be unverified (admin R13). |
 | `displayName` | string | yes | Shown name. SCIM `displayName`, else `name.formatted`, else `givenName familyName`, else `userName`. |
 | `givenName`, `familyName` | string | no | From SCIM `name` or the ID token claims; used for initials. |
 | `externalId` | string | no | The identity provider's id for the user, from SCIM. |
@@ -589,7 +589,7 @@ Nothing below is stored; each figure is computed when an admin endpoint ([api.md
 | Inactive makers | Users with status `inactive` who hold `maker` from a `role_assignments` row or a `group_role_mappings` row of one of their groups. |
 | Agents owned | `agents` documents per `ownerId`. |
 | Last sync | `at` of the newest `scim.request` event (minute precision, since that event is written at most once a minute). |
-| Held roles | As for `GET /me` ([api.md](api.md) 2.13): implicit User, `role_assignments`, `group_role_mappings` of the user's groups, and Platform admin for a bootstrap email. |
+| Held roles | As for `GET /me` ([api.md](api.md) 2.13): implicit User, `role_assignments`, `group_role_mappings` of the user's groups, and Platform admin for a bootstrap admin (`userName` in `ORG_BOOTSTRAP_ADMINS`). |
 
 Reads walk `users`, `agents` and `activity_events` across all owners, so the admin module reads the raw (not owner-scoped) stores (3.15).
 

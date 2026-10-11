@@ -34,8 +34,8 @@ export function initialsOf(user: {
 
 /**
  * A user's roles and permissions, resolved on every request (admin R18-R21;
- * api.md 2.13): the implicit User role, Platform admin for a bootstrap email,
- * their direct assignments and the roles mapped to their groups.
+ * api.md 2.13): the implicit User role, Platform admin for a bootstrap user
+ * name, their direct assignments and the roles mapped to their groups.
  */
 @Injectable()
 export class RoleResolver {
@@ -51,10 +51,12 @@ export class RoleResolver {
     this.bootstrapAdmins = new Set(config?.bootstrapAdmins ?? []);
   }
 
-  isBootstrapAdmin(user: Pick<UserDoc, 'email' | 'userName'>): boolean {
-    return [user.email, user.userName].some(
-      (value) => !!value && this.bootstrapAdmins.has(value.toLowerCase()),
-    );
+  /**
+   * By user name (the UPN) only, case-insensitively, never by email: the
+   * email can come from an unverified claim (admin R18; non-functional N77).
+   */
+  isBootstrapAdmin(user: Pick<UserDoc, 'userName'>): boolean {
+    return this.bootstrapAdmins.has(user.userName.trim().toLowerCase());
   }
 
   async heldRoles(user: UserDoc): Promise<HeldRole[]> {
