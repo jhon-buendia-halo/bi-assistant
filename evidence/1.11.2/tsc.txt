@@ -1,0 +1,2 @@
+$ tsc over hooks/ and types/ against the engine declarations (.claude-plugin/types written by Claude Code 2.1.296)
+exit: 0

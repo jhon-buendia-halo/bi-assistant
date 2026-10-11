@@ -104,6 +104,17 @@ To see traces, metrics and logs of your local runs in Phoenix and Grafana, follo
 
 The e2e suite needs the seeded World Cup Postgres. The suite starts it through Docker (`docker compose up -d postgres` at the repo root). Set `E2E_SKIP_DOCKER=1` only when an equivalent database is already running; the specs that need it still run.
 
+### Claude Code mod: the workflow pane
+
+Working on this repo in Claude Code? The `workflow-steps` mod in `.claude/mods/` opens a **Workflow** pane listing the eleven-step workflow from [CLAUDE.md](CLAUDE.md). The committed `.claude/settings.json` registers this repository as a plugin marketplace and enables the mod, so Claude Code offers to install it when you trust the folder. To install it by hand, or to load it for one session while changing it:
+
+```bash
+claude plugin marketplace add jhon-buendia-halo/bi-assistant && claude plugin install workflow-steps@bi-assistant
+claude --plugin-dir .claude/mods/workflow-steps      # one session, hot-reloads on save
+```
+
+`/workflow` opens the pane at any terminal width. Details: [specs/system/delivery.md](specs/system/delivery.md) §9.
+
 ## Releasing
 
 Versioning is automatic and building is manual.

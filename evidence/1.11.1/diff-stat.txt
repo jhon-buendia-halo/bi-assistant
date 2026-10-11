@@ -1,0 +1,26 @@
+ .claude-plugin/marketplace.json                    |  12 ++
+ .../mods/workflow-steps/.claude-plugin/plugin.json |   7 +
+ .claude/mods/workflow-steps/.gitignore             |   2 +
+ .claude/mods/workflow-steps/README.md              |  50 +++++++
+ .claude/mods/workflow-steps/hooks/hooks.json       |   1 +
+ .claude/mods/workflow-steps/hooks/register.tsx     | 156 +++++++++++++++++++++
+ .../workflow-steps/tests/workflow-steps.test.ts    | 112 +++++++++++++++
+ .claude/mods/workflow-steps/tsconfig.json          |   1 +
+ .claude/mods/workflow-steps/types/index.d.ts       |  13 ++
+ .claude/settings.json                              |   4 +
+ README.md                                          |  11 ++
+ changelog.md                                       |   5 +
+ evidence/1.11.1/README.md                          |  14 ++
+ evidence/1.11.1/check-specs.txt                    |  14 ++
+ evidence/1.11.1/e2e-impact.md                      |  11 ++
+ evidence/1.11.1/marketplace-install.txt            |  29 ++++
+ evidence/1.11.1/pane-capture.txt                   |  52 +++++++
+ evidence/1.11.1/plugin-test-first-run.txt          |  19 +++
+ evidence/1.11.1/plugin-test.txt                    |  11 ++
+ evidence/1.11.1/validate.txt                       |  20 +++
+ retrospective.md                                   |  20 +++
+ roadmap.md                                         |  11 ++
+ specs/README.md                                    |   1 +
+ specs/epics/BA-169/spec.md                         |  49 +++++++
+ specs/system/delivery.md                           |  22 +++
+ 25 files changed, 647 insertions(+)

@@ -1,0 +1,7 @@
+{
+  "name": "workflow-steps",
+  "version": "0.2.0",
+  "description": "Right-hand pane listing the eleven-step development workflow from the project's CLAUDE.md",
+  "author": { "name": "Jhon Buendia" },
+  "types": "./types/index.d.ts"
+}
