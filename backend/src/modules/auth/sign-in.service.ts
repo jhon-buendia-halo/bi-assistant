@@ -118,6 +118,16 @@ export class SignInService {
     }
 
     const user = await this.findOrCreateUser(claims);
+    if ('refused' in user) {
+      this.logger.warn(
+        `Sign-in refused: user ${user.refused.id} is bound to another subject`,
+      );
+      await this.activity.record('sign-in.refused', {
+        subjectId: user.refused.id,
+        details: { reason: 'subject-mismatch' },
+      });
+      return { ok: false, error: 'failed' };
+    }
     if (!isUsable(user)) return { ok: false, error: 'deactivated' };
     const token = await this.sessions.create(user, userAgent);
     await this.activity.record('sign-in', {
@@ -155,11 +165,15 @@ export class SignInService {
    * Match the directory user (admin R13): by the stored subject, else by
    * `preferred_username` (the UPN) against `userName`, case-insensitively.
    * Never by the `email` claim, which an identity provider can send
-   * unverified (N77): it is stored for display only. Otherwise add them just
-   * in time (R12), with the UPN, else the subject, as user name. Display
-   * name, email and the sign-in time are refreshed.
+   * unverified (N77): it is stored for display only. A user found by UPN
+   * whose recorded subject is another one is `refused`: the name now belongs
+   * to a different person. Otherwise add them just in time (R12), with the
+   * UPN, else the subject, as user name. Display name, email and the sign-in
+   * time are refreshed.
    */
-  private async findOrCreateUser(claims: OidcClaims): Promise<UserDoc> {
+  private async findOrCreateUser(
+    claims: OidcClaims,
+  ): Promise<UserDoc | { refused: UserDoc }> {
     const subject =
       typeof claims.tid === 'string' && typeof claims.oid === 'string'
         ? `${claims.tid}:${claims.oid}`
@@ -179,9 +193,18 @@ export class SignInService {
       profile.familyName = claims.family_name.trim();
     }
 
+    const bySubject = await this.directory.userBySubject(subject);
     const existing =
-      (await this.directory.userBySubject(subject)) ??
+      bySubject ??
       (userName ? await this.directory.userByUserName(userName) : null);
+    if (
+      existing &&
+      !bySubject &&
+      existing.oidcSubject &&
+      existing.oidcSubject !== subject
+    ) {
+      return { refused: existing };
+    }
     if (existing) {
       if (!existing.oidcSubject) profile.oidcSubject = subject;
       if (!isUsable(existing)) return existing;

@@ -1,8 +1,9 @@
 /**
  * API-level proof of the SCIM scenarios of the Feature "Org server API" in
  * specs/capabilities/admin/spec.md ("SCIM needs its token", "SCIM provisions
- * users, groups and memberships", "A group mapping grants its role to the
- * group's members") and of admin R14-R17 and api.md 2.14. It drives the
+ * users, groups and memberships", "SCIM gives a departed user's name to a
+ * new person", "A group mapping grants its role to the group's members") and
+ * of admin R14-R17 and api.md 2.14. It drives the
  * BUILT backend (`npm run build` first) in org server mode against the OIDC
  * stub. Group mappings have no API yet (api.md 89 ships with BA-167), so the
  * mapping is written straight into `app.sqlite`, as the store holds it
@@ -511,7 +512,7 @@ describe('Org server API: SCIM 2.0', () => {
       });
     });
 
-    it('DELETE deactivates the user, hides them from SCIM and keeps them in the directory; POST again reactivates the same id', async () => {
+    it('DELETE deactivates the user, hides them from SCIM and keeps them in the directory; POST again with the same externalId reactivates the same id', async () => {
       const group = await json<ScimGroup>(
         await org.scim('/Groups', {
           method: 'POST',
@@ -545,10 +546,141 @@ describe('Org server API: SCIM 2.0', () => {
 
       const again = await org.scim('/Users', {
         method: 'POST',
-        body: scimUser('grace@contoso.test', 'Grace Hopper'),
+        body: scimUser('grace@contoso.test', 'Grace Hopper', {
+          externalId: grace.externalId,
+        }),
       });
       expect(again.status).toBe(201);
       expect((await json<ScimUser>(again)).id).toBe(grace.id);
+    });
+  });
+
+  describe("SCIM gives a departed user's name to a new person (admin R13, R16)", () => {
+    const storedUser = (id: string) =>
+      org
+        .sql<{ doc: string }>(
+          `SELECT doc FROM users WHERE json_extract(doc, '$.id') = ?`,
+          id,
+        )
+        .map((r) => JSON.parse(r.doc) as Record<string, unknown>)[0];
+
+    it('a create with another externalId makes a new user; the new person signs in to it and sees none of the old data', async () => {
+      const departed = await json<ScimUser>(
+        await org.scim('/Users', {
+          method: 'POST',
+          body: scimUser('leaver@contoso.test', 'Lee Leaver', {
+            externalId: 'oid-old',
+          }),
+        }),
+      );
+      const departedCookie = await org.signIn({
+        email: 'leaver@contoso.test',
+        sub: 'sub-leaver',
+      });
+      const created = await org.api('/sessions', {
+        method: 'POST',
+        cookie: departedCookie,
+        body: { name: "Lee's goals", datasets: ['World Cup Core'] },
+      });
+      expect((await json<{ ok: boolean }>(created)).ok).toBe(true);
+      const removed = await org.scim(`/Users/${departed.id}`, {
+        method: 'DELETE',
+      });
+      expect(removed.status).toBe(204);
+
+      const hired = await org.scim('/Users', {
+        method: 'POST',
+        body: scimUser('leaver@contoso.test', 'Nia New', {
+          externalId: 'oid-new',
+        }),
+      });
+      expect(hired.status).toBe(201);
+      const newUser = await json<ScimUser>(hired);
+      expect(newUser.id).not.toBe(departed.id);
+      expect(newUser.userName).toBe('leaver@contoso.test');
+
+      const newCookie = await org.signIn({
+        email: 'leaver@contoso.test',
+        sub: 'sub-new-hire',
+        name: 'Nia New',
+      });
+      expect((await me(newCookie)).body.user.id).toBe(newUser.id);
+      const sessions = await json<{ sessions: unknown[] }>(
+        await org.api('/sessions', { cookie: newCookie }),
+      );
+      expect(sessions.sessions).toEqual([]);
+
+      // The departed user is released: same id and data, never matched by the name.
+      expect(storedUser(departed.id)).toMatchObject({
+        userName: `released:${departed.id}`,
+        releasedUserName: 'leaver@contoso.test',
+        active: false,
+        scimDeleted: true,
+      });
+      const owned = org.sql<{ n: number }>(
+        `SELECT COUNT(*) AS n FROM sessions WHERE json_extract(doc, '$.ownerId') = ?`,
+        departed.id,
+      )[0].n;
+      expect(owned).toBe(1);
+      const { location } = await org.signInRoundTrip({
+        email: 'leaver@contoso.test',
+        sub: 'sub-leaver',
+      });
+      expect(location).toBe('/?signInError=deactivated');
+    });
+
+    it('a deactivated user who has signed in is released the same way', async () => {
+      const departed = await json<ScimUser>(
+        await org.scim('/Users', {
+          method: 'POST',
+          body: scimUser('mover@contoso.test', 'Mo Mover', {
+            externalId: 'oid-mover-a',
+          }),
+        }),
+      );
+      await org.signIn({ email: 'mover@contoso.test', sub: 'sub-mover-a' });
+      await org.scim(`/Users/${departed.id}`, {
+        method: 'PATCH',
+        body: patch({ op: 'Replace', path: 'active', value: 'False' }),
+      });
+
+      const hired = await org.scim('/Users', {
+        method: 'POST',
+        body: scimUser('mover@contoso.test', 'Max Newer', {
+          externalId: 'oid-mover-b',
+        }),
+      });
+      expect(hired.status).toBe(201);
+      const newUser = await json<ScimUser>(hired);
+      expect(newUser.id).not.toBe(departed.id);
+      expect((await org.scim(`/Users/${departed.id}`)).status).toBe(404);
+      const cookie = await org.signIn({
+        email: 'mover@contoso.test',
+        sub: 'sub-mover-b',
+      });
+      expect((await me(cookie)).body.user.id).toBe(newUser.id);
+    });
+
+    it('a deactivated user who never signed in still answers 409', async () => {
+      const waiting = await json<ScimUser>(
+        await org.scim('/Users', {
+          method: 'POST',
+          body: scimUser('waiting@contoso.test', 'Wade Waiting', {
+            externalId: 'oid-waiting-a',
+            active: false,
+          }),
+        }),
+      );
+      const res = await org.scim('/Users', {
+        method: 'POST',
+        body: scimUser('waiting@contoso.test', 'Wren Other', {
+          externalId: 'oid-waiting-b',
+        }),
+      });
+      expect(res.status).toBe(409);
+      expect(storedUser(waiting.id)).toMatchObject({
+        userName: 'waiting@contoso.test',
+      });
     });
   });
 });

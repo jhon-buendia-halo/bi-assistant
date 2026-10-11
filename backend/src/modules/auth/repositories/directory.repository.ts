@@ -45,13 +45,31 @@ export class DirectoryRepository {
 
   /**
    * By user name, case-insensitively. Sign-in matches on this, never on the
-   * email (admin R13).
+   * email (admin R13). A released user (admin R16) is never found.
    */
   async userByUserName(userName: string): Promise<UserDoc | null> {
     const wanted = lower(userName);
     return (
-      (await this.users.find()).find((u) => lower(u.userName) === wanted) ??
-      null
+      (await this.users.find()).find(
+        (u) => u.releasedUserName === undefined && lower(u.userName) === wanted,
+      ) ?? null
+    );
+  }
+
+  /**
+   * Free a user's name for a different person (admin R16; data-model
+   * 3.14.1): the user keeps its id, so its data and ownership, but is
+   * deactivated, hidden from SCIM and never found by user name again.
+   */
+  releaseUserName(user: UserDoc): Promise<UserDoc | null> {
+    return this.users.update(
+      { id: user.id },
+      {
+        userName: `released:${user.id}`,
+        releasedUserName: user.userName,
+        active: false,
+        scimDeleted: true,
+      },
     );
   }
 

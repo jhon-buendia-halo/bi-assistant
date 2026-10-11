@@ -393,6 +393,38 @@ describe('Org server API: sign-in, 401, 403 and the Origin check', () => {
       ]);
     });
 
+    it('a sign-in name now held by a different subject is refused, changes nothing and is recorded (R13)', async () => {
+      const adaCookie = await org.signIn(ADA);
+      const before = (await me(adaCookie)).body;
+      const { location, cookie } = await org.signInRoundTrip({
+        ...ADA,
+        sub: 'a-different-person',
+        name: 'Ada Impostor',
+      });
+      expect(location).toBe('/?signInError=failed');
+      expect(cookie).toBeNull();
+      expect((await me(adaCookie)).body).toEqual(before);
+      const refused = org
+        .sql<{ doc: string }>('SELECT doc FROM activity_events')
+        .map(
+          (r) =>
+            JSON.parse(r.doc) as {
+              type: string;
+              actorId?: string;
+              subjectId?: string;
+              details?: unknown;
+            },
+        )
+        .filter((e) => e.type === 'sign-in.refused');
+      expect(refused).toEqual([
+        expect.objectContaining({
+          subjectId: before.user.id,
+          details: { reason: 'subject-mismatch' },
+        }),
+      ]);
+      expect(refused[0].actorId).toBeUndefined();
+    });
+
     it('records sign-in and the first request of the day as activity', () => {
       const types = org
         .sql<{ doc: string }>('SELECT doc FROM activity_events')

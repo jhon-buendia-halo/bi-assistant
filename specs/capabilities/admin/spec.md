@@ -39,10 +39,10 @@ Capability-local vocabulary:
 ### Directory
 
 - R12. A person who signs in and is not yet in the directory SHALL be added at that moment (**just in time**) from their sign-in claims: display name, email and user name. The user name SHALL be the identity provider's sign-in name (`preferred_username`; for Entra ID the UPN), else the subject. They start with no assigned roles, so they hold the User role only (R19).
-- R13. A person who signs in and is already in the directory SHALL be matched to their directory user, first by the identity provider's subject recorded at an earlier sign-in, else by their sign-in name (`preferred_username`; for Entra ID the UPN) against the directory user name, case-insensitive. The email claim SHALL NEVER be used to match a user or to grant a role (R18), because an identity provider can send it unverified. Their display name and email SHALL be refreshed from the claims; the email is kept for display and search only.
+- R13. A person who signs in and is already in the directory SHALL be matched to their directory user, first by the identity provider's subject recorded at an earlier sign-in, else by their sign-in name (`preferred_username`; for Entra ID the UPN) against the directory user name, case-insensitive. The email claim SHALL NEVER be used to match a user or to grant a role (R18), because an identity provider can send it unverified. Their display name and email SHALL be refreshed from the claims; the email is kept for display and search only. When the sign-in name matches a directory user whose recorded subject is a different one, the name now belongs to another person (for example a reassigned UPN): the sign-in SHALL fail with "Sign-in failed. Try again.", SHALL change nothing on that user, and SHALL be recorded as a refused sign-in (R36). A directory user with no recorded subject yet (provisioned through SCIM, never signed in) SHALL still be matched by sign-in name, and the subject recorded.
 - R14. The identity provider SHALL be able to create, read, update and deactivate users, and create, read, update and delete groups and their memberships, through SCIM 2.0 endpoints authenticated by the SCIM bearer token. A missing or wrong token SHALL be refused with HTTP 401. SCIM requests SHALL NOT use or need an auth session.
 - R15. A user provisioned through SCIM who has not signed in yet SHALL be in the directory, with no sign-in time. When they first sign in they SHALL be matched to that user, not duplicated (R13).
-- R16. A deactivated user SHALL NOT be able to sign in: the round trip SHALL return to the sign-in page with "Your account is deactivated. Contact your administrator." Deactivating a user SHALL end all their auth sessions at once, so their next request is refused (R11). Deactivation SHALL keep their data and ownership. Reactivating them SHALL let them sign in again.
+- R16. A deactivated user SHALL NOT be able to sign in: the round trip SHALL return to the sign-in page with "Your account is deactivated. Contact your administrator." Deactivating a user SHALL end all their auth sessions at once, so their next request is refused (R11). Deactivation SHALL keep their data and ownership. Reactivating them SHALL let them sign in again. When the identity provider creates, through SCIM, a user name that a user removed through SCIM holds, that user SHALL come back under the same id, unless both carry an external id and the two differ. Then the name belongs to a different person: SCIM SHALL create a new user, and the old one SHALL be **released** from the name: it keeps its id, data and ownership, stays deactivated and hidden from SCIM, and is never matched by that name again. The same SHALL apply to a deactivated user who has signed in. Entra ID always sends the external id (the user's object id), so a departed person's records never pass to a new hire who gets their UPN.
 - R17. Groups SHALL be read-only in the app: they and their members change only through SCIM. Deleting a group SHALL remove its memberships and its group mappings.
 - R18. Every user name in the bootstrap admin list (for Entra ID a UPN, which usually looks like an email) SHALL hold the Platform admin role whenever that person is signed in, without a stored assignment. The list SHALL be matched against the directory user name (R12, R13), case-insensitively, and never against the email. This role SHALL NOT be removable in the app; it goes away only when the user name leaves the list and the server restarts.
 
@@ -93,7 +93,7 @@ Capability-local vocabulary:
 
 ### Activity
 
-- R36. In org server mode the server SHALL record activity events for: sign-in, sign-out, a user's first request of each UTC day, SCIM requests (at most one event per minute), role assignments and removals, user deactivation and reactivation, group mappings added and removed, agent ownership transfers, and agent errors (R40). They feed the Overview (R41-R48), the last activity of each user (R39) and the last sync note (R54).
+- R36. In org server mode the server SHALL record activity events for: sign-in, refused sign-in (R13), sign-out, a user's first request of each UTC day, SCIM requests (at most one event per minute), role assignments and removals, user deactivation and reactivation, group mappings added and removed, agent ownership transfers, and agent errors (R40). They feed the Overview (R41-R48), the last activity of each user (R39) and the last sync note (R54).
 
 ### Admin panel
 
@@ -139,7 +139,7 @@ These rules cover the three tabs of the Admin area (R35): Overview (P1, [BA-164]
   | agent ownership transferred | `<admin> transferred <agent> from <former owner> to <new owner>` |
   | user deactivated / reactivated | `Entra ID deactivated <user>` / `Entra ID reactivated <user>` |
 
-  Sign-ins, sign-outs, daily activity, SCIM requests and agent errors SHALL NOT appear. With none of these events the card SHALL read "No activity yet." Recent activity is a short feed, not an audit log.
+  Sign-ins, refused sign-ins, sign-outs, daily activity, SCIM requests and agent errors SHALL NOT appear. With none of these events the card SHALL read "No activity yet." Recent activity is a short feed, not an audit log.
 - R48. **Export report** SHALL download a CSV file named `admin-report-<YYYY-MM-DD>.csv` (the UTC date) holding, at the moment of the export, the two tiles, the three Needs attention counts, the 8 weekly counts and the recent activity. A cell that starts with `=`, `+`, `-` or `@` SHALL be prefixed with `'`, so a spreadsheet never runs it as a formula.
 
 ### Users & groups (P2)
@@ -188,15 +188,16 @@ These rules cover the three tabs of the Admin area (R35): Overview (P1, [BA-164]
 - An ID token from another tenant than the issuer's: "Sign-in failed. Try again.", no auth session (R7).
 - A person whose email claim equals another user's email, or a bootstrap admin's, but whose sign-in name differs: they are matched or added by their own sign-in name only. They never land on the other user's account and don't get Platform admin (R13, R18).
 - A token without `preferred_username`: the person is matched by subject only, and a just-in-time user takes the subject as user name (R12).
+- A person signs in with a sign-in name that a directory user who signed in before holds under another subject (a reassigned UPN): "Sign-in failed. Try again.", no auth session, that user unchanged, a refused sign-in recorded (R13). The new person can sign in once the identity provider has removed the departed user through SCIM and provisioned them (R16); signing in before being provisioned stays refused.
 - The identity provider is unreachable when **Sign in with Microsoft** is clicked: the sign-in page shows "Sign-in failed. Try again."
 - A sign-in that returns after more than 10 minutes, or with a `state` that doesn't match: "Sign-in failed. Try again.", no auth session.
 - A return address that points outside the app after sign-in is ignored; the browser lands on the home view.
 - Two browsers signed in as the same user each have their own auth session. Signing out in one leaves the other signed in.
 - A user removed from a mapped group loses the mapped role on their next request; a role they also hold directly stays.
 - A Maker whose Maker role is removed while the agent editor is open: **Save** is refused with HTTP 403 and the toast "You don't have permission to do this."; the form keeps its content. The **New agent** button is gone after the next reload of the permissions (the next page load).
-- A SCIM request to create a user whose user name already exists: HTTP 409 in SCIM error format, nothing changed.
+- A SCIM request to create a user whose user name an active user holds, or a deactivated one that R16 doesn't release: HTTP 409 in SCIM error format, nothing changed.
 - A SCIM request for an unknown user or group id: HTTP 404 in SCIM error format.
-- Deleting a user through SCIM deactivates them (R16) and hides them from later SCIM reads; their data and ownership stay.
+- Deleting a user through SCIM deactivates them (R16) and hides them from later SCIM reads; their data and ownership stay. Creating their user name again brings the same user back when the external ids match or either is missing, and creates a new user when both are present and differ (R16).
 - A bootstrap admin who is deactivated cannot sign in; the bootstrap list does not override deactivation.
 - A request from a page served by another origin (a cross-site form post): HTTP 403, nothing changed (R27).
 - Pointing an org server at a data directory that a local-mode app used: the old items have no owner and nobody sees them (R33). Moving local data into an org server is out of scope.
@@ -395,7 +396,7 @@ Feature: Private and shared data
 
 ### Feature: Org server API
 
-E2E: API-level, not Playwright: `backend/test/org-auth.e2e-spec.ts` (the 401, 403, cross-site and sign-in scenarios, and the role assignment routes), `backend/test/scim.e2e-spec.ts` (the three SCIM scenarios), `backend/test/owner-isolation.e2e-spec.ts` (private collections) and `backend/test/local-auth.e2e-spec.ts` (local mode).
+E2E: API-level, not Playwright: `backend/test/org-auth.e2e-spec.ts` (the 401, 403, cross-site and sign-in scenarios, and the role assignment routes), `backend/test/scim.e2e-spec.ts` (the four SCIM scenarios), `backend/test/owner-isolation.e2e-spec.ts` (private collections) and `backend/test/local-auth.e2e-spec.ts` (local mode).
 
 ```gherkin
 Feature: Org server API
@@ -406,6 +407,13 @@ Feature: Org server API
     When I sign in as "mallory@contoso.test" with the email claim "admin@contoso.test"
     Then "GET /me" answers a user other than Avery Admin, with the User role only
     And "GET /me" as Avery Admin still answers "Avery Admin" with Platform admin
+
+  Scenario: A sign-in name now held by a different person is refused
+    Given "ada@contoso.test" (Ada Lovelace) has signed in
+    When a different person, with another subject, signs in as "ada@contoso.test"
+    Then the sign-in returns with "signInError=failed" and no auth session
+    And "GET /me" as Ada still answers "Ada Lovelace"
+    And a "sign-in.refused" activity event with the reason "subject-mismatch" names Ada's account
 
   Scenario: Bootstrap admins are matched by sign-in name
     Given the app runs in org server mode with "root@contoso.test" as a bootstrap admin
@@ -436,6 +444,14 @@ Feature: Org server API
     Then SCIM lists Ada, the group "Analysts" and Ada as its member
     When it sets Ada's "active" to false
     Then Ada's auth sessions are ended and she cannot sign in
+
+  Scenario: SCIM gives a departed user's name to a new person
+    Given "leaver@contoso.test" with the external id "oid-old" was provisioned through SCIM, signed in and created a session
+    And the identity provider removed "leaver@contoso.test" through SCIM
+    When the identity provider creates "leaver@contoso.test" with the external id "oid-new" through SCIM
+    Then it answers HTTP 201 with a new user id
+    And the new person signs in as "leaver@contoso.test" to that new user and lists no sessions
+    And the departed person's sign-in answers "signInError=deactivated"
 
   Scenario: A group mapping grants its role to the group's members
     Given the group "Analysts" is mapped to the Maker role

@@ -68,6 +68,7 @@ function setup(
   return {
     users,
     sessions,
+    activity,
     /** Finish a sign-in whose ID token carries `next`. */
     signIn(next: OidcClaims): Promise<SignInOutcome> {
       claims = next;
@@ -219,6 +220,70 @@ describe('SignInService: finding the directory user (admin R12, R13)', () => {
       source: 'jit',
       active: true,
     });
+  });
+});
+
+describe('SignInService: a sign-in name bound to another subject (admin R13)', () => {
+  it('refuses the sign-in, changes nothing on that user and records sign-in.refused', async () => {
+    const t = setup();
+    await t.seed({
+      id: 'ada',
+      userName: 'ada@contoso.test',
+      email: 'ada@contoso.test',
+      displayName: 'Ada Lovelace',
+      oidcSubject: `${TENANT}:oid-ada`,
+      lastSignInAt: '2026-10-01T08:00:00.000Z',
+    });
+    const before = await t.user('ada');
+    const outcome = await t.signIn({
+      sub: 'sub-new-hire',
+      tid: TENANT,
+      oid: 'oid-new-hire',
+      preferred_username: 'ADA@contoso.test',
+      email: 'ada@contoso.test',
+      name: 'New Hire',
+    });
+    expect(outcome).toEqual({ ok: false, error: 'failed' });
+    expect(t.sessions.create).not.toHaveBeenCalled();
+    expect(await t.user('ada')).toEqual(before);
+    expect(await t.users.find()).toHaveLength(1);
+    expect(t.activity.record).toHaveBeenCalledTimes(1);
+    expect(t.activity.record).toHaveBeenCalledWith('sign-in.refused', {
+      subjectId: 'ada',
+      details: { reason: 'subject-mismatch' },
+    });
+  });
+
+  it('answers failed, not deactivated, when that user is also deactivated', async () => {
+    const t = setup();
+    await t.seed({
+      id: 'ada',
+      userName: 'ada@contoso.test',
+      displayName: 'Ada Lovelace',
+      oidcSubject: 'sub-ada',
+      active: false,
+    });
+    const outcome = await t.signIn({
+      sub: 'sub-someone-else',
+      preferred_username: 'ada@contoso.test',
+    });
+    expect(outcome).toEqual({ ok: false, error: 'failed' });
+  });
+
+  it('still lets the same person in when the subject matches, and the deactivated message stays theirs', async () => {
+    const t = setup();
+    await t.seed({
+      id: 'ada',
+      userName: 'ada@contoso.test',
+      displayName: 'Ada Lovelace',
+      oidcSubject: 'sub-ada',
+      active: false,
+    });
+    const outcome = await t.signIn({
+      sub: 'sub-ada',
+      preferred_username: 'ada@contoso.test',
+    });
+    expect(outcome).toEqual({ ok: false, error: 'deactivated' });
   });
 });
 

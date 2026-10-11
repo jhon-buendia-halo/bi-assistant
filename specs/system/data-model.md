@@ -483,7 +483,8 @@ Rules: [../capabilities/admin/spec.md](../capabilities/admin/spec.md). Decisions
 | `displayName` | string | yes | Shown name. SCIM `displayName`, else `name.formatted`, else `givenName familyName`, else `userName`. |
 | `givenName`, `familyName` | string | no | From SCIM `name` or the ID token claims; used for initials. |
 | `externalId` | string | no | The identity provider's id for the user, from SCIM. |
-| `oidcSubject` | string | no | Stable sign-in subject, `<tid>:<oid>` for Entra ID, else the `sub` claim. Set at first sign-in; matched first at later sign-ins. |
+| `oidcSubject` | string | no | Stable sign-in subject, `<tid>:<oid>` for Entra ID, else the `sub` claim. Set at first sign-in; matched first at later sign-ins. Once set it is never changed: a sign-in whose name matches this user under another subject is refused (admin R13). |
+| `releasedUserName` | string | no | Set when SCIM gives this user's name to a different person (another `externalId`, admin R16; [api.md](api.md) 2.14): the former `userName`, kept for display and audit. The user is then **released**: `userName` is `released:<id>` (a colon can't occur in a UPN), `active:false`, `scimDeleted:true`. Sign-in and SCIM lookups by user name skip released users, so the name never matches them again; the id, and so the `ownerId` of their private data and their agents, stays. |
 | `active` | boolean | yes | `false` = deactivated: cannot sign in. |
 | `scimDeleted` | boolean | no | `true` after a SCIM `DELETE`: hidden from SCIM reads. |
 | `source` | enum | yes | `scim` (provisioned) \| `jit` (created at first sign-in). A `jit` user later seen by SCIM becomes `scim`. |
@@ -553,7 +554,7 @@ Append-only. Read by the admin Overview and Users & groups (admin R36, R39-R54).
 | Field | Type | Req | Meaning |
 |---|---|---|---|
 | `id` | uuid | yes | |
-| `type` | enum | yes | `sign-in` \| `sign-out` \| `user.active` (first request of a UTC day) \| `scim.request` (at most one per minute) \| `role.assigned` \| `role.removed` \| `user.deactivated` \| `user.reactivated` \| `mapping.added` \| `mapping.removed` \| `agent.transferred` \| `agent.turn-failed`. See the table below. |
+| `type` | enum | yes | `sign-in` \| `sign-in.refused` \| `sign-out` \| `user.active` (first request of a UTC day) \| `scim.request` (at most one per minute) \| `role.assigned` \| `role.removed` \| `user.deactivated` \| `user.reactivated` \| `mapping.added` \| `mapping.removed` \| `agent.transferred` \| `agent.turn-failed`. See the table below. |
 | `at` | ISO | yes | When it happened. Sort key (desc). |
 | `actorId` | string | no | The user who caused it; absent for SCIM. |
 | `subjectId` | string | no | The user, assignment or group it is about. |
@@ -563,6 +564,7 @@ Append-only. Read by the admin Overview and Users & groups (admin R36, R39-R54).
 | Type | Written by | `actorId` | `subjectId` | `details` |
 |---|---|---|---|---|
 | `sign-in`, `sign-out` | [api.md](api.md) 62, 63 | the user | the user | |
+| `sign-in.refused` | [api.md](api.md) 62, when the sign-in name matches a user whose `oidcSubject` is another subject (admin R13) | | the matched user | `{ reason: "subject-mismatch" }` |
 | `user.active` | the first authenticated request of a UTC day | the user | the user | |
 | `scim.request` | any SCIM request that passed the token check, at most one a minute | | | |
 | `role.assigned`, `role.removed` | [api.md](api.md) 79, 80, 85 | the admin | the user | `{ role, datasourceId? }` |
