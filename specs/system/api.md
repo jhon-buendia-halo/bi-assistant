@@ -935,7 +935,7 @@ interface ActivityItem { id: string; type: string; at: string; text: string }   
 
 #### 87. `GET /admin/groups`
 - Query: `q` (optional, a substring of the group name, case-insensitive), `page`, `pageSize` as in endpoint 83.
-- Response `200`: `{ items: { id: string; displayName: string; members: number; mappings: { role: Exclude<RoleId,'user'>; datasourceId?: string; datasourceName?: string }[] }[]; total: number; page: number; pageSize: number }`, sorted by name (case-insensitive).
+- Response `200`: `{ items: { id: string; displayName: string; members: number; mappings: { role: Exclude<RoleId,'user'>; datasourceId?: string; datasourceName?: string }[] }[]; total: number; page: number; pageSize: number }`, sorted by name (case-insensitive); each group's `mappings` in badge order (Platform admin, Approver, Data owner, Maker), then by datasource name.
 - Errors: the `page` / `pageSize` messages of endpoint 83.
 
 #### 88. `GET /admin/role-mappings`

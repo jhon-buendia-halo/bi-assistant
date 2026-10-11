@@ -45,6 +45,13 @@ export class ActivityService {
     await this.store.insert(event);
   }
 
+  /** When the newest event of `type` happened, if any ("Last sync"). */
+  async newestAt(type: ActivityEventType): Promise<string | null> {
+    return (
+      (await this.store.findOne({ type }, { sort: { at: -1 } }))?.at ?? null
+    );
+  }
+
   /** A SCIM request: at most one event a minute ("Last sync", admin R54). */
   async recordScimRequest(): Promise<void> {
     const now = Date.now();

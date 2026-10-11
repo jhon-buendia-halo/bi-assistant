@@ -2,7 +2,7 @@
  * API-level proof of the Feature "Org server API" in
  * specs/capabilities/admin/spec.md (sign-in, 401, 403, Origin check, role
  * assignments) and of admin R3-R13, R16, R18-R24, R27, R36, api.md 1.9,
- * 2.13 and 2.15 (79-80), and non-functional N77 (never trust the email claim). It drives the BUILT backend (`npm run build` first)
+ * 2.13 and 2.15 (79-80, and the 401 and 403 of every admin route), and non-functional N77 (never trust the email claim). It drives the BUILT backend (`npm run build` first)
  * in org server mode against the in-test OIDC stub (`test/oidc-stub.ts`).
  * Needs no Postgres and no Entra ID tenant.
  */
@@ -127,6 +127,8 @@ const ROUTES: [method: string, path: string, permission: string][] = [
   ['PUT', '/ui-preferences', 'use-agents'],
   ['POST', '/admin/role-assignments', 'manage-users'],
   ['DELETE', '/admin/role-assignments/r1', 'manage-users'],
+  ['GET', '/admin/users', 'manage-users'],
+  ['GET', '/admin/groups', 'manage-users'],
 ];
 
 describe('Org server API: sign-in, 401, 403 and the Origin check', () => {

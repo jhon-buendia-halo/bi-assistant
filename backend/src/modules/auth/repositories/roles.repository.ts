@@ -24,6 +24,10 @@ export class RolesRepository {
     private readonly mappings: DocStore<GroupRoleMappingDoc>,
   ) {}
 
+  allAssignments(): Promise<RoleAssignmentDoc[]> {
+    return this.assignments.find({}, { sort: { createdAt: 1 } });
+  }
+
   assignmentsOf(userId: string): Promise<RoleAssignmentDoc[]> {
     return this.assignments.find({ userId }, { sort: { createdAt: 1 } });
   }
@@ -53,6 +57,10 @@ export class RolesRepository {
 
   deleteAssignment(id: string): Promise<number> {
     return this.assignments.deleteOne({ id });
+  }
+
+  allMappings(): Promise<GroupRoleMappingDoc[]> {
+    return this.mappings.find({}, { sort: { createdAt: 1 } });
   }
 
   async mappingsOf(groupIds: string[]): Promise<GroupRoleMappingDoc[]> {

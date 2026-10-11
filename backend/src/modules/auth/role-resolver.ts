@@ -4,7 +4,11 @@ import {
   type OrgServerConfig,
 } from '../../config/org-server.config';
 import type { CurrentUser, HeldRole } from './entities/current-user.entity';
-import type { UserDoc } from './entities/directory.entity';
+import type {
+  GroupRoleMappingDoc,
+  RoleAssignmentDoc,
+  UserDoc,
+} from './entities/directory.entity';
 import { permissionsForRoles } from './permissions';
 import { DirectoryRepository } from './repositories/directory.repository';
 import { RolesRepository } from './repositories/roles.repository';
@@ -30,6 +34,40 @@ export function initialsOf(user: {
   }
   if (!initials) initials = first(user.email ?? '');
   return initials.toUpperCase().slice(0, 2);
+}
+
+/**
+ * A user's held roles from what is stored (admin R20; api.md 2.13): the
+ * implicit User role, Platform admin for a bootstrap admin, the direct
+ * assignments, then the mappings of the user's groups. Pure, so the admin
+ * screens resolve every user from one read of the directory.
+ */
+export function resolveHeldRoles(
+  isBootstrap: boolean,
+  assignments: readonly RoleAssignmentDoc[],
+  groupMappings: readonly GroupRoleMappingDoc[],
+): HeldRole[] {
+  const held: HeldRole[] = [{ role: 'user', source: 'implicit' }];
+  if (isBootstrap) held.push({ role: 'platform-admin', source: 'bootstrap' });
+  for (const assignment of assignments) {
+    const role: HeldRole = {
+      role: assignment.role,
+      source: 'direct',
+      assignmentId: assignment.id,
+    };
+    if (assignment.datasourceId) role.datasourceId = assignment.datasourceId;
+    held.push(role);
+  }
+  for (const mapping of groupMappings) {
+    const role: HeldRole = {
+      role: mapping.role,
+      source: 'group',
+      groupId: mapping.groupId,
+    };
+    if (mapping.datasourceId) role.datasourceId = mapping.datasourceId;
+    held.push(role);
+  }
+  return held;
 }
 
 /**
@@ -60,30 +98,12 @@ export class RoleResolver {
   }
 
   async heldRoles(user: UserDoc): Promise<HeldRole[]> {
-    const held: HeldRole[] = [{ role: 'user', source: 'implicit' }];
-    if (this.isBootstrapAdmin(user)) {
-      held.push({ role: 'platform-admin', source: 'bootstrap' });
-    }
-    for (const assignment of await this.roles.assignmentsOf(user.id)) {
-      const role: HeldRole = {
-        role: assignment.role,
-        source: 'direct',
-        assignmentId: assignment.id,
-      };
-      if (assignment.datasourceId) role.datasourceId = assignment.datasourceId;
-      held.push(role);
-    }
     const groupIds = await this.directory.groupIdsOf(user.id);
-    for (const mapping of await this.roles.mappingsOf(groupIds)) {
-      const role: HeldRole = {
-        role: mapping.role,
-        source: 'group',
-        groupId: mapping.groupId,
-      };
-      if (mapping.datasourceId) role.datasourceId = mapping.datasourceId;
-      held.push(role);
-    }
-    return held;
+    return resolveHeldRoles(
+      this.isBootstrapAdmin(user),
+      await this.roles.assignmentsOf(user.id),
+      await this.roles.mappingsOf(groupIds),
+    );
   }
 
   /** The user a request runs as. */

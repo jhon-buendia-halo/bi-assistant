@@ -3,7 +3,8 @@
  * API tests of the Feature "Org server API" (specs/capabilities/admin/spec.md).
  * Run `npm run build` first. Helpers sign people in through the real
  * redirect round trip, call SCIM with the token and reach into `app.sqlite`
- * for what has no API yet (group mappings, shared fixtures, clock changes).
+ * for what has no API (shared fixtures, agents of several owners, past
+ * activity and other clock changes).
  */
 import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -33,6 +34,17 @@ export interface OrgServer {
   sql<T = unknown>(statement: string, ...params: unknown[]): T[];
   /** Insert a raw document into a collection table. */
   insertDoc(table: string, doc: Record<string, unknown>): void;
+  /**
+   * Shallow-merge `patch` into every document of `table` whose top-level
+   * fields equal `match` (for example a user's past activity); the count.
+   */
+  patchDoc(
+    table: string,
+    match: Record<string, unknown>,
+    patch: Record<string, unknown>,
+  ): number;
+  /** Every document of a collection table, in insertion order. */
+  docs<T = Record<string, unknown>>(table: string): T[];
   close(): Promise<void>;
 }
 
@@ -190,6 +202,31 @@ export async function startOrgServer(
           ...doc,
         }),
       );
+    },
+    patchDoc(table, match, patch) {
+      const rows = db.prepare(`SELECT rid, doc FROM "${table}"`).all() as {
+        rid: number;
+        doc: string;
+      }[];
+      let patched = 0;
+      for (const row of rows) {
+        const doc = JSON.parse(row.doc) as Record<string, unknown>;
+        if (Object.entries(match).every(([key, value]) => doc[key] === value)) {
+          db.prepare(`UPDATE "${table}" SET doc = ? WHERE rid = ?`).run(
+            JSON.stringify({ ...doc, ...patch }),
+            row.rid,
+          );
+          patched++;
+        }
+      }
+      return patched;
+    },
+    docs<T>(table: string): T[] {
+      return (
+        db.prepare(`SELECT doc FROM "${table}" ORDER BY rid`).all() as {
+          doc: string;
+        }[]
+      ).map((row) => JSON.parse(row.doc) as T);
     },
     async close() {
       db.close();

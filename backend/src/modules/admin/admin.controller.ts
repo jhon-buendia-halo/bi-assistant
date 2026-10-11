@@ -1,4 +1,13 @@
-import { Body, Controller, Delete, Param, Post, Res } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Query,
+  Res,
+} from '@nestjs/common';
 import type { Response } from 'express';
 import {
   OrgServerOnly,
@@ -6,12 +15,17 @@ import {
 } from '../../common/decorators/auth-requirement.decorators';
 import { CurrentUserService } from '../auth/current-user.service';
 import type { RoleAssignmentDoc } from '../auth/entities/directory.entity';
+import { AdminReadService } from './admin-read.service';
 import { AdminService } from './admin.service';
 import type { AssignRoleDto } from './dto/assign-role.dto';
+import type {
+  AdminGroupsPage,
+  AdminUsersPage,
+} from './entities/admin-views.entity';
 
 /**
  * The admin API (api.md 2.15): `manage-users` on every route, org server
- * mode only. Errors are Style B. Later admin stories add their routes here.
+ * mode only. Errors are Style B; successful writes answer an `ok` body.
  */
 @Controller('admin')
 @RequirePermission('manage-users')
@@ -19,6 +33,7 @@ import type { AssignRoleDto } from './dto/assign-role.dto';
 export class AdminController {
   constructor(
     private readonly admin: AdminService,
+    private readonly reads: AdminReadService,
     private readonly currentUser: CurrentUserService,
   ) {}
 
@@ -46,5 +61,17 @@ export class AdminController {
   ): Promise<{ ok: true; message: string }> {
     await this.admin.removeAssignment(id, this.currentUser.ownerKey());
     return { ok: true, message: 'Role removed' };
+  }
+
+  /** 83. */
+  @Get('users')
+  users(@Query() query: Record<string, unknown>): Promise<AdminUsersPage> {
+    return this.reads.listUsers(query ?? {});
+  }
+
+  /** 87. */
+  @Get('groups')
+  groups(@Query() query: Record<string, unknown>): Promise<AdminGroupsPage> {
+    return this.reads.listGroups(query ?? {});
   }
 }
