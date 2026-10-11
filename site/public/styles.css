@@ -36,6 +36,9 @@ a{color:inherit;text-decoration:none}
 .dl-meta{color:var(--text-mute);font-size:14.5px}
 .dl-card .btn{align-self:flex-start;margin-top:auto}
 .btn[aria-disabled="true"]{opacity:.45;pointer-events:none}
+.dl-card-soon{background:transparent;border-style:dashed}
+.dl-card-soon .dl-os,.dl-card-soon .dl-meta{color:var(--text-mute)}
+.dl-soon{align-self:flex-start;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.16em;color:var(--text-mute);border:1px solid var(--hairline);border-radius:999px;padding:5px 12px}
 .dl-note{margin-top:28px;color:var(--text-mute);font-size:15px;max-width:720px}
 .dl-note code{background:var(--ink-3);border-radius:6px;padding:2px 7px;font-size:13.5px}
 
