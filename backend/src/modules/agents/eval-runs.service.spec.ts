@@ -159,7 +159,8 @@ describe('EvalRunsService ownership (admin R30, R32)', () => {
     jest.mocked(runAssistantEvalCase).mockImplementationOnce(
       () =>
         new Promise((resolve) => {
-          release = () => resolve({ id: 'champion-2022', passed: true });
+          release = () =>
+            resolve({ id: 'champion-2022', passed: true } as never);
         }),
     );
     const service = new EvalRunsService(
