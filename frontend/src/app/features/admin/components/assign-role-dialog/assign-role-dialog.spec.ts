@@ -57,7 +57,7 @@ describe('AssignRoleDialog', () => {
       .expectOne((req) => req.url === '/admin/users')
       .flush(usersPage([userRow({ id: 'u-grace', displayName: 'Grace Hopper', email: 'grace@contoso.test' })]));
     r.fixture.detectChanges();
-    r.element.querySelector('[role="option"]')!.dispatchEvent(new MouseEvent('mousedown'));
+    r.element.querySelector('[role="option"]')!.dispatchEvent(new MouseEvent('click'));
     r.fixture.detectChanges();
   }
 

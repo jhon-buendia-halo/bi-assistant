@@ -62,7 +62,7 @@ describe('TransferAgentsDialog', () => {
     expect(options.map((o) => o.textContent?.trim())).toEqual([
       'Grace Hopper · grace@contoso.test',
     ]);
-    options[0].dispatchEvent(new MouseEvent('mousedown'));
+    options[0].dispatchEvent(new MouseEvent('click'));
     r.fixture.detectChanges();
   }
 

@@ -63,7 +63,8 @@ let nextId = 0;
           [id]="listId + '-' + i"
           role="option"
           [attr.aria-selected]="i === active()"
-          (mousedown)="$event.preventDefault(); choose(option)"
+          (mousedown)="$event.preventDefault()"
+          (click)="choose(option)"
           class="menu-item cursor-pointer"
           [class.bg-surface-muted]="i === active()"
         >

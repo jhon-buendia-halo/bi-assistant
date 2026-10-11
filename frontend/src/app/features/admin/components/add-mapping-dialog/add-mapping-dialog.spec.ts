@@ -57,7 +57,7 @@ describe('AddMappingDialog', () => {
       fixture.detectChanges();
       const option = element.querySelector('[role="option"]')!;
       expect(option.textContent?.trim()).toBe('Analysts');
-      option.dispatchEvent(new MouseEvent('mousedown'));
+      option.dispatchEvent(new MouseEvent('click'));
       fixture.detectChanges();
     };
     return { fixture, add, choose, pickAnalysts };
