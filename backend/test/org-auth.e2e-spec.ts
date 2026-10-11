@@ -1,8 +1,8 @@
 /**
  * API-level proof of the Feature "Org server API" in
  * specs/capabilities/admin/spec.md (sign-in, 401, 403, Origin check, role
- * assignments) and of admin R3-R13, R16, R18-R24, R27, R36 and api.md 1.9,
- * 2.13 and 2.15 (79-80). It drives the BUILT backend (`npm run build` first)
+ * assignments) and of admin R3-R13, R16, R18-R24, R27, R36, api.md 1.9,
+ * 2.13 and 2.15 (79-80), and non-functional N77 (never trust the email claim). It drives the BUILT backend (`npm run build` first)
  * in org server mode against the in-test OIDC stub (`test/oidc-stub.ts`).
  * Needs no Postgres and no Entra ID tenant.
  */
@@ -21,6 +21,8 @@ import {
 jest.setTimeout(180_000);
 
 const ADMIN = 'admin@contoso.test';
+/** A bootstrap admin whose UPN and email differ. */
+const ROOT = 'root@contoso.test';
 const ADA = { email: 'ada@contoso.test', name: 'Ada Lovelace' };
 
 interface MeView {
@@ -137,9 +139,9 @@ describe('Org server API: sign-in, 401, 403 and the Origin check', () => {
   };
 
   beforeAll(async () => {
-    // Bootstrap emails match case-insensitively (admin R18).
+    // Bootstrap user names (UPNs) match case-insensitively (admin R18).
     org = await startOrgServer({
-      bootstrapAdmins: [' ADMIN@Contoso.test ', ''],
+      bootstrapAdmins: [' ADMIN@Contoso.test ', '', ROOT.toUpperCase()],
     });
     adminCookie = await org.signIn({ email: ADMIN, name: 'Avery Admin' });
   });
@@ -349,6 +351,78 @@ describe('Org server API: sign-in, 401, 403 and the Origin check', () => {
         { role: 'platform-admin', source: 'bootstrap' },
       ]);
       expect(body.permissions).toEqual(ALL_PERMISSIONS);
+    });
+
+    it("an email claim equal to the bootstrap admin's never lands on their account nor grants Platform admin (R13, R18, N77)", async () => {
+      const adminBefore = (await me(adminCookie)).body;
+      const cookie = await org.signIn({
+        preferredUsername: 'mallory@contoso.test',
+        email: ADMIN,
+        name: 'Mallory Spoof',
+      });
+      const { status, body } = await me(cookie);
+      expect(status).toBe(200);
+      expect(body.user.id).not.toBe(adminBefore.user.id);
+      expect(body.user.displayName).toBe('Mallory Spoof');
+      expect(body.roles).toEqual([{ role: 'user', source: 'implicit' }]);
+      expect(body.permissions).toEqual(['use-agents']);
+      // The admin's account is untouched and still the only Platform admin.
+      expect((await me(adminCookie)).body).toEqual(adminBefore);
+      const scim = await org.scim(
+        `/Users?filter=${encodeURIComponent('userName eq "mallory@contoso.test"')}`,
+      );
+      const list = (await scim.json()) as {
+        totalResults: number;
+        Resources: { id: string }[];
+      };
+      expect(list.totalResults).toBe(1);
+      expect(list.Resources[0].id).toBe(body.user.id);
+    });
+
+    it('a bootstrap admin is matched by UPN, whatever their email claim (R18)', async () => {
+      const cookie = await org.signIn({
+        preferredUsername: 'Root@Contoso.test',
+        email: 'root.mail@elsewhere.test',
+        name: 'Rory Root',
+      });
+      const { body } = await me(cookie);
+      expect(body.user.email).toBe('root.mail@elsewhere.test');
+      expect(body.roles).toEqual([
+        { role: 'user', source: 'implicit' },
+        { role: 'platform-admin', source: 'bootstrap' },
+      ]);
+    });
+
+    it('a sign-in name now held by a different subject is refused, changes nothing and is recorded (R13)', async () => {
+      const adaCookie = await org.signIn(ADA);
+      const before = (await me(adaCookie)).body;
+      const { location, cookie } = await org.signInRoundTrip({
+        ...ADA,
+        sub: 'a-different-person',
+        name: 'Ada Impostor',
+      });
+      expect(location).toBe('/?signInError=failed');
+      expect(cookie).toBeNull();
+      expect((await me(adaCookie)).body).toEqual(before);
+      const refused = org
+        .sql<{ doc: string }>('SELECT doc FROM activity_events')
+        .map(
+          (r) =>
+            JSON.parse(r.doc) as {
+              type: string;
+              actorId?: string;
+              subjectId?: string;
+              details?: unknown;
+            },
+        )
+        .filter((e) => e.type === 'sign-in.refused');
+      expect(refused).toEqual([
+        expect.objectContaining({
+          subjectId: before.user.id,
+          details: { reason: 'subject-mismatch' },
+        }),
+      ]);
+      expect(refused[0].actorId).toBeUndefined();
     });
 
     it('records sign-in and the first request of the day as activity', () => {
@@ -737,6 +811,18 @@ describe('Org server configuration', () => {
     });
     expect(code).not.toBe(0);
     expect(output).toContain('missing: ORG_SCIM_TOKEN');
+  });
+
+  it('a multi-tenant issuer stops startup and names ORG_OIDC_ISSUER (R3)', async () => {
+    const { code, output } = await bootFailure(dataDir, {
+      ORG_OIDC_ISSUER: 'https://login.microsoftonline.com/common/v2.0',
+      ORG_OIDC_CLIENT_ID: 'client',
+      ORG_OIDC_CLIENT_SECRET: 'secret',
+      ORG_PUBLIC_BASE_URL: 'https://insights.example.test',
+      ORG_SCIM_TOKEN: newScimToken(),
+    });
+    expect(code).not.toBe(0);
+    expect(output).toContain('ORG_OIDC_ISSUER must name one tenant');
   });
 
   it('a SCIM token shorter than 32 characters stops startup', async () => {

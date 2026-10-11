@@ -19,8 +19,14 @@ export interface UserDoc {
   givenName?: string;
   familyName?: string;
   externalId?: string;
-  /** `<tid>:<oid>` for Entra ID, else the `sub` claim. */
+  /** `<tid>:<oid>` for Entra ID, else the `sub` claim. Never changed once set. */
   oidcSubject?: string;
+  /**
+   * The former `userName` of a user SCIM released because a different person
+   * (another `externalId`) got the name (admin R16; data-model 3.14.1). Their
+   * `userName` is then `released:<id>` and lookups by user name skip them.
+   */
+  releasedUserName?: string;
   active: boolean;
   scimDeleted?: boolean;
   source: 'scim' | 'jit';
@@ -87,6 +93,7 @@ export interface AuthSessionDoc {
 /** The `activity_events` types (data-model 3.14.7). */
 export type ActivityEventType =
   | 'sign-in'
+  | 'sign-in.refused'
   | 'sign-out'
   | 'user.active'
   | 'scim.request'

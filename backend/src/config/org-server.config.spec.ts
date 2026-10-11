@@ -32,6 +32,36 @@ describe('loadOrgServerConfig (admin R1-R4, R18)', () => {
     ).toThrow('ORG_PUBLIC_BASE_URL must be an https:// URL');
   });
 
+  it.each([
+    'https://login.microsoftonline.com/common/v2.0',
+    'https://login.microsoftonline.com/Organizations/v2.0/',
+    'https://login.microsoftonline.com/CONSUMERS/v2.0',
+    'https://login.microsoftonline.us/common',
+  ])('refuses the multi-tenant issuer %s (admin R3, N77)', (issuer) => {
+    expect(() =>
+      loadOrgServerConfig({ ...FULL, ORG_OIDC_ISSUER: issuer }),
+    ).toThrow(
+      /^ORG_OIDC_ISSUER must name one tenant \(https:\/\/login\.microsoftonline\.com\/<tenant id>\/v2\.0\), not "(common|organizations|consumers)"$/i,
+    );
+  });
+
+  it('reads the tenant id from an Entra ID issuer, and none from another issuer', () => {
+    const tenant = '0B5E0F7A-1C2D-4E3F-9A8B-7C6D5E4F3A2B';
+    expect(
+      loadOrgServerConfig({
+        ...FULL,
+        ORG_OIDC_ISSUER: `https://login.microsoftonline.com/${tenant}/v2.0`,
+      })?.tenantId,
+    ).toBe(tenant.toLowerCase());
+    expect(
+      loadOrgServerConfig({
+        ...FULL,
+        ORG_OIDC_ISSUER: 'http://127.0.0.1:4000/oidc',
+      })?.tenantId,
+    ).toBeNull();
+    expect(loadOrgServerConfig(FULL)?.tenantId).toBeNull();
+  });
+
   it('normalises URLs, the cookie flag and the bootstrap list', () => {
     const config = loadOrgServerConfig({
       ...FULL,

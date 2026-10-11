@@ -45,8 +45,8 @@ const lower = (value: unknown) =>
 
 /**
  * The OpenID Connect sign-in of org server mode (admin R6-R8, R12, R13, R16;
- * api.md 61-62): the round trip, then finding or creating the directory user
- * and starting their auth session.
+ * api.md 61-62; non-functional N77): the round trip, then finding or creating
+ * the directory user and starting their auth session.
  */
 @Injectable()
 export class SignInService {
@@ -110,8 +110,24 @@ export class SignInService {
       this.logger.warn(`Sign-in failed: ${(error as Error).message}`);
       return { ok: false, error: 'failed' };
     }
+    if (!this.fromConfiguredTenant(claims)) {
+      this.logger.warn(
+        "Sign-in refused: the ID token's tenant (tid) is not the issuer's",
+      );
+      return { ok: false, error: 'failed' };
+    }
 
     const user = await this.findOrCreateUser(claims);
+    if ('refused' in user) {
+      this.logger.warn(
+        `Sign-in refused: user ${user.refused.id} is bound to another subject`,
+      );
+      await this.activity.record('sign-in.refused', {
+        subjectId: user.refused.id,
+        details: { reason: 'subject-mismatch' },
+      });
+      return { ok: false, error: 'failed' };
+    }
     if (!isUsable(user)) return { ok: false, error: 'deactivated' };
     const token = await this.sessions.create(user, userAgent);
     await this.activity.record('sign-in', {
@@ -135,16 +151,34 @@ export class SignInService {
   }
 
   /**
-   * Match the directory user (admin R13): by the stored subject, else by
-   * user name or email, case-insensitively. Otherwise add them just in time
-   * (R12). Display name, email and the sign-in time are refreshed.
+   * A token carrying `tid` must come from the tenant the issuer names (R7).
+   * The issuer check of the ID token already implies it for Entra ID; this
+   * keeps it explicit. Skipped for an issuer that names no tenant id.
    */
-  private async findOrCreateUser(claims: OidcClaims): Promise<UserDoc> {
+  private fromConfiguredTenant(claims: OidcClaims): boolean {
+    const tenantId = this.config.tenantId;
+    if (!tenantId || claims.tid === undefined) return true;
+    return lower(claims.tid) === tenantId;
+  }
+
+  /**
+   * Match the directory user (admin R13): by the stored subject, else by
+   * `preferred_username` (the UPN) against `userName`, case-insensitively.
+   * Never by the `email` claim, which an identity provider can send
+   * unverified (N77): it is stored for display only. A user found by UPN
+   * whose recorded subject is another one is `refused`: the name now belongs
+   * to a different person. Otherwise add them just in time (R12), with the
+   * UPN, else the subject, as user name. Display name, email and the sign-in
+   * time are refreshed.
+   */
+  private async findOrCreateUser(
+    claims: OidcClaims,
+  ): Promise<UserDoc | { refused: UserDoc }> {
     const subject =
       typeof claims.tid === 'string' && typeof claims.oid === 'string'
         ? `${claims.tid}:${claims.oid}`
         : claims.sub;
-    const userName = lower(claims.preferred_username) ?? lower(claims.email);
+    const userName = lower(claims.preferred_username);
     const email =
       lower(claims.email) ?? (userName?.includes('@') ? userName : undefined);
     const now = new Date().toISOString();
@@ -159,11 +193,18 @@ export class SignInService {
       profile.familyName = claims.family_name.trim();
     }
 
+    const bySubject = await this.directory.userBySubject(subject);
     const existing =
-      (await this.directory.userBySubject(subject)) ??
-      (await this.directory.userByNameOrEmail(
-        [userName, email].filter((v): v is string => !!v),
-      ));
+      bySubject ??
+      (userName ? await this.directory.userByUserName(userName) : null);
+    if (
+      existing &&
+      !bySubject &&
+      existing.oidcSubject &&
+      existing.oidcSubject !== subject
+    ) {
+      return { refused: existing };
+    }
     if (existing) {
       if (!existing.oidcSubject) profile.oidcSubject = subject;
       if (!isUsable(existing)) return existing;

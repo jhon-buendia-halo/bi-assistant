@@ -9,6 +9,8 @@
  *
  *   const stub = await startOidcStub();
  *   stub.signInAs({ email: 'ada@contoso.test', name: 'Ada Lovelace' });
+ *   // A sign-in name (UPN) and an email claim that differ:
+ *   stub.signInAs({ preferredUsername: 'eve@contoso.test', email: 'ada@contoso.test' });
  *   // ORG_OIDC_ISSUER=stub.issuer, ORG_OIDC_CLIENT_ID=stub.clientId, ...
  *   await stub.close();
  */
@@ -26,16 +28,22 @@ import {
 } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
-/** Who the stub signs in. Only `email` is required. */
+/**
+ * Who the stub signs in. `email` or `preferredUsername` is required; each
+ * defaults to the other, so `{ email }` alone is a person whose sign-in name
+ * (UPN) is their email. The app matches people by `sub` and
+ * `preferred_username`, never by `email` (admin R13).
+ */
 export interface StubUser {
-  email: string;
-  /** Display name (`name` claim). Default: derived from the email. */
+  /** `email` claim. Default: the `preferredUsername`. */
+  email?: string;
+  /** Display name (`name` claim). Default: derived from the sign-in name. */
   name?: string;
   givenName?: string;
   familyName?: string;
-  /** `preferred_username` claim. Default: the email. */
+  /** `preferred_username` claim (the UPN). Default: the email. */
   preferredUsername?: string;
-  /** `sub` claim. Default: a stable hash of the email. */
+  /** `sub` claim. Default: a stable hash of the `preferred_username`. */
   sub?: string;
   /** Entra ID tenant and object ids; the app then keys the user by `tid:oid`. */
   tid?: string;
@@ -58,8 +66,8 @@ export interface OidcStub {
   clientSecret: string;
   /**
    * Choose who the next sign-ins authenticate as (it sticks until changed).
-   * A string is an email. `null` makes the authorize step answer
-   * `error=login_required`.
+   * A string is an email that is also the sign-in name. `null` makes the
+   * authorize step answer `error=login_required`.
    */
   signInAs(user: StubUser | string | null): void;
   /** The next authorize request answers `error=<error>` instead (once). */
@@ -82,7 +90,11 @@ const base64url = (value: Buffer | string) =>
   Buffer.from(value).toString('base64url');
 
 function toStubUser(user: StubUser | string): StubUser {
-  return typeof user === 'string' ? { email: user } : user;
+  if (typeof user === 'string') return { email: user };
+  if (!user.email && !user.preferredUsername) {
+    throw new Error('A stub user needs an email or a preferredUsername');
+  }
+  return user;
 }
 
 /** "ada.lovelace@x" → "Ada Lovelace". */
@@ -96,15 +108,17 @@ function nameFromEmail(email: string): string {
 }
 
 function claimsOf(user: StubUser): Record<string, string> {
-  const name = user.name ?? nameFromEmail(user.email);
+  const userName = (user.preferredUsername ?? user.email)!;
+  const email = user.email ?? user.preferredUsername!;
+  const name = user.name ?? nameFromEmail(userName);
   const [given, ...rest] = name.split(' ');
   const claims: Record<string, string> = {
     sub:
       user.sub ??
-      createHash('sha256').update(user.email.toLowerCase()).digest('hex'),
-    email: user.email,
+      createHash('sha256').update(userName.toLowerCase()).digest('hex'),
+    email,
     name,
-    preferred_username: user.preferredUsername ?? user.email,
+    preferred_username: userName,
     given_name: user.givenName ?? given,
     family_name: user.familyName ?? rest.join(' '),
   };

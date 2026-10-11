@@ -23,14 +23,14 @@ Capability-local vocabulary:
 
 - R1. The system SHALL run in exactly one of two modes, chosen at startup: **local mode** (the default) or **org server mode**. The mode SHALL NOT change while the server runs.
 - R2. Local mode SHALL behave exactly as the app did before org server mode existed: no sign-in page, no sign-out, one implicit **local user** who holds every permission (R21), and no **Admin** rail item. The rail avatar SHALL stay the static "D" titled "Demo User" (app-shell R4). The desktop app SHALL always run in local mode.
-- R3. Org server mode SHALL be turned on by server configuration naming the identity provider's issuer, client id and client secret, the server's public base URL and the SCIM token. Configuring some but not all of these SHALL be a startup error that names the missing settings; the server SHALL NOT start in local mode by accident. The bootstrap admin list (R18) is optional.
+- R3. Org server mode SHALL be turned on by server configuration naming the identity provider's issuer, client id and client secret, the server's public base URL and the SCIM token. Configuring some but not all of these SHALL be a startup error that names the missing settings; the server SHALL NOT start in local mode by accident. The bootstrap admin list (R18) is optional. The issuer SHALL name one tenant: an issuer whose tenant segment is one of Entra ID's shared endpoints (`common`, `organizations`, `consumers`, in any case) SHALL be a startup error that names `ORG_OIDC_ISSUER`.
 - R4. In org server mode the public base URL SHALL be an `https://` URL, except for development and automated tests, which MAY use `http://`.
 
 ### Sign-in and sign-out
 
 - R5. In org server mode, a browser without a valid auth session SHALL see the sign-in page and nothing else: no rail, no data, no list of sessions. The page SHALL show "Agentic Hub" and one **Sign in with Microsoft** button.
 - R6. **Sign in with Microsoft** SHALL send the browser to the identity provider. After the person authenticates there, the browser SHALL come back to the app signed in, on the home view.
-- R7. The sign-in round trip SHALL be protected against replay and code interception (a one-time `state`, a `nonce` and a PKCE verifier, held only for the round trip, at most 10 minutes). A round trip that fails any check, or that the identity provider reports as an error, SHALL return to the sign-in page with "Sign-in failed. Try again." and SHALL NOT create an auth session.
+- R7. The sign-in round trip SHALL be protected against replay and code interception (a one-time `state`, a `nonce` and a PKCE verifier, held only for the round trip, at most 10 minutes). A round trip that fails any check, or that the identity provider reports as an error, SHALL return to the sign-in page with "Sign-in failed. Try again." and SHALL NOT create an auth session. When the issuer names a tenant id, an ID token whose tenant (`tid`) is a different one SHALL fail the same way.
 - R8. A successful sign-in SHALL create an auth session and set it as an `HttpOnly`, `SameSite=Lax` cookie, `Secure` unless the public base URL is `http://`. The browser SHALL hold no identity-provider token.
 - R9. An auth session SHALL end after 8 hours without a request, or 7 days after sign-in, whichever comes first. A request with an ended or unknown auth session SHALL be treated as unauthenticated (R11).
 - R10. In org server mode the rail avatar SHALL show the signed-in user's initials, titled with their display name. Clicking it SHALL open a menu with their display name, their email and **Sign out**. **Sign out** SHALL end the auth session on the server, clear the cookie, end the identity-provider session, and return the browser to the sign-in page. Reloading or going back afterwards SHALL show the sign-in page.
@@ -38,13 +38,13 @@ Capability-local vocabulary:
 
 ### Directory
 
-- R12. A person who signs in and is not yet in the directory SHALL be added at that moment (**just in time**) from their sign-in claims: display name, email and user name. They start with no assigned roles, so they hold the User role only (R19).
-- R13. A person who signs in and is already in the directory SHALL be matched to their directory user, first by the identity provider's subject recorded at an earlier sign-in, else by user name or email (case-insensitive). Their display name and email SHALL be refreshed from the claims.
+- R12. A person who signs in and is not yet in the directory SHALL be added at that moment (**just in time**) from their sign-in claims: display name, email and user name. The user name SHALL be the identity provider's sign-in name (`preferred_username`; for Entra ID the UPN), else the subject. They start with no assigned roles, so they hold the User role only (R19).
+- R13. A person who signs in and is already in the directory SHALL be matched to their directory user, first by the identity provider's subject recorded at an earlier sign-in, else by their sign-in name (`preferred_username`; for Entra ID the UPN) against the directory user name, case-insensitive. The email claim SHALL NEVER be used to match a user or to grant a role (R18), because an identity provider can send it unverified. Their display name and email SHALL be refreshed from the claims; the email is kept for display and search only. When the sign-in name matches a directory user whose recorded subject is a different one, the name now belongs to another person (for example a reassigned UPN): the sign-in SHALL fail with "Sign-in failed. Try again.", SHALL change nothing on that user, and SHALL be recorded as a refused sign-in (R36). A directory user with no recorded subject yet (provisioned through SCIM, never signed in) SHALL still be matched by sign-in name, and the subject recorded.
 - R14. The identity provider SHALL be able to create, read, update and deactivate users, and create, read, update and delete groups and their memberships, through SCIM 2.0 endpoints authenticated by the SCIM bearer token. A missing or wrong token SHALL be refused with HTTP 401. SCIM requests SHALL NOT use or need an auth session.
 - R15. A user provisioned through SCIM who has not signed in yet SHALL be in the directory, with no sign-in time. When they first sign in they SHALL be matched to that user, not duplicated (R13).
-- R16. A deactivated user SHALL NOT be able to sign in: the round trip SHALL return to the sign-in page with "Your account is deactivated. Contact your administrator." Deactivating a user SHALL end all their auth sessions at once, so their next request is refused (R11). Deactivation SHALL keep their data and ownership. Reactivating them SHALL let them sign in again.
+- R16. A deactivated user SHALL NOT be able to sign in: the round trip SHALL return to the sign-in page with "Your account is deactivated. Contact your administrator." Deactivating a user SHALL end all their auth sessions at once, so their next request is refused (R11). Deactivation SHALL keep their data and ownership. Reactivating them SHALL let them sign in again. When the identity provider creates, through SCIM, a user name that a user removed through SCIM holds, that user SHALL come back under the same id, unless both carry an external id and the two differ. Then the name belongs to a different person: SCIM SHALL create a new user, and the old one SHALL be **released** from the name: it keeps its id, data and ownership, stays deactivated and hidden from SCIM, and is never matched by that name again. The same SHALL apply to a deactivated user who has signed in. Entra ID always sends the external id (the user's object id), so a departed person's records never pass to a new hire who gets their UPN.
 - R17. Groups SHALL be read-only in the app: they and their members change only through SCIM. Deleting a group SHALL remove its memberships and its group mappings.
-- R18. Every email in the bootstrap admin list SHALL hold the Platform admin role whenever that person is signed in, without a stored assignment. The match SHALL be case-insensitive. This role SHALL NOT be removable in the app; it goes away only when the email leaves the list and the server restarts.
+- R18. Every user name in the bootstrap admin list (for Entra ID a UPN, which usually looks like an email) SHALL hold the Platform admin role whenever that person is signed in, without a stored assignment. The list SHALL be matched against the directory user name (R12, R13), case-insensitively, and never against the email. This role SHALL NOT be removable in the app; it goes away only when the user name leaves the list and the server restarts.
 
 ### Roles and permissions
 
@@ -93,7 +93,7 @@ Capability-local vocabulary:
 
 ### Activity
 
-- R36. In org server mode the server SHALL record activity events for: sign-in, sign-out, a user's first request of each UTC day, SCIM requests (at most one event per minute), role assignments and removals, user deactivation and reactivation, group mappings added and removed, agent ownership transfers, and agent errors (R40). They feed the Overview (R41-R48), the last activity of each user (R39) and the last sync note (R54).
+- R36. In org server mode the server SHALL record activity events for: sign-in, refused sign-in (R13), sign-out, a user's first request of each UTC day, SCIM requests (at most one event per minute), role assignments and removals, user deactivation and reactivation, group mappings added and removed, agent ownership transfers, and agent errors (R40). They feed the Overview (R41-R48), the last activity of each user (R39) and the last sync note (R54).
 
 ### Admin panel
 
@@ -139,7 +139,7 @@ These rules cover the three tabs of the Admin area (R35): Overview (P1, [BA-164]
   | agent ownership transferred | `<admin> transferred <agent> from <former owner> to <new owner>` |
   | user deactivated / reactivated | `Entra ID deactivated <user>` / `Entra ID reactivated <user>` |
 
-  Sign-ins, sign-outs, daily activity, SCIM requests and agent errors SHALL NOT appear. With none of these events the card SHALL read "No activity yet." Recent activity is a short feed, not an audit log.
+  Sign-ins, refused sign-ins, sign-outs, daily activity, SCIM requests and agent errors SHALL NOT appear. With none of these events the card SHALL read "No activity yet." Recent activity is a short feed, not an audit log.
 - R48. **Export report** SHALL download a CSV file named `admin-report-<YYYY-MM-DD>.csv` (the UTC date) holding, at the moment of the export, the two tiles, the three Needs attention counts, the 8 weekly counts and the recent activity. A cell that starts with `=`, `+`, `-` or `@` SHALL be prefixed with `'`, so a spreadsheet never runs it as a formula.
 
 ### Users & groups (P2)
@@ -184,15 +184,20 @@ These rules cover the three tabs of the Admin area (R35): Overview (P1, [BA-164]
 ## Edge cases and errors
 
 - Org server configuration with an issuer but no SCIM token: the server exits at startup with an error naming `ORG_SCIM_TOKEN`.
+- An issuer for a shared Entra ID endpoint, such as `https://login.microsoftonline.com/common/v2.0`: the server exits at startup with an error naming `ORG_OIDC_ISSUER` (R3).
+- An ID token from another tenant than the issuer's: "Sign-in failed. Try again.", no auth session (R7).
+- A person whose email claim equals another user's email, or a bootstrap admin's, but whose sign-in name differs: they are matched or added by their own sign-in name only. They never land on the other user's account and don't get Platform admin (R13, R18).
+- A token without `preferred_username`: the person is matched by subject only, and a just-in-time user takes the subject as user name (R12).
+- A person signs in with a sign-in name that a directory user who signed in before holds under another subject (a reassigned UPN): "Sign-in failed. Try again.", no auth session, that user unchanged, a refused sign-in recorded (R13). The new person can sign in once the identity provider has removed the departed user through SCIM and provisioned them (R16); signing in before being provisioned stays refused.
 - The identity provider is unreachable when **Sign in with Microsoft** is clicked: the sign-in page shows "Sign-in failed. Try again."
 - A sign-in that returns after more than 10 minutes, or with a `state` that doesn't match: "Sign-in failed. Try again.", no auth session.
 - A return address that points outside the app after sign-in is ignored; the browser lands on the home view.
 - Two browsers signed in as the same user each have their own auth session. Signing out in one leaves the other signed in.
 - A user removed from a mapped group loses the mapped role on their next request; a role they also hold directly stays.
 - A Maker whose Maker role is removed while the agent editor is open: **Save** is refused with HTTP 403 and the toast "You don't have permission to do this."; the form keeps its content. The **New agent** button is gone after the next reload of the permissions (the next page load).
-- A SCIM request to create a user whose user name already exists: HTTP 409 in SCIM error format, nothing changed.
+- A SCIM request to create a user whose user name an active user holds, or a deactivated one that R16 doesn't release: HTTP 409 in SCIM error format, nothing changed.
 - A SCIM request for an unknown user or group id: HTTP 404 in SCIM error format.
-- Deleting a user through SCIM deactivates them (R16) and hides them from later SCIM reads; their data and ownership stay.
+- Deleting a user through SCIM deactivates them (R16) and hides them from later SCIM reads; their data and ownership stay. Creating their user name again brings the same user back when the external ids match or either is missing, and creates a new user when both are present and differ (R16).
 - A bootstrap admin who is deactivated cannot sign in; the bootstrap list does not override deactivation.
 - A request from a page served by another origin (a cross-site form post): HTTP 403, nothing changed (R27).
 - Pointing an org server at a data directory that a local-mode app used: the old items have no owner and nobody sees them (R33). Moving local data into an org server is out of scope.
@@ -391,10 +396,29 @@ Feature: Private and shared data
 
 ### Feature: Org server API
 
-E2E: API-level, not Playwright: `backend/test/org-auth.e2e-spec.ts` (the 401, 403, cross-site and sign-in scenarios, and the role assignment routes), `backend/test/scim.e2e-spec.ts` (the three SCIM scenarios), `backend/test/owner-isolation.e2e-spec.ts` (private collections) and `backend/test/local-auth.e2e-spec.ts` (local mode).
+E2E: API-level, not Playwright: `backend/test/org-auth.e2e-spec.ts` (the 401, 403, cross-site and sign-in scenarios, and the role assignment routes), `backend/test/scim.e2e-spec.ts` (the four SCIM scenarios), `backend/test/owner-isolation.e2e-spec.ts` (private collections) and `backend/test/local-auth.e2e-spec.ts` (local mode).
 
 ```gherkin
 Feature: Org server API
+
+  Scenario: An email claim never matches a user or grants a role
+    Given the app runs in org server mode with "admin@contoso.test" as a bootstrap admin
+    And "admin@contoso.test" (Avery Admin) has signed in
+    When I sign in as "mallory@contoso.test" with the email claim "admin@contoso.test"
+    Then "GET /me" answers a user other than Avery Admin, with the User role only
+    And "GET /me" as Avery Admin still answers "Avery Admin" with Platform admin
+
+  Scenario: A sign-in name now held by a different person is refused
+    Given "ada@contoso.test" (Ada Lovelace) has signed in
+    When a different person, with another subject, signs in as "ada@contoso.test"
+    Then the sign-in returns with "signInError=failed" and no auth session
+    And "GET /me" as Ada still answers "Ada Lovelace"
+    And a "sign-in.refused" activity event with the reason "subject-mismatch" names Ada's account
+
+  Scenario: Bootstrap admins are matched by sign-in name
+    Given the app runs in org server mode with "root@contoso.test" as a bootstrap admin
+    When I sign in as "root@contoso.test" with the email claim "root.mail@elsewhere.test"
+    Then "GET /me" lists the Platform admin role from the bootstrap list
 
   Scenario: Every route refuses an unauthenticated request
     Given the app runs in org server mode
@@ -420,6 +444,14 @@ Feature: Org server API
     Then SCIM lists Ada, the group "Analysts" and Ada as its member
     When it sets Ada's "active" to false
     Then Ada's auth sessions are ended and she cannot sign in
+
+  Scenario: SCIM gives a departed user's name to a new person
+    Given "leaver@contoso.test" with the external id "oid-old" was provisioned through SCIM, signed in and created a session
+    And the identity provider removed "leaver@contoso.test" through SCIM
+    When the identity provider creates "leaver@contoso.test" with the external id "oid-new" through SCIM
+    Then it answers HTTP 201 with a new user id
+    And the new person signs in as "leaver@contoso.test" to that new user and lists no sessions
+    And the departed person's sign-in answers "signInError=deactivated"
 
   Scenario: A group mapping grants its role to the group's members
     Given the group "Analysts" is mapped to the Maker role

@@ -43,24 +43,33 @@ export class DirectoryRepository {
     return this.users.findOne({ oidcSubject: subject });
   }
 
-  /** By user name, case-insensitively. */
+  /**
+   * By user name, case-insensitively. Sign-in matches on this, never on the
+   * email (admin R13). A released user (admin R16) is never found.
+   */
   async userByUserName(userName: string): Promise<UserDoc | null> {
     const wanted = lower(userName);
     return (
-      (await this.users.find()).find((u) => lower(u.userName) === wanted) ??
-      null
+      (await this.users.find()).find(
+        (u) => u.releasedUserName === undefined && lower(u.userName) === wanted,
+      ) ?? null
     );
   }
 
-  /** By user name or email, case-insensitively (admin R13). */
-  async userByNameOrEmail(values: string[]): Promise<UserDoc | null> {
-    const wanted = new Set(values.map(lower).filter(Boolean));
-    if (!wanted.size) return null;
-    const all = await this.users.find({}, { sort: { createdAt: 1 } });
-    return (
-      all.find((u) => wanted.has(lower(u.userName))) ??
-      all.find((u) => u.email !== undefined && wanted.has(lower(u.email))) ??
-      null
+  /**
+   * Free a user's name for a different person (admin R16; data-model
+   * 3.14.1): the user keeps its id, so its data and ownership, but is
+   * deactivated, hidden from SCIM and never found by user name again.
+   */
+  releaseUserName(user: UserDoc): Promise<UserDoc | null> {
+    return this.users.update(
+      { id: user.id },
+      {
+        userName: `released:${user.id}`,
+        releasedUserName: user.userName,
+        active: false,
+        scimDeleted: true,
+      },
     );
   }
 

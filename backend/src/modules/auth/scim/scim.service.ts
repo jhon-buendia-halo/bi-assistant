@@ -197,7 +197,11 @@ export class ScimService {
   async createUser(body: unknown): Promise<ScimUserResource> {
     const input = this.readUser(body);
     const userName = this.requireUserName(input.userName);
-    const existing = await this.directory.userByUserName(userName);
+    let existing = await this.directory.userByUserName(userName);
+    if (existing && this.isSomeoneElse(existing, input.externalId)) {
+      await this.release(existing);
+      existing = null;
+    }
     if (existing && !existing.scimDeleted) {
       throw new ScimError(409, `User ${userName} already exists`, 'uniqueness');
     }
@@ -284,6 +288,29 @@ export class ScimService {
       active: working.active ?? user.active,
     });
     return this.renderUser(saved);
+  }
+
+  /**
+   * Whether a create of `user`'s name is for a different person (admin R16;
+   * api.md 2.14): `user` was removed through SCIM, or is deactivated and has
+   * signed in, and both carry an `externalId` and the two differ. Without an
+   * `externalId` on either side the old user comes back as before.
+   */
+  private isSomeoneElse(user: UserDoc, externalId?: string): boolean {
+    const gone = !!user.scimDeleted || (!user.active && !!user.oidcSubject);
+    return (
+      gone &&
+      !!externalId &&
+      !!user.externalId &&
+      user.externalId !== externalId
+    );
+  }
+
+  /** Free the name; the user keeps its id, data and ownership (R16). */
+  private async release(user: UserDoc): Promise<void> {
+    await this.directory.releaseUserName(user);
+    await this.sessions.endAllOf(user.id);
+    await this.directory.removeFromAllGroups(user.id);
   }
 
   /** Deactivate, hide from SCIM, end sessions, leave groups (api.md 2.14). */
