@@ -161,7 +161,7 @@ export class DataModelsController {
 
   /**
    * Logical query compiler, exposed for the editor (1.2.3) and for e2e
-   * (ADR-0007 / roadmap 1.2.2): pure — resolves the query against the
+   * (ADR-0013 / roadmap 1.2.2): pure — resolves the query against the
    * dataset's current model and emits SQL, with no database call. `dialect`
    * defaults to `postgres` when omitted (there is no live datasource to ask
    * here, unlike `/model/query` below).
@@ -312,7 +312,7 @@ export class DataModelsController {
 
   /** `sql` bindings compile for the datasource's actual kind (postgres or
    * databricks); `rest` always compiles as sqlite, matching the
-   * materialise-to-SQLite path (ADR-0007). The kind->dialect mapping itself
+   * materialise-to-SQLite path (ADR-0013). The kind->dialect mapping itself
    * is `dialectForDatasourceKind` (`query/sql-repair.ts`), shared with
    * `SessionsService.dialectForEntity` — this method keeps only the
    * datasource lookup/fallback, which differs per caller. */

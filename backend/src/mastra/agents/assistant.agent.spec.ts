@@ -1,5 +1,5 @@
 /**
- * ADR-0007 / roadmap 1.2.2's hard constraint: the assistant must never see a
+ * ADR-0013 / roadmap 1.2.2's hard constraint: the assistant must never see a
  * physical table name or a dialect word. This asserts it two ways — the
  * static instructions, and the rendered model block a real turn would see
  * for the World Cup fixture — so the guarantee holds for both halves of

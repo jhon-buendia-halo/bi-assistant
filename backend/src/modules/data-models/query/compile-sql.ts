@@ -1,5 +1,5 @@
 /**
- * The logical query compiler (ADR-0007 §3): turns a resolved `LogicalQuery`
+ * The logical query compiler (ADR-0013 §3): turns a resolved `LogicalQuery`
  * into dialect SQL. One function, three dialects — Postgres, Databricks SQL
  * and SQLite (the `rest` adapter's materialisation target) — so every
  * dialect quirk (quoting, date functions, bucket truncation) lives in this
@@ -303,7 +303,7 @@ function metricExpr(
       : undefined;
     return aggregateExpr(metric.agg, of, where);
   }
-  // Dialect-tagged escape hatch (ADR-0006): written against the binding's own
+  // Dialect-tagged escape hatch (ADR-0012): written against the binding's own
   // physical columns of this entity, inserted verbatim.
   return metric.expressions!.sql!;
 }

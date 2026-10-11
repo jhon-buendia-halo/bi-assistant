@@ -6,7 +6,7 @@ import { logicalQuerySchema } from '../../modules/data-models/query/logical-quer
 export const queryFixOutputSchema = z.object({ query: logicalQuerySchema });
 
 /**
- * Replaces `sql-fixer` for compile/semantic failures (ADR-0007 §6):
+ * Replaces `sql-fixer` for compile/semantic failures (ADR-0013 §6):
  * `query_entities` runs this once, automatically, before an
  * `unknown_attribute` / `unknown_metric` / `ambiguous_path` issue ever
  * reaches the assistant as an error. `sql-fixer` keeps its old job — a

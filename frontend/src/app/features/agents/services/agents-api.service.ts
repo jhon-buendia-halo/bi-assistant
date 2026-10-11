@@ -130,7 +130,7 @@ export interface EvalRunView {
   startedAt: string;
   finishedAt?: string;
   /**
-   * Which path this run exercised (ADR-0007, roadmap 1.2.2): `model` (the
+   * Which path this run exercised (ADR-0013, roadmap 1.2.2): `model` (the
    * current logical-query-layer assistant) or `legacy` (the pre-change
    * SQL-writing assistant, for comparison). Absent on a run persisted before
    * this field existed — treat as `model`.

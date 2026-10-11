@@ -19,13 +19,13 @@ import { watchSessionWorkspaceRegistry } from './session-workspaces';
 export const mastra = new Mastra({
   agents: {
     assistant: assistantAgent,
-    // Pre-ADR-0007 assistant, kept only for the eval harness's `legacy` vs
+    // Pre-ADR-0013 assistant, kept only for the eval harness's `legacy` vs
     // `model` comparison (roadmap 1.2.2 §7) — never exposed on a user-facing
     // surface.
     'assistant-legacy': assistantLegacyAgent,
     visualization: visualizationAgent,
     // Runtime repair of a *compiled* statement that fails to execute — still
-    // needed as a safety net under the logical query layer (ADR-0007 §6).
+    // needed as a safety net under the logical query layer (ADR-0013 §6).
     'sql-fixer': sqlFixerAgent,
     // Compile/semantic repair at the logical level — replaces `sql-verifier`
     // (removed; nothing else depended on it) for `query_entities`'s one

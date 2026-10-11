@@ -2,7 +2,7 @@
  * `model.tools.ts` only imports `@mastra/core/tools` (safe under Jest) —
  * see `assistant.agent.spec.ts`'s header for why `@mastra/core/agent` is not
  * safe to import here. Covers the BA-86 review findings: `sql`/`correctedSql`
- * never reach the model's own tool result (ADR-0007 §4), `run_raw_sql`
+ * never reach the model's own tool result (ADR-0013 §4), `run_raw_sql`
  * resolves its datasource from `entity` (no `datasourceId` input), execution
  * errors are sanitised of physical names, and `query_entities` reports every
  * resolver issue, not just the first.

@@ -53,7 +53,7 @@ export interface SqlRunResult {
 
 /** A `query_entities` run: the executed SQL's result, plus what the compiler
  * resolved it against — provenance the turn record and a visual's data
- * provenance both need (ADR-0007). */
+ * provenance both need (ADR-0013). */
 export interface LogicalQueryRunResult extends SqlRunResult {
   /** Logical entity names the compiled query touched (root + joins). */
   entities: string[];
@@ -62,7 +62,7 @@ export interface LogicalQueryRunResult extends SqlRunResult {
    * `DatasetToolServices` return value) for the turn record/visual
    * provenance to use — `mastra/tools/model.tools.ts`'s `queryEntitiesTool`
    * strips it (and `correctedSql`) before handing the result back to the
-   * model (ADR-0007 §4: no physical SQL text re-enters the model's own
+   * model (ADR-0013 §4: no physical SQL text re-enters the model's own
    * context/memory). */
   sql: string;
 }
@@ -146,7 +146,7 @@ export interface DatasetToolServices {
     datasets: string[],
   ): Promise<SqlRunResult>;
   /**
-   * The composed `SessionModel` (ADR-0007) for this session's datasets —
+   * The composed `SessionModel` (ADR-0013) for this session's datasets —
    * what `model.tools.ts`'s `list_entities`/`describe_entity`/`sample_records`
    * read from and what `query_entities` compiles against.
    */

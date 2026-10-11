@@ -401,7 +401,7 @@ export class AgentDetail implements OnDestroy {
     return new Date(run.startedAt).toLocaleString();
   }
 
-  /** `model` (ADR-0007's logical-query-layer assistant, the default) or
+  /** `model` (ADR-0013's logical-query-layer assistant, the default) or
    * `legacy` (the pre-change SQL-writing assistant) — absent on a run
    * persisted before this field existed, which ran the (then only) path
    * `model` now names. */

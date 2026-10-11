@@ -48,7 +48,7 @@ describe('lastSuccessfulSqlRecord', () => {
     expect(lastSuccessfulSqlRecord(records)?.input).toBe('SELECT 2');
   });
 
-  it("recognises query_entities records too (the model path's data-query tool, ADR-0007)", () => {
+  it("recognises query_entities records too (the model path's data-query tool, ADR-0013)", () => {
     const records: ToolDataRecord[] = [
       {
         tool: 'query_entities',
@@ -130,7 +130,7 @@ describe('runResultSetCheck', () => {
     );
   });
 
-  it('matches against a query_entities record just as it would a run_readonly_sql one (the model path, ADR-0007)', async () => {
+  it('matches against a query_entities record just as it would a run_readonly_sql one (the model path, ADR-0013)', async () => {
     const runReadOnlySql = jest.fn().mockResolvedValue({
       columns: ['champion'],
       rows: [{ champion: 'Argentina' }],

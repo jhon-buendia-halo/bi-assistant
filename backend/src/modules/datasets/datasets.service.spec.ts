@@ -25,7 +25,7 @@ function build(
       ),
     delete: jest.fn().mockResolvedValue(1),
   };
-  // `DataModelsService` is a separate module (ADR-0006); `DatasetsService`
+  // `DataModelsService` is a separate module (ADR-0012); `DatasetsService`
   // only calls through its bootstrap/drift/delete bridge, so a plain fake
   // is enough here — no need to pull in the real service and its own deps.
   const dataModels = {

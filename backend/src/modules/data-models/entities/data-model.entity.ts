@@ -1,5 +1,5 @@
 /**
- * The storage-neutral data model DSL (ADR-0006): a logical description of a
+ * The storage-neutral data model DSL (ADR-0012): a logical description of a
  * dataset's entities, relationships and metrics that the assistant reasons
  * over, kept independent of the physical store it happens to be bound to
  * today. One `DataModel` document per dataset; versions are immutable and a
@@ -64,7 +64,7 @@ export interface Attribute {
  * a query does. `columns` is only needed when the physical name differs
  * from the attribute's own name; omitting it means "same name".
  *
- * Only `sql` and `rest` have adapters in the beta (ADR-0006); `mongo` and
+ * Only `sql` and `rest` have adapters in the beta (ADR-0012); `mongo` and
  * `file` are accepted so a model can describe a dataset ahead of its
  * adapter landing, without a breaking shape change later.
  */
@@ -144,7 +144,7 @@ export interface Relationship {
  * Comparison operators for a portable predicate (below). Deliberately a
  * closed set rather than "any SQL expression" — this is what keeps a
  * predicate dialect-neutral and safe to compile against Postgres,
- * Databricks SQL or an in-process filter alike (ADR-0007's logical query
+ * Databricks SQL or an in-process filter alike (ADR-0013's logical query
  * layer is the consumer).
  */
 export type PredicateOp =
@@ -184,7 +184,7 @@ export type Aggregation =
 
 /**
  * The semantic layer entry, migrated here from the standalone `metrics`
- * table (ADR-0006) so a metric is addressed through the model instead of a
+ * table (ADR-0012) so a metric is addressed through the model instead of a
  * separate `catalog.schema.table` string. `agg`/`of` cover the common
  * aggregation shape; `expressions.sql` is the dialect-tagged escape hatch
  * for anything the portable core cannot express yet — both may be present

@@ -1,5 +1,5 @@
 /**
- * Orchestrates the data model DSL (ADR-0006): bootstrap on first save,
+ * Orchestrates the data model DSL (ADR-0012): bootstrap on first save,
  * merge-on-resave for newly included tables (`mergeSnapshot`, review
  * finding 1), drift reporting, YAML-edited versions, revert, reference
  * resolution, and the metrics-panel sync (`syncMetric` / `removeMetric`)
@@ -91,7 +91,7 @@ export class DataModelsService implements OnModuleInit {
   ) {}
 
   /**
-   * Every existing dataset gets a model v1 with no user action (ADR-0006).
+   * Every existing dataset gets a model v1 with no user action (ADR-0012).
    * One dataset's bootstrap failing (an invalid snapshot, a storage hiccup)
    * must never take the rest of the app down with it — each is isolated in
    * its own try/catch, logged, and skipped (review finding 4).
@@ -124,7 +124,7 @@ export class DataModelsService implements OnModuleInit {
 
   /**
    * The current version's `DataModel` for every dataset named, paired with
-   * its dataset — exactly the shape `composeSessionModel` (ADR-0007) takes.
+   * its dataset — exactly the shape `composeSessionModel` (ADR-0013) takes.
    * A dataset with no model yet (should not happen post-bootstrap, but a
    * session can still name a since-deleted dataset) is silently skipped
    * rather than failing the whole session's context.
@@ -187,7 +187,7 @@ export class DataModelsService implements OnModuleInit {
 
   /**
    * Compares the current version against a fresh snapshot and stores the
-   * result as `lastDrift` — never creates a version (ADR-0006: "a changed
+   * result as `lastDrift` — never creates a version (ADR-0012: "a changed
    * snapshot yields a drift report, not a new version").
    */
   async recordDrift(dataset: DatasetDoc): Promise<DriftReport> {
@@ -385,7 +385,7 @@ export class DataModelsService implements OnModuleInit {
   /**
    * roadmap 1.2.3 — `POST /datasets/:name/model/import`: the same
    * validation path as `saveYaml` (one write path, one validator per
-   * ADR-0006), but recorded as its own `source: 'import'` so the version
+   * ADR-0012), but recorded as its own `source: 'import'` so the version
    * history can tell "typed/pasted in the editor" from "brought in from a
    * file" apart.
    */
@@ -705,7 +705,7 @@ export class DataModelsService implements OnModuleInit {
   // entirely, rather than overwriting or deleting the model's own
   // definition. For every other name (nothing the model authored directly),
   // the legacy store stays authoritative and the mirror behaves exactly as
-  // it did under ADR-0006/1.2.1. ---
+  // it did under ADR-0012/1.2.1. ---
 
   /**
    * Mirrors a metrics-panel write into every current model: first removes

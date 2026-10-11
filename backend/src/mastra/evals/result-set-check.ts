@@ -20,7 +20,7 @@ export interface ResultSetCheckOptions {
 }
 
 /** The data-query tool each eval path actually has: `run_readonly_sql` on
- * `legacy`, `query_entities` on `model` (ADR-0007) — a check that only ever
+ * `legacy`, `query_entities` on `model` (ADR-0013) — a check that only ever
  * recognised `run_readonly_sql` silently found nothing to compare on the
  * `model` path (every result-set check "passed" by reporting "the agent ran
  * no successful run_readonly_sql", which a path-blind reading of the report

@@ -1,5 +1,5 @@
 /**
- * The DSL's stable reference grammar (ADR-0006): every addressable element
+ * The DSL's stable reference grammar (ADR-0012): every addressable element
  * of a `DataModel` — an entity, an attribute, a metric, a relationship —
  * has one textual address that survives round-tripping through YAML, a
  * prompt, or the Knowledge Store's mapping target (the ADR this is written

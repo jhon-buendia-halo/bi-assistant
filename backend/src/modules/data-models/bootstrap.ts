@@ -1,5 +1,5 @@
 /**
- * Bootstraps a v1 `DataModel` from a dataset's physical snapshot (ADR-0006:
+ * Bootstraps a v1 `DataModel` from a dataset's physical snapshot (ADR-0012:
  * "v1 is bootstrapped from the physical snapshot automatically"). Pure and
  * side-effect free save for logging (`Logger.warn`/`.error` calls record
  * dropped data so a silent, lossy bootstrap is at least visible in the
@@ -31,7 +31,7 @@ import { validateDataModel } from './schema/data-model.schema';
 
 const logger = new Logger('data-models/bootstrap');
 
-/** Prompt-grounding sample budget per attribute (ADR-0006's `Attribute.samples`). */
+/** Prompt-grounding sample budget per attribute (ADR-0012's `Attribute.samples`). */
 const MAX_SAMPLES = 6;
 
 /** A column whose name alone implies it is an identity, not a measure. */

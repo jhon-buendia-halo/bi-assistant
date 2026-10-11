@@ -132,7 +132,7 @@ const relationshipSchema = z
   .meta({ id: 'Relationship' });
 
 /** Exported for `query/logical-query.ts` — the logical query layer's `where`
- * and metrics' `where` share this exact operator set (ADR-0007: a portable
+ * and metrics' `where` share this exact operator set (ADR-0013: a portable
  * predicate dialect-neutral enough to compile to any binding kind). */
 export const predicateOpSchema = z.enum([
   'eq',
@@ -662,7 +662,7 @@ function columnOverrideLookup(
 }
 
 /**
- * Drift check against a physical snapshot (ADR-0006: "later snapshots
+ * Drift check against a physical snapshot (ADR-0012: "later snapshots
  * produce a drift report, never an overwrite"). A `sql`/`rest` binding
  * whose table/endpoint is not in the snapshot *at all* is rejected outright
  * (review finding 5) — unlike `drift.ts`, which tracks an established

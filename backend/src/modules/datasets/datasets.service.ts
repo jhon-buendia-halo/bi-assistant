@@ -53,7 +53,7 @@ export class DatasetsService {
   /**
    * Validate the selection against its datasource, enrich the schema snapshot
    * with real sample values, and upsert the dataset by name. The first save
-   * of a dataset bootstraps its data model (ADR-0006); every save after that
+   * of a dataset bootstraps its data model (ADR-0012); every save after that
    * only records drift against the current version — re-saving never
    * overwrites it.
    */

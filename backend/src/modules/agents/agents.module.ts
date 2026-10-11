@@ -16,7 +16,7 @@ import { EvalRunsRepository } from './repositories/eval-runs.repository';
   // so create_visual/update_visual work the way they do in a real chat turn.
   // KnowledgeModule: same curated-knowledge block a real chat turn gets.
   // UserAgentsModule: user-agent storage, merged into the agent catalogue.
-  // MetricsModule: the `legacy` eval path's curated-metrics block (ADR-0007
+  // MetricsModule: the `legacy` eval path's curated-metrics block (ADR-0013
   // §7) — the `model` path gets metrics from the rendered model block.
   imports: [
     MastraModule,

@@ -1,5 +1,5 @@
 /**
- * Small, DI-free pieces of the execution-guided SQL repair loop (ADR-0007
+ * Small, DI-free pieces of the execution-guided SQL repair loop (ADR-0013
  * §6), shared by `SessionsService` (`query_entities`/chat) and
  * `DataModelsController` (`POST /datasets/:name/model/query`, the API/CLI
  * path) so both run a failed statement past `sql-fixer` the same way rather
@@ -13,7 +13,7 @@ import type { DatasourceKind } from '../../datasources/entities/datasource.entit
 import type { SqlDialect } from './compile-sql';
 
 /** `sql` bindings compile for the datasource's actual kind; `rest` always
- * compiles as sqlite, matching the materialise-to-SQLite path (ADR-0007 §4).
+ * compiles as sqlite, matching the materialise-to-SQLite path (ADR-0013 §4).
  * Was duplicated almost verbatim between `SessionsService.dialectForEntity`
  * and `DataModelsController.dialectFor` — both now call this for the
  * kind->dialect mapping and keep only their own async lookup/fallback. */

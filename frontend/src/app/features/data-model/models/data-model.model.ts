@@ -1,5 +1,5 @@
 /**
- * The storage-neutral data model DSL (ADR-0006), mirrored from
+ * The storage-neutral data model DSL (ADR-0012), mirrored from
  * `backend/src/modules/data-models/entities/data-model.entity.ts`. Copied
  * rather than imported across the frontend/backend boundary (there is no
  * shared package) — keep this file's shapes in lockstep with the backend

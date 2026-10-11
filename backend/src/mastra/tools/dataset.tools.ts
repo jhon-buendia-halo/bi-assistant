@@ -19,7 +19,7 @@ interface EntityAccess {
 }
 
 /**
- * Exported for `model.tools.ts` (ADR-0007): `run_raw_sql`'s fallback needs
+ * Exported for `model.tools.ts` (ADR-0013): `run_raw_sql`'s fallback needs
  * the same session-dataset-names and single-datasource resolution as the
  * legacy `run_readonly_sql` below, so it reuses these instead of a second
  * copy that could drift from this one.

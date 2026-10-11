@@ -30,7 +30,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  // ADR-0007 §7: `model` (default) runs the current logical-query-layer
+  // ADR-0013 §7: `model` (default) runs the current logical-query-layer
   // assistant; `legacy` runs the pre-change SQL-writing assistant, for a
   // side-by-side comparison.
   const path: AssistantEvalPath =
@@ -50,7 +50,7 @@ async function main(): Promise<void> {
     const knowledgeBlock = await app
       .get(KnowledgeService)
       .definitionBlock(datasets);
-    // Only the `legacy` path needs the pre-ADR-0007 curated-metrics block.
+    // Only the `legacy` path needs the pre-ADR-0013 curated-metrics block.
     const metricsBlock =
       path === 'legacy'
         ? await app
