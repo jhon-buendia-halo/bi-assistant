@@ -940,7 +940,7 @@ interface ActivityItem { id: string; type: string; at: string; text: string }   
 - Errors: the `page` / `pageSize` messages of endpoint 83.
 
 #### 88. `GET /admin/role-mappings`
-- Response `200`: `{ mappings: GroupRoleMappingView[] }`, sorted by group name then role, where `GroupRoleMappingView = GroupRoleMappingDoc & { groupName: string; datasourceName?: string }` ([data-model.md](data-model.md) 3.14.5).
+- Response `200`: `{ mappings: GroupRoleMappingView[] }`, sorted by group name (case-insensitive), then role in badge order (Platform admin, Approver, Data owner, Maker), then datasource name, where `GroupRoleMappingView = GroupRoleMappingDoc & { groupName: string; datasourceName?: string }` ([data-model.md](data-model.md) 3.14.5).
 
 #### 89. `POST /admin/role-mappings`
 - Body: `{ groupId: string; role: RoleId; datasourceId?: string }`, with the same rules as endpoint 79.

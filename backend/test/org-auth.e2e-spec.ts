@@ -132,6 +132,9 @@ const ROUTES: [method: string, path: string, permission: string][] = [
   ['PUT', '/admin/users/u1/roles', 'manage-users'],
   ['POST', '/admin/agents/transfer', 'manage-users'],
   ['GET', '/admin/groups', 'manage-users'],
+  ['GET', '/admin/role-mappings', 'manage-users'],
+  ['POST', '/admin/role-mappings', 'manage-users'],
+  ['DELETE', '/admin/role-mappings/m1', 'manage-users'],
 ];
 
 describe('Org server API: sign-in, 401, 403 and the Origin check', () => {

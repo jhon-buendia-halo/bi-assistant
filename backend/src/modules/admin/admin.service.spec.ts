@@ -562,6 +562,92 @@ describe('AdminService.transferAgents (api.md 86; admin R43, R64)', () => {
   });
 });
 
+describe('AdminService group mappings (api.md 89, 90; admin R66-R68)', () => {
+  it('adds a mapping once, records it, and removes it', async () => {
+    const t = setup();
+    await directoryWithPeople(t);
+    const added = await t.admin.addMapping(
+      { groupId: 'g-analysts', role: 'data-owner', datasourceId: 'ds-1' },
+      'admin',
+    );
+    expect(added.created).toBe(true);
+    expect(added.mapping).toMatchObject({
+      groupId: 'g-analysts',
+      role: 'data-owner',
+      datasourceId: 'ds-1',
+      createdBy: 'admin',
+      groupName: 'Analysts',
+      datasourceName: 'World Cup',
+    });
+    const again = await t.admin.addMapping(
+      { groupId: 'g-analysts', role: 'data-owner', datasourceId: 'ds-1' },
+      'admin',
+    );
+    expect(again).toMatchObject({
+      created: false,
+      mapping: { id: added.mapping.id },
+    });
+    expect(await t.eventsOf('mapping.added')).toEqual([
+      {
+        actorId: 'admin',
+        subjectId: 'g-analysts',
+        details: {
+          role: 'data-owner',
+          datasourceId: 'ds-1',
+          mappingId: added.mapping.id,
+        },
+      },
+    ]);
+
+    await t.admin.removeMapping(added.mapping.id, 'admin');
+    expect(await t.eventsOf('mapping.removed')).toEqual([
+      {
+        actorId: 'admin',
+        subjectId: 'g-analysts',
+        details: {
+          role: 'data-owner',
+          datasourceId: 'ds-1',
+          mappingId: added.mapping.id,
+        },
+      },
+    ]);
+    await expect(
+      t.admin.removeMapping(added.mapping.id, 'admin'),
+    ).rejects.toMatchObject({
+      status: 404,
+      message: `Group mapping ${added.mapping.id} not found`,
+    });
+  });
+
+  it.each([
+    [{ groupId: 'g-analysts', role: 'wizard' }, 400, 'Unknown role: wizard'],
+    [{ groupId: 'g-analysts', role: 'user' }, 400, 'The User role is implicit'],
+    [
+      { groupId: 'g-analysts', role: 'data-owner' },
+      400,
+      'Data owner needs a datasource',
+    ],
+    [
+      { groupId: 'g-analysts', role: 'maker', datasourceId: 'ds-1' },
+      400,
+      'Only Data owner takes a datasource',
+    ],
+    [{ groupId: 'g-gone', role: 'maker' }, 404, 'Group g-gone not found'],
+    [
+      { groupId: 'g-analysts', role: 'data-owner', datasourceId: 'ds-gone' },
+      404,
+      'Datasource ds-gone not found',
+    ],
+  ])('refuses %j with %i', async (dto, status, message) => {
+    const t = setup();
+    await directoryWithPeople(t);
+    await expect(
+      t.admin.addMapping(dto as never, 'admin'),
+    ).rejects.toMatchObject({ status, message });
+    expect(await t.eventsOf('mapping.added')).toEqual([]);
+  });
+});
+
 describe('AdminReadService users (api.md 83, 84; admin R49-R54, R59-R61)', () => {
   async function directory(t: Testbed) {
     await directoryWithPeople(t);
@@ -768,7 +854,7 @@ describe('AdminReadService users (api.md 83, 84; admin R49-R54, R59-R61)', () =>
   });
 });
 
-describe('AdminReadService groups (api.md 87; admin R55)', () => {
+describe('AdminReadService groups and mappings (api.md 87, 88; admin R55, R66)', () => {
   it('lists groups with members and mapped roles, searchable and paged', async () => {
     const t = setup();
     await directoryWithPeople(t);
@@ -806,6 +892,28 @@ describe('AdminReadService groups (api.md 87; admin R55)', () => {
     await expect(t.read.listGroups({ page: '-1' })).rejects.toMatchObject({
       status: 400,
       message: 'page must be a positive integer',
+    });
+  });
+
+  it('lists every mapping sorted by group name then role', async () => {
+    const t = setup();
+    await directoryWithPeople(t);
+    await t.group('g-board', 'Board');
+    await t.map('g-analysts', 'maker');
+    await t.map('g-board', 'approver');
+    await t.map('g-analysts', 'data-owner', 'ds-1');
+    const { mappings } = await t.read.listMappings();
+    expect(
+      mappings.map((m) => [m.groupName, m.role, m.datasourceName ?? null]),
+    ).toEqual([
+      ['Analysts', 'data-owner', 'World Cup'],
+      ['Analysts', 'maker', null],
+      ['Board', 'approver', null],
+    ]);
+    expect(mappings[0].id).toMatch(/^m-g-analysts-/);
+    expect(mappings[0]).toMatchObject({
+      groupId: 'g-analysts',
+      createdBy: 'admin',
     });
   });
 });

@@ -1,10 +1,11 @@
 /**
- * API-level proof of the admin screens P2 and P3 (specs/capabilities/admin/spec.md
- * R49-R64; api.md 2.15, endpoints 83-87; data-model 3.14.8): every admin
+ * API-level proof of the admin screens P2-P4 (specs/capabilities/admin/spec.md
+ * R49-R68; api.md 2.15, endpoints 83-90; data-model 3.14.8): every admin
  * route's 403 for a non-admin, the users and groups tables, saving roles all
- * or nothing, and agent transfers and their conflicts. It drives the BUILT
- * backend (`npm run build` first) in org server mode against the in-test
- * OIDC stub. Needs no Postgres and no LLM.
+ * or nothing, agent transfers and their conflicts, and group mappings that
+ * grant and take away roles. It drives the BUILT backend (`npm run build`
+ * first) in org server mode against the in-test OIDC stub. Needs no Postgres
+ * and no LLM.
  */
 import { type OrgServer, scimUser, startOrgServer } from './org-server';
 
@@ -65,6 +66,15 @@ interface UserDetail extends UserRow {
   isBootstrap: boolean;
 }
 
+interface MappingView {
+  id: string;
+  groupId: string;
+  role: string;
+  datasourceId?: string;
+  groupName: string;
+  datasourceName?: string;
+}
+
 interface ActivityEvent {
   type: string;
   at: string;
@@ -102,10 +112,13 @@ function adminRoutes(ids: {
       { agentIds: ['a1'], toUserId: ids.user },
     ],
     ['GET', '/admin/groups'],
+    ['GET', '/admin/role-mappings'],
+    ['POST', '/admin/role-mappings', { groupId: ids.group, role: 'maker' }],
+    ['DELETE', '/admin/role-mappings/m1'],
   ];
 }
 
-describe('Admin API: users, groups, roles and transfers (BA-165, BA-166)', () => {
+describe('Admin API: users, groups, roles, transfers and mappings (BA-165, BA-166, BA-167)', () => {
   let org: OrgServer;
   let adminCookie = '';
   let adaCookie = '';
@@ -645,6 +658,130 @@ describe('Admin API: users, groups, roles and transfers (BA-165, BA-166)', () =>
         'agent-card',
       ]);
       expect(events('agent.transferred')).toHaveLength(1);
+    });
+  });
+
+  describe('Roles and permissions (BA-167)', () => {
+    it('a group mapping grants its role to the members on their next request, and removing it takes it away', async () => {
+      expect(
+        (await get<{ mappings: unknown[] }>('/admin/role-mappings')).mappings,
+      ).toEqual([]);
+      expect((await me(adaCookie)).permissions).not.toContain('create-agents');
+
+      const added = await send('POST', '/admin/role-mappings', {
+        groupId: ids.Analysts,
+        role: 'maker',
+      });
+      expect(added.status).toBe(201);
+      const { mapping, message } = (await added.json()) as {
+        mapping: MappingView;
+        message: string;
+      };
+      expect(message).toBe('Mapping added');
+      expect(mapping).toMatchObject({
+        groupId: ids.Analysts,
+        role: 'maker',
+        groupName: 'Analysts',
+        createdBy: ids.admin,
+      });
+      const ada = await me(adaCookie);
+      expect(ada.permissions).toContain('create-agents');
+      expect(ada.roles).toContainEqual({
+        role: 'maker',
+        source: 'group',
+        groupId: ids.Analysts,
+      });
+      expect((await detail(ids.ada)).heldRoles).toContainEqual({
+        role: 'maker',
+        source: 'group',
+        groupId: ids.Analysts,
+        groupNames: ['Analysts'],
+      });
+
+      const again = await send('POST', '/admin/role-mappings', {
+        groupId: ids.Analysts,
+        role: 'maker',
+      });
+      expect(again.status).toBe(200);
+      expect(await again.json()).toMatchObject({
+        ok: true,
+        message: 'Mapping already exists',
+        mapping: { id: mapping.id },
+      });
+
+      const removed = await send(
+        'DELETE',
+        `/admin/role-mappings/${mapping.id}`,
+      );
+      expect(await json(removed)).toEqual({
+        ok: true,
+        message: 'Mapping removed',
+      });
+      expect((await me(adaCookie)).permissions).not.toContain('create-agents');
+      const gone = await send('DELETE', `/admin/role-mappings/${mapping.id}`);
+      expect(gone.status).toBe(404);
+      expect(((await gone.json()) as { message: string }).message).toBe(
+        `Group mapping ${mapping.id} not found`,
+      );
+      expect(events('mapping.added')).toContainEqual(
+        expect.objectContaining({
+          actorId: ids.admin,
+          subjectId: ids.Analysts,
+          details: { role: 'maker', mappingId: mapping.id },
+        }),
+      );
+      expect(events('mapping.removed')).toContainEqual(
+        expect.objectContaining({
+          actorId: ids.admin,
+          subjectId: ids.Analysts,
+          details: { role: 'maker', mappingId: mapping.id },
+        }),
+      );
+    });
+
+    it('a Data owner mapping names its datasource; a group deleted through SCIM takes its mappings', async () => {
+      const noDatasource = await send('POST', '/admin/role-mappings', {
+        groupId: ids.Engineers,
+        role: 'data-owner',
+      });
+      expect(noDatasource.status).toBe(400);
+      expect(((await noDatasource.json()) as { message: string }).message).toBe(
+        'Data owner needs a datasource',
+      );
+      const added = await send('POST', '/admin/role-mappings', {
+        groupId: ids.Engineers,
+        role: 'data-owner',
+        datasourceId: 'ds-wc',
+      });
+      expect(added.status).toBe(201);
+      const { mappings } = await get<{ mappings: MappingView[] }>(
+        '/admin/role-mappings',
+      );
+      expect(mappings).toEqual([
+        expect.objectContaining({
+          groupName: 'Engineers',
+          role: 'data-owner',
+          datasourceId: 'ds-wc',
+          datasourceName: 'World Cup',
+        }),
+      ]);
+
+      expect(
+        (await org.scim(`/Groups/${ids.Engineers}`, { method: 'DELETE' }))
+          .status,
+      ).toBe(204);
+      expect(
+        (await get<{ mappings: unknown[] }>('/admin/role-mappings')).mappings,
+      ).toEqual([]);
+      expect((await get<{ total: number }>('/admin/groups')).total).toBe(1);
+      const unknown = await send('POST', '/admin/role-mappings', {
+        groupId: ids.Engineers,
+        role: 'maker',
+      });
+      expect(unknown.status).toBe(404);
+      expect(((await unknown.json()) as { message: string }).message).toBe(
+        `Group ${ids.Engineers} not found`,
+      );
     });
   });
 

@@ -16,6 +16,7 @@ import type {
 import { ActivityService } from '../auth/activity.service';
 import type {
   AssignableRoleId,
+  GroupRoleMappingDoc,
   RoleAssignmentDoc,
   UserDoc,
 } from '../auth/entities/directory.entity';
@@ -28,10 +29,14 @@ import {
   type DatasourceRef,
 } from './admin-directory.reader';
 import { agentNameOf, countOf, isDeactivated } from './admin-figures';
+import type { AddMappingDto } from './dto/add-mapping.dto';
 import type { AssignRoleDto } from './dto/assign-role.dto';
 import type { SaveUserRolesDto } from './dto/save-user-roles.dto';
 import type { TransferAgentsDto } from './dto/transfer-agents.dto';
-import type { AdminHeldRole } from './entities/admin-views.entity';
+import type {
+  AdminHeldRole,
+  GroupRoleMappingView,
+} from './entities/admin-views.entity';
 import { AllOwnersAgentsRepository } from './repositories/all-owners-agents.repository';
 
 /** A role to assign or map, validated (api.md 79). */
@@ -82,10 +87,10 @@ function roleSpecOf(input: {
 }
 
 /**
- * The admin area's writes (admin R22, R45, R61-R64; api.md 79, 80, 85,
- * 86). Each validates everything before it writes, then writes and records
- * its activity events in one transaction, so a request changes all it
- * should or nothing.
+ * The admin area's writes (admin R22, R45, R61-R68; api.md 79, 80, 85, 86,
+ * 89, 90). Each validates everything before it writes, then writes and
+ * records its activity events in one transaction, so a request changes all
+ * it should or nothing.
  */
 @Injectable()
 export class AdminService {
@@ -319,6 +324,65 @@ export class AdminService {
       message: `Transferred ${countOf(moving.length, 'agent')} to ${toUser.displayName}`,
       transferred: moving.length,
     };
+  }
+
+  /** 89. `created: false` when the same mapping exists. */
+  async addMapping(
+    dto: AddMappingDto,
+    adminId: string,
+  ): Promise<{ created: boolean; mapping: GroupRoleMappingView }> {
+    const spec = roleSpecOf(dto);
+    const groupId = typeof dto.groupId === 'string' ? dto.groupId : '';
+    const group = groupId ? await this.directory.groupById(groupId) : null;
+    if (!group) {
+      throw new NotFoundException(`Group ${String(dto.groupId)} not found`);
+    }
+    const datasource = spec.datasourceId
+      ? await this.requireDatasource(spec.datasourceId)
+      : null;
+    const view = (mapping: GroupRoleMappingDoc): GroupRoleMappingView => ({
+      ...mapping,
+      groupName: group.displayName,
+      ...(datasource
+        ? { datasourceName: datasource.name ?? datasource.id }
+        : {}),
+    });
+
+    const existing = await this.roles.findMapping(
+      group.id,
+      spec.role,
+      spec.datasourceId,
+    );
+    if (existing) return { created: false, mapping: view(existing) };
+
+    const mapping = await this.transactions.run(async () => {
+      const inserted = await this.roles.insertMapping({
+        groupId: group.id,
+        ...specDetails(spec),
+        createdBy: adminId,
+      });
+      await this.activity.record('mapping.added', {
+        actorId: adminId,
+        subjectId: group.id,
+        details: { ...specDetails(spec), mappingId: inserted.id },
+      });
+      return inserted;
+    });
+    return { created: true, mapping: view(mapping) };
+  }
+
+  /** 90. */
+  async removeMapping(id: string, adminId: string): Promise<void> {
+    const mapping = await this.roles.mappingById(id);
+    if (!mapping) throw new NotFoundException(`Group mapping ${id} not found`);
+    await this.transactions.run(async () => {
+      await this.roles.deleteMapping(id);
+      await this.activity.record('mapping.removed', {
+        actorId: adminId,
+        subjectId: mapping.groupId,
+        details: { ...specDetails(mapping), mappingId: mapping.id },
+      });
+    });
   }
 
   private async requireUser(id: unknown): Promise<UserDoc> {

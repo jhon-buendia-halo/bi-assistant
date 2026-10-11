@@ -19,6 +19,7 @@ import { CurrentUserService } from '../auth/current-user.service';
 import type { RoleAssignmentDoc } from '../auth/entities/directory.entity';
 import { AdminReadService } from './admin-read.service';
 import { AdminService } from './admin.service';
+import type { AddMappingDto } from './dto/add-mapping.dto';
 import type { AssignRoleDto } from './dto/assign-role.dto';
 import type { SaveUserRolesDto } from './dto/save-user-roles.dto';
 import type { TransferAgentsDto } from './dto/transfer-agents.dto';
@@ -27,6 +28,7 @@ import type {
   AdminHeldRole,
   AdminUserDetail,
   AdminUsersPage,
+  GroupRoleMappingView,
 } from './entities/admin-views.entity';
 
 /**
@@ -118,5 +120,37 @@ export class AdminController {
   @Get('groups')
   groups(@Query() query: Record<string, unknown>): Promise<AdminGroupsPage> {
     return this.reads.listGroups(query ?? {});
+  }
+
+  /** 88. */
+  @Get('role-mappings')
+  mappings(): Promise<{ mappings: GroupRoleMappingView[] }> {
+    return this.reads.listMappings();
+  }
+
+  /** 89: 201 when added, 200 when it already existed. */
+  @Post('role-mappings')
+  async addMapping(
+    @Body() dto: AddMappingDto,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<{ ok: true; message: string; mapping: GroupRoleMappingView }> {
+    const { created, mapping } = await this.admin.addMapping(
+      dto ?? ({} as AddMappingDto),
+      this.currentUser.ownerKey(),
+    );
+    if (!created) {
+      res.status(200);
+      return { ok: true, message: 'Mapping already exists', mapping };
+    }
+    return { ok: true, message: 'Mapping added', mapping };
+  }
+
+  /** 90. */
+  @Delete('role-mappings/:id')
+  async removeMapping(
+    @Param('id') id: string,
+  ): Promise<{ ok: true; message: string }> {
+    await this.admin.removeMapping(id, this.currentUser.ownerKey());
+    return { ok: true, message: 'Mapping removed' };
   }
 }

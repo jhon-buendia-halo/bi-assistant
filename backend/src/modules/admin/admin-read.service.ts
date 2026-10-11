@@ -13,6 +13,7 @@ import type {
   AdminUserDetail,
   AdminUserRow,
   AdminUsersPage,
+  GroupRoleMappingView,
 } from './entities/admin-views.entity';
 
 /** The Users view's filter chips (admin R51; api.md 83). */
@@ -197,6 +198,21 @@ export class AdminReadService {
       total: listed.length,
       page,
       pageSize,
+    };
+  }
+
+  /** 88: sorted by group name, then role (badge order), then datasource. */
+  async listMappings(): Promise<{ mappings: GroupRoleMappingView[] }> {
+    const snapshot = await this.reader.load();
+    return {
+      mappings: snapshot.mappings
+        .map((m) => snapshot.mappingView(m))
+        .sort(
+          (a, b) =>
+            byName(a.groupName, b.groupName) ||
+            roleOrder(a.role) - roleOrder(b.role) ||
+            byName(a.datasourceName ?? '', b.datasourceName ?? ''),
+        ),
     };
   }
 }

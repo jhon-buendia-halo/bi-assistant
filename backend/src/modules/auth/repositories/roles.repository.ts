@@ -63,6 +63,33 @@ export class RolesRepository {
     return this.mappings.find({}, { sort: { createdAt: 1 } });
   }
 
+  mappingById(id: string): Promise<GroupRoleMappingDoc | null> {
+    return this.mappings.findOne({ id });
+  }
+
+  /** The same mapping (for Data owner, on the same datasource). */
+  async findMapping(
+    groupId: string,
+    role: AssignableRoleId,
+    datasourceId?: string,
+  ): Promise<GroupRoleMappingDoc | null> {
+    return (
+      (await this.mappings.find({ groupId, role })).find(
+        (m) => (m.datasourceId ?? null) === (datasourceId ?? null),
+      ) ?? null
+    );
+  }
+
+  insertMapping(
+    mapping: Omit<GroupRoleMappingDoc, 'id'>,
+  ): Promise<GroupRoleMappingDoc> {
+    return this.mappings.insert({ ...mapping, id: randomUUID() });
+  }
+
+  deleteMapping(id: string): Promise<number> {
+    return this.mappings.deleteOne({ id });
+  }
+
   async mappingsOf(groupIds: string[]): Promise<GroupRoleMappingDoc[]> {
     if (!groupIds.length) return [];
     const wanted = new Set(groupIds);

@@ -28,6 +28,7 @@ import {
 import type {
   AdminHeldRole,
   AdminUserRow,
+  GroupRoleMappingView,
 } from './entities/admin-views.entity';
 import { AllOwnersAgentsRepository } from './repositories/all-owners-agents.repository';
 
@@ -223,6 +224,16 @@ export class AdminSnapshot {
       agentsOwned: this.agentsByOwner.get(user.id)?.length ?? 0,
       lastActiveAt: lastActiveAtOf(user),
       status: statusOf(user, this.now),
+    };
+  }
+
+  mappingView(mapping: GroupRoleMappingDoc): GroupRoleMappingView {
+    return {
+      ...mapping,
+      groupName: this.group(mapping.groupId)?.displayName ?? 'a deleted group',
+      ...(mapping.datasourceId
+        ? { datasourceName: this.datasourceName(mapping.datasourceId) }
+        : {}),
     };
   }
 }
