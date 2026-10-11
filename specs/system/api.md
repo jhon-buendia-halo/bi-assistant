@@ -59,7 +59,7 @@ Clients read the error text from `error.message` (Style B) or `body.message` wit
 
 ### 1.4 Success status codes
 
-POST handlers return the framework default **201 Created**; GET/PUT/DELETE return **200**; `DELETE /knowledge/:id` returns **204 No Content**. Handlers that write the response themselves (the two SSE endpoints and the three file downloads) return **200**. Clients treat any 2xx as success and do not depend on 200 vs 201.
+POST handlers return the framework default **201 Created**, except where an endpoint states **200**: the two SSE endpoints (5 and 54, 200 once the stream starts, whatever it then carries), `POST /developer-settings/test-endpoint` (55), `POST /testing-data/:fixtureId/load` (56), `POST /auth/logout` (63) and `POST /admin/agents/transfer` (86); `POST /admin/role-assignments` (79) and `POST /admin/role-mappings` (89) answer 200 when nothing was written. GET/PUT/DELETE return **200**; `DELETE /knowledge/:id` returns **204 No Content**. The file downloads write the response themselves and return **200**. Clients treat any 2xx as success and do not depend on 200 vs 201.
 
 ### 1.5 Validation
 

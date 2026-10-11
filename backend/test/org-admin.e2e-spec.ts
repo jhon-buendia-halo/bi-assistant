@@ -915,8 +915,8 @@ describe('Admin overview API (BA-164)', () => {
       cookie,
       body: { content },
     });
-    // Any 2xx: the failure arrives in the stream (api.md 3.1).
-    expect(res.ok).toBe(true);
+    // 200 even for a failed turn: the failure arrives in the stream (api.md 3.1).
+    expect(res.status).toBe(200);
     return (await res.text())
       .split('\n\n')
       .filter((frame) => frame.startsWith('data: '))
