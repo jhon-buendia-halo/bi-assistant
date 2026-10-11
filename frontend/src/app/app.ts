@@ -29,6 +29,7 @@ import {
   Search,
   ScrollText,
   Settings,
+  Shield,
   Signal,
   Sparkle,
   Sparkles,
@@ -90,6 +91,10 @@ import {
 import { ReasoningEffort } from './features/llm/models/llm.model';
 import { ToastService } from './core/toast/toast.service';
 import { APP_VERSION } from './core/config/app-version';
+import { AuthService } from './core/auth/auth.service';
+import { PermissionId } from './core/auth/auth.models';
+import { AccountMenu } from './core/auth/account-menu/account-menu';
+import { AdminArea } from './features/admin/components/admin-area/admin-area';
 
 type SettingsSection =
   | 'datasources'
@@ -108,10 +113,17 @@ type MainView =
   | 'knowledge'
   | 'sessions'
   | 'conversation-new'
-  | 'session-chat';
+  | 'session-chat'
+  | 'admin';
 
-/** What the navigation rail selects (app-shell R3–R5, R46). */
-type Area = 'datasets' | 'agents' | 'knowledge' | 'sessions' | 'settings';
+/** What the navigation rail selects (app-shell R3–R5, R46; admin R34). */
+type Area =
+  | 'datasets'
+  | 'agents'
+  | 'knowledge'
+  | 'sessions'
+  | 'admin'
+  | 'settings';
 
 /** The view each workspace area opens on. */
 const AREA_ROOT: Record<Exclude<Area, 'settings'>, MainView> = {
@@ -119,6 +131,7 @@ const AREA_ROOT: Record<Exclude<Area, 'settings'>, MainView> = {
   agents: 'agents',
   knowledge: 'knowledge',
   sessions: 'sessions',
+  admin: 'admin',
 };
 
 const AREA_OF_VIEW: Partial<Record<MainView, Area>> = {
@@ -131,6 +144,7 @@ const AREA_OF_VIEW: Partial<Record<MainView, Area>> = {
   sessions: 'sessions',
   'conversation-new': 'sessions',
   'session-chat': 'sessions',
+  admin: 'admin',
 };
 
 const DEFAULT_RIGHT_PANEL_WIDTH = 572;
@@ -141,7 +155,7 @@ const RIGHT_PANEL_RESIZE_STEP = 24;
 const RIGHT_PANEL_WIDTH_STORAGE_KEY = 'questions-to-insights:right-panel-width';
 
 @Component({
-  selector: 'app-root',
+  selector: 'app-shell',
   imports: [
     LucideAngularModule,
     BackendStatusBanner,
@@ -163,6 +177,8 @@ const RIGHT_PANEL_WIDTH_STORAGE_KEY = 'questions-to-insights:right-panel-width';
     SystemLogsPanel,
     SessionChat,
     InteractiveVisualPanel,
+    AccountMenu,
+    AdminArea,
   ],
   templateUrl: './app.html',
   styleUrl: './app.scss',
@@ -190,6 +206,7 @@ export class App {
   readonly Search = Search;
   readonly ScrollText = ScrollText;
   readonly Settings = Settings;
+  readonly Shield = Shield;
   readonly Signal = Signal;
   readonly Sparkle = Sparkle;
   readonly Sparkles = Sparkles;
@@ -879,13 +896,58 @@ export class App {
     key: Exclude<SettingsSection, null>;
     label: string;
     icon: LucideIconData;
+    /** Hidden without it (app-shell R50); Appearance is always offered. */
+    permission?: PermissionId;
   }[] = [
-    { key: 'datasources', label: 'Datasource Configuration', icon: Database },
-    { key: 'llm', label: 'LLM Configuration', icon: Bot },
-    { key: 'testing-data', label: 'Testing Data', icon: TestTube },
-    { key: 'developer', label: 'Developer', icon: Wrench },
+    {
+      key: 'datasources',
+      label: 'Datasource Configuration',
+      icon: Database,
+      permission: 'manage-datasources',
+    },
+    {
+      key: 'llm',
+      label: 'LLM Configuration',
+      icon: Bot,
+      permission: 'manage-llm',
+    },
+    {
+      key: 'testing-data',
+      label: 'Testing Data',
+      icon: TestTube,
+      permission: 'manage-datasources',
+    },
+    {
+      key: 'developer',
+      label: 'Developer',
+      icon: Wrench,
+      permission: 'edit-policies',
+    },
     { key: 'appearance', label: 'Appearance', icon: SunMoon },
   ];
+
+  /** Who is signed in and what they may do (admin R10, R25). */
+  readonly auth = inject(AuthService);
+
+  /** The Settings sections the user may open, in their fixed order. */
+  readonly visibleSettingsSections = computed(() =>
+    this.settingsSections.filter(
+      (section) => !section.permission || this.auth.can(section.permission),
+    ),
+  );
+
+  /** The chosen section, or none when it is hidden (ui.md 1.6). */
+  readonly shownSettingsSection = computed<SettingsSection>(() => {
+    const section = this.settingsSection();
+    return this.visibleSettingsSections().some((item) => item.key === section)
+      ? section
+      : null;
+  });
+
+  /** The Admin rail item: org server mode and Manage users only (R34). */
+  readonly showAdmin = computed(
+    () => this.auth.isOrg() && this.auth.can('manage-users'),
+  );
 
   private readonly uiPreferences = inject(UiPreferencesService);
 

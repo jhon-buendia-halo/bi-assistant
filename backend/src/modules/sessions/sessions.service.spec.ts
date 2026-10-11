@@ -77,6 +77,8 @@ import { setDatasetToolServices } from '../../mastra/tool-services';
 import type { DatasetToolServices } from '../../mastra/tool-services';
 import { TURN_RECORDS_CONTEXT_KEY } from '../../mastra/tools/visual.tools';
 import { sourceEntities } from './visualization-document';
+import type { OrgServerConfig } from '../../config/org-server.config';
+import { CurrentUserService, LOCAL_USER } from '../auth/current-user.service';
 import { SessionsService, StreamEvent } from './sessions.service';
 import type { SessionDoc } from './entities/session.entity';
 
@@ -104,6 +106,10 @@ describe('SessionsService streaming', () => {
         agentName?: string;
         live: Record<string, unknown> | null;
       };
+      /** Org server mode (admin R40): the turn runs as a signed-in user. */
+      org?: boolean;
+      /** The session is an agent editor's preview (agents-evals R60). */
+      preview?: boolean;
       /** Careful mode: what the verifier replies and what its SQL returns. */
       crossCheck?: {
         sql?: string;
@@ -125,6 +131,7 @@ describe('SessionsService streaming', () => {
             agentName: options.userAgent.agentName ?? 'Cup historian',
           }
         : {}),
+      ...(options.preview ? { preview: true } : {}),
     };
     const repository = {
       get: jest.fn().mockResolvedValue(session),
@@ -188,6 +195,10 @@ describe('SessionsService streaming', () => {
             .fn()
             .mockResolvedValue({ columns: ['n'], rows: check.rows ?? [] }),
     };
+    const users = options.org
+      ? new CurrentUserService({} as OrgServerConfig)
+      : new CurrentUserService();
+    const activity = { record: jest.fn().mockResolvedValue(undefined) };
     const service = new SessionsService(
       repository as never,
       {
@@ -232,11 +243,15 @@ describe('SessionsService streaming', () => {
       metrics as never,
       knowledge as never,
       userAgents as never,
+      users,
+      activity as never,
     );
     return {
       service,
       session,
       agent,
+      users,
+      activity,
       verifiedQueries,
       metrics,
       knowledge,
@@ -974,6 +989,133 @@ describe('SessionsService streaming', () => {
       });
     });
   });
+
+  describe('agent errors (admin R40; api.md 3.1)', () => {
+    const historian = {
+      name: 'Cup historian',
+      description: '',
+      instructions: '',
+      datasets: ['football'],
+      starterQuestions: [],
+    };
+    const ada = { ...LOCAL_USER, id: 'ada', displayName: 'Ada Lovelace' };
+
+    it('records agent.turn-failed for a failed turn in a session started from a user agent', async () => {
+      const { service, users, activity } = buildStreaming(
+        failingStream(new Error('Model unavailable')),
+        { org: true, userAgent: { id: 'agent-1', live: historian } },
+      );
+
+      await expect(
+        users.runAs(ada, () =>
+          service.streamMessage('session-1', 'Who won?', () => {}),
+        ),
+      ).rejects.toThrow('Model unavailable');
+
+      expect(activity.record).toHaveBeenCalledTimes(1);
+      expect(activity.record).toHaveBeenCalledWith('agent.turn-failed', {
+        actorId: 'ada',
+        subjectId: 'agent-1',
+        details: { sessionId: 'session-1', message: 'Model unavailable' },
+      });
+    });
+
+    it('cuts the message to 200 characters and never hides the turn error', async () => {
+      const { service, users, activity } = buildStreaming(
+        failingStream(new Error('x'.repeat(500))),
+        { org: true, userAgent: { id: 'agent-1', live: historian } },
+      );
+      activity.record.mockRejectedValue(new Error('store is down'));
+
+      await expect(
+        users.runAs(ada, () =>
+          service.streamMessage('session-1', 'Who won?', () => {}),
+        ),
+      ).rejects.toThrow('x'.repeat(500));
+
+      const [, fields] = activity.record.mock.calls[0] as [
+        string,
+        { details: { message: string } },
+      ];
+      expect(fields.details.message).toBe('x'.repeat(200));
+    });
+
+    it('records a failed non-streamed turn too', async () => {
+      const { service, users, activity, agent } = buildStreaming(
+        answerStream([]),
+        { org: true, userAgent: { id: 'agent-1', live: historian } },
+      );
+      agent.generate.mockRejectedValue(new Error('Provider down'));
+
+      await expect(
+        users.runAs(ada, () => service.sendMessage('session-1', 'Who won?')),
+      ).rejects.toThrow('Provider down');
+
+      expect(activity.record).toHaveBeenCalledWith(
+        'agent.turn-failed',
+        expect.objectContaining({ subjectId: 'agent-1' }),
+      );
+    });
+
+    it.each([
+      ['a plain session', { org: true }],
+      [
+        'a preview',
+        {
+          org: true,
+          preview: true,
+          userAgent: { id: 'agent-1', live: historian },
+        },
+      ],
+      [
+        'an agent the session no longer resolves (deleted or transferred)',
+        { org: true, userAgent: { id: 'agent-1', live: null } },
+      ],
+      ['local mode', { userAgent: { id: 'agent-1', live: historian } }],
+    ])('records nothing for %s', async (_label, options) => {
+      const { service, users, activity } = buildStreaming(
+        failingStream(new Error('Model unavailable')),
+        options,
+      );
+
+      await expect(
+        users.runAs(ada, () =>
+          service.streamMessage('session-1', 'Who won?', () => {}),
+        ),
+      ).rejects.toThrow('Model unavailable');
+
+      expect(activity.record).not.toHaveBeenCalled();
+    });
+
+    it('records nothing for a stopped turn or a refused request', async () => {
+      const { service, users, activity, repository } = buildStreaming(
+        failingStream(new Error('Model unavailable')),
+        { org: true, userAgent: { id: 'agent-1', live: historian } },
+      );
+      const stopped = new AbortController();
+      stopped.abort();
+
+      await users.runAs(ada, async () => {
+        await expect(
+          service.streamMessage(
+            'session-1',
+            'Who won?',
+            () => {},
+            stopped.signal,
+          ),
+        ).rejects.toThrow('Model unavailable');
+        await expect(
+          service.streamMessage('session-1', '   ', () => {}),
+        ).rejects.toThrow('message is required');
+        repository.get.mockResolvedValueOnce(null);
+        await expect(
+          service.streamMessage('missing', 'Who won?', () => {}),
+        ).rejects.toThrow('Session missing not found');
+      });
+
+      expect(activity.record).not.toHaveBeenCalled();
+    });
+  });
 });
 
 describe('SessionsService SQL self-correction', () => {
@@ -999,7 +1141,7 @@ describe('SessionsService SQL self-correction', () => {
       ],
     };
     const service = new SessionsService(
-      { list: jest.fn().mockResolvedValue([]) } as never,
+      { listAllOwners: jest.fn().mockResolvedValue([]) } as never,
       {
         getAgent: jest.fn().mockReturnValue(fixer),
         ensureSessionWorkspace: jest.fn().mockResolvedValue({ id: 'w' }),
@@ -1194,7 +1336,7 @@ describe('SessionsService visual tool bridge (turn records)', () => {
       visualizations: [],
     };
     const repository = {
-      list: jest.fn().mockResolvedValue([]),
+      listAllOwners: jest.fn().mockResolvedValue([]),
       get: jest.fn().mockResolvedValue(session),
       update: jest.fn().mockImplementation(async (_id, patch) => {
         Object.assign(session, patch);
@@ -1705,6 +1847,7 @@ describe('SessionsService sessions from a user agent (R52, api.md 2.1)', () => {
   };
 
   function build(agent: Record<string, unknown> | null, datasets: string[]) {
+    const users = new CurrentUserService();
     const repository = {
       insert: jest
         .fn()
@@ -1737,8 +1880,9 @@ describe('SessionsService sessions from a user agent (R52, api.md 2.1)', () => {
       {} as never,
       {} as never,
       userAgents as never,
+      users,
     );
-    return { service, repository, mastra };
+    return { service, repository, mastra, users };
   }
 
   it('names the session after the Live agent and keeps only existing datasets', async () => {
@@ -1833,6 +1977,29 @@ describe('SessionsService sessions from a user agent (R52, api.md 2.1)', () => {
       expect(mastra.deleteSessionResources).toHaveBeenCalledWith(preview.id);
       expect(repository.delete).not.toHaveBeenCalled();
       await expect(service.get(preview.id)).rejects.toThrow('not found');
+    });
+
+    it('belongs to the user who opened it (admin R29, R30)', async () => {
+      const { service, mastra, users } = build(
+        { id: 'agent-1', draft: { ...live, name: 'Draft name' } },
+        ['World Cup Core'],
+      );
+      const ada = { ...LOCAL_USER, id: 'ada' };
+      const bob = { ...LOCAL_USER, id: 'bob' };
+
+      const preview = await users.runAs(ada, () =>
+        service.createPreview('agent-1'),
+      );
+
+      await users.runAs(bob, async () => {
+        await expect(service.get(preview.id)).rejects.toThrow('not found');
+        await expect(service.delete(preview.id)).rejects.toThrow('not found');
+      });
+      await expect(service.get(preview.id)).rejects.toThrow('not found');
+      expect(mastra.deleteSessionResources).not.toHaveBeenCalled();
+      await users.runAs(ada, async () => {
+        expect(await service.get(preview.id)).toMatchObject({ preview: true });
+      });
     });
 
     it('refuses an unknown agent and a draft with no existing dataset', async () => {

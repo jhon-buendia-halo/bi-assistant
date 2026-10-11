@@ -20,10 +20,14 @@ The ADRs below marked *retroactive* document decisions already in place when thi
 ```mermaid
 flowchart LR
   analyst["Analyst<br/>(person)"]
+  member["Organisation member<br/>(person, browser; org server mode)"]
+  admin["Platform admin<br/>(person; org server mode)"]
 
   subgraph qti["Questions to Insights"]
-    system["Questions to Insights<br/>(Electron desktop app or npx web app)"]
+    system["Questions to Insights<br/>(Electron desktop app, npx web app,<br/>or self-hosted org server)"]
   end
+
+  idp["Microsoft Entra ID<br/>(OIDC sign-in, SCIM provisioning;<br/>org server mode only)"]
 
   subgraph sources["User datasources"]
     pg[("PostgreSQL")]
@@ -43,6 +47,11 @@ flowchart LR
   end
 
   analyst -->|"asks questions, tailors visuals"| system
+  member -->|"signs in, asks questions (HTTPS via the org's TLS proxy)"| system
+  admin -->|"manages users and roles"| system
+  member -->|"authenticates"| idp
+  system -->|"OIDC: discovery, code exchange, JWKS"| idp
+  idp -->|"SCIM 2.0: users, groups, memberships (bearer token)"| system
   analyst -->|"downloads installer"| releases
   analyst -->|"npx / npm i -g (read:packages PAT)"| packages
   system -->|"read-only SQL, schema discovery, sample rows"| pg
@@ -53,10 +62,10 @@ flowchart LR
   system -->|"chat completions (HTTPS)"| openai
 ```
 
-*System context: the analyst uses Questions to Insights, which queries the user's datasources (PostgreSQL, Databricks, REST/OpenAPI), calls the configured LLM provider, and is distributed through GitHub Releases and GitHub Packages.*
+*System context: the analyst uses Questions to Insights, which queries the user's datasources (PostgreSQL, Databricks, REST/OpenAPI), calls the configured LLM provider, and is distributed through GitHub Releases and GitHub Packages. In org server mode, organisation members reach a self-hosted server from a browser and sign in with Microsoft Entra ID, which also pushes the directory to the server through SCIM.*
 
 
-The user asks questions of their data in plain language; Questions to Insights answers with SQL, results, and interactive visuals. External systems: the user's datasources (PostgreSQL, Databricks SQL, REST/OpenAPI), an LLM provider (OpenAI-compatible / LenAI, Anthropic, OpenAI), GitHub (releases, GitHub Packages).
+The user asks questions of their data in plain language; Questions to Insights answers with SQL, results, and interactive visuals. External systems: the user's datasources (PostgreSQL, Databricks SQL, REST/OpenAPI), an LLM provider (OpenAI-compatible / LenAI, Anthropic, OpenAI), GitHub (releases, GitHub Packages), and in org server mode the identity provider (Microsoft Entra ID, for OpenID Connect sign-in and SCIM 2.0 provisioning). Two modes run the same build (ADR-0010): **local mode**, single-user with no sign-in (the desktop app always, the npx web app by default), and **org server mode**, many users of one organisation on a server it hosts.
 
 ## Level 2 — Containers
 
@@ -75,10 +84,17 @@ flowchart TB
     cli["npm CLI<br/>(backend/src/cli.ts)"]
   end
 
+  subgraph org["Org server mode (same npm CLI, ORG_* configuration)"]
+    member["Organisation member's browser"]
+    proxy["Organisation's reverse proxy<br/>(TLS, public hostname)"]
+  end
+
+  entra["Microsoft Entra ID<br/>(OIDC provider, SCIM client)"]
+
   backend["NestJS backend<br/>(backend/src, createApp)<br/>API + Mastra agents"]
 
   subgraph data["APP_DATA_DIR (userData, or ~/.questions-to-insights for the CLI)"]
-    appdb[("app.sqlite<br/>(better-sqlite3 DocStore)")]
+    appdb[("app.sqlite<br/>(better-sqlite3 DocStore;<br/>org mode adds users, groups,<br/>roles, auth sessions, activity)")]
     mastradb[("mastra.sqlite<br/>(LibSQL memory, threads)")]
     obsdb[("observability.duckdb<br/>(Mastra traces)")]
     ws["workspaces/session-id<br/>(filesystem: skills, visuals)"]
@@ -99,6 +115,11 @@ flowchart TB
   browser -->|"HTTP same-origin: UI (public/), API, SSE"| cli
   cli -->|"in-process createApp()<br/>--port (default 3000), --host 127.0.0.1"| backend
   cli -->|"opens URL (unless --no-open)"| browser
+  member -->|"HTTPS: UI, API, SSE<br/>(qti_session cookie)"| proxy
+  proxy -->|"HTTP + X-Forwarded-*<br/>(--host 0.0.0.0)"| cli
+  member -->|"sign-in redirect"| entra
+  backend -->|"OIDC discovery, token exchange, JWKS"| entra
+  entra -->|"SCIM 2.0 over HTTPS via the proxy<br/>(bearer token)"| proxy
   backend -->|"SQL (better-sqlite3)"| appdb
   backend -->|"LibSQL (@mastra/libsql)"| mastradb
   backend -->|"DuckDB (@mastra/duckdb)"| obsdb
@@ -108,13 +129,13 @@ flowchart TB
   backend -.->|"agent traces (OpenInference),<br/>only when developer observability is on"| phoenix
 ```
 
-*Containers: the two delivery modes (Electron spawning the backend as a child process, or the npm CLI serving backend + bundled UI to a browser) share one NestJS backend and its on-disk stores under `APP_DATA_DIR`.*
+*Containers: the two delivery modes (Electron spawning the backend as a child process, or the npm CLI serving backend + bundled UI to a browser) share one NestJS backend and its on-disk stores under `APP_DATA_DIR`. In org server mode the same CLI runs behind the organisation's TLS proxy, and the backend talks to Entra ID for sign-in and receives SCIM pushes from it.*
 
 
 - **Electron main process** (`frontend/electron/main.cjs`) — window shell; spawns and kills the backend.
 - **Angular renderer** (`frontend/src/`) — the UI.
 - **NestJS backend** (`backend/src/`) — API, Mastra agents, SQLite app store, per-session workspaces.
-- **npm CLI** (`backend/src/cli.ts`) — serves the same backend + bundled UI in a browser.
+- **npm CLI** (`backend/src/cli.ts`) — serves the same backend + bundled UI in a browser. With the `ORG_*` configuration it is the **org server** (ADR-0010): no new container, the backend gains an auth module (OIDC sign-in, SCIM, roles, owner scoping; ADR-0011) and is reached through the organisation's reverse proxy. How to run it: [delivery.md](delivery.md) section 4.1.
 
 #### ADR-0001 — Electron desktop app with an Angular renderer and a NestJS child-process backend *(retroactive)*
 - **Status:** Accepted
@@ -150,6 +171,68 @@ flowchart TB
   - Live switching isn't possible; the UI must make the restart explicit.
   - The developer-settings file is a new persisted shape under `APP_DATA_DIR` that the data model must record. A new dependency set (OpenTelemetry SDK, Phoenix exporter, `nestjs-pino`) ships in the package but stays unloaded by default.
   - Unreachable endpoints must never fail startup or requests. Exporters drop data instead.
+
+#### ADR-0010 — Multi-user org server mode with Entra ID sign-in and server-enforced roles
+- **Status:** Accepted
+- **Date:** 2026-10-10
+- **Context:**
+  - The vision used to rule out multi-user use ("no login, no roles and no shared server"). The Admin Panel epic ([BA-161](https://halo-powered.atlassian.net/browse/BA-161)) reverses that, from the Figma board "Agent Hub — E2E lifecycle (proposed)", section *Admin panel (draft)*.
+  - Decisions taken with the user on 2026-10-10:
+    - the organisation self-hosts the server, and Halo operates nothing;
+    - today's single-user local mode stays;
+    - only datasources and datasets are shared across users, plus one org-wide LLM configuration set by Platform admins;
+    - the server keeps SQLite.
+  - The backend already runs as a standalone web server through the npm CLI (ADR-0002) and stores everything behind `DocStore<T>` (ADR-0003). Neither has a notion of a user.
+  - ADR-0008 tied a user agent's owner to "this machine" and deferred any sharing that needs a new container or sync format.
+- **Decision:**
+  - **Two modes, one build.** The same backend and renderer run in either mode, chosen at startup.
+    - **Local mode** is the default and today's behaviour: no sign-in, and one implicit local user who holds every permission. The desktop app always runs in local mode.
+    - **Org server mode** is enabled by server configuration: the identity provider's issuer, client id and secret, the public base URL, and the SCIM token. It is started through the npm CLI or its container image.
+  - **No new container.** The org server is the existing web-mode backend, which serves the UI and the API from one origin. TLS and the public hostname are the organisation's reverse proxy's job. Users reach the org server from a browser. A desktop app connecting to a remote org server is out of scope for BA-161.
+  - **Identity: OpenID Connect against Microsoft Entra ID**, authorization code flow with PKCE, run by the backend.
+    - The backend issues its own session as an `HttpOnly`, `Secure`, `SameSite=Lax` cookie. No tokens are held in the renderer.
+    - Generic OIDC is used, so another provider can follow without a new ADR.
+  - **Directory: SCIM 2.0 inbound.** The backend exposes `/scim/v2/Users` and `/scim/v2/Groups`, protected by a bearer token, and Entra ID's provisioning service pushes to them.
+    - A user who signs in before being provisioned is created just in time from their ID token claims.
+    - Groups from the directory are read-only in the app.
+  - **Authorization: roles and permissions in the backend.**
+    - Five built-in roles: User, Maker, Data owner (scoped to one datasource), Approver and Platform admin. A fixed permission matrix maps roles to permissions.
+    - A user's roles are the union of direct assignments and group-to-role mappings.
+    - Every route declares the permission it needs, and one global guard checks it. The renderer reads the caller's permissions only to show or hide controls.
+  - **Data ownership.**
+    - Private documents gain an `ownerId`: sessions, visuals and their workspaces, memory threads, agents, knowledge, verified queries, metrics and eval runs. Repositories scope every read and write to the caller.
+    - Datasources and datasets are org-wide, with no owner filter.
+    - In local mode, every document belongs to the local user, so existing data needs no rewrite: a missing `ownerId` reads as the local user.
+  - **Storage stays SQLite (ADR-0003).** New collections hold users, groups, group memberships, role assignments, group-to-role mappings, sign-in sessions and activity events. Activity events feed the admin overview's active-user counts and recent activity.
+- **Consequences:**
+  - ADR-0008's "owner is this machine" becomes "owner is a user". Agent ownership can be transferred. Sharing agents beyond their owner stays out of scope, for a later Requests/Registry epic.
+  - Every repository must apply the owner scope. A missed one leaks one user's data to another, so an API test per collection must prove isolation between two users.
+  - SQLite has a single writer, which limits concurrency. That is acceptable for one organisation's server at expected team sizes. Moving to PostgreSQL behind `DocStore<T>` would need its own ADR.
+  - The server now accepts traffic beyond `127.0.0.1`, so the web-mode binding (non-functional N3) gains an org-server setting. CSRF protection and secure cookies become requirements.
+  - The agent memory store (Mastra) must also be scoped per user. In org server mode the LLM configuration is org-wide and only Platform admins can change it, coordinated with [BA-159](https://halo-powered.atlassian.net/browse/BA-159).
+  - The E2E harness needs a local OIDC stub and a SCIM client to drive org server mode without a real Entra ID tenant.
+
+#### ADR-0011 — Backend-run OIDC with `openid-client`, an opaque session cookie and an Origin check
+- **Status:** Accepted
+- **Date:** 2026-10-10
+- **Context:**
+  - ADR-0010 puts sign-in in the backend, and Entra ID is the first provider.
+  - The backend compiles to CommonJS and Jest can't load ESM-only packages (see the BA-152 retrospective).
+  - The renderer calls the API with `HttpClient` and with raw `fetch` for streams. It sends no custom header today.
+  - `openid-client@5` is already present through `@databricks/sql`, but that version is maintenance-only.
+- **Decision:**
+  - **OIDC client:** `openid-client@6`, imported lazily (`await import()`), the same way `cli.ts` and `main.ts` load ESM. It sits behind an `OidcClient` interface so unit tests mock it. The flow is the authorization code flow with PKCE, `state` and `nonce`, held during the round trip in a short-lived `HttpOnly` cookie.
+  - **Session:**
+    - The backend keeps no JWT. A session is an opaque 32-byte random id stored in an `auth_sessions` collection (SQLite, ADR-0003) and sent as an `HttpOnly; SameSite=Lax; Path=/` cookie.
+    - The cookie is `Secure` unless the public base URL is `http://` (development and E2E only).
+    - Behind the organisation's TLS proxy the app sets `trust proxy`.
+  - **CSRF:** `SameSite=Lax`, plus a check that every non-GET request in org mode carries an `Origin` (or `Referer`) matching the public base URL. SCIM is exempt, because it uses a bearer token and no cookie.
+  - **SCIM:** a hand-written controller covering the subset Entra ID's provisioning service sends. No library.
+  - **Current user:** propagated with `AsyncLocalStorage`, so tool calls, SSE streams and background jobs started inside a request run as the caller without request-scoped providers.
+- **Consequences:**
+  - One new runtime dependency (`openid-client`). The E2E tests use a hand-rolled OIDC stub on `node:http` and `node:crypto` instead of a full provider.
+  - A session can be revoked at once by deleting its document. Every request in org mode costs one store read.
+  - Background jobs must capture the owner when they start, and re-enter it if they outlive the request.
 
 ## Level 3 — Components
 
@@ -353,7 +436,7 @@ flowchart LR
 
 
 #### ADR-0009 — UI preferences live in the backend, with a browser cache for the first paint
-- **Status:** Accepted
+- **Status:** Accepted; on an org server the document is per user (ADR-0010, [data-model.md](data-model.md) 3.2.1)
 - **Date:** 2026-10-10
 - **Context:**
   - ADR-0007 stored the theme choice in the renderer's browser storage, defaulting to System, and the navigation drawer was never remembered (app-shell R2).

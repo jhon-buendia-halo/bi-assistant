@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Post, Put } from '@nestjs/common';
+import { RequirePermission } from '../../common/decorators/auth-requirement.decorators';
+import { Body, Controller, Get, HttpCode, Post, Put } from '@nestjs/common';
 import {
   DeveloperSettingsService,
   type DeveloperSettingsView,
@@ -6,6 +7,7 @@ import {
 } from './developer-settings.service';
 
 @Controller('developer-settings')
+@RequirePermission('edit-policies')
 export class DeveloperSettingsController {
   constructor(private readonly developerSettings: DeveloperSettingsService) {}
 
@@ -35,7 +37,9 @@ export class DeveloperSettingsController {
     }
   }
 
+  /** 200 with a Style A body, reachable or not (api.md 55). */
   @Post('test-endpoint')
+  @HttpCode(200)
   testEndpoint(@Body() body: { endpoint?: unknown }): Promise<ProbeResult> {
     return this.developerSettings.testEndpoint(body?.endpoint);
   }

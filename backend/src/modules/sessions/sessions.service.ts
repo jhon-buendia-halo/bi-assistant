@@ -4,6 +4,7 @@ import {
   Logger,
   NotFoundException,
   OnModuleInit,
+  Optional,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { RequestContext } from '@mastra/core/request-context';
@@ -48,6 +49,8 @@ import { MetricsService } from '../metrics/metrics.service';
 import { KnowledgeService } from '../knowledge/knowledge.service';
 import { SessionsRepository } from './repositories/sessions.repository';
 import { VisualizationService } from './visualization.service';
+import { ActivityService } from '../auth/activity.service';
+import { CurrentUserService } from '../auth/current-user.service';
 import { sourceEntities } from './visualization-document';
 import { compareResults } from './result-compare';
 import {
@@ -122,9 +125,13 @@ export class SessionsService implements OnModuleInit {
 
   /**
    * Preview sessions of the agent editor, held in memory only and never in
-   * the sessions collection (agents-evals R61, data-model 3.12).
+   * the sessions collection (agents-evals R61, data-model 3.12), with the
+   * user who opened each: for anyone else it does not exist (data-model 3.15).
    */
-  private readonly previews = new Map<string, SessionDoc>();
+  private readonly previews = new Map<
+    string,
+    { doc: SessionDoc; ownerId: string }
+  >();
 
   /**
    * Provider options filed under the bucket the configured model actually
@@ -151,7 +158,20 @@ export class SessionsService implements OnModuleInit {
     private readonly metrics: MetricsService,
     private readonly knowledge: KnowledgeService,
     private readonly userAgents: UserAgentsService,
+    // Defaulted so unit tests that never switch users can leave it out.
+    private readonly currentUser: CurrentUserService = new CurrentUserService(),
+    // Records agent errors in org server mode (admin R40); absent in unit tests.
+    @Optional() private readonly activity?: ActivityService,
   ) {}
+
+  /** The current user's preview with this id, if any. */
+  private ownPreview(id: string): SessionDoc | undefined {
+    const entry = this.previews.get(id);
+    if (!entry || entry.ownerId !== this.currentUser.ownerKey()) {
+      return undefined;
+    }
+    return entry.doc;
+  }
 
   async onModuleInit(): Promise<void> {
     // Install the DI bridge the Mastra tools use (they load with no Nest DI).
@@ -195,8 +215,9 @@ export class SessionsService implements OnModuleInit {
     await this.sweepPreviews();
 
     // Backfill workspaces for sessions created before workspace support and
-    // restore their registrations after every process restart.
-    const sessions = await this.repository.list();
+    // restore their registrations after every process restart. Startup work:
+    // it walks every owner's sessions (data-model 3.15).
+    const sessions = await this.repository.listAllOwners();
     await Promise.all(
       sessions.map(async (session) => {
         const workspace = await this.mastra.ensureSessionWorkspace(
@@ -204,9 +225,10 @@ export class SessionsService implements OnModuleInit {
           session.name,
         );
         if (session.workspaceId !== workspace.id) {
-          await this.repository.update(session.id, {
-            workspaceId: workspace.id,
-          });
+          await this.repository.setWorkspaceIdAnyOwner(
+            session.id,
+            workspace.id,
+          );
         }
       }),
     );
@@ -754,8 +776,13 @@ export class SessionsService implements OnModuleInit {
     return this.repository.list();
   }
 
+  /**
+   * The current user's session (or preview) with this id. Another user's
+   * answers as not found (admin R30); every route and tool that reaches a
+   * session's memory thread or workspace goes through here first.
+   */
   async get(id: string): Promise<SessionDoc> {
-    const preview = this.previews.get(id);
+    const preview = this.ownPreview(id);
     if (preview) return { ...preview };
     const session = await this.repository.get(id);
     if (!session) throw new NotFoundException(`Session ${id} not found`);
@@ -837,7 +864,10 @@ export class SessionsService implements OnModuleInit {
       createdAt: now,
       updatedAt: now,
     };
-    this.previews.set(id, preview);
+    this.previews.set(id, {
+      doc: preview,
+      ownerId: this.currentUser.ownerKey(),
+    });
     return { ...preview };
   }
 
@@ -873,14 +903,17 @@ export class SessionsService implements OnModuleInit {
     id: string,
     patch: Partial<SessionDoc>,
   ): Promise<SessionDoc | null> {
-    const preview = this.previews.get(id);
+    const preview = this.ownPreview(id);
     if (!preview) return this.repository.update(id, patch);
     const updated = {
       ...preview,
       ...patch,
       updatedAt: new Date().toISOString(),
     };
-    this.previews.set(id, updated);
+    this.previews.set(id, {
+      doc: updated,
+      ownerId: this.currentUser.ownerKey(),
+    });
     return { ...updated };
   }
 
@@ -1134,24 +1167,59 @@ export class SessionsService implements OnModuleInit {
     const trimmed = (content ?? '').trim();
     if (!trimmed) throw new BadRequestException('message is required');
     const session = await this.get(id);
-    this.appendUserMessage(session, trimmed);
-    const agent = this.mastra.getAgent('assistant');
-    const input = await this.agentInput(agent, session);
-    const options = await this.agentOptions(session, trimmed);
-    const result = await agent.generate(input, options);
-    const reasoning = reasoningTrail(toolRecords(result));
-    const knowledge = knowledgeUsed(options.requestContext);
-    session.messages.push({
-      role: 'assistant',
-      content: (result.text ?? '').trim(),
-      at: new Date().toISOString(),
-      ...(reasoning ? { reasoning } : {}),
-      ...(knowledge ? { knowledge } : {}),
-    });
-    const updated = await this.updateDoc(id, {
-      messages: session.messages,
-    });
-    return updated ?? session;
+    try {
+      this.appendUserMessage(session, trimmed);
+      const agent = this.mastra.getAgent('assistant');
+      const input = await this.agentInput(agent, session);
+      const options = await this.agentOptions(session, trimmed);
+      const result = await agent.generate(input, options);
+      const reasoning = reasoningTrail(toolRecords(result));
+      const knowledge = knowledgeUsed(options.requestContext);
+      session.messages.push({
+        role: 'assistant',
+        content: (result.text ?? '').trim(),
+        at: new Date().toISOString(),
+        ...(reasoning ? { reasoning } : {}),
+        ...(knowledge ? { knowledge } : {}),
+      });
+      const updated = await this.updateDoc(id, {
+        messages: session.messages,
+      });
+      return updated ?? session;
+    } catch (error) {
+      await this.recordAgentError(session, error);
+      throw error;
+    }
+  }
+
+  /**
+   * An agent error (admin R40; api.md 3.1; data-model 3.14.7): in org server
+   * mode, a turn in a session started from a user agent that ended in an
+   * error. Called only once the request reached the assistant, so an empty
+   * message or an unknown session never counts; a stopped turn, a preview
+   * and an agent this session no longer runs (deleted, or transferred to
+   * another owner) don't either. Recording never hides the turn's error.
+   */
+  private async recordAgentError(
+    session: SessionDoc,
+    error: unknown,
+    abortSignal?: AbortSignal,
+  ): Promise<void> {
+    if (abortSignal?.aborted || this.currentUser.mode !== 'org') return;
+    if (!this.activity || !session.agentId || session.preview) return;
+    try {
+      if (!(await this.userAgents.get(session.agentId))) return;
+      const message = error instanceof Error ? error.message : String(error);
+      await this.activity.record('agent.turn-failed', {
+        actorId: this.currentUser.ownerKey(),
+        subjectId: session.agentId,
+        details: { sessionId: session.id, message: message.slice(0, 200) },
+      });
+    } catch (recordError) {
+      this.logger.warn(
+        `Could not record the agent error of session ${session.id}: ${recordError instanceof Error ? recordError.message : String(recordError)}`,
+      );
+    }
   }
 
   /**
@@ -1173,6 +1241,31 @@ export class SessionsService implements OnModuleInit {
     const trimmed = (content ?? '').trim();
     if (!trimmed) throw new BadRequestException('message is required');
     const session = await this.get(id);
+    try {
+      await this.streamTurn(
+        session,
+        trimmed,
+        emit,
+        abortSignal,
+        activeVisualId,
+        careful,
+      );
+    } catch (error) {
+      await this.recordAgentError(session, error, abortSignal);
+      throw error;
+    }
+  }
+
+  /** The streamed turn itself, once the request reached the assistant. */
+  private async streamTurn(
+    session: SessionDoc,
+    trimmed: string,
+    emit: (event: StreamEvent) => void,
+    abortSignal: AbortSignal | undefined,
+    activeVisualId: string | undefined,
+    careful: boolean,
+  ): Promise<void> {
+    const id = session.id;
     this.appendUserMessage(session, trimmed);
     // Persist the prompt before model startup. A user can stop while the
     // provider is still connecting, and that turn should survive a reload.

@@ -161,11 +161,33 @@
       }
 
       <div class="flex shrink-0 flex-col gap-3" [class.items-center]="!navExpanded()">
-        <span
-          title="Demo User"
-          class="mx-2 flex size-8 items-center justify-center rounded-full bg-primary text-[14px] font-semibold text-on-primary"
-          >D</span
-        >
+        @if (showAdmin()) {
+          <!-- Org server mode, Manage users only (admin R34) -->
+          <button
+            type="button"
+            (click)="selectArea('admin')"
+            title="Admin"
+            aria-label="Admin"
+            [attr.aria-current]="currentArea() === 'admin' ? 'page' : null"
+            class="flex h-12 w-full items-center gap-3 rounded-lg px-3.5 text-icon transition-colors hover:bg-surface-muted"
+            [class.bg-surface-selected]="currentArea() === 'admin'"
+          >
+            <lucide-angular class="shrink-0" [img]="Shield" [size]="20" />
+            @if (navExpanded()) {
+              <span class="text-[14px] font-medium text-fg" aria-hidden="true">Admin</span>
+            }
+          </button>
+        }
+        @if (auth.isOrg()) {
+          <!-- The signed-in user's initials and account menu (admin R10) -->
+          <app-account-menu />
+        } @else {
+          <span
+            title="Demo User"
+            class="mx-2 flex size-8 items-center justify-center rounded-full bg-primary text-[14px] font-semibold text-on-primary"
+            >D</span
+          >
+        }
         <button
           type="button"
           (click)="systemLogsOpen.set(true)"
@@ -283,7 +305,7 @@
                 aria-label="Settings navigation"
                 class="flex flex-col gap-1.5 px-3"
               >
-                @for (section of settingsSections; track section.key) {
+                @for (section of visibleSettingsSections(); track section.key) {
                   <button
                     type="button"
                     (click)="selectSection(section.key)"
@@ -424,7 +446,7 @@
             <!-- Content area -->
             <div class="flex min-h-0 flex-1 flex-col">
               @if (settingsOpen()) {
-                @switch (settingsSection()) {
+                @switch (shownSettingsSection()) {
                   @case ("datasources") {
                     <div
                       class="flex flex-1 justify-center overflow-y-auto px-6 py-10"
@@ -519,6 +541,10 @@
                 <div class="flex flex-1 justify-center overflow-y-auto px-8 py-10">
                   <app-knowledge-list class="w-full max-w-[960px]" />
                 </div>
+              } @else if (mainView() === "admin") {
+                <div class="flex flex-1 justify-center overflow-y-auto px-8 py-10">
+                  <app-admin-area class="w-full max-w-[1280px]" />
+                </div>
               } @else if (mainView() === "session-chat" && activeSession()) {
                 <app-session-chat
                   class="min-h-0 flex-1"
@@ -561,37 +587,40 @@
                           <lucide-angular [img]="Sparkle" [size]="13" />
                           <span>{{ llmModel() ?? "No model configured" }}</span>
                         </button>
-                        <div class="relative">
-                          <button
-                            (click)="effortMenuOpen.set(!effortMenuOpen())"
-                            title="Reasoning effort"
-                            class="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-fg-muted capitalize hover:bg-surface-muted"
-                          >
-                            <lucide-angular [img]="Signal" [size]="13" />
-                            <span>{{ llmEffort() }}</span>
-                          </button>
-                          @if (effortMenuOpen()) {
-                            <div
-                              class="fixed inset-0 z-10"
-                              (click)="effortMenuOpen.set(false)"
-                            ></div>
-                            <div
-                              class="menu absolute bottom-full left-0 z-20 mb-1 w-36"
+                        <!-- Hidden without Manage LLM configuration (admin R26) -->
+                        @if (auth.can("manage-llm")) {
+                          <div class="relative">
+                            <button
+                              (click)="effortMenuOpen.set(!effortMenuOpen())"
+                              title="Reasoning effort"
+                              class="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-fg-muted capitalize hover:bg-surface-muted"
                             >
-                              @for (effort of reasoningEfforts; track effort) {
-                                <button
-                                  (click)="setEffort(effort)"
-                                  class="menu-item capitalize"
-                                  [class.font-semibold]="llmEffort() === effort"
-                                  [class.text-fg-strong]="llmEffort() === effort"
-                                  [class.text-fg-muted]="llmEffort() !== effort"
-                                >
-                                  {{ effort }}
-                                </button>
-                              }
-                            </div>
-                          }
-                        </div>
+                              <lucide-angular [img]="Signal" [size]="13" />
+                              <span>{{ llmEffort() }}</span>
+                            </button>
+                            @if (effortMenuOpen()) {
+                              <div
+                                class="fixed inset-0 z-10"
+                                (click)="effortMenuOpen.set(false)"
+                              ></div>
+                              <div
+                                class="menu absolute bottom-full left-0 z-20 mb-1 w-36"
+                              >
+                                @for (effort of reasoningEfforts; track effort) {
+                                  <button
+                                    (click)="setEffort(effort)"
+                                    class="menu-item capitalize"
+                                    [class.font-semibold]="llmEffort() === effort"
+                                    [class.text-fg-strong]="llmEffort() === effort"
+                                    [class.text-fg-muted]="llmEffort() !== effort"
+                                  >
+                                    {{ effort }}
+                                  </button>
+                                }
+                              </div>
+                            }
+                          </div>
+                        }
                       </div>
                       <div class="flex items-center gap-3">
                         <button

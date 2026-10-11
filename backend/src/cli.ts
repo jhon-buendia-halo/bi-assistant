@@ -185,12 +185,19 @@ async function main(): Promise<void> {
     );
   }
 
-  const { app, url } = await createApp({ port, host, webRoot });
+  const { app, url, orgPublicBaseUrl } = await createApp({
+    port,
+    host,
+    webRoot,
+  });
 
   console.log('');
   console.log(`  Questions to Insights ${readVersion()}`);
   console.log(`  URL:      ${url}`);
   console.log(`  Data dir: ${dataDir}`);
+  if (orgPublicBaseUrl) {
+    console.log(`  Mode:     org server, ${orgPublicBaseUrl}`);
+  }
   console.log('  Press Ctrl+C to stop.');
   console.log('');
 

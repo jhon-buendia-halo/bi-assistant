@@ -191,6 +191,8 @@ export interface SessionDoc {
   preview?: boolean;
   messages: ChatMessage[];
   visualizations?: SessionVisualization[];
+  /** The owning user's id in org server mode (data-model 3.15). */
+  ownerId?: string;
   createdAt?: string;
   updatedAt?: string;
 }

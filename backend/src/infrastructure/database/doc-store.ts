@@ -44,6 +44,19 @@ export interface DocStore<T extends object = Record<string, unknown>> {
   deleteMany(filter: DocFilter): Promise<number>;
 }
 
+/**
+ * Runs several store writes as one unit (data-model 2.4): every write made
+ * by `work` is applied, or none is. Used where the API promises "all or
+ * nothing" (api.md 85, 86). `work` must only call stores: the adapter's
+ * operations are synchronous under their promises, so nothing else runs on
+ * the connection until `work` settles. Runs are serialised, not nested.
+ */
+export interface DocStoreTransactions {
+  run<R>(work: () => Promise<R>): Promise<R>;
+}
+
+export const DOC_STORE_TRANSACTIONS = 'DOC_STORE_TRANSACTIONS';
+
 /** One injection token per application collection. */
 export const CONNECTIONS_STORE = 'DOC_STORE_connections';
 export const SETTINGS_STORE = 'DOC_STORE_settings';
@@ -55,6 +68,38 @@ export const METRICS_STORE = 'DOC_STORE_metrics';
 export const EVAL_RUNS_STORE = 'DOC_STORE_eval_runs';
 export const KNOWLEDGE_STORE = 'DOC_STORE_knowledge';
 export const AGENTS_STORE = 'DOC_STORE_agents';
+
+/** Identity and access collections, org server mode only (data-model 3.14). */
+export const USERS_STORE = 'DOC_STORE_users';
+export const GROUPS_STORE = 'DOC_STORE_groups';
+export const GROUP_MEMBERS_STORE = 'DOC_STORE_group_members';
+export const ROLE_ASSIGNMENTS_STORE = 'DOC_STORE_role_assignments';
+export const GROUP_ROLE_MAPPINGS_STORE = 'DOC_STORE_group_role_mappings';
+export const AUTH_SESSIONS_STORE = 'DOC_STORE_auth_sessions';
+export const ACTIVITY_EVENTS_STORE = 'DOC_STORE_activity_events';
+
+/**
+ * Owner-scoped views of the private collections (data-model 3.15): an
+ * `OwnedDocStore` over the raw store, provided by the auth module.
+ * Repositories of private collections inject these; the raw tokens above
+ * stay for startup work that walks every owner's documents.
+ */
+export const OWNED_SESSIONS_STORE = 'OWNED_DOC_STORE_sessions';
+export const OWNED_VERIFIED_QUERIES_STORE = 'OWNED_DOC_STORE_verified_queries';
+export const OWNED_METRICS_STORE = 'OWNED_DOC_STORE_metrics';
+export const OWNED_EVAL_RUNS_STORE = 'OWNED_DOC_STORE_eval_runs';
+export const OWNED_KNOWLEDGE_STORE = 'OWNED_DOC_STORE_knowledge';
+export const OWNED_AGENTS_STORE = 'OWNED_DOC_STORE_agents';
+
+/** Each private collection's owned token and the raw store it wraps. */
+export const PRIVATE_COLLECTIONS: { owned: string; raw: string }[] = [
+  { owned: OWNED_SESSIONS_STORE, raw: SESSIONS_STORE },
+  { owned: OWNED_VERIFIED_QUERIES_STORE, raw: VERIFIED_QUERIES_STORE },
+  { owned: OWNED_METRICS_STORE, raw: METRICS_STORE },
+  { owned: OWNED_EVAL_RUNS_STORE, raw: EVAL_RUNS_STORE },
+  { owned: OWNED_KNOWLEDGE_STORE, raw: KNOWLEDGE_STORE },
+  { owned: OWNED_AGENTS_STORE, raw: AGENTS_STORE },
+];
 
 export function isExistsCondition(v: FilterValue): v is ExistsCondition {
   return typeof v === 'object' && v !== null && '$exists' in v;

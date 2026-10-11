@@ -4,7 +4,7 @@ The contract for how the app looks and behaves as a single window: shell layout,
 
 Stack-neutral wording; *Implementation notes* name the current Angular/Tailwind realisation (see [tech-stack.md](tech-stack.md)). The shell-level rules (R-numbered, testable) are in [../capabilities/app-shell/spec.md](../capabilities/app-shell/spec.md); this file is the visual and structural reference that spec points at.
 
-Capability specs referenced below: [app-shell](../capabilities/app-shell/spec.md), [diagnostics](../capabilities/diagnostics/spec.md), [llm-settings](../capabilities/llm-settings/spec.md), [datasources](../capabilities/datasources/spec.md), [datasets](../capabilities/datasets/spec.md), [testing-data](../capabilities/testing-data/spec.md), [sessions-chat](../capabilities/sessions-chat/spec.md), [visuals](../capabilities/visuals/spec.md), [knowledge](../capabilities/knowledge/spec.md), [verified-queries](../capabilities/verified-queries/spec.md), [metrics](../capabilities/metrics/spec.md), [deep-analysis](../capabilities/deep-analysis/spec.md), [agents-evals](../capabilities/agents-evals/spec.md).
+Capability specs referenced below: [app-shell](../capabilities/app-shell/spec.md), [diagnostics](../capabilities/diagnostics/spec.md), [llm-settings](../capabilities/llm-settings/spec.md), [datasources](../capabilities/datasources/spec.md), [datasets](../capabilities/datasets/spec.md), [testing-data](../capabilities/testing-data/spec.md), [sessions-chat](../capabilities/sessions-chat/spec.md), [visuals](../capabilities/visuals/spec.md), [knowledge](../capabilities/knowledge/spec.md), [verified-queries](../capabilities/verified-queries/spec.md), [metrics](../capabilities/metrics/spec.md), [deep-analysis](../capabilities/deep-analysis/spec.md), [agents-evals](../capabilities/agents-evals/spec.md), [admin](../capabilities/admin/spec.md).
 
 ## 1. App shell
 
@@ -66,7 +66,10 @@ Capability specs referenced below: [app-shell](../capabilities/app-shell/spec.md
    - Hover: `surface-muted` fill. Current area: `surface-selected` fill and `aria-current="page"`.
 5. When expanded, the **Sessions list** (app-shell R46, R48), below a `border` rule and filling the free height (scrolls); when collapsed, a flexible spacer. See below.
 6. Bottom group, 12 px apart (centred while collapsed):
-   - The account avatar: a 32 px `primary` circle with the letter "D" in `on-primary` (14 px semibold), titled "Demo User". A static placeholder with no menu.
+   - **Admin** (org server mode, users with `manage-users` only; admin R34): `shield` icon, `icon` colour, title and `aria-label` "Admin", label "Admin" when expanded. Marked current (`surface-selected`, `aria-current="page"`) while the Admin area (4.18) is shown.
+   - The account avatar: a 32 px `primary` circle with initials in `on-primary` (14 px semibold).
+     - **Local mode:** the letter "D", titled "Demo User". A static placeholder with no menu.
+     - **Org server mode** (admin R10): a `button` with the signed-in user's initials, title the display name, `aria-label="Account menu"`, `aria-haspopup="menu"` and `aria-expanded`. Initials: the first letter of the given name and of the family name; else of the first two words of the display name; else the first letter of the email; uppercase, at most two. Clicking it opens a `menu` popover (width 240) beside the rail, its bottom level with the avatar's: the display name (13 px semibold `fg-strong`), the email (12 px `fg-muted`, truncated), a `border` rule, and a `role="menu"` list labelled "Account" (the avatar's `aria-controls`) holding the `menuitem` **Sign out** (`log-out` icon), which takes focus when the menu opens. Escape or a click outside closes it; Escape returns focus to the avatar. While sign-out runs the item reads "Signing out…" and is disabled.
    - **System logs** (scroll-text icon, `icon` colour; `aria-label="Open system logs"`, title "System logs and diagnostics"; label "System logs" when expanded), with a red count badge (`danger` palette, top-right of the icon) showing the number of error + warning log entries, capped at "99+", hidden at zero. Opens the system logs panel (3.2).
    - **Settings** (gear icon, `icon` colour, title and `aria-label` "Settings"; label "Settings" when expanded), marked current (`surface-selected`, `aria-current="page"`) while the Settings area is shown.
    - A 1 px `border` divider.
@@ -111,6 +114,7 @@ The main column renders exactly one of these views, held in a single "main view"
 | `conversation-new` | **New conversation** in the drawer, or **Start New Conversation** in the page header | Sessions | page header ("New conversation") + New-session composer (4.7); list in the drawer | Entity details |
 | `session-chat` | a session row in the drawer, or creating a session | Sessions | page header (session name + datasource context) + Session chat (4.12); list in the drawer | Interactive visual panel (4.13) |
 | Settings area, section `datasources` / `llm` / `testing-data` / `developer` / `appearance` | rail **Settings**, then a section | Settings | Settings list pane + the matching form (4.9-4.12, 4.16), centred column | Entity details |
+| `admin` (org server mode only) | rail **Admin** | Admin | Admin area (4.18), max width 1280; the selected tab is view state | Entity details |
 
 - Content views (everything except the chat) sit in a vertically scrolling, horizontally centred column with 32 px horizontal / 40 px vertical padding and a max width of 960 px (settings forms: 560 px for datasources, testing data, developer and appearance, 480 px for LLM, 24 px horizontal padding).
 - Opening a session loads the datasources used by that session (for the header) and its most recent visual (for the right panel).
@@ -128,6 +132,26 @@ The main column renders exactly one of these views, held in a single "main view"
   - Window resize re-clamps the width.
   - Persistence: `localStorage` key `questions-to-insights:right-panel-width`, value the integer pixel width as a string; written when a drag ends and on every keyboard/reset change; read once at start-up (non-numeric or missing -> 572; out-of-range values clamped).
 - Right panel bodies by main view: see the table in 1.4. Open/closed state is session-only (not persisted); only the width is remembered.
+
+### 1.6 Modes and permission-based visibility
+
+Rules: [../capabilities/admin/spec.md](../capabilities/admin/spec.md) R2, R5, R24-R26 and [../capabilities/app-shell/spec.md](../capabilities/app-shell/spec.md) R50.
+
+- **Both modes:** the renderer loads the current user (`GET /me`, [api.md](api.md) 2.13) before anything else; until it answers only the frame (1.2) shows. When the backend can't be reached it retries like the session list (1.4: 12 times, 200 ms steps capped at 1 s), then opens the shell as in local mode, so a desktop backend that is still starting behaves as before; an org server answers the next call with 401.
+- **Local mode:** the shell opens as soon as `GET /me` answers, and every control below is shown. The local backend never answers 401; the renderer ignores one.
+- **Org server mode:** a 401 from `GET /me` shows the sign-in page (4.17) in place of the whole shell; otherwise the shell renders with the user's permissions. Any later 401, from any call (the streamed chat and knowledge calls included), replaces the shell with the sign-in page.
+- Controls hidden, not disabled, when the user lacks the permission:
+
+  | Permission | Hidden without it |
+  |---|---|
+  | `create-agents` | Agent Hub **New agent** (4.4); in a user agent's detail **Edit**, **Publish** and **Delete** (4.5); in the Evals tab the question checkboxes, **Select all**, the datasource picker with **Run <n> selected**, and the **Executions** sub-tab (the question list stays readable) |
+  | `manage-datasources` | Datasets list **New dataset** and each row's options button (`Options for <name>`), whose menu holds only **Delete dataset** (4.2); in the catalog browser the **Dataset name** field and **Save dataset (<n>)** (4.3; rows still open it, so metrics stay reachable); Settings **Datasource Configuration** and **Testing Data** |
+  | `manage-llm` | Settings **LLM Configuration**; the New-session composer's **Reasoning effort** dropdown (4.7) |
+  | `edit-policies` | Settings **Developer** |
+  | `manage-users` | Rail **Admin** (1.3) |
+
+  The Settings list keeps its order with the hidden sections left out; **Appearance** is always there. A Settings section that becomes hidden while chosen falls back to "Choose a settings section.".
+- **403:** any call answered with HTTP 403 raises the error toast `You don't have permission to do this.` (instead of the server message) and leaves the view as it is. The error the view receives carries the same message, so a view that reports it too says the same thing, and the toast shows once while it is visible.
 
 ## 2. Loading, empty, error and confirmation conventions
 
@@ -303,7 +327,7 @@ Shown while an agent detail is open. With nothing selected: "Select a question i
 
 Capability: [sessions-chat](../capabilities/sessions-chat/spec.md).
 
-A centred `card` (radius 12, max width 920, padding 16) with a **Session name** `field` (14 px; label `field-label`; placeholder `My new session`), then a controls row: a model chip (sparkle icon + the configured model id in `fg`, or `No model configured` in `fg-muted` when none), a **Reasoning effort** dropdown button (title "Reasoning effort", signal icon + `low` / `medium` / `high` capitalised in `fg-muted`, a `menu` of the three values opening upward, the current one `fg-strong` semibold; choosing one saves it immediately: toast `<server message>`), and the `btn btn-primary` **Create** button (corner-down-left icon; shows `Creating…`; disabled until a name is typed and at least one dataset selected; title "Name the session and select at least one dataset"). Below the card: caption "Select at least one dataset for this session" and a list of dataset `list-row`s (36 px `surface-muted` tile with a workflow icon in `accent`, name, "<n> entities"; a selected row is `list-row-selected` with a trailing circle-check in `primary`). Empty: `No datasets yet — create one in Datasets first.` On success: toast with the server message, the session list reloads and the new session opens (4.12).
+A centred `card` (radius 12, max width 920, padding 16) with a **Session name** `field` (14 px; label `field-label`; placeholder `My new session`), then a controls row: a model chip (sparkle icon + the configured model id in `fg`, or `No model configured` in `fg-muted` when none), a **Reasoning effort** dropdown button (hidden without `manage-llm` in org server mode, 1.6; title "Reasoning effort", signal icon + `low` / `medium` / `high` capitalised in `fg-muted`, a `menu` of the three values opening upward, the current one `fg-strong` semibold; choosing one saves it immediately: toast `<server message>`), and the `btn btn-primary` **Create** button (corner-down-left icon; shows `Creating…`; disabled until a name is typed and at least one dataset selected; title "Name the session and select at least one dataset"). Below the card: caption "Select at least one dataset for this session" and a list of dataset `list-row`s (36 px `surface-muted` tile with a workflow icon in `accent`, name, "<n> entities"; a selected row is `list-row-selected` with a trailing circle-check in `primary`). Empty: `No datasets yet — create one in Datasets first.` On success: toast with the server message, the session list reloads and the new session opens (4.12).
 
 ### 4.8 Knowledge list and form
 
@@ -404,6 +428,117 @@ Capability: [app-shell](../capabilities/app-shell/spec.md) R39–R45.
 - A card holding one `radiogroup` labelled **Theme** with three options, each a native radio input with a visible label and an icon: **System** (`monitor`), **Light** (`sun`), **Dark** (`moon`). The options sit side by side as pill buttons (radius full, 1 px `border` token). The selected one has the `primary-soft` fill, `on-primary-soft` text and a `border-selected` outline. Keyboard: arrow keys move the selection, as for any native radio group.
 - No Save button: a choice applies and is remembered at once.
 
+### 4.17 Sign-in page (org server mode)
+
+Capability: [admin](../capabilities/admin/spec.md) R5-R7, R16.
+
+- Replaces the whole shell: no rail, no banner card, no details panel, no system-logs button. The frame (1.2: gradient and texture) fills the window and holds one centred `card` (width 400, padding 32, radius 12, `main` landmark), top to bottom, 16 px apart:
+  - a row with the logo (1.3, 40 px) and, 12 px to its right, the `h1` "Agentic Hub" (24 px semibold `fg-strong`);
+  - the subtitle "Sign in with your organisation account to continue." (14 px `fg-muted`);
+  - when the round trip failed, an inline error block (section 2, `role="alert"`) reading `Sign-in failed. Try again.` or `Your account is deactivated. Contact your administrator.`;
+  - the full-width `btn btn-primary` **Sign in with Microsoft** (`log-in` icon). Clicking it navigates the window to `/auth/login` (a full page load, not a request) and reads `Signing in…`, disabled, until the page unloads.
+- The error to show comes from the `signInError` query parameter of the page URL (`failed` or `deactivated`, [api.md](api.md) 2.13; any other value reads as `failed`); the page removes it from the address bar once shown.
+- Theme: follows the Appearance choice stored in the browser (6.5). axe-clean in both themes.
+
+### 4.18 Admin area (org server mode)
+
+Capability: [admin](../capabilities/admin/spec.md) R34-R68. Data: [api.md](api.md) 2.15. Visual reference: the Figma board in the [BA-161 epic spec](../epics/BA-161/spec.md), screens P1–P4 (the board's Requests, Registry, Policies and Audit log tabs and its Add role and Sync from Entra ID buttons are left out, admin R37).
+
+There is no URL route: the area is the `admin` main view (1.4) and the selected tab is view state. Overview is selected each time the area opens; the Users & groups view, search, chip and page reset when the tab is left.
+
+#### 4.18.1 Frame
+
+- Content view (1.4), but **max width 1280** instead of 960, so the users table and the user detail panel fit side by side.
+- **Header** (a row, 12 px gap, no rule under it: the tab bar carries the rule): a 32 px `primary-soft` tile with the `layout-dashboard` icon (`accent`, decorative), the `h2` "Admin" (page-title style, 4) and under it the subtitle "Manage people, roles and access for your organisation." (13 px `fg-muted`). Right-aligned, the selected tab's action (admin R37):
+  - Overview: `btn btn-outline` **Export report** (`download` icon). It fetches `GET /admin/overview/export` and saves the response as a file named by its `Content-Disposition` (else `admin-report-<UTC date>.csv`), through a temporary link to the downloaded file. It reads "Exporting…", disabled, until the file arrives; a failure raises the error toast with the server's message (5.3).
+  - Users & groups: `btn btn-primary` **Assign role** (`user-plus` icon), opening the Assign role dialog (4.18.4).
+  - Roles & permissions: none.
+- A `tablist` (`aria-label="Admin sections"`) with three `tab`s, in this order: **Overview**, **Users & groups**, **Roles & permissions**. 14 px medium; the selected tab has `fg-strong` text and a 2 px `primary` bottom border, the others `fg-muted`. A 1 px `border` rule runs under the tab bar. Only the selected tab is in the tab order (`tabindex` 0, the others -1); arrow keys move between tabs and select them, wrapping at the ends; Home and End go to the first and last.
+- Each `tabpanel` (labelled by its tab, focusable, 24 px below the tabs) shows, while loading, the loading line of section 2 (`Loading overview…`, `Loading users…`, `Loading roles…`), and on failure the error block of section 2 with a `btn btn-outline` **Retry** (admin R38).
+- **Badges** are `chip`s (3.6). Roles: Platform admin `chip-danger`, Approver `chip-warning`, Data owner `chip-success`, Maker `chip-info`, User `chip-neutral`. Status: Active `chip-success`, Inactive `chip-danger`, Not signed in `chip-neutral`, Deactivated `chip-warning`. Agents: Live `chip-success`, Draft `chip-neutral`. Groups: `chip-neutral`. The `*-soft` pairs meet 4.5:1 in both themes (6.0).
+- **Times.** Last active (admin R39): `Today`, `Yesterday`, `<n> days ago`, `Never`, by UTC calendar day. Relative times (last sync, recent activity, last error): `just now` (under a minute), `<n> minute(s) ago`, `<n> hour(s) ago`, `yesterday`, `<n> days ago`; the full local date and time is the element's `title`. Counts use thousands separators (`1,940`).
+- **Admin dialogs** (Assign an owner, Agents with errors, Inactive makers, Assign role, Transfer ownership, Add mapping): a scrim (`fg-strong` at 40 %; clicking it does nothing) and a centred `card` (width 560, padding 24, radius 16, `shadow-2xl`, scrolling inside when taller than the window) with `role="dialog"`, `aria-modal="true"`, labelled by its `h2` title (16 px semibold `fg-strong`) and described by its intro line (13 px `fg-muted`). Focus moves to the first control when it opens, stays inside while it is open, and returns to the button that opened it when it closes. Escape and **Cancel** (`btn btn-outline`) close it without changes. The primary button is right-aligned after **Cancel** and shows a spinner and its present participle while running ("Transferring…", "Removing…", "Assigning…", "Adding…"). A failure keeps the dialog open and raises the error toast (5.3).
+- **Pickers** (User, New owner, Entra ID group): a `field` text input with `role="combobox"`, `aria-autocomplete="list"`, `aria-expanded` and `aria-controls` pointing at a `listbox` of up to 10 matches (`GET /admin/users?excludeDeactivated=true&pageSize=10&q=` or `GET /admin/groups?pageSize=10&q=`, 250 ms after typing stops), shown as a `menu` under the input (in the flow, so a scrolling dialog never clips it). Placeholders: `Search by name or email` (users), `Search group name` (groups). Options read `<name> · <email>` for users (the name alone without an email) and the group name for groups; with no match the line `No matches.` (12 px `fg-muted`) shows instead. Arrow keys move, Enter picks, Escape closes the list (and only the list). Typing after a pick clears it. Labelled with `<label for>`.
+- **Selects** (Role, Datasource) are native `select.field`s labelled with `<label for>` (not a wrapping label). **Role** starts on `Choose a role`, then offers Maker, Data owner, Approver, Platform admin; choosing another role than Data owner clears the datasource. **Datasource** lists the datasources by name (`GET /datasources`), first option "Choose a datasource", or "No datasources" when there are none; it stays visible and is disabled unless Role is Data owner, with the hint "Only for Data owner." (12 px `fg-muted`, `aria-describedby`).
+
+#### 4.18.2 Overview (P1)
+
+Data: `GET /admin/overview` (api 81). Admin R41-R48.
+
+- **Tiles row**: two equal `card`s side by side (16 px gap), padding 16 × 20 (`data-testid="admin-tile"`). Each shows the value (32 px light, `data-testid="admin-tile-value"`) over its label (13 px `fg-muted`): `Active users · 30 days` (value `on-success-soft`) and `Agents live` (value `fg-strong`). The value and label are one `p` so they are read together.
+- **Body**, 24 px below: two columns, 24 px apart; under 1100 px of main-column width the right column moves below the left.
+  - **Left, `card` "Needs attention"** (`h3`, 15 px semibold `fg-strong`). A `ul` labelled by the heading, of three `li` rows, each a `list-row` (padding 12 × 16, 8 px apart): the row text (14 px `fg`), a flexible spacer, the count `chip` (`data-testid="attention-count"`) and a `btn btn-secondary` action (32 px tall).
+
+    | Row text | Badge | Badge style (0 → `chip-neutral`) | Action |
+    |---|---|---|---|
+    | `Agents without an active owner` | `<n> agent(s)` | `chip-danger` | **Assign** |
+    | `Agents with errors in the last 7 days` | `<n> agent(s)` | `chip-danger` | **Inspect** |
+    | `Users inactive for 90+ days with Maker role` | `<n> user(s)` | `chip-neutral` | **Clean up** |
+
+    A row with count 0 keeps its action visible and disabled, titled "Nothing to do" (admin R42).
+  - **Right column** (width 420):
+    - `card` **Weekly active users** (`h3`): a `figure` with 8 vertical bars, 32 px wide, 16 px apart, bottom-aligned in a 120 px box, heights proportional to the counts (an empty week is a 2 px stub). Past weeks `border-strong` fill, the current week `primary`; radius 4 on top. Each bar has a `title` "Week of <Mon D>: <n> user(s)". The bars are `aria-hidden`; a visually hidden `table` (caption "Weekly active users", columns "Week of", "Active users") carries the numbers. The `figcaption` (12 px `fg-muted`) is the caption of admin R46; a current week that ties the peak reads "this week", and when past weeks tie, the latest of them is named.
+    - `card` **Recent activity** (`h3`; the card is `data-testid="admin-recent-activity"`), 16 px below: a `ul` labelled by the heading, of up to 10 items, each the sentence (13 px `fg`) over its relative time (12 px `fg-muted`). Empty: "No activity yet." (13 px `fg-muted`).
+- **Assign an owner** dialog (**Assign**): title "Assign an owner"; intro "These agents belong to people who are deactivated or no longer in the directory. Choose who takes them over."; a `fieldset` (legend "Agents", visually hidden) of checkboxes, each labelled with the agent name and described by "Former owner: <name>" or "Former owner: unknown user", all ticked; the **New owner** picker; buttons **Cancel** and `btn btn-primary` **Transfer** (disabled until a new owner is picked and an agent is ticked). Success toasts the server message and reloads the overview.
+- **Agents with errors** dialog (**Inspect**): title "Agents with errors"; intro "Chat turns that ended in an error in the last 7 days. The sessions stay private to their owners."; a `table` with columns **Agent**, **Owner**, **Errors**, **Last error**; the last-error cell shows the relative time over the message (12 px `fg-muted`, one line, clipped with an ellipsis, the full message as `title`). One button, `btn btn-outline` **Close**.
+- **Inactive makers** dialog (**Clean up**): title "Inactive makers"; intro "These people haven't used the app for 90 days or more and still hold the Maker role."; checkboxes labelled with the user's name, described by "Last active <n> days ago · Direct assignment" (ticked) or "Last active <n> days ago · From group <names>" (unticked, disabled); buttons **Cancel** and `btn btn-danger` **Remove Maker role** (disabled with nothing ticked). It calls `DELETE /admin/role-assignments/:id` (api 80) for each ticked user, one after the other, then toasts "Maker role removed from <n> user(s)", closes and reloads the overview; a failure stops, toasts the server message and reloads the overview, and the dialog stays open with the users still listed.
+
+#### 4.18.3 Users & groups (P2)
+
+Data: `GET /admin/users` (api 83), `GET /admin/groups` (api 87). Admin R49-R57.
+
+- **Toolbar row**: on the left a `tablist` `aria-label="Directory view"` with two `tab`s styled as `filter-pill`s (selected = `filter-pill-active`; arrow keys, Home and End switch): **Users · <n>** and **Groups · <n>**. Both control one `tabpanel` (labelled by the selected view) holding the chips, the table and the footer. Switching the view clears the search, goes back to the first page and closes the user detail panel. On the right a search `field` (`type="search"`, width 360, a 15 px `fg-muted` `search` icon inside on the left): Users view `aria-label="Search users"`, placeholder `Search name, email or group`; Groups view `aria-label="Search groups"`, placeholder `Search group name`. Search applies 250 ms after typing stops.
+- **Chip row** (Users view only, 12 px below): a `group` `aria-label="Filter users by role"` of `filter-pill` buttons with `aria-pressed`: `All roles`, `Platform admins · <n>`, `Approvers · <n>`, `Data owners · <n>`, `Makers · <n>`, `Inactive 90d · <n>`.
+- **Users table** (16 px below, in a `card` with no padding): a `table` with a visually hidden caption "Users"; header row `surface-muted` fill, 13 px semibold `fg-strong`, `th scope="col"`; rows 64 px with a 1 px `border` rule, `surface-muted` on hover. Columns:
+  - **Name**: a 32 px `primary` circle with the initials in `on-primary` (12 px semibold, `aria-hidden`), then a `button` styled as text (14 px semibold `fg-strong`, underline on hover and focus, `id="admin-user-<id>"`) whose accessible name is the display name, and under it the email (12 px `fg-muted`), tied to the button with `aria-describedby`. The button opens the user detail panel (4.18.4).
+  - **Roles**: the role chips, 4 px apart, wrapping.
+  - **IdP groups**: 13 px `fg`, the names comma-separated, or `—` (`fg-muted`).
+  - **Agents owned**: 13 px `fg`, right-aligned.
+  - **Last active**: 13 px `fg`.
+  - **Status**: the status chip.
+  
+  The row of the user shown in the panel has `surface-selected` fill and `aria-current="true"`.
+- **Groups table** (Groups view): visually hidden caption "Groups"; columns **Name** (14 px `fg`), **Members** (right-aligned), **Mapped roles** (role chips; Data owner reads `Data owner · <datasource>`; `—` when none). Rows are not interactive.
+- **Footer** (16 px below the table): on the left the last sync note (admin R54, 12 px `fg-muted`); on the right the range `<first>–<last> of <total>` (12 px `fg-muted`, `aria-live="polite"`) and two `btn-icon`s, `chevron-left` "Previous page" and `chevron-right` "Next page" (title and `aria-label`), disabled at the ends.
+- **Groups view paging**: 25 groups a page, with the same footer (the last sync note, the range and the page buttons).
+- **Empty** (13 px `fg-muted`, inside the table card in place of the table, 24 px padding; the range reads `0 of 0`): `No users match your search.`, `No users match this filter.`, `No groups match your search.`, `No groups yet. Groups arrive from Entra ID through SCIM.`
+- **Assign role** dialog: title "Assign role"; intro "Give a person a role. Roles from group mappings are managed in Roles & permissions."; the **User** picker, the **Role** select, the **Datasource** select; buttons **Cancel** and `btn btn-primary` **Assign** (disabled until a user and a role are chosen, and a datasource for Data owner). It calls `POST /admin/role-assignments` (api 79): `201` toasts "Role assigned" (success), `200` toasts "Role already assigned" (info); then the table reloads.
+- *Locator note.* The view tab **Users · <n>** and the admin tab **Users & groups** both start with "Users", and the checkbox **Data owner** is a prefix of **Data owner · <datasource>**: and the dialogs' **User** picker is a prefix of the region `User details`: tests address them with exact names (`exact: true`) or within their container (`tablist` `Directory view`, region `User details`, the dialog).
+
+#### 4.18.4 User detail panel (P3)
+
+Data: `GET /admin/users/:id` (api 84), `PUT /admin/users/:id/roles` (api 85), `POST /admin/agents/transfer` (api 86). Admin R58-R64.
+
+- Opening it splits the tab body into the users table (flexible, at least 480 px, compact columns Name, Roles, Last active, role badges wrapping) and, 24 px to its right, the panel: a `section` `aria-label="User details"`, a `card` 520 px wide, padding 24, sticky at the top of the scroll area. The panel is created afresh for each selected user, so unsaved ticks go with the previous user. While the user loads it reads `Loading user…`; a failure shows the error block with **Retry** (section 2); **Close user details** is there in every state. Focus moves to the panel's `h3` (`tabindex="-1"`) once the user has loaded.
+- **Header**: a 48 px `primary` initials circle (`aria-hidden`), the `h3` display name (20 px normal `fg-strong`), the email under it (13 px `fg-muted`), the status chip right-aligned, and a `btn-icon` `x` **Close user details** (title and `aria-label`) in the top-right corner.
+- **Roles** (16 px below): a `fieldset` with the legend "Roles" (14 px semibold `fg-strong`) inside a `card-muted` box (padding 12 × 16, rows 8 px apart). Each row is a native 16 px checkbox (`accent-color: primary`) with a `<label for>` (14 px semibold `fg-strong`) and a description (12 px `fg-muted`) tied with `aria-describedby`:
+
+  | Checkbox label | Description |
+  |---|---|
+  | `Platform admin` | `Manage users, roles, policies and settings` |
+  | `Approver` | `Approve org-wide publishing` |
+  | `Maker` | `Create, test and share agents with their team` |
+  | `Data owner · <datasource name>` (one per datasource held) | `Approves access requests to this data source` |
+  | `Data owner · datasource removed` (one per direct assignment with `datasourceMissing`, api.md 84; ticked and enabled) | `Its datasource no longer exists, so this role grants nothing. Untick it to remove it.` |
+  | `Data owner` (to add one) | `Approves access requests to this data source`, then the **Datasource** select (4.18.1) under it, 28 px indented |
+
+  The `Data owner · <datasource name>` rows are sorted by label. A disabled checkbox (admin R59-R61) adds its reason to the description, on its own line: `From group <names>`, `Bootstrap admin, set in the server configuration.`, `You can't remove your own Platform admin role.`, `No other datasource to own.`
+- **Groups (from Entra ID, read-only)** (14 px semibold `fg-strong` heading `h4`, 16 px below): a `ul` labelled by the heading of group chips, 4 px apart, wrapping; or `No groups.` (13 px `fg-muted`).
+- **Agents owned** (`h4`, 16 px below): a `ul` labelled by the heading, of `list-row`s (padding 10 × 12): the agent name (14 px `fg`) and, right-aligned, `Live` or `Draft`; or `No agents owned.`
+- **Footer** (24 px below, right-aligned, 8 px apart): `btn btn-outline` **Transfer ownership** (disabled, titled "This user owns no agents", when the list is empty) and `btn btn-primary` **Save changes** ("Saving…"; disabled, titled "No changes to save" or "Choose a datasource for Data owner"). Success toasts the server message ("Roles saved for <name>") and reloads the panel and the table.
+- Escape inside the panel (outside a dialog or an open picker) closes it; closing returns focus to the user's name button in the table. A failed **Save changes** keeps the ticks and toasts the server's message.
+- **Transfer ownership** dialog: title "Transfer ownership"; intro "Move agents from <name> to another user. Sessions already started from them stay with <name> and continue with the assistant."; the agents as ticked checkboxes (labelled with their names, described by `Live` or `Draft`); the **New owner** picker (the current owner left out); buttons **Cancel** and `btn btn-primary` **Transfer**. Success toasts the server message and reloads the panel and the table.
+
+#### 4.18.5 Roles & permissions (P4)
+
+Data: `GET /admin/role-mappings` (api 88), `POST` / `DELETE /admin/role-mappings` (api 89, 90), `GET /admin/groups` (api 87, for the picker and to know whether any group exists). The matrix is built into the renderer from admin R21. Admin R65-R68.
+
+- Two columns, 24 px apart (stacked under 1100 px): the matrix `card` (flexible) and the mappings `card` (width 360).
+- **Permission matrix**: a `table` with a visually hidden caption "Permission matrix". Header row `surface-muted`, 13 px semibold `fg-strong`: `Permission`, `User`, `Maker`, `Data owner`, `Approver`, `Platform admin` (`th scope="col"`, role columns centred). Each row: the permission name as `th scope="row"` (13 px `fg`, left-aligned), then one cell per role, rows 44 px with a 1 px `border` rule. A granted cell shows a 16 px `check` icon in `accent` with the visually hidden text "Granted"; any other cell shows `—` in `fg-muted` (`aria-hidden`) with the visually hidden text "Not granted". Nothing is focusable or editable.
+- **Mappings card**: `h3` **Role ← Entra ID group mappings** (15 px semibold `fg-strong`); hint "Members of these groups get the role automatically." (12 px `fg-muted`); a `ul` `aria-label="Group mappings"` of `list-row`s (padding 10 × 12, 8 px apart): the group name (14 px `fg`), a flexible spacer, the role chip (`Data owner · <datasource>` for Data owner, the datasource's id once it is deleted) and a `btn-icon` `x` whose title and `aria-label` are `Remove mapping <group> → <role>`, where `<role>` is the chip's text; it is disabled while its removal runs. Empty: `No group mappings yet.` (13 px `fg-muted`). Under the list, left-aligned, the `btn btn-secondary` **Add mapping** (`plus` icon); with no groups it is disabled, titled `No groups yet. Groups arrive from Entra ID through SCIM.`
+- **Remove**: native confirm `Remove the mapping “<group> → <role>”?` + blank line + `Members of <group> lose the <role> role on their next request, unless they hold it another way.` `<role>` is the chip's text, as in the button. OK deletes it, toasts "Mapping removed" and reloads the list; a failure toasts the server's message.
+- **Add mapping** dialog: title "Add mapping"; intro "Members of the group get the role from their next request."; the **Entra ID group** picker, the **Role** select, the **Datasource** select; buttons **Cancel** and `btn btn-primary` **Add** (disabled until a group and a role are chosen, and a datasource for Data owner). `201` toasts "Mapping added" (success), `200` toasts "Mapping already exists" (info); then the list reloads.
+
 ## 5. Cross-cutting behaviour
 
 ### 5.1 State that survives view changes
@@ -416,7 +551,7 @@ The dataset browser's inclusion set and the current tree selection are shell-wid
 
 ### 5.3 Toast policy
 
-Every action failure surfaces as an error toast with the server's `message` (or `Backend unreachable` when the request itself failed); every successful mutating action surfaces a success toast carrying the server's message. Exception: pinning or unpinning an agent shows its result on the card at once and toasts only on failure (4.4). Errors persist 8 s, others 4 s (3.3).
+Every action failure surfaces as an error toast with the server's `message` (or `Backend unreachable` when the request itself failed; `You don't have permission to do this.` for any HTTP 403, 1.6); every successful mutating action surfaces a success toast carrying the server's message. Exception: pinning or unpinning an agent shows its result on the card at once and toasts only on failure (4.4). Errors persist 8 s, others 4 s (3.3).
 
 ## 6. Design tokens
 
@@ -490,7 +625,7 @@ Contrast: `fg-muted` is `rgba(0,0,0,.6)` (Figma's `.55` is kept only for `placeh
 
 Brand imagery comes from the Figma assets in `frontend/public/brand/agentic-hub/`: `frame-texture.webp`, `banner.webp`, `logo-mark.svg`, `lenai-mark.svg`, `powered-by-lenai.svg`, `sparks.svg` (assistant mark), `page-header-icon.svg` and `data-sources.svg`; the folder also keeps the other exported Figma icons (`rail-*.svg`, `new-conversation.svg`, `send.svg`, `copy.svg`, `download.svg`, `thumb-up.svg`, `thumb-down.svg`, `chevron-down.svg`), unused, for reference. Every generic icon stays [lucide](https://lucide.dev) outline (line width 2 by default, `strokeWidth` 2.5 on the Stop square), sized 11-19 px (15 px in nav rows, 14 px in buttons, 16 px for toolbar/panel toggles). Names used, by area:
 
-- Shell / nav: `sun-moon` (Appearance), `monitor` / `sun` / `moon` (theme options), `panel-right`, `arrow-left`, `chevron-down`, `chevron-up` (Show less), `chevron-right`, `plus`, `search`, `ellipsis-vertical`, `trash-2`, `scroll-text`, `settings`, `menu` (drawer toggle), `square-pen` (Start New Conversation), `flask-conical` (Datasets), `bot` (Agents, LLM config, agent tiles), `book-open` (Knowledge), `folder-kanban` (Sessions), `database` (Datasource config, catalogs, session datasource context), `test-tube` (Testing data), `workflow` (dataset tiles), `corner-down-left` (Create).
+- Shell / nav: `shield` (Admin), `layout-dashboard` (Admin header), `user-plus` (Assign role), `chevron-left` (Previous page), `log-in` (Sign in with Microsoft), `log-out` (Sign out), `sun-moon` (Appearance), `monitor` / `sun` / `moon` (theme options), `panel-right`, `arrow-left`, `chevron-down`, `chevron-up` (Show less), `chevron-right`, `plus`, `search`, `ellipsis-vertical`, `trash-2`, `scroll-text`, `settings`, `menu` (drawer toggle), `square-pen` (Start New Conversation), `flask-conical` (Datasets), `bot` (Agents, LLM config, agent tiles), `book-open` (Knowledge), `folder-kanban` (Sessions), `database` (Datasource config, catalogs, session datasource context), `test-tube` (Testing data), `workflow` (dataset tiles), `corner-down-left` (Create).
 - Status / feedback: `loader-2` (spinners), `circle-check`, `circle-x`, `circle-alert`, `circle-minus`, `info`, `x`, `triangle-alert`, `lock`, `refresh-cw`, `download`, `copy`, `play`, `plug-zap`, `check`.
 - Data / catalog: `folder-tree` (schema), `table-2` (entity), `layout-grid`, `gauge` (metrics, checks, Evals tab), `list-checks` (question sets), `pencil`, `wand-2` (generate suggestions), `sparkle` / `sparkles` (AI, visuals, suggestions, agent cards), `pin` / `pin-off` (agent pin toggle), `upload` (Publish), `file-text` / `tag` / `filter` (knowledge kinds), `wrench` (tools), `brain` (Thinking, Memory tab), `cpu` (Model tab), `clock`.
 - Chat / visuals: `arrow-up` (send), `square` (stop), `thumbs-up`, `thumbs-down`, `badge-check` (Verified), `shield-check` / `shield-alert` / `shield-off` (cross-check, Careful mode), `telescope` (deep analysis), `bar-chart-3`, `history` (versions), `sliders-horizontal` (Tailor), `gallery-vertical-end` (saved visuals), `signal` (reasoning effort).
@@ -514,7 +649,15 @@ Strings below are asserted by the Playwright suite or are user-facing contracts.
 |---|---|
 | Page heading (banner `h1`) | `Agentic Hub` |
 | Window / document title | `Agentic Hub` (OS app name stays `Halo BI Assistant`) |
-| Rail buttons (title and aria-label) | `Expand navigation` / `Collapse navigation` (menu button), `Datasets`, `Agents`, `Knowledge`, `Sessions`, `Settings`; `Open system logs` (title `System logs and diagnostics`); avatar title `Demo User` |
+| Rail buttons (title and aria-label) | `Expand navigation` / `Collapse navigation` (menu button), `Datasets`, `Agents`, `Knowledge`, `Sessions`, `Settings`; `Open system logs` (title `System logs and diagnostics`); avatar title `Demo User` (local mode) or the user's display name with `aria-label` `Account menu` (org server mode); `Admin` (org server mode) |
+| Sign-in page | `Agentic Hub`, `Sign in with your organisation account to continue.`, `Sign in with Microsoft`, `Signing in…`, `Sign-in failed. Try again.`, `Your account is deactivated. Contact your administrator.` |
+| Account menu | menu `Account`, `Sign out`, `Signing out…` |
+| Admin area | `Admin`, `Manage people, roles and access for your organisation.`, tablist `Admin sections`, tabs `Overview`, `Users & groups`, `Roles & permissions`, `Export report`, `Exporting…`, `Assign role`, `Retry`, `Loading overview…`, `Loading users…`, `Loading roles…` |
+| Admin overview | `Active users · 30 days`, `Agents live`, `Needs attention`, `Agents without an active owner`, `Agents with errors in the last 7 days`, `Users inactive for 90+ days with Maker role`, `<n> agent(s)`, `<n> user(s)`, `Assign`, `Inspect`, `Clean up`, `Nothing to do`, `Weekly active users`, `Last 8 weeks · peak <n> this week`, `Last 8 weeks · peak <n> in the week of <Mon D>`, `Last 8 weeks · no activity yet`, `Recent activity`, `No activity yet.`; dialogs `Assign an owner`, `Former owner: <name>`, `Former owner: unknown user`, `New owner`, `Transfer`, `Transferring…`, `Agents with errors`, `Agent`, `Owner`, `Errors`, `Last error`, `Close`, `Inactive makers`, `Remove Maker role`, `Removing…`, toast `Maker role removed from <n> user(s)`; activity sentences in admin R47 |
+| Users & groups | tablist `Directory view`, `Users · <n>`, `Groups · <n>`, `Search users`, `Search name, email or group`, `Search groups`, `Search group name`, group `Filter users by role`, `All roles`, `Platform admins · <n>`, `Approvers · <n>`, `Data owners · <n>`, `Makers · <n>`, `Inactive 90d · <n>`, columns `Name`, `Roles`, `IdP groups`, `Agents owned`, `Last active`, `Status`, `Members`, `Mapped roles`, `Today`, `Yesterday`, `<n> days ago`, `Never`, `Active`, `Inactive`, `Not signed in`, `Deactivated`, `Users and groups come from Entra ID via SCIM · last sync <time>. Roles are assigned here or mapped from groups.`, `· not synced yet`, `<first>–<last> of <total>`, `Previous page`, `Next page`, `No users match your search.`, `No users match this filter.`, `No groups match your search.`, `No groups yet. Groups arrive from Entra ID through SCIM.`; dialog `Assign role`, `User`, `Search by name or email`, `No matches.`, `Role`, `Choose a role`, `Datasource`, `Choose a datasource`, `No datasources`, `Only for Data owner.`, `Assign`, `Assigning…`, `Cancel`, toasts `Role assigned`, `Role already assigned` |
+| User detail panel | region `User details`, `Close user details`, `Loading user…`, `Roles`, `Platform admin`, `Approver`, `Maker`, `Data owner`, `Data owner · <datasource>`, the role descriptions in 4.18.4, `From group <names>`, `Bootstrap admin, set in the server configuration.`, `You can't remove your own Platform admin role.`, `No other datasource to own.`, `Groups (from Entra ID, read-only)`, `No groups.`, `Agents owned`, `Live`, `Draft`, `No agents owned.`, `Transfer ownership`, `Save changes`, `Saving…`, `No changes to save`, `Choose a datasource for Data owner`, `This user owns no agents`, toasts `Roles saved for <name>`, `Transferred <n> agent(s) to <name>`, `<name> already has an agent named "<agent>"` |
+| Roles & permissions | caption `Permission matrix`, `Permission`, the permission names of admin R21, `Granted`, `Not granted`, `Role ← Entra ID group mappings`, `Members of these groups get the role automatically.`, list `Group mappings`, `Remove mapping <group> → <role>`, `No group mappings yet.`, `Add mapping`, dialog `Add mapping`, `Entra ID group`, `Add`, `Adding…`, confirm `Remove the mapping “<group> → <role>”?` + blank line + `Members of <group> lose the <role> role on their next request, unless they hold it another way.`, toasts `Mapping added`, `Mapping already exists`, `Mapping removed` |
+| Permission toast | `You don't have permission to do this.` |
 | Drawer labels | `Agentic Hub`, `System logs`, `Settings`; LenAI mark `Powered by LenAI` |
 | Sessions area | `Sessions`, `New conversation`, `Start New Conversation`, `Session options`, `Options for <session name>`, `No sessions yet.`, `Select a session or start a new conversation.` |
 | Shell aria-labels | `Navigation rail`, `Workspace navigation`, `Sessions navigation`, `Settings navigation`, `Details panel` |
@@ -566,7 +709,7 @@ Targets and the automated gate: [../product/non-functional.md](../product/non-fu
 
 ## 10. Open questions and gaps
 
-- Account row ("Demo User", avatar "D"), settings search and its `⌘ F` hint, the Datasets list filter pills (Pinned / Yours / Shared with you), the search icon on the Datasets list, the layout-grid button and the empty 40 px tab strip are non-functional placeholders; intended behaviour is undefined.
+- Local mode's account avatar ("Demo User", "D"), settings search and its `⌘ F` hint, the Datasets list filter pills (Pinned / Yours / Shared with you), the search icon on the Datasets list, the layout-grid button and the empty 40 px tab strip are non-functional placeholders; intended behaviour is undefined.
 - The rail's 44 px window-drag spacer that clears the macOS traffic lights is applied on every platform; on Windows/Linux (no inset controls) it leaves a small empty space at the top of the rail. Intended cross-platform title-bar treatment is undefined.
 - Right-panel open state and drawer state are not persisted; only the panel width is.
 - No Escape / focus-trap handling for the system logs dialog and the popover menus; toasts lack live-region roles (see 8).

@@ -36,7 +36,7 @@ export interface RunningApp {
   output(): { stdout: string; stderr: string };
 }
 
-type Env = Record<string, string | undefined>;
+export type Env = Record<string, string | undefined>;
 
 interface AppFixtures {
   appDataDir: string;
@@ -133,14 +133,14 @@ async function launchDesktop(
   };
 }
 
-interface CliProcess {
+export interface CliProcess {
   child: ChildProcess;
   url: string;
   port: number;
 }
 
 /** Starts the CLI and resolves once it prints its URL. */
-function startCli(
+export function startCli(
   appDataDir: string,
   env: Env,
   port: number,
@@ -203,7 +203,7 @@ function startCli(
 }
 
 /** Stops the CLI and waits for the process to exit (forced after 10 s). */
-async function stopCli(child: ChildProcess): Promise<void> {
+export async function stopCli(child: ChildProcess): Promise<void> {
   if (child.exitCode !== null || child.signalCode !== null) return;
   const exited = new Promise<void>((resolve) =>
     child.once('exit', () => resolve()),

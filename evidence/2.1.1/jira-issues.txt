@@ -1,0 +1,10 @@
+  "key": "BA-161",
+  "type": "Epic",
+  "summary": "Admin Panel",
+
+BA-162	Story	To Do	Medium	unassigned	2026-10-10	Admin Panel: ADR, epic spec and roadmap
+BA-163	Story	To Do	Medium	unassigned	2026-10-10	Sign-in with Entra ID, users and role enforcement
+BA-164	Story	To Do	Medium	unassigned	2026-10-10	Admin overview (P1)
+BA-165	Story	To Do	Medium	unassigned	2026-10-10	Users & groups (P2)
+BA-166	Story	To Do	Medium	unassigned	2026-10-10	Edit a user (P3)
+BA-167	Story	To Do	Medium	unassigned	2026-10-10	Roles & permissions (P4)

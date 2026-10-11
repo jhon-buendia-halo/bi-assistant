@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { KNOWLEDGE_STORE } from '../../../infrastructure/database/doc-store';
+import { OWNED_KNOWLEDGE_STORE } from '../../../infrastructure/database/doc-store';
 import type { DocStore } from '../../../infrastructure/database/doc-store';
 import type { KnowledgeSnippet } from '../entities/knowledge-snippet.entity';
 
@@ -8,12 +8,13 @@ import type { KnowledgeSnippet } from '../entities/knowledge-snippet.entity';
  * filtering (including the dataset-scoped-OR-global rule) needs an OR the
  * `DocStore` filter surface does not express, so it lives in
  * `KnowledgeService` over the full `list()` — same trade `MetricsService`
- * makes over `MetricsRepository.list()`.
+ * makes over `MetricsRepository.list()`. Owner-scoped (data-model 3.15).
  */
 @Injectable()
 export class KnowledgeRepository {
   constructor(
-    @Inject(KNOWLEDGE_STORE) private readonly store: DocStore<KnowledgeSnippet>,
+    @Inject(OWNED_KNOWLEDGE_STORE)
+    private readonly store: DocStore<KnowledgeSnippet>,
   ) {}
 
   list(): Promise<KnowledgeSnippet[]> {

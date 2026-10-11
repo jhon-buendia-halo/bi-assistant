@@ -37,6 +37,8 @@ export interface KnowledgeSnippet {
   /** Only enabled snippets are injected into the assistant's context. */
   enabled: boolean;
   source: KnowledgeSnippetSource;
+  /** The owning user's id in org server mode (data-model 3.15). */
+  ownerId?: string;
   createdAt: string;
   updatedAt: string;
 }

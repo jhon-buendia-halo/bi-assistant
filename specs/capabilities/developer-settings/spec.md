@@ -54,6 +54,9 @@ Exporting logs (active setting on)
 - R25. A log line written while a request or agent run is being traced SHALL carry that trace's id and span id, so it can be followed from the trace and back.
 - R26. Console output SHALL stay exactly as it is with the setting off, whether the setting is on or off, so the desktop system-logs panel reads it unchanged. With the setting off, no log exporter is loaded.
 
+Org server mode
+- R27. In org server mode reading and changing developer settings SHALL need Edit policies and templates, because the setting applies to the whole server; the Developer section is hidden without it. Rules: [../admin/spec.md](../admin/spec.md) R21, R25.
+
 ## Edge cases and errors
 
 - Saving while the backend is unreachable shows an error toast with `Backend unreachable`, and the form keeps the typed values.

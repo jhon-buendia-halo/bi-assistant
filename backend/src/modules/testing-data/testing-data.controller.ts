@@ -1,8 +1,10 @@
+import { RequirePermission } from '../../common/decorators/auth-requirement.decorators';
 import {
   Body,
   Controller,
   Delete,
   Get,
+  HttpCode,
   Logger,
   Param,
   Post,
@@ -15,6 +17,7 @@ import {
 import type { LoadTestingDataDto } from './dto/testing-data.dto';
 
 @Controller('testing-data')
+@RequirePermission('manage-datasources')
 export class TestingDataController {
   private readonly logger = new Logger(TestingDataController.name);
 
@@ -32,7 +35,9 @@ export class TestingDataController {
     }
   }
 
+  /** 200 with a Style A body, loaded or not (api.md 56). */
   @Post(':fixtureId/load')
+  @HttpCode(200)
   async load(
     @Param('fixtureId') fixtureId: string,
     @Body() dto: LoadTestingDataDto,

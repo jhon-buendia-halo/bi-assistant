@@ -2,6 +2,9 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { App } from './app';
+import { ALL_PERMISSIONS, LOCAL_ME, MeView } from './core/auth/auth.models';
+import { AuthService } from './core/auth/auth.service';
+import { orgMe } from './core/auth/auth.testing';
 
 describe('App', () => {
   beforeEach(async () => {
@@ -137,5 +140,128 @@ describe('App', () => {
     expect(header.textContent).toContain('Datasource');
     expect(header.textContent).toContain('futbol local');
     expect(header.textContent).toContain('PostgreSQL');
+  });
+});
+
+describe('App in local and org server mode', () => {
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [App],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+  });
+
+  /** The shell as `me` sees it (the root shows it once signed in). */
+  function shellAs(me: MeView) {
+    const auth = TestBed.inject(AuthService);
+    auth.me.set(me);
+    auth.status.set('signed-in');
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    return {
+      fixture,
+      app: fixture.componentInstance,
+      element: fixture.nativeElement as HTMLElement,
+    };
+  }
+
+  const rail = (element: HTMLElement) =>
+    element.querySelector('[aria-label="Navigation rail"]') as HTMLElement;
+
+  function settingsLabels(element: HTMLElement): string[] {
+    return Array.from(
+      element.querySelectorAll('[aria-label="Settings navigation"] button'),
+    ).map((button) => button.textContent?.trim() ?? '');
+  }
+
+  it('keeps the static Demo User avatar and no Admin item in local mode', () => {
+    const { element } = shellAs(LOCAL_ME);
+    const avatar = rail(element).querySelector('[title="Demo User"]');
+    expect(avatar?.textContent?.trim()).toBe('D');
+    expect(
+      rail(element).querySelector('[aria-label="Account menu"]'),
+    ).toBeNull();
+    expect(
+      rail(element).querySelector('button[aria-label="Admin"]'),
+    ).toBeNull();
+  });
+
+  it("shows the signed-in user's initials on an org server (admin R10)", () => {
+    const { element } = shellAs(orgMe(['use-agents']));
+    const avatar = rail(element).querySelector(
+      'button[aria-label="Account menu"]',
+    ) as HTMLButtonElement;
+    expect(avatar.textContent?.trim()).toBe('AL');
+    expect(avatar.title).toBe('Ada Lovelace');
+    expect(avatar.getAttribute('aria-haspopup')).toBe('menu');
+    expect(rail(element).querySelector('[title="Demo User"]')).toBeNull();
+  });
+
+  it('offers Admin only with Manage users on an org server (admin R34)', () => {
+    const { element: user } = shellAs(orgMe(['use-agents']));
+    expect(rail(user).querySelector('button[aria-label="Admin"]')).toBeNull();
+  });
+
+  it('opens the Admin area from the rail and marks it current', () => {
+    const { fixture, app, element } = shellAs(orgMe([...ALL_PERMISSIONS]));
+    const admin = rail(element).querySelector(
+      'button[aria-label="Admin"]',
+    ) as HTMLButtonElement;
+    admin.click();
+    fixture.detectChanges();
+
+    expect(app.mainView()).toBe('admin');
+    expect(admin.getAttribute('aria-current')).toBe('page');
+    expect(element.querySelector('main h2')?.textContent?.trim()).toBe('Admin');
+  });
+
+  it('offers every Settings section in local mode', () => {
+    const { fixture, app, element } = shellAs(LOCAL_ME);
+    app.selectArea('settings');
+    fixture.detectChanges();
+    expect(settingsLabels(element)).toEqual([
+      'Datasource Configuration',
+      'LLM Configuration',
+      'Testing Data',
+      'Developer',
+      'Appearance',
+    ]);
+  });
+
+  it('offers only the Settings sections the user may open (app-shell R50)', () => {
+    const { fixture, app, element } = shellAs(
+      orgMe(['use-agents', 'manage-llm']),
+    );
+    app.selectArea('settings');
+    fixture.detectChanges();
+    expect(settingsLabels(element)).toEqual([
+      'LLM Configuration',
+      'Appearance',
+    ]);
+  });
+
+  it('falls back to "Choose a settings section." when the chosen one is hidden', () => {
+    const { fixture, app, element } = shellAs(orgMe(['use-agents']));
+    app.selectArea('settings');
+    app.settingsSection.set('developer');
+    fixture.detectChanges();
+    expect(element.textContent).toContain('Choose a settings section.');
+    expect(element.querySelector('app-developer-settings')).toBeNull();
+  });
+
+  it('hides the composer Reasoning effort without Manage LLM configuration (admin R26)', () => {
+    const { fixture, app, element } = shellAs(orgMe(['use-agents']));
+    app.mainView.set('conversation-new');
+    fixture.detectChanges();
+    expect(element.querySelector('main [title="Reasoning effort"]')).toBeNull();
+  });
+
+  it('shows the composer Reasoning effort to the local user', () => {
+    const { fixture, app, element } = shellAs(LOCAL_ME);
+    app.mainView.set('conversation-new');
+    fixture.detectChanges();
+    expect(
+      element.querySelector('main [title="Reasoning effort"]'),
+    ).toBeTruthy();
   });
 });

@@ -48,31 +48,34 @@
           [class.animate-spin]="loading()"
         />
       </button>
-      <input
-        type="text"
-        placeholder="Dataset name"
-        [value]="datasetName()"
-        (input)="datasetName.set($any($event.target).value)"
-        class="field w-[220px]"
-      />
-      <button
-        (click)="saveDataset()"
-        [disabled]="
-          saving() ||
-          !selectedDatasource() ||
-          includedCount() === 0 ||
-          datasetName().trim() === ''
-        "
-        title="Name the dataset and include at least one element"
-        class="btn btn-primary"
-      >
-        @if (saving()) {
-          <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
-          <span>Saving…</span>
-        } @else {
-          <span>Save dataset ({{ includedCount() }})</span>
-        }
-      </button>
+      <!-- Naming and saving need Manage datasources (ui.md 1.6) -->
+      @if (auth.can("manage-datasources")) {
+        <input
+          type="text"
+          placeholder="Dataset name"
+          [value]="datasetName()"
+          (input)="datasetName.set($any($event.target).value)"
+          class="field w-[220px]"
+        />
+        <button
+          (click)="saveDataset()"
+          [disabled]="
+            saving() ||
+            !selectedDatasource() ||
+            includedCount() === 0 ||
+            datasetName().trim() === ''
+          "
+          title="Name the dataset and include at least one element"
+          class="btn btn-primary"
+        >
+          @if (saving()) {
+            <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+            <span>Saving…</span>
+          } @else {
+            <span>Save dataset ({{ includedCount() }})</span>
+          }
+        </button>
+      }
     </div>
   </div>
 

@@ -9,6 +9,7 @@ import {
   reportMarkdown,
 } from './deep-analysis.service';
 import type { ChatMessage } from '../sessions/entities/session.entity';
+import { CurrentUserService, LOCAL_USER } from '../auth/current-user.service';
 
 const SESSION = {
   id: 'session-1',
@@ -72,8 +73,13 @@ function build(responses: unknown[], options: { plannerFails?: boolean } = {}) {
         return SESSION;
       }),
   };
-  const service = new DeepAnalysisService(sessions as never, mastra as never);
-  return { service, generate, filesystem, sessions, appended };
+  const users = new CurrentUserService();
+  const service = new DeepAnalysisService(
+    sessions as never,
+    mastra as never,
+    users,
+  );
+  return { service, generate, filesystem, sessions, appended, users };
 }
 
 /** Let the in-process job run to completion (or failure). */
@@ -96,6 +102,33 @@ async function startJob(service: DeepAnalysisService): Promise<string> {
 }
 
 describe('DeepAnalysisService', () => {
+  it('keeps a job private to the user who started it, and runs it as them (admin R30, R32)', async () => {
+    const { service, sessions, users } = build([
+      PLAN,
+      finding(1),
+      finding(2),
+      finding(3),
+      REPORT,
+    ]);
+    const ada = { ...LOCAL_USER, id: 'ada' };
+    const bob = { ...LOCAL_USER, id: 'bob' };
+    const seenBy: (string | undefined)[] = [];
+    sessions.backgroundAgentOptions.mockImplementation(() => {
+      seenBy.push(users.current()?.id);
+      return Promise.resolve({ maxSteps: 15, context: [], requestContext: {} });
+    });
+
+    const jobId = await users.runAs(ada, () => startJob(service));
+
+    expect(() =>
+      users.runAs(bob, () => service.status(SESSION.id, jobId)),
+    ).toThrow('not found');
+    expect(() => service.status(SESSION.id, jobId)).toThrow('not found');
+    await users.runAs(ada, () => settle(service, jobId));
+    expect(seenBy).toHaveLength(5);
+    expect(new Set(seenBy)).toEqual(new Set(['ada']));
+  });
+
   it('plans, investigates each angle, writes the report and posts it to the chat', async () => {
     const { service, generate, filesystem, sessions, appended } = build([
       PLAN,

@@ -2,9 +2,17 @@ import { Global, Module, Provider } from '@nestjs/common';
 import { mkdirSync } from 'fs';
 import { join } from 'path';
 import {
+  ACTIVITY_EVENTS_STORE,
   AGENTS_STORE,
+  AUTH_SESSIONS_STORE,
+  GROUP_MEMBERS_STORE,
+  GROUP_ROLE_MAPPINGS_STORE,
+  GROUPS_STORE,
+  ROLE_ASSIGNMENTS_STORE,
+  USERS_STORE,
   CONNECTIONS_STORE,
   DATASOURCE_INVENTORIES_STORE,
+  DOC_STORE_TRANSACTIONS,
   METRICS_STORE,
   EVAL_RUNS_STORE,
   KNOWLEDGE_STORE,
@@ -14,6 +22,7 @@ import {
   VERIFIED_QUERIES_STORE,
 } from './doc-store';
 import { SqliteDocStore } from './sqlite-doc-store';
+import { SqliteTransactions } from './sqlite-transactions';
 
 /**
  * Embedded SQLite application datastore, mirrored from data-readiness-agent's
@@ -37,6 +46,13 @@ const COLLECTIONS = [
   { token: EVAL_RUNS_STORE, table: 'eval_runs' },
   { token: KNOWLEDGE_STORE, table: 'knowledge_snippets' },
   { token: AGENTS_STORE, table: 'agents' },
+  { token: USERS_STORE, table: 'users' },
+  { token: GROUPS_STORE, table: 'groups' },
+  { token: GROUP_MEMBERS_STORE, table: 'group_members' },
+  { token: ROLE_ASSIGNMENTS_STORE, table: 'role_assignments' },
+  { token: GROUP_ROLE_MAPPINGS_STORE, table: 'group_role_mappings' },
+  { token: AUTH_SESSIONS_STORE, table: 'auth_sessions' },
+  { token: ACTIVITY_EVENTS_STORE, table: 'activity_events' },
 ];
 
 const sqliteDbProvider: Provider = {
@@ -119,9 +135,17 @@ const storeProviders: Provider[] = COLLECTIONS.map((c) => ({
     new SqliteDocStore(db, c.table),
 }));
 
+/** Several writes as one unit, across collections (data-model 2.4). */
+const transactionsProvider: Provider = {
+  provide: DOC_STORE_TRANSACTIONS,
+  inject: [SQLITE_DB],
+  useFactory: (db: import('better-sqlite3').Database) =>
+    new SqliteTransactions(db),
+};
+
 @Global()
 @Module({
-  providers: [sqliteDbProvider, ...storeProviders],
-  exports: COLLECTIONS.map((c) => c.token),
+  providers: [sqliteDbProvider, ...storeProviders, transactionsProvider],
+  exports: [...COLLECTIONS.map((c) => c.token), DOC_STORE_TRANSACTIONS],
 })
 export class DatabaseModule {}

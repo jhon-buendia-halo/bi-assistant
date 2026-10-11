@@ -10,7 +10,8 @@ export const UI_PREFERENCES_KEY = 'ui-preferences';
  * (data-model 3.2.1, ADR-0009). Absent fields were never chosen.
  */
 export interface UiPreferencesDoc {
-  key: typeof UI_PREFERENCES_KEY;
+  /** `ui-preferences`, or `ui-preferences:<user id>` on an org server. */
+  key: string;
   theme?: ThemePreference;
   navExpanded?: boolean;
   createdAt?: string;

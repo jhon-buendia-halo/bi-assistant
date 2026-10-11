@@ -105,6 +105,10 @@ Terms are defined once in [the glossary](../../product/glossary.md); this capabi
 - R49. A connection saved before datasources existed (one anonymous Databricks connection) SHALL be migrated on first read into a datasource named "Databricks" with id `legacy-databricks`, so existing datasets can bind to it.
 - R50. Datasets that carry no datasource binding SHALL resolve to the default datasource: the first Databricks datasource, otherwise the first datasource in list order.
 
+### Sharing and permissions (org server mode)
+
+- R51. In org server mode datasources SHALL be shared by every signed-in user. Listing datasources and reading their inventory need Use agents; creating, testing, discovering REST endpoints for, editing and deleting a datasource need Manage datasources and datasets, and the Datasource Configuration settings section is hidden without it. Rules: [../admin/spec.md](../admin/spec.md) R21, R25, R28.
+
 ## Edge cases and errors
 
 - **Wrong credentials / unreachable host:** the form shows the connector's message (for example `Postgres — connect ECONNREFUSED 127.0.0.1:1`), Save stays disabled, and the same message appears in the system logs under Issues without the password.

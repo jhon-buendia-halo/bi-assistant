@@ -43,6 +43,7 @@ specs/
 | [metrics](capabilities/metrics/spec.md) | Metric definitions and the metrics panel | — |
 | [deep-analysis](capabilities/deep-analysis/spec.md) | Multi-step deep analysis runs | — |
 | [agents-evals](capabilities/agents-evals/spec.md) | Agent Hub, agent catalogue and user agents, eval sets, eval runs and reports | Agents (`agents.spec.ts`), Agent Hub (`agent-hub.spec.ts`) |
+| [admin](capabilities/admin/spec.md) | Local and org server modes, sign-in with Entra ID, SCIM directory, roles and permissions, enforcement, data ownership, the Admin area (Overview, Users & groups, Edit a user, Roles & permissions) | Sign in to an org server (`org-sign-in.spec.ts`), Permissions in the app (`org-permissions.spec.ts`), Private and shared data (`org-isolation.spec.ts`), Admin overview (`org-admin-overview.spec.ts`), Users and groups (`org-admin-users.spec.ts`), Edit a user (`org-admin-edit-user.spec.ts`), Roles and permissions (`org-admin-roles.spec.ts`), all in the Playwright `org` project |
 
 A Gherkin Feature that spans capabilities lives in the capability that owns its main outcome; the others link to it.
 
@@ -63,6 +64,7 @@ A Gherkin Feature that spans capabilities lives in the capability that owns its 
 | BA-141 Agentic Hub Look and Feel | [epics/BA-141](epics/BA-141/spec.md) |
 | BA-150 Agent Hub | [epics/BA-150](epics/BA-150/spec.md) |
 | BA-159 LLM configuration | [epics/BA-159](epics/BA-159/spec.md) |
+| BA-161 Admin Panel | [epics/BA-161](epics/BA-161/spec.md) |
 | BA-169 Claude Code workflow mod | [epics/BA-169](epics/BA-169/spec.md) |
 
 ## Stack neutrality

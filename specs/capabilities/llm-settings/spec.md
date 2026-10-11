@@ -76,6 +76,9 @@ Effort levels
 - R41. Every model call SHALL map its effort to the nearest level the model accepts (ties to the higher level) before sending it. A model without levels SHALL keep today's behaviour (R29).
 - R42. The select's hint, linked to it as its accessible description, SHALL read `Used for answers. Test connection always uses the lowest level.` when the model has levels, `Enter a model to see the effort levels it supports.` when the model is empty, and `This model doesn't support a reasoning effort setting.` when it has none.
 
+Org server mode
+- R43. In org server mode there SHALL be one LLM configuration for the whole server, used by every user's calls. Reading it needs Use agents; saving it, testing a connection and changing the reasoning effort need Manage LLM configuration. Without that permission the LLM Configuration section and the composer's Reasoning effort control are hidden, and the settings view carries no masked key. Rules: [../admin/spec.md](../admin/spec.md) R21, R26, R28.
+
 ## Edge cases and errors
 
 - Switching provider in the form keeps the typed model and key; the placeholder example changes (`gpt-4o-mini`, `claude-sonnet-5-5`, `my-deployment`).

@@ -23,6 +23,8 @@ export interface AngleFinding extends AnalysisAngle {
 export interface DeepAnalysisJob {
   id: string;
   sessionId: string;
+  /** Who started it; for anyone else it does not exist (data-model 3.15). */
+  ownerId: string;
   question: string;
   status: DeepAnalysisStatus;
   /** Human-readable line for the pending card in the chat. */

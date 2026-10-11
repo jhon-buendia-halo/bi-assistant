@@ -1,6 +1,7 @@
 import BetterSqlite3 from 'better-sqlite3';
 import { SqliteDocStore } from '../../infrastructure/database/sqlite-doc-store';
 import type { DatasetsRepository } from '../datasets/repositories/datasets.repository';
+import { CurrentUserService } from '../auth/current-user.service';
 import { BuiltinAgentPinsRepository } from './repositories/builtin-agent-pins.repository';
 import { UserAgentsRepository } from './repositories/user-agents.repository';
 import {
@@ -25,7 +26,7 @@ function build(datasetNames: string[] = ['World Cup Core']) {
   } as unknown as DatasetsRepository;
   const service = new UserAgentsService(
     new UserAgentsRepository(agents),
-    new BuiltinAgentPinsRepository(settings),
+    new BuiltinAgentPinsRepository(settings, new CurrentUserService()),
     datasets,
   );
   return { db, service, settings };

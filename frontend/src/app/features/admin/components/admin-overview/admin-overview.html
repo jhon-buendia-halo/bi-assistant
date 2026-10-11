@@ -1,0 +1,231 @@
+@switch (state()) {
+  @case ("loading") {
+    <div class="flex items-center gap-2.5 text-[13px] text-fg-muted">
+      <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
+      <span>Loading overview…</span>
+    </div>
+  }
+  @case ("error") {
+    <div class="flex flex-col items-start gap-3">
+      <p
+        class="rounded-md bg-danger-soft px-3 py-2.5 text-[13px] text-on-danger-soft"
+      >
+        {{ error() }}
+      </p>
+      <button type="button" class="btn btn-outline" (click)="load()">
+        Retry
+      </button>
+    </div>
+  }
+  @default {
+    @if (overview(); as data) {
+      <!-- Tiles (admin R41) -->
+      <div class="grid grid-cols-2 gap-4">
+        <div class="card px-5 py-4" data-testid="admin-tile">
+          <p class="flex flex-col">
+            <span
+              data-testid="admin-tile-value"
+              class="text-[32px] leading-10 font-light text-on-success-soft"
+              >{{ formatCount(data.activeUsers30d) }}</span
+            >
+            <span class="text-[13px] text-fg-muted">Active users · 30 days</span>
+          </p>
+        </div>
+        <div class="card px-5 py-4" data-testid="admin-tile">
+          <p class="flex flex-col">
+            <span
+              data-testid="admin-tile-value"
+              class="text-[32px] leading-10 font-light text-fg-strong"
+              >{{ formatCount(data.agentsLive) }}</span
+            >
+            <span class="text-[13px] text-fg-muted">Agents live</span>
+          </p>
+        </div>
+      </div>
+
+      <div class="@container mt-6">
+        <div
+          class="flex flex-col gap-6 @min-[1100px]:flex-row @min-[1100px]:items-start"
+        >
+          <!-- Needs attention (admin R42) -->
+          <div class="card min-w-0 flex-1 p-5">
+            <h3
+              id="admin-attention-title"
+              class="text-[15px] font-semibold text-fg-strong"
+            >
+              Needs attention
+            </h3>
+            <ul
+              class="mt-4 flex flex-col gap-2"
+              aria-labelledby="admin-attention-title"
+            >
+              @for (row of attention(); track row.key) {
+                <li class="list-row flex items-center gap-3 px-4 py-3">
+                  <span class="min-w-0 text-[14px] text-fg">{{ row.text }}</span>
+                  <span class="flex-1"></span>
+                  <span
+                    data-testid="attention-count"
+                    [class]="'chip shrink-0 ' + row.chip"
+                    >{{ row.badge }}</span
+                  >
+                  <button
+                    type="button"
+                    class="btn btn-secondary h-8 shrink-0 py-0"
+                    [disabled]="row.count === 0"
+                    [attr.title]="row.count === 0 ? 'Nothing to do' : null"
+                    (click)="open(row.key)"
+                  >
+                    {{ row.action }}
+                  </button>
+                </li>
+              }
+            </ul>
+          </div>
+
+          <div
+            class="flex w-full shrink-0 flex-col gap-4 @min-[1100px]:w-[420px]"
+          >
+            <!-- Weekly active users (admin R46) -->
+            <div class="card p-5">
+              <h3
+                id="admin-weekly-title"
+                class="text-[15px] font-semibold text-fg-strong"
+              >
+                Weekly active users
+              </h3>
+              <figure class="mt-4" aria-labelledby="admin-weekly-title">
+                <div class="flex h-[120px] items-end gap-4" aria-hidden="true">
+                  @for (week of weeks(); track week.weekStart) {
+                    <div
+                      class="w-8 shrink-0 rounded-t"
+                      [class.bg-primary]="week.current"
+                      [class.bg-border-strong]="!week.current"
+                      [style.height.px]="week.height"
+                      [attr.title]="week.title"
+                    ></div>
+                  }
+                </div>
+                <table class="sr-only">
+                  <caption>
+                    Weekly active users
+                  </caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Week of</th>
+                      <th scope="col">Active users</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (week of weeks(); track week.weekStart) {
+                      <tr>
+                        <td>{{ week.label }}</td>
+                        <td>{{ week.users }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+                <figcaption class="mt-3 text-[12px] text-fg-muted">
+                  {{ caption() }}
+                </figcaption>
+              </figure>
+            </div>
+
+            <!-- Recent activity (admin R47) -->
+            <div class="card p-5" data-testid="admin-recent-activity">
+              <h3
+                id="admin-activity-title"
+                class="text-[15px] font-semibold text-fg-strong"
+              >
+                Recent activity
+              </h3>
+              @if (activity().length) {
+                <ul
+                  class="mt-3 flex flex-col gap-3"
+                  aria-labelledby="admin-activity-title"
+                >
+                  @for (item of activity(); track item.id) {
+                    <li>
+                      <p class="text-[13px] text-fg">{{ item.text }}</p>
+                      <p class="text-[12px] text-fg-muted" [title]="item.full">
+                        {{ item.relative }}
+                      </p>
+                    </li>
+                  }
+                </ul>
+              } @else {
+                <p class="mt-3 text-[13px] text-fg-muted">No activity yet.</p>
+              }
+            </div>
+          </div>
+        </div>
+      </div>
+    }
+  }
+}
+
+@switch (dialog()) {
+  @case ("assign") {
+    <app-transfer-agents-dialog
+      title="Assign an owner"
+      intro="These agents belong to people who are deactivated or no longer in the directory. Choose who takes them over."
+      [agents]="ownerless()"
+      (cancel)="close()"
+      (done)="closeAndReload()"
+    />
+  }
+  @case ("inspect") {
+    <app-admin-dialog
+      title="Agents with errors"
+      intro="Chat turns that ended in an error in the last 7 days. The sessions stay private to their owners."
+      (dismiss)="close()"
+    >
+      <table class="w-full table-fixed text-left text-[13px]">
+        <caption class="sr-only">
+          Agents with errors
+        </caption>
+        <thead>
+          <tr class="text-fg-strong">
+            <th scope="col" class="w-[30%] pb-2 font-semibold">Agent</th>
+            <th scope="col" class="w-[25%] pb-2 font-semibold">Owner</th>
+            <th scope="col" class="w-[12%] pb-2 text-right font-semibold">
+              Errors
+            </th>
+            <th scope="col" class="pb-2 pl-4 font-semibold">Last error</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (item of errored(); track item.agentId) {
+            <tr class="border-t border-border align-top">
+              <td class="py-2 pr-3 text-fg">{{ item.agentName }}</td>
+              <td class="py-2 pr-3 text-fg">{{ item.owner.displayName }}</td>
+              <td class="py-2 text-right text-fg">{{ item.errors }}</td>
+              <td class="py-2 pl-4">
+                <span class="block text-fg" [title]="item.full">{{
+                  item.relative
+                }}</span>
+                <span
+                  class="block truncate text-[12px] text-fg-muted"
+                  [title]="item.lastErrorMessage"
+                  >{{ item.lastErrorMessage }}</span
+                >
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+      <ng-container ngProjectAs="[dialogActions]">
+        <button type="button" class="btn btn-outline" (click)="close()">
+          Close
+        </button>
+      </ng-container>
+    </app-admin-dialog>
+  }
+  @case ("clean-up") {
+    <app-inactive-makers-dialog
+      [items]="inactiveMakers()"
+      (cancel)="close()"
+      (done)="closeAndReload()"
+      (changed)="load()"
+    />
+  }
+}

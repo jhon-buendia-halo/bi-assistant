@@ -1,6 +1,6 @@
 # Vision
 
-Questions to Insights (shipped as the desktop app "Halo BI Assistant") lets a person ask a question about their own data in plain English and get back an answer, the SQL behind it, and an interactive visual they can reshape by talking to it.
+Questions to Insights (shipped as the desktop app "Halo BI Assistant") lets a person ask a question about their own data in plain English and get back an answer, the SQL behind it, and an interactive visual they can reshape by talking to it. One person can run it alone on their machine. An organisation can run it on its own server for many people, with sign-in, roles and an admin panel.
 
 ## The problem
 
@@ -17,6 +17,7 @@ These personas are derived from the product's copy, sample data and research not
 |---|---|---|
 | Business user / product owner | Get a trustworthy number or chart without writing SQL. | Plain-language questions, answers that name entities rather than ids, a visible route from question to figure, charts they can tweak by asking. |
 | Data analyst | Make the assistant reliable for everyone else, and check its work. | Datasets scoped to the right tables, curated knowledge (terms, standing instructions, default filters), governed metrics, verified queries, access to every SQL statement and result row. |
+| Platform admin (IT) | Run the app for the organisation and decide who can do what. | Sign-in with the company identity provider, users and groups synced from it, roles assigned directly or from groups, an admin overview of usage and of what needs attention. |
 | Evaluator / maintainer (internal) | Know whether a change made answers better or worse. | Repeatable eval sets with pass/fail per question and run-to-run comparison, diagnostics for support. |
 
 ## The value
@@ -25,15 +26,20 @@ These personas are derived from the product's copy, sample data and research not
 - **Trust by construction.** Every figure comes from SQL that actually ran on the user's data in this conversation. The SQL, the rows and the entities used are one click away.
 - **Meaning that sticks.** Analysts record what terms and filters mean once. Every later answer follows it.
 - **Visuals that join the conversation.** A chart is created from an answer, then tailored in plain English, versioned, and reverted if the change is worse.
-- **Runs where the data is.** The app works on the user's machine against the user's databases, with the user's own LLM account.
+- **Runs where the data is.** The app works on the user's machine, or on a server the organisation runs next to its data, against the organisation's own databases.
+- **Governed for teams.** On an organisation's server, people sign in with their company account, share the same datasources and datasets, and get only the permissions their role grants.
 
 ## Product principles
 
 The product SHALL follow these principles. Capability specs turn them into testable rules.
 
-1. **Local-first.** App data (settings, datasources, datasets, sessions, memory, visuals) lives on the user's machine in a data directory the user can back up. There is no hosted backend and no account. See [non-functional.md](non-functional.md).
+1. **Local-first, self-hosted for teams.** The app runs in one of two modes:
+   - **Local mode** (the default): app data (settings, datasources, datasets, sessions, memory, visuals) lives on the user's machine in a data directory the user can back up. There is no sign-in and no account.
+   - **Org server mode**: the organisation runs the same app on its own infrastructure. App data lives in that server's data directory, which the organisation backs up.
+
+   Halo operates no backend in either mode. See [non-functional.md](non-functional.md).
 2. **Read-only access to user data.** The assistant can only read. Any statement that writes, alters or drops is rejected before it reaches the database.
-3. **Only two things leave the machine.** Calls to the configured LLM provider and queries to the user's datasources. The product sends no analytics or usage telemetry.
+3. **Only the necessary things leave the machine.** Calls to the configured LLM provider and queries to the user's datasources. In org server mode, the server also talks to the organisation's identity provider for sign-in and directory sync. The product sends no analytics or usage telemetry to Halo or anyone else.
 4. **Traceable answers.** Every factual claim about the data must come from a query the assistant ran in this conversation. Each answer keeps the SQL, the result rows, the entities used and a plain-language account of the steps taken.
 5. **Say what is uncertain.** Truncated results, empty results, auto-corrected SQL, suspicious figures (a ratio of a sum to itself, a metric identical on every row) and out-of-scope questions are surfaced to the user, never hidden.
 6. **Business meaning outranks inference.** Curated knowledge and governed metrics outrank what the model infers from column names and sample values. The data itself still outranks the knowledge: the assistant never invents rows to fit a definition.
@@ -42,20 +48,25 @@ The product SHALL follow these principles. Capability specs turn them into testa
 9. **Deterministic frame, generative core.** Provenance, titles, source lists and similar context come from stored facts, never from model output, so readability and honesty do not depend on the model.
 10. **Learn from approval.** A thumbs-up saves the question and its SQL as a verified query that guides later, similar questions. Accuracy compounds without a curation project.
 11. **Measured, not assumed.** Quality is checked with repeatable eval sets against known-correct answers.
-12. **Same app, two doors.** One desktop installer, and one npm command that serves the same app in a browser.
+12. **Same app, every door.** One desktop installer, and one npm command that serves the same app in a browser, alone or as an organisation's server. There is no separate server product.
+13. **Permissions are enforced by the server.** In org server mode, every request is checked against the caller's roles on the backend. Hiding a button is never the only control.
+14. **Private by default, shared by design.** A person's sessions, visuals, memory, agents, knowledge and verified queries are theirs alone. Datasources, datasets and the LLM configuration are shared across the organisation and managed by Platform admins.
+15. **The identity provider owns identity.** Users and groups come from the organisation's identity provider (Microsoft Entra ID first). The app stores no passwords. It owns only role assignments and the mappings from groups to roles.
 
 ## What the product deliberately is not
 
 - Not a data warehouse, ETL tool or data modelling tool. It reads from sources; it never loads, writes or transforms them.
 - Not a dashboard builder. Visuals belong to a conversation, not to a shared board. Open question: no sharing or publishing of visuals exists beyond local export.
-- Not multi-user. There is no login, no roles and no shared server. The "Demo User" avatar on the navigation rail is a placeholder.
+- Not an identity provider. Users and groups are not created or authenticated by the app: they come from the organisation's identity provider. In local mode there is one implicit local user, with no sign-in. Today the rail's "Demo User" avatar is a placeholder; in org server mode it shows the signed-in user.
 - Not a SQL editor. Users read and learn from the SQL but do not author it in the product. Open question: confirm there is no manual "run SQL" surface (none was found).
-- Not a hosted service. It makes no calls to a Halo-operated backend.
+- Not a hosted service. It makes no calls to a Halo-operated backend, and Halo does not run org servers for customers.
 - Not tied to one LLM vendor. OpenAI, Anthropic and an OpenAI-compatible gateway (LenAI) are supported. Claude subscription logins are not a supported provider.
 - Not a replacement for a governed semantic layer. Metrics and knowledge are lightweight, app-managed definitions that need no feature enabled in the user's warehouse.
 
 ## Where it is going
 
-The 1.0 Beta (target 2026-10-31) hardens the connectors (Databricks, PostgreSQL, REST API), adds a golden dataset with evals, a data model DSL, an ontology-based knowledge store and answer trust signals. See `roadmap.md` at the repository root for scope and status. Open question: the phase plans in `docs/plans/` (answer reliability, trust UX, visual quality, strategic bets) appear fully shipped in the code (SQL repair, verified queries, interpretation line, truncation markers, chart heuristic, runtime repair, click-to-follow-up, metrics, careful mode, deep analysis), but the roadmap still lists them as unsequenced backlog. Confirm their status.
+The 1.0 Beta (target 2026-10-31) hardens the connectors (Databricks, PostgreSQL, REST API), adds a golden dataset with evals, a data model DSL, an ontology-based knowledge store and answer trust signals. See `roadmap.md` at the repository root for scope and status.
+
+After the beta, the product becomes multi-user (Release 2, epic [BA-161](https://halo-powered.atlassian.net/browse/BA-161), [epic spec](../epics/BA-161/spec.md), ADR-0010 in [architecture.md](../system/architecture.md)). An organisation self-hosts the app as an org server. People sign in with Entra ID, roles (User, Maker, Data owner, Approver, Platform admin) are enforced by the backend, and Platform admins manage users, groups, roles and permissions in an admin panel. Local mode stays. Until that epic ships, the app runs in local mode only, and [non-functional.md](non-functional.md) describes local mode. Open question: the phase plans in `docs/plans/` (answer reliability, trust UX, visual quality, strategic bets) appear fully shipped in the code (SQL repair, verified queries, interpretation line, truncation markers, chart heuristic, runtime repair, click-to-follow-up, metrics, careful mode, deep analysis), but the roadmap still lists them as unsequenced backlog. Confirm their status.
 
 <!-- sources: README.md, roadmap.md, docs/research/competitive-research-and-improvement-plan.md, docs/plans/*.md, frontend/src/app/app.html, backend/src/mastra/agents/assistant.agent.ts, backend/src/modules/llm/llm.types.ts, backend/src/modules/testing-data/fixtures/registry.ts -->

@@ -1,0 +1,105 @@
+<!-- Header: the selected tab's action sits on the right (admin R37) -->
+<div class="flex items-center gap-3">
+  <span
+    class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-accent"
+    aria-hidden="true"
+  >
+    <lucide-angular [img]="LayoutDashboard" [size]="16" />
+  </span>
+  <div class="min-w-0">
+    <h2
+      class="text-[24px] leading-8 font-light tracking-[0.12px] text-fg-strong"
+    >
+      Admin
+    </h2>
+    <p class="text-[13px] text-fg-muted">
+      Manage people, roles and access for your organisation.
+    </p>
+  </div>
+  <div class="ml-auto flex shrink-0 items-center gap-2">
+    @switch (selected()) {
+      @case ("overview") {
+        <button
+          type="button"
+          class="btn btn-outline"
+          [disabled]="exporting()"
+          (click)="exportReport()"
+        >
+          @if (exporting()) {
+            <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+            <span>Exporting…</span>
+          } @else {
+            <lucide-angular [img]="Download" [size]="14" />
+            <span>Export report</span>
+          }
+        </button>
+      }
+      @case ("users") {
+        <button
+          type="button"
+          class="btn btn-primary"
+          (click)="assigning.set(true)"
+        >
+          <lucide-angular [img]="UserPlus" [size]="14" />
+          <span>Assign role</span>
+        </button>
+      }
+    }
+  </div>
+</div>
+
+<div
+  role="tablist"
+  aria-label="Admin sections"
+  class="mt-6 flex gap-6 border-b border-border"
+>
+  @for (tab of tabs; track tab.key; let i = $index) {
+    <button
+      #tabButton
+      type="button"
+      role="tab"
+      [id]="'admin-tab-' + tab.key"
+      [attr.aria-selected]="selected() === tab.key"
+      [attr.aria-controls]="'admin-panel-' + tab.key"
+      [attr.tabindex]="selected() === tab.key ? 0 : -1"
+      (click)="select(tab.key)"
+      (keydown)="onTabKeydown($event, i)"
+      class="-mb-px border-b-2 pb-2.5 text-[14px] font-medium transition-colors"
+      [class.border-primary]="selected() === tab.key"
+      [class.text-fg-strong]="selected() === tab.key"
+      [class.border-transparent]="selected() !== tab.key"
+      [class.text-fg-muted]="selected() !== tab.key"
+      [class.hover:text-fg]="selected() !== tab.key"
+    >
+      {{ tab.label }}
+    </button>
+  }
+</div>
+
+<!-- The selected tab's screen; created on selection, so it loads each time (R38). -->
+<div
+  role="tabpanel"
+  [id]="'admin-panel-' + selected()"
+  [attr.aria-labelledby]="'admin-tab-' + selected()"
+  tabindex="0"
+  class="mt-6 min-h-48 rounded-lg"
+>
+  @switch (selected()) {
+    @case ("overview") {
+      <app-admin-overview />
+    }
+    @case ("users") {
+      <app-admin-users />
+    }
+    @case ("roles") {
+      <app-admin-roles />
+    }
+  }
+</div>
+
+@if (assigning()) {
+  <app-assign-role-dialog
+    (cancel)="assigning.set(false)"
+    (done)="onAssigned()"
+  />
+}

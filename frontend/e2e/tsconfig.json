@@ -6,6 +6,9 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "moduleResolution": "bundler",
     "noEmit": true,
+    // backend/test/oidc-stub.ts (the org fixture's OIDC provider) is written
+    // for the backend's compiler settings, which allow dotted index access.
+    "noPropertyAccessFromIndexSignature": false,
     "types": ["node"]
   },
   "include": ["./**/*.ts", "../playwright.config.ts"]

@@ -1,3 +1,4 @@
+import { RequirePermission } from '../../common/decorators/auth-requirement.decorators';
 import {
   Body,
   Controller,
@@ -23,6 +24,7 @@ import { UpdateKnowledgeSnippetDto } from './dto/update-knowledge-snippet.dto';
 import { BootstrapKnowledgeDto } from './dto/bootstrap-knowledge.dto';
 
 @Controller('knowledge')
+@RequirePermission('use-agents')
 export class KnowledgeController {
   constructor(private readonly knowledge: KnowledgeService) {}
 
@@ -72,6 +74,7 @@ export class KnowledgeController {
    * terminal `done` with the created snippets — or `error` with the reason.
    */
   @Post('bootstrap/stream')
+  @HttpCode(200)
   async bootstrapStream(
     @Body() dto: BootstrapKnowledgeDto,
     @Res() res: Response,
