@@ -4,7 +4,7 @@ The complete contract between the renderer (or any HTTP client) and the backend,
 
 Contents: [1 Conventions](#1-conventions) · [2 Endpoints](#2-endpoints) · [3 Streaming and long-running work](#3-streaming-and-long-running-work) · [4 Desktop bridge (IPC)](#4-desktop-bridge-ipc) · [5 CLI contract](#5-cli-contract) · [6 Environment variables](#6-environment-variables) · [7 Gaps and open questions](#7-gaps-and-open-questions)
 
-Endpoint total: **57 HTTP route handlers** across 9 controllers (sessions 14, datasources 6, metrics 5, llm 4, datasets 3, agents 13, deep analysis 3, testing data 3, knowledge 6). Verified queries have **no** HTTP surface (they are created and removed as a side effect of message feedback, and read by the metrics promotion path). Org server mode adds the auth and current-user routes (2.13), the SCIM routes (2.14) and the admin routes (2.15); in local mode those answer 404, except `GET /me`.
+Endpoint total: **57 HTTP route handlers** across 9 controllers (sessions 14, datasources 6, metrics 5, llm 4, datasets 3, agents 13, deep analysis 3, testing data 3, knowledge 6). Verified queries have **no** HTTP surface (they are created and removed as a side effect of message feedback, and read by the metrics promotion path). Org server mode adds 30 routes: the auth and current-user routes (2.13, 4), the SCIM routes (2.14, 14) and the admin routes (2.15, 12); in local mode those answer 404, except `GET /me`.
 
 ---
 
@@ -96,7 +96,7 @@ Everything else keeps the default 404 body (`{statusCode:404, message:"Cannot GE
 
 ### 1.9 Authentication, authorization and CSRF (org server mode)
 
-Rules: [admin](../capabilities/admin/spec.md) R1-R36. Decisions: ADR-0010 and ADR-0011 in [architecture.md](architecture.md).
+Rules: [admin](../capabilities/admin/spec.md) R1-R36 (the admin screens: R37-R68). Decisions: ADR-0010 and ADR-0011 in [architecture.md](architecture.md).
 
 **Mode.** The server runs in org server mode when every required `ORG_*` variable (6.1) is set, and in local mode when none is. Some but not all is a startup error naming the missing ones. The Electron-spawned backend is always local (4.3).
 
@@ -150,7 +150,7 @@ The renderer shows its own toast for any 403 (`You don't have permission to do t
 | `GET /ui-preferences`, `PUT /ui-preferences` (2.12) | `use-agents` (each user's own theme and drawer state) |
 | `GET /auth/login`, `GET /auth/callback`, `POST /auth/logout`, `GET /me` (2.13) | public: no permission checked (`GET /me` answers 401 itself without an auth session) |
 | Every `/scim/v2` route (2.14) | the SCIM bearer token, no auth session |
-| Every `/admin` route (2.15) | `manage-users` |
+| Every `/admin` route (2.15): role assignments, overview and its export, users, user roles, agent transfer, groups and group mappings | `manage-users` |
 
 `GET /llm/settings` leaves out `apiKeyMasked` (sends `null`) for a caller without `manage-llm`.
 
@@ -812,12 +812,45 @@ Controller prefix `/scim/v2`. Capability: [admin](../capabilities/admin/spec.md)
 
 ### 2.15 Admin
 
-Controller prefix `/admin`. Capability: [admin](../capabilities/admin/spec.md) R22. Requirement: `manage-users` (1.9). Org server mode only. Later stories of epic BA-161 add the overview, users, ownership-transfer, group-mapping and export routes here.
+Controller prefix `/admin`. Capability: [admin](../capabilities/admin/spec.md) R22 and R37-R68. Requirement: `manage-users` (1.9). Org server mode only. Errors are Style B (1.3); successful writes answer an `ok` body like Style A. Activity events are the `activity_events` types in [data-model.md](data-model.md) 3.14.7; how each figure is derived is in 3.14.8.
 
 | # | Method + path | Purpose | FE |
 |---|---|---|---|
-| 79 | `POST /admin/role-assignments` | Assign a role to a user | no (used by tests until BA-166) |
-| 80 | `DELETE /admin/role-assignments/:id` | Remove a direct role assignment | no (used by tests until BA-166) |
+| 79 | `POST /admin/role-assignments` | Assign a role to a user | yes (Assign role dialog) |
+| 80 | `DELETE /admin/role-assignments/:id` | Remove a direct role assignment | yes (Inactive makers dialog) |
+| 81 | `GET /admin/overview` | Tiles, Needs attention, weekly active users, recent activity | yes |
+| 82 | `GET /admin/overview/export` | The overview as a CSV download | yes (full-page download) |
+| 83 | `GET /admin/users` | Search, filter and page the users | yes |
+| 84 | `GET /admin/users/:id` | One user's detail | yes |
+| 85 | `PUT /admin/users/:id/roles` | Replace a user's direct role assignments | yes |
+| 86 | `POST /admin/agents/transfer` | Move user agents to another owner | yes |
+| 87 | `GET /admin/groups` | Search and page the groups | yes |
+| 88 | `GET /admin/role-mappings` | List the group mappings | yes |
+| 89 | `POST /admin/role-mappings` | Add a group mapping | yes |
+| 90 | `DELETE /admin/role-mappings/:id` | Remove a group mapping | yes |
+
+Shared shapes (`RoleId`, `HeldRole` in 2.13):
+
+```ts
+type UserStatus = 'active' | 'inactive' | 'not-signed-in' | 'deactivated';   // admin R39
+interface UserRef { id: string; displayName: string }
+interface AdminUserRow {
+  id: string;
+  displayName: string;
+  email: string | null;
+  initials: string;                  // as in ui.md 1.3
+  roles: Exclude<RoleId, 'user'>[];  // distinct, from every source, order: platform-admin, approver, data-owner, maker; [] = User only
+  groups: string[];                  // group display names, sorted
+  agentsOwned: number;
+  lastActiveAt: string | null;       // admin R39; null = never signed in
+  status: UserStatus;
+}
+interface AdminHeldRole extends HeldRole {
+  datasourceName?: string;           // data-owner only; the datasource's current name, or its id if it no longer exists
+  groupNames?: string[];             // source 'group': every group that maps this role (and datasource)
+}
+interface ActivityItem { id: string; type: string; at: string; text: string }   // text: the admin R47 sentence
+```
 
 #### 79. `POST /admin/role-assignments`
 - Body: `{ userId: string; role: RoleId; datasourceId?: string }`. `datasourceId` is required for `data-owner` and refused for any other role.
@@ -827,7 +860,95 @@ Controller prefix `/admin`. Capability: [admin](../capabilities/admin/spec.md) R
 
 #### 80. `DELETE /admin/role-assignments/:id`
 - Success `200`: `{ ok:true, message:"Role removed" }`. Records `role.removed`.
-- Errors: `404` `"Role assignment <id> not found"`. Bootstrap and group-mapped roles have no assignment id and cannot be removed here.
+- Errors: `404` `"Role assignment <id> not found"`; `400` `"You can't remove your own Platform admin role"` when the assignment is the caller's own `platform-admin` (admin R61). Bootstrap and group-mapped roles have no assignment id and cannot be removed here.
+
+#### 81. `GET /admin/overview`
+- Response `200`:
+  ```ts
+  interface AdminOverview {
+    generatedAt: string;
+    activeUsers30d: number;
+    agentsLive: number;
+    attention: {
+      ownerlessAgents: { count: number; items: { agentId: string; agentName: string; formerOwner: UserRef | null }[] };
+      erroredAgents: { count: number; items: { agentId: string; agentName: string; owner: UserRef; errors: number; lastErrorAt: string; lastErrorMessage: string }[] };
+      inactiveMakers: { count: number; items: { user: UserRef; lastActiveAt: string; makerAssignmentId: string | null; makerGroups: string[] }[] };
+    };
+    weeklyActiveUsers: { weekStart: string; users: number }[];   // 8 entries, oldest first; weekStart = the Monday, YYYY-MM-DD (UTC)
+    recentActivity: ActivityItem[];                             // at most 10, newest first
+  }
+  ```
+  `agentName` is the agent's Live name, else its draft name. `formerOwner` is `null` when the owner is no longer in the directory. `makerAssignmentId` is the direct Maker assignment (the id endpoint 80 takes), `null` when Maker comes only from groups. Each `items` list holds at most 100 entries, ordered by name; `count` is always the full number.
+- Errors: none expected beyond 1.9.
+
+#### 82. `GET /admin/overview/export`
+- Response `200`, `Content-Type: text/csv; charset=utf-8`, `Content-Disposition: attachment; filename="admin-report-<YYYY-MM-DD>.csv"` (UTC date). UTF-8 with a byte-order mark, CRLF line ends, RFC 4180 quoting. A cell starting with `=`, `+`, `-` or `@` is prefixed with `'` (admin R48).
+- Columns `section,label,value`. Rows, in order:
+  - `summary,Active users · 30 days,<n>` and `summary,Agents live,<n>`;
+  - `attention,Agents without an active owner,<n>`, `attention,Agents with errors in the last 7 days,<n>`, `attention,Users inactive for 90+ days with Maker role,<n>`;
+  - 8 rows `weekly-active-users,<weekStart>,<n>`, oldest first;
+  - up to 10 rows `activity,<ISO at>,<sentence>`, newest first.
+- Computed exactly as endpoint 81 at the time of the request. Records nothing.
+
+#### 83. `GET /admin/users`
+- Query: `q` (optional; trimmed, matched as in admin R50), `filter` (`all` default \| `platform-admin` \| `approver` \| `data-owner` \| `maker` \| `inactive`), `page` (1-based, default 1), `pageSize` (1-100, default 25), `excludeDeactivated` (`true` leaves out deactivated users; used by the User and New owner pickers).
+- Response `200`:
+  ```ts
+  interface AdminUsersPage {
+    items: AdminUserRow[];          // sorted by displayName (case-insensitive), then email
+    total: number;                  // after q and filter
+    page: number; pageSize: number;
+    counts: { users: number; groups: number; platformAdmins: number; approvers: number; dataOwners: number; makers: number; inactive: number };   // whole directory, ignoring q and filter (admin R49, R51)
+    lastSyncAt: string | null;      // the newest scim.request event; null before any (admin R54)
+  }
+  ```
+  A `page` past the end answers an empty `items` with the real `total`.
+- Errors: `400` `"Unknown filter: <filter>"`, `"page must be a positive integer"`, `"pageSize must be between 1 and 100"`.
+
+#### 84. `GET /admin/users/:id`
+- Response `200`:
+  ```ts
+  interface AdminUserDetail extends AdminUserRow {
+    heldRoles: AdminHeldRole[];     // every source, including { role:'user', source:'implicit' }
+    groupList: UserRef[];           // the user's groups ({ id, displayName })
+    agents: { id: string; name: string; status: 'live' | 'draft' }[];   // sorted by name
+    isSelf: boolean;                // the caller (admin R61)
+    isBootstrap: boolean;           // email in ORG_BOOTSTRAP_ADMINS (admin R18)
+  }
+  ```
+- Errors: `404` `"User <id> not found"`.
+
+#### 85. `PUT /admin/users/:id/roles`
+- Body: `{ roles: { role: RoleId; datasourceId?: string }[] }`, the complete set of **direct** assignments the user should hold (admin R62). Duplicates collapse. Roles held from groups or as a bootstrap admin are not part of it and are not changed.
+- Validates everything before writing: the same `400` and `404` messages as endpoint 79, plus `400` `"You can't remove your own Platform admin role"` when the caller is the user and the set drops their direct `platform-admin`.
+- Then deletes the direct assignments not in the set and creates the missing ones, as one transaction (all or nothing).
+- Success `200`: `{ ok:true, message:"Roles saved for <displayName>", added: number, removed: number, heldRoles: AdminHeldRole[] }`; with nothing to change, `message:"No changes"` and nothing written.
+- Records one `role.assigned` or `role.removed` per change.
+
+#### 86. `POST /admin/agents/transfer`
+- Body: `{ agentIds: string[]; toUserId: string }`; 1-100 distinct ids of user agents, from any owner.
+- Validates everything before writing: `400` `"Choose at least one agent"`, `"Choose at most 100 agents"`, `"<name> is deactivated"` (the new owner), `"\"<agent name>\" already belongs to <name>"`; `404` `"User <id> not found"`, `"Agent <id> not found"` (also for an agent stored without an owner, admin R33); `409` `"<name> already has an agent named \"<agent name>\""` when the new owner has a user agent with the same name (case-insensitive), or two of the agents share a name.
+- Then, as one transaction, sets each agent's `ownerId` to `toUserId` and `pinned` to `false`; the draft, Live version and `publishedAt` are unchanged (admin R64).
+- Success `200`: `{ ok:true, message:"Transferred <n> agent(s) to <displayName>", transferred: number }` (`1 agent`, `2 agents`).
+- Records one `agent.transferred` per agent.
+
+#### 87. `GET /admin/groups`
+- Query: `q` (optional, a substring of the group name, case-insensitive), `page`, `pageSize` as in endpoint 83.
+- Response `200`: `{ items: { id: string; displayName: string; members: number; mappings: { role: Exclude<RoleId,'user'>; datasourceId?: string; datasourceName?: string }[] }[]; total: number; page: number; pageSize: number }`, sorted by name (case-insensitive).
+- Errors: the `page` / `pageSize` messages of endpoint 83.
+
+#### 88. `GET /admin/role-mappings`
+- Response `200`: `{ mappings: GroupRoleMappingView[] }`, sorted by group name then role, where `GroupRoleMappingView = GroupRoleMappingDoc & { groupName: string; datasourceName?: string }` ([data-model.md](data-model.md) 3.14.5).
+
+#### 89. `POST /admin/role-mappings`
+- Body: `{ groupId: string; role: RoleId; datasourceId?: string }`, with the same rules as endpoint 79.
+- Success `201`: `{ ok:true, message:"Mapping added", mapping: GroupRoleMappingView }`. If the same mapping exists: `200 { ok:true, message:"Mapping already exists", mapping }`, nothing written.
+- Errors: the `400` messages of endpoint 79; `404` `"Group <id> not found"`, `"Datasource <id> not found"`.
+- Records `mapping.added`.
+
+#### 90. `DELETE /admin/role-mappings/:id`
+- Success `200`: `{ ok:true, message:"Mapping removed" }`. Records `mapping.removed`.
+- Errors: `404` `"Group mapping <id> not found"`.
 
 ## 3. Streaming and long-running work
 
@@ -891,7 +1012,7 @@ interface StreamMessageRequest {
 - Whatever text had already streamed is still persisted as a (partial) assistant message together with captured `data`; the careful-mode cross-check is skipped. The client should reload the session (`GET /sessions/:id`) to show the persisted state; the shipped chat does this.
 - Abort errors are swallowed silently on both sides.
 
-**Errors mid-stream.** Any thrown error that is not an abort is caught by the controller and sent as `{ type:"error", content: <message> }`, then the response ends. The user message stays persisted; no assistant message is added. A failed connect on the client yields `"Backend unreachable"`, a non-2xx or bodyless response yields `"Stream failed (<status>)"`, a read failure yields `"Stream disconnected"`.
+**Errors mid-stream.** Any thrown error that is not an abort is caught by the controller and sent as `{ type:"error", content: <message> }`, then the response ends. The user message stays persisted; no assistant message is added. In org server mode, when the session was started from a user agent (not a preview) and the error is not a refused request (an empty message, an unknown session), the server also records an `agent.turn-failed` activity event ([data-model.md](data-model.md) 3.14.7; admin R40). Endpoint 6 does the same for a failed non-streamed turn. A failed connect on the client yields `"Backend unreachable"`, a non-2xx or bodyless response yields `"Stream failed (<status>)"`, a read failure yields `"Stream disconnected"`.
 
 ### 3.2 Deep analysis
 

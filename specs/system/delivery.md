@@ -209,7 +209,7 @@ An org server is the same npm package started with the `ORG_*` configuration (AD
    ```
 
    Bind only the interface the proxy reaches (`0.0.0.0` when the proxy is on another host, `127.0.0.1` when it is on the same one), and keep the port closed to everyone but the proxy. The banner prints `Mode: org server, <public base URL>`. A missing variable stops startup with an error naming it.
-5. **First sign-in.** A bootstrap admin signs in at the public URL and holds Platform admin at once. Other people hold the User role until they get more roles (today through `POST /admin/role-assignments`; the Users & groups screen arrives with BA-165).
+5. **First sign-in.** A bootstrap admin signs in at the public URL and holds Platform admin at once. Other people hold the User role until they get more roles (in the Admin area's Users & groups tab, or through group mappings on Roles & permissions).
 6. **Secrets and backups.** Keep `ORG_OIDC_CLIENT_SECRET` and `ORG_SCIM_TOKEN` out of the data directory and out of logs (an environment file readable only by the service account). Back up the data directory with its `.app-secret`, as in local mode. Rotating `ORG_SCIM_TOKEN` means updating it in Entra ID and restarting the server.
 
 For development and the E2E suite, `ORG_PUBLIC_BASE_URL` may be `http://127.0.0.1:<port>` and the issuer a local stub; cookies then drop `Secure`. `npm run test:e2e:org` in `frontend/` does this for you.

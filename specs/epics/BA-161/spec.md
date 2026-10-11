@@ -24,7 +24,7 @@ Visual reference: the Figma board [Agent Hub — E2E lifecycle (proposed)](https
   - Users and groups are pushed by Entra ID through SCIM 2.0.
   - A user who signs in before being provisioned is created just in time.
   - Groups are read-only in the app.
-  - Status is Active, Inactive (no activity for 90 days or more) or Not signed in.
+  - Status is Active, Inactive (no activity for 90 days or more), Not signed in, or Deactivated (deactivated through SCIM).
 - **Roles and permissions.**
   - Five roles:
     - **User:** use agents and chat.
@@ -126,6 +126,10 @@ All stories are built on one branch, `feat/BA-161-admin-panel`, and ship as one 
 - **Board items that need epics this one excludes**: "Publish requests" and "Data access requests" (tiles and rows), and "Share agents with own team", "Request org-wide publishing" and "Approve org-wide publishing". They appear in the P4 matrix as permissions, but no screen uses them yet.
 - **Decided: no "Sync from Entra ID" button.** SCIM is pushed by Entra ID on its own cycle, so P2 shows the time of the last SCIM request instead (2026-10-10).
 - **Decided: datasource and dataset management is Platform admin only**, as a tenth permission in the P4 matrix (2026-10-10).
-- **Open: "Agents with errors in the last 7 days"** needs a definition of an agent error. Proposed: a turn in a session started from the agent that ended in an error.
+- **Decided: "Agents with errors in the last 7 days"** counts agents with at least one *agent error*: a turn in a session started from the agent that ended in an error. Stopped turns, refused requests and preview turns don't count. Each one is recorded as an `agent.turn-failed` activity event (2026-10-10; admin R40).
+- **Decided: a fourth status, Deactivated**, so a user deactivated through SCIM never shows as Active (2026-10-10; admin R39).
+- **Decided: an admin can't remove their own Platform admin role**, in the UI or through the API, so an org can't lose its last admin by accident (2026-10-10).
+- **Decided: transferring an agent** leaves the former owner's sessions in place, where the agent then acts as deleted; the pin resets, and a name clash with the new owner's agents is refused (2026-10-10).
+- **Decided: Inspect is read-only** (admins can't open private sessions), and **Clean up** removes only directly assigned Maker roles (2026-10-10).
 - **Open: E2E for SSO.** Playwright needs a local OIDC provider stub and a SCIM test client. The harness should run org server mode beside the existing local-mode suite, not replace it.
 - **Related:** [BA-150](../BA-150/spec.md) Agent Hub (agent ownership), [BA-82](../BA-82/spec.md) Agent Routines (whose identity a scheduled run uses).
