@@ -331,6 +331,21 @@ Entry template:
 - When Jira returns 401, have the user open https://id.atlassian.com/manage-profile/security/api-tokens straight away and check the token's expiry before any other diagnosis.
 - Ask every open question for one decision through a single picker call, not mixed with numbered questions in the text, so answers can't conflict.
 - For any rename, check `productName`, the data dir and the installer names in `delivery.md` first, and state which of them the rename covers.
+## 2026-10-09 — 0.2.7 Local test deploys check the default ports first (BA-157)
+
+### What went well
+- The rule came straight from an incident in the same session: a subagent's `pkill -f "dist/main.js"` also matched its own shell. It was written while the details were fresh.
+- The rule was set aside as a patch file, not left as an edit on the Agent Hub epic branch. So it ships under its own epic (BA-89), as the branching convention requires, and the epic branch could merge `main` on a clean tree.
+
+### What went wrong
+- The rule was first written straight into the BA-150 worktree's CLAUDE.md, on the wrong epic's branch. Its own Jira story only came afterwards.
+- The BA-89 epic branch had been merged and deleted, so a second branch with the same name was opened for one small story.
+- The commit was pushed to the branch after its PR (#62) had merged, and no new PR was opened, so it sat off `main` for a day until a worktree audit on 2026-10-10 found it and it was replayed onto a fresh branch from `main`.
+
+### What to do differently
+- When the user asks for a CLAUDE.md or process rule in the middle of another epic, create the BA-89 story and its branch before editing CLAUDE.md, rather than editing on the current epic's branch.
+- Before starting any local server for the user, follow the new rule: check the default ports and record the PID you'll stop.
+- After pushing to a branch, check `gh pr list --head <branch> --state all`; if its PR is already merged, restart the branch from `main` and open a new PR in the same turn.
 
 ## 2026-10-09 — 0.2.6 E2E and testing run against the web app; desktop only on request (BA-156)
 

@@ -123,6 +123,18 @@ How work is planned, specified, built, verified and traced. It covers the repo's
   - CLAUDE.md states the rule. `python3 scripts/check-specs.py` passes.
 - **Notes:** made on the BA-89 epic branch `test/BA-89-delivery-process`. Evidence: [evidence/0.2.6/](evidence/0.2.6/).
 
+#### 0.2.7 — Local test deploys check the default ports and keep deploy tweaks out of commits ([BA-157](https://halo-powered.atlassian.net/browse/BA-157))  `✅ Done`
+- **Intent:** when Claude starts the app for the user to try, it never collides with something already running, never kills the wrong process, and never commits a change made only to run locally.
+- **Scope:** a rule at the end of CLAUDE.md *Worktree deploy convention*:
+  - Before starting the app, check the default ports (backend 3000, Postgres 55432, observability 6006, 3001, 4317 and 4318) with `ss -ltnp` and `docker ps`.
+  - The shared World Cup Postgres on 55432 is reused, not a conflict.
+  - Any other busy port is worked around with flags or environment variables only.
+  - A tracked-file change needed only to run locally stays out of every commit and is reverted after testing.
+  - Report the URL, port, data dir and PID, and stop the process by that PID, never with `pkill -f`.
+- **Out of scope:** changing default ports; scripting the check.
+- **Acceptance:** CLAUDE.md states the rule; `python3 scripts/check-specs.py` passes.
+- **Notes:** requested by the user on 2026-10-09 during the Agent Hub epic (BA-150), after a subagent's `pkill -f "dist/main.js"` matched more than intended. Branch `docs/BA-89-delivery-process`. Evidence: [evidence/0.2.7/](evidence/0.2.7/).
+
 ### Milestone 0.3 — Local Development Observability ([BA-111](https://halo-powered.atlassian.net/browse/BA-111))
 
 Developer tooling for seeing what the backend and agents are doing: agent and LLM traces, HTTP and database traces, metrics and linked logs. Switched on by a Developer toggle in Settings. With it off, which is the default, end-user installs behave exactly as before. Epic spec: [specs/epics/BA-111/spec.md](specs/epics/BA-111/spec.md). Decision: ADR-0006 in [specs/system/architecture.md](specs/system/architecture.md).
