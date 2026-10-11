@@ -774,7 +774,7 @@ interface MeView {
 
 #### 64. `GET /me`
 - Local mode: `200 { mode:"local", user:{ id:"local", displayName:"Demo User", email:null, initials:"D" }, roles:[{role:"user",source:"implicit"},{role:"platform-admin",source:"implicit"}], permissions:<all eleven> }`.
-- Org server mode, signed in: `200 MeView` with `mode:"org"`. `initials` per [ui.md](ui.md) 1.3.
+- Org server mode, signed in: `200 MeView` with `mode:"org"`. `initials` per [ui.md](ui.md) 1.3. A Data owner assignment or mapping whose datasource no longer exists is not listed and grants nothing ([data-model.md](data-model.md) 3.13).
 - Org server mode, not signed in: `401` (1.9).
 
 ### 2.14 SCIM 2.0 (directory provisioning)
@@ -849,6 +849,7 @@ interface AdminUserRow {
 interface AdminHeldRole extends HeldRole {
   datasourceName?: string;           // data-owner only; the datasource's current name, or its id if it no longer exists
   groupNames?: string[];             // source 'group': every group that maps this role (and datasource)
+  datasourceMissing?: true;          // 84 only: a direct Data owner assignment whose datasource no longer exists
 }
 interface ActivityItem { id: string; type: string; at: string; text: string }   // text: the admin R47 sentence
 ```
@@ -917,7 +918,7 @@ interface ActivityItem { id: string; type: string; at: string; text: string }   
     isBootstrap: boolean;           // userName in ORG_BOOTSTRAP_ADMINS (admin R18)
   }
   ```
-  `heldRoles` lists, in order, the implicit User role, the bootstrap Platform admin, the direct assignments (oldest first), then the roles from groups. A role mapped from several of the user's groups (for Data owner, on the same datasource) appears once, with every group in `groupNames` (sorted) and `groupId` the first of them.
+  `heldRoles` lists, in order, the implicit User role, the bootstrap Platform admin, the direct assignments (oldest first), then the roles from groups. A direct Data owner assignment whose datasource no longer exists grants nothing ([data-model.md](data-model.md) 3.13) but is still listed, with `datasourceMissing: true` and `datasourceName` set to its id, so the panel can offer to remove it; the row's `roles` leave it out. A group mapping whose datasource no longer exists is left out here (it shows in 88). A role mapped from several of the user's groups (for Data owner, on the same datasource) appears once, with every group in `groupNames` (sorted) and `groupId` the first of them.
 - Errors: `404` `"User <id> not found"`.
 
 #### 85. `PUT /admin/users/:id/roles`

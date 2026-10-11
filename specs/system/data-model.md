@@ -591,7 +591,7 @@ Nothing below is stored; each figure is computed when an admin endpoint ([api.md
 | Inactive makers | Users with status `inactive` who hold `maker` from a `role_assignments` row or a `group_role_mappings` row of one of their groups. |
 | Agents owned | `agents` documents per `ownerId`. |
 | Last sync | `at` of the newest `scim.request` event (minute precision, since that event is written at most once a minute). |
-| Held roles | As for `GET /me` ([api.md](api.md) 2.13): implicit User, `role_assignments`, `group_role_mappings` of the user's groups, and Platform admin for a bootstrap admin (`userName` in `ORG_BOOTSTRAP_ADMINS`). |
+| Held roles | As for `GET /me` ([api.md](api.md) 2.13): implicit User, `role_assignments`, `group_role_mappings` of the user's groups, and Platform admin for a bootstrap admin (`userName` in `ORG_BOOTSTRAP_ADMINS`). A Data owner assignment or mapping whose `datasourceId` is not in `connections` grants nothing (3.13), so it counts in no role figure; the user detail still lists such a direct assignment, flagged. |
 
 Reads walk `users`, `agents` and `activity_events` across all owners, so the admin module reads the raw (not owner-scoped) stores (3.15). Each admin request reads each collection once and derives every row and figure from that read.
 

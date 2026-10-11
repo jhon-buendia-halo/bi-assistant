@@ -161,6 +161,7 @@ export class AdminSnapshot {
         this.bootstrap(user),
         this.assignmentsOf(user.id),
         this.mappings.filter((m) => groupIds.has(m.groupId)),
+        (id) => this.datasourceNames.has(id),
       );
       this.held.set(user.id, held);
     }
@@ -170,7 +171,9 @@ export class AdminSnapshot {
   /**
    * Held roles with their names (api.md 84). A role mapped from several of
    * the user's groups appears once per role and datasource, with every
-   * group's name; its `groupId` is the first of them by name.
+   * group's name; its `groupId` is the first of them by name. A direct Data
+   * owner assignment whose datasource is gone is listed with
+   * `datasourceMissing`, though it grants nothing.
    */
   adminHeldRoles(user: UserDoc): AdminHeldRole[] {
     const out: AdminHeldRole[] = [];
@@ -178,7 +181,17 @@ export class AdminSnapshot {
       string,
       { entry: AdminHeldRole; groups: GroupDoc[] }
     >();
-    for (const held of this.heldRoles(user)) {
+    // Unlike `heldRoles`, also the direct Data owner assignments whose
+    // datasource is gone, flagged, so the admin can remove them (api.md 84).
+    const groupIds = new Set(this.groupIdsByUser.get(user.id) ?? []);
+    const listed = resolveHeldRoles(
+      this.bootstrap(user),
+      this.assignmentsOf(user.id),
+      this.mappings.filter((m) => groupIds.has(m.groupId)),
+      (id) => this.datasourceNames.has(id),
+      { includeDanglingAssignments: true },
+    );
+    for (const held of listed) {
       const entry: AdminHeldRole = { ...held };
       if (held.datasourceId) {
         entry.datasourceName = this.datasourceName(held.datasourceId);

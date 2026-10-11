@@ -827,6 +827,41 @@ describe('Admin API: users, groups, roles, transfers and mappings (BA-165, BA-16
     });
   });
 
+  describe('A Data owner role whose datasource is gone (BA-163)', () => {
+    it('grants nothing on the next request; the detail lists it, flagged, and saving without it removes it', async () => {
+      expect(await directRoles(ids.ada)).toEqual([
+        'approver',
+        'data-owner:ds-wc',
+      ]);
+      expect((await me(adaCookie)).permissions).toContain(
+        'approve-datasource-access',
+      );
+      const deleted = await send('DELETE', '/datasources/ds-wc');
+      expect(await json(deleted)).toMatchObject({ ok: true });
+
+      const ada = await me(adaCookie);
+      expect(ada.roles.map((r) => r.role)).toEqual(['user', 'approver']);
+      expect(ada.permissions).not.toContain('approve-datasource-access');
+      expect((await users('?q=ada')).items[0].roles).toEqual(['approver']);
+      expect((await detail(ids.ada)).heldRoles).toContainEqual({
+        role: 'data-owner',
+        source: 'direct',
+        assignmentId: anyString,
+        datasourceId: 'ds-wc',
+        datasourceName: 'ds-wc',
+        datasourceMissing: true,
+      });
+
+      const saved = await json<{ removed: number }>(
+        await send('PUT', `/admin/users/${ids.ada}/roles`, {
+          roles: [{ role: 'approver' }],
+        }),
+      );
+      expect(saved.removed).toBe(1);
+      expect(await directRoles(ids.ada)).toEqual(['approver']);
+    });
+  });
+
   describe('Users and groups, after the directory changes (BA-165)', () => {
     it('shows a user deactivated through SCIM as Deactivated, and leaves them out of the pickers', async () => {
       expect((await scimPatchActive(ids.alan, false)).status).toBe(200);

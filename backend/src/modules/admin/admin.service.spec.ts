@@ -84,7 +84,7 @@ function setup() {
   const directory = new DirectoryRepository(users, groups, members);
   const roles = new RolesRepository(assignments, mappings);
   const activity = new ActivityService(events, directory);
-  const resolver = new RoleResolver(directory, roles, {
+  const resolver = new RoleResolver(directory, roles, connections, {
     bootstrapAdmins: ['admin@contoso.test'],
   } as OrgServerConfig);
   const allAgents = new AllOwnersAgentsRepository(agents);
@@ -828,6 +828,7 @@ describe('AdminReadService users (api.md 83, 84; admin R49-R54, R59-R61)', () =>
         source: 'direct',
         datasourceId: 'ds-gone',
         datasourceName: 'ds-gone',
+        datasourceMissing: true,
       }),
       {
         role: 'approver',
@@ -853,6 +854,39 @@ describe('AdminReadService users (api.md 83, 84; admin R49-R54, R59-R61)', () =>
       status: 404,
       message: 'User nobody not found',
     });
+  });
+});
+
+describe('A Data owner role whose datasource is gone (data-model 3.13)', () => {
+  it('grants nothing, but the detail still lists the direct assignment, flagged', async () => {
+    const t = setup();
+    await directoryWithPeople(t);
+    await t.user('dora', 'Dora Owner');
+    await t.group('g-owners', 'Owners', ['dora']);
+    const dangling = await t.assign('dora', 'data-owner', 'ds-gone');
+    await t.map('g-owners', 'data-owner', 'ds-gone');
+
+    const page = await t.read.listUsers({ q: 'dora' });
+    expect(page.items[0].roles).toEqual([]);
+    expect(page.counts.dataOwners).toBe(0);
+    expect((await t.read.listUsers({ filter: 'data-owner' })).total).toBe(0);
+
+    expect((await t.read.userDetail('dora', 'admin')).heldRoles).toEqual([
+      { role: 'user', source: 'implicit' },
+      {
+        role: 'data-owner',
+        source: 'direct',
+        assignmentId: dangling.id,
+        datasourceId: 'ds-gone',
+        datasourceName: 'ds-gone',
+        datasourceMissing: true,
+      },
+    ]);
+
+    // Unticking it removes the stored assignment (api.md 85).
+    const saved = await t.admin.saveUserRoles('dora', { roles: [] }, 'admin');
+    expect(saved).toMatchObject({ removed: 1, added: 0 });
+    expect(await t.directRoles('dora')).toEqual([]);
   });
 });
 
