@@ -2,6 +2,7 @@ import BetterSqlite3 from 'better-sqlite3';
 import type { OrgServerConfig } from '../../config/org-server.config';
 import type { DocFilter } from '../../infrastructure/database/doc-store';
 import { SqliteDocStore } from '../../infrastructure/database/sqlite-doc-store';
+import { SqliteTransactions } from '../../infrastructure/database/sqlite-transactions';
 import { ActivityService } from '../auth/activity.service';
 import type {
   ActivityEventDoc,
@@ -18,11 +19,13 @@ import { RoleResolver } from '../auth/role-resolver';
 import type { UserAgentDoc } from '../user-agents/entities/user-agent.entity';
 import { AdminDirectoryReader } from './admin-directory.reader';
 import { AdminReadService } from './admin-read.service';
+import { AdminService } from './admin.service';
 import { AllOwnersAgentsRepository } from './repositories/all-owners-agents.repository';
 
 /**
  * The admin API's services (admin R37-R68; api.md 2.15; data-model 3.14.8)
- * over the real repositories and in-memory SQLite.
+ * over the real repositories and in-memory SQLite, so "all or nothing" is
+ * proven against a real transaction.
  */
 
 const DAY = 86_400_000;
@@ -91,6 +94,15 @@ function setup() {
     connections,
     resolver,
   );
+  const admin = new AdminService(
+    directory,
+    roles,
+    activity,
+    connections,
+    allAgents,
+    new SqliteTransactions(db),
+    reader,
+  );
   const config = (name: string) => ({
     name,
     description: '',
@@ -101,6 +113,7 @@ function setup() {
 
   const t = {
     db,
+    admin,
     read: new AdminReadService(reader, activity),
     assignments,
     agents,
@@ -211,7 +224,345 @@ async function directoryWithPeople(t: Testbed) {
   await t.assign('ada', 'maker');
 }
 
-describe('AdminReadService users (api.md 83; admin R49-R54)', () => {
+describe('AdminService.saveUserRoles (api.md 85; admin R60-R62)', () => {
+  it('replaces the direct assignments and records one event per change', async () => {
+    const t = setup();
+    await directoryWithPeople(t);
+    const result = await t.admin.saveUserRoles(
+      'ada',
+      {
+        roles: [
+          { role: 'approver' },
+          { role: 'data-owner', datasourceId: 'ds-1' },
+        ],
+      },
+      'admin',
+    );
+    expect(result).toMatchObject({
+      message: 'Roles saved for Ada Lovelace',
+      added: 2,
+      removed: 1,
+    });
+    expect(await t.directRoles('ada')).toEqual(['approver', 'data-owner:ds-1']);
+    expect(result.heldRoles).toEqual([
+      { role: 'user', source: 'implicit' },
+      expect.objectContaining({ role: 'approver', source: 'direct' }),
+      expect.objectContaining({
+        role: 'data-owner',
+        source: 'direct',
+        datasourceId: 'ds-1',
+        datasourceName: 'World Cup',
+      }),
+    ]);
+    expect(await t.eventsOf('role.removed')).toEqual([
+      { actorId: 'admin', subjectId: 'ada', details: { role: 'maker' } },
+    ]);
+    expect(await t.eventsOf('role.assigned')).toEqual(
+      expect.arrayContaining([
+        { actorId: 'admin', subjectId: 'ada', details: { role: 'approver' } },
+        {
+          actorId: 'admin',
+          subjectId: 'ada',
+          details: { role: 'data-owner', datasourceId: 'ds-1' },
+        },
+      ]),
+    );
+  });
+
+  it('answers "No changes" and writes nothing when the set is what is stored; duplicates collapse', async () => {
+    const t = setup();
+    await directoryWithPeople(t);
+    const result = await t.admin.saveUserRoles(
+      'ada',
+      { roles: [{ role: 'maker' }, { role: 'maker' }] },
+      'admin',
+    );
+    expect(result).toMatchObject({
+      message: 'No changes',
+      added: 0,
+      removed: 0,
+    });
+    expect(await t.eventsOf('role.assigned')).toEqual([]);
+    expect(await t.eventsOf('role.removed')).toEqual([]);
+  });
+
+  it.each([
+    [{ roles: 'maker' }, 400, 'roles must be a list'],
+    [
+      { roles: [{ role: 'approver' }, { role: 'wizard' }] },
+      400,
+      'Unknown role: wizard',
+    ],
+    [{ roles: [{ role: 'user' }] }, 400, 'The User role is implicit'],
+    [
+      { roles: [{ role: 'approver' }, { role: 'data-owner' }] },
+      400,
+      'Data owner needs a datasource',
+    ],
+    [
+      { roles: [{ role: 'maker', datasourceId: 'ds-1' }] },
+      400,
+      'Only Data owner takes a datasource',
+    ],
+    [
+      {
+        roles: [
+          { role: 'approver' },
+          { role: 'data-owner', datasourceId: 'ds-gone' },
+        ],
+      },
+      404,
+      'Datasource ds-gone not found',
+    ],
+  ])(
+    'refuses %j with %i before writing anything',
+    async (dto, status, message) => {
+      const t = setup();
+      await directoryWithPeople(t);
+      await expect(
+        t.admin.saveUserRoles('ada', dto as never, 'admin'),
+      ).rejects.toMatchObject({
+        status,
+        message,
+      });
+      expect(await t.directRoles('ada')).toEqual(['maker']);
+      expect(await t.eventsOf('role.assigned')).toEqual([]);
+    },
+  );
+
+  it('keeps a stored Data owner assignment whose datasource is gone', async () => {
+    const t = setup();
+    await directoryWithPeople(t);
+    await t.assign('ada', 'data-owner', 'ds-gone');
+    const result = await t.admin.saveUserRoles(
+      'ada',
+      { roles: [{ role: 'data-owner', datasourceId: 'ds-gone' }] },
+      'admin',
+    );
+    expect(result).toMatchObject({ added: 0, removed: 1 });
+    expect(await t.directRoles('ada')).toEqual(['data-owner:ds-gone']);
+  });
+
+  it('refuses an unknown user with 404', async () => {
+    const t = setup();
+    await directoryWithPeople(t);
+    await expect(
+      t.admin.saveUserRoles('nobody', { roles: [] }, 'admin'),
+    ).rejects.toMatchObject({ status: 404, message: 'User nobody not found' });
+  });
+
+  it("refuses dropping the caller's own direct Platform admin role (admin R61)", async () => {
+    const t = setup();
+    await directoryWithPeople(t);
+    await t.assign('grace', 'platform-admin');
+    await expect(
+      t.admin.saveUserRoles(
+        'grace',
+        { roles: [{ role: 'approver' }] },
+        'grace',
+      ),
+    ).rejects.toMatchObject({
+      status: 400,
+      message: "You can't remove your own Platform admin role",
+    });
+    expect(await t.directRoles('grace')).toEqual(['platform-admin']);
+    // Keeping it while changing the rest is fine; another admin may drop it.
+    await t.admin.saveUserRoles(
+      'grace',
+      { roles: [{ role: 'platform-admin' }, { role: 'approver' }] },
+      'grace',
+    );
+    await t.admin.saveUserRoles('grace', { roles: [] }, 'admin');
+    expect(await t.directRoles('grace')).toEqual([]);
+  });
+
+  it('is all or nothing: a write that fails rolls back the ones before it', async () => {
+    const t = setup();
+    await directoryWithPeople(t);
+    t.assignments.failInsertsAfter(1);
+    await expect(
+      t.admin.saveUserRoles(
+        'ada',
+        { roles: [{ role: 'approver' }, { role: 'platform-admin' }] },
+        'admin',
+      ),
+    ).rejects.toThrow('disk I/O error');
+    expect(await t.directRoles('ada')).toEqual(['maker']);
+    expect(await t.eventsOf('role.removed')).toEqual([]);
+    expect(await t.eventsOf('role.assigned')).toEqual([]);
+  });
+});
+
+describe('AdminService.transferAgents (api.md 86; admin R43, R64)', () => {
+  async function withAgents(t: Testbed) {
+    await directoryWithPeople(t);
+    await t.agent('a-goal', 'Goal analyst', {
+      ownerId: 'ada',
+      live: true,
+      pinned: true,
+    });
+    await t.agent('a-card', 'Card counter', { ownerId: 'ada' });
+  }
+
+  it('moves each agent with its draft, Live version and publish time, unpinned, and records one event each', async () => {
+    const t = setup();
+    await withAgents(t);
+    const result = await t.admin.transferAgents(
+      { agentIds: ['a-goal', 'a-card', 'a-goal'], toUserId: 'grace' },
+      'admin',
+    );
+    expect(result).toEqual({
+      message: 'Transferred 2 agents to Grace Hopper',
+      transferred: 2,
+    });
+    const goal = await t.agents.findOne({ id: 'a-goal' });
+    expect(goal).toMatchObject({
+      ownerId: 'grace',
+      pinned: false,
+      live: { name: 'Goal analyst' },
+      draft: { name: 'Goal analyst' },
+      publishedAt: '2026-01-01T00:00:00.000Z',
+    });
+    expect(await t.eventsOf('agent.transferred')).toEqual(
+      expect.arrayContaining([
+        {
+          actorId: 'admin',
+          subjectId: 'a-goal',
+          details: {
+            agentName: 'Goal analyst',
+            fromUserId: 'ada',
+            toUserId: 'grace',
+          },
+        },
+        {
+          actorId: 'admin',
+          subjectId: 'a-card',
+          details: {
+            agentName: 'Card counter',
+            fromUserId: 'ada',
+            toUserId: 'grace',
+          },
+        },
+      ]),
+    );
+    const one = await t.admin.transferAgents(
+      { agentIds: ['a-goal'], toUserId: 'ada' },
+      'admin',
+    );
+    expect(one.message).toBe('Transferred 1 agent to Ada Lovelace');
+  });
+
+  it('refuses a name the new owner already has, ignoring case, and moves nothing', async () => {
+    const t = setup();
+    await withAgents(t);
+    await t.agent('g-card', 'CARD COUNTER', { ownerId: 'grace' });
+    await expect(
+      t.admin.transferAgents(
+        { agentIds: ['a-goal', 'a-card'], toUserId: 'grace' },
+        'admin',
+      ),
+    ).rejects.toMatchObject({
+      status: 409,
+      message: 'Grace Hopper already has an agent named "Card counter"',
+    });
+    expect(await t.ownerOf('a-goal')).toBe('ada');
+    expect(await t.ownerOf('a-card')).toBe('ada');
+  });
+
+  it('refuses two agents that share a name', async () => {
+    const t = setup();
+    await withAgents(t);
+    await t.user('alan', 'Alan Turing');
+    await t.agent('alan-goal', 'Goal analyst', { ownerId: 'alan' });
+    await expect(
+      t.admin.transferAgents(
+        { agentIds: ['a-goal', 'alan-goal'], toUserId: 'grace' },
+        'admin',
+      ),
+    ).rejects.toMatchObject({
+      status: 409,
+      message: 'Grace Hopper already has an agent named "Goal analyst"',
+    });
+  });
+
+  it.each([
+    [{ agentIds: [], toUserId: 'grace' }, 400, 'Choose at least one agent'],
+    [{ toUserId: 'grace' }, 400, 'Choose at least one agent'],
+    [
+      {
+        agentIds: Array.from({ length: 101 }, (_, i) => `a${i}`),
+        toUserId: 'grace',
+      },
+      400,
+      'Choose at most 100 agents',
+    ],
+    [
+      { agentIds: ['a-goal'], toUserId: 'nobody' },
+      404,
+      'User nobody not found',
+    ],
+    [
+      { agentIds: ['a-goal', 'a-missing'], toUserId: 'grace' },
+      404,
+      'Agent a-missing not found',
+    ],
+    [
+      { agentIds: ['a-goal', 'a-local'], toUserId: 'grace' },
+      404,
+      'Agent a-local not found',
+    ],
+    [
+      { agentIds: ['a-goal'], toUserId: 'ada' },
+      400,
+      '"Goal analyst" already belongs to Ada Lovelace',
+    ],
+  ])('refuses %j with %i and moves nothing', async (dto, status, message) => {
+    const t = setup();
+    await withAgents(t);
+    // Stored before org server mode: no owner (admin R33).
+    await t.agent('a-local', 'Local agent');
+    await expect(
+      t.admin.transferAgents(dto as never, 'admin'),
+    ).rejects.toMatchObject({
+      status,
+      message,
+    });
+    expect(await t.ownerOf('a-goal')).toBe('ada');
+    expect(await t.eventsOf('agent.transferred')).toEqual([]);
+  });
+
+  it('refuses a deactivated new owner', async () => {
+    const t = setup();
+    await withAgents(t);
+    await t.user('lin', 'Lin Leaver', { active: false });
+    await t.user('sam', 'Sam Removed', { scimDeleted: true });
+    for (const toUserId of ['lin', 'sam']) {
+      await expect(
+        t.admin.transferAgents({ agentIds: ['a-goal'], toUserId }, 'admin'),
+      ).rejects.toMatchObject({
+        status: 400,
+        message: `${toUserId === 'lin' ? 'Lin Leaver' : 'Sam Removed'} is deactivated`,
+      });
+    }
+  });
+
+  it('is all or nothing: a failed move rolls back the moves before it', async () => {
+    const t = setup();
+    await withAgents(t);
+    t.agents.failUpdatesAfter(1);
+    await expect(
+      t.admin.transferAgents(
+        { agentIds: ['a-goal', 'a-card'], toUserId: 'grace' },
+        'admin',
+      ),
+    ).rejects.toThrow('disk I/O error');
+    expect(await t.ownerOf('a-goal')).toBe('ada');
+    expect(await t.ownerOf('a-card')).toBe('ada');
+    expect(await t.eventsOf('agent.transferred')).toEqual([]);
+  });
+});
+
+describe('AdminReadService users (api.md 83, 84; admin R49-R54, R59-R61)', () => {
   async function directory(t: Testbed) {
     await directoryWithPeople(t);
     await t.user('alan', 'Alan Turing', {
@@ -350,6 +701,70 @@ describe('AdminReadService users (api.md 83; admin R49-R54)', () => {
     await t.event('scim.request', daysAgo(1));
     await t.event('sign-in', daysAgo(0));
     expect((await t.read.listUsers({})).lastSyncAt).toBe(daysAgo(1));
+  });
+
+  it("details a user's held roles with their sources, groups and agents", async () => {
+    const t = setup();
+    await directory(t);
+    await t.map('g-eng', 'approver');
+    const direct = await t.assign('ada', 'data-owner', 'ds-1');
+    await t.assign('ada', 'data-owner', 'ds-gone');
+    const detail = await t.read.userDetail('ada', 'admin');
+    expect(detail).toMatchObject({
+      id: 'ada',
+      displayName: 'Ada Lovelace',
+      roles: ['approver', 'data-owner', 'maker'],
+      isSelf: false,
+      isBootstrap: false,
+      groupList: [
+        { id: 'g-analysts', displayName: 'Analysts' },
+        { id: 'g-eng', displayName: 'Engineers' },
+      ],
+      agents: [
+        { id: 'a-card', name: 'Card counter', status: 'draft' },
+        { id: 'a-goal', name: 'Goal analyst', status: 'live' },
+      ],
+    });
+    expect(detail.heldRoles).toEqual([
+      { role: 'user', source: 'implicit' },
+      expect.objectContaining({ role: 'maker', source: 'direct' }),
+      {
+        role: 'data-owner',
+        source: 'direct',
+        assignmentId: direct.id,
+        datasourceId: 'ds-1',
+        datasourceName: 'World Cup',
+      },
+      expect.objectContaining({
+        role: 'data-owner',
+        source: 'direct',
+        datasourceId: 'ds-gone',
+        datasourceName: 'ds-gone',
+      }),
+      {
+        role: 'approver',
+        source: 'group',
+        groupId: 'g-analysts',
+        groupNames: ['Analysts', 'Engineers'],
+      },
+      {
+        role: 'maker',
+        source: 'group',
+        groupId: 'g-eng',
+        groupNames: ['Engineers'],
+      },
+    ]);
+
+    const self = await t.read.userDetail('admin', 'admin');
+    expect(self).toMatchObject({ isSelf: true, isBootstrap: true, agents: [] });
+    expect(self.heldRoles).toEqual([
+      { role: 'user', source: 'implicit' },
+      { role: 'platform-admin', source: 'bootstrap' },
+    ]);
+    await expect(t.read.userDetail('nobody', 'admin')).rejects.toMatchObject({
+      status: 404,
+      message: 'User nobody not found',
+    });
   });
 });
 

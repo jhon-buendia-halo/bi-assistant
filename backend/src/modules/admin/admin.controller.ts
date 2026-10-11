@@ -3,8 +3,10 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
   Param,
   Post,
+  Put,
   Query,
   Res,
 } from '@nestjs/common';
@@ -18,8 +20,12 @@ import type { RoleAssignmentDoc } from '../auth/entities/directory.entity';
 import { AdminReadService } from './admin-read.service';
 import { AdminService } from './admin.service';
 import type { AssignRoleDto } from './dto/assign-role.dto';
+import type { SaveUserRolesDto } from './dto/save-user-roles.dto';
+import type { TransferAgentsDto } from './dto/transfer-agents.dto';
 import type {
   AdminGroupsPage,
+  AdminHeldRole,
+  AdminUserDetail,
   AdminUsersPage,
 } from './entities/admin-views.entity';
 
@@ -67,6 +73,45 @@ export class AdminController {
   @Get('users')
   users(@Query() query: Record<string, unknown>): Promise<AdminUsersPage> {
     return this.reads.listUsers(query ?? {});
+  }
+
+  /** 84. */
+  @Get('users/:id')
+  user(@Param('id') id: string): Promise<AdminUserDetail> {
+    return this.reads.userDetail(id, this.currentUser.ownerKey());
+  }
+
+  /** 85. */
+  @Put('users/:id/roles')
+  async saveRoles(
+    @Param('id') id: string,
+    @Body() dto: SaveUserRolesDto,
+  ): Promise<{
+    ok: true;
+    message: string;
+    added: number;
+    removed: number;
+    heldRoles: AdminHeldRole[];
+  }> {
+    const saved = await this.admin.saveUserRoles(
+      id,
+      dto ?? ({} as SaveUserRolesDto),
+      this.currentUser.ownerKey(),
+    );
+    return { ok: true, ...saved };
+  }
+
+  /** 86: 200, not 201: nothing is created. */
+  @Post('agents/transfer')
+  @HttpCode(200)
+  async transferAgents(
+    @Body() dto: TransferAgentsDto,
+  ): Promise<{ ok: true; message: string; transferred: number }> {
+    const result = await this.admin.transferAgents(
+      dto ?? ({} as TransferAgentsDto),
+      this.currentUser.ownerKey(),
+    );
+    return { ok: true, ...result };
   }
 
   /** 87. */

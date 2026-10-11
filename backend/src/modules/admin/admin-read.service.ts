@@ -1,11 +1,16 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { ActivityService } from '../auth/activity.service';
 import type { AssignableRoleId } from '../auth/entities/directory.entity';
 import { AdminDirectoryReader } from './admin-directory.reader';
-import { byName, ROLE_BADGE_ORDER } from './admin-figures';
+import { agentNameOf, byName, ROLE_BADGE_ORDER } from './admin-figures';
 import type {
   AdminGroupMappingRef,
   AdminGroupsPage,
+  AdminUserDetail,
   AdminUserRow,
   AdminUsersPage,
 } from './entities/admin-views.entity';
@@ -135,6 +140,27 @@ export class AdminReadService {
         inactive: rows.filter(inactive).length,
       },
       lastSyncAt: await this.activity.newestAt('scim.request'),
+    };
+  }
+
+  /** 84. `callerId` is the admin asking (admin R61). */
+  async userDetail(id: string, callerId: string): Promise<AdminUserDetail> {
+    const snapshot = await this.reader.load();
+    const user = snapshot.user(id);
+    if (!user) throw new NotFoundException(`User ${id} not found`);
+    return {
+      ...snapshot.row(user),
+      heldRoles: snapshot.adminHeldRoles(user),
+      groupList: snapshot
+        .groupsOf(user.id)
+        .map((g) => ({ id: g.id, displayName: g.displayName })),
+      agents: snapshot.agentsOf(user.id).map((agent) => ({
+        id: agent.id,
+        name: agentNameOf(agent),
+        status: agent.live ? 'live' : 'draft',
+      })),
+      isSelf: user.id === callerId,
+      isBootstrap: snapshot.isBootstrap(user),
     };
   }
 

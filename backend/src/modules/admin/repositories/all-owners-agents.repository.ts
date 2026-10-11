@@ -33,4 +33,9 @@ export class AllOwnersAgentsRepository {
     const doc = await this.store.findOne({ id });
     return doc?.ownerId ? doc : null;
   }
+
+  /** Move an agent to another owner, unpinned (admin R64). */
+  async moveTo(id: string, ownerId: string): Promise<UserAgentDoc | null> {
+    return this.store.update({ id }, { ownerId, pinned: false });
+  }
 }

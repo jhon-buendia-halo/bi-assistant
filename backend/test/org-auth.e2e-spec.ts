@@ -128,6 +128,9 @@ const ROUTES: [method: string, path: string, permission: string][] = [
   ['POST', '/admin/role-assignments', 'manage-users'],
   ['DELETE', '/admin/role-assignments/r1', 'manage-users'],
   ['GET', '/admin/users', 'manage-users'],
+  ['GET', '/admin/users/u1', 'manage-users'],
+  ['PUT', '/admin/users/u1/roles', 'manage-users'],
+  ['POST', '/admin/agents/transfer', 'manage-users'],
   ['GET', '/admin/groups', 'manage-users'],
 ];
 

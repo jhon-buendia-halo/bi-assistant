@@ -917,18 +917,19 @@ interface ActivityItem { id: string; type: string; at: string; text: string }   
     isBootstrap: boolean;           // userName in ORG_BOOTSTRAP_ADMINS (admin R18)
   }
   ```
+  `heldRoles` lists, in order, the implicit User role, the bootstrap Platform admin, the direct assignments (oldest first), then the roles from groups. A role mapped from several of the user's groups (for Data owner, on the same datasource) appears once, with every group in `groupNames` (sorted) and `groupId` the first of them.
 - Errors: `404` `"User <id> not found"`.
 
 #### 85. `PUT /admin/users/:id/roles`
 - Body: `{ roles: { role: RoleId; datasourceId?: string }[] }`, the complete set of **direct** assignments the user should hold (admin R62). Duplicates collapse. Roles held from groups or as a bootstrap admin are not part of it and are not changed.
-- Validates everything before writing: the same `400` and `404` messages as endpoint 79, plus `400` `"You can't remove your own Platform admin role"` when the caller is the user and the set drops their direct `platform-admin`.
+- Validates everything before writing: `404` `"User <id> not found"`, `400` `"roles must be a list"`, the `400` messages of endpoint 79 for each entry, `404` `"Datasource <id> not found"` for a Data owner assignment being **added** (one already stored is kept even when its datasource is gone), and `400` `"You can't remove your own Platform admin role"` when the caller is the user and the set drops their direct `platform-admin`.
 - Then deletes the direct assignments not in the set and creates the missing ones, as one transaction (all or nothing).
 - Success `200`: `{ ok:true, message:"Roles saved for <displayName>", added: number, removed: number, heldRoles: AdminHeldRole[] }`; with nothing to change, `message:"No changes"` and nothing written.
 - Records one `role.assigned` or `role.removed` per change.
 
 #### 86. `POST /admin/agents/transfer`
 - Body: `{ agentIds: string[]; toUserId: string }`; 1-100 distinct ids of user agents, from any owner.
-- Validates everything before writing: `400` `"Choose at least one agent"`, `"Choose at most 100 agents"`, `"<name> is deactivated"` (the new owner), `"\"<agent name>\" already belongs to <name>"`; `404` `"User <id> not found"`, `"Agent <id> not found"` (also for an agent stored without an owner, admin R33); `409` `"<name> already has an agent named \"<agent name>\""` when the new owner has a user agent with the same name (case-insensitive), or two of the agents share a name.
+- Validates everything before writing, in this order: `400` `"Choose at least one agent"`, `"Choose at most 100 agents"` (ids that are not strings are dropped, duplicates collapse); `404` `"User <id> not found"`; `400` `"<name> is deactivated"` (the new owner); `404` `"Agent <id> not found"` (also for an agent stored without an owner, admin R33); `400` `"\"<agent name>\" already belongs to <name>"`; `409` `"<name> already has an agent named \"<agent name>\""` when the new owner has a user agent with the same name (case-insensitive, Live or draft name), or two of the agents share a name. The message names the transferred agent's clashing name.
 - Then, as one transaction, sets each agent's `ownerId` to `toUserId` and `pinned` to `false`; the draft, Live version and `publishedAt` are unchanged (admin R64).
 - Success `200`: `{ ok:true, message:"Transferred <n> agent(s) to <displayName>", transferred: number }` (`1 agent`, `2 agents`).
 - Records one `agent.transferred` per agent.

@@ -1,9 +1,10 @@
 /**
- * API-level proof of the Users & groups screen (specs/capabilities/admin/spec.md
- * R49-R57; api.md 2.15, endpoints 83 and 87; data-model 3.14.8): every admin
- * route's 403 for a non-admin and the users and groups tables. It drives the
- * BUILT backend (`npm run build` first) in org server mode against the
- * in-test OIDC stub. Needs no Postgres and no LLM.
+ * API-level proof of the admin screens P2 and P3 (specs/capabilities/admin/spec.md
+ * R49-R64; api.md 2.15, endpoints 83-87; data-model 3.14.8): every admin
+ * route's 403 for a non-admin, the users and groups tables, saving roles all
+ * or nothing, and agent transfers and their conflicts. It drives the BUILT
+ * backend (`npm run build` first) in org server mode against the in-test
+ * OIDC stub. Needs no Postgres and no LLM.
  */
 import { type OrgServer, scimUser, startOrgServer } from './org-server';
 
@@ -56,6 +57,14 @@ interface HeldRole {
   groupNames?: string[];
 }
 
+interface UserDetail extends UserRow {
+  heldRoles: HeldRole[];
+  groupList: { id: string; displayName: string }[];
+  agents: { id: string; name: string; status: string }[];
+  isSelf: boolean;
+  isBootstrap: boolean;
+}
+
 interface ActivityEvent {
   type: string;
   at: string;
@@ -63,6 +72,14 @@ interface ActivityEvent {
   subjectId?: string;
   details?: Record<string, unknown>;
 }
+
+const agentConfig = (name: string) => ({
+  name,
+  description: '',
+  instructions: '',
+  datasets: ['World Cup Core'],
+  starterQuestions: [],
+});
 
 /** The admin routes, each with a body that would be valid for an admin. */
 function adminRoutes(ids: {
@@ -73,11 +90,22 @@ function adminRoutes(ids: {
     ['POST', '/admin/role-assignments', { userId: ids.user, role: 'approver' }],
     ['DELETE', '/admin/role-assignments/r1'],
     ['GET', '/admin/users'],
+    ['GET', `/admin/users/${ids.user}`],
+    [
+      'PUT',
+      `/admin/users/${ids.user}/roles`,
+      { roles: [{ role: 'approver' }] },
+    ],
+    [
+      'POST',
+      '/admin/agents/transfer',
+      { agentIds: ['a1'], toUserId: ids.user },
+    ],
     ['GET', '/admin/groups'],
   ];
 }
 
-describe('Admin API: users and groups (BA-165)', () => {
+describe('Admin API: users, groups, roles and transfers (BA-165, BA-166)', () => {
   let org: OrgServer;
   let adminCookie = '';
   let adaCookie = '';
@@ -120,6 +148,13 @@ describe('Admin API: users and groups (BA-165)', () => {
   const events = (type: string) =>
     org.docs<ActivityEvent>('activity_events').filter((e) => e.type === type);
   const users = (query = '') => get<UsersPage>(`/admin/users${query}`);
+  const detail = (id: string) => get<UserDetail>(`/admin/users/${id}`);
+  const directRoles = async (id: string) =>
+    (await detail(id)).heldRoles
+      .filter((r) => r.source === 'direct')
+      .map((r) => `${r.role}${r.datasourceId ? `:${r.datasourceId}` : ''}`)
+      .sort();
+
   beforeAll(async () => {
     org = await startOrgServer({ bootstrapAdmins: [ADMIN.email] });
     adminCookie = await org.signIn(ADMIN);
@@ -312,6 +347,304 @@ describe('Admin API: users and groups (BA-165)', () => {
         `DELETE FROM group_role_mappings WHERE json_extract(doc, '$.id') = ?`,
         'mapping-seeded',
       );
+    });
+  });
+
+  describe('Edit a user (BA-166)', () => {
+    beforeAll(() => {
+      org.insertDoc('agents', {
+        id: 'agent-goal',
+        draft: agentConfig('Goal analyst'),
+        live: agentConfig('Goal analyst'),
+        publishedAt: '2026-01-01T00:00:00.000Z',
+        pinned: true,
+        ownerId: ids.ada,
+      });
+      org.insertDoc('agents', {
+        id: 'agent-card',
+        draft: agentConfig('Card counter'),
+        pinned: false,
+        ownerId: ids.ada,
+      });
+      // Ada's session started from "Goal analyst" (sessions-chat R52).
+      org.insertDoc('sessions', {
+        id: 'session-ada-goal',
+        name: 'Goal analyst',
+        datasets: [],
+        messages: [],
+        visualizations: [],
+        agentId: 'agent-goal',
+        agentName: 'Goal analyst',
+        ownerId: ids.ada,
+      });
+    });
+
+    it("details a user's roles with their sources, groups and agents", async () => {
+      const ada = await detail(ids.ada);
+      expect(ada).toMatchObject({
+        displayName: 'Ada Lovelace',
+        email: 'ada@contoso.test',
+        status: 'active',
+        roles: ['maker'],
+        agentsOwned: 2,
+        groupList: [{ id: ids.Analysts, displayName: 'Analysts' }],
+        agents: [
+          { id: 'agent-card', name: 'Card counter', status: 'draft' },
+          { id: 'agent-goal', name: 'Goal analyst', status: 'live' },
+        ],
+        isSelf: false,
+        isBootstrap: false,
+      });
+      expect(ada.heldRoles).toEqual([
+        { role: 'user', source: 'implicit' },
+        {
+          role: 'maker',
+          source: 'direct',
+          assignmentId: anyString,
+        },
+      ]);
+      expect(await detail(ids.admin)).toMatchObject({
+        isSelf: true,
+        isBootstrap: true,
+        heldRoles: [
+          { role: 'user', source: 'implicit' },
+          { role: 'platform-admin', source: 'bootstrap' },
+        ],
+      });
+      const missing = await org.api('/admin/users/nobody', {
+        cookie: adminCookie,
+      });
+      expect(missing.status).toBe(404);
+      expect(((await missing.json()) as { message: string }).message).toBe(
+        'User nobody not found',
+      );
+    });
+
+    it('saving roles changes what the user can do on their next request', async () => {
+      const res = await send('PUT', `/admin/users/${ids.ada}/roles`, {
+        roles: [{ role: 'approver' }],
+      });
+      const body = await json<{
+        ok: boolean;
+        message: string;
+        added: number;
+        removed: number;
+        heldRoles: HeldRole[];
+      }>(res);
+      expect(body).toMatchObject({
+        ok: true,
+        message: 'Roles saved for Ada Lovelace',
+        added: 1,
+        removed: 1,
+      });
+      expect(body.heldRoles.map((r) => r.role)).toEqual(['user', 'approver']);
+      const { permissions } = await me(adaCookie);
+      expect(permissions).toContain('approve-publishing');
+      expect(permissions).not.toContain('create-agents');
+      expect(
+        events('role.removed').filter((e) => e.subjectId === ids.ada),
+      ).toContainEqual(
+        expect.objectContaining({
+          actorId: ids.admin,
+          details: { role: 'maker' },
+        }),
+      );
+      const row = (await users('?q=ada')).items[0];
+      expect(row.roles).toEqual(['approver']);
+
+      const same = await json<{ message: string; added: number }>(
+        await send('PUT', `/admin/users/${ids.ada}/roles`, {
+          roles: [{ role: 'approver' }],
+        }),
+      );
+      expect(same).toMatchObject({ message: 'No changes', added: 0 });
+    });
+
+    it('saves all or nothing: a set with one bad entry changes nothing', async () => {
+      const eventsBefore = org.docs('activity_events').length;
+      for (const [roles, status, message] of [
+        [
+          [{ role: 'maker' }, { role: 'data-owner' }],
+          400,
+          'Data owner needs a datasource',
+        ],
+        [
+          [{ role: 'maker' }, { role: 'data-owner', datasourceId: 'ds-gone' }],
+          404,
+          'Datasource ds-gone not found',
+        ],
+        [[{ role: 'wizard' }], 400, 'Unknown role: wizard'],
+      ] as [unknown[], number, string][]) {
+        const res = await send('PUT', `/admin/users/${ids.ada}/roles`, {
+          roles,
+        });
+        expect(res.status).toBe(status);
+        expect(((await res.json()) as { message: string }).message).toBe(
+          message,
+        );
+      }
+      expect(await directRoles(ids.ada)).toEqual(['approver']);
+      // No role event was written either.
+      expect(
+        org
+          .docs<ActivityEvent>('activity_events')
+          .slice(eventsBefore)
+          .filter((e) => e.type.startsWith('role.')),
+      ).toEqual([]);
+    });
+
+    it('names the datasource of a Data owner role', async () => {
+      await json(
+        await send('PUT', `/admin/users/${ids.ada}/roles`, {
+          roles: [
+            { role: 'approver' },
+            { role: 'data-owner', datasourceId: 'ds-wc' },
+          ],
+        }),
+      );
+      expect((await detail(ids.ada)).heldRoles).toContainEqual(
+        expect.objectContaining({
+          role: 'data-owner',
+          source: 'direct',
+          datasourceId: 'ds-wc',
+          datasourceName: 'World Cup',
+        }),
+      );
+      expect((await users()).counts.dataOwners).toBe(1);
+    });
+
+    it("refuses removing the caller's own Platform admin role", async () => {
+      await send('POST', '/admin/role-assignments', {
+        userId: ids.grace,
+        role: 'platform-admin',
+      });
+      const graceCookie = await org.signIn(GRACE);
+      const own = await send(
+        'PUT',
+        `/admin/users/${ids.grace}/roles`,
+        { roles: [{ role: 'approver' }] },
+        graceCookie,
+      );
+      expect(own.status).toBe(400);
+      expect(((await own.json()) as { message: string }).message).toBe(
+        "You can't remove your own Platform admin role",
+      );
+      expect(await directRoles(ids.grace)).toEqual(['platform-admin']);
+      expect((await detail(ids.grace)).isSelf).toBe(false);
+      // Another admin can.
+      await json(
+        await send('PUT', `/admin/users/${ids.grace}/roles`, { roles: [] }),
+      );
+      expect(await directRoles(ids.grace)).toEqual([]);
+    });
+
+    it('transfers an agent to its new owner, unpinned; for the former owner its sessions act as deleted', async () => {
+      const graceCookie = await org.signIn(GRACE);
+      const res = await send('POST', '/admin/agents/transfer', {
+        agentIds: ['agent-goal'],
+        toUserId: ids.grace,
+      });
+      expect(await json(res)).toEqual({
+        ok: true,
+        message: 'Transferred 1 agent to Grace Hopper',
+        transferred: 1,
+      });
+      type Catalogue = {
+        agents: {
+          id: string;
+          owner: string;
+          pinned: boolean;
+          status: string;
+        }[];
+      };
+      const graces = await get<Catalogue>('/agents', graceCookie);
+      expect(graces.agents.find((a) => a.id === 'agent-goal')).toMatchObject({
+        owner: 'You',
+        pinned: false,
+        status: 'live',
+      });
+      const adas = await get<Catalogue>('/agents', adaCookie);
+      expect(adas.agents.map((a) => a.id)).not.toContain('agent-goal');
+      const session = await get<{ agent?: { deleted: boolean; name: string } }>(
+        '/sessions/session-ada-goal',
+        adaCookie,
+      );
+      expect(session.agent).toMatchObject({
+        deleted: true,
+        name: 'Goal analyst',
+      });
+      expect((await detail(ids.ada)).agents.map((a) => a.name)).toEqual([
+        'Card counter',
+      ]);
+      expect(events('agent.transferred')).toEqual([
+        expect.objectContaining({
+          actorId: ids.admin,
+          subjectId: 'agent-goal',
+          details: {
+            agentName: 'Goal analyst',
+            fromUserId: ids.ada,
+            toUserId: ids.grace,
+          },
+        }),
+      ]);
+    });
+
+    it('refuses a transfer that would duplicate a name, or reach a missing agent, and moves nothing', async () => {
+      org.insertDoc('agents', {
+        id: 'agent-grace-card',
+        draft: agentConfig('card counter'),
+        pinned: false,
+        ownerId: ids.grace,
+      });
+      org.insertDoc('agents', {
+        id: 'agent-local',
+        draft: agentConfig('Local agent'),
+        pinned: false,
+      });
+      const lin = await provision('lin@contoso.test', 'Lin Leaver');
+      expect((await scimPatchActive(lin, false)).status).toBe(200);
+      for (const [body, status, message] of [
+        [
+          { agentIds: ['agent-card'], toUserId: ids.grace },
+          409,
+          'Grace Hopper already has an agent named "Card counter"',
+        ],
+        [
+          { agentIds: ['agent-card', 'agent-missing'], toUserId: ids.alan },
+          404,
+          'Agent agent-missing not found',
+        ],
+        [
+          { agentIds: ['agent-local'], toUserId: ids.alan },
+          404,
+          'Agent agent-local not found',
+        ],
+        [
+          { agentIds: ['agent-card'], toUserId: lin },
+          400,
+          'Lin Leaver is deactivated',
+        ],
+        [
+          { agentIds: ['agent-card'], toUserId: ids.ada },
+          400,
+          '"Card counter" already belongs to Ada Lovelace',
+        ],
+        [
+          { agentIds: [], toUserId: ids.alan },
+          400,
+          'Choose at least one agent',
+        ],
+      ] as [unknown, number, string][]) {
+        const res = await send('POST', '/admin/agents/transfer', body);
+        expect({ body, status: res.status }).toEqual({ body, status });
+        expect(((await res.json()) as { message: string }).message).toBe(
+          message,
+        );
+      }
+      expect((await detail(ids.ada)).agents.map((a) => a.id)).toEqual([
+        'agent-card',
+      ]);
+      expect(events('agent.transferred')).toHaveLength(1);
     });
   });
 

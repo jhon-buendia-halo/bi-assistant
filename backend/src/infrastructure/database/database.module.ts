@@ -12,6 +12,7 @@ import {
   USERS_STORE,
   CONNECTIONS_STORE,
   DATASOURCE_INVENTORIES_STORE,
+  DOC_STORE_TRANSACTIONS,
   METRICS_STORE,
   EVAL_RUNS_STORE,
   KNOWLEDGE_STORE,
@@ -21,6 +22,7 @@ import {
   VERIFIED_QUERIES_STORE,
 } from './doc-store';
 import { SqliteDocStore } from './sqlite-doc-store';
+import { SqliteTransactions } from './sqlite-transactions';
 
 /**
  * Embedded SQLite application datastore, mirrored from data-readiness-agent's
@@ -133,9 +135,17 @@ const storeProviders: Provider[] = COLLECTIONS.map((c) => ({
     new SqliteDocStore(db, c.table),
 }));
 
+/** Several writes as one unit, across collections (data-model 2.4). */
+const transactionsProvider: Provider = {
+  provide: DOC_STORE_TRANSACTIONS,
+  inject: [SQLITE_DB],
+  useFactory: (db: import('better-sqlite3').Database) =>
+    new SqliteTransactions(db),
+};
+
 @Global()
 @Module({
-  providers: [sqliteDbProvider, ...storeProviders],
-  exports: COLLECTIONS.map((c) => c.token),
+  providers: [sqliteDbProvider, ...storeProviders, transactionsProvider],
+  exports: [...COLLECTIONS.map((c) => c.token), DOC_STORE_TRANSACTIONS],
 })
 export class DatabaseModule {}

@@ -25,7 +25,10 @@ import {
   ROLE_BADGE_ORDER,
   statusOf,
 } from './admin-figures';
-import type { AdminUserRow } from './entities/admin-views.entity';
+import type {
+  AdminHeldRole,
+  AdminUserRow,
+} from './entities/admin-views.entity';
 import { AllOwnersAgentsRepository } from './repositories/all-owners-agents.repository';
 
 /** What the admin screens read of a datasource: its name. */
@@ -160,6 +163,47 @@ export class AdminSnapshot {
       this.held.set(user.id, held);
     }
     return held;
+  }
+
+  /**
+   * Held roles with their names (api.md 84). A role mapped from several of
+   * the user's groups appears once per role and datasource, with every
+   * group's name; its `groupId` is the first of them by name.
+   */
+  adminHeldRoles(user: UserDoc): AdminHeldRole[] {
+    const out: AdminHeldRole[] = [];
+    const fromGroups = new Map<
+      string,
+      { entry: AdminHeldRole; groups: GroupDoc[] }
+    >();
+    for (const held of this.heldRoles(user)) {
+      const entry: AdminHeldRole = { ...held };
+      if (held.datasourceId) {
+        entry.datasourceName = this.datasourceName(held.datasourceId);
+      }
+      if (held.source !== 'group') {
+        out.push(entry);
+        continue;
+      }
+      const group = this.group(held.groupId) ?? {
+        id: held.groupId!,
+        displayName: held.groupId!,
+      };
+      const key = `${held.role}|${held.datasourceId ?? ''}`;
+      const seen = fromGroups.get(key);
+      if (seen) {
+        seen.groups.push(group);
+        continue;
+      }
+      fromGroups.set(key, { entry, groups: [group] });
+      out.push(entry);
+    }
+    for (const { entry, groups } of fromGroups.values()) {
+      groups.sort((a, b) => byName(a.displayName, b.displayName));
+      entry.groupId = groups[0].id;
+      entry.groupNames = groups.map((g) => g.displayName);
+    }
+    return out;
   }
 
   /** Every role held but User, each once, in badge order (admin R52). */
