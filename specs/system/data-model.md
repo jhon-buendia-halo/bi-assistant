@@ -258,11 +258,13 @@ Deleting a session deletes the document, its agent memory thread and its workspa
 | `content` | string | yes | Message text. For an assistant message it is the answer markdown; for a clarification, the question; for a deep-analysis report, the report's executive summary; for a visual-only turn a generated line like `Created interactive visual "<title>" (v<N>).` (verbs Created / Updated / Reverted). |
 | `at` | ISO | yes | Creation time; the message's identity (see 1.3). |
 | `data` | `ToolDataRecord[]` | no | Data the assistant retrieved this turn (3.4.2). Omitted when empty. |
-| `entities` | string[] | no | Distinct fully-qualified `catalog.schema.table` entities the answer's SQL touched, derived from `data`; drives provenance chips and the visual frame's source list. |
+| `entities` | string[] | no | The answer's distinct source entities, in first-seen order, derived from `data`: the logical `entities` of `query_entities` and `sample_records` records, and the `catalog.schema.table` names (bare, double-quoted or backquoted in the SQL, stored unquoted) of `run_raw_sql` and legacy records ([agents.md](agents.md) 5.7, sessions-chat R63). Drives the "Data entities" chips, the interpretation line and the visual frame's source list. Answers saved before this rule may hold three-part names scanned from compiled SQL. |
 | `clarification` | object | no | `{question: string, options: ClarificationOption[]}` where `ClarificationOption = {label: string, description?: string}`. Present when the turn ended with a clarifying question; the message `content` equals `question`. |
 | `visual` | `VisualEvent` | no | `{visualId: string, version: number, title: string, action: "created" \| "updated" \| "reverted"}` — this turn created/updated/reverted a visual (rendered as a card). |
 | `verified` | boolean | no | Always `true` when present. Set when the answer's final successful SQL matches a stored verified query, or on thumbs-up; removed on thumbs-down. |
-| `interpretation` | string | no | Deterministic provenance line built at persist time (never model output): `Computed from <n> quer(y\|ies) over <entities, comma-joined> — <rows> row(s) analyzed.` (` over …` omitted with no entities). Absent with no successful SQL. |
+| `interpretation` | string | no | Deterministic provenance line built at persist time (never model output): `Computed from <n> quer(y\|ies) over <entities, comma-joined> — <rows> row(s) analyzed.` (` over …` omitted with no entities; `<entities>` = this message's `entities`). Absent with no successful SQL. |
+| `modelVersions` | `{dataset: string, version: number}[]` | no | The data model version of each session dataset the turn's model block was composed from ([agents.md](agents.md) 4.2). |
+| `outsideModel` | boolean | no | `true` when any step of the turn called `run_raw_sql`, successfully or not; shows the answer's "Outside the data model" chip (sessions-chat R62). Omitted otherwise. |
 | `feedback` | enum | no | `up` \| `down`. A thumbs-up also upserts a verified query (section 3.6). |
 | `crossCheck` | object | no | Careful mode only: `{status: "agree" \| "disagree" \| "error", note?: string}`; `note` is a one-line tooltip text (clipped). `agree` = an independent re-derived query returned the same result set, `disagree` = it differed, `error` = the check could not complete. |
 | `reasoning` | `ReasoningStep[]` | no | The assistant's plain-language route to the answer (3.4.2); omitted when no call carried a rationale. Older transcripts lack it; readers derive it from `data[].rationale`. |
@@ -277,15 +279,18 @@ Messages never carry an id; user messages have only `role`, `content`, `at`.
 
 | Field | Type | Req | Meaning |
 |---|---|---|---|
-| `tool` | string | yes | Tool name; only `run_readonly_sql` and `sample_rows` are captured. |
-| `input` | string | no | The SQL actually run (the repaired statement when the SQL repair agent rewrote it) or, for `sample_rows`, the entity name. |
+| `tool` | string | yes | Tool name; only the data tools are captured: `query_entities`, `sample_records`, `run_raw_sql`, and on the legacy eval path `run_readonly_sql` and `sample_rows`. |
+| `input` | string | no | The SQL actually run (the repaired statement when the SQL repair agent rewrote it): compiled from the logical query for `query_entities` and `sample_records`, the assistant's statement for `run_raw_sql` and `run_readonly_sql`; for `sample_rows`, the entity name. Never sent back to the model for `query_entities` and `sample_records` ([agents.md](agents.md) 5.5). |
 | `columns` | string[] | no | Column names (falls back to the keys of the first row). |
 | `rows` | object[] | no | Result rows (column name to value), **capped at 200 rows** per record in storage. |
 | `rowCount` | number | no | Rows the tool returned before the 200-row storage cap. |
 | `truncated` | boolean | no | `true` when rows were clipped anywhere: the query hit its row limit or storage kept fewer rows than returned. Omitted when `false`. |
-| `error` | string | no | Error text for a failed call. A failed record has `tool`, `input`, `error` and `rationale` only. |
+| `error` | string | no | Error text for a failed call. A failed record has `tool`, `input`, `error`, `rationale` and, when they apply, `logicalQuery`, `entities` and `outsideModel` only. |
 | `rationale` | string | no | Why the assistant ran this call, in its own business language; whitespace flattened, trimmed, clipped to 400 characters (ending `…`). |
-| `warnings` | string[] | no | Faults the result guards found (ratio of a sum to itself, a metric constant on every row, an unordered "top N", row cap reached). Omitted when none. |
+| `warnings` | string[] | no | Faults the result guards found on any successful data query (ratio of a sum to itself, a metric constant on every row, an unordered "top N", blank group keys, row cap reached; [agents.md](agents.md) 5.4). Omitted when none. |
+| `logicalQuery` | string | no | `query_entities` only: the logical query as JSON. |
+| `entities` | string[] | no | `query_entities`: the logical entities the query touched (its `from` entity and every joined entity); `sample_records`: the sampled entity. Absent for other tools and for a failed `query_entities`. |
+| `outsideModel` | boolean | no | `true` on every `run_raw_sql` record, successful or not. |
 
 `ReasoningStep`: `step` (number, 1-based position among records that carried a rationale), `rationale` (string), `tool` (string), `input` (string, no), `rowCount` (number, no), `error` (string, no). Assembled at persist time from `data` so a step can never describe a query that did not run.
 
@@ -377,11 +382,13 @@ Persisted record of an eval run (the assistant's regression suite). Rewritten wh
 | `error` | string | no | Set when `status = failed`. |
 | `startedAt` | ISO | yes | Sort key (desc) for listings. |
 | `finishedAt` | ISO | no | Set when the run ends. |
-| `comparison` | `EvalRegressionSummary` | no | Set when a run completes and a previous completed run with the same agent, `datasourceId` and the same set of datasets (order-insensitive) exists. Absent on older records and when no comparable run exists. |
+| `comparison` | `EvalRegressionSummary` | no | Set when a run completes and a previous completed run with the same agent, the same `path`, `datasourceId` and the same set of datasets (order-insensitive) exists. Absent on older records and when no comparable run exists. |
+| `path` | enum | no | `model` \| `legacy`: the eval path the run exercised ([agents.md](agents.md) 8.6). Absent on runs saved before paths existed; read as `model`. |
+| `outsideModelCount` | number | no | Finished questions whose result has `outsideModel`, recomputed after every question (always 0 on `legacy`). Absent on older records; read as 0. |
 | `ownerId` | string | no | The owning user's id in org server mode; absent in local mode (section 3.15). |
 | `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
 
-`AssistantEvalCaseResult`: `id` (string, case id), `question` (string), `scores` (map<string, number 0..1>, per scorer id; empty when the run threw), `checkResults` (`EvalCheckResult[]`), `answer` (string), `toolCalls` (`EvalToolCall[]`), `passed` (boolean; every scorer scored 1), `error` (string, no; agent run failure), `durationMs` (number).
+`AssistantEvalCaseResult`: `id` (string, case id), `question` (string), `scores` (map<string, number 0..1>, per scorer id; empty when the run threw), `checkResults` (`EvalCheckResult[]`), `answer` (string), `toolCalls` (`EvalToolCall[]`), `passed` (boolean; every scorer scored 1), `error` (string, no; agent run failure), `durationMs` (number), `path` (`model` \| `legacy`; absent on older records), `outsideModel` (boolean; the question called `run_raw_sql`, always `false` on `legacy`; absent on older records).
 `EvalCheckResult`: `id`, `description` (string), `score` (number), `passed` (boolean), `reason` (string, no).
 `EvalToolCall`: `name` (string), `input`, `output` (strings, no; JSON-encoded, each truncated to 2000 chars with a trailing `… (truncated)`), `error` (string, no).
 `EvalRegressionSummary`: `previousRunId` (string), `regressions`, `improvements`, `unchanged` (each `{id: string, question: string}[]`); cases present in only one of the two runs are skipped; regression = passed before, fails now; improvement = the reverse.
@@ -645,7 +652,7 @@ One document per dataset: the versioned data model (ADR-0012). Shared (3.15), up
 - `Attribute`: `{ name; type: 'string'|'integer'|'number'|'boolean'|'date'|'datetime'|'time'|'json'|'unknown'; role?: 'key'|'dimension'|'measure'|'time'; nullable?; description?; samples?: (string|number|boolean)[] }`.
 - `Binding` (the only place physical names appear): `{ kind:'sql'; datasource; table /* catalog.schema.table */; columns?: Record<attribute, column> }` \| `{ kind:'rest'; datasource; endpoint; recordPath?; columns? }` \| `{ kind:'mongo'; datasource; collection }` \| `{ kind:'file'; datasource?; path; format:'csv'|'json'|'ndjson'; recordPath? }`. Only `sql` and `rest` compile today.
 - `Relationship`: `{ name?; from /* entity.attribute */; to; cardinality: 'one_to_one'|'many_to_one'|'one_to_many'|'many_to_many'; source: 'declared'|'inferred'|'user'; description? }`.
-- `Metric`: `{ name /* lowercase, unique in the model, ^[a-z][a-z0-9_]*$ */; label; description?; entity /* logical */; agg?: 'sum'|'count'|'count_distinct'|'avg'|'min'|'max'|'ratio'; of?; numerator?; denominator? /* metric names, ratio only */; where?: Predicate; dimensions?: string[]; expressions?: { sql?: string }; sourceVerifiedQueryId?; author?: string }`. **`author`** is the id of the user who owned the legacy metric it was imported from; absent for metrics created on the model and in local mode. It is round-tripped through the YAML.
+- `Metric`: `{ name /* lowercase, unique in the model, ^[a-z][a-z0-9_]*$ */; label; description?; entity /* logical */; agg?: 'sum'|'count'|'count_distinct'|'avg'|'min'|'max'|'ratio'; of?; numerator?; denominator? /* metric names, ratio only */; where?: Predicate; dimensions?: string[]; expressions?: { sql?: string }; sourceVerifiedQueryId?; author?: string }`. **`author`** is the owner key (user id) of whoever defined the metric in org server mode: the owner of the legacy metric it was imported from, or the signed-in user who created it through the model-metric endpoints (the Metrics tab, a promoted candidate included). An edit through those endpoints keeps the stored `author` (it never stamps the editor, and never adds one to a metric that has none). Absent in local mode. It is round-tripped through the YAML, so a YAML save or import keeps whatever `author` the YAML holds.
 - `Predicate`: `{ and: Predicate[] } | { or: Predicate[] } | { not: Predicate } | { attr; op: 'eq'|'ne'|'gt'|'gte'|'lt'|'lte'|'in'|'not_in'|'between'|'is_null'|'not_null'|'contains'|'starts_with'; value? }`.
 
 `MetricsImportReport`:

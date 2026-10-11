@@ -12,7 +12,7 @@ Capability-local vocabulary:
 - **Section** — a group of agent cards on the hub, one per kind of agent: **Official**, **Mine** or **System**. The **Pinned** filter shows a single **Pinned** section instead.
 - **Filter** — one of the hub's pills (**All**, **Pinned**, **Official**, **Mine**) that limits which agents and sections show.
 - **Questions** and **Executions** — the two sub-tabs inside an agent's Evals tab: the suite, and the history of runs.
-- **Regression comparison** — the per-question diff between a finished run and the previous comparable run; see R32.
+- **Regression comparison** — the per-question diff between a finished run and the previous comparable run (same agent, path, datasource and datasets); see R40.
 - **Details panel** — the right-hand panel ([../app-shell/spec.md](../app-shell/spec.md)); on an agent's detail view it shows one question's scoring and trace.
 
 ## Rules
@@ -85,7 +85,7 @@ Executions, details and report
 - R39. Downloading a run that does not exist SHALL fail with `Eval run "<id>" not found` (HTTP 404); polling one SHALL answer with ok false and the same message.
 
 Regression comparison
-- R40. When a run completes, the system SHALL compare its per-question verdicts with the most recent earlier completed run of the same agent, same datasource and same set of datasets (order ignored), whatever its path (see Open questions), matching by question id. It SHALL record the previous run's id and three lists, each of id and question: **regressions** (passed before, failing now), **improvements** (failed before, passing now) and **unchanged**. Questions present in only one of the two runs SHALL be skipped. With no comparable earlier run no comparison SHALL be recorded; runs saved before this feature have none. A failure while comparing SHALL NOT fail the run.
+- R40. When a run completes, the system SHALL compare its per-question verdicts with the most recent earlier completed run of the same agent, on the **same path** (R63: a `model` run only with a `model` run, a `legacy` run only with a `legacy` run; a run saved before paths existed counts as `model`), same datasource and same set of datasets (order ignored), matching by question id. It SHALL record the previous run's id and three lists, each of id and question: **regressions** (passed before, failing now), **improvements** (failed before, passing now) and **unchanged**. Questions present in only one of the two runs SHALL be skipped. With no comparable earlier run no comparison SHALL be recorded; runs saved before this feature have none. A failure while comparing SHALL NOT fail the run.
 - R41. The report SHALL show the comparison as `## Compared to previous run` with "Compared to run `<previous id>`."; "No change from the previous run." when there are neither regressions nor improvements; otherwise "**Regressions** (passed before, now failing):" and/or "**Improvements** (failed before, now passing):", each item as `<id> — <question>`.
 
 Other entry points
@@ -464,7 +464,7 @@ Feature: Agents and evals behaviour not yet covered by Playwright
     And a running execution has no delete button
 
   Scenario: Compares a run with the previous comparable run
-    Given two completed runs of the same suite on the same datasource and datasets
+    Given two completed runs of the same suite on the model path, the same datasource and the same datasets
     And a question passed in the first and failed in the second
     When I download the second run's report
     Then it has the section "Compared to previous run"
@@ -495,6 +495,15 @@ Feature: Agents and evals behaviour not yet covered by Playwright
     When I open the executions sub-tab of "Questions to Insights Assistant"
     Then the run shows "legacy path"
     And its downloaded report contains "**Path:** legacy"
+
+  Scenario: A run is compared only with an earlier run on the same path
+    Given a completed model-path run of the "world-cup" set on the "World Cup PostgreSQL" datasource
+    And a legacy-path run of the same questions on the same datasource then completes through the API
+    When I download the legacy run's report
+    Then it has no section "Compared to previous run"
+    When a second legacy-path run of the same questions completes
+    And I download its report
+    Then it has the section "Compared to previous run", naming the first legacy run
 ```
 
 ### Feature: Agent editor
@@ -663,7 +672,6 @@ Feature: Agent definitions (API)
 - The browser saves the report as `eval-run-<agent>-<8-char id>.md` (no date) while the server's attachment name includes the date and time. The gherkin file pattern "eval-run-assistant-…" matches both.
 - A code comment says runs are in-memory and forgotten on restart; in fact they are persisted and survive restarts (R25). The spec follows the behaviour.
 - A failed (not just partial) run or a partial pass is drawn with the same red cross in Executions.
-- The regression comparison (R40) ignores the path, so a `legacy` run can be compared with a `model` run on the same datasource and datasets, and its regressions then mix the two assistants. Confirm whether comparable runs should also share the path.
 - The Evals UI cannot start a `legacy` run (R63); the comparison is API- and command-line-only. Confirm whether the UI needs a path picker.
 
 <!-- sources: backend/src/modules/agents/{agents.controller,agents.service,eval-runs.service,eval-regression,eval-report}.ts, backend/src/modules/agents/repositories/eval-runs.repository.ts, backend/src/mastra/evals/{assistant.evals,assistant-eval-datasets,result-set-check,run-assistant-evals}.ts, backend/src/mastra/agents/{eval-judge,assistant-legacy}.agent.ts, backend/src/mastra/index.ts, backend/src/modules/sessions/result-compare.ts, backend/src/modules/testing-data/fixtures/registry.ts, frontend/src/app/features/agents/, frontend/e2e/agents.spec.ts, frontend/e2e/agent-hub.spec.ts -->

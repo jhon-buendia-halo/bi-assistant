@@ -270,6 +270,14 @@ The structure the assistant reasons over, as a single, versionable source of tru
   - Merge the old branch's implementation onto `main` and renumber its ADRs to ADR-0012 (data model DSL) and ADR-0013 (logical query layer); `main` had taken 0006 and 0007 meanwhile.
   - **Org server permissions.** A data model is shared like its dataset. Reads (the JSON Schema, model, versions, one version, drift, export, model metrics and metric candidates; resolve, compile, query and serialize) need *Use agents in the gallery and chat* (`use-agents`). Writes (save, revert, bootstrap, import, and creating, editing or deleting a model metric) need *Manage datasources and datasets* (`manage-datasources`). Local mode is unchanged. The data model view hides its edit controls from a caller without `manage-datasources`.
   - **Metrics import across owners.** At startup, the legacy metrics of every owner are imported into the model of the dataset that covers them, with `author` set to the owner's id (absent in local mode). When two metrics share a lowercase name, the first by `createdAt`, then id, wins; the rest are listed in the model's metrics-import report (`lastMetricsImport`, returned by drift as `metricsImport`). A later legacy `/metrics` write of a name the model already has from another author is skipped and added to the report. The legacy `/metrics` store becomes import-only.
+  - **Metric author from the Metrics tab.** In org server mode a metric created in the Metrics tab gets `author` = the signed-in user's owner key; an edit keeps the stored author. Local mode records none.
+  - **Fixes to the ported model path** ([specs/system/agents.md](specs/system/agents.md) 3, 5.4, 5.5, 5.7, 8.4):
+    - result guards run on `query_entities`, `sample_records` and `run_raw_sql` results, so their warnings reach the model and the data record;
+    - the "Data entities" chips and the interpretation line's "over …" come from the logical query's entities (`from` + joins) for `query_entities`/`sample_records` records; `run_raw_sql` records keep the SQL scan, which reads bare, `"double-quoted"` and `` `backquoted` `` three-part names;
+    - no physical SQL reaches the model: the tool-only synthesis pass sends logical queries in place of compiled SQL; `run_raw_sql` stays the flagged exemption and keeps returning `correctedSql`;
+    - the eval regression comparison only compares runs of the same path;
+    - `run_raw_sql` resolves the placeholder `default` datasource like `query_entities`;
+    - the chat shows an **Outside the data model** chip on an answer whose turn used `run_raw_sql`.
   - **Agent lists.** `assistant-legacy` is hidden from `GET /agents` and the Agent Hub; it stays reachable at `GET /agents/assistant-legacy` and through the eval `legacy` path. The Hub's System section shows `query-verifier` in place of `sql-verifier`, plus `query-fixer`.
   - **Restyle.** `features/data-model/` moves to main's semantic tokens and shared component classes (ADR-0007, [specs/system/ui.md](specs/system/ui.md)).
   - **Web E2E.** `frontend/e2e/data-model-editing.spec.ts` runs on the web app fixture; a new org-permissions scenario and `backend/test/data-models-org.e2e-spec.ts` cover the permissions and the metrics import; the agent hub and agent sessions specs follow the model vocabulary.
@@ -283,6 +291,12 @@ The structure the assistant reasons over, as a single, versionable source of tru
   - In org server mode, a User can read a dataset's data model, sees no edit controls, and gets 403 on every model write, which leaves the current version unchanged.
   - Two owners' legacy metrics with the same name end up as one model metric, the earliest, with its author; the other is listed in the drift response's `metricsImport`.
   - `GET /agents` and the Agent Hub don't list `assistant-legacy`.
+  - In org server mode a metric created in the Metrics tab shows its creator as author, and still does after another user edits it.
+  - A `query_entities` result with a measure constant on every row carries the warning; an answer over `query_entities` shows its logical entity names as "Data entities" chips and in "Computed from 1 query over …".
+  - The tool-only synthesis input holds no compiled SQL; only `run_raw_sql` records carry SQL.
+  - A `legacy` eval run is never compared with a `model` run.
+  - `run_raw_sql` on an entity of a dataset saved before datasources existed runs on the default datasource.
+  - An answer whose turn used `run_raw_sql` shows the "Outside the data model" chip (`answer-outside-model`); other answers don't.
   - `grep -rE "zinc|white/|red-|amber-|emerald-" frontend/src/app/features/data-model` finds nothing.
   - `python3 scripts/check-specs.py` passes; backend and frontend unit tests, builds and the web E2E suites (`npm run test:e2e`, `npm run test:e2e:org`) are green.
 - **Notes:** decisions taken with the user on 2026-10-11 are in the [epic spec](specs/epics/BA-2/spec.md). Eval runs are evidence, not acceptance. The E2E Postgres runs as an isolated `docker compose -p qti-ba2` stack with `E2E_SKIP_DOCKER=1`. Evidence: [evidence/1.2.4/](evidence/1.2.4/).

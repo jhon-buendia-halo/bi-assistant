@@ -46,7 +46,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Data point selection.** The user clicking a mark (bar, segment, point) inside a *visual*. The panel reports it to the chat so the user can ask a follow-up about that value.
 
-**Data record.** The stored result of one data tool call (`query_entities`, `sample_records`, `run_raw_sql`; on the legacy eval path `run_readonly_sql` and `sample_rows`): tool, input (the SQL that ran), columns, rows (capped), total row count, truncated flag, error, rationale, warnings, the *logical query* when there was one, and the *outside the data model* flag for raw SQL.
+**Data record.** The stored result of one data tool call (`query_entities`, `sample_records`, `run_raw_sql`; on the legacy eval path `run_readonly_sql` and `sample_rows`): tool, input (the SQL that ran), columns, rows (capped), total row count, truncated flag, error, rationale, warnings, the *logical query* and the logical entities it touched when there was one, and the *outside the data model* flag for raw SQL.
 
 **Dataset.** A named, saved selection of *entities* from one *datasource*, plus a snapshot of their schema and sample values. Sessions work over datasets, not directly over datasources. Identified by its name; there is no separate id. Legacy name: *sandbox selection* (collection `sandbox_selections`, session field `sandboxes`); the UI once said "sandbox".
 
@@ -70,7 +70,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Eval check.** One scorer that grades an eval case's answer or tool calls.
 
-**Eval run.** One execution of selected eval cases against a datasource and its datasets, on one path: `model` (the assistant) or `legacy` (the *legacy assistant*, for comparison). Records per-question results (pass or fail, scores, tool calls, answer, whether it was *outside the data model*). When a completed earlier run exists for the same agent, datasource and datasets, the run also stores a *regression comparison*.
+**Eval run.** One execution of selected eval cases against a datasource and its datasets, on one path: `model` (the assistant) or `legacy` (the *legacy assistant*, for comparison). Records per-question results (pass or fail, scores, tool calls, answer, whether it was *outside the data model*). When a completed earlier run exists for the same agent, path, datasource and datasets, the run also stores a *regression comparison*.
 
 **Eval set.** A named group of eval cases bound to one *sample fixture* (World Cup on PostgreSQL, World Cup on REST, Formula 1).
 
@@ -118,7 +118,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Org server mode.** The app run by an organisation on its own server for many people: they sign in with Microsoft Entra ID, the directory is pushed by SCIM, *roles* decide what each person can do, and private data is kept per *owner*. Turned on by server configuration. Opposite of *local mode*. See [../capabilities/admin/spec.md](../capabilities/admin/spec.md).
 
-**Outside the data model.** A flag on an answer (and on an eval question) whose turn called `run_raw_sql`, the last-resort tool that runs SQL directly when a *logical query* cannot express the question. The assistant is told to say so in the answer.
+**Outside the data model.** A flag on an answer (and on an eval question) whose turn called `run_raw_sql`, the last-resort tool that runs SQL directly when a *logical query* cannot express the question. The assistant is told to say so in the answer, and the chat shows the answer with an "Outside the data model" chip. The raw path is the only one where the assistant sees physical SQL.
 
 **Ownership transfer.** A *Platform admin* moving one or more *user agents* to another *owner*, for example from a person who left. The agent keeps its *draft* and *Live* version; its sessions stay with their owners. See [../capabilities/admin/spec.md](../capabilities/admin/spec.md) R64.
 
@@ -142,7 +142,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Report.** The markdown output of a *deep analysis*: title, executive summary, findings by angle, data appendix.
 
-**Result guard.** A deterministic check on a query result that attaches a *warning*: a ratio of a sum to itself, a metric constant on every row, an unordered "top N".
+**Result guard.** A deterministic check on the result of every data query (logical query, sample or raw SQL) that attaches a *warning*: a ratio of a sum to itself, a metric constant on every row, an unordered "top N", blank group keys, a row cap reached.
 
 **Role.** A named set of *permissions* given to a user in *org server mode*: **User** (implicit for everyone signed in), *Maker*, *Data owner*, *Approver* or *Platform admin*. Roles are fixed and additive; a user's roles are their direct assignments plus their *group mappings*. See [../capabilities/admin/spec.md](../capabilities/admin/spec.md).
 

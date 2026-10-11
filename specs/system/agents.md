@@ -649,7 +649,7 @@ Two tool sets exist. The **model tools** (3.1-3.5) belong to the `assistant` and
 
 **Session model.** Every model tool works on the session model composed, at call time, from the current model version of each of the session's datasets (4.1, *Session model*). An entity is named by its logical name, matched case-insensitively. A name that is not in the session model → `Entity "<e>" is not part of this session's model`.
 
-**No physical names back to the model.** `query_entities` and `sample_records` return their result without the compiled `sql` and `correctedSql`; the full result is kept aside for the data record (5.1). An execution error is **sanitized** before it reaches the model: every entity's physical table string is replaced by the entity's logical name and every physical column that differs from its attribute name by the attribute name; if a three-part dotted token (`word.word.word`) still remains, the whole message becomes `the data source rejected the query (<error class>)`, where the class is a leading `[CODE]` of the message, else a leading `<Name>Error`, else `engine error`.
+**No physical names back to the model.** `query_entities` and `sample_records` return their result without the compiled `sql` and `correctedSql`; the full result is kept aside for the data record (5.1). No later call hands that SQL back either: the tool-only synthesis pass (5.5) sends these records with their logical query in place of the compiled SQL. The one exemption is `run_raw_sql` (3.5), the explicit, flagged raw fallback: the assistant writes that statement itself against the physical storage, so the path is outside the data model by definition, and its statement and its `correctedSql` are returned and passed on as they are. An execution error is **sanitized** before it reaches the model: every entity's physical table string is replaced by the entity's logical name and every physical column that differs from its attribute name by the attribute name; if a three-part dotted token (`word.word.word`) still remains, the whole message becomes `the data source rejected the query (<error class>)`, where the class is a leading `[CODE]` of the message, else a leading `<Name>Error`, else `engine error`.
 
 **Rationale field** (on `sample_records`, `query_entities`, `run_raw_sql`, and the legacy `sample_rows` and `run_readonly_sql`), description given to the model: `One or two sentences of plain business English saying what this step checks and why it moves toward answering the user's question. No SQL jargon, no restating the statement.` It is stored (whitespace-flattened, trimmed, capped at 400 chars with `…`) and shown to the user as the reasoning trail.
 
@@ -673,9 +673,9 @@ Two tool sets exist. The **model tools** (3.1-3.5) belong to the `assistant` and
 - **Description:** `Fetch up to 50 real sample rows from one logical entity — useful for checking value formats (dates, enum casing) before filtering on them.`
 - **Input:** `{ entity: string ("Logical entity name"), limit?: int 1..50 (default 10), rationale: string }`.
 - **Behaviour:** builds the logical query `{ from: <entity>, select: [{ attr: <a> } for every declared attribute], limit }` and runs it exactly as `query_entities` does (5.11), so a sample never shows a column the model does not declare.
-- **Output:** the `query_entities` success shape (3.4).
+- **Output:** the `query_entities` success shape (3.4), `warnings` included (result guards run on samples too, 5.4).
 - **Errors:** an unknown entity; a compile failure → `{ error: { code, message, path } }` (its first issue); an execution failure → `{ error: { code: 'execution_error', message: <sanitized>, path: '' } }`.
-- **Side effects:** live read on the entity's datasource; may invoke `query-fixer` (2.8) and `sql-fixer` (2.3). The call is captured as a data record (5.1).
+- **Side effects:** live read on the entity's datasource; may invoke `query-fixer` (2.8) and `sql-fixer` (2.3). The call is captured as a data record (5.1) whose `entities` is the sampled entity.
 
 ### 3.4 `query_entities`
 
@@ -716,21 +716,20 @@ Two tool sets exist. The **model tools** (3.1-3.5) belong to the `assistant` and
   ```
 
   A ratio exists only as a named metric; an ad-hoc `agg` cannot be `ratio`.
-- **Output (success):** `{ columns, rows, entities: string[], truncated?, note? }` — `entities` are the logical entities the compiled query touched (root and joins). `truncated` and `note` are as in 5.3, and a query the query fixer corrected carries the note prefix `query auto-corrected (<code>: <message>)` (5.11). The compiled `sql` and any `correctedSql` are never returned to the model.
+- **Output (success):** `{ columns, rows, entities: string[], truncated?, note?, warnings? }` — `entities` are the logical entities the compiled query touched (root and joins). `truncated` and `note` are as in 5.3, and a query the query fixer corrected carries the note prefix `query auto-corrected (<code>: <message>)` (5.11). `warnings` are the result guards' findings (5.4), present only when non-empty. The compiled `sql` and any `correctedSql` are never returned to the model.
 - **Errors:**
   - a compile failure (after the one query-fixer attempt, when it applies) → `{ error: { code, message, path, issues }, hint: "Call describe_entity to confirm attribute/relationship names, or set joins[].via to pick a path explicitly." }`, where `issues` is every `{ code, message, path }` the compiler found, `code` and `path` are the first issue's, and `message` joins all of them as `<path>: <message>` with `; `. Codes: `unknown_entity`, `unknown_attribute`, `unknown_metric`, `unknown_relationship`, `ambiguous_path`, `no_path`, `invalid_order_by`, `invalid_select`, `mixed_datasources`, `bucket_on_non_date`, `fan_out`;
   - an execution failure (after SQL repair, 5.3) → `{ error: { code: 'execution_error', message: <sanitized>, path: '' } }`.
-- **Side effects:** live read on the datasource of the entities it touches; may invoke `query-fixer` once (2.8) and `sql-fixer` up to twice (2.3). Captured as a data record (5.1) whose input is the compiled SQL that ran and whose `logicalQuery` is the query as JSON.
-- **Note:** result guards (5.4) do not run on this tool, so its results never carry `warnings`. See Open questions.
+- **Side effects:** live read on the datasource of the entities it touches; may invoke `query-fixer` once (2.8) and `sql-fixer` up to twice (2.3). Captured as a data record (5.1) whose input is the compiled SQL that ran, whose `logicalQuery` is the query as JSON and whose `entities` are the logical entities it touched.
 
 ### 3.5 `run_raw_sql`
 
 - **Description** (lines joined with a space): `Last resort, only when query_entities reported it cannot express the question (not for a typo you can just fix): run one read-only SQL statement directly against the entity you name. The answer will be marked as outside the data model, so state that plainly if you use this.`
 - **Input:** `{ entity: string ("Logical entity name whose storage this statement runs against"), sql: string ("A single SELECT or WITH statement"), limit?: int 1..500 (default 100), rationale: string }`.
-- **Behaviour:** runs the statement on the named entity's datasource through the read-only guard (5.2) and SQL repair (5.3), with the session's datasets as the fixer's schema. It does not check which tables the statement reads.
-- **Output:** `{ columns, rows, correctedSql?, truncated?, note?, outsideModel: true }`.
+- **Behaviour:** runs the statement on the named entity's datasource through the read-only guard (5.2) and SQL repair (5.3), with the session's datasets as the fixer's schema. The datasource is resolved exactly as for `query_entities` (5.11 step 2): an entity bound to the placeholder `default` datasource (a dataset saved before datasources existed) runs on the default datasource. It does not check which tables the statement reads. After a successful run the result guards (5.4) inspect the statement that ran and its rows.
+- **Output:** `{ columns, rows, correctedSql?, truncated?, note?, warnings?, outsideModel: true }`. `correctedSql` (and the note asking to cite it) is returned on purpose: the raw path is outside the data model by definition (the assistant writes physical SQL here itself, and the answer is flagged), so the no-physical-names rule of ADR-0013 does not apply to it. It is the only tool result that carries SQL (section 3, *No physical names back to the model*).
 - **Errors:** an unknown entity → `{ error: 'Entity "<e>" is not part of this session\'s model', outsideModel: true }`; a guard rejection or engine failure (after repair) → `{ error: <sanitized message>, outsideModel: true }`.
-- **Side effects:** live read; may invoke `sql-fixer`. Every call, successful or not, is captured as a data record with `outsideModel: true`, which flags the whole answer as outside the data model (5.7). Result guards do not run on it.
+- **Side effects:** live read; may invoke `sql-fixer`. Every call, successful or not, is captured as a data record with `outsideModel: true`, which flags the whole answer as outside the data model (5.7) and shows the answer's **Outside the data model** chip ([ui.md](ui.md) 4.12 Session chat).
 
 ### 3.6 `ask_clarification`
 
@@ -917,7 +916,7 @@ User prompts are trimmed; an empty prompt is a 400 `message is required`. When t
 
 Wire format of these events: [api.md](api.md). Errors thrown during the stream (other than the turn's own abort) propagate and are sent as an `error` event by the controller.
 
-**Data record** (from a data tool result; shape in [data-model.md](data-model.md)): for `query_entities` and `sample_records` the record is built from the full result the tool kept aside (section 3, *No physical names back to the model*), not from what the model saw. `input` = the corrected SQL when repaired, else the compiled SQL (`query_entities`, `sample_records`), else the `sql` argument (`run_raw_sql`, `run_readonly_sql`), else the entity; `logicalQuery` = the `query` argument as JSON (`query_entities` only); `outsideModel: true` when the result carried it (`run_raw_sql`). Failed calls keep `{tool, input, error, rationale?, logicalQuery?, outsideModel?}`, a structured `{code, message}` error being stored as `<code>: <message>`; successful ones keep `columns` (declared, else first row's keys), at most **200** rows, `rowCount` = rows returned, `truncated` when the tool flagged it or rows > 200, `rationale`, the tool's `warnings`, `logicalQuery` and `outsideModel`. The **SQL-running tools** are `query_entities`, `run_raw_sql` and `run_readonly_sql`; a sample is never "the query behind an answer".
+**Data record** (from a data tool result; shape in [data-model.md](data-model.md)): for `query_entities` and `sample_records` the record is built from the full result the tool kept aside (section 3, *No physical names back to the model*), not from what the model saw. `input` = the corrected SQL when repaired, else the compiled SQL (`query_entities`, `sample_records`), else the `sql` argument (`run_raw_sql`, `run_readonly_sql`), else the entity; `logicalQuery` = the `query` argument as JSON (`query_entities` only); `entities` = the logical entities the query touched, from the result kept aside (its `from` entity and every joined entity, explicit or auto-joined; `query_entities`), or the sampled entity (`sample_records`); `outsideModel: true` when the result carried it (`run_raw_sql`). Failed calls keep `{tool, input, error, rationale?, logicalQuery?, entities?, outsideModel?}` (`entities` = the sampled entity for a failed sample, absent for a failed `query_entities`), a structured `{code, message}` error being stored as `<code>: <message>`; successful ones keep `columns` (declared, else first row's keys), at most **200** rows, `rowCount` = rows returned, `truncated` when the tool flagged it or rows > 200, `rationale`, the tool's `warnings` (5.4), `logicalQuery`, `entities` and `outsideModel`. The **SQL-running tools** are `query_entities`, `run_raw_sql` and `run_readonly_sql`; a sample is never "the query behind an answer".
 
 **Non-streamed turn** (`POST /sessions/:id/messages`): a single generate with the same options; persists only `{content, reasoning?, knowledge?, modelVersions?, outsideModel?}` — no data records, no clarification interception, no synthesis, grounding guard or cross-check.
 
@@ -945,7 +944,14 @@ A fixer call that itself fails is logged (`SQL repair attempt failed: …`) and 
 
 ### 5.4 Result guards
 
-After every successful legacy `run_readonly_sql` (the guards run inside that tool; `query_entities`, `sample_records` and `run_raw_sql` do not run them), cheap dialect-agnostic heuristics inspect the executed SQL and returned rows; each finding becomes a one-sentence warning in `warnings` that the assistant must act on (A34). Biased towards false negatives; any internal error yields no warnings. Up to 5,000 rows scanned. String literals and comments are masked before keyword scanning.
+After every successful data query — `query_entities`, `sample_records`, `run_raw_sql` and the legacy `run_readonly_sql` — cheap dialect-agnostic heuristics inspect the executed SQL and returned rows, inside the tool, before the result reaches the model; each finding becomes a one-sentence warning in the result's `warnings` (present only when non-empty) that the assistant must act on (A34), and the data record keeps it (5.1). Biased towards false negatives; any internal error yields no warnings. Up to 5,000 rows scanned. String literals and comments are masked before keyword scanning. The statement inspected is the one that actually ran (the corrected one when repaired); the row limit is the call's limit.
+
+On the logical path (`query_entities`, `sample_records`) the inspected statement is the compiled SQL, which the model never sees (section 3); the warning texts name only result columns, which are the query's aliases and attribute names, never a physical table. Two adjustments keep compiled SQL from raising false alarms, because the compiler always writes a `LIMIT` (the query's `limit`, default 100):
+
+- `unordered-limit` fires for `query_entities` only when the logical query sets `limit` itself and has no `order_by`; it never fires for `sample_records`, a sample being unordered on purpose.
+- `row-cap-reached` never fires for `sample_records`: a sample that fills its requested size is complete.
+
+The other checks run unchanged on every path.
 
 | Code | Fires when | Message (verbatim template) |
 |---|---|---|
@@ -961,15 +967,15 @@ If a completed turn produced neither text nor a visual (the model spent every st
 
 ```
 Answer the original user question using only the tool results below.
-Give concrete findings, comparisons, a short takeaway, and name the source entities from the SQL where possible.
+Give concrete findings, comparisons, a short takeaway, and name the source entities where possible.
 Do not call tools and do not mention internal step limits.
 
 Original question: <question>
 
-Tool results: <JSON of this turn's data records, rows capped at 50 each>
+Tool results: <JSON of this turn's data records, as below, rows capped at 50 each>
 ```
 
-The data records are sent whole, so their `input` (the compiled or raw SQL) reaches the model in this pass. See Open questions.
+No physical SQL reaches the model in this pass (section 3). Each record is sent with its `input` replaced: for `query_entities` by the logical query (`logicalQuery`, as JSON), for `sample_records` by the sampled entity's logical name; their `entities` (logical names) are kept. A `run_raw_sql` record is the exemption: it is sent with its raw statement as `input` and with `outsideModel: true`, since the assistant wrote that statement itself on the flagged raw path (3.5). The other fields (`tool`, `columns`, `rows`, `rowCount`, `truncated`, `error`, `rationale`, `warnings`) are sent as stored.
 
 No data captured, an empty reply, or a failed call → the answer is the fallback text `I completed the data analysis but could not produce a final response. Please retry your question.` (an aborted call yields nothing). The synthesized text is emitted as one `text` event.
 
@@ -994,8 +1000,8 @@ The session is re-read before writing (visual tools write metadata mid-turn). Th
 - **Clarification:** an assistant message with `content` = the question, `clarification {question, options}`, plus `data`, `entities`, `reasoning`, `knowledge`, `modelVersions`, `outsideModel` when present (work done before the question is kept).
 - **Answer:** when there is text or a visual event — `content` = text, or (visual-only turn) `Created|Updated interactive visual "<title>" (v<N>).`; plus:
   - `data` — the turn's records;
-  - `entities` — source entities derived from the records ([visuals](../capabilities/visuals/spec.md) / data-model own the derivation);
-  - `interpretation` — deterministic, from successful SQL-running records only (5.1): `Computed from <n> query|queries[ over <entities, comma-separated>] — <rows> row|rows analyzed.` (rows = sum of rowCount);
+  - `entities` — the answer's source entities, the distinct names in first-seen call order over all the turn's records: a `query_entities` or `sample_records` record contributes its logical `entities` (5.1), never names read from its compiled SQL; a `run_raw_sql` record (and a legacy `run_readonly_sql` record) contributes the three-part names found in its SQL, where a name may be bare (`cat.schema.table`), double-quoted (`"cat"."schema"."table"`) or backquoted (`` `cat`.`schema`.`table` ``), with quoting per part allowed, and is reported unquoted as `cat.schema.table`. The visual frame derives its source list the same way when the answer has none ([visuals](../capabilities/visuals/spec.md));
+  - `interpretation` — deterministic, from successful SQL-running records only (5.1): `Computed from <n> query|queries[ over <entities, comma-separated>] — <rows> row|rows analyzed.` (rows = sum of rowCount; `<entities>` = the answer's `entities` above, so a logical query reads as its logical entity names);
   - `reasoning` — one step per record that has a rationale, in call order: `{step, rationale, tool, input?, rowCount?, error?}`;
   - `knowledge` — 4.1 Block 2's used list;
   - `modelVersions` — the `model-versions` requestContext value (4.2): which version of each dataset's model the turn saw;
@@ -1067,7 +1073,8 @@ How `query_entities` and `sample_records` (and, from step 2, the careful-mode ve
 3. Compile. A compile failure is a `LogicalQueryError` carrying every issue `{code, message, path}`; nothing is sent to the datasource.
 4. Run the compiled SQL with the query's limit through 5.3 (read-only guard, notes, up to 2 `sql-fixer` repairs) on the compiled datasource, with the datasets of the entities it touched as the fixer's schema. The result keeps the compiled `sql` and the logical `entities` touched.
 5. **Compile repair.** When step 3 fails with at least one issue of code `unknown_attribute`, `unknown_metric` or `ambiguous_path`, call `query-fixer` (2.8) once with the failed query and its issues. No usable output → the original error. Otherwise compile and run the corrected query (steps 2-4): on success its `note` is prefixed with `query auto-corrected (<code>: <message>)` (the original first issue) and joined to any other note with `; `; on failure log `query_entities repair produced a query that also failed: <detail>` and return the **original** error. A fixer call that itself fails is logged (`Query repair attempt failed: …`) and treated as no usable output. Any other issue code goes back to the model without a fixer call.
-6. The tool hands the model the result without `sql` and `correctedSql` and keeps the full result for the data record (5.1).
+6. After a successful run, the result guards (5.4) inspect the compiled statement that ran and its rows; their `warnings` join the result.
+7. The tool hands the model the result without `sql` and `correctedSql` and keeps the full result for the data record (5.1).
 
 ---
 
@@ -1364,7 +1371,7 @@ A case **passes** when it has at least one check and every check scored 1. Each 
 ### 8.4 Runs, regression and report
 
 - A run is `{jobId, agentKey, datasourceId, datasets, caseIds, status: running|completed|failed, results, totalCases, currentQuestion?, error?, startedAt, finishedAt?, comparison?, path?, outsideModelCount?}`, persisted at start and after every case (a crash keeps finished questions). `path` is `model` or `legacy` (absent on runs saved before it existed, read as `model`); `outsideModelCount` is the number of finished cases with `outsideModel`, recomputed after every case (absent read as 0).
-- On completion it is compared, by case id, with the agent's most recent previous **completed** run with the same datasource and datasets, whatever its path: `regressions` (passed → failed), `improvements` (failed → passed), `unchanged`; cases present in only one run are skipped. Failure to compute it never fails the run.
+- On completion it is compared, by case id, with the agent's most recent previous **completed** run on the **same path** with the same datasource and datasets (a `model` run only with a `model` run, a `legacy` run only with a `legacy` run; a run without `path` counts as `model`): `regressions` (passed → failed), `improvements` (failed → passed), `unchanged`; cases present in only one run are skipped. Failure to compute it never fails the run.
 - The run downloads as a Markdown report (summary, per-case verdict, checks table with reasons, executed steps with inputs/outputs or errors, answers, regression section) — format owned by [agents-evals](../capabilities/agents-evals/spec.md).
 - A running run cannot be deleted (`Cannot delete a run that is still going`).
 
@@ -1427,12 +1434,9 @@ Budget 4,000 characters; entries that don't fit end the list.
 - **Gap:** deep-analysis investigation calls keep `ask_clarification`, `create_visual` and `update_visual` available; only the prompt forbids them, and nothing intercepts a clarification in `generate` mode. Should these tools be removed for background calls?
 - **Gap:** the legacy `list_entities`' description says the kind is "databricks or postgres", omitting `rest` (which the legacy SQL tool description and prompt do mention). Kept as is: `assistant-legacy` is frozen.
 - **Gap:** the non-streamed chat endpoint persists no `data`, `entities`, `interpretation`, clarification, grounding guard or cross-check. Is it still used by any client? (The frontend service still has a caller.)
-- **Gap:** `run_raw_sql` (and the legacy `run_readonly_sql`) do not check which tables a statement reads; any table reachable on the datasource can be read. `run_raw_sql` also uses the named entity's datasource id as is, so an entity bound to the placeholder `default` datasource (5.11 step 2) is not resolved to the default datasource.
+- **Gap:** `run_raw_sql` (and the legacy `run_readonly_sql`) do not check which tables a statement reads; any table reachable on the datasource can be read.
 - **Gap:** auto-repair designs from the **source answer's** data, not the current version's stored `data.json` (which may include merged turn records or refreshed rows), so a repaired version can lose drill-down data or a refresh.
 - **Gap:** the eval harness omits the verified-query block, the effort setting, the session workspace and the grounding guard, so it does not measure exactly what production runs (the code comments claim parity for step budget and grounding only). The `model` path gets metrics through the model block; the `legacy` path through its metrics block (8.6).
-- **Gap:** the regression comparison (8.4) ignores the run's path, so a `model` run can be compared with a `legacy` run on the same datasource and datasets.
-- **Gap (ADR-0013 leaks):** the assistant still sees physical SQL in two places: the tool-only synthesis pass (5.5) sends whole data records, whose `input` is the compiled or raw SQL, and `run_raw_sql` returns `correctedSql`.
-- **Gap:** result guards (5.4) run only inside the legacy `run_readonly_sql`, so `query_entities`, `sample_records` and `run_raw_sql` results never carry `warnings`, although the assistant's prompt (A34) and the sessions UI still expect them.
 - **Open question:** `run_raw_sql` asks for SQL against an entity whose physical table and columns the assistant is never shown; it can only guess them. Confirm whether the tool should accept a logical-name form, or whether a failure here is the intended signal that the model needs extending.
 - **Discrepancy:** `EvalRunsService` says "Runs are in-memory: a backend restart forgets them", but runs are also persisted and listed from the store; only the in-flight state and the one-run-per-agent guard are in memory.
 - **Discrepancy:** `KnowledgeService` calls the curated-knowledge block the "fourth system block"; in the turn it is the second (model and visuals, knowledge, verified queries, agent instructions).

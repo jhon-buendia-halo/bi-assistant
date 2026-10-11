@@ -56,7 +56,7 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
   - query entities: one **logical query** (start entity, attributes, metrics or ad-hoc aggregations, filters, grouping, ordering, joins along declared relationships, default limit 100, max 500) that the system compiles to read-only SQL for the entity's datasource and runs;
   - run raw SQL: one read-only `SELECT`/`WITH` statement on a named entity's datasource, as a last resort when a logical query cannot express the question (R62).
 
-  An entity is named by its logical name; the datasource and SQL dialect follow from the entity, so the assistant never names a datasource. Its prompt, context and tool results SHALL NOT contain a physical table name, a datasource id or kind, or a SQL dialect name (ADR-0013 in [architecture.md](../../system/architecture.md)); the exceptions are listed in [agents.md](../../system/agents.md) Open questions.
+  An entity is named by its logical name; the datasource and SQL dialect follow from the entity, so the assistant never names a datasource. Its prompt, context and tool results SHALL NOT contain a physical table name, a datasource id or kind, or a SQL dialect name (ADR-0013 in [architecture.md](../../system/architecture.md)). That includes every later call in the turn: when the system writes the final answer from the tool results itself (R18), it hands the model each query's logical query, never the SQL it compiled to. The one exemption is raw SQL (R62): the assistant writes that statement against the physical storage itself, so the statement, and the corrected statement when it was repaired, are returned to it and passed on as they are ([agents.md](../../system/agents.md) section 3).
 - R23. Every sample, query or raw SQL tool call SHALL carry a rationale: one or two plain business sentences saying why the step is taken. It is stored flattened and clipped to 400 characters.
 - R24. Each turn's context SHALL give the assistant:
   - the session's data model as one rendered block: every entity with its attributes (with up to 3 sample values each, within a character budget), its relationships and its metrics;
@@ -66,7 +66,7 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
   - for a session bound to an agent, the agent's Live instructions, last (R54).
 
   A new model version, saved or reverted, SHALL apply from the next turn. Each answer records which version of each dataset's model it was answered from.
-- R62. **Raw SQL is the flagged last resort.** A raw SQL call SHALL run through the same read-only guard and SQL repair. Every turn in which the assistant called it, successfully or not, SHALL be stored as answered **outside the data model**, and the assistant is told to say so in the answer. Open question: the chat shows no badge for it yet.
+- R62. **Raw SQL is the flagged last resort.** A raw SQL call SHALL run on the datasource of the entity it names, resolved like a logical query's (an entity of a dataset saved before datasources existed runs on the default datasource), through the same read-only guard, SQL repair and result-quality warnings (R29). Every turn in which the assistant called it, successfully or not, SHALL be stored as answered **outside the data model**, and the assistant is told to say so in the answer. The chat SHALL show such an answer with an **Outside the data model** chip whose tooltip reads "Part of this answer used raw SQL outside the dataset's data model."; an answer whose turn never called raw SQL SHALL NOT show it.
 
 ### Logical query repair
 
@@ -87,7 +87,7 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
 
 ### Result-quality warnings
 
-- R29. After every SQL run the system SHALL inspect the statement and its rows and attach any of these warnings to the data record. Known gap: the checks currently run only inside the legacy SQL tool, so query entities, sample records and raw SQL results carry no warnings (see the known gaps under Acceptance). The texts are exact templates:
+- R29. After every successful query entities, sample records and raw SQL call the system SHALL inspect the statement that ran (for a logical query, the SQL it compiled to) and its rows, and attach any of these warnings to the tool result and the data record. Because compiled SQL always carries a row limit, "limited without ordering" SHALL fire for a logical query only when the query sets its own limit without an ordering, and neither "limited without ordering" nor "row cap reached" SHALL fire for a sample. A warning names only result columns, never a physical table. The texts are exact templates:
   - same expression under two names: "`<a> and <b>` are computed from the same expression, so any ratio between them is 1 by construction."
   - a measure constant on every row: "`<column>` is `<value>` on every row, so it cannot explain any difference between them."
   - limited without ordering: "The query keeps only a few rows without ranking them, so these are an arbitrary sample rather than the top results."
@@ -100,13 +100,14 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
 
 - R30. Each persisted answer SHALL carry:
   - its data records: tool, input as run (the SQL actually executed), columns, up to 200 rows, the returned row count, a truncated flag, error, rationale, warnings, the logical query (for a query entities call) and an outside-the-model flag (for a raw SQL call);
-  - the entities its SQL referenced;
+  - its source entities (R63);
   - the version of each dataset's data model the turn was answered from;
   - an outside-the-model flag when any step used raw SQL (R62);
   - a deterministic interpretation line (R31);
   - a reasoning trail: one step per call that carried a rationale, in run order, with that call's row count or error;
   - the knowledge snippets that were in its context.
-- R31. The interpretation line SHALL be built from the successful queries only (query entities and raw SQL; samples do not count), never from model output: `Computed from <N> quer(y|ies)[ over <entity, …>] — <R> row(s) analyzed.` It is absent when no query succeeded.
+- R31. The interpretation line SHALL be built from the successful queries only (query entities and raw SQL; samples do not count), never from model output: `Computed from <N> quer(y|ies)[ over <entity, …>] — <R> row(s) analyzed.`, where the entities are the answer's source entities (R63). It is absent when no query succeeded.
+- R63. An answer's **source entities** (the "Data entities" chips and the "over …" part of R31) SHALL be the distinct entities of its steps, in the order first used: for a query entities call, the logical entities the query read (its start entity and every joined entity, including auto-joins), and for a sample records call, the sampled entity, both by logical name and never read from the compiled SQL; for a raw SQL call, the `catalog.schema.table` names in its statement, written bare, double-quoted (`"cat"."schema"."table"`) or backquoted (`` `cat`.`schema`.`table` ``), shown unquoted.
 - R32. Under an answer, the chat SHALL show these blocks, each only when non-empty:
   - a collapsible "How I worked this out (N step(s))" list, each step's rationale followed by "N rows" or "failed — <error>";
   - a collapsible "Knowledge in context (N)" list (kind, title, dataset or "global", body), with a note that disabled snippets are never included;
@@ -278,7 +279,7 @@ Shell placement and tokens are in [ui.md](../../system/ui.md).
   - follow-up chips from the open visual, specified in [visuals](../visuals/spec.md).
 - **Message kinds**:
   - user bubble;
-  - answer (Markdown plus the R32–R36 blocks, the "Generate interactive visuals" action from [visuals](../visuals/spec.md), and the badges and rating buttons);
+  - answer (Markdown plus the R32–R36 blocks, the "Generate interactive visuals" action from [visuals](../visuals/spec.md), the badges ("Outside the data model" R62, "Verified", cross-check) and rating buttons);
   - clarification card (R43);
   - visual event card (see [visuals](../visuals/spec.md));
   - deep-analysis report card;
@@ -324,6 +325,16 @@ Feature: Chat and visuals
     When I click "Version history"
     Then I see "Version 1"
     And I see "current"
+
+  Scenario: An answer that used raw SQL is marked outside the data model
+    Given the scripted answer to "Use raw SQL for the champions" ran "run_raw_sql" and is stored as answered outside the data model
+    When I type "Use raw SQL for the champions" into "Ask a follow-up question…"
+    And I click "Send message"
+    Then the answer shows the chip "Outside the data model"
+    And the chip's tooltip reads "Part of this answer used raw SQL outside the dataset's data model."
+    When I type "Who won the last two tournaments?" into "Ask a follow-up question…"
+    And I click "Send message"
+    Then that answer shows no "Outside the data model" chip
 ```
 
 ### Feature: Session management
@@ -404,7 +415,9 @@ Feature: Chat answers and reliability signals
   Scenario: An answer shows how it was worked out and the data behind it
     Given the assistant answers with one "query_entities" call on the "tournaments" entity with a rationale, returning 2 rows
     When I ask "Who won the last two tournaments?"
-    Then I see an interpretation line starting "Computed from 1 query" and ending "2 rows analyzed."
+    Then I see "Computed from 1 query over tournaments — 2 rows analyzed."
+    And I see "Data entities" with the chip "tournaments"
+    And I see no chip naming a "catalog.schema.table" entity
     When I click "How I worked this out (1 step)"
     Then I see the rationale followed by "2 rows"
     When I click "Data used (1 query)"
@@ -414,10 +427,10 @@ Feature: Chat answers and reliability signals
     Then I see the toast "SQL copied to clipboard"
 
   Scenario: A questionable query result carries a warning
-    Given the assistant's query returns a measure that is 1 on every row
+    Given the assistant answers with one "query_entities" call whose result has a measure that is 1 on every row
     When I ask "What is the retention rate per team?"
     And I click "Data used (1 query)"
-    Then I see a warning ending "is 1 on every row, so it cannot explain any difference between them."
+    Then the "query_entities" step shows a warning ending "is 1 on every row, so it cannot explain any difference between them."
 
   Scenario: A logical query naming an unknown attribute is corrected before it runs
     Given the assistant's first query names a misspelled attribute of the "goals" entity
@@ -578,9 +591,6 @@ Feature: Sessions started from an agent
 - Deleting a session leaves no transcript, memory thread or workspace directory behind.
 - Stopping a turn before the model answers leaves the question in the transcript after a reload.
 - Known gaps to settle (see the Open questions):
-  - answers on the data model path carry no result-quality warnings (R29), so the scenario "A questionable query result carries a warning" fails until the checks run for logical and raw SQL queries;
-  - the "Data entities" chips and the "over <entities>" part of the interpretation line are derived by scanning each step's SQL for `catalog.schema.table` names; SQL compiled from a logical query quotes each name part separately on PostgreSQL and Databricks, so those answers show no entity chips (the logical entities touched are known at query time but not stored);
-  - the outside-the-data-model flag (R62) is stored but not shown;
   - the session list order is fetched only at startup and after creating a session, so it does not re-sort after a turn;
   - there is no rename;
   - datasets cannot be edited after creation.

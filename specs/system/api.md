@@ -437,7 +437,7 @@ interface LlmSettingsView {
 
 ### 2.6 Agents, hub and evals
 
-Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra registry key (`assistant`, `interactive-visual-designer`, `sql-fixer`, `query-fixer`, `query-verifier`, `knowledge-bootstrap`, `assistant-eval-judge`, `assistant-legacy`; see [agents.md](agents.md)) **or** the id of a user agent ([data-model.md](data-model.md) section 3.10); the registry is checked first. `:id` is always a user-agent id. The catalogue merges both kinds. Rules: R43-R52 in [agents-evals](../capabilities/agents-evals/spec.md). The user-agent routes are declared before `GET /agents/:key`.
+Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra registry key (`assistant`, `visualization` (agent id `interactive-visual-designer`), `sql-fixer`, `query-fixer`, `query-verifier`, `knowledge-bootstrap`, `assistant-eval-judge`, `assistant-legacy`; see [agents.md](agents.md)) **or** the id of a user agent ([data-model.md](data-model.md) section 3.10); the registry is checked first. `:id` is always a user-agent id. The catalogue merges both kinds. Rules: R43-R52 in [agents-evals](../capabilities/agents-evals/spec.md). The user-agent routes are declared before `GET /agents/:key`.
 
 | # | Method + path | Purpose | FE |
 |---|---|---|---|
@@ -458,7 +458,7 @@ Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra regi
 #### 33. `GET /agents`
 - Response `200`: `{ agents: AgentSummary[] }` sorted by `name`, built-in and user agents together.
 - `AgentSummary = { key, id, name, description, tools: string[] /* sorted tool names; a user agent shows the assistant's */, kind: 'official'|'system'|'user', status: 'builtin'|'draft'|'live', pinned: boolean, owner: 'Official'|'System'|'You', hasUnpublishedChanges: boolean, missingDatasets: string[], datasets: string[], starterQuestions: string[] }`.
-- For a user agent `key` equals `id`, and `name`, `description`, `datasets` and `starterQuestions` come from the Live version when there is one, else the draft. For a built-in agent `status` is `builtin`, `hasUnpublishedChanges` is `false` and `datasets`, `starterQuestions` and `missingDatasets` are empty. `kind` is `official` for `assistant` and `system` for the other listed agents. **`assistant-legacy` is excluded from this list** (it is the pre-data-model assistant, kept only for the eval `legacy` path, [agents.md](agents.md)); it stays reachable through `GET /agents/assistant-legacy` (34) and the eval routes (35-40).
+- For a built-in agent `key` is its registry key and `id` its agent id; they differ only for the visual designer (`key` `visualization`, `id` `interactive-visual-designer`), and routes take the key. For a user agent `key` equals `id`, and `name`, `description`, `datasets` and `starterQuestions` come from the Live version when there is one, else the draft. For a built-in agent `status` is `builtin`, `hasUnpublishedChanges` is `false` and `datasets`, `starterQuestions` and `missingDatasets` are empty. `kind` is `official` for `assistant` and `system` for the other listed agents. **`assistant-legacy` is excluded from this list** (it is the pre-data-model assistant, kept only for the eval `legacy` path, [agents.md](agents.md)); it stays reachable through `GET /agents/assistant-legacy` (34) and the eval routes (35-40).
 
 #### 34. `GET /agents/:key`
 - Response `200`: `AgentDetail = AgentSummary & { draft?: AgentConfig; live?: AgentConfig /* user agents only; shapes in data-model 3.10 */; instructions: string /* prompt flattened to text */; toolDetails: { name, description, inputs: string[] /* top-level input param names */ }[]; memory: { storage: string|null; lastMessages: number|false|null; semanticRecall: boolean; workingMemory: boolean; generateTitle: boolean } | null; model: { id: string; provider: string } | null /* null when no LLM settings saved */ }`.
@@ -469,7 +469,7 @@ Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra regi
 - Response `200`: `{ sets: AgentEvalSet[] }`. Only `assistant` has sets; any other key returns `{ sets: [] }` (no 404). `AgentEvalSet = { id, name, description, cases: { id, question, intent, checks: { id, name, description }[] }[] }`.
 
 #### 36. `POST /agents/:key/evals/run`
-- Body: `{ datasourceId: string; caseIds?: string[] }`. `caseIds` omitted = all questions.
+- Body: `{ datasourceId: string; caseIds?: string[]; path?: 'model' | 'legacy' }`. `caseIds` omitted = all questions. `path` picks the eval path ([agents.md](agents.md) 8.6); any value other than `legacy`, or none, runs `model`. The Evals UI never sends it.
 - Success: `{ ok:true, message:"Eval run started", jobId }`. Returns immediately; the run is long-running (see [3.3](#33-eval-runs)).
 - Failures (Style A, `ok:false`): `"Agent \"<key>\" has no evals to run"` (non-assistant); `"An eval run is already in progress for this agent"` (also returns the running `jobId`); `"Pick a datasource to run against"`; `"That datasource has no datasets — create one in Datasets before running evals"`; `"Pick at least one question to run"`; fixture/dataset coverage errors (the datasets bound to the datasource must expose the entities the selected questions need).
 - Side effects: persists an initial run record; spawns the run (one throwaway session is created for the run to host visual tools and deleted afterwards).
@@ -522,7 +522,9 @@ interface EvalRunView {
   results: AssistantEvalCaseResult[];   // finished questions, in order
   currentQuestion?: string; error?: string;
   startedAt: string; finishedAt?: string;
-  comparison?: { previousRunId: string; regressions: {id,question}[]; improvements: {id,question}[]; unchanged: {id,question}[] };
+  comparison?: { previousRunId: string; regressions: {id,question}[]; improvements: {id,question}[]; unchanged: {id,question}[] };   // previous run on the same path
+  path?: 'model' | 'legacy';     // absent on runs saved before paths existed: read as 'model'
+  outsideModelCount?: number;    // finished questions with outsideModel; absent read as 0
 }
 interface AssistantEvalCaseResult {
   id: string; question: string;
@@ -532,6 +534,8 @@ interface AssistantEvalCaseResult {
   toolCalls: { name: string; input?: string; output?: string; error?: string }[];   // JSON-encoded, truncated to ~2000 chars each
   passed: boolean;                                    // every scorer scored 1
   error?: string; durationMs: number;
+  path: 'model' | 'legacy';                          // absent on older records
+  outsideModel: boolean;                              // called run_raw_sql; always false on legacy
 }
 ```
 
@@ -1080,11 +1084,11 @@ type ResolveResult = { ref: string; resolved: true; kind: string; target: unknow
 
 #### 106. `POST /datasets/:name/model/metrics`
 - Body `SaveModelMetricDto`: `{ name: string; label: string; entity: string; description?: string; agg?: 'count'|'sum'|'avg'|'min'|'max'|'count_distinct'|'ratio'; of?: string; numerator?: string; denominator?: string; where?: Predicate; dimensions?: string[]; expressions?: { sql?: string }; sourceVerifiedQueryId?: string }`. `name` is trimmed and lowercased, other strings trimmed, empty optionals omitted. `entity` is a logical entity name.
-- Success `201`: `{ ok:true, version: number }`; the new version has `source:"user"` and `note:"metric <name> added"`. The name is added to `localMetricNames` and removed from `deletedMetricNames` ([data-model.md](data-model.md) 3.16). The stored metric carries no `author`.
+- Success `201`: `{ ok:true, version: number }`; the new version has `source:"user"` and `note:"metric <name> added"`. The name is added to `localMetricNames` and removed from `deletedMetricNames` ([data-model.md](data-model.md) 3.16). In org server mode the stored metric's `author` is the caller's owner key (user id); in local mode it has none. The body carries no `author`.
 - Errors: `400 { ok:false, errors: ModelIssue[] }` (duplicate name, unresolved `entity`/`of`/`dimensions`/`where`, aggregation rules, `numerator`/`denominator` not metrics); `404` as 92.
 
 #### 107. `PUT /datasets/:name/model/metrics/:metricName`
-- Body as 106; replaces the metric (renaming allowed). Note `"metric <metricName> updated"`.
+- Body as 106; replaces the metric (renaming allowed), keeping the stored `author` (absent stays absent). Note `"metric <metricName> updated"`.
 - Success `200`: `{ ok:true, version: number }`.
 - Errors: `404` `"Metric \"<metricName>\" not found on dataset \"<name>\""`; `400` as 106.
 

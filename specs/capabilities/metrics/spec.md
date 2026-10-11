@@ -12,7 +12,7 @@ Capability-local vocabulary:
 - **Model metric** — a metric stored in a data model version (R1). The editor of record.
 - **Legacy metric** — a metric in the pre-data-model store: a flat SQL expression over a physical table `catalog.schema.table`, private to its owner in org server mode (R15).
 - **Candidate** — a prefilled metric draft offered from a verified query (R10).
-- **Author** — the user who created a legacy metric, recorded on the model metric it was imported as (R14).
+- **Author** — in org server mode, the user who defined a metric: the creator of the legacy metric it was imported from, or the user who created it in the Metrics tab (R14).
 
 ## Rules
 
@@ -40,7 +40,7 @@ Capability-local vocabulary:
 ### Sharing (org server mode)
 
 - R13. In org server mode model metrics SHALL be shared with the data model that holds them ([data-model](../data-model/spec.md) R37): every signed-in user sees them and every user's turns use them. Listing metrics and candidates SHALL need Use agents; creating, changing and deleting them SHALL need Manage datasources and datasets ([data-model](../data-model/spec.md) R38, R39), and the Metrics tab hides its write controls without it (R40 there).
-- R14. A metric imported from the legacy store SHALL record its **author**, the owner who created the legacy metric; in local mode no author is recorded. The Metrics tab SHALL show a metric's author when it has one.
+- R14. In org server mode every model metric SHALL record its **author**: a metric imported from the legacy store, the owner who created the legacy metric; a metric created in the Metrics tab (a promoted candidate included), the signed-in user who created it (their owner key). Changing a metric SHALL keep its author; the editor is not recorded. In local mode no author is recorded. A metric added through the YAML keeps whatever author the YAML gives it. The Metrics tab SHALL show a metric's author when it has one.
 
 ### Legacy store (import-only)
 
@@ -155,6 +155,13 @@ Feature: Metrics tab
     Then "avg_attendance" is listed once, with Ada as its author
     And the header shows "1 metric skipped on import"
 
+  Scenario: A metric created in the Metrics tab records who created it
+    Given the app runs in org server mode and I am signed in as "grace@contoso.test" with Manage datasources and datasets
+    When I create the metric "Max attendance" ("max_attendance", "max" of "attendance" on "matches")
+    Then "Max attendance" is listed with me as its author
+    When "ada@contoso.test" edits its description and saves
+    Then "Max attendance" is still listed with me as its author
+
   Scenario: The assistant reuses the metric
     Given the metric "avg_attendance" exists in the model of the session's dataset
     When I ask "What was the average attendance per tournament?"
@@ -165,11 +172,10 @@ Feature: Metrics tab
 
 - The scenario "Defines a metric in the Metrics tab" passes ([data-model](../data-model/spec.md)); the scenarios above behave as written once automated. Backend tests cover model metric validation (R2-R4), each write as a version and the delete rules (R5, R6), candidate scoping, slugging and exclusion (R10-R12), the legacy validation (R16, R17) and the import and mirror rules (R18).
 - A turn in a session whose dataset's model holds the metric shows the metric in the model block; a logical query selecting it compiles to the metric's definition.
-- In org server mode every user sees the same model metrics, a User cannot change them (HTTP 403), and imported metrics carry their author.
+- In org server mode every user sees the same model metrics, a User cannot change them (HTTP 403), and imported metrics and metrics created in the Metrics tab carry their author, kept on edit.
 
 ## Open questions
 
-- Open question: metrics created in the Metrics tab record no author, so in org server mode only imported metrics say who defined them. Should the tab record the signed-in user?
 - Open question: roadmap Milestone 1.3 (Knowledge Store, BA-4) plans to link metrics, verified queries and relationships to concepts (1.3.2); none of that linkage exists yet beyond the metric's source verified-query id.
 - Open question: metrics are not shown anywhere in chat provenance (unlike knowledge snippets), so a reader cannot tell which metric an answer used beyond the logical query's `select`.
 
