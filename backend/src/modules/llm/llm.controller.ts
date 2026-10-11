@@ -1,6 +1,7 @@
-import { Body, Controller, Get, Post, Put } from '@nestjs/common';
+import { Body, Controller, Get, Post, Put, Query } from '@nestjs/common';
 import { LlmService } from './llm.service';
 import type {
+  EffortLevelsView,
   LlmSettingsView,
   ReasoningEffort,
   SaveLlmSettingsDto,
@@ -13,6 +14,11 @@ export class LlmController {
   @Get('settings')
   getSettings(): Promise<LlmSettingsView> {
     return this.llmService.getView();
+  }
+
+  @Get('effort-levels')
+  effortLevels(@Query('model') model?: string): EffortLevelsView {
+    return this.llmService.effortLevels(model);
   }
 
   @Put('settings')

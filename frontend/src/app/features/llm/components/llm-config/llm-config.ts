@@ -1,8 +1,22 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { LucideAngularModule, Loader2, TriangleAlert } from 'lucide-angular';
 import { LlmApiService } from '../../services/llm-api.service';
-import { LlmProvider } from '../../models/llm.model';
+import { LlmProvider, ReasoningEffort } from '../../models/llm.model';
 import { ToastService } from '../../../../core/toast/toast.service';
+
+/** Labels for the effort select, in the order the backend sends levels. */
+export const EFFORT_LABELS: Record<ReasoningEffort, string> = {
+  none: 'None',
+  minimal: 'Minimal',
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+  xhigh: 'XHigh',
+  max: 'Max',
+};
+
+/** Wait after the last keystroke before looking up a model's levels. */
+const LEVELS_LOOKUP_DELAY_MS = 250;
 
 @Component({
   selector: 'app-llm-config',
@@ -10,7 +24,7 @@ import { ToastService } from '../../../../core/toast/toast.service';
   templateUrl: './llm-config.html',
   styleUrl: './llm-config.scss',
 })
-export class LlmConfig implements OnInit {
+export class LlmConfig implements OnInit, OnDestroy {
   readonly Loader2 = Loader2;
   readonly TriangleAlert = TriangleAlert;
 
@@ -26,6 +40,12 @@ export class LlmConfig implements OnInit {
   // A key is stored but can't be decrypted (the app secret changed) — the
   // user has to type it again.
   readonly keyUnreadable = signal(false);
+  readonly effortLabels = EFFORT_LABELS;
+  // The typed model's effort levels (lowest first); empty = no select.
+  readonly effortLevels = signal<ReasoningEffort[]>([]);
+  readonly reasoningEffort = signal<ReasoningEffort>('high');
+  private levelsTimer: ReturnType<typeof setTimeout> | undefined;
+  private levelsRequest = 0;
 
   readonly testing = signal(false);
   readonly saving = signal(false);
@@ -43,6 +63,8 @@ export class LlmConfig implements OnInit {
         // The key never travels back in plaintext — empty field + masked
         // placeholder means "stored key is kept unless you type a new one".
         if (saved.apiKeyMasked) this.apiKeyPlaceholder.set(saved.apiKeyMasked);
+        this.reasoningEffort.set(saved.reasoningEffort);
+        this.lookUpEffortLevels(0);
       },
       error: () => {
         // Backend unreachable — leave the form empty.
@@ -58,9 +80,68 @@ export class LlmConfig implements OnInit {
     );
   }
 
+  ngOnDestroy(): void {
+    clearTimeout(this.levelsTimer);
+  }
+
+  /** The select's single option while it is disabled (spec R37). */
+  get effortPlaceholder(): string {
+    return this.model().trim()
+      ? 'Default — not available for this model'
+      : 'Default — enter a model first';
+  }
+
+  /** The select's hint, also its accessible description (spec R42). */
+  get effortHint(): string {
+    if (this.effortLevels().length) {
+      return 'Used for answers. Test connection always uses the lowest level.';
+    }
+    return this.model().trim()
+      ? "This model doesn't support a reasoning effort setting."
+      : 'Enter a model to see the effort levels it supports.';
+  }
+
   onFieldChange(): void {
     // Editing invalidates the previous successful test.
     this.testedOk.set(false);
+    this.lookUpEffortLevels(LEVELS_LOOKUP_DELAY_MS);
+  }
+
+  /** The probe ignores the chosen effort, so a passed test still stands. */
+  onEffortChange(effort: ReasoningEffort): void {
+    this.reasoningEffort.set(effort);
+  }
+
+  /**
+   * Fetches the typed model's levels and keeps the selected effort when the
+   * model accepts it, else selects the model's default. Only the newest
+   * lookup applies, so a slow answer for an older model can't win.
+   */
+  private lookUpEffortLevels(delayMs: number): void {
+    clearTimeout(this.levelsTimer);
+    const model = this.model().trim();
+    if (!model) {
+      this.effortLevels.set([]);
+      return;
+    }
+    const request = ++this.levelsRequest;
+    this.levelsTimer = setTimeout(() => {
+      this.api.effortLevels(model).subscribe({
+        next: (view) => {
+          if (request !== this.levelsRequest) return;
+          this.effortLevels.set(view.levels);
+          if (
+            view.defaultEffort &&
+            !view.levels.includes(this.reasoningEffort())
+          ) {
+            this.reasoningEffort.set(view.defaultEffort);
+          }
+        },
+        error: () => {
+          if (request === this.levelsRequest) this.effortLevels.set([]);
+        },
+      });
+    }, delayMs);
   }
 
   private payload() {
@@ -70,6 +151,10 @@ export class LlmConfig implements OnInit {
       // Empty key = backend uses the stored one.
       apiKey: this.apiKey().trim() || undefined,
       baseUrl: this.baseUrl().trim() || undefined,
+      // Sent only when the model has levels; otherwise the stored one stays.
+      reasoningEffort: this.effortLevels().length
+        ? this.reasoningEffort()
+        : undefined,
     };
   }
 

@@ -63,10 +63,10 @@ Build facts: the Angular production build has budgets (initial 500 kB warn / 1 M
 | pg | 8.23.0 | PostgreSQL datasource connector. |
 | `@databricks/sql` | 2.1.0 | Databricks datasource connector. |
 | marked | 18.0.13 | Markdown to HTML for the analysis section of visual documents. |
-| `openid-client` | 6.x (exact pin recorded when it is added, BA-163) | Org server mode only (ADR-0010): OpenID Connect discovery, authorization code flow with PKCE, ID token validation. ESM-only, so it is loaded lazily with `await import()` behind an `OidcClient` interface, which unit tests mock; it is never loaded in local mode. Not to be confused with `openid-client@5`, which `@databricks/sql` brings in. |
+| `openid-client` | 6.x (exact pin recorded when it is added, BA-163) | Org server mode only (ADR-0011): OpenID Connect discovery, authorization code flow with PKCE, ID token validation. ESM-only, so it is loaded lazily with `await import()` behind an `OidcClient` interface, which unit tests mock; it is never loaded in local mode. Not to be confused with `openid-client@5`, which `@databricks/sql` brings in. |
 | `cookie` | 1.x (exact pin recorded when it is added, BA-163) | Parses and serialises the `qti_session` and `qti_oidc` cookies ([api.md](api.md) 1.9). |
 | sanitize-html | 2.17.7 | Sanitises that HTML (and other generated markup) on the server. |
-| Node built-ins | | `node:util` `parseArgs` (CLI), `node:net`, `node:fs`, `node:crypto` (API-key encryption in `infrastructure/crypto`, keyed by `APP_SECRET`; in org server mode also auth-session tokens and their SHA-256, sealing the `qti_oidc` cookie, and the constant-time SCIM token check), `node:async_hooks` `AsyncLocalStorage` (the current user, ADR-0010), `node:http` (World Cup test REST API, the E2E OIDC stub). |
+| Node built-ins | | `node:util` `parseArgs` (CLI), `node:net`, `node:fs`, `node:crypto` (API-key encryption in `infrastructure/crypto`, keyed by `APP_SECRET`; in org server mode also auth-session tokens and their SHA-256, sealing the `qti_oidc` cookie, and the constant-time SCIM token check), `node:async_hooks` `AsyncLocalStorage` (the current user, ADR-0011), `node:http` (World Cup test REST API, the E2E OIDC stub). |
 | Jest | ^30.0.0 (`ts-jest` ^29.2.5, `@types/jest` ^30.0.0) | Backend unit tests and the API-level e2e specs. |
 | supertest | ^7.0.0 | HTTP assertions in backend e2e specs. |
 | ESLint 9 + `typescript-eslint` ^8.20.0 + Prettier ^3.4.2 | | Lint and format (the `lint` script runs with `--fix`). |

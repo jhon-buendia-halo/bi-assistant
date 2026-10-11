@@ -183,7 +183,7 @@ First run needs an LLM provider in Settings (or `OPENAI_API_KEY` in the environm
 
 ### 4.1 Running an org server
 
-An org server is the same npm package started with the `ORG_*` configuration (ADR-0009, [api.md](api.md) 1.9 and 6.1). Rules: [admin](../capabilities/admin/spec.md). The desktop app never runs as an org server.
+An org server is the same npm package started with the `ORG_*` configuration (ADR-0010, [api.md](api.md) 1.9 and 6.1). Rules: [admin](../capabilities/admin/spec.md). The desktop app never runs as an org server.
 
 1. **Register the app in Entra ID** (Microsoft Entra admin center → App registrations → New registration):
    - Supported account types: this organisation only.

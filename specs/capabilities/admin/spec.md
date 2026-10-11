@@ -1,6 +1,6 @@
 # Admin
 
-An organisation can run the app on its own server for many people. People sign in with their company Microsoft account, share the organisation's datasources, datasets and LLM configuration, keep their own sessions, agents and knowledge private, and can do only what their roles allow. The directory of people and groups is pushed from the identity provider. Platform admins get an **Admin** area. This spec owns the two modes, sign-in, the directory, roles and permissions, their enforcement, and data ownership. The admin tabs themselves (Overview, Users & groups, Roles & permissions) are filled in by later stories of epic [BA-161](../../epics/BA-161/spec.md); today the Admin area is a placeholder. Decision: ADR-0009 and ADR-0010 in [../../system/architecture.md](../../system/architecture.md).
+An organisation can run the app on its own server for many people. People sign in with their company Microsoft account, share the organisation's datasources, datasets and LLM configuration, keep their own sessions, agents and knowledge private, and can do only what their roles allow. The directory of people and groups is pushed from the identity provider. Platform admins get an **Admin** area. This spec owns the two modes, sign-in, the directory, roles and permissions, their enforcement, and data ownership. The admin tabs themselves (Overview, Users & groups, Roles & permissions) are filled in by later stories of epic [BA-161](../../epics/BA-161/spec.md); today the Admin area is a placeholder. Decision: ADR-0010 and ADR-0011 in [../../system/architecture.md](../../system/architecture.md).
 
 ## Concepts
 
@@ -109,7 +109,7 @@ Capability-local vocabulary:
 
 ## Contracts
 
-- Mode configuration, the auth routes (`GET /auth/login`, `GET /auth/callback`, `POST /auth/logout`), `GET /me`, the SCIM routes, the admin role-assignment routes, the 401/403 bodies, the Origin check and the permission each route needs: [../../system/api.md](../../system/api.md) sections 1.9, 2.12-2.14 and 6.
+- Mode configuration, the auth routes (`GET /auth/login`, `GET /auth/callback`, `POST /auth/logout`), `GET /me`, the SCIM routes, the admin role-assignment routes, the 401/403 bodies, the Origin check and the permission each route needs: [../../system/api.md](../../system/api.md) sections 1.9, 2.13-2.15 and 6.
 - The `users`, `groups`, `group_members`, `role_assignments`, `group_role_mappings`, `auth_sessions` and `activity_events` collections, and `ownerId` on private collections: [../../system/data-model.md](../../system/data-model.md) sections 3.14 and 3.15.
 - Agent memory and workspaces reached only through an owner-scoped session; the org-wide LLM configuration: [../../system/agents.md](../../system/agents.md) sections 1.3 and 7.1.
 - How to run an org server and register it with Entra ID: [../../system/delivery.md](../../system/delivery.md) section 4.1.

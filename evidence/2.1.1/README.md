@@ -9,7 +9,7 @@ This is a planning-only change: no code, UI or test changes, so there is no E2E 
 
 Changed:
 - [specs/product/vision.md](../../specs/product/vision.md): local and org server modes.
-- ADR-0009 in [specs/system/architecture.md](../../specs/system/architecture.md): Accepted.
+- ADR-0010 in [specs/system/architecture.md](../../specs/system/architecture.md): Accepted.
 - [specs/epics/BA-161/spec.md](../../specs/epics/BA-161/spec.md): confirmed by the user on 2026-10-10.
 - Release 2 and Milestone 2.1 in [roadmap.md](../../roadmap.md).
 - The epic row in [specs/README.md](../../specs/README.md).

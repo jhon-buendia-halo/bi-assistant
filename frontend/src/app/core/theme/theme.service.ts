@@ -23,11 +23,11 @@ interface DesktopThemeBridge {
   setWindowTheme?: (theme: ResolvedTheme) => void;
 }
 
-/** Missing or unknown values mean System (app-shell R43). */
+/** Missing or unknown values mean Light (app-shell R39, R43). */
 export function parseThemePreference(
   value: string | null | undefined,
 ): ThemePreference {
-  return value === 'light' || value === 'dark' ? value : 'system';
+  return value === 'system' || value === 'dark' ? value : 'light';
 }
 
 export function resolveTheme(
@@ -88,6 +88,20 @@ export class ThemeService {
     }
   }
 
+  /** True when browser storage holds a choice the user made. */
+  hasStoredChoice(): boolean {
+    try {
+      const stored = this.window?.localStorage.getItem(THEME_STORAGE_KEY);
+      return stored === 'system' || stored === 'light' || stored === 'dark';
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Applies a choice and keeps the browser copy for the next first paint.
+   * The backend copy is written by `UiPreferencesService` (ADR-0009).
+   */
   setPreference(preference: ThemePreference): void {
     this.preference.set(preference);
     try {
@@ -103,7 +117,7 @@ export class ThemeService {
         this.window?.localStorage.getItem(THEME_STORAGE_KEY),
       );
     } catch {
-      return 'system';
+      return 'light';
     }
   }
 }

@@ -4,7 +4,7 @@ The complete contract between the renderer (or any HTTP client) and the backend,
 
 Contents: [1 Conventions](#1-conventions) · [2 Endpoints](#2-endpoints) · [3 Streaming and long-running work](#3-streaming-and-long-running-work) · [4 Desktop bridge (IPC)](#4-desktop-bridge-ipc) · [5 CLI contract](#5-cli-contract) · [6 Environment variables](#6-environment-variables) · [7 Gaps and open questions](#7-gaps-and-open-questions)
 
-Endpoint total: **57 HTTP route handlers** across 9 controllers (sessions 14, datasources 6, metrics 5, llm 4, datasets 3, agents 13, deep analysis 3, testing data 3, knowledge 6). Verified queries have **no** HTTP surface (they are created and removed as a side effect of message feedback, and read by the metrics promotion path). Org server mode adds the auth and current-user routes (2.12), the SCIM routes (2.13) and the admin routes (2.14); in local mode those answer 404, except `GET /me`.
+Endpoint total: **57 HTTP route handlers** across 9 controllers (sessions 14, datasources 6, metrics 5, llm 4, datasets 3, agents 13, deep analysis 3, testing data 3, knowledge 6). Verified queries have **no** HTTP surface (they are created and removed as a side effect of message feedback, and read by the metrics promotion path). Org server mode adds the auth and current-user routes (2.13), the SCIM routes (2.14) and the admin routes (2.15); in local mode those answer 404, except `GET /me`.
 
 ---
 
@@ -96,11 +96,11 @@ Everything else keeps the default 404 body (`{statusCode:404, message:"Cannot GE
 
 ### 1.9 Authentication, authorization and CSRF (org server mode)
 
-Rules: [admin](../capabilities/admin/spec.md) R1-R36. Decisions: ADR-0009 and ADR-0010 in [architecture.md](architecture.md).
+Rules: [admin](../capabilities/admin/spec.md) R1-R36. Decisions: ADR-0011 and ADR-0011 in [architecture.md](architecture.md).
 
 **Mode.** The server runs in org server mode when every required `ORG_*` variable (6.1) is set, and in local mode when none is. Some but not all is a startup error naming the missing ones. The Electron-spawned backend is always local (4.3).
 
-**Local mode.** No cookie, no 401, no 403, no Origin check. Every request runs as the local user (id `local`), who holds every permission. Auth routes (2.12, except `GET /me`), SCIM (2.13) and admin (2.14) routes answer `404 { statusCode:404, message:"Not available in local mode", error:"Not Found" }`.
+**Local mode.** No cookie, no 401, no 403, no Origin check. Every request runs as the local user (id `local`), who holds every permission. Auth routes (2.13, except `GET /me`), SCIM (2.14) and admin (2.15) routes answer `404 { statusCode:404, message:"Not available in local mode", error:"Not Found" }`.
 
 **Cookies** (org server mode). Both `HttpOnly`, `SameSite=Lax`, and `Secure` unless `ORG_PUBLIC_BASE_URL` starts with `http://`.
 
@@ -147,9 +147,9 @@ The renderer shows its own toast for any 403 (`You don't have permission to do t
 | `GET /llm/settings` | `use-agents` |
 | `PUT /llm/settings`, `PUT /llm/reasoning`, `POST /llm/test-connection` | `manage-llm` |
 | Every `/developer-settings` route (2.11) | `edit-policies` |
-| `GET /auth/login`, `GET /auth/callback`, `POST /auth/logout`, `GET /me` (2.12) | public: no permission checked (`GET /me` answers 401 itself without an auth session) |
-| Every `/scim/v2` route (2.13) | the SCIM bearer token, no auth session |
-| Every `/admin` route (2.14) | `manage-users` |
+| `GET /auth/login`, `GET /auth/callback`, `POST /auth/logout`, `GET /me` (2.13) | public: no permission checked (`GET /me` answers 401 itself without an auth session) |
+| Every `/scim/v2` route (2.14) | the SCIM bearer token, no auth session |
+| Every `/admin` route (2.15) | `manage-users` |
 
 `GET /llm/settings` leaves out `apiKeyMasked` (sends `null`) for a caller without `manage-llm`.
 
@@ -382,11 +382,18 @@ Controller prefix `/llm`. Capability: llm-settings. One persisted singleton docu
 | 30 | `PUT /llm/settings` | Save settings (tests first) | yes |
 | 31 | `PUT /llm/reasoning` | Set reasoning effort only | yes |
 | 32 | `POST /llm/test-connection` | Test candidate settings | yes |
+| 32a | `GET /llm/effort-levels` | Effort levels a model accepts | yes |
 
 ```ts
 type LlmProvider = 'openai' | 'anthropic' | 'lenai';
-type ReasoningEffort = 'low' | 'medium' | 'high';
-interface SaveLlmSettingsDto { provider: LlmProvider; model: string; apiKey?: string; baseUrl?: string }
+// Ordered lowest to highest; each model accepts a subset (agents.md 1.4).
+type ReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+interface SaveLlmSettingsDto { provider: LlmProvider; model: string; apiKey?: string; baseUrl?: string; reasoningEffort?: ReasoningEffort }
+interface EffortLevelsView {
+  levels: ReasoningEffort[];              // lowest first; [] = the model has no reasoning effort
+  defaultEffort: ReasoningEffort | null;  // 'high' when offered, else the first level; null when levels is []
+  probeEffort: ReasoningEffort | null;    // the lowest level, sent by the connection probe; null when levels is []
+}
 interface LlmSettingsView {
   provider: LlmProvider | null; model: string | null; baseUrl: string | null;
   apiKeyMasked: string | null;   // "••••••••" + last 4 chars of the key
@@ -404,17 +411,22 @@ interface LlmSettingsView {
 - Body: `SaveLlmSettingsDto`. `apiKey` omitted or blank = use the stored key. For `lenai`, `model` is the deployment name and `baseUrl` is required. `anthropic` takes an API key only (no subscription logins).
 - Validation (Style A): `"provider must be one of: openai, anthropic, lenai"`, `"model is required"`, `"baseUrl is required for lenai"`, `"apiKey is required — none stored yet"`, and, with no `apiKey` and a stored key that cannot be decrypted, `"The saved API key can't be read because the app secret changed — enter it again in Settings → LLM Configuration"` (same for `POST /llm/test-connection`).
 - **The settings are tested against the provider before they are persisted**; a failing test fails the save with the provider's error text and nothing is stored.
-- Success: `{ ok:true, message:"Configuration saved", settings: LlmSettingsView }`. A re-save keeps the existing `reasoningEffort`, else defaults to `high`.
+- `reasoningEffort` (optional) must be one of the model's levels (32a), else the save fails with `"reasoning effort must be one of: <levels, comma-separated>"` before any provider call. Omitted: the stored effort is kept when the model offers it, else the model's `defaultEffort`; for a model with no levels the stored effort (or `high`) is kept unchanged.
+- Success: `{ ok:true, message:"Configuration saved", settings: LlmSettingsView }`.
 - Side effects: persists (key encrypted); subsequent agent turns resolve the model from these settings.
 
 #### 31. `PUT /llm/reasoning`
-- Body: `{ effort: "low"|"medium"|"high" }`.
+- Body: `{ effort: "low"|"medium"|"high" }`. This is the composer's menu; it still offers only these three.
 - Success: `{ ok:true, message:"Reasoning effort set to <effort>", settings }`. Failures: `"reasoning effort must be one of: low, medium, high"`, `"Configure and save the LLM first — no settings stored yet"`.
-- Applied per model: translated to the provider's native option and dropped for models that reject it.
+- Applied per model: mapped to the nearest level the model accepts, translated to the provider's native option, and dropped for Anthropic models that reject it (agents.md 1.4).
 
 #### 32. `POST /llm/test-connection`
-- Body: `SaveLlmSettingsDto` (same rules as save, nothing persisted). Sends one cheap fixed prompt using the candidate settings; 30 s timeout.
+- Body: `SaveLlmSettingsDto` (same rules as save, nothing persisted; `reasoningEffort` is ignored). Sends one cheap fixed prompt using the candidate settings at the model's `probeEffort` (32a; none sent when the model has no levels); 30 s timeout.
 - Success: `{ ok:true, message:"Connection successful — <provider>/<model> replied \"<reply>\" in <ms>ms" }`. Failure: `{ ok:false, message }` (validation errors, provider HTTP errors, `"LLM request timed out after 30s"`).
+
+#### 32a. `GET /llm/effort-levels`
+- Query: `provider` (`openai`|`anthropic`|`lenai`) and `model` (the model or deployment name, trimmed). Both optional; an empty model answers `{ levels: [], defaultEffort: null, probeEffort: null }`.
+- Response `200`: `EffortLevelsView` (bare), from the built-in table in [agents.md](agents.md) section 1.4. Pure lookup: no provider call, nothing stored.
 
 ### 2.6 Agents, hub and evals
 
@@ -689,7 +701,30 @@ interface DeveloperSettingsView {
 - Sends `POST <endpoint>/v1/traces`, `Content-Type: application/x-protobuf`, empty body (an empty OTLP export), 3 s timeout.
 - Response `200` (Style A): `{ ok:true, message:"Reachable — <endpoint> accepted an OTLP trace export in <ms>ms" }`; `{ ok:false, message:"Endpoint answered <status> — not an OTLP trace receiver" }`; `{ ok:false, message:"Unreachable — <detail>" }` (network error, or `timed out after 3s`).
 
-### 2.12 Auth and current user
+
+### 2.12 UI preferences
+
+Controller prefix `/ui-preferences`. Capability: app-shell (R39–R43, R50). One `settings` document per data directory (data-model 3.2; ADR-0009).
+
+| # | Method + path | Purpose | FE |
+|---|---|---|---|
+| 56 | `GET /ui-preferences` | Read the theme choice and drawer state | yes |
+| 57 | `PUT /ui-preferences` | Save one or both | yes |
+
+```ts
+type ThemePreference = 'system' | 'light' | 'dark';
+interface UiPreferences { theme: ThemePreference | null; navExpanded: boolean | null }   // null = never chosen
+```
+
+#### 56. `GET /ui-preferences`
+- Response `200`: `UiPreferences` (bare). Nothing stored: `{ theme:null, navExpanded:null }`; the renderer then uses Light and an expanded drawer. A stored value that is not valid reads as `null`.
+
+#### 57. `PUT /ui-preferences`
+- Body: `Partial<{ theme: ThemePreference; navExpanded: boolean }>`. Only the fields sent are changed.
+- Validation (Style A): `"theme must be one of: system, light, dark"`, `"navExpanded must be true or false"`.
+- Success: `{ ok:true, message:"Preferences saved", preferences: UiPreferences }`.
+
+### 2.13 Auth and current user
 
 Controllers `/auth` and `/me`. Capability: [admin](../capabilities/admin/spec.md). Requirement: public (1.9).
 
@@ -741,9 +776,9 @@ interface MeView {
 - Org server mode, signed in: `200 MeView` with `mode:"org"`. `initials` per [ui.md](ui.md) 1.3.
 - Org server mode, not signed in: `401` (1.9).
 
-### 2.13 SCIM 2.0 (directory provisioning)
+### 2.14 SCIM 2.0 (directory provisioning)
 
-Controller prefix `/scim/v2`. Capability: [admin](../capabilities/admin/spec.md) R14-R17. Org server mode only. The subset Microsoft Entra ID's provisioning service sends; hand-written (ADR-0010). Shapes map to [data-model.md](data-model.md) 3.14.1-3.14.3.
+Controller prefix `/scim/v2`. Capability: [admin](../capabilities/admin/spec.md) R14-R17. Org server mode only. The subset Microsoft Entra ID's provisioning service sends; hand-written (ADR-0011). Shapes map to [data-model.md](data-model.md) 3.14.1-3.14.3.
 
 | # | Method + path | Purpose |
 |---|---|---|
@@ -774,7 +809,7 @@ Controller prefix `/scim/v2`. Capability: [admin](../capabilities/admin/spec.md)
 - **Responses:** `POST` `201` with the resource and a `Location` header; `GET`, `PUT`, `PATCH` `200` with the resource; `DELETE` `204`.
 - **Errors:** `{ schemas:["urn:ietf:params:scim:api:messages:2.0:Error"], status:"<code>", scimType?, detail }`: `400` (`invalidValue`, `invalidSyntax`, `invalidFilter`), `401`, `404` unknown id, `409` (`uniqueness`) for a duplicate `userName` or group `displayName`.
 
-### 2.14 Admin
+### 2.15 Admin
 
 Controller prefix `/admin`. Capability: [admin](../capabilities/admin/spec.md) R22. Requirement: `manage-users` (1.9). Org server mode only. Later stories of epic BA-161 add the overview, users, ownership-transfer, group-mapping and export routes here.
 

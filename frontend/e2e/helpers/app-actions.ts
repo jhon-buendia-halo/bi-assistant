@@ -113,3 +113,29 @@ export async function createWorldCupWorkspace(page: Page): Promise<string> {
   await createWorldCupDataset(page);
   return createWorldCupSession(page);
 }
+
+/**
+ * Chooses the System theme (stored in the backend and the browser copy) and
+ * reloads, so a test can drive light and dark through the emulated OS
+ * setting. Light is the default otherwise (app-shell R39). Call it before
+ * navigating: the reload returns to home.
+ */
+export async function followOsTheme(page: Page): Promise<void> {
+  const res = await page.request.put(apiUrl(page, '/ui-preferences'), {
+    data: { theme: 'system' },
+  });
+  expect(res.ok()).toBe(true);
+  await page.evaluate(() =>
+    localStorage.setItem('questions-to-insights:theme', 'system'),
+  );
+  await page.reload();
+  await expect(page.getByTitle('Settings')).toBeVisible();
+}
+
+/** A backend URL: same origin on web, port 3000 under the desktop file://. */
+export function apiUrl(page: Page, route: string): string {
+  const base = page.url().startsWith('file:')
+    ? 'http://localhost:3000'
+    : page.url();
+  return new URL(route, base).href;
+}

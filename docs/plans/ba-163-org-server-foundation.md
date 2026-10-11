@@ -1,6 +1,6 @@
 # BA-163 — Org server foundation: sign-in, directory, roles, owner scoping
 
-Implementation plan for roadmap 2.1.2 ([BA-163](https://halo-powered.atlassian.net/browse/BA-163)), epic [BA-161](https://halo-powered.atlassian.net/browse/BA-161). Decisions: ADR-0009 and ADR-0010 in [specs/system/architecture.md](../../specs/system/architecture.md). Epic scope: [specs/epics/BA-161/spec.md](../../specs/epics/BA-161/spec.md). Specs are the contract; this file is the build order and design detail. Where they disagree, the specs win.
+Implementation plan for roadmap 2.1.2 ([BA-163](https://halo-powered.atlassian.net/browse/BA-163)), epic [BA-161](https://halo-powered.atlassian.net/browse/BA-161). Decisions: ADR-0010 and ADR-0011 in [specs/system/architecture.md](../../specs/system/architecture.md). Epic scope: [specs/epics/BA-161/spec.md](../../specs/epics/BA-161/spec.md). Specs are the contract; this file is the build order and design detail. Where they disagree, the specs win.
 
 ## Decisions taken with the user (2026-10-10)
 

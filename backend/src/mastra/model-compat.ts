@@ -13,6 +13,11 @@
 //    body verbatim, which is what makes `max_completion_tokens` injectable.
 
 import type { AgentModelConfig } from './model-resolver';
+import {
+  effortLevelsFor,
+  isReasoningEffort,
+  nearestEffort,
+} from './effort-levels';
 
 /**
  * Families that reject `max_tokens`: gpt-5 and later, plus the o-series.
@@ -66,17 +71,27 @@ export function providerOptionsFor(
 ): ProviderOptions {
   const modelId = modelIdOf(config);
   const key = providerOptionsKey(modelId);
+  const tuned = fitEffort(modelId, bucket);
   return {
-    [key]: key === 'anthropic' ? anthropicBucket(modelId, bucket) : bucket,
+    [key]: key === 'anthropic' ? anthropicBucket(modelId, tuned) : tuned,
   };
 }
 
 /**
- * Claude models that reject `output_config.effort` with a 400: Haiku, the
- * Claude 3 line, and the Sonnet 4 / 4.5 and Opus 4 / 4.1 generation.
+ * Moves `reasoningEffort` to the nearest level the model accepts, so a fixed
+ * `low` still works on a model that only takes `high`. A model with no levels
+ * keeps the value: the OpenAI providers drop it themselves, and the Anthropic
+ * bucket below drops it explicitly.
  */
-const REJECTS_EFFORT =
-  /claude-(?:haiku-|3|sonnet-4-5|sonnet-4-\d{8}|opus-4-1|opus-4-\d{8})/i;
+function fitEffort(
+  modelId: string,
+  bucket: Record<string, ProviderOptionValue>,
+): Record<string, ProviderOptionValue> {
+  const effort = bucket.reasoningEffort;
+  const levels = effortLevelsFor(modelId);
+  if (!isReasoningEffort(effort) || !levels.length) return bucket;
+  return { ...bucket, reasoningEffort: nearestEffort(levels, effort) };
+}
 
 /**
  * The Anthropic provider reads `effort`, not `reasoningEffort`, and ignores
@@ -90,7 +105,8 @@ function anthropicBucket(
   const out: Record<string, ProviderOptionValue> = {};
   for (const [name, value] of Object.entries(bucket)) {
     if (name === 'reasoningEffort') {
-      if (!REJECTS_EFFORT.test(modelId)) out.effort = value;
+      // Models with no levels reject `effort` with a 400.
+      if (effortLevelsFor(modelId).length) out.effort = value;
     } else if (name !== 'max_completion_tokens') {
       out[name] = value;
     }

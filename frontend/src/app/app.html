@@ -27,7 +27,7 @@
 
       <button
         type="button"
-        (click)="navExpanded.set(!navExpanded())"
+        (click)="toggleNav()"
         [title]="navExpanded() ? 'Collapse navigation' : 'Expand navigation'"
         [attr.aria-label]="navExpanded() ? 'Collapse navigation' : 'Expand navigation'"
         [attr.aria-expanded]="navExpanded()"

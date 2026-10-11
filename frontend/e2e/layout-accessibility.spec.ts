@@ -3,6 +3,7 @@ import { test, expect } from './fixtures/app.fixture';
 import {
   createWorldCupDataset,
   createWorldCupDatasource,
+  followOsTheme,
 } from './helpers/app-actions';
 
 test('supports keyboard layout controls and persists the right-panel width', async ({
@@ -48,6 +49,7 @@ test('has no automatically detectable accessibility violations on any screen in 
   page,
 }) => {
   test.slow();
+  await followOsTheme(page);
   await createWorldCupDatasource(page);
   await createWorldCupDataset(page);
   await page.addScriptTag({ content: axe.source });

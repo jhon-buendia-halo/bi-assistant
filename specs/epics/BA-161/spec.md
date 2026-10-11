@@ -6,7 +6,7 @@
 
 An organisation runs the app on its own server for many people. People sign in with their company Entra ID account. They share the organisation's datasources and datasets, keep their own sessions, agents and knowledge private, and can do only what their role allows. Platform admins manage users, groups, roles and permissions in an admin panel.
 
-Today the app is single-user and local: there is no sign-in and no roles, and the rail's "Demo User" avatar is a placeholder. Local mode stays, and org server mode is added beside it. Direction: [vision.md](../../product/vision.md). Decision: ADR-0009 in [architecture.md](../../system/architecture.md).
+Today the app is single-user and local: there is no sign-in and no roles, and the rail's "Demo User" avatar is a placeholder. Local mode stays, and org server mode is added beside it. Direction: [vision.md](../../product/vision.md). Decision: ADR-0010 in [architecture.md](../../system/architecture.md).
 
 Visual reference: the Figma board [Agent Hub — E2E lifecycle (proposed)](https://www.figma.com/board/S3DMKrgzGHMl65c5bzvabR/Agent-Hub---E2E-lifecycle--proposed-?node-id=52-1167), section *Admin panel (draft)*, screens P1–P4.
 
@@ -76,7 +76,7 @@ Visual reference: the Figma board [Agent Hub — E2E lifecycle (proposed)](https
 - A desktop app connecting to a remote org server. The desktop app runs in local mode only.
 - Identity providers other than Entra ID, and pulling the directory through Microsoft Graph.
 - Halo-hosted org servers. Moving a local-mode data directory into an org server.
-- PostgreSQL as the app store (ADR-0009 keeps SQLite).
+- PostgreSQL as the app store (ADR-0010 keeps SQLite).
 
 ## Stories
 
@@ -94,7 +94,7 @@ All stories are built on one branch, `feat/BA-161-admin-panel`, and ship as one 
 ## Specs touched
 
 - [product/vision.md](../../product/vision.md): local and org server modes, principles 1, 3 and 12–15, the Platform admin persona, and non-goals (BA-162).
-- [system/architecture.md](../../system/architecture.md): ADR-0009 (BA-162). The Level 1 and Level 2 diagrams gain the identity provider and org server mode (BA-163).
+- [system/architecture.md](../../system/architecture.md): ADR-0010 (BA-162). The Level 1 and Level 2 diagrams gain the identity provider and org server mode (BA-163).
 - [product/non-functional.md](../../product/non-functional.md): org server mode, binding and TLS behind a proxy, session cookies, CSRF, SCIM token, and data isolation between users (BA-163).
 - [system/data-model.md](../../system/data-model.md): the `users`, `groups`, `group_members`, `role_assignments`, `group_role_mappings`, `auth_sessions` and `activity_events` collections, and `ownerId` on private collections, where a missing value means the local user (BA-163). Agent ownership transfer (BA-166).
 - [system/api.md](../../system/api.md): the auth routes, `GET /me` with roles and permissions, the SCIM 2.0 endpoints, the permission each endpoint needs, and the admin endpoints (overview, users, user roles, transfer ownership, role mappings, export) (BA-163–BA-167).

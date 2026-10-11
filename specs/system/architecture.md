@@ -65,7 +65,7 @@ flowchart LR
 *System context: the analyst uses Questions to Insights, which queries the user's datasources (PostgreSQL, Databricks, REST/OpenAPI), calls the configured LLM provider, and is distributed through GitHub Releases and GitHub Packages. In org server mode, organisation members reach a self-hosted server from a browser and sign in with Microsoft Entra ID, which also pushes the directory to the server through SCIM.*
 
 
-The user asks questions of their data in plain language; Questions to Insights answers with SQL, results, and interactive visuals. External systems: the user's datasources (PostgreSQL, Databricks SQL, REST/OpenAPI), an LLM provider (OpenAI-compatible / LenAI, Anthropic, OpenAI), GitHub (releases, GitHub Packages), and in org server mode the identity provider (Microsoft Entra ID, for OpenID Connect sign-in and SCIM 2.0 provisioning). Two modes run the same build (ADR-0009): **local mode**, single-user with no sign-in (the desktop app always, the npx web app by default), and **org server mode**, many users of one organisation on a server it hosts.
+The user asks questions of their data in plain language; Questions to Insights answers with SQL, results, and interactive visuals. External systems: the user's datasources (PostgreSQL, Databricks SQL, REST/OpenAPI), an LLM provider (OpenAI-compatible / LenAI, Anthropic, OpenAI), GitHub (releases, GitHub Packages), and in org server mode the identity provider (Microsoft Entra ID, for OpenID Connect sign-in and SCIM 2.0 provisioning). Two modes run the same build (ADR-0010): **local mode**, single-user with no sign-in (the desktop app always, the npx web app by default), and **org server mode**, many users of one organisation on a server it hosts.
 
 ## Level 2 — Containers
 
@@ -135,7 +135,7 @@ flowchart TB
 - **Electron main process** (`frontend/electron/main.cjs`) — window shell; spawns and kills the backend.
 - **Angular renderer** (`frontend/src/`) — the UI.
 - **NestJS backend** (`backend/src/`) — API, Mastra agents, SQLite app store, per-session workspaces.
-- **npm CLI** (`backend/src/cli.ts`) — serves the same backend + bundled UI in a browser. With the `ORG_*` configuration it is the **org server** (ADR-0009): no new container, the backend gains an auth module (OIDC sign-in, SCIM, roles, owner scoping; ADR-0010) and is reached through the organisation's reverse proxy. How to run it: [delivery.md](delivery.md) section 4.1.
+- **npm CLI** (`backend/src/cli.ts`) — serves the same backend + bundled UI in a browser. With the `ORG_*` configuration it is the **org server** (ADR-0010): no new container, the backend gains an auth module (OIDC sign-in, SCIM, roles, owner scoping; ADR-0011) and is reached through the organisation's reverse proxy. How to run it: [delivery.md](delivery.md) section 4.1.
 
 #### ADR-0001 — Electron desktop app with an Angular renderer and a NestJS child-process backend *(retroactive)*
 - **Status:** Accepted
@@ -172,7 +172,7 @@ flowchart TB
   - The developer-settings file is a new persisted shape under `APP_DATA_DIR` that the data model must record. A new dependency set (OpenTelemetry SDK, Phoenix exporter, `nestjs-pino`) ships in the package but stays unloaded by default.
   - Unreachable endpoints must never fail startup or requests. Exporters drop data instead.
 
-#### ADR-0009 — Multi-user org server mode with Entra ID sign-in and server-enforced roles
+#### ADR-0010 — Multi-user org server mode with Entra ID sign-in and server-enforced roles
 - **Status:** Accepted
 - **Date:** 2026-10-10
 - **Context:**
@@ -212,11 +212,11 @@ flowchart TB
   - The agent memory store (Mastra) must also be scoped per user. In org server mode the LLM configuration is org-wide and only Platform admins can change it, coordinated with [BA-159](https://halo-powered.atlassian.net/browse/BA-159).
   - The E2E harness needs a local OIDC stub and a SCIM client to drive org server mode without a real Entra ID tenant.
 
-#### ADR-0010 — Backend-run OIDC with `openid-client`, an opaque session cookie and an Origin check
+#### ADR-0011 — Backend-run OIDC with `openid-client`, an opaque session cookie and an Origin check
 - **Status:** Accepted
 - **Date:** 2026-10-10
 - **Context:**
-  - ADR-0009 puts sign-in in the backend, and Entra ID is the first provider.
+  - ADR-0010 puts sign-in in the backend, and Entra ID is the first provider.
   - The backend compiles to CommonJS and Jest can't load ESM-only packages (see the BA-152 retrospective).
   - The renderer calls the API with `HttpClient` and with raw `fetch` for streams. It sends no custom header today.
   - `openid-client@5` is already present through `@databricks/sql`, but that version is maintenance-only.
@@ -395,7 +395,7 @@ flowchart LR
 - **Consequences:** Readability does not depend on designer-model output; storage grows per version.
 
 #### ADR-0007 — Themeable renderer: semantic design tokens, a bundled webfont and a System / Light / Dark preference
-- **Status:** Accepted
+- **Status:** Accepted; its *Preference* storage and default superseded by ADR-0009
 - **Date:** 2026-10-09
 - **Context:**
   - The renderer is dark-only. Its colours are hardcoded per component as Tailwind arbitrary values (`bg-[#232323]`, `zinc-*`), and it has no theme file and no CSS variables ([ui.md](ui.md) §6).
@@ -434,6 +434,24 @@ flowchart LR
   - Adds a collection, and an optional field on `sessions` (no migration: absent means the plain assistant).
   - Sharing across machines, teams and owners would need a new container or a sync format. That is deferred and would supersede the "this machine" ownership here.
 
+
+#### ADR-0009 — UI preferences live in the backend, with a browser cache for the first paint
+- **Status:** Accepted
+- **Date:** 2026-10-10
+- **Context:**
+  - ADR-0007 stored the theme choice in the renderer's browser storage, defaulting to System, and the navigation drawer was never remembered (app-shell R2).
+  - The user wants the app to open in the Light theme with the drawer expanded, and any change the user makes to either to be stored in the database ([BA-168](https://halo-powered.atlassian.net/browse/BA-168)).
+  - Browser storage is per renderer origin and per port, so the desktop app, a CLI tab on another port and a fresh browser profile each lose the choice.
+  - The theme must still apply before the first paint (app-shell R42), which a backend round trip can't guarantee.
+- **Decision:**
+  - **Source of truth.** One `ui-preferences` document in the existing `settings` collection holds the theme choice and the drawer state, read and written through `GET` / `PUT /ui-preferences`. It belongs to the data directory, so every renderer on that data shares it.
+  - **Defaults.** Nothing stored means Light and an expanded drawer. System stays a choice, no longer the default.
+  - **First-paint cache.** The renderer keeps a browser-storage copy of the theme (and of the drawer state) and applies it before boot, then reconciles with the backend once it answers; the backend wins.
+  - **One-time move.** A theme chosen before this change, found in browser storage while the backend has none, is written to the backend once.
+- **Consequences:**
+  - A new `settings` key and two endpoints; no new collection and no table migration.
+  - A renderer whose cache disagrees with the backend (another renderer changed the choice) shows its cached theme for one frame, then switches.
+  - Existing users who never chose a theme move from System to Light.
 ## Level 4 — Code
 
 ```mermaid
