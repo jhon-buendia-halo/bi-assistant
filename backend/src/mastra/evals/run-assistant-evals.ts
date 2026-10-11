@@ -56,9 +56,9 @@ async function main(): Promise<void> {
         ? await app
             .get(MetricsService)
             .definitionBlock(
-              (
-                await app.get(DatasetsRepository).getByNames(datasets)
-              ).flatMap((d) => d.tables ?? []),
+              (await app.get(DatasetsRepository).getByNames(datasets)).flatMap(
+                (d) => d.tables ?? [],
+              ),
             )
         : undefined;
     console.log(`Running the "${path}" path\n`);
@@ -78,9 +78,7 @@ async function main(): Promise<void> {
       { path, metricsBlock },
     );
     const passed = results.filter((result) => result.passed).length;
-    const outsideModel = results.filter(
-      (result) => result.outsideModel,
-    ).length;
+    const outsideModel = results.filter((result) => result.outsideModel).length;
     console.log(`\n${passed}/${results.length} questions passed`);
     console.log(
       `${outsideModel}/${results.length} answers outside the data model`,

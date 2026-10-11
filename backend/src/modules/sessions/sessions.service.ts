@@ -337,9 +337,7 @@ export class SessionsService implements OnModuleInit {
     // orientation, join-hint and curated-metrics blocks — the assistant's
     // only view of "what data exists" is the logical model, never a
     // physical table name, datasource id/kind or dialect word.
-    const modelPairs = await this.dataModels.getCurrentModels(
-      session.datasets,
-    );
+    const modelPairs = await this.dataModels.getCurrentModels(session.datasets);
     const sessionModel = composeSessionModel(modelPairs);
     const modelBlock = renderModelBlock(sessionModel);
     const modelVersions = modelPairs.map((p) => ({
@@ -563,8 +561,7 @@ export class SessionsService implements OnModuleInit {
       new Set(
         compiled.entities.flatMap(
           (name) =>
-            sessionModel.entities.find((e) => e.name === name)?.datasets ??
-            [],
+            sessionModel.entities.find((e) => e.name === name)?.datasets ?? [],
         ),
       ),
     );
@@ -640,33 +637,35 @@ export class SessionsService implements OnModuleInit {
       const modelBlock = renderModelBlock(sessionModel, {
         budgetChars: FIXER_SCHEMA_CHARS,
       });
-      const result = await this.mastra.getAgent('query-fixer').generate(
-        [
-          '<model>',
-          modelBlock,
-          '</model>',
-          '',
-          '<failed-query>',
-          JSON.stringify(query),
-          '</failed-query>',
-          '',
-          '<issues>',
-          JSON.stringify(error.issues),
-          '</issues>',
-        ].join('\n'),
-        {
-          maxSteps: 1,
-          toolChoice: 'none',
-          // A reference fix does not benefit from hidden reasoning tokens.
-          providerOptions: await this.providerOptions({
-            reasoningEffort: 'low',
-          }),
-          structuredOutput: {
-            schema: queryFixOutputSchema,
-            jsonPromptInjection: 'inline',
+      const result = await this.mastra
+        .getAgent('query-fixer')
+        .generate(
+          [
+            '<model>',
+            modelBlock,
+            '</model>',
+            '',
+            '<failed-query>',
+            JSON.stringify(query),
+            '</failed-query>',
+            '',
+            '<issues>',
+            JSON.stringify(error.issues),
+            '</issues>',
+          ].join('\n'),
+          {
+            maxSteps: 1,
+            toolChoice: 'none',
+            // A reference fix does not benefit from hidden reasoning tokens.
+            providerOptions: await this.providerOptions({
+              reasoningEffort: 'low',
+            }),
+            structuredOutput: {
+              schema: queryFixOutputSchema,
+              jsonPromptInjection: 'inline',
+            },
           },
-        },
-      );
+        );
       const parsed = queryFixOutputSchema.safeParse(
         result.object ?? parseJsonObject(result.text),
       );
@@ -1417,7 +1416,9 @@ export class SessionsService implements OnModuleInit {
         ...(reasoning ? { reasoning } : {}),
         ...(knowledge ? { knowledge } : {}),
         ...(modelVersions ? { modelVersions } : {}),
-        ...(outsideModelFlag(toolRecords(result)) ? { outsideModel: true } : {}),
+        ...(outsideModelFlag(toolRecords(result))
+          ? { outsideModel: true }
+          : {}),
       });
       const updated = await this.updateDoc(id, {
         messages: session.messages,

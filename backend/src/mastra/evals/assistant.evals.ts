@@ -1139,10 +1139,9 @@ export async function runAssistantEvalCase(
         ? [
             {
               role: 'system',
-              content: entityOrientationLines(
-                datasets,
-                datasetSnapshots,
-              ).join('\n'),
+              content: entityOrientationLines(datasets, datasetSnapshots).join(
+                '\n',
+              ),
             },
             ...(options.metricsBlock
               ? [{ role: 'system' as const, content: options.metricsBlock }]
