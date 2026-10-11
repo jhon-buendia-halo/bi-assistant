@@ -14,6 +14,64 @@ Entry template:
 
 ---
 
+## 2026-10-11 — 2.1.3 Admin overview (BA-164)
+
+### What went well
+- Building P1 last, as the epic spec suggested, meant every figure it shows (users, roles, agents, activity) already had an endpoint and tests behind it.
+- The user settled "agent error" with a one-line definition before any code, so `agent.turn-failed` was recorded once, in `SessionsService`, for both the streamed and the plain turn.
+
+### What went wrong
+- The org E2E seeds agent errors by writing an `agent.turn-failed` event straight into SQLite, so the Playwright run doesn't prove the recording itself; only the backend API test does.
+- The frontend agent built the screens before the backend was merged, so no screenshots could be taken until a separate pass.
+
+### What to do differently
+- When an E2E seeds a derived record directly, name the backend test that proves the record is written, in the Feature's E2E line.
+- Plan the evidence screenshots as their own step after the last merge, not inside the frontend step.
+
+## 2026-10-11 — 2.1.4 Users & groups (BA-165)
+
+### What went well
+- The backend (endpoints 81–90) and the four screens were built in parallel, against the endpoint shapes in api.md 2.15. The org suite then passed 46/46 on its first run after the merge.
+- Sending the frontend agent the API as actually built, mid-task, closed the gaps between spec and code before they became test failures.
+
+### What went wrong
+- The confirmed epic scope listed three user statuses; a SCIM-deactivated user would have shown as Active. It came out only while writing the screen specs (decision D1).
+- I killed my own shell with `pkill -f "ng test"`: the pattern matched the command line that ran it. That's exactly what the 0.2.7 rule forbids, written the day before.
+- `npm test` in `frontend/` runs Karma in watch mode and never exits, which cost a 10-minute timeout.
+
+### What to do differently
+- Stop processes by PID only (`ps -eo pid,args | grep`, then `kill <pid>`), never with `pkill -f`. No exceptions for "just a test runner".
+- Run frontend unit tests as `npx ng test --watch=false` with `CHROME_BIN` set; don't run `npm test` there from a script.
+- When a spec lists the states of an entity, check each state the directory or provider can put it in (SCIM deactivate, delete) before confirming.
+
+## 2026-10-11 — 2.1.5 Edit a user (BA-166)
+
+### What went well
+- "All or nothing" for Save changes was taken literally. The backend agent added a small `DocStoreTransactions` seam instead of faking atomicity, and tested the rollback.
+- Its report listed spec-vs-code mismatches it hadn't been asked about: a dangling Data owner still granting permissions, and streams answering 201. Both were fixed with tests on the same branch.
+
+### What went wrong
+- data-model 3.13 said a dangling Data owner grants nothing, but BA-163's resolver granted it. The spec rule had no test, so the mismatch shipped in BA-163 and was caught only by a later story.
+- The open panel overflowed the card by 38 px at the 1440 px desktop width. The spec's widths (table at least 560 + gap 24 + panel 520) never fit the real content area (about 1066), and neither the E2E nor the axe scan checks layout. It was found only by looking at the evidence screenshot.
+
+### What to do differently
+- For every SHALL-NOT rule about permissions (a role that grants nothing, a route that refuses), write the negative test in the same story that writes the rule.
+- When a spec fixes widths for elements placed side by side, add up the widths against the real content width at 1440 px before confirming it, and assert the layout in the E2E with `boundingBox()`.
+- Look at every evidence screenshot before closing a story; that review is what found this bug.
+
+## 2026-10-11 — 2.1.6 Roles & permissions (BA-167)
+
+### What went well
+- The matrix in the UI and the guard's matrix come from one table (admin R21). The P4 scenario checks the UI against it, and the backend unit test checks the guard row by row.
+- Mappings were tested end to end: add a mapping, see the member gain the role on their next request, remove it, see it go.
+
+### What went wrong
+- The board's sample mapping "All-Employees → User" can't exist, because User is implicit. That was spotted while writing the spec, not when the epic was confirmed.
+
+### What to do differently
+- When confirming an epic from a design board, read each sample row against the model's rules (implicit roles, fixed sets) and list the ones that can't exist.
+
+
 ## 2026-10-10 — 2.1.2 Org server mode: sign-in, directory, roles and enforcement (BA-163)
 
 ### What went well

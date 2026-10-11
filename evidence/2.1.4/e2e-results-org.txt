@@ -1,0 +1,12 @@
+Org Playwright project, final run on feat/BA-161-admin-panel (2026-10-11), after the admin API merge and the panel-width fix.
+Command: npx playwright test --project=org (frontend), on a fresh npm run test:e2e:prepare build. Whole run: 46 passed (1.8m).
+
+Scenarios from e2e/org-admin-users.spec.ts:
+  ✓  23 [org] › e2e/org-admin-users.spec.ts:49:5 › the users table shows each person's roles, groups and status (3.5s)
+  ✓  24 [org] › e2e/org-admin-users.spec.ts:113:5 › search finds users by name, email or group (3.0s)
+  ✓  25 [org] › e2e/org-admin-users.spec.ts:137:5 › role filter chips narrow the list (1.9s)
+  ✓  26 [org] › e2e/org-admin-users.spec.ts:163:5 › a deactivated user is shown as deactivated (1.8s)
+  ✓  27 [org] › e2e/org-admin-users.spec.ts:178:5 › the users table is paged (2.0s)
+  ✓  28 [org] › e2e/org-admin-users.spec.ts:201:5 › the Groups view lists groups, members and mapped roles (1.9s)
+  ✓  29 [org] › e2e/org-admin-users.spec.ts:231:5 › assign role gives a user a role (2.2s)
+  ✓  30 [org] › e2e/org-admin-users.spec.ts:251:5 › a user without the admin permission can't list users (1.6s)

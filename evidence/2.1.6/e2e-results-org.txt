@@ -1,0 +1,10 @@
+Org Playwright project, final run on feat/BA-161-admin-panel (2026-10-11), after the admin API merge and the panel-width fix.
+Command: npx playwright test --project=org (frontend), on a fresh npm run test:e2e:prepare build. Whole run: 46 passed (1.8m).
+
+Scenarios from e2e/org-admin-roles.spec.ts:
+  ✓  17 [org] › e2e/org-admin-roles.spec.ts:39:5 › the matrix shows what each role can do (3.7s)
+  ✓  18 [org] › e2e/org-admin-roles.spec.ts:68:5 › a group mapping gives the group's members the role (3.0s)
+  ✓  19 [org] › e2e/org-admin-roles.spec.ts:95:5 › removing a mapping takes the role away (2.4s)
+  ✓  20 [org] › e2e/org-admin-roles.spec.ts:123:5 › a data owner mapping names its datasource (2.4s)
+  ✓  21 [org] › e2e/org-admin-roles.spec.ts:146:5 › add mapping needs a group (1.9s)
+  ✓  22 [org] › e2e/org-admin-roles.spec.ts:160:5 › a user without the admin permission can't add a mapping (1.8s)

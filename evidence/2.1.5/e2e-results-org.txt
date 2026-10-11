@@ -1,0 +1,13 @@
+Org Playwright project, final run on feat/BA-161-admin-panel (2026-10-11), after the admin API merge and the panel-width fix.
+Command: npx playwright test --project=org (frontend), on a fresh npm run test:e2e:prepare build. Whole run: 46 passed (1.8m).
+
+Scenarios from e2e/org-admin-edit-user.spec.ts:
+  ✓   1 [org] › e2e/org-admin-edit-user.spec.ts:49:5 › selecting a user opens their details (4.0s)
+  ✓   2 [org] › e2e/org-admin-edit-user.spec.ts:98:5 › changing roles changes what the user can do (2.6s)
+  ✓   3 [org] › e2e/org-admin-edit-user.spec.ts:125:5 › data owner names its datasource (2.1s)
+  ✓   4 [org] › e2e/org-admin-edit-user.spec.ts:150:5 › a role from a group mapping can't be unticked (2.0s)
+  ✓   5 [org] › e2e/org-admin-edit-user.spec.ts:167:5 › an admin can't remove their own Platform admin role (2.1s)
+  ✓   6 [org] › e2e/org-admin-edit-user.spec.ts:186:5 › transferring agents hands them to another user (3.0s)
+  ✓   7 [org] › e2e/org-admin-edit-user.spec.ts:228:5 › a transfer that would duplicate a name is refused (2.5s)
+  ✓   8 [org] › e2e/org-admin-edit-user.spec.ts:255:5 › a user with no groups and no agents (2.0s)
+  ✓   9 [org] › e2e/org-admin-edit-user.spec.ts:269:5 › a user without the admin permission can't change roles (1.8s)

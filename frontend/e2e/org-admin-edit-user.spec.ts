@@ -72,6 +72,15 @@ test("selecting a user opens their details", async ({ page, signInAs }) => {
     'Roles',
     'Last active',
   ]);
+  // The table and the panel fit side by side at the desktop width (ui.md
+  // 4.18.4): the panel ends where the header's actions end.
+  const panelBox = await panel.boundingBox();
+  const headerAction = await page
+    .getByRole('button', { name: 'Assign role', exact: true })
+    .boundingBox();
+  expect(panelBox!.x + panelBox!.width).toBeLessThanOrEqual(
+    headerAction!.x + headerAction!.width + 1,
+  );
 
   await expectNoAxeViolations(page);
 
