@@ -16,6 +16,26 @@
       Manage people, roles and access for your organisation.
     </p>
   </div>
+  <div class="ml-auto flex shrink-0 items-center gap-2">
+    @switch (selected()) {
+      @case ("overview") {
+        <button
+          type="button"
+          class="btn btn-outline"
+          [disabled]="exporting()"
+          (click)="exportReport()"
+        >
+          @if (exporting()) {
+            <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+            <span>Exporting…</span>
+          } @else {
+            <lucide-angular [img]="Download" [size]="14" />
+            <span>Export report</span>
+          }
+        </button>
+      }
+    }
+  </div>
 </div>
 
 <div
@@ -46,11 +66,17 @@
   }
 </div>
 
-<!-- The tab's screen (P1-P4) fills the panel once its story lands. -->
+<!-- The selected tab's screen; created on selection, so it loads each time (R38). -->
 <div
   role="tabpanel"
   [id]="'admin-panel-' + selected()"
   [attr.aria-labelledby]="'admin-tab-' + selected()"
   tabindex="0"
   class="mt-6 min-h-48 rounded-lg"
-></div>
+>
+  @switch (selected()) {
+    @case ("overview") {
+      <app-admin-overview />
+    }
+  }
+</div>

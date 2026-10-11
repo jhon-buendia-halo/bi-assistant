@@ -299,7 +299,7 @@ Feature: Sign in to an org server
 
 ### Feature: Permissions in the app
 
-E2E: `frontend/e2e/org-permissions.spec.ts` (Playwright `org` project). In "A bootstrap admin sees the Admin area", the steps `I see "Needs attention"` and `I see the "Search users" field` check the tabs' content, which arrives with BA-164 and BA-165; until then the spec checks the frame (heading, tabs, selection) and marks those steps `TODO(BA-164)` / `TODO(BA-165)`.
+E2E: `frontend/e2e/org-permissions.spec.ts` (Playwright `org` project). In "A bootstrap admin sees the Admin area", the step `I see the "Search users" field` checks the Users & groups tab's content, which arrives with BA-165; until then the spec marks it `TODO(BA-165)`.
 
 ```gherkin
 Feature: Permissions in the app
@@ -469,11 +469,11 @@ Feature: Org server API
     Then it answers mode "local", the user "Demo User" and every permission
 ```
 
-The four Features below run in the Playwright `org` project like the three above. Their Backgrounds seed the directory through the SCIM test client, sign people in through the OpenID Connect stub, and set past activity (for example "last active 95 days ago") by writing the user's activity to the store before the app starts, through the org harness. "Avery Admin" (`admin@contoso.test`) is a bootstrap admin in every Feature. The API-level parts (every admin route's 403 for a non-admin, transfer conflicts, the CSV content, save atomicity) are also covered by `backend/test/org-admin.e2e-spec.ts`.
+The four Features below run in the Playwright `org` project like the three above. Their Backgrounds seed the directory through the SCIM test client, roles, mappings and shared data through the admin API, and agents through each person's own API session; people are signed in through the OpenID Connect stub, which makes them active that day. What has no endpoint is written to the running app's store through the org harness (`org.sql`, `frontend/e2e/helpers/admin-actions.ts`): past activity (for example "last active 95 days ago" sets the user's `lastSignInAt` and `lastActiveAt` and adds a `user.active` event that day) and agent errors (an `agent.turn-failed` event for a real session started from the agent). "Avery Admin" (`admin@contoso.test`) is a bootstrap admin in every Feature. The API-level parts (every admin route's 403 for a non-admin, transfer conflicts, the CSV content, save atomicity) are also covered by `backend/test/org-admin.e2e-spec.ts`.
 
 ### Feature: Admin overview
 
-E2E: none yet. Its spec, `frontend/e2e/org-admin-overview.spec.ts`, is written in step 7 of BA-164.
+E2E: `frontend/e2e/org-admin-overview.spec.ts` (Playwright `org` project).
 
 ```gherkin
 Feature: Admin overview

@@ -1,11 +1,20 @@
 import { TestBed } from '@angular/core/testing';
+import { provideHttpClient } from '@angular/common/http';
+import {
+  HttpTestingController,
+  provideHttpClientTesting,
+} from '@angular/common/http/testing';
 import { AdminArea } from './admin-area';
 
 describe('AdminArea', () => {
+  let http: HttpTestingController;
+
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [AdminArea],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
     }).compileComponents();
+    http = TestBed.inject(HttpTestingController);
   });
 
   function render() {
@@ -18,7 +27,12 @@ describe('AdminArea', () => {
       tabs()
         .filter((tab) => tab.getAttribute('aria-selected') === 'true')
         .map((tab) => tab.textContent?.trim());
-    return { fixture, element, tabs, selected };
+    /** The header's action buttons (admin R37). */
+    const headerActions = () =>
+      Array.from(
+        element.querySelectorAll<HTMLButtonElement>('.ml-auto > button'),
+      ).map((b) => b.textContent?.replace(/\s+/g, ' ').trim());
+    return { fixture, element, tabs, selected, headerActions };
   }
 
   it('shows the heading and three tabs with Overview selected (admin R35)', () => {
@@ -35,6 +49,8 @@ describe('AdminArea', () => {
     expect(selected()).toEqual(['Overview']);
     const panel = element.querySelector('[role="tabpanel"]') as HTMLElement;
     expect(panel.getAttribute('aria-labelledby')).toBe(tabs()[0].id);
+    // The Overview loads as the area opens (admin R38).
+    http.expectOne('/admin/overview');
   });
 
   it('selects a tab on click and labels the panel with it', () => {
@@ -68,5 +84,39 @@ describe('AdminArea', () => {
     expect(selected()).toEqual(['Roles & permissions']);
     press('Home');
     expect(selected()).toEqual(['Overview']);
+  });
+
+  it('shows Export report on Overview only (admin R37)', () => {
+    const { fixture, tabs, headerActions } = render();
+    expect(headerActions()).toEqual(['Export report']);
+    tabs()[2].click();
+    fixture.detectChanges();
+    expect(headerActions()).toEqual([]);
+  });
+
+  it('downloads the report under the server file name (admin R48)', () => {
+    const { fixture, element, headerActions } = render();
+    http.expectOne('/admin/overview');
+    const clicked: string[] = [];
+    spyOn(HTMLAnchorElement.prototype, 'click').and.callFake(function (
+      this: HTMLAnchorElement,
+    ) {
+      clicked.push(this.download);
+    });
+
+    const exportButton = element.querySelector<HTMLButtonElement>('.ml-auto > button')!;
+    exportButton.click();
+    fixture.detectChanges();
+    expect(headerActions()).toEqual(['Exporting…']);
+    expect(exportButton.disabled).toBeTrue();
+
+    http.expectOne('/admin/overview/export').flush(new Blob(['section,label,value']), {
+      headers: {
+        'Content-Disposition': 'attachment; filename="admin-report-2026-10-10.csv"',
+      },
+    });
+    fixture.detectChanges();
+    expect(clicked).toEqual(['admin-report-2026-10-10.csv']);
+    expect(headerActions()).toEqual(['Export report']);
   });
 });

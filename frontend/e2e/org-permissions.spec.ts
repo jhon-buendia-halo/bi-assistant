@@ -106,7 +106,9 @@ test('a bootstrap admin sees the Admin area', async ({ page, signInAs }) => {
   await expect(
     page.getByRole('tab', { name: 'Overview', exact: true }),
   ).toHaveAttribute('aria-selected', 'true');
-  // TODO(BA-164): And I see "Needs attention" (the Overview's content, P1).
+  await expect(
+    page.getByRole('heading', { name: 'Needs attention', exact: true }),
+  ).toBeVisible();
 
   await page.getByRole('tab', { name: 'Users & groups', exact: true }).click();
   await expect(
