@@ -334,6 +334,32 @@ describe('dataModelJsonSchema', () => {
   });
 });
 
+describe('Metric.author (data-model.md 3.16, metrics R14)', () => {
+  it('accepts an optional author and keeps it', () => {
+    const model = fixture();
+    model.metrics[0] = { ...model.metrics[0], author: 'user-ada' };
+    const result = validateDataModel(model);
+    expect(result.issues).toEqual([]);
+    expect(result.model?.metrics[0].author).toBe('user-ada');
+  });
+
+  it('rejects an empty author', () => {
+    const model = fixture();
+    model.metrics[0] = { ...model.metrics[0], author: '' };
+    const result = validateDataModel(model);
+    expect(issuePaths(result.issues)).toEqual(['metrics[0].author']);
+  });
+
+  it('publishes author as an optional string on Metric', () => {
+    const defs = dataModelJsonSchema().$defs as Record<
+      string,
+      { properties: Record<string, { type?: string }>; required?: string[] }
+    >;
+    expect(defs.Metric.properties.author).toMatchObject({ type: 'string' });
+    expect(defs.Metric.required).not.toContain('author');
+  });
+});
+
 describe('validateAgainstSnapshot', () => {
   const snapshot = [
     { table: 'main.public.teams', columns: ['id', 'common_name', 'fifa_code'] },

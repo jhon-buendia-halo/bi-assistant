@@ -1,9 +1,11 @@
 import {
   bootstrapFromSnapshot,
   deriveEntityNames,
+  importLegacyMetrics,
   inferAttributeType,
   mapDimensionNames,
   safeName,
+  toModelMetric,
 } from './bootstrap';
 import type {
   DatasetDoc,
@@ -310,5 +312,230 @@ describe('bootstrapFromSnapshot', () => {
 
     expect(issues.length).toBeGreaterThan(0);
     expect(model.entities[0].attributes).toHaveLength(2);
+  });
+});
+
+/** A legacy metric on "matches", as the raw (all owners) store holds it. */
+function legacyMetric(
+  overrides: Partial<MetricDoc> & { id: string },
+): MetricDoc {
+  return {
+    name: 'avg_attendance',
+    label: 'Average attendance',
+    entity: MATCHES_KEY,
+    expression: 'avg(attendance)',
+    ...overrides,
+  };
+}
+
+describe('toModelMetric (data-model R34)', () => {
+  const attributes: Attribute[] = [{ name: 'attendance', type: 'integer' }];
+
+  it("records the legacy owner as the metric's author", () => {
+    const metric = toModelMetric(
+      legacyMetric({ id: 'm1', ownerId: 'user-ada' }),
+      'matches',
+      attributes,
+    );
+    expect(metric).toEqual({
+      name: 'avg_attendance',
+      label: 'Average attendance',
+      entity: 'matches',
+      expressions: { sql: 'avg(attendance)' },
+      author: 'user-ada',
+    });
+  });
+
+  it('records no author for a local-mode metric, and lowercases the name', () => {
+    const metric = toModelMetric(
+      legacyMetric({ id: 'm1', name: 'Avg_Attendance' }),
+      'matches',
+      attributes,
+    );
+    expect(metric.name).toBe('avg_attendance');
+    expect(metric).not.toHaveProperty('author');
+  });
+});
+
+describe('bootstrapFromSnapshot — metrics import across owners (data-model R34, R35)', () => {
+  it('keeps the first metric of each lowercase name by createdAt, then id, and reports the rest', () => {
+    const legacy = [
+      legacyMetric({
+        id: 'm-grace',
+        ownerId: 'user-grace',
+        label: 'Mean attendance',
+        expression: 'sum(attendance) / count(*)',
+        createdAt: '2025-02-01T00:00:00.000Z',
+      }),
+      legacyMetric({
+        id: 'm-ada',
+        ownerId: 'user-ada',
+        createdAt: '2025-01-01T00:00:00.000Z',
+      }),
+      legacyMetric({
+        id: 'm-max',
+        ownerId: 'user-grace',
+        name: 'max_attendance',
+        label: 'Highest attendance',
+        expression: 'max(attendance)',
+        createdAt: '2025-02-02T00:00:00.000Z',
+      }),
+      legacyMetric({
+        id: 'm-elsewhere',
+        ownerId: 'user-grace',
+        name: 'elsewhere',
+        entity: 'main.other.table',
+      }),
+    ];
+
+    const { model, issues, metricsImport } = bootstrapFromSnapshot(
+      dataset(),
+      legacy,
+      1,
+    );
+
+    expect(issues).toEqual([]);
+    expect(model.metrics).toEqual([
+      expect.objectContaining({
+        name: 'avg_attendance',
+        label: 'Average attendance',
+        author: 'user-ada',
+        expressions: { sql: 'avg(attendance)' },
+      }),
+      expect.objectContaining({ name: 'max_attendance', author: 'user-grace' }),
+    ]);
+    expect(metricsImport).toEqual({
+      imported: [
+        {
+          name: 'avg_attendance',
+          entity: 'matches',
+          author: 'user-ada',
+          sourceId: 'm-ada',
+        },
+        {
+          name: 'max_attendance',
+          entity: 'matches',
+          author: 'user-grace',
+          sourceId: 'm-max',
+        },
+      ],
+      skipped: [
+        {
+          name: 'avg_attendance',
+          author: 'user-grace',
+          sourceId: 'm-grace',
+          reason: 'name_clash',
+          keptSourceId: 'm-ada',
+        },
+      ],
+    });
+  });
+
+  it('breaks a createdAt tie by the lowest id, and clashes names that differ only in case', () => {
+    const at = '2025-01-01T00:00:00.000Z';
+    const { model, metricsImport } = bootstrapFromSnapshot(
+      dataset(),
+      [
+        legacyMetric({ id: 'b', name: 'Avg_Attendance', createdAt: at }),
+        legacyMetric({ id: 'a', createdAt: at, label: 'Kept' }),
+      ],
+      1,
+    );
+
+    expect(model.metrics).toHaveLength(1);
+    expect(model.metrics[0]).toMatchObject({
+      name: 'avg_attendance',
+      label: 'Kept',
+    });
+    expect(model.metrics[0]).not.toHaveProperty('author');
+    expect(metricsImport.skipped).toEqual([
+      {
+        name: 'avg_attendance',
+        sourceId: 'b',
+        reason: 'name_clash',
+        keptSourceId: 'a',
+      },
+    ]);
+  });
+});
+
+describe('importLegacyMetrics (data-model R34)', () => {
+  const targets = new Map([
+    [
+      MATCHES_KEY,
+      {
+        name: 'matches',
+        attributes: [{ name: 'attendance', type: 'integer' }],
+      },
+    ],
+  ]) as Parameters<typeof importLegacyMetrics>[1];
+
+  it('imports nothing for a name the model already holds from the same author', () => {
+    const result = importLegacyMetrics(
+      [legacyMetric({ id: 'm-ada', ownerId: 'user-ada' })],
+      targets,
+      {
+        held: [
+          {
+            name: 'avg_attendance',
+            label: 'Average attendance',
+            entity: 'matches',
+            author: 'user-ada',
+          },
+        ],
+      },
+    );
+    expect(result).toEqual({ metrics: [], imported: [], skipped: [] });
+  });
+
+  it('reports a name the model holds from another author, keeping the holder', () => {
+    const result = importLegacyMetrics(
+      [
+        legacyMetric({
+          id: 'm-ada',
+          ownerId: 'user-ada',
+          createdAt: '2025-01-01T00:00:00.000Z',
+        }),
+        legacyMetric({
+          id: 'm-grace',
+          ownerId: 'user-grace',
+          createdAt: '2025-02-01T00:00:00.000Z',
+        }),
+      ],
+      targets,
+      {
+        held: [
+          {
+            name: 'avg_attendance',
+            label: 'Mean attendance',
+            entity: 'matches',
+            author: 'user-grace',
+          },
+        ],
+      },
+    );
+    expect(result.metrics).toEqual([]);
+    expect(result.imported).toEqual([]);
+    expect(result.skipped).toEqual([
+      {
+        name: 'avg_attendance',
+        author: 'user-ada',
+        sourceId: 'm-ada',
+        reason: 'name_clash',
+        keptSourceId: 'm-grace',
+      },
+    ]);
+  });
+
+  it('never imports a model-managed or deleted name, and reports nothing for it', () => {
+    const result = importLegacyMetrics(
+      [
+        legacyMetric({ id: 'm1' }),
+        legacyMetric({ id: 'm2', name: 'max_attendance' }),
+      ],
+      targets,
+      { excludedNames: ['AVG_ATTENDANCE', 'max_attendance'] },
+    );
+    expect(result).toEqual({ metrics: [], imported: [], skipped: [] });
   });
 });

@@ -51,6 +51,11 @@ function build() {
       'You are the assistant.',
     ),
     'assistant-eval-judge': fakeAgent('assistant-eval-judge', []),
+    'assistant-legacy': fakeAgent(
+      'assistant-legacy',
+      ['run_readonly_sql'],
+      'You are the legacy assistant.',
+    ),
   };
   const mastra = { listAgents: () => registry } as unknown as MastraService;
   return { db, service: new AgentsService(mastra, userAgents) };
@@ -83,6 +88,16 @@ describe('AgentsService (built-in and user agents)', () => {
       starterQuestions: [],
     });
     expect(agents[2]).toMatchObject({ kind: 'system', owner: 'System' });
+  });
+
+  it('hides assistant-legacy from the list but keeps it reachable by key (api.md 33-34)', async () => {
+    const agents = await ctx.service.list();
+    expect(agents.map((agent) => agent.key)).not.toContain('assistant-legacy');
+    expect(await ctx.service.get('assistant-legacy')).toMatchObject({
+      key: 'assistant-legacy',
+      kind: 'system',
+      instructions: 'You are the legacy assistant.',
+    });
   });
 
   it('merges user agents into the catalogue, sorted by name', async () => {

@@ -211,6 +211,7 @@ function orderMetric(metric: Metric) {
       'dimensions',
       'expressions',
       'sourceVerifiedQueryId',
+      'author',
     ],
   );
 }

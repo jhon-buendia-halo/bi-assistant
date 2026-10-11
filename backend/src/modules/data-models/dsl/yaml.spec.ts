@@ -81,6 +81,18 @@ describe('serializeDataModel / parseDataModelYaml — round trip', () => {
     expect(text).not.toMatch(/[&*]/);
   });
 
+  it("round-trips a metric's author, written last among the metric's keys", () => {
+    const model = worldCupFixture();
+    model.metrics[0] = {
+      ...model.metrics[0],
+      sourceVerifiedQueryId: 'vq-1',
+      author: 'user-ada',
+    };
+    const text = serializeDataModel(model);
+    expect(text).toMatch(/sourceVerifiedQueryId: vq-1\n\s+author: user-ada\n/);
+    expect(modelOf(parseDataModelYaml(text))).toEqual(model);
+  });
+
   it('omits undefined/optional fields rather than writing them as null', () => {
     const model = worldCupFixture();
     delete model.description;

@@ -83,7 +83,7 @@ export class MetricsService {
     // model that had it — `syncMetric` only strips the *new* name, so the
     // old one needs its own pass first.
     if (existing.name !== saved.name) {
-      await this.dataModels.removeMetric(existing.name);
+      await this.dataModels.removeMetric(existing.name, existing.ownerId);
     }
     await this.dataModels.syncMetric(saved);
     return saved;
@@ -93,7 +93,7 @@ export class MetricsService {
     const existing = await this.repository.get(id);
     if (!existing) throw new BadRequestException(`Metric ${id} not found`);
     await this.repository.delete(id);
-    await this.dataModels.removeMetric(existing.name);
+    await this.dataModels.removeMetric(existing.name, existing.ownerId);
     return existing;
   }
 

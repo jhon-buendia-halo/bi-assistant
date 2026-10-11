@@ -18,6 +18,7 @@ import {
   Logger,
   NotFoundException,
   OnModuleInit,
+  Optional,
 } from '@nestjs/common';
 import {
   DATASETS_STORE,
@@ -26,15 +27,21 @@ import {
 import type { DocStore } from '../../infrastructure/database/doc-store';
 import type { DatasetDoc } from '../datasets/repositories/datasets.repository';
 import type { MetricDoc } from '../metrics/entities/metric.entity';
+import { CurrentUserService } from '../auth/current-user.service';
 import {
   bindingAddress,
   bootstrapFromSnapshot,
   buildEntity,
   buildRelationships,
   deriveEntityNames,
+  importLegacyMetrics,
+  keptSourceIdFor,
   lastSegment,
   safeName,
+  sameAuthor,
   toModelMetric,
+  type ImportTarget,
+  type LegacyMetricsImport,
 } from './bootstrap';
 import { driftReport } from './drift';
 import type { DriftReport } from './drift';
@@ -54,6 +61,8 @@ import type {
   DataModel,
   Entity,
   Metric,
+  MetricsImportReport,
+  MetricsImportSkip,
   ModelIssue,
   Relationship,
 } from './entities/data-model.entity';
@@ -71,6 +80,12 @@ export interface ResolveResult {
   target?: unknown;
 }
 
+/** `GET /datasets/:name/model/drift` (api.md 98): the drift report, with
+ * the model's last metrics-import report when one ran (data-model R35). */
+export type DriftWithMetricsImport = DriftReport & {
+  metricsImport?: MetricsImportReport;
+};
+
 function toSnapshotTables(dataset: DatasetDoc): SnapshotTable[] {
   return (dataset.entities ?? []).map((entity) => ({
     table: entity.key,
@@ -86,13 +101,20 @@ export class DataModelsService implements OnModuleInit {
     private readonly repository: DataModelsRepository,
     @Inject(DATASETS_STORE)
     private readonly datasetsStore: DocStore<DatasetDoc>,
+    /** Raw (all owners): the metrics import reads every owner's legacy
+     * metrics (data-model R34, data-model.md M13). */
     @Inject(METRICS_STORE)
     private readonly metricsStore: DocStore<MetricDoc>,
+    /** Who creates a model metric (its `author` in org server mode). */
+    @Optional()
+    private readonly currentUser?: CurrentUserService,
   ) {}
 
   /**
-   * Every existing dataset gets a model v1 with no user action (ADR-0012).
-   * One dataset's bootstrap failing (an invalid snapshot, a storage hiccup)
+   * Every existing dataset gets a model v1 with no user action (ADR-0012),
+   * and every existing model gets the legacy metrics of every owner it does
+   * not hold yet (data-model R34, data-model.md M13). One dataset's
+   * bootstrap or import failing (an invalid snapshot, a storage hiccup)
    * must never take the rest of the app down with it — each is isolated in
    * its own try/catch, logged, and skipped (review finding 4).
    */
@@ -105,6 +127,8 @@ export class DataModelsService implements OnModuleInit {
         if (!existing) {
           await this.ensureBootstrapped(dataset);
           bootstrapped += 1;
+        } else {
+          await this.importMissingLegacyMetrics(existing);
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -162,13 +186,12 @@ export class DataModelsService implements OnModuleInit {
     if (existing) return existing;
 
     const legacyMetrics = await this.metricsStore.find({});
-    const model = this.requireValidModel(
-      dataset.name,
-      bootstrapFromSnapshot(dataset, legacyMetrics, 1),
-    );
+    const result = bootstrapFromSnapshot(dataset, legacyMetrics, 1);
+    const model = this.requireValidModel(dataset.name, result);
     const now = new Date().toISOString();
     const doc: DataModelDoc = {
       dataset: dataset.name,
+      ...importReportField(result.metricsImport, now),
       currentVersion: 1,
       versions: [
         {
@@ -206,19 +229,77 @@ export class DataModelsService implements OnModuleInit {
    * The last recorded report when a re-save produced one; otherwise computed
    * now against the stored snapshot, so a freshly bootstrapped dataset answers
    * with an empty report instead of a 404 the caller has to special-case.
+   * Answered together with the last metrics-import report as
+   * `metricsImport`, absent when no import has run (data-model R35).
    */
-  async drift(datasetName: string): Promise<DriftReport> {
+  async drift(datasetName: string): Promise<DriftWithMetricsImport> {
     const doc = await this.requireDoc(datasetName);
-    if (doc.lastDrift) return doc.lastDrift;
+    const metricsImport = doc.lastMetricsImport
+      ? { metricsImport: doc.lastMetricsImport }
+      : {};
+    if (doc.lastDrift) return { ...doc.lastDrift, ...metricsImport };
     const dataset = await this.datasetsStore.findOne({ name: datasetName });
     if (!dataset) {
       throw new NotFoundException(`Dataset "${datasetName}" not found`);
     }
-    return driftReport(
-      this.currentVersionOf(doc).model,
-      dataset,
-      new Date().toISOString(),
+    return {
+      ...driftReport(
+        this.currentVersionOf(doc).model,
+        dataset,
+        new Date().toISOString(),
+      ),
+      ...metricsImport,
+    };
+  }
+
+  /**
+   * The startup metrics import for a model that already exists (data-model
+   * R34, data-model.md M13): the legacy metrics of every owner over the
+   * tables the current version binds, minus the names it holds, manages or
+   * has deleted, appended as one `bootstrap` version with a fresh
+   * metrics-import report. Nothing new -> no version and the report stays
+   * as it is, so repeated startups change nothing.
+   */
+  private async importMissingLegacyMetrics(
+    doc: DataModelDoc,
+  ): Promise<DataModelDoc> {
+    const current = this.findCurrentVersion(doc);
+    if (!current) return doc;
+    const result = importLegacyMetrics(
+      await this.metricsStore.find({}),
+      boundImportTargets(current.model.entities),
+      this.importOptions(doc, current.model.metrics),
     );
+    if (!result.metrics.length) return doc;
+
+    const draft: DataModel = {
+      ...current.model,
+      metrics: [...current.model.metrics, ...result.metrics],
+    };
+    const model = this.requireValidModel(doc.dataset, {
+      model: draft,
+      issues: validateDataModel(draft).issues,
+    });
+    const count = result.metrics.length;
+    return this.appendVersion(
+      { ...doc, ...importReportField(result) },
+      model,
+      'bootstrap',
+      `imported ${count} legacy metric${count === 1 ? '' : 's'}`,
+    );
+  }
+
+  /** The names a metrics import keeps out of (or reports against) a model:
+   * the metrics it holds, and its model-managed and tombstoned names. */
+  private importOptions(doc: DataModelDoc, held: Metric[]) {
+    return {
+      held,
+      excludedNames: [
+        ...(doc.localMetricNames ?? []),
+        ...(doc.deletedMetricNames ?? []),
+      ],
+      previous: doc.lastMetricsImport,
+    };
   }
 
   /**
@@ -295,34 +376,33 @@ export class DataModelsService implements OnModuleInit {
       return touchesNew && !existingRelKeys.has(`${rel.from}->${rel.to}`);
     });
 
-    const legacyMetrics = await this.metricsStore.find({});
-    const existingMetricNames = new Set(
-      current.model.metrics.map((m) => m.name.toLowerCase()),
+    // The metrics import over the new tables only (data-model R20, R34):
+    // every owner's legacy metrics, first of each name, never a name the
+    // model already holds, manages or has deleted.
+    const targets = new Map<string, ImportTarget>(
+      unbound.map((snapshot) => {
+        const name = nameByTableLower.get(snapshot.key.toLowerCase())!;
+        return [
+          snapshot.key.toLowerCase(),
+          { name, attributes: attributesByEntityName.get(name) ?? [] },
+        ];
+      }),
     );
-    const newMetrics = legacyMetrics
-      .filter((m) =>
-        unbound.some(
-          (snapshot) =>
-            snapshot.key.toLowerCase() === (m.entity ?? '').toLowerCase(),
-        ),
-      )
-      .filter((m) => !existingMetricNames.has(m.name.toLowerCase()))
-      .filter((m) => !hasMetricName(doc.deletedMetricNames, m.name))
-      .map((m) => {
-        const name = nameByTableLower.get((m.entity ?? '').toLowerCase())!;
-        const attributes = attributesByEntityName.get(name) ?? [];
-        return toModelMetric(m, name, attributes);
-      });
+    const imported = importLegacyMetrics(
+      await this.metricsStore.find({}),
+      targets,
+      this.importOptions(doc, current.model.metrics),
+    );
 
     const draft: DataModel = {
       ...current.model,
       entities: [...current.model.entities, ...newEntities],
       relationships: [...current.model.relationships, ...newRelationships],
-      metrics: [...current.model.metrics, ...newMetrics],
+      metrics: [...current.model.metrics, ...imported.metrics],
     };
 
     return this.appendVersion(
-      doc,
+      { ...doc, ...importReportField(imported) },
       draft,
       'bootstrap',
       `merged ${newEntities.length} new entities from the dataset snapshot`,
@@ -348,21 +428,23 @@ export class DataModelsService implements OnModuleInit {
 
     const legacyMetrics = await this.metricsStore.find({});
     const current = this.currentVersionOf(doc);
-    const fresh = this.requireValidModel(
-      datasetName,
-      bootstrapFromSnapshot(dataset, legacyMetrics, 1),
+    // The fresh build imports only the legacy metrics whose names the
+    // current version does not hold (data-model R22, R34): the current
+    // definitions win, followed by the newly imported ones.
+    const result = bootstrapFromSnapshot(
+      dataset,
+      legacyMetrics,
+      1,
+      this.importOptions(doc, current.model.metrics),
     );
-    const metricsByName = new Map(fresh.metrics.map((m) => [m.name, m]));
-    for (const metric of current.model.metrics) {
-      metricsByName.set(metric.name, metric);
-    }
-    for (const deletedName of doc.deletedMetricNames ?? []) {
-      metricsByName.delete(deletedName);
-    }
+    const fresh = this.requireValidModel(datasetName, result);
+    const metrics = [...current.model.metrics, ...fresh.metrics].filter(
+      (m) => !hasMetricName(doc.deletedMetricNames, m.name),
+    );
 
     return this.appendVersion(
-      doc,
-      { ...fresh, metrics: Array.from(metricsByName.values()) },
+      { ...doc, ...importReportField(result.metricsImport) },
+      { ...fresh, metrics },
       'bootstrap',
     );
   }
@@ -537,9 +619,12 @@ export class DataModelsService implements OnModuleInit {
   ): Promise<{ version: number }> {
     const doc = await this.requireDoc(datasetName);
     const current = this.currentVersionOf(doc);
+    // The creator is the author in org server mode; local mode records none
+    // (metrics R14). A body's own `author` never chooses it.
+    const author = this.currentUser?.ownerScope() ?? undefined;
     const draft: DataModel = {
       ...current.model,
-      metrics: [...current.model.metrics, metric],
+      metrics: [...current.model.metrics, withAuthor(metric, author)],
     };
     const validated = this.validateMetricDraft(draft);
     const withLocal: DataModelDoc = {
@@ -577,7 +662,8 @@ export class DataModelsService implements OnModuleInit {
       );
     }
     const metrics = [...current.model.metrics];
-    metrics[index] = metric;
+    // An edit keeps the stored author, and never adds one (metrics R14).
+    metrics[index] = withAuthor(metric, metrics[index].author);
     const draft: DataModel = { ...current.model, metrics };
     const validated = this.validateMetricDraft(draft);
     const withoutOldName = withoutMetricName(doc.localMetricNames, metricName);
@@ -703,7 +789,10 @@ export class DataModelsService implements OnModuleInit {
   // manages itself (`localMetricNames`, written by the model-metrics API
   // above) — a legacy write of the same name is skipped on that model
   // entirely, rather than overwriting or deleting the model's own
-  // definition. For every other name (nothing the model authored directly),
+  // definition. Since 1.2.4 (data-model R36) the same holds for a name the
+  // model holds from another author: a legacy write never overwrites or
+  // removes another owner's metric in a shared model, and a skipped write
+  // is appended to the model's metrics-import report. For every other name
   // the legacy store stays authoritative and the mirror behaves exactly as
   // it did under ADR-0012/1.2.1. ---
 
@@ -720,13 +809,18 @@ export class DataModelsService implements OnModuleInit {
    * (`localMetricNames`) is skipped entirely — see the merge-rule note
    * above — and so is a model that has explicitly deleted this name
    * (`deletedMetricNames`, review finding 6): a legacy write must not
-   * resurrect a metric the model's own panel removed.
+   * resurrect a metric the model's own panel removed. A model that holds
+   * this name from another author (`Metric.author` vs the legacy
+   * `ownerId`; both absent in local mode) is never changed: when it binds
+   * the metric's table the write is appended to its metrics-import report
+   * as skipped, with no new version (data-model R36).
    */
   async syncMetric(metric: MetricDoc): Promise<string[]> {
     const docs = await this.repository.list();
     const touched: string[] = [];
     const nameLower = metric.name.toLowerCase();
     const entityLower = (metric.entity ?? '').toLowerCase();
+    let legacyMetrics: MetricDoc[] | undefined;
 
     for (const doc of docs) {
       const current = this.findCurrentVersion(doc);
@@ -734,14 +828,35 @@ export class DataModelsService implements OnModuleInit {
       if (hasMetricName(doc.localMetricNames, metric.name)) continue;
       if (hasMetricName(doc.deletedMetricNames, metric.name)) continue;
 
-      const withoutStale = current.model.metrics.filter(
-        (m) => m.name.toLowerCase() !== nameLower,
-      );
       const boundEntity = current.model.entities.find((e) => {
         const binding = e.bindings[0];
         const address = binding ? bindingAddress(binding) : null;
         return address?.toLowerCase() === entityLower;
       });
+      const held = current.model.metrics.find(
+        (m) => m.name.toLowerCase() === nameLower,
+      );
+      if (held && !sameAuthor(held.author, metric.ownerId)) {
+        if (boundEntity) {
+          legacyMetrics ??= await this.metricsStore.find({});
+          await this.recordSkippedLegacyWrite(doc, {
+            name: nameLower,
+            ...(metric.ownerId ? { author: metric.ownerId } : {}),
+            sourceId: metric.id,
+            reason: 'name_clash',
+            keptSourceId: keptSourceIdFor(
+              held,
+              legacyMetrics,
+              doc.lastMetricsImport,
+            ),
+          });
+        }
+        continue;
+      }
+
+      const withoutStale = current.model.metrics.filter(
+        (m) => m.name.toLowerCase() !== nameLower,
+      );
       const nextMetrics = boundEntity
         ? [
             ...withoutStale,
@@ -761,12 +876,16 @@ export class DataModelsService implements OnModuleInit {
     return touched;
   }
 
-  /** Mirrors a metrics-panel delete: removes `name` from every current
-   * model that has it, one new version per model touched. A model that
-   * manages this name itself (`localMetricNames`) is skipped — deleting an
-   * unrelated legacy metric that happens to share a name must not take the
-   * model's own definition down with it. */
-  async removeMetric(name: string): Promise<string[]> {
+  /** Mirrors a metrics-panel delete (or the old name of a rename): removes
+   * `name` from every current model that has it, one new version per model
+   * touched. A model that manages this name itself (`localMetricNames`) is
+   * skipped — deleting an unrelated legacy metric that happens to share a
+   * name must not take the model's own definition down with it — and so is
+   * a model whose metric of that name has another author than the legacy
+   * metric's owner (`author`; both absent in local mode): one owner's
+   * legacy delete never removes another owner's metric from a shared model,
+   * the same rule as `syncMetric`'s skip (data-model R36). */
+  async removeMetric(name: string, author?: string): Promise<string[]> {
     const docs = await this.repository.list();
     const touched: string[] = [];
     const nameLower = name.toLowerCase();
@@ -775,11 +894,10 @@ export class DataModelsService implements OnModuleInit {
       const current = this.findCurrentVersion(doc);
       if (!current) continue;
       if (hasMetricName(doc.localMetricNames, name)) continue;
-      if (
-        !current.model.metrics.some((m) => m.name.toLowerCase() === nameLower)
-      ) {
-        continue;
-      }
+      const held = current.model.metrics.find(
+        (m) => m.name.toLowerCase() === nameLower,
+      );
+      if (!held || !sameAuthor(held.author, author)) continue;
       const metrics = current.model.metrics.filter(
         (m) => m.name.toLowerCase() !== nameLower,
       );
@@ -792,6 +910,30 @@ export class DataModelsService implements OnModuleInit {
       touched.push(doc.dataset);
     }
     return touched;
+  }
+
+  /** Appends (or refreshes, by `sourceId`) one skipped legacy write in the
+   * model's metrics-import report — no version (data-model R36). */
+  private async recordSkippedLegacyWrite(
+    doc: DataModelDoc,
+    entry: MetricsImportSkip,
+  ): Promise<void> {
+    const report: MetricsImportReport = doc.lastMetricsImport ?? {
+      importedAt: new Date().toISOString(),
+      imported: [],
+      skipped: [],
+    };
+    const others = report.skipped.filter((s) => s.sourceId !== entry.sourceId);
+    if (
+      others.length < report.skipped.length &&
+      report.skipped.some((s) => JSON.stringify(s) === JSON.stringify(entry))
+    ) {
+      return; // already reported exactly so
+    }
+    await this.repository.save({
+      ...doc,
+      lastMetricsImport: { ...report, skipped: [...others, entry] },
+    });
   }
 
   // --- Shared helpers ---
@@ -871,6 +1013,50 @@ export class DataModelsService implements OnModuleInit {
     };
     return (await this.repository.save(updated)) ?? updated;
   }
+}
+
+/**
+ * `lastMetricsImport` for a document, from one import pass's entries: set
+ * (with `importedAt`) when the pass imported or skipped anything, left out
+ * otherwise so the previous report stays (data-model R35).
+ */
+function importReportField(
+  result: Pick<LegacyMetricsImport, 'imported' | 'skipped'>,
+  importedAt = new Date().toISOString(),
+): { lastMetricsImport?: MetricsImportReport } {
+  if (!result.imported.length && !result.skipped.length) return {};
+  return {
+    lastMetricsImport: {
+      importedAt,
+      imported: result.imported,
+      skipped: result.skipped,
+    },
+  };
+}
+
+/** Import targets of a model: each entity, keyed by the lowercase physical
+ * address of its first binding. */
+function boundImportTargets(entities: Entity[]): Map<string, ImportTarget> {
+  const targets = new Map<string, ImportTarget>();
+  for (const entity of entities) {
+    const binding = entity.bindings[0];
+    const address = binding ? bindingAddress(binding) : null;
+    if (address) {
+      targets.set(address.toLowerCase(), {
+        name: entity.name,
+        attributes: entity.attributes,
+      });
+    }
+  }
+  return targets;
+}
+
+/** `metric` with exactly `author` (none when undefined), whatever the
+ * metric carried before. */
+function withAuthor(metric: Metric, author: string | undefined): Metric {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { author: _ignored, ...rest } = metric;
+  return author ? { ...rest, author } : rest;
 }
 
 /** Metric-name-set equality — used to decide whether a sync actually

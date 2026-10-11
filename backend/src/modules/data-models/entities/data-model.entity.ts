@@ -208,6 +208,45 @@ export interface Metric {
   expressions?: { sql?: string };
   /** Promotion provenance — the verified query this metric was lifted from. */
   sourceVerifiedQueryId?: string;
+  /**
+   * Owner key (user id) of whoever defined the metric in org server mode:
+   * the owner of the legacy metric it was imported from, or the signed-in
+   * user who created it through the model-metric endpoints. Kept on edit;
+   * absent in local mode (data-model.md 3.16, metrics R14).
+   */
+  author?: string;
+}
+
+/** One legacy metric copied into a model by the metrics import. */
+export interface MetricsImportEntry {
+  /** Lowercase metric name. */
+  name: string;
+  /** Logical entity name it was imported onto. */
+  entity: string;
+  /** The legacy owner's id; absent in local mode. */
+  author?: string;
+  /** The legacy metric document's `id`. */
+  sourceId: string;
+}
+
+/** One legacy metric the import (or the legacy-write mirror) did not copy. */
+export interface MetricsImportSkip {
+  name: string;
+  author?: string;
+  sourceId: string;
+  reason: 'name_clash';
+  /** Legacy id of the metric that holds the name instead. */
+  keptSourceId: string;
+}
+
+/**
+ * The model document's `lastMetricsImport` (data-model.md 3.16), answered
+ * as `metricsImport` with the drift report (api.md 98, data-model R35).
+ */
+export interface MetricsImportReport {
+  importedAt: string;
+  imported: MetricsImportEntry[];
+  skipped: MetricsImportSkip[];
 }
 
 /**

@@ -215,6 +215,8 @@ const metricSchema = z
     dimensions: z.array(z.string()).optional(),
     expressions: z.strictObject({ sql: z.string().optional() }).optional(),
     sourceVerifiedQueryId: z.string().optional(),
+    /** Owner key of whoever defined the metric (org server mode only). */
+    author: z.string().min(1).optional(),
   })
   .meta({ id: 'Metric' });
 

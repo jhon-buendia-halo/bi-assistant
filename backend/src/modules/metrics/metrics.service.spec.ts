@@ -156,7 +156,9 @@ describe('MetricsService.update', () => {
   });
 
   it('removes the old name first when the metric is renamed', async () => {
-    const { service, dataModels } = build([metric({ name: 'denial_rate' })]);
+    const { service, dataModels } = build([
+      metric({ name: 'denial_rate', ownerId: 'user-ada' }),
+    ]);
 
     await service.update('metric-1', {
       name: 'denial_ratio',
@@ -165,7 +167,12 @@ describe('MetricsService.update', () => {
       expression: 'COUNT(*)',
     });
 
-    expect(dataModels.removeMetric).toHaveBeenCalledWith('denial_rate');
+    // The owner goes along: a legacy write never removes another owner's
+    // metric from a shared model (data-model R36).
+    expect(dataModels.removeMetric).toHaveBeenCalledWith(
+      'denial_rate',
+      'user-ada',
+    );
     expect(dataModels.syncMetric).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'denial_ratio' }),
     );
@@ -207,7 +214,11 @@ describe('MetricsService.delete', () => {
 
     expect((await service.delete('metric-1')).label).toBe('Denial rate');
     expect(repository.delete).toHaveBeenCalledWith('metric-1');
-    expect(dataModels.removeMetric).toHaveBeenCalledWith('denial_rate');
+    // Local mode: no owner on the legacy metric.
+    expect(dataModels.removeMetric).toHaveBeenCalledWith(
+      'denial_rate',
+      undefined,
+    );
   });
 
   it('rejects an unknown metric', async () => {

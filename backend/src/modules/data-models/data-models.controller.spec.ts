@@ -6,6 +6,12 @@ jest.mock('../datasources/connectors/databricks.connector', () => ({
 }));
 
 import { BadRequestException } from '@nestjs/common';
+import { METHOD_METADATA } from '@nestjs/common/constants';
+import { Reflector } from '@nestjs/core';
+import {
+  AUTH_REQUIREMENT_KEY,
+  type AuthRequirement,
+} from '../../common/decorators/auth-requirement.decorators';
 import { DataModelsController } from './data-models.controller';
 import { worldCupFixture } from './dsl/__fixtures__/world-cup.fixture';
 import { setSqlFixerBridge } from './query/sql-repair';
@@ -125,5 +131,72 @@ describe('DataModelsController — /model/query repair routing', () => {
     await expect(controller.runQuery('world-cup', { query })).rejects.toThrow(
       'column "stage" does not exist',
     );
+  });
+});
+
+/**
+ * data-model R38-R39, api.md 1.9: a data model is shared like its dataset,
+ * so reads (and the operations that change nothing) need Use agents and
+ * every write needs Manage datasources and datasets. The handler's marker
+ * wins over the controller's, exactly as `PermissionsGuard` reads it.
+ */
+describe('DataModelsController — route permissions', () => {
+  const reflector = new Reflector();
+  /** The route handler itself, as Nest stores metadata on it. */
+  const handlerOf = (method: string) =>
+    Object.getOwnPropertyDescriptor(DataModelsController.prototype, method)
+      ?.value as (...args: unknown[]) => unknown;
+  const requirementOf = (method: keyof DataModelsController) =>
+    reflector.getAllAndOverride<AuthRequirement | undefined>(
+      AUTH_REQUIREMENT_KEY,
+      [handlerOf(method), DataModelsController],
+    );
+
+  const READS: (keyof DataModelsController)[] = [
+    'schema',
+    'get',
+    'listVersions',
+    'getVersion',
+    'drift',
+    'resolve',
+    'compile',
+    'runQuery',
+    'export',
+    'serialize',
+    'listModelMetrics',
+  ];
+  const WRITES: (keyof DataModelsController)[] = [
+    'save',
+    'revert',
+    'bootstrap',
+    'import',
+    'createModelMetric',
+    'updateModelMetric',
+    'deleteModelMetric',
+  ];
+
+  it.each(READS)('%s needs use-agents', (method) => {
+    expect(requirementOf(method)).toEqual({
+      kind: 'permission',
+      permission: 'use-agents',
+    });
+  });
+
+  it.each(WRITES)('%s needs manage-datasources', (method) => {
+    expect(requirementOf(method)).toEqual({
+      kind: 'permission',
+      permission: 'manage-datasources',
+    });
+  });
+
+  it('covers every route handler of the controller', () => {
+    const handlers = Object.getOwnPropertyNames(
+      DataModelsController.prototype,
+    ).filter(
+      (name) =>
+        name !== 'constructor' &&
+        Reflect.getMetadata(METHOD_METADATA, handlerOf(name)) !== undefined,
+    );
+    expect([...handlers].sort()).toEqual([...READS, ...WRITES].sort());
   });
 });

@@ -16,6 +16,7 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { ZodError } from 'zod';
+import { RequirePermission } from '../../common/decorators/auth-requirement.decorators';
 import { DataModelsService } from './data-models.service';
 import { dataModelJsonSchema } from './schema/data-model.schema';
 import { composeSessionModel, type SessionModel } from './session-model';
@@ -49,14 +50,21 @@ function isSqlDialect(value: unknown): value is SqlDialect {
 }
 
 /**
- * The Data model API (roadmap 1.2.1 / BA-85, `gherkin.md` "Feature: Data
- * model"). Routes are spelled out in full rather than nested under a
+ * The Data model API (roadmap 1.2.1 / BA-85; "Feature: Data model" in
+ * specs/capabilities/data-model/spec.md, endpoints in specs/system/api.md
+ * 2.16). Routes are spelled out in full rather than nested under a
  * `/datasets` controller prefix: `DatasetsController` already owns
  * `/datasets` (list/create/delete), and `/datasets/:name/model*` only
  * shares a path segment with it, not a method+path pair, so there is no
  * route collision.
+ *
+ * Permissions (data-model R38-R39, api.md 1.9): a model is shared like its
+ * dataset, so reads and the operations that change nothing need Use agents
+ * (the controller default); every write carries its own Manage datasources
+ * and datasets marker.
  */
 @Controller()
+@RequirePermission('use-agents')
 export class DataModelsController {
   private readonly logger = new Logger(DataModelsController.name);
 
@@ -119,6 +127,7 @@ export class DataModelsController {
   }
 
   @Put('datasets/:name/model')
+  @RequirePermission('manage-datasources')
   async save(@Param('name') name: string, @Body() body: { yaml?: unknown }) {
     const yaml = typeof body?.yaml === 'string' ? body.yaml : '';
     const result = await this.dataModels.saveYaml(name, yaml);
@@ -126,6 +135,7 @@ export class DataModelsController {
   }
 
   @Post('datasets/:name/model/revert')
+  @RequirePermission('manage-datasources')
   @HttpCode(200)
   async revert(
     @Param('name') name: string,
@@ -136,6 +146,7 @@ export class DataModelsController {
   }
 
   @Post('datasets/:name/model/bootstrap')
+  @RequirePermission('manage-datasources')
   async bootstrap(@Param('name') name: string) {
     const doc = await this.dataModels.rebootstrap(name);
     return { ok: true, currentVersion: doc.currentVersion };
@@ -356,6 +367,7 @@ export class DataModelsController {
   /** roadmap 1.2.3 — imports a `.yaml` file through the same validation path
    * as `PUT .../model`, recorded as its own `source: 'import'`. */
   @Post('datasets/:name/model/import')
+  @RequirePermission('manage-datasources')
   @HttpCode(200)
   async import(
     @Param('name') name: string,
@@ -389,6 +401,7 @@ export class DataModelsController {
   }
 
   @Post('datasets/:name/model/metrics')
+  @RequirePermission('manage-datasources')
   async createModelMetric(
     @Param('name') name: string,
     @Body() dto: SaveModelMetricDto,
@@ -398,6 +411,7 @@ export class DataModelsController {
   }
 
   @Put('datasets/:name/model/metrics/:metricName')
+  @RequirePermission('manage-datasources')
   async updateModelMetric(
     @Param('name') name: string,
     @Param('metricName') metricName: string,
@@ -412,6 +426,7 @@ export class DataModelsController {
   }
 
   @Delete('datasets/:name/model/metrics/:metricName')
+  @RequirePermission('manage-datasources')
   async deleteModelMetric(
     @Param('name') name: string,
     @Param('metricName') metricName: string,

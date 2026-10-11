@@ -1,10 +1,8 @@
 import { Module } from '@nestjs/common';
 import { VerifiedQueriesModule } from '../verified-queries/verified-queries.module';
 import { DataModelsModule } from '../data-models/data-models.module';
-import {
-  MetricsController,
-  ModelMetricCandidatesController,
-} from './metrics.controller';
+import { MetricsController } from './metrics.controller';
+import { ModelMetricCandidatesController } from './model-metric-candidates.controller';
 import { MetricsService } from './metrics.service';
 import { MetricsRepository } from './repositories/metrics.repository';
 

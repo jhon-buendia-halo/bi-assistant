@@ -19,6 +19,14 @@ import type {
 /** The registry key of the official agent; every other built-in is `system`. */
 const OFFICIAL_AGENT_KEY = 'assistant';
 
+/**
+ * Registered built-ins left out of `GET /agents` (and so the Agent Hub):
+ * `assistant-legacy` is the pre-data-model assistant, kept only for the eval
+ * `legacy` path. It stays reachable by key (`GET /agents/assistant-legacy`)
+ * and through the eval routes (api.md 34-40, agents.md).
+ */
+const HIDDEN_AGENT_KEYS = new Set(['assistant-legacy']);
+
 export interface AgentSummary {
   /** Registry key the agent is registered under in the Mastra instance. */
   key: string;
@@ -104,7 +112,8 @@ export class AgentsService {
     private readonly userAgents: UserAgentsService,
   ) {}
 
-  /** Built-in and user agents together, alphabetical by name (R48). */
+  /** Built-in and user agents together, alphabetical by name (R48), without
+   * the hidden built-ins (`HIDDEN_AGENT_KEYS`). */
   async list(): Promise<AgentSummary[]> {
     const registry = this.mastra.listAgents();
     const [pins, docs, datasetNames, assistantTools] = await Promise.all([
@@ -114,9 +123,9 @@ export class AgentsService {
       this.assistantToolNames(),
     ]);
     const builtins = await Promise.all(
-      Object.entries(registry).map(([key, agent]) =>
-        this.summarize(key, agent, pins),
-      ),
+      Object.entries(registry)
+        .filter(([key]) => !HIDDEN_AGENT_KEYS.has(key))
+        .map(([key, agent]) => this.summarize(key, agent, pins)),
     );
     const users = docs.map((doc) =>
       summarizeUserAgent(doc, assistantTools, datasetNames),

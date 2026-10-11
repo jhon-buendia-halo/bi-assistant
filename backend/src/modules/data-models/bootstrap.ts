@@ -18,6 +18,9 @@ import type {
   DataModel,
   Entity,
   Metric,
+  MetricsImportEntry,
+  MetricsImportReport,
+  MetricsImportSkip,
   ModelIssue,
   Relationship,
 } from './entities/data-model.entity';
@@ -392,9 +395,12 @@ export function mapDimensionNames(
 }
 
 /** A legacy `MetricDoc`, converted onto one entity already resolved to its
- * logical name/attributes — the single place both bootstrap's `mapMetrics`
- * and `DataModelsService.syncMetric` build a model `Metric` from the
- * legacy flat shape, so the two paths cannot drift apart. */
+ * logical name/attributes — the single place both the metrics import
+ * (`importLegacyMetrics`) and `DataModelsService.syncMetric` build a model
+ * `Metric` from the legacy flat shape, so the two paths cannot drift apart.
+ * The name is lowercased (the DSL's metric names are), and the legacy
+ * owner becomes the metric's `author` (absent in local mode, where legacy
+ * metrics carry no `ownerId`; data-model R34). */
 export function toModelMetric(
   legacy: MetricDoc,
   entityName: string,
@@ -406,7 +412,7 @@ export function toModelMetric(
     legacy.name,
   );
   return {
-    name: legacy.name,
+    name: legacy.name.toLowerCase(),
     label: legacy.label,
     ...(legacy.description ? { description: legacy.description } : {}),
     entity: entityName,
@@ -415,28 +421,146 @@ export function toModelMetric(
     ...(legacy.sourceVerifiedQueryId
       ? { sourceVerifiedQueryId: legacy.sourceVerifiedQueryId }
       : {}),
+    ...(legacy.ownerId ? { author: legacy.ownerId } : {}),
   };
 }
 
-function mapMetrics(
+/** The entity a legacy metric's table is imported onto. */
+export interface ImportTarget {
+  name: string;
+  attributes: Attribute[];
+}
+
+/** What one metrics-import pass produced: the metrics to add to the model,
+ * and the report entries (`MetricsImportReport` without its timestamp). */
+export interface LegacyMetricsImport {
+  metrics: Metric[];
+  imported: MetricsImportEntry[];
+  skipped: MetricsImportSkip[];
+}
+
+export interface ImportLegacyMetricsOptions {
+  /** Metrics the model already holds: their names are never imported. */
+  held?: Metric[];
+  /** Model-managed and tombstoned names: never imported, never reported. */
+  excludedNames?: string[];
+  /** The model's previous report, the last resort for a `keptSourceId`. */
+  previous?: MetricsImportReport;
+}
+
+/** Same owner, local mode (no owner on either side) included. */
+export function sameAuthor(
+  a: string | undefined,
+  b: string | undefined,
+): boolean {
+  return (a || undefined) === (b || undefined);
+}
+
+/** The import order: creation time, then id (data-model R34). A metric
+ * stored without `createdAt` sorts first. */
+function byCreationThenId(a: MetricDoc, b: MetricDoc): number {
+  const at = a.createdAt ?? '';
+  const bt = b.createdAt ?? '';
+  if (at !== bt) return at < bt ? -1 : 1;
+  if (a.id === b.id) return 0;
+  return a.id < b.id ? -1 : 1;
+}
+
+/**
+ * The legacy id behind a metric the model already holds, for a skipped
+ * entry's `keptSourceId`: the earliest legacy metric of that name by the
+ * same author, else the previous report's imported entry of that name,
+ * else `''` (a metric that never came from the legacy store, e.g. one
+ * written in the YAML).
+ */
+export function keptSourceIdFor(
+  held: Metric,
   legacyMetrics: MetricDoc[],
-  entities: DatasetEntitySnapshot[],
-  entityNames: Map<string, string>,
-  attributesByEntityName: Map<string, Attribute[]>,
-): Metric[] {
-  const entityByTable = new Map(
-    entities.map((entity) => [entity.key.toLowerCase(), entity]),
+  previous?: MetricsImportReport,
+): string {
+  const name = held.name.toLowerCase();
+  const legacy = [...legacyMetrics]
+    .sort(byCreationThenId)
+    .find(
+      (m) =>
+        m.name.toLowerCase() === name && sameAuthor(m.ownerId, held.author),
+    );
+  if (legacy) return legacy.id;
+  return previous?.imported.find((e) => e.name === name)?.sourceId ?? '';
+}
+
+/**
+ * The metrics import (data-model R34, R35; data-model.md M13): the legacy
+ * metrics of every owner whose table is one of `targets` (keyed by the
+ * lowercase physical address), in creation-then-id order, the first of each
+ * lowercase name imported onto its entity with its owner as `author`. A
+ * later metric of a name already taken is reported as skipped
+ * (`name_clash`, keeping the first). A name the model already holds is
+ * never imported: a metric of it by the holder's author is silent (it is
+ * that metric, or an older copy of it), one by another author is reported
+ * as skipped. Model-managed and tombstoned names are left out entirely.
+ * Pure: the caller decides whether anything is persisted.
+ */
+export function importLegacyMetrics(
+  legacyMetrics: MetricDoc[],
+  targets: Map<string, ImportTarget>,
+  options: ImportLegacyMetricsOptions = {},
+): LegacyMetricsImport {
+  const excluded = new Set(
+    (options.excludedNames ?? []).map((n) => n.toLowerCase()),
   );
-  const metrics: Metric[] = [];
-  for (const legacy of legacyMetrics) {
-    const snapshot = entityByTable.get((legacy.entity ?? '').toLowerCase());
-    if (!snapshot) continue; // metric's table is not part of this dataset
-    const logicalName = entityNames.get(snapshot.key);
-    if (!logicalName) continue;
-    const attributes = attributesByEntityName.get(logicalName) ?? [];
-    metrics.push(toModelMetric(legacy, logicalName, attributes));
+  const heldByName = new Map(
+    (options.held ?? []).map((m) => [m.name.toLowerCase(), m]),
+  );
+  const candidates = legacyMetrics
+    .filter((m) => targets.has((m.entity ?? '').toLowerCase()))
+    .filter((m) => !excluded.has(m.name.toLowerCase()))
+    .sort(byCreationThenId);
+
+  const result: LegacyMetricsImport = {
+    metrics: [],
+    imported: [],
+    skipped: [],
+  };
+  /** Lowercase name -> legacy id of the metric imported in this pass. */
+  const importedIds = new Map<string, string>();
+
+  for (const legacy of candidates) {
+    const name = legacy.name.toLowerCase();
+    const skip = (keptSourceId: string): void => {
+      result.skipped.push({
+        name,
+        ...(legacy.ownerId ? { author: legacy.ownerId } : {}),
+        sourceId: legacy.id,
+        reason: 'name_clash',
+        keptSourceId,
+      });
+    };
+
+    const held = heldByName.get(name);
+    if (held) {
+      if (!sameAuthor(held.author, legacy.ownerId)) {
+        skip(keptSourceIdFor(held, legacyMetrics, options.previous));
+      }
+      continue;
+    }
+    const keptId = importedIds.get(name);
+    if (keptId !== undefined) {
+      skip(keptId);
+      continue;
+    }
+
+    const target = targets.get((legacy.entity ?? '').toLowerCase())!;
+    result.metrics.push(toModelMetric(legacy, target.name, target.attributes));
+    result.imported.push({
+      name,
+      entity: target.name,
+      ...(legacy.ownerId ? { author: legacy.ownerId } : {}),
+      sourceId: legacy.id,
+    });
+    importedIds.set(name, legacy.id);
   }
-  return metrics;
+  return result;
 }
 
 /** One entity, built the same way regardless of whether it is part of a
@@ -457,44 +581,58 @@ export function buildEntity(
 
 /**
  * The bootstrap entry point: a dataset's physical snapshot + the legacy
- * metrics that apply to it, turned into a numbered `DataModel` version, and
- * validated before being handed back. The caller (`DataModelsService`)
+ * metrics of every owner that apply to it (`importLegacyMetrics`), turned
+ * into a numbered `DataModel` version, and validated before being handed
+ * back with the import's report entries. The caller (`DataModelsService`)
  * decides the version number — 1 for a brand new model, or a later number
  * when `rebootstrap` refreshes an existing one — and refuses to persist a
  * model this returns with non-empty `issues` (review finding 4: a silently
- * invalid bootstrap used to be worse than a loud one).
+ * invalid bootstrap used to be worse than a loud one). `importOptions`
+ * lets a rebuild keep the current version's metric names (`held`) and the
+ * model-managed and tombstoned ones out of the import.
  */
 export function bootstrapFromSnapshot(
   dataset: DatasetDoc,
   legacyMetrics: MetricDoc[],
   version: number,
-): { model: DataModel; issues: ModelIssue[] } {
+  importOptions: ImportLegacyMetricsOptions = {},
+): {
+  model: DataModel;
+  issues: ModelIssue[];
+  metricsImport: Omit<LegacyMetricsImport, 'metrics'>;
+} {
   const snapshotEntities = dataset.entities ?? [];
   const entityNames = deriveEntityNames(snapshotEntities);
-  const attributesByEntityName = new Map<string, Attribute[]>();
+  const targets = new Map<string, ImportTarget>();
 
   const entities: Entity[] = snapshotEntities.map((snapshot) => {
     const name =
       entityNames.get(snapshot.key) ?? safeName(lastSegment(snapshot.key));
     const entity = buildEntity(dataset, snapshot, name);
-    attributesByEntityName.set(name, entity.attributes);
+    targets.set(snapshot.key.toLowerCase(), {
+      name,
+      attributes: entity.attributes,
+    });
     return entity;
   });
+  const { metrics, imported, skipped } = importLegacyMetrics(
+    legacyMetrics,
+    targets,
+    importOptions,
+  );
 
   const draft: DataModel = {
     model: dataset.name,
     version,
     entities,
     relationships: buildRelationships(snapshotEntities, entityNames),
-    metrics: mapMetrics(
-      legacyMetrics,
-      snapshotEntities,
-      entityNames,
-      attributesByEntityName,
-    ),
+    metrics,
   };
 
+  const metricsImport = { imported, skipped };
   const validated = validateDataModel(draft);
-  if (validated.model) return { model: validated.model, issues: [] };
-  return { model: draft, issues: validated.issues };
+  if (validated.model) {
+    return { model: validated.model, issues: [], metricsImport };
+  }
+  return { model: draft, issues: validated.issues, metricsImport };
 }

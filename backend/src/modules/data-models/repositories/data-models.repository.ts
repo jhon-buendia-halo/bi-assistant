@@ -1,7 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { DATA_MODELS_STORE } from '../../../infrastructure/database/doc-store';
 import type { DocStore } from '../../../infrastructure/database/doc-store';
-import type { DataModel } from '../entities/data-model.entity';
+import type {
+  DataModel,
+  MetricsImportReport,
+} from '../entities/data-model.entity';
 import type { DriftReport } from '../drift';
 
 /**
@@ -48,6 +51,14 @@ export interface DataModelDoc {
    * `updateModelMetric` brings it back under model management.
    */
   deletedMetricNames?: string[];
+  /**
+   * The report of the last metrics import into this model (data-model R35,
+   * data-model.md 3.16): written by a bootstrap, rebuild, re-save merge or
+   * startup import that imported or skipped anything, and appended to by a
+   * skipped legacy write (R36). Answered as `metricsImport` with the drift
+   * report. Absent when no import has run.
+   */
+  lastMetricsImport?: MetricsImportReport;
   createdAt: string;
   updatedAt: string;
 }

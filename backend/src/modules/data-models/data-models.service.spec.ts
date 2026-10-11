@@ -8,6 +8,8 @@ import { serializeDataModel } from './dsl/yaml';
 import type { DataModelDoc } from './repositories/data-models.repository';
 import type { DatasetDoc } from '../datasets/repositories/datasets.repository';
 import type { MetricDoc } from '../metrics/entities/metric.entity';
+import { CurrentUserService } from '../auth/current-user.service';
+import type { CurrentUser } from '../auth/entities/current-user.entity';
 
 /**
  * Real `SqliteDocStore`s over an in-memory database — same spirit as
@@ -16,7 +18,7 @@ import type { MetricDoc } from '../metrics/entities/metric.entity';
  * read-modify-write version bookkeeping is checked against real semantics
  * (shallow-merge patches, store-stamped timestamps).
  */
-function build() {
+function build(currentUser?: CurrentUserService) {
   const db = new BetterSqlite3(':memory:');
   const dataModelsStore = new SqliteDocStore<DataModelDoc>(db, 'data_models');
   const datasetsStore = new SqliteDocStore<DatasetDoc>(db, 'datasets');
@@ -26,6 +28,7 @@ function build() {
     repository,
     datasetsStore,
     metricsStore,
+    currentUser,
   );
   return {
     service,
@@ -1049,5 +1052,414 @@ describe('DataModelsService delete tombstone (review finding 6): a deleted metri
         (m) => m.name === 'wins',
       ),
     ).toBe(true);
+  });
+});
+
+// --- Metrics import across owners (data-model R34-R36, data-model.md 3.16
+// and M13). Legacy metrics are written straight into the raw store, the way
+// `OwnedDocStore` stores them for an org server user: with `ownerId`. ---
+
+const ADA = 'user-ada';
+const GRACE = 'user-grace';
+
+function legacy(overrides: Partial<MetricDoc> & { id: string }): MetricDoc {
+  return {
+    name: 'avg_attendance',
+    label: 'Average attendance',
+    entity: MATCHES_KEY,
+    expression: 'avg(attendance)',
+    ...overrides,
+  };
+}
+
+type MetricsStore = ReturnType<typeof build>['metricsStore'];
+
+/** Inserts a legacy metric, then pins its `createdAt` (the store stamps
+ * the insert time), so "the first one" does not depend on the clock. */
+async function seedLegacy(store: MetricsStore, doc: MetricDoc): Promise<void> {
+  await store.insert(doc);
+  if (doc.createdAt)
+    await store.update({ id: doc.id }, { createdAt: doc.createdAt });
+}
+
+/** Ada's metric, then Grace's of the same name a month later, then Grace's
+ * `max_attendance` — the org E2E's fixture. */
+async function seedClash(metricsStore: MetricsStore) {
+  await seedLegacy(
+    metricsStore,
+    legacy({
+      id: 'm-grace',
+      ownerId: GRACE,
+      label: 'Mean attendance',
+      expression: 'sum(attendance) / count(*)',
+      createdAt: '2025-02-01T00:00:00.000Z',
+    }),
+  );
+  await seedLegacy(
+    metricsStore,
+    legacy({
+      id: 'm-ada',
+      ownerId: ADA,
+      createdAt: '2025-01-01T00:00:00.000Z',
+    }),
+  );
+  await seedLegacy(
+    metricsStore,
+    legacy({
+      id: 'm-max',
+      ownerId: GRACE,
+      name: 'max_attendance',
+      label: 'Highest attendance',
+      expression: 'max(attendance)',
+      createdAt: '2025-02-02T00:00:00.000Z',
+    }),
+  );
+}
+
+function currentOf(doc: DataModelDoc | null) {
+  return doc!.versions.find((v) => v.version === doc!.currentVersion)!;
+}
+
+describe('DataModelsService metrics import across owners (data-model R34, R35)', () => {
+  it('bootstraps with the first metric of each name, its author, and the import report', async () => {
+    const { service, datasetsStore, metricsStore } = build();
+    await seedClash(metricsStore);
+    await datasetsStore.insert(worldCupDataset());
+
+    await service.onModuleInit();
+
+    const doc = await service.get('World Cup Core');
+    expect(doc!.currentVersion).toBe(1);
+    const metrics = currentOf(doc).model.metrics;
+    expect(metrics.map((m) => [m.name, m.author])).toEqual([
+      ['avg_attendance', ADA],
+      ['max_attendance', GRACE],
+    ]);
+    expect(currentOf(doc).yaml).toContain(`author: ${ADA}`);
+    expect(doc!.lastMetricsImport).toEqual({
+      importedAt: expect.any(String) as string,
+      imported: [
+        {
+          name: 'avg_attendance',
+          entity: 'matches',
+          author: ADA,
+          sourceId: 'm-ada',
+        },
+        {
+          name: 'max_attendance',
+          entity: 'matches',
+          author: GRACE,
+          sourceId: 'm-max',
+        },
+      ],
+      skipped: [
+        {
+          name: 'avg_attendance',
+          author: GRACE,
+          sourceId: 'm-grace',
+          reason: 'name_clash',
+          keptSourceId: 'm-ada',
+        },
+      ],
+    });
+
+    const drift = await service.drift('World Cup Core');
+    expect(drift.metricsImport).toEqual(doc!.lastMetricsImport);
+  });
+
+  it('answers the drift report without metricsImport when no import ran', async () => {
+    const { service, datasetsStore } = build();
+    await datasetsStore.insert(worldCupDataset());
+    await service.onModuleInit();
+
+    expect(await service.drift('World Cup Core')).not.toHaveProperty(
+      'metricsImport',
+    );
+  });
+
+  it('a second startup adds no version and keeps the report unchanged', async () => {
+    const { service, datasetsStore, metricsStore } = build();
+    await seedClash(metricsStore);
+    await datasetsStore.insert(worldCupDataset());
+    await service.onModuleInit();
+    const before = await service.get('World Cup Core');
+
+    await service.onModuleInit();
+
+    const after = await service.get('World Cup Core');
+    expect(after!.versions).toHaveLength(1);
+    expect(after!.lastMetricsImport).toEqual(before!.lastMetricsImport);
+  });
+
+  it('imports at startup the legacy metrics an existing model does not have yet, as one version', async () => {
+    const { service, datasetsStore, metricsStore } = build();
+    await datasetsStore.insert(worldCupDataset());
+    await service.onModuleInit();
+    await seedClash(metricsStore);
+
+    await service.onModuleInit();
+
+    const doc = await service.get('World Cup Core');
+    expect(doc!.currentVersion).toBe(2);
+    expect(currentOf(doc).source).toBe('bootstrap');
+    expect(currentOf(doc).note).toBe('imported 2 legacy metrics');
+    expect(currentOf(doc).model.metrics.map((m) => m.author)).toEqual([
+      ADA,
+      GRACE,
+    ]);
+    expect(doc!.lastMetricsImport?.skipped).toEqual([
+      expect.objectContaining({ sourceId: 'm-grace', keptSourceId: 'm-ada' }),
+    ]);
+
+    await service.onModuleInit();
+    expect((await service.get('World Cup Core'))!.currentVersion).toBe(2);
+  });
+
+  it('a startup import leaves model-managed and deleted names alone', async () => {
+    const { service, datasetsStore, metricsStore } = build();
+    await datasetsStore.insert(worldCupDataset());
+    await service.onModuleInit();
+    await service.createModelMetric('World Cup Core', {
+      name: 'avg_attendance',
+      label: 'Model-owned',
+      entity: 'matches',
+      agg: 'avg',
+      of: 'attendance',
+    });
+    await service.createModelMetric('World Cup Core', {
+      name: 'max_attendance',
+      label: 'Soon gone',
+      entity: 'matches',
+      agg: 'max',
+      of: 'attendance',
+    });
+    await service.deleteModelMetric('World Cup Core', 'max_attendance');
+    await seedClash(metricsStore);
+    const versionBefore = (await service.get('World Cup Core'))!.currentVersion;
+
+    await service.onModuleInit();
+
+    const doc = await service.get('World Cup Core');
+    expect(doc!.currentVersion).toBe(versionBefore);
+    expect(currentOf(doc).model.metrics.map((m) => m.label)).toEqual([
+      'Model-owned',
+    ]);
+  });
+
+  it('rebootstrap keeps the current metrics, imports only new names and rewrites the report', async () => {
+    const { service, datasetsStore, metricsStore } = build();
+    await seedClash(metricsStore);
+    await datasetsStore.insert(worldCupDataset());
+    await service.onModuleInit();
+    await seedLegacy(
+      metricsStore,
+      legacy({
+        id: 'm-min',
+        ownerId: GRACE,
+        name: 'min_attendance',
+        label: 'Lowest attendance',
+        expression: 'min(attendance)',
+        createdAt: '2025-03-01T00:00:00.000Z',
+      }),
+    );
+
+    const doc = await service.rebootstrap('World Cup Core');
+
+    expect(currentOf(doc).model.metrics.map((m) => m.name)).toEqual([
+      'avg_attendance',
+      'max_attendance',
+      'min_attendance',
+    ]);
+    expect(doc.lastMetricsImport?.imported).toEqual([
+      {
+        name: 'min_attendance',
+        entity: 'matches',
+        author: GRACE,
+        sourceId: 'm-min',
+      },
+    ]);
+    expect(doc.lastMetricsImport?.skipped).toEqual([
+      expect.objectContaining({ sourceId: 'm-grace', keptSourceId: 'm-ada' }),
+    ]);
+  });
+
+  it('a re-save merge imports the first metric of each name on the new table and reports the rest', async () => {
+    const { service, datasetsStore, metricsStore } = build();
+    const matchesOnly = worldCupDataset({
+      tables: [MATCHES_KEY],
+      entities: [worldCupDataset().entities![0]],
+    });
+    await datasetsStore.insert(matchesOnly);
+    await service.ensureBootstrapped(matchesOnly);
+    await seedLegacy(
+      metricsStore,
+      legacy({
+        id: 't-grace',
+        ownerId: GRACE,
+        name: 'team_count',
+        label: 'Teams (Grace)',
+        entity: TEAMS_KEY,
+        expression: 'count(*)',
+        createdAt: '2025-02-01T00:00:00.000Z',
+      }),
+    );
+    await seedLegacy(
+      metricsStore,
+      legacy({
+        id: 't-ada',
+        ownerId: ADA,
+        name: 'team_count',
+        label: 'Teams (Ada)',
+        entity: TEAMS_KEY,
+        expression: 'count(*)',
+        createdAt: '2025-01-01T00:00:00.000Z',
+      }),
+    );
+
+    const doc = await service.mergeSnapshot(worldCupDataset());
+
+    expect(currentOf(doc).model.metrics).toEqual([
+      expect.objectContaining({
+        name: 'team_count',
+        label: 'Teams (Ada)',
+        author: ADA,
+      }),
+    ]);
+    expect(doc.lastMetricsImport?.skipped).toEqual([
+      expect.objectContaining({ sourceId: 't-grace', keptSourceId: 't-ada' }),
+    ]);
+  });
+});
+
+describe('DataModelsService legacy-write mirror with authors (data-model R36)', () => {
+  async function bootstrappedWithAda() {
+    const ctx = build();
+    await seedLegacy(
+      ctx.metricsStore,
+      legacy({
+        id: 'm-ada',
+        ownerId: ADA,
+        createdAt: '2025-01-01T00:00:00.000Z',
+      }),
+    );
+    await ctx.datasetsStore.insert(worldCupDataset());
+    await ctx.service.onModuleInit();
+    return ctx;
+  }
+
+  it('skips a name the model holds from another author and appends it to the report', async () => {
+    const { service } = await bootstrappedWithAda();
+    const grace = legacy({
+      id: 'm-grace',
+      ownerId: GRACE,
+      label: 'Mean attendance',
+      expression: 'sum(attendance) / count(*)',
+    });
+
+    expect(await service.syncMetric(grace)).toEqual([]);
+    // Writing it again (a legacy update) does not duplicate the entry.
+    expect(await service.syncMetric(grace)).toEqual([]);
+
+    const doc = await service.get('World Cup Core');
+    expect(doc!.currentVersion).toBe(1);
+    expect(currentOf(doc).model.metrics[0]).toMatchObject({
+      label: 'Average attendance',
+      author: ADA,
+    });
+    expect(doc!.lastMetricsImport?.imported).toEqual([
+      expect.objectContaining({ sourceId: 'm-ada' }),
+    ]);
+    expect(doc!.lastMetricsImport?.skipped).toEqual([
+      {
+        name: 'avg_attendance',
+        author: GRACE,
+        sourceId: 'm-grace',
+        reason: 'name_clash',
+        keptSourceId: 'm-ada',
+      },
+    ]);
+  });
+
+  it("mirrors a write by the metric's own author", async () => {
+    const { service } = await bootstrappedWithAda();
+
+    const touched = await service.syncMetric(
+      legacy({ id: 'm-ada', ownerId: ADA, label: 'Average attendance (v2)' }),
+    );
+
+    expect(touched).toEqual(['World Cup Core']);
+    const doc = await service.get('World Cup Core');
+    expect(currentOf(doc).model.metrics[0]).toMatchObject({
+      label: 'Average attendance (v2)',
+      author: ADA,
+    });
+  });
+
+  it("a legacy delete by another author leaves the model's metric in place", async () => {
+    const { service } = await bootstrappedWithAda();
+
+    expect(await service.removeMetric('avg_attendance', GRACE)).toEqual([]);
+    expect(await service.removeMetric('avg_attendance', ADA)).toEqual([
+      'World Cup Core',
+    ]);
+    const doc = await service.get('World Cup Core');
+    expect(currentOf(doc).model.metrics).toEqual([]);
+  });
+});
+
+describe('DataModelsService model-metric author (metrics R14, api.md 106-107)', () => {
+  function orgUser(id: string): CurrentUser {
+    return {
+      id,
+      displayName: id,
+      email: `${id}@contoso.test`,
+      initials: 'U',
+      roles: [],
+      permissions: ['use-agents', 'manage-datasources'],
+    };
+  }
+
+  const metric = {
+    name: 'max_attendance',
+    label: 'Highest attendance',
+    entity: 'matches',
+    agg: 'max' as const,
+    of: 'attendance',
+  };
+
+  it('stamps the creator in org server mode and keeps the author on edit', async () => {
+    const currentUser = new CurrentUserService({} as never);
+    const { service } = build(currentUser);
+    await service.ensureBootstrapped(worldCupDataset());
+
+    await currentUser.runAs(orgUser(ADA), () =>
+      // A body that names an author does not choose it.
+      service.createModelMetric('World Cup Core', { ...metric, author: GRACE }),
+    );
+    await currentUser.runAs(orgUser(GRACE), () =>
+      service.updateModelMetric('World Cup Core', 'max_attendance', {
+        ...metric,
+        label: 'Top attendance',
+      }),
+    );
+
+    const doc = await service.get('World Cup Core');
+    expect(currentOf(doc).model.metrics).toEqual([
+      expect.objectContaining({ label: 'Top attendance', author: ADA }),
+    ]);
+  });
+
+  it('records no author in local mode, and an edit never adds one', async () => {
+    const { service } = build(new CurrentUserService());
+    await service.ensureBootstrapped(worldCupDataset());
+
+    await service.createModelMetric('World Cup Core', metric);
+    await service.updateModelMetric('World Cup Core', 'max_attendance', {
+      ...metric,
+      author: ADA,
+    });
+
+    const doc = await service.get('World Cup Core');
+    expect(currentOf(doc).model.metrics[0]).not.toHaveProperty('author');
   });
 });
