@@ -367,9 +367,31 @@ Developer tooling for people who work on this repository in Claude Code, not par
 
 ### `workflow-steps`
 
-Opens a **Workflow** pane (the right-hand sidebar in a wide fullscreen terminal or the desktop app, a framed region above the prompt otherwise) that lists the development workflow from [CLAUDE.md](../../CLAUDE.md).
+Opens a **Workflow** pane (the right-hand sidebar in a wide fullscreen terminal or the desktop app, a framed region above the prompt otherwise) that shows the development workflow from [CLAUDE.md](../../CLAUDE.md) as a **task queue inferred from tool calls**. Nothing is asked of Claude and no prompt is changed: the mod watches every tool call, maps the file or command to a step, and moves the queue itself.
 
-- At session start, and whenever `/workflow` runs, it reads `CLAUDE.md` in the working directory, takes the `## Workflow` section and parses the mandatory first action (the `MANDATORY FIRST ACTION — …` line) and the steps (`<n>. **<title>** — <description>`), showing each step's number, title and the first sentence of its description with Markdown links, emphasis and code marks removed. `/workflow` also focuses the pane, and Esc closes it.
-- When the file can't be read or has no `## Workflow` section, the pane shows a built-in copy of the eleven steps and says `CLAUDE.md not readable here: built-in copy.`
-- A pane opened by the mod itself only appears in a terminal at least 144 columns wide (110 once the developer has opened it themselves); narrower, a toast says to run `/workflow`, which opens it at any width.
-- Static: it tracks nothing and writes nothing. State lives in `$.state` for the session only (`steps`, `source`, `firstAction`).
+- **Steps.** At session start, and whenever `/workflow` runs, it reads `CLAUDE.md` in the working directory, takes the `## Workflow` section and parses the mandatory first action (the `MANDATORY FIRST ACTION — …` line) and the steps (`<n>. **<title>** — <description>`). When the file can't be read or has no `## Workflow` section, a built-in copy of the eleven steps is used and the pane says `CLAUDE.md not readable here: built-in copy.`
+- **Inference rules**, matched top to bottom on each tool call; the first match names the step, and a call that matches nothing leaves the queue as it is:
+
+  | Signal | Step |
+  |---|---|
+  | `Read` of `retrospective.md` | marks the first action done (header check); counts as step 1 before the first write |
+  | any call that matches no other rule, before the first write of the session (reads, searches, shell commands, other tools) | 1 Understand the goal |
+  | `AskUserQuestion` | 2 Ask clarifying questions |
+  | a write (`Edit`, `Write`, `MultiEdit`, `NotebookEdit`) or read of `roadmap.md` | 3 |
+  | … of `specs/system/architecture.md` | 4 |
+  | … under `specs/` | 5 |
+  | … of `evidence/<id>/e2e-impact.md` | 6 |
+  | … under `frontend/e2e/`, or under `backend/test/` ending in `.e2e-spec.ts` | 7 |
+  | … under `frontend/src/`, `backend/src/` or `.claude/` | 8 |
+  | `Bash` whose command contains `test:e2e`, `check-specs.py`, `jest`, `playwright test`, or `npm [--prefix <dir>] [run] test|build|lint` | 9, with the task marked `passed` or `failed` from the last such command's result |
+  | any other `Bash` command naming a path one of the rules above owns | that path's step: strong when the command writes (a `>` or `>>` redirect, `tee`, `sed -i`, `cp`, `mv`, `rm`, `touch`, `mkdir`, a heredoc or a `python3 -` script), weak otherwise; a read naming `retrospective.md` is the first action |
+  | … of `changelog.md` or under `evidence/` | 10 |
+  | … of `retrospective.md` | 11 |
+
+  A write, a question or a step-9 command is a *strong* signal; a read is a *weak* one. Paths are matched after any `…/.claude/worktrees/<name>/` prefix is removed, so a worktree checkout behaves like the main one; in a shell command the redirect target is matched first, then the other paths in order.
+- **Queue.** Task `#1` (step 1) starts with the session. A call for a step other than the running task's opens a *tentative* task, drawn as `#n?` under the running one. It earns its number and becomes the running task after three matched calls or one strong signal; three unmatched calls, or a call for the running task's step, drop it. A later call for an earlier step makes a new task, so a step that runs twice appears twice with two numbers. Sequence numbers are never reused.
+- **Rows.** Done: `#n`, title, `step s`, the agent (`main`, or `<k> agent(s)`), duration, tokens, cost, a confidence bar (matched calls over all calls) and the evidence (`Edit roadmap.md ×4 · Read ×7`). Running: the same plus one indented line per subagent spawned during the task (`↳ <type> · <model> · "<description>"`, with a running marker until the turn ends). Tentative: as running, with `#n?`. Queued: every step above the highest step started, in CLAUDE.md order, numbered from the next free sequence number (one later while a tentative task holds, which takes the step it is for out of the list). Steps below the highest started that never had a task are listed as `no signal yet`. When more than twelve tasks are done, the earlier ones fold into `… <k> earlier tasks · <tokens> · $<cost>`.
+- **Figures.** Tokens: each `turn.complete` usage's input and output tokens are added to the running task (cache reads are counted separately and not shown). Cost: the session cost from `$.session.usage()` at the task's start subtracted from the cost at its end (US dollars as `/cost` totals them); no price table. Duration: wall clock from the task's first signal to its end.
+- **Commands.** `/workflow` re-reads `CLAUDE.md` and opens (and focuses) the pane; Esc closes it. `/workflow reset` clears the queue and starts `#1` again, for a new change in the same session.
+- A pane opened by the mod itself only appears in a terminal at least 144 columns wide (110 once the developer has opened it themselves); narrower, a toast says to run `/workflow`, which opens it at any width. The queue needs about 96 columns for one line per task; narrower panes truncate the evidence column.
+- State lives in `$.state` for the session only (`steps`, `source`, `firstAction`, `queue`). Nothing is stored across sessions and nothing is written back to the repository.

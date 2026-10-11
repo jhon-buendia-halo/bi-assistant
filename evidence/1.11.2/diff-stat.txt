@@ -1,0 +1,21 @@
+ .../mods/workflow-steps/.claude-plugin/plugin.json |   2 +-
+ .claude/mods/workflow-steps/README.md              |  32 +-
+ .claude/mods/workflow-steps/hooks/register.tsx     | 332 +++++++++++++++++++--
+ .claude/mods/workflow-steps/hooks/rules.ts         | 101 +++++++
+ .claude/mods/workflow-steps/tests/rules.test.ts    |  74 +++++
+ .../workflow-steps/tests/workflow-steps.test.ts    | 269 ++++++++++++-----
+ .claude/mods/workflow-steps/types/index.d.ts       |  43 ++-
+ changelog.md                                       |   7 +
+ evidence/1.11.2/README.md                          |  16 +
+ evidence/1.11.2/check-specs.txt                    |  14 +
+ evidence/1.11.2/e2e-impact.md                      |   9 +
+ evidence/1.11.2/pane-capture.txt                   |  64 ++++
+ evidence/1.11.2/plugin-test-first-run.txt          |  30 ++
+ evidence/1.11.2/plugin-test.txt                    |  26 ++
+ evidence/1.11.2/tsc.txt                            |   2 +
+ evidence/1.11.2/validate.txt                       |  22 ++
+ retrospective.md                                   |  25 ++
+ roadmap.md                                         |   7 +
+ specs/epics/BA-169/spec.md                         |   4 +-
+ specs/system/delivery.md                           |  34 ++-
+ 20 files changed, 990 insertions(+), 123 deletions(-)

@@ -14,6 +14,31 @@ Entry template:
 
 ---
 
+## 2026-10-10 — 1.11.2 Inferred task queue in the workflow pane (BA-171)
+
+### What went well
+- Designing on a page first (five mockups with the data source of every number) made the implementation a transcription: the rule table, the tentative threshold and the row format were all decided before any code.
+- Splitting the inference into a pure `rules.ts` gave five fast tests with no engine stubs, and the hooks module only orchestrates. The first red run failed on "cannot find module", exactly as intended.
+- Checking the event shapes in the engine-written declarations (`turn.complete` has `usage?`, `agent.spawn`'s result has `model` and `agentId`, `$.session.usage().cost.usd`) before writing the hooks meant no API surprises; `tsc` over the hooks against those declarations passed first time.
+- The test kit's `mock.clock` made durations and the cost delta exact assertions (`1:05`, `$0.22`).
+
+### What went wrong
+- Two test expectations were wrong about my own numbering (which parity a repeated step lands on, and which number a queued step gets while a tentative task holds); I corrected the tests after reading the output, which is acceptable only because the spec text, not the test, defined the behaviour.
+- A `cd <worktree> && python3 …` edit ran against the main checkout: the delivery spec edit failed on a missing anchor and the evidence folder was created in the wrong place. The harness resets the shell's working directory between calls and the script's `cd` was not where I thought it was.
+- Nine queue tests failed on `no implementation for clock.now` because only one test registered the mock clock; the fix was to register it in the shared stub helper.
+- The first live capture didn't submit the prompt (`send-keys 'text' Enter` in one call); a literal send, a pause, then Enter worked.
+- The pane's elapsed time only refreshes on events; a ticking clock (`$.clock.every`) was left out to keep the change small, and the roadmap says so.
+- The third live run ran `cd <worktree> && printf … > evidence/…`, and the worktree's absolute path under `.claude/worktrees/` matched rule 8 before the redirect target matched rule 10. Paths now drop the worktree prefix and a redirect target is matched first. Each live run found one more shape of real call.
+- The second live run wrote a file with `printf > …` in a shell command, and the pane saw only `Bash ×2`: the rules knew the write tools but not shell writes, which this project's auto mode uses for most edits. Paths named in a shell command now count for their step, strongly when the command writes.
+- The first live run showed task #1 at 0% confidence: Claude explored with a shell search, which the rules counted as unmatched because only `Read`, `Grep` and `Glob` were step 1 before the first write. One real session found what fifteen tests had not; the rule now counts any unmatched call before the first write as exploration.
+
+### What to do differently
+- Use absolute paths in every scripted edit of a worktree file and never rely on the shell's working directory.
+- Put `mock.clock(on)` in the shared stub helper of any mod test file whose hooks call `$.clock`.
+- When a test expectation disagrees with the implementation, re-derive the expected value from the spec text before touching either.
+- For tmux-driven captures of Claude Code, send the prompt with `-l`, wait, then send Enter in a separate call.
+- Drive one real session through the mod before calling an inference rule done; the test fixtures only contain the calls I imagined.
+
 ## 2026-10-10 — 1.11.1 Claude Code workflow mod in the repository (BA-170)
 
 ### What went well

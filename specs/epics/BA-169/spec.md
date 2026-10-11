@@ -11,6 +11,7 @@ Today the workflow lives only in CLAUDE.md. A Claude Code *mod* (a plugin whose 
 ## Scope
 
 - **The mod.** `.claude/mods/workflow-steps/`: a plugin with a hooks module that, at session start and on `/workflow`, reads `CLAUDE.md` in the working directory, parses the `## Workflow` section (the mandatory first action and the numbered, bold-titled steps) and opens a **Workflow** pane listing them: number, title and the first sentence of each step. When the file can't be read or has no such section, a built-in copy of the steps is shown and the pane says so. A static checklist: nothing is tracked or stored.
+- **The queue (BA-171).** The pane is a task queue inferred from tool calls, with nothing asked of Claude: executed tasks numbered in the order they ran with step, agent, duration, tokens and cost; the running task with a confidence bar and its subagents; a tentative task that earns its number after enough matched calls; the remaining steps queued with the numbers they will get. Cost is the session cost delta; no history is kept.
 - **Tests.** The mod's own tests, run with `claude plugin test`, cover parsing, the pane on the terminal and desktop surfaces, the command and both fallbacks.
 - **Install for every developer.** The repository is a plugin marketplace (`.claude-plugin/marketplace.json` at the root lists the mod by its path), and the committed project settings (`.claude/settings.json`) register that marketplace and enable `workflow-steps@bi-assistant`, so Claude Code offers the install to a developer who trusts the folder. Developers changing the mod load it directly with `claude --plugin-dir .claude/mods/workflow-steps`.
 - **Documentation.** The install and the mod's behaviour in [system/delivery.md](../../system/delivery.md) and the repository README; a README inside the mod.
@@ -18,7 +19,7 @@ Today the workflow lives only in CLAUDE.md. A Claude Code *mod* (a plugin whose 
 ## Out of scope
 
 - Any change to the application (frontend, backend, CLI, desktop). The mod is developer tooling.
-- Tracking progress per step, or writing anything back to the repository or the session.
+- A reporting tool or prompt injection; a history store with estimates; writing anything back to the repository.
 - Organization-wide managed installs; other mods.
 
 ## Stories
@@ -26,6 +27,7 @@ Today the workflow lives only in CLAUDE.md. A Claude Code *mod* (a plugin whose 
 | Story | Summary | Roadmap feature |
 |---|---|---|
 | [BA-170](https://halo-powered.atlassian.net/browse/BA-170) | Ship the workflow-steps mod in the repo and make it installable | 1.11.1 |
+| [BA-171](https://halo-powered.atlassian.net/browse/BA-171) | Inferred task queue in the workflow pane | 1.11.2 |
 
 All stories are built on one branch, `feat/BA-169-claude-code-workflow-mod`, and ship as one PR.
 

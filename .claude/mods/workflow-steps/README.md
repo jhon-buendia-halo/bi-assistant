@@ -2,19 +2,30 @@
 
 A Claude Code mod that opens a **Workflow** pane beside the transcript (the right-hand
 sidebar in a wide fullscreen terminal or the desktop app, a framed region above the
-prompt otherwise) listing the eleven-step development workflow from this repository's
-[CLAUDE.md](../../../CLAUDE.md), plus the mandatory first action it names.
+prompt otherwise) showing the eleven-step development workflow from this repository's
+[CLAUDE.md](../../../CLAUDE.md) as a **task queue inferred from tool calls**.
 
-- On session start the mod reads `CLAUDE.md` in the working directory, parses the
-  `## Workflow` section (its numbered, bold-titled steps) and opens the pane.
-- `/workflow` re-reads the file and opens (or focuses) the pane. Esc closes it.
+- Executed tasks are numbered in the order they ran (`#1`, `#2`, …) with the step they
+  correspond to, the agent, duration, tokens, cost, a confidence bar and the evidence
+  (`Edit roadmap.md ×4`). The running task also lists the subagents spawned under it.
+- The mod maps each tool call to a step (roadmap.md is 3, specs are 5, Playwright files
+  are 7, source files 8, a test run 9, the changelog 10, the retrospective 11, and so on).
+  A step change opens a tentative task (`#n?`) that earns its number after three matched
+  calls or one write, and is dropped after three unmatched calls. Nothing is asked of
+  Claude and no prompt is changed.
+- The remaining steps are queued with the numbers they will get; steps that never gave a
+  signal are listed apart.
+- `/workflow` re-reads `CLAUDE.md` and opens (or focuses) the pane; Esc closes it.
+  `/workflow reset` clears the queue for a new change.
 - When `CLAUDE.md` can't be read or has no `## Workflow` section, a built-in copy of the
-  steps is shown and the pane says so.
+  steps is used and the pane says so.
 - A pane the mod opens by itself only appears in a terminal at least 144 columns wide
   (110 once you opened it yourself); otherwise a toast says to run `/workflow`.
 
-The checklist is static: nothing is tracked or stored. Written against Claude Code
-2.1.296; mods need 2.1.287 or later and the hooks API is early access.
+Tokens come from each turn's usage; cost is the session cost delta between a task's start
+and end, as `/cost` counts it. Nothing is stored across sessions. The full rule table is in
+[specs/system/delivery.md](../../../specs/system/delivery.md) §9. Written against Claude
+Code 2.1.296; mods need 2.1.287 or later and the hooks API is early access.
 
 ## Install
 
@@ -44,7 +55,8 @@ workflow-steps/
 ├── .claude-plugin/plugin.json   manifest (name, version, types)
 ├── hooks/hooks.json             points at the hooks module
 ├── hooks/register.tsx           session.start, command.run{workflow}, ui.render{Pane}
+├── hooks/rules.ts               the inference rules (pure functions, tested on their own)
 ├── types/index.d.ts             the $.state values the mod keeps
-├── tests/workflow-steps.test.ts `claude plugin test`
+├── tests/                       `claude plugin test`: the rules and the queue through the hooks
 └── tsconfig.json                extends the declarations Claude Code writes into .claude-plugin/types/
 ```
