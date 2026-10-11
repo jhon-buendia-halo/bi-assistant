@@ -4,6 +4,7 @@ import {
   Logger,
   NotFoundException,
   OnModuleInit,
+  Optional,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { RequestContext } from '@mastra/core/request-context';
@@ -48,6 +49,7 @@ import { MetricsService } from '../metrics/metrics.service';
 import { KnowledgeService } from '../knowledge/knowledge.service';
 import { SessionsRepository } from './repositories/sessions.repository';
 import { VisualizationService } from './visualization.service';
+import { ActivityService } from '../auth/activity.service';
 import { CurrentUserService } from '../auth/current-user.service';
 import { sourceEntities } from './visualization-document';
 import { compareResults } from './result-compare';
@@ -158,6 +160,8 @@ export class SessionsService implements OnModuleInit {
     private readonly userAgents: UserAgentsService,
     // Defaulted so unit tests that never switch users can leave it out.
     private readonly currentUser: CurrentUserService = new CurrentUserService(),
+    // Records agent errors in org server mode (admin R40); absent in unit tests.
+    @Optional() private readonly activity?: ActivityService,
   ) {}
 
   /** The current user's preview with this id, if any. */
@@ -1163,24 +1167,59 @@ export class SessionsService implements OnModuleInit {
     const trimmed = (content ?? '').trim();
     if (!trimmed) throw new BadRequestException('message is required');
     const session = await this.get(id);
-    this.appendUserMessage(session, trimmed);
-    const agent = this.mastra.getAgent('assistant');
-    const input = await this.agentInput(agent, session);
-    const options = await this.agentOptions(session, trimmed);
-    const result = await agent.generate(input, options);
-    const reasoning = reasoningTrail(toolRecords(result));
-    const knowledge = knowledgeUsed(options.requestContext);
-    session.messages.push({
-      role: 'assistant',
-      content: (result.text ?? '').trim(),
-      at: new Date().toISOString(),
-      ...(reasoning ? { reasoning } : {}),
-      ...(knowledge ? { knowledge } : {}),
-    });
-    const updated = await this.updateDoc(id, {
-      messages: session.messages,
-    });
-    return updated ?? session;
+    try {
+      this.appendUserMessage(session, trimmed);
+      const agent = this.mastra.getAgent('assistant');
+      const input = await this.agentInput(agent, session);
+      const options = await this.agentOptions(session, trimmed);
+      const result = await agent.generate(input, options);
+      const reasoning = reasoningTrail(toolRecords(result));
+      const knowledge = knowledgeUsed(options.requestContext);
+      session.messages.push({
+        role: 'assistant',
+        content: (result.text ?? '').trim(),
+        at: new Date().toISOString(),
+        ...(reasoning ? { reasoning } : {}),
+        ...(knowledge ? { knowledge } : {}),
+      });
+      const updated = await this.updateDoc(id, {
+        messages: session.messages,
+      });
+      return updated ?? session;
+    } catch (error) {
+      await this.recordAgentError(session, error);
+      throw error;
+    }
+  }
+
+  /**
+   * An agent error (admin R40; api.md 3.1; data-model 3.14.7): in org server
+   * mode, a turn in a session started from a user agent that ended in an
+   * error. Called only once the request reached the assistant, so an empty
+   * message or an unknown session never counts; a stopped turn, a preview
+   * and an agent this session no longer runs (deleted, or transferred to
+   * another owner) don't either. Recording never hides the turn's error.
+   */
+  private async recordAgentError(
+    session: SessionDoc,
+    error: unknown,
+    abortSignal?: AbortSignal,
+  ): Promise<void> {
+    if (abortSignal?.aborted || this.currentUser.mode !== 'org') return;
+    if (!this.activity || !session.agentId || session.preview) return;
+    try {
+      if (!(await this.userAgents.get(session.agentId))) return;
+      const message = error instanceof Error ? error.message : String(error);
+      await this.activity.record('agent.turn-failed', {
+        actorId: this.currentUser.ownerKey(),
+        subjectId: session.agentId,
+        details: { sessionId: session.id, message: message.slice(0, 200) },
+      });
+    } catch (recordError) {
+      this.logger.warn(
+        `Could not record the agent error of session ${session.id}: ${recordError instanceof Error ? recordError.message : String(recordError)}`,
+      );
+    }
   }
 
   /**
@@ -1202,6 +1241,31 @@ export class SessionsService implements OnModuleInit {
     const trimmed = (content ?? '').trim();
     if (!trimmed) throw new BadRequestException('message is required');
     const session = await this.get(id);
+    try {
+      await this.streamTurn(
+        session,
+        trimmed,
+        emit,
+        abortSignal,
+        activeVisualId,
+        careful,
+      );
+    } catch (error) {
+      await this.recordAgentError(session, error, abortSignal);
+      throw error;
+    }
+  }
+
+  /** The streamed turn itself, once the request reached the assistant. */
+  private async streamTurn(
+    session: SessionDoc,
+    trimmed: string,
+    emit: (event: StreamEvent) => void,
+    abortSignal: AbortSignal | undefined,
+    activeVisualId: string | undefined,
+    careful: boolean,
+  ): Promise<void> {
+    const id = session.id;
     this.appendUserMessage(session, trimmed);
     // Persist the prompt before model startup. A user can stop while the
     // provider is still connecting, and that turn should survive a reload.

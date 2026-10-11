@@ -122,6 +122,11 @@ export class DirectoryRepository {
 
   // Memberships
 
+  /** Every membership, for the admin screens' one read of the directory. */
+  allMemberships(): Promise<GroupMemberDoc[]> {
+    return this.members.find({}, { sort: { createdAt: 1 } });
+  }
+
   membersOf(groupId: string): Promise<GroupMemberDoc[]> {
     return this.members.find({ groupId }, { sort: { createdAt: 1 } });
   }

@@ -13,6 +13,12 @@ export interface HeldRole {
   groupId?: string;
   /** Source `direct` only; the id `DELETE /admin/role-assignments/:id` takes. */
   assignmentId?: string;
+  /**
+   * Admin detail only (api.md 84): a direct Data owner assignment whose
+   * datasource no longer exists. It grants nothing (data-model 3.13), so
+   * `GET /me` never lists it.
+   */
+  datasourceMissing?: true;
 }
 
 /** The user a request (and the work it starts) runs as. */

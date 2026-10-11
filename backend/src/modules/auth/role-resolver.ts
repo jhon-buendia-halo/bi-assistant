@@ -3,8 +3,14 @@ import {
   ORG_SERVER_CONFIG,
   type OrgServerConfig,
 } from '../../config/org-server.config';
+import { CONNECTIONS_STORE } from '../../infrastructure/database/doc-store';
+import type { DocStore } from '../../infrastructure/database/doc-store';
 import type { CurrentUser, HeldRole } from './entities/current-user.entity';
-import type { UserDoc } from './entities/directory.entity';
+import type {
+  GroupRoleMappingDoc,
+  RoleAssignmentDoc,
+  UserDoc,
+} from './entities/directory.entity';
 import { permissionsForRoles } from './permissions';
 import { DirectoryRepository } from './repositories/directory.repository';
 import { RolesRepository } from './repositories/roles.repository';
@@ -33,6 +39,53 @@ export function initialsOf(user: {
 }
 
 /**
+ * A user's held roles from what is stored (admin R20; api.md 2.13): the
+ * implicit User role, Platform admin for a bootstrap admin, the direct
+ * assignments, then the mappings of the user's groups. Pure, so the admin
+ * screens resolve every user from one read of the directory.
+ *
+ * A Data owner assignment or mapping whose datasource no longer exists
+ * grants nothing (data-model 3.13) and is left out. Only the admin detail
+ * asks for the dangling direct assignments too (`includeDanglingAssignments`,
+ * api.md 84), flagged `datasourceMissing`, so an admin can remove them.
+ */
+export function resolveHeldRoles(
+  isBootstrap: boolean,
+  assignments: readonly RoleAssignmentDoc[],
+  groupMappings: readonly GroupRoleMappingDoc[],
+  datasourceExists: (id: string) => boolean,
+  options: { includeDanglingAssignments?: boolean } = {},
+): HeldRole[] {
+  const dangling = (datasourceId?: string) =>
+    datasourceId !== undefined && !datasourceExists(datasourceId);
+  const held: HeldRole[] = [{ role: 'user', source: 'implicit' }];
+  if (isBootstrap) held.push({ role: 'platform-admin', source: 'bootstrap' });
+  for (const assignment of assignments) {
+    const missing = dangling(assignment.datasourceId);
+    if (missing && !options.includeDanglingAssignments) continue;
+    const role: HeldRole = {
+      role: assignment.role,
+      source: 'direct',
+      assignmentId: assignment.id,
+    };
+    if (assignment.datasourceId) role.datasourceId = assignment.datasourceId;
+    if (missing) role.datasourceMissing = true;
+    held.push(role);
+  }
+  for (const mapping of groupMappings) {
+    if (dangling(mapping.datasourceId)) continue;
+    const role: HeldRole = {
+      role: mapping.role,
+      source: 'group',
+      groupId: mapping.groupId,
+    };
+    if (mapping.datasourceId) role.datasourceId = mapping.datasourceId;
+    held.push(role);
+  }
+  return held;
+}
+
+/**
  * A user's roles and permissions, resolved on every request (admin R18-R21;
  * api.md 2.13): the implicit User role, Platform admin for a bootstrap user
  * name, their direct assignments and the roles mapped to their groups.
@@ -44,6 +97,8 @@ export class RoleResolver {
   constructor(
     private readonly directory: DirectoryRepository,
     private readonly roles: RolesRepository,
+    @Inject(CONNECTIONS_STORE)
+    private readonly connections: DocStore<{ id: string }>,
     @Optional()
     @Inject(ORG_SERVER_CONFIG)
     config: OrgServerConfig | null = null,
@@ -60,30 +115,27 @@ export class RoleResolver {
   }
 
   async heldRoles(user: UserDoc): Promise<HeldRole[]> {
-    const held: HeldRole[] = [{ role: 'user', source: 'implicit' }];
-    if (this.isBootstrapAdmin(user)) {
-      held.push({ role: 'platform-admin', source: 'bootstrap' });
-    }
-    for (const assignment of await this.roles.assignmentsOf(user.id)) {
-      const role: HeldRole = {
-        role: assignment.role,
-        source: 'direct',
-        assignmentId: assignment.id,
-      };
-      if (assignment.datasourceId) role.datasourceId = assignment.datasourceId;
-      held.push(role);
-    }
     const groupIds = await this.directory.groupIdsOf(user.id);
-    for (const mapping of await this.roles.mappingsOf(groupIds)) {
-      const role: HeldRole = {
-        role: mapping.role,
-        source: 'group',
-        groupId: mapping.groupId,
-      };
-      if (mapping.datasourceId) role.datasourceId = mapping.datasourceId;
-      held.push(role);
-    }
-    return held;
+    const assignments = await this.roles.assignmentsOf(user.id);
+    const mappings = await this.roles.mappingsOf(groupIds);
+    return resolveHeldRoles(
+      this.isBootstrapAdmin(user),
+      assignments,
+      mappings,
+      await this.datasourceCheck([...assignments, ...mappings]),
+    );
+  }
+
+  /**
+   * Whether a datasource exists, for the Data owner roles among `held`.
+   * Reads the datasources only when one of them names one.
+   */
+  private async datasourceCheck(
+    held: readonly { datasourceId?: string }[],
+  ): Promise<(id: string) => boolean> {
+    if (!held.some((r) => r.datasourceId)) return () => true;
+    const ids = new Set((await this.connections.find()).map((c) => c.id));
+    return (id) => ids.has(id);
   }
 
   /** The user a request runs as. */

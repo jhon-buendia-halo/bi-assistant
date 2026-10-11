@@ -4,6 +4,7 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
   Param,
   Post,
   Query,
@@ -275,8 +276,10 @@ export class SessionsController {
   }
 
   // Server-sent events: reasoning/text deltas while the agent thinks, then
-  // `done` with the persisted session.
+  // `done` with the persisted session. 200 once started, even when the turn
+  // fails: the failure arrives as an `error` event (api.md 3.1).
   @Post(':id/messages/stream')
+  @HttpCode(200)
   async streamMessage(
     @Param('id') id: string,
     @Body()

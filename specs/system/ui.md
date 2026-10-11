@@ -519,6 +519,7 @@ Data: `GET /admin/users/:id` (api 84), `PUT /admin/users/:id/roles` (api 85), `P
   | `Approver` | `Approve org-wide publishing` |
   | `Maker` | `Create, test and share agents with their team` |
   | `Data owner · <datasource name>` (one per datasource held) | `Approves access requests to this data source` |
+  | `Data owner · datasource removed` (one per direct assignment with `datasourceMissing`, api.md 84; ticked and enabled) | `Its datasource no longer exists, so this role grants nothing. Untick it to remove it.` |
   | `Data owner` (to add one) | `Approves access requests to this data source`, then the **Datasource** select (4.18.1) under it, 28 px indented |
 
   The `Data owner · <datasource name>` rows are sorted by label. A disabled checkbox (admin R59-R61) adds its reason to the description, on its own line: `From group <names>`, `Bootstrap admin, set in the server configuration.`, `You can't remove your own Platform admin role.`, `No other datasource to own.`

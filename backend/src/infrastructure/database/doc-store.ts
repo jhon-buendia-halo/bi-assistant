@@ -44,6 +44,19 @@ export interface DocStore<T extends object = Record<string, unknown>> {
   deleteMany(filter: DocFilter): Promise<number>;
 }
 
+/**
+ * Runs several store writes as one unit (data-model 2.4): every write made
+ * by `work` is applied, or none is. Used where the API promises "all or
+ * nothing" (api.md 85, 86). `work` must only call stores: the adapter's
+ * operations are synchronous under their promises, so nothing else runs on
+ * the connection until `work` settles. Runs are serialised, not nested.
+ */
+export interface DocStoreTransactions {
+  run<R>(work: () => Promise<R>): Promise<R>;
+}
+
+export const DOC_STORE_TRANSACTIONS = 'DOC_STORE_TRANSACTIONS';
+
 /** One injection token per application collection. */
 export const CONNECTIONS_STORE = 'DOC_STORE_connections';
 export const SETTINGS_STORE = 'DOC_STORE_settings';

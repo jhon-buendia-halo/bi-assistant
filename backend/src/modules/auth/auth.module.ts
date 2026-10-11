@@ -89,6 +89,7 @@ const ownedStoreProviders: Provider[] = PRIVATE_COLLECTIONS.map((c) => ({
     CurrentUserService,
     DirectoryRepository,
     RolesRepository,
+    RoleResolver,
     ActivityService,
     AuthSessionsService,
     ...PRIVATE_COLLECTIONS.map((c) => c.owned),

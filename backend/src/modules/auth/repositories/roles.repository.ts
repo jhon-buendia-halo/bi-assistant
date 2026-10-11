@@ -24,6 +24,10 @@ export class RolesRepository {
     private readonly mappings: DocStore<GroupRoleMappingDoc>,
   ) {}
 
+  allAssignments(): Promise<RoleAssignmentDoc[]> {
+    return this.assignments.find({}, { sort: { createdAt: 1 } });
+  }
+
   assignmentsOf(userId: string): Promise<RoleAssignmentDoc[]> {
     return this.assignments.find({ userId }, { sort: { createdAt: 1 } });
   }
@@ -53,6 +57,37 @@ export class RolesRepository {
 
   deleteAssignment(id: string): Promise<number> {
     return this.assignments.deleteOne({ id });
+  }
+
+  allMappings(): Promise<GroupRoleMappingDoc[]> {
+    return this.mappings.find({}, { sort: { createdAt: 1 } });
+  }
+
+  mappingById(id: string): Promise<GroupRoleMappingDoc | null> {
+    return this.mappings.findOne({ id });
+  }
+
+  /** The same mapping (for Data owner, on the same datasource). */
+  async findMapping(
+    groupId: string,
+    role: AssignableRoleId,
+    datasourceId?: string,
+  ): Promise<GroupRoleMappingDoc | null> {
+    return (
+      (await this.mappings.find({ groupId, role })).find(
+        (m) => (m.datasourceId ?? null) === (datasourceId ?? null),
+      ) ?? null
+    );
+  }
+
+  insertMapping(
+    mapping: Omit<GroupRoleMappingDoc, 'id'>,
+  ): Promise<GroupRoleMappingDoc> {
+    return this.mappings.insert({ ...mapping, id: randomUUID() });
+  }
+
+  deleteMapping(id: string): Promise<number> {
+    return this.mappings.deleteOne({ id });
   }
 
   async mappingsOf(groupIds: string[]): Promise<GroupRoleMappingDoc[]> {

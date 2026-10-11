@@ -4,6 +4,7 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
   Logger,
   Param,
   Post,
@@ -34,7 +35,9 @@ export class TestingDataController {
     }
   }
 
+  /** 200 with a Style A body, loaded or not (api.md 56). */
   @Post(':fixtureId/load')
+  @HttpCode(200)
   async load(
     @Param('fixtureId') fixtureId: string,
     @Body() dto: LoadTestingDataDto,

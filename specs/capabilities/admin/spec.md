@@ -49,7 +49,7 @@ Capability-local vocabulary:
 ### Roles and permissions
 
 - R19. There SHALL be five built-in roles: **User**, **Maker**, **Data owner**, **Approver** and **Platform admin**. Every signed-in user SHALL hold the User role implicitly. The set of roles is fixed: roles cannot be added, renamed or removed.
-- R20. A user's roles SHALL be the union of: User; their direct role assignments; the roles mapped to every group they are a member of (**group mappings**); and Platform admin when they are a bootstrap admin (R18). Roles are additive: holding more roles never removes a permission. A **Data owner** assignment or mapping SHALL name one datasource. Roles SHALL be resolved on every request, so a change applies to the user's next request without signing in again.
+- R20. A user's roles SHALL be the union of: User; their direct role assignments; the roles mapped to every group they are a member of (**group mappings**); and Platform admin when they are a bootstrap admin (R18). Roles are additive: holding more roles never removes a permission. A **Data owner** assignment or mapping SHALL name one datasource; once that datasource no longer exists it SHALL grant no role and no permission, though it stays stored. Roles SHALL be resolved on every request, so a change applies to the user's next request without signing in again.
 - R21. A user's permissions SHALL be the union of their roles' permissions in this fixed matrix. The local user (R2) SHALL hold every permission.
 
   | Permission | Id | User | Maker | Data owner | Approver | Platform admin |
@@ -108,7 +108,7 @@ These rules cover the three tabs of the Admin area (R35): Overview (P1, [BA-164]
   4. **Active**: otherwise.
 
   A user's last activity SHALL be the time of their first request on the most recent UTC day they made one (R36), or their last sign-in when that is later or there is no such day. **Last active** SHALL show it at day precision ("Today", "Yesterday", "<n> days ago"), or "Never" for a user who has not signed in.
-- R40. An **agent error** SHALL be a chat turn, in a session started from a user agent, that ended in an error instead of an answer (sessions-chat R45). A turn the user stopped, a refused request that never reached the assistant (an empty message, an unknown session) and a turn in the agent editor's preview chat SHALL NOT count. In org server mode each agent error SHALL be recorded as an activity event naming the agent, the session's owner and the error message.
+- R40. An **agent error** SHALL be a chat turn, in a session started from a user agent, that ended in an error instead of an answer (sessions-chat R45). A turn the user stopped, a refused request that never reached the assistant (an empty message, an unknown session), a turn in the agent editor's preview chat and a turn in a session whose agent was deleted or transferred to another owner (the session then runs without it, sessions-chat R59) SHALL NOT count. In org server mode each agent error SHALL be recorded as an activity event naming the agent, the session's owner and the error message.
 
 ### Overview (P1)
 
@@ -140,7 +140,7 @@ These rules cover the three tabs of the Admin area (R35): Overview (P1, [BA-164]
   | user deactivated / reactivated | `Entra ID deactivated <user>` / `Entra ID reactivated <user>` |
 
   Sign-ins, refused sign-ins, sign-outs, daily activity, SCIM requests and agent errors SHALL NOT appear. With none of these events the card SHALL read "No activity yet." Recent activity is a short feed, not an audit log.
-- R48. **Export report** SHALL download a CSV file named `admin-report-<YYYY-MM-DD>.csv` (the UTC date) holding, at the moment of the export, the two tiles, the three Needs attention counts, the 8 weekly counts and the recent activity. A cell that starts with `=`, `+`, `-` or `@` SHALL be prefixed with `'`, so a spreadsheet never runs it as a formula.
+- R48. **Export report** SHALL download a CSV file named `admin-report-<YYYY-MM-DD>.csv` (the UTC date) holding, at the moment of the export, the two tiles, the three Needs attention counts, the 8 weekly counts and the recent activity. A cell that starts with `=`, `+`, `-`, `@`, a tab or a carriage return SHALL be prefixed with `'`, so a spreadsheet never runs it as a formula.
 
 ### Users & groups (P2)
 
@@ -164,7 +164,7 @@ These rules cover the three tabs of the Admin area (R35): Overview (P1, [BA-164]
 - R58. Selecting a user's name in the users table SHALL open the **user detail panel** beside the table and mark the row selected. While the panel is open the table SHALL show only **Name**, **Roles** and **Last active**; the search, the chips and the pagination stay. Selecting another user SHALL show that user instead, discarding changes not yet saved. **Close user details** or Escape SHALL close the panel and return focus to the user's name in the table.
 - R59. The panel SHALL show, top to bottom:
   - the user's initials, display name, email and status badge (R39);
-  - **Roles**: a checkbox for **Platform admin**, **Approver** and **Maker**, each with its description; one ticked checkbox **Data owner · <datasource name>** per datasource the user is Data owner of; and an unticked **Data owner** checkbox with a **Datasource** select that is enabled only while that box is ticked and offers the datasources the user is not yet Data owner of. With no datasource left to offer, that **Data owner** checkbox is disabled with the reason "No other datasource to own.". The User role has no checkbox: everyone holds it (R19).
+  - **Roles**: a checkbox for **Platform admin**, **Approver** and **Maker**, each with its description; one ticked checkbox **Data owner · <datasource name>** per datasource the user is Data owner of; one ticked **Data owner · datasource removed** checkbox per direct Data owner assignment whose datasource no longer exists (it grants nothing, R20; unticking it and saving removes it); and an unticked **Data owner** checkbox with a **Datasource** select that is enabled only while that box is ticked and offers the datasources the user is not yet Data owner of. With no datasource left to offer, that **Data owner** checkbox is disabled with the reason "No other datasource to own.". The User role has no checkbox: everyone holds it (R19).
   - **Groups (from Entra ID, read-only)**: the user's groups as badges, or "No groups.";
   - **Agents owned**: each user agent the user owns with its status badge, **Live** when it has a Live version, else **Draft**, or "No agents owned.";
   - **Transfer ownership** and **Save changes**.

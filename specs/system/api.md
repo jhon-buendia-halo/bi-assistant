@@ -59,7 +59,7 @@ Clients read the error text from `error.message` (Style B) or `body.message` wit
 
 ### 1.4 Success status codes
 
-POST handlers return the framework default **201 Created**; GET/PUT/DELETE return **200**; `DELETE /knowledge/:id` returns **204 No Content**. Handlers that write the response themselves (the two SSE endpoints and the three file downloads) return **200**. Clients treat any 2xx as success and do not depend on 200 vs 201.
+POST handlers return the framework default **201 Created**, except where an endpoint states **200**: the two SSE endpoints (5 and 54, 200 once the stream starts, whatever it then carries), `POST /developer-settings/test-endpoint` (55), `POST /testing-data/:fixtureId/load` (56), `POST /auth/logout` (63) and `POST /admin/agents/transfer` (86); `POST /admin/role-assignments` (79) and `POST /admin/role-mappings` (89) answer 200 when nothing was written. GET/PUT/DELETE return **200**; `DELETE /knowledge/:id` returns **204 No Content**. The file downloads write the response themselves and return **200**. Clients treat any 2xx as success and do not depend on 200 vs 201.
 
 ### 1.5 Validation
 
@@ -774,7 +774,7 @@ interface MeView {
 
 #### 64. `GET /me`
 - Local mode: `200 { mode:"local", user:{ id:"local", displayName:"Demo User", email:null, initials:"D" }, roles:[{role:"user",source:"implicit"},{role:"platform-admin",source:"implicit"}], permissions:<all eleven> }`.
-- Org server mode, signed in: `200 MeView` with `mode:"org"`. `initials` per [ui.md](ui.md) 1.3.
+- Org server mode, signed in: `200 MeView` with `mode:"org"`. `initials` per [ui.md](ui.md) 1.3. A Data owner assignment or mapping whose datasource no longer exists is not listed and grants nothing ([data-model.md](data-model.md) 3.13).
 - Org server mode, not signed in: `401` (1.9).
 
 ### 2.14 SCIM 2.0 (directory provisioning)
@@ -849,6 +849,7 @@ interface AdminUserRow {
 interface AdminHeldRole extends HeldRole {
   datasourceName?: string;           // data-owner only; the datasource's current name, or its id if it no longer exists
   groupNames?: string[];             // source 'group': every group that maps this role (and datasource)
+  datasourceMissing?: true;          // 84 only: a direct Data owner assignment whose datasource no longer exists
 }
 interface ActivityItem { id: string; type: string; at: string; text: string }   // text: the admin R47 sentence
 ```
@@ -879,12 +880,12 @@ interface ActivityItem { id: string; type: string; at: string; text: string }   
     recentActivity: ActivityItem[];                             // at most 10, newest first
   }
   ```
-  `agentName` is the agent's Live name, else its draft name. `formerOwner` is `null` when the owner is no longer in the directory. `makerAssignmentId` is the direct Maker assignment (the id endpoint 80 takes), `null` when Maker comes only from groups. Each `items` list holds at most 100 entries, ordered by name; `count` is always the full number.
+  `agentName` is the agent's Live name, else its draft name. `formerOwner` is `null` when the owner is no longer in the directory. An errored agent's `owner` is its current owner (`displayName` `"unknown user"` when that user is no longer in the directory). Agents stored without an owner (admin R33) count in no figure. `makerAssignmentId` is the direct Maker assignment (the id endpoint 80 takes), `null` when Maker comes only from groups. Each `items` list holds at most 100 entries, ordered by name; `count` is always the full number.
 - Errors: none expected beyond 1.9.
 
 #### 82. `GET /admin/overview/export`
-- Response `200`, `Content-Type: text/csv; charset=utf-8`, `Content-Disposition: attachment; filename="admin-report-<YYYY-MM-DD>.csv"` (UTC date). UTF-8 with a byte-order mark, CRLF line ends, RFC 4180 quoting. A cell starting with `=`, `+`, `-` or `@` is prefixed with `'` (admin R48).
-- Columns `section,label,value`. Rows, in order:
+- Response `200`, `Content-Type: text/csv; charset=utf-8`, `Content-Disposition: attachment; filename="admin-report-<YYYY-MM-DD>.csv"` (UTC date). UTF-8 with a byte-order mark, CRLF after every row (the last included), RFC 4180 quoting. A cell starting with `=`, `+`, `-`, `@`, a tab or a carriage return is prefixed with `'` before quoting (admin R48).
+- A header row `section,label,value`, then, in order:
   - `summary,Active users · 30 days,<n>` and `summary,Agents live,<n>`;
   - `attention,Agents without an active owner,<n>`, `attention,Agents with errors in the last 7 days,<n>`, `attention,Users inactive for 90+ days with Maker role,<n>`;
   - 8 rows `weekly-active-users,<weekStart>,<n>`, oldest first;
@@ -917,29 +918,30 @@ interface ActivityItem { id: string; type: string; at: string; text: string }   
     isBootstrap: boolean;           // userName in ORG_BOOTSTRAP_ADMINS (admin R18)
   }
   ```
+  `heldRoles` lists, in order, the implicit User role, the bootstrap Platform admin, the direct assignments (oldest first), then the roles from groups. A direct Data owner assignment whose datasource no longer exists grants nothing ([data-model.md](data-model.md) 3.13) but is still listed, with `datasourceMissing: true` and `datasourceName` set to its id, so the panel can offer to remove it; the row's `roles` leave it out. A group mapping whose datasource no longer exists is left out here (it shows in 88). A role mapped from several of the user's groups (for Data owner, on the same datasource) appears once, with every group in `groupNames` (sorted) and `groupId` the first of them.
 - Errors: `404` `"User <id> not found"`.
 
 #### 85. `PUT /admin/users/:id/roles`
 - Body: `{ roles: { role: RoleId; datasourceId?: string }[] }`, the complete set of **direct** assignments the user should hold (admin R62). Duplicates collapse. Roles held from groups or as a bootstrap admin are not part of it and are not changed.
-- Validates everything before writing: the same `400` and `404` messages as endpoint 79, plus `400` `"You can't remove your own Platform admin role"` when the caller is the user and the set drops their direct `platform-admin`.
+- Validates everything before writing: `404` `"User <id> not found"`, `400` `"roles must be a list"`, the `400` messages of endpoint 79 for each entry, `404` `"Datasource <id> not found"` for a Data owner assignment being **added** (one already stored is kept even when its datasource is gone), and `400` `"You can't remove your own Platform admin role"` when the caller is the user and the set drops their direct `platform-admin`.
 - Then deletes the direct assignments not in the set and creates the missing ones, as one transaction (all or nothing).
 - Success `200`: `{ ok:true, message:"Roles saved for <displayName>", added: number, removed: number, heldRoles: AdminHeldRole[] }`; with nothing to change, `message:"No changes"` and nothing written.
 - Records one `role.assigned` or `role.removed` per change.
 
 #### 86. `POST /admin/agents/transfer`
 - Body: `{ agentIds: string[]; toUserId: string }`; 1-100 distinct ids of user agents, from any owner.
-- Validates everything before writing: `400` `"Choose at least one agent"`, `"Choose at most 100 agents"`, `"<name> is deactivated"` (the new owner), `"\"<agent name>\" already belongs to <name>"`; `404` `"User <id> not found"`, `"Agent <id> not found"` (also for an agent stored without an owner, admin R33); `409` `"<name> already has an agent named \"<agent name>\""` when the new owner has a user agent with the same name (case-insensitive), or two of the agents share a name.
+- Validates everything before writing, in this order: `400` `"Choose at least one agent"`, `"Choose at most 100 agents"` (ids that are not strings are dropped, duplicates collapse); `404` `"User <id> not found"`; `400` `"<name> is deactivated"` (the new owner); `404` `"Agent <id> not found"` (also for an agent stored without an owner, admin R33); `400` `"\"<agent name>\" already belongs to <name>"`; `409` `"<name> already has an agent named \"<agent name>\""` when the new owner has a user agent with the same name (case-insensitive, Live or draft name), or two of the agents share a name. The message names the transferred agent's clashing name.
 - Then, as one transaction, sets each agent's `ownerId` to `toUserId` and `pinned` to `false`; the draft, Live version and `publishedAt` are unchanged (admin R64).
 - Success `200`: `{ ok:true, message:"Transferred <n> agent(s) to <displayName>", transferred: number }` (`1 agent`, `2 agents`).
 - Records one `agent.transferred` per agent.
 
 #### 87. `GET /admin/groups`
 - Query: `q` (optional, a substring of the group name, case-insensitive), `page`, `pageSize` as in endpoint 83.
-- Response `200`: `{ items: { id: string; displayName: string; members: number; mappings: { role: Exclude<RoleId,'user'>; datasourceId?: string; datasourceName?: string }[] }[]; total: number; page: number; pageSize: number }`, sorted by name (case-insensitive).
+- Response `200`: `{ items: { id: string; displayName: string; members: number; mappings: { role: Exclude<RoleId,'user'>; datasourceId?: string; datasourceName?: string }[] }[]; total: number; page: number; pageSize: number }`, sorted by name (case-insensitive); each group's `mappings` in badge order (Platform admin, Approver, Data owner, Maker), then by datasource name.
 - Errors: the `page` / `pageSize` messages of endpoint 83.
 
 #### 88. `GET /admin/role-mappings`
-- Response `200`: `{ mappings: GroupRoleMappingView[] }`, sorted by group name then role, where `GroupRoleMappingView = GroupRoleMappingDoc & { groupName: string; datasourceName?: string }` ([data-model.md](data-model.md) 3.14.5).
+- Response `200`: `{ mappings: GroupRoleMappingView[] }`, sorted by group name (case-insensitive), then role in badge order (Platform admin, Approver, Data owner, Maker), then datasource name, where `GroupRoleMappingView = GroupRoleMappingDoc & { groupName: string; datasourceName?: string }` ([data-model.md](data-model.md) 3.14.5).
 
 #### 89. `POST /admin/role-mappings`
 - Body: `{ groupId: string; role: RoleId; datasourceId?: string }`, with the same rules as endpoint 79.
@@ -1013,7 +1015,7 @@ interface StreamMessageRequest {
 - Whatever text had already streamed is still persisted as a (partial) assistant message together with captured `data`; the careful-mode cross-check is skipped. The client should reload the session (`GET /sessions/:id`) to show the persisted state; the shipped chat does this.
 - Abort errors are swallowed silently on both sides.
 
-**Errors mid-stream.** Any thrown error that is not an abort is caught by the controller and sent as `{ type:"error", content: <message> }`, then the response ends. The user message stays persisted; no assistant message is added. In org server mode, when the session was started from a user agent (not a preview) and the error is not a refused request (an empty message, an unknown session), the server also records an `agent.turn-failed` activity event ([data-model.md](data-model.md) 3.14.7; admin R40). Endpoint 6 does the same for a failed non-streamed turn. A failed connect on the client yields `"Backend unreachable"`, a non-2xx or bodyless response yields `"Stream failed (<status>)"`, a read failure yields `"Stream disconnected"`.
+**Errors mid-stream.** Any thrown error that is not an abort is caught by the controller and sent as `{ type:"error", content: <message> }`, then the response ends. The user message stays persisted; no assistant message is added. In org server mode, when the session was started from a user agent (not a preview) that it still runs (not deleted, nor transferred to another owner), the error is not a refused request (an empty message, an unknown session) and the client did not stop the turn, the server also records an `agent.turn-failed` activity event ([data-model.md](data-model.md) 3.14.7; admin R40). Endpoint 6 does the same for a failed non-streamed turn. A failed connect on the client yields `"Backend unreachable"`, a non-2xx or bodyless response yields `"Stream failed (<status>)"`, a read failure yields `"Stream disconnected"`.
 
 ### 3.2 Deep analysis
 
