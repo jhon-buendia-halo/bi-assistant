@@ -797,7 +797,17 @@ export class DataModelsService implements OnModuleInit {
         `Version ${version} not found for dataset "${datasetName}"`,
       );
     }
-    await this.repository.save({ ...doc, currentVersion: version });
+    // Moving the pointer is a user edit too: a metric the target version
+    // leaves out is tombstoned (and one it holds is no longer), so the
+    // startup metrics import never brings it back (data-model R25).
+    await this.repository.save({
+      ...withYamlMetricTombstones(
+        doc,
+        this.currentVersionOf(doc).model,
+        target.model,
+      ),
+      currentVersion: version,
+    });
     return { currentVersion: version };
   }
 

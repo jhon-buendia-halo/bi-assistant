@@ -1748,6 +1748,29 @@ describe('DataModelsService YAML removals tombstone metrics (data-model R23)', (
     ]);
   });
 
+  it('a revert to a version without a metric tombstones it, and back lifts it', async () => {
+    const { service } = await importedClash();
+    const original = await service.get('World Cup Core');
+    const { version: withoutMax } = await service.saveYaml(
+      'World Cup Core',
+      yamlWithout(original, 'max_attendance'),
+    );
+
+    await service.revert('World Cup Core', original!.currentVersion);
+    expect((await service.get('World Cup Core'))!.deletedMetricNames).toEqual(
+      [],
+    );
+
+    await service.revert('World Cup Core', withoutMax);
+    await service.onModuleInit();
+    const doc = await service.get('World Cup Core');
+    expect(doc!.currentVersion).toBe(withoutMax);
+    expect(doc!.deletedMetricNames).toEqual(['max_attendance']);
+    expect(currentOf(doc).model.metrics.map((m) => m.name)).toEqual([
+      'avg_attendance',
+    ]);
+  });
+
   it('a YAML save that keeps every metric tombstones nothing', async () => {
     const { service } = await importedClash();
     const before = await service.get('World Cup Core');
