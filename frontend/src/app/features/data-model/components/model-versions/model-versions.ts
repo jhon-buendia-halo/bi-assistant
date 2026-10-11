@@ -36,6 +36,9 @@ export class ModelVersions {
   readonly datasetName = input.required<string>();
   readonly versions = input.required<DataModelVersion[]>();
   readonly currentVersion = input.required<number>();
+  /** Without Manage datasources and datasets Revert is hidden; Compare
+   * stays (ui.md 4.19.4, data-model R40). */
+  readonly readOnly = input(false);
   readonly reverted = output<number>();
 
   readonly reverting = signal<number | null>(null);
@@ -83,7 +86,7 @@ export class ModelVersions {
   }
 
   revert(version: number): void {
-    if (this.reverting() !== null) return;
+    if (this.readOnly() || this.reverting() !== null) return;
     this.reverting.set(version);
     this.api.revert(this.datasetName(), version).subscribe({
       next: (res) => {

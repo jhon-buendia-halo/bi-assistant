@@ -38,6 +38,9 @@ export class ModelYamlEditor {
 
   readonly datasetName = input.required<string>();
   readonly yaml = input.required<string>();
+  /** Without Manage datasources and datasets: the textarea is readonly and
+   * Save is hidden (ui.md 4.19.4, data-model R40). */
+  readonly readOnly = input(false);
   /** Emits the new current version on a successful save. */
   readonly saved = output<number>();
 
@@ -57,7 +60,9 @@ export class ModelYamlEditor {
   });
 
   readonly dirty = computed(() => this.text() !== this.yaml());
-  readonly canSave = computed(() => this.dirty() && !this.saving());
+  readonly canSave = computed(
+    () => !this.readOnly() && this.dirty() && !this.saving(),
+  );
 
   constructor() {
     // Re-sync whenever the parent loads a different version's yaml (e.g.
@@ -71,6 +76,7 @@ export class ModelYamlEditor {
   }
 
   onInput(value: string): void {
+    if (this.readOnly()) return;
     this.text.set(value);
     this.highlightedLine.set(null);
   }

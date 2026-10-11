@@ -57,4 +57,34 @@ describe('ModelYamlEditor', () => {
     expect(component.highlightedLine()).toBeNull();
     expect(component.errors()).toEqual([]);
   });
+
+  describe('read-only (without Manage datasources)', () => {
+    const el = () => fixture.nativeElement as HTMLElement;
+
+    it('shows Save as new version and an editable textarea by default', () => {
+      expect(el().querySelector('[data-testid="save-yaml"]')).not.toBeNull();
+      const textarea = el().querySelector(
+        '[data-testid="yaml-textarea"]',
+      ) as HTMLTextAreaElement;
+      expect(textarea.readOnly).toBe(false);
+    });
+
+    it('makes the textarea readonly and hides Save', () => {
+      fixture.componentRef.setInput('readOnly', true);
+      fixture.detectChanges();
+      const textarea = el().querySelector(
+        '[data-testid="yaml-textarea"]',
+      ) as HTMLTextAreaElement;
+      expect(textarea.readOnly).toBe(true);
+      expect(el().querySelector('[data-testid="save-yaml"]')).toBeNull();
+    });
+
+    it('ignores input and never becomes savable', () => {
+      fixture.componentRef.setInput('readOnly', true);
+      fixture.detectChanges();
+      component.onInput('changed');
+      expect(component.text()).toBe('model: world_cup\nversion: 1\nentities: []\n');
+      expect(component.canSave()).toBe(false);
+    });
+  });
 });

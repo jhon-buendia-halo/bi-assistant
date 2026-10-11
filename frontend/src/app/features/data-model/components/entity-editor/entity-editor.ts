@@ -64,6 +64,9 @@ export class EntityEditor {
   /** Set by the parent (e.g. clicking an entity in the Overview tab) to
    * jump straight to that entity; optional, defaults to the first entity. */
   readonly focusEntityName = input<string | null>(null);
+  /** Without Manage datasources and datasets every input is disabled and
+   * Save, add and remove are hidden (ui.md 4.19.6, data-model R40). */
+  readonly readOnly = input(false);
   readonly saved = output<number>();
 
   readonly working = signal<DataModel | null>(null);
@@ -81,7 +84,9 @@ export class EntityEditor {
   readonly dirty = computed(
     () => JSON.stringify(this.working()) !== JSON.stringify(this.model()),
   );
-  readonly canSave = computed(() => this.dirty() && !this.saving());
+  readonly canSave = computed(
+    () => !this.readOnly() && this.dirty() && !this.saving(),
+  );
 
   /** Relationships touching the selected entity, with their index in the
    * model's flat array so an edit/remove addresses the right one. */
@@ -200,6 +205,7 @@ export class EntityEditor {
    * entity's first key attribute — a starting point the user edits from,
    * not a guess meant to be correct unedited. */
   addRelationship(targetEntityName: string): void {
+    if (this.readOnly()) return;
     const entity = this.selectedEntity();
     const target = this.entities().find((e) => e.name === targetEntityName);
     if (!entity || !target) return;
@@ -264,6 +270,7 @@ export class EntityEditor {
   }
 
   private mutateEntity(fn: (entity: Entity) => Entity): void {
+    if (this.readOnly()) return;
     const name = this.selectedEntityName();
     if (!name) return;
     this.working.update((model) =>
@@ -279,6 +286,7 @@ export class EntityEditor {
   private mutateRelationships(
     fn: (relationships: Relationship[]) => Relationship[],
   ): void {
+    if (this.readOnly()) return;
     this.working.update((model) =>
       model ? { ...model, relationships: fn(model.relationships) } : model,
     );

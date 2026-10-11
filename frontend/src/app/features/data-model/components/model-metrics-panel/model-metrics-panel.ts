@@ -68,6 +68,9 @@ export class ModelMetricsPanel {
 
   readonly datasetName = input.required<string>();
   readonly entities = input.required<Entity[]>();
+  /** Without Manage datasources and datasets: no New metric, Edit, Delete
+   * or Promote a verified answer (ui.md 4.19.5, data-model R40). */
+  readonly readOnly = input(false);
   /** Emits the new current version after any create/update/delete. */
   readonly saved = output<number>();
 
@@ -121,7 +124,7 @@ export class ModelMetricsPanel {
   );
 
   readonly canSave = computed(() => {
-    if (this.saving() || this.readOnlyMetric()) return false;
+    if (this.readOnly() || this.saving() || this.readOnlyMetric()) return false;
     if (!this.label().trim() || !this.name().trim() || !this.entity().trim()) {
       return false;
     }
@@ -157,12 +160,14 @@ export class ModelMetricsPanel {
   }
 
   startNew(): void {
+    if (this.readOnly()) return;
     this.reset();
     this.entity.set(this.entityOptions()[0] ?? '');
     this.formOpen.set(true);
   }
 
   startEdit(metric: Metric): void {
+    if (this.readOnly()) return;
     this.editingName.set(metric.name);
     this.label.set(metric.label);
     this.name.set(metric.name);
@@ -202,6 +207,7 @@ export class ModelMetricsPanel {
   }
 
   startFromCandidate(candidate: MetricCandidate): void {
+    if (this.readOnly()) return;
     this.reset();
     this.label.set(candidate.label);
     this.name.set(candidate.name);
@@ -258,6 +264,7 @@ export class ModelMetricsPanel {
   }
 
   remove(metric: Metric): void {
+    if (this.readOnly()) return;
     const confirmed = window.confirm(
       `Delete the metric “${metric.label}”?\n\nAnswers will stop reusing its definition.`,
     );

@@ -1,21 +1,17 @@
 <div class="flex min-h-0 flex-1 flex-col gap-4" data-testid="data-model-view">
-  <!-- Header -->
-  <div class="flex items-center gap-3">
-    <button
-      type="button"
-      (click)="back.emit()"
-      class="flex items-center gap-1.5 rounded-md px-2 py-1 text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
-    >
+  <!-- Header (ui.md 4.19.1) -->
+  <div class="flex flex-wrap items-center gap-3">
+    <button type="button" (click)="back.emit()" class="btn btn-ghost">
       <lucide-angular [img]="ArrowLeft" [size]="15" />
       <span>Back</span>
     </button>
-    <h1 class="truncate font-serif text-[22px] font-semibold text-zinc-100">
+    <h2
+      class="min-w-0 truncate text-[24px] leading-8 font-light text-fg-strong"
+    >
       {{ datasetName() }}
-    </h1>
+    </h2>
     @if (currentVersion() > 0) {
-      <span
-        data-testid="model-version-badge"
-        class="shrink-0 rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-medium text-zinc-300"
+      <span data-testid="model-version-badge" class="chip chip-neutral shrink-0"
         >v{{ currentVersion() }} · {{ versionSource() }}</span
       >
     }
@@ -23,85 +19,98 @@
       <span
         data-testid="drift-pill"
         title="A re-saved snapshot differs from this version"
-        class="flex shrink-0 items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-400"
+        class="chip chip-warning shrink-0"
       >
         <lucide-angular [img]="FileWarning" [size]="12" />
         Drift: {{ driftCount() }}
       </span>
     }
+    @if (metricsImportSkipped(); as report) {
+      <span
+        data-testid="metrics-import-pill"
+        [title]="metricsSkippedTitle(report)"
+        class="chip chip-info shrink-0"
+        >{{ metricsSkippedLabel(report.skipped.length) }}</span
+      >
+    }
 
     <div class="ml-auto flex items-center gap-2">
-      <button
-        type="button"
-        data-testid="bootstrap-model"
-        (click)="bootstrapFromSnapshot()"
-        [disabled]="bootstrapping()"
-        title="Rebuild from the dataset's current snapshot, keeping metrics"
-        class="flex items-center gap-1.5 rounded-md border border-white/10 px-2.5 py-1.5 text-[12px] text-zinc-300 hover:bg-white/5 disabled:opacity-50"
-      >
-        @if (bootstrapping()) {
-          <lucide-angular [img]="Loader2" [size]="13" class="animate-spin" />
-        } @else {
-          <lucide-angular [img]="RefreshCw" [size]="13" />
-        }
-        Bootstrap from snapshot
-      </button>
+      @if (canEdit()) {
+        <button
+          type="button"
+          data-testid="bootstrap-model"
+          (click)="bootstrapFromSnapshot()"
+          [disabled]="bootstrapping()"
+          title="Rebuild from the dataset's current snapshot, keeping metrics"
+          class="btn btn-outline"
+        >
+          @if (bootstrapping()) {
+            <lucide-angular [img]="Loader2" [size]="13" class="animate-spin" />
+          } @else {
+            <lucide-angular [img]="RefreshCw" [size]="13" />
+          }
+          Bootstrap from snapshot
+        </button>
+      }
       <button
         type="button"
         data-testid="export-model"
         (click)="export()"
         [disabled]="exporting()"
-        class="flex items-center gap-1.5 rounded-md border border-white/10 px-2.5 py-1.5 text-[12px] text-zinc-300 hover:bg-white/5 disabled:opacity-50"
+        class="btn btn-outline"
       >
         <lucide-angular [img]="Download" [size]="13" />
         Export
       </button>
-      <button
-        type="button"
-        data-testid="import-model"
-        (click)="triggerImport()"
-        [disabled]="importing()"
-        class="flex items-center gap-1.5 rounded-md border border-white/10 px-2.5 py-1.5 text-[12px] text-zinc-300 hover:bg-white/5 disabled:opacity-50"
-      >
-        <lucide-angular [img]="Upload" [size]="13" />
-        Import
-      </button>
-      <input
-        #importInput
-        type="file"
-        data-testid="import-file-input"
-        accept=".yaml,.yml"
-        class="hidden"
-        (change)="onImportFileSelected($any($event.target))"
-      />
+      @if (canEdit()) {
+        <button
+          type="button"
+          data-testid="import-model"
+          (click)="triggerImport()"
+          [disabled]="importing()"
+          class="btn btn-outline"
+        >
+          <lucide-angular [img]="Upload" [size]="13" />
+          Import
+        </button>
+        <input
+          #importInput
+          type="file"
+          data-testid="import-file-input"
+          accept=".yaml,.yml"
+          class="hidden"
+          (change)="onImportFileSelected($any($event.target))"
+        />
+      }
     </div>
   </div>
 
   @if (loading()) {
-    <div class="flex items-center gap-2 text-[13px] text-zinc-500">
-      <lucide-angular [img]="Loader2" [size]="15" class="animate-spin" />
+    <div class="flex items-center gap-2 text-[13px] text-fg-muted">
+      <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
       <span>Loading data model…</span>
     </div>
   } @else if (loadError(); as error) {
-    <p class="rounded-md bg-red-500/10 px-3 py-2.5 text-[13px] text-red-400">
+    <p
+      class="rounded-md bg-danger-soft px-3 py-2.5 text-[13px] text-on-danger-soft"
+    >
       {{ error }}
     </p>
   } @else if (model(); as model) {
-    <!-- Tabs -->
-    <div class="flex items-center gap-1 border-b border-white/5">
-      @for (t of ["overview", "yaml", "versions", "metrics"]; track t) {
+    <!-- Tabs (ui.md 4.19.2, the agent detail idiom) -->
+    <div class="flex items-center gap-1 border-b border-border">
+      @for (t of tabs; track t.id) {
         <button
           type="button"
-          [attr.data-testid]="'tab-' + t"
-          (click)="setTab($any(t))"
-          class="border-b-2 px-3 py-2 text-[13px] capitalize"
-          [class.border-zinc-200]="tab() === t"
-          [class.text-zinc-100]="tab() === t"
-          [class.border-transparent]="tab() !== t"
-          [class.text-zinc-500]="tab() !== t"
-        >
-          {{ t }}
-        </button>
+          [attr.data-testid]="'tab-' + t.id"
+          (click)="setTab(t.id)"
+          class="-mb-px border-b-2 px-3 py-2 text-[13px]"
+          [class.border-border-selected]="tab() === t.id"
+          [class.text-fg-strong]="tab() === t.id"
+          [class.border-transparent]="tab() !== t.id"
+          [class.text-fg-muted]="tab() !== t.id"
+          [class.hover:text-fg]="tab() !== t.id"
+        >{{ t.label }}</button>
       }
     </div>
 
@@ -110,7 +119,7 @@
         @case ("overview") {
           <div class="flex flex-col gap-5 overflow-y-auto">
             <div>
-              <p class="mb-2 text-[12px] font-medium text-zinc-400">
+              <p class="mb-2 text-[12px] font-medium text-fg-muted">
                 Entities ({{ model.entities.length }})
               </p>
               <div class="flex flex-col gap-1.5">
@@ -119,60 +128,66 @@
                     type="button"
                     [attr.data-testid]="'overview-entity-' + entity.name"
                     (click)="openEntity(entity.name)"
-                    class="flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2.5 text-left hover:bg-white/5"
+                    class="list-row flex items-center gap-3"
                   >
-                    <span class="min-w-0 flex-1 truncate text-[13px] text-zinc-200">{{
+                    <span class="min-w-0 flex-1 truncate text-[13px] text-fg">{{
                       entity.label || entity.name
                     }}</span>
-                    <span class="shrink-0 text-[11px] text-zinc-500"
+                    <span class="shrink-0 text-[11px] text-fg-muted"
                       >{{ entity.attributes.length }} attributes</span
                     >
                     <lucide-angular
                       [img]="ChevronRight"
                       [size]="14"
-                      class="shrink-0 text-zinc-600"
+                      class="shrink-0 text-fg-muted"
                     />
                   </button>
                 }
               </div>
             </div>
             <div>
-              <p class="mb-2 text-[12px] font-medium text-zinc-400">
+              <p class="mb-2 text-[12px] font-medium text-fg-muted">
                 Relationships ({{ model.relationships.length }})
               </p>
               <div class="flex flex-col gap-1.5" data-testid="overview-relationships">
                 @for (rel of model.relationships; track $index) {
                   <div
                     [attr.data-testid]="'overview-relationship-' + $index"
-                    class="flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-[12px]"
+                    class="flex items-center gap-3 rounded-xl bg-surface-muted px-3 py-2 text-[12px]"
                   >
-                    <span class="min-w-0 flex-1 truncate font-mono text-zinc-300"
+                    <span class="min-w-0 flex-1 truncate font-mono text-fg"
                       >{{ rel.from }} → {{ rel.to }}</span
                     >
                     <span
                       [attr.data-testid]="'overview-relationship-cardinality-' + $index"
-                      class="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[11px] text-zinc-400"
+                      class="chip chip-neutral shrink-0"
                       >{{ rel.cardinality }}</span
                     >
                   </div>
                 } @empty {
-                  <p class="text-[11px] text-zinc-600">No relationships yet.</p>
+                  <p class="text-[11px] text-fg-muted">No relationships yet.</p>
                 }
               </div>
             </div>
             <div>
-              <p class="mb-2 text-[12px] font-medium text-zinc-400">
+              <p class="mb-2 text-[12px] font-medium text-fg-muted">
                 Metrics ({{ model.metrics.length }})
               </p>
               <div class="flex flex-wrap gap-1.5" data-testid="overview-metrics">
                 @for (metric of model.metrics; track metric.name) {
                   <span
                     [attr.data-testid]="'overview-metric-' + metric.name"
-                    class="rounded-full border border-white/10 px-2.5 py-1 text-[11px] text-zinc-300"
-                    >{{ metric.label }}</span
+                    class="filter-pill"
+                    >{{ metric.label }}@if (metric.author) {
+                      <span
+                        [attr.data-testid]="'model-metric-author-' + metric.name"
+                        class="text-[11px] font-normal text-fg-muted"
+                        >by {{ metric.author }}</span
+                      >
+                    }</span
                   >
                 } @empty {
-                  <p class="text-[11px] text-zinc-600">No metrics yet.</p>
+                  <p class="text-[11px] text-fg-muted">No metrics yet.</p>
                 }
               </div>
             </div>
@@ -183,7 +198,7 @@
             <button
               type="button"
               (click)="setTab('overview')"
-              class="self-start text-[12px] text-zinc-500 hover:text-zinc-300"
+              class="self-start text-[12px] text-fg-muted hover:text-fg"
             >
               ← Back to overview
             </button>
@@ -192,6 +207,7 @@
               [datasetName]="datasetName()"
               [model]="model"
               [focusEntityName]="focusEntityName()"
+              [readOnly]="!canEdit()"
               (saved)="onVersionChanged()"
             />
           </div>
@@ -201,6 +217,7 @@
             class="flex min-h-0 flex-1"
             [datasetName]="datasetName()"
             [yaml]="response()!.version.yaml"
+            [readOnly]="!canEdit()"
             (saved)="onVersionChanged()"
           />
         }
@@ -210,6 +227,7 @@
               [datasetName]="datasetName()"
               [versions]="versions()"
               [currentVersion]="currentVersion()"
+              [readOnly]="!canEdit()"
               (reverted)="onVersionChanged()"
             />
           </div>
@@ -219,6 +237,7 @@
             <app-model-metrics-panel
               [datasetName]="datasetName()"
               [entities]="model.entities"
+              [readOnly]="!canEdit()"
               (saved)="onVersionChanged()"
             />
           </div>

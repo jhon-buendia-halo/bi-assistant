@@ -90,3 +90,97 @@ describe('ModelMetricsPanel — advanced-shape detection (review finding 7)', ()
     expect(component.readOnlyMetric()).toBe(false);
   });
 });
+
+describe('ModelMetricsPanel — rows, author and read-only (data-model R40)', () => {
+  let fixture: ComponentFixture<ModelMetricsPanel>;
+  let component: ModelMetricsPanel;
+
+  const METRICS: Metric[] = [
+    {
+      name: 'avg_attendance',
+      label: 'Average attendance',
+      entity: 'matches',
+      agg: 'avg',
+      of: 'attendance',
+      author: 'u-ada',
+    },
+    { name: 'match_count', label: 'Match count', entity: 'matches', agg: 'count' },
+  ];
+
+  beforeEach(async () => {
+    const api = {
+      listModelMetrics: () => of({ metrics: METRICS }),
+      modelMetricCandidates: () =>
+        of({
+          candidates: [
+            {
+              verifiedQueryId: 'vq-1',
+              name: 'max_attendance',
+              label: 'Max attendance',
+              entity: 'matches',
+              sql: 'select max(attendance) from matches',
+            },
+          ],
+        }),
+    };
+    await TestBed.configureTestingModule({
+      imports: [ModelMetricsPanel],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: DataModelApiService, useValue: api },
+      ],
+    }).compileComponents();
+    fixture = TestBed.createComponent(ModelMetricsPanel);
+    component = fixture.componentInstance;
+    fixture.componentRef.setInput('datasetName', 'World Cup Core');
+    fixture.componentRef.setInput('entities', [
+      { name: 'matches', bindings: [], attributes: [{ name: 'attendance', type: 'integer' }] },
+    ]);
+    fixture.detectChanges();
+  });
+
+  const el = () => fixture.nativeElement as HTMLElement;
+  const q = (selector: string) => el().querySelector(selector);
+  const row = (name: string) => q(`[data-testid="model-metric-${name}"]`) as HTMLElement;
+
+  it('shows "by <author>" only for a metric that records one', () => {
+    expect(q('[data-testid="model-metric-author-avg_attendance"]')!.textContent!.trim()).toBe(
+      'by u-ada',
+    );
+    expect(q('[data-testid="model-metric-author-match_count"]')).toBeNull();
+  });
+
+  it('shows New metric, Edit, Delete and the promotion row by default', () => {
+    expect(q('[data-testid="new-model-metric"]')).not.toBeNull();
+    expect(row('avg_attendance').querySelector('button[title="Edit"]')).not.toBeNull();
+    expect(row('avg_attendance').querySelector('button[title="Delete"]')).not.toBeNull();
+    expect(q('[data-testid="promote-candidates"]')).not.toBeNull();
+  });
+
+  describe('read-only', () => {
+    beforeEach(() => {
+      fixture.componentRef.setInput('readOnly', true);
+      fixture.detectChanges();
+    });
+
+    it('keeps the rows and the author but hides New metric, Edit, Delete and the promotion row', () => {
+      expect(row('avg_attendance')).not.toBeNull();
+      expect(row('match_count')).not.toBeNull();
+      expect(q('[data-testid="model-metric-author-avg_attendance"]')).not.toBeNull();
+      expect(q('[data-testid="new-model-metric"]')).toBeNull();
+      expect(q('button[title="Edit"]')).toBeNull();
+      expect(q('button[title="Delete"]')).toBeNull();
+      expect(q('[data-testid="promote-candidates"]')).toBeNull();
+      expect(el().textContent).not.toContain('Promote a verified answer');
+    });
+
+    it('never opens the form', () => {
+      component.startNew();
+      component.startEdit(METRICS[0]);
+      fixture.detectChanges();
+      expect(component.formOpen()).toBe(false);
+      expect(q('[data-testid="save-model-metric"]')).toBeNull();
+    });
+  });
+});

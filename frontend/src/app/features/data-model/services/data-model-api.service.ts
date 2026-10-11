@@ -5,7 +5,7 @@ import { API_BASE_URL } from '../../../core/config/api.config';
 import {
   DataModel,
   DataModelVersion,
-  DriftReport,
+  DriftResponse,
   Metric,
   ModelResponse,
   ModelSaveResult,
@@ -90,8 +90,8 @@ export class DataModelApiService {
     );
   }
 
-  drift(datasetName: string): Observable<DriftReport> {
-    return this.http.get<DriftReport>(`${modelPath(datasetName)}/drift`);
+  drift(datasetName: string): Observable<DriftResponse> {
+    return this.http.get<DriftResponse>(`${modelPath(datasetName)}/drift`);
   }
 
   resolve(

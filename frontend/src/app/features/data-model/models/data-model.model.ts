@@ -178,6 +178,9 @@ export interface Metric {
   dimensions?: string[];
   expressions?: { sql?: string };
   sourceVerifiedQueryId?: string;
+  /** Owner key of whoever defined the metric (org server mode only;
+   * absent in local mode). Shown as `by <author>` (ui.md 4.19.5). */
+  author?: string;
 }
 
 export interface DataModel {
@@ -214,6 +217,31 @@ export interface DriftReport {
   entitiesAdded: string[];
   entitiesRemoved: string[];
 }
+
+/** The model's last legacy-metrics import (data-model.md 3.16,
+ * `lastMetricsImport`), answered with the drift report as `metricsImport`. */
+export interface MetricsImportReport {
+  importedAt: string;
+  imported: {
+    name: string;
+    entity: string;
+    author?: string;
+    sourceId: string;
+  }[];
+  skipped: {
+    name: string;
+    author?: string;
+    sourceId: string;
+    reason: 'name_clash';
+    keptSourceId: string;
+  }[];
+}
+
+/** `GET /datasets/:name/model/drift` (api.md 98): the drift report plus the
+ * metrics-import report, absent (or null) when no import has run. */
+export type DriftResponse = DriftReport & {
+  metricsImport?: MetricsImportReport | null;
+};
 
 export interface ResolveResult {
   ref: string;

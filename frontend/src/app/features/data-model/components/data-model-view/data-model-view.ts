@@ -26,7 +26,8 @@ import {
 import {
   DataModel,
   DataModelVersion,
-  DriftReport,
+  DriftResponse,
+  MetricsImportReport,
   ModelResponse,
 } from '../../models/data-model.model';
 import { ModelYamlEditor } from '../model-yaml-editor/model-yaml-editor';
@@ -34,16 +35,43 @@ import { ModelVersions } from '../model-versions/model-versions';
 import { EntityEditor } from '../entity-editor/entity-editor';
 import { ModelMetricsPanel } from '../model-metrics-panel/model-metrics-panel';
 import { ToastService } from '../../../../core/toast/toast.service';
+import { AuthService } from '../../../../core/auth/auth.service';
 
 type DataModelTab = 'overview' | 'entity' | 'yaml' | 'versions' | 'metrics';
+
+/** The tab strip (ui.md 4.19.2); `entity` opens from an Overview row only. */
+const TABS: { id: Exclude<DataModelTab, 'entity'>; label: string }[] = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'yaml', label: 'YAML' },
+  { id: 'versions', label: 'Versions' },
+  { id: 'metrics', label: 'Metrics' },
+];
+
+/** `1 metric skipped on import` / `<n> metrics skipped on import`. */
+export function metricsSkippedLabel(count: number): string {
+  return `${count} ${count === 1 ? 'metric' : 'metrics'} skipped on import`;
+}
+
+/** The metrics-import chip's title: one line per skipped metric with its
+ * author and the reason (ui.md 4.19.1). */
+export function metricsSkippedTitle(report: MetricsImportReport): string {
+  return report.skipped
+    .map((s) => {
+      const by = s.author ? ` by ${s.author}` : '';
+      return `${s.name}${by} — name clash with ${s.keptSourceId}`;
+    })
+    .join('\n');
+}
 
 /**
  * The data model editing surface (brief §2, `data-model-view`), opened from
  * the dataset list's new "Data model" action. Header carries the dataset
  * name, the current version badge, a drift pill when the last recorded
- * drift has removed/changed attributes, and Export/Import/Bootstrap.
- * Tabs: Overview (entities/relationships/metrics summary, click an entity
- * to edit it), YAML, Versions, Metrics.
+ * drift has removed/changed attributes, a metrics-import chip when the last
+ * legacy-metrics import skipped any, and Export/Import/Bootstrap (ui.md
+ * 4.19). Tabs: Overview (entities/relationships/metrics summary, click an
+ * entity to edit it), YAML, Versions, Metrics. Without Manage datasources
+ * and datasets every write control is hidden and the children read-only.
  */
 @Component({
   selector: 'app-data-model-view',
@@ -65,9 +93,15 @@ export class DataModelView {
   readonly Loader2 = Loader2;
   readonly RefreshCw = RefreshCw;
   readonly Upload = Upload;
+  readonly tabs = TABS;
 
   private readonly api = inject(DataModelApiService);
   private readonly toast = inject(ToastService);
+  private readonly auth = inject(AuthService);
+
+  /** Edit controls need Manage datasources and datasets (ui.md 1.6,
+   * data-model R40); without it the view is read-only, Export stays. */
+  readonly canEdit = computed(() => this.auth.can('manage-datasources'));
 
   readonly datasetName = input.required<string>();
   readonly back = output<void>();
@@ -79,7 +113,7 @@ export class DataModelView {
   readonly loadError = signal<string | null>(null);
   readonly response = signal<ModelResponse | null>(null);
   readonly versions = signal<DataModelVersion[]>([]);
-  readonly drift = signal<DriftReport | null>(null);
+  readonly drift = signal<DriftResponse | null>(null);
   readonly tab = signal<DataModelTab>('overview');
   readonly focusEntityName = signal<string | null>(null);
   readonly exporting = signal(false);
@@ -102,6 +136,14 @@ export class DataModelView {
     if (!d) return 0;
     return d.removed.length + d.changed.length;
   });
+
+  /** The last metrics import, when it skipped at least one metric. */
+  readonly metricsImportSkipped = computed<MetricsImportReport | null>(() => {
+    const report = this.drift()?.metricsImport;
+    return report && report.skipped.length > 0 ? report : null;
+  });
+  readonly metricsSkippedLabel = metricsSkippedLabel;
+  readonly metricsSkippedTitle = metricsSkippedTitle;
 
   constructor() {
     effect(() => this.load(this.datasetName()));
@@ -179,6 +221,7 @@ export class DataModelView {
   }
 
   triggerImport(): void {
+    if (!this.canEdit()) return;
     this.fileInput()?.nativeElement.click();
   }
 
@@ -213,7 +256,7 @@ export class DataModelView {
   }
 
   bootstrapFromSnapshot(): void {
-    if (this.bootstrapping()) return;
+    if (this.bootstrapping() || !this.canEdit()) return;
     this.bootstrapping.set(true);
     this.api.bootstrap(this.datasetName()).subscribe({
       next: (res) => {
