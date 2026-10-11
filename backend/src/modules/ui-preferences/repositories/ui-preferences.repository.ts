@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { SETTINGS_STORE } from '../../../infrastructure/database/doc-store';
 import type { DocStore } from '../../../infrastructure/database/doc-store';
+import { CurrentUserService } from '../../auth/current-user.service';
 import {
   UI_PREFERENCES_KEY,
   type UiPreferencesDoc,
@@ -8,26 +9,38 @@ import {
 
 /**
  * The UI preferences, kept as one more `settings` document beside the LLM and
- * built-in pins ones (data-model 3.2). Each reader filters by its own `key`.
+ * built-in pins ones (data-model 3.2.1). Each reader filters by its own
+ * `key`. They are per user: the local user keeps `ui-preferences`, a user of
+ * an org server has `ui-preferences:<user id>`.
  */
 @Injectable()
 export class UiPreferencesRepository {
   constructor(
     @Inject(SETTINGS_STORE)
     private readonly store: DocStore<UiPreferencesDoc>,
+    private readonly users: CurrentUserService,
   ) {}
 
+  /** The current user's preferences document key. */
+  private key(): string {
+    const owner = this.users.ownerScope();
+    return owner === null
+      ? UI_PREFERENCES_KEY
+      : `${UI_PREFERENCES_KEY}:${owner}`;
+  }
+
   get(): Promise<UiPreferencesDoc | null> {
-    return this.store.findOne({ key: UI_PREFERENCES_KEY });
+    return this.store.findOne({ key: this.key() });
   }
 
   async patch(
     patch: Partial<Pick<UiPreferencesDoc, 'theme' | 'navExpanded'>>,
   ): Promise<UiPreferencesDoc | null> {
+    const key = this.key();
     const existing = await this.get();
     await this.store.update(
-      { key: UI_PREFERENCES_KEY },
-      { ...existing, ...patch, key: UI_PREFERENCES_KEY },
+      { key },
+      { ...existing, ...patch, key },
       { upsert: true },
     );
     return this.get();

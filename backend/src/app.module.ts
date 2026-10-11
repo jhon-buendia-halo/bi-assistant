@@ -14,6 +14,7 @@ import { TestingDataModule } from './modules/testing-data/testing-data.module';
 import { DeveloperSettingsModule } from './modules/developer-settings/developer-settings.module';
 import { UiPreferencesModule } from './modules/ui-preferences/ui-preferences.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { AdminModule } from './modules/admin/admin.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { AuthModule } from './modules/auth/auth.module';
     TestingDataModule,
     DeveloperSettingsModule,
     UiPreferencesModule,
+    AdminModule,
   ],
   controllers: [],
   providers: [],

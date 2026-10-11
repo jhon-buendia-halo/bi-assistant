@@ -16,6 +16,7 @@ import { existsSync } from 'node:fs';
 import { AddressInfo } from 'node:net';
 import { extname, join, resolve } from 'node:path';
 import { AppModule } from './app.module';
+import { loadOrgServerConfig } from './config/org-server.config';
 import { startupDeveloperSettings } from './infrastructure/developer-settings/developer-settings.file';
 
 export interface CreateAppOptions {
@@ -24,7 +25,10 @@ export interface CreateAppOptions {
   host?: string;
   /** Directory holding the built web UI; defaults to `resolveWebRoot()`. */
   webRoot?: string;
-  /** Allow cross-origin requests (Electron renderer runs from file://). */
+  /**
+   * Allow cross-origin requests (Electron renderer runs from file://).
+   * Ignored in org server mode, which serves the UI from its own origin.
+   */
   cors?: boolean;
 }
 
@@ -34,6 +38,8 @@ export interface CreatedApp {
   port: number;
   /** Web root actually served, or null when only the API is available. */
   webRoot: string | null;
+  /** `ORG_PUBLIC_BASE_URL` in org server mode, null in local mode. */
+  orgPublicBaseUrl: string | null;
 }
 
 /** `WEB_ROOT` env, else `<package>/public` (next to `dist/`). */
@@ -99,8 +105,21 @@ export async function createApp(
 ): Promise<CreatedApp> {
   const logger = new Logger('Bootstrap');
   installDeveloperLogExport();
+  // Fails fast on a partial org server configuration (admin R3).
+  const orgConfig = loadOrgServerConfig();
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
-  if (options.cors) app.enableCors();
+  // SCIM clients send `application/scim+json` (api.md 2.14). Registering the
+  // JSON parser here replaces Nest's default one, so it takes both types.
+  app.useBodyParser('json', {
+    type: ['application/json', 'application/scim+json'],
+  });
+  if (orgConfig) {
+    // Behind the organisation's TLS proxy: trust its first hop (api.md 1.9).
+    app.set('trust proxy', 1);
+    logger.log(`Org server mode: ${orgConfig.publicBaseUrl}`);
+  } else if (options.cors) {
+    app.enableCors();
+  }
 
   const webRoot = options.webRoot ? resolve(options.webRoot) : resolveWebRoot();
   const serveWeb = hasWebUi(webRoot);
@@ -139,5 +158,6 @@ export async function createApp(
     url: `http://${displayHost}:${port}`,
     port,
     webRoot: serveWeb ? webRoot : null,
+    orgPublicBaseUrl: orgConfig?.publicBaseUrl ?? null,
   };
 }

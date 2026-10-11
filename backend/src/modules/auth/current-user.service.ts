@@ -1,5 +1,14 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Optional,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { AsyncLocalStorage } from 'node:async_hooks';
+import {
+  ORG_SERVER_CONFIG,
+  type OrgServerConfig,
+} from '../../config/org-server.config';
 import type { AuthMode, CurrentUser } from './entities/current-user.entity';
 import { permissionsForRoles } from './permissions';
 
@@ -24,14 +33,25 @@ export const LOCAL_USER: CurrentUser = Object.freeze({
  * `AsyncLocalStorage`, so streams, tool calls and background work started
  * inside a request keep it without request-scoped providers (admin R32).
  *
- * Only local mode exists so far: org server mode (BA-163 S3) resolves the
- * user from the auth session instead.
+ * The mode is fixed at startup (admin R1): org server mode when the `ORG_*`
+ * configuration is present. In local mode every request and any code outside
+ * a request runs as `LOCAL_USER`; in org server mode the current-user
+ * middleware runs each request as its auth session's user, and code outside
+ * a request runs as nobody.
  */
 @Injectable()
 export class CurrentUserService {
   private readonly storage = new AsyncLocalStorage<CurrentUser>();
 
-  readonly mode: AuthMode = 'local';
+  readonly mode: AuthMode;
+
+  constructor(
+    @Optional()
+    @Inject(ORG_SERVER_CONFIG)
+    config: OrgServerConfig | null = null,
+  ) {
+    this.mode = config ? 'org' : 'local';
+  }
 
   /**
    * The user the current code runs as. Outside a request in local mode that
@@ -83,10 +103,5 @@ export class CurrentUserService {
     const user = this.current();
     if (!user) throw new UnauthorizedException('Sign in required');
     return (...args: A) => this.runAs(user, () => fn(...args));
-  }
-
-  /** The user a request runs as: in local mode always the local user. */
-  resolveRequestUser(): CurrentUser | undefined {
-    return this.mode === 'local' ? LOCAL_USER : undefined;
   }
 }

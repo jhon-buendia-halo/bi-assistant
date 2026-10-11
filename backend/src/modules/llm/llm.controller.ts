@@ -1,5 +1,6 @@
 import { RequirePermission } from '../../common/decorators/auth-requirement.decorators';
 import { Body, Controller, Get, Post, Put, Query } from '@nestjs/common';
+import { CurrentUserService } from '../auth/current-user.service';
 import { LlmService } from './llm.service';
 import type {
   EffortLevelsView,
@@ -10,12 +11,20 @@ import type {
 
 @Controller('llm')
 export class LlmController {
-  constructor(private readonly llmService: LlmService) {}
+  constructor(
+    private readonly llmService: LlmService,
+    private readonly currentUser: CurrentUserService,
+  ) {}
 
+  /** The masked key only for `manage-llm` (api.md 1.9, non-functional N76). */
   @Get('settings')
   @RequirePermission('use-agents')
-  getSettings(): Promise<LlmSettingsView> {
-    return this.llmService.getView();
+  async getSettings(): Promise<LlmSettingsView> {
+    const view = await this.llmService.getView();
+    const canManage = this.currentUser
+      .current()
+      ?.permissions.includes('manage-llm');
+    return canManage ? view : { ...view, apiKeyMasked: null };
   }
 
   @Get('effort-levels')

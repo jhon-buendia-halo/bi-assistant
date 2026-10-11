@@ -391,7 +391,7 @@ Feature: Private and shared data
 
 ### Feature: Org server API
 
-E2E: none yet. API-level; covered by the backend API tests named above, not by Playwright.
+E2E: API-level, not Playwright: `backend/test/org-auth.e2e-spec.ts` (the 401, 403, cross-site and sign-in scenarios, and the role assignment routes), `backend/test/scim.e2e-spec.ts` (the three SCIM scenarios), `backend/test/owner-isolation.e2e-spec.ts` (private collections) and `backend/test/local-auth.e2e-spec.ts` (local mode).
 
 ```gherkin
 Feature: Org server API

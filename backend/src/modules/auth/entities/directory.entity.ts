@@ -1,0 +1,112 @@
+import type { RoleId } from '../permissions';
+
+/**
+ * The identity and access documents of org server mode (data-model 3.14).
+ * Written only in org server mode; local mode leaves the collections empty.
+ */
+
+/** A role that can be assigned or mapped: every role but the implicit User. */
+export type AssignableRoleId = Exclude<RoleId, 'user'>;
+
+/** `users` (data-model 3.14.1). */
+export interface UserDoc {
+  id: string;
+  /** Lowercased; unique. */
+  userName: string;
+  /** Lowercased. */
+  email?: string;
+  displayName: string;
+  givenName?: string;
+  familyName?: string;
+  externalId?: string;
+  /** `<tid>:<oid>` for Entra ID, else the `sub` claim. */
+  oidcSubject?: string;
+  active: boolean;
+  scimDeleted?: boolean;
+  source: 'scim' | 'jit';
+  lastSignInAt?: string;
+  lastActiveAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+/** `groups` (data-model 3.14.2). */
+export interface GroupDoc {
+  id: string;
+  displayName: string;
+  externalId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+/** `group_members` (data-model 3.14.3). */
+export interface GroupMemberDoc {
+  id: string;
+  groupId: string;
+  userId: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+/** `role_assignments` (data-model 3.14.4): direct assignments only. */
+export interface RoleAssignmentDoc {
+  id: string;
+  userId: string;
+  role: AssignableRoleId;
+  /** Data owner only. */
+  datasourceId?: string;
+  assignedBy: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+/** `group_role_mappings` (data-model 3.14.5). */
+export interface GroupRoleMappingDoc {
+  id: string;
+  groupId: string;
+  role: AssignableRoleId;
+  /** Data owner only. */
+  datasourceId?: string;
+  createdBy: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+/** `auth_sessions` (data-model 3.14.6). */
+export interface AuthSessionDoc {
+  /** SHA-256 hex of the cookie token; the token itself is never stored. */
+  id: string;
+  userId: string;
+  lastSeenAt: string;
+  expiresAt: string;
+  userAgent?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+/** The `activity_events` types (data-model 3.14.7). */
+export type ActivityEventType =
+  | 'sign-in'
+  | 'sign-out'
+  | 'user.active'
+  | 'scim.request'
+  | 'role.assigned'
+  | 'role.removed'
+  | 'user.deactivated'
+  | 'user.reactivated'
+  | 'mapping.added'
+  | 'mapping.removed'
+  | 'agent.transferred'
+  | 'agent.turn-failed';
+
+/** `activity_events` (data-model 3.14.7); append-only. */
+export interface ActivityEventDoc {
+  id: string;
+  type: ActivityEventType;
+  at: string;
+  actorId?: string;
+  subjectId?: string;
+  details?: Record<string, unknown>;
+  createdAt?: string;
+  updatedAt?: string;
+}

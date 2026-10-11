@@ -436,7 +436,7 @@ flowchart LR
 
 
 #### ADR-0009 — UI preferences live in the backend, with a browser cache for the first paint
-- **Status:** Accepted
+- **Status:** Accepted; on an org server the document is per user (ADR-0010, [data-model.md](data-model.md) 3.2.1)
 - **Date:** 2026-10-10
 - **Context:**
   - ADR-0007 stored the theme choice in the renderer's browser storage, defaulting to System, and the navigation drawer was never remembered (app-shell R2).

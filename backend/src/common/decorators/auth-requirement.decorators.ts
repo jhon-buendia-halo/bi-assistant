@@ -31,3 +31,13 @@ export const ScimAuth = () =>
   SetMetadata<string, AuthRequirement>(AUTH_REQUIREMENT_KEY, {
     kind: 'scim',
   });
+
+export const ORG_SERVER_ONLY_KEY = 'qti:org-server-only';
+
+/**
+ * The route exists only in org server mode: in local mode the guard answers
+ * `404 Not available in local mode` (api.md 1.9). Used by the auth (except
+ * `GET /me`), SCIM and admin controllers.
+ */
+export const OrgServerOnly = () =>
+  SetMetadata<string, boolean>(ORG_SERVER_ONLY_KEY, true);

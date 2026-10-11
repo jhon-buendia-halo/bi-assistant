@@ -2,7 +2,14 @@ import { Global, Module, Provider } from '@nestjs/common';
 import { mkdirSync } from 'fs';
 import { join } from 'path';
 import {
+  ACTIVITY_EVENTS_STORE,
   AGENTS_STORE,
+  AUTH_SESSIONS_STORE,
+  GROUP_MEMBERS_STORE,
+  GROUP_ROLE_MAPPINGS_STORE,
+  GROUPS_STORE,
+  ROLE_ASSIGNMENTS_STORE,
+  USERS_STORE,
   CONNECTIONS_STORE,
   DATASOURCE_INVENTORIES_STORE,
   METRICS_STORE,
@@ -37,6 +44,13 @@ const COLLECTIONS = [
   { token: EVAL_RUNS_STORE, table: 'eval_runs' },
   { token: KNOWLEDGE_STORE, table: 'knowledge_snippets' },
   { token: AGENTS_STORE, table: 'agents' },
+  { token: USERS_STORE, table: 'users' },
+  { token: GROUPS_STORE, table: 'groups' },
+  { token: GROUP_MEMBERS_STORE, table: 'group_members' },
+  { token: ROLE_ASSIGNMENTS_STORE, table: 'role_assignments' },
+  { token: GROUP_ROLE_MAPPINGS_STORE, table: 'group_role_mappings' },
+  { token: AUTH_SESSIONS_STORE, table: 'auth_sessions' },
+  { token: ACTIVITY_EVENTS_STORE, table: 'activity_events' },
 ];
 
 const sqliteDbProvider: Provider = {

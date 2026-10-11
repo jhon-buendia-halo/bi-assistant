@@ -56,6 +56,15 @@ export const EVAL_RUNS_STORE = 'DOC_STORE_eval_runs';
 export const KNOWLEDGE_STORE = 'DOC_STORE_knowledge';
 export const AGENTS_STORE = 'DOC_STORE_agents';
 
+/** Identity and access collections, org server mode only (data-model 3.14). */
+export const USERS_STORE = 'DOC_STORE_users';
+export const GROUPS_STORE = 'DOC_STORE_groups';
+export const GROUP_MEMBERS_STORE = 'DOC_STORE_group_members';
+export const ROLE_ASSIGNMENTS_STORE = 'DOC_STORE_role_assignments';
+export const GROUP_ROLE_MAPPINGS_STORE = 'DOC_STORE_group_role_mappings';
+export const AUTH_SESSIONS_STORE = 'DOC_STORE_auth_sessions';
+export const ACTIVITY_EVENTS_STORE = 'DOC_STORE_activity_events';
+
 /**
  * Owner-scoped views of the private collections (data-model 3.15): an
  * `OwnedDocStore` over the raw store, provided by the auth module.

@@ -2,18 +2,32 @@ import {
   CanActivate,
   ExecutionContext,
   ForbiddenException,
+  Inject,
   Injectable,
+  NotFoundException,
   OnModuleInit,
+  Optional,
   RequestMethod,
   UnauthorizedException,
 } from '@nestjs/common';
 import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { DiscoveryService, MetadataScanner, Reflector } from '@nestjs/core';
+import type { Request } from 'express';
+import { createHash, timingSafeEqual } from 'node:crypto';
+import {
+  ORG_SERVER_CONFIG,
+  type OrgServerConfig,
+} from '../../config/org-server.config';
+import { ActivityService } from '../../modules/auth/activity.service';
 import { CurrentUserService } from '../../modules/auth/current-user.service';
+import { ScimError } from '../../modules/auth/scim/scim-error';
 import {
   AUTH_REQUIREMENT_KEY,
   type AuthRequirement,
+  ORG_SERVER_ONLY_KEY,
 } from '../decorators/auth-requirement.decorators';
+
+const digest = (value: string) => createHash('sha256').update(value).digest();
 
 /** A route handler or a controller class: what route metadata sits on. */
 type RouteTarget = ReturnType<ExecutionContext['getHandler']>;
@@ -21,8 +35,9 @@ type RouteTarget = ReturnType<ExecutionContext['getHandler']>;
 /**
  * The one server-side permission check (admin R23, R24; api.md 1.9),
  * registered as a global `APP_GUARD`. It runs before every handler: public
- * routes pass, SCIM routes are left to their token check, and every other
- * route needs a signed-in caller (401) holding its permission (403).
+ * routes pass, SCIM routes need the SCIM bearer token (401 otherwise), and
+ * every other route needs a signed-in caller (401) holding its permission
+ * (403). Routes marked `@OrgServerOnly()` answer 404 in local mode.
  *
  * At startup it walks every controller route and refuses to start when one
  * declares no requirement, so a new route cannot ship unguarded.
@@ -34,6 +49,10 @@ export class PermissionsGuard implements CanActivate, OnModuleInit {
     private readonly currentUser: CurrentUserService,
     private readonly discovery: DiscoveryService,
     private readonly metadataScanner: MetadataScanner,
+    @Optional() private readonly activity?: ActivityService,
+    @Optional()
+    @Inject(ORG_SERVER_CONFIG)
+    private readonly config: OrgServerConfig | null = null,
   ) {}
 
   onModuleInit(): void {
@@ -45,17 +64,27 @@ export class PermissionsGuard implements CanActivate, OnModuleInit {
     }
   }
 
-  canActivate(context: ExecutionContext): boolean {
-    const requirement = this.requirementOf(
-      context.getHandler(),
-      context.getClass(),
-    );
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const handler = context.getHandler();
+    const controller = context.getClass();
+    if (
+      this.currentUser.mode === 'local' &&
+      this.reflector.getAllAndOverride<boolean>(ORG_SERVER_ONLY_KEY, [
+        handler,
+        controller,
+      ])
+    ) {
+      throw new NotFoundException('Not available in local mode');
+    }
+    const requirement = this.requirementOf(handler, controller);
     // The startup check makes this unreachable for registered routes.
     if (!requirement) throw new ForbiddenException('Route has no permission');
     if (requirement.kind === 'public') return true;
-    // Local mode has no SCIM token; the SCIM routes answer 404 there
-    // (api.md 1.9). Org server mode checks the bearer token (BA-163 S3).
-    if (requirement.kind === 'scim') return true;
+    if (requirement.kind === 'scim') {
+      this.checkScimToken(context.switchToHttp().getRequest<Request>());
+      await this.activity?.recordScimRequest();
+      return true;
+    }
 
     const user = this.currentUser.current();
     if (!user) throw new UnauthorizedException('Sign in required');
@@ -65,6 +94,22 @@ export class PermissionsGuard implements CanActivate, OnModuleInit {
       );
     }
     return true;
+  }
+
+  /**
+   * `Authorization: Bearer <ORG_SCIM_TOKEN>`, compared in constant time
+   * (admin R14, non-functional N73). A cookie never opens SCIM.
+   */
+  private checkScimToken(req: Request): void {
+    const expected = this.config?.scimToken;
+    const match = /^Bearer\s+(.+)$/i.exec(req.headers.authorization ?? '');
+    if (
+      !expected ||
+      !match ||
+      !timingSafeEqual(digest(match[1].trim()), digest(expected))
+    ) {
+      throw new ScimError(401, 'Missing or invalid SCIM bearer token');
+    }
   }
 
   private requirementOf(

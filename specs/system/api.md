@@ -705,7 +705,7 @@ interface DeveloperSettingsView {
 
 ### 2.12 UI preferences
 
-Controller prefix `/ui-preferences`. Capability: app-shell (R39–R43, R50). One `settings` document per data directory (data-model 3.2; ADR-0009).
+Controller prefix `/ui-preferences`. Capability: app-shell (R39–R43, R50). One `settings` document per data directory in local mode, and one per user on an org server (data-model 3.2.1; ADR-0009): each route reads and writes the caller's own.
 
 | # | Method + path | Purpose | FE |
 |---|---|---|---|
@@ -798,7 +798,7 @@ Controller prefix `/scim/v2`. Capability: [admin](../capabilities/admin/spec.md)
 | 77 | `PATCH /scim/v2/Groups/:id` | Rename, add or remove members |
 | 78 | `DELETE /scim/v2/Groups/:id` | Delete a group, its memberships and its group mappings |
 
-- **Auth:** `Authorization: Bearer <ORG_SCIM_TOKEN>`, compared in constant time. Missing or wrong: `401`. No cookie, no Origin check. Every SCIM request records at most one `scim.request` activity event per minute.
+- **Auth:** `Authorization: Bearer <ORG_SCIM_TOKEN>`, compared in constant time. Missing or wrong: `401` in SCIM error format. No cookie (an auth session does not open SCIM), no Origin check. Every SCIM request that passes the token check records at most one `scim.request` activity event per minute.
 - **Media type:** responses are `application/scim+json`; requests are accepted as `application/scim+json` or `application/json`.
 - **User resource:** `{ schemas:["urn:ietf:params:scim:schemas:core:2.0:User"], id, externalId?, userName, name:{ givenName?, familyName?, formatted? }, displayName?, emails:[{ value, type:"work", primary:true }], active, meta:{ resourceType:"User", created, lastModified, location } }`. Supported attributes: `userName` (required, unique case-insensitively), `externalId`, `active`, `displayName`, `name.givenName`, `name.familyName`, `name.formatted`, `emails[type eq "work"].value`. Others are accepted and ignored.
 - **Group resource:** `{ schemas:["urn:ietf:params:scim:schemas:core:2.0:Group"], id, externalId?, displayName, members:[{ value:<user id>, display? }], meta }`. `excludedAttributes=members` leaves `members` out.

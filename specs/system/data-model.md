@@ -101,7 +101,7 @@ Summary:
 | Collection (table) | Purpose | Identity | Default order | Capability |
 |---|---|---|---|---|
 | `connections` | Saved datasources (data platform connections) | `id` | `updatedAt` desc | [datasources](../capabilities/datasources/spec.md) |
-| `settings` | Single-row app settings: the LLM settings, the built-in agent pins and the UI preferences | `key` (`"llm"`, `"builtin-agent-pins"`, `"ui-preferences"`) | n/a | [llm-settings](../capabilities/llm-settings/spec.md) |
+| `settings` | Single-row app settings: the LLM settings, the built-in agent pins and the UI preferences | `key` (`"llm"`, `"builtin-agent-pins"`, `"ui-preferences"`; the last two suffixed `:<user id>` per user of an org server) | n/a | [llm-settings](../capabilities/llm-settings/spec.md) |
 | `datasets` | Named selections of entities with a schema snapshot | `name` (unique, upsert key) | `updatedAt` desc | [datasets](../capabilities/datasets/spec.md) |
 | `sessions` | Chat sessions with full transcript and visual metadata | `id` | `updatedAt` desc | [sessions-chat](../capabilities/sessions-chat/spec.md), [visuals](../capabilities/visuals/spec.md) |
 | `datasource_inventories` | Cached catalog/schema/table walk per datasource | `id` = datasource id | n/a | [datasources](../capabilities/datasources/spec.md) |
@@ -197,12 +197,12 @@ No document stored = "not configured": agents fall back to model `openai/gpt-4o-
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `key` | `"ui-preferences"` | yes | Identity. |
+| `key` | string | yes | Identity: `"ui-preferences"` for the local user, `"ui-preferences:<user id>"` for a user of an org server, so each user keeps their own theme and drawer state (section 3.15) without a migration. |
 | `theme` | enum | no | `system` \| `light` \| `dark`. Absent = never chosen = Light (app-shell R39, R43). |
 | `navExpanded` | boolean | no | Navigation drawer state from the user's last Expand / Collapse click. Absent = expanded (app-shell R50). |
 | `updatedAt` | ISO string | yes | Set on each save. |
 
-Written by `PUT /ui-preferences` ([api.md](api.md) 57); ADR-0009.
+Written by `PUT /ui-preferences` ([api.md](api.md) 57) for the caller; ADR-0009.
 
 ### 3.3 `datasets`
 
@@ -564,7 +564,7 @@ Append-only. Read by the admin Overview and Users & groups (admin R36, R39-R54).
 |---|---|---|---|---|
 | `sign-in`, `sign-out` | [api.md](api.md) 62, 63 | the user | the user | |
 | `user.active` | the first authenticated request of a UTC day | the user | the user | |
-| `scim.request` | any SCIM request, at most one a minute | | | |
+| `scim.request` | any SCIM request that passed the token check, at most one a minute | | | |
 | `role.assigned`, `role.removed` | [api.md](api.md) 79, 80, 85 | the admin | the user | `{ role, datasourceId? }` |
 | `user.deactivated`, `user.reactivated` | SCIM ([api.md](api.md) 2.14) | | the user | |
 | `mapping.added`, `mapping.removed` | [api.md](api.md) 89, 90 | the admin | the group | `{ role, datasourceId?, mappingId }` |
@@ -597,7 +597,7 @@ Reads walk `users`, `agents` and `activity_events` across all owners, so the adm
 
 Rules: [../capabilities/admin/spec.md](../capabilities/admin/spec.md) R28-R33.
 
-- **Private collections:** `sessions`, `verified_queries`, `metrics`, `eval_runs`, `knowledge_snippets`, `agents`, plus the per-user built-in pins document in `settings` (3.2). Everything hanging off a session is private through it: visual metadata and files, reports, the session workspace (section 4) and its agent memory thread (section 5).
+- **Private collections:** `sessions`, `verified_queries`, `metrics`, `eval_runs`, `knowledge_snippets`, `agents`, plus the per-user built-in pins and UI preferences documents in `settings` (3.2, 3.2.1). Everything hanging off a session is private through it: visual metadata and files, reports, the session workspace (section 4) and its agent memory thread (section 5).
 - **Shared collections:** `connections`, `datasets`, `datasource_inventories`, and the `llm` document in `settings`.
 - **Org server mode:** every insert into a private collection stamps `ownerId` with the caller's id, and every find, update, unset and delete ANDs `ownerId = <caller>` into its filter. A document with another `ownerId`, or none, is invisible to the caller. Upserts carry `ownerId`, so they can never take over another owner's document.
 - **Local mode:** no `ownerId` is written and no owner filter is applied: every document belongs to the local user, whether it was stored before or after org server mode existed.
@@ -605,7 +605,7 @@ Rules: [../capabilities/admin/spec.md](../capabilities/admin/spec.md) R28-R33.
 - **In-memory state** keyed by id (preview sessions, in-flight eval runs, deep-analysis jobs) records the owner's id (`local` for the local user) when it is created, and lookups filter by it: another user's entry answers as not found. The one-running-eval-run guard is kept per agent and owner. Work that outlives its request (eval runs, deep analysis) captures the user when it starts and re-enters it for every later step.
 - **Startup work** that walks a private collection across all owners (the verified-query field migration M4, the workspace backfill) reads the store without the owner filter.
 
-*Implementation note.* An `OwnedDocStore<T>` wrapper around `DocStore<T>` adds the stamp and the filter from the current user (`AsyncLocalStorage`, ADR-0011); the auth module provides it under an owned token per private collection. Repositories of private collections inject the owned token; the raw token stays for startup work (the sessions repository's workspace backfill and the verified-query migration). The wrapper reads the caller on every call and fails closed (401) when nobody is signed in; a patch can't change `ownerId` and `ownerId` can't be unset. The built-in pins document is scoped by its `key` instead (3.2).
+*Implementation note.* An `OwnedDocStore<T>` wrapper around `DocStore<T>` adds the stamp and the filter from the current user (`AsyncLocalStorage`, ADR-0011); the auth module provides it under an owned token per private collection. Repositories of private collections inject the owned token; the raw token stays for startup work (the sessions repository's workspace backfill and the verified-query migration). The wrapper reads the caller on every call and fails closed (401) when nobody is signed in; a patch can't change `ownerId` and `ownerId` can't be unset. The built-in pins and UI preferences documents are scoped by their `key` instead (3.2, 3.2.1).
 
 ## 4. Files on disk
 

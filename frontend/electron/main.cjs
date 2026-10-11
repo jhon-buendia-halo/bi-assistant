@@ -504,9 +504,14 @@ function startBackend() {
     return;
   }
   // Reuse Electron's binary as plain Node so packaged apps don't need a system Node.
+  // The desktop backend always runs in local mode (admin R2): drop any
+  // org server configuration inherited from the shell (api.md 4.3).
+  const inheritedEnv = Object.fromEntries(
+    Object.entries(process.env).filter(([key]) => !key.startsWith("ORG_")),
+  );
   backendProcess = spawn(process.execPath, [entry], {
     env: {
-      ...process.env,
+      ...inheritedEnv,
       ELECTRON_RUN_AS_NODE: "1",
       PORT: BACKEND_PORT,
       // SQLite app database lives in the OS-standard per-user app folder
