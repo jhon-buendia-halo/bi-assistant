@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AdminController } from './admin.controller';
 import { AdminDirectoryReader } from './admin-directory.reader';
+import { AdminOverviewService } from './admin-overview.service';
 import { AdminReadService } from './admin-read.service';
 import { AdminService } from './admin.service';
 import { AllOwnersAgentsRepository } from './repositories/all-owners-agents.repository';
@@ -15,6 +16,7 @@ import { AllOwnersAgentsRepository } from './repositories/all-owners-agents.repo
   providers: [
     AdminService,
     AdminReadService,
+    AdminOverviewService,
     AdminDirectoryReader,
     AllOwnersAgentsRepository,
   ],

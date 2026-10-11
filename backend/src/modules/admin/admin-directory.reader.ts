@@ -18,6 +18,7 @@ import {
   RoleResolver,
 } from '../auth/role-resolver';
 import type { UserAgentDoc } from '../user-agents/entities/user-agent.entity';
+import type { ActivityNames } from './activity-sentences';
 import {
   agentNameOf,
   byName,
@@ -213,6 +214,10 @@ export class AdminSnapshot {
     return ROLE_BADGE_ORDER.filter((role) => held.has(role));
   }
 
+  holds(user: UserDoc, role: AssignableRoleId): boolean {
+    return this.heldRoles(user).some((r) => r.role === role);
+  }
+
   row(user: UserDoc): AdminUserRow {
     return {
       id: user.id,
@@ -234,6 +239,19 @@ export class AdminSnapshot {
       ...(mapping.datasourceId
         ? { datasourceName: this.datasourceName(mapping.datasourceId) }
         : {}),
+    };
+  }
+
+  /** How ids read in Recent activity (data-model 3.14.7). */
+  names(): ActivityNames {
+    return {
+      user: (id) => this.user(id)?.displayName ?? 'a deleted user',
+      group: (id) => this.group(id)?.displayName ?? 'a deleted group',
+      agent: (id, fallback) => {
+        const agent = this.agent(id);
+        return agent ? agentNameOf(agent) : fallback || 'a deleted agent';
+      },
+      datasource: (id) => (id ? this.datasourceName(id) : ''),
     };
   }
 }

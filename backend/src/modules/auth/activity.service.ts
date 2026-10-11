@@ -45,6 +45,11 @@ export class ActivityService {
     await this.store.insert(event);
   }
 
+  /** Every event, newest first: what the admin screens derive from. */
+  events(): Promise<ActivityEventDoc[]> {
+    return this.store.find({}, { sort: { at: -1 } });
+  }
+
   /** When the newest event of `type` happened, if any ("Last sync"). */
   async newestAt(type: ActivityEventType): Promise<string | null> {
     return (

@@ -879,12 +879,12 @@ interface ActivityItem { id: string; type: string; at: string; text: string }   
     recentActivity: ActivityItem[];                             // at most 10, newest first
   }
   ```
-  `agentName` is the agent's Live name, else its draft name. `formerOwner` is `null` when the owner is no longer in the directory. `makerAssignmentId` is the direct Maker assignment (the id endpoint 80 takes), `null` when Maker comes only from groups. Each `items` list holds at most 100 entries, ordered by name; `count` is always the full number.
+  `agentName` is the agent's Live name, else its draft name. `formerOwner` is `null` when the owner is no longer in the directory. An errored agent's `owner` is its current owner (`displayName` `"unknown user"` when that user is no longer in the directory). Agents stored without an owner (admin R33) count in no figure. `makerAssignmentId` is the direct Maker assignment (the id endpoint 80 takes), `null` when Maker comes only from groups. Each `items` list holds at most 100 entries, ordered by name; `count` is always the full number.
 - Errors: none expected beyond 1.9.
 
 #### 82. `GET /admin/overview/export`
-- Response `200`, `Content-Type: text/csv; charset=utf-8`, `Content-Disposition: attachment; filename="admin-report-<YYYY-MM-DD>.csv"` (UTC date). UTF-8 with a byte-order mark, CRLF line ends, RFC 4180 quoting. A cell starting with `=`, `+`, `-` or `@` is prefixed with `'` (admin R48).
-- Columns `section,label,value`. Rows, in order:
+- Response `200`, `Content-Type: text/csv; charset=utf-8`, `Content-Disposition: attachment; filename="admin-report-<YYYY-MM-DD>.csv"` (UTC date). UTF-8 with a byte-order mark, CRLF after every row (the last included), RFC 4180 quoting. A cell starting with `=`, `+`, `-`, `@`, a tab or a carriage return is prefixed with `'` before quoting (admin R48).
+- A header row `section,label,value`, then, in order:
   - `summary,Active users · 30 days,<n>` and `summary,Agents live,<n>`;
   - `attention,Agents without an active owner,<n>`, `attention,Agents with errors in the last 7 days,<n>`, `attention,Users inactive for 90+ days with Maker role,<n>`;
   - 8 rows `weekly-active-users,<weekStart>,<n>`, oldest first;
@@ -1014,7 +1014,7 @@ interface StreamMessageRequest {
 - Whatever text had already streamed is still persisted as a (partial) assistant message together with captured `data`; the careful-mode cross-check is skipped. The client should reload the session (`GET /sessions/:id`) to show the persisted state; the shipped chat does this.
 - Abort errors are swallowed silently on both sides.
 
-**Errors mid-stream.** Any thrown error that is not an abort is caught by the controller and sent as `{ type:"error", content: <message> }`, then the response ends. The user message stays persisted; no assistant message is added. In org server mode, when the session was started from a user agent (not a preview) and the error is not a refused request (an empty message, an unknown session), the server also records an `agent.turn-failed` activity event ([data-model.md](data-model.md) 3.14.7; admin R40). Endpoint 6 does the same for a failed non-streamed turn. A failed connect on the client yields `"Backend unreachable"`, a non-2xx or bodyless response yields `"Stream failed (<status>)"`, a read failure yields `"Stream disconnected"`.
+**Errors mid-stream.** Any thrown error that is not an abort is caught by the controller and sent as `{ type:"error", content: <message> }`, then the response ends. The user message stays persisted; no assistant message is added. In org server mode, when the session was started from a user agent (not a preview) that it still runs (not deleted, nor transferred to another owner), the error is not a refused request (an empty message, an unknown session) and the client did not stop the turn, the server also records an `agent.turn-failed` activity event ([data-model.md](data-model.md) 3.14.7; admin R40). Endpoint 6 does the same for a failed non-streamed turn. A failed connect on the client yields `"Backend unreachable"`, a non-2xx or bodyless response yields `"Stream failed (<status>)"`, a read failure yields `"Stream disconnected"`.
 
 ### 3.2 Deep analysis
 

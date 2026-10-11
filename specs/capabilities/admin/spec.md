@@ -108,7 +108,7 @@ These rules cover the three tabs of the Admin area (R35): Overview (P1, [BA-164]
   4. **Active**: otherwise.
 
   A user's last activity SHALL be the time of their first request on the most recent UTC day they made one (R36), or their last sign-in when that is later or there is no such day. **Last active** SHALL show it at day precision ("Today", "Yesterday", "<n> days ago"), or "Never" for a user who has not signed in.
-- R40. An **agent error** SHALL be a chat turn, in a session started from a user agent, that ended in an error instead of an answer (sessions-chat R45). A turn the user stopped, a refused request that never reached the assistant (an empty message, an unknown session) and a turn in the agent editor's preview chat SHALL NOT count. In org server mode each agent error SHALL be recorded as an activity event naming the agent, the session's owner and the error message.
+- R40. An **agent error** SHALL be a chat turn, in a session started from a user agent, that ended in an error instead of an answer (sessions-chat R45). A turn the user stopped, a refused request that never reached the assistant (an empty message, an unknown session), a turn in the agent editor's preview chat and a turn in a session whose agent was deleted or transferred to another owner (the session then runs without it, sessions-chat R59) SHALL NOT count. In org server mode each agent error SHALL be recorded as an activity event naming the agent, the session's owner and the error message.
 
 ### Overview (P1)
 
@@ -140,7 +140,7 @@ These rules cover the three tabs of the Admin area (R35): Overview (P1, [BA-164]
   | user deactivated / reactivated | `Entra ID deactivated <user>` / `Entra ID reactivated <user>` |
 
   Sign-ins, refused sign-ins, sign-outs, daily activity, SCIM requests and agent errors SHALL NOT appear. With none of these events the card SHALL read "No activity yet." Recent activity is a short feed, not an audit log.
-- R48. **Export report** SHALL download a CSV file named `admin-report-<YYYY-MM-DD>.csv` (the UTC date) holding, at the moment of the export, the two tiles, the three Needs attention counts, the 8 weekly counts and the recent activity. A cell that starts with `=`, `+`, `-` or `@` SHALL be prefixed with `'`, so a spreadsheet never runs it as a formula.
+- R48. **Export report** SHALL download a CSV file named `admin-report-<YYYY-MM-DD>.csv` (the UTC date) holding, at the moment of the export, the two tiles, the three Needs attention counts, the 8 weekly counts and the recent activity. A cell that starts with `=`, `+`, `-`, `@`, a tab or a carriage return SHALL be prefixed with `'`, so a spreadsheet never runs it as a formula.
 
 ### Users & groups (P2)
 

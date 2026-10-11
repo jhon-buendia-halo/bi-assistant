@@ -17,6 +17,7 @@ import {
 } from '../../common/decorators/auth-requirement.decorators';
 import { CurrentUserService } from '../auth/current-user.service';
 import type { RoleAssignmentDoc } from '../auth/entities/directory.entity';
+import { AdminOverviewService } from './admin-overview.service';
 import { AdminReadService } from './admin-read.service';
 import { AdminService } from './admin.service';
 import type { AddMappingDto } from './dto/add-mapping.dto';
@@ -26,6 +27,7 @@ import type { TransferAgentsDto } from './dto/transfer-agents.dto';
 import type {
   AdminGroupsPage,
   AdminHeldRole,
+  AdminOverview,
   AdminUserDetail,
   AdminUsersPage,
   GroupRoleMappingView,
@@ -42,6 +44,7 @@ export class AdminController {
   constructor(
     private readonly admin: AdminService,
     private readonly reads: AdminReadService,
+    private readonly overviews: AdminOverviewService,
     private readonly currentUser: CurrentUserService,
   ) {}
 
@@ -69,6 +72,23 @@ export class AdminController {
   ): Promise<{ ok: true; message: string }> {
     await this.admin.removeAssignment(id, this.currentUser.ownerKey());
     return { ok: true, message: 'Role removed' };
+  }
+
+  /** 81. */
+  @Get('overview')
+  overview(): Promise<AdminOverview> {
+    return this.overviews.overview();
+  }
+
+  /** 82: a CSV download named after the UTC date. */
+  @Get('overview/export')
+  async exportOverview(@Res() res: Response): Promise<void> {
+    const { fileName, csv } = await this.overviews.exportCsv();
+    res
+      .status(200)
+      .setHeader('Content-Type', 'text/csv; charset=utf-8')
+      .setHeader('Content-Disposition', `attachment; filename="${fileName}"`)
+      .send(Buffer.from(csv, 'utf8'));
   }
 
   /** 83. */

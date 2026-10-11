@@ -1,12 +1,14 @@
 /**
- * API-level proof of the admin screens P2-P4 (specs/capabilities/admin/spec.md
- * R49-R68; api.md 2.15, endpoints 83-90; data-model 3.14.8): every admin
- * route's 403 for a non-admin, the users and groups tables, saving roles all
- * or nothing, agent transfers and their conflicts, and group mappings that
- * grant and take away roles. It drives the BUILT backend (`npm run build`
- * first) in org server mode against the in-test OIDC stub. Needs no Postgres
- * and no LLM.
+ * API-level proof of the admin screens P1-P4 (specs/capabilities/admin/spec.md
+ * R37-R68; api.md 2.15, endpoints 81-90; data-model 3.14.8): every admin
+ * route's 403 for a non-admin, the users and groups tables, saving roles
+ * all or nothing, agent transfers and their conflicts, group mappings that
+ * grant and take away roles, the overview figures from seeded activity, the
+ * agent errors a failed turn records (admin R40) and the CSV export. It
+ * drives the BUILT backend (`npm run build` first) in org server mode
+ * against the in-test OIDC stub. Needs no Postgres and no LLM.
  */
+import { randomUUID } from 'node:crypto';
 import { type OrgServer, scimUser, startOrgServer } from './org-server';
 
 jest.setTimeout(240_000);
@@ -75,6 +77,44 @@ interface MappingView {
   datasourceName?: string;
 }
 
+interface Overview {
+  generatedAt: string;
+  activeUsers30d: number;
+  agentsLive: number;
+  attention: {
+    ownerlessAgents: {
+      count: number;
+      items: {
+        agentId: string;
+        agentName: string;
+        formerOwner: { id: string; displayName: string } | null;
+      }[];
+    };
+    erroredAgents: {
+      count: number;
+      items: {
+        agentId: string;
+        agentName: string;
+        owner: { id: string; displayName: string };
+        errors: number;
+        lastErrorAt: string;
+        lastErrorMessage: string;
+      }[];
+    };
+    inactiveMakers: {
+      count: number;
+      items: {
+        user: { id: string; displayName: string };
+        lastActiveAt: string;
+        makerAssignmentId: string | null;
+        makerGroups: string[];
+      }[];
+    };
+  };
+  weeklyActiveUsers: { weekStart: string; users: number }[];
+  recentActivity: { id: string; type: string; at: string; text: string }[];
+}
+
 interface ActivityEvent {
   type: string;
   at: string;
@@ -99,6 +139,8 @@ function adminRoutes(ids: {
   return [
     ['POST', '/admin/role-assignments', { userId: ids.user, role: 'approver' }],
     ['DELETE', '/admin/role-assignments/r1'],
+    ['GET', '/admin/overview'],
+    ['GET', '/admin/overview/export'],
     ['GET', '/admin/users'],
     ['GET', `/admin/users/${ids.user}`],
     [
@@ -808,5 +850,349 @@ describe('Admin API: users, groups, roles, transfers and mappings (BA-165, BA-16
       expect(second.items[0].displayName).not.toBe(first.items[0].displayName);
       expect(await users('?page=9')).toMatchObject({ items: [], total });
     });
+  });
+});
+
+describe('Admin overview API (BA-164)', () => {
+  let org: OrgServer;
+  let adminCookie = '';
+  const ids: Record<string, string> = {};
+
+  const get = async <T>(path: string, cookie = adminCookie): Promise<T> => {
+    const res = await org.api(path, { cookie });
+    expect({ path, status: res.status }).toEqual({ path, status: 200 });
+    return (await res.json()) as T;
+  };
+  const overview = () => get<Overview>('/admin/overview');
+  const provision = async (email: string, name: string) => {
+    const res = await org.scim('/Users', {
+      method: 'POST',
+      body: scimUser(email, name),
+    });
+    return ((await res.json()) as { id: string }).id;
+  };
+  const activityEvent = (type: string, at: string, fields: object = {}) =>
+    org.insertDoc('activity_events', { type, at, ...fields });
+  /** The `data:` frames of a chat stream (api.md 3.1). */
+  const stream = async (cookie: string, sessionId: string, content: string) => {
+    const res = await org.api(`/sessions/${sessionId}/messages/stream`, {
+      method: 'POST',
+      cookie,
+      body: { content },
+    });
+    // Any 2xx: the failure arrives in the stream (api.md 3.1).
+    expect(res.ok).toBe(true);
+    return (await res.text())
+      .split('\n\n')
+      .filter((frame) => frame.startsWith('data: '))
+      .map(
+        (frame) =>
+          JSON.parse(frame.slice(6)) as { type: string; content?: string },
+      );
+  };
+  const turnFailures = () =>
+    org
+      .docs<ActivityEvent>('activity_events')
+      .filter((e) => e.type === 'agent.turn-failed');
+
+  beforeAll(async () => {
+    org = await startOrgServer({
+      bootstrapAdmins: [ADMIN.email, 'mallet@contoso.test'],
+    });
+    adminCookie = await org.signIn(ADMIN);
+  });
+
+  afterAll(async () => {
+    await org?.close();
+  });
+
+  it('a new org server shows zeros and no recent activity', async () => {
+    activityEvent('sign-in.refused', new Date().toISOString(), {
+      subjectId: 'someone',
+      details: { reason: 'subject-mismatch' },
+    });
+    const empty = await overview();
+    expect(empty).toMatchObject({
+      activeUsers30d: 1,
+      agentsLive: 0,
+      attention: {
+        ownerlessAgents: { count: 0, items: [] },
+        erroredAgents: { count: 0, items: [] },
+        inactiveMakers: { count: 0, items: [] },
+      },
+      recentActivity: [],
+    });
+    expect(empty.weeklyActiveUsers).toHaveLength(8);
+    expect(empty.weeklyActiveUsers[7].users).toBe(1);
+  });
+
+  it('records an agent error for a failed turn in a session started from a user agent, and nothing for the others (admin R40)', async () => {
+    ids.ada = await provision(ADA.email, ADA.name);
+    const adaCookie = await org.signIn(ADA);
+    org.insertDoc('datasets', {
+      name: 'World Cup Core',
+      tables: [],
+      entities: [],
+      datasourceId: 'ds-none',
+      datasourceKind: 'postgres',
+    });
+    org.insertDoc('agents', {
+      id: 'agent-goal',
+      draft: agentConfig('Goal analyst'),
+      live: agentConfig('Goal analyst'),
+      publishedAt: '2026-01-01T00:00:00.000Z',
+      pinned: false,
+      ownerId: ids.ada,
+    });
+    // An LLM configuration whose key can't be read: every turn fails at once.
+    org.insertDoc('settings', {
+      key: 'llm',
+      provider: 'lenai',
+      model: 'gpt-test',
+      baseUrl: 'http://127.0.0.1:1',
+      apiKeyCiphertext: 'not:a:ciphertext',
+    });
+    for (const [id, agentId] of [
+      ['session-agent', 'agent-goal'],
+      ['session-plain', undefined],
+    ]) {
+      org.insertDoc('sessions', {
+        id,
+        name: id,
+        datasets: [],
+        messages: [],
+        visualizations: [],
+        ...(agentId ? { agentId, agentName: 'Goal analyst' } : {}),
+        ownerId: ids.ada,
+      });
+    }
+
+    const frames = await stream(adaCookie, 'session-agent', 'Who scored most?');
+    const error = frames.find((f) => f.type === 'error');
+    expect(error?.content).toBeTruthy();
+    expect(turnFailures()).toEqual([
+      expect.objectContaining({
+        actorId: ids.ada,
+        subjectId: 'agent-goal',
+        details: {
+          sessionId: 'session-agent',
+          message: error!.content!.slice(0, 200),
+        },
+      }),
+    ]);
+
+    // A plain session, a refused request and a preview record nothing.
+    await stream(adaCookie, 'session-plain', 'Who scored most?');
+    await stream(adaCookie, 'session-agent', '   ');
+    await stream(adaCookie, 'no-such-session', 'Who scored most?');
+    const preview = await org.api('/sessions', {
+      method: 'POST',
+      cookie: adaCookie,
+      body: { agentId: 'agent-goal', preview: true },
+    });
+    const { session } = (await preview.json()) as { session: { id: string } };
+    expect(session.id).toMatch(/^preview-/);
+    const previewFrames = await stream(
+      adaCookie,
+      session.id,
+      'Who scored most?',
+    );
+    expect(previewFrames.some((f) => f.type === 'error')).toBe(true);
+    expect(turnFailures()).toHaveLength(1);
+  });
+
+  it('derives the tiles, Needs attention, the weekly chart and Recent activity from the activity', async () => {
+    ids.grace = await provision(GRACE.email, GRACE.name);
+    ids.alan = await provision('alan@contoso.test', 'Alan Turing');
+    ids.lin = await provision('lin@contoso.test', 'Lin Leaver');
+    // Grace was active today; Alan last 95 days ago and holds Maker.
+    org.patchDoc(
+      'users',
+      { id: ids.grace },
+      { lastSignInAt: daysAgo(0), lastActiveAt: daysAgo(0) },
+    );
+    activityEvent('user.active', daysAgo(0), {
+      actorId: ids.grace,
+      subjectId: ids.grace,
+    });
+    org.patchDoc(
+      'users',
+      { id: ids.alan },
+      { lastSignInAt: daysAgo(95), lastActiveAt: daysAgo(95) },
+    );
+    activityEvent('user.active', daysAgo(14), {
+      actorId: ids.alan,
+      subjectId: ids.alan,
+    });
+    const assigned = await org.api('/admin/role-assignments', {
+      method: 'POST',
+      cookie: adminCookie,
+      body: { userId: ids.alan, role: 'maker' },
+    });
+    expect(assigned.status).toBe(201);
+    // A second bootstrap admin whose name a spreadsheet would run.
+    const malletCookie = await org.signIn({
+      email: 'mallet@contoso.test',
+      name: '=SUM(1,2)',
+    });
+    await org.api('/admin/role-assignments', {
+      method: 'POST',
+      cookie: malletCookie,
+      body: { userId: ids.grace, role: 'approver' },
+    });
+    // Lin's Live agent loses its owner; another agent's owner left the directory.
+    org.insertDoc('agents', {
+      id: 'agent-orphan',
+      draft: agentConfig('Orphan'),
+      live: agentConfig('Orphan'),
+      pinned: false,
+      ownerId: ids.lin,
+    });
+    org.insertDoc('agents', {
+      id: 'agent-ghost',
+      draft: agentConfig('Ghost'),
+      pinned: false,
+      ownerId: randomUUID(),
+    });
+    // Stored before org server mode: in no figure (admin R33).
+    org.insertDoc('agents', {
+      id: 'agent-local',
+      draft: agentConfig('Local'),
+      live: agentConfig('Local'),
+      pinned: false,
+    });
+    const deactivate = await org.scim(`/Users/${ids.lin}`, {
+      method: 'PATCH',
+      body: {
+        schemas: [PATCH_SCHEMA],
+        Operations: [{ op: 'replace', path: 'active', value: false }],
+      },
+    });
+    expect(deactivate.status).toBe(200);
+    activityEvent('agent.turn-failed', daysAgo(2), {
+      actorId: ids.ada,
+      subjectId: 'agent-goal',
+      details: { sessionId: 'session-agent', message: 'Model unavailable' },
+    });
+    activityEvent('agent.turn-failed', daysAgo(8), {
+      actorId: ids.ada,
+      subjectId: 'agent-goal',
+      details: { sessionId: 'session-agent', message: 'Too old' },
+    });
+
+    const view = await overview();
+    // Avery, Mallet, Ada and Grace.
+    expect(view.activeUsers30d).toBe(4);
+    expect(view.agentsLive).toBe(2);
+    expect(view.attention.ownerlessAgents).toEqual({
+      count: 2,
+      items: [
+        { agentId: 'agent-ghost', agentName: 'Ghost', formerOwner: null },
+        {
+          agentId: 'agent-orphan',
+          agentName: 'Orphan',
+          formerOwner: { id: ids.lin, displayName: 'Lin Leaver' },
+        },
+      ],
+    });
+    const [failure] = turnFailures();
+    expect(view.attention.erroredAgents).toEqual({
+      count: 1,
+      items: [
+        {
+          agentId: 'agent-goal',
+          agentName: 'Goal analyst',
+          owner: { id: ids.ada, displayName: 'Ada Lovelace' },
+          errors: 2,
+          lastErrorAt: failure.at,
+          lastErrorMessage: failure.details!.message,
+        },
+      ],
+    });
+    expect(view.attention.inactiveMakers).toEqual({
+      count: 1,
+      items: [
+        {
+          user: { id: ids.alan, displayName: 'Alan Turing' },
+          lastActiveAt: anyString,
+          makerAssignmentId: anyString,
+          makerGroups: [],
+        },
+      ],
+    });
+    expect(view.weeklyActiveUsers).toHaveLength(8);
+    expect(view.weeklyActiveUsers[7].users).toBe(4);
+    expect(view.weeklyActiveUsers[5].users).toBe(1);
+    const monday = new Date(`${view.weeklyActiveUsers[7].weekStart}T00:00:00Z`);
+    expect(monday.getUTCDay()).toBe(1);
+    expect(view.recentActivity.map((a) => a.text)).toEqual([
+      'Entra ID deactivated Lin Leaver',
+      '=SUM(1,2) gave Grace Hopper the Approver role',
+      'Avery Admin gave Alan Turing the Maker role',
+    ]);
+
+    // Export report (admin R48).
+    const res = await org.api('/admin/overview/export', {
+      cookie: adminCookie,
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('text/csv; charset=utf-8');
+    expect(res.headers.get('content-disposition')).toBe(
+      `attachment; filename="admin-report-${today()}.csv"`,
+    );
+    const bytes = Buffer.from(await res.arrayBuffer());
+    expect([...bytes.subarray(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+    const lines = bytes.subarray(3).toString('utf8').split('\r\n');
+    expect(lines).toContain('summary,Active users · 30 days,4');
+    expect(lines).toContain('summary,Agents live,2');
+    expect(lines).toContain('attention,Agents without an active owner,2');
+    expect(lines).toContain(
+      'attention,Agents with errors in the last 7 days,1',
+    );
+    expect(lines).toContain(
+      'attention,Users inactive for 90+ days with Maker role,1',
+    );
+    expect(
+      lines.filter((l) => l.startsWith('weekly-active-users,')),
+    ).toHaveLength(8);
+    expect(
+      lines.find((l) => l.includes('gave Grace Hopper the Approver role')),
+    ).toMatch(
+      /^activity,[0-9T:.Z-]+,"'=SUM\(1,2\) gave Grace Hopper the Approver role"$/,
+    );
+  });
+
+  it('Clean up and Assign resolve their rows and show in Recent activity', async () => {
+    const before = await overview();
+    const [maker] = before.attention.inactiveMakers.items;
+    const removed = await org.api(
+      `/admin/role-assignments/${maker.makerAssignmentId}`,
+      { method: 'DELETE', cookie: adminCookie },
+    );
+    expect(removed.status).toBe(200);
+    const transferred = await org.api('/admin/agents/transfer', {
+      method: 'POST',
+      cookie: adminCookie,
+      body: { agentIds: ['agent-orphan'], toUserId: ids.grace },
+    });
+    expect(transferred.status).toBe(200);
+
+    const after = await overview();
+    expect(after.attention.inactiveMakers.count).toBe(0);
+    expect(after.attention.ownerlessAgents.items.map((a) => a.agentId)).toEqual(
+      ['agent-ghost'],
+    );
+    expect(after.recentActivity.slice(0, 2).map((a) => a.text)).toEqual([
+      'Avery Admin transferred Orphan from Lin Leaver to Grace Hopper',
+      'Avery Admin removed the Maker role from Alan Turing',
+    ]);
+  });
+
+  it('refuses the overview and its export to a user without the admin permission', async () => {
+    const adaCookie = await org.signIn(ADA);
+    for (const path of ['/admin/overview', '/admin/overview/export']) {
+      const res = await org.api(path, { cookie: adaCookie });
+      expect(res.status).toBe(403);
+    }
   });
 });

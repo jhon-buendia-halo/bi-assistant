@@ -18,6 +18,7 @@ import { RolesRepository } from '../auth/repositories/roles.repository';
 import { RoleResolver } from '../auth/role-resolver';
 import type { UserAgentDoc } from '../user-agents/entities/user-agent.entity';
 import { AdminDirectoryReader } from './admin-directory.reader';
+import { AdminOverviewService } from './admin-overview.service';
 import { AdminReadService } from './admin-read.service';
 import { AdminService } from './admin.service';
 import { AllOwnersAgentsRepository } from './repositories/all-owners-agents.repository';
@@ -115,6 +116,7 @@ function setup() {
     db,
     admin,
     read: new AdminReadService(reader, activity),
+    overview: new AdminOverviewService(reader, activity),
     assignments,
     agents,
     async user(
@@ -915,5 +917,170 @@ describe('AdminReadService groups and mappings (api.md 87, 88; admin R55, R66)',
       groupId: 'g-analysts',
       createdBy: 'admin',
     });
+  });
+});
+
+describe('AdminOverviewService (api.md 81, 82; admin R41-R48; data-model 3.14.8)', () => {
+  it('shows zeros, eight empty weeks and no activity on a new org server', async () => {
+    const t = setup();
+    await t.user('admin', 'Avery Admin', {
+      lastActiveAt: undefined,
+      lastSignInAt: undefined,
+    });
+    await t.event('sign-in', daysAgo(0), {
+      actorId: 'admin',
+      subjectId: 'admin',
+    });
+    await t.event('sign-in.refused', daysAgo(0), {
+      subjectId: 'admin',
+      details: { reason: 'subject-mismatch' },
+    });
+    await t.event('scim.request', daysAgo(0));
+    const overview = await t.overview.overview();
+    expect(overview).toMatchObject({
+      activeUsers30d: 0,
+      agentsLive: 0,
+      attention: {
+        ownerlessAgents: { count: 0, items: [] },
+        erroredAgents: { count: 0, items: [] },
+        inactiveMakers: { count: 0, items: [] },
+      },
+      recentActivity: [],
+    });
+    expect(overview.weeklyActiveUsers).toHaveLength(8);
+    expect(overview.weeklyActiveUsers.every((w) => w.users === 0)).toBe(true);
+  });
+
+  it('derives the tiles, Needs attention, the chart and Recent activity', async () => {
+    const t = setup();
+    await directoryWithPeople(t);
+    await t.user('alan', 'Alan Turing', {
+      lastSignInAt: daysAgo(95),
+      lastActiveAt: daysAgo(95),
+    });
+    await t.user('olga', 'Olga Old', {
+      lastSignInAt: daysAgo(40),
+      lastActiveAt: daysAgo(40),
+    });
+    await t.user('ivy', 'Ivy Inactive', {
+      lastSignInAt: daysAgo(120),
+      lastActiveAt: daysAgo(120),
+    });
+    await t.user('lin', 'Lin Leaver', {
+      active: false,
+      lastSignInAt: daysAgo(60),
+      lastActiveAt: daysAgo(60),
+    });
+    await t.group('g-eng', 'Engineers', ['ivy']);
+    await t.map('g-eng', 'maker');
+    const alanMaker = await t.assign('alan', 'maker');
+
+    await t.agent('a-goal', 'Goal analyst', { ownerId: 'ada', live: true });
+    await t.agent('a-card', 'Card counter', { ownerId: 'ada' });
+    await t.agent('a-orphan', 'Orphan', { ownerId: 'lin', live: true });
+    await t.agent('a-ghost', 'Ghost', { ownerId: 'ghost-user' });
+    await t.agent('a-local', 'Local', { live: true });
+
+    await t.event('agent.turn-failed', daysAgo(1), {
+      actorId: 'ada',
+      subjectId: 'a-goal',
+      details: { sessionId: 's1', message: 'Older failure' },
+    });
+    await t.event('agent.turn-failed', daysAgo(0.5), {
+      actorId: 'ada',
+      subjectId: 'a-goal',
+      details: { sessionId: 's1', message: 'Model unavailable' },
+    });
+    await t.event('agent.turn-failed', daysAgo(8), {
+      actorId: 'ada',
+      subjectId: 'a-goal',
+      details: { sessionId: 's1', message: 'Too old' },
+    });
+    await t.event('agent.turn-failed', daysAgo(0), {
+      actorId: 'ada',
+      subjectId: 'a-deleted',
+      details: { sessionId: 's2', message: 'Gone' },
+    });
+    for (const actorId of ['admin', 'ada', 'grace']) {
+      await t.event('user.active', daysAgo(0), { actorId, subjectId: actorId });
+    }
+    await t.event('user.active', daysAgo(14), {
+      actorId: 'olga',
+      subjectId: 'olga',
+    });
+    await t.event('role.assigned', daysAgo(0.1), {
+      actorId: 'admin',
+      subjectId: 'alan',
+      details: { role: 'maker' },
+    });
+    await t.event('user.deactivated', daysAgo(0.05), { subjectId: 'lin' });
+    await t.event('sign-in.refused', daysAgo(0.01), {
+      subjectId: 'ada',
+      details: { reason: 'subject-mismatch' },
+    });
+
+    const overview = await t.overview.overview(NOW);
+    expect(overview.activeUsers30d).toBe(3);
+    expect(overview.agentsLive).toBe(2);
+    expect(overview.attention.ownerlessAgents).toEqual({
+      count: 2,
+      items: [
+        { agentId: 'a-ghost', agentName: 'Ghost', formerOwner: null },
+        {
+          agentId: 'a-orphan',
+          agentName: 'Orphan',
+          formerOwner: { id: 'lin', displayName: 'Lin Leaver' },
+        },
+      ],
+    });
+    expect(overview.attention.erroredAgents).toEqual({
+      count: 1,
+      items: [
+        {
+          agentId: 'a-goal',
+          agentName: 'Goal analyst',
+          owner: { id: 'ada', displayName: 'Ada Lovelace' },
+          errors: 2,
+          lastErrorAt: daysAgo(0.5),
+          lastErrorMessage: 'Model unavailable',
+        },
+      ],
+    });
+    expect(overview.attention.inactiveMakers).toEqual({
+      count: 2,
+      items: [
+        {
+          user: { id: 'alan', displayName: 'Alan Turing' },
+          lastActiveAt: daysAgo(95),
+          makerAssignmentId: alanMaker.id,
+          makerGroups: [],
+        },
+        {
+          user: { id: 'ivy', displayName: 'Ivy Inactive' },
+          lastActiveAt: daysAgo(120),
+          makerAssignmentId: null,
+          makerGroups: ['Engineers'],
+        },
+      ],
+    });
+    const weeks = overview.weeklyActiveUsers;
+    expect(weeks).toHaveLength(8);
+    expect(weeks[7].users).toBe(3);
+    expect(weeks.slice(0, 7).map((w) => w.users)).toEqual([
+      0, 0, 0, 0, 0, 1, 0,
+    ]);
+    expect(overview.recentActivity.map((a) => a.text)).toEqual([
+      'Entra ID deactivated Lin Leaver',
+      'Avery Admin gave Alan Turing the Maker role',
+    ]);
+
+    const exported = await t.overview.exportCsv(NOW);
+    expect(exported.fileName).toBe(
+      `admin-report-${NOW.toISOString().slice(0, 10)}.csv`,
+    );
+    expect(exported.csv).toContain('\r\nsummary,Active users · 30 days,3\r\n');
+    expect(exported.csv).toContain(
+      '\r\nattention,Agents without an active owner,2\r\n',
+    );
   });
 });

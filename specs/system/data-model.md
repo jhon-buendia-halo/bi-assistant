@@ -571,7 +571,7 @@ Append-only. Read by the admin Overview and Users & groups (admin R36, R39-R54).
 | `user.deactivated`, `user.reactivated` | SCIM ([api.md](api.md) 2.14) | | the user | |
 | `mapping.added`, `mapping.removed` | [api.md](api.md) 89, 90 | the admin | the group | `{ role, datasourceId?, mappingId }` |
 | `agent.transferred` | [api.md](api.md) 86 | the admin | the agent | `{ agentName, fromUserId, toUserId }` |
-| `agent.turn-failed` | a failed chat turn in a session started from a user agent ([api.md](api.md) 3.1; admin R40) | the session's owner | the agent | `{ sessionId, message }`, `message` cut to 200 characters |
+| `agent.turn-failed` | a failed chat turn in a session started from a user agent that the session still runs, so not one deleted or transferred to another owner, and not a preview ([api.md](api.md) 3.1; admin R40) | the session's owner | the agent | `{ sessionId, message }`, `message` cut to 200 characters |
 
 Sentences shown in Recent activity are built when read, from the names current at that time; a user, group, agent or datasource no longer found shows as "a deleted user", "a deleted group", "a deleted agent" or its id. `agentName` in `agent.transferred` is kept for that case.
 
@@ -585,9 +585,9 @@ Nothing below is stored; each figure is computed when an admin endpoint ([api.md
 | Status | `users.active` false (or `scimDeleted` true) → `deactivated`; no `lastSignInAt` → `not-signed-in`; last activity 90 × 24 h or more ago → `inactive`; else `active`. |
 | Active users · 30 days | Users whose last activity is within 30 × 24 h. |
 | Weekly active users | Distinct `actorId` of `user.active` events per UTC week (Monday 00:00 to Sunday 24:00), the last 8 weeks. |
-| Agents live | `agents` documents (all owners) with a `live` value. |
+| Agents live | `agents` documents (all owners) with a `live` value and an `ownerId`. A document without `ownerId` (stored before org server mode, admin R33) counts in none of these figures. |
 | Agents without an active owner | `agents` documents whose `ownerId` is set and names a user who is deactivated or is not in `users`. Documents without `ownerId` are left out. |
-| Agents with errors | `agent.turn-failed` events with `at` in the last 7 × 24 h, grouped by `subjectId`, for agents that still exist. |
+| Agents with errors | `agent.turn-failed` events with `at` in the last 7 × 24 h, grouped by `subjectId`, for agents that still exist. The owner shown is the agent's current owner. |
 | Inactive makers | Users with status `inactive` who hold `maker` from a `role_assignments` row or a `group_role_mappings` row of one of their groups. |
 | Agents owned | `agents` documents per `ownerId`. |
 | Last sync | `at` of the newest `scim.request` event (minute precision, since that event is written at most once a minute). |
@@ -607,7 +607,7 @@ Rules: [../capabilities/admin/spec.md](../capabilities/admin/spec.md) R28-R33.
 - **In-memory state** keyed by id (preview sessions, in-flight eval runs, deep-analysis jobs) records the owner's id (`local` for the local user) when it is created, and lookups filter by it: another user's entry answers as not found. The one-running-eval-run guard is kept per agent and owner. Work that outlives its request (eval runs, deep analysis) captures the user when it starts and re-enters it for every later step.
 - **Startup work** that walks a private collection across all owners (the verified-query field migration M4, the workspace backfill) reads the store without the owner filter.
 
-*Implementation note.* An `OwnedDocStore<T>` wrapper around `DocStore<T>` adds the stamp and the filter from the current user (`AsyncLocalStorage`, ADR-0011); the auth module provides it under an owned token per private collection. Repositories of private collections inject the owned token; the raw token stays for startup work (the sessions repository's workspace backfill and the verified-query migration) and for one request-time reader: the admin module's agents repository, which lists agents across owners and moves one to another owner ([api.md](api.md) 83-87; every route reaching it needs `manage-users`). The wrapper reads the caller on every call and fails closed (401) when nobody is signed in; a patch can't change `ownerId` and `ownerId` can't be unset. The built-in pins and UI preferences documents are scoped by their `key` instead (3.2, 3.2.1).
+*Implementation note.* An `OwnedDocStore<T>` wrapper around `DocStore<T>` adds the stamp and the filter from the current user (`AsyncLocalStorage`, ADR-0011); the auth module provides it under an owned token per private collection. Repositories of private collections inject the owned token; the raw token stays for startup work (the sessions repository's workspace backfill and the verified-query migration) and for one request-time reader: the admin module's agents repository, which lists agents across owners and moves one to another owner ([api.md](api.md) 81-87; every route reaching it needs `manage-users`). The wrapper reads the caller on every call and fails closed (401) when nobody is signed in; a patch can't change `ownerId` and `ownerId` can't be unset. The built-in pins and UI preferences documents are scoped by their `key` instead (3.2, 3.2.1).
 
 ## 4. Files on disk
 
