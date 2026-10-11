@@ -656,30 +656,30 @@ Org server mode with Entra ID sign-in, SCIM directory sync and five roles enforc
 
 #### 2.1.3 — Admin overview (P1) ([BA-164](https://halo-powered.atlassian.net/browse/BA-164))  `📋 Planned`
 - **Intent:** a Platform admin sees at a glance how the org server is used and what needs attention.
-- **Scope:** tiles for active users (30 days) and agents live; Needs attention rows (agents without an active owner → Assign, agents with errors in 7 days → Inspect, inactive Makers → Clean up); a Weekly active users chart (8 weeks); Recent activity; Export report (CSV); the admin panel frame and its tab bar.
+- **Scope:** tiles for active users (30 days) and agents live; Needs attention rows (agents without an active owner → Assign, agents with errors in 7 days → Inspect, inactive Makers → Clean up), each action opening a dialog (Assign an owner, Agents with errors, Inactive makers); a Weekly active users chart (8 weeks); Recent activity (10 events); Export report (CSV); the admin panel frame, its tab bar and per-tab header actions; recording `agent.turn-failed`, `agent.transferred` and `mapping.*` activity events; `GET /admin/overview` and its CSV export (api 81, 82). Rules: admin R35-R48.
 - **Out of scope:** the publish-request and data-access-request tiles and rows (Requests epic).
-- **Acceptance:** Playwright seeds activity and checks each tile, row, action target and the chart's data; the CSV export; the axe scan in both themes.
-- **Notes:** depends on 2.1.2, and reads data from 2.1.4–2.1.6. Built last.
+- **Acceptance:** the Feature "Admin overview" (`frontend/e2e/org-admin-overview.spec.ts`) passes: it seeds activity and checks each tile, each Needs attention row and its dialog, the chart's data, Recent activity, the CSV export, the empty states, the 403 for a non-admin and the axe scan in both themes.
+- **Notes:** depends on 2.1.2, and reads data from 2.1.4–2.1.6. Built last. Decided 2026-10-10: an agent error is a turn in a session started from the agent that ended in an error.
 
 #### 2.1.4 — Users & groups (P2) ([BA-165](https://halo-powered.atlassian.net/browse/BA-165))  `📋 Planned`
 - **Intent:** a Platform admin finds any user or group and sees their roles, groups, agents and activity.
-- **Scope:** Users and Groups tabs with counts; search over name, email and group; role filter chips; a users table (name and email, roles, IdP groups, agents owned, last active, status); a groups list; pagination; the last-sync note; Assign role.
+- **Scope:** Users and Groups tabs with counts; search over name, email and group; role filter chips; a users table (name and email, roles, IdP groups, agents owned, last active, status); a groups list with members and mapped roles; pagination (25 a page); the last-sync note from the last SCIM request; the Assign role dialog; `GET /admin/users` and `GET /admin/groups` (api 83, 87). Rules: admin R39, R49-R57.
 - **Out of scope:** editing users or groups from the directory (they are read-only); a Microsoft Graph pull sync.
-- **Acceptance:** Playwright covers search, each filter chip, pagination and the statuses (Active, Inactive, Not signed in) over SCIM-seeded users; the axe scan.
-- **Notes:** depends on 2.1.2. The "Sync from Entra ID" button is an open question in the epic spec.
+- **Acceptance:** the Feature "Users and groups" (`frontend/e2e/org-admin-users.spec.ts`) passes: search, each filter chip, pagination, the Groups view, Assign role and the statuses (Active, Inactive, Not signed in, Deactivated) over SCIM-seeded users; the 403 for a non-admin; the axe scan in both themes.
+- **Notes:** depends on 2.1.2. No "Sync from Entra ID" button (decided 2026-10-10).
 
 #### 2.1.5 — Edit a user (P3) ([BA-166](https://halo-powered.atlassian.net/browse/BA-166))  `📋 Planned`
 - **Intent:** a Platform admin changes what one person can do, and hands their agents to someone else.
-- **Scope:** a detail panel next to the users list with identity and status, role checkboxes with their descriptions (Data owner picks a datasource), read-only groups, agents owned with their status, Transfer ownership and Save changes; a role that comes from a group mapping is shown as inherited and can't be unticked.
+- **Scope:** a detail panel next to the users list, with a Close button, showing identity and status, role checkboxes with their descriptions (Data owner picks a datasource), read-only groups, agents owned with their status, Transfer ownership and Save changes; a role from a group mapping or the bootstrap list is shown ticked and disabled with its reason; an admin can't remove their own Platform admin role; `GET /admin/users/:id`, `PUT /admin/users/:id/roles` and `POST /admin/agents/transfer` (api 84-86). Rules: admin R58-R64.
 - **Out of scope:** deactivating users (the directory does that).
-- **Acceptance:** Playwright assigns and removes roles and checks that the user's permissions change on their next request; transfers an agent and checks that the new owner sees it; the axe scan.
-- **Notes:** depends on 2.1.4.
+- **Acceptance:** the Feature "Edit a user" (`frontend/e2e/org-admin-edit-user.spec.ts`) passes: it assigns and removes roles and checks that the user's permissions change on their next request; Data owner with a datasource; group-mapped and own-admin roles disabled; transfers an agent and checks that the new owner sees it; a name clash refused; the empty states; the 403; the axe scan in both themes.
+- **Notes:** depends on 2.1.4. The transfer endpoint is also used by Overview's Assign (2.1.3).
 
 #### 2.1.6 — Roles & permissions (P4) ([BA-167](https://halo-powered.atlassian.net/browse/BA-167))  `📋 Planned`
 - **Intent:** a Platform admin sees what each role can do and lets directory groups grant roles automatically.
-- **Scope:** the read-only permission matrix of the five roles; the list of Entra ID group → role mappings, with Add mapping and remove.
+- **Scope:** the read-only permission matrix of the five roles and eleven permissions; the list of Entra ID group → role mappings, with the Add mapping dialog (Data owner picks a datasource) and remove with confirmation; `GET`, `POST` and `DELETE /admin/role-mappings` (api 88-90). Rules: admin R65-R68.
 - **Out of scope:** Add role, custom roles and editing the matrix.
-- **Acceptance:** Playwright adds a mapping and checks that a member of the group gets the role; removes it and checks that the role is gone; the axe scan.
+- **Acceptance:** the Feature "Roles and permissions" (`frontend/e2e/org-admin-roles.spec.ts`) passes: it checks the matrix, adds a mapping and checks that a member of the group gets the role, removes it and checks that the role is gone, a Data owner mapping, Add mapping disabled with no groups, the 403 and the axe scan in both themes.
 - **Notes:** depends on 2.1.2.
 
 ## Backlog

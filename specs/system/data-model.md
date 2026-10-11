@@ -433,6 +433,8 @@ User-built agents: a stored configuration of the assistant, with a working draft
 
 Saving a draft replaces the whole `draft` object. Publishing sets `live` to a copy of `draft`. "Unpublished changes" is derived (`live` exists and differs from `draft`), not stored.
 
+In org server mode a Platform admin can transfer an agent to another owner ([api.md](api.md) 86, admin R64): its `ownerId` changes and `pinned` resets to `false`; `draft`, `live` and `publishedAt` are kept. Sessions keep their `agentId` and `ownerId`, so for the former owner the agent no longer resolves and their sessions behave as for a deleted agent.
+
 ### 3.11 Deep-analysis jobs (not persisted)
 
 Deep-analysis jobs exist only in process memory (bounded history; a backend restart forgets them). Persisted outputs are the report file (`workspaces/session-<id>/reports/<jobId>.md`, section 4.5) and the assistant message carrying `report` (3.4.1). For completeness the in-memory job shape is: `id`, `sessionId`, `question`, `status` (`planning` \| `investigating` \| `writing` \| `done` \| `error`), `progress?`, `step?`, `steps?`, `title?`, `path?`, `error?`, `startedAt`, `finishedAt?`. The planner output schema is `{title: string, angles: [{title, question}] (3..5 intended, min 1)}` and the writer output `{title, executiveSummary, report}`; see [../capabilities/deep-analysis/spec.md](../capabilities/deep-analysis/spec.md) and [agents.md](agents.md).
@@ -546,17 +548,50 @@ Ended sessions (idle, expired, signed out, user deactivated) are deleted. Expire
 
 #### 3.14.7 `activity_events`
 
-Append-only. Read by the admin overview and Users & groups in later stories (admin R36).
+Append-only. Read by the admin Overview and Users & groups (admin R36, R39-R54).
 
 | Field | Type | Req | Meaning |
 |---|---|---|---|
 | `id` | uuid | yes | |
-| `type` | enum | yes | `sign-in` \| `sign-out` \| `user.active` (first request of a UTC day) \| `scim.request` (at most one per minute) \| `role.assigned` \| `role.removed` \| `user.deactivated` \| `user.reactivated`. Later stories add types. |
+| `type` | enum | yes | `sign-in` \| `sign-out` \| `user.active` (first request of a UTC day) \| `scim.request` (at most one per minute) \| `role.assigned` \| `role.removed` \| `user.deactivated` \| `user.reactivated` \| `mapping.added` \| `mapping.removed` \| `agent.transferred` \| `agent.turn-failed`. See the table below. |
 | `at` | ISO | yes | When it happened. Sort key (desc). |
 | `actorId` | string | no | The user who caused it; absent for SCIM. |
 | `subjectId` | string | no | The user, assignment or group it is about. |
 | `details` | object | no | Small type-specific data, e.g. `{ role, datasourceId }` for role events. Never secrets. |
 | `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
+
+| Type | Written by | `actorId` | `subjectId` | `details` |
+|---|---|---|---|---|
+| `sign-in`, `sign-out` | [api.md](api.md) 62, 63 | the user | the user | |
+| `user.active` | the first authenticated request of a UTC day | the user | the user | |
+| `scim.request` | any SCIM request, at most one a minute | | | |
+| `role.assigned`, `role.removed` | [api.md](api.md) 79, 80, 85 | the admin | the user | `{ role, datasourceId? }` |
+| `user.deactivated`, `user.reactivated` | SCIM ([api.md](api.md) 2.14) | | the user | |
+| `mapping.added`, `mapping.removed` | [api.md](api.md) 89, 90 | the admin | the group | `{ role, datasourceId?, mappingId }` |
+| `agent.transferred` | [api.md](api.md) 86 | the admin | the agent | `{ agentName, fromUserId, toUserId }` |
+| `agent.turn-failed` | a failed chat turn in a session started from a user agent ([api.md](api.md) 3.1; admin R40) | the session's owner | the agent | `{ sessionId, message }`, `message` cut to 200 characters |
+
+Sentences shown in Recent activity are built when read, from the names current at that time; a user, group, agent or datasource no longer found shows as "a deleted user", "a deleted group", "a deleted agent" or its id. `agentName` in `agent.transferred` is kept for that case.
+
+#### 3.14.8 Derived admin figures
+
+Nothing below is stored; each figure is computed when an admin endpoint ([api.md](api.md) 81-87) is called. Rules: admin R39-R54.
+
+| Figure | Computed from |
+|---|---|
+| Last activity | `users.lastActiveAt`, or `users.lastSignInAt` when later or the other is absent. |
+| Status | `users.active` false (or `scimDeleted` true) → `deactivated`; no `lastSignInAt` → `not-signed-in`; last activity 90 × 24 h or more ago → `inactive`; else `active`. |
+| Active users · 30 days | Users whose last activity is within 30 × 24 h. |
+| Weekly active users | Distinct `actorId` of `user.active` events per UTC week (Monday 00:00 to Sunday 24:00), the last 8 weeks. |
+| Agents live | `agents` documents (all owners) with a `live` value. |
+| Agents without an active owner | `agents` documents whose `ownerId` is set and names a user who is deactivated or is not in `users`. Documents without `ownerId` are left out. |
+| Agents with errors | `agent.turn-failed` events with `at` in the last 7 × 24 h, grouped by `subjectId`, for agents that still exist. |
+| Inactive makers | Users with status `inactive` who hold `maker` from a `role_assignments` row or a `group_role_mappings` row of one of their groups. |
+| Agents owned | `agents` documents per `ownerId`. |
+| Last sync | `at` of the newest `scim.request` event (minute precision, since that event is written at most once a minute). |
+| Held roles | As for `GET /me` ([api.md](api.md) 2.13): implicit User, `role_assignments`, `group_role_mappings` of the user's groups, and Platform admin for a bootstrap email. |
+
+Reads walk `users`, `agents` and `activity_events` across all owners, so the admin module reads the raw (not owner-scoped) stores (3.15).
 
 ### 3.15 Ownership (`ownerId`)
 
@@ -734,6 +769,8 @@ Visuals created before versioning keep their **v1 files directly under `visuals/
 None for `agents`: it is a new collection, and the store creates the table on first open. The built-in pins document is a new `settings` key and needs no migration.
 
 None for org server mode (BA-163): the seven identity and access collections are new, `ownerId` is absent on every document stored before it (and in local mode, which means the local user, section 3.15), and the local user's pins keep the `builtin-agent-pins` key.
+
+None for the admin screens (BA-164 to BA-167): they add `activity_events` types and derive every figure from existing fields (3.14.8). Ownership transfer rewrites `ownerId` and `pinned` on existing `agents` documents; no field is renamed.
 
 Tests: the table/field renames (M1-M3) and M4/M5 are covered by `database.module.spec.ts` and the repository/workspace specs.
 

@@ -8,6 +8,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Agent.** A configured LLM role with its own instructions, optional tools and optional memory. The product ships six built-in agents (the assistant, the visual designer, the SQL fixer, the SQL verifier, the knowledge bootstrap agent and the eval judge), and users can build their own (*user agent*). See [../system/agents.md](../system/agents.md). The *Agent Hub* lists them all.
 
+**Agent error.** In *org server mode*, a chat turn in a session started from a *user agent* that ended in an error instead of an answer. A stopped turn, a refused request and a preview turn don't count. The admin Overview counts agents with errors in the last 7 days. See [../capabilities/admin/spec.md](../capabilities/admin/spec.md) R40.
+
 **Agent Hub.** The Agents screen. It shows every agent as a card, grouped in sections (Official, Mine and System, pinned cards first), with a search over name and description, filter pills (All, Pinned, Official and Mine) and a *pin* on each card. A card opens the agent's detail view. See [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md).
 
 **Angle.** One sub-question of a *deep analysis*. A plan has between 3 and 5 angles (hard cap 5). Each is investigated on its own.
@@ -102,6 +104,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Org server mode.** The app run by an organisation on its own server for many people: they sign in with Microsoft Entra ID, the directory is pushed by SCIM, *roles* decide what each person can do, and private data is kept per *owner*. Turned on by server configuration. Opposite of *local mode*. See [../capabilities/admin/spec.md](../capabilities/admin/spec.md).
 
+**Ownership transfer.** A *Platform admin* moving one or more *user agents* to another *owner*, for example from a person who left. The agent keeps its *draft* and *Live* version; its sessions stay with their owners. See [../capabilities/admin/spec.md](../capabilities/admin/spec.md) R64.
+
 **Owner.** The user who created a private item (a session with its visuals and memory, a user agent, a pin, a knowledge entry, a verified query, a metric, an eval run). Only the owner can see or change it. Datasources, datasets and the LLM configuration have no owner: they are shared org-wide. Stored as `ownerId`; absent means the *local user*.
 
 **Permission.** One action a *role* allows, such as *Use agents in the gallery and chat* (`use-agents`) or *Manage datasources and datasets* (`manage-datasources`). Eleven in a fixed matrix; the server checks one on every request. See [../capabilities/admin/spec.md](../capabilities/admin/spec.md).
@@ -151,6 +155,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 **Tool call.** One invocation of a capability by the assistant during a turn. Data tools: `list_entities`, `describe_entity`, `sample_rows`, `run_readonly_sql`. Visual tools: `create_visual`, `update_visual`. UI tool: `ask_clarification`. Calls to the data tools are captured as *data records*.
 
 **Turn.** One user message and everything the assistant does in response, up to its final answer or a clarification. Includes streamed reasoning, tool calls and their results.
+
+**User status.** How the Admin area describes a directory user: **Active**, **Inactive** (no activity for 90 days or more), **Not signed in** (provisioned but never signed in) or **Deactivated** (turned off by the identity provider). Derived, never stored. See [../capabilities/admin/spec.md](../capabilities/admin/spec.md) R39.
 
 **User agent.** An agent a user builds: a name, a description, instructions, the datasets it may query, starter questions and an optional model or reasoning-effort override. It runs on the *assistant* with the same tools and guards, and it has a *draft* and, once published, a *Live* version.
 
