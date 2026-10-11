@@ -11,19 +11,20 @@ interface Doc {
 
 /**
  * Owner scoping over the real SQLite adapter (data-model 3.15). `owner` is
- * what the scope answers: a user id scopes, `null` is the local user, and
- * `undefined` stands for "nobody signed in" (the scope throws).
+ * what the scope answers: a user id scopes (in both modes, including Demo
+ * User's `local`), and `undefined` stands for "nobody signed in" (the scope
+ * throws).
  */
 function build() {
   const db = new BetterSqlite3(':memory:');
   const raw = new SqliteDocStore<Doc>(db, 'things');
-  let owner: string | null | undefined = null;
+  let owner: string | undefined = 'local';
   const store = new OwnedDocStore<Doc>(raw, () => {
     if (owner === undefined) throw new Error('Sign in required');
     return owner;
   });
   const as = async <T>(
-    who: string | null | undefined,
+    who: string | undefined,
     fn: () => Promise<T>,
   ) => {
     const previous = owner;
@@ -42,13 +43,13 @@ describe('OwnedDocStore', () => {
   beforeEach(() => (ctx = build()));
   afterEach(() => ctx.db.close());
 
-  it('stamps the owner on insert, and writes none for the local user', async () => {
+  it('stamps the owner on insert, Demo User included', async () => {
     const { store, raw, as } = ctx;
     await as('a', () => store.insert({ id: '1' }));
-    await as(null, () => store.insert({ id: '2' }));
+    await as('local', () => store.insert({ id: '2' }));
     const all = await raw.find({});
     expect(all.find((d) => d.id === '1')?.ownerId).toBe('a');
-    expect(all.find((d) => d.id === '2')).not.toHaveProperty('ownerId');
+    expect(all.find((d) => d.id === '2')?.ownerId).toBe('local');
   });
 
   it('never lets an insert claim another owner', async () => {
@@ -134,22 +135,23 @@ describe('OwnedDocStore', () => {
     expect((await raw.findOne({ id: '1' }))?.ownerId).toBe('a');
   });
 
-  it('shows documents stored without an owner to the local user only', async () => {
+  it('shows documents stored without an owner to nobody (M13 gives them to Demo User)', async () => {
     const { store, raw, as } = ctx;
     await raw.insert({ id: 'legacy' });
 
     await expect(
-      as(null, () => store.findOne({ id: 'legacy' })),
-    ).resolves.toMatchObject({ id: 'legacy' });
+      as('local', () => store.findOne({ id: 'legacy' })),
+    ).resolves.toBeNull();
     await expect(as('a', () => store.find({}))).resolves.toEqual([]);
     await expect(
       as('a', () => store.deleteOne({ id: 'legacy' })),
     ).resolves.toBe(0);
-    // The local user sees every document, as before org server mode.
-    await as('a', () => store.insert({ id: 'mine' }));
+    // Demo User sees only their own documents, like any user.
+    await as('a', () => store.insert({ id: 'theirs' }));
+    await as('local', () => store.insert({ id: 'mine' }));
     expect(
-      (await as(null, () => store.find({}))).map((d) => d.id).sort(),
-    ).toEqual(['legacy', 'mine']);
+      (await as('local', () => store.find({}))).map((d) => d.id),
+    ).toEqual(['mine']);
   });
 
   it('fails closed when nobody is signed in', async () => {

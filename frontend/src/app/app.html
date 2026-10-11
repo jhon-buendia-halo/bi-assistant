@@ -162,7 +162,7 @@
 
       <div class="flex shrink-0 flex-col gap-3" [class.items-center]="!navExpanded()">
         @if (showAdmin()) {
-          <!-- Org server mode, Manage users only (admin R34) -->
+          <!-- Manage users only, both modes (admin R34) -->
           <button
             type="button"
             (click)="selectArea('admin')"
@@ -178,15 +178,9 @@
             }
           </button>
         }
-        @if (auth.isOrg()) {
-          <!-- The signed-in user's initials and account menu (admin R10) -->
+        @if (auth.user()) {
+          <!-- The signed-in user's initials and account menu, both modes (admin R10) -->
           <app-account-menu />
-        } @else {
-          <span
-            title="Demo User"
-            class="mx-2 flex size-8 items-center justify-center rounded-full bg-primary text-[14px] font-semibold text-on-primary"
-            >D</span
-          >
         }
         <button
           type="button"

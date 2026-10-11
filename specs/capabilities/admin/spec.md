@@ -1,14 +1,14 @@
 # Admin
 
-An organisation can run the app on its own server for many people. People sign in with their company Microsoft account, share the organisation's datasources, datasets and LLM configuration, keep their own sessions, agents and knowledge private, and can do only what their roles allow. The directory of people and groups is pushed from the identity provider. Platform admins get an **Admin** area. This spec owns the two modes, sign-in, the directory, roles and permissions, their enforcement, and data ownership. The Admin area's three tabs, Overview, Users & groups (with the user detail panel) and Roles & permissions, are the screens P1–P4 of epic [BA-161](../../epics/BA-161/spec.md). Decision: ADR-0010 and ADR-0011 in [../../system/architecture.md](../../system/architecture.md).
+An organisation can run the app on its own server for many people. People sign in with their company Microsoft account, share the organisation's datasources, datasets and LLM configuration, keep their own sessions, agents and knowledge private, and can do only what their roles allow. The directory of people and groups is pushed from the identity provider. Platform admins get an **Admin** area. In local mode the same roles, ownership and Admin area apply to five seeded personas, signed in without a password, so one person can see what each role can do. This spec owns the two modes, sign-in, the directory, roles and permissions, their enforcement, and data ownership. The Admin area's three tabs, Overview, Users & groups (with the user detail panel) and Roles & permissions, are the screens P1–P4 of epic [BA-161](../../epics/BA-161/spec.md). Decision: ADR-0010, ADR-0011 and ADR-0012 in [../../system/architecture.md](../../system/architecture.md).
 
 ## Concepts
 
-Defined in [../../product/glossary.md](../../product/glossary.md): local mode, org server mode, local user, owner, bootstrap admin, role, permission, group mapping, User (role), Maker, Data owner, Approver, Platform admin, user status, agent error, ownership transfer, session, agent, user agent, live (agent), draft (agent), datasource, dataset, knowledge entry, verified query, metric, eval run.
+Defined in [../../product/glossary.md](../../product/glossary.md): local mode, org server mode, local user, local persona, owner, bootstrap admin, role, permission, group mapping, User (role), Maker, Data owner, Approver, Platform admin, user status, agent error, ownership transfer, session, agent, user agent, live (agent), draft (agent), datasource, dataset, knowledge entry, verified query, metric, eval run.
 
 Capability-local vocabulary:
-- **Sign-in page** — the only screen an unauthenticated browser sees in org server mode.
-- **Auth session** — the server-side record behind a signed-in browser, referenced by a cookie. Not the same thing as a chat *session*.
+- **Sign-in page** — the only screen an unauthenticated browser sees, in either mode. It has an org server variant (R5) and a local mode variant (R70).
+- **Auth session** — the server-side record behind a signed-in browser, referenced by a cookie on an org server (R8) and by a bearer token in local mode (R71). Not the same thing as a chat *session*.
 - **Directory** — the users, groups and group memberships the app knows about, pushed by the identity provider through SCIM or created at first sign-in.
 - **Deactivated user** — a directory user whose `active` flag is false. They cannot sign in.
 - **Admin area** — the main view opened by the **Admin** rail item.
@@ -22,7 +22,7 @@ Capability-local vocabulary:
 ### Modes
 
 - R1. The system SHALL run in exactly one of two modes, chosen at startup: **local mode** (the default) or **org server mode**. The mode SHALL NOT change while the server runs.
-- R2. Local mode SHALL behave exactly as the app did before org server mode existed: no sign-in page, no sign-out, one implicit **local user** who holds every permission (R21), and no **Admin** rail item. The rail avatar SHALL stay the static "D" titled "Demo User" (app-shell R4). The desktop app SHALL always run in local mode.
+- R2. Local mode SHALL seed five local personas (R69) and open on the local mode sign-in page (R70). It SHALL enforce roles, permissions and ownership exactly as org server mode does (R19-R33), and SHALL show the **Admin** rail item to holders of **Manage users, roles and group mappings** (R34). The desktop app SHALL always run in local mode.
 - R3. Org server mode SHALL be turned on by server configuration naming the identity provider's issuer, client id and client secret, the server's public base URL and the SCIM token. Configuring some but not all of these SHALL be a startup error that names the missing settings; the server SHALL NOT start in local mode by accident. The bootstrap admin list (R18) is optional. The issuer SHALL name one tenant: an issuer whose tenant segment is one of Entra ID's shared endpoints (`common`, `organizations`, `consumers`, in any case) SHALL be a startup error that names `ORG_OIDC_ISSUER`.
 - R4. In org server mode the public base URL SHALL be an `https://` URL, except for development and automated tests, which MAY use `http://`.
 
@@ -32,9 +32,9 @@ Capability-local vocabulary:
 - R6. **Sign in with Microsoft** SHALL send the browser to the identity provider. After the person authenticates there, the browser SHALL come back to the app signed in, on the home view.
 - R7. The sign-in round trip SHALL be protected against replay and code interception (a one-time `state`, a `nonce` and a PKCE verifier, held only for the round trip, at most 10 minutes). A round trip that fails any check, or that the identity provider reports as an error, SHALL return to the sign-in page with "Sign-in failed. Try again." and SHALL NOT create an auth session. When the issuer names a tenant id, an ID token whose tenant (`tid`) is a different one SHALL fail the same way.
 - R8. A successful sign-in SHALL create an auth session and set it as an `HttpOnly`, `SameSite=Lax` cookie, `Secure` unless the public base URL is `http://`. The browser SHALL hold no identity-provider token.
-- R9. An auth session SHALL end after 8 hours without a request, or 7 days after sign-in, whichever comes first. A request with an ended or unknown auth session SHALL be treated as unauthenticated (R11).
-- R10. In org server mode the rail avatar SHALL show the signed-in user's initials, titled with their display name. Clicking it SHALL open a menu with their display name, their email and **Sign out**. **Sign out** SHALL end the auth session on the server, clear the cookie, end the identity-provider session, and return the browser to the sign-in page. Reloading or going back afterwards SHALL show the sign-in page.
-- R11. In org server mode every API request without a valid auth session SHALL be refused with HTTP 401 and no data, except the sign-in routes and the SCIM routes (R14). The current-user route also answers 401, which is how the app learns to show the sign-in page. When the app receives a 401 while it is open (for example because the auth session expired), it SHALL show the sign-in page.
+- R9. In org server mode an auth session SHALL end after 8 hours without a request, or 7 days after sign-in, whichever comes first. A request with an ended or unknown auth session SHALL be treated as unauthenticated (R11).
+- R10. In both modes the rail avatar SHALL show the signed-in user's initials, titled with their display name. Clicking it SHALL open a menu with their display name, their email and **Sign out**. In org server mode **Sign out** SHALL end the auth session on the server, clear the cookie, end the identity-provider session, and return the browser to the sign-in page. In local mode it SHALL end the auth session on the server, forget the token and return the browser to the local mode sign-in page (R71). Reloading or going back afterwards SHALL show the sign-in page.
+- R11. In both modes every API request without a valid auth session SHALL be refused with HTTP 401 and no data, except the sign-in routes of the running mode (in local mode the local sign-in routes, R70, R73) and, in org server mode, the SCIM routes (R14). The current-user route also answers 401, which is how the app learns to show the sign-in page. When the app receives a 401 while it is open (for example because the auth session expired), it SHALL show the sign-in page.
 
 ### Directory
 
@@ -44,13 +44,13 @@ Capability-local vocabulary:
 - R15. A user provisioned through SCIM who has not signed in yet SHALL be in the directory, with no sign-in time. When they first sign in they SHALL be matched to that user, not duplicated (R13).
 - R16. A deactivated user SHALL NOT be able to sign in: the round trip SHALL return to the sign-in page with "Your account is deactivated. Contact your administrator." Deactivating a user SHALL end all their auth sessions at once, so their next request is refused (R11). Deactivation SHALL keep their data and ownership. Reactivating them SHALL let them sign in again. When the identity provider creates, through SCIM, a user name that a user removed through SCIM holds, that user SHALL come back under the same id, unless both carry an external id and the two differ. Then the name belongs to a different person: SCIM SHALL create a new user, and the old one SHALL be **released** from the name: it keeps its id, data and ownership, stays deactivated and hidden from SCIM, and is never matched by that name again. The same SHALL apply to a deactivated user who has signed in. Entra ID always sends the external id (the user's object id), so a departed person's records never pass to a new hire who gets their UPN.
 - R17. Groups SHALL be read-only in the app: they and their members change only through SCIM. Deleting a group SHALL remove its memberships and its group mappings.
-- R18. Every user name in the bootstrap admin list (for Entra ID a UPN, which usually looks like an email) SHALL hold the Platform admin role whenever that person is signed in, without a stored assignment. The list SHALL be matched against the directory user name (R12, R13), case-insensitively, and never against the email. This role SHALL NOT be removable in the app; it goes away only when the user name leaves the list and the server restarts.
+- R18. Every user name in the bootstrap admin list (for Entra ID a UPN, which usually looks like an email) SHALL hold the Platform admin role whenever that person is signed in, without a stored assignment. The list SHALL be matched against the directory user name (R12, R13), case-insensitively, and never against the email. This role SHALL NOT be removable in the app; it goes away only when the user name leaves the list and the server restarts. In local mode the bootstrap admin list SHALL be Demo User alone (R69), and it can't be configured.
 
 ### Roles and permissions
 
 - R19. There SHALL be five built-in roles: **User**, **Maker**, **Data owner**, **Approver** and **Platform admin**. Every signed-in user SHALL hold the User role implicitly. The set of roles is fixed: roles cannot be added, renamed or removed.
 - R20. A user's roles SHALL be the union of: User; their direct role assignments; the roles mapped to every group they are a member of (**group mappings**); and Platform admin when they are a bootstrap admin (R18). Roles are additive: holding more roles never removes a permission. A **Data owner** assignment or mapping SHALL name one datasource; once that datasource no longer exists it SHALL grant no role and no permission, though it stays stored. Roles SHALL be resolved on every request, so a change applies to the user's next request without signing in again.
-- R21. A user's permissions SHALL be the union of their roles' permissions in this fixed matrix. The local user (R2) SHALL hold every permission.
+- R21. A user's permissions SHALL be the union of their roles' permissions in this fixed matrix. In local mode Demo User holds every permission through Platform admin (R18, R69).
 
   | Permission | Id | User | Maker | Data owner | Approver | Platform admin |
   |---|---|---|---|---|---|---|
@@ -79,21 +79,21 @@ Capability-local vocabulary:
 
 ### Ownership and privacy
 
-- R28. In org server mode, datasources, datasets and the LLM configuration SHALL be shared: every signed-in user SHALL see and use the same ones, and only holders of the matching permission (Manage datasources and datasets, Manage LLM configuration) SHALL create, change or delete them.
+- R28. In both modes, datasources, datasets and the LLM configuration SHALL be shared: every signed-in user SHALL see and use the same ones, and only holders of the matching permission (Manage datasources and datasets, Manage LLM configuration) SHALL create, change or delete them.
 - R29. Everything else a user creates SHALL be private to its **owner**, the user who created it: sessions with their transcripts, visuals, reports, workspace files and agent memory; user agents and their pins; knowledge entries; verified queries; metrics; eval runs; and pins of built-in agents. Another user SHALL NOT see, list, open, change or delete it, through the UI or the API.
 - R30. A request for another user's private item by its id SHALL be answered exactly as for an item that does not exist (HTTP 404, or the endpoint's usual not-found answer), so ids reveal nothing.
 - R31. Uniqueness rules on private items SHALL apply per owner: two users MAY each have a user agent or a metric with the same name.
 - R32. Work that outlives its request (a streamed chat turn, a deep analysis, an eval run, a knowledge bootstrap) SHALL run as the user who started it and SHALL write only to that user's items. Its progress and results SHALL be visible only to that user.
-- R33. In local mode every item SHALL belong to the local user, including items stored before org server mode existed. Items stored without an owner SHALL NOT be visible to any user of an org server.
+- R33. In local mode every item SHALL belong to the user who created it, as in org server mode (R29). Items stored in local mode before it had sign-in, which have no owner, SHALL belong to Demo User (R69). Items stored without an owner, and items owned by Demo User, SHALL NOT be visible to any user of an org server.
 
 ### Admin area
 
-- R34. In org server mode, a user with **Manage users, roles and group mappings** SHALL see an **Admin** item on the rail. Choosing it SHALL open the Admin area and mark the item current. Users without the permission SHALL NOT see the item, and the admin API SHALL refuse them with HTTP 403 (R24). Local mode has no Admin item (R2).
+- R34. In both modes, a user with **Manage users, roles and group mappings** SHALL see an **Admin** item on the rail. Choosing it SHALL open the Admin area and mark the item current. Users without the permission SHALL NOT see the item, and the admin API SHALL refuse them with HTTP 403 (R24).
 - R35. The Admin area SHALL show the heading "Admin" and three tabs, **Overview**, **Users & groups** and **Roles & permissions**, with Overview selected when the area opens. Each tab holds its screen (R37-R68).
 
 ### Activity
 
-- R36. In org server mode the server SHALL record activity events for: sign-in, refused sign-in (R13), sign-out, a user's first request of each UTC day, SCIM requests (at most one event per minute), role assignments and removals, user deactivation and reactivation, group mappings added and removed, agent ownership transfers, and agent errors (R40). They feed the Overview (R41-R48), the last activity of each user (R39) and the last sync note (R54).
+- R36. In both modes the server SHALL record activity events for: sign-in, refused sign-in (R13), sign-out, a user's first request of each UTC day, SCIM requests (org server mode only, at most one event per minute), role assignments and removals, user deactivation and reactivation, group mappings added and removed, agent ownership transfers, and agent errors (R40). They feed the Overview (R41-R48), the last activity of each user (R39) and the last sync note (R54).
 
 ### Admin panel
 
@@ -108,7 +108,7 @@ These rules cover the three tabs of the Admin area (R35): Overview (P1, [BA-164]
   4. **Active**: otherwise.
 
   A user's last activity SHALL be the time of their first request on the most recent UTC day they made one (R36), or their last sign-in when that is later or there is no such day. **Last active** SHALL show it at day precision ("Today", "Yesterday", "<n> days ago"), or "Never" for a user who has not signed in.
-- R40. An **agent error** SHALL be a chat turn, in a session started from a user agent, that ended in an error instead of an answer (sessions-chat R45). A turn the user stopped, a refused request that never reached the assistant (an empty message, an unknown session), a turn in the agent editor's preview chat and a turn in a session whose agent was deleted or transferred to another owner (the session then runs without it, sessions-chat R59) SHALL NOT count. In org server mode each agent error SHALL be recorded as an activity event naming the agent, the session's owner and the error message.
+- R40. An **agent error** SHALL be a chat turn, in a session started from a user agent, that ended in an error instead of an answer (sessions-chat R45). A turn the user stopped, a refused request that never reached the assistant (an empty message, an unknown session), a turn in the agent editor's preview chat and a turn in a session whose agent was deleted or transferred to another owner (the session then runs without it, sessions-chat R59) SHALL NOT count. In both modes each agent error SHALL be recorded as an activity event naming the agent, the session's owner and the error message.
 
 ### Overview (P1)
 
@@ -154,7 +154,7 @@ These rules cover the three tabs of the Admin area (R35): Overview (P1, [BA-164]
   - **Agents owned**: the number of user agents they own.
   - **Last active** (R39) and **Status** (R39).
 - R53. The table SHALL show 25 rows a page, with "<first>–<last> of <total>" and **Previous page** / **Next page** buttons, each disabled at its end. Changing the view, the search or the filter SHALL go back to the first page.
-- R54. Under the table a note SHALL read "Users and groups come from Entra ID via SCIM · last sync <relative time>. Roles are assigned here or mapped from groups.", where the last sync is the time of the most recent SCIM request (R36). Before any SCIM request it SHALL read "· not synced yet" in place of "· last sync <relative time>".
+- R54. Under the table a note SHALL read "Users and groups come from Entra ID via SCIM · last sync <relative time>. Roles are assigned here or mapped from groups.", where the last sync is the time of the most recent SCIM request (R36). Before any SCIM request it SHALL read "· not synced yet" in place of "· last sync <relative time>". In local mode, which has no SCIM, the note SHALL read as in [../../system/ui.md](../../system/ui.md) section 4.18.6 (R74).
 - R55. The Groups view SHALL list one row per group, sorted by name, with **Name**, **Members** (the number of members) and **Mapped roles** (a badge per group mapping, R66). Groups are read-only (R17): their rows have no action.
 - R56. **Assign role** SHALL open the **Assign role** dialog with a **User** picker (search by name or email over users who are not deactivated), a **Role** select (Maker, Data owner, Approver, Platform admin; User is implicit and not offered) and a **Datasource** select, which is enabled only for Data owner and required then. **Assign** SHALL create the direct assignment (R22) and refresh the table. A role the user already holds directly SHALL change nothing and show the toast "Role already assigned".
 - R57. When nothing matches the search or filter, the table SHALL read "No users match your search." when there is a search, else "No users match this filter.". The Groups view reads "No groups match your search." when there is a search, else "No groups yet. Groups arrive from Entra ID through SCIM."
@@ -168,7 +168,7 @@ These rules cover the three tabs of the Admin area (R35): Overview (P1, [BA-164]
   - **Groups (from Entra ID, read-only)**: the user's groups as badges, or "No groups.";
   - **Agents owned**: each user agent the user owns with its status badge, **Live** when it has a Live version, else **Draft**, or "No agents owned.";
   - **Transfer ownership** and **Save changes**.
-- R60. A role the user holds from a group mapping or as a bootstrap admin SHALL show ticked and disabled, with the reason "From group <group names>" or "Bootstrap admin, set in the server configuration.". A direct assignment of the same role stays stored and is not changed.
+- R60. A role the user holds from a group mapping or as a bootstrap admin SHALL show ticked and disabled, with the reason "From group <group names>" or "Bootstrap admin, set in the server configuration."; in local mode Demo User's Platform admin reads "Always a Platform admin in local mode." (R69). A direct assignment of the same role stays stored and is not changed.
 - R61. An admin SHALL NOT be able to remove their own direct Platform admin role. In their own panel the **Platform admin** checkbox SHALL be disabled with the reason "You can't remove your own Platform admin role.", and the server SHALL refuse such a removal, so an org server never loses its last admin by accident.
 - R62. **Save changes** SHALL be disabled until the ticks differ from what is stored, and while **Data owner** is ticked without a datasource. It SHALL replace the user's direct assignments with the ticked roles all at once: every change is applied, or none is. It SHALL record one activity event per role added or removed, show the toast "Roles saved for <name>", and refresh the panel and the table. The user's permissions SHALL change on their next request (R20).
 - R63. **Transfer ownership** SHALL be disabled when the user owns no agent. It SHALL open the **Transfer ownership** dialog, listing the user's agents as ticked checkboxes, with a **New owner** picker (search by name or email over users who are not deactivated, the current owner left out) and **Transfer**, enabled once a new owner is chosen and at least one agent is ticked.
@@ -180,6 +180,15 @@ These rules cover the three tabs of the Admin area (R35): Overview (P1, [BA-164]
 - R66. Beside the matrix, **Role ← Entra ID group mappings** SHALL list every group mapping, sorted by group name then role, each with the group's name, the role's badge (for Data owner, `Data owner · <datasource name>`) and a remove button. With none it SHALL read "No group mappings yet."
 - R67. **Add mapping** SHALL open the **Add mapping** dialog with an **Entra ID group** picker (search over group names), a **Role** select (Maker, Data owner, Approver, Platform admin) and a **Datasource** select, enabled only for Data owner and required then. **Add** SHALL create the mapping, record an activity event and show the toast "Mapping added". The group's members SHALL hold the role from their next request (R20). A mapping that already exists SHALL change nothing and show the toast "Mapping already exists". With no groups in the directory, **Add mapping** SHALL be disabled with the reason "No groups yet. Groups arrive from Entra ID through SCIM."
 - R68. Removing a mapping SHALL ask for confirmation, then delete it, record an activity event and show the toast "Mapping removed". The group's members SHALL lose the role from their next request, unless they hold it another way (R20).
+
+### Local mode
+
+- R69. At startup in local mode the server SHALL ensure five directory users exist, the **local personas**, creating only the missing ones: **Demo User** (`demo@local.test`, id `local`), **Uma User** (`uma@local.test`), **Mark Maker** (`mark@local.test`), **Dana Data Owner** (`dana@local.test`) and **Avery Approver** (`avery@local.test`). It SHALL seed Mark Maker's Maker assignment, Avery Approver's Approver assignment and, for every datasource, Dana Data Owner's Data owner assignment. Each seed SHALL be applied once and never again, so a role an admin removes in the Admin area stays removed, across restarts. Demo User SHALL always hold Platform admin as the bootstrap admin (R18), which can't be removed. The personas SHALL be editable in the Admin area like any user, and SHALL NOT be deactivated or deleted.
+- R70. In local mode a browser without a valid auth session SHALL see the local mode sign-in page and nothing else: "Agentic Hub", a **Sign in as** dropdown of the active directory users, each shown as `<display name> · <roles>`, and a **Sign in** button that is disabled until a user is chosen. The roles SHALL be those the user holds other than User, in the order Platform admin, Approver, Data owner, Maker, or "User" when they hold no other. Choosing a user and clicking **Sign in** SHALL start an auth session for that user, without a password, and open the home view. The app SHALL NOT sign anyone in automatically.
+- R71. A local sign-in SHALL answer an opaque token, which the browser keeps in its storage and sends as `Authorization: Bearer <token>` on every API request. The cookie of R8 SHALL NOT be used in local mode. A local auth session SHALL survive reloads and backend restarts, and SHALL end only at **Sign out** or 30 days after sign-in. **Sign out** SHALL end it on the server, forget the token and show the sign-in page; reloading afterwards SHALL show the sign-in page.
+- R72. Whenever a datasource is created in local mode, Dana Data Owner SHALL receive a Data owner assignment on it, once (R69).
+- R73. The two modes' sign-ins SHALL never mix: the local sign-in routes SHALL answer HTTP 404 in org server mode, and the org sign-in routes SHALL answer HTTP 404 in local mode. An org server SHALL never show the **Sign in as** dropdown, and local mode SHALL never show **Sign in with Microsoft**.
+- R74. In local mode, Admin area copy that names Entra ID or SCIM (the last sync note R54, the empty Groups view R57, the mappings card R66, the groups in the user detail panel R59, the Add mapping reason R67) SHALL read as in [../../system/ui.md](../../system/ui.md) section 4.18.6.
 
 ## Edge cases and errors
 
@@ -200,7 +209,7 @@ These rules cover the three tabs of the Admin area (R35): Overview (P1, [BA-164]
 - Deleting a user through SCIM deactivates them (R16) and hides them from later SCIM reads; their data and ownership stay. Creating their user name again brings the same user back when the external ids match or either is missing, and creates a new user when both are present and differ (R16).
 - A bootstrap admin who is deactivated cannot sign in; the bootstrap list does not override deactivation.
 - A request from a page served by another origin (a cross-site form post): HTTP 403, nothing changed (R27).
-- Pointing an org server at a data directory that a local-mode app used: the old items have no owner and nobody sees them (R33). Moving local data into an org server is out of scope.
+- Pointing an org server at a data directory that a local-mode app used: items with no owner, and items owned by Demo User or another local persona, are seen by nobody (R33). Moving local data into an org server is out of scope.
 - Two admins edit the same user's roles at once: each **Save changes** replaces the direct assignments with what that admin ticked, so the later save wins. The panel shows the stored roles again after each save (R62).
 - **Save changes** with a datasource that was deleted meanwhile: HTTP 404 `Datasource <id> not found`, nothing changed, the error toast shows the message.
 - A user removed from the directory by SCIM while their panel is open: **Save changes** still works on their direct assignments; they stay listed as Deactivated (R39, R52).
@@ -214,19 +223,26 @@ These rules cover the three tabs of the Admin area (R35): Overview (P1, [BA-164]
 - An agent with errors whose owner is also deactivated is counted in both attention rows (R42).
 - An agent stored before org server mode (no owner, R33) is counted in none of the Overview figures and can't be transferred.
 - A search with only spaces: the same as no search (R50).
+- The backend is unreachable when the local mode sign-in page loads: it shows "Backend unreachable" and a **Retry** button, and no app shell.
+- A local sign-in for an unknown or deactivated user id: HTTP 404, the page shows "Sign-in failed. Try again." and no auth session is created.
+- A browser whose stored token names an auth session that ended (30 days after sign-in, or signed out elsewhere): its next request answers HTTP 401, the app forgets the token and shows the sign-in page (R11, R71).
+- A datasource deleted while Dana Data Owner owns it: her assignment stays stored and grants nothing, as any dangling Data owner (R20). It is not re-seeded if a datasource is later created with the same name; a new datasource gets its own assignment (R72).
+- An admin removes Mark Maker's Maker role and the app restarts: Mark Maker stays without Maker (R69).
+- Signing in as Uma User and calling a Maker or admin endpoint directly: HTTP 403, nothing changed (R24).
 
 ## Contracts
 
-- Mode configuration, the auth routes (`GET /auth/login`, `GET /auth/callback`, `POST /auth/logout`), `GET /me`, the SCIM routes, the admin routes (role assignments, overview and CSV export, users, user roles, agent transfer, groups, group mappings), the 401/403 bodies, the Origin check and the permission each route needs: [../../system/api.md](../../system/api.md) sections 1.9, 2.13-2.15 and 6.
-- The `users`, `groups`, `group_members`, `role_assignments`, `group_role_mappings`, `auth_sessions` and `activity_events` collections, the activity event types, how the admin figures (status, last activity, agents live, agent errors, last sync) are derived, agent ownership transfer, and `ownerId` on private collections: [../../system/data-model.md](../../system/data-model.md) sections 3.10, 3.14 and 3.15.
+- Mode configuration, the auth routes (`GET /auth/login`, `GET /auth/callback`, `POST /auth/logout`), the local sign-in routes (`GET /auth/local/users`, `POST /auth/local/sign-in`, `POST /auth/local/sign-out`), the bearer token, `GET /me`, the SCIM routes, the admin routes (role assignments, overview and CSV export, users, user roles, agent transfer, groups, group mappings), the 401/403 bodies, the Origin check and the permission each route needs: [../../system/api.md](../../system/api.md) sections 1.9, 2.13-2.15 and 6.
+- The `users`, `groups`, `group_members`, `role_assignments`, `group_role_mappings`, `auth_sessions` and `activity_events` collections, the activity event types, how the admin figures (status, last activity, agents live, agent errors, last sync) are derived, agent ownership transfer, `ownerId` on private collections, the `local-seed` settings document and migration M13: [../../system/data-model.md](../../system/data-model.md) sections 3.2.2, 3.10, 3.14, 3.15 and 6.
 - Agent memory and workspaces reached only through an owner-scoped session; the org-wide LLM configuration: [../../system/agents.md](../../system/agents.md) sections 1.3 and 7.1.
 - How to run an org server and register it with Entra ID: [../../system/delivery.md](../../system/delivery.md) section 4.1.
-- Security requirements (binding, cookies, CSRF, SCIM token, isolation): [../../product/non-functional.md](../../product/non-functional.md) section 3.
+- Security requirements (binding, cookies, CSRF, SCIM token, isolation, local mode not being a security boundary): [../../product/non-functional.md](../../product/non-functional.md) section 3.
 
 ## UI
 
 The sign-in page, the signed-in avatar and its menu, the **Admin** rail item, the Admin area with its three tabs, the user detail panel and the admin dialogs, and the controls hidden by permission: [../../system/ui.md](../../system/ui.md) sections 1.3, 1.6, 4.17 and 4.18. Shell rules: [../app-shell/spec.md](../app-shell/spec.md) R4 and R50. States:
-- Sign-in page: idle, signing in (button reads "Signing in…"), failed ("Sign-in failed. Try again."), deactivated ("Your account is deactivated. Contact your administrator.").
+- Sign-in page (org server): idle, signing in (button reads "Signing in…"), failed ("Sign-in failed. Try again."), deactivated ("Your account is deactivated. Contact your administrator.").
+- Sign-in page (local mode): loading users ("Loading users…"), nothing chosen (**Sign in** disabled), a user chosen, signing in ("Signing in…"), failed ("Sign-in failed. Try again."), backend unreachable ("Backend unreachable" with **Retry**).
 - Avatar menu: closed, open.
 - Admin area: Overview, Users & groups or Roles & permissions selected; each tab loading, failed (with **Retry**) or loaded (R38).
 - Overview: Needs attention rows with a count or with 0 (action disabled); Recent activity empty or populated; dialogs Assign an owner, Agents with errors and Inactive makers closed or open.
@@ -235,7 +251,90 @@ The sign-in page, the signed-in avatar and its menu, the **Admin** rail item, th
 
 ## Flows
 
-The three Features below run in the Playwright `org` project, against the app started in org server mode with a local OpenID Connect stub and a SCIM test client (see [../../system/tech-stack.md](../../system/tech-stack.md)). Behaviour with no screen (the SCIM protocol, the Origin check, the 401 and 403 answers of every route, and owner isolation for every private collection) is covered by the backend API tests `backend/test/org-auth.e2e-spec.ts`, `backend/test/scim.e2e-spec.ts` and `backend/test/owner-isolation.e2e-spec.ts` (Feature "Org server API" below); its scenario "Local mode answers as the local user" is `backend/test/local-auth.e2e-spec.ts`, which also checks that the existing routes answer as before in local mode. Local mode is covered by the existing Features, which run unchanged, and by "Local mode has no sign-in and no Admin item" in [../app-shell/spec.md](../app-shell/spec.md).
+The Feature "Sign in to local mode" runs in the Playwright `web` project, against the app started in local mode with no one signed in. Every other Feature of the `web` project runs in local mode signed in as Demo User through the app fixture (see [../../system/tech-stack.md](../../system/tech-stack.md)), and "Local mode signs in as Demo User" in [../app-shell/spec.md](../app-shell/spec.md) checks the shell. The three Features after it run in the Playwright `org` project, against the app started in org server mode with a local OpenID Connect stub and a SCIM test client. Behaviour with no screen (the SCIM protocol, the Origin check, the 401 and 403 answers of every route, and owner isolation for every private collection) is covered by the backend API tests `backend/test/org-auth.e2e-spec.ts`, `backend/test/scim.e2e-spec.ts` and `backend/test/owner-isolation.e2e-spec.ts` (Feature "Org server API" below); its scenario "Local mode refuses a request without a session and answers the signed-in persona" is `backend/test/local-auth.e2e-spec.ts`, which also covers the local sign-in routes, the seeded roles, a removed seeded role staying removed after a restart, Dana Data Owner's role on a new datasource, migration M13 and the 403s for Uma User.
+
+### Feature: Sign in to local mode
+
+E2E: `frontend/e2e/local-sign-in.spec.ts` (Playwright `web` project).
+
+```gherkin
+Feature: Sign in to local mode
+
+  Background:
+    Given the app runs in local mode
+    And nobody is signed in
+
+  Scenario: The app opens on the sign-in page listing the personas
+    When I open the app
+    Then I see "Agentic Hub" and "Choose who you are to continue. Local mode has no passwords."
+    And I don't see the navigation rail
+    And "Sign in as" offers the five personas, each with their roles, such as "Demo User · Platform admin" and "Mark Maker · Maker"
+    And the "Sign in" button is disabled
+    And the axe scan reports no violations in the Light theme
+    And the axe scan reports no violations in the Dark theme
+
+  Scenario: Signing in as Demo User opens the shell
+    When I open the app, choose "Demo User" in "Sign in as" and click "Sign in"
+    Then I see the app shell on the home view
+    And the rail avatar shows "DU" titled "Demo User"
+    And I see "Admin" on the rail
+    When I reload the page
+    Then I still see the app shell with the rail avatar "DU"
+
+  Scenario: Uma User sees no maker, data or admin controls
+    Given I am signed in as "Uma User"
+    When I click "Agents" on the rail
+    Then I don't see the "New agent" button
+    When I click "Datasets" on the rail
+    Then I don't see the "New dataset" button
+    When I click "Settings" on the rail
+    Then the settings navigation offers only "Appearance"
+    And I don't see "Admin" on the rail
+
+  Scenario: Mark Maker's agents are private
+    Given I am signed in as "Mark Maker"
+    When I click "Agents" on the rail and click "New agent"
+    And I name the agent "Mark's analyst" and click "Save"
+    Then I see the toast 'Agent "Mark's analyst" saved as draft'
+    When I sign out, sign in as "Uma User" and click "Agents" on the rail
+    Then I don't see "Mark's analyst"
+    When I sign out, sign in as "Demo User" and click "Agents" on the rail
+    Then I don't see "Mark's analyst"
+
+  Scenario: Signing out returns to the sign-in page
+    Given I am signed in as "Demo User"
+    When I click the rail avatar
+    Then the menu shows "Demo User", "demo@local.test" and "Sign out"
+    When I click "Sign out"
+    Then I see the "Sign in as" dropdown and the "Sign in" button
+    When I reload the page
+    Then I still see the "Sign in as" dropdown
+
+  Scenario: A role change in Admin persists
+    Given I am signed in as "Demo User"
+    When I click "Admin" on the rail, click "Users & groups" and click "Uma User"
+    And I tick "Maker" and click "Save changes"
+    Then I see the toast "Roles saved for Uma User"
+    When I sign out, sign in as "Uma User" and click "Agents" on the rail
+    Then I see the "New agent" button
+    When the backend restarts and I reload the page
+    Then I am still signed in as "Uma User" and see the "New agent" button
+
+  Scenario: Dana Data Owner owns every datasource
+    Given I am signed in as "Demo User"
+    When I add the World Cup PostgreSQL datasource
+    And I click "Admin" on the rail, click "Users & groups" and click "Dana Data Owner"
+    Then "Data owner · World Cup PostgreSQL" is ticked
+    When I click "Demo User"
+    Then "Platform admin" is ticked and disabled, with "Always a Platform admin in local mode."
+
+  Scenario: Data from before sign-in belongs to Demo User
+    Given the data folder holds the session "Old goals", stored with no owner before local mode had sign-in
+    When I sign in as "Demo User" and click "Sessions" on the rail
+    Then I see "Old goals"
+    When I sign out, sign in as "Uma User" and click "Sessions" on the rail
+    Then I don't see "Old goals"
+```
 
 ### Feature: Sign in to an org server
 
@@ -295,6 +394,12 @@ Feature: Sign in to an org server
     When my auth session is ended on the server
     And I click "Datasets" on the rail
     Then I see the "Sign in with Microsoft" button
+
+  Scenario: An org server never offers the local sign-in
+    When I open the app
+    Then I see the "Sign in with Microsoft" button
+    And I don't see the "Sign in as" dropdown
+    And "POST /auth/local/sign-in" answers HTTP 404
 ```
 
 ### Feature: Permissions in the app
@@ -463,10 +568,14 @@ Feature: Org server API
     When Ada creates a session, a visual, an agent, a pin, a knowledge entry, a verified query, a metric and an eval run
     Then Grace can list none of them, and reading, changing or deleting any of them by id answers as not found
 
-  Scenario: Local mode answers as the local user
+  Scenario: Local mode refuses a request without a session and answers the signed-in persona
     Given the app runs in local mode
-    When I call "GET /me"
-    Then it answers mode "local", the user "Demo User" and every permission
+    When I call "GET /me" without a token
+    Then it answers HTTP 401 with mode "local"
+    When I sign in as Demo User through "POST /auth/local/sign-in" and call "GET /me" with the token
+    Then it answers mode "local", the user "Demo User", Platform admin from the bootstrap list and every permission
+    When I sign in as Uma User and call "POST /agents" with her token
+    Then it answers HTTP 403 and no agent is created
 ```
 
 The four Features below run in the Playwright `org` project like the three above. Their Backgrounds seed the directory through the SCIM test client, roles, mappings and shared data through the admin API, and agents through each person's own API session; people are signed in through the OpenID Connect stub, which makes them active that day. What has no endpoint is written to the running app's store through the org harness (`org.sql`, `frontend/e2e/helpers/admin-actions.ts`): past activity (for example "last active 95 days ago" sets the user's `lastSignInAt` and `lastActiveAt` and adds a `user.active` event that day) and agent errors (an `agent.turn-failed` event for a real session started from the agent). "Avery Admin" (`admin@contoso.test`) is a bootstrap admin in every Feature. The API-level parts (every admin route's 403 for a non-admin, transfer conflicts, the CSV content, save atomicity) are also covered by `backend/test/org-admin.e2e-spec.ts`.
@@ -774,9 +883,9 @@ Feature: Roles and permissions
 
 ## Acceptance
 
-- In local mode, every existing Playwright Feature passes unchanged and "Local mode has no sign-in and no Admin item" ([../app-shell/spec.md](../app-shell/spec.md)) passes.
+- In local mode, the Feature "Sign in to local mode" passes in the Playwright `web` project, with the axe scan of the sign-in page clean in both themes; every other `web` Feature passes signed in as Demo User through the app fixture, and "Local mode signs in as Demo User" ([../app-shell/spec.md](../app-shell/spec.md)) passes.
 - In org server mode, the Features "Sign in to an org server", "Permissions in the app", "Private and shared data", "Admin overview", "Users and groups", "Edit a user" and "Roles and permissions" pass in the Playwright `org` project, with the axe scans of the sign-in page and of each admin tab, the user detail panel included, clean in both themes.
-- The backend API tests behind "Org server API" and `backend/test/org-admin.e2e-spec.ts` pass, including one isolation check per private collection (sessions, agents, knowledge, verified queries, metrics, eval runs, built-in pins) with two users.
+- The backend API tests behind "Org server API" (`backend/test/local-auth.e2e-spec.ts` included) and `backend/test/org-admin.e2e-spec.ts` pass, including one isolation check per private collection (sessions, agents, knowledge, verified queries, metrics, eval runs, built-in pins) with two users.
 - The server refuses to start when a route declares no permission, or when org server configuration is incomplete.
 
 ## Open questions

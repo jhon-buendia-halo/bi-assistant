@@ -10,8 +10,8 @@ import {
 /**
  * The pinned built-in agents, kept as a second `settings` document next to the
  * LLM one (data-model 3.2). LLM readers filter by `key: 'llm'`, so the two
- * never mix. Pins are per user: the local user keeps `builtin-agent-pins`,
- * a user of an org server has `builtin-agent-pins:<user id>`.
+ * never mix. Pins are per user, `builtin-agent-pins:<user id>` in both
+ * modes; M13 renamed local mode's former bare key to Demo User's.
  */
 @Injectable()
 export class BuiltinAgentPinsRepository {
@@ -23,10 +23,7 @@ export class BuiltinAgentPinsRepository {
 
   /** The current user's pins document key. */
   private key(): string {
-    const owner = this.users.ownerScope();
-    return owner === null
-      ? BUILTIN_AGENT_PINS_KEY
-      : `${BUILTIN_AGENT_PINS_KEY}:${owner}`;
+    return `${BUILTIN_AGENT_PINS_KEY}:${this.users.ownerScope()}`;
   }
 
   async get(): Promise<string[]> {

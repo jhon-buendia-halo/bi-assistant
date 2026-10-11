@@ -73,8 +73,11 @@ export class DirectoryRepository {
     );
   }
 
-  async insertUser(user: Omit<UserDoc, 'id'>): Promise<UserDoc> {
-    return this.users.insert({ ...user, id: randomUUID() });
+  /** A new user; `id` is random unless given (the local personas, R69). */
+  async insertUser(
+    user: Omit<UserDoc, 'id'> & { id?: string },
+  ): Promise<UserDoc> {
+    return this.users.insert({ ...user, id: user.id ?? randomUUID() });
   }
 
   updateUser(id: string, patch: Partial<UserDoc>): Promise<UserDoc | null> {

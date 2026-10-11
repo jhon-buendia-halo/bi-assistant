@@ -111,3 +111,35 @@ export async function bootFailure(
   clearTimeout(timer);
   return { code, output: output.join('') };
 }
+
+/**
+ * Local mode sign-in (api.md 92): signs `userId` in (default Demo User,
+ * id `local`) and resolves to the auth session token, sent as
+ * `Authorization: Bearer <token>` (admin R71).
+ */
+export async function signInLocally(
+  url: string,
+  userId = 'local',
+): Promise<string> {
+  const res = await fetch(`${url}/auth/local/sign-in`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId }),
+  });
+  const text = await res.text();
+  if (res.status !== 200) {
+    throw new Error(
+      `Local sign-in as ${userId} failed: POST /auth/local/sign-in answered ${res.status}: ${text}`,
+    );
+  }
+  const body = JSON.parse(text) as { ok?: boolean; token?: unknown };
+  if (body.ok !== true || typeof body.token !== 'string' || !body.token) {
+    throw new Error(`Local sign-in as ${userId} answered no token: ${text}`);
+  }
+  return body.token;
+}
+
+/** The `Authorization` header of a local auth session. */
+export function bearer(token: string): { Authorization: string } {
+  return { Authorization: `Bearer ${token}` };
+}

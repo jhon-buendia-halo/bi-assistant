@@ -1,4 +1,5 @@
 import { expect, Page } from '@playwright/test';
+import { authHeaders } from './local-auth';
 import { WORLD_CUP_CATALOG, WORLD_CUP_DB } from './world-cup-db';
 
 export const WORLD_CUP_DATASOURCE = 'World Cup PostgreSQL';
@@ -123,6 +124,7 @@ export async function createWorldCupWorkspace(page: Page): Promise<string> {
 export async function followOsTheme(page: Page): Promise<void> {
   const res = await page.request.put(apiUrl(page, '/ui-preferences'), {
     data: { theme: 'system' },
+    headers: await authHeaders(page),
   });
   expect(res.ok()).toBe(true);
   await page.evaluate(() =>

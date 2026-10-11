@@ -6,6 +6,7 @@ import {
 } from '@angular/common/http/testing';
 import { ToastService } from '../../../../core/toast/toast.service';
 import { GroupRoleMapping } from '../../models/admin.models';
+import { AuthService } from '../../../../core/auth/auth.service';
 import { groupsPage } from '../../testing/admin.fixtures';
 import { AdminRolesTab, removeMappingQuestion } from './admin-roles';
 
@@ -97,6 +98,17 @@ describe('AdminRolesTab', () => {
     expect(button('Add mapping').title).toBe(
       'No groups yet. Groups arrive from Entra ID through SCIM.',
     );
+  });
+
+  it('reads the local-mode copy without Entra ID (admin R74, ui.md 4.18.6)', () => {
+    TestBed.inject(AuthService).handleUnauthorized('local');
+    const { element, text, button } = render([], 0);
+    expect(element.querySelector('h3')?.textContent?.trim()).toBe(
+      'Role ← group mappings',
+    );
+    expect(text()).not.toContain('Entra ID');
+    expect(button('Add mapping').disabled).toBeTrue();
+    expect(button('Add mapping').title).toBe('No groups in local mode.');
   });
 
   it('asks before removing a mapping, then toasts and reloads (admin R68)', () => {

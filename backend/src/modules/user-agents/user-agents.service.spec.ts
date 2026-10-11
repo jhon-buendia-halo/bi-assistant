@@ -1,7 +1,7 @@
 import BetterSqlite3 from 'better-sqlite3';
 import { SqliteDocStore } from '../../infrastructure/database/sqlite-doc-store';
 import type { DatasetsRepository } from '../datasets/repositories/datasets.repository';
-import { CurrentUserService } from '../auth/current-user.service';
+import { CurrentUserService, LOCAL_USER } from '../auth/current-user.service';
 import { BuiltinAgentPinsRepository } from './repositories/builtin-agent-pins.repository';
 import { UserAgentsRepository } from './repositories/user-agents.repository';
 import {
@@ -24,12 +24,13 @@ function build(datasetNames: string[] = ['World Cup Core']) {
   const datasets = {
     list: jest.fn().mockResolvedValue(datasetNames.map((name) => ({ name }))),
   } as unknown as DatasetsRepository;
+  const users = new CurrentUserService();
   const service = new UserAgentsService(
     new UserAgentsRepository(agents),
-    new BuiltinAgentPinsRepository(settings, new CurrentUserService()),
+    new BuiltinAgentPinsRepository(settings, users),
     datasets,
   );
-  return { db, service, settings };
+  return { db, service, settings, users };
 }
 
 describe('normalizeAgentConfig', () => {
@@ -218,6 +219,11 @@ describe('UserAgentsService', () => {
   });
 
   it('stores built-in pins in one settings document without touching the LLM one', async () => {
+    await ctx.users.runAs(LOCAL_USER, () => pinsAsDemoUser());
+  });
+
+  /** As Demo User: outside a request nobody is signed in (ADR-0012). */
+  async function pinsAsDemoUser() {
     await ctx.settings.insert({ key: 'llm' } as never);
     expect(await ctx.service.builtinPins()).toEqual([]);
     await ctx.service.setBuiltinPin('assistant', true);
@@ -228,10 +234,10 @@ describe('UserAgentsService', () => {
     expect(await ctx.service.builtinPins()).toEqual(['sql-fixer']);
     const docs = await ctx.settings.find();
     expect(docs.map((doc) => doc.key).sort()).toEqual([
-      'builtin-agent-pins',
+      'builtin-agent-pins:local',
       'llm',
     ]);
-  });
+  }
 
   it('reports the dataset names that exist', async () => {
     expect(await ctx.service.datasetNames()).toEqual(

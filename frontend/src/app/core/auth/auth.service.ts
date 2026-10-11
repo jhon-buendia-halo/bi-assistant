@@ -1,12 +1,14 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { DOCUMENT } from '@angular/common';
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { retry, throwError, timer } from 'rxjs';
+import { Observable, map, retry, tap, throwError, timer } from 'rxjs';
 import { API_BASE_URL } from '../config/api.config';
 import { ToastService } from '../toast/toast.service';
 import {
   AuthMode,
-  LOCAL_ME,
+  LOCAL_SESSION_STORAGE_KEY,
+  LocalSignInResult,
+  LocalSignInUser,
   MeView,
   PERMISSION_DENIED_MESSAGE,
   PermissionId,
@@ -16,6 +18,9 @@ import {
 
 /** `loading` until `GET /me` answers; the shell renders only when signed in. */
 export type AuthStatus = 'loading' | 'signed-in' | 'signed-out';
+
+/** The server's mode, or `unknown` until an answer names it (ui.md 1.6). */
+export type AuthModeState = AuthMode | 'unknown';
 
 interface LogoutResult {
   ok: boolean;
@@ -34,11 +39,23 @@ const isTransient = (error: unknown) =>
   error instanceof HttpErrorResponse &&
   (error.status === 0 || error.status >= 500);
 
+/** The `mode` a 401 body names (`GET /me` answers it, api.md 64), if any. */
+export function modeOf(error: unknown): AuthMode | null {
+  const body =
+    error instanceof HttpErrorResponse ? error.error : (error as object);
+  const mode =
+    body && typeof body === 'object'
+      ? (body as { mode?: unknown }).mode
+      : undefined;
+  return mode === 'local' || mode === 'org' ? mode : null;
+}
+
 /**
- * Who is using the app and what they may do (admin R2, R5, R10, R11, R25).
- * Loaded before anything else: in local mode it is the local user with
- * every permission; on an org server it is the signed-in user, or the
- * sign-in page when nobody is (ui.md 1.6).
+ * Who is using the app and what they may do (admin R2, R5, R10, R11, R25,
+ * R70, R71). Loaded before anything else: the signed-in user, or the
+ * sign-in page when nobody is (ui.md 1.6), in either mode. In local mode the
+ * auth session is a token kept in browser storage and sent as
+ * `Authorization: Bearer <token>`; on an org server it is a cookie.
  */
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -48,8 +65,14 @@ export class AuthService {
 
   readonly status = signal<AuthStatus>('loading');
   readonly me = signal<MeView | null>(null);
-  readonly mode = computed<AuthMode>(() => this.me()?.mode ?? 'local');
+  /** Set by `GET /me` (its answer, or its 401 body), kept across a 401. */
+  readonly mode = signal<AuthModeState>('unknown');
   readonly isOrg = computed(() => this.mode() === 'org');
+  readonly isLocal = computed(() => this.mode() === 'local');
+  /** The backend could not be reached: the sign-in page offers Retry. */
+  readonly backendUnreachable = signal(false);
+  /** A Retry of `GET /me` is running. */
+  readonly checking = signal(false);
   readonly user = computed(() => this.me()?.user ?? null);
   readonly signingIn = signal(false);
   readonly signingOut = signal(false);
@@ -63,12 +86,32 @@ export class AuthService {
     return this.permissions().has(permission);
   }
 
+  /** The local auth session token, or null (admin R71). */
+  localToken(): string | null {
+    try {
+      return (
+        this.document.defaultView?.localStorage.getItem(
+          LOCAL_SESSION_STORAGE_KEY,
+        ) || null
+      );
+    } catch {
+      return null;
+    }
+  }
+
+  /** The `Authorization` header for a raw `fetch` to the API, if any. */
+  authHeaders(): Record<string, string> {
+    const token = this.localToken();
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  }
+
   /**
-   * Reads `GET /me` once at start-up. A 401 shows the sign-in page. A backend
-   * that can't be reached is retried, then treated as local mode, as before
-   * org server mode existed: an org server answers 401 to the next call.
+   * Reads `GET /me` (at start-up, and on **Retry**). A 401 shows the sign-in
+   * page in the variant its `mode` names. A backend that can't be reached is
+   * retried, then the sign-in page says "Backend unreachable" (ui.md 1.6).
    */
   load(): void {
+    this.checking.set(true);
     this.http
       .get<MeView>(`${API_BASE_URL}/me`)
       .pipe(
@@ -81,17 +124,75 @@ export class AuthService {
         }),
       )
       .subscribe({
-        next: (me) => this.signedIn(me),
-        error: (error) =>
-          isUnauthorized(error) ? this.toSignInPage() : this.signedIn(LOCAL_ME),
+        next: (me) => {
+          this.checking.set(false);
+          this.backendUnreachable.set(false);
+          this.signedIn(me);
+        },
+        error: (error) => {
+          this.checking.set(false);
+          if (isUnauthorized(error)) {
+            this.backendUnreachable.set(false);
+            this.handleUnauthorized(modeOf(error) ?? undefined);
+          } else {
+            this.unreachable();
+          }
+        },
       });
   }
 
-  /** Any 401: the auth session is gone, so the sign-in page replaces the app. */
-  handleUnauthorized(): void {
-    // The local backend never answers 401; there is nothing to sign in to.
-    if (this.status() === 'signed-in' && !this.isOrg()) return;
+  /** **Retry** on the sign-in page: `GET /me` again. */
+  retryLoad(): void {
+    if (this.checking()) return;
+    this.load();
+  }
+
+  /**
+   * Any 401: the auth session is gone (admin R11, R71). The local token is
+   * forgotten and the sign-in page replaces the app, in either mode.
+   */
+  handleUnauthorized(mode?: AuthMode): void {
+    this.forgetToken();
+    if (mode) this.mode.set(mode);
+    else if (this.mode() === 'unknown') this.mode.set('org');
     this.toSignInPage();
+  }
+
+  /** Shows the "Backend unreachable" sign-in page (ui.md 4.17). */
+  unreachable(): void {
+    this.backendUnreachable.set(true);
+    this.toSignInPage();
+  }
+
+  /** The local sign-in dropdown's users (`GET /auth/local/users`, api.md 91). */
+  loadLocalUsers(): Observable<LocalSignInUser[]> {
+    return this.http
+      .get<{ users: LocalSignInUser[] }>(`${API_BASE_URL}/auth/local/users`)
+      .pipe(map((res) => res.users ?? []));
+  }
+
+  /**
+   * Local **Sign in** (admin R70, R71): starts an auth session as `userId`,
+   * keeps its token and opens the shell.
+   */
+  signInLocal(userId: string): Observable<MeView> {
+    this.signingIn.set(true);
+    return this.http
+      .post<LocalSignInResult>(`${API_BASE_URL}/auth/local/sign-in`, {
+        userId,
+      })
+      .pipe(
+        tap({
+          next: (res) => {
+            this.storeToken(res.token);
+            this.signingIn.set(false);
+            this.backendUnreachable.set(false);
+            this.signedIn(res.me);
+          },
+          error: () => this.signingIn.set(false),
+        }),
+        map((res) => res.me),
+      );
   }
 
   /**
@@ -118,18 +219,33 @@ export class AuthService {
   }
 
   /**
-   * **Sign out**: ends the auth session, then the identity provider's
-   * session, which returns to the app's sign-in page (admin R10).
+   * **Sign out** (admin R10, R71). Org server: ends the auth session, then
+   * the identity provider's session, which returns to the app's sign-in
+   * page. Local mode: ends the auth session, forgets the token and reloads,
+   * which shows the sign-in page.
    */
   signOut(): void {
     if (this.signingOut()) return;
     this.signingOut.set(true);
+    const failed = (err: HttpErrorResponse) => {
+      this.signingOut.set(false);
+      this.toast.error(err?.error?.message ?? 'Backend unreachable');
+    };
+    if (this.isLocal()) {
+      this.http
+        .post(`${API_BASE_URL}/auth/local/sign-out`, {})
+        .subscribe({
+          next: () => {
+            this.forgetToken();
+            this.reload();
+          },
+          error: failed,
+        });
+      return;
+    }
     this.http.post<LogoutResult>(`${API_BASE_URL}/auth/logout`, {}).subscribe({
       next: (res) => this.navigate(res.endSessionUrl ?? `${API_BASE_URL}/`),
-      error: (err) => {
-        this.signingOut.set(false);
-        this.toast.error(err?.error?.message ?? 'Backend unreachable');
-      },
+      error: failed,
     });
   }
 
@@ -160,9 +276,36 @@ export class AuthService {
     this.document.defaultView?.location.assign(url);
   }
 
+  /** Reloads the page (a fresh start, nobody signed in in memory). */
+  reload(): void {
+    this.document.defaultView?.location.reload();
+  }
+
   private signedIn(me: MeView): void {
+    this.mode.set(me.mode);
     this.me.set(me);
     this.status.set('signed-in');
+  }
+
+  private storeToken(token: string): void {
+    try {
+      this.document.defaultView?.localStorage.setItem(
+        LOCAL_SESSION_STORAGE_KEY,
+        token,
+      );
+    } catch {
+      // No storage: the session lasts until the next 401.
+    }
+  }
+
+  private forgetToken(): void {
+    try {
+      this.document.defaultView?.localStorage.removeItem(
+        LOCAL_SESSION_STORAGE_KEY,
+      );
+    } catch {
+      // Nothing stored.
+    }
   }
 
   private toSignInPage(): void {

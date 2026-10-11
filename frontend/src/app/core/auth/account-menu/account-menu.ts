@@ -14,9 +14,8 @@ import { AuthService } from '../auth.service';
 const MENU_GAP_PX = 8;
 
 /**
- * The rail avatar on an org server (admin R10; ui.md 1.3): the signed-in
+ * The rail avatar in both modes (admin R10; ui.md 1.3): the signed-in
  * user's initials, opening a menu with their name, email and **Sign out**.
- * Local mode keeps the static "Demo User" avatar instead.
  */
 @Component({
   selector: 'app-account-menu',

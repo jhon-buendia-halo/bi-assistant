@@ -53,20 +53,61 @@ export interface MeView {
   permissions: PermissionId[];
 }
 
+/** One persona of the local sign-in dropdown (`GET /auth/local/users`, api.md 91). */
+export interface LocalSignInUser {
+  id: string;
+  displayName: string;
+  email: string | null;
+  initials: string;
+  /** Roles other than User, in badge order; [] = User only. */
+  roles: RoleId[];
+}
+
+/** What `POST /auth/local/sign-in` answers (api.md 92). */
+export interface LocalSignInResult {
+  ok: boolean;
+  message: string;
+  token: string;
+  me: MeView;
+}
+
 /**
- * The local user (admin R2), as local mode's `GET /me` answers it. The app
- * falls back to it when `GET /me` can't be reached, so a backend that is
- * still starting behaves exactly as before org server mode existed.
+ * Where local mode keeps the auth session token (the raw string; admin R71,
+ * ui.md 1.6). Sent as `Authorization: Bearer <token>` on every API call.
  */
-export const LOCAL_ME: MeView = {
-  mode: 'local',
-  user: { id: 'local', displayName: 'Demo User', email: null, initials: 'D' },
-  roles: [
-    { role: 'user', source: 'implicit' },
-    { role: 'platform-admin', source: 'implicit' },
-  ],
-  permissions: [...ALL_PERMISSIONS],
+export const LOCAL_SESSION_STORAGE_KEY = 'questions-to-insights:local-session';
+
+/** Role names as the local sign-in dropdown shows them (admin R70). */
+const LOCAL_ROLE_LABELS: Record<RoleId, string> = {
+  user: 'User',
+  'platform-admin': 'Platform admin',
+  approver: 'Approver',
+  'data-owner': 'Data owner',
+  maker: 'Maker',
 };
+
+const LOCAL_ROLE_ORDER: readonly RoleId[] = [
+  'platform-admin',
+  'approver',
+  'data-owner',
+  'maker',
+];
+
+/**
+ * A dropdown option: `<display name> · <roles>`, the roles other than User
+ * joined with ", ", or "User" when there are none (admin R70, ui.md 4.17.1).
+ */
+export function localUserOptionLabel(user: LocalSignInUser): string {
+  const roles = LOCAL_ROLE_ORDER.filter((role) => user.roles.includes(role));
+  const names = roles.length
+    ? roles.map((role) => LOCAL_ROLE_LABELS[role]).join(', ')
+    : LOCAL_ROLE_LABELS.user;
+  return `${user.displayName} · ${names}`;
+}
+
+/** Copy of the sign-in page (ui.md 4.17, 4.17.1). */
+export const BACKEND_UNREACHABLE_MESSAGE = 'Backend unreachable';
+export const LOCAL_SIGN_IN_FAILED_MESSAGE = 'Sign-in failed. Try again.';
 
 /** The toast for any HTTP 403 (admin R24, ui.md 1.6). */
 export const PERMISSION_DENIED_MESSAGE =

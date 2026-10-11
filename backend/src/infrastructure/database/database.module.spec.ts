@@ -1,5 +1,9 @@
 import BetterSqlite3 from 'better-sqlite3';
-import { renameLegacyFields, renameLegacyTables } from './database.module';
+import {
+  backfillLocalOwners,
+  renameLegacyFields,
+  renameLegacyTables,
+} from './database.module';
 
 /**
  * Guards the two rename migrations. `SqliteDocStore` creates a missing table
@@ -106,5 +110,83 @@ describe('legacy datastore migrations', () => {
   it('is a no-op when the table does not exist yet', () => {
     expect(() => renameLegacyFields(db)).not.toThrow();
     expect(() => renameLegacyTables(db)).not.toThrow();
+  });
+
+  describe('M13: local data from before sign-in belongs to Demo User', () => {
+    const PRIVATE = [
+      'sessions',
+      'verified_queries',
+      'metrics',
+      'eval_runs',
+      'knowledge_snippets',
+      'agents',
+    ];
+
+    it('stamps ownerId "local" on every ownerless private document only', () => {
+      for (const table of PRIVATE) {
+        createTable(table);
+        insert(table, { id: 'legacy', updatedAt: '2026-01-01T00:00:00.000Z' });
+        insert(table, { id: 'theirs', ownerId: 'local-mark' });
+      }
+      createTable('connections');
+      insert('connections', { id: 'shared' });
+
+      backfillLocalOwners(db);
+
+      for (const table of PRIVATE) {
+        expect(docs(table)).toEqual([
+          // updatedAt is not restamped: raw SQL.
+          {
+            id: 'legacy',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+            ownerId: 'local',
+          },
+          { id: 'theirs', ownerId: 'local-mark' },
+        ]);
+      }
+      // Shared collections are never owned.
+      expect(docs('connections')).toEqual([{ id: 'shared' }]);
+    });
+
+    it('renames the bare per-user settings keys to Demo User\'s', () => {
+      createTable('settings');
+      insert('settings', { key: 'llm', provider: 'openai' });
+      insert('settings', { key: 'ui-preferences', theme: 'dark' });
+      insert('settings', { key: 'builtin-agent-pins', pinned: ['assistant'] });
+      insert('settings', { key: 'ui-preferences:local-uma', theme: 'light' });
+
+      backfillLocalOwners(db);
+
+      expect(docs('settings')).toEqual([
+        { key: 'llm', provider: 'openai' },
+        { key: 'ui-preferences:local', theme: 'dark' },
+        { key: 'builtin-agent-pins:local', pinned: ['assistant'] },
+        { key: 'ui-preferences:local-uma', theme: 'light' },
+      ]);
+    });
+
+    it('keeps the bare key when Demo User already has a suffixed one', () => {
+      createTable('settings');
+      insert('settings', { key: 'ui-preferences', theme: 'dark' });
+      insert('settings', { key: 'ui-preferences:local', theme: 'light' });
+
+      backfillLocalOwners(db);
+
+      expect(docs('settings')).toEqual([
+        { key: 'ui-preferences', theme: 'dark' },
+        { key: 'ui-preferences:local', theme: 'light' },
+      ]);
+    });
+
+    it('is idempotent and skips missing tables', () => {
+      createTable('sessions');
+      insert('sessions', { id: 'legacy' });
+
+      backfillLocalOwners(db);
+      backfillLocalOwners(db);
+
+      expect(docs('sessions')).toEqual([{ id: 'legacy', ownerId: 'local' }]);
+      expect(tables()).toEqual(['sessions', 'sqlite_sequence']);
+    });
   });
 });
