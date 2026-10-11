@@ -1486,6 +1486,32 @@ describe('SessionsService logical query layer — datasource resolution', () => 
     );
   });
 
+  it('resolves the "default" placeholder for run_raw_sql too, like a logical query (sessions-chat R62)', async () => {
+    const get = jest
+      .fn()
+      .mockResolvedValue({ id: 'ds-real', kind: 'databricks' });
+    const defaultDatasource = jest
+      .fn()
+      .mockResolvedValue({ id: 'ds-real', kind: 'databricks' });
+    const runReadOnlySql = jest
+      .fn()
+      .mockResolvedValue({ columns: ['n'], rows: [{ n: 1 }] });
+    const installed = await bridge({ get, defaultDatasource, runReadOnlySql });
+
+    await installed.runReadOnlySql(
+      'default',
+      'SELECT COUNT(*) AS n FROM main.health.claims',
+      100,
+      ['claims'],
+    );
+
+    expect(runReadOnlySql).toHaveBeenCalledWith(
+      'ds-real',
+      'SELECT COUNT(*) AS n FROM main.health.claims',
+      100,
+    );
+  });
+
   it('treats "Datasource ... not found" as non-repairable — no sql-fixer round trip', async () => {
     const get = jest
       .fn()

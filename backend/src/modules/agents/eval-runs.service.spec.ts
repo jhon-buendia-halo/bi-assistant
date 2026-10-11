@@ -35,7 +35,11 @@ import {
 } from '../../mastra/evals/assistant.evals';
 
 describe('EvalRunsService dataset validation', () => {
-  const datasets = { list: jest.fn() };
+  const datasets = {
+    list: jest.fn(),
+    // The legacy path's curated-metrics block reads the run's datasets.
+    getByNames: jest.fn().mockResolvedValue([]),
+  };
   const repository = {
     insert: jest.fn(),
     save: jest.fn(),
@@ -118,6 +122,39 @@ describe('EvalRunsService dataset validation', () => {
       result.jobId,
       'wc',
       ['Sample'],
+      'model',
+    );
+  });
+
+  it("looks for the regression baseline on the run's own path (agents-evals R40)", async () => {
+    datasets.list.mockResolvedValue([
+      {
+        name: 'Sample',
+        datasourceId: 'wc',
+        datasourceKind: 'postgres',
+        tables: [
+          'tournaments',
+          'teams',
+          'matches',
+          'venues',
+          'players',
+          'goals',
+          'match_team_statistics',
+          'v_match_results',
+          'v_player_goal_totals',
+        ].map((table) => `world_cup.world_cup.${table}`),
+      },
+    ]);
+    const runner = service();
+    const result = await runner.start('assistant', 'wc', undefined, 'legacy');
+    await new Promise((resolve) => setImmediate(resolve));
+    if (!('jobId' in result)) throw new Error('Run did not start');
+    expect(repository.mostRecentCompleted).toHaveBeenCalledWith(
+      'assistant',
+      result.jobId,
+      'wc',
+      ['Sample'],
+      'legacy',
     );
   });
 });

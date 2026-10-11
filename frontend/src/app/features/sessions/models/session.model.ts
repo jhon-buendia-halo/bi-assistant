@@ -55,7 +55,10 @@ export interface ChatMessage {
   at: string;
   /** Structured data the assistant retrieved while producing this answer. */
   data?: ToolDataRecord[];
-  /** `catalog.schema.table` entities queried to produce this answer. */
+  /**
+   * The answer's source entities: logical entity names, or
+   * `catalog.schema.table` for raw SQL (sessions-chat R63).
+   */
   entities?: string[];
   /** Present when the assistant asked a clarifying question with options. */
   clarification?: {
@@ -82,6 +85,11 @@ export interface ChatMessage {
   reasoning?: ReasoningStep[];
   /** Curated knowledge snippets this answer's context carried. */
   knowledge?: KnowledgeUse[];
+  /**
+   * A step of this answer's turn used `run_raw_sql`, so part of it was
+   * answered outside the dataset's data model (sessions-chat R62).
+   */
+  outsideModel?: boolean;
   /**
    * Present when a deep-analysis job produced a report. The content is the
    * report's executive summary; the full markdown is downloadable.

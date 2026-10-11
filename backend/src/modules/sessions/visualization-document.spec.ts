@@ -20,6 +20,7 @@ import {
   FRAME_SCRIPT_FILENAME,
   FRAME_SELECT_SCRIPT,
   sandboxedVisualizationDocument,
+  sourceEntities,
   storedVisualizationDocument,
   VisualContext,
 } from './visualization-document';
@@ -480,5 +481,74 @@ describe('designer stylesheet scoping', () => {
 
     expect(document).toContain('@scope (.qti-visual-body) {');
     expect(document).toContain('<div class="qti-visual-body">');
+  });
+});
+
+describe('sourceEntities (agents.md 5.7, sessions-chat R63)', () => {
+  it('takes logical entities from query_entities and sample_records, never from their compiled SQL', () => {
+    expect(
+      sourceEntities([
+        {
+          tool: 'query_entities',
+          input:
+            'SELECT "tournaments"."year" FROM "main"."world_cup"."tournaments" AS "tournaments" LIMIT 100',
+          entities: ['tournaments'],
+        },
+        {
+          tool: 'sample_records',
+          input:
+            'SELECT "teams"."team_id" FROM "main"."world_cup"."teams" AS "teams" LIMIT 10',
+          entities: ['teams'],
+        },
+      ]),
+    ).toEqual(['tournaments', 'teams']);
+  });
+
+  it('reads bare, double-quoted and backquoted three-part names from raw SQL, unquoted', () => {
+    expect(
+      sourceEntities([
+        {
+          tool: 'run_raw_sql',
+          input: [
+            'SELECT * FROM "main"."world_cup"."matches" m',
+            'JOIN `cat`.`sch`.`goals` g ON g.match_id = m.match_id',
+            'JOIN main.world_cup.teams t ON t.team_id = m.home_team_id',
+            'JOIN "main".world_cup.`squads` s ON s.team_id = t.team_id',
+          ].join(' '),
+          outsideModel: true,
+        },
+      ]),
+    ).toEqual([
+      'main.world_cup.matches',
+      'cat.sch.goals',
+      'main.world_cup.teams',
+      'main.world_cup.squads',
+    ]);
+  });
+
+  it("keeps first-seen order and drops duplicates across all the turn's records", () => {
+    expect(
+      sourceEntities([
+        { tool: 'query_entities', entities: ['matches', 'teams'] },
+        {
+          tool: 'run_raw_sql',
+          input:
+            'SELECT 1 FROM "main"."world_cup"."matches" JOIN main.world_cup.matches x ON 1=1',
+        },
+        { tool: 'sample_records', entities: ['teams'] },
+        {
+          tool: 'run_readonly_sql',
+          input: 'SELECT 1 FROM `main`.`world_cup`.`matches`',
+        },
+      ]),
+    ).toEqual(['matches', 'teams', 'main.world_cup.matches']);
+  });
+
+  it('adds nothing for a failed query_entities call', () => {
+    expect(
+      sourceEntities([
+        { tool: 'query_entities', error: 'unknown_entity: from: nope' },
+      ]),
+    ).toEqual([]);
   });
 });

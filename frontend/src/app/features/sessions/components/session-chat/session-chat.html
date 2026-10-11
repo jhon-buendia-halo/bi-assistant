@@ -355,6 +355,17 @@
               [ngTemplateOutletContext]="{ $implicit: message }"
             />
             <div class="flex min-h-5 items-center">
+              @if (message.outsideModel) {
+                <!-- A step of this turn used raw SQL (sessions-chat R62) -->
+                <span
+                  class="chip chip-warning mr-1"
+                  title="Part of this answer used raw SQL outside the dataset's data model."
+                  data-testid="answer-outside-model"
+                >
+                  <lucide-angular [img]="TriangleAlert" [size]="12" />
+                  Outside the data model
+                </span>
+              }
               @if (message.verified) {
                 <!-- Answer's SQL matches a query in the verified library -->
                 <span

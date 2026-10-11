@@ -188,15 +188,60 @@ export function renderMarkdown(markdown: string): string {
   });
 }
 
-/** Source entities referenced in the SQL (`catalog.schema.table`). */
+/** Tools whose records name their logical entities (agents.md 5.1); their
+ * `input` is compiled SQL and is never scanned for names. */
+const LOGICAL_ENTITY_TOOLS = new Set(['query_entities', 'sample_records']);
+
+/** One part of a `catalog.schema.table` name: double-quoted (`""` escapes a
+ * quote), backquoted (` `` ` escapes a backquote) or bare. */
+const NAME_PART = '(?:"((?:[^"]|"")+)"|`((?:[^`]|``)+)`|([A-Za-z0-9_]+))';
+/** Three parts joined by dots, quoting allowed per part; not the tail of a
+ * longer dotted or quoted name. */
+const THREE_PART_NAME = new RegExp(
+  `(?<![\\w."\`])${NAME_PART}\\.${NAME_PART}\\.${NAME_PART}(?![\\w"\`])`,
+  'g',
+);
+
+function unquotedPart(
+  doubleQuoted: string | undefined,
+  backquoted: string | undefined,
+  bare: string | undefined,
+): string {
+  if (doubleQuoted !== undefined) return doubleQuoted.replace(/""/g, '"');
+  if (backquoted !== undefined) return backquoted.replace(/``/g, '`');
+  return bare ?? '';
+}
+
+/** The `catalog.schema.table` names a statement reads, unquoted. */
+function namesInSql(sql: string): string[] {
+  const names: string[] = [];
+  for (const match of sql.matchAll(THREE_PART_NAME)) {
+    names.push(
+      [
+        unquotedPart(match[1], match[2], match[3]),
+        unquotedPart(match[4], match[5], match[6]),
+        unquotedPart(match[7], match[8], match[9]),
+      ].join('.'),
+    );
+  }
+  return names;
+}
+
+/**
+ * The answer's source entities (agents.md 5.7, sessions-chat R63): the
+ * distinct names in first-seen call order. A `query_entities` or
+ * `sample_records` record contributes its logical `entities`, never names
+ * read from its compiled SQL; a raw SQL record (and a legacy one) contributes
+ * the three-part names in its statement, bare, double-quoted or backquoted,
+ * reported unquoted.
+ */
 export function sourceEntities(data: ToolDataRecord[] | undefined): string[] {
   const found = new Set<string>();
   for (const record of data ?? []) {
-    for (const match of (record.input ?? '').matchAll(
-      /\b([a-zA-Z0-9_]+\.[a-zA-Z0-9_]+\.[a-zA-Z0-9_]+)\b/g,
-    )) {
-      found.add(match[1]);
-    }
+    const names = LOGICAL_ENTITY_TOOLS.has(record.tool)
+      ? (record.entities ?? [])
+      : namesInSql(record.input ?? '');
+    for (const name of names) found.add(name);
   }
   return Array.from(found);
 }

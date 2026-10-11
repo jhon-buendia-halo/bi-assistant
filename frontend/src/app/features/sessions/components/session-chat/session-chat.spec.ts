@@ -72,6 +72,37 @@ describe('SessionChat trust UX', () => {
     ).toBe('Verified');
   });
 
+  it('marks an answer that used raw SQL as outside the data model (sessions-chat R62)', async () => {
+    const plain = await render(answer);
+    expect(
+      plain.querySelector('[data-testid="answer-outside-model"]'),
+    ).toBeNull();
+    expect(plain.textContent).not.toContain('Outside the data model');
+
+    TestBed.resetTestingModule();
+    const raw = await render({
+      ...answer,
+      data: [
+        {
+          tool: 'run_raw_sql',
+          input: 'select count(*) from main.world_cup.matches',
+          rowCount: 1,
+        },
+      ],
+      outsideModel: true,
+    });
+    const chip = raw.querySelector('[data-testid="answer-outside-model"]');
+    expect(chip?.textContent?.trim()).toBe('Outside the data model');
+    expect(chip?.getAttribute('title')).toBe(
+      "Part of this answer used raw SQL outside the dataset's data model.",
+    );
+    expect(chip?.classList).toContain('chip');
+    expect(chip?.classList).toContain('chip-warning');
+    expect(
+      chip?.querySelector('lucide-angular, lucide-icon, svg'),
+    ).toBeTruthy();
+  });
+
   it('marks truncated records and offers a copy-SQL button', async () => {
     const el = await render({
       ...answer,

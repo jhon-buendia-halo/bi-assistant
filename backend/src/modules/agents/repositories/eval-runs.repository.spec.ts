@@ -32,4 +32,63 @@ describe('eval regression baseline scope', () => {
       ]),
     ).toBeNull();
   });
+
+  it('compares a legacy run only with an earlier legacy run (agents-evals R40)', async () => {
+    const repository = new EvalRunsRepository({
+      find: jest.fn().mockResolvedValue([
+        { jobId: 'model-newer', datasets: ['Core'], path: 'model' },
+        { jobId: 'unpathed', datasets: ['Core'] },
+        { jobId: 'legacy-older', datasets: ['Core'], path: 'legacy' },
+      ]),
+    } as never);
+
+    const baseline = await repository.mostRecentCompleted(
+      'assistant',
+      'current',
+      'wc',
+      ['Core'],
+      'legacy',
+    );
+
+    expect(baseline?.jobId).toBe('legacy-older');
+  });
+
+  it('compares a model run only with model runs, counting a run saved before paths as model', async () => {
+    const repository = new EvalRunsRepository({
+      find: jest.fn().mockResolvedValue([
+        { jobId: 'legacy-newer', datasets: ['Core'], path: 'legacy' },
+        { jobId: 'unpathed', datasets: ['Core'] },
+      ]),
+    } as never);
+
+    const baseline = await repository.mostRecentCompleted(
+      'assistant',
+      'current',
+      'wc',
+      ['Core'],
+      'model',
+    );
+
+    expect(baseline?.jobId).toBe('unpathed');
+  });
+
+  it('finds no baseline for a legacy run when only model runs exist', async () => {
+    const repository = new EvalRunsRepository({
+      find: jest
+        .fn()
+        .mockResolvedValue([
+          { jobId: 'model', datasets: ['Core'], path: 'model' },
+        ]),
+    } as never);
+
+    expect(
+      await repository.mostRecentCompleted(
+        'assistant',
+        'current',
+        'wc',
+        ['Core'],
+        'legacy',
+      ),
+    ).toBeNull();
+  });
 });

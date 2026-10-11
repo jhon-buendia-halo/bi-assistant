@@ -42,6 +42,14 @@ export interface ToolDataRecord {
    */
   logicalQuery?: string;
   /**
+   * The logical entities behind the call, by logical name: for
+   * `query_entities` its `from` entity and every joined entity (explicit or
+   * auto-joined), for `sample_records` the sampled entity. Absent for other
+   * tools and for a failed `query_entities` (agents.md 5.1). The answer's
+   * "Data entities" chips read these, never the compiled SQL.
+   */
+  entities?: string[];
+  /**
    * This record came from `run_raw_sql`, the flagged last resort — the
    * answer it contributed to is "outside the data model" (ADR-0013 §4),
    * regardless of whether the statement itself succeeded.
@@ -72,9 +80,11 @@ export interface ChatMessage {
   /** Structured data the assistant retrieved while producing this answer. */
   data?: ToolDataRecord[];
   /**
-   * Fully-qualified `catalog.schema.table` entities the assistant queried to
-   * produce this answer, derived from `data`. Feeds the chat provenance chips
-   * and the visual frame's source list.
+   * The answer's source entities, derived from `data` in first-seen order:
+   * logical entity names from `query_entities`/`sample_records` records, and
+   * `catalog.schema.table` names (unquoted) from raw SQL. Feeds the chat
+   * provenance chips, the interpretation line and the visual frame's source
+   * list (sessions-chat R63).
    */
   entities?: string[];
   /** Present when the assistant asked a clarifying question with options. */

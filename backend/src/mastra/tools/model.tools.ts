@@ -16,6 +16,10 @@ import {
 } from '../../modules/data-models/query/logical-query';
 import type { SessionModel } from '../../modules/data-models/session-model';
 import {
+  inspectResult,
+  type DataWarningCode,
+} from '../../modules/sessions/result-guards';
+import {
   DATASETS_CONTEXT_KEY,
   RATIONALE_DESCRIPTION,
   datasetNames,
@@ -86,6 +90,63 @@ function withoutSql<T extends { sql?: unknown; correctedSql?: unknown }>(
   delete copy.sql;
   delete copy.correctedSql;
   return copy as Omit<T, 'sql' | 'correctedSql'>;
+}
+
+/** The query's own row cap when it leaves `limit` out (agents.md 3.4). */
+const DEFAULT_QUERY_LIMIT = 100;
+/** `sample_records`' default sample size (agents.md 3.3). */
+const DEFAULT_SAMPLE_LIMIT = 10;
+
+/**
+ * `query_entities`' input schema: the shared `logicalQuerySchema` with its
+ * `limit` left undefined when the model omits it, instead of defaulted to
+ * 100 by the parse — the result guards must know whether the query set a
+ * limit itself (agents.md 5.4), and the parsed input is all a tool sees.
+ * The tool applies the same default before compiling.
+ */
+const queryEntitiesInputQuerySchema = logicalQuerySchema.extend({
+  limit: z
+    .number()
+    .int()
+    .min(1)
+    .max(500)
+    .optional()
+    .describe('Row cap, 1-500, defaults to 100'),
+});
+
+/**
+ * The result guards (agents.md 5.4) on a successful logical-path run: they
+ * inspect the compiled statement that actually ran (the corrected one when
+ * repaired) and its rows, minus the checks `skip` names — the compiler
+ * always writes a `LIMIT`, so a check keyed on it would otherwise fire on
+ * every query. The warnings name only result columns (the query's aliases
+ * and attribute names), never a physical table.
+ */
+function guardWarnings(
+  full: { sql?: unknown; correctedSql?: unknown; rows?: unknown },
+  rowLimit: number,
+  skip: DataWarningCode[],
+): string[] {
+  const executed =
+    typeof full.correctedSql === 'string'
+      ? full.correctedSql
+      : typeof full.sql === 'string'
+        ? full.sql
+        : '';
+  const rows = Array.isArray(full.rows)
+    ? (full.rows as Record<string, unknown>[])
+    : [];
+  return inspectResult(executed, rows, rowLimit)
+    .filter((warning) => !skip.includes(warning.code))
+    .map((warning) => warning.message);
+}
+
+/** `warnings` joins a result only when there is something to say. */
+function withWarnings<T extends object>(
+  result: T,
+  warnings: string[],
+): T & { warnings?: string[] } {
+  return warnings.length ? { ...result, warnings } : result;
 }
 
 export const listEntitiesTool = createTool({
@@ -181,10 +242,16 @@ export const sampleRecordsTool = createTool({
     const query: LogicalQuery = {
       from: found.name,
       select: found.attributes.map((a) => ({ attr: a.name })),
-      limit: limit ?? 10,
+      limit: limit ?? DEFAULT_SAMPLE_LIMIT,
     };
     try {
-      const full = await getDatasetToolServices().runLogicalQuery(model, query);
+      const run = await getDatasetToolServices().runLogicalQuery(model, query);
+      // A sample is unordered on purpose, and one that fills its requested
+      // size is complete — neither is a fault to warn about (agents.md 5.4).
+      const full = withWarnings(
+        run,
+        guardWarnings(run, query.limit, ['unordered-limit', 'row-cap-reached']),
+      );
       const modelVisible = withoutSql(full);
       queryEntitiesProvenance.set(modelVisible, full);
       return modelVisible;
@@ -228,11 +295,13 @@ export const queryEntitiesTool = createTool({
     'hint — fix the query and try again rather than guessing.',
   ].join(' '),
   inputSchema: z.object({
-    query: logicalQuerySchema,
+    query: queryEntitiesInputQuerySchema,
     rationale: z.string().describe(RATIONALE_DESCRIPTION),
   }),
   execute: async ({ query }, { requestContext }) => {
     const model = await sessionModelFor(requestContext);
+    const setsOwnLimit = query.limit !== undefined;
+    const limit = query.limit ?? DEFAULT_QUERY_LIMIT;
     try {
       // The entity's own datasource kind decides the dialect (ADR-0013 §4):
       // `sql` bindings compile for the datasource's actual kind, `rest`
@@ -240,9 +309,20 @@ export const queryEntitiesTool = createTool({
       // Cast: `logicalQuerySchema`'s recursive predicate loses its precise
       // type through `z.infer` (see `logical-query.ts`'s own comment on
       // this); the schema still validated the shape at the tool boundary.
-      const full = await getDatasetToolServices().runLogicalQuery(
-        model,
-        query as unknown as LogicalQuery,
+      const run = await getDatasetToolServices().runLogicalQuery(model, {
+        ...(query as unknown as LogicalQuery),
+        limit,
+      });
+      // The compiled SQL always carries a LIMIT; only a limit the query set
+      // itself, with nothing ordering it, is an arbitrary "top N".
+      const ordered = (query.order_by ?? []).length > 0;
+      const full = withWarnings(
+        run,
+        guardWarnings(
+          run,
+          limit,
+          setsOwnLimit && !ordered ? [] : ['unordered-limit'],
+        ),
       );
       // `sql`/`correctedSql` never reach the model (ADR-0013 §4) — kept only
       // in `queryEntitiesProvenance`, which `toolDataRecord`
@@ -317,14 +397,25 @@ export const runRawSqlTool = createTool({
         outsideModel: true,
       };
     }
+    const rowLimit = limit ?? DEFAULT_QUERY_LIMIT;
     try {
+      // The bridge resolves the placeholder `default` datasource of a
+      // dataset saved before datasources existed, exactly as a logical
+      // query's (agents.md 5.11 step 2).
       const result = await getDatasetToolServices().runReadOnlySql(
         found.datasourceId,
         sql,
-        limit ?? 100,
+        rowLimit,
         datasetNames(requestContext),
       );
-      return { ...result, outsideModel: true };
+      // Guards inspect the statement that actually ran — the fixer may have
+      // repaired the one the assistant wrote (agents.md 5.4).
+      const warnings = guardWarnings(
+        { sql, correctedSql: result.correctedSql, rows: result.rows },
+        rowLimit,
+        [],
+      );
+      return { ...withWarnings(result, warnings), outsideModel: true };
     } catch (err) {
       return {
         error: sanitizeExecutionError(

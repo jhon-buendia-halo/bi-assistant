@@ -226,8 +226,16 @@ export class SessionsService implements OnModuleInit {
       getDatasets: (names) => this.boundDatasets(names),
       sampleRows: (datasourceId, entity, limit) =>
         this.datasourcesService.sampleRows(datasourceId, entity, limit),
-      runReadOnlySql: (datasourceId, sql, limit, datasets) =>
-        this.runSqlWithRepair(datasourceId, sql, limit, datasets),
+      // `run_raw_sql` passes the named entity's own datasource id, which can
+      // be the `default` placeholder — resolved like a logical query's
+      // (agents.md 3.5, 5.11 step 2).
+      runReadOnlySql: async (datasourceId, sql, limit, datasets) =>
+        this.runSqlWithRepair(
+          await this.resolveDatasourceId(datasourceId),
+          sql,
+          limit,
+          datasets,
+        ),
       getSessionModel: (datasetNames) =>
         this.composedSessionModel(datasetNames),
       runLogicalQuery: (sessionModel, query) =>

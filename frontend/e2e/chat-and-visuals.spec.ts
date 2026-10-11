@@ -7,6 +7,8 @@ import {
 } from './helpers/app-actions';
 
 const assistantMessageAt = '2026-09-15T12:00:01.000Z';
+const OUTSIDE_MODEL_TITLE =
+  "Part of this answer used raw SQL outside the dataset's data model.";
 
 async function installDeterministicChatStream(
   page: Page,
@@ -15,6 +17,9 @@ async function installDeterministicChatStream(
   await page.evaluate(
     ({ id, sessionName, datasetName, answerAt }) => {
       const originalFetch = window.fetch.bind(window);
+      // The transcript the scripted `done` events return, so a second
+      // question keeps the first answer on screen (as the backend does).
+      const transcript: unknown[] = [];
       window.fetch = async (input, init) => {
         const url =
           typeof input === 'string'
@@ -30,6 +35,13 @@ async function installDeterministicChatStream(
           content?: string;
         };
         const question = request.content ?? '';
+        // "raw SQL" questions are answered through `run_raw_sql` and stored
+        // as answered outside the data model (sessions-chat R62).
+        const raw = question.includes('raw SQL');
+        const tool = raw ? 'run_raw_sql' : 'run_sql';
+        const sql = raw
+          ? 'SELECT year, champion FROM world_cup.world_cup.tournaments'
+          : 'SELECT tournament_year, champion FROM world_cup.tournaments';
         const encoder = new TextEncoder();
         const timers: ReturnType<typeof setTimeout>[] = [];
         let closed = false;
@@ -49,15 +61,10 @@ async function installDeterministicChatStream(
               type: 'reasoning',
               content: 'Inspecting the tournament and match tables…',
             });
-            emit(120, { type: 'tool', content: 'run_sql' });
+            emit(120, { type: 'tool', content: tool });
             emit(220, {
               type: 'tool-result',
-              content: JSON.stringify({
-                tool: 'run_sql',
-                input:
-                  'SELECT tournament_year, champion FROM world_cup.tournaments',
-                rowCount: 2,
-              }),
+              content: JSON.stringify({ tool, input: sql, rowCount: 2 }),
             });
             emit(320, {
               type: 'text',
@@ -69,6 +76,31 @@ async function installDeterministicChatStream(
             timers.push(
               setTimeout(() => {
                 if (closed) return;
+                // The first turn keeps the fixed timestamps the visual test
+                // points at; later turns are a minute apart.
+                const turn = transcript.length / 2;
+                const minute = String(turn).padStart(2, '0');
+                transcript.push(
+                  {
+                    role: 'user',
+                    content: question,
+                    at: `2026-09-15T12:${minute}:00.000Z`,
+                  },
+                  {
+                    role: 'assistant',
+                    content: raw
+                      ? 'Using raw SQL outside the data model: **Argentina** won in 2022.'
+                      : '**Argentina** won the 2022 World Cup, while France won in 2018.',
+                    at:
+                      turn === 0 ? answerAt : `2026-09-15T12:${minute}:01.000Z`,
+                    data: [
+                      raw
+                        ? { tool, input: sql, rowCount: 2, outsideModel: true }
+                        : { tool, input: sql, rowCount: 2 },
+                    ],
+                    ...(raw ? { outsideModel: true } : {}),
+                  },
+                );
                 controller.enqueue(
                   encoder.encode(
                     `data: ${JSON.stringify({
@@ -77,27 +109,7 @@ async function installDeterministicChatStream(
                         id,
                         name: sessionName,
                         datasets: [datasetName],
-                        messages: [
-                          {
-                            role: 'user',
-                            content: question,
-                            at: '2026-09-15T12:00:00.000Z',
-                          },
-                          {
-                            role: 'assistant',
-                            content:
-                              '**Argentina** won the 2022 World Cup, while France won in 2018.',
-                            at: answerAt,
-                            data: [
-                              {
-                                tool: 'run_sql',
-                                input:
-                                  'SELECT tournament_year, champion FROM world_cup.tournaments',
-                                rowCount: 2,
-                              },
-                            ],
-                          },
-                        ],
+                        messages: transcript,
                         visualizations: [],
                       },
                     })}\n\n`,
@@ -234,4 +246,28 @@ test('renders a deterministic interactive visualization and its version controls
   await page.getByTitle('Version history').click();
   await expect(page.getByText('Version 1', { exact: true })).toBeVisible();
   await expect(page.getByText('current', { exact: true })).toBeVisible();
+});
+
+test('marks an answer that used raw SQL as outside the data model', async ({
+  page,
+}) => {
+  const sessionId = await createWorldCupWorkspace(page);
+  await installDeterministicChatStream(page, sessionId);
+
+  const input = page.getByPlaceholder('Ask a follow-up question…');
+  await input.fill('Use raw SQL for the champions');
+  await page.getByLabel('Send message').click();
+  await expect(page.getByText('won in 2022.')).toBeVisible();
+
+  const chip = page.getByTestId('answer-outside-model');
+  await expect(chip).toHaveCount(1);
+  await expect(chip).toHaveText('Outside the data model');
+  await expect(chip).toHaveAttribute('title', OUTSIDE_MODEL_TITLE);
+
+  await input.fill('Who won the last two tournaments?');
+  await page.getByLabel('Send message').click();
+  await expect(page.getByText('France won in 2018.')).toBeVisible();
+
+  // Still only the raw-SQL answer carries the chip; the new answer has none.
+  await expect(chip).toHaveCount(1);
 });

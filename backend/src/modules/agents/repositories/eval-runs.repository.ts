@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { OWNED_EVAL_RUNS_STORE } from '../../../infrastructure/database/doc-store';
 import type { DocStore } from '../../../infrastructure/database/doc-store';
 import type { EvalRunView } from '../eval-runs.service';
+import type { AssistantEvalPath } from '../../../mastra/evals/assistant.evals';
 
 /** Past and in-flight eval runs, newest first; owner-scoped (data-model 3.15). */
 @Injectable()
@@ -20,15 +21,19 @@ export class EvalRunsRepository {
   }
 
   /**
-   * The most recently completed run for this agent and data scope, excluding
-   * `excludeJobId`. Regression tracking diffs a finishing run against this
-   * baseline. `null` when no comparable completed run exists.
+   * The most recently completed run for this agent, path and data scope,
+   * excluding `excludeJobId`. Regression tracking diffs a finishing run
+   * against this baseline, so a `model` run is only ever compared with a
+   * `model` run and a `legacy` run with a `legacy` run; a run saved before
+   * paths existed counts as `model` (agents-evals R40). `null` when no
+   * comparable completed run exists.
    */
   async mostRecentCompleted(
     agentKey: string,
     excludeJobId: string,
     datasourceId: string,
     datasets: string[],
+    path: AssistantEvalPath = 'model',
   ): Promise<EvalRunView | null> {
     const completed = await this.store.find(
       { agentKey, status: 'completed', datasourceId },
@@ -39,6 +44,7 @@ export class EvalRunsRepository {
       completed.find(
         (run) =>
           run.jobId !== excludeJobId &&
+          (run.path ?? 'model') === path &&
           new Set(run.datasets).size === scope.size &&
           run.datasets.every((dataset) => scope.has(dataset)),
       ) ?? null

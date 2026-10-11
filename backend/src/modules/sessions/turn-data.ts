@@ -113,6 +113,11 @@ export function toolDataRecord(
   // `run_raw_sql` always flags its contribution as outside the model,
   // whether or not the statement itself succeeded (ADR-0013 §4).
   const outsideModel = value.outsideModel === true ? true : undefined;
+  // The logical entities behind the call (agents.md 5.1): what the compiled
+  // query touched for `query_entities`, the sampled entity for
+  // `sample_records` (even when the sample failed) — never names read back
+  // out of the compiled SQL.
+  const entities = logicalEntities(tool, args, value);
   if (typeof value.error === 'string') {
     // A step that failed still explained why it was attempted — keep it, the
     // dead end is part of the route the assistant took.
@@ -122,6 +127,7 @@ export function toolDataRecord(
       error: value.error,
       ...(rationale ? { rationale } : {}),
       ...(logicalQuery ? { logicalQuery } : {}),
+      ...(entities ? { entities } : {}),
       ...(outsideModel ? { outsideModel } : {}),
     };
   }
@@ -145,6 +151,7 @@ export function toolDataRecord(
       error: `${code}: ${message}`,
       ...(rationale ? { rationale } : {}),
       ...(logicalQuery ? { logicalQuery } : {}),
+      ...(entities ? { entities } : {}),
       ...(outsideModel ? { outsideModel } : {}),
     };
   }
@@ -172,8 +179,70 @@ export function toolDataRecord(
     ...(rationale ? { rationale } : {}),
     ...(warnings.length ? { warnings } : {}),
     ...(logicalQuery ? { logicalQuery } : {}),
+    ...(entities ? { entities } : {}),
     ...(outsideModel ? { outsideModel } : {}),
   };
+}
+
+/**
+ * A record's logical `entities` (agents.md 5.1): `query_entities` keeps the
+ * entities its successful result names (from + every join); a failed one has
+ * none. `sample_records` keeps the sampled entity — the result's own
+ * (canonical) name when it ran, the requested name when it failed. Every
+ * other tool has none; its source entities come from its SQL instead.
+ */
+function logicalEntities(
+  tool: string,
+  args: Record<string, unknown>,
+  value: { entities?: unknown; error?: unknown },
+): string[] | undefined {
+  const fromResult =
+    value.error === undefined && Array.isArray(value.entities)
+      ? value.entities.map((e) => String(e)).filter(Boolean)
+      : [];
+  if (tool === 'query_entities') {
+    return fromResult.length ? fromResult : undefined;
+  }
+  if (tool === 'sample_records') {
+    if (fromResult.length) return [fromResult[0]];
+    const requested =
+      typeof args['entity'] === 'string' ? args['entity'].trim() : '';
+    return requested ? [requested] : undefined;
+  }
+  return undefined;
+}
+
+/**
+ * A data record as the tool-only synthesis pass sends it (agents.md 5.5): no
+ * compiled SQL reaches the model. A `query_entities` record goes with its
+ * logical query as `input`, a `sample_records` record with the sampled
+ * entity's logical name; both keep their logical `entities`. A `run_raw_sql`
+ * record is the exemption — the assistant wrote that statement itself on
+ * the flagged raw path — and goes with its statement and `outsideModel`.
+ * Legacy records go as stored.
+ */
+function synthesisRecord(record: ToolDataRecord): Record<string, unknown> {
+  const rows = record.rows?.slice(0, SYNTHESIS_ROWS_CAP);
+  if (!SQL_STRIPPED_TOOLS.has(record.tool)) {
+    return { ...record, ...(record.rows ? { rows } : {}) };
+  }
+  const input =
+    record.tool === 'query_entities'
+      ? record.logicalQuery
+      : record.entities?.[0];
+  const sent: Record<string, unknown> = {
+    tool: record.tool,
+    ...(input !== undefined ? { input } : {}),
+    ...(record.columns ? { columns: record.columns } : {}),
+    ...(record.rows ? { rows } : {}),
+    ...(record.rowCount !== undefined ? { rowCount: record.rowCount } : {}),
+    ...(record.truncated ? { truncated: record.truncated } : {}),
+    ...(record.error !== undefined ? { error: record.error } : {}),
+    ...(record.rationale ? { rationale: record.rationale } : {}),
+    ...(record.warnings?.length ? { warnings: record.warnings } : {}),
+    ...(record.entities?.length ? { entities: record.entities } : {}),
+  };
+  return sent;
 }
 
 /** `JSON.stringify` that degrades to `undefined` instead of throwing on a
@@ -264,15 +333,12 @@ export async function synthesizeToolOnlyTurn(
 ): Promise<string> {
   if (!data.length) return EMPTY_RESPONSE_FALLBACK;
 
-  const compactData = data.map((record) => ({
-    ...record,
-    rows: record.rows?.slice(0, SYNTHESIS_ROWS_CAP),
-  }));
+  const compactData = data.map(synthesisRecord);
   try {
     const result = await agent.generate(
       [
         'Answer the original user question using only the tool results below.',
-        'Give concrete findings, comparisons, a short takeaway, and name the source entities from the SQL where possible.',
+        'Give concrete findings, comparisons, a short takeaway, and name the source entities where possible.',
         'Do not call tools and do not mention internal step limits.',
         '',
         `Original question: ${question}`,
