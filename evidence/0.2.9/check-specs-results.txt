@@ -1,0 +1,24 @@
+### 1. Positive: this branch against origin/main
+
+ALL CHECKS PASSED
+
+### 2. Negative: a branch that adds no fragments (BA-172 fragments moved away for the run)
+FAIL fragments are valid, and the branch adds them instead of editing changelog.md and retrospective.md (base origin/main)
+     this branch adds no changelog.d/<STORY>.md fragment
+     this branch adds no retrospective.d/<STORY>.md fragment
+
+
+### 3. Negative: changelog.md edited directly
+FAIL fragments are valid, and the branch adds them instead of editing changelog.md and retrospective.md (base origin/main)
+     this branch edits changelog.md directly: add a fragment instead (the release workflow collects it)
+
+
+### 4. Negative: malformed fragments
+changelog.d/BA-998.md: story BA-999 does not match the file name
+changelog.d/BA-998.md: roadmap must be a feature ID such as 0.2.8
+changelog.d/BA-998.md: type must be one of added, changed, fixed, removed, cut
+changelog.d/BA-998.md: evidence evidence/nope/ does not exist (or write `none: <why>`)
+changelog.d/BA-998.md: link nowhere.md does not resolve from the repo root
+retrospective.d/BA-998.md: missing `### What went wrong`
+retrospective.d/BA-998.md: missing `### What to do differently`
+exit=1

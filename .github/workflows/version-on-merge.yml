@@ -78,6 +78,12 @@ jobs:
           echo "version=$new_version" >> "$GITHUB_OUTPUT"
           echo "tag=v$new_version" >> "$GITHUB_OUTPUT"
 
+      # Each merged story left changelog.d/<STORY>.md and retrospective.d/<STORY>.md
+      # instead of editing the two files (CLAUDE.md, Logging convention). Write them
+      # in under this version, delete them, and ship them in the bump commit.
+      - name: Collect changelog and retrospective fragments
+        run: python3 scripts/fragments.py collect --version "${{ steps.bump.outputs.version }}"
+
       - name: Commit, tag and push
         run: |
           set -euo pipefail
@@ -85,6 +91,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add frontend/package.json frontend/package-lock.json \
                   backend/package.json backend/package-lock.json
+          git add -A changelog.md retrospective.md changelog.d retrospective.d
           git commit -m "chore(release): ${{ steps.bump.outputs.tag }}"
           git tag -a "${{ steps.bump.outputs.tag }}" -m "${{ steps.bump.outputs.tag }}"
 

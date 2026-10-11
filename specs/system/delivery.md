@@ -228,7 +228,7 @@ All release workflows run on Node 22 and live in `.github/workflows/`. The one p
 | Skipped when | The head commit message starts with `chore(release):` (its own bump commit). |
 | Concurrency | Group `version-on-merge`, no cancellation, so quick back-to-back merges queue. |
 | Bump level | From commits since the last `v*` tag: `BREAKING CHANGE` / `BREAKING-CHANGE` in any body, or a subject `type!:` → **major**; any subject `feat:` / `feat(scope):` → **minor**; otherwise **patch**. |
-| Effects | `npm version <level> --no-git-tag-version` in `frontend/`, then the same version in `backend/`; commits both `package.json` and `package-lock.json` pairs as `chore(release): vX.Y.Z` as `github-actions[bot]`; creates annotated tag `vX.Y.Z`; pushes the branch over SSH with the `RELEASE_DEPLOY_KEY` deploy key and the tag with `GITHUB_TOKEN` (see *Release push* and *Chaining* below). Builds nothing. The run summary says which tag to build. |
+| Effects | `npm version <level> --no-git-tag-version` in `frontend/`, then the same version in `backend/`; collects the changelog and retrospective fragments (`python3 scripts/fragments.py collect --version X.Y.Z`: writes `changelog.d/*.md` into a `## <date> — vX.Y.Z` section of `changelog.md` and `retrospective.d/*.md` into `retrospective.md`, then deletes them); commits both `package.json` and `package-lock.json` pairs, `changelog.md`, `retrospective.md` and the deleted fragments as `chore(release): vX.Y.Z` as `github-actions[bot]`; creates annotated tag `vX.Y.Z`; pushes the branch over SSH with the `RELEASE_DEPLOY_KEY` deploy key and the tag with `GITHUB_TOKEN` (see *Release push* and *Chaining* below). Builds nothing. The run summary says which tag to build. |
 | Release push | `main` requires a reviewed PR (see *Branch rulesets* below), and GitHub Actions can't be put on a bypass list in a personal-account repo. So checkout uses `ssh-key: secrets.RELEASE_DEPLOY_KEY`: a write deploy key titled "version-on-merge release push (BA-110)", on the review ruleset's bypass list. The staging-branch and `main` pushes go through it. The tag is pushed over HTTPS with `GITHUB_TOKEN`, because no ruleset covers tags. |
 | Spec check | The default branch also requires the "Specs match the code" check (see *Branch rulesets* below), and that ruleset has no bypass, so the deploy key doesn't skip it. So before pushing, the job runs `scripts/check-specs.py` on the bump commit. It then pushes the commit to a temporary `release-staging/<sha>` branch so GitHub knows the commit, and reports a successful `Specs match the code` commit status on it. Only then does it push to `main`, push the tag, and delete the staging branch. If the check fails, nothing is pushed. |
 | Permissions | `contents: write` (the tag push), `statuses: write` (the spec-check status). Branch pushes use the deploy key. |
@@ -271,7 +271,7 @@ Steps: check out the ref; Node 22 with the GitHub Packages registry and scope; r
 
 ### `spec-checks.yml` — Spec checks
 
-Runs on every pull request, on every push to `main`, and on manual dispatch. It is the only pull-request check. It checks out the repo and runs `python3 scripts/check-specs.py` (standard library only, no install step, about one second). It fails the run when `specs/` drifts from the code:
+Runs on every pull request, on every push to `main`, and on manual dispatch. It is the only pull-request check. It checks out the repo with full history and runs `python3 scripts/check-specs.py` (standard library only, no install step, about one second); on a pull request it adds `--base origin/<base branch>`, which turns on the branch rules of the *Fragments* check. It fails the run when `specs/` drifts from the code:
 
 | Check | Fails when |
 |---|---|
@@ -283,6 +283,8 @@ Runs on every pull request, on every push to `main`, and on manual dispatch. It 
 | Data model | a collection in `database.module.ts` is not in `system/data-model.md` |
 | Agents | an agent registered in `mastra/index.ts` is not in `system/agents.md` |
 | Epic gate | a roadmap milestone's epic has no spec, or an epic spec has no `Status` |
+| Wireframes | a page under `design/wireframes/` lacks its `wf-` metas, sits in the wrong folder, or is missing from `index.html` |
+| Fragments | a `changelog.d/` or `retrospective.d/` fragment is malformed (name, front matter, type, keys, evidence path, links, retrospective subsections); with `--base`, the branch adds no changelog or no retrospective fragment, or edits `changelog.md` or `retrospective.md` directly |
 
 The checks prove coverage, not correctness. Reviewers still check that the spec text is right. Run the same check locally with `python3 scripts/check-specs.py`.
 
@@ -420,8 +422,8 @@ Opens a **Workflow** pane (the right-hand sidebar in a wide fullscreen terminal 
   | … under `frontend/src/`, `backend/src/` or `.claude/` | 8 |
   | `Bash` whose command contains `test:e2e`, `check-specs.py`, `jest`, `playwright test`, or `npm [--prefix <dir>] [run] test|build|lint` | 9, with the task marked `passed` or `failed` from the last such command's result |
   | any other `Bash` command naming a path one of the rules above owns | that path's step: strong when the command writes (a `>` or `>>` redirect, `tee`, `sed -i`, `cp`, `mv`, `rm`, `touch`, `mkdir`, a heredoc or a `python3 -` script), weak otherwise; a read naming `retrospective.md` is the first action |
-  | … of `changelog.md` or under `evidence/` | 10 |
-  | … of `retrospective.md` | 11 |
+  | … of `changelog.md`, under `changelog.d/` or under `evidence/` | 10 |
+  | … of `retrospective.md` or under `retrospective.d/` | 11 |
 
   A write, a question or a step-9 command is a *strong* signal; a read is a *weak* one. Paths are matched after any `…/.claude/worktrees/<name>/` prefix is removed, so a worktree checkout behaves like the main one; in a shell command the redirect target is matched first, then the other paths in order.
 - **Queue.** Task `#1` (step 1) starts with the session. A call for a step other than the running task's opens a *tentative* task, drawn as `#n?` under the running one. It earns its number and becomes the running task after three matched calls or one strong signal; three unmatched calls, or a call for the running task's step, drop it. A later call for an earlier step makes a new task, so a step that runs twice appears twice with two numbers. Sequence numbers are never reused.

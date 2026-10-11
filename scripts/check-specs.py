@@ -2,7 +2,8 @@
 """Fail when specs/ or design/wireframes/ drift from the code. Runs in CI (.github/workflows/spec-checks.yml).
 
 See *Spec convention* in CLAUDE.md. Standard library only; run from anywhere in the repo:
-    python3 scripts/check-specs.py
+    python3 scripts/check-specs.py                    # what CI runs on main
+    python3 scripts/check-specs.py --base origin/main  # what CI runs on a pull request (adds the fragment rules)
 """
 import glob
 import os
@@ -12,6 +13,11 @@ import sys
 
 ROOT = subprocess.check_output(["git", "rev-parse", "--show-toplevel"], text=True).strip()
 os.chdir(ROOT)
+sys.dont_write_bytecode = True  # importing scripts/fragments.py leaves no __pycache__
+sys.path.insert(0, os.path.join(ROOT, "scripts"))
+import fragments  # noqa: E402  (scripts/fragments.py)
+
+BASE = sys.argv[sys.argv.index("--base") + 1] if "--base" in sys.argv else None
 failures = 0
 
 
@@ -142,6 +148,26 @@ for p in pages:
     if os.path.normpath(p) not in linked:
         problems.append(f"{p}: not linked from {WF}/index.html")
 check(pages and not problems, f"{len(pages)} wireframe pages are complete and indexed", problems)
+
+# 10. Changelog and retrospective fragments (see *Logging convention* in CLAUDE.md): every fragment is valid.
+#     With --base (pull requests), the branch adds at least one of each and leaves the two collected files alone;
+#     the release workflow is the only writer of changelog.md and retrospective.md.
+problems = fragments.check_all()
+if BASE:
+    # The working tree against the merge base, so uncommitted and untracked files count when run locally.
+    merge_base = subprocess.check_output(["git", "merge-base", BASE, "HEAD"], text=True).strip()
+    diff = [l.split("\t") for l in subprocess.check_output(["git", "diff", "--name-status", merge_base], text=True).splitlines()]
+    untracked = subprocess.check_output(["git", "ls-files", "--others", "--exclude-standard"], text=True).splitlines()
+    added = {rest[-1] for status, *rest in diff if status[0] in "AR"} | set(untracked)
+    changed = {rest[-1] for status, *rest in diff} | set(untracked)
+    for folder in (fragments.CHANGELOG_DIR, fragments.RETRO_DIR):
+        if not any(p.startswith(folder + "/") and not p.endswith("README.md") for p in added):
+            problems.append(f"this branch adds no {folder}/<STORY>.md fragment")
+    for name in ("changelog.md", "retrospective.md"):
+        if name in changed:
+            problems.append(f"this branch edits {name} directly: add a fragment instead (the release workflow collects it)")
+label = "fragments are valid" + (f", and the branch adds them instead of editing changelog.md and retrospective.md (base {BASE})" if BASE else "")
+check(not problems, label, problems)
 
 print("\n" + ("ALL CHECKS PASSED" if not failures else f"{failures} CHECK(S) FAILED"))
 sys.exit(1 if failures else 0)

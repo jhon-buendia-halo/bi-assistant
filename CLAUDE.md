@@ -14,15 +14,15 @@ design/     wireframes of every screen, as built and proposed
 Process documents (see **Workflow** below):
 
 - [roadmap.md](roadmap.md) — pre-implementation plan for all work. See **Planning convention**. Longer-form phase plans live in [docs/plans/](docs/plans/); roadmap features link to them rather than duplicating them.
-- [changelog.md](changelog.md) — running log of every change. See **Logging convention**.
+- [changelog.md](changelog.md) — running log of every change, written on merge from the `changelog.d/` fragments each story adds. See **Logging convention**.
 - [specs/](specs/README.md) — the product, system, capability and epic specs; an LLM given only this folder can rebuild the app. Architecture and ADRs are in [specs/system/architecture.md](specs/system/architecture.md); user flows in Gherkin are in each capability spec. See **Spec convention**, **Architecture convention** and **Epic gate**.
-- [retrospective.md](retrospective.md) — what went well and wrong on each completed change. See **Retrospective convention**.
+- [retrospective.md](retrospective.md) — what went well and wrong on each completed change, written on merge from the `retrospective.d/` fragments. See **Retrospective convention**.
 - [evidence/](evidence/) — verifiable artifacts for each shipped change, linked from the changelog. See **Evidence convention**.
 - [design/wireframes/](design/wireframes/README.md) — one HTML wireframe per screen: *as-built* pages that match the shipped app per role, and *proposed* pages co-designed for an epic. See **Wireframe convention**.
 
 ## Workflow — order of operations
 
-> **MANDATORY FIRST ACTION — read [retrospective.md](retrospective.md) before doing anything else.** Before you restate the goal, ask a question, run a command, or touch a file — on *every* task, not just large ones — open [retrospective.md](retrospective.md) and read the lessons. They are recorded specifically so past mistakes are not repeated. This precedes step 1.
+> **MANDATORY FIRST ACTION — read [retrospective.md](retrospective.md) (and any fragments in `retrospective.d/`) before doing anything else.** Before you restate the goal, ask a question, run a command, or touch a file — on *every* task, not just large ones — open [retrospective.md](retrospective.md) and read the lessons. They are recorded specifically so past mistakes are not repeated. This precedes step 1.
 
 Every meaningful change follows this eleven-step workflow, in order. Do not skip a step. Steps are sequential gates; *within* a step, independent units still fan out to parallel subagents per **Model usage** above.
 
@@ -35,8 +35,8 @@ Every meaningful change follows this eleven-step workflow, in order. Do not skip
 7. **Implement / update / delete E2E** — apply the step-6 decisions to [frontend/e2e/](frontend/e2e/) (and backend `test/*.e2e-spec.ts` where the flow is API-level) *first*. Run them and confirm they fail for the right reason.
 8. **Implement changes** — only now is production code touched, built against the Acceptance criteria and the step-7 specs.
 9. **Run E2E and fix until green** — `npm run test:e2e` in [frontend/](frontend/) (builds the backend with the web UI, then drives the **web app** in Chromium through `e2e/fixtures/app.fixture`; global setup starts the World Cup Postgres with `docker compose up -d --wait postgres` unless `E2E_SKIP_DOCKER=1`). Run `npm run test:e2e:desktop` only when the user asks for a desktop run. See **Test target convention**. Also run `python3 scripts/check-specs.py` at the repo root, `npm test` / `npm run lint` / `npm run build` in [backend/](backend/) and `npm test` / `npm run build` in [frontend/](frontend/). Diagnose root causes; fix the test if the test was wrong, the implementation if it was wrong. Repeat until every spec is green.
-10. **Update changelog with evidence** — only after step 9 is green, add a dated entry to [changelog.md](changelog.md) and capture the evidence under [evidence/](evidence/) (E2E summary, screenshots of the running app, exports). Mark the roadmap entry `✅ Done`. Confirm the specs touched in step 5 describe what actually shipped, and fix them in the same PR if not. Bring the *as-built* wireframes in line with what shipped and fold in any *proposed* ones. See **Logging convention**, **Evidence convention** and **Wireframe convention**.
-11. **Retrospective** — add a dated entry to [retrospective.md](retrospective.md): what went well, what went wrong, what to do differently. Step 1 of the *next* change reads it.
+10. **Update changelog with evidence** — only after step 9 is green, add the story's changelog fragment `changelog.d/<STORY>.md` (never edit [changelog.md](changelog.md) itself) and capture the evidence under [evidence/](evidence/) (E2E summary, screenshots of the running app, exports). Mark the roadmap entry `✅ Done`. Confirm the specs touched in step 5 describe what actually shipped, and fix them in the same PR if not. Bring the *as-built* wireframes in line with what shipped and fold in any *proposed* ones. See **Logging convention**, **Evidence convention** and **Wireframe convention**.
+11. **Retrospective** — add the story's fragment `retrospective.d/<STORY>.md` (never edit [retrospective.md](retrospective.md) itself): what went well, what went wrong, what to do differently. Step 1 of the *next* change reads it.
 
 Versioning stays automatic (see **Versioning** under **Code rules**): the changelog is the human-readable record of *what* shipped, Conventional Commit subjects still drive the version bump.
 
@@ -63,7 +63,11 @@ The roadmap is read top-to-bottom; ordering and grouping carry meaning.
 
 ## Logging convention — record every change
 
-**Every meaningful change must be logged in [changelog.md](changelog.md), as the *final* implementation step (step 10).** Reverse-chronological dated sections (`## YYYY-MM-DD`) with categorized subsections (`### Added`, `### Changed`, `### Removed`, `### Cut`, `### Fixed`). Bundle related edits from one session into one bullet; reference the affected file or roadmap feature ID. Never rewrite past entries — fix forward with a new dated entry. Roadmap status transitions get a matching changelog entry at the same time. **Every entry links to its evidence.**
+**Every meaningful change is logged as a changelog fragment, `changelog.d/<STORY>.md`, as the *final* implementation step (step 10). Never edit [changelog.md](changelog.md) on a branch:** on every merge to `main`, `version-on-merge.yml` runs `python3 scripts/fragments.py collect`, which writes the fragments into a `## <date> — v<version>` section with categorized subsections (`### Added`, `### Changed`, `### Fixed`, `### Removed`, `### Cut`), deletes them, and commits with the version bump. One file per story means epics built in parallel never conflict on the changelog.
+
+- **Format** (the full spec is in [changelog.d/README.md](changelog.d/README.md)): front matter `type` (added, changed, fixed, removed, cut), `story`, `epic`, `roadmap` (feature ID), `title` and `evidence` (a path under `evidence/`, or `none: <why>`), then the body: one paragraph, or a list for several points. Links are written relative to the repo root, as they will read in `changelog.md`. A story with two kinds of change adds a second file, `BA-123-fixed.md`.
+- **CI** (`scripts/check-specs.py` check 10) validates every fragment, and on a pull request fails when the branch adds no fragment or edits `changelog.md` directly. Check locally with `python3 scripts/check-specs.py --base origin/main`; preview the merge with `python3 scripts/fragments.py collect --version <next> --dry-run`.
+- Bundle related edits from one story into one fragment. Never rewrite past entries in `changelog.md` — fix forward with a new fragment. Roadmap status transitions get a matching fragment at the same time. **Every fragment links to its evidence.**
 
 ## Evidence convention — every shipped change is independently verifiable
 
@@ -124,13 +128,13 @@ Scope: Playwright covers end-to-end behaviour in the running app: the web app by
 
 ## Retrospective convention — capture lessons so the next run is better
 
-**Every completed change closes with an entry in [retrospective.md](retrospective.md) (step 11), and reading that file is the mandatory first action of the next task.** Reverse-chronological dated sections (`## YYYY-MM-DD`), one per shipped change, referencing the roadmap feature ID, with three subsections:
+**Every completed story closes with a retrospective fragment, `retrospective.d/<STORY>.md` (step 11), and reading [retrospective.md](retrospective.md) — plus any fragments in `retrospective.d/` — is the mandatory first action of the next task.** The fragment's front matter is `story`, `roadmap` and `title`; its body has three subsections (format in [retrospective.d/README.md](retrospective.d/README.md)). On merge the release workflow writes it into `retrospective.md` as `## <date> — <roadmap> <title> (<story>)`, newest first; never edit `retrospective.md` on a branch. The subsections:
 
 - **What went well** — specific decisions, tests, or conventions worth repeating, and why.
 - **What went wrong** — misread goals, regressions, skipped or out-of-order steps, lost time. An entry with no `What went wrong` means you didn't look hard enough.
 - **What to do differently** — a concrete instruction your future self can follow ("before renaming a persisted field, add it to `LEGACY_DOC_FIELDS`"), not "be more careful".
 
-Skip only for trivial, zero-risk edits. Never rewrite a past entry. When a recurring lesson hardens into a rule, promote it into the relevant convention (or CLAUDE.md proper) and note the promotion.
+Every pull request carries at least one retrospective fragment (CI check 10); a trivial, zero-risk story within a larger PR may skip its own. Never rewrite a past entry. When a recurring lesson hardens into a rule, promote it into the relevant convention (or CLAUDE.md proper) and note the promotion.
 
 ## Epic gate — no Jira epic, no code change
 
@@ -161,7 +165,7 @@ Skip only for trivial, zero-risk edits. Never rewrite a past entry. When a recur
 - **Bugs:** a Bug whose parent epic has an open branch is fixed on that branch, like a story. A Bug against work that already shipped, whose epic has no open branch, gets its own `fix/<BUG-ID>-<short-description>` branch, worktree and PR (e.g. `fix/BA-83-empty-session-thread`). The bug must still belong to an epic.
 - **Traceability:**
   - Each commit is scoped to the story (or bug) it implements: `feat(BA-115): …`.
-  - Each story keeps its own [roadmap.md](roadmap.md) feature, changelog entry, evidence folder and retrospective entry, all made on the epic branch.
+  - Each story keeps its own [roadmap.md](roadmap.md) feature, changelog fragment, evidence folder and retrospective fragment, all made on the epic branch.
   - The PR title names the epic (`feat(BA-111): …` or `feat: … (BA-111)`).
   - The PR description links the epic and lists every story and bug it includes, each with its Jira link and roadmap feature ID.
   - Open the PR when the epic's stories are done, not one PR per story.

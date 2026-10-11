@@ -14,23 +14,6 @@ Entry template:
 
 ---
 
-## 2026-10-11 — 0.2.8 Wireframes skill and as-built baseline (BA-172)
-
-### What went well
-- The kit imports the app's own `tokens.css` and `components.css` instead of copying values. The pages came out almost identical to the evidence screenshots, and a later token change reaches them without edits.
-- One page (CU2) was built and rendered before the fan-out, so the three role agents started from a shell and head that already worked.
-- The agents read the Angular templates for copy and reported where the spec, the brief and the evidence disagreed, instead of guessing. That turned up a stale ui.md copy entry and the lucide alias gap.
-
-### What went wrong
-- About ten Figma MCP calls went into drawing the board by hand before the Collab seat's limit stopped the work. That left a half-built section 4 on the board: the kit, empty role sections and one screen with a spacing bug.
-- The kit's defaults were wrong in ways every agent hit: page padding swapped (32/40 instead of 40/32), a panel 460 px wide instead of the spec's 572, and an unlayered `button` reset that beat `@layer components`, so `<button class="btn">` lost its fill. Each agent patched these locally before the kit was fixed.
-- `build-icons.mjs` first missed multi-line lucide definitions, then the old names the app still imports (`bar-chart-3`, `filter`, `wand-2`).
-
-### What to do differently
-- Before any Figma MCP work of more than two or three calls, run `whoami` and tell the user the seat type and its limit. Use the html.to.design path by default.
-- Before fanning out to agents on a shared kit, check its numbers against the spec (padding, widths, layer order) by rendering one page next to an evidence screenshot. Put any reset next to imported `@layer` CSS inside a lower layer.
-- When generating from a third-party package's sources, test the generator on the multi-line and alias cases before relying on it.
-
 ## 2026-10-11 — 2.1.3 Admin overview (BA-164)
 
 ### What went well

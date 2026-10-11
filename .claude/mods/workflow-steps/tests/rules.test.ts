@@ -18,6 +18,8 @@ test('writes map to the step that owns the file', async () => {
   expect(classify(edit('/work/changelog.md'), true)).toMatchObject({ step: 10, strong: true })
   expect(classify(edit('/work/evidence/1.11.2/README.md', 'Write'), true)).toMatchObject({ step: 10, strong: true })
   expect(classify(edit('/work/retrospective.md'), true)).toMatchObject({ step: 11, strong: true })
+  expect(classify(edit('/work/changelog.d/BA-173.md'), true)).toMatchObject({ step: 10, strong: true })
+  expect(classify(edit('/work/retrospective.d/BA-173.md'), true)).toMatchObject({ step: 11, strong: true })
 })
 
 test('reads of owned files are weak signals for the same step', async () => {

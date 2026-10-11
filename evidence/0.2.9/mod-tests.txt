@@ -1,0 +1,5 @@
+(pass) without a readable CLAUDE.md the built-in step titles are used [28.92ms]
+
+ 17 pass
+ 0 fail
+Ran 17 tests across 2 files. [0.70s]

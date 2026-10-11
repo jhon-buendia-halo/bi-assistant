@@ -149,6 +149,21 @@ How work is planned, specified, built, verified and traced. It covers the repo's
   - CLAUDE.md states the rule and links the skill; `python3 scripts/check-specs.py` passes, and fails when a page is left out of the index.
 - **Notes:** requested by the user on 2026-10-11 after the Figma board update hit the seat's MCP limit. Branch `docs/BA-89-delivery-process`. Evidence: [evidence/0.2.8/](evidence/0.2.8/).
 
+#### 0.2.9 — Changelog and retrospective fragments, collected on merge ([BA-173](https://halo-powered.atlassian.net/browse/BA-173))  `✅ Done`
+- **Intent:** epics built in parallel, each on its own branch, never conflict on `changelog.md` or `retrospective.md`, which every story used to edit.
+- **Scope:**
+  - Each story adds `changelog.d/<STORY>.md` and `retrospective.d/<STORY>.md` (front matter + body) instead of editing the two files.
+  - `scripts/fragments.py` validates fragments and, on every merge to `main`, `version-on-merge.yml` collects them: a `## <date> — v<version>` section in `changelog.md` and one entry per story in `retrospective.md`, committed with the version bump, fragments deleted.
+  - `scripts/check-specs.py` check 10 validates every fragment; with `--base` (pull requests in `spec-checks.yml`) it also requires at least one changelog and one retrospective fragment and refuses direct edits to `changelog.md` and `retrospective.md`.
+  - CLAUDE.md *Logging* and *Retrospective* conventions, `specs/system/delivery.md`, and the `workflow-steps` mod (fragment paths map to steps 10 and 11).
+  - The BA-172 entries move from the two files into fragments, so this PR's merge is the first collection.
+- **Out of scope:** rewriting past entries; the epic orchestrator for parallel sessions.
+- **Acceptance:**
+  - A dry run of the collector on this branch prints the section and entries the merge will write.
+  - `check-specs.py --base origin/main` passes on this branch and fails when a fragment is missing, malformed, or when `changelog.md` is edited directly.
+  - The mod's tests pass with the new path rules.
+- **Notes:** requested by the user on 2026-10-11 as the first step towards running one session per epic in parallel. Branch `docs/BA-89-delivery-process`. Evidence: [evidence/0.2.9/](evidence/0.2.9/).
+
 ### Milestone 0.3 — Local Development Observability ([BA-111](https://halo-powered.atlassian.net/browse/BA-111))
 
 Developer tooling for seeing what the backend and agents are doing: agent and LLM traces, HTTP and database traces, metrics and linked logs. Switched on by a Developer toggle in Settings. With it off, which is the default, end-user installs behave exactly as before. Epic spec: [specs/epics/BA-111/spec.md](specs/epics/BA-111/spec.md). Decision: ADR-0006 in [specs/system/architecture.md](specs/system/architecture.md).

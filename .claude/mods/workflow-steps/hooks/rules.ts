@@ -35,8 +35,9 @@ export const stepForPath = (path: string): number | null => {
   if (/(^|\/)evidence\/[^/]+\/e2e-impact\.md$/.test(p)) return 6
   if (/(^|\/)frontend\/e2e(\/|$)/.test(p) || /(^|\/)backend\/test\/.*\.e2e-spec\.ts$/.test(p)) return 7
   if (/(^|\/)(frontend\/src|backend\/src|\.claude)(\/|$)/.test(p)) return 8
-  if (/(^|\/)changelog\.md$/.test(p) || /(^|\/)evidence(\/|$)/.test(p)) return 10
-  if (/(^|\/)retrospective\.md$/.test(p)) return 11
+  // Stories write fragments (changelog.d/, retrospective.d/); the release workflow collects them.
+  if (/(^|\/)changelog\.md$/.test(p) || /(^|\/)changelog\.d(\/|$)/.test(p) || /(^|\/)evidence(\/|$)/.test(p)) return 10
+  if (/(^|\/)retrospective\.md$/.test(p) || /(^|\/)retrospective\.d(\/|$)/.test(p)) return 11
   return null
 }
 
