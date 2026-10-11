@@ -713,7 +713,7 @@ Feature: Edit a user
 
 ### Feature: Roles and permissions
 
-E2E: none yet. Its spec, `frontend/e2e/org-admin-roles.spec.ts`, is written in step 7 of BA-167.
+E2E: `frontend/e2e/org-admin-roles.spec.ts` (Playwright `org` project).
 
 ```gherkin
 Feature: Roles and permissions
@@ -730,6 +730,7 @@ Feature: Roles and permissions
     And "Use agents in the gallery and chat" is granted to every role
     And "Manage users, roles and group mappings" is granted only to "Platform admin"
     And "View audit log" is granted to "Approver" and "Platform admin"
+    And nothing in the matrix can be changed
     And I see "No group mappings yet."
     And the axe scan reports no violations in the Light theme
     And the axe scan reports no violations in the Dark theme
@@ -756,13 +757,14 @@ Feature: Roles and permissions
     When I open the "Roles & permissions" tab as "admin@contoso.test"
     And I click "Add mapping", choose the group "Analysts" and the role "Data owner"
     Then "Add" is disabled
-    When I choose "World Cup" in "Datasource" and click "Add"
-    Then the mappings list shows "Analysts" with "Data owner · World Cup"
+    When I choose "World Cup PostgreSQL" in "Datasource" and click "Add"
+    Then I see the toast "Mapping added"
+    And the mappings list shows "Analysts" with "Data owner · World Cup PostgreSQL"
 
   Scenario: Add mapping needs a group
     Given the group "Analysts" is deleted through SCIM
     When I open the "Roles & permissions" tab as "admin@contoso.test"
-    Then "Add mapping" is disabled
+    Then "Add mapping" is disabled, titled "No groups yet. Groups arrive from Entra ID through SCIM."
 
   Scenario: A user without the admin permission can't add a mapping
     Given I am signed in as "ada@contoso.test", who holds only the User role

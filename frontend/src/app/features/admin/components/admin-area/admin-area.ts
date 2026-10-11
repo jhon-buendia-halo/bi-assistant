@@ -23,6 +23,7 @@ import {
   errorMessage,
 } from '../../services/admin-format';
 import { AdminOverviewTab } from '../admin-overview/admin-overview';
+import { AdminRolesTab } from '../admin-roles/admin-roles';
 import { AdminUsersTab } from '../admin-users/admin-users';
 import { AssignRoleDialog } from '../assign-role-dialog/assign-role-dialog';
 
@@ -58,6 +59,7 @@ async function blobErrorMessage(error: unknown): Promise<string> {
   selector: 'app-admin-area',
   imports: [
     AdminOverviewTab,
+    AdminRolesTab,
     AdminUsersTab,
     AssignRoleDialog,
     LucideAngularModule,
