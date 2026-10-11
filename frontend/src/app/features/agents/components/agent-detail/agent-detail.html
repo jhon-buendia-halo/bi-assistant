@@ -55,7 +55,7 @@
           }
         </div>
       </div>
-      @if (showStartChat() || isUserAgent()) {
+      @if (showStartChat() || canChange()) {
         <div class="ml-auto flex shrink-0 items-center gap-2">
           @if (showStartChat()) {
             <button
@@ -79,7 +79,7 @@
               }
             </button>
           }
-          @if (isUserAgent()) {
+          @if (canChange()) {
             <button
               type="button"
               data-testid="agent-edit"
@@ -114,7 +114,7 @@
               }
             </button>
           }
-          @if (isUserAgent()) {
+          @if (canChange()) {
             <button
               type="button"
               data-testid="agent-delete"
@@ -310,17 +310,19 @@
               >
                 Questions
               </button>
-              <button
-                data-testid="eval-subtab-runs"
-                (click)="selectEvalTab('runs')"
-                class="rounded-lg px-3 py-1.5 text-[13px]"
-                [class.bg-surface-selected]="evalTab() === 'runs'"
-                [class.text-fg]="evalTab() === 'runs'"
-                [class.text-fg-muted]="evalTab() !== 'runs'"
-                [class.hover:text-fg]="evalTab() !== 'runs'"
-              >
-                Executions
-              </button>
+              @if (canCreateAgents()) {
+                <button
+                  data-testid="eval-subtab-runs"
+                  (click)="selectEvalTab('runs')"
+                  class="rounded-lg px-3 py-1.5 text-[13px]"
+                  [class.bg-surface-selected]="evalTab() === 'runs'"
+                  [class.text-fg]="evalTab() === 'runs'"
+                  [class.text-fg-muted]="evalTab() !== 'runs'"
+                  [class.hover:text-fg]="evalTab() !== 'runs'"
+                >
+                  Executions
+                </button>
+              }
             </div>
           }
 
@@ -516,54 +518,56 @@
             </p>
 
             <!-- Datasource picker + run -->
-            <div class="mt-4 flex flex-wrap items-center gap-2">
-              <select
-                data-testid="eval-datasource-select"
-                aria-label="Datasource to run the evals against"
-                [value]="selectedDatasourceId()"
-                (change)="onDatasourceChange($event)"
-                [disabled]="running() || runStarting()"
-                class="field w-auto"
-              >
-                @if (datasources().length === 0) {
-                  <option value="">No datasources configured</option>
+            @if (canCreateAgents()) {
+              <div class="mt-4 flex flex-wrap items-center gap-2">
+                <select
+                  data-testid="eval-datasource-select"
+                  aria-label="Datasource to run the evals against"
+                  [value]="selectedDatasourceId()"
+                  (change)="onDatasourceChange($event)"
+                  [disabled]="running() || runStarting()"
+                  class="field w-auto"
+                >
+                  @if (datasources().length === 0) {
+                    <option value="">No datasources configured</option>
+                  }
+                  @for (datasource of datasources(); track datasource.id) {
+                    <option [value]="datasource.id">
+                      {{ datasource.name }} · {{ kindLabel(datasource.kind) }}
+                    </option>
+                  }
+                </select>
+                <button
+                  data-testid="eval-run"
+                  (click)="startRun()"
+                  [disabled]="
+                    running() ||
+                    runStarting() ||
+                    datasources().length === 0 ||
+                    selectedCaseIds().size === 0
+                  "
+                  class="btn btn-primary"
+                >
+                  @if (running() || runStarting()) {
+                    <lucide-angular
+                      [img]="Loader2"
+                      [size]="14"
+                      class="animate-spin"
+                    />
+                    <span>Running…</span>
+                  } @else {
+                    <lucide-angular [img]="Play" [size]="14" />
+                    <span>Run {{ selectedCaseIds().size }} selected</span>
+                  }
+                </button>
+                @if (runStatus() !== "idle") {
+                  <span class="text-[12px] text-fg-muted">
+                    {{ runResults().length }}/{{ evalCases().length }} done ·
+                    {{ passedCount() }} passed
+                  </span>
                 }
-                @for (datasource of datasources(); track datasource.id) {
-                  <option [value]="datasource.id">
-                    {{ datasource.name }} · {{ kindLabel(datasource.kind) }}
-                  </option>
-                }
-              </select>
-              <button
-                data-testid="eval-run"
-                (click)="startRun()"
-                [disabled]="
-                  running() ||
-                  runStarting() ||
-                  datasources().length === 0 ||
-                  selectedCaseIds().size === 0
-                "
-                class="btn btn-primary"
-              >
-                @if (running() || runStarting()) {
-                  <lucide-angular
-                    [img]="Loader2"
-                    [size]="14"
-                    class="animate-spin"
-                  />
-                  <span>Running…</span>
-                } @else {
-                  <lucide-angular [img]="Play" [size]="14" />
-                  <span>Run {{ selectedCaseIds().size }} selected</span>
-                }
-              </button>
-              @if (runStatus() !== "idle") {
-                <span class="text-[12px] text-fg-muted">
-                  {{ runResults().length }}/{{ evalCases().length }} done ·
-                  {{ passedCount() }} passed
-                </span>
-              }
-            </div>
+              </div>
+            }
 
             @if (runDatasets().length > 0) {
               <p class="mt-2 text-[12px] text-fg-muted">
@@ -580,19 +584,21 @@
                 {{ err }}
               </p>
             }
-            <label
-              class="mt-5 flex w-fit cursor-pointer items-center gap-2 text-[12px] text-fg-muted"
-            >
-              <input
-                type="checkbox"
-                data-testid="eval-select-all"
-                [checked]="allCasesSelected()"
-                (change)="toggleAllCases()"
-                [disabled]="running() || runStarting()"
-                class="h-3.5 w-3.5 accent-primary"
-              />
-              <span>Select all</span>
-            </label>
+            @if (canCreateAgents()) {
+              <label
+                class="mt-5 flex w-fit cursor-pointer items-center gap-2 text-[12px] text-fg-muted"
+              >
+                <input
+                  type="checkbox"
+                  data-testid="eval-select-all"
+                  [checked]="allCasesSelected()"
+                  (change)="toggleAllCases()"
+                  [disabled]="running() || runStarting()"
+                  class="h-3.5 w-3.5 accent-primary"
+                />
+                <span>Select all</span>
+              </label>
+            }
 
             <div class="mt-2 flex flex-col gap-2">
               @for (
@@ -607,15 +613,17 @@
                     selectedEvalCaseId() !== evalCase.id
                   "
                 >
-                  <input
-                    type="checkbox"
-                    [attr.data-testid]="'eval-select-' + evalCase.id"
-                    [attr.aria-label]="'Run: ' + evalCase.question"
-                    [checked]="isCaseSelected(evalCase.id)"
-                    (change)="toggleCase(evalCase.id)"
-                    [disabled]="running() || runStarting()"
-                    class="mt-1 h-3.5 w-3.5 shrink-0 accent-primary"
-                  />
+                  @if (canCreateAgents()) {
+                    <input
+                      type="checkbox"
+                      [attr.data-testid]="'eval-select-' + evalCase.id"
+                      [attr.aria-label]="'Run: ' + evalCase.question"
+                      [checked]="isCaseSelected(evalCase.id)"
+                      (change)="toggleCase(evalCase.id)"
+                      [disabled]="running() || runStarting()"
+                      class="mt-1 h-3.5 w-3.5 shrink-0 accent-primary"
+                    />
+                  }
                   <button
                     type="button"
                     [attr.data-testid]="'eval-case-' + evalCase.id"

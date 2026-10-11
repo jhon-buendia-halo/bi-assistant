@@ -234,7 +234,7 @@ The three Features below run in the Playwright `org` project, against the app st
 
 ### Feature: Sign in to an org server
 
-E2E: none yet. Its spec, `frontend/e2e/org-sign-in.spec.ts`, is written in step 7 of BA-163.
+E2E: `frontend/e2e/org-sign-in.spec.ts` (Playwright `org` project).
 
 ```gherkin
 Feature: Sign in to an org server
@@ -294,7 +294,7 @@ Feature: Sign in to an org server
 
 ### Feature: Permissions in the app
 
-E2E: none yet. Its spec, `frontend/e2e/org-permissions.spec.ts`, is written in step 7 of BA-163.
+E2E: `frontend/e2e/org-permissions.spec.ts` (Playwright `org` project). In "A bootstrap admin sees the Admin area", the steps `I see "Needs attention"` and `I see the "Search users" field` check the tabs' content, which arrives with BA-164 and BA-165; until then the spec checks the frame (heading, tabs, selection) and marks those steps `TODO(BA-164)` / `TODO(BA-165)`.
 
 ```gherkin
 Feature: Permissions in the app
@@ -353,7 +353,7 @@ Feature: Permissions in the app
 
 ### Feature: Private and shared data
 
-E2E: none yet. Its spec, `frontend/e2e/org-isolation.spec.ts`, is written in step 7 of BA-163.
+E2E: `frontend/e2e/org-isolation.spec.ts` (Playwright `org` project).
 
 ```gherkin
 Feature: Private and shared data

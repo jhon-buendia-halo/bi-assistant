@@ -6,15 +6,17 @@
     >
       Agents
     </h2>
-    <button
-      type="button"
-      data-testid="agent-new"
-      (click)="newAgent.emit()"
-      class="btn btn-primary ml-auto"
-    >
-      <lucide-angular [img]="Plus" [size]="14" />
-      <span>New agent</span>
-    </button>
+    @if (auth.can("create-agents")) {
+      <button
+        type="button"
+        data-testid="agent-new"
+        (click)="newAgent.emit()"
+        class="btn btn-primary ml-auto"
+      >
+        <lucide-angular [img]="Plus" [size]="14" />
+        <span>New agent</span>
+      </button>
+    }
   </div>
 
   <!-- Search: a full-width row under the header -->

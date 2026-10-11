@@ -43,6 +43,7 @@ import {
   startChatBlockedReason,
 } from '../../services/agent-hub.util';
 import { ToastService } from '../../../../core/toast/toast.service';
+import { AuthService } from '../../../../core/auth/auth.service';
 import {
   Datasource,
   kindLabel,
@@ -83,6 +84,7 @@ export class AgentDetail implements OnDestroy {
   private readonly datasourcesApi = inject(DatasourcesApiService);
   private readonly evalSelection = inject(EvalSelectionService);
   private readonly toast = inject(ToastService);
+  private readonly auth = inject(AuthService);
 
   readonly selectedEvalCaseId = computed(
     () => this.evalSelection.selection()?.evalCase.id ?? null,
@@ -181,6 +183,17 @@ export class AgentDetail implements OnDestroy {
   /** User agents only; built-in agents offer neither Publish nor Delete (R5). */
   readonly isUserAgent = computed(() => this.agent()?.kind === 'user');
 
+  /**
+   * Create agents (admin R25; ui.md 1.6): Edit, Publish and Delete, and in
+   * the Evals tab running questions and the Executions sub-tab.
+   */
+  readonly canCreateAgents = computed(() => this.auth.can('create-agents'));
+
+  /** Edit and Delete on a user agent. */
+  readonly canChange = computed(
+    () => this.isUserAgent() && this.canCreateAgents(),
+  );
+
   /** The Official agent and Live user agents offer Start chat (R53). */
   readonly showStartChat = computed(() => {
     const agent = this.agent();
@@ -197,6 +210,7 @@ export class AgentDetail implements OnDestroy {
     const agent = this.agent();
     return (
       agent?.kind === 'user' &&
+      this.canCreateAgents() &&
       (agent.status !== 'live' || !!agent.hasUnpublishedChanges)
     );
   });

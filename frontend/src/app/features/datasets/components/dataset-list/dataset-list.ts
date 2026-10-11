@@ -12,6 +12,7 @@ import {
 } from 'lucide-angular';
 import { Dataset, DatasetsApiService } from '../../services/datasets-api.service';
 import { ToastService } from '../../../../core/toast/toast.service';
+import { AuthService } from '../../../../core/auth/auth.service';
 
 interface DatasetSection {
   label: string;
@@ -36,6 +37,8 @@ export class DatasetList implements OnInit {
 
   private readonly api = inject(DatasetsApiService);
   private readonly toast = inject(ToastService);
+  /** New dataset and Delete dataset need Manage datasources (ui.md 1.6). */
+  readonly auth = inject(AuthService);
 
   readonly filters = ['All', 'Pinned', 'Yours', 'Shared with you'];
   readonly activeFilter = signal('All');

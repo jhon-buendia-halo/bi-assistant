@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures/app.fixture';
+import { apiUrl } from './helpers/app-actions';
 
 const rail = (page: Page) =>
   page.getByRole('complementary', { name: 'Navigation rail' });
@@ -160,4 +161,24 @@ test('shows the product name', async ({ page }) => {
   await expect(page.getByTestId('app-version')).toHaveText(
     /^Agentic Hub v\d+\.\d+\.\d+$/,
   );
+});
+
+test('local mode has no sign-in and no Admin item', async ({ page }) => {
+  // The fixture opened the app straight into the shell, without signing in.
+  await expect(rail(page)).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Sign in with Microsoft' }),
+  ).toHaveCount(0);
+
+  const avatar = rail(page).getByTitle('Demo User', { exact: true });
+  await expect(avatar).toHaveText('D');
+  await expect(page.getByRole('button', { name: 'Account menu' })).toHaveCount(0);
+  await expect(railItem(page, 'Admin')).toHaveCount(0);
+
+  const me = await page.request.get(apiUrl(page, '/me'));
+  expect(me.ok()).toBe(true);
+  expect(await me.json()).toMatchObject({
+    mode: 'local',
+    user: { displayName: 'Demo User' },
+  });
 });

@@ -33,13 +33,15 @@
       >
         <lucide-angular [img]="LayoutGrid" [size]="16" />
       </button>
-      <button
-        (click)="newDataset.emit()"
-        class="btn btn-primary"
-      >
-        <lucide-angular [img]="Plus" [size]="14" />
-        <span>New dataset</span>
-      </button>
+      @if (auth.can("manage-datasources")) {
+        <button
+          (click)="newDataset.emit()"
+          class="btn btn-primary"
+        >
+          <lucide-angular [img]="Plus" [size]="14" />
+          <span>New dataset</span>
+        </button>
+      }
     </div>
   </div>
 
@@ -87,35 +89,38 @@
                 <span>{{ editedLabel(item) }}</span>
               </span>
             </button>
-            <div class="relative">
-              <button
-                type="button"
-                (click)="toggleMenu(item.name)"
-                title="Dataset options"
-                [attr.aria-label]="'Options for ' + item.name"
-                class="btn-icon"
-              >
-                <lucide-angular [img]="EllipsisVertical" [size]="15" />
-              </button>
-              @if (menuOpen() === item.name) {
-                <!-- Backdrop closes the menu on outside click -->
-                <div
-                  class="fixed inset-0 z-10"
-                  (click)="menuOpen.set(null)"
-                ></div>
-                <div
-                  class="absolute top-full right-0 z-20 mt-1 w-44 menu"
+            <!-- Its only item is Delete dataset (ui.md 1.6) -->
+            @if (auth.can("manage-datasources")) {
+              <div class="relative">
+                <button
+                  type="button"
+                  (click)="toggleMenu(item.name)"
+                  title="Dataset options"
+                  [attr.aria-label]="'Options for ' + item.name"
+                  class="btn-icon"
                 >
-                  <button
-                    (click)="deleteDataset(item)"
-                    class="menu-item text-on-danger-soft"
+                  <lucide-angular [img]="EllipsisVertical" [size]="15" />
+                </button>
+                @if (menuOpen() === item.name) {
+                  <!-- Backdrop closes the menu on outside click -->
+                  <div
+                    class="fixed inset-0 z-10"
+                    (click)="menuOpen.set(null)"
+                  ></div>
+                  <div
+                    class="absolute top-full right-0 z-20 mt-1 w-44 menu"
                   >
-                    <lucide-angular [img]="Trash2" [size]="14" />
-                    <span>Delete dataset</span>
-                  </button>
-                </div>
-              }
-            </div>
+                    <button
+                      (click)="deleteDataset(item)"
+                      class="menu-item text-on-danger-soft"
+                    >
+                      <lucide-angular [img]="Trash2" [size]="14" />
+                      <span>Delete dataset</span>
+                    </button>
+                  </div>
+                }
+              </div>
+            }
           </div>
         }
       </div>

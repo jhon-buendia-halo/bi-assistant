@@ -1,0 +1,56 @@
+<div
+  class="relative flex h-screen items-center justify-center p-3 text-[13px] text-fg select-none"
+  style="background: var(--frame-gradient)"
+>
+  <img
+    src="brand/agentic-hub/frame-texture.webp"
+    alt=""
+    aria-hidden="true"
+    class="pointer-events-none absolute inset-0 h-full w-full object-cover mix-blend-multiply"
+    style="opacity: var(--frame-texture-opacity)"
+  />
+
+  <main class="card relative flex w-[400px] max-w-full flex-col gap-4 p-8">
+    <div class="flex items-center gap-3">
+      <span
+        class="flex size-10 shrink-0 items-center justify-center rounded-full"
+        style="background: var(--logo-gradient)"
+      >
+        <img
+          src="brand/agentic-hub/logo-mark.svg"
+          alt=""
+          width="10"
+          height="30.34"
+        />
+      </span>
+      <h1 class="text-[24px] leading-8 font-semibold text-fg-strong">
+        Agentic Hub
+      </h1>
+    </div>
+
+    <p class="text-[14px] text-fg-muted">
+      Sign in with your organisation account to continue.
+    </p>
+
+    @if (error) {
+      <p
+        role="alert"
+        class="rounded-md bg-danger-soft px-3 py-2.5 text-[13px] text-on-danger-soft"
+      >
+        {{ error }}
+      </p>
+    }
+
+    <button
+      type="button"
+      (click)="auth.signIn()"
+      [disabled]="auth.signingIn()"
+      class="btn btn-primary w-full justify-center"
+    >
+      <lucide-angular [img]="LogIn" [size]="16" />
+      <span>{{
+        auth.signingIn() ? "Signing in…" : "Sign in with Microsoft"
+      }}</span>
+    </button>
+  </main>
+</div>
