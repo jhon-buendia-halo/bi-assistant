@@ -1,0 +1,52 @@
+Claude Code 2.1.296 started in the epic worktree with: claude --plugin-dir .claude/mods/workflow-steps
+tmux session 170x45. Captured 20 s after start, before any prompt: the mod opened the Workflow pane by itself.
+
+ ▐▛███▛█   Claude Code v2.1.296
+▝▜██████▀  Fable 5.1 · Claude Team
+ ▝▝   ▝▝   ~/Documents/projects/halo/bi-assistant/.claude/worktrees/BA-169-claude-code-workflow-mod
+  Get to finished work sooner with Opus 5.5. Switch anytime with /model.
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────✕─╮
+│ Development workflow (11 steps)                                                                                                                                        │
+│ From CLAUDE.md in this project.                                                                                                                                        │
+│                                                                                                                                                                        │
+│ First: Read retrospective.md before doing anything else.                                                                                                               │
+│                                                                                                                                                                        │
+│  1. Understand the goal                                                                                                                                                │
+│     restate the request in your own words before touching anything.                                                                                                    │
+│  2. Ask clarifying questions until the goal is 100% understood                                                                                                         │
+│     scope, behaviour, edge cases, acceptance criteria.                                                                                                                 │
+│  3. Update roadmap                                                                                                                                                     │
+│     find or add the feature in roadmap.md with Intent, Scope, Acceptance filled in; set status to 🚧 In progress.                                                      │
+│  4. Update architecture                                                                                                                                                │
+│     if the change involves an architectural decision, record it as an ADR in specs/system/architecture.md under the relevant C4 level before any code is written.      │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ Try "write a test for styles.scss"
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents
+
+--- after Esc, then typing /workflow and Enter (the command re-reads CLAUDE.md and opens the pane focused) ---
+
+ ▐▛███▛█   Claude Code v2.1.296
+▝▜██████▀  Fable 5.1 · Claude Team
+ ▝▝   ▝▝   ~/Documents/projects/halo/bi-assistant/.claude/worktrees/BA-169-claude-code-workflow-mod
+  Get to finished work sooner with Opus 5.5. Switch anytime with /model.
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────✕─╮
+│ Development workflow (11 steps)                                                                                                                                        │
+│ From CLAUDE.md in this project.                                                                                                                                        │
+│                                                                                                                                                                        │
+│ First: Read retrospective.md before doing anything else.                                                                                                               │
+│                                                                                                                                                                        │
+│  1. Understand the goal                                                                                                                                                │
+│     restate the request in your own words before touching anything.                                                                                                    │
+│  2. Ask clarifying questions until the goal is 100% understood                                                                                                         │
+│     scope, behaviour, edge cases, acceptance criteria.                                                                                                                 │
+│  3. Update roadmap                                                                                                                                                     │
+│     find or add the feature in roadmap.md with Intent, Scope, Acceptance filled in; set status to 🚧 In progress.                                                      │
+│  4. Update architecture                                                                                                                                                │
+│     if the change involves an architectural decision, record it as an ADR in specs/system/architecture.md under the relevant C4 level before any code is written.      │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents

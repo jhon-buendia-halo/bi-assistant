@@ -1,0 +1,30 @@
+$ claude plugin test   (first run: the two test files written before the queue existed, against the 1.11.1 mod)
+
+tests/rules.test.ts:
+(fail) writes map to the step that owns the file                      — Cannot find module '../hooks/rules'
+(fail) reads of owned files are weak signals for the same step
+(fail) before the first write every read is step 1, and retrospective.md is the first action
+(fail) questions and test commands are strong signals
+(fail) anything else matches nothing
+
+tests/workflow-steps.test.ts:
+(fail) task #1 runs from the start and every other step is queued with its future number
+  AssertionError: expect(received).toBeDefined()   Expected: defined   Received: undefined
+(fail) reads stay in #1, a question and a roadmap edit are strong signals that start #2 and #3 at once
+(fail) a weak signal opens a tentative task that earns its number after three matched calls
+(fail) three unmatched calls drop a tentative task, and a call for the running step drops it too
+(fail) a step that runs again gets a new number, and a test run is marked failed or passed
+(fail) turn usage goes to the running task and cost is the session delta
+(fail) a subagent spawned during a task is listed under it, and done rows count agents
+(fail) done tasks beyond the last twelve fold into one line
+(fail) /workflow reset clears the queue and starts #1 again
+  AssertionError: expect(received).toMatch()   Expected: /reset/   Received: undefined
+(fail) without a readable CLAUDE.md the built-in step titles are used
+
+ 0 pass
+ 11 fail
+Ran 11 tests across 2 files. [0.24s]
+
+(The rules file did not exist and the pane still drew the static list, so every queue
+assertion found no matching text. Transcribed from the session; the tee to this file
+failed on the first run because the evidence folder was created in the wrong checkout.)

@@ -123,6 +123,18 @@ How work is planned, specified, built, verified and traced. It covers the repo's
   - CLAUDE.md states the rule. `python3 scripts/check-specs.py` passes.
 - **Notes:** made on the BA-89 epic branch `test/BA-89-delivery-process`. Evidence: [evidence/0.2.6/](evidence/0.2.6/).
 
+#### 0.2.7 — Local test deploys check the default ports and keep deploy tweaks out of commits ([BA-157](https://halo-powered.atlassian.net/browse/BA-157))  `✅ Done`
+- **Intent:** when Claude starts the app for the user to try, it never collides with something already running, never kills the wrong process, and never commits a change made only to run locally.
+- **Scope:** a rule at the end of CLAUDE.md *Worktree deploy convention*:
+  - Before starting the app, check the default ports (backend 3000, Postgres 55432, observability 6006, 3001, 4317 and 4318) with `ss -ltnp` and `docker ps`.
+  - The shared World Cup Postgres on 55432 is reused, not a conflict.
+  - Any other busy port is worked around with flags or environment variables only.
+  - A tracked-file change needed only to run locally stays out of every commit and is reverted after testing.
+  - Report the URL, port, data dir and PID, and stop the process by that PID, never with `pkill -f`.
+- **Out of scope:** changing default ports; scripting the check.
+- **Acceptance:** CLAUDE.md states the rule; `python3 scripts/check-specs.py` passes.
+- **Notes:** requested by the user on 2026-10-09 during the Agent Hub epic (BA-150), after a subagent's `pkill -f "dist/main.js"` matched more than intended. Branch `docs/BA-89-delivery-process`. Evidence: [evidence/0.2.7/](evidence/0.2.7/).
+
 ### Milestone 0.3 — Local Development Observability ([BA-111](https://halo-powered.atlassian.net/browse/BA-111))
 
 Developer tooling for seeing what the backend and agents are doing: agent and LLM traces, HTTP and database traces, metrics and linked logs. Switched on by a Developer toggle in Settings. With it off, which is the default, end-user installs behave exactly as before. Epic spec: [specs/epics/BA-111/spec.md](specs/epics/BA-111/spec.md). Decision: ADR-0006 in [specs/system/architecture.md](specs/system/architecture.md).
@@ -627,6 +639,24 @@ Users can configure any supported model in Settings → LLM, reasoning models in
 - **Out of scope:** remembering the details panel (it still opens collapsed); per-user preferences (the app has no accounts); other settings.
 - **Acceptance:** Playwright: a new install opens Light (even with a dark OS) with the drawer expanded; collapsing the drawer or choosing Dark survives a restart in a fresh browser profile on the same data; a browser-only Dark choice is moved to the database; existing appearance, navigation and layout scenarios pass (visual baselines updated on purpose for the expanded drawer); ADR-0009; app-shell R2, R39, R43, R50, `api.md` 2.12, `data-model.md` 3.2.1 and M12 updated.
 - **Notes:** requested by the user on 2026-10-10 and shipped in the BA-159 PR at their request (an exception to one epic per PR, like the CLAUDE.md rule). Decisions taken with the user: keep System as a choice; database plus a browser cache for the first paint, with a one-time move of existing choices; "left bar" means the navigation drawer. ADR-0009 supersedes ADR-0007's preference storage and default. E2E runs on the web target (BA-156). Desktop not run, and the darwin desktop baseline was not regenerated. Evidence: [evidence/1.10.2/](evidence/1.10.2/).
+
+### Milestone 1.11 — Claude Code workflow mod ([BA-169](https://halo-powered.atlassian.net/browse/BA-169))
+
+Developer tooling, not an application change: a Claude Code mod in the repository shows the eleven-step workflow from [CLAUDE.md](CLAUDE.md) in a side pane, and the repository offers it to every developer. All stories are built on the branch `feat/BA-169-claude-code-workflow-mod` and ship as one PR. Epic spec: [specs/epics/BA-169/spec.md](specs/epics/BA-169/spec.md).
+
+#### 1.11.1 — Ship the workflow-steps mod in the repo and make it installable ([BA-170](https://halo-powered.atlassian.net/browse/BA-170))  `✅ Done`
+- **Intent:** a developer working in this repository with Claude Code sees the workflow steps in the right-hand pane without reopening CLAUDE.md, and every developer can install the mod from the repository.
+- **Scope:** the mod under `.claude/mods/workflow-steps/` (manifest, hooks module, state types, tests, README): at session start and on `/workflow` it reads `CLAUDE.md`, parses the `## Workflow` section and opens a **Workflow** pane listing the mandatory first action and the eleven steps (number, title, first sentence), with a built-in copy when the file is unreadable; a marketplace manifest at the repository root (`.claude-plugin/marketplace.json`) listing the mod; project settings (`.claude/settings.json`) that register the marketplace and enable `workflow-steps@bi-assistant`; the install, validate, test and develop recipes in `delivery.md` and the README.
+- **Out of scope:** application changes; progress tracking per step; organization-wide managed installs.
+- **Acceptance:** `claude plugin validate` passes on the mod and the marketplace; `claude plugin test` passes (parsing, pane on terminal and desktop, `/workflow`, both fallbacks); a session in the repo with the mod loaded shows the eleven steps and the first action as CLAUDE.md spells them; the marketplace installs from a local path; nothing under `backend/` or `frontend/` changes.
+- **Notes:** requested 2026-10-10. Decisions taken with the user: a Claude Code mod, not an app feature; a static checklist; it lives in the repo; install through a repository marketplace plus project settings rather than a documented `--plugin-dir` only. No Gherkin or Playwright impact (step 6: none). Mods are early access (Claude Code ≥ 2.1.287; written against 2.1.296). The marketplace install was verified from the branch's local path; the GitHub-sourced install in `.claude/settings.json` works once the PR is on `main`. Evidence: [evidence/1.11.1/](evidence/1.11.1/).
+
+#### 1.11.2 — Inferred task queue in the workflow pane ([BA-171](https://halo-powered.atlassian.net/browse/BA-171))  `✅ Done`
+- **Intent:** the pane shows what actually happened and what comes next: tasks numbered in the order they ran, the running one with its agents, tokens and cost, and the remaining steps queued, without asking Claude to report anything.
+- **Scope:** the mod infers the step from each tool call (reads before any edit → 1; `AskUserQuestion` → 2; `roadmap.md` → 3; `specs/system/architecture.md` → 4; `specs/**` → 5; `evidence/*/e2e-impact.md` → 6; `frontend/e2e/**`, `backend/test/*.e2e-spec.ts` → 7; `frontend/src/**`, `backend/src/**`, `.claude/**` → 8; test, build and check-specs commands → 9, passed or failed from the result; `changelog.md`, `evidence/**` → 10; `retrospective.md` → 11); a step change opens a tentative task (`#n?`) that earns its number after three matched calls or one write and is dropped after three unmatched calls; done rows show step, agent, duration, tokens and cost; the running row shows a confidence bar (matched over all calls) and its subagents; the remaining steps are queued with the numbers they will get, steps without a signal listed apart; done rows beyond the last twelve fold into one line; tokens from each turn's usage, cost as the session cost delta; `/workflow reset` clears the queue; `delivery.md` §9 and the mod README updated.
+- **Out of scope:** a reporting tool or prompt injection; a history store and estimates (alternatives 4 and 5); press interactions; the lanes layout.
+- **Acceptance:** `claude plugin validate` and `claude plugin test` pass, the tests covering the rule table, the tentative threshold and drop, numbering across a repeat, usage and cost attribution, the fold and `/workflow reset`; a session in the repo shows the queue moving as files are edited and commands run; nothing under `backend/` or `frontend/` changes.
+- **Notes:** chosen 2026-10-10 from the five inferred-queue alternatives (confidence queue). Decisions with the user: inference only; cost as the session delta, no price table; no store yet (alternative 5 is the natural follow-up). Verified with the mod's tests and a live session in the terminal; the elapsed time in the pane only refreshes on events (no ticking clock). Evidence: [evidence/1.11.2/](evidence/1.11.2/).
 
 ## Release 2 — Multi-user  (no target date yet)
 

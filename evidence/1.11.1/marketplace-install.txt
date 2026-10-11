@@ -1,0 +1,29 @@
+$ claude plugin marketplace add /Users/jhonbuendia/Documents/projects/halo/bi-assistant/.claude/worktrees/BA-169-claude-code-workflow-mod   (the branch's marketplace, from its local path)
+Adding marketplace…✔ Successfully added marketplace: bi-assistant (declared in user settings)
+
+$ claude plugin install workflow-steps@bi-assistant
+Installing plugin "workflow-steps@bi-assistant"...✔ Successfully installed plugin: workflow-steps@bi-assistant (scope: user)
+
+$ claude plugin list
+  ❯ workflow-steps@bi-assistant
+    Version: 0.1.0
+    Read from: /Users/jhonbuendia/Documents/projects/halo/bi-assistant/.claude/worktrees/BA-169-claude-code-workflow-mod/.claude/mods/workflow-steps
+    Scope: user
+    Status: ✔ enabled
+
+Synced from claude.ai:
+
+$ claude plugin details workflow-steps@bi-assistant
+workflow-steps 0.1.0
+  Description: Side pane listing the eleven-step development workflow from CLAUDE.md
+  Source: workflow-steps@bi-assistant
+
+Component inventory
+  Skills (0)
+  Agents (0)
+  Hooks (0)
+  MCP servers (0)
+  LSP servers (0)
+
+Projected token cost
+  Always-on:   ~0 tok   added to every session

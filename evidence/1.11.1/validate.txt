@@ -1,0 +1,20 @@
+$ claude plugin validate .claude/mods/workflow-steps
+Validating plugin manifest: /Users/jhonbuendia/Documents/projects/halo/bi-assistant/.claude/worktrees/BA-169-claude-code-workflow-mod/.claude/mods/workflow-steps/.claude-plugin/plugin.json
+
+  ❯ types ./types/index.d.ts declares on $: nothing (no EngineInterface member)
+  ❯ types ./types/index.d.ts declares state: workflow-steps.steps, workflow-steps.source, workflow-steps.firstAction
+
+Validating hooks: /Users/jhonbuendia/Documents/projects/halo/bi-assistant/.claude/worktrees/BA-169-claude-code-workflow-mod/.claude/mods/workflow-steps/hooks/hooks.json
+
+  ❯ ./register.tsx hooks: session.start, command.run{command=workflow}, ui.render{component=Pane, requestId=workflow}
+  ❯ ./register.tsx answers its own command: command.run{command=workflow}
+  ❯ ./register.tsx calls: $.command.register, $.fs.read (via loadSteps), $.state.get, $.state.set, $.ui.open, $.ui.resolve, $.ui.toast
+  ❯ ./register.tsx state writes: workflow-steps.firstAction, workflow-steps.source, workflow-steps.steps
+  ❯ ./register.tsx state reads: workflow-steps.firstAction, workflow-steps.source, workflow-steps.steps
+
+✔ Validation passed
+
+$ claude plugin validate .   (the repository marketplace)
+Validating marketplace manifest: /Users/jhonbuendia/Documents/projects/halo/bi-assistant/.claude/worktrees/BA-169-claude-code-workflow-mod/.claude-plugin/marketplace.json
+
+✔ Validation passed
