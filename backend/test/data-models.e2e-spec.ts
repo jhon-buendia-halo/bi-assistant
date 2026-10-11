@@ -1,9 +1,10 @@
 /**
- * E2E spec for the Data model feature (gherkin.md "Feature: Data model",
- * roadmap 1.2.1 / BA-85). Written ahead of the implementation (workflow
- * step 7) — none of the `/datasets/:name/model*` or `/data-models/*`
- * endpoints exist yet, so every scenario here is expected to fail (404s or
- * missing fields) until the feature lands.
+ * E2E spec for the Data model feature (specs/capabilities/data-model/spec.md
+ * "Feature: Data model", roadmap 1.2.1 / BA-85): every scenario but the
+ * three org server ones, which are in `data-models-org.e2e-spec.ts`. First
+ * written ahead of the implementation (workflow step 7); it is now the
+ * API-level proof of the `/datasets/:name/model*` and `/data-models/*`
+ * endpoints (api.md 2.16) in local mode.
  *
  * Bootstrap mirrors `app.e2e-spec.ts` / `answer-guards.e2e-spec.ts`: a
  * throwaway `APP_DATA_DIR` + `APP_SECRET`, a focused module set, supertest
@@ -258,6 +259,11 @@ function loadFreshModules() {
     require('../src/modules/metrics/metrics.module') as typeof import('../src/modules/metrics/metrics.module');
   const dataModels =
     require('../src/modules/data-models/data-models.module') as typeof import('../src/modules/data-models/data-models.module');
+  // Global: the current user (local mode here), the owner-scoped stores the
+  // metrics and verified-queries repositories inject, and the permission
+  // guard whose startup check every route must pass (admin R23).
+  const auth =
+    require('../src/modules/auth/auth.module') as typeof import('../src/modules/auth/auth.module');
   const datasourcesServiceExports =
     require('../src/modules/datasources/datasources.service') as typeof import('../src/modules/datasources/datasources.service');
   const testingExports =
@@ -266,6 +272,7 @@ function loadFreshModules() {
   return {
     modules: [
       database.DatabaseModule,
+      auth.AuthModule,
       datasources.DatasourcesModule,
       datasets.DatasetsModule,
       metrics.MetricsModule,
@@ -1362,11 +1369,12 @@ describe('Data model API (e2e) — startup bootstrap', () => {
 
 /**
  * Scenario: Metrics created before the change appear in the model and keep
- * working (gherkin.md "Feature: Data model") — a real upgrade test, not
+ * working (specs/capabilities/data-model/spec.md "Feature: Data model") — a
+ * real upgrade test, not
  * just a same-process create-then-read: a legacy `metrics` row (UUID id,
  * physical entity, expression) and a dataset doc are seeded directly into
  * SQLite *before* the app boots, mirroring a database that predates
- * ADR-0012, then the backend starts and bootstraps a model from them. Its
+ * ADR-0012 (specs/system/architecture.md), then the backend starts and bootstraps a model from them. Its
  * own `describe`/`dataDir` (rather than reusing the shared `app` above) so
  * the seeding happens before `onModuleInit`'s backfill runs.
  */

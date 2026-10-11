@@ -70,6 +70,65 @@ test('a User sees no maker, data or admin controls', async ({
   await expect(composerReasoningEffort(page)).toHaveCount(0);
 });
 
+/** Opens the Data model view of "World Cup Core" from the Datasets list. */
+async function openWorldCupModel(page: Page): Promise<void> {
+  await openRail(page, 'Datasets');
+  await page.getByTestId(`dataset-${WORLD_CUP_DATASET}`).hover();
+  await button(page, `Data model of ${WORLD_CUP_DATASET}`).click();
+  await expect(page.getByTestId('data-model-view')).toBeVisible();
+}
+
+test("a User can read a dataset's data model but not change it", async ({
+  page,
+  signInAs,
+  newBrowserAs,
+}, testInfo) => {
+  await signInAs(page, USER);
+
+  await openWorldCupModel(page);
+  await expect(page.getByTestId('model-version-badge')).toHaveText(
+    'v1 · bootstrap',
+  );
+  for (const [id, label] of [
+    ['overview', 'Overview'],
+    ['yaml', 'YAML'],
+    ['versions', 'Versions'],
+    ['metrics', 'Metrics'],
+  ] as const) {
+    await expect(page.getByTestId(`tab-${id}`)).toHaveText(label);
+  }
+  await expect(button(page, 'Export')).toBeVisible();
+  await expect(button(page, 'Bootstrap from snapshot')).toHaveCount(0);
+  await expect(button(page, 'Import')).toHaveCount(0);
+
+  await page.getByTestId('tab-yaml').click();
+  await expect(page.getByTestId('yaml-textarea')).toBeVisible();
+  await expect(page.getByTestId('yaml-textarea')).not.toBeEditable();
+  await expect(button(page, 'Save as new version')).toHaveCount(0);
+  await page.screenshot({
+    path: testInfo.outputPath('org-user-readonly-model.png'),
+  });
+
+  await page.getByTestId('tab-metrics').click();
+  await expect(
+    page.getByRole('heading', { name: 'Metrics', exact: true }),
+  ).toBeVisible();
+  await expect(button(page, 'New metric')).toHaveCount(0);
+
+  // The same view for the bootstrap admin (Manage datasources and datasets)
+  // keeps every edit control, so the hiding above is about the permission.
+  const admin = await newBrowserAs(ADMIN);
+  await openWorldCupModel(admin);
+  await expect(button(admin, 'Bootstrap from snapshot')).toBeVisible();
+  await expect(button(admin, 'Import')).toBeVisible();
+  await admin.getByTestId('tab-yaml').click();
+  await expect(admin.getByTestId('yaml-textarea')).toBeEditable();
+  await expect(button(admin, 'Save as new version')).toBeVisible();
+  await admin.screenshot({
+    path: testInfo.outputPath('org-admin-model-controls.png'),
+  });
+});
+
 test('a Maker can create an agent', async ({ page, org, signInAs }) => {
   await org.admin.assignRole(MAKER, 'maker');
   await signInAs(page, MAKER);

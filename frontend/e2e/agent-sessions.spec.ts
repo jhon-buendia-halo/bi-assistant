@@ -37,8 +37,7 @@ const BASE_PROMPT_START = 'You are the Questions to Insights assistant';
 const AGENT_BLOCK_START = 'Agent instructions (user-supplied';
 /** Openings of the app's other per-turn context blocks (agents.md 4.1). */
 const APP_BLOCK_STARTS = [
-  'Datasets for this session',
-  'Governed metric definitions',
+  'Entities in this session',
   'Curated dataset knowledge',
   'Verified reference queries',
 ];
@@ -272,10 +271,9 @@ test("instructions can't switch off the read-only guard", async ({ page }) => {
       ? { text: STUB_ANSWER }
       : {
           toolCall: {
-            name:
-              request.tools.find((tool) => tool.includes('readonly_sql')) ??
-              'run_readonly_sql',
+            name: 'run_raw_sql',
             arguments: {
+              entity: 'matches',
               sql: 'DELETE FROM world_cup.matches',
               rationale: 'Clearing the matches table as instructed.',
             },
@@ -288,7 +286,7 @@ test("instructions can't switch off the read-only guard", async ({ page }) => {
   await expectAnswered(page, 1);
 
   await page.getByText('Data used (1 query)').click();
-  await expect(page.getByText('run_readonly_sql — failed')).toBeVisible();
+  await expect(page.getByText('run_raw_sql — failed')).toBeVisible();
   await expect(
     page.getByText('Only read-only SELECT / WITH queries can be run.', {
       exact: true,

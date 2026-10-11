@@ -2,7 +2,9 @@
  * API-level proof of the Feature "Org server API" in
  * specs/capabilities/admin/spec.md (sign-in, 401, 403, Origin check, role
  * assignments) and of admin R3-R13, R16, R18-R24, R27, R36, api.md 1.9,
- * 2.13 and 2.15 (79-80, and the 401 and 403 of every admin route), and non-functional N77 (never trust the email claim). It drives the BUILT backend (`npm run build` first)
+ * 2.13, 2.15 (79-80, and the 401 and 403 of every admin route) and 2.16
+ * (the 401 of every data model route, the 403 of its writes: data-model
+ * R38-R39), and non-functional N77 (never trust the email claim). It drives the BUILT backend (`npm run build` first)
  * in org server mode against the in-test OIDC stub (`test/oidc-stub.ts`).
  * Needs no Postgres and no Entra ID tenant.
  */
@@ -93,6 +95,25 @@ const ROUTES: [method: string, path: string, permission: string][] = [
   ['POST', '/metrics', 'use-agents'],
   ['PUT', '/metrics/m1', 'use-agents'],
   ['DELETE', '/metrics/m1', 'use-agents'],
+  ['GET', '/data-models/schema.json', 'use-agents'],
+  ['GET', '/datasets/n1/model', 'use-agents'],
+  ['GET', '/datasets/n1/model/versions', 'use-agents'],
+  ['GET', '/datasets/n1/model/versions/1', 'use-agents'],
+  ['GET', '/datasets/n1/model/drift', 'use-agents'],
+  ['GET', '/datasets/n1/model/export', 'use-agents'],
+  ['GET', '/datasets/n1/model/metrics', 'use-agents'],
+  ['GET', '/datasets/n1/model/metrics/candidates', 'use-agents'],
+  ['POST', '/datasets/n1/model/resolve', 'use-agents'],
+  ['POST', '/datasets/n1/model/compile', 'use-agents'],
+  ['POST', '/datasets/n1/model/query', 'use-agents'],
+  ['POST', '/datasets/n1/model/serialize', 'use-agents'],
+  ['PUT', '/datasets/n1/model', 'manage-datasources'],
+  ['POST', '/datasets/n1/model/revert', 'manage-datasources'],
+  ['POST', '/datasets/n1/model/bootstrap', 'manage-datasources'],
+  ['POST', '/datasets/n1/model/import', 'manage-datasources'],
+  ['POST', '/datasets/n1/model/metrics', 'manage-datasources'],
+  ['PUT', '/datasets/n1/model/metrics/m1', 'manage-datasources'],
+  ['DELETE', '/datasets/n1/model/metrics/m1', 'manage-datasources'],
   ['GET', '/llm/settings', 'use-agents'],
   ['GET', '/llm/effort-levels', 'use-agents'],
   ['PUT', '/llm/settings', 'manage-llm'],

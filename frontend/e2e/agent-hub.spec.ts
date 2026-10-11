@@ -12,6 +12,7 @@ import {
 /** Mirrors the Feature "Agent Hub" in specs/capabilities/agents-evals/spec.md. */
 
 const ASSISTANT = 'Questions to Insights Assistant';
+const LEGACY_ASSISTANT = 'Questions to Insights Assistant (legacy SQL path)';
 const HEALTH = 'Health plan analyst';
 const HEALTH_DESCRIPTION = 'Answers questions about the 2026 health plan';
 const CLAIMS = 'Claims triage';
@@ -126,13 +127,19 @@ test('shows the built-in agents and mine in sections', async ({ page }) => {
   const system = section(page, 'system');
   await expect(cards(system)).toHaveCount(3);
   const showMore = system.getByTestId('agent-show-more-system');
-  await expect(showMore).toHaveText('Show more (2)');
+  await expect(showMore).toHaveText('Show more (3)');
   await expect(showMore).toHaveAttribute('aria-expanded', 'false');
 
-  await button(page, 'Show more (2)').click();
-  await expect(cards(system)).toHaveCount(5);
-  await expect(system.getByTestId('agent-card-sql-verifier')).toContainText(
-    'SQL Verifier',
+  await button(page, 'Show more (3)').click();
+  await expect(cards(system)).toHaveCount(6);
+  await expect(system.getByTestId('agent-card-query-verifier')).toContainText(
+    'Query Verifier',
+  );
+  await expect(system.getByTestId('agent-card-sql-verifier')).toHaveCount(0);
+  // The frozen legacy assistant exists only for the eval legacy path.
+  await expect(page.getByTestId('agent-card-assistant-legacy')).toHaveCount(0);
+  await expect(cards(page).filter({ hasText: LEGACY_ASSISTANT })).toHaveCount(
+    0,
   );
   await expect(showMore).toHaveAttribute('aria-expanded', 'true');
 
@@ -340,8 +347,8 @@ test('the hub has no detectable accessibility violations in either theme', async
 }) => {
   await followOsTheme(page);
   await openHub(page);
-  await button(page, 'Show more (2)').click();
-  await expect(cards(section(page, 'system'))).toHaveCount(5);
+  await button(page, 'Show more (3)').click();
+  await expect(cards(section(page, 'system'))).toHaveCount(6);
 
   await page.addScriptTag({ content: axe.source });
   for (const theme of ['light', 'dark'] as const) {

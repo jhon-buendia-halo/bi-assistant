@@ -79,6 +79,17 @@ describe('Local mode answers as the local user (API)', () => {
     await http().get('/developer-settings').expect(200);
     await http().get('/ui-preferences').expect(200);
     await http().get('/testing-data').expect(200);
+    // Data model reads (api.md 2.16): the JSON Schema needs no dataset; a
+    // model read of an unknown dataset reaches its handler (404, not 403).
+    await http().get('/data-models/schema.json').expect(200);
+    const model = await http().get('/datasets/Local auth check/model');
+    expect({
+      status: model.status,
+      message: (model.body as { message?: string }).message,
+    }).toEqual({
+      status: 404,
+      message: 'No data model for dataset "Local auth check"',
+    });
   });
 
   it('writes guarded by admin-only permissions still succeed for the local user', async () => {
@@ -104,6 +115,19 @@ describe('Local mode answers as the local user (API)', () => {
     expect(dataset.body).toEqual({
       ok: false,
       message: 'Include at least one entity',
+    });
+
+    // A data model write (manage-datasources, api.md 1.9) reaches its
+    // handler too: an unknown dataset answers 404, never 403.
+    const saved = await http()
+      .put('/datasets/Local auth check/model')
+      .send({ yaml: 'model: x' });
+    expect({
+      status: saved.status,
+      message: (saved.body as { message?: string }).message,
+    }).toEqual({
+      status: 404,
+      message: 'No data model for dataset "Local auth check"',
     });
   });
 

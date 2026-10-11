@@ -45,6 +45,12 @@ export interface OrgServer {
   ): number;
   /** Every document of a collection table, in insertion order. */
   docs<T = Record<string, unknown>>(table: string): T[];
+  /**
+   * Stop the backend and boot it again on the same data directory, port and
+   * configuration, so `url` and the OIDC stub stay valid ("the backend
+   * restarts"). `backend` then refers to the new process.
+   */
+  restart(): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -157,7 +163,9 @@ export async function startOrgServer(
   };
 
   return {
-    backend,
+    get backend() {
+      return backend;
+    },
     stub,
     url,
     scimToken,
@@ -227,6 +235,10 @@ export async function startOrgServer(
           doc: string;
         }[]
       ).map((row) => JSON.parse(row.doc) as T);
+    },
+    async restart() {
+      await stop(backend);
+      backend = await boot(dataDir, { env, port });
     },
     async close() {
       db.close();
