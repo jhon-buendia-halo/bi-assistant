@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { AuthMode, CurrentUser } from './entities/current-user.entity';
 import { permissionsForRoles } from './permissions';
@@ -52,6 +52,37 @@ export class CurrentUserService {
   /** Run `fn` (and everything it starts) as `user`. */
   runAs<T>(user: CurrentUser, fn: () => T): T {
     return this.storage.run(user, fn);
+  }
+
+  /**
+   * The id private items and in-memory jobs are owned by (data-model 3.15):
+   * the current user's id, `local` for the local user. Throws 401 when
+   * nobody is signed in, so private data is never reached without an owner.
+   */
+  ownerKey(): string {
+    const user = this.current();
+    if (!user) throw new UnauthorizedException('Sign in required');
+    return user.id;
+  }
+
+  /**
+   * The `ownerId` a private collection is scoped to: `null` for the local
+   * user, whose items are never stamped or filtered (admin R33).
+   */
+  ownerScope(): string | null {
+    const id = this.ownerKey();
+    return id === LOCAL_USER.id ? null : id;
+  }
+
+  /**
+   * Start background work as the current user (admin R32): the returned
+   * function runs `fn` as the user captured now, whatever context it is
+   * later called from.
+   */
+  bind<A extends unknown[], R>(fn: (...args: A) => R): (...args: A) => R {
+    const user = this.current();
+    if (!user) throw new UnauthorizedException('Sign in required');
+    return (...args: A) => this.runAs(user, () => fn(...args));
   }
 
   /** The user a request runs as: in local mode always the local user. */

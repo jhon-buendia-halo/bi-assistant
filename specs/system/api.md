@@ -900,13 +900,13 @@ Pattern: **start, poll, then download**. Endpoints 46-48.
 - State machine: `planning` → `investigating` (one step per angle, 1..`steps`, at most 5 angles, 3-5 planned) → `writing` → `done`; any failure → `error`. Not resumable.
 - Progress is observed by polling `GET /sessions/:id/deep-analysis/:jobId` (the shipped chat polls every **3000 ms**, gives up after 5 consecutive poll failures). `progress` is the human line for the pending card: `"Planning the investigation"`, `"Investigating angle <i> of <n>: <title>"`, `"Writing the report"`, `"Report ready — <n> angle(s) investigated"`, `"Deep analysis failed"`. `step`/`steps` are 1-based.
 - Completion is also observable in the transcript: on `done` an assistant message with `report` is appended; on `error` an assistant failure message is appended (so a reload shows the outcome even if polling stopped).
-- One running job per session (conflict returns the running `jobId` with `ok:false`). Job records are in memory (50 most recent kept); aborted on backend shutdown. Reports persist in the workspace and remain downloadable.
+- One running job per session (conflict returns the running `jobId` with `ok:false`). Job records are in memory (50 most recent kept), each with the user who started it; polling another user's job answers as not found ([data-model.md](data-model.md) 3.15); aborted on backend shutdown. Reports persist in the workspace and remain downloadable.
 
 ### 3.3 Eval runs
 
 Pattern: **start, poll, list, download, delete**. Endpoints 36-40.
 
-- One running run per agent (`conflictWith` surfaced as `ok:false` + `jobId`).
+- One running run per agent and owner (`conflictWith` surfaced as `ok:false` + `jobId`). Another user's run, running or not, answers as not found and never conflicts ([data-model.md](data-model.md) 3.15).
 - A run executes the selected questions sequentially against the datasets bound to the datasource. After every question the finished result is appended to `results` and the record is persisted (a crash mid-suite keeps finished questions). `currentQuestion` names the question in flight.
 - Observed by polling `GET /agents/:key/evals/runs/:jobId` (the shipped UI polls every **1500 ms** until `status !== "running"`); the run history (`…/runs`) reads persisted records with live in-memory state overlaid for in-flight runs. Persisted runs survive restart; an interrupted run is not resumed and its stored `status` may stay `running` (G4).
 - On completion the run is compared with the most recent previous completed run for the same agent, datasource and datasets, and `comparison` (regressions, improvements, unchanged by case id) is attached; a comparison failure never fails the run.

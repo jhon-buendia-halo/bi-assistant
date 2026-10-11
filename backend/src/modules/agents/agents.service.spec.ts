@@ -9,6 +9,7 @@ import BetterSqlite3 from 'better-sqlite3';
 import { SqliteDocStore } from '../../infrastructure/database/sqlite-doc-store';
 import type { MastraService } from '../../mastra/mastra.service';
 import type { DatasetsRepository } from '../datasets/repositories/datasets.repository';
+import { CurrentUserService } from '../auth/current-user.service';
 import { BuiltinAgentPinsRepository } from '../user-agents/repositories/builtin-agent-pins.repository';
 import { UserAgentsRepository } from '../user-agents/repositories/user-agents.repository';
 import { UserAgentsService } from '../user-agents/user-agents.service';
@@ -34,7 +35,10 @@ function build() {
   const db = new BetterSqlite3(':memory:');
   const userAgents = new UserAgentsService(
     new UserAgentsRepository(new SqliteDocStore(db, 'agents')),
-    new BuiltinAgentPinsRepository(new SqliteDocStore(db, 'settings')),
+    new BuiltinAgentPinsRepository(
+      new SqliteDocStore(db, 'settings'),
+      new CurrentUserService(),
+    ),
     {
       list: jest.fn().mockResolvedValue([{ name: 'World Cup Core' }]),
     } as unknown as DatasetsRepository,

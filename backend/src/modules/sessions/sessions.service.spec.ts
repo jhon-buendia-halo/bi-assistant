@@ -77,6 +77,7 @@ import { setDatasetToolServices } from '../../mastra/tool-services';
 import type { DatasetToolServices } from '../../mastra/tool-services';
 import { TURN_RECORDS_CONTEXT_KEY } from '../../mastra/tools/visual.tools';
 import { sourceEntities } from './visualization-document';
+import { CurrentUserService, LOCAL_USER } from '../auth/current-user.service';
 import { SessionsService, StreamEvent } from './sessions.service';
 import type { SessionDoc } from './entities/session.entity';
 
@@ -999,7 +1000,7 @@ describe('SessionsService SQL self-correction', () => {
       ],
     };
     const service = new SessionsService(
-      { list: jest.fn().mockResolvedValue([]) } as never,
+      { listAllOwners: jest.fn().mockResolvedValue([]) } as never,
       {
         getAgent: jest.fn().mockReturnValue(fixer),
         ensureSessionWorkspace: jest.fn().mockResolvedValue({ id: 'w' }),
@@ -1194,7 +1195,7 @@ describe('SessionsService visual tool bridge (turn records)', () => {
       visualizations: [],
     };
     const repository = {
-      list: jest.fn().mockResolvedValue([]),
+      listAllOwners: jest.fn().mockResolvedValue([]),
       get: jest.fn().mockResolvedValue(session),
       update: jest.fn().mockImplementation(async (_id, patch) => {
         Object.assign(session, patch);
@@ -1705,6 +1706,7 @@ describe('SessionsService sessions from a user agent (R52, api.md 2.1)', () => {
   };
 
   function build(agent: Record<string, unknown> | null, datasets: string[]) {
+    const users = new CurrentUserService();
     const repository = {
       insert: jest
         .fn()
@@ -1737,8 +1739,9 @@ describe('SessionsService sessions from a user agent (R52, api.md 2.1)', () => {
       {} as never,
       {} as never,
       userAgents as never,
+      users,
     );
-    return { service, repository, mastra };
+    return { service, repository, mastra, users };
   }
 
   it('names the session after the Live agent and keeps only existing datasets', async () => {
@@ -1833,6 +1836,29 @@ describe('SessionsService sessions from a user agent (R52, api.md 2.1)', () => {
       expect(mastra.deleteSessionResources).toHaveBeenCalledWith(preview.id);
       expect(repository.delete).not.toHaveBeenCalled();
       await expect(service.get(preview.id)).rejects.toThrow('not found');
+    });
+
+    it('belongs to the user who opened it (admin R29, R30)', async () => {
+      const { service, mastra, users } = build(
+        { id: 'agent-1', draft: { ...live, name: 'Draft name' } },
+        ['World Cup Core'],
+      );
+      const ada = { ...LOCAL_USER, id: 'ada' };
+      const bob = { ...LOCAL_USER, id: 'bob' };
+
+      const preview = await users.runAs(ada, () =>
+        service.createPreview('agent-1'),
+      );
+
+      await users.runAs(bob, async () => {
+        await expect(service.get(preview.id)).rejects.toThrow('not found');
+        await expect(service.delete(preview.id)).rejects.toThrow('not found');
+      });
+      await expect(service.get(preview.id)).rejects.toThrow('not found');
+      expect(mastra.deleteSessionResources).not.toHaveBeenCalled();
+      await users.runAs(ada, async () => {
+        expect(await service.get(preview.id)).toMatchObject({ preview: true });
+      });
     });
 
     it('refuses an unknown agent and a draft with no existing dataset', async () => {

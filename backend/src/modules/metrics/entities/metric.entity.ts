@@ -25,6 +25,8 @@ export interface MetricDoc {
   dimensions?: string[];
   /** Verified query this metric was promoted from (provenance). */
   sourceVerifiedQueryId?: string;
+  /** The owning user's id in org server mode (data-model 3.15). */
+  ownerId?: string;
   createdAt?: string;
   updatedAt?: string;
 }

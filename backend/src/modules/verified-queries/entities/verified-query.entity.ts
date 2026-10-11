@@ -15,6 +15,8 @@ export interface VerifiedQueryDoc {
   /** Session + assistant-message `at` the pair came from; dedupe key. */
   sourceSessionId: string;
   sourceMessageAt: string;
+  /** The owning user's id in org server mode (data-model 3.15). */
+  ownerId?: string;
   createdAt?: string;
   updatedAt?: string;
 }

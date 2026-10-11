@@ -5,7 +5,10 @@ import { DatasourcesService } from '../datasources/datasources.service';
 import { SessionsService } from '../sessions/sessions.service';
 import { KnowledgeService } from '../knowledge/knowledge.service';
 import { EvalRunsRepository } from './repositories/eval-runs.repository';
-import { computeRegressionDiff, EvalRegressionSummary } from './eval-regression';
+import {
+  computeRegressionDiff,
+  EvalRegressionSummary,
+} from './eval-regression';
 import { assistantEvalDatasetError } from '../../mastra/evals/assistant-eval-datasets';
 import {
   AssistantEvalCase,
@@ -18,6 +21,7 @@ import {
   selectEvalCases,
 } from '../../mastra/evals/assistant.evals';
 import type { SampleFixture } from '../testing-data/fixtures/registry';
+import { CurrentUserService } from '../auth/current-user.service';
 
 export type EvalRunStatus = 'running' | 'completed' | 'failed';
 
@@ -47,18 +51,30 @@ export interface EvalRunView {
    * before this field existed; callers must treat it as optional.
    */
   comparison?: EvalRegressionSummary;
+  /** The owning user's id in org server mode, on stored runs (data-model 3.15). */
+  ownerId?: string;
 }
 
 /**
  * Eval runs are long (one model call per question, with tool loops), so they
  * follow the same start/poll shape as deep analysis rather than blocking an
  * HTTP request. Runs are in-memory: a backend restart forgets them.
+ *
+ * A run belongs to the user who started it (admin R30, R32): the in-memory
+ * maps record the owner, lookups filter by it, and the run itself executes
+ * as that user, so the throwaway session and the stored run are theirs.
  */
 @Injectable()
 export class EvalRunsService {
   private readonly logger = new Logger(EvalRunsService.name);
-  private readonly runs = new Map<string, EvalRunView>();
-  /** One running job per agent, so a double-click cannot double-spend. */
+  private readonly runs = new Map<
+    string,
+    { view: EvalRunView; ownerId: string }
+  >();
+  /**
+   * One running job per agent and owner, so a double-click cannot
+   * double-spend. Keyed by `activeKey`.
+   */
   private readonly active = new Map<string, string>();
 
   constructor(
@@ -67,7 +83,20 @@ export class EvalRunsService {
     private readonly datasources: DatasourcesService,
     private readonly sessions: SessionsService,
     private readonly knowledge: KnowledgeService,
+    private readonly currentUser: CurrentUserService,
   ) {}
+
+  /** The current user's in-memory run with this id, if any. */
+  private ownRun(jobId: string): EvalRunView | undefined {
+    const entry = this.runs.get(jobId);
+    return entry && entry.ownerId === this.currentUser.ownerKey()
+      ? entry.view
+      : undefined;
+  }
+
+  private activeKey(agentKey: string, ownerId: string): string {
+    return `${ownerId}/${agentKey}`;
+  }
 
   /** Display name for a datasource id, falling back to the id itself. */
   async datasourceName(id: string): Promise<string> {
@@ -83,12 +112,13 @@ export class EvalRunsService {
   async list(agentKey: string): Promise<EvalRunView[]> {
     const stored = await this.repository.list(agentKey);
     // In-flight runs are authoritative in memory; the store lags by a question.
-    return stored.map((run) => this.runs.get(run.jobId) ?? run);
+    return stored.map((run) => this.ownRun(run.jobId) ?? run);
   }
 
   async remove(jobId: string): Promise<boolean> {
-    if (this.runs.get(jobId)?.status === 'running') return false;
-    this.runs.delete(jobId);
+    const own = this.ownRun(jobId);
+    if (own?.status === 'running') return false;
+    if (own) this.runs.delete(jobId);
     return (await this.repository.delete(jobId)) > 0;
   }
 
@@ -104,7 +134,8 @@ export class EvalRunsService {
     if (agentKey !== 'assistant') {
       return { error: `Agent "${agentKey}" has no evals to run` };
     }
-    const running = this.active.get(agentKey);
+    const ownerId = this.currentUser.ownerKey();
+    const running = this.active.get(this.activeKey(agentKey, ownerId));
     if (running) return { conflictWith: running };
 
     if (!datasourceId) return { error: 'Pick a datasource to run against' };
@@ -153,21 +184,23 @@ export class EvalRunsService {
       currentQuestion: cases[0]?.question,
       startedAt: new Date().toISOString(),
     };
-    this.runs.set(jobId, view);
-    this.active.set(agentKey, jobId);
+    this.runs.set(jobId, { view, ownerId });
+    this.active.set(this.activeKey(agentKey, ownerId), jobId);
     await this.repository.insert(view);
 
-    void this.run(view, cases);
+    // Outlives the request: runs as the user who started it (admin R32).
+    void this.currentUser.bind(() => this.run(view, cases, ownerId))();
     return { jobId };
   }
 
   async status(jobId: string): Promise<EvalRunView | null> {
-    return this.runs.get(jobId) ?? (await this.repository.get(jobId));
+    return this.ownRun(jobId) ?? (await this.repository.get(jobId));
   }
 
   private async run(
     view: EvalRunView,
     cases: AssistantEvalCase[],
+    ownerId: string,
   ): Promise<void> {
     // A throwaway session so create_visual/update_visual behave the way they
     // do in a real chat turn (see assistant.evals.ts). Best-effort: a run
@@ -186,9 +219,7 @@ export class EvalRunsService {
     // Same curated-knowledge block a real chat turn gets from
     // SessionsService.agentContext, computed once per run — every case in
     // the run shares the same datasets.
-    const knowledgeBlock = await this.knowledge.definitionBlock(
-      view.datasets,
-    );
+    const knowledgeBlock = await this.knowledge.definitionBlock(view.datasets);
     try {
       for (const [index, evalCase] of cases.entries()) {
         view.currentQuestion = evalCase.question;
@@ -213,7 +244,7 @@ export class EvalRunsService {
     } finally {
       view.currentQuestion = undefined;
       view.finishedAt = new Date().toISOString();
-      this.active.delete(view.agentKey);
+      this.active.delete(this.activeKey(view.agentKey, ownerId));
       await this.repository.save(view);
       await cleanupEvalSession(this.sessions, evalSession);
     }

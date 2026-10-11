@@ -30,15 +30,21 @@ export interface UserAgentDoc {
   live?: AgentConfig;
   publishedAt?: string;
   pinned: boolean;
+  /** The owning user's id in org server mode (data-model 3.15). */
+  ownerId?: string;
   createdAt?: string;
   updatedAt?: string;
 }
 
 export const BUILTIN_AGENT_PINS_KEY = 'builtin-agent-pins';
 
-/** The `settings` document holding the pinned built-in agents' registry keys. */
+/**
+ * The `settings` document holding one user's pinned built-in agents' registry
+ * keys: `builtin-agent-pins`, or `builtin-agent-pins:<user id>` on an org
+ * server (data-model 3.2).
+ */
 export interface BuiltinAgentPinsDoc {
-  key: typeof BUILTIN_AGENT_PINS_KEY;
+  key: string;
   pinned: string[];
 }
 

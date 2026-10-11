@@ -56,6 +56,29 @@ export const EVAL_RUNS_STORE = 'DOC_STORE_eval_runs';
 export const KNOWLEDGE_STORE = 'DOC_STORE_knowledge';
 export const AGENTS_STORE = 'DOC_STORE_agents';
 
+/**
+ * Owner-scoped views of the private collections (data-model 3.15): an
+ * `OwnedDocStore` over the raw store, provided by the auth module.
+ * Repositories of private collections inject these; the raw tokens above
+ * stay for startup work that walks every owner's documents.
+ */
+export const OWNED_SESSIONS_STORE = 'OWNED_DOC_STORE_sessions';
+export const OWNED_VERIFIED_QUERIES_STORE = 'OWNED_DOC_STORE_verified_queries';
+export const OWNED_METRICS_STORE = 'OWNED_DOC_STORE_metrics';
+export const OWNED_EVAL_RUNS_STORE = 'OWNED_DOC_STORE_eval_runs';
+export const OWNED_KNOWLEDGE_STORE = 'OWNED_DOC_STORE_knowledge';
+export const OWNED_AGENTS_STORE = 'OWNED_DOC_STORE_agents';
+
+/** Each private collection's owned token and the raw store it wraps. */
+export const PRIVATE_COLLECTIONS: { owned: string; raw: string }[] = [
+  { owned: OWNED_SESSIONS_STORE, raw: SESSIONS_STORE },
+  { owned: OWNED_VERIFIED_QUERIES_STORE, raw: VERIFIED_QUERIES_STORE },
+  { owned: OWNED_METRICS_STORE, raw: METRICS_STORE },
+  { owned: OWNED_EVAL_RUNS_STORE, raw: EVAL_RUNS_STORE },
+  { owned: OWNED_KNOWLEDGE_STORE, raw: KNOWLEDGE_STORE },
+  { owned: OWNED_AGENTS_STORE, raw: AGENTS_STORE },
+];
+
 export function isExistsCondition(v: FilterValue): v is ExistsCondition {
   return typeof v === 'object' && v !== null && '$exists' in v;
 }

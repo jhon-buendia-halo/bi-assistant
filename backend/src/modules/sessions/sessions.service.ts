@@ -48,6 +48,7 @@ import { MetricsService } from '../metrics/metrics.service';
 import { KnowledgeService } from '../knowledge/knowledge.service';
 import { SessionsRepository } from './repositories/sessions.repository';
 import { VisualizationService } from './visualization.service';
+import { CurrentUserService } from '../auth/current-user.service';
 import { sourceEntities } from './visualization-document';
 import { compareResults } from './result-compare';
 import {
@@ -122,9 +123,13 @@ export class SessionsService implements OnModuleInit {
 
   /**
    * Preview sessions of the agent editor, held in memory only and never in
-   * the sessions collection (agents-evals R61, data-model 3.12).
+   * the sessions collection (agents-evals R61, data-model 3.12), with the
+   * user who opened each: for anyone else it does not exist (data-model 3.15).
    */
-  private readonly previews = new Map<string, SessionDoc>();
+  private readonly previews = new Map<
+    string,
+    { doc: SessionDoc; ownerId: string }
+  >();
 
   /**
    * Provider options filed under the bucket the configured model actually
@@ -151,7 +156,18 @@ export class SessionsService implements OnModuleInit {
     private readonly metrics: MetricsService,
     private readonly knowledge: KnowledgeService,
     private readonly userAgents: UserAgentsService,
+    // Defaulted so unit tests that never switch users can leave it out.
+    private readonly currentUser: CurrentUserService = new CurrentUserService(),
   ) {}
+
+  /** The current user's preview with this id, if any. */
+  private ownPreview(id: string): SessionDoc | undefined {
+    const entry = this.previews.get(id);
+    if (!entry || entry.ownerId !== this.currentUser.ownerKey()) {
+      return undefined;
+    }
+    return entry.doc;
+  }
 
   async onModuleInit(): Promise<void> {
     // Install the DI bridge the Mastra tools use (they load with no Nest DI).
@@ -195,8 +211,9 @@ export class SessionsService implements OnModuleInit {
     await this.sweepPreviews();
 
     // Backfill workspaces for sessions created before workspace support and
-    // restore their registrations after every process restart.
-    const sessions = await this.repository.list();
+    // restore their registrations after every process restart. Startup work:
+    // it walks every owner's sessions (data-model 3.15).
+    const sessions = await this.repository.listAllOwners();
     await Promise.all(
       sessions.map(async (session) => {
         const workspace = await this.mastra.ensureSessionWorkspace(
@@ -204,9 +221,10 @@ export class SessionsService implements OnModuleInit {
           session.name,
         );
         if (session.workspaceId !== workspace.id) {
-          await this.repository.update(session.id, {
-            workspaceId: workspace.id,
-          });
+          await this.repository.setWorkspaceIdAnyOwner(
+            session.id,
+            workspace.id,
+          );
         }
       }),
     );
@@ -754,8 +772,13 @@ export class SessionsService implements OnModuleInit {
     return this.repository.list();
   }
 
+  /**
+   * The current user's session (or preview) with this id. Another user's
+   * answers as not found (admin R30); every route and tool that reaches a
+   * session's memory thread or workspace goes through here first.
+   */
   async get(id: string): Promise<SessionDoc> {
-    const preview = this.previews.get(id);
+    const preview = this.ownPreview(id);
     if (preview) return { ...preview };
     const session = await this.repository.get(id);
     if (!session) throw new NotFoundException(`Session ${id} not found`);
@@ -837,7 +860,10 @@ export class SessionsService implements OnModuleInit {
       createdAt: now,
       updatedAt: now,
     };
-    this.previews.set(id, preview);
+    this.previews.set(id, {
+      doc: preview,
+      ownerId: this.currentUser.ownerKey(),
+    });
     return { ...preview };
   }
 
@@ -873,14 +899,17 @@ export class SessionsService implements OnModuleInit {
     id: string,
     patch: Partial<SessionDoc>,
   ): Promise<SessionDoc | null> {
-    const preview = this.previews.get(id);
+    const preview = this.ownPreview(id);
     if (!preview) return this.repository.update(id, patch);
     const updated = {
       ...preview,
       ...patch,
       updatedAt: new Date().toISOString(),
     };
-    this.previews.set(id, updated);
+    this.previews.set(id, {
+      doc: updated,
+      ownerId: this.currentUser.ownerKey(),
+    });
     return { ...updated };
   }
 
