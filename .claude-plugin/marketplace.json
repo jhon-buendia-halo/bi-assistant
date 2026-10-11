@@ -1,0 +1,12 @@
+{
+  "name": "bi-assistant",
+  "description": "Claude Code mods for developers of Questions to Insights (Halo BI Assistant)",
+  "owner": { "name": "Jhon Buendia" },
+  "plugins": [
+    {
+      "name": "workflow-steps",
+      "source": "./.claude/mods/workflow-steps",
+      "description": "Side pane listing the eleven-step development workflow from CLAUDE.md"
+    }
+  ]
+}

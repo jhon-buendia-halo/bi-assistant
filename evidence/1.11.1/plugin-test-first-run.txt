@@ -1,0 +1,19 @@
+$ claude plugin test   (in the mod directory, first run, before the parser fix)
+
+tests/workflow-steps.test.ts:
+(fail) the pane lists the eleven steps parsed from CLAUDE.md on every surface [23.05ms]
+  AssertionError: expect(received).toBeDefined()
+
+  Expected: defined
+  Received: undefined
+(pass) /workflow re-reads CLAUDE.md and opens the pane [10.86ms]
+(pass) without a readable CLAUDE.md the built-in copy of the steps is shown [10.22ms]
+(pass) a CLAUDE.md without a Workflow section falls back too [10.11ms]
+
+ 3 pass
+ 1 fail
+Ran 4 tests across 1 file. [0.15s]
+
+Cause (found with a debug mount): the "First:" line read
+  "First: read retrospective.md before doing anything else.."
+The parser now capitalises the first action and ends it with one full stop.

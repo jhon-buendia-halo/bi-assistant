@@ -351,3 +351,25 @@ A separate, static deliverable: the public page for the app, a section of the Ha
 | Skill | The project skill `deploy-labs-site` covers publishing or redeploying it. |
 
 Installers are named `Questions-to-Insights-<version>-<os>-<arch>.<ext>` while the product is branded Halo BI Assistant; change `build.artifactName` if the downloaded file should carry the product name.
+
+## 9. Claude Code mods (`.claude/mods/`)
+
+Developer tooling for people who work on this repository in Claude Code, not part of the app or its releases. A *mod* is a Claude Code plugin whose hooks module runs inside Claude Code and draws in its interface (early access: Claude Code 2.1.287 or later; the hooks API may change between releases). Epic [BA-169](../epics/BA-169/spec.md).
+
+| Item | Detail |
+|---|---|
+| Layout | One directory per mod under `.claude/mods/<name>/`: `.claude-plugin/plugin.json` (manifest: `name`, `version`, `description`, `author`, `types`), `hooks/hooks.json` (points at the hooks module), the hooks module (`hooks/register.tsx`), `types/index.d.ts` (the `$.state` values it keeps), `tests/*.test.ts`, a README naming the Claude Code version it was tested with. Claude Code writes `.claude-plugin/types/` (the API declarations of the running build) beside a loaded mod; it is git-ignored. |
+| Marketplace | The repository root is a plugin marketplace: `.claude-plugin/marketplace.json` (`name` `bi-assistant`, `owner`, `plugins[]`) lists each mod with a `source` path relative to the root, as `./.claude/mods/workflow-steps`. The install id is `<mod name>@bi-assistant`. |
+| Project settings | `.claude/settings.json` (committed) registers the marketplace under `extraKnownMarketplaces` as the GitHub repository `jhon-buendia-halo/bi-assistant` and lists each mod under `enabledPlugins`. Claude Code offers the install to a developer who trusts the folder; the marketplace is fetched from the default branch, so a new mod installs this way once its PR has merged. |
+| Install by hand | `claude plugin marketplace add jhon-buendia-halo/bi-assistant` (or the repository path, for a branch), then `claude plugin install <mod name>@bi-assistant`; `/plugin` inside a session does the same. |
+| Develop | `claude --plugin-dir .claude/mods/<name>` loads the directory for one session and hot-reloads it on every save, so edits show without an install. An installed copy is cached by version: bump `version` in the manifest and `/plugin update` for installed developers to get a change. |
+| Verify | `claude plugin validate .claude/mods/<name>` (static analysis of the hooks module: every event it hooks and every API method it calls) and `claude plugin validate .` (the marketplace); `claude plugin test` in the mod runs its `*.test.ts` with the test kit, no session or network. |
+
+### `workflow-steps`
+
+Opens a **Workflow** pane (the right-hand sidebar in a wide fullscreen terminal or the desktop app, a framed region above the prompt otherwise) that lists the development workflow from [CLAUDE.md](../../CLAUDE.md).
+
+- At session start, and whenever `/workflow` runs, it reads `CLAUDE.md` in the working directory, takes the `## Workflow` section and parses the mandatory first action (the `MANDATORY FIRST ACTION — …` line) and the steps (`<n>. **<title>** — <description>`), showing each step's number, title and the first sentence of its description with Markdown links, emphasis and code marks removed. `/workflow` also focuses the pane, and Esc closes it.
+- When the file can't be read or has no `## Workflow` section, the pane shows a built-in copy of the eleven steps and says `CLAUDE.md not readable here: built-in copy.`
+- A pane opened by the mod itself only appears in a terminal at least 144 columns wide (110 once the developer has opened it themselves); narrower, a toast says to run `/workflow`, which opens it at any width.
+- Static: it tracks nothing and writes nothing. State lives in `$.state` for the session only (`steps`, `source`, `firstAction`).

@@ -14,6 +14,26 @@ Entry template:
 
 ---
 
+## 2026-10-10 — 1.11.1 Claude Code workflow mod in the repository (BA-170)
+
+### What went well
+- Stopping to ask where the "mod" should live caught a wrong premise before any file changed: I had read "right panel" as the app's details panel and drafted an app feature, and the user meant a Claude Code mod. The Jira writes were held until the text matched.
+- An existing mod in `~/.claude/dev-mods/` plus the engine-written `.claude-plugin/types/index.d.ts` gave the exact API (`$.ui.open`, `ui.render` on `Pane`, `$.fs.read`, `atom/read/update`) faster than the docs alone; the docs then supplied the rules static validation enforces.
+- Writing the mod's tests with the test kit first and running them red found a real formatting defect (lowercase, doubled full stop) through a debug mount that printed the drawn tree.
+- Evidence beyond the unit level: a marketplace install from the branch path, and a real session in tmux at 170 columns captured with the pane open, both at start and after `/workflow`.
+
+### What went wrong
+- Three Bash chains in zsh died on an `echo ====` separator (`=` prefix is a glob), losing a test-evidence file and the plugin cleanup step, which had to be re-run.
+- The first type-check of the test file against the engine declarations reported four errors in the stubs' types that the test kit tolerates; I left them rather than find the exact result shapes.
+- I committed the mod's `tsconfig.json`, which extends a file the engine writes only after it loads the mod; a fresh clone's editor sees a missing extends until the first load.
+- The GitHub-sourced marketplace in `.claude/settings.json` cannot be verified on the branch, only once it is on `main`, so the install path developers will actually use is unproven until merge.
+
+### What to do differently
+- In zsh, never start an echoed separator with `=`; use `echo '-----'`.
+- When a request names a UI region ("right panel", "left bar"), ask which surface before classifying it as an app feature.
+- For a repo-hosted marketplace, add a post-merge check to the PR description: `claude plugin marketplace add <owner>/<repo>` then `claude plugin install` from a clean machine.
+- Type-check a mod's tests against the engine declarations and fix the stub shapes, or drop the test file from `tsconfig`'s include, so `tsc` is a clean signal.
+
 ## 2026-10-10 — 1.10.2 Light theme and open drawer by default, remembered in the database (BA-168)
 
 ### What went well
