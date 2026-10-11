@@ -103,6 +103,10 @@ export interface DatasetToolTurnRecord {
   truncated?: boolean;
   error?: string;
   rationale?: string;
+  /** Logical entities a `query_entities` / `sample_records` call read
+   * (`ToolDataRecord.entities`, data-model.md 3.4.2), carried onto the
+   * visual's data so its provenance names entities, never compiled SQL. */
+  entities?: string[];
 }
 
 export interface DatasetToolServices {

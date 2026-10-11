@@ -539,3 +539,121 @@ describe('importLegacyMetrics (data-model R34)', () => {
     expect(result).toEqual({ metrics: [], imported: [], skipped: [] });
   });
 });
+
+describe('importLegacyMetrics author name (data-model R34, R35)', () => {
+  const targets = new Map([
+    [
+      MATCHES_KEY,
+      {
+        name: 'matches',
+        attributes: [{ name: 'attendance', type: 'integer' }],
+      },
+    ],
+  ]) as Parameters<typeof importLegacyMetrics>[1];
+  const authorNames = new Map([['user-ada', 'Ada Lovelace']]);
+
+  it("stamps the owner's display name on the metric and on both report lists", () => {
+    const result = importLegacyMetrics(
+      [
+        legacyMetric({
+          id: 'm-ada',
+          ownerId: 'user-ada',
+          createdAt: '2025-01-01T00:00:00.000Z',
+        }),
+        legacyMetric({
+          id: 'm-grace',
+          ownerId: 'user-grace',
+          createdAt: '2025-02-01T00:00:00.000Z',
+        }),
+      ],
+      targets,
+      { authorNames },
+    );
+    expect(result.metrics).toEqual([
+      expect.objectContaining({
+        author: 'user-ada',
+        authorName: 'Ada Lovelace',
+      }),
+    ]);
+    expect(result.imported).toEqual([
+      {
+        name: 'avg_attendance',
+        entity: 'matches',
+        author: 'user-ada',
+        authorName: 'Ada Lovelace',
+        sourceId: 'm-ada',
+      },
+    ]);
+    // Grace is not in the directory: author kept, no author name.
+    expect(result.skipped).toEqual([
+      {
+        name: 'avg_attendance',
+        author: 'user-grace',
+        sourceId: 'm-grace',
+        reason: 'name_clash',
+        keptSourceId: 'm-ada',
+      },
+    ]);
+  });
+
+  it('records no author name in local mode (no owner)', () => {
+    const result = importLegacyMetrics([legacyMetric({ id: 'm1' })], targets, {
+      authorNames,
+    });
+    expect(result.metrics[0]).not.toHaveProperty('authorName');
+    expect(result.imported[0]).not.toHaveProperty('authorName');
+  });
+
+  it('toModelMetric stamps the author name when one is known', () => {
+    const metric = toModelMetric(
+      legacyMetric({ id: 'm-ada', ownerId: 'user-ada' }),
+      'matches',
+      [{ name: 'attendance', type: 'integer' }],
+      authorNames,
+    );
+    expect(metric).toMatchObject({
+      author: 'user-ada',
+      authorName: 'Ada Lovelace',
+    });
+  });
+});
+
+describe('keptSourceId (data-model R35)', () => {
+  const targets = new Map([
+    [
+      MATCHES_KEY,
+      {
+        name: 'matches',
+        attributes: [{ name: 'attendance', type: 'integer' }],
+      },
+    ],
+  ]) as Parameters<typeof importLegacyMetrics>[1];
+
+  it('is left out when the held metric did not come from the legacy store', () => {
+    const result = importLegacyMetrics(
+      [legacyMetric({ id: 'm-grace', ownerId: 'user-grace' })],
+      targets,
+      {
+        // Written in the YAML (or the Metrics tab) by Ada: no legacy twin.
+        held: [
+          {
+            name: 'avg_attendance',
+            label: 'Average attendance',
+            entity: 'matches',
+            agg: 'avg',
+            of: 'attendance',
+            author: 'user-ada',
+          },
+        ],
+      },
+    );
+    expect(result.skipped).toEqual([
+      {
+        name: 'avg_attendance',
+        author: 'user-grace',
+        sourceId: 'm-grace',
+        reason: 'name_clash',
+      },
+    ]);
+  });
+});

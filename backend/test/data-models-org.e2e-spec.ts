@@ -6,10 +6,12 @@
  * - Metrics of every user are imported into the shared model at startup
  * - A name clash keeps the first metric and reports the rest
  * - A caller without Manage datasources cannot change a model
+ * - A legacy metric removed in the YAML stays removed after a restart
  *
  * and of data-model R34-R39, api.md 2.16 (92, 95, 98, 102, 104: the drift
  * response's `metricsImport`), the 1.9 permission rows for data models and
- * data-model.md 3.16 (`author`, `lastMetricsImport`).
+ * data-model.md 3.16 (`author`, `authorName`, `lastMetricsImport`,
+ * `deletedMetricNames`).
  *
  * It drives the BUILT backend (`npm run build` first) in org server mode
  * against the OIDC stub, and restarts it on the same data directory. Ada and
@@ -33,13 +35,15 @@ const DATASET = 'World Cup Core';
 const DATASET_PATH = `/datasets/${encodeURIComponent(DATASET)}`;
 const MATCHES_KEY = 'world_cup.world_cup.matches';
 
-/** `Metric` of a model version, with the `author` data-model 3.16 adds. */
+/** `Metric` of a model version, with the `author` and `authorName`
+ * data-model 3.16 adds. */
 interface ModelMetric {
   name: string;
   label: string;
   entity: string;
   expressions?: { sql?: string };
   author?: string;
+  authorName?: string;
 }
 
 interface ModelVersion {
@@ -63,14 +67,16 @@ interface MetricsImportReport {
     name: string;
     entity: string;
     author?: string;
+    authorName?: string;
     sourceId: string;
   }[];
   skipped: {
     name: string;
     author?: string;
+    authorName?: string;
     sourceId: string;
     reason: 'name_clash';
-    keptSourceId: string;
+    keptSourceId?: string;
   }[];
 }
 
@@ -101,6 +107,14 @@ describe('Org server API: the shared data model and its imported metrics', () =>
   const meId = async (cookie: string) =>
     ((await call(cookie, 'GET', '/me')).body as { user: { id: string } }).user
       .id;
+
+  /** The display name `/me` answers: the `users` document's `displayName`. */
+  const meName = async (cookie: string) =>
+    (
+      (await call(cookie, 'GET', '/me')).body as {
+        user: { displayName: string };
+      }
+    ).user.displayName;
 
   /** Every person signs in again: a restart is a new process. */
   const signInAll = async () => {
@@ -229,15 +243,23 @@ describe('Org server API: the shared data model and its imported metrics', () =>
       const byName = new Map(
         body.version.model.metrics.map((m) => [m.name, m]),
       );
+      // The author name is the user's display name in the directory.
+      expect(await meName(cookies.ada)).toBe(ADA.name);
+      expect(await meName(cookies.grace)).toBe(GRACE.name);
       expect(byName.get('avg_attendance')).toMatchObject({
         entity: 'matches',
         author: ids.ada,
+        authorName: ADA.name,
       });
       expect(byName.get('max_attendance')).toMatchObject({
         entity: 'matches',
         author: ids.grace,
+        authorName: GRACE.name,
         expressions: { sql: 'max(attendance)' },
       });
+      expect(body.version.yaml).toContain(
+        `author: ${ids.ada}\n    authorName: ${ADA.name}`,
+      );
     });
 
     it('Scenario: A name clash keeps the first metric and reports the rest', async () => {
@@ -248,6 +270,7 @@ describe('Org server API: the shared data model and its imported metrics', () =>
       expect(avg).toHaveLength(1);
       expect(avg[0]).toMatchObject({
         author: ids.ada,
+        authorName: ADA.name,
         label: 'Average attendance',
         expressions: { sql: 'avg(attendance)' },
       });
@@ -269,12 +292,14 @@ describe('Org server API: the shared data model and its imported metrics', () =>
           name: 'avg_attendance',
           entity: 'matches',
           author: ids.ada,
+          authorName: ADA.name,
           sourceId: metricIds.adaAvg,
         },
         {
           name: 'max_attendance',
           entity: 'matches',
           author: ids.grace,
+          authorName: GRACE.name,
           sourceId: metricIds.graceMax,
         },
       ]);
@@ -282,6 +307,7 @@ describe('Org server API: the shared data model and its imported metrics', () =>
         {
           name: 'avg_attendance',
           author: ids.grace,
+          authorName: GRACE.name,
           sourceId: metricIds.graceAvg,
           reason: 'name_clash',
           keptSourceId: metricIds.adaAvg,
@@ -386,6 +412,55 @@ describe('Org server API: the shared data model and its imported metrics', () =>
           (m) => m.name === 'avg_attendance',
         )?.label,
       ).toBe('Average attendance per match');
+    });
+
+    it('Scenario: A legacy metric removed in the YAML stays removed after a restart', async () => {
+      const before = await getModel(cookies.admin);
+      expect(
+        before.body.version.model.metrics.map((m) => m.name).sort(),
+      ).toEqual(['avg_attendance', 'max_attendance']);
+      const serialized = await call(
+        cookies.admin,
+        'POST',
+        `${DATASET_PATH}/model/serialize`,
+        {
+          model: {
+            ...before.body.version.model,
+            metrics: before.body.version.model.metrics.filter(
+              (m) => m.name !== 'max_attendance',
+            ),
+          },
+        },
+      );
+      expect(serialized.status).toBe(200);
+
+      const saved = await call(cookies.admin, 'PUT', `${DATASET_PATH}/model`, {
+        yaml: (serialized.body as { yaml: string }).yaml,
+      });
+      expect(saved.status).toBe(200);
+      const savedVersion = (saved.body as { version: number }).version;
+      expect(savedVersion).toBe(before.body.currentVersion + 1);
+      const after = await getModel(cookies.una);
+      expect(after.body.version.source).toBe('user');
+      expect(after.body.version.model.metrics.map((m) => m.name)).toEqual([
+        'avg_attendance',
+      ]);
+      // Tombstoned like a delete in the Metrics tab (data-model.md 3.16).
+      const stored = org
+        .docs<{ dataset: string; deletedMetricNames?: string[] }>('data_models')
+        .find((d) => d.dataset === DATASET);
+      expect(stored?.deletedMetricNames).toEqual(['max_attendance']);
+
+      // Grace's legacy metric is still in the legacy store; the startup
+      // metrics import must not bring it back.
+      await org.restart();
+      await signInAll();
+      const restarted = await getModel(cookies.una);
+      expect(restarted.status).toBe(200);
+      expect(restarted.body.currentVersion).toBe(savedVersion);
+      expect(restarted.body.version.model.metrics.map((m) => m.name)).toEqual([
+        'avg_attendance',
+      ]);
     });
   });
 });

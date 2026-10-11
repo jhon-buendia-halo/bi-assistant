@@ -10,6 +10,7 @@ import type { DatasetDoc } from '../datasets/repositories/datasets.repository';
 import type { MetricDoc } from '../metrics/entities/metric.entity';
 import { CurrentUserService } from '../auth/current-user.service';
 import type { CurrentUser } from '../auth/entities/current-user.entity';
+import type { UserDoc } from '../auth/entities/directory.entity';
 
 /**
  * Real `SqliteDocStore`s over an in-memory database — same spirit as
@@ -23,12 +24,14 @@ function build(currentUser?: CurrentUserService) {
   const dataModelsStore = new SqliteDocStore<DataModelDoc>(db, 'data_models');
   const datasetsStore = new SqliteDocStore<DatasetDoc>(db, 'datasets');
   const metricsStore = new SqliteDocStore<MetricDoc>(db, 'metrics');
+  const usersStore = new SqliteDocStore<UserDoc>(db, 'users');
   const repository = new DataModelsRepository(dataModelsStore);
   const service = new DataModelsService(
     repository,
     datasetsStore,
     metricsStore,
     currentUser,
+    usersStore,
   );
   return {
     service,
@@ -36,6 +39,7 @@ function build(currentUser?: CurrentUserService) {
     dataModelsStore,
     datasetsStore,
     metricsStore,
+    usersStore,
     db,
   };
 }
@@ -1461,5 +1465,342 @@ describe('DataModelsService model-metric author (metrics R14, api.md 106-107)', 
 
     const doc = await service.get('World Cup Core');
     expect(currentOf(doc).model.metrics[0]).not.toHaveProperty('author');
+  });
+});
+
+// --- Author display names (metrics R14, data-model R34, R35,
+// data-model.md 3.16 `authorName`). ---
+
+type UsersStore = ReturnType<typeof build>['usersStore'];
+
+async function seedUser(
+  store: UsersStore,
+  id: string,
+  displayName: string,
+): Promise<void> {
+  await store.insert({
+    id,
+    userName: `${id}@contoso.test`,
+    displayName,
+    active: true,
+    source: 'jit',
+  });
+}
+
+describe('DataModelsService author name (metrics R14, data-model R34, R35)', () => {
+  it("imports each legacy metric with its owner's display name, in the model and the report", async () => {
+    const { service, datasetsStore, metricsStore, usersStore } = build();
+    await seedUser(usersStore, ADA, 'Ada Lovelace');
+    await seedUser(usersStore, GRACE, 'Grace Hopper');
+    await seedClash(metricsStore);
+    await datasetsStore.insert(worldCupDataset());
+
+    await service.onModuleInit();
+
+    const doc = await service.get('World Cup Core');
+    expect(
+      currentOf(doc).model.metrics.map((m) => [m.name, m.author, m.authorName]),
+    ).toEqual([
+      ['avg_attendance', ADA, 'Ada Lovelace'],
+      ['max_attendance', GRACE, 'Grace Hopper'],
+    ]);
+    expect(currentOf(doc).yaml).toContain(
+      `author: ${ADA}\n    authorName: Ada Lovelace`,
+    );
+    expect(doc!.lastMetricsImport?.imported).toEqual([
+      expect.objectContaining({
+        sourceId: 'm-ada',
+        authorName: 'Ada Lovelace',
+      }),
+      expect.objectContaining({
+        sourceId: 'm-max',
+        authorName: 'Grace Hopper',
+      }),
+    ]);
+    expect(doc!.lastMetricsImport?.skipped).toEqual([
+      expect.objectContaining({
+        sourceId: 'm-grace',
+        author: GRACE,
+        authorName: 'Grace Hopper',
+      }),
+    ]);
+  });
+
+  it('leaves the author name out when the directory has no such user', async () => {
+    const { service, datasetsStore, metricsStore } = build();
+    await seedClash(metricsStore);
+    await datasetsStore.insert(worldCupDataset());
+
+    await service.onModuleInit();
+
+    const doc = await service.get('World Cup Core');
+    expect(currentOf(doc).model.metrics[0]).toMatchObject({ author: ADA });
+    expect(currentOf(doc).model.metrics[0]).not.toHaveProperty('authorName');
+  });
+
+  it("the legacy-write mirror stamps the writer's display name", async () => {
+    const { service, datasetsStore, usersStore } = build();
+    await seedUser(usersStore, GRACE, 'Grace Hopper');
+    await datasetsStore.insert(worldCupDataset());
+    await service.onModuleInit();
+
+    await service.syncMetric(
+      legacy({
+        id: 'm-max',
+        ownerId: GRACE,
+        name: 'max_attendance',
+        expression: 'max(attendance)',
+      }),
+    );
+
+    const doc = await service.get('World Cup Core');
+    expect(currentOf(doc).model.metrics).toEqual([
+      expect.objectContaining({ author: GRACE, authorName: 'Grace Hopper' }),
+    ]);
+  });
+
+  it("stamps the creator's display name in org server mode and keeps it on edit", async () => {
+    const currentUser = new CurrentUserService({} as never);
+    const { service } = build(currentUser);
+    await service.ensureBootstrapped(worldCupDataset());
+    const user = (id: string, displayName: string): CurrentUser => ({
+      id,
+      displayName,
+      email: `${id}@contoso.test`,
+      initials: 'U',
+      roles: [],
+      permissions: ['use-agents', 'manage-datasources'],
+    });
+    const metric = {
+      name: 'max_attendance',
+      label: 'Highest attendance',
+      entity: 'matches',
+      agg: 'max' as const,
+      of: 'attendance',
+    };
+
+    await currentUser.runAs(user(GRACE, 'Grace Hopper'), () =>
+      // A body that names an author name does not choose it.
+      service.createModelMetric('World Cup Core', {
+        ...metric,
+        authorName: 'Someone Else',
+      }),
+    );
+    await currentUser.runAs(user(ADA, 'Ada Lovelace'), () =>
+      service.updateModelMetric('World Cup Core', 'max_attendance', {
+        ...metric,
+        description: 'Edited by Ada',
+      }),
+    );
+
+    const doc = await service.get('World Cup Core');
+    expect(currentOf(doc).model.metrics).toEqual([
+      expect.objectContaining({
+        description: 'Edited by Ada',
+        author: GRACE,
+        authorName: 'Grace Hopper',
+      }),
+    ]);
+  });
+
+  it('records no author name in local mode', async () => {
+    const { service } = build(new CurrentUserService());
+    await service.ensureBootstrapped(worldCupDataset());
+
+    await service.createModelMetric('World Cup Core', {
+      name: 'max_attendance',
+      label: 'Highest attendance',
+      entity: 'matches',
+      agg: 'max',
+      of: 'attendance',
+      authorName: 'Ignored',
+    });
+
+    const doc = await service.get('World Cup Core');
+    expect(currentOf(doc).model.metrics[0]).not.toHaveProperty('authorName');
+  });
+});
+
+// --- A metric removed through the YAML, the entity form or an import is
+// tombstoned like a Metrics-tab delete (data-model R23, metrics R6,
+// data-model.md 3.16 `deletedMetricNames`). ---
+
+describe('DataModelsService YAML removals tombstone metrics (data-model R23)', () => {
+  async function importedClash() {
+    const ctx = build();
+    await seedClash(ctx.metricsStore);
+    await ctx.datasetsStore.insert(worldCupDataset());
+    await ctx.service.onModuleInit();
+    return ctx;
+  }
+
+  function yamlWithout(doc: DataModelDoc | null, name: string): string {
+    const model = currentOf(doc).model;
+    return serializeDataModel({
+      ...model,
+      metrics: model.metrics.filter((m) => m.name !== name),
+    });
+  }
+
+  it('a YAML save that leaves out a legacy-imported metric keeps it gone across a restart and a rebootstrap', async () => {
+    const { service } = await importedClash();
+    const before = await service.get('World Cup Core');
+
+    await service.saveYaml(
+      'World Cup Core',
+      yamlWithout(before, 'max_attendance'),
+    );
+    const saved = await service.get('World Cup Core');
+    expect(saved!.deletedMetricNames).toEqual(['max_attendance']);
+
+    // The startup import (a restart) adds no version and no metric.
+    await service.onModuleInit();
+    const restarted = await service.get('World Cup Core');
+    expect(restarted!.currentVersion).toBe(saved!.currentVersion);
+    expect(currentOf(restarted).model.metrics.map((m) => m.name)).toEqual([
+      'avg_attendance',
+    ]);
+
+    const rebuilt = await service.rebootstrap('World Cup Core');
+    expect(currentOf(rebuilt).model.metrics.map((m) => m.name)).toEqual([
+      'avg_attendance',
+    ]);
+  });
+
+  it('an import that leaves out a metric tombstones it too', async () => {
+    const { service } = await importedClash();
+    const before = await service.get('World Cup Core');
+
+    await service.importYaml(
+      'World Cup Core',
+      yamlWithout(before, 'avg_attendance'),
+    );
+    await service.onModuleInit();
+
+    const doc = await service.get('World Cup Core');
+    expect(doc!.deletedMetricNames).toEqual(['avg_attendance']);
+    expect(currentOf(doc).model.metrics.map((m) => m.name)).toEqual([
+      'max_attendance',
+    ]);
+  });
+
+  it('a model-managed metric left out of the YAML is no longer model-managed', async () => {
+    const { service, datasetsStore } = build();
+    await datasetsStore.insert(worldCupDataset());
+    await service.onModuleInit();
+    await service.createModelMetric('World Cup Core', {
+      name: 'max_attendance',
+      label: 'Highest attendance',
+      entity: 'matches',
+      agg: 'max',
+      of: 'attendance',
+    });
+
+    await service.saveYaml(
+      'World Cup Core',
+      yamlWithout(await service.get('World Cup Core'), 'max_attendance'),
+    );
+
+    const doc = await service.get('World Cup Core');
+    expect(doc!.localMetricNames).toEqual([]);
+    expect(doc!.deletedMetricNames).toEqual(['max_attendance']);
+  });
+
+  it('a legacy write never brings a YAML-removed name back', async () => {
+    const { service } = await importedClash();
+    await service.saveYaml(
+      'World Cup Core',
+      yamlWithout(await service.get('World Cup Core'), 'max_attendance'),
+    );
+    const version = (await service.get('World Cup Core'))!.currentVersion;
+
+    expect(
+      await service.syncMetric(
+        legacy({
+          id: 'm-max',
+          ownerId: GRACE,
+          name: 'max_attendance',
+          expression: 'max(attendance)',
+        }),
+      ),
+    ).toEqual([]);
+    expect((await service.get('World Cup Core'))!.currentVersion).toBe(version);
+  });
+
+  it('saving a version that holds a tombstoned name lifts the tombstone', async () => {
+    const { service } = await importedClash();
+    const original = await service.get('World Cup Core');
+    await service.saveYaml(
+      'World Cup Core',
+      yamlWithout(original, 'max_attendance'),
+    );
+
+    await service.saveYaml(
+      'World Cup Core',
+      serializeDataModel(currentOf(original).model),
+    );
+
+    const doc = await service.get('World Cup Core');
+    expect(doc!.deletedMetricNames).toEqual([]);
+    expect(currentOf(doc).model.metrics.map((m) => m.name)).toEqual([
+      'avg_attendance',
+      'max_attendance',
+    ]);
+  });
+
+  it('a YAML save that keeps every metric tombstones nothing', async () => {
+    const { service } = await importedClash();
+    const before = await service.get('World Cup Core');
+
+    await service.saveYaml(
+      'World Cup Core',
+      serializeDataModel({
+        ...currentOf(before).model,
+        description: 'Edited',
+      }),
+    );
+
+    const doc = await service.get('World Cup Core');
+    expect(doc!.deletedMetricNames ?? []).toEqual([]);
+  });
+});
+
+describe('DataModelsService keptSourceId (data-model R35)', () => {
+  it("is left out when the model's metric was written in the YAML", async () => {
+    const { service, datasetsStore, metricsStore } = build();
+    await datasetsStore.insert(worldCupDataset());
+    await service.onModuleInit();
+    const model = currentOf(await service.get('World Cup Core')).model;
+    await service.saveYaml(
+      'World Cup Core',
+      serializeDataModel({
+        ...model,
+        metrics: [
+          {
+            name: 'avg_attendance',
+            label: 'Average attendance',
+            entity: 'matches',
+            agg: 'avg',
+            of: 'attendance',
+            author: ADA,
+          },
+        ],
+      }),
+    );
+    await seedLegacy(
+      metricsStore,
+      legacy({ id: 'm-grace', ownerId: GRACE, label: 'Mean attendance' }),
+    );
+
+    const doc = await service.rebootstrap('World Cup Core');
+
+    expect(doc.lastMetricsImport?.skipped).toEqual([
+      {
+        name: 'avg_attendance',
+        author: GRACE,
+        sourceId: 'm-grace',
+        reason: 'name_clash',
+      },
+    ]);
   });
 });

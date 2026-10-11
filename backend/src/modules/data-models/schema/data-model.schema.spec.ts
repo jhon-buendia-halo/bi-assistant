@@ -360,6 +360,31 @@ describe('Metric.author (data-model.md 3.16, metrics R14)', () => {
   });
 });
 
+describe('Metric.authorName (data-model.md 3.16, metrics R14)', () => {
+  it('accepts an optional author name and keeps it', () => {
+    const model = fixture();
+    model.metrics[0] = {
+      ...model.metrics[0],
+      author: 'user-ada',
+      authorName: 'Ada Lovelace',
+    };
+    const result = validateDataModel(model);
+    expect(result.issues).toEqual([]);
+    expect(result.model?.metrics[0].authorName).toBe('Ada Lovelace');
+  });
+
+  it('publishes authorName as an optional string on Metric', () => {
+    const defs = dataModelJsonSchema().$defs as Record<
+      string,
+      { properties: Record<string, { type?: string }>; required?: string[] }
+    >;
+    expect(defs.Metric.properties.authorName).toMatchObject({
+      type: 'string',
+    });
+    expect(defs.Metric.required).not.toContain('authorName');
+  });
+});
+
 describe('validateAgainstSnapshot', () => {
   const snapshot = [
     { table: 'main.public.teams', columns: ['id', 'common_name', 'fifa_code'] },

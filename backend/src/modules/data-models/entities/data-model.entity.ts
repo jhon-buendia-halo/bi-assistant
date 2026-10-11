@@ -215,6 +215,13 @@ export interface Metric {
    * absent in local mode (data-model.md 3.16, metrics R14).
    */
   author?: string;
+  /**
+   * The author's display name, for people to read (`by <authorName ??
+   * author>`): the directory's `displayName` of the legacy owner at import
+   * time, or the signed-in creator's. Kept on edit; absent in local mode
+   * and when the directory has no such user (data-model.md 3.16).
+   */
+  authorName?: string;
 }
 
 /** One legacy metric copied into a model by the metrics import. */
@@ -225,6 +232,8 @@ export interface MetricsImportEntry {
   entity: string;
   /** The legacy owner's id; absent in local mode. */
   author?: string;
+  /** The legacy owner's display name, when the directory knows them. */
+  authorName?: string;
   /** The legacy metric document's `id`. */
   sourceId: string;
 }
@@ -233,10 +242,12 @@ export interface MetricsImportEntry {
 export interface MetricsImportSkip {
   name: string;
   author?: string;
+  authorName?: string;
   sourceId: string;
   reason: 'name_clash';
-  /** Legacy id of the metric that holds the name instead. */
-  keptSourceId: string;
+  /** Legacy id of the metric that holds the name instead; left out when
+   * that model metric did not come from the legacy store (data-model R35). */
+  keptSourceId?: string;
 }
 
 /**

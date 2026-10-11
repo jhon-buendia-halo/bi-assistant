@@ -182,7 +182,7 @@
                       <span
                         [attr.data-testid]="'model-metric-author-' + metric.name"
                         class="text-[11px] font-normal text-fg-muted"
-                        >by {{ metric.author }}</span
+                        >by {{ metric.authorName ?? metric.author }}</span
                       >
                     }</span
                   >

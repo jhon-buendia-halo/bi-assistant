@@ -32,12 +32,21 @@ const MODEL: DataModel = {
       agg: 'avg',
       of: 'attendance',
       author: 'u-ada',
+      authorName: 'Ada Lovelace',
     },
     {
       name: 'match_count',
       label: 'Match count',
       entity: 'matches',
       agg: 'count',
+    },
+    {
+      name: 'max_attendance',
+      label: 'Highest attendance',
+      entity: 'matches',
+      agg: 'max',
+      of: 'attendance',
+      author: 'u-grace',
     },
   ],
 };
@@ -165,11 +174,14 @@ describe('DataModelView', () => {
     expect(byTestId(el, 'new-model-metric')).toBeNull();
   });
 
-  it("shows a metric's author on the Overview, and none for a metric without one", () => {
+  it("shows a metric's author name on the Overview, its author id without a name, and none for a metric without one", () => {
     const el = render(LOCAL_ME);
     expect(
       byTestId(el, 'model-metric-author-avg_attendance')!.textContent!.trim(),
-    ).toBe('by u-ada');
+    ).toBe('by Ada Lovelace');
+    expect(
+      byTestId(el, 'model-metric-author-max_attendance')!.textContent!.trim(),
+    ).toBe('by u-grace');
     expect(byTestId(el, 'model-metric-author-match_count')).toBeNull();
   });
 
@@ -188,6 +200,7 @@ describe('DataModelView', () => {
         {
           name: 'avg_attendance',
           author: 'u-grace',
+          authorName: 'Grace Hopper',
           sourceId: 'm-2',
           reason: 'name_clash',
           keptSourceId: 'm-1',
@@ -197,7 +210,7 @@ describe('DataModelView', () => {
     const chip = byTestId(el, 'metrics-import-pill')!;
     expect(chip.textContent!.trim()).toBe('1 metric skipped on import');
     expect(chip.classList).toContain('chip-info');
-    expect(chip.title).toBe('avg_attendance by u-grace — name clash with m-1');
+    expect(chip.title).toBe('avg_attendance by Grace Hopper — name clash with m-1');
   });
 
   it('pluralises the chip and lists one title line per skipped metric', () => {
@@ -217,13 +230,20 @@ describe('DataModelView', () => {
           reason: 'name_clash',
           keptSourceId: 'm-3',
         },
+        {
+          name: 'wins',
+          author: 'u-ada',
+          sourceId: 'm-5',
+          reason: 'name_clash',
+        },
       ]),
     });
     const chip = byTestId(el, 'metrics-import-pill')!;
-    expect(chip.textContent!.trim()).toBe('2 metrics skipped on import');
+    expect(chip.textContent!.trim()).toBe('3 metrics skipped on import');
     expect(chip.title.split('\n')).toEqual([
       'avg_attendance by u-grace — name clash with m-1',
       'goals — name clash with m-3',
+      'wins by u-ada — name clash',
     ]);
   });
 

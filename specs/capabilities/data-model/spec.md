@@ -56,11 +56,11 @@ Capability-local vocabulary:
 
 ### Editing, revert, export and import
 
-- R23. Saving YAML SHALL validate it (R11-R14) and append a version with source `user`. Importing a file SHALL do exactly the same, with source `import`.
-- R24. The entity form SHALL save through the same path as the YAML editor: the edited model is serialized by the one serializer (R15), then saved as YAML, so it is validated the same way and becomes a `user` version. Serializing on its own SHALL validate the model and store nothing.
+- R23. Saving YAML SHALL validate it (R11-R14) and append a version with source `user`. Importing a file SHALL do exactly the same, with source `import`. A save or an import that leaves out a metric name the current version holds SHALL **tombstone** that name exactly as deleting it in the Metrics tab does ([metrics](../metrics/spec.md) R6): the name stops being model-managed and is added to the deleted names, so the metrics import (R34, at every startup included), Bootstrap from snapshot (R22), a re-save merge (R20) and legacy writes (R36) never bring it back. A name the saved version holds is no longer tombstoned. A renamed metric is the old name removed and the new one added. User edits are therefore never overwritten by a restart.
+- R24. The entity form SHALL save through the same path as the YAML editor: the edited model is serialized by the one serializer (R15), then saved as YAML, so it is validated the same way and becomes a `user` version. Serializing on its own SHALL validate the model and store nothing. An entity-form save that leaves out a metric tombstones it like a YAML save (R23).
 - R25. Revert SHALL move the current pointer to a stored version. It SHALL create no version and delete none. The assistant SHALL use the reverted model from its next turn.
 - R26. Export SHALL return the stored YAML of the current version, or of a requested version, verbatim, as a YAML file named `<dataset-slug>.model.v<n>.yaml` (slug: lowercase, every run of other characters than `a-z0-9` replaced by `-`, trimmed of `-`, `dataset` when empty).
-- R27. Importing an exported file SHALL produce a model identical to the exported one apart from the version header (name and number, which R5 sets): every entity, relationship and metric matches.
+- R27. Importing an exported file SHALL produce a model identical to the exported one apart from the version header (name and number, which R5 sets): every entity, relationship and metric matches, a metric's author and author name included. Metric names the file does not hold are tombstoned by R23.
 
 ### Resolving references
 
@@ -76,9 +76,9 @@ Capability-local vocabulary:
 
 ### Metrics in the model
 
-- R34. **Metrics import.** The system SHALL import legacy metrics into data models at startup for every model, when a model is bootstrapped or rebuilt (R16, R22), and for the new tables of a re-save merge (R20). It SHALL take the legacy metrics of **every owner**, not only the caller's, keep those whose entity is a table the model binds, order them by creation time and then id, and import the first metric of each lowercase name onto the entity bound to its table, as a metric with its SQL expression, label, description and the dimensions that match the entity's attributes (others are dropped and logged), recording its **author**: the owner who created it, or none in local mode. A later metric with a name already imported, or a name the model already holds from another source, SHALL NOT be imported. Names the model manages itself or has deleted ([metrics](../metrics/spec.md) R6) SHALL NOT be imported. An import that finds nothing new SHALL add no version, so repeated startups change nothing. A metric created through the Metrics tab in org server mode records its author too: the signed-in user who created it, kept when it is later changed ([metrics](../metrics/spec.md) R14).
-- R35. The model SHALL keep the **metrics-import report** of its last import: when it ran, each imported metric (name, entity, author, legacy id) and each skipped metric (name, author, legacy id, reason `name_clash`, and the legacy id of the metric that was kept). The drift report SHALL be answered together with this report (`metricsImport`), absent when no import has run.
-- R36. A write to the legacy metrics store SHALL be mirrored into every current model that binds the metric's table, one new version per model touched (source `bootstrap`, note `metric <name> synced from the metrics panel`), except: a name the model manages itself or has deleted ([metrics](../metrics/spec.md) R6) is skipped and nothing changes; a name the model already holds from **another author** is skipped and appended to the model's metrics-import report as skipped, never overwritten. Renaming a legacy metric removes the old name from the models first. Deleting a legacy metric removes its name from every model that does not manage that name itself (note `metric <name> removed from the metrics panel`).
+- R34. **Metrics import.** The system SHALL import legacy metrics into data models at startup for every model, when a model is bootstrapped or rebuilt (R16, R22), and for the new tables of a re-save merge (R20). It SHALL take the legacy metrics of **every owner**, not only the caller's, keep those whose entity is a table the model binds, order them by creation time and then id, and import the first metric of each lowercase name onto the entity bound to its table, as a metric with its SQL expression, label, description and the dimensions that match the entity's attributes (others are dropped and logged), recording its **author**, the owner key of the user who created it, and its **author name**, that user's display name in the directory ([../../system/data-model.md](../../system/data-model.md) 3.14.1 `displayName`) at import time, left out when the directory has no such user; neither is recorded in local mode. A later metric with a name already imported, or a name the model already holds from another source, SHALL NOT be imported. Names the model manages itself or has deleted ([metrics](../metrics/spec.md) R6) SHALL NOT be imported. An import that finds nothing new SHALL add no version, so repeated startups change nothing. A metric created through the Metrics tab in org server mode records its author and author name too: the signed-in user who created it, both kept when it is later changed ([metrics](../metrics/spec.md) R14).
+- R35. The model SHALL keep the **metrics-import report** of its last import: when it ran, each imported metric (name, entity, author, author name, legacy id) and each skipped metric (name, author, author name, legacy id, reason `name_clash`, and the legacy id of the metric that was kept, left out when the model's metric of that name did not come from the legacy store, for example one written in the YAML or the Metrics tab). Author and author name follow R34 (absent in local mode). The report SHALL be rewritten only by an import pass that imported or skipped at least one metric (the startup import of an existing model: only when it imported at least one, the pass that adds a version, so repeated startups leave the report unchanged); a pass that finds nothing leaves the previous report (or its absence) as it was. A skipped legacy write (R36) is appended to it. The drift report SHALL be answered together with this report (`metricsImport`), absent when no import has run.
+- R36. A write to the legacy metrics store SHALL be mirrored into every current model that binds the metric's table, one new version per model touched (source `bootstrap`, note `metric <name> synced from the metrics panel`), except: a name the model manages itself or has deleted ([metrics](../metrics/spec.md) R6) is skipped and nothing changes; a name the model already holds from **another author** is skipped and appended to the model's metrics-import report as skipped, never overwritten. Renaming a legacy metric removes the old name from the models first, and deleting a legacy metric removes its name (note `metric <name> removed from the metrics panel`), but only from a model whose metric of that name has the legacy metric's owner as its author (both absent in local mode) and that does not manage the name itself: a model holding the name from another author keeps its metric, so a user whose metric was skipped can never delete or rename away another author's shared metric.
 
 ### Sharing and permissions (org server mode)
 
@@ -124,7 +124,7 @@ The **Data model view** is a main view reached from the **Data model** icon butt
 
 ### Feature: Data model
 
-E2E: API-level, not Playwright: `backend/test/data-models.e2e-spec.ts` (every scenario but the last three, local mode) and `backend/test/data-models-org.e2e-spec.ts` (the last three, org server mode).
+E2E: API-level, not Playwright: `backend/test/data-models.e2e-spec.ts` (every scenario but the last four, local mode) and `backend/test/data-models-org.e2e-spec.ts` (the last four, org server mode).
 
 ```gherkin
 Feature: Data model
@@ -249,6 +249,7 @@ Feature: Data model
     When the backend restarts on the same data directory
     Then GET /datasets/World Cup Core/model as "user@contoso.test", who holds only the User role, answers 200
     And the model lists "avg_attendance" with Ada as its author and "max_attendance" with Grace as its author
+    And each metric's author name is its author's display name, "Ada Lovelace" and "Grace Hopper"
 
   Scenario: A name clash keeps the first metric and reports the rest
     Given the backend runs in org server mode
@@ -269,6 +270,14 @@ Feature: Data model
     And GET /datasets/World Cup Core/model as "user@contoso.test" answers 200 with version 1
     When "admin@contoso.test" sends the same PUT
     Then the response is version 2 with source "user"
+
+  Scenario: A legacy metric removed in the YAML stays removed after a restart
+    Given the backend runs in org server mode
+    And the model of "World Cup Core" holds "max_attendance", imported from Grace's legacy metric
+    When "admin@contoso.test" sends PUT /datasets/World Cup Core/model with YAML that leaves out "max_attendance"
+    Then the response is a new version with source "user" that no longer lists "max_attendance"
+    When the backend restarts on the same data directory
+    Then the model has no new version and still does not list "max_attendance"
 ```
 
 ### Feature: Data model editing

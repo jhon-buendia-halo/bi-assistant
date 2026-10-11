@@ -212,6 +212,7 @@ function orderMetric(metric: Metric) {
       'expressions',
       'sourceVerifiedQueryId',
       'author',
+      'authorName',
     ],
   );
 }

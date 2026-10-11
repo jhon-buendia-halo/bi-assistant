@@ -394,17 +394,34 @@ export function mapDimensionNames(
   return mapped;
 }
 
+/** User id -> display name, from the directory (data-model.md 3.14.1). */
+export type AuthorNames = ReadonlyMap<string, string>;
+
+/** `{ author, authorName }` of a legacy metric's owner: both absent in
+ * local mode (no `ownerId`), the name absent when the directory has no such
+ * user (data-model R34, data-model.md 3.16). */
+export function legacyAuthorFields(
+  ownerId: string | undefined,
+  authorNames?: AuthorNames,
+): { author?: string; authorName?: string } {
+  if (!ownerId) return {};
+  const authorName = authorNames?.get(ownerId);
+  return authorName ? { author: ownerId, authorName } : { author: ownerId };
+}
+
 /** A legacy `MetricDoc`, converted onto one entity already resolved to its
  * logical name/attributes — the single place both the metrics import
  * (`importLegacyMetrics`) and `DataModelsService.syncMetric` build a model
  * `Metric` from the legacy flat shape, so the two paths cannot drift apart.
  * The name is lowercased (the DSL's metric names are), and the legacy
- * owner becomes the metric's `author` (absent in local mode, where legacy
+ * owner becomes the metric's `author`, with their display name from
+ * `authorNames` as `authorName` (both absent in local mode, where legacy
  * metrics carry no `ownerId`; data-model R34). */
 export function toModelMetric(
   legacy: MetricDoc,
   entityName: string,
   attributes: Attribute[],
+  authorNames?: AuthorNames,
 ): Metric {
   const dimensions = mapDimensionNames(
     legacy.dimensions ?? [],
@@ -421,7 +438,7 @@ export function toModelMetric(
     ...(legacy.sourceVerifiedQueryId
       ? { sourceVerifiedQueryId: legacy.sourceVerifiedQueryId }
       : {}),
-    ...(legacy.ownerId ? { author: legacy.ownerId } : {}),
+    ...legacyAuthorFields(legacy.ownerId, authorNames),
   };
 }
 
@@ -446,6 +463,8 @@ export interface ImportLegacyMetricsOptions {
   excludedNames?: string[];
   /** The model's previous report, the last resort for a `keptSourceId`. */
   previous?: MetricsImportReport;
+  /** Display names of the legacy owners, for `authorName`. */
+  authorNames?: AuthorNames;
 }
 
 /** Same owner, local mode (no owner on either side) included. */
@@ -470,14 +489,14 @@ function byCreationThenId(a: MetricDoc, b: MetricDoc): number {
  * The legacy id behind a metric the model already holds, for a skipped
  * entry's `keptSourceId`: the earliest legacy metric of that name by the
  * same author, else the previous report's imported entry of that name,
- * else `''` (a metric that never came from the legacy store, e.g. one
- * written in the YAML).
+ * else none (a metric that never came from the legacy store, e.g. one
+ * written in the YAML): the skipped entry then has no `keptSourceId`.
  */
 export function keptSourceIdFor(
   held: Metric,
   legacyMetrics: MetricDoc[],
   previous?: MetricsImportReport,
-): string {
+): string | undefined {
   const name = held.name.toLowerCase();
   const legacy = [...legacyMetrics]
     .sort(byCreationThenId)
@@ -486,7 +505,7 @@ export function keptSourceIdFor(
         m.name.toLowerCase() === name && sameAuthor(m.ownerId, held.author),
     );
   if (legacy) return legacy.id;
-  return previous?.imported.find((e) => e.name === name)?.sourceId ?? '';
+  return previous?.imported.find((e) => e.name === name)?.sourceId;
 }
 
 /**
@@ -527,13 +546,17 @@ export function importLegacyMetrics(
 
   for (const legacy of candidates) {
     const name = legacy.name.toLowerCase();
-    const skip = (keptSourceId: string): void => {
+    const authorFields = legacyAuthorFields(
+      legacy.ownerId,
+      options.authorNames,
+    );
+    const skip = (keptSourceId: string | undefined): void => {
       result.skipped.push({
         name,
-        ...(legacy.ownerId ? { author: legacy.ownerId } : {}),
+        ...authorFields,
         sourceId: legacy.id,
         reason: 'name_clash',
-        keptSourceId,
+        ...(keptSourceId ? { keptSourceId } : {}),
       });
     };
 
@@ -551,11 +574,18 @@ export function importLegacyMetrics(
     }
 
     const target = targets.get((legacy.entity ?? '').toLowerCase())!;
-    result.metrics.push(toModelMetric(legacy, target.name, target.attributes));
+    result.metrics.push(
+      toModelMetric(
+        legacy,
+        target.name,
+        target.attributes,
+        options.authorNames,
+      ),
+    );
     result.imported.push({
       name,
       entity: target.name,
-      ...(legacy.ownerId ? { author: legacy.ownerId } : {}),
+      ...authorFields,
       sourceId: legacy.id,
     });
     importedIds.set(name, legacy.id);

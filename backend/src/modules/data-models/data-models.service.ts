@@ -23,11 +23,13 @@ import {
 import {
   DATASETS_STORE,
   METRICS_STORE,
+  USERS_STORE,
 } from '../../infrastructure/database/doc-store';
 import type { DocStore } from '../../infrastructure/database/doc-store';
 import type { DatasetDoc } from '../datasets/repositories/datasets.repository';
 import type { MetricDoc } from '../metrics/entities/metric.entity';
 import { CurrentUserService } from '../auth/current-user.service';
+import type { UserDoc } from '../auth/entities/directory.entity';
 import {
   bindingAddress,
   bootstrapFromSnapshot,
@@ -37,9 +39,12 @@ import {
   importLegacyMetrics,
   keptSourceIdFor,
   lastSegment,
+  legacyAuthorFields,
   safeName,
   sameAuthor,
   toModelMetric,
+  type AuthorNames,
+  type ImportLegacyMetricsOptions,
   type ImportTarget,
   type LegacyMetricsImport,
 } from './bootstrap';
@@ -108,6 +113,11 @@ export class DataModelsService implements OnModuleInit {
     /** Who creates a model metric (its `author` in org server mode). */
     @Optional()
     private readonly currentUser?: CurrentUserService,
+    /** The directory (data-model.md 3.14.1, empty in local mode): the
+     * display names stamped as `authorName` on imported metrics. */
+    @Optional()
+    @Inject(USERS_STORE)
+    private readonly usersStore?: DocStore<UserDoc>,
   ) {}
 
   /**
@@ -186,7 +196,9 @@ export class DataModelsService implements OnModuleInit {
     if (existing) return existing;
 
     const legacyMetrics = await this.metricsStore.find({});
-    const result = bootstrapFromSnapshot(dataset, legacyMetrics, 1);
+    const result = bootstrapFromSnapshot(dataset, legacyMetrics, 1, {
+      authorNames: await this.authorNames(),
+    });
     const model = this.requireValidModel(dataset.name, result);
     const now = new Date().toISOString();
     const doc: DataModelDoc = {
@@ -268,7 +280,7 @@ export class DataModelsService implements OnModuleInit {
     const result = importLegacyMetrics(
       await this.metricsStore.find({}),
       boundImportTargets(current.model.entities),
-      this.importOptions(doc, current.model.metrics),
+      await this.importOptions(doc, current.model.metrics),
     );
     if (!result.metrics.length) return doc;
 
@@ -290,8 +302,12 @@ export class DataModelsService implements OnModuleInit {
   }
 
   /** The names a metrics import keeps out of (or reports against) a model:
-   * the metrics it holds, and its model-managed and tombstoned names. */
-  private importOptions(doc: DataModelDoc, held: Metric[]) {
+   * the metrics it holds, and its model-managed and tombstoned names; plus
+   * the directory's display names for `authorName`. */
+  private async importOptions(
+    doc: DataModelDoc,
+    held: Metric[],
+  ): Promise<ImportLegacyMetricsOptions> {
     return {
       held,
       excludedNames: [
@@ -299,7 +315,19 @@ export class DataModelsService implements OnModuleInit {
         ...(doc.deletedMetricNames ?? []),
       ],
       previous: doc.lastMetricsImport,
+      authorNames: await this.authorNames(),
     };
+  }
+
+  /** User id -> display name of every user in the directory (data-model.md
+   * 3.14.1). Empty in local mode, where the collection is never written. */
+  private async authorNames(): Promise<AuthorNames> {
+    const names = new Map<string, string>();
+    if (!this.usersStore) return names;
+    for (const user of await this.usersStore.find({})) {
+      if (user.id && user.displayName) names.set(user.id, user.displayName);
+    }
+    return names;
   }
 
   /**
@@ -391,7 +419,7 @@ export class DataModelsService implements OnModuleInit {
     const imported = importLegacyMetrics(
       await this.metricsStore.find({}),
       targets,
-      this.importOptions(doc, current.model.metrics),
+      await this.importOptions(doc, current.model.metrics),
     );
 
     const draft: DataModel = {
@@ -435,7 +463,7 @@ export class DataModelsService implements OnModuleInit {
       dataset,
       legacyMetrics,
       1,
-      this.importOptions(doc, current.model.metrics),
+      await this.importOptions(doc, current.model.metrics),
     );
     const fresh = this.requireValidModel(datasetName, result);
     const metrics = [...current.model.metrics, ...fresh.metrics].filter(
@@ -452,7 +480,10 @@ export class DataModelsService implements OnModuleInit {
   /**
    * Parses + validates the YAML (structural/semantic via `parseDataModelYaml`,
    * then against the dataset's live snapshot via `validateAgainstSnapshot`)
-   * and appends a new version, or throws with located errors.
+   * and appends a new version, or throws with located errors. Every metric
+   * the YAML leaves out is tombstoned like a Metrics-tab delete
+   * (`withYamlMetricTombstones`, data-model R23), so the startup metrics
+   * import never brings a removed legacy metric back.
    */
   async saveYaml(
     datasetName: string,
@@ -460,7 +491,11 @@ export class DataModelsService implements OnModuleInit {
   ): Promise<{ version: number }> {
     const doc = await this.requireDoc(datasetName);
     const model = await this.validateYamlForDataset(datasetName, yaml);
-    const saved = await this.appendVersion(doc, model, 'user');
+    const saved = await this.appendVersion(
+      withYamlMetricTombstones(doc, this.currentVersionOf(doc).model, model),
+      model,
+      'user',
+    );
     return { version: saved.currentVersion };
   }
 
@@ -477,7 +512,11 @@ export class DataModelsService implements OnModuleInit {
   ): Promise<{ version: number }> {
     const doc = await this.requireDoc(datasetName);
     const model = await this.validateYamlForDataset(datasetName, yaml);
-    const saved = await this.appendVersion(doc, model, 'import');
+    const saved = await this.appendVersion(
+      withYamlMetricTombstones(doc, this.currentVersionOf(doc).model, model),
+      model,
+      'import',
+    );
     return { version: saved.currentVersion };
   }
 
@@ -619,12 +658,19 @@ export class DataModelsService implements OnModuleInit {
   ): Promise<{ version: number }> {
     const doc = await this.requireDoc(datasetName);
     const current = this.currentVersionOf(doc);
-    // The creator is the author in org server mode; local mode records none
-    // (metrics R14). A body's own `author` never chooses it.
+    // The creator is the author, with their display name, in org server
+    // mode; local mode records neither (metrics R14). A body's own `author`
+    // or `authorName` never chooses them.
     const author = this.currentUser?.ownerScope() ?? undefined;
+    const authorName = author
+      ? this.currentUser?.current()?.displayName || undefined
+      : undefined;
     const draft: DataModel = {
       ...current.model,
-      metrics: [...current.model.metrics, withAuthor(metric, author)],
+      metrics: [
+        ...current.model.metrics,
+        withAuthor(metric, author, authorName),
+      ],
     };
     const validated = this.validateMetricDraft(draft);
     const withLocal: DataModelDoc = {
@@ -662,8 +708,13 @@ export class DataModelsService implements OnModuleInit {
       );
     }
     const metrics = [...current.model.metrics];
-    // An edit keeps the stored author, and never adds one (metrics R14).
-    metrics[index] = withAuthor(metric, metrics[index].author);
+    // An edit keeps the stored author and author name, and never adds one
+    // (metrics R14).
+    metrics[index] = withAuthor(
+      metric,
+      metrics[index].author,
+      metrics[index].authorName,
+    );
     const draft: DataModel = { ...current.model, metrics };
     const validated = this.validateMetricDraft(draft);
     const withoutOldName = withoutMetricName(doc.localMetricNames, metricName);
@@ -821,6 +872,7 @@ export class DataModelsService implements OnModuleInit {
     const nameLower = metric.name.toLowerCase();
     const entityLower = (metric.entity ?? '').toLowerCase();
     let legacyMetrics: MetricDoc[] | undefined;
+    let authorNames: AuthorNames | undefined;
 
     for (const doc of docs) {
       const current = this.findCurrentVersion(doc);
@@ -839,16 +891,18 @@ export class DataModelsService implements OnModuleInit {
       if (held && !sameAuthor(held.author, metric.ownerId)) {
         if (boundEntity) {
           legacyMetrics ??= await this.metricsStore.find({});
+          authorNames ??= await this.authorNames();
+          const keptSourceId = keptSourceIdFor(
+            held,
+            legacyMetrics,
+            doc.lastMetricsImport,
+          );
           await this.recordSkippedLegacyWrite(doc, {
             name: nameLower,
-            ...(metric.ownerId ? { author: metric.ownerId } : {}),
+            ...legacyAuthorFields(metric.ownerId, authorNames),
             sourceId: metric.id,
             reason: 'name_clash',
-            keptSourceId: keptSourceIdFor(
-              held,
-              legacyMetrics,
-              doc.lastMetricsImport,
-            ),
+            ...(keptSourceId ? { keptSourceId } : {}),
           });
         }
         continue;
@@ -857,10 +911,16 @@ export class DataModelsService implements OnModuleInit {
       const withoutStale = current.model.metrics.filter(
         (m) => m.name.toLowerCase() !== nameLower,
       );
+      if (boundEntity) authorNames ??= await this.authorNames();
       const nextMetrics = boundEntity
         ? [
             ...withoutStale,
-            toModelMetric(metric, boundEntity.name, boundEntity.attributes),
+            toModelMetric(
+              metric,
+              boundEntity.name,
+              boundEntity.attributes,
+              authorNames,
+            ),
           ]
         : withoutStale;
 
@@ -1051,12 +1111,57 @@ function boundImportTargets(entities: Entity[]): Map<string, ImportTarget> {
   return targets;
 }
 
-/** `metric` with exactly `author` (none when undefined), whatever the
- * metric carried before. */
-function withAuthor(metric: Metric, author: string | undefined): Metric {
+/** `metric` with exactly `author` and `authorName` (each left out when
+ * undefined, and no name without an author), whatever the metric carried
+ * before. */
+function withAuthor(
+  metric: Metric,
+  author: string | undefined,
+  authorName: string | undefined,
+): Metric {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { author: _ignored, ...rest } = metric;
-  return author ? { ...rest, author } : rest;
+  const { author: _author, authorName: _authorName, ...rest } = metric;
+  if (!author) return rest;
+  return authorName ? { ...rest, author, authorName } : { ...rest, author };
+}
+
+/**
+ * The name lists after a YAML save or import (data-model R23, data-model.md
+ * 3.16) replaces `previous` with `next`: every metric name `previous` holds
+ * and `next` leaves out is tombstoned exactly like a Metrics-tab delete
+ * (out of `localMetricNames`, into `deletedMetricNames`), so the startup
+ * metrics import, bootstrap, merge and the legacy mirror never bring it
+ * back; every name `next` holds is no longer tombstoned. A save that keeps
+ * every metric leaves both lists as they were.
+ */
+function withYamlMetricTombstones(
+  doc: DataModelDoc,
+  previous: DataModel,
+  next: DataModel,
+): DataModelDoc {
+  const kept = new Set(next.metrics.map((m) => m.name.toLowerCase()));
+  const removed = previous.metrics
+    .map((m) => m.name.toLowerCase())
+    .filter((name) => !kept.has(name));
+  const revived = (doc.deletedMetricNames ?? []).filter((name) =>
+    kept.has(name.toLowerCase()),
+  );
+  if (!removed.length && !revived.length) return doc;
+
+  let localMetricNames = doc.localMetricNames;
+  let deletedMetricNames = doc.deletedMetricNames;
+  for (const name of revived) {
+    deletedMetricNames = withoutMetricName(deletedMetricNames, name);
+  }
+  for (const name of removed) {
+    localMetricNames = withoutMetricName(localMetricNames, name);
+    deletedMetricNames = withMetricName(deletedMetricNames, name);
+  }
+  return {
+    ...doc,
+    ...(localMetricNames ? { localMetricNames } : {}),
+    deletedMetricNames: deletedMetricNames ?? [],
+  };
 }
 
 /** Metric-name-set equality — used to decide whether a sync actually

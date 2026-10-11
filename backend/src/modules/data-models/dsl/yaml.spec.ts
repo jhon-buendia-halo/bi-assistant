@@ -93,6 +93,18 @@ describe('serializeDataModel / parseDataModelYaml — round trip', () => {
     expect(modelOf(parseDataModelYaml(text))).toEqual(model);
   });
 
+  it("round-trips a metric's author name, written right after the author", () => {
+    const model = worldCupFixture();
+    model.metrics[0] = {
+      ...model.metrics[0],
+      author: 'user-ada',
+      authorName: 'Ada Lovelace',
+    };
+    const text = serializeDataModel(model);
+    expect(text).toMatch(/author: user-ada\n\s+authorName: Ada Lovelace\n/);
+    expect(modelOf(parseDataModelYaml(text))).toEqual(model);
+  });
+
   it('omits undefined/optional fields rather than writing them as null', () => {
     const model = worldCupFixture();
     delete model.description;

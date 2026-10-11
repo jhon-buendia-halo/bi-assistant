@@ -57,8 +57,10 @@ export function metricsSkippedLabel(count: number): string {
 export function metricsSkippedTitle(report: MetricsImportReport): string {
   return report.skipped
     .map((s) => {
-      const by = s.author ? ` by ${s.author}` : '';
-      return `${s.name}${by} — name clash with ${s.keptSourceId}`;
+      const author = s.authorName ?? s.author;
+      const by = author ? ` by ${author}` : '';
+      const kept = s.keptSourceId ? ` with ${s.keptSourceId}` : '';
+      return `${s.name}${by} — name clash${kept}`;
     })
     .join('\n');
 }

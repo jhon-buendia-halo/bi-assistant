@@ -217,6 +217,8 @@ const metricSchema = z
     sourceVerifiedQueryId: z.string().optional(),
     /** Owner key of whoever defined the metric (org server mode only). */
     author: z.string().min(1).optional(),
+    /** The author's display name (data-model.md 3.16). */
+    authorName: z.string().min(1).optional(),
   })
   .meta({ id: 'Metric' });
 

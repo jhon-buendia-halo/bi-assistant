@@ -179,8 +179,11 @@ export interface Metric {
   expressions?: { sql?: string };
   sourceVerifiedQueryId?: string;
   /** Owner key of whoever defined the metric (org server mode only;
-   * absent in local mode). Shown as `by <author>` (ui.md 4.19.5). */
+   * absent in local mode). Shown when there is no `authorName`. */
   author?: string;
+  /** The author's display name, shown as `by <authorName ?? author>`
+   * (ui.md 4.19.3, 4.19.5; data-model.md 3.16). */
+  authorName?: string;
 }
 
 export interface DataModel {
@@ -226,14 +229,17 @@ export interface MetricsImportReport {
     name: string;
     entity: string;
     author?: string;
+    authorName?: string;
     sourceId: string;
   }[];
   skipped: {
     name: string;
     author?: string;
+    authorName?: string;
     sourceId: string;
     reason: 'name_clash';
-    keptSourceId: string;
+    /** Absent when the model's metric did not come from the legacy store. */
+    keptSourceId?: string;
   }[];
 }
 

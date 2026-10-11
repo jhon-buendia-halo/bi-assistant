@@ -103,8 +103,17 @@ describe('ModelMetricsPanel — rows, author and read-only (data-model R40)', ()
       agg: 'avg',
       of: 'attendance',
       author: 'u-ada',
+      authorName: 'Ada Lovelace',
     },
     { name: 'match_count', label: 'Match count', entity: 'matches', agg: 'count' },
+    {
+      name: 'max_attendance',
+      label: 'Highest attendance',
+      entity: 'matches',
+      agg: 'max',
+      of: 'attendance',
+      author: 'u-grace',
+    },
   ];
 
   beforeEach(async () => {
@@ -144,9 +153,12 @@ describe('ModelMetricsPanel — rows, author and read-only (data-model R40)', ()
   const q = (selector: string) => el().querySelector(selector);
   const row = (name: string) => q(`[data-testid="model-metric-${name}"]`) as HTMLElement;
 
-  it('shows "by <author>" only for a metric that records one', () => {
+  it('shows "by <author name>", else "by <author>", only for a metric that records an author', () => {
     expect(q('[data-testid="model-metric-author-avg_attendance"]')!.textContent!.trim()).toBe(
-      'by u-ada',
+      'by Ada Lovelace',
+    );
+    expect(q('[data-testid="model-metric-author-max_attendance"]')!.textContent!.trim()).toBe(
+      'by u-grace',
     );
     expect(q('[data-testid="model-metric-author-match_count"]')).toBeNull();
   });

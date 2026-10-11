@@ -8,8 +8,8 @@ import type { MetricCandidate } from './entities/metric.entity';
  * `GET /datasets/:name/model/metrics/candidates` (api.md 2.16, endpoint
  * 109), scoped to one dataset's model and addressed by logical entity
  * names. An unprefixed controller of its own, not a method on
- * `MetricsController` (whose `@Controller('metrics')` prefix every route
- * there shares) nor on `DataModelsController` (which would need
+ * `MetricsController` (whose `metrics` prefix every route there
+ * shares) nor on `DataModelsController` (which would need
  * `MetricsService` injected back into `DataModelsModule`: a circular import,
  * since `MetricsModule` already depends on `DataModelsModule`). It lives in
  * its own file so `scripts/check-specs.py`, which reads one controller

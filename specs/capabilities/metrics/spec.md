@@ -12,19 +12,19 @@ Capability-local vocabulary:
 - **Model metric** — a metric stored in a data model version (R1). The editor of record.
 - **Legacy metric** — a metric in the pre-data-model store: a flat SQL expression over a physical table `catalog.schema.table`, private to its owner in org server mode (R15).
 - **Candidate** — a prefilled metric draft offered from a verified query (R10).
-- **Author** — in org server mode, the user who defined a metric: the creator of the legacy metric it was imported from, or the user who created it in the Metrics tab (R14).
+- **Author** — in org server mode, the user who defined a metric: the creator of the legacy metric it was imported from, or the user who created it in the Metrics tab (R14). Recorded as their owner key and, for display, their name.
 
 ## Rules
 
 ### Model metrics
 
-- R1. A model metric SHALL have a name (its handle), a label, an optional description, one entity (a logical entity name of the model), and optionally: an aggregation (`sum`, `count`, `count_distinct`, `avg`, `min`, `max` or `ratio`), the attribute it aggregates (`of`), a numerator and a denominator (names of other metrics, for `ratio`), a filter (`where`: a predicate tree of `and`, `or`, `not` and `{ attribute, operator, value }` conditions, operators `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `in`, `not_in`, `between`, `is_null`, `not_null`, `contains`, `starts_with`), dimensions (attribute names), a SQL expression, the verified query it was promoted from, and its author (R14).
+- R1. A model metric SHALL have a name (its handle), a label, an optional description, one entity (a logical entity name of the model), and optionally: an aggregation (`sum`, `count`, `count_distinct`, `avg`, `min`, `max` or `ratio`), the attribute it aggregates (`of`), a numerator and a denominator (names of other metrics, for `ratio`), a filter (`where`: a predicate tree of `and`, `or`, `not` and `{ attribute, operator, value }` conditions, operators `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `in`, `not_in`, `between`, `is_null`, `not_null`, `contains`, `starts_with`), dimensions (attribute names), a SQL expression, the verified query it was promoted from, and its author and author name (R14).
 - R2. The name SHALL be trimmed and lowercased, and SHALL match `^[a-z][a-z0-9_]*$` (`must be lowercase, start with a letter: ^[a-z][a-z0-9_]*$`). Names SHALL be unique within the model, ignoring case (`duplicate metric name "<name>" (case-insensitive)`). The label and the entity SHALL NOT be empty.
 - R3. A metric SHALL have an aggregation or a SQL expression (`metric "<name>" needs "agg" or "expressions.sql"`). An aggregation other than `count` and `ratio` SHALL name its attribute (`metric "<name>" has agg "<agg>" and needs "of"`). A `ratio` SHALL name a numerator and a denominator (`… has agg "ratio" and needs "<field>"`) that are other metrics of the model (`… references unknown metric "<operand>" as its <field>`), never itself (`… cannot use itself as its own <field>`), and ratios SHALL NOT form a cycle (`ratio cycle detected: a -> b -> a`).
 - R4. The entity, the aggregated attribute, every dimension and every attribute of the filter SHALL exist in the model (`metric "<name>" references unknown entity "<entity>"`, `metric "<name>" references unknown attribute "<attribute>" on entity "<entity>"`, `metric "<name>" where-clause references unknown attribute …`).
 - R5. Creating, changing (addressed by its current name; the change may rename it) and deleting a model metric SHALL each validate the whole model ([data-model](../data-model/spec.md) R11) and append one version with source `user` and the note `metric <name> added`, `metric <name> updated` or `metric <name> removed`. A failure SHALL answer the issues and leave the current version unchanged. Changing or deleting a name the current version does not have SHALL fail with `Metric "<name>" not found on dataset "<dataset>"`. Deleting a metric that another metric's ratio still uses SHALL be rejected.
-- R6. A name created or changed through the Metrics tab SHALL become **model-managed**: a later write of that name to the legacy store never changes the model's metric. A deleted name SHALL be **tombstoned**: Bootstrap from snapshot, a re-save merge, the metrics import and legacy writes never bring it back. Creating or renaming a metric to a tombstoned name lifts the tombstone.
-- R7. Listing a model's metrics SHALL return the current version's metrics in model order. Metrics MAY also be edited in the model's YAML ([data-model](../data-model/spec.md) R23); that path follows R2-R4 but does not mark names as model-managed.
+- R6. A name created or changed through the Metrics tab SHALL become **model-managed**: a later write of that name to the legacy store never changes the model's metric. A deleted name SHALL be **tombstoned**: Bootstrap from snapshot, a re-save merge, the metrics import (at every startup included) and legacy writes never bring it back. Removing a metric from the YAML, the entity form or an imported file tombstones its name the same way ([data-model](../data-model/spec.md) R23). Creating or renaming a metric to a tombstoned name lifts the tombstone, and so does saving a version that holds the name.
+- R7. Listing a model's metrics SHALL return the current version's metrics in model order. Metrics MAY also be edited in the model's YAML ([data-model](../data-model/spec.md) R23); that path follows R2-R4 but does not mark names as model-managed; a metric it removes is tombstoned (R6).
 
 ### Reaching the assistant
 
@@ -39,15 +39,15 @@ Capability-local vocabulary:
 
 ### Sharing (org server mode)
 
-- R13. In org server mode model metrics SHALL be shared with the data model that holds them ([data-model](../data-model/spec.md) R37): every signed-in user sees them and every user's turns use them. Listing metrics and candidates SHALL need Use agents; creating, changing and deleting them SHALL need Manage datasources and datasets ([data-model](../data-model/spec.md) R38, R39), and the Metrics tab hides its write controls without it (R40 there).
-- R14. In org server mode every model metric SHALL record its **author**: a metric imported from the legacy store, the owner who created the legacy metric; a metric created in the Metrics tab (a promoted candidate included), the signed-in user who created it (their owner key). Changing a metric SHALL keep its author; the editor is not recorded. In local mode no author is recorded. A metric added through the YAML keeps whatever author the YAML gives it. The Metrics tab SHALL show a metric's author when it has one.
+- R13. In org server mode model metrics SHALL be shared with the data model that holds them ([data-model](../data-model/spec.md) R37): every signed-in user sees them, with their author's name (R14), and every user's turns use them. Listing metrics and candidates SHALL need Use agents; creating, changing and deleting them SHALL need Manage datasources and datasets ([data-model](../data-model/spec.md) R38, R39), and the Metrics tab hides its write controls without it (R40 there).
+- R14. In org server mode every model metric SHALL record its **author** (an owner key, an opaque user id) and its **author name** (that user's display name, for people to read): a metric imported from the legacy store, the owner who created the legacy metric and their display name in the directory when the import runs (no author name when the directory has no such user); a metric created in the Metrics tab (a promoted candidate included), the signed-in user who created it and their display name. Changing a metric SHALL keep its author and author name; the editor is not recorded. In local mode neither is recorded. A metric added through the YAML keeps whatever author and author name the YAML gives it. The Overview and the Metrics tab SHALL show `by <author name>` for a metric that has an author, `by <author>` when it has no author name.
 
 ### Legacy store (import-only)
 
 - R15. The legacy store SHALL keep the metrics created before data models existed: an id, a name, a label, an optional description, one physical entity `catalog.schema.table`, an optional datasource id, a SQL expression, optional dimensions, an optional source verified query and timestamps. No screen reads or writes it; its endpoints remain for compatibility. In org server mode each legacy metric is private to its owner and names are unique per owner ([../admin/spec.md](../admin/spec.md) R29, R31); every legacy action needs Use agents.
 - R16. A legacy write SHALL validate as before data models: name trimmed, lowercased, starting with a letter, only lowercase letters, digits and underscores, at most 64 characters (`Metric name is required`, `Metric name must be 64 characters or fewer`, `Metric name must be lowercase letters, digits and underscores, starting with a letter (e.g. denial_rate)`); label, entity and expression required (`Metric label is required`, `Metric entity is required`, `Metric expression is required`); an expression with a semicolon rejected (`Metric expression must be a single SQL expression (no semicolons)`); a name used by another of the owner's metrics rejected (`Metric "<name>" already exists`). Dimensions and description are trimmed; blank ones are dropped.
 - R17. A legacy update SHALL replace the metric from the full submitted definition, removing optional fields not submitted; updating or deleting an unknown id SHALL fail with `Metric <id> not found`. Legacy metrics SHALL be listed newest-updated first, optionally scoped to a set of entities (case-insensitive).
-- R18. Legacy metrics SHALL reach the models only through the metrics import and the legacy-write mirror: every owner's metrics, first by creation time then id per lowercase name, the rest reported as skipped, and a legacy write of a name the model holds from another author skipped and reported ([data-model](../data-model/spec.md) R34-R36).
+- R18. Legacy metrics SHALL reach the models only through the metrics import and the legacy-write mirror: every owner's metrics, first by creation time then id per lowercase name, the rest reported as skipped, and a legacy write of a name the model holds from another author skipped and reported ([data-model](../data-model/spec.md) R34-R36). A legacy delete, or the old name of a legacy rename, SHALL remove a model metric only when that metric's author is the legacy metric's owner (both absent in local mode); a model metric of another author stays ([data-model](../data-model/spec.md) R36).
 
 ## Edge cases and errors
 
@@ -74,7 +74,7 @@ The **Metrics** tab of the Data model view ([data-model](../data-model/spec.md))
 
 - Header "Metrics" with "Curated definitions, stored directly in the data model. Answers reuse these expressions verbatim instead of re-deriving the number each turn." and a **New metric** button (hidden while the form is open).
 - States: loading ("Loading metrics…"), error, empty, populated.
-- Row: gauge icon, label, name, entity, the definition (`<agg>(<attribute>)` or the SQL expression), "by <dimensions>" when present, the author when recorded, **Edit** and **Delete**.
+- Row: gauge icon, label, name, entity, the definition (`<agg>(<attribute>)` or the SQL expression), "by <dimensions>" when present, "by <author name>" (else "by <author>") when an author is recorded, **Edit** and **Delete**.
 - **Promote a verified answer**: when the form is closed and candidates exist, one button per candidate showing the approved question (tooltip = the approved SQL). Clicking one opens the form in SQL expression mode with Label, Name and Entity filled, the description "Promoted from verified query: <sql>" and an empty expression.
 - Form ("New metric" / "Edit metric"): Label, Name, Entity, an **Aggregation** / **SQL expression** switch, then Aggregation and Attribute (or Numerator metric and Denominator metric for a ratio) or the SQL expression; Dimensions as toggles of the entity's attributes; an optional single-condition **Filter (where)**; Description; **Cancel** and **Create metric** / **Save changes**. **New metric** defaults the entity to the model's first entity.
 - Toasts: `Metric "<label>" saved` (create and change), `Metric "<label>" deleted`.
@@ -152,15 +152,16 @@ Feature: Metrics tab
     Given the app runs in org server mode
     And "ada@contoso.test" and then "grace@contoso.test" each created a legacy metric "avg_attendance" on the "matches" table before the data model existed
     When I open the "Metrics" tab of the "World Cup Core" data model
-    Then "avg_attendance" is listed once, with Ada as its author
+    Then "avg_attendance" is listed once, with "by Ada Lovelace", Ada's display name, as its author
     And the header shows "1 metric skipped on import"
+    And the chip's title names Grace Hopper as the author of the skipped metric
 
   Scenario: A metric created in the Metrics tab records who created it
     Given the app runs in org server mode and I am signed in as "grace@contoso.test" with Manage datasources and datasets
     When I create the metric "Max attendance" ("max_attendance", "max" of "attendance" on "matches")
-    Then "Max attendance" is listed with me as its author
+    Then "Max attendance" is listed with "by Grace Hopper", my display name
     When "ada@contoso.test" edits its description and saves
-    Then "Max attendance" is still listed with me as its author
+    Then "Max attendance" is still listed with "by Grace Hopper"
 
   Scenario: The assistant reuses the metric
     Given the metric "avg_attendance" exists in the model of the session's dataset
@@ -172,7 +173,7 @@ Feature: Metrics tab
 
 - The scenario "Defines a metric in the Metrics tab" passes ([data-model](../data-model/spec.md)); the scenarios above behave as written once automated. Backend tests cover model metric validation (R2-R4), each write as a version and the delete rules (R5, R6), candidate scoping, slugging and exclusion (R10-R12), the legacy validation (R16, R17) and the import and mirror rules (R18).
 - A turn in a session whose dataset's model holds the metric shows the metric in the model block; a logical query selecting it compiles to the metric's definition.
-- In org server mode every user sees the same model metrics, a User cannot change them (HTTP 403), and imported metrics and metrics created in the Metrics tab carry their author, kept on edit.
+- In org server mode every user sees the same model metrics, a User cannot change them (HTTP 403), and imported metrics and metrics created in the Metrics tab carry their author and author name, kept on edit and shown by name.
 
 ## Open questions
 
