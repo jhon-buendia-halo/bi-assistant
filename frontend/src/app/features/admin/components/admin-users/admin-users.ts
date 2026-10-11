@@ -30,6 +30,7 @@ import {
   roleBadgeLabel,
 } from '../../models/admin.models';
 import { AdminApiService } from '../../services/admin-api.service';
+import { UserDetailPanel } from '../user-detail-panel/user-detail-panel';
 import {
   errorMessage,
   formatCount,
@@ -85,7 +86,7 @@ export function emptyMessage(view: DirectoryView, query: string): string {
  */
 @Component({
   selector: 'app-admin-users',
-  imports: [LucideAngularModule],
+  imports: [LucideAngularModule, UserDetailPanel],
   templateUrl: './admin-users.html',
 })
 export class AdminUsersTab implements OnInit, OnDestroy {
@@ -120,6 +121,8 @@ export class AdminUsersTab implements OnInit, OnDestroy {
 
   /** The user whose detail panel is open (admin R58). */
   readonly selectedId = signal<string | null>(null);
+  /** While the panel is open the table shows only Name, Roles and Last active. */
+  readonly compact = computed(() => this.selectedId() !== null);
 
   readonly chips = computed(() => {
     const counts = this.counts();
@@ -256,8 +259,18 @@ export class AdminUsersTab implements OnInit, OnDestroy {
     this.load();
   }
 
+  /** Opens the user detail panel, or shows another user in it (R58). */
   select(user: AdminUserRow): void {
     this.selectedId.set(user.id);
+  }
+
+  /** Closes the panel and returns focus to the user's name in the table. */
+  closePanel(): void {
+    const id = this.selectedId();
+    this.selectedId.set(null);
+    if (id) {
+      setTimeout(() => document.getElementById(`admin-user-${id}`)?.focus());
+    }
   }
 
   groupBadges(group: AdminGroupRow): { label: string; chip: string }[] {

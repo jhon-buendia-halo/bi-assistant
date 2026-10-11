@@ -626,7 +626,7 @@ Feature: Users and groups
 
 ### Feature: Edit a user
 
-E2E: none yet. Its spec, `frontend/e2e/org-admin-edit-user.spec.ts`, is written in step 7 of BA-166.
+E2E: `frontend/e2e/org-admin-edit-user.spec.ts` (Playwright `org` project).
 
 ```gherkin
 Feature: Edit a user
@@ -642,12 +642,14 @@ Feature: Edit a user
     Then the "User details" panel shows "Ada Lovelace", "ada@contoso.test" and "Active"
     And "Maker" is ticked and "Platform admin" and "Approver" are not
     And the groups show "Analysts"
+    And the row "Ada Lovelace" is marked current
     And the table shows only the columns "Name", "Roles" and "Last active"
     And the axe scan reports no violations in the Light theme
     And the axe scan reports no violations in the Dark theme
     When I click "Close user details"
     Then I don't see the "User details" panel
     And the table shows the column "Status"
+    And the focus is on "Ada Lovelace" in the table
 
   Scenario: Changing roles changes what the user can do
     Given "ada@contoso.test" is signed in in another browser
@@ -655,16 +657,17 @@ Feature: Edit a user
     And I tick "Approver", untick "Maker" and click "Save changes"
     Then I see the toast "Roles saved for Ada Lovelace"
     And the row "Ada Lovelace" shows the role "Approver" and not "Maker"
-    When Ada clicks "Agents" on the rail
+    When Ada reloads the page and clicks "Agents" on the rail
     Then Ada doesn't see the "New agent" button
 
   Scenario: Data owner names its datasource
     When I open the "Users & groups" tab as "admin@contoso.test" and click "Ada Lovelace"
     And I tick "Data owner"
     Then "Save changes" is disabled
-    When I choose "World Cup" in "Datasource" and click "Save changes"
+    When I choose "World Cup PostgreSQL" in "Datasource" and click "Save changes"
     Then I see the toast "Roles saved for Ada Lovelace"
-    And "Data owner · World Cup" is ticked
+    And "Data owner · World Cup PostgreSQL" is ticked
+    And "Data owner" is disabled, with "No other datasource to own."
 
   Scenario: A role from a group mapping can't be unticked
     Given the group "Analysts" is mapped to the Approver role
@@ -693,7 +696,8 @@ Feature: Edit a user
     When I open the "Users & groups" tab as "admin@contoso.test" and click "Ada Lovelace"
     And I click "Transfer ownership", choose "Grace Hopper" as the new owner and click "Transfer"
     Then I see the error toast 'Grace Hopper already has an agent named "Goal analyst"'
-    And "Agents owned" still lists "Goal analyst"
+    When I click "Cancel"
+    Then "Agents owned" still lists "Goal analyst"
 
   Scenario: A user with no groups and no agents
     Given "alan@contoso.test" (Alan Turing) is provisioned and in no group

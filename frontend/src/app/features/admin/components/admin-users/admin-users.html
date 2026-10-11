@@ -116,12 +116,16 @@
                   <tr class="text-[13px] font-semibold text-fg-strong">
                     <th scope="col" class="px-4 py-3 font-semibold">Name</th>
                     <th scope="col" class="px-4 py-3 font-semibold">Roles</th>
-                    <th scope="col" class="px-4 py-3 font-semibold">IdP groups</th>
-                    <th scope="col" class="px-4 py-3 text-right font-semibold">
-                      Agents owned
-                    </th>
+                    @if (!compact()) {
+                      <th scope="col" class="px-4 py-3 font-semibold">IdP groups</th>
+                      <th scope="col" class="px-4 py-3 text-right font-semibold">
+                        Agents owned
+                      </th>
+                    }
                     <th scope="col" class="px-4 py-3 font-semibold">Last active</th>
-                    <th scope="col" class="px-4 py-3 font-semibold">Status</th>
+                    @if (!compact()) {
+                      <th scope="col" class="px-4 py-3 font-semibold">Status</th>
+                    }
                   </tr>
                 </thead>
                 <tbody>
@@ -168,24 +172,28 @@
                           }
                         </div>
                       </td>
-                      <td class="px-4 py-2 text-[13px]">
-                        @if (user.groups.length) {
-                          <span class="text-fg">{{ user.groups.join(", ") }}</span>
-                        } @else {
-                          <span class="text-fg-muted">—</span>
-                        }
-                      </td>
-                      <td class="px-4 py-2 text-right text-[13px] text-fg">
-                        {{ formatCount(user.agentsOwned) }}
-                      </td>
+                      @if (!compact()) {
+                        <td class="px-4 py-2 text-[13px]">
+                          @if (user.groups.length) {
+                            <span class="text-fg">{{ user.groups.join(", ") }}</span>
+                          } @else {
+                            <span class="text-fg-muted">—</span>
+                          }
+                        </td>
+                        <td class="px-4 py-2 text-right text-[13px] text-fg">
+                          {{ formatCount(user.agentsOwned) }}
+                        </td>
+                      }
                       <td class="px-4 py-2 text-[13px] text-fg">
                         {{ lastActiveLabel(user.lastActiveAt) }}
                       </td>
-                      <td class="px-4 py-2">
-                        <span [class]="'chip ' + statusChips[user.status]">{{
-                          statusLabels[user.status]
-                        }}</span>
-                      </td>
+                      @if (!compact()) {
+                        <td class="px-4 py-2">
+                          <span [class]="'chip ' + statusChips[user.status]">{{
+                            statusLabels[user.status]
+                          }}</span>
+                        </td>
+                      }
                     </tr>
                   }
                 </tbody>
@@ -267,6 +275,18 @@
             </div>
           </div>
         </div>
+
+        <!-- The user detail panel (admin R58-R64), re-created for each user -->
+        @if (view() === "users" && selectedId(); as id) {
+          @for (userId of [id]; track userId) {
+            <app-user-detail-panel
+              class="sticky top-0 w-[520px] shrink-0"
+              [userId]="userId"
+              (close)="closePanel()"
+              (changed)="reload()"
+            />
+          }
+        }
       </div>
     </div>
   }

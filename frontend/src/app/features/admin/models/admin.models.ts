@@ -29,7 +29,10 @@ export interface AdminUserRow {
 }
 
 export interface AdminHeldRole extends HeldRole {
+  /** Data owner only: the datasource's current name, or its id once deleted. */
   datasourceName?: string;
+  /** Data owner only: the datasource was deleted, so the role grants nothing. */
+  datasourceMissing?: boolean;
   groupNames?: string[];
 }
 

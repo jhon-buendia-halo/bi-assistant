@@ -234,6 +234,30 @@ describe('AdminUsersTab', () => {
     ]);
   });
 
+  it('opens the user detail panel with compact columns, and closes it (admin R58)', fakeAsync(() => {
+    const { fixture, element } = loaded();
+    element.querySelector<HTMLButtonElement>('#admin-user-u-ada')!.click();
+    fixture.detectChanges();
+    http.expectOne('/admin/users/u-ada');
+    http.expectOne('/datasources');
+
+    expect(
+      Array.from(element.querySelectorAll('thead th')).map((th) => th.textContent?.trim()),
+    ).toEqual(['Name', 'Roles', 'Last active']);
+    const row = element.querySelector('#admin-user-u-ada')!.closest('tr')!;
+    expect(row.getAttribute('aria-current')).toBe('true');
+    expect(element.querySelector('app-user-detail-panel')).not.toBeNull();
+
+    fixture.componentInstance.closePanel();
+    fixture.detectChanges();
+    tick();
+    expect(element.querySelector('app-user-detail-panel')).toBeNull();
+    expect(
+      Array.from(element.querySelectorAll('thead th')).map((th) => th.textContent?.trim()),
+    ).toContain('Status');
+    expect(document.activeElement?.id).toBe('admin-user-u-ada');
+  }));
+
   it("shows the server's message with Retry when loading fails (admin R38)", () => {
     const { fixture, button, text } = render();
     usersRequest().flush({ message: 'Unknown filter: x' }, { status: 400, statusText: 'Bad' });

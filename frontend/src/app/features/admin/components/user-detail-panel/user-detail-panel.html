@@ -1,0 +1,237 @@
+<section
+  aria-label="User details"
+  class="card relative p-6"
+  (keydown)="onKeydown($event)"
+>
+  <button
+    type="button"
+    class="btn-icon absolute top-4 right-4"
+    title="Close user details"
+    aria-label="Close user details"
+    (click)="close.emit()"
+  >
+    <lucide-angular [img]="X" [size]="16" />
+  </button>
+
+  @switch (state()) {
+    @case ("loading") {
+      <div class="flex items-center gap-2.5 text-[13px] text-fg-muted">
+        <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
+        <span>Loading user…</span>
+      </div>
+    }
+    @case ("error") {
+      <div class="flex flex-col items-start gap-3 pr-8">
+        <p
+          class="rounded-md bg-danger-soft px-3 py-2.5 text-[13px] text-on-danger-soft"
+        >
+          {{ error() }}
+        </p>
+        <button type="button" class="btn btn-outline" (click)="load()">
+          Retry
+        </button>
+      </div>
+    }
+    @default {
+      @if (detail(); as user) {
+        <!-- Header (R59) -->
+        <div class="flex items-start gap-4 pr-10">
+          <span
+            aria-hidden="true"
+            class="flex size-12 shrink-0 items-center justify-center rounded-full bg-primary text-[16px] font-semibold text-on-primary"
+            >{{ user.initials }}</span
+          >
+          <div class="min-w-0 flex-1">
+            <h3
+              #heading
+              tabindex="-1"
+              class="truncate text-[20px] leading-7 font-normal text-fg-strong outline-none"
+            >
+              {{ user.displayName }}
+            </h3>
+            @if (user.email) {
+              <p class="truncate text-[13px] text-fg-muted">{{ user.email }}</p>
+            }
+          </div>
+          <span [class]="'chip mt-1 shrink-0 ' + statusChips[user.status]">{{
+            statusLabels[user.status]
+          }}</span>
+        </div>
+
+        <!-- Roles (R59-R61) -->
+        <fieldset class="mt-4">
+          <legend class="text-[14px] font-semibold text-fg-strong">Roles</legend>
+          <div class="card-muted mt-2 flex flex-col gap-2 px-4 py-3">
+            @for (row of rows(); track row.key; let i = $index) {
+              <div class="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  [id]="id + '-role-' + i"
+                  [checked]="isTicked(row)"
+                  [disabled]="row.locked"
+                  (change)="toggle(row)"
+                  [attr.aria-describedby]="id + '-role-' + i + '-desc'"
+                  class="mt-0.5 size-4 shrink-0 accent-primary"
+                />
+                <div class="min-w-0">
+                  <label
+                    [for]="id + '-role-' + i"
+                    class="text-[14px] font-semibold text-fg-strong"
+                    >{{ row.label }}</label
+                  >
+                  <p
+                    [id]="id + '-role-' + i + '-desc'"
+                    class="text-[12px] text-fg-muted"
+                  >
+                    {{ row.description }}
+                    @if (row.reason) {
+                      <span class="block">{{ row.reason }}</span>
+                    }
+                  </p>
+                </div>
+              </div>
+            }
+
+            <!-- Data owner of one more datasource -->
+            <div class="flex items-start gap-3">
+              <input
+                type="checkbox"
+                [id]="id + '-add'"
+                [checked]="addDataOwner()"
+                [disabled]="!offered().length"
+                (change)="toggleAddDataOwner()"
+                [attr.aria-describedby]="id + '-add-desc'"
+                class="mt-0.5 size-4 shrink-0 accent-primary"
+              />
+              <div class="min-w-0 flex-1">
+                <label
+                  [for]="id + '-add'"
+                  class="text-[14px] font-semibold text-fg-strong"
+                  >Data owner</label
+                >
+                <p [id]="id + '-add-desc'" class="text-[12px] text-fg-muted">
+                  {{ dataOwnerDescription }}
+                  @if (!offered().length) {
+                    <span class="block">{{ noDatasourceReason }}</span>
+                  }
+                </p>
+                <div class="mt-2">
+                  <label [for]="id + '-datasource'" class="field-label"
+                    >Datasource</label
+                  >
+                  <select
+                    [id]="id + '-datasource'"
+                    class="field mt-1"
+                    [disabled]="!addDataOwner()"
+                    (change)="newDatasourceId.set($any($event.target).value)"
+                  >
+                    <option value="" [selected]="!newDatasourceId()">
+                      Choose a datasource
+                    </option>
+                    @for (option of offered(); track option.id) {
+                      <option
+                        [value]="option.id"
+                        [selected]="newDatasourceId() === option.id"
+                      >
+                        {{ option.name }}
+                      </option>
+                    }
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+        </fieldset>
+
+        <!-- Groups (read-only, R17) -->
+        <h4
+          [id]="id + '-groups'"
+          class="mt-4 text-[14px] font-semibold text-fg-strong"
+        >
+          Groups (from Entra ID, read-only)
+        </h4>
+        @if (user.groupList.length) {
+          <ul
+            class="mt-2 flex flex-wrap gap-1"
+            [attr.aria-labelledby]="id + '-groups'"
+          >
+            @for (group of user.groupList; track group.id) {
+              <li class="chip chip-neutral">{{ group.displayName }}</li>
+            }
+          </ul>
+        } @else {
+          <p class="mt-2 text-[13px] text-fg-muted">No groups.</p>
+        }
+
+        <!-- Agents owned (R59) -->
+        <h4
+          [id]="id + '-agents'"
+          class="mt-4 text-[14px] font-semibold text-fg-strong"
+        >
+          Agents owned
+        </h4>
+        @if (agents().length) {
+          <ul
+            class="mt-2 flex flex-col gap-2"
+            [attr.aria-labelledby]="id + '-agents'"
+          >
+            @for (agent of agents(); track agent.id) {
+              <li class="list-row flex items-center gap-3 px-3 py-2.5">
+                <span class="min-w-0 flex-1 truncate text-[14px] text-fg">{{
+                  agent.name
+                }}</span>
+                <span [class]="'chip shrink-0 ' + agentStatus[agent.status].chip">{{
+                  agentStatus[agent.status].label
+                }}</span>
+              </li>
+            }
+          </ul>
+        } @else {
+          <p class="mt-2 text-[13px] text-fg-muted">No agents owned.</p>
+        }
+
+        <!-- Footer (R62, R63) -->
+        <div class="mt-6 flex justify-end gap-2">
+          <button
+            type="button"
+            class="btn btn-outline"
+            [disabled]="!agents().length"
+            [attr.title]="agents().length ? null : 'This user owns no agents'"
+            (click)="transferring.set(true)"
+          >
+            Transfer ownership
+          </button>
+          <button
+            type="button"
+            class="btn btn-primary"
+            [disabled]="saving() || saveBlocker() !== null"
+            [attr.title]="saveBlocker()"
+            (click)="save()"
+          >
+            @if (saving()) {
+              <lucide-angular
+                [img]="Loader2"
+                [size]="14"
+                class="animate-spin"
+              />
+              <span>Saving…</span>
+            } @else {
+              <span>Save changes</span>
+            }
+          </button>
+        </div>
+
+        @if (transferring()) {
+          <app-transfer-agents-dialog
+            title="Transfer ownership"
+            [intro]="transferIntro()"
+            [agents]="transferCandidates()"
+            [exclude]="[user.id]"
+            (cancel)="transferring.set(false)"
+            (done)="onTransferred()"
+          />
+        }
+      }
+    }
+  }
+</section>
