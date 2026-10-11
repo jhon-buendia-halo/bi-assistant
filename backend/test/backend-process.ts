@@ -31,15 +31,30 @@ export interface Backend {
   output: string[];
 }
 
-/** Start the built backend and wait until `GET /agents` answers. */
-export async function boot(dataDir: string): Promise<Backend> {
+export interface BootOptions {
+  /** Extra environment, e.g. the `ORG_*` configuration of an org server. */
+  env?: Record<string, string>;
+  /** Port to listen on; default a free one. */
+  port?: number;
+}
+
+/** Start the built backend and wait until `GET /me` answers (200 or 401). */
+export async function boot(
+  dataDir: string,
+  options: BootOptions = {},
+): Promise<Backend> {
   if (!existsSync(MAIN)) {
     throw new Error(`${MAIN} is missing: run "npm run build" first`);
   }
-  const port = await freePort();
+  const port = options.port ?? (await freePort());
   const output: string[] = [];
   const child = spawn(process.execPath, [MAIN], {
-    env: { ...process.env, APP_DATA_DIR: dataDir, PORT: String(port) },
+    env: {
+      ...process.env,
+      ...options.env,
+      APP_DATA_DIR: dataDir,
+      PORT: String(port),
+    },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   child.stdout?.on('data', (chunk: Buffer) => output.push(String(chunk)));
@@ -49,8 +64,11 @@ export async function boot(dataDir: string): Promise<Backend> {
   while (Date.now() < deadline) {
     if (child.exitCode !== null) break;
     try {
-      const res = await fetch(`${url}/agents`);
-      if (res.ok) return { url, process: child, output };
+      // Local mode answers 200, org server mode 401 without a session.
+      const res = await fetch(`${url}/me`);
+      if (res.status === 200 || res.status === 401) {
+        return { url, process: child, output };
+      }
     } catch {
       // Not listening yet.
     }
@@ -68,4 +86,28 @@ export async function stop(backend: Backend | undefined): Promise<void> {
   const timer = setTimeout(() => child.kill('SIGKILL'), 10_000);
   await exited;
   clearTimeout(timer);
+}
+
+/**
+ * Start the built backend expecting it to refuse to start (for example on a
+ * partial org server configuration). Resolves with its exit code and output.
+ */
+export async function bootFailure(
+  dataDir: string,
+  env: Record<string, string>,
+): Promise<{ code: number | null; output: string }> {
+  const port = await freePort();
+  const output: string[] = [];
+  const child = spawn(process.execPath, [MAIN], {
+    env: { ...process.env, ...env, APP_DATA_DIR: dataDir, PORT: String(port) },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  child.stdout?.on('data', (chunk: Buffer) => output.push(String(chunk)));
+  child.stderr?.on('data', (chunk: Buffer) => output.push(String(chunk)));
+  const timer = setTimeout(() => child.kill('SIGKILL'), 60_000);
+  const code = await new Promise<number | null>((resolve) =>
+    child.once('exit', (exitCode) => resolve(exitCode)),
+  );
+  clearTimeout(timer);
+  return { code, output: output.join('') };
 }

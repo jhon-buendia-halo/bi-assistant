@@ -107,6 +107,31 @@ describe('Local mode answers as the local user (API)', () => {
     });
   });
 
+  it('the org server routes answer 404 in local mode, except GET /me', async () => {
+    const notAvailable = {
+      statusCode: 404,
+      message: 'Not available in local mode',
+      error: 'Not Found',
+    };
+    for (const [method, path] of [
+      ['get', '/auth/login'],
+      ['get', '/auth/callback'],
+      ['post', '/auth/logout'],
+      ['get', '/scim/v2/Users'],
+      ['get', '/scim/v2/ServiceProviderConfig'],
+      ['post', '/scim/v2/Groups'],
+      ['post', '/admin/role-assignments'],
+      ['delete', '/admin/role-assignments/r1'],
+    ] as const) {
+      const res = await http()[method](path).send({});
+      expect({ path, status: res.status, body: res.body as unknown }).toEqual({
+        path,
+        status: 404,
+        body: notAvailable,
+      });
+    }
+  });
+
   it('a request without any Origin header is accepted in local mode', async () => {
     await http()
       .put('/developer-settings')
