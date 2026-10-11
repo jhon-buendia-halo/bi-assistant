@@ -1,0 +1,9 @@
+
+> @jhon-buendia-halo/questions-to-insights@0.20.3 test:e2e
+> jest --config ./test/jest-e2e.json data-models
+
+Test Suites: 1 passed, 1 total
+Tests:       22 passed, 22 total
+Snapshots:   0 total
+Time:        0.859 s, estimated 1 s
+Ran all test suites matching data-models.

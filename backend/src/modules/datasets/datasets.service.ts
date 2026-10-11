@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { DatasourcesService } from '../datasources/datasources.service';
 import type { ForeignKeyEdge } from '../datasources/connectors/connector';
 import type { QueryResult } from '../datasources/entities/datasource.entity';
+import { DataModelsService } from '../data-models/data-models.service';
 import { applyReferences, inferRelationships } from './relationships';
 import { DatasetsRepository } from './repositories/datasets.repository';
 import type {
@@ -34,19 +35,27 @@ export class DatasetsService {
   constructor(
     private readonly repository: DatasetsRepository,
     private readonly datasources: DatasourcesService,
+    private readonly dataModels: DataModelsService,
   ) {}
 
   list(): Promise<DatasetDoc[]> {
     return this.repository.list();
   }
 
-  delete(name: string): Promise<number> {
-    return this.repository.delete(name);
+  /** Deleting a dataset deletes its data model too — nothing should keep
+   * addressing a model whose dataset no longer exists. */
+  async delete(name: string): Promise<number> {
+    const removed = await this.repository.delete(name);
+    if (removed) await this.dataModels.delete(name);
+    return removed;
   }
 
   /**
    * Validate the selection against its datasource, enrich the schema snapshot
-   * with real sample values, and upsert the dataset by name.
+   * with real sample values, and upsert the dataset by name. The first save
+   * of a dataset bootstraps its data model (ADR-0006); every save after that
+   * only records drift against the current version — re-saving never
+   * overwrites it.
    */
   async save(input: SaveDatasetInput): Promise<DatasetDoc | null> {
     const name = (input.name ?? '').trim();
@@ -71,10 +80,22 @@ export class DatasetsService {
       input.tables,
       input.entities,
     );
-    return this.repository.save(name, input.tables, entities, {
+    const saved = await this.repository.save(name, input.tables, entities, {
       id: datasource.id,
       kind: datasource.kind,
     });
+    if (saved) {
+      const existingModel = await this.dataModels.get(saved.name);
+      if (existingModel) {
+        // Merges newly-included tables into a new version and always
+        // records drift for removed/changed attributes — never overwrites
+        // existing entities/attributes/metrics (review finding 1).
+        await this.dataModels.mergeSnapshot(saved);
+      } else {
+        await this.dataModels.ensureBootstrapped(saved);
+      }
+    }
+    return saved;
   }
 
   /**

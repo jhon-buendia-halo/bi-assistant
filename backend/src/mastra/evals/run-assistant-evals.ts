@@ -2,7 +2,10 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../../app.module';
 import { SessionsService } from '../../modules/sessions/sessions.service';
 import { KnowledgeService } from '../../modules/knowledge/knowledge.service';
+import { MetricsService } from '../../modules/metrics/metrics.service';
+import { DatasetsRepository } from '../../modules/datasets/repositories/datasets.repository';
 import { runAssistantEvals } from './assistant.evals';
+import type { AssistantEvalPath } from './assistant.evals';
 
 /**
  * CLI entry point for the same suite the Agents → Evals tab runs.
@@ -27,6 +30,12 @@ async function main(): Promise<void> {
     return;
   }
 
+  // ADR-0007 §7: `model` (default) runs the current logical-query-layer
+  // assistant; `legacy` runs the pre-change SQL-writing assistant, for a
+  // side-by-side comparison.
+  const path: AssistantEvalPath =
+    process.env['EVAL_PATH'] === 'legacy' ? 'legacy' : 'model';
+
   const app = await NestFactory.createApplicationContext(AppModule, {
     logger: ['error', 'warn'],
   });
@@ -41,6 +50,18 @@ async function main(): Promise<void> {
     const knowledgeBlock = await app
       .get(KnowledgeService)
       .definitionBlock(datasets);
+    // Only the `legacy` path needs the pre-ADR-0007 curated-metrics block.
+    const metricsBlock =
+      path === 'legacy'
+        ? await app
+            .get(MetricsService)
+            .definitionBlock(
+              (
+                await app.get(DatasetsRepository).getByNames(datasets)
+              ).flatMap((d) => d.tables ?? []),
+            )
+        : undefined;
+    console.log(`Running the "${path}" path\n`);
     const results = await runAssistantEvals(
       datasets,
       (result) => {
@@ -54,9 +75,16 @@ async function main(): Promise<void> {
       undefined,
       sessions,
       knowledgeBlock,
+      { path, metricsBlock },
     );
     const passed = results.filter((result) => result.passed).length;
+    const outsideModel = results.filter(
+      (result) => result.outsideModel,
+    ).length;
     console.log(`\n${passed}/${results.length} questions passed`);
+    console.log(
+      `${outsideModel}/${results.length} answers outside the data model`,
+    );
     process.exitCode = passed === results.length ? 0 : 1;
   } finally {
     await app.close();

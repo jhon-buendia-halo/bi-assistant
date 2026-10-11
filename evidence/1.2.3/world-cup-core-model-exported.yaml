@@ -1,0 +1,56 @@
+model: World Cup Core
+version: 2
+entities:
+  - name: matches
+    key: [ match_id ]
+    bindings:
+      - kind: sql
+        datasource: 1eec9abd-f4aa-4aea-8fca-423110c4a003
+        table: world_cup.world_cup.matches
+    attributes:
+      - name: match_id
+        type: integer
+        role: key
+        samples: [ 1 ]
+      - name: home_team_id
+        type: integer
+        role: key
+        samples: [ 10 ]
+      - name: away_team_id
+        type: integer
+        role: key
+        samples: [ 20 ]
+      - name: attendance
+        type: integer
+        role: measure
+        nullable: true
+        samples: [ 42000 ]
+  - name: teams
+    key: [ team_id ]
+    bindings:
+      - kind: sql
+        datasource: 1eec9abd-f4aa-4aea-8fca-423110c4a003
+        table: world_cup.world_cup.teams
+    attributes:
+      - name: team_id
+        type: integer
+        role: key
+        samples: [ 10 ]
+      - name: name
+        type: string
+        role: dimension
+        samples: [ Argentina ]
+relationships:
+  - from: matches.home_team_id
+    to: teams.team_id
+    cardinality: many_to_one
+    source: declared
+  - from: matches.away_team_id
+    to: teams.team_id
+    cardinality: many_to_one
+    source: inferred
+metrics:
+  - name: goals_per_match
+    label: Goals per match
+    entity: matches
+    agg: count

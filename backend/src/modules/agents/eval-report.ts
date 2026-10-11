@@ -128,6 +128,10 @@ export function renderEvalRunMarkdown(
     `- **Status:** ${run.status}`,
     `- **Datasource:** ${datasourceName ?? run.datasourceId}`,
     `- **Datasets:** ${run.datasets.join(', ') || '—'}`,
+    // `path` is optional for runs persisted before ADR-0007 — treat a
+    // missing value as the current default, `model`.
+    `- **Path:** ${run.path ?? 'model'}`,
+    `- **Outside the data model:** ${run.outsideModelCount ?? 0}/${run.totalCases}`,
     `- **Run id:** \`${run.jobId}\``,
   ];
 

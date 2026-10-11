@@ -101,12 +101,19 @@ export class AgentsController {
   @RequirePermission('create-agents')
   async runEvals(
     @Param('key') key: string,
-    @Body() body: { datasourceId?: string; caseIds?: string[] },
+    @Body()
+    body: {
+      datasourceId?: string;
+      caseIds?: string[];
+      /** `model` (default, ADR-0007) or `legacy` — see `EvalRunsService.start`. */
+      path?: string;
+    },
   ): Promise<{ ok: boolean; message: string; jobId?: string }> {
     const result = await this.evalRuns.start(
       key,
       body?.datasourceId ?? '',
       Array.isArray(body?.caseIds) ? body.caseIds.map(String) : undefined,
+      body?.path === 'legacy' ? 'legacy' : 'model',
     );
     if ('error' in result) return { ok: false, message: result.error };
     if ('conflictWith' in result) {

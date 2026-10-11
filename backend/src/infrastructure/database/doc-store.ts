@@ -100,6 +100,7 @@ export const PRIVATE_COLLECTIONS: { owned: string; raw: string }[] = [
   { owned: OWNED_KNOWLEDGE_STORE, raw: KNOWLEDGE_STORE },
   { owned: OWNED_AGENTS_STORE, raw: AGENTS_STORE },
 ];
+export const DATA_MODELS_STORE = 'DOC_STORE_data_models';
 
 export function isExistsCondition(v: FilterValue): v is ExistsCondition {
   return typeof v === 'object' && v !== null && '$exists' in v;

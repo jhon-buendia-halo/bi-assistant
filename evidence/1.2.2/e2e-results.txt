@@ -1,0 +1,71 @@
+## Backend e2e (data-models), re-run after the code-review fixes — 2026-10-02
+
+> @jhon-buendia-halo/questions-to-insights@0.20.3 test:e2e
+> jest --config ./test/jest-e2e.json data-models
+
+Test Suites: 1 passed, 1 total
+Tests:       13 passed, 13 total
+Snapshots:   0 total
+Time:        0.821 s, estimated 1 s
+Ran all test suites matching data-models.
+
+(This suite failed 13/13 mid-review, transiently: `DataModelsModule` briefly
+imported `MastraModule` to route `/model/query` through the sql-fixer repair
+path, which eagerly loads the full Mastra agent registry — unsafe under this
+project's Jest CommonJS config. Fixed by routing the repair pass through a
+runtime `SqlFixerBridge` (`query/sql-repair.ts`) instead, the same pattern
+`tool-services.ts`'s `setDatasetToolServices` already uses, so
+`DataModelsModule` never needs a Mastra import.)
+
+## Playwright Electron suite, re-run after the code-review fixes — 2026-10-02
+## E2E_SKIP_DOCKER=1 npm run test:e2e (Postgres already up on 55432)
+
+  ✓   1 e2e/agents.spec.ts:29:5 › opens an agent from the Agents list and switches between its tabs (2.5s)
+  ✓   2 e2e/agents.spec.ts:92:5 › shows the stateless, no-tool agents accurately (1.2s)
+  ✓   3 e2e/agents.spec.ts:112:5 › offers the configured datasources and starts a run from the evals tab (2.3s)
+  ✓   4 e2e/agents.spec.ts:138:5 › runs only the ticked questions (1.6s)
+  ✓   5 e2e/agents.spec.ts:168:5 › refuses to run against a datasource with no datasets (1.5s)
+  ✓   6 e2e/agents.spec.ts:183:5 › explains an incomplete eval dataset without starting a run (1.8s)
+  ✓   7 e2e/agents.spec.ts:200:5 › opens a question in the right panel with what it is scored on (1.3s)
+  ✓   8 e2e/agents.spec.ts:225:5 › separates the question suite from past executions (2.6s)
+  ✓   9 e2e/agents.spec.ts:254:5 › downloads an execution as a Markdown report (3.0s)
+  ✓  10 e2e/chat-and-visuals.spec.ts:141:5 › renders streamed reasoning, tool activity, final Markdown, and supports stopping (3.6s)
+  ✓  11 e2e/chat-and-visuals.spec.ts:170:5 › renders a deterministic interactive visualization and its version controls (3.4s)
+  ✓  12 e2e/diagnostics.spec.ts:5:5 › captures live renderer failures, filters issues, and exports a redacted LLM-readable report (1.2s)
+  ✓  13 e2e/diagnostics.spec.ts:83:5 › replaces the help icon and supports log refresh, follow mode, and dismissal (1.1s)
+  ✓  14 e2e/layout-accessibility.spec.ts:4:5 › supports keyboard layout controls and persists the right-panel width (1.3s)
+  ✓  15 e2e/layout-accessibility.spec.ts:37:5 › has no automatically detectable accessibility violations in the application shell (1.1s)
+  ✓  16 e2e/layout-accessibility.spec.ts:47:5 › matches the stable application-shell visual baseline (1.1s)
+  ✓  17 e2e/world-cup-workflow.spec.ts:13:5 › creates a PostgreSQL datasource, dataset, and session using the real World Cup database (1.8s)
+  ✓  18 e2e/world-cup-workflow.spec.ts:34:5 › preserves masked credentials when editing and supports datasource deletion (1.3s)
+  ✓  19 e2e/world-cup-workflow.spec.ts:60:5 › surfaces a failed connection in both the form and system diagnostics (1.3s)
+  ✓  20 e2e/world-cup-workflow.spec.ts:89:5 › shows the real catalog schema and column metadata before a dataset is saved (1.8s)
+
+  20 passed (37.0s)
+
+## Prior orchestrator run (pre-review-round tree), 2026-10-02T14:45Z, for reference
+## E2E_SKIP_DOCKER=1 npm run test:e2e — 20/20 passed (40.5s), same 20 specs as above.
+
+## Playwright Electron suite after the review fix round, orchestrator runs 2026-10-02T16:07Z — E2E_SKIP_DOCKER=1 npm run test:e2e
+Run 1: 19 passed, 1 failed (agents.spec.ts first test: electronApplication.firstWindow timeout — Electron cold start, not a feature failure). Run 2:
+  ✓   1 e2e/agents.spec.ts:29:5 › opens an agent from the Agents list and switches between its tabs (2.4s)
+  ✓   2 e2e/agents.spec.ts:92:5 › shows the stateless, no-tool agents accurately (1.3s)
+  ✓   3 e2e/agents.spec.ts:112:5 › offers the configured datasources and starts a run from the evals tab (2.5s)
+  ✓   4 e2e/agents.spec.ts:138:5 › runs only the ticked questions (2.0s)
+  ✓   5 e2e/agents.spec.ts:168:5 › refuses to run against a datasource with no datasets (1.7s)
+  ✓   6 e2e/agents.spec.ts:183:5 › explains an incomplete eval dataset without starting a run (2.1s)
+  ✓   7 e2e/agents.spec.ts:200:5 › opens a question in the right panel with what it is scored on (1.4s)
+  ✓   8 e2e/agents.spec.ts:225:5 › separates the question suite from past executions (2.9s)
+  ✓   9 e2e/agents.spec.ts:254:5 › downloads an execution as a Markdown report (2.9s)
+  ✓  10 e2e/chat-and-visuals.spec.ts:141:5 › renders streamed reasoning, tool activity, final Markdown, and supports stopping (3.3s)
+  ✓  11 e2e/chat-and-visuals.spec.ts:170:5 › renders a deterministic interactive visualization and its version controls (3.3s)
+  ✓  12 e2e/diagnostics.spec.ts:5:5 › captures live renderer failures, filters issues, and exports a redacted LLM-readable report (1.4s)
+  ✓  13 e2e/diagnostics.spec.ts:83:5 › replaces the help icon and supports log refresh, follow mode, and dismissal (1.3s)
+  ✓  14 e2e/layout-accessibility.spec.ts:4:5 › supports keyboard layout controls and persists the right-panel width (1.5s)
+  ✓  15 e2e/layout-accessibility.spec.ts:37:5 › has no automatically detectable accessibility violations in the application shell (1.4s)
+  ✓  16 e2e/layout-accessibility.spec.ts:47:5 › matches the stable application-shell visual baseline (1.2s)
+  ✓  17 e2e/world-cup-workflow.spec.ts:13:5 › creates a PostgreSQL datasource, dataset, and session using the real World Cup database (2.0s)
+  ✓  18 e2e/world-cup-workflow.spec.ts:34:5 › preserves masked credentials when editing and supports datasource deletion (1.5s)
+  ✓  19 e2e/world-cup-workflow.spec.ts:60:5 › surfaces a failed connection in both the form and system diagnostics (1.5s)
+  ✓  20 e2e/world-cup-workflow.spec.ts:89:5 › shows the real catalog schema and column metadata before a dataset is saved (2.2s)
+  20 passed (40.3s)

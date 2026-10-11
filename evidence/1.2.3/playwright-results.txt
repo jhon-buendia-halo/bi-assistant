@@ -1,0 +1,81 @@
+Playwright — frontend/e2e/data-model-editing.spec.ts (roadmap 1.2.3 / BA-87)
+Run: E2E_SKIP_DOCKER=1 npx playwright test e2e/data-model-editing.spec.ts
+World Cup Postgres already running on 55432; backend spawned by the Electron
+main process on port 3000 per-test (electron.fixture.ts gives each test its
+own appDataDir/Electron instance).
+
+Running 7 tests using 1 worker
+
+  ✓ 1 opens a dataset's data model and sees its bootstrapped entities, relationships and metrics (2.8s)
+  ✓ 2 edits the YAML, saves, and the version badge advances; v1 is still listed (1.9s)
+  ✓ 3 rejects an invalid YAML edit with the offending line highlighted, leaving v1 current (2.0s)
+  ✓ 4 reverts to version 1 from the Versions tab, keeping version 2, and diffs them (2.0s)
+  ✓ 5 changes a relationship's cardinality in the entity form and saves a new version (1.9s)
+  ✓ 6 defines a metric in the Metrics tab; it appears in the list and in the YAML (1.9s)
+  ✓ 7 exports the model; the response is a yaml file, and importing it back creates an equivalent "import" version (2.0s)
+
+  7 passed (15.4s)
+
+History: the orchestrator's first full-suite run (frontend `npm run test:e2e`)
+reported 25/27 passing with scenarios 5 and 7 failing. Code review identified
+the root causes (see docs/plans/ba-87-model-editing.md):
+  - #5 (cardinality): entity-editor.html's <select [value]> bound the
+    element but never marked an <option> [selected], so every select in
+    the entity/metrics forms rendered its first option regardless of the
+    real value — Playwright's selectOption() picked the same underlying
+    value the model already had, so nothing was actually dirty and Save
+    stayed disabled. Fixed by adding [selected] per <option>, matching
+    catalog-browser.html's existing working pattern.
+  - #7 (export/import): Playwright's `download` event is not wired through
+    the Electron renderer (same constraint already noted in
+    agents.spec.ts's Markdown-report download test); the test now asserts
+    the `GET .../model/export` network response directly and feeds its
+    body into the import step. The export filename is also now built
+    client-side (`slugifyDatasetName`) rather than read from
+    Content-Disposition, which is unreadable cross-origin under Electron's
+    file:// -> http://localhost:3000 call without CORS exposedHeaders.
+
+Both fixes (and ten other code-review findings spanning backend metrics
+grounding, delete validation/tombstoning, promotion-candidate scoping,
+Overview relationship/metric display, YAML editor line-wrap/highlight
+rendering, and wording corrections) are applied; this run reflects the
+fixed state, 7/7 green.
+
+Full suite note: the orchestrator's original run covered 27 Playwright specs
+across the whole app (25/27 passing before this fix round, only the two
+data-model-editing scenarios above failing). This workspace is restricted
+to running only data-model-editing.spec.ts (port/Postgres collision risk
+with a concurrent story's run); a full-suite re-run is the orchestrator's
+to confirm, but nothing touched outside features/data-model/,
+features/datasets/{dataset-list,catalog-browser}, shared/utils/line-diff.ts
+or the backend modules/{data-models,metrics} in this round.
+
+## Full suite, orchestrator run 2026-10-02T14:43Z — E2E_SKIP_DOCKER=1 npm run test:e2e
+  ✓   1 e2e/agents.spec.ts:29:5 › opens an agent from the Agents list and switches between its tabs (2.3s)
+  ✓   2 e2e/agents.spec.ts:89:5 › shows the stateless, no-tool agents accurately (1.1s)
+  ✓   3 e2e/agents.spec.ts:109:5 › offers the configured datasources and starts a run from the evals tab (2.5s)
+  ✓   4 e2e/agents.spec.ts:135:5 › runs only the ticked questions (1.6s)
+  ✓   5 e2e/agents.spec.ts:165:5 › refuses to run against a datasource with no datasets (1.4s)
+  ✓   6 e2e/agents.spec.ts:180:5 › explains an incomplete eval dataset without starting a run (1.9s)
+  ✓   7 e2e/agents.spec.ts:197:5 › opens a question in the right panel with what it is scored on (1.3s)
+  ✓   8 e2e/agents.spec.ts:222:5 › separates the question suite from past executions (2.6s)
+  ✓   9 e2e/agents.spec.ts:251:5 › downloads an execution as a Markdown report (2.6s)
+  ✓  10 e2e/chat-and-visuals.spec.ts:141:5 › renders streamed reasoning, tool activity, final Markdown, and supports stopping (3.5s)
+  ✓  11 e2e/chat-and-visuals.spec.ts:170:5 › renders a deterministic interactive visualization and its version controls (3.5s)
+  ✓  12 e2e/data-model-editing.spec.ts:103:5 › opens a dataset's data model and sees its bootstrapped entities, relationships and metrics (1.8s)
+  ✓  13 e2e/data-model-editing.spec.ts:137:5 › edits the YAML, saves, and the version badge advances; v1 is still listed (1.9s)
+  ✓  14 e2e/data-model-editing.spec.ts:158:5 › rejects an invalid YAML edit with the offending line highlighted, leaving v1 current (1.9s)
+  ✓  15 e2e/data-model-editing.spec.ts:187:5 › reverts to version 1 from the Versions tab, keeping version 2, and diffs them (2.0s)
+  ✓  16 e2e/data-model-editing.spec.ts:216:5 › changes a relationship's cardinality in the entity form and saves a new version (1.9s)
+  ✓  17 e2e/data-model-editing.spec.ts:248:5 › defines a metric in the Metrics tab; it appears in the list and in the YAML (1.9s)
+  ✓  18 e2e/data-model-editing.spec.ts:270:5 › exports the model; the response is a yaml file, and importing it back creates an equivalent "import" version (2.0s)
+  ✓  19 e2e/diagnostics.spec.ts:5:5 › captures live renderer failures, filters issues, and exports a redacted LLM-readable report (1.2s)
+  ✓  20 e2e/diagnostics.spec.ts:83:5 › replaces the help icon and supports log refresh, follow mode, and dismissal (1.1s)
+  ✓  21 e2e/layout-accessibility.spec.ts:4:5 › supports keyboard layout controls and persists the right-panel width (1.2s)
+  ✓  22 e2e/layout-accessibility.spec.ts:37:5 › has no automatically detectable accessibility violations in the application shell (1.1s)
+  ✓  23 e2e/layout-accessibility.spec.ts:47:5 › matches the stable application-shell visual baseline (1.1s)
+  ✓  24 e2e/world-cup-workflow.spec.ts:13:5 › creates a PostgreSQL datasource, dataset, and session using the real World Cup database (1.9s)
+  ✓  25 e2e/world-cup-workflow.spec.ts:34:5 › preserves masked credentials when editing and supports datasource deletion (1.3s)
+  ✓  26 e2e/world-cup-workflow.spec.ts:60:5 › surfaces a failed connection in both the form and system diagnostics (1.3s)
+  ✓  27 e2e/world-cup-workflow.spec.ts:89:5 › shows the real catalog schema and column metadata before a dataset is saved (1.9s)
+  27 passed (50.2s)

@@ -47,6 +47,17 @@ describe('lastSuccessfulSqlRecord', () => {
     ];
     expect(lastSuccessfulSqlRecord(records)?.input).toBe('SELECT 2');
   });
+
+  it("recognises query_entities records too (the model path's data-query tool, ADR-0007)", () => {
+    const records: ToolDataRecord[] = [
+      {
+        tool: 'query_entities',
+        input: 'SELECT COUNT(*) AS n FROM "public"."matches"',
+        rows: [{ n: 1 }],
+      },
+    ];
+    expect(lastSuccessfulSqlRecord(records)?.tool).toBe('query_entities');
+  });
 });
 
 describe('runResultSetCheck', () => {
@@ -74,7 +85,7 @@ describe('runResultSetCheck', () => {
     );
     expect(result?.id).toBe(RESULT_SET_CHECK_ID);
     expect(result?.passed).toBe(false);
-    expect(result?.reason).toMatch(/no successful run_readonly_sql/);
+    expect(result?.reason).toMatch(/no successful data query/);
   });
 
   it('fails when no datasource can be resolved', async () => {
@@ -117,6 +128,31 @@ describe('runResultSetCheck', () => {
       RESULT_SET_ROW_LIMIT,
       ['World Cup'],
     );
+  });
+
+  it('matches against a query_entities record just as it would a run_readonly_sql one (the model path, ADR-0007)', async () => {
+    const runReadOnlySql = jest.fn().mockResolvedValue({
+      columns: ['champion'],
+      rows: [{ champion: 'Argentina' }],
+    });
+    setDatasetToolServices(stubServices({ runReadOnlySql }));
+
+    const result = await runResultSetCheck(
+      'SELECT champion FROM tournaments',
+      ['World Cup'],
+      snapshot,
+      [
+        {
+          tool: 'query_entities',
+          input:
+            'SELECT "teams"."common_name" AS "team" FROM "public"."matches" ...',
+          rows: [{ team: 'Argentina' }],
+        },
+      ],
+    );
+
+    expect(result?.passed).toBe(true);
+    expect(result?.score).toBe(1);
   });
 
   it('fails with a reason when the rows differ', async () => {

@@ -1,0 +1,11 @@
+# Frontend unit (npm test -- --watch=false --browsers=ChromeHeadless) and build (npm run build)
+
+TOTAL: 1 FAILED, 83 SUCCESS
+88:[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7) App should support keyboard resizing from the separator FAILED
+89-	Expected 516 to be 548.
+90-	    at <Jasmine>
+
+Note: the one failure (App › keyboard resizing from the separator, src/app/app.spec.ts:94) is in code untouched by this change; the frontend tree is identical to main.
+
+Application bundle generation complete. [3.078 seconds] - 2026-10-02T03:07:46.115Z
+BUILD_EXIT=0

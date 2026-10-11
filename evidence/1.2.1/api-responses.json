@@ -1,0 +1,626 @@
+{
+  "metric_before_dataset": {
+    "status": 201,
+    "data": {
+      "ok": true,
+      "message": "Metric \"Average attendance\" saved",
+      "metric": {
+        "id": "d9d57854-a414-456d-bb9c-239e30bc768f",
+        "name": "avg_attendance",
+        "label": "Average attendance",
+        "entity": "world_cup.world_cup.matches",
+        "expression": "AVG(attendance)",
+        "description": "Mean attendance per match",
+        "dimensions": [
+          "tournament_id"
+        ],
+        "createdAt": "2026-10-02T04:31:21.127Z",
+        "updatedAt": "2026-10-02T04:31:21.127Z"
+      }
+    }
+  },
+  "dataset_save": {
+    "status": 201,
+    "ok": true,
+    "message": "Dataset \"World Cup Core\" saved — 5 entities"
+  },
+  "metric_after_dataset": {
+    "status": 201,
+    "data": {
+      "ok": false,
+      "message": "Metric \"avg_attendance\" already exists"
+    }
+  },
+  "model_get": {
+    "status": 200,
+    "currentVersion": 1,
+    "entities": [
+      "goals",
+      "matches",
+      "players",
+      "teams",
+      "tournaments"
+    ],
+    "relationships": [
+      {
+        "from": "goals.match_id",
+        "to": "matches.id",
+        "cardinality": "many_to_one",
+        "source": "declared"
+      },
+      {
+        "from": "goals.scoring_team_id",
+        "to": "teams.id",
+        "cardinality": "many_to_one",
+        "source": "declared"
+      },
+      {
+        "from": "goals.scorer_player_id",
+        "to": "players.id",
+        "cardinality": "many_to_one",
+        "source": "declared"
+      },
+      {
+        "from": "goals.assist_player_id",
+        "to": "players.id",
+        "cardinality": "many_to_one",
+        "source": "declared"
+      },
+      {
+        "from": "matches.tournament_id",
+        "to": "tournaments.id",
+        "cardinality": "many_to_one",
+        "source": "declared"
+      },
+      {
+        "from": "matches.home_team_id",
+        "to": "teams.id",
+        "cardinality": "many_to_one",
+        "source": "declared"
+      },
+      {
+        "from": "matches.away_team_id",
+        "to": "teams.id",
+        "cardinality": "many_to_one",
+        "source": "declared"
+      },
+      {
+        "from": "matches.winner_team_id",
+        "to": "teams.id",
+        "cardinality": "many_to_one",
+        "source": "declared"
+      },
+      {
+        "from": "players.national_team_id",
+        "to": "teams.id",
+        "cardinality": "many_to_one",
+        "source": "declared"
+      },
+      {
+        "from": "tournaments.champion_team_id",
+        "to": "teams.id",
+        "cardinality": "many_to_one",
+        "source": "declared"
+      },
+      {
+        "from": "tournaments.runner_up_team_id",
+        "to": "teams.id",
+        "cardinality": "many_to_one",
+        "source": "declared"
+      }
+    ],
+    "metrics": [
+      {
+        "name": "avg_attendance",
+        "label": "Average attendance",
+        "description": "Mean attendance per match",
+        "entity": "matches",
+        "dimensions": [
+          "tournament_id"
+        ],
+        "expressions": {
+          "sql": "AVG(attendance)"
+        }
+      }
+    ]
+  },
+  "resolve": {
+    "status": 200,
+    "data": {
+      "results": [
+        {
+          "ref": "matches",
+          "resolved": true,
+          "kind": "entity",
+          "target": {
+            "name": "matches",
+            "key": [
+              "id"
+            ],
+            "bindings": [
+              {
+                "kind": "sql",
+                "datasource": "8a2a9a3f-420d-4dfc-8a1b-4e9bf68c8f73",
+                "table": "world_cup.world_cup.matches"
+              }
+            ],
+            "attributes": [
+              {
+                "name": "id",
+                "type": "integer",
+                "role": "key",
+                "samples": [
+                  1,
+                  2,
+                  3,
+                  4,
+                  5
+                ]
+              },
+              {
+                "name": "tournament_id",
+                "type": "integer",
+                "role": "key",
+                "samples": [
+                  2,
+                  1
+                ]
+              },
+              {
+                "name": "match_number",
+                "type": "integer",
+                "role": "measure",
+                "samples": [
+                  64,
+                  61,
+                  58,
+                  63,
+                  62
+                ]
+              },
+              {
+                "name": "stage",
+                "type": "string",
+                "role": "dimension",
+                "samples": [
+                  "final",
+                  "semi_final",
+                  "quarter_final",
+                  "third_place"
+                ]
+              },
+              {
+                "name": "group_letter",
+                "type": "string",
+                "role": "dimension",
+                "nullable": true
+              },
+              {
+                "name": "kicked_off_at",
+                "type": "datetime",
+                "role": "time",
+                "samples": [
+                  "2022-12-18T15:00:00.000Z",
+                  "2022-12-13T19:00:00.000Z",
+                  "2022-12-09T19:00:00.000Z",
+                  "2018-07-14T14:00:00.000Z",
+                  "2018-07-06T18:00:00.000Z"
+                ]
+              },
+              {
+                "name": "venue_id",
+                "type": "integer",
+                "role": "key",
+                "samples": [
+                  9,
+                  3,
+                  5,
+                  4,
+                  2
+                ]
+              },
+              {
+                "name": "home_team_id",
+                "type": "integer",
+                "role": "key",
+                "samples": [
+                  1,
+                  8,
+                  2,
+                  3,
+                  4
+                ]
+              },
+              {
+                "name": "away_team_id",
+                "type": "integer",
+                "role": "key",
+                "samples": [
+                  6,
+                  4,
+                  1,
+                  5,
+                  2
+                ]
+              },
+              {
+                "name": "home_goals",
+                "type": "integer",
+                "role": "measure",
+                "samples": [
+                  3,
+                  2,
+                  1,
+                  0,
+                  4
+                ]
+              },
+              {
+                "name": "away_goals",
+                "type": "integer",
+                "role": "measure",
+                "samples": [
+                  3,
+                  0,
+                  2,
+                  1
+                ]
+              },
+              {
+                "name": "went_to_extra_time",
+                "type": "boolean",
+                "role": "dimension",
+                "samples": [
+                  true,
+                  false
+                ]
+              },
+              {
+                "name": "home_penalties",
+                "type": "integer",
+                "role": "measure",
+                "nullable": true,
+                "samples": [
+                  4,
+                  3
+                ]
+              },
+              {
+                "name": "away_penalties",
+                "type": "integer",
+                "role": "measure",
+                "nullable": true,
+                "samples": [
+                  2,
+                  4
+                ]
+              },
+              {
+                "name": "winner_team_id",
+                "type": "integer",
+                "role": "key",
+                "nullable": true,
+                "samples": [
+                  1,
+                  2,
+                  4,
+                  5,
+                  6
+                ]
+              },
+              {
+                "name": "attendance",
+                "type": "integer",
+                "role": "measure",
+                "nullable": true,
+                "samples": [
+                  88966,
+                  88235,
+                  64406,
+                  44137,
+                  78011
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "ref": "matches.attendance",
+          "resolved": true,
+          "kind": "attribute",
+          "target": {
+            "entity": {
+              "name": "matches",
+              "key": [
+                "id"
+              ],
+              "bindings": [
+                {
+                  "kind": "sql",
+                  "datasource": "8a2a9a3f-420d-4dfc-8a1b-4e9bf68c8f73",
+                  "table": "world_cup.world_cup.matches"
+                }
+              ],
+              "attributes": [
+                {
+                  "name": "id",
+                  "type": "integer",
+                  "role": "key",
+                  "samples": [
+                    1,
+                    2,
+                    3,
+                    4,
+                    5
+                  ]
+                },
+                {
+                  "name": "tournament_id",
+                  "type": "integer",
+                  "role": "key",
+                  "samples": [
+                    2,
+                    1
+                  ]
+                },
+                {
+                  "name": "match_number",
+                  "type": "integer",
+                  "role": "measure",
+                  "samples": [
+                    64,
+                    61,
+                    58,
+                    63,
+                    62
+                  ]
+                },
+                {
+                  "name": "stage",
+                  "type": "string",
+                  "role": "dimension",
+                  "samples": [
+                    "final",
+                    "semi_final",
+                    "quarter_final",
+                    "third_place"
+                  ]
+                },
+                {
+                  "name": "group_letter",
+                  "type": "string",
+                  "role": "dimension",
+                  "nullable": true
+                },
+                {
+                  "name": "kicked_off_at",
+                  "type": "datetime",
+                  "role": "time",
+                  "samples": [
+                    "2022-12-18T15:00:00.000Z",
+                    "2022-12-13T19:00:00.000Z",
+                    "2022-12-09T19:00:00.000Z",
+                    "2018-07-14T14:00:00.000Z",
+                    "2018-07-06T18:00:00.000Z"
+                  ]
+                },
+                {
+                  "name": "venue_id",
+                  "type": "integer",
+                  "role": "key",
+                  "samples": [
+                    9,
+                    3,
+                    5,
+                    4,
+                    2
+                  ]
+                },
+                {
+                  "name": "home_team_id",
+                  "type": "integer",
+                  "role": "key",
+                  "samples": [
+                    1,
+                    8,
+                    2,
+                    3,
+                    4
+                  ]
+                },
+                {
+                  "name": "away_team_id",
+                  "type": "integer",
+                  "role": "key",
+                  "samples": [
+                    6,
+                    4,
+                    1,
+                    5,
+                    2
+                  ]
+                },
+                {
+                  "name": "home_goals",
+                  "type": "integer",
+                  "role": "measure",
+                  "samples": [
+                    3,
+                    2,
+                    1,
+                    0,
+                    4
+                  ]
+                },
+                {
+                  "name": "away_goals",
+                  "type": "integer",
+                  "role": "measure",
+                  "samples": [
+                    3,
+                    0,
+                    2,
+                    1
+                  ]
+                },
+                {
+                  "name": "went_to_extra_time",
+                  "type": "boolean",
+                  "role": "dimension",
+                  "samples": [
+                    true,
+                    false
+                  ]
+                },
+                {
+                  "name": "home_penalties",
+                  "type": "integer",
+                  "role": "measure",
+                  "nullable": true,
+                  "samples": [
+                    4,
+                    3
+                  ]
+                },
+                {
+                  "name": "away_penalties",
+                  "type": "integer",
+                  "role": "measure",
+                  "nullable": true,
+                  "samples": [
+                    2,
+                    4
+                  ]
+                },
+                {
+                  "name": "winner_team_id",
+                  "type": "integer",
+                  "role": "key",
+                  "nullable": true,
+                  "samples": [
+                    1,
+                    2,
+                    4,
+                    5,
+                    6
+                  ]
+                },
+                {
+                  "name": "attendance",
+                  "type": "integer",
+                  "role": "measure",
+                  "nullable": true,
+                  "samples": [
+                    88966,
+                    88235,
+                    64406,
+                    44137,
+                    78011
+                  ]
+                }
+              ]
+            },
+            "attribute": {
+              "name": "attendance",
+              "type": "integer",
+              "role": "measure",
+              "nullable": true,
+              "samples": [
+                88966,
+                88235,
+                64406,
+                44137,
+                78011
+              ]
+            }
+          }
+        },
+        {
+          "ref": "metric:avg_attendance",
+          "resolved": true,
+          "kind": "metric",
+          "target": {
+            "name": "avg_attendance",
+            "label": "Average attendance",
+            "description": "Mean attendance per match",
+            "entity": "matches",
+            "dimensions": [
+              "tournament_id"
+            ],
+            "expressions": {
+              "sql": "AVG(attendance)"
+            }
+          }
+        },
+        {
+          "ref": "rel:goals.match_id->matches.id",
+          "resolved": true,
+          "kind": "relationship",
+          "target": {
+            "from": "goals.match_id",
+            "to": "matches.id",
+            "cardinality": "many_to_one",
+            "source": "declared"
+          }
+        },
+        {
+          "ref": "matches.nope",
+          "resolved": false
+        }
+      ]
+    }
+  },
+  "put_invalid": {
+    "status": 400,
+    "data": {
+      "ok": false,
+      "errors": [
+        {
+          "path": "entities[1].attributes[15].name",
+          "message": "attribute \"spectators\" has no matching column on \"world_cup.world_cup.matches\"",
+          "line": 130,
+          "col": 15
+        }
+      ]
+    }
+  },
+  "put_valid": {
+    "status": 200,
+    "data": {
+      "ok": true,
+      "version": 2
+    }
+  },
+  "metrics_list_after": {
+    "status": 200,
+    "data": {
+      "metrics": [
+        {
+          "id": "d9d57854-a414-456d-bb9c-239e30bc768f",
+          "name": "avg_attendance",
+          "label": "Average attendance",
+          "entity": "world_cup.world_cup.matches",
+          "expression": "AVG(attendance)",
+          "description": "Mean attendance per match",
+          "dimensions": [
+            "tournament_id"
+          ],
+          "createdAt": "2026-10-02T04:31:21.127Z",
+          "updatedAt": "2026-10-02T04:31:21.127Z"
+        }
+      ]
+    }
+  },
+  "drift": {
+    "status": 200,
+    "data": {
+      "checkedAt": "2026-10-02T04:31:21.270Z",
+      "snapshotOf": 2,
+      "added": [],
+      "removed": [],
+      "changed": [],
+      "entitiesAdded": [],
+      "entitiesRemoved": []
+    }
+  }
+}

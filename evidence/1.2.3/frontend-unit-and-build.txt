@@ -1,0 +1,248 @@
+
+> frontend@0.20.3 test
+> ng test --watch=false --browsers=ChromeHeadless
+
+Node.js version v25.8.1 detected.
+Odd numbered Node.js versions will not enter LTS status and should not be used for production. For more information, please see https://nodejs.org/en/about/previous-releases/.
+❯ Building...
+✔ Building...
+Initial chunk files                                                                             | Names                                                                                        |  Raw size
+chunk-6YU4ZVNL.js                                                                               | -                                                                                            |   2.28 MB | 
+polyfills.js                                                                                    | polyfills                                                                                    |   1.04 MB | 
+spec-app-app.spec.js                                                                            | spec-app-app.spec                                                                            | 302.63 kB | 
+chunk-NYA7PMXY.js                                                                               | -                                                                                            | 201.09 kB | 
+chunk-NE6YBYJW.js                                                                               | -                                                                                            | 193.66 kB | 
+chunk-IXURKC25.js                                                                               | -                                                                                            | 108.91 kB | 
+jasmine-cleanup-1.js                                                                            | jasmine-cleanup-1                                                                            |  67.20 kB | 
+styles.css                                                                                      | styles                                                                                       |  56.01 kB | 
+chunk-ZVGFECV5.js                                                                               | -                                                                                            |  43.42 kB | 
+chunk-OYYEWPIG.js                                                                               | -                                                                                            |  40.19 kB | 
+chunk-QXKB57ES.js                                                                               | -                                                                                            |  33.19 kB | 
+chunk-LJ7G62HJ.js                                                                               | -                                                                                            |  31.24 kB | 
+chunk-B5CVWPYW.js                                                                               | -                                                                                            |  28.98 kB | 
+chunk-4GQJETMX.js                                                                               | -                                                                                            |  23.42 kB | 
+spec-app-features-sessions-components-session-chat-session-chat.spec.js                         | spec-app-features-sessions-components-session-chat-session-chat.spec                         |  22.82 kB | 
+test_main.js                                                                                    | test_main                                                                                    |  21.87 kB | 
+chunk-W7TXEIBC.js                                                                               | -                                                                                            |  17.06 kB | 
+spec-app-features-sessions-components-interactive-visual-panel-interactive-visual-panel.spec.js | spec-app-features-sessions-components-interactive-visual-panel-interactive-visual-panel.spec |  13.52 kB | 
+chunk-2WB5SRPX.js                                                                               | -                                                                                            |   9.23 kB | 
+chunk-KSIS6JJN.js                                                                               | -                                                                                            |   8.85 kB | 
+spec-app-features-sessions-services-sessions-api.service.spec.js                                | spec-app-features-sessions-services-sessions-api.service.spec                                |   7.44 kB | 
+chunk-GC3KDKH3.js                                                                               | -                                                                                            |   6.75 kB | 
+spec-app-features-data-model-services-data-model-api.service.spec.js                            | spec-app-features-data-model-services-data-model-api.service.spec                            |   6.51 kB | 
+spec-app-core-diagnostics-log-runs.spec.js                                                      | spec-app-core-diagnostics-log-runs.spec                                                      |   5.32 kB | 
+spec-app-shared-components-system-logs-panel-system-logs-panel.spec.js                          | spec-app-shared-components-system-logs-panel-system-logs-panel.spec                          |   4.98 kB | 
+chunk-WLVEXICE.js                                                                               | -                                                                                            |   4.13 kB | 
+spec-app-features-data-model-components-model-metrics-panel-model-metrics-panel.spec.js         | spec-app-features-data-model-components-model-metrics-panel-model-metrics-panel.spec         |   4.04 kB | 
+spec-app-features-knowledge-components-knowledge-list-knowledge-list.spec.js                    | spec-app-features-knowledge-components-knowledge-list-knowledge-list.spec                    |   3.98 kB | 
+spec-app-features-data-model-components-model-yaml-editor-model-yaml-editor.spec.js             | spec-app-features-data-model-components-model-yaml-editor-model-yaml-editor.spec             |   3.36 kB | 
+spec-app-shared-utils-line-diff.spec.js                                                         | spec-app-shared-utils-line-diff.spec                                                         |   2.37 kB | 
+chunk-3FMBEB3S.js                                                                               | -                                                                                            |   2.13 kB | 
+chunk-PURJ5ECJ.js                                                                               | -                                                                                            |   1.65 kB | 
+chunk-C5FRWUQN.js                                                                               | -                                                                                            |   1.65 kB | 
+chunk-DPANONBQ.js                                                                               | -                                                                                            |   1.45 kB | 
+jasmine-cleanup-0.js                                                                            | jasmine-cleanup-0                                                                            | 519 bytes | 
+
+                                                                                                | Initial total                                                                                |   4.60 MB
+
+Application bundle generation complete. [1.581 seconds] - 2026-10-02T14:35:54.796Z
+
+▲ [WARNING] Deprecation [plugin angular-sass]
+
+    src/styles.scss:1:8:
+      1 │ @import "tailwindcss";
+        ╵         ^
+
+
+  Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+  
+  More info and automated migrator: https://sass-lang.com/d/import
+
+  The plugin "angular-sass" was triggered by this import
+
+    angular:styles/global:styles:1:8:
+      1 │ @import 'src/styles.scss';
+        ╵         ~~~~~~~~~~~~~~~~~
+
+
+02 10 2026 09:35:54.856:INFO [karma-server]: Karma v6.4.4 server started at http://localhost:9876/
+02 10 2026 09:35:54.856:INFO [launcher]: Launching browsers ChromeHeadless with concurrency unlimited
+02 10 2026 09:35:54.858:INFO [launcher]: Starting browser ChromeHeadless
+02 10 2026 09:35:55.652:INFO [Chrome Headless 154.0.0.0 (Mac OS 10.15.7)]: Connected on socket nUyKI4kR59D-7X07AAAA with id 40558078
+Chrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 0 of 114 SUCCESS (0 secs / 0 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 1 of 114 SUCCESS (0 secs / 0.042 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 2 of 114 SUCCESS (0 secs / 0.045 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 3 of 114 SUCCESS (0 secs / 0.046 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 4 of 114 SUCCESS (0 secs / 0.047 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 5 of 114 SUCCESS (0 secs / 0.062 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 6 of 114 SUCCESS (0 secs / 0.064 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 7 of 114 SUCCESS (0 secs / 0.064 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 8 of 114 SUCCESS (0 secs / 0.064 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 9 of 114 SUCCESS (0 secs / 0.064 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 10 of 114 SUCCESS (0 secs / 0.065 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 11 of 114 SUCCESS (0 secs / 0.065 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 12 of 114 SUCCESS (0 secs / 0.065 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 13 of 114 SUCCESS (0 secs / 0.065 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 14 of 114 SUCCESS (0 secs / 0.065 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 15 of 114 SUCCESS (0 secs / 0.065 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 16 of 114 SUCCESS (0 secs / 0.066 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 17 of 114 SUCCESS (0 secs / 0.066 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 18 of 114 SUCCESS (0 secs / 0.067 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 19 of 114 SUCCESS (0 secs / 0.068 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 20 of 114 SUCCESS (0 secs / 0.069 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 21 of 114 SUCCESS (0 secs / 0.07 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 22 of 114 SUCCESS (0 secs / 0.07 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 23 of 114 SUCCESS (0 secs / 0.071 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 24 of 114 SUCCESS (0 secs / 0.071 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 25 of 114 SUCCESS (0 secs / 0.072 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 26 of 114 SUCCESS (0 secs / 0.073 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 27 of 114 SUCCESS (0 secs / 0.073 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 28 of 114 SUCCESS (0 secs / 0.073 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 29 of 114 SUCCESS (0 secs / 0.074 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 30 of 114 SUCCESS (0 secs / 0.074 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 31 of 114 SUCCESS (0 secs / 0.107 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 32 of 114 SUCCESS (0 secs / 0.11 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 33 of 114 SUCCESS (0 secs / 0.111 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 34 of 114 SUCCESS (0 secs / 0.114 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 35 of 114 SUCCESS (0 secs / 0.117 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 36 of 114 SUCCESS (0 secs / 0.118 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 37 of 114 SUCCESS (0 secs / 0.119 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 38 of 114 SUCCESS (0 secs / 0.12 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 39 of 114 SUCCESS (0 secs / 0.13 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 40 of 114 SUCCESS (0 secs / 0.133 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 41 of 114 SUCCESS (0 secs / 0.134 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 42 of 114 SUCCESS (0 secs / 0.135 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 43 of 114 SUCCESS (0 secs / 0.136 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 44 of 114 SUCCESS (0 secs / 0.15 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 45 of 114 SUCCESS (0 secs / 0.152 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 46 of 114 SUCCESS (0 secs / 0.154 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 47 of 114 SUCCESS (0 secs / 0.156 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 48 of 114 SUCCESS (0 secs / 0.16 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 49 of 114 SUCCESS (0 secs / 0.161 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 50 of 114 SUCCESS (0 secs / 0.17 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 51 of 114 SUCCESS (0 secs / 0.171 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 52 of 114 SUCCESS (0 secs / 0.172 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 53 of 114 SUCCESS (0 secs / 0.173 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 54 of 114 SUCCESS (0 secs / 0.175 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 55 of 114 SUCCESS (0 secs / 0.177 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 56 of 114 SUCCESS (0 secs / 0.18 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 57 of 114 SUCCESS (0 secs / 0.18 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 58 of 114 SUCCESS (0 secs / 0.18 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 59 of 114 SUCCESS (0 secs / 0.18 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 60 of 114 SUCCESS (0 secs / 0.18 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 61 of 114 SUCCESS (0 secs / 0.18 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 62 of 114 SUCCESS (0 secs / 0.18 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 63 of 114 SUCCESS (0 secs / 0.18 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 64 of 114 SUCCESS (0 secs / 0.181 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 65 of 114 SUCCESS (0 secs / 0.181 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 66 of 114 SUCCESS (0 secs / 0.181 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 67 of 114 SUCCESS (0 secs / 0.181 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 68 of 114 SUCCESS (0 secs / 0.181 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 69 of 114 SUCCESS (0 secs / 0.181 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 70 of 114 SUCCESS (0 secs / 0.181 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 71 of 114 SUCCESS (0 secs / 0.181 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 72 of 114 SUCCESS (0 secs / 0.181 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 73 of 114 SUCCESS (0 secs / 0.181 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 74 of 114 SUCCESS (0 secs / 0.181 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 75 of 114 SUCCESS (0 secs / 0.193 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 76 of 114 SUCCESS (0 secs / 0.194 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 77 of 114 SUCCESS (0 secs / 0.195 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 78 of 114 SUCCESS (0 secs / 0.196 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 79 of 114 SUCCESS (0 secs / 0.197 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 80 of 114 SUCCESS (0 secs / 0.197 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 81 of 114 SUCCESS (0 secs / 0.198 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 82 of 114 SUCCESS (0 secs / 0.198 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 83 of 114 SUCCESS (0 secs / 0.198 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 84 of 114 SUCCESS (0 secs / 0.199 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 85 of 114 SUCCESS (0 secs / 0.199 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 86 of 114 SUCCESS (0 secs / 0.199 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 87 of 114 SUCCESS (0 secs / 0.2 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 88 of 114 SUCCESS (0 secs / 0.2 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 89 of 114 SUCCESS (0 secs / 0.201 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 90 of 114 SUCCESS (0 secs / 0.201 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 91 of 114 SUCCESS (0 secs / 0.205 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7) App should support keyboard resizing from the separator FAILED
+	Expected 516 to be 548.
+	    at <Jasmine>
+	    at UserContext.<anonymous> (src/app/app.spec.ts:94:35)
+	    at _ZoneDelegate.invoke (node_modules/zone.js/fesm2015/zone.js:398:28)
+	    at _ProxyZoneSpec.onInvoke (node_modules/zone.js/fesm2015/zone-testing.js:2132:39)
+	    at _ZoneDelegate.invoke (node_modules/zone.js/fesm2015/zone.js:397:34)
+Chrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 92 of 114 (1 FAILED) (0 secs / 0.286 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 93 of 114 (1 FAILED) (0 secs / 0.288 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 94 of 114 (1 FAILED) (0 secs / 0.291 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 95 of 114 (1 FAILED) (0 secs / 0.292 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 96 of 114 (1 FAILED) (0 secs / 0.294 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 97 of 114 (1 FAILED) (0 secs / 0.295 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 98 of 114 (1 FAILED) (0 secs / 0.296 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 99 of 114 (1 FAILED) (0 secs / 0.301 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 100 of 114 (1 FAILED) (0 secs / 0.302 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 101 of 114 (1 FAILED) (0 secs / 0.304 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 102 of 114 (1 FAILED) (0 secs / 0.307 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 103 of 114 (1 FAILED) (0 secs / 0.309 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 104 of 114 (1 FAILED) (0 secs / 0.311 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 105 of 114 (1 FAILED) (0 secs / 0.312 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 106 of 114 (1 FAILED) (0 secs / 0.314 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 107 of 114 (1 FAILED) (0 secs / 0.317 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 108 of 114 (1 FAILED) (0 secs / 0.32 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 109 of 114 (1 FAILED) (0 secs / 0.326 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 110 of 114 (1 FAILED) (0 secs / 0.328 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 111 of 114 (1 FAILED) (0 secs / 0.331 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 112 of 114 (1 FAILED) (0 secs / 0.332 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 113 of 114 (1 FAILED) (0 secs / 0.332 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 114 of 114 (1 FAILED) (0 secs / 0.332 secs)
+[1A[2KChrome Headless 154.0.0.0 (Mac OS 10.15.7): Executed 114 of 114 (1 FAILED) (0.358 secs / 0.332 secs)
+TOTAL: 1 FAILED, 113 SUCCESS
+
+> frontend@0.20.3 build
+> ng build
+
+Node.js version v25.8.1 detected.
+Odd numbered Node.js versions will not enter LTS status and should not be used for production. For more information, please see https://nodejs.org/en/about/previous-releases/.
+❯ Building...
+✔ Building...
+Initial chunk files   | Names         |  Raw size | Estimated transfer size
+main-2OTR32NF.js      | main          | 692.77 kB |               155.26 kB
+styles-WKU3KTG7.css   | styles        |  44.40 kB |                 6.45 kB
+polyfills-5CFQRCPP.js | polyfills     |  34.59 kB |                11.33 kB
+
+                      | Initial total | 771.76 kB |               173.04 kB
+
+Application bundle generation complete. [3.337 seconds] - 2026-10-02T14:35:59.928Z
+
+▲ [WARNING] NG8102: The left side of this nullish coalescing operation does not include 'null' or 'undefined' in its type, therefore the '??' operator can be safely removed. [plugin angular-compiler]
+
+    src/app/features/agents/components/agent-detail/agent-detail.html:584:38:
+      584 │ ...                        >{{ result.scores[check.id] ?? 0 }}</span
+          ╵                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+  Warning occurs in the template of component AgentDetail.
+
+    src/app/features/agents/components/agent-detail/agent-detail.ts:52:15:
+      52 │   templateUrl: './agent-detail.html',
+         ╵                ~~~~~~~~~~~~~~~~~~~~~
+
+
+▲ [WARNING] Deprecation [plugin angular-sass]
+
+    src/styles.scss:1:8:
+      1 │ @import "tailwindcss";
+        ╵         ^
+
+
+  Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+  
+  More info and automated migrator: https://sass-lang.com/d/import
+
+  The plugin "angular-sass" was triggered by this import
+
+    angular:styles/global:styles:1:8:
+      1 │ @import 'src/styles.scss';
+        ╵         ~~~~~~~~~~~~~~~~~
+
+
+▲ [WARNING] bundle initial exceeded maximum budget. Budget 500.00 kB was not met by 271.76 kB with a total of 771.76 kB.
+
+
+Output location: /Users/jhonbuendia/conductor/workspaces/questions-to-insights/tokyo/.claude/worktrees/BA-87-model-editing/frontend/dist/frontend
+

@@ -1,0 +1,294 @@
+model: World Cup Core
+version: 1
+entities:
+  - name: goals
+    key: [ id ]
+    bindings:
+      - kind: sql
+        datasource: 8a2a9a3f-420d-4dfc-8a1b-4e9bf68c8f73
+        table: world_cup.world_cup.goals
+    attributes:
+      - name: id
+        type: integer
+        role: key
+        samples: [ 1, 2, 3, 4, 5 ]
+      - name: match_id
+        type: integer
+        role: key
+        samples: [ 1, 2, 3, 4, 5 ]
+      - name: scoring_team_id
+        type: integer
+        role: key
+        samples: [ 1, 2, 3, 4, 5 ]
+      - name: scorer_player_id
+        type: integer
+        role: key
+        nullable: true
+        samples: [ 3, 1, 2, 4, 7 ]
+      - name: assist_player_id
+        type: integer
+        role: key
+        nullable: true
+        samples: [ 3 ]
+      - name: minute
+        type: integer
+        role: measure
+        samples: [ 108, 36, 23, 39, 34 ]
+      - name: stoppage_minute
+        type: integer
+        role: measure
+        samples: [ 0, 1, 11 ]
+      - name: goal_type
+        type: string
+        role: dimension
+        samples: [ open_play, penalty, own_goal, header, free_kick ]
+      - name: home_score_after
+        type: integer
+        role: measure
+        samples: [ 3, 2, 1, 0, 4 ]
+      - name: away_score_after
+        type: integer
+        role: measure
+        samples: [ 2, 0, 1, 3 ]
+  - name: matches
+    key: [ id ]
+    bindings:
+      - kind: sql
+        datasource: 8a2a9a3f-420d-4dfc-8a1b-4e9bf68c8f73
+        table: world_cup.world_cup.matches
+    attributes:
+      - name: id
+        type: integer
+        role: key
+        samples: [ 1, 2, 3, 4, 5 ]
+      - name: tournament_id
+        type: integer
+        role: key
+        samples: [ 2, 1 ]
+      - name: match_number
+        type: integer
+        role: measure
+        samples: [ 64, 61, 58, 63, 62 ]
+      - name: stage
+        type: string
+        role: dimension
+        samples: [ final, semi_final, quarter_final, third_place ]
+      - name: group_letter
+        type: string
+        role: dimension
+        nullable: true
+      - name: kicked_off_at
+        type: datetime
+        role: time
+        samples:
+          [
+            2022-12-18T15:00:00.000Z,
+            2022-12-13T19:00:00.000Z,
+            2022-12-09T19:00:00.000Z,
+            2018-07-14T14:00:00.000Z,
+            2018-07-06T18:00:00.000Z
+          ]
+      - name: venue_id
+        type: integer
+        role: key
+        samples: [ 9, 3, 5, 4, 2 ]
+      - name: home_team_id
+        type: integer
+        role: key
+        samples: [ 1, 8, 2, 3, 4 ]
+      - name: away_team_id
+        type: integer
+        role: key
+        samples: [ 6, 4, 1, 5, 2 ]
+      - name: home_goals
+        type: integer
+        role: measure
+        samples: [ 3, 2, 1, 0, 4 ]
+      - name: away_goals
+        type: integer
+        role: measure
+        samples: [ 3, 0, 2, 1 ]
+      - name: went_to_extra_time
+        type: boolean
+        role: dimension
+        samples: [ true, false ]
+      - name: home_penalties
+        type: integer
+        role: measure
+        nullable: true
+        samples: [ 4, 3 ]
+      - name: away_penalties
+        type: integer
+        role: measure
+        nullable: true
+        samples: [ 2, 4 ]
+      - name: winner_team_id
+        type: integer
+        role: key
+        nullable: true
+        samples: [ 1, 2, 4, 5, 6 ]
+      - name: attendance
+        type: integer
+        role: measure
+        nullable: true
+        samples: [ 88966, 88235, 64406, 44137, 78011 ]
+  - name: players
+    key: [ id ]
+    bindings:
+      - kind: sql
+        datasource: 8a2a9a3f-420d-4dfc-8a1b-4e9bf68c8f73
+        table: world_cup.world_cup.players
+    attributes:
+      - name: id
+        type: integer
+        role: key
+        samples: [ 1, 2, 3, 4, 5 ]
+      - name: national_team_id
+        type: integer
+        role: key
+        samples: [ 1, 2, 3, 4, 5 ]
+      - name: full_name
+        type: string
+        role: dimension
+        samples:
+          [
+            Angel Di Maria,
+            Julian Alvarez,
+            Lionel Messi,
+            Nahuel Molina,
+            Emiliano Martinez
+          ]
+      - name: position
+        type: string
+        role: dimension
+        samples: [ MF, FW, DF, GK ]
+      - name: date_of_birth
+        type: date
+        role: time
+        nullable: true
+        samples:
+          [
+            1988-02-14T05:00:00.000Z,
+            2000-01-31T05:00:00.000Z,
+            1987-06-24T05:00:00.000Z,
+            1998-04-06T05:00:00.000Z,
+            1992-09-02T04:00:00.000Z
+          ]
+  - name: teams
+    key: [ id ]
+    bindings:
+      - kind: sql
+        datasource: 8a2a9a3f-420d-4dfc-8a1b-4e9bf68c8f73
+        table: world_cup.world_cup.teams
+    attributes:
+      - name: id
+        type: integer
+        role: key
+        samples: [ 1, 2, 3, 4, 5 ]
+      - name: country_code
+        type: string
+        role: key
+        samples: [ ARG, BEL, BRA, CRO, ENG ]
+      - name: common_name
+        type: string
+        role: dimension
+        samples: [ Argentina, Belgium, Brazil, Croatia, England ]
+      - name: fifa_code
+        type: string
+        role: key
+        samples: [ ARG, BEL, BRA, CRO, ENG ]
+  - name: tournaments
+    key: [ id ]
+    bindings:
+      - kind: sql
+        datasource: 8a2a9a3f-420d-4dfc-8a1b-4e9bf68c8f73
+        table: world_cup.world_cup.tournaments
+    attributes:
+      - name: id
+        type: integer
+        role: key
+        samples: [ 1, 2 ]
+      - name: name
+        type: string
+        role: dimension
+        samples: [ 2018 FIFA World Cup, 2022 FIFA World Cup ]
+      - name: tournament_year
+        type: integer
+        role: measure
+        samples: [ 2018, 2022 ]
+      - name: host_country_code
+        type: string
+        role: key
+        samples: [ RUS, QAT ]
+      - name: starts_on
+        type: date
+        role: time
+        samples: [ 2018-06-14T05:00:00.000Z, 2022-11-20T05:00:00.000Z ]
+      - name: ends_on
+        type: date
+        role: time
+        samples: [ 2018-07-15T05:00:00.000Z, 2022-12-18T05:00:00.000Z ]
+      - name: champion_team_id
+        type: integer
+        role: key
+        nullable: true
+        samples: [ 6, 1 ]
+      - name: runner_up_team_id
+        type: integer
+        role: key
+        nullable: true
+        samples: [ 4, 6 ]
+relationships:
+  - from: goals.match_id
+    to: matches.id
+    cardinality: many_to_one
+    source: declared
+  - from: goals.scoring_team_id
+    to: teams.id
+    cardinality: many_to_one
+    source: declared
+  - from: goals.scorer_player_id
+    to: players.id
+    cardinality: many_to_one
+    source: declared
+  - from: goals.assist_player_id
+    to: players.id
+    cardinality: many_to_one
+    source: declared
+  - from: matches.tournament_id
+    to: tournaments.id
+    cardinality: many_to_one
+    source: declared
+  - from: matches.home_team_id
+    to: teams.id
+    cardinality: many_to_one
+    source: declared
+  - from: matches.away_team_id
+    to: teams.id
+    cardinality: many_to_one
+    source: declared
+  - from: matches.winner_team_id
+    to: teams.id
+    cardinality: many_to_one
+    source: declared
+  - from: players.national_team_id
+    to: teams.id
+    cardinality: many_to_one
+    source: declared
+  - from: tournaments.champion_team_id
+    to: teams.id
+    cardinality: many_to_one
+    source: declared
+  - from: tournaments.runner_up_team_id
+    to: teams.id
+    cardinality: many_to_one
+    source: declared
+metrics:
+  - name: avg_attendance
+    label: Average attendance
+    description: Mean attendance per match
+    entity: matches
+    dimensions:
+      - tournament_id
+    expressions:
+      sql: AVG(attendance)

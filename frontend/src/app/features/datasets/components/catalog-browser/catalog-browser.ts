@@ -38,13 +38,12 @@ import {
   DatasetInclusionService,
 } from '../../services/dataset-inclusion.service';
 import { Dataset, DatasetsApiService } from '../../services/datasets-api.service';
-import { MetricsPanel } from '../metrics-panel/metrics-panel';
 import { ToastService } from '../../../../core/toast/toast.service';
 import { AuthService } from '../../../../core/auth/auth.service';
 
 @Component({
   selector: 'app-catalog-browser',
-  imports: [LucideAngularModule, MetricsPanel],
+  imports: [LucideAngularModule],
   templateUrl: './catalog-browser.html',
   styleUrl: './catalog-browser.scss',
 })
@@ -133,11 +132,6 @@ export class CatalogBrowser implements OnInit, OnDestroy {
 
   readonly includedCount = computed(
     () => this.inclusionService.included().size,
-  );
-
-  /** Included entities, the scope the metrics panel curates definitions for. */
-  readonly includedEntities = computed(() =>
-    Array.from(this.inclusionService.included()),
   );
 
   /** Key of the currently selected element, for row highlighting. */

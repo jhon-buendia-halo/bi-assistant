@@ -1,0 +1,378 @@
+{
+  "get-model-v1": {
+    "dataset": "World Cup Core",
+    "currentVersion": 1,
+    "version": {
+      "version": 1,
+      "createdAt": "2026-10-02T14:00:25.692Z",
+      "source": "bootstrap",
+      "yaml": "model: World Cup Core\nversion: 1\nentities:\n  - name: matches\n    key: [ match_id ]\n    bindings:\n      - kind: sql\n        datasource: 1eec9abd-f4aa-4aea-8fca-423110c4a003\n        table: world_cup.world_cup.matches\n    attributes:\n      - name: match_id\n        type: integer\n        role: key\n        samples: [ 1 ]\n      - name: home_team_id\n        type: integer\n        role: key\n        samples: [ 10 ]\n      - name: away_team_id\n        type: integer\n        role: key\n        samples: [ 20 ]\n      - name: attendance\n        type: integer\n        role: measure\n        nullable: true\n        samples: [ 42000 ]\n  - name: teams\n    key: [ team_id ]\n    bindings:\n      - kind: sql\n        datasource: 1eec9abd-f4aa-4aea-8fca-423110c4a003\n        table: world_cup.world_cup.teams\n    attributes:\n      - name: team_id\n        type: integer\n        role: key\n        samples: [ 10 ]\n      - name: name\n        type: string\n        role: dimension\n        samples: [ Argentina ]\nrelationships:\n  - from: matches.home_team_id\n    to: teams.team_id\n    cardinality: many_to_one\n    source: declared\n  - from: matches.away_team_id\n    to: teams.team_id\n    cardinality: many_to_one\n    source: inferred\nmetrics: []\n",
+      "model": {
+        "model": "World Cup Core",
+        "version": 1,
+        "entities": [
+          {
+            "name": "matches",
+            "key": [
+              "match_id"
+            ],
+            "bindings": [
+              {
+                "kind": "sql",
+                "datasource": "1eec9abd-f4aa-4aea-8fca-423110c4a003",
+                "table": "world_cup.world_cup.matches"
+              }
+            ],
+            "attributes": [
+              {
+                "name": "match_id",
+                "type": "integer",
+                "role": "key",
+                "samples": [
+                  1
+                ]
+              },
+              {
+                "name": "home_team_id",
+                "type": "integer",
+                "role": "key",
+                "samples": [
+                  10
+                ]
+              },
+              {
+                "name": "away_team_id",
+                "type": "integer",
+                "role": "key",
+                "samples": [
+                  20
+                ]
+              },
+              {
+                "name": "attendance",
+                "type": "integer",
+                "role": "measure",
+                "nullable": true,
+                "samples": [
+                  42000
+                ]
+              }
+            ]
+          },
+          {
+            "name": "teams",
+            "key": [
+              "team_id"
+            ],
+            "bindings": [
+              {
+                "kind": "sql",
+                "datasource": "1eec9abd-f4aa-4aea-8fca-423110c4a003",
+                "table": "world_cup.world_cup.teams"
+              }
+            ],
+            "attributes": [
+              {
+                "name": "team_id",
+                "type": "integer",
+                "role": "key",
+                "samples": [
+                  10
+                ]
+              },
+              {
+                "name": "name",
+                "type": "string",
+                "role": "dimension",
+                "samples": [
+                  "Argentina"
+                ]
+              }
+            ]
+          }
+        ],
+        "relationships": [
+          {
+            "from": "matches.home_team_id",
+            "to": "teams.team_id",
+            "cardinality": "many_to_one",
+            "source": "declared"
+          },
+          {
+            "from": "matches.away_team_id",
+            "to": "teams.team_id",
+            "cardinality": "many_to_one",
+            "source": "inferred"
+          }
+        ],
+        "metrics": []
+      }
+    }
+  },
+  "create-model-metric": {
+    "ok": true,
+    "version": 2
+  },
+  "list-model-metrics": {
+    "metrics": [
+      {
+        "name": "goals_per_match",
+        "label": "Goals per match",
+        "entity": "matches",
+        "agg": "count"
+      }
+    ]
+  },
+  "model-metric-candidates": {
+    "candidates": []
+  },
+  "list-versions": {
+    "versions": [
+      {
+        "version": 1,
+        "createdAt": "2026-10-02T14:00:25.692Z",
+        "source": "bootstrap",
+        "yaml": "model: World Cup Core\nversion: 1\nentities:\n  - name: matches\n    key: [ match_id ]\n    bindings:\n      - kind: sql\n        datasource: 1eec9abd-f4aa-4aea-8fca-423110c4a003\n        table: world_cup.world_cup.matches\n    attributes:\n      - name: match_id\n        type: integer\n        role: key\n        samples: [ 1 ]\n      - name: home_team_id\n        type: integer\n        role: key\n        samples: [ 10 ]\n      - name: away_team_id\n        type: integer\n        role: key\n        samples: [ 20 ]\n      - name: attendance\n        type: integer\n        role: measure\n        nullable: true\n        samples: [ 42000 ]\n  - name: teams\n    key: [ team_id ]\n    bindings:\n      - kind: sql\n        datasource: 1eec9abd-f4aa-4aea-8fca-423110c4a003\n        table: world_cup.world_cup.teams\n    attributes:\n      - name: team_id\n        type: integer\n        role: key\n        samples: [ 10 ]\n      - name: name\n        type: string\n        role: dimension\n        samples: [ Argentina ]\nrelationships:\n  - from: matches.home_team_id\n    to: teams.team_id\n    cardinality: many_to_one\n    source: declared\n  - from: matches.away_team_id\n    to: teams.team_id\n    cardinality: many_to_one\n    source: inferred\nmetrics: []\n",
+        "model": {
+          "model": "World Cup Core",
+          "version": 1,
+          "entities": [
+            {
+              "name": "matches",
+              "key": [
+                "match_id"
+              ],
+              "bindings": [
+                {
+                  "kind": "sql",
+                  "datasource": "1eec9abd-f4aa-4aea-8fca-423110c4a003",
+                  "table": "world_cup.world_cup.matches"
+                }
+              ],
+              "attributes": [
+                {
+                  "name": "match_id",
+                  "type": "integer",
+                  "role": "key",
+                  "samples": [
+                    1
+                  ]
+                },
+                {
+                  "name": "home_team_id",
+                  "type": "integer",
+                  "role": "key",
+                  "samples": [
+                    10
+                  ]
+                },
+                {
+                  "name": "away_team_id",
+                  "type": "integer",
+                  "role": "key",
+                  "samples": [
+                    20
+                  ]
+                },
+                {
+                  "name": "attendance",
+                  "type": "integer",
+                  "role": "measure",
+                  "nullable": true,
+                  "samples": [
+                    42000
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "teams",
+              "key": [
+                "team_id"
+              ],
+              "bindings": [
+                {
+                  "kind": "sql",
+                  "datasource": "1eec9abd-f4aa-4aea-8fca-423110c4a003",
+                  "table": "world_cup.world_cup.teams"
+                }
+              ],
+              "attributes": [
+                {
+                  "name": "team_id",
+                  "type": "integer",
+                  "role": "key",
+                  "samples": [
+                    10
+                  ]
+                },
+                {
+                  "name": "name",
+                  "type": "string",
+                  "role": "dimension",
+                  "samples": [
+                    "Argentina"
+                  ]
+                }
+              ]
+            }
+          ],
+          "relationships": [
+            {
+              "from": "matches.home_team_id",
+              "to": "teams.team_id",
+              "cardinality": "many_to_one",
+              "source": "declared"
+            },
+            {
+              "from": "matches.away_team_id",
+              "to": "teams.team_id",
+              "cardinality": "many_to_one",
+              "source": "inferred"
+            }
+          ],
+          "metrics": []
+        }
+      },
+      {
+        "version": 2,
+        "createdAt": "2026-10-02T14:00:25.697Z",
+        "source": "user",
+        "yaml": "model: World Cup Core\nversion: 2\nentities:\n  - name: matches\n    key: [ match_id ]\n    bindings:\n      - kind: sql\n        datasource: 1eec9abd-f4aa-4aea-8fca-423110c4a003\n        table: world_cup.world_cup.matches\n    attributes:\n      - name: match_id\n        type: integer\n        role: key\n        samples: [ 1 ]\n      - name: home_team_id\n        type: integer\n        role: key\n        samples: [ 10 ]\n      - name: away_team_id\n        type: integer\n        role: key\n        samples: [ 20 ]\n      - name: attendance\n        type: integer\n        role: measure\n        nullable: true\n        samples: [ 42000 ]\n  - name: teams\n    key: [ team_id ]\n    bindings:\n      - kind: sql\n        datasource: 1eec9abd-f4aa-4aea-8fca-423110c4a003\n        table: world_cup.world_cup.teams\n    attributes:\n      - name: team_id\n        type: integer\n        role: key\n        samples: [ 10 ]\n      - name: name\n        type: string\n        role: dimension\n        samples: [ Argentina ]\nrelationships:\n  - from: matches.home_team_id\n    to: teams.team_id\n    cardinality: many_to_one\n    source: declared\n  - from: matches.away_team_id\n    to: teams.team_id\n    cardinality: many_to_one\n    source: inferred\nmetrics:\n  - name: goals_per_match\n    label: Goals per match\n    entity: matches\n    agg: count\n",
+        "model": {
+          "model": "World Cup Core",
+          "version": 2,
+          "entities": [
+            {
+              "name": "matches",
+              "key": [
+                "match_id"
+              ],
+              "bindings": [
+                {
+                  "kind": "sql",
+                  "datasource": "1eec9abd-f4aa-4aea-8fca-423110c4a003",
+                  "table": "world_cup.world_cup.matches"
+                }
+              ],
+              "attributes": [
+                {
+                  "name": "match_id",
+                  "type": "integer",
+                  "role": "key",
+                  "samples": [
+                    1
+                  ]
+                },
+                {
+                  "name": "home_team_id",
+                  "type": "integer",
+                  "role": "key",
+                  "samples": [
+                    10
+                  ]
+                },
+                {
+                  "name": "away_team_id",
+                  "type": "integer",
+                  "role": "key",
+                  "samples": [
+                    20
+                  ]
+                },
+                {
+                  "name": "attendance",
+                  "type": "integer",
+                  "role": "measure",
+                  "nullable": true,
+                  "samples": [
+                    42000
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "teams",
+              "key": [
+                "team_id"
+              ],
+              "bindings": [
+                {
+                  "kind": "sql",
+                  "datasource": "1eec9abd-f4aa-4aea-8fca-423110c4a003",
+                  "table": "world_cup.world_cup.teams"
+                }
+              ],
+              "attributes": [
+                {
+                  "name": "team_id",
+                  "type": "integer",
+                  "role": "key",
+                  "samples": [
+                    10
+                  ]
+                },
+                {
+                  "name": "name",
+                  "type": "string",
+                  "role": "dimension",
+                  "samples": [
+                    "Argentina"
+                  ]
+                }
+              ]
+            }
+          ],
+          "relationships": [
+            {
+              "from": "matches.home_team_id",
+              "to": "teams.team_id",
+              "cardinality": "many_to_one",
+              "source": "declared"
+            },
+            {
+              "from": "matches.away_team_id",
+              "to": "teams.team_id",
+              "cardinality": "many_to_one",
+              "source": "inferred"
+            }
+          ],
+          "metrics": [
+            {
+              "name": "goals_per_match",
+              "label": "Goals per match",
+              "entity": "matches",
+              "agg": "count"
+            }
+          ]
+        },
+        "note": "metric goals_per_match added"
+      }
+    ]
+  },
+  "export-headers": {
+    "content-type": "text/yaml; charset=utf-8",
+    "content-disposition": "attachment; filename=\"world-cup-core.model.v2.yaml\""
+  },
+  "import-roundtrip": {
+    "ok": true,
+    "version": 3
+  },
+  "import-invalid": {
+    "status": 400,
+    "body": {
+      "ok": false,
+      "errors": [
+        {
+          "path": "entities[0].bindings[0].columns.attendance",
+          "message": "column \"nope_column\" mapped from attribute \"attendance\" does not exist on \"world_cup.world_cup.matches\"",
+          "line": 10,
+          "col": 32
+        }
+      ]
+    }
+  },
+  "serialize": {
+    "yaml": "model: World Cup Core\nversion: 1\nentities:\n  - name: matches\n    key: [ match_id ]\n    bindings:\n      - kind: sql\n        datasource: 1eec9abd-f4aa-4aea-8fca-423110c4a003\n        table: world_cup.world_cup.matches\n    attributes:\n      - name: match_id\n        type: integer\n        role: key\n        samples: [ 1 ]\n      - name: home_team_id\n        type: integer\n        role: key\n        samples: [ 10 ]\n      - name: away_team_id\n        type: integer\n        role: key\n        samples: [ 20 ]\n      - name: attendance\n        type: integer\n        role: measure\n        nullable: true\n        samples: [ 42000 ]\n  - name: teams\n    key: [ team_id ]\n    bindings:\n      - kind: sql\n        datasource: 1eec9abd-f4aa-4aea-8fca-423110c4a003\n        table: world_cup.world_cup.teams\n    attributes:\n      - name: team_id\n        type: integer\n        role: key\n        samples: [ 10 ]\n      - name: name\n        type: string\n        role: dimension\n        samples: [ Argentina ]\nrelationships:\n  - from: matches.home_team_id\n    to: teams.team_id\n    cardinality: many_to_one\n    source: declared\n  - from: matches.away_team_id\n    to: teams.team_id\n    cardinality: many_to_one\n    source: inferred\nmetrics: []\n"
+  }
+}

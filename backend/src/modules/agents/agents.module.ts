@@ -5,6 +5,7 @@ import { DatasourcesModule } from '../datasources/datasources.module';
 import { SessionsModule } from '../sessions/sessions.module';
 import { KnowledgeModule } from '../knowledge/knowledge.module';
 import { UserAgentsModule } from '../user-agents/user-agents.module';
+import { MetricsModule } from '../metrics/metrics.module';
 import { AgentsController } from './agents.controller';
 import { AgentsService } from './agents.service';
 import { EvalRunsService } from './eval-runs.service';
@@ -15,6 +16,8 @@ import { EvalRunsRepository } from './repositories/eval-runs.repository';
   // so create_visual/update_visual work the way they do in a real chat turn.
   // KnowledgeModule: same curated-knowledge block a real chat turn gets.
   // UserAgentsModule: user-agent storage, merged into the agent catalogue.
+  // MetricsModule: the `legacy` eval path's curated-metrics block (ADR-0007
+  // §7) — the `model` path gets metrics from the rendered model block.
   imports: [
     MastraModule,
     DatasetsModule,
@@ -22,6 +25,7 @@ import { EvalRunsRepository } from './repositories/eval-runs.repository';
     SessionsModule,
     KnowledgeModule,
     UserAgentsModule,
+    MetricsModule,
   ],
   controllers: [AgentsController],
   providers: [AgentsService, EvalRunsService, EvalRunsRepository],

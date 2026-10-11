@@ -43,6 +43,7 @@ describe('EvalRunsService dataset validation', () => {
   };
   const knowledge = { definitionBlock: jest.fn().mockResolvedValue('') };
   const users = new CurrentUserService();
+  const metrics = { definitionBlock: jest.fn().mockResolvedValue(undefined) };
   const service = () =>
     new EvalRunsService(
       datasets as any,
@@ -51,6 +52,7 @@ describe('EvalRunsService dataset validation', () => {
       {} as any,
       knowledge as any,
       users,
+      metrics as any,
     );
 
   beforeEach(() => jest.clearAllMocks());
@@ -107,6 +109,7 @@ describe('EvalRunsService dataset validation', () => {
       ['Sample'],
       'session',
       '',
+      { path: 'model', metricsBlock: undefined },
     );
     if (!('jobId' in result)) throw new Error('Run did not start');
     expect((await runner.status(result.jobId))?.status).toBe('completed');
@@ -170,6 +173,7 @@ describe('EvalRunsService ownership (admin R30, R32)', () => {
       {} as never,
       { definitionBlock: jest.fn().mockResolvedValue('') } as never,
       users,
+      { definitionBlock: jest.fn().mockResolvedValue(undefined) } as never,
     );
     return { service, users, repository, savedBy, release: () => release() };
   }

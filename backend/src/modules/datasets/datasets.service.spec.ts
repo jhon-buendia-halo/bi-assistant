@@ -13,13 +13,26 @@ const claims: DatasetEntitySnapshot = {
   ],
 };
 
-function build(sampleRows: jest.Mock) {
+function build(
+  sampleRows: jest.Mock,
+  options: { existingModel?: unknown } = {},
+) {
   const repository = {
     save: jest
       .fn()
       .mockImplementation((name: string) =>
         Promise.resolve({ name, tables: [] }),
       ),
+    delete: jest.fn().mockResolvedValue(1),
+  };
+  // `DataModelsService` is a separate module (ADR-0006); `DatasetsService`
+  // only calls through its bootstrap/drift/delete bridge, so a plain fake
+  // is enough here — no need to pull in the real service and its own deps.
+  const dataModels = {
+    get: jest.fn().mockResolvedValue(options.existingModel ?? null),
+    ensureBootstrapped: jest.fn().mockResolvedValue(undefined),
+    mergeSnapshot: jest.fn().mockResolvedValue(undefined),
+    delete: jest.fn().mockResolvedValue(1),
   };
   const datasources = {
     get: jest
@@ -46,9 +59,14 @@ function build(sampleRows: jest.Mock) {
     ),
   };
   return {
-    service: new DatasetsService(repository as never, datasources as never),
+    service: new DatasetsService(
+      repository as never,
+      datasources as never,
+      dataModels as never,
+    ),
     repository,
     datasources,
+    dataModels,
   };
 }
 
@@ -152,5 +170,56 @@ describe('DatasetsService.save', () => {
         datasourceKind: 'postgres',
       }),
     ).rejects.toThrow('Datasource kind must be databricks');
+  });
+
+  it('bootstraps a data model on the first save of a dataset', async () => {
+    const { service, dataModels } = build(jest.fn().mockResolvedValue(null));
+
+    const saved = await service.save({
+      name: 'health',
+      tables: ['main.health.claims'],
+      entities: [claims],
+      datasourceId: 'ds-1',
+    });
+
+    expect(dataModels.get).toHaveBeenCalledWith('health');
+    expect(dataModels.ensureBootstrapped).toHaveBeenCalledWith(saved);
+    expect(dataModels.mergeSnapshot).not.toHaveBeenCalled();
+  });
+
+  it('merges the snapshot instead of bootstrapping when a model already exists', async () => {
+    const { service, dataModels } = build(jest.fn().mockResolvedValue(null), {
+      existingModel: { dataset: 'health', currentVersion: 1, versions: [] },
+    });
+
+    const saved = await service.save({
+      name: 'health',
+      tables: ['main.health.claims'],
+      entities: [claims],
+      datasourceId: 'ds-1',
+    });
+
+    expect(dataModels.mergeSnapshot).toHaveBeenCalledWith(saved);
+    expect(dataModels.ensureBootstrapped).not.toHaveBeenCalled();
+  });
+});
+
+describe('DatasetsService.delete', () => {
+  it('deletes the data model along with the dataset', async () => {
+    const { service, repository, dataModels } = build(jest.fn());
+
+    const removed = await service.delete('health');
+
+    expect(removed).toBe(1);
+    expect(repository.delete).toHaveBeenCalledWith('health');
+    expect(dataModels.delete).toHaveBeenCalledWith('health');
+  });
+
+  it('does not touch the data model when nothing was deleted', async () => {
+    const { service, repository, dataModels } = build(jest.fn());
+    repository.delete.mockResolvedValueOnce(0);
+
+    expect(await service.delete('missing')).toBe(0);
+    expect(dataModels.delete).not.toHaveBeenCalled();
   });
 });

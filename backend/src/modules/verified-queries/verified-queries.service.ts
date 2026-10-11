@@ -70,6 +70,9 @@ const STOPWORDS = new Set([
 export interface VerifiedQueryInput {
   question: string;
   sql: string;
+  /** See `VerifiedQueryDoc.logicalQuery` — set only when the answering turn
+   * used `query_entities`. */
+  logicalQuery?: string;
   datasourceId?: string;
   entities?: string[];
   sourceSessionId: string;
@@ -94,6 +97,7 @@ export class VerifiedQueriesService {
       id: randomUUID(),
       question: input.question.trim(),
       sql: input.sql.trim(),
+      ...(input.logicalQuery ? { logicalQuery: input.logicalQuery } : {}),
       ...(input.datasourceId ? { datasourceId: input.datasourceId } : {}),
       entities: input.entities ?? [],
       sourceSessionId: input.sourceSessionId,
@@ -145,18 +149,51 @@ export class VerifiedQueriesService {
   }
 
   /**
-   * The system block appended to the analysis prompt, or undefined when
-   * nothing stored resembles the question.
+   * The system block appended to the assistant's own prompt — logical-query
+   * pairs only (ADR-0007 §4: the assistant is never shown physical SQL
+   * text). A SQL-only legacy pair (from before the logical query layer, or
+   * answered via the `run_raw_sql` fallback) is silently excluded here, not
+   * degraded to something half-useful; `verifierReferenceBlock` still uses
+   * it as a bare reference question. Undefined when nothing left resembles
+   * the question.
    */
   async referenceBlock(question: string): Promise<string | undefined> {
-    const similar = await this.findSimilar(question, MAX_REFERENCE_PAIRS);
+    const similar = (
+      await this.findSimilar(question, MAX_REFERENCE_PAIRS)
+    ).filter((doc) => !!doc.logicalQuery);
     if (!similar.length) return undefined;
     const lines = [
-      'Verified reference queries (user-approved earlier — reuse their tables, joins and filters when the question is similar):',
+      'Verified reference queries (user-approved earlier — reuse their entities, joins and filters when the question is similar):',
     ];
     let budget = REFERENCE_BLOCK_CHARS;
     for (const pair of similar) {
-      const entry = `Q: ${pair.question}\nSQL: ${pair.sql}`;
+      const entry = `Q: ${pair.question}\nQuery: ${pair.logicalQuery}`;
+      if (entry.length > budget) break;
+      budget -= entry.length;
+      lines.push(entry);
+    }
+    return lines.length > 1 ? lines.join('\n') : undefined;
+  }
+
+  /**
+   * The system block for the `query-verifier`'s independent pass
+   * (`SessionsService.deriveIndependentQuery`): every similar pair, not just
+   * the logical-query ones — but a SQL-only legacy pair contributes only its
+   * question text (phrasing/scope signal), never its SQL, since the
+   * verifier always derives its own logical query rather than reusing one
+   * (ADR-0007 §6's whole point is a second, independent opinion).
+   */
+  async verifierReferenceBlock(question: string): Promise<string | undefined> {
+    const similar = await this.findSimilar(question, MAX_REFERENCE_PAIRS);
+    if (!similar.length) return undefined;
+    const lines = [
+      'Similar questions asked and approved before (reference for phrasing/scope only — derive your own query):',
+    ];
+    let budget = REFERENCE_BLOCK_CHARS;
+    for (const pair of similar) {
+      const entry = pair.logicalQuery
+        ? `Q: ${pair.question}\nQuery: ${pair.logicalQuery}`
+        : `Q: ${pair.question}`;
       if (entry.length > budget) break;
       budget -= entry.length;
       lines.push(entry);

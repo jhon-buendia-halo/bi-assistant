@@ -1,0 +1,111 @@
+<div class="flex flex-col gap-4">
+  <div class="flex flex-col gap-1.5">
+    @for (version of sortedVersions(); track version.version) {
+      <div
+        [attr.data-testid]="'model-version-' + version.version"
+        class="flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2.5"
+        [class.border-emerald-500/40]="version.version === currentVersion()"
+        [class.border-white/25]="isCompareSelected(version.version)"
+      >
+        <span
+          class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/5 text-zinc-400"
+        >
+          <lucide-angular [img]="History" [size]="14" />
+        </span>
+        <span class="flex min-w-0 flex-1 flex-col">
+          <span class="flex items-center gap-2">
+            <span class="text-[13px] font-medium text-zinc-200"
+              >v{{ version.version }}</span
+            >
+            <span class="rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-zinc-400">{{
+              version.source
+            }}</span>
+            @if (version.version === currentVersion()) {
+              <span class="text-[10px] font-medium text-emerald-400"
+                >current</span
+              >
+            }
+          </span>
+          <span class="truncate text-[11px] text-zinc-500">
+            {{ formattedTime(version.createdAt) }}
+            @if (version.note) {
+              · {{ version.note }}
+            }
+          </span>
+        </span>
+        <button
+          type="button"
+          title="Compare"
+          (click)="startCompare(version.version)"
+          class="rounded p-1.5 text-zinc-500 hover:bg-white/10 hover:text-zinc-200"
+          [class.text-zinc-200]="isCompareSelected(version.version)"
+        >
+          <lucide-angular [img]="GitCompare" [size]="14" />
+        </button>
+        @if (version.version !== currentVersion()) {
+          <button
+            type="button"
+            [attr.data-testid]="'revert-' + version.version"
+            title="Revert to this version"
+            (click)="revert(version.version)"
+            [disabled]="reverting() !== null"
+            class="rounded-md border border-white/10 px-2.5 py-1 text-[12px] text-zinc-300 hover:bg-white/5 disabled:opacity-50"
+          >
+            @if (reverting() === version.version) {
+              <lucide-angular
+                [img]="Loader2"
+                [size]="13"
+                class="animate-spin"
+              />
+            } @else {
+              Revert
+            }
+          </button>
+        }
+      </div>
+    }
+  </div>
+
+  @if (compareFrom() !== null || compareTo() !== null) {
+    <div class="flex items-center justify-between">
+      <p class="text-[12px] text-zinc-500">
+        @if (compareFrom() !== null && compareTo() === null) {
+          Pick a second version to compare against v{{ compareFrom() }}.
+        } @else {
+          Comparing v{{ compareFrom() }} → v{{ compareTo() }}
+        }
+      </p>
+      <button
+        type="button"
+        (click)="clearCompare()"
+        class="text-[12px] text-zinc-500 hover:text-zinc-300"
+      >
+        Clear
+      </button>
+    </div>
+  }
+
+  @if (diff(); as lines) {
+    <div
+      data-testid="model-diff"
+      class="max-h-80 overflow-auto rounded-lg border border-white/10 bg-[#1b1b1b] font-mono text-[11px] leading-5"
+    >
+      @for (line of lines; track $index) {
+        <div
+          [attr.data-testid]="'diff-line-' + line.kind"
+          class="flex gap-2 px-2"
+          [class.bg-emerald-500/10]="line.kind === 'added'"
+          [class.text-emerald-300]="line.kind === 'added'"
+          [class.bg-red-500/10]="line.kind === 'removed'"
+          [class.text-red-300]="line.kind === 'removed'"
+          [class.text-zinc-500]="line.kind === 'unchanged'"
+        >
+          <span class="w-4 shrink-0 select-none">{{
+            line.kind === "added" ? "+" : line.kind === "removed" ? "-" : ""
+          }}</span>
+          <span class="whitespace-pre">{{ line.text }}</span>
+        </div>
+      }
+    </div>
+  }
+</div>

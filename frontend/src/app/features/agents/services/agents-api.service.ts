@@ -129,6 +129,16 @@ export interface EvalRunView {
   error?: string;
   startedAt: string;
   finishedAt?: string;
+  /**
+   * Which path this run exercised (ADR-0007, roadmap 1.2.2): `model` (the
+   * current logical-query-layer assistant) or `legacy` (the pre-change
+   * SQL-writing assistant, for comparison). Absent on a run persisted before
+   * this field existed — treat as `model`.
+   */
+  path?: 'model' | 'legacy';
+  /** How many finished cases called `run_raw_sql` (the flagged last resort —
+   * the question could not be expressed as a logical query). */
+  outsideModelCount?: number;
 }
 
 /** Body of `POST /agents` and `PUT /agents/:id/draft` (api.md 41, 42). */
@@ -210,10 +220,11 @@ export class AgentsApiService {
     key: string,
     datasourceId: string,
     caseIds: string[],
+    path?: 'model' | 'legacy',
   ): Observable<EvalRunStartResult> {
     return this.http.post<EvalRunStartResult>(
       `${API_BASE_URL}/agents/${encodeURIComponent(key)}/evals/run`,
-      { datasourceId, caseIds },
+      { datasourceId, caseIds, ...(path ? { path } : {}) },
     );
   }
 

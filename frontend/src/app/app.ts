@@ -53,6 +53,7 @@ import { ThemeService } from './core/theme/theme.service';
 import { UiPreferencesService } from './core/preferences/ui-preferences.service';
 import { DatasetList } from './features/datasets/components/dataset-list/dataset-list';
 import { AgentHub } from './features/agents/components/agent-hub/agent-hub';
+import { DataModelView } from './features/data-model/components/data-model-view/data-model-view';
 import { AgentDetail } from './features/agents/components/agent-detail/agent-detail';
 import { EvalTrace } from './features/agents/components/eval-trace/eval-trace';
 import { AgentEditor } from './features/agents/components/agent-editor/agent-editor';
@@ -107,6 +108,7 @@ type MainView =
   | 'home'
   | 'dataset'
   | 'dataset-new'
+  | 'dataset-model'
   | 'agents'
   | 'agent-detail'
   | 'agent-editor'
@@ -137,6 +139,7 @@ const AREA_ROOT: Record<Exclude<Area, 'settings'>, MainView> = {
 const AREA_OF_VIEW: Partial<Record<MainView, Area>> = {
   dataset: 'datasets',
   'dataset-new': 'datasets',
+  'dataset-model': 'datasets',
   agents: 'agents',
   'agent-detail': 'agents',
   'agent-editor': 'agents',
@@ -166,6 +169,7 @@ const RIGHT_PANEL_WIDTH_STORAGE_KEY = 'questions-to-insights:right-panel-width';
     AppearanceSettings,
     DatasetList,
     AgentHub,
+    DataModelView,
     AgentDetail,
     EvalTrace,
     AgentEditor,
@@ -235,6 +239,15 @@ export class App {
     if (!this.confirmLeaveAgentEditor()) return;
     this.editingDataset.set(dataset);
     this.mainView.set('dataset-new');
+  }
+
+  /** Dataset whose data model is open in `app-data-model-view` (roadmap 1.2.3). */
+  readonly dataModelDataset = signal<Dataset | null>(null);
+
+  openDataModel(dataset: Dataset): void {
+    if (!this.confirmLeaveAgentEditor()) return;
+    this.dataModelDataset.set(dataset);
+    this.mainView.set('dataset-model');
   }
 
   /** Registry key of the agent open in the detail view. */

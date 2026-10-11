@@ -1,0 +1,90 @@
+<div class="flex min-h-0 flex-1 flex-col gap-3">
+  <div class="flex items-center justify-between">
+    <p class="text-[12px] text-zinc-500">
+      Edit the model's YAML directly. Saving creates a new version; the
+      current one is untouched if validation fails.
+    </p>
+    <button
+      type="button"
+      data-testid="save-yaml"
+      (click)="save()"
+      [disabled]="!canSave()"
+      title="No changes to save"
+      class="flex shrink-0 items-center gap-1.5 rounded-md bg-zinc-200 px-3 py-1.5 text-[13px] font-medium text-zinc-900 hover:bg-white disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+    >
+      @if (saving()) {
+        <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+        <span>Saving…</span>
+      } @else {
+        <lucide-angular [img]="Save" [size]="14" />
+        <span>Save as new version</span>
+      }
+    </button>
+  </div>
+
+  @if (errors().length > 0) {
+    <div
+      data-testid="yaml-errors"
+      class="flex flex-col gap-1 rounded-md border border-red-500/30 bg-red-500/10 p-2.5"
+    >
+      @for (issue of errors(); track $index) {
+        <button
+          type="button"
+          (click)="jumpToError(issue)"
+          [disabled]="issue.line === undefined"
+          class="flex items-start gap-2 rounded px-1.5 py-1 text-left text-[12px] text-red-300 hover:bg-red-500/10 disabled:cursor-default"
+        >
+          <lucide-angular
+            [img]="AlertTriangle"
+            [size]="13"
+            class="mt-0.5 shrink-0"
+          />
+          <span>
+            <span class="font-mono text-red-400">{{ issue.path }}</span>
+            @if (issue.line !== undefined) {
+              <span class="text-red-500">
+                ·
+                @if (issue.col !== undefined) {
+                  {{ issue.line }}:{{ issue.col }}
+                } @else {
+                  line {{ issue.line }}
+                }
+              </span>
+            }
+            <span class="block text-red-300/90">{{ issue.message }}</span>
+          </span>
+        </button>
+      }
+    </div>
+  }
+
+  <div
+    class="flex min-h-0 flex-1 overflow-hidden rounded-lg border border-white/10 bg-[#1b1b1b]"
+  >
+    <div
+      #gutterEl
+      class="select-none overflow-hidden border-r border-white/5 bg-white/[0.02] px-2 py-2 text-right font-mono text-[11px] leading-5 text-zinc-600"
+    >
+      @for (n of lineNumbers(); track n) {
+        <div
+          [attr.data-testid]="'yaml-line-' + n"
+          [attr.data-highlighted]="highlightedLine() === n"
+          [class.text-amber-400]="highlightedLine() === n"
+          [class.font-semibold]="highlightedLine() === n"
+        >
+          {{ n }}
+        </div>
+      }
+    </div>
+    <textarea
+      #textareaEl
+      data-testid="yaml-textarea"
+      [value]="text()"
+      (input)="onInput($any($event.target).value)"
+      (scroll)="onScroll($any($event.target))"
+      spellcheck="false"
+      wrap="off"
+      class="min-h-0 flex-1 resize-none overflow-auto bg-transparent px-3 py-2 font-mono text-[11px] leading-5 whitespace-pre text-zinc-200 outline-none"
+    ></textarea>
+  </div>
+</div>

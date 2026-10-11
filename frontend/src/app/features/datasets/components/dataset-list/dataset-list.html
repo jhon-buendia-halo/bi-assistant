@@ -89,6 +89,16 @@
                 <span>{{ editedLabel(item) }}</span>
               </span>
             </button>
+            <button
+              type="button"
+              [attr.data-testid]="'dataset-model-' + item.name"
+              (click)="openDataModel.emit(item)"
+              title="Data model"
+              [attr.aria-label]="'Data model of ' + item.name"
+              class="btn-icon opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+            >
+              <lucide-angular [img]="Network" [size]="15" />
+            </button>
             <!-- Its only item is Delete dataset (ui.md 1.6) -->
             @if (auth.can("manage-datasources")) {
               <div class="relative">

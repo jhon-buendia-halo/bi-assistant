@@ -18,6 +18,7 @@ import {
   KNOWLEDGE_STORE,
   SESSIONS_STORE,
   DATASETS_STORE,
+  DATA_MODELS_STORE,
   SETTINGS_STORE,
   VERIFIED_QUERIES_STORE,
 } from './doc-store';
@@ -53,6 +54,7 @@ const COLLECTIONS = [
   { token: GROUP_ROLE_MAPPINGS_STORE, table: 'group_role_mappings' },
   { token: AUTH_SESSIONS_STORE, table: 'auth_sessions' },
   { token: ACTIVITY_EVENTS_STORE, table: 'activity_events' },
+  { token: DATA_MODELS_STORE, table: 'data_models' },
 ];
 
 const sqliteDbProvider: Provider = {
