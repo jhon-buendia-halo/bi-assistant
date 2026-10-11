@@ -124,7 +124,7 @@ The sign-in page, the signed-in avatar and its menu, the **Admin** rail item and
 
 ## Flows
 
-The three Features below run in the Playwright `org` project, against the app started in org server mode with a local OpenID Connect stub and a SCIM test client (see [../../system/tech-stack.md](../../system/tech-stack.md)). Behaviour with no screen (the SCIM protocol, the Origin check, the 401 and 403 answers of every route, and owner isolation for every private collection) is covered by the backend API tests `backend/test/org-auth.e2e-spec.ts`, `backend/test/scim.e2e-spec.ts` and `backend/test/owner-isolation.e2e-spec.ts` (Feature "Org server API" below). Local mode is covered by the existing Features, which run unchanged, and by "Local mode has no sign-in and no Admin item" in [../app-shell/spec.md](../app-shell/spec.md).
+The three Features below run in the Playwright `org` project, against the app started in org server mode with a local OpenID Connect stub and a SCIM test client (see [../../system/tech-stack.md](../../system/tech-stack.md)). Behaviour with no screen (the SCIM protocol, the Origin check, the 401 and 403 answers of every route, and owner isolation for every private collection) is covered by the backend API tests `backend/test/org-auth.e2e-spec.ts`, `backend/test/scim.e2e-spec.ts` and `backend/test/owner-isolation.e2e-spec.ts` (Feature "Org server API" below); its scenario "Local mode answers as the local user" is `backend/test/local-auth.e2e-spec.ts`, which also checks that the existing routes answer as before in local mode. Local mode is covered by the existing Features, which run unchanged, and by "Local mode has no sign-in and no Admin item" in [../app-shell/spec.md](../app-shell/spec.md).
 
 ### Feature: Sign in to an org server
 

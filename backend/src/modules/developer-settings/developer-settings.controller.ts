@@ -1,3 +1,4 @@
+import { RequirePermission } from '../../common/decorators/auth-requirement.decorators';
 import { Body, Controller, Get, Post, Put } from '@nestjs/common';
 import {
   DeveloperSettingsService,
@@ -6,6 +7,7 @@ import {
 } from './developer-settings.service';
 
 @Controller('developer-settings')
+@RequirePermission('edit-policies')
 export class DeveloperSettingsController {
   constructor(private readonly developerSettings: DeveloperSettingsService) {}
 

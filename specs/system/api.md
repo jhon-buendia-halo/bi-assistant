@@ -96,7 +96,7 @@ Everything else keeps the default 404 body (`{statusCode:404, message:"Cannot GE
 
 ### 1.9 Authentication, authorization and CSRF (org server mode)
 
-Rules: [admin](../capabilities/admin/spec.md) R1-R36. Decisions: ADR-0011 and ADR-0011 in [architecture.md](architecture.md).
+Rules: [admin](../capabilities/admin/spec.md) R1-R36. Decisions: ADR-0010 and ADR-0011 in [architecture.md](architecture.md).
 
 **Mode.** The server runs in org server mode when every required `ORG_*` variable (6.1) is set, and in local mode when none is. Some but not all is a startup error naming the missing ones. The Electron-spawned backend is always local (4.3).
 
@@ -131,7 +131,7 @@ The renderer shows its own toast for any 403 (`You don't have permission to do t
 
 **Current user.** Each request in org server mode reads its auth session (one store read), checks that the user is still active, resolves their roles and permissions (admin R20, R21) and runs the handler as that user. Work started by the request (streams, deep analysis, eval runs, knowledge bootstrap) keeps that user (admin R32).
 
-**Permission per route.** Every route declares exactly one requirement; a route with none stops the server at startup (admin R23). Private collections are also filtered by owner (admin R29, R30): another user's item answers as not found.
+**Permission per route.** Every route declares exactly one requirement, on the handler or on its controller (a handler's own requirement wins); a route with none stops the server at startup (admin R23). Private collections are also filtered by owner (admin R29, R30): another user's item answers as not found.
 
 | Routes | Requirement |
 |---|---|
@@ -144,9 +144,10 @@ The renderer shows its own toast for any 403 (`You don't have permission to do t
 | `GET /datasets` | `use-agents` |
 | `POST /datasets`, `DELETE /datasets/:name` | `manage-datasources` |
 | Every `/testing-data` route (2.9) | `manage-datasources` |
-| `GET /llm/settings` | `use-agents` |
+| `GET /llm/settings`, `GET /llm/effort-levels` | `use-agents` |
 | `PUT /llm/settings`, `PUT /llm/reasoning`, `POST /llm/test-connection` | `manage-llm` |
 | Every `/developer-settings` route (2.11) | `edit-policies` |
+| `GET /ui-preferences`, `PUT /ui-preferences` (2.12) | `use-agents` (each user's own theme and drawer state) |
 | `GET /auth/login`, `GET /auth/callback`, `POST /auth/logout`, `GET /me` (2.13) | public: no permission checked (`GET /me` answers 401 itself without an auth session) |
 | Every `/scim/v2` route (2.14) | the SCIM bearer token, no auth session |
 | Every `/admin` route (2.15) | `manage-users` |

@@ -1,3 +1,4 @@
+import { RequirePermission } from '../../common/decorators/auth-requirement.decorators';
 import { Body, Controller, Get, Post, Put, Query } from '@nestjs/common';
 import { LlmService } from './llm.service';
 import type {
@@ -12,16 +13,19 @@ export class LlmController {
   constructor(private readonly llmService: LlmService) {}
 
   @Get('settings')
+  @RequirePermission('use-agents')
   getSettings(): Promise<LlmSettingsView> {
     return this.llmService.getView();
   }
 
   @Get('effort-levels')
+  @RequirePermission('use-agents')
   effortLevels(@Query('model') model?: string): EffortLevelsView {
     return this.llmService.effortLevels(model);
   }
 
   @Put('settings')
+  @RequirePermission('manage-llm')
   async saveSettings(
     @Body() dto: SaveLlmSettingsDto,
   ): Promise<{ ok: boolean; message: string; settings?: LlmSettingsView }> {
@@ -35,6 +39,7 @@ export class LlmController {
   }
 
   @Put('reasoning')
+  @RequirePermission('manage-llm')
   async saveReasoning(
     @Body() body: { effort?: ReasoningEffort },
   ): Promise<{ ok: boolean; message: string; settings?: LlmSettingsView }> {
@@ -54,6 +59,7 @@ export class LlmController {
   }
 
   @Post('test-connection')
+  @RequirePermission('manage-llm')
   async testConnection(
     @Body() dto: SaveLlmSettingsDto,
   ): Promise<{ ok: boolean; message: string }> {

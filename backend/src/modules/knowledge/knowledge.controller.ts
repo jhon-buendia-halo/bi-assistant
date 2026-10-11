@@ -1,3 +1,4 @@
+import { RequirePermission } from '../../common/decorators/auth-requirement.decorators';
 import {
   Body,
   Controller,
@@ -23,6 +24,7 @@ import { UpdateKnowledgeSnippetDto } from './dto/update-knowledge-snippet.dto';
 import { BootstrapKnowledgeDto } from './dto/bootstrap-knowledge.dto';
 
 @Controller('knowledge')
+@RequirePermission('use-agents')
 export class KnowledgeController {
   constructor(private readonly knowledge: KnowledgeService) {}
 

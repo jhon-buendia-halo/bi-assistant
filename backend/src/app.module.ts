@@ -13,10 +13,12 @@ import { DeepAnalysisModule } from './modules/deep-analysis/deep-analysis.module
 import { TestingDataModule } from './modules/testing-data/testing-data.module';
 import { DeveloperSettingsModule } from './modules/developer-settings/developer-settings.module';
 import { UiPreferencesModule } from './modules/ui-preferences/ui-preferences.module';
+import { AuthModule } from './modules/auth/auth.module';
 
 @Module({
   imports: [
     DatabaseModule,
+    AuthModule,
     DatasourcesModule,
     LlmModule,
     DatasetsModule,

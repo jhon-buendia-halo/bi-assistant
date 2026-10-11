@@ -1,3 +1,4 @@
+import { RequirePermission } from '../../common/decorators/auth-requirement.decorators';
 import {
   Body,
   Controller,
@@ -17,6 +18,7 @@ import type {
 import type { Response } from 'express';
 
 @Controller('sessions')
+@RequirePermission('use-agents')
 export class SessionsController {
   constructor(private readonly sessionsService: SessionsService) {}
 

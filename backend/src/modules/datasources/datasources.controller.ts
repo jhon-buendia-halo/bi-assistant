@@ -1,3 +1,4 @@
+import { RequirePermission } from '../../common/decorators/auth-requirement.decorators';
 import {
   Body,
   Controller,
@@ -24,11 +25,13 @@ export class DatasourcesController {
   constructor(private readonly datasources: DatasourcesService) {}
 
   @Get()
+  @RequirePermission('use-agents')
   async list(): Promise<{ datasources: DatasourceView[] }> {
     return { datasources: await this.datasources.list() };
   }
 
   @Post('test-connection')
+  @RequirePermission('manage-datasources')
   async testConnection(
     @Body() dto: TestDatasourceDto,
   ): Promise<{ ok: boolean; message: string }> {
@@ -42,6 +45,7 @@ export class DatasourcesController {
   }
 
   @Post('rest/discover')
+  @RequirePermission('manage-datasources')
   async discoverRestEndpoints(
     @Body() dto: DiscoverRestEndpointsDto,
   ): Promise<{ ok: boolean; message: string } & Partial<RestDiscovery>> {
@@ -65,6 +69,7 @@ export class DatasourcesController {
   }
 
   @Post()
+  @RequirePermission('manage-datasources')
   async save(
     @Body() dto: SaveDatasourceDto,
   ): Promise<{ ok: boolean; message: string; datasource?: DatasourceView }> {
@@ -82,6 +87,7 @@ export class DatasourcesController {
   }
 
   @Delete(':id')
+  @RequirePermission('manage-datasources')
   async remove(
     @Param('id') id: string,
   ): Promise<{ ok: boolean; message: string }> {
@@ -95,6 +101,7 @@ export class DatasourcesController {
   }
 
   @Get(':id/inventory')
+  @RequirePermission('use-agents')
   async inventory(
     @Param('id') id: string,
     @Query('refresh') refresh?: string,

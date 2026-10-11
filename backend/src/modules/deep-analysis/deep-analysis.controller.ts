@@ -1,9 +1,11 @@
+import { RequirePermission } from '../../common/decorators/auth-requirement.decorators';
 import { Body, Controller, Get, Param, Post, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { DeepAnalysisService } from './deep-analysis.service';
 import type { DeepAnalysisView } from './entities/deep-analysis-job.entity';
 
 @Controller('sessions')
+@RequirePermission('use-agents')
 export class DeepAnalysisController {
   constructor(private readonly deepAnalysis: DeepAnalysisService) {}
 
