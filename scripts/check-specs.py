@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Fail when specs/ drifts from the code. Runs in CI (.github/workflows/spec-checks.yml).
+"""Fail when specs/ or design/wireframes/ drift from the code. Runs in CI (.github/workflows/spec-checks.yml).
 
 See *Spec convention* in CLAUDE.md. Standard library only; run from anywhere in the repo:
-    python3 scripts/check-specs.py
+    python3 scripts/check-specs.py                    # what CI runs on main
+    python3 scripts/check-specs.py --base origin/main  # what CI runs on a pull request (adds the fragment rules)
 """
 import glob
 import os
@@ -12,6 +13,11 @@ import sys
 
 ROOT = subprocess.check_output(["git", "rev-parse", "--show-toplevel"], text=True).strip()
 os.chdir(ROOT)
+sys.dont_write_bytecode = True  # importing scripts/fragments.py leaves no __pycache__
+sys.path.insert(0, os.path.join(ROOT, "scripts"))
+import fragments  # noqa: E402  (scripts/fragments.py)
+
+BASE = sys.argv[sys.argv.index("--base") + 1] if "--base" in sys.argv else None
 failures = 0
 
 
@@ -55,7 +61,7 @@ check(listed_epics == set(epics), "specs/README.md lists exactly the epic specs 
 
 # 2. Every relative link resolves.
 # changelog.md and retrospective.md are excluded: past entries are never rewritten, so their links may point at moved files.
-files = ["CLAUDE.md", "README.md", "roadmap.md"] + glob.glob("specs/**/*.md", recursive=True)
+files = ["CLAUDE.md", "README.md", "roadmap.md"] + glob.glob("specs/**/*.md", recursive=True) + glob.glob("design/**/*.md", recursive=True)
 broken = []
 for f in files:
     for target in re.findall(r"\]\(([^)\s]+)\)", strip_code(read(f))):
@@ -115,6 +121,53 @@ missing = sorted(roadmap_epics - set(epics))
 check(not missing, f"{len(roadmap_epics)} roadmap milestone epics have a spec in specs/epics/", missing)
 no_status = sorted(e for e, t in epics.items() if not re.search(r"\*\*Status:\*\* (Draft|Confirmed)", t))
 check(not no_status, "every epic spec has a Status of Draft or Confirmed", no_status)
+
+# 9. Wireframes (see *Wireframe convention* in CLAUDE.md): every page declares its status, role, spec and
+#    version, sits in as-built/<role>/ or proposed/<EPIC-ID>/, and is linked from the index; every index link resolves.
+WF = "design/wireframes"
+pages = sorted(p for p in glob.glob(f"{WF}/*/*/*.html") if "/_" not in p)
+index = read(f"{WF}/index.html") if os.path.isfile(f"{WF}/index.html") else ""
+linked = {os.path.normpath(os.path.join(WF, h)) for h in re.findall(r'href="([^"#?:]+\.html)"', index)}
+problems = [f"index.html links missing page {os.path.relpath(p, WF)}" for p in sorted(linked) if not os.path.isfile(p)]
+for p in pages:
+    html = read(p)
+    meta = dict(re.findall(r'<meta name="(wf-[\w-]+)" content="([^"]*)"', html))
+    kind, group = p.split("/")[2:4]
+    if kind not in ("as-built", "proposed") or meta.get("wf-status") != kind:
+        problems.append(f"{p}: wf-status must match its folder (as-built or proposed)")
+    if kind == "as-built" and group not in ("user", "maker", "admin"):
+        problems.append(f"{p}: as-built pages live in as-built/user|maker|admin/")
+    if kind == "proposed" and not re.fullmatch(r"BA-\d+", group):
+        problems.append(f"{p}: proposed pages live in proposed/<EPIC-ID>/")
+    for key in ("wf-role", "wf-spec", "wf-version"):
+        if not meta.get(key):
+            problems.append(f"{p}: missing <meta name=\"{key}\">")
+    spec = meta.get("wf-spec", "").split("#")[0]
+    if spec and not os.path.isfile(spec):
+        problems.append(f"{p}: wf-spec points at missing {spec}")
+    if os.path.normpath(p) not in linked:
+        problems.append(f"{p}: not linked from {WF}/index.html")
+check(pages and not problems, f"{len(pages)} wireframe pages are complete and indexed", problems)
+
+# 10. Changelog and retrospective fragments (see *Logging convention* in CLAUDE.md): every fragment is valid.
+#     With --base (pull requests), the branch adds at least one of each and leaves the two collected files alone;
+#     the release workflow is the only writer of changelog.md and retrospective.md.
+problems = fragments.check_all()
+if BASE:
+    # The working tree against the merge base, so uncommitted and untracked files count when run locally.
+    merge_base = subprocess.check_output(["git", "merge-base", BASE, "HEAD"], text=True).strip()
+    diff = [l.split("\t") for l in subprocess.check_output(["git", "diff", "--name-status", merge_base], text=True).splitlines()]
+    untracked = subprocess.check_output(["git", "ls-files", "--others", "--exclude-standard"], text=True).splitlines()
+    added = {rest[-1] for status, *rest in diff if status[0] in "AR"} | set(untracked)
+    changed = {rest[-1] for status, *rest in diff} | set(untracked)
+    for folder in (fragments.CHANGELOG_DIR, fragments.RETRO_DIR):
+        if not any(p.startswith(folder + "/") and not p.endswith("README.md") for p in added):
+            problems.append(f"this branch adds no {folder}/<STORY>.md fragment")
+    for name in ("changelog.md", "retrospective.md"):
+        if name in changed:
+            problems.append(f"this branch edits {name} directly: add a fragment instead (the release workflow collects it)")
+label = "fragments are valid" + (f", and the branch adds them instead of editing changelog.md and retrospective.md (base {BASE})" if BASE else "")
+check(not problems, label, problems)
 
 print("\n" + ("ALL CHECKS PASSED" if not failures else f"{failures} CHECK(S) FAILED"))
 sys.exit(1 if failures else 0)

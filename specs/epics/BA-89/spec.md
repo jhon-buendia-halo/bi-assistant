@@ -29,12 +29,15 @@ Every change to Questions to Insights is planned, specified, built, verified and
 | [BA-149](https://halo-powered.atlassian.net/browse/BA-149) | One branch and one PR per epic | 0.2.5 |
 | [BA-156](https://halo-powered.atlassian.net/browse/BA-156) | E2E and testing run against the web app; desktop only on request | 0.2.6 |
 | [BA-157](https://halo-powered.atlassian.net/browse/BA-157) | Local test deploys: check the default ports first and keep deploy tweaks out of commits | 0.2.7 |
+| [BA-172](https://halo-powered.atlassian.net/browse/BA-172) | Wireframes skill: co-design future UI and keep as-built wireframes in sync with the app | 0.2.8 |
+| [BA-173](https://halo-powered.atlassian.net/browse/BA-173) | Changelog and retrospective fragments: one file per story, collected on merge | 0.2.9 |
 
 ## Specs touched
 
 - [specs/README.md](../../README.md): layout, formats, lifecycle, rebuild prompt.
 - Every file under [product/](../../product/), [system/](../../system/) and [capabilities/](../../capabilities/), created by the BA-90 backfill.
-- [system/delivery.md](../../system/delivery.md): the release workflow and the branch rulesets on `main` (BA-108, BA-110), and how one epic PR with mixed commit types is bumped (BA-149).
+- [system/ui.md](../../system/ui.md): points at the wireframes in [design/wireframes/](../../../design/wireframes/README.md) (BA-172).
+- [system/delivery.md](../../system/delivery.md): the fragment collection in `version-on-merge.yml` and check 10 in `spec-checks.yml` (BA-173); the release workflow and the branch rulesets on `main` (BA-108, BA-110), and how one epic PR with mixed commit types is bumped (BA-149).
 
 ## Acceptance
 

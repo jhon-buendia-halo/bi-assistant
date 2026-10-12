@@ -2,7 +2,9 @@ name: Spec checks
 
 # Fails when specs/ drifts from the code: a new backend route, collection,
 # agent, Playwright spec, capability or roadmap epic without its spec, or a
-# broken link. See "Spec convention" in CLAUDE.md and specs/README.md.
+# broken link, a wireframe page missing its metas or its index entry, or a
+# pull request without its changelog and retrospective fragments.
+# See "Spec convention" and "Wireframe convention" in CLAUDE.md and specs/README.md.
 on:
   pull_request:
   push:
@@ -24,6 +26,14 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+        with:
+          # A pull request is compared with its base branch (fragment rules, check 10).
+          fetch-depth: 0
 
       - name: Check specs
-        run: python3 scripts/check-specs.py
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            python3 scripts/check-specs.py --base "origin/${{ github.base_ref }}"
+          else
+            python3 scripts/check-specs.py
+          fi

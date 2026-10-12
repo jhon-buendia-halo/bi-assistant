@@ -8,3 +8,6 @@ dist
 .DS_Store
 .context
 .env
+
+# Wireframe renders (.claude/skills/wireframes/scripts/render.mjs)
+design/wireframes/_renders/

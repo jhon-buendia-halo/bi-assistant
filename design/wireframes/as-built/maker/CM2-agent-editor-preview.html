@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <title>CM2 · Edit a Live agent and preview its draft</title>
+  <meta name="wf-status" content="as-built">
+  <meta name="wf-version" content="v0.29.0">
+  <meta name="wf-role" content="maker">
+  <meta name="wf-spec" content="specs/system/ui.md#451-agent-editor-and-preview-chat">
+  <link rel="stylesheet" href="../../_kit/hub.css">
+  <script src="../../_kit/icons.js"></script>
+  <script src="../../_kit/shell.js" defer></script>
+  <style>
+    /* The app's content column: px-8 py-10, max 960 (the kit's .narrow counts padding inside max-width). */
+    main.wf-page-content { padding: 40px 32px; gap: 0; }
+    .wf-rail.collapsed .wf-powered img { max-width: 100%; }
+    .fld { display: flex; flex-direction: column; gap: 6px; }
+    .fld .field { min-height: 38px; display: flex; align-items: center; }
+    .ta { height: 174px; align-items: flex-start !important; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 13px; line-height: 19.5px; white-space: pre-wrap; position: relative; }
+    .ta::after { content: ""; position: absolute; right: 3px; bottom: 3px; width: 8px; height: 8px; border-right: 1.5px solid var(--qti-fg-muted); border-bottom: 1.5px solid var(--qti-fg-muted); opacity: .5; }
+    .cb { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--qti-fg); width: fit-content; }
+    .cb .wf-check { width: 14px; height: 14px; border-radius: 3px; }
+    .btn[disabled] { opacity: .55; }
+    /* Session chat at panel width (ui.md 4.12) */
+    .chat { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .transcript { flex: 1; min-height: 0; overflow: hidden; padding: 32px 32px 24px; display: flex; flex-direction: column; gap: 24px; position: relative; }
+    .bubble { align-self: flex-end; max-width: 92%; background: var(--qti-surface-selected); border-radius: 12px 2px 12px 12px; padding: 12px; display: flex; gap: 12px; align-items: center; font-size: 16px; line-height: 24px; color: var(--qti-fg); }
+    .bubble .av { width: 32px; height: 32px; border-radius: 999px; background: var(--qti-primary); color: var(--qti-on-primary); display: grid; place-items: center; font-weight: 600; font-size: 14px; flex: none; }
+    .answer { display: flex; gap: 12px; align-items: flex-start; }
+    .answer > img { width: 24px; height: 24px; flex: none; margin-top: 2px; }
+    .answer .body { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+    .datarow { display: flex; align-items: center; gap: 8px; border: 1px solid var(--qti-border); border-radius: 8px; background: var(--qti-surface); padding: 8px 12px; font-size: 16px; line-height: 24px; color: var(--qti-on-primary-soft); }
+    .ib { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 999px; color: var(--qti-icon); }
+    .composer { margin: 0 32px; border: 1px solid var(--qti-border-strong); border-radius: 8px; background: var(--qti-surface); box-shadow: var(--qti-shadow-input); padding: 12px 8px; display: flex; flex-direction: column; gap: 10px; }
+    .mode { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 3px 10px; font-size: 12px; border: 1px solid var(--qti-border); background: var(--qti-surface-muted); color: var(--qti-fg-muted); }
+    .disclaimer { padding: 8px 32px 56px; text-align: center; font-size: 12px; line-height: 17px; color: var(--qti-fg-muted); }
+    .navtick { position: absolute; top: 18px; right: 22px; width: 16px; height: 2px; border-radius: 2px; background: var(--qti-border-selected); }
+  </style>
+</head>
+<body data-area="Agents" data-role="maker" data-mode="org" data-initials="JB" data-drawer="collapsed">
+<!--
+  Workflow: Maker edits a Live agent, saves the draft and previews it (steps 2-3 of "create, preview, publish an agent").
+  Endpoints: GET /agents/:key (load the draft), PUT /agents/:id/draft (Save -> toast "Draft saved"; first save of a new agent
+  is POST /agents -> "Agent \"<name>\" saved as draft"), POST /sessions {agentId, preview:true} (Preview; held in memory,
+  never listed), POST /sessions/:id/messages/stream (a preview turn runs the saved draft), DELETE /sessions/:id (Reset preview
+  discards it and starts an empty one; closing the panel or leaving the editor discards it too), POST /agents/:id/publish
+  (Publish -> "Agent \"Cup historian\" is Live").
+  State: Live agent + newer draft = "Unpublished changes". Save is disabled (nothing changed since the save that raised
+  the toast). Sessions started from the agent keep running the Live version until Publish.
+  World Cup Archive was added to the draft and later deleted, so it reads "(missing)"; the Live version only uses
+  World Cup Core, so the hub card shows no missing note (CM1).
+  Frame: the Details panel at its default 572 px, so the header wraps its buttons under the title as in
+  evidence/1.9.5/editor-preview-answered-light.png. The form card scrolls with the page: below the fold follow the second
+  starter question, "Add starter question" (btn-ghost, plus icon; disabled at 5), then one row with Model (text field,
+  placeholder "Default (gpt-5.2)") and Reasoning effort (select: Default, Low, Medium, High).
+-->
+  <main>
+    <span class="btn btn-ghost" style="width:fit-content"><i data-lucide="arrow-left" data-size="15"></i>Back</span>
+    <div class="row wrap g12" style="margin-top:16px">
+      <h2 class="h2" style="white-space:nowrap">Edit Cup historian</h2>
+      <span class="row g8"><span class="chip chip-success">Live</span><span class="chip chip-warning">Unpublished changes</span></span>
+      <div class="row" style="margin-left:auto">
+        <span class="btn btn-secondary"><i data-lucide="message-square" data-size="14"></i>Preview</span>
+        <span class="btn btn-secondary" disabled><i data-lucide="save" data-size="14"></i>Save</span>
+        <span class="btn btn-primary"><i data-lucide="upload" data-size="14"></i>Publish</span>
+      </div>
+    </div>
+
+    <div class="card col" style="margin-top:24px;padding:24px;gap:20px;flex:none">
+      <div class="fld"><span class="field-label">Name</span><div class="field">Cup historian</div></div>
+      <div class="fld"><span class="field-label">Description</span><div class="field">Answers questions about World Cup history</div></div>
+      <div class="fld">
+        <span class="field-label">Instructions</span>
+        <div class="field ta">Answer as a football historian, in one or two sentences.
+Name the tournament year, the host and the final's score.
+If the data doesn't cover a tournament, say so.</div>
+        <span class="small muted">Added to the assistant's context in every turn. The assistant's own rules and the read-only guard still apply.</span>
+      </div>
+      <div class="fld" style="gap:8px">
+        <span class="field-label" style="margin-bottom:6px">Datasets</span>
+        <span class="cb"><span class="wf-check"></span>Formula 1</span>
+        <span class="cb"><span class="wf-check on"><i data-lucide="check" data-size="11" data-stroke="3"></i></span>World Cup Core</span>
+        <span class="cb"><span class="wf-check on"><i data-lucide="check" data-size="11" data-stroke="3"></i></span><span style="color:var(--qti-on-warning-soft)">World Cup Archive (missing)</span></span>
+      </div>
+      <div class="fld" style="gap:8px">
+        <span class="field-label" style="margin-bottom:6px">Starter questions</span>
+        <div class="row"><div class="field">Who won the 2018 World Cup?</div><span class="btn-icon" title="Remove starter question"><i data-lucide="x" data-size="14"></i></span></div>
+        <div class="row"><div class="field">Which knockout matches went to penalties?</div><span class="btn-icon" title="Remove starter question"><i data-lucide="x" data-size="14"></i></span></div>
+        <span class="btn btn-ghost" style="width:fit-content"><i data-lucide="plus" data-size="14"></i>Add starter question</span>
+      </div>
+      <div class="row top g20">
+        <div class="fld grow"><span class="field-label">Model</span><div class="field" style="color:var(--qti-fg-muted)">Default (gpt-5.2)</div></div>
+        <div class="fld" style="width:180px"><span class="field-label">Reasoning effort</span><div class="field row between">Default<i data-lucide="chevron-down" data-size="14"></i></div></div>
+      </div>
+    </div>
+  </main>
+
+  <aside data-panel="Preview" data-width="572">
+    <div class="chat">
+      <div class="transcript">
+        <span class="navtick"></span>
+        <div class="bubble"><span class="av">D</span><span>Who won the 2018 World Cup?</span></div>
+        <div class="answer">
+          <img src="../../../../frontend/public/brand/agentic-hub/sparks.svg" alt="">
+          <div class="body">
+            <div class="prose" style="color:var(--qti-fg-strong)">France won the 2018 World Cup in Russia, beating Croatia 4–2 in the final at the Luzhniki Stadium in Moscow.</div>
+            <div class="datarow"><img src="../../../../frontend/public/brand/agentic-hub/data-sources.svg" width="24" height="24" alt=""><span class="grow">Data used (1 query)</span><i data-lucide="chevron-down" data-size="16"></i></div>
+            <div class="row g4">
+              <span class="ib" title="Copy message"><i data-lucide="copy" data-size="16"></i></span>
+              <span class="ib" title="Save as verified query"><i data-lucide="thumbs-up" data-size="16"></i></span>
+              <span class="ib" title="Mark answer as wrong"><i data-lucide="thumbs-down" data-size="16"></i></span>
+            </div>
+            <span class="btn btn-outline" style="width:fit-content;padding:6px 12px;font-size:13px;border-radius:8px;color:var(--qti-fg)"><i data-lucide="sparkles" data-size="14"></i>Generate interactive visuals</span>
+          </div>
+        </div>
+      </div>
+      <div class="composer">
+        <div style="height:40px;padding:0 4px;font-size:14px;color:var(--qti-placeholder)">Ask a follow-up question…</div>
+        <div class="row">
+          <span class="mode"><i data-lucide="shield-check" data-size="12"></i>Careful</span>
+          <span class="mode" style="opacity:.55"><i data-lucide="telescope" data-size="12"></i>Deep analysis</span>
+          <span class="grow"></span>
+          <span style="color:var(--qti-accent);display:flex;opacity:.55"><i data-lucide="arrow-up" data-size="20"></i></span>
+        </div>
+      </div>
+      <div class="disclaimer">Responses are generated by AI (Powered by LenAI) and may be inaccurate or incomplete. Please verify against source data before sharing.</div>
+    </div>
+  </aside>
+
+  <div class="wf-overlay">
+    <!-- Kit gap: the panel header takes only a title; Reset preview is laid over it at the header's position. -->
+    <span class="btn btn-ghost" style="position:absolute;left:916px;top:180px;background:var(--qti-surface)"><i data-lucide="rotate-ccw" data-size="14"></i>Reset preview</span>
+    <div class="wf-toast" style="width:360px"><span style="color:var(--qti-on-success-soft);display:flex"><i data-lucide="circle-check" data-size="16"></i></span><span class="grow">Draft saved</span><span style="color:var(--qti-fg-muted);display:flex"><i data-lucide="x" data-size="14"></i></span></div>
+  </div>
+</body>
+</html>

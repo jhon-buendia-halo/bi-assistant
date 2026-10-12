@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <title>Agentic Hub wireframes</title>
+  <link rel="stylesheet" href="_kit/hub.css">
+  <style>
+    body { background: var(--qti-surface-muted); padding: 40px 56px 80px; }
+    .wf-index-section { margin-top: 40px; }
+    .wf-thumbs { display: grid; grid-template-columns: repeat(auto-fill, 372px); gap: 24px; margin-top: 16px; }
+    .wf-thumb { display: flex; flex-direction: column; gap: 8px; text-decoration: none; color: inherit; }
+    .wf-thumb-frame { width: 372px; height: 248px; overflow: hidden; border-radius: 12px; border: 1px solid var(--qti-border); box-shadow: var(--qti-shadow-card); background: var(--qti-surface); }
+    .wf-thumb-frame iframe { width: 1440px; height: 960px; border: 0; transform: scale(0.2583); transform-origin: 0 0; pointer-events: none; }
+  </style>
+</head>
+<!--
+  Every wireframe page is linked here (check 9 in scripts/check-specs.py fails otherwise).
+  Add a proposed epic as its own section: <section class="wf-index-section" id="BA-123"> … </section>.
+-->
+<body>
+  <div class="row g16">
+    <span class="wf-tile"><i data-lucide="layout-grid" data-size="20"></i></span>
+    <div class="col g4">
+      <h1 class="h2" style="font-size:32px;line-height:40px">Agentic Hub wireframes</h1>
+      <span class="muted">One page per screen, drawn with the app's own tokens. As-built pages match v0.29.0. See <a class="link" href="README.md">README</a> and <a class="link" href="flows.md">flows per role</a>.</span>
+    </div>
+  </div>
+
+  <section class="wf-index-section" id="as-built-user">
+    <div class="row g12"><h2 class="h3">As built · User</h2><span class="chip chip-success">as-built</span><span class="small muted">Data owner and Approver see the same screens today</span></div>
+    <div class="wf-thumbs">
+      <a class="wf-thumb" href="as-built/user/CU1-sign-in.html"><div class="wf-thumb-frame"><iframe src="as-built/user/CU1-sign-in.html" loading="lazy" tabindex="-1"></iframe></div><span class="title">CU1 · Sign in (org server mode)</span></a>
+      <a class="wf-thumb" href="as-built/user/CU2-agents-hub.html"><div class="wf-thumb-frame"><iframe src="as-built/user/CU2-agents-hub.html" loading="lazy" tabindex="-1"></iframe></div><span class="title">CU2 · Agents: discover, pin, Start chat</span></a>
+      <a class="wf-thumb" href="as-built/user/CU3-agent-detail.html"><div class="wf-thumb-frame"><iframe src="as-built/user/CU3-agent-detail.html" loading="lazy" tabindex="-1"></iframe></div><span class="title">CU3 · Agent detail (read-only)</span></a>
+      <a class="wf-thumb" href="as-built/user/CU4-new-conversation.html"><div class="wf-thumb-frame"><iframe src="as-built/user/CU4-new-conversation.html" loading="lazy" tabindex="-1"></iframe></div><span class="title">CU4 · New conversation: pick datasets</span></a>
+      <a class="wf-thumb" href="as-built/user/CU5-agent-session-welcome.html"><div class="wf-thumb-frame"><iframe src="as-built/user/CU5-agent-session-welcome.html" loading="lazy" tabindex="-1"></iframe></div><span class="title">CU5 · Agent session: welcome + starters</span></a>
+      <a class="wf-thumb" href="as-built/user/CU6-answer-evidence-feedback-visuals.html"><div class="wf-thumb-frame"><iframe src="as-built/user/CU6-answer-evidence-feedback-visuals.html" loading="lazy" tabindex="-1"></iframe></div><span class="title">CU6 · Answer: evidence, feedback, visuals</span></a>
+      <a class="wf-thumb" href="as-built/user/CU6b-clarification.html"><div class="wf-thumb-frame"><iframe src="as-built/user/CU6b-clarification.html" loading="lazy" tabindex="-1"></iframe></div><span class="title">CU6b · Clarification card</span></a>
+      <a class="wf-thumb" href="as-built/user/CU7-knowledge.html"><div class="wf-thumb-frame"><iframe src="as-built/user/CU7-knowledge.html" loading="lazy" tabindex="-1"></iframe></div><span class="title">CU7 · Knowledge: private snippets</span></a>
+      <a class="wf-thumb" href="as-built/user/CU7b-knowledge-pending.html"><div class="wf-thumb-frame"><iframe src="as-built/user/CU7b-knowledge-pending.html" loading="lazy" tabindex="-1"></iframe></div><span class="title">CU7b · Knowledge: pending suggestions, Accept / Reject</span></a>
+    </div>
+  </section>
+
+  <section class="wf-index-section" id="as-built-maker">
+    <div class="row g12"><h2 class="h3">As built · Maker</h2><span class="chip chip-success">as-built</span><span class="small muted">Everything a User has, plus building agents</span></div>
+    <div class="wf-thumbs">
+      <a class="wf-thumb" href="as-built/maker/CM1-agents-hub-maker.html"><div class="wf-thumb-frame"><iframe src="as-built/maker/CM1-agents-hub-maker.html" loading="lazy" tabindex="-1"></iframe></div><span class="title">CM1 · Agents with New agent, Draft / Live</span></a>
+      <a class="wf-thumb" href="as-built/maker/CM2-agent-editor-preview.html"><div class="wf-thumb-frame"><iframe src="as-built/maker/CM2-agent-editor-preview.html" loading="lazy" tabindex="-1"></iframe></div><span class="title">CM2 · Agent editor + Preview</span></a>
+      <a class="wf-thumb" href="as-built/maker/CM3-own-agent-detail.html"><div class="wf-thumb-frame"><iframe src="as-built/maker/CM3-own-agent-detail.html" loading="lazy" tabindex="-1"></iframe></div><span class="title">CM3 · Own agent: Edit / Publish / Delete</span></a>
+      <a class="wf-thumb" href="as-built/maker/CM4-evals-run.html"><div class="wf-thumb-frame"><iframe src="as-built/maker/CM4-evals-run.html" loading="lazy" tabindex="-1"></iframe></div><span class="title">CM4 · Evals: run selected (built-in assistant)</span></a>
+    </div>
+  </section>
+
+  <section class="wf-index-section" id="as-built-admin">
+    <div class="row g12"><h2 class="h3">As built · Platform admin</h2><span class="chip chip-success">as-built</span><span class="small muted">Everything a Maker has, plus shared data and, in org mode, people and roles</span></div>
+    <div class="wf-thumbs">
+      <a class="wf-thumb" href="as-built/admin/CA1-new-dataset.html"><div class="wf-thumb-frame"><iframe src="as-built/admin/CA1-new-dataset.html" loading="lazy" tabindex="-1"></iframe></div><span class="title">CA1 · New dataset (catalog browser)</span></a>
+      <a class="wf-thumb" href="as-built/admin/CA2-settings-datasources.html"><div class="wf-thumb-frame"><iframe src="as-built/admin/CA2-settings-datasources.html" loading="lazy" tabindex="-1"></iframe></div><span class="title">CA2 · Settings: Datasource Configuration</span></a>
+      <a class="wf-thumb" href="as-built/admin/CA3-settings-llm.html"><div class="wf-thumb-frame"><iframe src="as-built/admin/CA3-settings-llm.html" loading="lazy" tabindex="-1"></iframe></div><span class="title">CA3 · Settings: LLM Configuration</span></a>
+      <a class="wf-thumb" href="as-built/admin/CA4-admin-overview.html"><div class="wf-thumb-frame"><iframe src="as-built/admin/CA4-admin-overview.html" loading="lazy" tabindex="-1"></iframe></div><span class="title">CA4 · Admin: Overview</span></a>
+      <a class="wf-thumb" href="as-built/admin/CA5-admin-users-assign-role.html"><div class="wf-thumb-frame"><iframe src="as-built/admin/CA5-admin-users-assign-role.html" loading="lazy" tabindex="-1"></iframe></div><span class="title">CA5 · Admin: Users &amp; groups + Assign role</span></a>
+      <a class="wf-thumb" href="as-built/admin/CA6-admin-edit-user.html"><div class="wf-thumb-frame"><iframe src="as-built/admin/CA6-admin-edit-user.html" loading="lazy" tabindex="-1"></iframe></div><span class="title">CA6 · Admin: Edit a user</span></a>
+      <a class="wf-thumb" href="as-built/admin/CA7-admin-roles-permissions.html"><div class="wf-thumb-frame"><iframe src="as-built/admin/CA7-admin-roles-permissions.html" loading="lazy" tabindex="-1"></iframe></div><span class="title">CA7 · Admin: Roles &amp; permissions</span></a>
+    </div>
+  </section>
+
+  <section class="wf-index-section" id="proposed">
+    <div class="row g12"><h2 class="h3">Proposed</h2><span class="chip chip-warning">proposed</span></div>
+    <p class="muted">No epic has proposed wireframes yet. Co-design them with the <code class="mono">wireframes</code> skill; each epic gets its own section here.</p>
+  </section>
+
+  <script src="_kit/icons.js"></script>
+  <script>
+    document.querySelectorAll('i[data-lucide]').forEach((el) => {
+      const s = el.dataset.size || 16;
+      el.outerHTML = `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${(window.WF_ICONS || {})[el.dataset.lucide] || ''}</svg>`;
+    });
+  </script>
+</body>
+</html>

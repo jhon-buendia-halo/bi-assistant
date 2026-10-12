@@ -1,0 +1,5 @@
+FAIL 20 wireframe pages are complete and indexed
+     design/wireframes/as-built/user/CU7b-knowledge-pending.html: not linked from design/wireframes/index.html
+
+1 CHECK(S) FAILED
+exit 1

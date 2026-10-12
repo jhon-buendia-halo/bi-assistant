@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <title>CA2 · Settings: Datasource Configuration, new datasource</title>
+  <meta name="wf-status" content="as-built">
+  <meta name="wf-version" content="v0.29.0">
+  <meta name="wf-role" content="admin">
+  <meta name="wf-spec" content="specs/system/ui.md#410-datasource-configuration-settings specs/system/ui.md#13-rail-and-drawer">
+  <link rel="stylesheet" href="../../_kit/hub.css">
+  <script src="../../_kit/icons.js"></script>
+  <script src="../../_kit/shell.js" defer></script>
+  <style>
+    .wf-lbl { display: flex; flex-direction: column; gap: 4px; }
+    select.field, input.field { height: 38px; }
+  </style>
+</head>
+<!--
+  Workflow: Settings -> Datasource Configuration -> New datasource (the button hides while the form is open).
+  The admin filled a PostgreSQL datasource and clicked Test connection: POST /datasources/test-connection (api 16)
+  answered ok, toasted "Connection successful", and Save datasource is now enabled.
+  Save datasource -> POST /datasources (api 18); the list reloads from GET /datasources (api 15).
+  Kind options: Databricks (Server hostname, Personal access token, SQL warehouse ID), PostgreSQL (shown),
+  REST API (Base URL, Authentication, Endpoints, OpenAPI discovery via POST /datasources/rest/discover, api 17).
+  Editing any field invalidates the test (Save disabled again, titled "Test the connection successfully before saving").
+-->
+<body data-area="Settings" data-settings="Datasource Configuration" data-role="admin" data-mode="org" data-initials="AA" data-drawer="collapsed">
+  <main style="padding:40px 24px;gap:0;align-items:center">
+    <div class="col g16" style="width:100%;max-width:560px">
+      <div>
+        <h2 class="h3" style="font-size:15px">Datasource Configuration</h2>
+        <div class="small muted" style="margin-top:4px">Connect the data platforms your datasets draw from — Databricks SQL warehouses, PostgreSQL databases or REST APIs.</div>
+      </div>
+
+      <!-- Saved datasources -->
+      <div class="row g12" style="border:1px solid var(--qti-border);border-radius:8px;background:var(--qti-surface-muted);padding:10px 12px">
+        <span style="width:32px;height:32px;border-radius:8px;display:grid;place-items:center;color:var(--qti-fg-muted);background:var(--qti-surface-muted);flex:none"><i data-lucide="database" data-size="15"></i></span>
+        <span class="grow col" style="gap:0">
+          <span class="row"><span style="font-size:13px">World Cup PostgreSQL</span><span class="chip chip-neutral" style="font-size:10px;padding:2px 6px;line-height:14px">PostgreSQL</span></span>
+          <span class="mono muted" style="font-size:11px">127.0.0.1:55432/world_cup</span>
+        </span>
+        <span class="btn-icon" title="Edit"><i data-lucide="pencil" data-size="14"></i></span>
+        <span class="btn-icon" title="Delete"><i data-lucide="trash-2" data-size="14"></i></span>
+      </div>
+
+      <!-- New datasource form -->
+      <div class="card col g12 p16">
+        <div style="font-size:13px;font-weight:500">New datasource</div>
+        <label class="wf-lbl"><span class="field-label">Name</span><input class="field" placeholder="Claims warehouse" value="Claims warehouse"></label>
+        <label class="wf-lbl"><span class="field-label">Kind</span><select class="field"><option>Databricks</option><option selected>PostgreSQL</option><option>REST API</option></select></label>
+        <div style="display:grid;grid-template-columns:2fr 1fr;gap:12px">
+          <label class="wf-lbl"><span class="field-label">Host</span><input class="field" placeholder="db.example.com" value="claims-db.contoso.internal"></label>
+          <label class="wf-lbl"><span class="field-label">Port</span><input class="field" placeholder="5432" value="5432"></label>
+        </div>
+        <label class="wf-lbl"><span class="field-label">Database</span><input class="field" placeholder="analytics" value="claims"></label>
+        <div class="grid2" style="gap:12px">
+          <label class="wf-lbl"><span class="field-label">User</span><input class="field" placeholder="readonly_user" value="readonly_user"></label>
+          <label class="wf-lbl"><span class="field-label">Password</span><input class="field" type="password" placeholder="••••••••" value="secretpass"></label>
+        </div>
+        <label class="row muted" style="font-size:12px"><input type="checkbox" checked style="width:14px;height:14px;margin:0;accent-color:var(--qti-primary)"><span>Use SSL</span></label>
+        <div class="row" style="margin-top:4px">
+          <span class="btn btn-secondary grow">Test connection</span>
+          <span class="btn btn-primary grow" title="Test the connection successfully before saving">Save datasource</span>
+          <span class="btn btn-ghost">Cancel</span>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Toast: the test result (ui.md 3.3) -->
+  <div class="wf-overlay">
+    <div class="wf-toast" style="width:360px;padding:12px 14px;align-items:flex-start">
+      <i data-lucide="circle-check" data-size="16" style="color:var(--qti-on-success-soft);margin-top:2px"></i>
+      <span class="grow" style="font-size:13px;line-height:20px">Connection successful</span>
+      <span style="color:var(--qti-fg-muted);display:flex;margin-top:3px" title="Dismiss notification"><i data-lucide="x" data-size="14"></i></span>
+    </div>
+  </div>
+</body>
+</html>
