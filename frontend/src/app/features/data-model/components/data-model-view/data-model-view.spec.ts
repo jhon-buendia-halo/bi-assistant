@@ -10,8 +10,8 @@ import {
   MetricsImportReport,
 } from '../../models/data-model.model';
 import { AuthService } from '../../../../core/auth/auth.service';
-import { LOCAL_ME, MeView } from '../../../../core/auth/auth.models';
-import { orgMe } from '../../../../core/auth/auth.testing';
+import { MeView } from '../../../../core/auth/auth.models';
+import { localMe, orgMe } from '../../../../core/auth/auth.testing';
 
 const MODEL: DataModel = {
   model: 'world_cup_core',
@@ -119,7 +119,7 @@ describe('DataModelView', () => {
   }
 
   it('shows Bootstrap, Export and Import with Manage datasources', () => {
-    const el = render(LOCAL_ME);
+    const el = render(localMe());
     expect(byTestId(el, 'bootstrap-model')).not.toBeNull();
     expect(byTestId(el, 'export-model')).not.toBeNull();
     expect(byTestId(el, 'import-model')).not.toBeNull();
@@ -137,7 +137,7 @@ describe('DataModelView', () => {
   });
 
   it('labels the tabs Overview, YAML, Versions and Metrics', () => {
-    const el = render(LOCAL_ME);
+    const el = render(localMe());
     const labels = ['overview', 'yaml', 'versions', 'metrics'].map((id) =>
       byTestId(el, `tab-${id}`)!.textContent!.trim(),
     );
@@ -145,7 +145,7 @@ describe('DataModelView', () => {
   });
 
   it('shows the version chip', () => {
-    const el = render(LOCAL_ME);
+    const el = render(localMe());
     expect(byTestId(el, 'model-version-badge')!.textContent!.trim()).toBe(
       'v1 · bootstrap',
     );
@@ -160,7 +160,7 @@ describe('DataModelView', () => {
   });
 
   it('keeps the YAML editor writable with Manage datasources', () => {
-    const el = render(LOCAL_ME);
+    const el = render(localMe());
     openTab(el, 'yaml');
     const textarea = byTestId(el, 'yaml-textarea') as HTMLTextAreaElement;
     expect(textarea.readOnly).toBe(false);
@@ -175,7 +175,7 @@ describe('DataModelView', () => {
   });
 
   it("shows a metric's author name on the Overview, its author id without a name, and none for a metric without one", () => {
-    const el = render(LOCAL_ME);
+    const el = render(localMe());
     expect(
       byTestId(el, 'model-metric-author-avg_attendance')!.textContent!.trim(),
     ).toBe('by Ada Lovelace');
@@ -186,7 +186,7 @@ describe('DataModelView', () => {
   });
 
   it('shows no metrics-import chip when nothing was skipped or no import ran', () => {
-    const el = render(LOCAL_ME, {
+    const el = render(localMe(), {
       ...EMPTY_DRIFT,
       metricsImport: importReport([]),
     });
@@ -194,7 +194,7 @@ describe('DataModelView', () => {
   });
 
   it('shows the metrics-import chip, singular, with each skipped metric in its title', () => {
-    const el = render(LOCAL_ME, {
+    const el = render(localMe(), {
       ...EMPTY_DRIFT,
       metricsImport: importReport([
         {
@@ -214,7 +214,7 @@ describe('DataModelView', () => {
   });
 
   it('pluralises the chip and lists one title line per skipped metric', () => {
-    const el = render(LOCAL_ME, {
+    const el = render(localMe(), {
       ...EMPTY_DRIFT,
       metricsImport: importReport([
         {

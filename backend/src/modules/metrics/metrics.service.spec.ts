@@ -214,7 +214,7 @@ describe('MetricsService.delete', () => {
 
     expect((await service.delete('metric-1')).label).toBe('Denial rate');
     expect(repository.delete).toHaveBeenCalledWith('metric-1');
-    // Local mode: no owner on the legacy metric.
+    // A legacy metric with no owner.
     expect(dataModels.removeMetric).toHaveBeenCalledWith(
       'denial_rate',
       undefined,

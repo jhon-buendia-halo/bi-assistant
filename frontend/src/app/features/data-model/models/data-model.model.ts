@@ -178,8 +178,8 @@ export interface Metric {
   dimensions?: string[];
   expressions?: { sql?: string };
   sourceVerifiedQueryId?: string;
-  /** Owner key of whoever defined the metric (org server mode only;
-   * absent in local mode). Shown when there is no `authorName`. */
+  /** Owner key of whoever defined the metric (absent for an ownerless
+   * legacy metric). Shown when there is no `authorName`. */
   author?: string;
   /** The author's display name, shown as `by <authorName ?? author>`
    * (ui.md 4.19.3, 4.19.5; data-model.md 3.16). */

@@ -43,7 +43,7 @@ There is no eval threshold. Eval runs are evidence, not acceptance. Per-story ac
 
 ## Dependencies, risks and open questions
 - **Decided 2026-10-11 (the port):** the work done on branch `ba-2-epic-kickoff` is ported onto `main` (1.2.4) and this spec describes it as shipped there.
-  - In org server mode a data model is shared like its dataset. Reads need *Use agents in the gallery and chat*; writes (save, revert, bootstrap, import, model metric create, edit and delete) need *Manage datasources and datasets*. Local mode is unchanged. The UI hides edit controls from callers without the write permission.
+  - A data model is shared like its dataset. Reads need *Use agents in the gallery and chat*; writes (save, revert, bootstrap, import, model metric create, edit and delete) need *Manage datasources and datasets*. Since roadmap 2.1.7 (ADR-0012) the same permissions apply in local mode, to the signed-in persona. The UI hides edit controls from callers without the write permission.
   - At startup every owner's legacy metrics are imported into the model of the dataset that covers them, with an `author`. On a name clash the first by creation time, then id, wins and the rest are listed in a metrics-import report. A later legacy `/metrics` write of a name the model already has from another author is skipped and reported. The legacy store is import-only.
   - `assistant-legacy` is hidden from agent lists and the Agent Hub; it stays reachable for the eval `legacy` path.
   - Rules: [data-model capability](../../capabilities/data-model/spec.md); decision: ADR-0013 and ADR-0014 in [architecture.md](../../system/architecture.md).

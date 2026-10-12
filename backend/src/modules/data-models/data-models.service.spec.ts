@@ -8,7 +8,7 @@ import { serializeDataModel } from './dsl/yaml';
 import type { DataModelDoc } from './repositories/data-models.repository';
 import type { DatasetDoc } from '../datasets/repositories/datasets.repository';
 import type { MetricDoc } from '../metrics/entities/metric.entity';
-import { CurrentUserService } from '../auth/current-user.service';
+import { CurrentUserService, LOCAL_USER } from '../auth/current-user.service';
 import type { CurrentUser } from '../auth/entities/current-user.entity';
 import type { UserDoc } from '../auth/entities/directory.entity';
 
@@ -1453,18 +1453,27 @@ describe('DataModelsService model-metric author (metrics R14, api.md 109-110)', 
     ]);
   });
 
-  it('records no author in local mode, and an edit never adds one', async () => {
-    const { service } = build(new CurrentUserService());
+  it('stamps the signed-in persona in local mode too (ADR-0012) and keeps it on edit', async () => {
+    const currentUser = new CurrentUserService();
+    const { service } = build(currentUser);
     await service.ensureBootstrapped(worldCupDataset());
 
-    await service.createModelMetric('World Cup Core', metric);
-    await service.updateModelMetric('World Cup Core', 'max_attendance', {
-      ...metric,
-      author: ADA,
-    });
+    await currentUser.runAs(LOCAL_USER, () =>
+      service.createModelMetric('World Cup Core', metric),
+    );
+    await currentUser.runAs(
+      { ...LOCAL_USER, id: 'local-dana', displayName: 'Dana Data Owner' },
+      () =>
+        service.updateModelMetric('World Cup Core', 'max_attendance', {
+          ...metric,
+          author: ADA,
+        }),
+    );
 
     const doc = await service.get('World Cup Core');
-    expect(currentOf(doc).model.metrics[0]).not.toHaveProperty('author');
+    expect(currentOf(doc).model.metrics).toEqual([
+      expect.objectContaining({ author: 'local', authorName: 'Demo User' }),
+    ]);
   });
 });
 
@@ -1603,21 +1612,29 @@ describe('DataModelsService author name (metrics R14, data-model R34, R35)', () 
     ]);
   });
 
-  it('records no author name in local mode', async () => {
-    const { service } = build(new CurrentUserService());
+  it("stamps the local persona's display name in local mode (ADR-0012)", async () => {
+    const currentUser = new CurrentUserService();
+    const { service } = build(currentUser);
     await service.ensureBootstrapped(worldCupDataset());
 
-    await service.createModelMetric('World Cup Core', {
-      name: 'max_attendance',
-      label: 'Highest attendance',
-      entity: 'matches',
-      agg: 'max',
-      of: 'attendance',
-      authorName: 'Ignored',
-    });
+    await currentUser.runAs(
+      { ...LOCAL_USER, id: 'local-mark', displayName: 'Mark Maker' },
+      () =>
+        service.createModelMetric('World Cup Core', {
+          name: 'max_attendance',
+          label: 'Highest attendance',
+          entity: 'matches',
+          agg: 'max',
+          of: 'attendance',
+          authorName: 'Ignored',
+        }),
+    );
 
     const doc = await service.get('World Cup Core');
-    expect(currentOf(doc).model.metrics[0]).not.toHaveProperty('authorName');
+    expect(currentOf(doc).model.metrics[0]).toMatchObject({
+      author: 'local-mark',
+      authorName: 'Mark Maker',
+    });
   });
 });
 

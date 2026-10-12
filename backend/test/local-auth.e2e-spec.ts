@@ -380,9 +380,9 @@ describe('Local mode signs in a persona (API)', () => {
         const token = await as(userId);
         // The JSON Schema needs no dataset; a model read of an unknown
         // dataset reaches its handler (404, not 403).
-        expect(
-          (await json('/data-models/schema.json', { token })).status,
-        ).toBe(200);
+        expect((await json('/data-models/schema.json', { token })).status).toBe(
+          200,
+        );
         expect(
           await statusAndMessage('/datasets/Local auth check/model', { token }),
         ).toEqual(noModel);

@@ -4,7 +4,8 @@
  * three org server ones, which are in `data-models-org.e2e-spec.ts`. First
  * written ahead of the implementation (workflow step 7); it is now the
  * API-level proof of the `/datasets/:name/model*` and `/data-models/*`
- * endpoints (api.md 2.16) in local mode.
+ * endpoints (api.md 2.16) in local mode, signed in as Demo User (since
+ * roadmap 2.1.7 local mode has no implicit user, ADR-0012).
  *
  * Bootstrap mirrors `app.e2e-spec.ts` / `answer-guards.e2e-spec.ts`: a
  * throwaway `APP_DATA_DIR` + `APP_SECRET`, a focused module set, supertest
@@ -283,6 +284,16 @@ function loadFreshModules() {
   };
 }
 
+/** Demo User's bearer token per booted app. */
+const tokens = new WeakMap<INestApplication<App>, string>();
+
+/** Supertest over the app's HTTP server, signed in as Demo User. */
+function http(app: INestApplication<App>) {
+  return request
+    .agent(app.getHttpServer())
+    .set('Authorization', `Bearer ${tokens.get(app) ?? ''}`);
+}
+
 async function bootApp(
   dataDir: string,
   secret: string,
@@ -295,6 +306,12 @@ async function bootApp(
   }).compile();
   const app = moduleFixture.createNestApplication<INestApplication<App>>();
   await app.init();
+  // Local mode answers 401 until a persona signs in (admin R69-R71).
+  const signIn = await request(app.getHttpServer())
+    .post('/auth/local/sign-in')
+    .send({ userId: 'local' });
+  expect(signIn.status).toBe(200);
+  tokens.set(app, (signIn.body as { token: string }).token);
 
   const datasourcesService = app.get(DatasourcesService);
   jest
@@ -312,7 +329,7 @@ async function bootApp(
 }
 
 async function createDatasource(app: INestApplication<App>): Promise<string> {
-  const res = await request(app.getHttpServer())
+  const res = await http(app)
     .post('/datasources')
     .send({
       name: 'World Cup',
@@ -337,7 +354,7 @@ async function saveDataset(
   datasourceId: string,
   matchesColumns: DatasetColumnSnapshot[] = MATCHES_COLUMNS,
 ): Promise<SaveResponse> {
-  const res = await request(app.getHttpServer())
+  const res = await http(app)
     .post('/datasets')
     .send({
       name,
@@ -359,7 +376,7 @@ async function saveDatasetWithEntities(
   tables: string[],
   entities: DatasetEntitySnapshot[],
 ): Promise<SaveResponse> {
-  const res = await request(app.getHttpServer())
+  const res = await http(app)
     .post('/datasets')
     .send({ name, tables, entities, datasourceId });
   const body = res.body as SaveResponse;
@@ -390,28 +407,21 @@ async function typed<T>(
 const createMetric = (
   app: INestApplication<App>,
   input: { name: string; label: string; entity: string; expression: string },
-) =>
-  typed<SaveResponse>(
-    request(app.getHttpServer()).post('/metrics').send(input),
-  );
+) => typed<SaveResponse>(http(app).post('/metrics').send(input));
 
 const listMetrics = (app: INestApplication<App>, entities: string) =>
   typed<MetricsListResponse>(
-    request(app.getHttpServer()).get(
-      `/metrics?entities=${encodeURIComponent(entities)}`,
-    ),
+    http(app).get(`/metrics?entities=${encodeURIComponent(entities)}`),
   );
 
 const getSchema = (app: INestApplication<App>) =>
-  typed<SchemaResponse>(
-    request(app.getHttpServer()).get('/data-models/schema.json'),
-  );
+  typed<SchemaResponse>(http(app).get('/data-models/schema.json'));
 
 const modelPath = (name: string) =>
   `/datasets/${encodeURIComponent(name)}/model`;
 
 const getModel = (app: INestApplication<App>, name: string) =>
-  typed<ModelResponse>(request(app.getHttpServer()).get(modelPath(name)));
+  typed<ModelResponse>(http(app).get(modelPath(name)));
 
 const getModelVersion = (
   app: INestApplication<App>,
@@ -419,18 +429,16 @@ const getModelVersion = (
   version: number,
 ) =>
   typed<VersionResponse>(
-    request(app.getHttpServer()).get(`${modelPath(name)}/versions/${version}`),
+    http(app).get(`${modelPath(name)}/versions/${version}`),
   );
 
 const listModelVersions = (app: INestApplication<App>, name: string) =>
   typed<{ versions: DataModelVersion[] }>(
-    request(app.getHttpServer()).get(`${modelPath(name)}/versions`),
+    http(app).get(`${modelPath(name)}/versions`),
   );
 
 const putModel = (app: INestApplication<App>, name: string, yaml: string) =>
-  typed<PutModelResponse>(
-    request(app.getHttpServer()).put(modelPath(name)).send({ yaml }),
-  );
+  typed<PutModelResponse>(http(app).put(modelPath(name)).send({ yaml }));
 
 const revertModel = (
   app: INestApplication<App>,
@@ -438,20 +446,16 @@ const revertModel = (
   version: number,
 ) =>
   typed<SaveResponse>(
-    request(app.getHttpServer())
+    http(app)
       .post(`${modelPath(name)}/revert`)
       .send({ version }),
   );
 
 const bootstrapModel = (app: INestApplication<App>, name: string) =>
-  typed<SaveResponse>(
-    request(app.getHttpServer()).post(`${modelPath(name)}/bootstrap`),
-  );
+  typed<SaveResponse>(http(app).post(`${modelPath(name)}/bootstrap`));
 
 const getDrift = (app: INestApplication<App>, name: string) =>
-  typed<DriftResponse>(
-    request(app.getHttpServer()).get(`${modelPath(name)}/drift`),
-  );
+  typed<DriftResponse>(http(app).get(`${modelPath(name)}/drift`));
 
 const resolveRefs = (
   app: INestApplication<App>,
@@ -460,7 +464,7 @@ const resolveRefs = (
   version?: number,
 ) =>
   typed<ResolveResponse>(
-    request(app.getHttpServer())
+    http(app)
       .post(`${modelPath(name)}/resolve`)
       .send({ refs, ...(version !== undefined ? { version } : {}) }),
   );
@@ -477,7 +481,7 @@ async function exportModel(
   contentType: string | undefined;
   contentDisposition: string | undefined;
 }> {
-  let req = request(app.getHttpServer()).get(`${modelPath(name)}/export`);
+  let req = http(app).get(`${modelPath(name)}/export`);
   if (version !== undefined) req = req.query({ version });
   const res = await req;
   return {
@@ -490,7 +494,7 @@ async function exportModel(
 
 const importModel = (app: INestApplication<App>, name: string, yaml: string) =>
   typed<PutModelResponse>(
-    request(app.getHttpServer())
+    http(app)
       .post(`${modelPath(name)}/import`)
       .send({ yaml }),
   );
@@ -501,7 +505,7 @@ const serializeModel = (
   model: unknown,
 ) =>
   typed<{ yaml: string }>(
-    request(app.getHttpServer())
+    http(app)
       .post(`${modelPath(name)}/serialize`)
       .send({ model }),
   );
@@ -515,9 +519,7 @@ interface ModelMetricSaveResponse {
 }
 
 const listModelMetrics = (app: INestApplication<App>, name: string) =>
-  typed<{ metrics: Metric[] }>(
-    request(app.getHttpServer()).get(`${modelPath(name)}/metrics`),
-  );
+  typed<{ metrics: Metric[] }>(http(app).get(`${modelPath(name)}/metrics`));
 
 const createModelMetric = (
   app: INestApplication<App>,
@@ -525,7 +527,7 @@ const createModelMetric = (
   metric: Partial<Metric>,
 ) =>
   typed<ModelMetricSaveResponse>(
-    request(app.getHttpServer())
+    http(app)
       .post(`${modelPath(name)}/metrics`)
       .send(metric),
   );
@@ -537,7 +539,7 @@ const updateModelMetric = (
   metric: Partial<Metric>,
 ) =>
   typed<ModelMetricSaveResponse>(
-    request(app.getHttpServer())
+    http(app)
       .put(`${modelPath(name)}/metrics/${encodeURIComponent(metricName)}`)
       .send(metric),
   );
@@ -548,14 +550,14 @@ const deleteModelMetric = (
   metricName: string,
 ) =>
   typed<ModelMetricSaveResponse>(
-    request(app.getHttpServer()).delete(
+    http(app).delete(
       `${modelPath(name)}/metrics/${encodeURIComponent(metricName)}`,
     ),
   );
 
 const modelMetricCandidates = (app: INestApplication<App>, name: string) =>
   typed<{ candidates: MetricCandidate[] }>(
-    request(app.getHttpServer()).get(`${modelPath(name)}/metrics/candidates`),
+    http(app).get(`${modelPath(name)}/metrics/candidates`),
   );
 
 /**
@@ -905,7 +907,7 @@ describe('Data model API (e2e)', () => {
         entities: string[];
         notes: string[];
       }>(
-        request(app.getHttpServer())
+        http(app)
           .post(`${modelPath(name)}/compile`)
           .send({
             query: {
@@ -926,7 +928,7 @@ describe('Data model API (e2e)', () => {
       expect(res.body.entities).toEqual(['matches']);
 
       const databricksRes = await typed<{ sql: string }>(
-        request(app.getHttpServer())
+        http(app)
           .post(`${modelPath(name)}/compile`)
           .send({
             query: {
@@ -951,7 +953,7 @@ describe('Data model API (e2e)', () => {
         ok: boolean;
         errors: { code: string; path: string }[];
       }>(
-        request(app.getHttpServer())
+        http(app)
           .post(`${modelPath(name)}/compile`)
           .send({
             query: { from: 'matches', select: [{ attr: 'nope' }], limit: 10 },
@@ -967,7 +969,7 @@ describe('Data model API (e2e)', () => {
       await saveDataset(app, name, datasourceId);
 
       const res = await typed<{ ok: boolean; errors: { code: string }[] }>(
-        request(app.getHttpServer())
+        http(app)
           .post(`${modelPath(name)}/compile`)
           .send({
             query: {

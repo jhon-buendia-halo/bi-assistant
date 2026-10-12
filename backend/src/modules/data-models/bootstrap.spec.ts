@@ -596,7 +596,7 @@ describe('importLegacyMetrics author name (data-model R34, R35)', () => {
     ]);
   });
 
-  it('records no author name in local mode (no owner)', () => {
+  it('records no author or author name for a legacy metric with no owner', () => {
     const result = importLegacyMetrics([legacyMetric({ id: 'm1' })], targets, {
       authorNames,
     });

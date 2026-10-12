@@ -10,9 +10,9 @@ Defined in [../../product/glossary.md](../../product/glossary.md): metric, data 
 
 Capability-local vocabulary:
 - **Model metric** — a metric stored in a data model version (R1). The editor of record.
-- **Legacy metric** — a metric in the pre-data-model store: a flat SQL expression over a physical table `catalog.schema.table`, private to its owner in org server mode (R15).
+- **Legacy metric** — a metric in the pre-data-model store: a flat SQL expression over a physical table `catalog.schema.table`, private to its owner in both modes (R15).
 - **Candidate** — a prefilled metric draft offered from a verified query (R10).
-- **Author** — in org server mode, the user who defined a metric: the creator of the legacy metric it was imported from, or the user who created it in the Metrics tab (R14). Recorded as their owner key and, for display, their name.
+- **Author** — the user who defined a metric: the creator of the legacy metric it was imported from, or the user who created it in the Metrics tab (R14). Recorded as their owner key and, for display, their name.
 
 ## Rules
 
@@ -173,7 +173,7 @@ Feature: Metrics tab
 
 - The scenario "Defines a metric in the Metrics tab" passes ([data-model](../data-model/spec.md)); the scenarios above behave as written once automated. Backend tests cover model metric validation (R2-R4), each write as a version and the delete rules (R5, R6), candidate scoping, slugging and exclusion (R10-R12), the legacy validation (R16, R17) and the import and mirror rules (R18).
 - A turn in a session whose dataset's model holds the metric shows the metric in the model block; a logical query selecting it compiles to the metric's definition.
-- In org server mode every user sees the same model metrics, a User cannot change them (HTTP 403), and imported metrics and metrics created in the Metrics tab carry their author and author name, kept on edit and shown by name.
+- In both modes every user sees the same model metrics, a User cannot change them (HTTP 403), and imported metrics and metrics created in the Metrics tab carry their author and author name, kept on edit and shown by name.
 
 ## Open questions
 

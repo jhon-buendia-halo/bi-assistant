@@ -110,11 +110,11 @@ export class DataModelsService implements OnModuleInit {
      * metrics (data-model R34, data-model.md M14). */
     @Inject(METRICS_STORE)
     private readonly metricsStore: DocStore<MetricDoc>,
-    /** Who creates a model metric (its `author` in org server mode). */
+    /** Who creates a model metric (its `author`, in both modes). */
     @Optional()
     private readonly currentUser?: CurrentUserService,
-    /** The directory (data-model.md 3.14.1, empty in local mode): the
-     * display names stamped as `authorName` on imported metrics. */
+    /** The directory (data-model.md 3.14.1; the local personas in local
+     * mode): the display names stamped as `authorName` on imported metrics. */
     @Optional()
     @Inject(USERS_STORE)
     private readonly usersStore?: DocStore<UserDoc>,
@@ -320,7 +320,7 @@ export class DataModelsService implements OnModuleInit {
   }
 
   /** User id -> display name of every user in the directory (data-model.md
-   * 3.14.1). Empty in local mode, where the collection is never written. */
+   * 3.14.1); in local mode, the five local personas. */
   private async authorNames(): Promise<AuthorNames> {
     const names = new Map<string, string>();
     if (!this.usersStore) return names;
@@ -658,8 +658,8 @@ export class DataModelsService implements OnModuleInit {
   ): Promise<{ version: number }> {
     const doc = await this.requireDoc(datasetName);
     const current = this.currentVersionOf(doc);
-    // The creator is the author, with their display name, in org server
-    // mode; local mode records neither (metrics R14). A body's own `author`
+    // The creator is the author, with their display name, in both modes
+    // (in local mode the signed-in persona; metrics R14). A body's own `author`
     // or `authorName` never chooses them.
     const author = this.currentUser?.ownerScope() ?? undefined;
     const authorName = author
@@ -872,7 +872,7 @@ export class DataModelsService implements OnModuleInit {
    * (`deletedMetricNames`, review finding 6): a legacy write must not
    * resurrect a metric the model's own panel removed. A model that holds
    * this name from another author (`Metric.author` vs the legacy
-   * `ownerId`; both absent in local mode) is never changed: when it binds
+   * `ownerId`, or both absent) is never changed: when it binds
    * the metric's table the write is appended to its metrics-import report
    * as skipped, with no new version (data-model R36).
    */
@@ -952,7 +952,7 @@ export class DataModelsService implements OnModuleInit {
    * skipped — deleting an unrelated legacy metric that happens to share a
    * name must not take the model's own definition down with it — and so is
    * a model whose metric of that name has another author than the legacy
-   * metric's owner (`author`; both absent in local mode): one owner's
+   * metric's owner (`author`, or both absent): one owner's
    * legacy delete never removes another owner's metric from a shared model,
    * the same rule as `syncMetric`'s skip (data-model R36). */
   async removeMetric(name: string, author?: string): Promise<string[]> {

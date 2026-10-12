@@ -209,16 +209,16 @@ export interface Metric {
   /** Promotion provenance — the verified query this metric was lifted from. */
   sourceVerifiedQueryId?: string;
   /**
-   * Owner key (user id) of whoever defined the metric in org server mode:
+   * Owner key (user id) of whoever defined the metric, in both modes:
    * the owner of the legacy metric it was imported from, or the signed-in
    * user who created it through the model-metric endpoints. Kept on edit;
-   * absent in local mode (data-model.md 3.16, metrics R14).
+   * absent when the legacy metric had no owner (data-model.md 3.16, metrics R14).
    */
   author?: string;
   /**
    * The author's display name, for people to read (`by <authorName ??
    * author>`): the directory's `displayName` of the legacy owner at import
-   * time, or the signed-in creator's. Kept on edit; absent in local mode
+   * time, or the signed-in creator's. Kept on edit; absent with `author`
    * and when the directory has no such user (data-model.md 3.16).
    */
   authorName?: string;
@@ -230,7 +230,7 @@ export interface MetricsImportEntry {
   name: string;
   /** Logical entity name it was imported onto. */
   entity: string;
-  /** The legacy owner's id; absent in local mode. */
+  /** The legacy owner's id; absent when the legacy metric had none. */
   author?: string;
   /** The legacy owner's display name, when the directory knows them. */
   authorName?: string;

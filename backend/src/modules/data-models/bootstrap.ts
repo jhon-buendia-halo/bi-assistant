@@ -397,8 +397,8 @@ export function mapDimensionNames(
 /** User id -> display name, from the directory (data-model.md 3.14.1). */
 export type AuthorNames = ReadonlyMap<string, string>;
 
-/** `{ author, authorName }` of a legacy metric's owner: both absent in
- * local mode (no `ownerId`), the name absent when the directory has no such
+/** `{ author, authorName }` of a legacy metric's owner: both absent when
+ * the metric has no `ownerId`, the name absent when the directory has no such
  * user (data-model R34, data-model.md 3.16). */
 export function legacyAuthorFields(
   ownerId: string | undefined,
@@ -415,8 +415,8 @@ export function legacyAuthorFields(
  * `Metric` from the legacy flat shape, so the two paths cannot drift apart.
  * The name is lowercased (the DSL's metric names are), and the legacy
  * owner becomes the metric's `author`, with their display name from
- * `authorNames` as `authorName` (both absent in local mode, where legacy
- * metrics carry no `ownerId`; data-model R34). */
+ * `authorNames` as `authorName` (both absent when the legacy metric has no
+ * `ownerId`; data-model R34). */
 export function toModelMetric(
   legacy: MetricDoc,
   entityName: string,
@@ -467,7 +467,7 @@ export interface ImportLegacyMetricsOptions {
   authorNames?: AuthorNames;
 }
 
-/** Same owner, local mode (no owner on either side) included. */
+/** Same owner, no owner on either side included. */
 export function sameAuthor(
   a: string | undefined,
   b: string | undefined,
