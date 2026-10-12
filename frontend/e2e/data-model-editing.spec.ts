@@ -9,6 +9,7 @@ import {
   createWorldCupDatasource,
   followOsTheme,
 } from './helpers/app-actions';
+import { authHeaders } from './helpers/local-auth';
 import { worldCupKey } from './helpers/world-cup-db';
 
 /**
@@ -164,6 +165,7 @@ test("Opens a dataset's data model and sees its bootstrapped entities, relations
   // A metric on "matches" before the dataset is first saved: the bootstrap
   // on save brings it into version 1, so "the dataset's metrics" exist.
   const metric = await page.request.post(apiUrl(page, '/metrics'), {
+    headers: await authHeaders(page),
     data: {
       name: 'match_count',
       label: 'Match count',
@@ -341,6 +343,7 @@ test('Exports the model and re-imports it', async ({ page }) => {
   await expectVersion(page, 'v2 · import');
   const reimported = await page.request.get(
     apiUrl(page, modelRoute('/versions/2')),
+    { headers: await authHeaders(page) },
   );
   expect(reimported.ok()).toBe(true);
   const { yaml } = (await reimported.json()) as { yaml: string };
