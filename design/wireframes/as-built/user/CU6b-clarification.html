@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <title>CU6b · Clarification: the agent asks before answering</title>
+  <meta name="wf-status" content="as-built">
+  <meta name="wf-version" content="v0.29.0">
+  <meta name="wf-role" content="user">
+  <meta name="wf-spec" content="specs/system/ui.md#412-session-chat">
+  <link rel="stylesheet" href="../../_kit/hub.css">
+  <script src="../../_kit/icons.js"></script>
+  <script src="../../_kit/shell.js" defer></script>
+  <style>
+    /* Kit gap: the collapsed rail clips the 56 px "Powered by LenAI" artwork. */
+    .wf-rail.collapsed .wf-powered img { max-width: 100%; }
+    /* Kit gap: in the Sessions area the Expand right panel button sits in the page header, not floating on the page card. */
+    .wf-page > span[title="Expand right panel"] { display: none !important; }
+    /* Page-local: chat pieces the app builds with utilities (session-chat.html). */
+    .sc-label { font-size: 10px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--qti-fg-muted); }
+    .sc-composer { width: 100%; border: 1px solid var(--qti-border-strong); border-radius: 8px; background: var(--qti-surface); box-shadow: var(--qti-shadow-input); padding: 12px 8px; }
+    .sc-toggle { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; border: 1px solid var(--qti-border); padding: 4px 10px; font-size: 12px; line-height: 16px; color: var(--qti-fg-muted); }
+    .sc-bubble { display: flex; align-items: flex-start; gap: 12px; max-width: 800px; border-radius: 12px 2px 12px 12px; background: var(--qti-surface-selected); padding: 12px; }
+    .sc-avatar { width: 32px; height: 32px; border-radius: 999px; background: var(--qti-primary); color: var(--qti-on-primary); display: grid; place-items: center; font-size: 14px; font-weight: 600; flex: none; }
+    .sc-details { border: 1px solid var(--qti-border); border-radius: 8px; background: var(--qti-surface-muted); font-size: 12px; }
+    .sc-details summary { padding: 6px 12px; color: var(--qti-fg-muted); }
+    .cl-option { display: flex; align-items: flex-start; gap: 12px; border: 1px solid transparent; border-radius: 12px; padding: 10px 12px; }
+    .cl-option.hover { border-color: var(--qti-border-strong); background: var(--qti-surface-muted); }
+    .cl-num { width: 20px; height: 20px; margin-top: 2px; border-radius: 4px; background: var(--qti-surface-muted); color: var(--qti-fg-muted); font-size: 11px; display: grid; place-items: center; flex: none; }
+  </style>
+</head>
+<!--
+  Workflow step: the question is ambiguous, so the agent calls ask_clarification instead of guessing
+  (streamed over POST /sessions/:id/messages/stream; the clarification is persisted as an assistant message).
+  On the latest message: pick a numbered option (sent as the next user turn), "Something else" (reveals
+  "Type your own answer…" + "Send custom answer"; the button becomes "Cancel custom answer"), or "Skip".
+  Older clarifications are disabled. Work done before the question (reasoning, knowledge, data) stays visible inside the card.
+  The details panel is closed here, so "Expand right panel" shows in the page header.
+-->
+<body data-area="Sessions" data-role="user" data-mode="org" data-initials="JB" data-drawer="collapsed"
+      data-sessions='[["Best team 2022","World Cup Core",true],["Cup historian","Cup historian · World Cup Core"]]'>
+  <main class="flush">
+    <header class="wf-page-header" style="align-items:flex-start">
+      <img src="../../../../frontend/public/brand/agentic-hub/page-header-icon.svg" width="36" height="36" alt="" style="margin-top:2px">
+      <div class="grow" style="min-width:0">
+        <h2 class="h2">Best team 2022</h2>
+        <div class="row" style="margin-top:4px">
+          <span class="muted" style="display:flex"><i data-lucide="database" data-size="14"></i></span>
+          <span class="sc-label">Datasource</span>
+          <span class="chip chip-neutral">World Cup PostgreSQL <span style="font-size:10px;font-weight:400">PostgreSQL</span></span>
+        </div>
+      </div>
+      <span class="btn btn-secondary"><i data-lucide="square-pen" data-size="20"></i><span>Start New Conversation</span></span>
+      <span class="btn-icon" title="Expand right panel" style="margin-top:8px"><i data-lucide="panel-right" data-size="16"></i></span>
+    </header>
+
+    <div class="grow" style="position:relative;padding:32px 32px 24px;min-height:0;overflow:hidden">
+      <div class="col" style="position:absolute;top:16px;right:14px;gap:6px"><span style="width:16px;height:2px;border-radius:2px;background:var(--qti-border-strong)"></span></div>
+      <div class="col" style="gap:24px">
+        <div class="row end">
+          <div class="sc-bubble"><span class="sc-avatar">D</span><p style="margin:0;font-size:16px;line-height:24px;text-align:right">Which team performed best?</p></div>
+        </div>
+
+        <div class="card" style="padding:16px">
+          <p style="margin:0;font-size:14px;font-weight:500;color:var(--qti-fg-strong)">"Performed best" can mean a few things here — which one do you want?</p>
+          <div class="col g4" style="margin-top:12px">
+            <div class="cl-option hover"><span class="cl-num">1</span><span class="col" style="gap:0"><span style="font-size:13px">Most matches won</span><span class="small muted">Wins from the quarter-finals to the final, a shootout counted for the team that advanced</span></span></div>
+            <div class="cl-option"><span class="cl-num">2</span><span class="col" style="gap:0"><span style="font-size:13px">Most goals scored</span><span class="small muted">Total goals per team across the 2018 and 2022 knockout matches, own goals excluded</span></span></div>
+            <div class="cl-option"><span class="cl-num">3</span><span class="col" style="gap:0"><span style="font-size:13px">Furthest stage reached</span><span class="small muted">Champions first, then runners-up, then the losing semi-finalists</span></span></div>
+          </div>
+          <details class="sc-details" style="margin-top:8px"><summary>Knowledge in context (1)</summary></details>
+          <div class="row between" style="margin-top:8px;padding-top:10px;border-top:1px solid var(--qti-border)">
+            <span style="padding:6px 10px;border-radius:8px;font-size:13px" class="muted">Something else</span>
+            <span style="padding:6px 12px;border-radius:8px;border:1px solid var(--qti-border-strong);font-size:13px">Skip</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col" style="align-items:center;padding:0 32px 24px;gap:0">
+      <div class="sc-composer">
+        <div style="height:40px;font-size:14px;line-height:20px;color:var(--qti-placeholder)">Ask a follow-up question…</div>
+        <div class="row between" style="margin-top:4px">
+          <div class="row">
+            <span class="sc-toggle"><i data-lucide="shield-check" data-size="12"></i>Careful</span>
+            <span class="sc-toggle" style="opacity:0.4"><i data-lucide="telescope" data-size="12"></i>Deep analysis</span>
+          </div>
+          <span style="color:var(--qti-accent);display:flex;padding:6px;opacity:0.4" title="Send message"><i data-lucide="arrow-up" data-size="20"></i></span>
+        </div>
+      </div>
+      <p class="muted" style="margin:16px 0 0;font-size:12px;line-height:16px;text-align:center">Responses are generated by AI (Powered by LenAI) and may be inaccurate or incomplete. Please verify against source data before sharing.</p>
+    </div>
+  </main>
+</body>
+</html>

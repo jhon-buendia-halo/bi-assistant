@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <title>CA5 · Admin: Users &amp; groups, Assign role</title>
+  <meta name="wf-status" content="as-built">
+  <meta name="wf-version" content="v0.29.0">
+  <meta name="wf-role" content="admin">
+  <meta name="wf-spec" content="specs/system/ui.md#4183-users--groups-p2 specs/system/ui.md#4181-frame">
+  <link rel="stylesheet" href="../../_kit/hub.css">
+  <script src="../../_kit/icons.js"></script>
+  <script src="../../_kit/shell.js" defer></script>
+  <style>
+    .wf-tab { font-weight: 500; }
+    .wf-tab.current { color: var(--qti-fg-strong); }
+    /* Users table (ui.md 4.18.3): header 13 px semibold fg-strong, rows 64 px. */
+    .wf-table th { font-size: 13px; color: var(--qti-fg-strong); padding: 12px 16px; }
+    .wf-table td { height: 64px; padding: 8px 16px; font-size: 13px; }
+    .wf-av { width: 32px; height: 32px; border-radius: 999px; background: var(--qti-primary); color: var(--qti-on-primary); display: grid; place-items: center; font-size: 12px; font-weight: 600; flex: none; }
+    .wf-name { font-size: 14px; font-weight: 600; color: var(--qti-fg-strong); line-height: 20px; }
+    select.field, input.field { height: 38px; }
+  </style>
+</head>
+<!--
+  Workflow: Users & groups tab -> header "Assign role" opens the Assign role dialog. The User picker has a pick
+  (combobox, GET /admin/users?excludeDeactivated=true&pageSize=10&q=, api 83); Role still reads "Choose a role",
+  so Assign is disabled; Datasource (GET /datasources) is disabled unless Role is Data owner.
+  Assign calls POST /admin/role-assignments (api 79): 201 toasts "Role assigned", 200 "Role already assigned"; the table reloads.
+  Table data: GET /admin/users (api 83). The page scrolls: the table's footer (SCIM note, "1–7 of 7", page buttons) sits below the fold.
+-->
+<body data-area="Admin" data-role="admin" data-mode="org" data-initials="AA">
+  <main style="padding:40px 32px;gap:0">
+    <div class="row g12">
+      <span class="wf-tile" style="width:32px;height:32px;border-radius:8px"><i data-lucide="layout-dashboard" data-size="16"></i></span>
+      <div>
+        <h2 class="h2">Admin</h2>
+        <div class="muted" style="font-size:13px">Manage people, roles and access for your organisation.</div>
+      </div>
+      <span class="grow"></span>
+      <span class="btn btn-primary"><i data-lucide="user-plus" data-size="14"></i>Assign role</span>
+    </div>
+
+    <div class="wf-tabs" style="margin-top:24px">
+      <span class="wf-tab">Overview</span><span class="wf-tab current">Users &amp; groups</span><span class="wf-tab">Roles &amp; permissions</span>
+    </div>
+
+    <div style="margin-top:24px">
+      <div class="row g12">
+        <span class="filter-pill filter-pill-active">Users · 7</span><span class="filter-pill">Groups · 2</span>
+        <span class="grow"></span>
+        <div class="field row" style="width:360px;padding:8px 12px;gap:8px"><i data-lucide="search" data-size="15" style="color:var(--qti-fg-muted)"></i><span class="muted">Search name, email or group</span></div>
+      </div>
+      <div class="row wrap" style="margin-top:12px">
+        <span class="filter-pill filter-pill-active">All roles</span><span class="filter-pill">Platform admins · 1</span><span class="filter-pill">Approvers · 3</span><span class="filter-pill">Data owners · 1</span><span class="filter-pill">Makers · 6</span><span class="filter-pill">Inactive 90d · 1</span>
+      </div>
+
+      <table class="wf-table" style="margin-top:16px">
+        <thead><tr><th>Name</th><th>Roles</th><th>IdP groups</th><th style="text-align:right">Agents owned</th><th>Last active</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td><div class="row g12"><span class="wf-av">AL</span><div><div class="wf-name">Ada Lovelace</div><div class="small muted">ada@contoso.test</div></div></div></td>
+            <td><span class="chip chip-warning">Approver</span> <span class="chip chip-info">Maker</span></td><td>Analysts</td><td style="text-align:right">2</td><td>Today</td><td><span class="chip chip-success">Active</span></td></tr>
+          <tr><td><div class="row g12"><span class="wf-av">AT</span><div><div class="wf-name">Alan Turing</div><div class="small muted">alan@contoso.test</div></div></div></td>
+            <td><span class="chip chip-warning">Approver</span> <span class="chip chip-info">Maker</span></td><td>Engineers</td><td style="text-align:right">0</td><td>95 days ago</td><td><span class="chip chip-danger">Inactive</span></td></tr>
+          <tr><td><div class="row g12"><span class="wf-av">AA</span><div><div class="wf-name">Avery Admin</div><div class="small muted">admin@contoso.test</div></div></div></td>
+            <td><span class="chip chip-danger">Platform admin</span></td><td class="muted">—</td><td style="text-align:right">0</td><td>Today</td><td><span class="chip chip-success">Active</span></td></tr>
+          <tr><td><div class="row g12"><span class="wf-av">ED</span><div><div class="wf-name">Edsger Dijkstra</div><div class="small muted">edsger@contoso.test</div></div></div></td>
+            <td><span class="chip chip-info">Maker</span></td><td>Analysts</td><td style="text-align:right">0</td><td>Never</td><td><span class="chip chip-neutral">Not signed in</span></td></tr>
+          <tr><td><div class="row g12"><span class="wf-av">GH</span><div><div class="wf-name">Grace Hopper</div><div class="small muted">grace@contoso.test</div></div></div></td>
+            <td><span class="chip chip-warning">Approver</span> <span class="chip chip-info">Maker</span></td><td>Engineers</td><td style="text-align:right">1</td><td>3 days ago</td><td><span class="chip chip-success">Active</span></td></tr>
+          <tr><td><div class="row g12"><span class="wf-av">KJ</span><div><div class="wf-name">Katherine Johnson</div><div class="small muted">katherine@contoso.test</div></div></div></td>
+            <td><span class="chip chip-info">Maker</span></td><td class="muted">—</td><td style="text-align:right">1</td><td>Today</td><td><span class="chip chip-warning">Deactivated</span></td></tr>
+          <tr><td><div class="row g12"><span class="wf-av">MH</span><div><div class="wf-name">Margaret Hamilton</div><div class="small muted">margaret@contoso.test</div></div></div></td>
+            <td><span class="chip chip-success">Data owner</span> <span class="chip chip-info">Maker</span></td><td>Analysts</td><td style="text-align:right">0</td><td>Today</td><td><span class="chip chip-success">Active</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <!-- Assign role dialog (ui.md 4.18.3, 4.18.1 Admin dialogs) -->
+  <div class="wf-overlay">
+    <div class="wf-scrim" style="background:color-mix(in srgb, var(--qti-fg-strong) 40%, transparent)">
+      <div class="wf-dialog" style="width:560px;gap:0;border:1px solid var(--qti-border)">
+        <h3 style="font-size:16px;line-height:24px;font-weight:600">Assign role</h3>
+        <div class="muted" style="margin-top:4px;font-size:13px">Give a person a role. Roles from group mappings are managed in Roles &amp; permissions.</div>
+        <div class="col g16" style="margin-top:20px">
+          <div>
+            <label class="field-label">User</label>
+            <input class="field" style="margin-top:4px;border-color:var(--qti-border-selected);box-shadow:0 0 0 2px var(--qti-surface-selected)" value="Edsger Dijkstra · edsger@contoso.test">
+          </div>
+          <div>
+            <label class="field-label">Role</label>
+            <select class="field" style="margin-top:4px"><option>Choose a role</option></select>
+          </div>
+          <div>
+            <label class="field-label">Datasource</label>
+            <select class="field" style="margin-top:4px" disabled><option>Choose a datasource</option></select>
+            <div class="small muted" style="margin-top:4px">Only for Data owner.</div>
+          </div>
+        </div>
+        <div class="row end" style="margin-top:24px">
+          <span class="btn btn-outline">Cancel</span>
+          <span class="btn btn-primary" style="opacity:0.55" title="Disabled until a user and a role are chosen">Assign</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

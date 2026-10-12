@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <title>CM4 · Run the assistant's evals and read a trace</title>
+  <meta name="wf-status" content="as-built">
+  <meta name="wf-version" content="v0.29.0">
+  <meta name="wf-role" content="maker">
+  <meta name="wf-spec" content="specs/system/ui.md#45-agent-detail specs/system/ui.md#46-eval-trace-right-panel">
+  <link rel="stylesheet" href="../../_kit/hub.css">
+  <script src="../../_kit/icons.js"></script>
+  <script src="../../_kit/shell.js" defer></script>
+  <style>
+    /* The app's content column: px-8 py-10 (the page scrolls; see the comment for the scroll position). */
+    main.wf-page-content { padding: 40px 32px; gap: 0; }
+    .wf-rail.collapsed .wf-powered img { max-width: 100%; }
+    .scrolled { margin-top: var(--scroll, 0px); display: flex; flex-direction: column; }
+    .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--qti-border); }
+    .tab { display: flex; align-items: center; gap: 8px; padding: 8px 12px; font-size: 13px; color: var(--qti-fg-muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+    .tab.on { color: var(--qti-fg-strong); border-color: var(--qti-border-selected); }
+    .sub { border-radius: 8px; padding: 6px 12px; font-size: 13px; color: var(--qti-fg-muted); }
+    .sub.on { background: var(--qti-surface-selected); color: var(--qti-fg); }
+    .cap { font-size: 11px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; color: var(--qti-fg-muted); }
+    .set { border: 1px solid var(--qti-border); border-radius: 12px; padding: 10px 12px; }
+    .set.on { border-color: var(--qti-border-selected); background: var(--qti-surface-selected); }
+    .set .d { display: block; margin-top: 4px; max-width: 80ch; font-size: 12px; line-height: 19.5px; color: var(--qti-fg-muted); }
+    .q { display: flex; align-items: flex-start; gap: 8px; border: 1px solid transparent; border-radius: 12px; background: var(--qti-surface-muted); padding: 12px; }
+    .q.sel { border-color: var(--qti-border-selected); }
+    .cbx { width: 14px; height: 14px; border-radius: 3px; border: 1.5px solid var(--qti-fg-muted); display: grid; place-items: center; flex: none; margin-top: 3px; background: var(--qti-surface); }
+    .cbx.on { background: var(--qti-primary); border-color: var(--qti-primary); color: var(--qti-on-primary); }
+    .idx { width: 20px; flex: none; text-align: right; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; color: var(--qti-fg-muted); margin-top: 1px; }
+    .qt { font-size: 13px; color: var(--qti-fg); }
+    .intent { font-size: 12px; line-height: 19.5px; color: var(--qti-fg-muted); }
+    .ok { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--qti-on-success-soft); white-space: nowrap; }
+    .ko { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--qti-on-danger-soft); white-space: nowrap; }
+    .ck { display: inline-flex; align-items: center; gap: 6px; border-radius: 6px; background: var(--qti-surface-muted); padding: 2px 8px; font-size: 11px; color: var(--qti-fg-muted); box-shadow: inset 0 0 0 1px var(--qti-border); }
+    .s1 { color: var(--qti-on-success-soft); } .s0 { color: var(--qti-on-danger-soft); }
+    /* Eval trace panel (eval-trace.html) */
+    .tr { display: flex; flex-direction: column; gap: 16px; padding: 12px 16px; line-height: 18px; }
+    .tr .lbl { font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--qti-fg-muted); margin: 0; }
+    .tr .box { border-radius: 6px; background: var(--qti-surface-muted); padding: 6px 10px; display: flex; align-items: flex-start; gap: 8px; font-size: 12px; }
+    .tr pre { margin: 6px 0 0; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px; line-height: 16px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--qti-fg-muted); }
+  </style>
+</head>
+<body data-area="Agents" data-role="maker" data-mode="org" data-initials="JB" data-drawer="collapsed">
+<!--
+  Workflow: Maker runs the built-in assistant's eval suite against a datasource and inspects a failed question
+  (quality check before relying on the assistant; user agents have no evals: "No evals configured for this agent yet.").
+  Endpoints: GET /agents/assistant (detail), GET /agents/assistant/evals (question sets), GET /datasources (picker),
+  POST /agents/assistant/evals/run {datasourceId, caseIds} ("Run 4 selected" -> {jobId}), GET /agents/assistant/evals/runs/:jobId
+  (polled every 1500 ms while status is running), GET /agents/assistant/evals/runs (Executions sub-tab),
+  GET /agents/assistant/evals/runs/:jobId/download, DELETE /agents/assistant/evals/runs/:jobId.
+  create-agents shows the checkboxes, Select all, the datasource picker with "Run <n> selected" and the Executions sub-tab;
+  a User sees the same list read-only.
+  Run states: shown here is a completed run (4/10 done · 3 passed; row 1 "failed" because its first SQL errored, rows 2-4
+  "passed"; row 1 is selected, so the trace shows it). While running, the
+  button reads "Running…" with a spinner, every control is disabled and the question in flight shows a "running" label
+  with a spinner; a refused start shows the server message in a danger-soft block under the run row
+  (e.g. "An eval run is already in progress for this agent"). In Executions a run card shows a spinner (running), a green
+  check (all passed) or a red X (any failed) with "<passed>/<total> passed · <started> · <datasource> · <duration>".
+  Frame: the page is shown scrolled to the Evals tab (the header, "All agents", the Start chat button and the
+  description sit above, as in CM3 and evidence/1.8.6/agent-detail-light.png). The right panel has no title as built
+  (only the agent editor's Preview titles it); ui.md calls it the eval trace. It is at its default 572 px.
+-->
+  <main>
+    <div class="scrolled" style="--scroll:-224px">
+      <span class="btn btn-ghost" style="width:fit-content"><i data-lucide="arrow-left" data-size="15"></i>All agents</span>
+      <div class="row top" style="margin-top:16px;gap:14px">
+        <span style="width:44px;height:44px;border-radius:12px;background:var(--qti-surface-muted);color:var(--qti-fg-muted);display:grid;place-items:center;flex:none"><i data-lucide="bot" data-size="19"></i></span>
+        <div class="col g4"><h2 class="h2">Questions to Insights Assistant</h2><span class="mono muted">assistant</span></div>
+        <span class="btn btn-primary" style="margin-left:auto"><i data-lucide="message-square-plus" data-size="14"></i>Start chat</span>
+      </div>
+      <p style="margin:12px 0 0;max-width:70ch;font-size:13px;line-height:21px;color:var(--qti-fg-muted)">Answers business questions over a session's datasets — plans the analysis, writes and runs the SQL, and explains the result.</p>
+
+      <div class="tabs" style="margin-top:24px">
+        <span class="tab"><i data-lucide="scroll-text" data-size="14"></i>Prompt template</span>
+        <span class="tab"><i data-lucide="wrench" data-size="14"></i>Tools (7)</span>
+        <span class="tab"><i data-lucide="brain" data-size="14"></i>Memory</span>
+        <span class="tab"><i data-lucide="cpu" data-size="14"></i>Model</span>
+        <span class="tab on"><i data-lucide="gauge" data-size="14"></i>Evals</span>
+      </div>
+
+      <div style="margin-top:24px">
+        <div class="row g4" style="margin-bottom:20px"><span class="sub on">Questions</span><span class="sub">Executions</span></div>
+        <p class="cap" style="margin:0">Question sets</p>
+        <div class="col" style="margin-top:8px;gap:8px">
+          <div class="set on">
+            <span class="row"><i data-lucide="chevron-right" data-size="14" style="transform:rotate(90deg)"></i><i data-lucide="list-checks" data-size="14"></i><span style="font-size:13px;color:var(--qti-fg)">World Cup</span><span style="font-size:11px;color:var(--qti-fg-muted)">10 questions</span></span>
+            <span class="d">Questions against the bundled World Cup sample (2018 and 2022). Select its PostgreSQL datasource with a saved dataset containing the world_cup tables and views.</span>
+          </div>
+          <div class="set">
+            <span class="row"><i data-lucide="chevron-right" data-size="14"></i><i data-lucide="list-checks" data-size="14"></i><span style="font-size:13px;color:var(--qti-fg)">World Cup (REST API)</span><span style="font-size:11px;color:var(--qti-fg-muted)">10 questions</span></span>
+            <span class="d">The same World Cup questions against the sample served by a local REST API ('npm run worldcup:api'). Select its REST API datasource with a saved dataset containing the api.world_cup endpoints; reference SQL runs in SQLite over the fetched endpoints.</span>
+          </div>
+          <div class="set">
+            <span class="row"><i data-lucide="chevron-right" data-size="14"></i><i data-lucide="list-checks" data-size="14"></i><span style="font-size:13px;color:var(--qti-fg)">Formula 1</span><span style="font-size:11px;color:var(--qti-fg-muted)">10 questions</span></span>
+            <span class="d">Questions against the bundled Formula 1 sample (1950 to 2026) — seasons, drivers, constructors, circuits, races, standings and the per-session result views. Select its PostgreSQL datasource with a saved dataset containing the formula1 tables and views.</span>
+          </div>
+        </div>
+
+        <p style="margin:16px 0 0;font-size:12px;color:var(--qti-fg-muted)">10 questions in World Cup. Each check must score 1.0 for its question to pass.</p>
+        <div class="row" style="margin-top:16px">
+          <div class="field row between" style="width:auto;gap:24px">World Cup PostgreSQL · PostgreSQL<i data-lucide="chevron-down" data-size="14"></i></div>
+          <span class="btn btn-primary"><i data-lucide="play" data-size="14"></i>Run 4 selected</span>
+          <span style="font-size:12px;color:var(--qti-fg-muted)">4/10 done · 3 passed</span>
+        </div>
+        <p style="margin:8px 0 0;font-size:12px;color:var(--qti-fg-muted)">Scoped to World Cup</p>
+        <span class="row" style="margin-top:20px;font-size:12px;color:var(--qti-fg-muted)"><span class="cbx" style="margin:0"></span>Select all</span>
+
+        <div class="col" style="margin-top:8px;gap:8px">
+          <div class="q sel">
+            <span class="cbx on"><i data-lucide="check" data-size="10" data-stroke="3"></i></span>
+            <span class="idx">1</span>
+            <div class="col" style="gap:6px;min-width:0">
+              <span class="row"><span class="qt">Who won the 2022 World Cup?</span><span class="ko"><i data-lucide="circle-x" data-size="12"></i>failed</span></span>
+              <span class="intent">Single-hop lookup against tournaments — the simplest happy path.</span>
+              <span class="row wrap g6" style="margin-top:4px"><span class="ck"><i data-lucide="gauge" data-size="11"></i>Checks if output includes "Argentina"<span class="s1">1</span></span><span class="ck"><i data-lucide="gauge" data-size="11"></i>Checks that "run_readonly_sql" was called<span class="s1">1</span></span><span class="ck"><i data-lucide="gauge" data-size="11"></i>Checks that no tool calls resulted in errors<span class="s0">0</span></span></span>
+            </div>
+          </div>
+          <div class="q">
+            <span class="cbx on"><i data-lucide="check" data-size="10" data-stroke="3"></i></span>
+            <span class="idx">2</span>
+            <div class="col" style="gap:6px;min-width:0">
+              <span class="row"><span class="qt">What was the score of the 2018 World Cup final?</span><span class="ok"><i data-lucide="circle-check" data-size="12"></i>passed</span></span>
+              <span class="intent">Filter matches by stage and tournament, then read both goal columns.</span>
+              <span class="row wrap g6" style="margin-top:4px"><span class="ck"><i data-lucide="gauge" data-size="11"></i>Checks if output matches pattern /4\s*[-–:]\s*2/<span class="s1">1</span></span><span class="ck"><i data-lucide="gauge" data-size="11"></i>Checks if output includes "France"<span class="s1">1</span></span><span class="ck"><i data-lucide="gauge" data-size="11"></i>Checks that "run_readonly_sql" was called<span class="s1">1</span></span><span class="ck"><i data-lucide="gauge" data-size="11"></i>Checks that no tool calls resulted in errors<span class="s1">1</span></span></span>
+            </div>
+          </div>
+          <div class="q">
+            <span class="cbx on"><i data-lucide="check" data-size="10" data-stroke="3"></i></span>
+            <span class="idx">3</span>
+            <div class="col" style="gap:6px;min-width:0">
+              <span class="row"><span class="qt">Who scored the most goals in the 2022 World Cup, and how many?</span><span class="ok"><i data-lucide="circle-check" data-size="12"></i>passed</span></span>
+              <span class="intent">Aggregate over goals joined to players, excluding own goals — the classic GROUP BY question.</span>
+              <span class="row wrap g6" style="margin-top:4px"><span class="ck"><i data-lucide="gauge" data-size="11"></i>Checks if output includes "Messi"<span class="s1">1</span></span><span class="ck"><i data-lucide="gauge" data-size="11"></i>Checks if output matches pattern /\b4\b/<span class="s1">1</span></span><span class="ck"><i data-lucide="gauge" data-size="11"></i>Checks that "run_readonly_sql" was called<span class="s1">1</span></span><span class="ck"><i data-lucide="gauge" data-size="11"></i>Checks that no tool calls resulted in errors<span class="s1">1</span></span></span>
+            </div>
+          </div>
+          <div class="q">
+            <span class="cbx on"><i data-lucide="check" data-size="10" data-stroke="3"></i></span>
+            <span class="idx">4</span>
+            <div class="col" style="gap:6px;min-width:0">
+              <span class="row"><span class="qt">Which knockout matches went to a penalty shootout, and who advanced?</span><span class="ok"><i data-lucide="circle-check" data-size="12"></i>passed</span></span>
+              <span class="intent">Requires noticing that shootouts are encoded as non-null penalty columns, not a flag.</span>
+              <span class="row wrap g6" style="margin-top:4px"><span class="ck"><i data-lucide="gauge" data-size="11"></i>Checks if output includes "Croatia"<span class="s1">1</span></span><span class="ck"><i data-lucide="gauge" data-size="11"></i>Checks if output matches pattern /Argentina/i<span class="s1">1</span></span><span class="ck"><i data-lucide="gauge" data-size="11"></i>Checks that "run_readonly_sql" was called<span class="s1">1</span></span><span class="ck"><i data-lucide="gauge" data-size="11"></i>Checks that no tool calls resulted in errors<span class="s1">1</span></span></span>
+            </div>
+          </div>
+          <div class="q">
+            <span class="cbx"></span>
+            <span class="idx">5</span>
+            <div class="col" style="gap:6px;min-width:0">
+              <span class="row"><span class="qt">Which stadium hosted the best-attended match, and what was the attendance?</span></span>
+              <span class="intent">Join matches to venues and order by a nullable measure.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <aside data-panel="" data-width="572">
+    <div class="tr" style="margin:-16px -20px 0">
+      <div class="col" style="gap:6px">
+        <p class="lbl">Question</p>
+        <p style="margin:0;font-size:13px;color:var(--qti-fg)">Who won the 2022 World Cup?</p>
+        <p style="margin:0;font-size:12px;line-height:19.5px;color:var(--qti-fg-muted)">Single-hop lookup against tournaments — the simplest happy path.</p>
+      </div>
+      <div class="row">
+        <span class="row g6" style="font-size:13px;color:var(--qti-on-danger-soft)"><i data-lucide="circle-x" data-size="15"></i>Failed</span>
+        <span class="row g4" style="font-size:12px;color:var(--qti-fg-muted)"><i data-lucide="clock" data-size="12"></i>14.2s</span>
+      </div>
+      <div class="col" style="gap:6px">
+        <p class="lbl">Why it failed</p>
+        <div style="border-radius:6px;background:var(--qti-danger-soft);padding:8px 12px">
+          <p style="margin:0;font-size:12px;color:var(--qti-on-danger-soft)">Checks that no tool calls resulted in errors</p>
+          <p style="margin:4px 0 0;font-size:11px;line-height:16px;color:var(--qti-on-danger-soft)">a tool call failed: [{"toolName":"run_readonly_sql","error":"column \"champion\" does not exist"}]</p>
+        </div>
+      </div>
+      <div class="col" style="gap:6px">
+        <p class="lbl">Checks</p>
+        <div class="box"><span class="s1" style="display:flex;margin-top:2px"><i data-lucide="circle-check" data-size="13"></i></span><span class="grow">Checks if output includes "Argentina"</span><span class="mono" style="font-size:11px;color:var(--qti-fg-muted)">1</span></div>
+        <div class="box"><span class="s1" style="display:flex;margin-top:2px"><i data-lucide="circle-check" data-size="13"></i></span><span class="grow">Checks that "run_readonly_sql" was called</span><span class="mono" style="font-size:11px;color:var(--qti-fg-muted)">1</span></div>
+        <div class="box"><span class="s0" style="display:flex;margin-top:2px"><i data-lucide="circle-x" data-size="13"></i></span><span class="grow">Checks that no tool calls resulted in errors</span><span class="mono" style="font-size:11px;color:var(--qti-fg-muted)">0</span></div>
+        <div class="box"><span class="s1" style="display:flex;margin-top:2px"><i data-lucide="circle-check" data-size="13"></i></span><span class="grow">Result set matches expectedSql (primary correctness signal)</span><span class="mono" style="font-size:11px;color:var(--qti-fg-muted)">1</span></div>
+      </div>
+      <div class="col" style="gap:6px">
+        <p class="lbl">Executed steps</p>
+        <div class="box" style="flex-direction:column;gap:0;padding:8px 10px">
+          <div class="row g6" style="width:100%"><i data-lucide="wrench" data-size="12" style="color:var(--qti-fg-muted)"></i><span class="mono" style="color:var(--qti-fg)">run_readonly_sql</span><span class="grow"></span><span class="mono" style="font-size:11px;color:var(--qti-fg-muted)">#1</span></div>
+          <pre>{"sql":"SELECT champion FROM world_cup.tournaments WHERE tournament_year = 2022"}</pre>
+          <pre style="border-radius:4px;background:var(--qti-danger-soft);color:var(--qti-on-danger-soft);padding:4px 8px">column "champion" does not exist</pre>
+        </div>
+        <div class="box" style="flex-direction:column;gap:0;padding:8px 10px">
+          <div class="row g6" style="width:100%"><i data-lucide="wrench" data-size="12" style="color:var(--qti-fg-muted)"></i><span class="mono" style="color:var(--qti-fg)">run_readonly_sql</span><span class="grow"></span><span class="mono" style="font-size:11px;color:var(--qti-fg-muted)">#2</span></div>
+          <pre>{"sql":"SELECT c.common_name FROM world_cup.tournaments t JOIN world_cup.teams c ON c.id = t.champion_team_id WHERE t.tournament_year = 2022"}</pre>
+          <pre>{"rowCount":1,"rows":[{"champion":"Argentina"}]}</pre>
+        </div>
+      </div>
+      <div class="col" style="gap:6px">
+        <p class="lbl">Answer</p>
+        <div style="border-radius:6px;background:var(--qti-surface-muted);padding:8px 12px;font-size:12px;line-height:19.5px;color:var(--qti-fg)">Argentina won the 2022 World Cup, beating France on penalties in the final.</div>
+      </div>
+    </div>
+  </aside>
+</body>
+</html>

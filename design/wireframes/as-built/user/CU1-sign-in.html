@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <title>CU1 · Sign in</title>
+  <meta name="wf-status" content="as-built">
+  <meta name="wf-version" content="v0.29.0">
+  <meta name="wf-role" content="user">
+  <meta name="wf-spec" content="specs/system/ui.md#417-sign-in-page-org-server-mode">
+  <link rel="stylesheet" href="../../_kit/hub.css">
+  <script src="../../_kit/icons.js"></script>
+  <script src="../../_kit/shell.js" defer></script>
+</head>
+<!--
+  Workflow step 1 (every role, org server mode): GET /me answers 401, so the sign-in page replaces the whole shell.
+  "Sign in with Microsoft" is a full-page navigation to GET /auth/login (redirect to Entra ID);
+  the identity provider returns to GET /auth/callback, which sets the qti_session cookie and lands on the app.
+  The error variants (?signInError=failed|deactivated) are not shown here.
+-->
+<body data-shell="none">
+  <main class="card col g16" style="width:400px;padding:32px">
+    <div class="row g12">
+      <span class="wf-logo-mark" style="width:40px;height:40px;border-radius:999px;background:var(--logo-gradient);display:grid;place-items:center;flex:none">
+        <img src="../../../../frontend/public/brand/agentic-hub/logo-mark.svg" width="10" height="30" alt="">
+      </span>
+      <h1 style="margin:0;font-size:24px;line-height:32px;font-weight:600;color:var(--qti-fg-strong)">Agentic Hub</h1>
+    </div>
+    <p style="margin:0;font-size:14px;line-height:21px;color:var(--qti-fg-muted)">Sign in with your organisation account to continue.</p>
+    <span class="btn btn-primary" style="width:100%"><i data-lucide="log-in" data-size="16"></i><span>Sign in with Microsoft</span></span>
+  </main>
+</body>
+</html>
