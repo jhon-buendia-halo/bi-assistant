@@ -242,9 +242,13 @@
             }
           </div>
 
-          <!-- Footer: the last sync note and the pagination (admin R53, R54) -->
+          <!-- Footer: the last sync note and the pagination (admin R53, R54, R74) -->
           <div class="mt-4 flex items-center gap-4">
-            <p class="min-w-0 text-[12px] text-fg-muted">Users and groups come from Entra ID via SCIM · @if (lastSync(); as sync) {last sync <span [title]="sync.full">{{ sync.relative }}</span>} @else {not synced yet}. Roles are assigned here or mapped from groups.</p>
+            @if (auth.isLocal()) {
+              <p class="min-w-0 text-[12px] text-fg-muted">Users are the local personas of this machine. Roles are assigned here.</p>
+            } @else {
+              <p class="min-w-0 text-[12px] text-fg-muted">Users and groups come from Entra ID via SCIM · @if (lastSync(); as sync) {last sync <span [title]="sync.full">{{ sync.relative }}</span>} @else {not synced yet}. Roles are assigned here or mapped from groups.</p>
+            }
             <span class="flex-1"></span>
             <span
               class="shrink-0 text-[12px] text-fg-muted"

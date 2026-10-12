@@ -195,9 +195,9 @@ Agents are defined in [agents-evals](../agents-evals/spec.md) (R43-R52); decisio
 - R58. The welcome block (R50) of a session bound to an agent SHALL use the agent's Live description as its one-line description when that is not empty, and the agent's Live starter questions (up to 5, in order) as the starter prompts when there are any. Otherwise R50's text and prompts apply. Clicking a starter question SHALL fill the composer and SHALL NOT send it.
 - R59. When the agent is deleted, its sessions SHALL keep their transcript, memory and datasets and continue with the plain assistant: no instructions block and no overrides. The page header chip and the list row SHALL read `<agent name> · agent deleted`, using the name the agent last had for the session, and the welcome block falls back to R50.
 
-### Ownership (org server mode)
+### Ownership
 
-- R60. In org server mode a session, with its transcript, visuals, reports, workspace files and agent memory, SHALL belong to the user who created it. Only that user SHALL see it in the session list or open, chat in, rate, tailor, refresh, download, analyse or delete it; for anyone else it SHALL answer as not found. Every session action needs the Use agents permission. Rules: [../admin/spec.md](../admin/spec.md) R29, R30, R32.
+- R60. In both modes a session, with its transcript, visuals, reports, workspace files and agent memory, SHALL belong to the user who created it. Only that user SHALL see it in the session list or open, chat in, rate, tailor, refresh, download, analyse or delete it; for anyone else it SHALL answer as not found. Every session action needs the Use agents permission. Rules: [../admin/spec.md](../admin/spec.md) R29, R30, R32.
 
 ## Edge cases and errors
 

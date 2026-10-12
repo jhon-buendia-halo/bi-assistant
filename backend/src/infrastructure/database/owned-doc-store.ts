@@ -9,21 +9,21 @@ import type {
 export const OWNER_FIELD = 'ownerId';
 
 /**
- * Who the current call is scoped to: a user id, or `null` for the local user,
- * whose calls are not scoped. Throws when nobody is signed in, so a private
- * collection is never read or written without an owner.
+ * Who the current call is scoped to: the caller's user id, in both modes.
+ * Throws when nobody is signed in, so a private collection is never read or
+ * written without an owner.
  */
-export type OwnerScope = () => string | null;
+export type OwnerScope = () => string;
 
 /**
  * A private collection seen through its owner (data-model 3.15, ADR-0011).
  *
- * For a user of an org server every insert stamps `ownerId`, and every find,
- * update, unset and delete ANDs `ownerId = <caller>` into its filter, so a
- * document with another owner, or none, does not exist for the caller.
- * Upserts and patches carry the caller's id, so they can neither take over
- * nor give away a document. For the local user nothing is stamped or
- * filtered: every document is theirs, as before org server mode.
+ * Every insert stamps `ownerId`, and every find, update, unset and delete
+ * ANDs `ownerId = <caller>` into its filter, so a document with another
+ * owner, or none, does not exist for the caller. Upserts and patches carry
+ * the caller's id, so they can neither take over nor give away a document.
+ * The same in local mode (admin R33): documents stored there before it had
+ * sign-in are given to Demo User by M13 at startup.
  *
  * The scope is read on every call, from the user the current code runs as.
  */
@@ -34,8 +34,7 @@ export class OwnedDocStore<T extends object> implements DocStore<T> {
   ) {}
 
   async insert(doc: T): Promise<T> {
-    const owner = this.scope();
-    return this.inner.insert(owner === null ? doc : this.stamp(doc, owner));
+    return this.inner.insert(this.stamp(doc, this.scope()));
   }
 
   async find(filter: DocFilter = {}, options?: FindOptions): Promise<T[]> {
@@ -52,7 +51,6 @@ export class OwnedDocStore<T extends object> implements DocStore<T> {
     options?: UpdateOptions,
   ): Promise<T | null> {
     const owner = this.scope();
-    if (owner === null) return this.inner.update(filter, patch, options);
     return this.inner.update(
       { ...filter, [OWNER_FIELD]: owner },
       this.stamp(patch, owner),
@@ -77,8 +75,7 @@ export class OwnedDocStore<T extends object> implements DocStore<T> {
 
   /** `filter` AND the caller's ownership; it wins over any `ownerId` given. */
   private scoped(filter: DocFilter): DocFilter {
-    const owner = this.scope();
-    return owner === null ? filter : { ...filter, [OWNER_FIELD]: owner };
+    return { ...filter, [OWNER_FIELD]: this.scope() };
   }
 
   private stamp<D extends object>(doc: D, owner: string): D {

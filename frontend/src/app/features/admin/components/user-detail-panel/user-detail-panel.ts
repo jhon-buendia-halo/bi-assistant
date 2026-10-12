@@ -10,6 +10,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { Loader2, LucideAngularModule, X } from 'lucide-angular';
+import { AuthService } from '../../../../core/auth/auth.service';
 import { ToastService } from '../../../../core/toast/toast.service';
 import { DatasourcesApiService } from '../../../datasources/services/datasources-api.service';
 import {
@@ -63,6 +64,8 @@ export class UserDetailPanel implements OnInit {
   private readonly api = inject(AdminApiService);
   private readonly datasourcesApi = inject(DatasourcesApiService);
   private readonly toast = inject(ToastService);
+  /** Org server or local mode: the groups heading and reasons differ (R74). */
+  readonly auth = inject(AuthService);
 
   readonly userId = input.required<string>();
   /** Close user details, or Escape (R58). */
@@ -87,7 +90,7 @@ export class UserDetailPanel implements OnInit {
 
   readonly rows = computed(() => {
     const detail = this.detail();
-    return detail ? roleRows(detail) : [];
+    return detail ? roleRows(detail, this.auth.isLocal()) : [];
   });
 
   /** Datasources the user does not own yet (R59). */
@@ -134,7 +137,7 @@ export class UserDetailPanel implements OnInit {
     this.api.user(this.userId()).subscribe({
       next: (detail) => {
         this.detail.set(detail);
-        this.ticks.set(initialTicks(roleRows(detail)));
+        this.ticks.set(initialTicks(roleRows(detail, this.auth.isLocal())));
         this.addDataOwner.set(false);
         this.newDatasourceId.set('');
         this.state.set('ready');

@@ -13,7 +13,13 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { type Backend, boot, stop } from './backend-process';
+import {
+  type Backend,
+  bearer,
+  boot,
+  signInLocally,
+  stop,
+} from './backend-process';
 
 const dataDir = mkdtempSync(join(tmpdir(), 'qti-response-status-'));
 
@@ -21,11 +27,13 @@ jest.setTimeout(120_000);
 
 describe('POST routes the spec answers with 200 (api.md 1.4)', () => {
   let backend: Backend | undefined;
+  /** Demo User's local auth session (admin R71). */
+  let token = '';
 
   const post = (path: string, body: unknown) =>
     fetch(`${backend!.url}${path}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...bearer(token) },
       body: JSON.stringify(body),
     });
   /** The `data:` frames of a stream (api.md 3.1). */
@@ -44,6 +52,7 @@ describe('POST routes the spec answers with 200 (api.md 1.4)', () => {
 
   beforeAll(async () => {
     backend = await boot(dataDir);
+    token = await signInLocally(backend.url);
   });
 
   afterAll(async () => {

@@ -18,7 +18,13 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import request from 'supertest';
-import { type Backend, boot as bootIn, stop } from './backend-process';
+import {
+  type Backend,
+  bearer,
+  boot as bootIn,
+  signInLocally,
+  stop,
+} from './backend-process';
 
 const boot = () => bootIn(dataDir);
 const dataDir = mkdtempSync(join(tmpdir(), 'qti-user-agents-'));
@@ -56,8 +62,10 @@ const answer = (res: { body: unknown }) => res.body as Answer;
 describe('Agent definitions (API)', () => {
   let backend: Backend | undefined;
   let agentId = '';
+  /** Demo User's local auth session; it survives the restart (admin R71). */
+  let token = '';
 
-  const http = () => request(backend!.url);
+  const http = () => request.agent(backend!.url).set(bearer(token));
   const listAgents = async (): Promise<AgentView[]> =>
     ((await http().get('/agents').expect(200)).body as { agents: AgentView[] })
       .agents;
@@ -68,6 +76,7 @@ describe('Agent definitions (API)', () => {
 
   beforeAll(async () => {
     backend = await boot();
+    token = await signInLocally(backend.url);
   });
 
   afterAll(async () => {

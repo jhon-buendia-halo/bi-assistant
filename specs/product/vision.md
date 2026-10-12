@@ -34,7 +34,7 @@ These personas are derived from the product's copy, sample data and research not
 The product SHALL follow these principles. Capability specs turn them into testable rules.
 
 1. **Local-first, self-hosted for teams.** The app runs in one of two modes:
-   - **Local mode** (the default): app data (settings, datasources, datasets, sessions, memory, visuals) lives on the user's machine in a data directory the user can back up. There is no sign-in and no account.
+   - **Local mode** (the default): app data (settings, datasources, datasets, sessions, memory, visuals) lives on the user's machine in a data directory the user can back up. There is no account and no password: you sign in as one of five built-in personas, one per role, to see what each role can do.
    - **Org server mode**: the organisation runs the same app on its own infrastructure. App data lives in that server's data directory, which the organisation backs up.
 
    Halo operates no backend in either mode. See [non-functional.md](non-functional.md).
@@ -57,7 +57,7 @@ The product SHALL follow these principles. Capability specs turn them into testa
 
 - Not a data warehouse, ETL tool or data modelling tool. It reads from sources; it never loads, writes or transforms them.
 - Not a dashboard builder. Visuals belong to a conversation, not to a shared board. Open question: no sharing or publishing of visuals exists beyond local export.
-- Not an identity provider. Users and groups are not created or authenticated by the app: they come from the organisation's identity provider. In local mode there is one implicit local user, with no sign-in. Today the rail's "Demo User" avatar is a placeholder; in org server mode it shows the signed-in user.
+- Not an identity provider. Users and groups are not created or authenticated by the app: they come from the organisation's identity provider. In local mode the app seeds five personas (Demo User, who is a Platform admin, and one persona per other role), signed in without a password; this is a way to try each role, not a security boundary. The rail avatar shows the signed-in user in both modes.
 - Not a SQL editor. Users read and learn from the SQL but do not author it in the product. Open question: confirm there is no manual "run SQL" surface (none was found).
 - Not a hosted service. It makes no calls to a Halo-operated backend, and Halo does not run org servers for customers.
 - Not tied to one LLM vendor. OpenAI, Anthropic and an OpenAI-compatible gateway (LenAI) are supported. Claude subscription logins are not a supported provider.

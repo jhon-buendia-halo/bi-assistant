@@ -13,17 +13,21 @@ import type { AuthMode, CurrentUser } from './entities/current-user.entity';
 import { permissionsForRoles } from './permissions';
 
 /**
- * The implicit user of local mode (admin R2, R21): holds every permission.
- * Items stored without an owner belong to them (admin R33).
+ * Demo User, the local persona with id `local` (admin R69; ADR-0012): always
+ * Platform admin as local mode's bootstrap admin (R18), so holds every
+ * permission (R21). Items stored in local mode before it had sign-in belong
+ * to them (admin R33, M13). Requests run as the signed-in persona; this
+ * constant is for code that runs outside any request on purpose (the eval
+ * CLI).
  */
 export const LOCAL_USER: CurrentUser = Object.freeze({
   id: 'local',
   displayName: 'Demo User',
-  email: null,
-  initials: 'D',
+  email: 'demo@local.test',
+  initials: 'DU',
   roles: [
     { role: 'user', source: 'implicit' },
-    { role: 'platform-admin', source: 'implicit' },
+    { role: 'platform-admin', source: 'bootstrap' },
   ],
   permissions: permissionsForRoles(['user', 'platform-admin']),
 }) as CurrentUser;
@@ -34,10 +38,9 @@ export const LOCAL_USER: CurrentUser = Object.freeze({
  * inside a request keep it without request-scoped providers (admin R32).
  *
  * The mode is fixed at startup (admin R1): org server mode when the `ORG_*`
- * configuration is present. In local mode every request and any code outside
- * a request runs as `LOCAL_USER`; in org server mode the current-user
- * middleware runs each request as its auth session's user, and code outside
- * a request runs as nobody.
+ * configuration is present. In both modes the current-user middleware runs
+ * each request as its auth session's user (admin R11, R71), and code outside
+ * a request runs as nobody unless it calls `runAs`.
  */
 @Injectable()
 export class CurrentUserService {
@@ -54,18 +57,10 @@ export class CurrentUserService {
   }
 
   /**
-   * The user the current code runs as. Outside a request in local mode that
-   * is the local user; `undefined` means "not signed in" (org server mode).
+   * The user the current code runs as; `undefined` means "not signed in"
+   * (and outside any request), in both modes.
    */
   current(): CurrentUser | undefined {
-    return (
-      this.storage.getStore() ??
-      (this.mode === 'local' ? LOCAL_USER : undefined)
-    );
-  }
-
-  /** Only the user set by `runAs`, without the local-mode fallback. */
-  storedUser(): CurrentUser | undefined {
     return this.storage.getStore();
   }
 
@@ -76,8 +71,8 @@ export class CurrentUserService {
 
   /**
    * The id private items and in-memory jobs are owned by (data-model 3.15):
-   * the current user's id, `local` for the local user. Throws 401 when
-   * nobody is signed in, so private data is never reached without an owner.
+   * the current user's id (`local` for Demo User). Throws 401 when nobody is
+   * signed in, so private data is never reached without an owner.
    */
   ownerKey(): string {
     const user = this.current();
@@ -86,12 +81,11 @@ export class CurrentUserService {
   }
 
   /**
-   * The `ownerId` a private collection is scoped to: `null` for the local
-   * user, whose items are never stamped or filtered (admin R33).
+   * The `ownerId` a private collection is scoped to: the caller's id, in
+   * both modes (admin R29, R33).
    */
-  ownerScope(): string | null {
-    const id = this.ownerKey();
-    return id === LOCAL_USER.id ? null : id;
+  ownerScope(): string {
+    return this.ownerKey();
   }
 
   /**

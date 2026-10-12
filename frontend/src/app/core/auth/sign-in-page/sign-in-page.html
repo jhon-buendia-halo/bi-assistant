@@ -28,29 +28,99 @@
       </h1>
     </div>
 
-    <p class="text-[14px] text-fg-muted">
-      Sign in with your organisation account to continue.
-    </p>
-
-    @if (error) {
+    @if (auth.backendUnreachable()) {
+      <!-- Either mode: the backend can't be reached (ui.md 1.6, 4.17) -->
       <p
         role="alert"
         class="rounded-md bg-danger-soft px-3 py-2.5 text-[13px] text-on-danger-soft"
       >
-        {{ error }}
+        {{ unreachableMessage }}
       </p>
-    }
+      <button
+        type="button"
+        (click)="retry()"
+        [disabled]="auth.checking()"
+        class="btn btn-outline self-start"
+      >
+        Retry
+      </button>
+    } @else if (auth.isLocal()) {
+      <!-- Local mode variant (admin R70, ui.md 4.17.1) -->
+      <p class="text-[14px] text-fg-muted">
+        Choose who you are to continue. Local mode has no passwords.
+      </p>
 
-    <button
-      type="button"
-      (click)="auth.signIn()"
-      [disabled]="auth.signingIn()"
-      class="btn btn-primary w-full justify-center"
-    >
-      <lucide-angular [img]="LogIn" [size]="16" />
-      <span>{{
-        auth.signingIn() ? "Signing in…" : "Sign in with Microsoft"
-      }}</span>
-    </button>
+      @if (users(); as users) {
+        <div class="flex flex-col gap-1.5">
+          <label for="local-user" class="text-[13px] font-medium text-fg"
+            >Sign in as</label
+          >
+          <select
+            id="local-user"
+            class="field"
+            (change)="choose($any($event.target).value)"
+          >
+            <option value="" [selected]="selected() === ''">
+              Choose a user
+            </option>
+            @for (user of users; track user.id) {
+              <option [value]="user.id" [selected]="selected() === user.id">
+                {{ optionLabel(user) }}
+              </option>
+            }
+          </select>
+        </div>
+
+        @if (localError(); as message) {
+          <p
+            role="alert"
+            class="rounded-md bg-danger-soft px-3 py-2.5 text-[13px] text-on-danger-soft"
+          >
+            {{ message }}
+          </p>
+        }
+
+        <button
+          type="button"
+          (click)="signInLocal()"
+          [disabled]="!selected() || auth.signingIn()"
+          class="btn btn-primary w-full justify-center"
+        >
+          <lucide-angular [img]="LogIn" [size]="16" />
+          <span>{{ auth.signingIn() ? "Signing in…" : "Sign in" }}</span>
+        </button>
+      } @else {
+        <div class="flex items-center gap-2.5 text-[13px] text-fg-muted">
+          <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
+          <span>Loading users…</span>
+        </div>
+      }
+    } @else {
+      <!-- Org server variant (admin R5-R7, ui.md 4.17) -->
+      <p class="text-[14px] text-fg-muted">
+        Sign in with your organisation account to continue.
+      </p>
+
+      @if (error) {
+        <p
+          role="alert"
+          class="rounded-md bg-danger-soft px-3 py-2.5 text-[13px] text-on-danger-soft"
+        >
+          {{ error }}
+        </p>
+      }
+
+      <button
+        type="button"
+        (click)="auth.signIn()"
+        [disabled]="auth.signingIn()"
+        class="btn btn-primary w-full justify-center"
+      >
+        <lucide-angular [img]="LogIn" [size]="16" />
+        <span>{{
+          auth.signingIn() ? "Signing in…" : "Sign in with Microsoft"
+        }}</span>
+      </button>
+    }
   </main>
 </div>

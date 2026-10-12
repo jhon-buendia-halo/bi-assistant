@@ -1,8 +1,9 @@
 import type { RoleId } from '../permissions';
 
 /**
- * The identity and access documents of org server mode (data-model 3.14).
- * Written only in org server mode; local mode leaves the collections empty.
+ * The identity and access documents (data-model 3.14), written in both
+ * modes: on an org server by sign-in, SCIM and the admin area; in local mode
+ * by the persona seeding (admin R69), local sign-in and the admin area.
  */
 
 /** A role that can be assigned or mapped: every role but the implicit User. */
@@ -29,7 +30,8 @@ export interface UserDoc {
   releasedUserName?: string;
   active: boolean;
   scimDeleted?: boolean;
-  source: 'scim' | 'jit';
+  /** `local`: a local persona seeded at startup (admin R69). */
+  source: 'scim' | 'jit' | 'local';
   lastSignInAt?: string;
   lastActiveAt?: string;
   createdAt?: string;

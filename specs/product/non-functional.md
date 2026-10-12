@@ -47,7 +47,7 @@ Open question (discrepancy): the README says the application database stores dat
 
 ### Org server mode
 
-These apply only in org server mode ([../capabilities/admin/spec.md](../capabilities/admin/spec.md)). Local mode keeps every statement above and below unchanged, with no sign-in.
+These apply only in org server mode ([../capabilities/admin/spec.md](../capabilities/admin/spec.md)), except where a statement says otherwise. Local mode keeps every statement above and below, and adds N78.
 
 - N67. An org server SHALL be self-hosted by the organisation: the npm package on a machine it runs, behind its own TLS reverse proxy. People SHALL reach it only over HTTPS at its public base URL; plain `http://` is allowed for development and automated tests only. The server SHALL trust only the first proxy hop's forwarded headers.
 - N68. Every API request SHALL need a valid auth session, except sign-in, the current-user check and SCIM. Without one the server SHALL answer 401 and return no data.
@@ -57,9 +57,10 @@ These apply only in org server mode ([../capabilities/admin/spec.md](../capabili
 - N72. The sign-in round trip SHALL use the authorization code flow with PKCE, a one-time `state` and a `nonce`, and SHALL validate the ID token's signature, issuer, audience, expiry and nonce.
 - N73. The SCIM bearer token and the OIDC client secret SHALL come from the server's environment, SHALL be at least 32 characters (the SCIM token), SHALL be compared in constant time (the SCIM token), and SHALL NEVER be stored in the data directory, logged, or returned by any API.
 - N74. Every API route SHALL declare the permission it needs, and the server SHALL refuse to start if one does not. A missing permission SHALL answer 403 and change nothing.
-- N75. One user's private data (sessions with their visuals, reports, workspace files and agent memory; agents; knowledge; verified queries; metrics; eval runs; pins) SHALL NEVER be returned to, changed by or deleted by another user. A request for another user's item SHALL look exactly like a request for one that does not exist. An automated test SHALL prove this for each private collection with two users.
+- N75. In both modes, one user's private data (sessions with their visuals, reports, workspace files and agent memory; agents; knowledge; verified queries; metrics; eval runs; pins) SHALL NEVER be returned to, changed by or deleted by another user. A request for another user's item SHALL look exactly like a request for one that does not exist. An automated test SHALL prove this for each private collection with two users.
 - N76. The LLM API key SHALL be shared org-wide and SHALL be readable by no user, not even masked, unless they hold Manage LLM configuration.
 - N77. Sign-in SHALL identify a person only by the identity provider's subject or their sign-in name (for Entra ID the UPN), NEVER by the email claim, which an identity provider can send unverified; the bootstrap admin list SHALL be matched the same way. The server SHALL accept one tenant only: the issuer SHALL name it (Entra ID's shared `common`, `organizations` and `consumers` endpoints are a startup error), and an ID token from another tenant SHALL fail sign-in. A sign-in name already bound to another subject SHALL fail sign-in, and a user name the identity provider gives to a different person (another external id) SHALL get a new directory user, so one person's private data never passes to another.
+- N78. Local mode's sign-in (admin R69-R71) is NOT a security boundary: it asks for no password, and anyone who can reach the local backend can sign in as any *local persona*, Demo User included. Its roles and ownership show what each role can do on an org server; they don't protect data on the machine. The auth-session token (32 random bytes, of which the server stores only the SHA-256) SHALL be sent only as an `Authorization: Bearer` header, never in a URL, and SHALL end at sign-out or 30 days after sign-in. ADR-0012.
 
 ### Read-only access to data
 
@@ -89,7 +90,7 @@ Open question: PostgreSQL connections with SSL turned on do not verify the serve
 - N28. Diagnostics SHALL be redacted before they are stored or exported (see section 7).
 - N29. The Databricks driver's own telemetry SHALL be turned off.
 
-Open question: in local mode the backend has no authentication (org server mode has, N67-N77). On desktop it listens without a host restriction (all interfaces) on port 3000 with cross-origin access open; only the web command binds to `127.0.0.1` by default. Anyone who can reach the port can read data and use the stored LLM key. Confirm the intended boundary (bind desktop to `127.0.0.1`, add a per-launch token, or accept) before the beta.
+Open question: in local mode the backend has no real authentication, only the password-less persona sign-in (N78; org server mode has N67-N77). On desktop it listens without a host restriction (all interfaces) on port 3000 with cross-origin access open; only the web command binds to `127.0.0.1` by default. Anyone who can reach the port can read data and use the stored LLM key. Confirm the intended boundary (bind desktop to `127.0.0.1`, add a per-launch token, or accept) before the beta.
 
 Open question: the desktop main window has no explicit restriction on navigation or on opening new windows. Confirm.
 

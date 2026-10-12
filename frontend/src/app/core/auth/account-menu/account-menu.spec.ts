@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { AuthService } from '../auth.service';
-import { orgMe } from '../auth.testing';
+import { localMe, orgMe } from '../auth.testing';
 import { AccountMenu } from './account-menu';
 
 describe('AccountMenu', () => {
@@ -79,5 +79,19 @@ describe('AccountMenu', () => {
     expect(signOut).toHaveBeenCalled();
     expect(item.disabled).toBeTrue();
     expect(item.textContent?.trim()).toBe('Signing out…');
+  });
+
+  it("shows Demo User's initials, name and email in local mode (admin R10)", () => {
+    auth.me.set(localMe());
+    const { fixture, element, avatar } = render();
+    expect(avatar.textContent?.trim()).toBe('DU');
+    expect(avatar.title).toBe('Demo User');
+    avatar.click();
+    fixture.detectChanges();
+    const menu = element.querySelector(
+      '[data-testid="account-menu"]',
+    ) as HTMLElement;
+    expect(menu.textContent).toContain('Demo User');
+    expect(menu.textContent).toContain('demo@local.test');
   });
 });

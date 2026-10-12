@@ -31,6 +31,8 @@ export interface RoleRow {
 }
 
 export const BOOTSTRAP_REASON = 'Bootstrap admin, set in the server configuration.';
+/** Demo User's locked Platform admin in local mode (admin R60, R69, R74). */
+export const LOCAL_BOOTSTRAP_REASON = 'Always a Platform admin in local mode.';
 export const OWN_ADMIN_REASON = "You can't remove your own Platform admin role.";
 export const NO_DATASOURCE_REASON = 'No other datasource to own.';
 /** A Data owner assignment whose datasource was deleted (ui.md 4.18.4). */
@@ -48,6 +50,7 @@ function rowFor(
   role: AssignableRole,
   held: AdminHeldRole[],
   detail: AdminUserDetail,
+  local: boolean,
   datasourceId?: string,
 ): RoleRow {
   const direct = held.some((h) => h.source === 'direct');
@@ -56,7 +59,9 @@ function rowFor(
   ].sort((a, b) => a.localeCompare(b));
   const fromGroup = held.some((h) => h.source === 'group');
   const reason = held.some((h) => h.source === 'bootstrap')
-    ? BOOTSTRAP_REASON
+    ? local
+      ? LOCAL_BOOTSTRAP_REASON
+      : BOOTSTRAP_REASON
     : fromGroup
       ? `From group ${groups.join(', ')}`
       : role === 'platform-admin' && detail.isSelf && direct
@@ -79,14 +84,16 @@ function rowFor(
 /**
  * The checkboxes for a user: Platform admin, Approver and Maker, then one
  * `Data owner · <datasource>` per datasource they own from any source,
- * sorted by name (admin R59, R60, R61).
+ * sorted by name (admin R59, R60, R61). `local`: the server runs in local
+ * mode, where the bootstrap admin reads as Demo User's (R74).
  */
-export function roleRows(detail: AdminUserDetail): RoleRow[] {
+export function roleRows(detail: AdminUserDetail, local = false): RoleRow[] {
   const rows = FIXED_ROLES.map((role) =>
     rowFor(
       role,
       detail.heldRoles.filter((h) => h.role === role),
       detail,
+      local,
     ),
   );
   const owned = detail.heldRoles.filter((h) => h.role === 'data-owner' && h.datasourceId);
@@ -97,6 +104,7 @@ export function roleRows(detail: AdminUserDetail): RoleRow[] {
         'data-owner',
         owned.filter((h) => h.datasourceId === id),
         detail,
+        local,
         id,
       ),
     )

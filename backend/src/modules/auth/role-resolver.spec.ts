@@ -114,6 +114,36 @@ describe('RoleResolver (admin R18-R21)', () => {
     const resolved = await resolver.currentUserFor(mallory);
     expect(resolved.roles.map((r) => r.role)).not.toContain('platform-admin');
   });
+
+  it('makes Demo User the only bootstrap admin in local mode (R18, R69)', async () => {
+    const resolver = new RoleResolver(directory, roles, connections(), null);
+    expect(resolver.isBootstrapAdmin({ userName: 'demo@local.test' })).toBe(
+      true,
+    );
+    expect(resolver.isBootstrapAdmin({ userName: 'uma@local.test' })).toBe(
+      false,
+    );
+    expect(resolver.isBootstrapAdmin(user)).toBe(false);
+    const demo = await resolver.currentUserFor({
+      ...user,
+      id: 'local',
+      userName: 'demo@local.test',
+      email: 'demo@local.test',
+      displayName: 'Demo User',
+      givenName: 'Demo',
+      familyName: 'User',
+    });
+    expect(demo.roles[1]).toEqual({
+      role: 'platform-admin',
+      source: 'bootstrap',
+    });
+    expect(demo.initials).toBe('DU');
+    // An org server configuration never includes Demo User implicitly.
+    const org = new RoleResolver(directory, roles, connections(), {
+      bootstrapAdmins: [],
+    } as never);
+    expect(org.isBootstrapAdmin({ userName: 'demo@local.test' })).toBe(false);
+  });
 });
 
 describe('a Data owner role whose datasource is gone (data-model 3.13)', () => {

@@ -148,7 +148,9 @@
           [id]="id + '-groups'"
           class="mt-4 text-[14px] font-semibold text-fg-strong"
         >
-          Groups (from Entra ID, read-only)
+          {{
+            auth.isLocal() ? "Groups (read-only)" : "Groups (from Entra ID, read-only)"
+          }}
         </h4>
         @if (user.groupList.length) {
           <ul

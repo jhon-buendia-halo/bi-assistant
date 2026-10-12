@@ -22,7 +22,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Assistant.** The main agent. It answers business questions over a session's datasets, runs SQL, calls the visual tools and asks clarifying questions.
 
-**Bootstrap admin.** A person whose user name (for Entra ID the UPN, which usually looks like an email) is in the org server's bootstrap admin list (`ORG_BOOTSTRAP_ADMINS`). They hold *Platform admin* whenever they are signed in, without a stored assignment, so a new org server always has an admin. See [../capabilities/admin/spec.md](../capabilities/admin/spec.md).
+**Bootstrap admin.** A person whose user name (for Entra ID the UPN, which usually looks like an email) is in the org server's bootstrap admin list (`ORG_BOOTSTRAP_ADMINS`). They hold *Platform admin* whenever they are signed in, without a stored assignment, so a new org server always has an admin. In *local mode* the bootstrap admin is always the *local user*, Demo User. See [../capabilities/admin/spec.md](../capabilities/admin/spec.md).
 
 **Careful mode.** An opt-in per-turn setting in the chat. After the assistant answers, a second agent (the *SQL verifier*) re-derives the SQL independently, runs it, and compares its result set with the answer's. The answer gets an agree, disagree or error badge. Slower per answer. See *Cross-check*.
 
@@ -88,9 +88,11 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **LLM provider.** The service the agents call. `openai`, `anthropic` or `lenai` (Halo's OpenAI-compatible gateway, which needs a base URL; the "model" field is then the deployment name). One global setting: provider, model, API key (stored encrypted, shown masked) and *reasoning effort*.
 
-**Local mode.** The default way the app runs: one person on their own machine, no sign-in, every permission (the *local user*). The desktop app always runs in local mode. Opposite of *org server mode*. See [../capabilities/admin/spec.md](../capabilities/admin/spec.md).
+**Local mode.** The default way the app runs, on one machine: you sign in as one of five *local personas*, without a password, and roles and ownership apply as in *org server mode*. The desktop app always runs in local mode. Opposite of *org server mode*. See [../capabilities/admin/spec.md](../capabilities/admin/spec.md).
 
-**Local user.** The single implicit user of *local mode* (id `local`, shown as "Demo User"). Owns every item in local mode, including items stored before *org server mode* existed.
+**Local persona.** One of the five directory users that *local mode* seeds: Demo User, Uma User (User), Mark Maker (Maker), Dana Data Owner (Data owner of every datasource) and Avery Approver (Approver). Each shows what its role can do; none has a password.
+
+**Local user.** Demo User, the *local persona* with id `local`: always a *Platform admin* (as the *bootstrap admin*), and the owner of every item stored in local mode before local mode had sign-in.
 
 **Maker.** A *role* that can create, test, version and publish *user agents* (*Create, test and version agents*), and later share them.
 
@@ -106,7 +108,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Ownership transfer.** A *Platform admin* moving one or more *user agents* to another *owner*, for example from a person who left. The agent keeps its *draft* and *Live* version; its sessions stay with their owners. See [../capabilities/admin/spec.md](../capabilities/admin/spec.md) R64.
 
-**Owner.** The user who created a private item (a session with its visuals and memory, a user agent, a pin, a knowledge entry, a verified query, a metric, an eval run). Only the owner can see or change it. Datasources, datasets and the LLM configuration have no owner: they are shared org-wide. Stored as `ownerId`; absent means the *local user*.
+**Owner.** The user who created a private item (a session with its visuals and memory, a user agent, a pin, a knowledge entry, a verified query, a metric, an eval run). Only the owner can see or change it. Datasources, datasets and the LLM configuration have no owner: they are shared org-wide. Stored as `ownerId`. In local mode, items stored before sign-in had none and were given to Demo User (the *local user*); on an org server an item without one belongs to nobody.
 
 **Permission.** One action a *role* allows, such as *Use agents in the gallery and chat* (`use-agents`) or *Manage datasources and datasets* (`manage-datasources`). Eleven in a fixed matrix; the server checks one on every request. See [../capabilities/admin/spec.md](../capabilities/admin/spec.md).
 

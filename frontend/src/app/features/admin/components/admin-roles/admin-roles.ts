@@ -1,11 +1,19 @@
-import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
+import {
+  Component,
+  OnDestroy,
+  OnInit,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { Subscription, forkJoin } from 'rxjs';
 import { Check, Loader2, LucideAngularModule, Plus, X } from 'lucide-angular';
+import { AuthService } from '../../../../core/auth/auth.service';
 import { ToastService } from '../../../../core/toast/toast.service';
 import {
   GroupRoleMapping,
   MATRIX_ROLES,
-  NO_GROUPS_YET,
+  noGroupsYet,
   PERMISSION_MATRIX,
   ROLE_CHIPS,
   ROLE_LABELS,
@@ -47,7 +55,10 @@ export class AdminRolesTab implements OnInit, OnDestroy {
   readonly matrixRoles = MATRIX_ROLES;
   readonly roleLabels = ROLE_LABELS;
   readonly roleChips = ROLE_CHIPS;
-  readonly noGroupsYet = NO_GROUPS_YET;
+  /** Org server or local mode: the mappings copy differs (R74). */
+  readonly auth = inject(AuthService);
+  /** Add mapping's title while there are no groups (R67, R74). */
+  readonly noGroupsTitle = computed(() => noGroupsYet(!this.auth.isLocal()));
   readonly mappingRoleLabel = mappingRoleLabel;
 
   private readonly api = inject(AdminApiService);
