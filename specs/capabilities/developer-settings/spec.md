@@ -57,6 +57,12 @@ Exporting logs (active setting on)
 Permissions
 - R27. In both modes reading and changing developer settings SHALL need Edit policies and templates, because the setting applies to the whole server; the Developer section is hidden without it. Rules: [../admin/spec.md](../admin/spec.md) R21, R25.
 
+Forcing it on for a dev run
+- R28. When the backend's environment has `QTI_DEV_OBSERVABILITY` set to `1` or `true` (any case), the active setting SHALL have observability on, with the saved endpoints, for that process. The saved setting SHALL NOT change. Any other value, or no variable, SHALL leave the active setting as read from the file (R7).
+- R29. The npm CLI flag `--dev-observability` SHALL set `QTI_DEV_OBSERVABILITY=1` before the backend reads the setting, so it applies from the first module loaded (R17).
+- R30. The settings view SHALL report whether observability is forced on. While it is, restart required SHALL compare only the endpoints, because the saved switch does not apply. The section SHALL show the note "Developer observability is on for this run, forced by --dev-observability. The switch shows the saved setting, used when the flag is not set." The switch SHALL keep showing the saved value.
+- R31. When the active setting is on, the CLI banner SHALL print `Observability: Phoenix <endpoint>, OTLP <endpoint>`, followed by ` (forced by --dev-observability)` when it is forced.
+
 ## Edge cases and errors
 
 - Saving while the backend is unreachable shows an error toast with `Backend unreachable`, and the form keeps the typed values.
@@ -156,7 +162,7 @@ Feature: Developer settings
 
 ### Feature: Developer observability export
 
-E2E: `frontend/e2e/developer-observability.spec.ts`
+E2E: `frontend/e2e/developer-observability.spec.ts`. The `@web-only` scenario starts the npm CLI with a flag, so the `desktop` project skips it.
 
 ```gherkin
 Feature: Developer observability export
@@ -185,6 +191,19 @@ Feature: Developer observability export
     When I click "Save" with "Developer observability" off and restart the backend
     And I open "LLM Configuration"
     Then neither receiver gets data
+
+  @web-only
+  Scenario: The CLI flag turns observability on without changing the saved setting
+    Given the saved setting has "Developer observability" off and the endpoints set to the receivers
+    And no model is configured
+    When I start the CLI with "--dev-observability"
+    And I open "Developer"
+    Then I see "Developer observability is on for this run"
+    And the "Developer observability" switch is off
+    And I do not see "Restart to apply"
+    When I create a session on the World Cup dataset and ask a question in it
+    Then the Phoenix receiver gets trace data for the "assistant" agent
+    And the OTLP receiver gets trace data from the service "questions-to-insights"
 ```
 
 ## Acceptance
@@ -197,5 +216,6 @@ Feature: Developer observability export
 6. With the active setting on, backend HTTP and PostgreSQL spans and metrics reach the OTLP endpoint; with it off, no OpenTelemetry module is loaded and nothing is sent (R17 to R20).
 7. With the active setting on, an agent run appears in Phoenix and in the local observability store; with it off, only in the local store (R21 to R23).
 8. With the active setting on, backend logs reach the OTLP endpoint, and a log written during a request carries that request's trace id; the console output is the same either way (R24 to R26).
+9. The CLI started with `--dev-observability` on a data directory whose setting is off exports to both endpoints, leaves the file unchanged, and shows the note and the saved switch value with no restart notice (R28 to R31).
 
-<!-- sources: backend/src/infrastructure/developer-settings/**, backend/src/infrastructure/telemetry/**, backend/src/main.ts, backend/src/cli.ts, backend/src/mastra/developer-exporters.ts, backend/src/mastra/index.ts, backend/src/app-bootstrap.ts, backend/src/modules/developer-settings/**, frontend/src/app/features/developer/**, frontend/src/app/app.html (Developer navigation), frontend/electron/main.cjs (backend:restart), frontend/electron/preload.cjs -->
+<!-- sources: backend/src/infrastructure/developer-settings/**, backend/src/infrastructure/telemetry/**, backend/src/main.ts, backend/src/cli.ts, backend/src/mastra/developer-exporters.ts, backend/src/mastra/index.ts, backend/src/app-bootstrap.ts, backend/src/modules/developer-settings/**, frontend/src/app/features/developer/**, frontend/src/app/app.html (Developer navigation), frontend/electron/main.cjs (backend:restart), frontend/electron/preload.cjs, frontend/e2e/fixtures/app.fixture.ts (QTI_DEV_OBSERVABILITY removed, cliArgs) -->

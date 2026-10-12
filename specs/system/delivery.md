@@ -101,6 +101,16 @@ cd frontend && npm run electron                      # production-style desktop 
 cd backend && npm run build:all && npm run start:web # web mode from the working tree
 ```
 
+**Development runs are observed.** Any run of the app for development or debugging, by a person or an agent, starts the observability tools first and runs with developer observability on, so an error or unexpected behaviour can be followed in Phoenix and Grafana (*Observability profile* in section 6; rule in [CLAUDE.md](../../CLAUDE.md), *Observed dev runs*):
+
+```bash
+docker compose --profile observability up -d --wait phoenix otel-lgtm   # from the repo root; then poll http://localhost:6006
+cd backend && npm run start:web -- --dev-observability                 # or: node dist/cli.js --no-open --dev-observability [--port N --data-dir DIR]
+QTI_DEV_OBSERVABILITY=1 npm run start:dev                              # API only
+```
+
+The banner's `Observability:` line confirms it. The desktop app has no flag: turn the switch on in Settings → Developer and click **Restart backend**. The Playwright suite is the exception: it keeps observability off and checks exports with its own receivers.
+
 ### Verification gate (what must be green before a change ships)
 
 | Where | Commands |
@@ -348,7 +358,8 @@ Local developer tools for [ADR-0006](architecture.md) and the [BA-111 epic](../e
 
 - **Start:** `docker compose --profile observability up -d --wait phoenix otel-lgtm` (omit the names to include `postgres`). Grafana is at `http://localhost:3001`, Phoenix at `http://localhost:6006`. The image has no healthcheck for `phoenix`, so `--wait` only waits for it to be running; poll `http://localhost:6006`.
 - **Stop only the tools:** `docker compose --profile observability stop phoenix otel-lgtm`, then `rm -f phoenix otel-lgtm`. Do not use `docker compose down` on a shared stack: it also removes `postgres`.
-- **Isolation:** use `-p <name>` and the four port variables, as in section 7.
+- **Isolation:** use `-p <name>` and the four port variables, as in section 7. The tools only receive data, so worktrees and parallel runs may share one set; each run's traces still carry its own service and trace ids.
+- **Required for development runs:** see *Development runs are observed* under *Local run recipes* (section 1).
 - **Pinned tags:** Bump them deliberately; they were the latest releases on 2026-10-05.
 
 ## 7. Running a second instance (worktrees and parallel runs)

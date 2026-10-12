@@ -1,0 +1,58 @@
+# Live check of --dev-observability (BA-176)
+
+Worktree build, `node backend/dist/cli.js --no-open --port 3105 --data-dir <scratch>/ba111-live --dev-observability`,
+against the real compose `observability` profile (Phoenix 6006, Grafana otel-lgtm 3001/4318). Fresh data dir: nothing saved.
+No LLM configured, so the agent turn fails at the model call; failed runs are exported too (R21).
+
+## CLI banner
+  Questions to Insights 0.31.0
+  URL:      http://127.0.0.1:3105
+  Data dir: /home/jhonbuendia/.hermes/cache/scratch/ba111-live
+  Observability: Phoenix http://localhost:6006, OTLP http://localhost:4318 (forced by --dev-observability)
+  Press Ctrl+C to stop.
+
+## Server log line for the failed turn
+ERROR (Mastra): Error in agent stream  trace_id: "c62f2743a5a4ef9da7c8268cb16da19e"  modelId: "gpt-4o-mini"
+  Could not find API key process.env.OPENAI_API_KEY for model id openai/gpt-4o-mini
+
+## GET /developer-settings (port 3105, started with --dev-observability, nothing saved)
+{
+  "saved": {
+    "observabilityEnabled": false,
+    "phoenixEndpoint": "http://localhost:6006",
+    "otlpEndpoint": "http://localhost:4318"
+  },
+  "active": {
+    "observabilityEnabled": true,
+    "phoenixEndpoint": "http://localhost:6006",
+    "otlpEndpoint": "http://localhost:4318"
+  },
+  "observabilityForced": true,
+  "restartRequired": false
+}
+
+## developer-settings.json in the data dir
+absent (the flag wrote nothing)
+
+## Phoenix projects
+["questions-to-insights", "default"]
+
+## Phoenix spans in project questions-to-insights (latest 50): 16
+names: ['chat gpt-4o-mini', 'invoke_agent Questions to Insights Assistant', 'memory_operation MessageHistory', 'model_inference Questions to Insights Assistant', 'model_step Questions to Insights Assistant', 'skill_action Skills Processor', 'workspace_action Workspace Instructions Processor']
+spans with status ERROR: 2
+
+example error: Could not find API key process.env.OPENAI_API_KEY for model id openai/gpt-4o-mini
+
+## Tempo: traces from the port-3105 run (TraceQL server.port=3105)
+[["POST /sessions/:id/messages/stream", 156], ["POST /sessions", 9], ["POST /datasources/test-connection", 18], ["GET", 3], ["GET", 4]]
+
+## That trace_id looked up in Phoenix (the CLAUDE.md triage path)
+8 spans with trace_id c62f2743a5a4ef9da7c8268cb16da19e:
+- invoke_agent Questions to Insights Assistant [ERROR] Could not find API key process.env.OPENAI_API_KEY for model id openai/gpt-4o-mini
+- chat gpt-4o-mini [OK] 
+- memory_operation MessageHistory [OK] 
+- model_step Questions to Insights Assistant [OK] 
+- model_inference Questions to Insights Assistant [OK] 
+- skill_action Skills Processor [OK] 
+- workspace_action Workspace Instructions Processor [OK] 
+- memory_operation MessageHistory [OK] 

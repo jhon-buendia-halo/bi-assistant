@@ -95,21 +95,50 @@ export function writeDeveloperSettings(
 }
 
 let startupSettings: DeveloperSettings | null = null;
+let startupForced = false;
 
 /**
- * The setting this process started with. The first call reads the file and
- * every later call returns that same copy, so saving never changes it.
+ * Environment variable that forces developer observability on for one
+ * process (developer-settings R28). The CLI's `--dev-observability` sets it.
+ */
+export const DEV_OBSERVABILITY_ENV = 'QTI_DEV_OBSERVABILITY';
+
+/** `1` or `true` (any case) forces it on; anything else doesn't. */
+export function observabilityForcedByEnv(
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  const value = env[DEV_OBSERVABILITY_ENV]?.trim().toLowerCase();
+  return value === '1' || value === 'true';
+}
+
+/**
+ * The setting this process started with. The first call reads the file (and
+ * the force variable) and every later call returns that same copy, so saving
+ * never changes it. When forced, observability is on with the saved endpoints.
  */
 export function startupDeveloperSettings(
   dataDir: string = resolveDataDir(),
 ): DeveloperSettings {
-  startupSettings ??= readDeveloperSettings(dataDir);
+  if (!startupSettings) {
+    startupForced = observabilityForcedByEnv();
+    const saved = readDeveloperSettings(dataDir);
+    startupSettings = startupForced
+      ? { ...saved, observabilityEnabled: true }
+      : saved;
+  }
   return { ...startupSettings };
+}
+
+/** Whether the startup copy was forced on by the environment. */
+export function startupObservabilityForced(): boolean {
+  startupDeveloperSettings();
+  return startupForced;
 }
 
 /** Test hook: forget the startup copy. */
 export function resetStartupDeveloperSettings(): void {
   startupSettings = null;
+  startupForced = false;
 }
 
 export function sameDeveloperSettings(

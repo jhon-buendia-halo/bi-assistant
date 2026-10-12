@@ -7,12 +7,15 @@ import {
   readDeveloperSettings,
   sameDeveloperSettings,
   startupDeveloperSettings,
+  startupObservabilityForced,
   writeDeveloperSettings,
 } from '../../infrastructure/developer-settings/developer-settings.file';
 
 export interface DeveloperSettingsView {
   saved: DeveloperSettings;
   active: DeveloperSettings;
+  /** QTI_DEV_OBSERVABILITY / --dev-observability forced it on (R28-R30). */
+  observabilityForced: boolean;
   restartRequired: boolean;
 }
 
@@ -33,10 +36,17 @@ export class DeveloperSettingsService implements OnModuleInit {
   getView(): DeveloperSettingsView {
     const saved = readDeveloperSettings();
     const active = startupDeveloperSettings();
+    const observabilityForced = startupObservabilityForced();
+    // While forced, the saved switch doesn't apply, so only the endpoints
+    // can call for a restart (R30).
+    const effective = observabilityForced
+      ? { ...saved, observabilityEnabled: true }
+      : saved;
     return {
       saved,
       active,
-      restartRequired: !sameDeveloperSettings(saved, active),
+      observabilityForced,
+      restartRequired: !sameDeveloperSettings(effective, active),
     };
   }
 

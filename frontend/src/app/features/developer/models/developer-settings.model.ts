@@ -8,6 +8,8 @@ export interface DeveloperSettings {
 export interface DeveloperSettingsView {
   saved: DeveloperSettings;
   active: DeveloperSettings;
+  /** Forced on for this run by `--dev-observability` (developer-settings R30). */
+  observabilityForced: boolean;
   restartRequired: boolean;
 }
 

@@ -196,6 +196,20 @@ Developer tooling for seeing what the backend and agents are doing: agent and LL
 - **Acceptance:** a developer following only the docs sees one chat question in Phoenix and Grafana.
 - **Notes:** last; depends on 0.3.2–0.3.6. Guide: [docs/observability.md](docs/observability.md), linked from README *Development*. Branch `docs/BA-118-observability-docs` (it includes the BA-114 compose branch merged in, so it holds the whole stack). Evidence: [evidence/0.3.7/](evidence/0.3.7/).
 
+#### 0.3.8 — Dev runs require local observability ([BA-175](https://halo-powered.atlassian.net/browse/BA-175))  `✅ Done`
+- **Intent:** every development run of the app is observed, so errors and unexpected behaviour are diagnosed from Phoenix and Grafana traces instead of guessed. Asked for by the user on 2026-10-12, after a visual designer failure could not be traced.
+- **Scope:** a rule in CLAUDE.md (next to *Local test deploys*): starting the app for development or debugging, by a person or an agent, also starts the compose `observability` profile and runs with developer observability active (the 0.3.9 flag on the CLI). The commands in `specs/system/delivery.md` and `docs/observability.md`.
+- **Out of scope:** product code (that is 0.3.9); the Playwright suite, which keeps observability off and uses its own receivers; end-user defaults.
+- **Acceptance:** CLAUDE.md, `delivery.md` and `docs/observability.md` state the rule and the exact commands; `python3 scripts/check-specs.py` passes.
+- **Notes:** reopens the BA-111 epic (Done since 2026-10-05). Branch `feat/BA-111-dev-observability-required`, shipped in one PR with 0.3.9. Evidence: [evidence/0.3.8/](evidence/0.3.8/).
+
+#### 0.3.9 — CLI flag to force developer observability on ([BA-176](https://halo-powered.atlassian.net/browse/BA-176))  `✅ Done`
+- **Intent:** a dev run gets observability with one flag, including on a fresh or isolated data dir, without the Settings toggle and a restart.
+- **Scope:** `--dev-observability` on the npm CLI, and the backend environment variable `QTI_DEV_OBSERVABILITY=1` it sets (so `npm run start:dev` can use it too). Either makes the active setting's observability on for that process, with the saved endpoints; the saved file is not changed. `GET /developer-settings` reports it (`observabilityForced`), the Developer section shows a note instead of a restart notice, and the CLI banner prints where telemetry goes. The E2E fixture removes the variable from the app's environment, so a developer's shell can't turn it on in tests.
+- **Out of scope:** changing the end-user default (stays off); the desktop app; overriding the endpoints from the command line.
+- **Acceptance:** started with the flag on a data dir whose setting is off, an agent run reaches the Phoenix endpoint and backend traces reach the OTLP endpoint, the Developer switch still shows the saved value (off), the section shows the note and no restart notice; started without it, nothing changes (the existing "Nothing is exported when observability is off" scenario).
+- **Notes:** rules R28–R31 and the Feature "Developer observability export" in [specs/capabilities/developer-settings/spec.md](specs/capabilities/developer-settings/spec.md). Not architectural: ADR-0006 already covers reading the setting before bootstrap; the flag only changes the active value. Branch `feat/BA-111-dev-observability-required`. Evidence: [evidence/0.3.9/](evidence/0.3.9/).
+
 ## Release 1 — 1.0 Beta  (target 2026-10-31)
 
 Source of truth for scope and dates: Jira project **BA**, version *1.0 Beta* ([timeline](https://halo-powered.atlassian.net/jira/software/projects/BA/boards/2688/timeline)). Each milestone mirrors one Jira epic and each feature mirrors one story, so IDs map 1:1. Imported 2026-10-01. Status changes are made in both places.

@@ -2,7 +2,7 @@
 
 How to see what the backend and the agents are doing on your machine: agent runs in **Arize Phoenix**, and HTTP and database traces, metrics and logs in **Grafana**.
 
-It is off by default, and end-user installs never send anything. The behaviour is specified in [specs/capabilities/developer-settings/spec.md](../specs/capabilities/developer-settings/spec.md), and the decision behind it is ADR-0006 in [specs/system/architecture.md](../specs/system/architecture.md).
+It is off by default, and end-user installs never send anything. **Development runs are the exception: every run of the app for development or debugging has it on** (rule *Observed dev runs* in [CLAUDE.md](../CLAUDE.md)). The quick path is step 1, then step 2a. The behaviour is specified in [specs/capabilities/developer-settings/spec.md](../specs/capabilities/developer-settings/spec.md), and the decision behind it is ADR-0006 in [specs/system/architecture.md](../specs/system/architecture.md).
 
 | What | Where it goes | Where to look |
 |---|---|---|
@@ -21,7 +21,23 @@ docker compose --profile observability up -d --wait phoenix otel-lgtm
 
 Phoenix has no healthcheck, so give it a few seconds after the command returns. Ports, image tags and overrides are listed under *Observability profile* in [specs/system/delivery.md](../specs/system/delivery.md).
 
-## 2. Turn on developer observability
+## 2a. Dev runs: start the CLI with `--dev-observability`
+
+```bash
+cd backend && npm run build:all && npm run start:web -- --dev-observability
+# or, API only:
+QTI_DEV_OBSERVABILITY=1 npm run start:dev
+```
+
+The flag turns observability on for that run, whatever the saved setting says, and doesn't change the saved setting. It uses the saved endpoints (the defaults `http://localhost:6006` and `http://localhost:4318` on a fresh data dir). The banner shows it:
+
+```
+  Observability: Phoenix http://localhost:6006, OTLP http://localhost:4318 (forced by --dev-observability)
+```
+
+Settings → Developer shows "Developer observability is on for this run…" above the switch. The switch still shows the saved value.
+
+## 2b. Or turn it on in Settings (desktop app, or to keep it on without the flag)
 
 In the app, open **Settings → Developer**.
 

@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import {
   DEFAULT_DEVELOPER_SETTINGS,
   DEVELOPER_SETTINGS_FILE,
+  DEV_OBSERVABILITY_ENV,
   normalizeEndpoint,
   readDeveloperSettings,
   resetStartupDeveloperSettings,
@@ -15,10 +16,12 @@ import { DeveloperSettingsService } from './developer-settings.service';
 describe('DeveloperSettingsService', () => {
   let dataDir: string;
   const previousDataDir = process.env.APP_DATA_DIR;
+  const previousForce = process.env[DEV_OBSERVABILITY_ENV];
 
   beforeEach(() => {
     dataDir = mkdtempSync(join(tmpdir(), 'qti-developer-settings-'));
     process.env.APP_DATA_DIR = dataDir;
+    delete process.env[DEV_OBSERVABILITY_ENV];
     resetStartupDeveloperSettings();
   });
 
@@ -27,6 +30,8 @@ describe('DeveloperSettingsService', () => {
     resetStartupDeveloperSettings();
     if (previousDataDir === undefined) delete process.env.APP_DATA_DIR;
     else process.env.APP_DATA_DIR = previousDataDir;
+    if (previousForce === undefined) delete process.env[DEV_OBSERVABILITY_ENV];
+    else process.env[DEV_OBSERVABILITY_ENV] = previousForce;
   });
 
   const file = () => join(dataDir, DEVELOPER_SETTINGS_FILE);
@@ -38,7 +43,77 @@ describe('DeveloperSettingsService', () => {
     expect(service.getView()).toEqual({
       saved: DEFAULT_DEVELOPER_SETTINGS,
       active: DEFAULT_DEVELOPER_SETTINGS,
+      observabilityForced: false,
       restartRequired: false,
+    });
+  });
+
+  describe(`forced on by ${DEV_OBSERVABILITY_ENV} (R28-R30)`, () => {
+    const saved = {
+      observabilityEnabled: false,
+      phoenixEndpoint: 'http://phoenix:6006',
+      otlpEndpoint: 'http://otlp:4318',
+    };
+
+    it.each(['1', 'true', 'TRUE'])(
+      'makes the active setting on with the saved endpoints for %p',
+      (value) => {
+        writeFileSync(file(), JSON.stringify(saved));
+        process.env[DEV_OBSERVABILITY_ENV] = value;
+        const service = new DeveloperSettingsService();
+        service.onModuleInit();
+
+        expect(service.getView()).toEqual({
+          saved,
+          active: { ...saved, observabilityEnabled: true },
+          observabilityForced: true,
+          restartRequired: false,
+        });
+        // The saved file is untouched.
+        expect(JSON.parse(readFileSync(file(), 'utf8'))).toEqual(saved);
+      },
+    );
+
+    it.each(['0', 'false', 'yes', ''])('ignores %p', (value) => {
+      process.env[DEV_OBSERVABILITY_ENV] = value;
+      const service = new DeveloperSettingsService();
+      service.onModuleInit();
+
+      expect(service.getView()).toMatchObject({
+        active: DEFAULT_DEVELOPER_SETTINGS,
+        observabilityForced: false,
+      });
+    });
+
+    it('compares only the endpoints for restart while forced', () => {
+      process.env[DEV_OBSERVABILITY_ENV] = '1';
+      const service = new DeveloperSettingsService();
+      service.onModuleInit();
+
+      expect(
+        service.save({
+          ...DEFAULT_DEVELOPER_SETTINGS,
+          observabilityEnabled: true,
+        }).restartRequired,
+      ).toBe(false);
+      expect(
+        service.save({ ...DEFAULT_DEVELOPER_SETTINGS }).restartRequired,
+      ).toBe(false);
+      expect(
+        service.save({
+          ...DEFAULT_DEVELOPER_SETTINGS,
+          otlpEndpoint: 'http://elsewhere:4318',
+        }).restartRequired,
+      ).toBe(true);
+    });
+
+    it('is read once at startup, like the file', () => {
+      const service = new DeveloperSettingsService();
+      service.onModuleInit();
+      process.env[DEV_OBSERVABILITY_ENV] = '1';
+
+      expect(service.getView().observabilityForced).toBe(false);
+      expect(service.getView().active.observabilityEnabled).toBe(false);
     });
   });
 

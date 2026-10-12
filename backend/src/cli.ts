@@ -30,6 +30,10 @@ Options:
   --data-dir <path>  Where app data is stored (default: $QTI_DATA_DIR,
                      $APP_DATA_DIR, or ~/.questions-to-insights)
   --no-open          Do not open the browser
+  --dev-observability
+                     Turn developer observability on for this run (exports
+                     to the saved Phoenix and OTLP endpoints; the saved
+                     setting is unchanged). Same as QTI_DEV_OBSERVABILITY=1
   -h, --help         Show this help
   -v, --version      Show the version
 `;
@@ -111,6 +115,7 @@ async function main(): Promise<void> {
     host?: string;
     'data-dir'?: string;
     open?: boolean;
+    'dev-observability'?: boolean;
     help?: boolean;
     version?: boolean;
   };
@@ -122,6 +127,7 @@ async function main(): Promise<void> {
         'data-dir': { type: 'string' },
         // `--no-open` via allowNegative.
         open: { type: 'boolean' },
+        'dev-observability': { type: 'boolean' },
         help: { type: 'boolean', short: 'h' },
         version: { type: 'boolean', short: 'v' },
       },
@@ -169,11 +175,18 @@ async function main(): Promise<void> {
 
   // Telemetry must start before the app is imported: auto-instrumentation
   // only patches modules loaded after it (ADR-0006).
-  const { startupDeveloperSettings } =
+  const {
+    DEV_OBSERVABILITY_ENV,
+    startupDeveloperSettings,
+    startupObservabilityForced,
+  } =
     await import('./infrastructure/developer-settings/developer-settings.file.js');
+  // Set before the first read, so the flag applies from the first module.
+  if (values['dev-observability']) process.env[DEV_OBSERVABILITY_ENV] = '1';
+  const developerSettings = startupDeveloperSettings(dataDir);
   const { startDeveloperTelemetry } =
     await import('./infrastructure/telemetry/developer-telemetry.js');
-  await startDeveloperTelemetry(startupDeveloperSettings(dataDir));
+  await startDeveloperTelemetry(developerSettings);
 
   const { createApp, hasWebUi, resolveWebRoot } =
     await import('./app-bootstrap.js');
@@ -197,6 +210,14 @@ async function main(): Promise<void> {
   console.log(`  Data dir: ${dataDir}`);
   if (orgPublicBaseUrl) {
     console.log(`  Mode:     org server, ${orgPublicBaseUrl}`);
+  }
+  if (developerSettings.observabilityEnabled) {
+    const forced = startupObservabilityForced()
+      ? ' (forced by --dev-observability)'
+      : '';
+    console.log(
+      `  Observability: Phoenix ${developerSettings.phoenixEndpoint}, OTLP ${developerSettings.otlpEndpoint}${forced}`,
+    );
   }
   console.log('  Press Ctrl+C to stop.');
   console.log('');

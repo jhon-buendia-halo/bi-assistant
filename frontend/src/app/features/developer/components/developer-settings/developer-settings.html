@@ -7,6 +7,22 @@
   </div>
 
   @if (view(); as current) {
+    @if (current.observabilityForced) {
+      <p
+        data-testid="developer-forced-notice"
+        class="flex items-start gap-2 rounded-md border border-on-info-soft/30 bg-info-soft px-3 py-2.5 text-[12px] text-on-info-soft"
+      >
+        <lucide-angular [img]="Info" [size]="14" class="mt-0.5 shrink-0" />
+        <span>
+          <span class="font-medium"
+            >Developer observability is on for this run,</span
+          >
+          forced by --dev-observability. The switch shows the saved setting,
+          used when the flag is not set.
+        </span>
+      </p>
+    }
+
     @if (current.restartRequired) {
       <div
         data-testid="developer-restart-notice"

@@ -39,6 +39,10 @@ A developer can see what the backend and the agents are doing in one local view:
 | [BA-116](https://halo-powered.atlassian.net/browse/BA-116) | Agent trace export to Arize Phoenix gated by the developer setting | 0.3.5 |
 | [BA-117](https://halo-powered.atlassian.net/browse/BA-117) | Unified pino logging with trace ids | 0.3.6 |
 | [BA-118](https://halo-powered.atlassian.net/browse/BA-118) | Developer docs for the local observability stack | 0.3.7 |
+| [BA-175](https://halo-powered.atlassian.net/browse/BA-175) | Dev runs require local observability (repo rule) | 0.3.8 |
+| [BA-176](https://halo-powered.atlassian.net/browse/BA-176) | CLI flag to force developer observability on | 0.3.9 |
+
+**Reopened 2026-10-12** for BA-175 and BA-176: the user made observability a requirement of every development run, so errors are traced, not guessed. The end-user default stays off.
 
 ## Specs touched
 
