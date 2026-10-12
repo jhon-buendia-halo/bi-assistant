@@ -14,6 +14,25 @@ Entry template:
 
 ---
 
+## 2026-10-11 — 2.1.7 Local mode: sign in as a seeded persona (BA-161)
+
+### What went well
+- The plan read the code before deciding: it found that local mode stored no `ownerId` at all, so "Demo User keeps the old data" became a fixed id `local` plus a raw-SQL backfill (M13) instead of a guess.
+- The same plan found three ways around the new sign-in before any code: the backend's `LOCAL_USER` fallback outside a request, the frontend's `LOCAL_ME` fallback when `/me` is unreachable, and the Electron probe that waits for `GET /sessions` 200. All three were removed or changed, with tests.
+- One transport (a bearer token) for web and desktop means the web E2E covers the desktop's path, even though desktop E2E only runs on request.
+- Specs and tests were written first by two parallel agents, then backend and frontend by two more against a written contract (exact routes, bodies, copy, selectors); the full web and org suites passed on the first full run.
+
+### What went wrong
+- I asked the user three questions at once and they dismissed the picker; the work stalled until they said "figure everything by yourself". Two of the three had sensible defaults I could have stated and used.
+- Creating the Jira story was refused by the permission check, so the work is scoped to the epic with the story key pending.
+- The homelab Postgres I deployed and seeded became unreachable after a container restart (no route to 192.168.0.x from WSL), so the backend agent skipped `answer-guards`; it cost a second database setup.
+- The E2E agent had to rename the fixture option to `autoSignInAs` because `org.fixture.ts` already defines `signInAs` with another type; the plan didn't check for the name clash.
+
+### What to do differently
+- Ask only the questions with no safe default; state the defaults for the rest and proceed, and say which ones the user can override.
+- Before relying on a LAN service for E2E, check it again right before the run (`bash -c 'echo > /dev/tcp/<host>/<port>'`). Without Docker, `embedded-postgres` from npm in the scratchpad gives a real Postgres on 55432 in a minute.
+- When a plan names a new fixture option, grep every fixture that extends the base test for the same name first.
+
 ## 2026-10-11 — 2.1.3 Admin overview (BA-164)
 
 ### What went well

@@ -90,7 +90,10 @@ export class KnowledgeApiService {
     try {
       res = await fetch(`${API_BASE_URL}/knowledge/bootstrap/stream`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...this.auth.authHeaders(),
+        },
         body: JSON.stringify({ datasetId }),
         signal,
       });

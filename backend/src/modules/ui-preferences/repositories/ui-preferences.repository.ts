@@ -10,8 +10,8 @@ import {
 /**
  * The UI preferences, kept as one more `settings` document beside the LLM and
  * built-in pins ones (data-model 3.2.1). Each reader filters by its own
- * `key`. They are per user: the local user keeps `ui-preferences`, a user of
- * an org server has `ui-preferences:<user id>`.
+ * `key`. They are per user, `ui-preferences:<user id>` in both modes; M13
+ * renamed local mode's former bare `ui-preferences` to Demo User's.
  */
 @Injectable()
 export class UiPreferencesRepository {
@@ -23,10 +23,7 @@ export class UiPreferencesRepository {
 
   /** The current user's preferences document key. */
   private key(): string {
-    const owner = this.users.ownerScope();
-    return owner === null
-      ? UI_PREFERENCES_KEY
-      : `${UI_PREFERENCES_KEY}:${owner}`;
+    return `${UI_PREFERENCES_KEY}:${this.users.ownerScope()}`;
   }
 
   get(): Promise<UiPreferencesDoc | null> {

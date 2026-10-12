@@ -13,7 +13,7 @@ Visual reference: the Figma board [Agent Hub — E2E lifecycle (proposed)](https
 ## Scope
 
 - **Two modes.**
-  - **Local mode** is the default and unchanged: no sign-in, one implicit local user with every permission, and no Admin item.
+  - **Local mode** is the default. It seeds five personas (Demo User, Uma User, Mark Maker, Dana Data Owner, Avery Approver) and opens on a sign-in page where you choose one from a dropdown, with no password. It enforces roles and ownership as org server mode does, and Platform admins get the Admin item. The desktop app always runs in local mode (2.1.7, ADR-0012).
   - **Org server mode** is turned on by server configuration (identity provider, public URL, SCIM token) and reached from a browser.
 - **Sign-in.**
   - OpenID Connect with Microsoft Entra ID, run by the backend, with a session cookie.
@@ -88,25 +88,27 @@ Visual reference: the Figma board [Agent Hub — E2E lifecycle (proposed)](https
 | [BA-165](https://halo-powered.atlassian.net/browse/BA-165) | Users & groups (P2) | 2.1.4 |
 | [BA-166](https://halo-powered.atlassian.net/browse/BA-166) | Edit a user (P3) | 2.1.5 |
 | [BA-167](https://halo-powered.atlassian.net/browse/BA-167) | Roles & permissions (P4) | 2.1.6 |
+| *(story key pending)* | Local mode: seeded personas, sign-in, enforcement | 2.1.7 |
 
-All stories are built on one branch, `feat/BA-161-admin-panel`, and ship as one PR. BA-163 is the foundation, and the four screens build on it. P2 → P3 → P4 is the suggested order, with P1 last because it reads data from all of them.
+BA-162 to BA-167 were built on one branch, `feat/BA-161-admin-panel`, and shipped as one PR (#69). BA-163 is the foundation, and the four screens build on it. P2 → P3 → P4 is the suggested order, with P1 last because it reads data from all of them. 2.1.7 follows on a new branch of the same name and its own PR.
 
 ## Specs touched
 
 - [product/vision.md](../../product/vision.md): local and org server modes, principles 1, 3 and 12–15, the Platform admin persona, and non-goals (BA-162).
-- [system/architecture.md](../../system/architecture.md): ADR-0010 (BA-162). The Level 1 and Level 2 diagrams gain the identity provider and org server mode (BA-163).
+- [system/architecture.md](../../system/architecture.md): ADR-0010 (BA-162). The Level 1 and Level 2 diagrams gain the identity provider and org server mode (BA-163). ADR-0012: local mode signs in as a seeded persona (2.1.7).
 - [product/non-functional.md](../../product/non-functional.md): org server mode, binding and TLS behind a proxy, session cookies, CSRF, SCIM token, and data isolation between users (BA-163).
-- [system/data-model.md](../../system/data-model.md): the `users`, `groups`, `group_members`, `role_assignments`, `group_role_mappings`, `auth_sessions` and `activity_events` collections, and `ownerId` on private collections, where a missing value means the local user (BA-163). Agent ownership transfer (BA-166).
-- [system/api.md](../../system/api.md): the auth routes, `GET /me` with roles and permissions, the SCIM 2.0 endpoints, the permission each endpoint needs, and the admin endpoints (overview, users, user roles, transfer ownership, role mappings, export) (BA-163–BA-167).
+- [system/data-model.md](../../system/data-model.md): the `users`, `groups`, `group_members`, `role_assignments`, `group_role_mappings`, `auth_sessions` and `activity_events` collections, and `ownerId` on private collections, where a missing value means the local user (BA-163). Agent ownership transfer (BA-166). Migration M13, which gives ownerless local data to Demo User, and the `local-seed` settings document (2.1.7).
+- [system/api.md](../../system/api.md): the auth routes, `GET /me` with roles and permissions, the SCIM 2.0 endpoints, the permission each endpoint needs, and the admin endpoints (overview, users, user roles, transfer ownership, role mappings, export) (BA-163–BA-167). The local sign-in routes, the bearer token and `GET /me` answering 401 in local mode (2.1.7).
 - [system/agents.md](../../system/agents.md): per-user scoping of memory threads and of the LLM configuration (BA-163).
-- [system/ui.md](../../system/ui.md): the sign-in page, the signed-in avatar and sign-out, the Admin rail item, and the admin panel layout and its four tabs (BA-163–BA-167).
+- [system/ui.md](../../system/ui.md): the sign-in page, the signed-in avatar and sign-out, the Admin rail item, and the admin panel layout and its four tabs (BA-163–BA-167). The sign-in page's local mode variant and the admin copy in local mode (2.1.7).
+- [capabilities/app-shell](../../capabilities/app-shell/spec.md): R4, the avatar, account menu and Admin item in both modes (2.1.7).
 - [system/tech-stack.md](../../system/tech-stack.md) and [system/delivery.md](../../system/delivery.md): the OIDC library, org server configuration and how to run it, and the E2E OIDC stub (BA-163).
 - New capability **admin** (`specs/capabilities/admin/spec.md`), with rules and Gherkin for sign-in, enforcement and each admin tab, and a row in [specs/README.md](../../README.md) (BA-163–BA-167). Owner scoping rules go into the existing capability specs (sessions-chat, agents-evals, datasources-datasets, knowledge, verified-queries, metrics) (BA-163).
 - [product/glossary.md](../../product/glossary.md): *local mode*, *org server mode*, *role*, *permission*, *group mapping*, *Platform admin*, *Maker*, *Data owner*, *Approver* (BA-163).
 
 ## Acceptance
 
-- In local mode the app behaves as it does today. The full existing E2E suite passes unchanged, and no Admin item appears.
+- In local mode the app opens on the sign-in page listing the five personas. Signed in as Demo User, the existing E2E suite passes through the fixture's sign-in, and the Admin item appears. Signed in as Uma User, no Maker, data or Admin controls show.
 - In org server mode, an unauthenticated browser sees only the sign-in page. After signing in through the OIDC stub, the rail shows the user, and sign-out ends the session.
 - Two users on one org server see the same datasources and datasets. They never see each other's sessions, visuals, agents, knowledge, verified queries, metrics or eval runs, through the UI or the API.
 - A User without Maker can't create an agent: the button is hidden and the API answers 403. A non-admin can't open the Admin panel or call admin endpoints (403).
@@ -133,5 +135,6 @@ All stories are built on one branch, `feat/BA-161-admin-panel`, and ship as one 
 - **Decided: a UPN that now belongs to a different person is refused, not merged.** A sign-in whose UPN matches a user who signed in under another subject fails and is recorded as `sign-in.refused`. A SCIM create of a removed (or deactivated, signed-in) user's name with a different `externalId` creates a new user and releases the old one, which keeps its id and data. With either `externalId` missing, the old user is revived as before. So a departed person's data never passes to a new hire who gets their UPN: Entra ID removes the departed user through SCIM, provisions the new hire, and the new hire signs in to the new user (2026-10-10; admin R13, R16; api.md 62 and 2.14; data-model 3.14.1 and 3.14.7).
 - **Decided: transferring an agent** leaves the former owner's sessions in place, where the agent then acts as deleted; the pin resets, and a name clash with the new owner's agents is refused (2026-10-10).
 - **Decided: Inspect is read-only** (admins can't open private sessions), and **Clean up** removes only directly assigned Maker roles (2026-10-10).
+- **Decided 2026-10-11: local and org approaches merged (ADR-0012).** Demo User keeps all legacy data (owner `local`, M13). Dana Data Owner is Data owner of every datasource, reconciled at startup and on datasource creation. Seeded roles are never re-added once removed. Decisions delegated by the user on 2026-10-11 ("figure everything by yourself"); scope change confirmed on that delegation (admin R69–R74).
 - **Open: E2E for SSO.** Playwright needs a local OIDC provider stub and a SCIM test client. The harness should run org server mode beside the existing local-mode suite, not replace it.
 - **Related:** [BA-150](../BA-150/spec.md) Agent Hub (agent ownership), [BA-82](../BA-82/spec.md) Agent Routines (whose identity a scheduled run uses).

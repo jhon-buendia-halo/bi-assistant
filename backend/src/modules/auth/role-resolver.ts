@@ -6,6 +6,7 @@ import {
 import { CONNECTIONS_STORE } from '../../infrastructure/database/doc-store';
 import type { DocStore } from '../../infrastructure/database/doc-store';
 import type { CurrentUser, HeldRole } from './entities/current-user.entity';
+import { DEMO_USER_NAME } from './local/local-personas';
 import type {
   GroupRoleMappingDoc,
   RoleAssignmentDoc,
@@ -103,7 +104,8 @@ export class RoleResolver {
     @Inject(ORG_SERVER_CONFIG)
     config: OrgServerConfig | null = null,
   ) {
-    this.bootstrapAdmins = new Set(config?.bootstrapAdmins ?? []);
+    // Local mode's only bootstrap admin is Demo User (admin R18, R69).
+    this.bootstrapAdmins = new Set(config?.bootstrapAdmins ?? [DEMO_USER_NAME]);
   }
 
   /**

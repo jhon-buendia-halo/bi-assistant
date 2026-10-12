@@ -287,6 +287,12 @@ export const PERMISSION_MATRIX: readonly { name: string; roles: readonly RoleId[
 
 /** The empty-directory copy (admin R57, R67). */
 export const NO_GROUPS_YET = 'No groups yet. Groups arrive from Entra ID through SCIM.';
+/** Its local-mode variant: local mode has no groups (admin R74, ui.md 4.18.6). */
+export const NO_GROUPS_LOCAL = 'No groups in local mode.';
+
+/** The empty-directory copy for the server's mode. */
+export const noGroupsYet = (isOrg: boolean): string =>
+  isOrg ? NO_GROUPS_YET : NO_GROUPS_LOCAL;
 
 /** The label of a role badge: `Data owner · <datasource>` names its datasource. */
 export function roleBadgeLabel(role: RoleId, datasourceName?: string): string {

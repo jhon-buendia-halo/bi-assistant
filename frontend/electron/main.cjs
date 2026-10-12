@@ -647,18 +647,20 @@ function stopBackend() {
   }
 }
 
+// Readiness probe (api.md 4.3): `GET /me` answers 200 when signed in and
+// 401 when not (local mode signs in, ADR-0012); either means the backend is up.
 function backendIsReady() {
   return new Promise((resolve) => {
     const request = http.get(
       {
         hostname: "127.0.0.1",
         port: BACKEND_PORT,
-        path: "/sessions",
+        path: "/me",
         timeout: 500,
       },
       (response) => {
         response.resume();
-        resolve(response.statusCode === 200);
+        resolve(response.statusCode === 200 || response.statusCode === 401);
       },
     );
     request.on("timeout", () => request.destroy());

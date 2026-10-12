@@ -15,7 +15,13 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import request from 'supertest';
-import { type Backend, boot, stop } from './backend-process';
+import {
+  type Backend,
+  bearer,
+  boot,
+  signInLocally,
+  stop,
+} from './backend-process';
 
 const dataDir = mkdtempSync(join(tmpdir(), 'qti-agent-sessions-'));
 
@@ -48,7 +54,9 @@ interface Answer {
 
 describe('Sessions started from an agent (API)', () => {
   let backend: Backend | undefined;
-  const http = () => request(backend!.url);
+  /** Demo User's local auth session (admin R71). */
+  let token = '';
+  const http = () => request.agent(backend!.url).set(bearer(token));
 
   const ok = async (
     method: 'post' | 'put' | 'delete',
@@ -90,6 +98,7 @@ describe('Sessions started from an agent (API)', () => {
 
   beforeAll(async () => {
     backend = await boot(dataDir);
+    token = await signInLocally(backend.url);
     const { datasource } = (await ok('post', '/datasources', {
       kind: 'postgres',
       name: 'Closed port',

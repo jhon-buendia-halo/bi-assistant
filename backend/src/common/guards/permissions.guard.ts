@@ -24,6 +24,7 @@ import { ScimError } from '../../modules/auth/scim/scim-error';
 import {
   AUTH_REQUIREMENT_KEY,
   type AuthRequirement,
+  LOCAL_MODE_ONLY_KEY,
   ORG_SERVER_ONLY_KEY,
 } from '../decorators/auth-requirement.decorators';
 
@@ -37,7 +38,8 @@ type RouteTarget = ReturnType<ExecutionContext['getHandler']>;
  * registered as a global `APP_GUARD`. It runs before every handler: public
  * routes pass, SCIM routes need the SCIM bearer token (401 otherwise), and
  * every other route needs a signed-in caller (401) holding its permission
- * (403). Routes marked `@OrgServerOnly()` answer 404 in local mode.
+ * (403). Routes marked `@OrgServerOnly()` answer 404 in local mode, and
+ * routes marked `@LocalModeOnly()` 404 on an org server (admin R73).
  *
  * At startup it walks every controller route and refuses to start when one
  * declares no requirement, so a new route cannot ship unguarded.
@@ -75,6 +77,15 @@ export class PermissionsGuard implements CanActivate, OnModuleInit {
       ])
     ) {
       throw new NotFoundException('Not available in local mode');
+    }
+    if (
+      this.currentUser.mode === 'org' &&
+      this.reflector.getAllAndOverride<boolean>(LOCAL_MODE_ONLY_KEY, [
+        handler,
+        controller,
+      ])
+    ) {
+      throw new NotFoundException('Not available in org server mode');
     }
     const requirement = this.requirementOf(handler, controller);
     // The startup check makes this unreachable for registered routes.

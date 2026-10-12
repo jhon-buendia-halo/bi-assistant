@@ -9,6 +9,7 @@ import { MetricsRepository } from '../metrics/repositories/metrics.repository';
 import type { MetricDoc } from '../metrics/entities/metric.entity';
 import { SessionsRepository } from '../sessions/repositories/sessions.repository';
 import type { SessionDoc } from '../sessions/entities/session.entity';
+import { UiPreferencesRepository } from '../ui-preferences/repositories/ui-preferences.repository';
 import { BuiltinAgentPinsRepository } from '../user-agents/repositories/builtin-agent-pins.repository';
 import { UserAgentsRepository } from '../user-agents/repositories/user-agents.repository';
 import type { UserAgentDoc } from '../user-agents/entities/user-agent.entity';
@@ -21,6 +22,8 @@ import type { CurrentUser } from './entities/current-user.entity';
  * Two owners per private collection (admin R29-R31, R33; data-model 3.15).
  * Every repository runs over the real SQLite adapter wrapped the way the
  * auth module wires it, with users switched through `CurrentUserService`.
+ * Local mode scopes exactly like an org server (ADR-0012): Demo User (id
+ * `local`) is one more owner, and nothing runs outside a signed-in user.
  */
 const user = (id: string): CurrentUser => ({
   id,
@@ -52,7 +55,8 @@ afterEach(() => db.close());
 
 /**
  * The shared contract: Bob can't read, list, change or delete Ada's item;
- * an item stored without an owner is the local user's only.
+ * an item stored without an owner is nobody's (M13 gives local ones to Demo
+ * User at startup), and nobody reads anything outside a signed-in user.
  */
 async function expectPrivate<T extends object>(options: {
   raw: SqliteDocStore<T>;
@@ -79,9 +83,10 @@ async function expectPrivate<T extends object>(options: {
   await expect(as(ADA, options.list)).resolves.toHaveLength(1);
   await expect(as(ADA, options.get)).resolves.not.toBeNull();
 
-  // The local user sees both, as before org server mode.
-  await expect(as(LOCAL_USER, options.list)).resolves.toHaveLength(2);
-  await expect(options.list()).resolves.toHaveLength(2);
+  // Demo User is scoped like anyone: neither Ada's item nor the legacy one.
+  await expect(as(LOCAL_USER, options.list)).resolves.toEqual([]);
+  // Outside a request nobody is signed in, in local mode too.
+  await expect(options.list()).rejects.toThrow('Sign in required');
 
   await expect(as(ADA, options.remove)).resolves.toBe(1);
 }
@@ -227,7 +232,8 @@ describe('owner scoping of private collections', () => {
     expect((await as(BOB, () => repo.list())).map((v) => v.question)).toEqual([
       'Bob asks',
     ]);
-    expect(await repo.list()).toHaveLength(3);
+    expect(await raw.find({})).toHaveLength(3);
+    await expect(as(LOCAL_USER, () => repo.list())).resolves.toEqual([]);
 
     await expect(
       as(BOB, () => repo.deleteForMessage('s1', 't1')),
@@ -308,20 +314,44 @@ describe('owner scoping of private collections', () => {
     await expect(as(BOB, () => repo.get())).resolves.toEqual([]);
     await expect(as(ADA, () => repo.get())).resolves.toEqual(['assistant']);
 
-    await repo.save(['sql-fixer']);
-    await expect(repo.get()).resolves.toEqual(['sql-fixer']);
+    await as(LOCAL_USER, () => repo.save(['sql-fixer']));
+    await expect(as(LOCAL_USER, () => repo.get())).resolves.toEqual([
+      'sql-fixer',
+    ]);
     await expect(as(ADA, () => repo.get())).resolves.toEqual(['assistant']);
+    await expect(async () => repo.get()).rejects.toThrow('Sign in required');
 
-    // The local user keeps the key stored before org server mode existed.
-    expect(await settings.findOne({ key: 'builtin-agent-pins' })).toMatchObject(
-      {
-        pinned: ['sql-fixer'],
-      },
-    );
+    // Demo User's key is suffixed like everyone's (M13 renamed the old one).
+    expect(await settings.findOne({ key: 'builtin-agent-pins' })).toBeNull();
+    expect(
+      await settings.findOne({ key: 'builtin-agent-pins:local' }),
+    ).toMatchObject({ pinned: ['sql-fixer'] });
     expect(
       await settings.findOne({ key: 'builtin-agent-pins:ada' }),
     ).toMatchObject({
       pinned: ['assistant'],
     });
+  });
+
+  it('UI preferences are kept per user, Demo User under ui-preferences:local', async () => {
+    const settings = new SqliteDocStore<Record<string, unknown>>(
+      db,
+      'settings',
+    );
+    const repo = new UiPreferencesRepository(settings as never, users);
+
+    await as(LOCAL_USER, () => repo.patch({ theme: 'dark' }));
+    await as(ADA, () => repo.patch({ theme: 'light' }));
+    await expect(as(BOB, () => repo.get())).resolves.toBeNull();
+    await expect(as(LOCAL_USER, () => repo.get())).resolves.toMatchObject({
+      key: 'ui-preferences:local',
+      theme: 'dark',
+    });
+    await expect(as(ADA, () => repo.get())).resolves.toMatchObject({
+      key: 'ui-preferences:ada',
+      theme: 'light',
+    });
+    await expect(async () => repo.get()).rejects.toThrow('Sign in required');
+    expect(await settings.findOne({ key: 'ui-preferences' })).toBeNull();
   });
 });

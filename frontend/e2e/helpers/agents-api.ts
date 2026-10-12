@@ -1,5 +1,6 @@
 import { expect, Page } from '@playwright/test';
 import { WORLD_CUP_DATASET, WORLD_CUP_DATASOURCE } from './app-actions';
+import { apiBaseOf, authHeaders } from './local-auth';
 import { WORLD_CUP_DB, worldCupKey } from './world-cup-db';
 
 /**
@@ -9,8 +10,7 @@ import { WORLD_CUP_DB, worldCupKey } from './world-cup-db';
 
 /** The backend's base URL: same origin on the web target, port 3000 on desktop. */
 export function apiBase(page: Page): string {
-  const url = new URL(page.url());
-  return url.protocol === 'file:' ? 'http://localhost:3000' : url.origin;
+  return apiBaseOf(page);
 }
 
 interface StyleA {
@@ -27,6 +27,8 @@ async function call<T extends StyleA>(
   const response = await page.request.fetch(`${apiBase(page)}${path}`, {
     method,
     data,
+    // The page's local auth session (admin R71).
+    headers: await authHeaders(page),
   });
   expect(response.ok(), `${method} ${path} → HTTP ${response.status()}`).toBe(
     true,

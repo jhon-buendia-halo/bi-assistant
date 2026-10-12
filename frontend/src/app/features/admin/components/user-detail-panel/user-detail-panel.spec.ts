@@ -4,6 +4,7 @@ import {
   HttpTestingController,
   provideHttpClientTesting,
 } from '@angular/common/http/testing';
+import { AuthService } from '../../../../core/auth/auth.service';
 import { ToastService } from '../../../../core/toast/toast.service';
 import { AdminUserDetail } from '../../models/admin.models';
 import { userDetail } from '../../testing/admin.fixtures';
@@ -50,6 +51,29 @@ describe('UserDetailPanel', () => {
       )!;
     return { fixture, element, text, box, description, button };
   }
+
+  it("locks Demo User's Platform admin with the local reason and drops Entra ID (admin R74)", () => {
+    TestBed.inject(AuthService).handleUnauthorized('local');
+    const { text, box, description } = render(
+      userDetail({
+        id: 'local',
+        displayName: 'Demo User',
+        heldRoles: [
+          { role: 'user', source: 'implicit' },
+          { role: 'platform-admin', source: 'bootstrap' },
+        ],
+        isBootstrap: true,
+        isSelf: true,
+      }),
+    );
+    expect(box('Platform admin').checked).toBeTrue();
+    expect(box('Platform admin').disabled).toBeTrue();
+    expect(description(box('Platform admin'))).toContain(
+      'Always a Platform admin in local mode.',
+    );
+    expect(text()).toContain('Groups (read-only)');
+    expect(text()).not.toContain('Entra ID');
+  });
 
   it("shows the user's header, roles, groups and agents (admin R59)", () => {
     const { element, text, box, description, button } = render(

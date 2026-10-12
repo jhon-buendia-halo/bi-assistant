@@ -3,7 +3,9 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
+import { LocalDirectoryService } from '../auth/local/local-directory.service';
 import { DatabricksConnector } from './connectors/databricks.connector';
 import { PostgresConnector } from './connectors/postgres.connector';
 import { RestConnector } from './connectors/rest.connector';
@@ -39,6 +41,7 @@ export class DatasourcesService {
     private readonly databricks: DatabricksConnector,
     private readonly postgres: PostgresConnector,
     private readonly rest: RestConnector,
+    @Optional() private readonly localDirectory?: LocalDirectoryService,
   ) {}
 
   connector(kind: DatasourceKind): DatasourceConnector {
@@ -117,6 +120,8 @@ export class DatasourcesService {
       kind: input.kind,
       config,
     });
+    // Local mode: Dana Data Owner owns every datasource, once (admin R72).
+    await this.localDirectory?.onDatasourceCreated(saved.id);
     return this.view(saved);
   }
 

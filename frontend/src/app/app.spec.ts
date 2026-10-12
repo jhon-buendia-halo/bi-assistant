@@ -2,9 +2,9 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { App } from './app';
-import { ALL_PERMISSIONS, LOCAL_ME, MeView } from './core/auth/auth.models';
+import { ALL_PERMISSIONS, MeView } from './core/auth/auth.models';
 import { AuthService } from './core/auth/auth.service';
-import { orgMe } from './core/auth/auth.testing';
+import { LOCAL_UMA, localMe, orgMe } from './core/auth/auth.testing';
 
 describe('App', () => {
   beforeEach(async () => {
@@ -174,13 +174,24 @@ describe('App in local and org server mode', () => {
     ).map((button) => button.textContent?.trim() ?? '');
   }
 
-  it('keeps the static Demo User avatar and no Admin item in local mode', () => {
-    const { element } = shellAs(LOCAL_ME);
-    const avatar = rail(element).querySelector('[title="Demo User"]');
-    expect(avatar?.textContent?.trim()).toBe('D');
+  it("shows Demo User's initials, account menu and Admin in local mode (admin R10, R34)", () => {
+    const { element } = shellAs(localMe());
+    const avatar = rail(element).querySelector(
+      'button[aria-label="Account menu"]',
+    ) as HTMLButtonElement;
+    expect(avatar.textContent?.trim()).toBe('DU');
+    expect(avatar.title).toBe('Demo User');
     expect(
-      rail(element).querySelector('[aria-label="Account menu"]'),
-    ).toBeNull();
+      rail(element).querySelector('button[aria-label="Admin"]'),
+    ).toBeTruthy();
+  });
+
+  it('offers no Admin to a local persona without Manage users', () => {
+    const { element } = shellAs(LOCAL_UMA);
+    const avatar = rail(element).querySelector(
+      'button[aria-label="Account menu"]',
+    ) as HTMLButtonElement;
+    expect(avatar.textContent?.trim()).toBe('UU');
     expect(
       rail(element).querySelector('button[aria-label="Admin"]'),
     ).toBeNull();
@@ -215,8 +226,8 @@ describe('App in local and org server mode', () => {
     expect(element.querySelector('main h2')?.textContent?.trim()).toBe('Admin');
   });
 
-  it('offers every Settings section in local mode', () => {
-    const { fixture, app, element } = shellAs(LOCAL_ME);
+  it('offers every Settings section to Demo User in local mode', () => {
+    const { fixture, app, element } = shellAs(localMe());
     app.selectArea('settings');
     fixture.detectChanges();
     expect(settingsLabels(element)).toEqual([
@@ -256,8 +267,8 @@ describe('App in local and org server mode', () => {
     expect(element.querySelector('main [title="Reasoning effort"]')).toBeNull();
   });
 
-  it('shows the composer Reasoning effort to the local user', () => {
-    const { fixture, app, element } = shellAs(LOCAL_ME);
+  it('shows the composer Reasoning effort to Demo User', () => {
+    const { fixture, app, element } = shellAs(localMe());
     app.mainView.set('conversation-new');
     fixture.detectChanges();
     expect(

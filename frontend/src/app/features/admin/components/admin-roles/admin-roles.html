@@ -72,7 +72,11 @@
         <!-- Group mappings (admin R66-R68) -->
         <div class="card w-full shrink-0 p-5 @min-[1100px]:w-[360px]">
           <h3 class="text-[15px] font-semibold text-fg-strong">
-            Role ← Entra ID group mappings
+            {{
+              auth.isLocal()
+                ? "Role ← group mappings"
+                : "Role ← Entra ID group mappings"
+            }}
           </h3>
           <p class="mt-1 text-[12px] text-fg-muted">
             Members of these groups get the role automatically.
@@ -118,7 +122,7 @@
             type="button"
             class="btn btn-secondary mt-4"
             [disabled]="!hasGroups()"
-            [attr.title]="hasGroups() ? null : noGroupsYet"
+            [attr.title]="hasGroups() ? null : noGroupsTitle()"
             (click)="adding.set(true)"
           >
             <lucide-angular [img]="Plus" [size]="14" />

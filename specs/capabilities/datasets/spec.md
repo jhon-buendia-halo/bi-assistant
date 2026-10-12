@@ -79,9 +79,9 @@ Defined once in [the glossary](../../product/glossary.md); used here as follows.
 
 - R38. The persisted collection was previously named `sandbox_selections` and session documents carried `sandboxes`; both are migrated to `datasets` on startup, without changing sessions' recency order. Legacy documents in the datasets collection that have no name (the older single-selection shape) SHALL be ignored when listing. See [data-model.md](../../system/data-model.md).
 
-### Sharing and permissions (org server mode)
+### Sharing and permissions
 
-- R39. In org server mode datasets SHALL be shared by every signed-in user, and every user's sessions and agents can use any of them. Listing datasets needs Use agents; saving and deleting a dataset need Manage datasources and datasets, and **New dataset**, **Delete dataset**, the dataset name field and **Save dataset** are hidden without it. A user without it can still open a dataset in the browser to see its entities and work on their own metrics. Rules: [../admin/spec.md](../admin/spec.md) R21, R25, R28.
+- R39. In both modes datasets SHALL be shared by every signed-in user, and every user's sessions and agents can use any of them. Listing datasets needs Use agents; saving and deleting a dataset need Manage datasources and datasets, and **New dataset**, **Delete dataset**, the dataset name field and **Save dataset** are hidden without it. A user without it can still open a dataset in the browser to see its entities and work on their own metrics. Rules: [../admin/spec.md](../admin/spec.md) R21, R25, R28.
 
 ## Edge cases and errors
 

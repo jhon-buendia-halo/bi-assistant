@@ -6,8 +6,8 @@ import { ThemeService } from './core/theme/theme.service';
 
 /**
  * The bootstrapped component. It loads the current user before anything
- * else (ui.md 1.6), then shows the app shell, or on an org server without
- * an auth session the sign-in page in its place (admin R5, R11).
+ * else (ui.md 1.6), then shows the app shell, or without an auth session
+ * (either mode) the sign-in page in its place (admin R5, R11, R70).
  */
 @Component({
   selector: 'app-root',

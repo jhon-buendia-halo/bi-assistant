@@ -1,5 +1,9 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../../app.module';
+import {
+  CurrentUserService,
+  LOCAL_USER,
+} from '../../modules/auth/current-user.service';
 import { SessionsService } from '../../modules/sessions/sessions.service';
 import { KnowledgeService } from '../../modules/knowledge/knowledge.service';
 import { runAssistantEvals } from './assistant.evals';
@@ -11,6 +15,9 @@ import { runAssistantEvals } from './assistant.evals';
  * installs their real implementations and `LlmService` installs the model
  * resolver. Booting an application context gives the eval run the same wiring
  * the app has, without opening an HTTP port.
+ *
+ * Outside a request nobody is signed in (ADR-0012), so the run is explicitly
+ * Demo User's: its throwaway sessions and knowledge are Demo User's own.
  */
 async function main(): Promise<void> {
   const datasets = (process.env['EVAL_DATASETS'] ?? '')
@@ -32,35 +39,44 @@ async function main(): Promise<void> {
   });
 
   try {
-    // Same Nest app the eval-runs.service in-app runner uses, so a throwaway
-    // session for create_visual/update_visual works here too — no CLI-only
-    // degrade needed.
-    const sessions = app.get(SessionsService);
-    // Same curated-knowledge block a real chat turn gets from
-    // SessionsService.agentContext.
-    const knowledgeBlock = await app
-      .get(KnowledgeService)
-      .definitionBlock(datasets);
-    const results = await runAssistantEvals(
-      datasets,
-      (result) => {
-        const mark = result.passed ? 'PASS' : 'FAIL';
-        console.log(`${mark}  ${result.id}  (${result.durationMs}ms)`);
-        if (result.error) console.log(`      error: ${result.error}`);
-        for (const [id, score] of Object.entries(result.scores)) {
-          console.log(`      ${id}: ${score}`);
-        }
-      },
-      undefined,
-      sessions,
-      knowledgeBlock,
-    );
-    const passed = results.filter((result) => result.passed).length;
-    console.log(`\n${passed}/${results.length} questions passed`);
-    process.exitCode = passed === results.length ? 0 : 1;
+    await app
+      .get(CurrentUserService)
+      .runAs(LOCAL_USER, () => runAsDemoUser(app, datasets));
   } finally {
     await app.close();
   }
+}
+
+async function runAsDemoUser(
+  app: Awaited<ReturnType<typeof NestFactory.createApplicationContext>>,
+  datasets: string[],
+): Promise<void> {
+  // Same Nest app the eval-runs.service in-app runner uses, so a throwaway
+  // session for create_visual/update_visual works here too — no CLI-only
+  // degrade needed.
+  const sessions = app.get(SessionsService);
+  // Same curated-knowledge block a real chat turn gets from
+  // SessionsService.agentContext.
+  const knowledgeBlock = await app
+    .get(KnowledgeService)
+    .definitionBlock(datasets);
+  const results = await runAssistantEvals(
+    datasets,
+    (result) => {
+      const mark = result.passed ? 'PASS' : 'FAIL';
+      console.log(`${mark}  ${result.id}  (${result.durationMs}ms)`);
+      if (result.error) console.log(`      error: ${result.error}`);
+      for (const [id, score] of Object.entries(result.scores)) {
+        console.log(`      ${id}: ${score}`);
+      }
+    },
+    undefined,
+    sessions,
+    knowledgeBlock,
+  );
+  const passed = results.filter((result) => result.passed).length;
+  console.log(`\n${passed}/${results.length} questions passed`);
+  process.exitCode = passed === results.length ? 0 : 1;
 }
 
 main().catch((err) => {

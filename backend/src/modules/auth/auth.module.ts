@@ -23,6 +23,8 @@ import { AuthController } from './auth.controller';
 import { AuthSessionsService } from './auth-sessions.service';
 import { CurrentUserMiddleware } from './current-user.middleware';
 import { CurrentUserService } from './current-user.service';
+import { LocalAuthController } from './local/local-auth.controller';
+import { LocalDirectoryService } from './local/local-directory.service';
 import { MeController } from './me.controller';
 import { OIDC_CLIENT } from './oidc/oidc-client';
 import { OpenIdClientOidcClient } from './oidc/openid-client.oidc-client';
@@ -49,7 +51,7 @@ const ownedStoreProviders: Provider[] = PRIVATE_COLLECTIONS.map((c) => ({
  * Who calls and what they may do (admin capability; ADR-0010, ADR-0011):
  * the mode and org server configuration, the current user on
  * `AsyncLocalStorage`, the global permission guard, `GET /me`, sign-in and
- * sign-out, SCIM, the directory, roles, auth sessions and activity events,
+ * sign-out (org and local), the local personas, SCIM, the directory, roles, auth sessions and activity events,
  * and the owner-scoped views of the private collections. Global so any
  * module can ask for the current user or inject an owned store.
  */
@@ -59,6 +61,7 @@ const ownedStoreProviders: Provider[] = PRIVATE_COLLECTIONS.map((c) => ({
   controllers: [
     MeController,
     AuthController,
+    LocalAuthController,
     ScimDiscoveryController,
     ScimUsersController,
     ScimGroupsController,
@@ -81,6 +84,7 @@ const ownedStoreProviders: Provider[] = PRIVATE_COLLECTIONS.map((c) => ({
     AuthSessionsService,
     SignInService,
     ScimService,
+    LocalDirectoryService,
     { provide: APP_GUARD, useClass: PermissionsGuard },
     ...ownedStoreProviders,
   ],
@@ -92,6 +96,7 @@ const ownedStoreProviders: Provider[] = PRIVATE_COLLECTIONS.map((c) => ({
     RoleResolver,
     ActivityService,
     AuthSessionsService,
+    LocalDirectoryService,
     ...PRIVATE_COLLECTIONS.map((c) => c.owned),
   ],
 })

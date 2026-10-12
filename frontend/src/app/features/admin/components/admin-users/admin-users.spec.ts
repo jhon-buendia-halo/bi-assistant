@@ -5,6 +5,7 @@ import {
   TestRequest,
   provideHttpClientTesting,
 } from '@angular/common/http/testing';
+import { AuthService } from '../../../../core/auth/auth.service';
 import { groupsPage, userRow, usersPage } from '../../testing/admin.fixtures';
 import {
   AdminUsersTab,
@@ -112,6 +113,8 @@ describe('AdminUsersTab', () => {
     expect(emptyMessage('groups', '')).toBe(
       'No groups yet. Groups arrive from Entra ID through SCIM.',
     );
+    expect(emptyMessage('groups', '', false)).toBe('No groups in local mode.');
+    expect(emptyMessage('groups', 'x', false)).toBe('No groups match your search.');
   });
 
   it('shows the view switch, chips and one row per user (admin R49-R52)', () => {
@@ -157,6 +160,15 @@ describe('AdminUsersTab', () => {
     expect(after.text()).toContain(
       'Users and groups come from Entra ID via SCIM · last sync 2 hours ago. Roles are assigned here or mapped from groups.',
     );
+  });
+
+  it('reads the local-mode footer note (admin R74, ui.md 4.18.6)', () => {
+    TestBed.inject(AuthService).handleUnauthorized('local');
+    const { text } = loaded();
+    expect(text()).toContain(
+      'Users are the local personas of this machine. Roles are assigned here.',
+    );
+    expect(text()).not.toContain('Entra ID');
   });
 
   it('searches 250 ms after typing stops, from the first page (admin R50)', fakeAsync(() => {

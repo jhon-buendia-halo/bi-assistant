@@ -31,8 +31,8 @@ Promotion from verified queries
 - R14. A candidate SHALL NOT supply an expression. A whole statement is not an aggregation, so the user lifts the aggregation out of the shown SQL; the system SHALL NOT guess it.
 - R15. Saving a metric started from a candidate SHALL store the verified-query id as its source, and that candidate SHALL stop being offered.
 
-Ownership (org server mode)
-- R16. In org server mode metrics SHALL belong to the user who created them: only that user sees, edits, deletes them or has them injected into their turns, and metric names are unique per owner. Every metrics action needs Use agents. Rules: [../admin/spec.md](../admin/spec.md) R29, R31.
+Ownership
+- R16. In both modes metrics SHALL belong to the user who created them: only that user sees, edits, deletes them or has them injected into their turns, and metric names are unique per owner. Every metrics action needs Use agents. Rules: [../admin/spec.md](../admin/spec.md) R29, R31.
 
 ## Edge cases and errors
 

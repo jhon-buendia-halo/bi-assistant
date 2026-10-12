@@ -944,10 +944,8 @@ export class App {
       : null;
   });
 
-  /** The Admin rail item: org server mode and Manage users only (R34). */
-  readonly showAdmin = computed(
-    () => this.auth.isOrg() && this.auth.can('manage-users'),
-  );
+  /** The Admin rail item: Manage users only, in both modes (R34). */
+  readonly showAdmin = computed(() => this.auth.can('manage-users'));
 
   private readonly uiPreferences = inject(UiPreferencesService);
 

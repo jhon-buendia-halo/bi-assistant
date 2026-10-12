@@ -3,6 +3,7 @@ import { APP_GUARD, DiscoveryModule } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import {
+  LocalModeOnly,
   OrgServerOnly,
   Public,
   RequirePermission,
@@ -42,6 +43,13 @@ class ThingsController {
   @OrgServerOnly()
   scim() {
     return { scim: true };
+  }
+
+  @Post('local-sign-in')
+  @Public()
+  @LocalModeOnly()
+  localSignIn() {
+    return { ok: true };
   }
 }
 
@@ -134,7 +142,7 @@ describe('PermissionsGuard', () => {
     currentUser.user = LOCAL_USER;
   });
 
-  it('lets the local user through every route', async () => {
+  it('lets Demo User (Platform admin) through every route', async () => {
     const http = () => request(app.getHttpServer());
     await http().get('/things').expect(200);
     await http().post('/things').expect(201);
@@ -186,6 +194,11 @@ describe('PermissionsGuard', () => {
       error: 'Not Found',
     });
   });
+
+  it('opens local-mode-only routes in local mode, without a user', async () => {
+    currentUser.user = undefined;
+    await request(app.getHttpServer()).post('/things/local-sign-in').expect(201);
+  });
 });
 
 describe('PermissionsGuard in org server mode', () => {
@@ -220,6 +233,18 @@ describe('PermissionsGuard in org server mode', () => {
   it('a signed-in user does not open SCIM without the token', async () => {
     currentUser.user = LOCAL_USER;
     await request(app.getHttpServer()).get('/things/scim').expect(401);
+  });
+
+  it('answers 404 for local-mode-only routes on an org server (admin R73)', async () => {
+    currentUser.user = undefined;
+    const res = await request(app.getHttpServer())
+      .post('/things/local-sign-in')
+      .expect(404);
+    expect(res.body).toEqual({
+      statusCode: 404,
+      message: 'Not available in org server mode',
+      error: 'Not Found',
+    });
   });
 });
 

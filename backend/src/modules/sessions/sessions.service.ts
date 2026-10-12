@@ -1193,7 +1193,7 @@ export class SessionsService implements OnModuleInit {
   }
 
   /**
-   * An agent error (admin R40; api.md 3.1; data-model 3.14.7): in org server
+   * An agent error (admin R40; api.md 3.1; data-model 3.14.7): in either
    * mode, a turn in a session started from a user agent that ended in an
    * error. Called only once the request reached the assistant, so an empty
    * message or an unknown session never counts; a stopped turn, a preview
@@ -1205,7 +1205,7 @@ export class SessionsService implements OnModuleInit {
     error: unknown,
     abortSignal?: AbortSignal,
   ): Promise<void> {
-    if (abortSignal?.aborted || this.currentUser.mode !== 'org') return;
+    if (abortSignal?.aborted) return;
     if (!this.activity || !session.agentId || session.preview) return;
     try {
       if (!(await this.userAgents.get(session.agentId))) return;

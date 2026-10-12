@@ -4,6 +4,8 @@ import {
   provideHttpClientTesting,
 } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { LOCAL_SESSION_STORAGE_KEY } from '../../../core/auth/auth.models';
+import { AuthService } from '../../../core/auth/auth.service';
 import { API_BASE_URL } from '../../../core/config/api.config';
 import { SessionsApiService, parseToolEvent } from './sessions-api.service';
 
@@ -188,6 +190,55 @@ describe('SessionsApiService streaming', () => {
       activeVisualizationId: 'visual-1',
       careful: true,
     });
+  });
+});
+
+describe('SessionsApiService streaming auth', () => {
+  let service: SessionsApiService;
+
+  beforeEach(() => {
+    localStorage.removeItem(LOCAL_SESSION_STORAGE_KEY);
+    TestBed.configureTestingModule({ providers: [provideHttpClient()] });
+    service = TestBed.inject(SessionsApiService);
+  });
+
+  afterEach(() => localStorage.removeItem(LOCAL_SESSION_STORAGE_KEY));
+
+  it('sends the local token as a bearer header (admin R71, ui.md 1.6)', async () => {
+    const fetchSpy = spyOn(globalThis, 'fetch').and.callFake(() =>
+      Promise.resolve(sseResponse({ type: 'done' })),
+    );
+
+    await service.streamMessage('session-1', 'question', {});
+    let headers = (fetchSpy.calls.mostRecent().args[1] as RequestInit)
+      .headers as Record<string, string>;
+    expect(headers['Authorization']).toBeUndefined();
+
+    localStorage.setItem(LOCAL_SESSION_STORAGE_KEY, 'tok-123');
+    await service.streamMessage('session-1', 'question', {});
+    headers = (fetchSpy.calls.mostRecent().args[1] as RequestInit)
+      .headers as Record<string, string>;
+    expect(headers).toEqual({
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer tok-123',
+    });
+  });
+
+  it('shows the sign-in page when the stream answers 401 (admin R11)', async () => {
+    const auth = TestBed.inject(AuthService);
+    auth.handleUnauthorized('local');
+    auth.status.set('signed-in');
+    localStorage.setItem(LOCAL_SESSION_STORAGE_KEY, 'swept-token');
+    spyOn(globalThis, 'fetch').and.resolveTo(
+      new Response('{}', { status: 401 }),
+    );
+    const onError = jasmine.createSpy('onError');
+
+    await service.streamMessage('session-1', 'question', { onError });
+
+    expect(onError).toHaveBeenCalledOnceWith('Sign in required');
+    expect(auth.status()).toBe('signed-out');
+    expect(localStorage.getItem(LOCAL_SESSION_STORAGE_KEY)).toBeNull();
   });
 });
 
