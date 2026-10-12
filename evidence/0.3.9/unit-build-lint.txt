@@ -1,0 +1,17 @@
+# Backend: npm test
+Test Suites: 61 passed, 61 total
+Tests:       1056 passed, 1056 total
+
+# Backend: npx jest src/modules/developer-settings (new cases: forced on for '1'/'true'/'TRUE', ignored for '0'/'false'/'yes'/'', endpoint-only restart while forced, read once at startup)
+Tests:       19 passed, 19 total
+
+# Backend: npm run build -> exit 0; eslint on the 4 changed backend files -> clean
+# Backend: full eslint is 243 problems (221 errors) both on main and on this branch (pre-existing; 'npm run lint' --fix reformatted ~30 unrelated files, reverted)
+
+# Frontend: ng test --watch=false --browsers=ChromeHeadless (CHROME_BIN = Playwright Chromium, 1440x900)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 297 of 297 SUCCESS (3.032 secs / 2.859 secs)
+# Frontend: npm run build -> exit 0
+
+# python3 scripts/check-specs.py
+
+ALL CHECKS PASSED

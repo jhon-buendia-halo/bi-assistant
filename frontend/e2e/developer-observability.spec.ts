@@ -1,5 +1,12 @@
 import { Page } from '@playwright/test';
-import { test, expect, RunningApp } from './fixtures/app.fixture';
+import fs from 'node:fs';
+import path from 'node:path';
+import {
+  test,
+  expect,
+  RunningApp,
+  webOnly,
+} from './fixtures/app.fixture';
 import {
   createWorldCupWorkspace,
   openSessions,
@@ -141,4 +148,55 @@ test('nothing is exported when observability is off', async ({ app, page }) => {
   await page.waitForTimeout(12_000);
   expect(otlp.requests).toEqual([]);
   expect(phoenix.requests).toEqual([]);
+});
+
+test.describe('the --dev-observability CLI flag', () => {
+  webOnly('the flag belongs to the npm CLI; the desktop app has none');
+
+  test('turns observability on without changing the saved setting', async ({
+    appDataDir,
+    launchApp,
+  }) => {
+    // Saved off, endpoints at the receivers: what a hand-edited or
+    // previously saved file looks like.
+    const saved = {
+      observabilityEnabled: false,
+      phoenixEndpoint: phoenix.url,
+      otlpEndpoint: otlp.url,
+    };
+    const settingsFile = path.join(appDataDir, 'developer-settings.json');
+    fs.writeFileSync(settingsFile, JSON.stringify(saved));
+
+    const app = await launchApp(appDataDir, {}, {
+      cliArgs: ['--dev-observability'],
+    });
+    const { page } = app;
+    expect(app.output().stdout).toContain(
+      `Observability: Phoenix ${phoenix.url}, OTLP ${otlp.url} (forced by --dev-observability)`,
+    );
+
+    await openDeveloperSettings(page);
+    await expect(page.getByTestId('developer-forced-notice')).toContainText(
+      'Developer observability is on for this run',
+    );
+    await expect(
+      page.getByRole('switch', { name: 'Developer observability' }),
+    ).toHaveAttribute('aria-checked', 'false');
+    await expect(page.getByTestId('developer-restart-notice')).toHaveCount(0);
+
+    const sessionId = await createWorldCupWorkspace(page);
+    await openSessions(page);
+    await page.getByTestId(`session-${sessionId}`).click();
+    await page.getByPlaceholder(/Ask a/).fill('Who won the 2022 World Cup?');
+    await page.getByLabel('Send message').click();
+
+    await expect
+      .poll(() => payloadOf(phoenix, '/v1/traces'), { timeout: 30_000 })
+      .toContain('assistant');
+    await expect
+      .poll(() => payloadOf(otlp, '/v1/traces'), { timeout: 20_000 })
+      .toContain('questions-to-insights');
+    // The flag never writes the file.
+    expect(JSON.parse(fs.readFileSync(settingsFile, 'utf8'))).toEqual(saved);
+  });
 });

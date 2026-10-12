@@ -683,13 +683,14 @@ Controller prefix `/developer-settings`. Capability: developer-settings. One set
 interface DeveloperSettings { observabilityEnabled: boolean; phoenixEndpoint: string; otlpEndpoint: string }
 interface DeveloperSettingsView {
   saved: DeveloperSettings;    // what the file holds now (defaults when absent)
-  active: DeveloperSettings;   // what this backend read at startup
-  restartRequired: boolean;    // saved differs from active
+  active: DeveloperSettings;   // what this backend read at startup, with observability on when forced
+  observabilityForced: boolean; // QTI_DEV_OBSERVABILITY / --dev-observability forced it on (developer-settings R28-R30)
+  restartRequired: boolean;    // saved differs from active; while forced, only the endpoints are compared
 }
 ```
 
 #### 53. `GET /developer-settings`
-- Response `200`: `DeveloperSettingsView` (bare). No file: `saved` and `active` are the defaults `{ observabilityEnabled:false, phoenixEndpoint:"http://localhost:6006", otlpEndpoint:"http://localhost:4318" }`, `restartRequired:false`. Never fails on a bad file: invalid values fall back to their defaults.
+- Response `200`: `DeveloperSettingsView` (bare). No file: `saved` and `active` are the defaults `{ observabilityEnabled:false, phoenixEndpoint:"http://localhost:6006", otlpEndpoint:"http://localhost:4318" }`, `observabilityForced:false`, `restartRequired:false`. Forced on: `active.observabilityEnabled` is `true` whatever `saved` says. Never fails on a bad file: invalid values fall back to their defaults.
 
 #### 54. `PUT /developer-settings`
 - Body: `DeveloperSettings`. `observabilityEnabled` is true only for `true`. Endpoints are trimmed, and trailing slashes removed.
@@ -1153,6 +1154,7 @@ Binary `questions-to-insights` (`backend/src/cli.ts` compiled to `dist/cli.js`),
 | `--host` | string | `127.0.0.1` | Interface to bind. An org server behind the organisation's TLS proxy binds the interface the proxy reaches, typically `0.0.0.0` ([delivery.md](delivery.md) 4.1). |
 | `--data-dir` | path | `$QTI_DATA_DIR`, else `$APP_DATA_DIR`, else `~/.questions-to-insights` | Resolved to an absolute path; created (`mkdir -p`). Deliberately separate from the Electron `userData` dir so both can run at once. |
 | `--no-open` | none | opens the browser | Parsed as the negation of a boolean `open` option. |
+| `--dev-observability` | none | off | Sets `QTI_DEV_OBSERVABILITY=1` before the developer setting is read, so developer observability is on for this run with the saved endpoints; the saved setting is unchanged ([developer-settings](../capabilities/developer-settings/spec.md) R28-R31). For development runs ([delivery.md](delivery.md) section 6, *Observability profile*). |
 | `-h`, `--help` | none | | Prints usage to stdout, exit 0. |
 | `-v`, `--version` | none | | Prints the package version (`unknown` if unreadable), exit 0. |
 
@@ -1175,6 +1177,7 @@ Argument parsing is **strict**: an unknown flag or malformed argument prints `qu
   URL:      http://<host>:<port>          # host shown as `localhost` when bound to 0.0.0.0/::, IPv6 in brackets
   Data dir: <absolute path>
   Mode:     org server, <ORG_PUBLIC_BASE_URL>   # only in org server mode
+  Observability: Phoenix <url>, OTLP <url>[ (forced by --dev-observability)]   # only when developer observability is active
   Press Ctrl+C to stop.
 (blank)
 ```
@@ -1207,6 +1210,7 @@ Argument parsing is **strict**: an unknown flag or malformed argument prints `qu
 | `ORG_PUBLIC_BASE_URL` | org server config | The URL people open, as the proxy serves it, e.g. `https://insights.contoso.com`; trailing slashes removed. Builds the redirect URI (`<url>/auth/callback`), the Origin check and the cookie `Secure` flag. Must be `https://` except for development and tests. Required for org server mode. | unset |
 | `ORG_SCIM_TOKEN` | org server config | The SCIM bearer token given to the identity provider. At least 32 characters (shorter is a startup error). Required for org server mode. Never logged. | unset |
 | `ORG_BOOTSTRAP_ADMINS` | org server config | Comma-separated user names that always hold Platform admin (admin R18), matched against the directory `userName`: for Entra ID the UPN (`preferred_username`, SCIM `userName`), which usually looks like an email. Never matched against the email. Optional; blanks ignored, case-insensitive. | unset |
+| `QTI_DEV_OBSERVABILITY` | developer-settings file reader, at startup (`main.ts`, `cli.ts`) | `1` or `true` (any case) forces developer observability on for this process with the saved endpoints; the saved setting is unchanged. Set by the CLI's `--dev-observability`. The E2E fixture removes it from the app's environment. | unset |
 | `EVAL_DATASETS` | `mastra/evals/run-assistant-evals.ts` (CLI eval script only) | Comma-separated dataset names to run the assistant evals against. Required by that script. | none |
 
 ### 6.2 CLI-only

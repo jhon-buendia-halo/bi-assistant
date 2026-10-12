@@ -8,6 +8,7 @@ import {
   untracked,
 } from '@angular/core';
 import {
+  Info,
   LucideAngularModule,
   Loader2,
   PlugZap,
@@ -45,6 +46,7 @@ const IDLE_TEST: EndpointTestState = { testing: false, result: null };
   styleUrl: './developer-settings.scss',
 })
 export class DeveloperSettingsConfig implements OnInit {
+  readonly Info = Info;
   readonly Loader2 = Loader2;
   readonly PlugZap = PlugZap;
   readonly RotateCw = RotateCw;

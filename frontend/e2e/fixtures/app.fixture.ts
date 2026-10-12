@@ -52,6 +52,12 @@ export interface RunningApp {
 
 export type Env = Record<string, string | undefined>;
 
+/** Extra launch options for `launchApp`. */
+export interface LaunchOptions {
+  /** Web only: extra npm CLI arguments, kept across `restartCli()`. */
+  cliArgs?: string[];
+}
+
 /** How `launchApp` signs in (local mode, admin R70-R71). */
 export interface SignInOptions {
   /** Sign in before the test starts; default true. */
@@ -65,7 +71,11 @@ interface AppFixtures extends SignInOptions {
   app: RunningApp;
   page: Page;
   /** Launches another app on `appDataDir`; closed after the test. */
-  launchApp: (appDataDir: string, env?: Env) => Promise<RunningApp>;
+  launchApp: (
+    appDataDir: string,
+    env?: Env,
+    options?: LaunchOptions,
+  ) => Promise<RunningApp>;
 }
 
 interface WorkerFixtures {
@@ -86,6 +96,9 @@ function mergedEnv(env: Env): Record<string, string> {
   for (const [name, value] of Object.entries({
     ...process.env,
     NODE_ENV: 'test',
+    // A developer's shell may export it for dev runs (CLAUDE.md, Observed dev
+    // runs); tests keep observability off unless they turn it on themselves.
+    QTI_DEV_OBSERVABILITY: undefined,
     ...env,
   })) {
     if (value !== undefined) merged[name] = value;
@@ -217,6 +230,7 @@ export function startCli(
   port: number,
   stdout: string[],
   stderr: string[],
+  cliArgs: string[] = [],
 ): Promise<CliProcess> {
   if (!fs.existsSync(cliPath)) {
     throw new Error(
@@ -234,6 +248,7 @@ export function startCli(
       String(port),
       '--data-dir',
       appDataDir,
+      ...cliArgs,
     ],
     {
       cwd: backendRoot,
@@ -290,10 +305,11 @@ async function launchWeb(
   appDataDir: string,
   env: Env,
   signIn: SignInOptions,
+  cliArgs: string[] = [],
 ): Promise<RunningApp> {
   const stdout: string[] = [];
   const stderr: string[] = [];
-  let cli = await startCli(appDataDir, env, 0, stdout, stderr);
+  let cli = await startCli(appDataDir, env, 0, stdout, stderr, cliArgs);
   const context = await browser.newContext({ viewport: WINDOW_SIZE });
   if (signIn.autoSignIn) {
     const token = await signInLocally(cli.url, signIn.autoSignInAs);
@@ -322,7 +338,7 @@ async function launchWeb(
     page,
     async restartCli() {
       await stopCli(cli.child);
-      cli = await startCli(appDataDir, env, cli.port, stdout, stderr);
+      cli = await startCli(appDataDir, env, cli.port, stdout, stderr, cliArgs);
       await page.reload();
       await waitForShellOrSignIn(page);
     },
@@ -391,11 +407,20 @@ export const test = base.extend<AppFixtures, WorkerFixtures>({
   ) => {
     const launched: RunningApp[] = [];
     const signIn: SignInOptions = { autoSignIn, autoSignInAs };
-    await use(async (appDataDir, env = {}) => {
+    await use(async (appDataDir, env = {}, options = {}) => {
+      if (target === 'desktop' && options.cliArgs?.length) {
+        throw new Error('cliArgs are web only (the desktop app has no CLI)');
+      }
       const app =
         target === 'desktop'
           ? await launchDesktop(appDataDir, env, signIn)
-          : await launchWeb(await webBrowser(), appDataDir, env, signIn);
+          : await launchWeb(
+              await webBrowser(),
+              appDataDir,
+              env,
+              signIn,
+              options.cliArgs,
+            );
       launched.push(app);
       return app;
     });
