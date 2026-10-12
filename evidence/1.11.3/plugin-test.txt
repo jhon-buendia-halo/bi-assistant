@@ -1,0 +1,38 @@
+$ cd .claude/mods/workflow-steps && claude plugin test
+
+tests/rules.test.ts:
+(pass) writes map to the step that owns the file
+(pass) reads of owned files are weak signals for the same step
+(pass) before the first write every read is step 1, and retrospective.md is the first action
+(pass) questions and test commands are strong signals
+(pass) shell commands that name an owned file count for its step, strongly when they write
+(pass) paths inside a worktree checkout are matched past the .claude/worktrees prefix
+(pass) anything else matches nothing once something has been written, and is step 1 before
+(pass) each step checklist reads its facts off the call: the path written and the written text
+(pass) completion is the share of the step checklist met, with two checks read from the live task
+(pass) the summary lists edits, shell paths, commands, questions, reads, other calls, the result and subagents
+(pass) a queued step names the agent it is expected to use
+
+tests/workflow-steps.test.ts:
+(pass) task #1 runs from the start and every other step is queued with its future number
+(pass) reads stay in #1, a question and a roadmap edit are strong signals that start #2 and #3 at once
+(pass) a weak signal opens a tentative task that earns its number after three matched calls
+(pass) three unmatched calls drop a tentative task, and a call for the running step drops it too
+(pass) a step that runs again gets a new number, and a test run is marked failed or passed
+(pass) turn usage goes to the running task and cost is the session delta
+(pass) a subagent spawned during a task is listed under it, and done rows count agents
+(pass) done tasks beyond the last twelve fold into one line
+(pass) /workflow reset clears the queue, starts #1 again and closes open rows
+(pass) a narrow pane keeps whole titles and the figures, and leaves the summary to the detail
+(pass) in a sidebar 74 columns wide every row fits on one line, keeping the title, the figures that fit and the %
+(pass) step 1's checks are the session's: the first action and reads before the first write, whichever task the calls landed in
+(pass) a row's completion is the share of its step checklist met
+(pass) a press opens a detail under the row, a second press closes it, and two rows can stay open
+(pass) a queued step's detail shows what is expected of it
+(pass) the header shows the overall completion: the mean of the done, running and queued rows
+(pass) a subagent's own turn credits its tokens to it and to the task it was spawned under, and marks it finished
+(pass) without a readable CLAUDE.md the built-in step titles are used
+
+ 29 pass
+ 0 fail
+Ran 29 tests across 2 files. [1.20s]

@@ -14,6 +14,8 @@ export type TaskAgent = {
   model: string
   description: string
   running: boolean
+  /** Input plus output tokens of the subagent's own runs (their `turn.complete`). */
+  tokens: number
 }
 
 export type Task = {
@@ -33,6 +35,8 @@ export type Task = {
   cost: number
   agents: TaskAgent[]
   evidence: Record<string, number>
+  /** The checklist facts the task's calls established (rules.ts CHECKLISTS ids). */
+  facts: string[]
   /** For a step-9 task: the result of its last test command. */
   result?: 'passed' | 'failed'
 }
@@ -42,6 +46,8 @@ export type Queue = {
   nextSeq: number
   hasWritten: boolean
   firstActionDone: boolean
+  /** Some call other than a write ran before the session's first write (step 1's second check). */
+  exploredBeforeWrite?: boolean
   startedAt: number
   /** The last session cost seen, in US dollars. */
   usd: number
@@ -49,6 +55,7 @@ export type Queue = {
 
 declare module 'claude-code' {
   interface PluginState {
-    'workflow-steps': { steps: Step[]; source: StepsSource; firstAction: string; queue: Queue }
+    /** `open`: the keys of the rows whose detail is open (`row-<n>`, `row-tentative`, `queued-<step>`). */
+    'workflow-steps': { steps: Step[]; source: StepsSource; firstAction: string; queue: Queue; open: string[] }
   }
 }

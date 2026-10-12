@@ -2,6 +2,17 @@
 
 Running log of every meaningful change, newest first. See *Logging convention* and *Evidence convention* in [CLAUDE.md](CLAUDE.md). Release versions come from Conventional Commits (`version-on-merge.yml`); this file records what shipped and links to the evidence.
 
+## 2026-10-12
+
+### Added
+- **Workflow pane: click a task to see its summary, agents and completion** (roadmap 1.11.3, [BA-174](https://halo-powered.atlassian.net/browse/BA-174), epic [BA-169](https://halo-powered.atlassian.net/browse/BA-169)); the `workflow-steps` mod is 0.3.0:
+  - Every row of the queue (done, running, tentative and queued) shows its agent (`main`, `main +k`, `~main` expected for a queued step), tokens, cost, a completion bar with its %, and a one-line summary when the pane has room; the header adds `overall <p>%`, the mean of the rows.
+  - Rows are `Button`s: a click, or Enter after `ctrl+x tab`, opens a detail under the row (the summary, the step's checklist with each check met or not, the agents with their own tokens, the cost and the confidence), and pressing again closes it; several rows can stay open. A queued step's detail shows what CLAUDE.md expects of it.
+  - Completion is the share of the step's checklist met, from facts read off the task's calls (`roadmap.md` edited with `Acceptance` and a status for step 3, tests run and the last run passed for step 9, and so on); step 1's checks are the session's. A subagent's own `turn.complete` (its `agentId`) credits its tokens to it and to the task it was spawned under, and marks it finished. Cost stays at task level: no cost per agent, no price table.
+  - A row is never wider than the pane: columns drop in a fixed order (duration and step first) and the summary only shows with 12 columns to spare, because a `Button` does not truncate its children. A live session in a 72-column sidebar found both this and the step-1 case before the tests did.
+  - Specs: `delivery.md` §9 (rows, summary, completion table, details, figures, widths), the BA-169 epic spec (scope, stories, out of scope) and the mod README; Jira BA-174 created under BA-169 and the epic's out-of-scope line updated.
+  - Evidence: [evidence/1.11.3/](evidence/1.11.3/).
+
 ## 2026-10-11
 
 ### Added

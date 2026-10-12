@@ -1,0 +1,22 @@
+$ claude plugin validate .claude/mods/workflow-steps
+Validating plugin manifest: /home/jhonbuendia/projects/bi-assistant/.claude/worktrees/BA-169-claude-code-workflow-mod/.claude/mods/workflow-steps/.claude-plugin/plugin.json
+
+  ❯ types ./types/index.d.ts declares on $: nothing (no EngineInterface member)
+  ❯ types ./types/index.d.ts declares state: workflow-steps.steps, workflow-steps.source, workflow-steps.firstAction, workflow-steps.queue, workflow-steps.open
+
+Validating hooks: /home/jhonbuendia/projects/bi-assistant/.claude/worktrees/BA-169-claude-code-workflow-mod/.claude/mods/workflow-steps/hooks/hooks.json
+
+  ❯ ./register.tsx hooks: session.start, command.run{command=workflow}, tool.call, turn.complete, agent.spawn, ui.render{component=Pane, requestId=workflow}
+  ❯ ./register.tsx answers its own command: command.run{command=workflow}
+  ❯ ./register.tsx gating hook without .catch: tool.call
+  ❯ ./register.tsx gating hook without .catch: agent.spawn
+  ❯ ./register.tsx calls: $.clock.now, $.command.register, $.fs.read (via loadSteps), $.session.usage (via sessionCost), $.state.get, $.state.set, $.ui.open, $.ui.resolve, $.ui.toast
+  ❯ ./register.tsx state writes: workflow-steps.firstAction, workflow-steps.open, workflow-steps.queue, workflow-steps.source, workflow-steps.steps
+  ❯ ./register.tsx state reads: workflow-steps.firstAction, workflow-steps.open, workflow-steps.queue, workflow-steps.source, workflow-steps.steps
+
+✔ Validation passed
+
+$ claude plugin validate .   (the repository marketplace)
+Validating marketplace manifest: /home/jhonbuendia/projects/bi-assistant/.claude/worktrees/BA-169-claude-code-workflow-mod/.claude-plugin/marketplace.json
+
+✔ Validation passed
