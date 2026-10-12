@@ -150,7 +150,7 @@ export class VerifiedQueriesService {
 
   /**
    * The system block appended to the assistant's own prompt — logical-query
-   * pairs only (ADR-0013 §4: the assistant is never shown physical SQL
+   * pairs only (ADR-0014 §4: the assistant is never shown physical SQL
    * text). A SQL-only legacy pair (from before the logical query layer, or
    * answered via the `run_raw_sql` fallback) is silently excluded here, not
    * degraded to something half-useful; `verifierReferenceBlock` still uses
@@ -181,7 +181,7 @@ export class VerifiedQueriesService {
    * the logical-query ones — but a SQL-only legacy pair contributes only its
    * question text (phrasing/scope signal), never its SQL, since the
    * verifier always derives its own logical query rather than reusing one
-   * (ADR-0013 §6's whole point is a second, independent opinion).
+   * (ADR-0014 §6's whole point is a second, independent opinion).
    */
   async verifierReferenceBlock(question: string): Promise<string | undefined> {
     const similar = await this.findSimilar(question, MAX_REFERENCE_PAIRS);

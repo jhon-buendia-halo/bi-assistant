@@ -107,14 +107,14 @@ const VISUAL_TOOLS = new Set(['create_visual', 'update_visual']);
 const KNOWLEDGE_USED_CONTEXT_KEY = 'knowledge-used';
 /**
  * requestContext key carrying the session model versions `agentContext`
- * composed the turn's rendered model block from (ADR-0013) — read back at
+ * composed the turn's rendered model block from (ADR-0014) — read back at
  * persist time the same way `KNOWLEDGE_USED_CONTEXT_KEY` is, so an answer
  * records exactly the model the assistant actually saw.
  */
 const MODEL_VERSIONS_CONTEXT_KEY = 'model-versions';
 /** Issue codes a logical query is worth one automatic `query-fixer` retry
  * for — a mistaken reference, not a structural/dialect problem a rewrite
- * cannot fix (ADR-0013 §6). */
+ * cannot fix (ADR-0014 §6). */
 const FIXABLE_QUERY_ISSUE_CODES = new Set([
   'unknown_attribute',
   'unknown_metric',
@@ -333,7 +333,7 @@ export class SessionsService implements OnModuleInit {
     const verified = question
       ? await this.verifiedQueries.referenceBlock(question)
       : undefined;
-    // ADR-0013: one rendered model block replaces the old dataset/entity
+    // ADR-0014: one rendered model block replaces the old dataset/entity
     // orientation, join-hint and curated-metrics blocks — the assistant's
     // only view of "what data exists" is the logical model, never a
     // physical table name, datasource id/kind or dialect word.
@@ -499,7 +499,7 @@ export class SessionsService implements OnModuleInit {
 
   // ------------------------------------------------- logical query layer
 
-  /** The session's composed model (ADR-0013) — the `DatasetToolServices`
+  /** The session's composed model (ADR-0014) — the `DatasetToolServices`
    * bridge's `getSessionModel`, and `agentContext`'s own source for the
    * rendered block (built inline there so it can also keep the per-dataset
    * versions for provenance). */
@@ -525,7 +525,7 @@ export class SessionsService implements OnModuleInit {
 
   /** `sql` bindings compile for the datasource's actual kind (postgres or
    * databricks); `rest` always compiles as sqlite, matching the
-   * materialise-to-SQLite path (ADR-0013 §4). */
+   * materialise-to-SQLite path (ADR-0014 §4). */
   private async dialectForEntity(entity: SessionEntity): Promise<SqlDialect> {
     if (entity.kind === 'rest') return 'sqlite';
     try {
@@ -575,7 +575,7 @@ export class SessionsService implements OnModuleInit {
   }
 
   /**
-   * `query_entities`'s implementation (ADR-0013 §4/§6): compiles and runs
+   * `query_entities`'s implementation (ADR-0014 §4/§6): compiles and runs
    * `query`, and — only for a reference mistake a fixer can plausibly
    * correct (`unknown_attribute`/`unknown_metric`/`ambiguous_path`) — tries
    * exactly once to repair the query before giving up, so the assistant
@@ -826,7 +826,7 @@ export class SessionsService implements OnModuleInit {
   // ------------------------------------------------------- careful mode
 
   /**
-   * Careful mode's cross-check (ADR-0013 §6, moved to the logical level): a
+   * Careful mode's cross-check (ADR-0014 §6, moved to the logical level): a
    * second agent re-derives the question's *logical query* without ever
    * seeing the one the analysis agent ran, it is compiled and executed once,
    * and the two result sets are compared as multisets. Agreement is
@@ -1955,7 +1955,7 @@ function lastSuccessfulSql(
  * step was `query_entities` — undefined for a `run_readonly_sql`/
  * `run_raw_sql` step, which never has one (`turn-data.ts`'s `toolDataRecord`
  * only sets `logicalQuery` for `query_entities`). Drives whether a verified
- * query is shown to the assistant at all (ADR-0013 §4 — SQL-only legacy
+ * query is shown to the assistant at all (ADR-0014 §4 — SQL-only legacy
  * pairs are omitted from its reference block). */
 function lastSuccessfulLogicalQuery(
   data: ToolDataRecord[] | undefined,
@@ -2057,7 +2057,7 @@ function knowledgeUsed(
 }
 
 /** `agentContext`'s model-version provenance, read back the same way as
- * `knowledgeUsed` (ADR-0013). */
+ * `knowledgeUsed` (ADR-0014). */
 function modelVersionsUsed(
   requestContext: { get(key: string): unknown } | undefined,
 ): { dataset: string; version: number }[] | undefined {
@@ -2068,14 +2068,14 @@ function modelVersionsUsed(
 }
 
 /** True when any captured record this turn came from `run_raw_sql` — the
- * whole answer is then "outside the data model" (ADR-0013 §4), even if other
+ * whole answer is then "outside the data model" (ADR-0014 §4), even if other
  * tool calls in the same turn stayed on the logical path. */
 function outsideModelFlag(data: ToolDataRecord[]): true | undefined {
   return data.some((record) => record.outsideModel) ? true : undefined;
 }
 
 /** Whether a `LogicalQueryError` is worth one `query-fixer` round trip
- * (ADR-0013 §6) — a reference mistake, not a structural one (e.g.
+ * (ADR-0014 §6) — a reference mistake, not a structural one (e.g.
  * `mixed_datasources`, `invalid_order_by`) a rewrite is unlikely to fix. */
 function isFixableQueryError(error: LogicalQueryError): boolean {
   return error.issues.some((issue) =>

@@ -920,7 +920,7 @@ describe('Data model API (e2e)', () => {
       expect(res.body.sql).toContain('SELECT');
       expect(res.body.sql).toContain('LIMIT 10');
       // The *compiled SQL* legitimately names the physical table (the
-      // compiler's whole job) — what ADR-0013 forbids is the assistant ever
+      // compiler's whole job) — what ADR-0014 forbids is the assistant ever
       // writing or seeing that name itself, proven by `entities` reporting
       // only the logical name back.
       expect(res.body.entities).toEqual(['matches']);
@@ -1374,7 +1374,7 @@ describe('Data model API (e2e) — startup bootstrap', () => {
  * just a same-process create-then-read: a legacy `metrics` row (UUID id,
  * physical entity, expression) and a dataset doc are seeded directly into
  * SQLite *before* the app boots, mirroring a database that predates
- * ADR-0012 (specs/system/architecture.md), then the backend starts and bootstraps a model from them. Its
+ * ADR-0013 (specs/system/architecture.md), then the backend starts and bootstraps a model from them. Its
  * own `describe`/`dataDir` (rather than reusing the shared `app` above) so
  * the seeding happens before `onModuleInit`'s backfill runs.
  */

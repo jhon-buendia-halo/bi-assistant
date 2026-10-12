@@ -94,7 +94,7 @@ describe('VerifiedQueriesService.referenceBlock', () => {
     expect(block).not.toContain('SELECT 1');
   });
 
-  it('omits a SQL-only legacy pair entirely (ADR-0013 §4 — no SQL reaches the assistant)', async () => {
+  it('omits a SQL-only legacy pair entirely (ADR-0014 §4 — no SQL reaches the assistant)', async () => {
     const { service } = build(); // none of `stored` has a logicalQuery
 
     const block = await service.referenceBlock('claims denied last year');

@@ -105,7 +105,7 @@ export interface AssistantEvalSet {
 }
 
 /** The data-query tool each path actually has: `query_entities` on `model`
- * (ADR-0013), `run_readonly_sql` on `legacy`. `result-set-check.ts` exports
+ * (ADR-0014), `run_readonly_sql` on `legacy`. `result-set-check.ts` exports
  * its own copy of the same pair (`dataQueryTools`) rather than this file
  * exporting one here — that file's whole reason to exist is staying
  * importable without `@mastra/core/agent`'s ESM-only transitive deps, which
@@ -701,7 +701,7 @@ export interface EvalCheckResult {
 }
 
 /** Outcome of one question. */
-/** Which agent/context a case ran through (ADR-0013 §7): `model` is the
+/** Which agent/context a case ran through (ADR-0014 §7): `model` is the
  * current, logical-query-layer assistant (default); `legacy` is the
  * pre-change SQL-writing assistant, run for comparison only. */
 export type AssistantEvalPath = 'model' | 'legacy';
@@ -1110,7 +1110,7 @@ export async function runAssistantEvalCase(
    */
   knowledgeBlock?: string,
   /**
-   * ADR-0013 §7: `path` picks which agent/context the case runs through —
+   * ADR-0014 §7: `path` picks which agent/context the case runs through —
    * `model` (default) is the current logical-query-layer assistant, built
    * from `renderModelBlock`; `legacy` is the pre-change assistant, built
    * from `entityOrientationLines` + `metricsBlock`, run for comparison only.
@@ -1132,7 +1132,7 @@ export async function runAssistantEvalCase(
     const datasetSnapshots =
       await getDatasetToolServices().getDatasets(datasets);
     // `legacy` rebuilds the pre-change blocks (orientation + metrics);
-    // `model` builds the one rendered model block ADR-0013 replaces them
+    // `model` builds the one rendered model block ADR-0014 replaces them
     // with — each path's own system context, never mixed.
     const systemBlocks: { role: 'system'; content: string }[] =
       path === 'legacy'

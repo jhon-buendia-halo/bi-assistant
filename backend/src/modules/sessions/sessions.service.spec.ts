@@ -46,7 +46,7 @@ jest.mock('../../mastra/agents/sql-fixer.agent', () => {
   const { z } = require('zod') as typeof import('zod');
   return { sqlFixOutputSchema: z.object({ sql: z.string() }) };
 });
-// Replace `sql-verifier` (ADR-0013 §6): both new agents still import the real
+// Replace `sql-verifier` (ADR-0014 §6): both new agents still import the real
 // `logicalQuerySchema` (pure, safe under Jest) but also `@mastra/core/agent`
 // via `new Agent(...)` at module scope — mocked here the same way
 // `sql-fixer.agent` is, so that ESM-only transitive dependency never loads.
@@ -104,7 +104,7 @@ import type { DataModel } from '../data-models/entities/data-model.entity';
 
 /**
  * The composed session model `agentContext`/`crossCheckAnswer` now build the
- * rendered block / cross-check query from (ADR-0013), standing in for the
+ * rendered block / cross-check query from (ADR-0014), standing in for the
  * old physical `datasets.getByNames` snapshot these tests used to ground
  * `entityOrientationLines` — same dataset ("football"), same entity
  * ("matches"), same `winner` attribute/samples, so the independence
@@ -181,7 +181,7 @@ describe('SessionsService streaming', () => {
       /** The session is an agent editor's preview (agents-evals R60). */
       preview?: boolean;
       /** Overrides `defaultDataModelPairs()` — the session model
-       * `agentContext`/`crossCheckAnswer` compose from (ADR-0013). */
+       * `agentContext`/`crossCheckAnswer` compose from (ADR-0014). */
       dataModelPairs?: { dataset: string; model: DataModel }[];
       /** Careful mode: what the verifier replies and what its query returns. */
       crossCheck?: {
@@ -475,7 +475,7 @@ describe('SessionsService streaming', () => {
     expect(session.messages.at(-1)?.verified).toBeUndefined();
   });
 
-  it('grounds the turn in the rendered model block — entities, attributes and metrics (ADR-0013)', async () => {
+  it('grounds the turn in the rendered model block — entities, attributes and metrics (ADR-0014)', async () => {
     const { service, agent, dataModels } = buildStreaming(answerStream([]));
 
     await service.streamMessage('session-1', 'Win rate?', () => {});
@@ -902,7 +902,7 @@ describe('SessionsService streaming', () => {
       });
       // Independence: the verifier sees the question and the rendered model
       // block with its sample values, never the statement the analysis agent
-      // ran, and never a physical table key or a dialect word (ADR-0013).
+      // ran, and never a physical table key or a dialect word (ADR-0014).
       const prompt = (
         verifier.generate.mock.calls as unknown[][]
       )[0][0] as string;

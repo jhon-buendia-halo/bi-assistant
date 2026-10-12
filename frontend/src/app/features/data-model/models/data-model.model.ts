@@ -1,5 +1,5 @@
 /**
- * The storage-neutral data model DSL (ADR-0012), mirrored from
+ * The storage-neutral data model DSL (ADR-0013), mirrored from
  * `backend/src/modules/data-models/entities/data-model.entity.ts`. Copied
  * rather than imported across the frontend/backend boundary (there is no
  * shared package) — keep this file's shapes in lockstep with the backend
@@ -243,7 +243,7 @@ export interface MetricsImportReport {
   }[];
 }
 
-/** `GET /datasets/:name/model/drift` (api.md 98): the drift report plus the
+/** `GET /datasets/:name/model/drift` (api.md 101): the drift report plus the
  * metrics-import report, absent (or null) when no import has run. */
 export type DriftResponse = DriftReport & {
   metricsImport?: MetricsImportReport | null;

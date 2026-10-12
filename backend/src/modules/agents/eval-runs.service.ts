@@ -45,7 +45,7 @@ export interface EvalRunView {
   startedAt: string;
   finishedAt?: string;
   /**
-   * Which path this run exercised (ADR-0013 §7, roadmap 1.2.2): `model`
+   * Which path this run exercised (ADR-0014 §7, roadmap 1.2.2): `model`
    * (default) is the current logical-query-layer assistant, `legacy` is the
    * pre-change SQL-writing assistant, for side-by-side comparison. Optional
    * for backward compatibility with runs persisted before this field
@@ -100,7 +100,7 @@ export class EvalRunsService {
     private readonly metrics: MetricsService,
   ) {}
 
-  /** The curated-metrics block the pre-ADR-0013 `legacy` eval path builds
+  /** The curated-metrics block the pre-ADR-0014 `legacy` eval path builds
    * its context from, same source `SessionsService.agentContext` used to
    * read before the logical query layer replaced it with the rendered model
    * block. */
@@ -250,7 +250,7 @@ export class EvalRunsService {
     // SessionsService.agentContext, computed once per run — every case in
     // the run shares the same datasets.
     const knowledgeBlock = await this.knowledge.definitionBlock(view.datasets);
-    // Only the `legacy` path needs the pre-ADR-0013 curated-metrics block —
+    // Only the `legacy` path needs the pre-ADR-0014 curated-metrics block —
     // the `model` path gets metrics from the rendered model block instead.
     const metricsBlock =
       view.path === 'legacy'

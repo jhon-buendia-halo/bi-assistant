@@ -30,8 +30,8 @@ const MAX_NAME_CHARS = 64;
  *
  * The `metrics` collection (`MetricsRepository`) is the *editor of record*
  * for this feature's public API and HTTP contract — every read/write here
- * goes straight through it, exactly as before ADR-0012 — until roadmap
- * 1.2.3 moves the panel onto the data model directly. What ADR-0012 adds is
+ * goes straight through it, exactly as before ADR-0013 — until roadmap
+ * 1.2.3 moves the panel onto the data model directly. What ADR-0013 adds is
  * a one-way mirror: every successful write calls `DataModelsService`'s
  * `syncMetric`/`removeMetric` so the metric also shows up (and stays
  * current) on every data model that binds its physical entity, which is

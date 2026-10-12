@@ -102,7 +102,7 @@ Defined once in [the glossary](../../product/glossary.md); used here as follows.
 - Endpoints: list, create/upsert and delete datasets: [api.md](../../system/api.md), section Datasets. Inventory and sampling come from the datasources endpoints.
 - Collections: `datasets` (legacy name `sandbox_selections`) and the session field `datasets`: [data-model.md](../../system/data-model.md).
 - Assistant tools (`list_entities`, `describe_entity`, `sample_records`, `query_entities`, `run_raw_sql`) and the per-turn model block: [agents.md](../../system/agents.md), sections 3 and 4.1.
-- The dataset's data model (bootstrap, versions, drift, editing, metrics, logical queries): [data-model](../data-model/spec.md); decisions ADR-0012 and ADR-0013 in [architecture.md](../../system/architecture.md).
+- The dataset's data model (bootstrap, versions, drift, editing, metrics, logical queries): [data-model](../data-model/spec.md); decisions ADR-0013 and ADR-0014 in [architecture.md](../../system/architecture.md).
 - Datasource behaviour (inventory, sampling, foreign keys, read-only SQL): [datasources](../datasources/spec.md). Session creation: [sessions-chat](../sessions-chat/spec.md). Metrics, defined in the data model: [metrics](../metrics/spec.md).
 - Terms: [glossary](../../product/glossary.md).
 

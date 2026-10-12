@@ -1,5 +1,5 @@
 /**
- * Snapshot-drift detection (ADR-0012: "later snapshots produce a drift
+ * Snapshot-drift detection (ADR-0013: "later snapshots produce a drift
  * report, never an overwrite"). Pure, like `bootstrap.ts` — compares a
  * model version's `sql`-bound entities against a fresh physical snapshot and
  * reports what changed, without touching storage or picking a version.

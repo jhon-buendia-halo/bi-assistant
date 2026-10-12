@@ -1011,7 +1011,7 @@ export class VisualizationService {
       existing.map(async (record): Promise<ToolDataRecord> => {
         if (
           // `run_readonly_sql` (legacy path) and `query_entities`/
-          // `run_raw_sql` (ADR-0013) all leave re-runnable SQL in `input` —
+          // `run_raw_sql` (ADR-0014) all leave re-runnable SQL in `input` —
           // `query_entities`'s `input` is already the *compiled* statement,
           // so re-running it needs no session model, just the datasource.
           !SQL_RUN_TOOLS.has(record.tool) ||

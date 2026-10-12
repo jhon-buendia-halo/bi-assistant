@@ -8,7 +8,7 @@ import { MetricsRepository } from './repositories/metrics.repository';
 
 /**
  * `MetricsRepository` (the `metrics` collection) was this feature's editor
- * of record under ADR-0012; roadmap 1.2.3 moves the panel onto the data
+ * of record under ADR-0013; roadmap 1.2.3 moves the panel onto the data
  * model directly (`DataModelsController`'s `/datasets/:name/model/metrics*`
  * routes are the panel's API now). This module and `MetricsRepository` stay
  * for backward compatibility — the legacy `/metrics*` endpoints keep

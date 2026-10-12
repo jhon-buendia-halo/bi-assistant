@@ -1,6 +1,6 @@
 # BA-86 — Logical query layer: the assistant reasons over abstract entities
 
-Roadmap 1.2.2 · ADR-0013 · depends on 1.2.1 (BA-85, merged into this branch's base). Decision record: [ba-2-data-model-dsl-alternatives.md](ba-2-data-model-dsl-alternatives.md) §4b.
+Roadmap 1.2.2 · ADR-0014 · depends on 1.2.1 (BA-85, merged into this branch's base). Decision record: [ba-2-data-model-dsl-alternatives.md](ba-2-data-model-dsl-alternatives.md) §4b.
 
 ## Goal
 

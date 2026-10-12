@@ -5,8 +5,8 @@ import { DataModelsService } from './data-models.service';
 import { DataModelsRepository } from './repositories/data-models.repository';
 
 /**
- * The data model DSL's service layer (roadmap 1.2.1 / BA-85, ADR-0012) and
- * the logical query layer built on it (roadmap 1.2.2 / BA-86, ADR-0013).
+ * The data model DSL's service layer (roadmap 1.2.1 / BA-85, ADR-0013) and
+ * the logical query layer built on it (roadmap 1.2.2 / BA-86, ADR-0014).
  * Imported by `AppModule` directly, and by `DatasetsModule` (bootstrap on
  * save, drift on re-save, delete on delete) and `MetricsModule` (metrics
  * storage moves through models) — never the other way around, which is what

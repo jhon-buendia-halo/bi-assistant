@@ -1,6 +1,6 @@
 /**
  * The logical query layer's one entry point for "what can the assistant see
- * this turn" (ADR-0013): composes the union of a session's dataset models
+ * this turn" (ADR-0014): composes the union of a session's dataset models
  * into one `SessionModel`, and renders it as the single system block that
  * replaces `entityOrientationLines` + `joinHintBlock` +
  * `metrics.definitionBlock`. Pure — no Nest DI, no I/O — so `SessionsService`,
@@ -70,7 +70,7 @@ function datasetSlug(dataset: string): string {
 }
 
 /** The entity's first `sql`/`rest` binding — the only kinds with a compiler
- * (ADR-0013; mongo/file are schema-only in the beta and are skipped here,
+ * (ADR-0014; mongo/file are schema-only in the beta and are skipped here,
  * never surfaced as queryable). */
 function queryableBinding(entity: Entity): {
   kind: 'sql' | 'rest';
@@ -139,7 +139,7 @@ function mergeEntity(
 }
 
 /**
- * The union of a session's current dataset models (ADR-0013 §1). Entities
+ * The union of a session's current dataset models (ADR-0014 §1). Entities
  * keep their logical name when unique, or when every dataset binding that
  * name points at the same physical address (deduped into one entity
  * remembering every contributing dataset); when two datasets bind the same
@@ -315,10 +315,10 @@ function formatMetricFormula(metric: Metric): string {
   if (metric.agg && metric.of) {
     return `${metric.agg}(${metric.of})`;
   }
-  // Portable form unavailable — the dialect-tagged escape hatch (ADR-0012)
+  // Portable form unavailable — the dialect-tagged escape hatch (ADR-0013)
   // is written against a binding's own physical columns, so the raw SQL
   // text is exactly the kind of physical detail this block must never show
-  // the assistant (ADR-0013 §4); say only that it exists.
+  // the assistant (ADR-0014 §4); say only that it exists.
   return metric.expressions?.sql ? '(custom expression)' : '(no formula)';
 }
 
@@ -353,7 +353,7 @@ function entityLines(
       attribute.name,
     );
     if (rel) {
-      // The exact `via` ref `joins[].via` needs (ADR-0013): "declared" uses a
+      // The exact `via` ref `joins[].via` needs (ADR-0014): "declared" uses a
       // solid arrow, "inferred"/"user" a tilde to hint at confidence, and the
       // relationship's own `name` (when set) is the shorter alternative to
       // the same `via`.
@@ -391,7 +391,7 @@ const DEFAULT_SAMPLES = 3;
 /**
  * The ONE system block the assistant gets about the data model — replaces
  * `entityOrientationLines` + `joinHintBlock` + `metrics.definitionBlock`
- * (ADR-0013). Whole model, no pruning, within budget: samples are dropped
+ * (ADR-0014). Whole model, no pruning, within budget: samples are dropped
  * first, then descriptions, then the entity list itself is truncated with a
  * pointer at `describe_entity`. Never emits a physical table name, a
  * datasource id/kind or a dialect word.

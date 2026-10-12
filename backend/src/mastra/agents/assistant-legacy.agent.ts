@@ -1,5 +1,5 @@
 /**
- * The pre-ADR-0013 assistant, kept verbatim (same instructions, same
+ * The pre-ADR-0014 assistant, kept verbatim (same instructions, same
  * `datasetTools`) under a new id so the eval harness can run the `legacy`
  * path side by side with the current, model-vocabulary `assistant`
  * (`assistant.agent.ts`) — roadmap 1.2.2 §7's "measured by evals"
@@ -20,7 +20,7 @@ export const assistantLegacyAgent = new Agent({
   id: 'assistant-legacy',
   name: 'Questions to Insights Assistant (legacy SQL path)',
   description:
-    "Pre-ADR-0013 assistant — answers business questions by writing and running SQL directly against the session's physical datasets. Kept only for eval comparison.",
+    "Pre-ADR-0014 assistant — answers business questions by writing and running SQL directly against the session's physical datasets. Kept only for eval comparison.",
   instructions: [
     'You are the Questions to Insights assistant — a data analyst working over',
     "the catalogs, schemas and entities in the user's session datasets. Each",

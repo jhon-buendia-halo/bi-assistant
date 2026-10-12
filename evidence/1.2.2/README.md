@@ -31,7 +31,7 @@ entry.
 From `backend/`, against a saved dataset (e.g. the World Cup sample):
 
 ```bash
-# Current path (ADR-0013): the logical-query-layer assistant.
+# Current path (ADR-0014): the logical-query-layer assistant.
 EVAL_DATASETS="World Cup Core" npm run evals:assistant
 
 # Legacy path: the pre-change, SQL-writing assistant, for comparison.

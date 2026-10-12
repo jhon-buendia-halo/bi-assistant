@@ -10,7 +10,7 @@ import { queryEntitiesProvenance } from '../../mastra/tool-services';
 import type { ToolDataRecord } from './entities/session.entity';
 
 /** Tools whose model-visible result has `sql`/`correctedSql` stripped
- * (ADR-0013 §4) — the full result (with SQL, for this record's `input`) is
+ * (ADR-0014 §4) — the full result (with SQL, for this record's `input`) is
  * recovered from `queryEntitiesProvenance` instead. */
 const SQL_STRIPPED_TOOLS = new Set(['query_entities', 'sample_records']);
 
@@ -41,7 +41,7 @@ export function statedRationale(value: unknown): string | undefined {
  * worth capturing on the turn. `run_readonly_sql`/`sample_rows` are the
  * legacy (`assistant-legacy`, dataset.tools.ts) names; `query_entities`/
  * `sample_records`/`run_raw_sql` are the logical-query-layer names
- * (ADR-0013) — both sets are accepted so the eval harness's `legacy` path
+ * (ADR-0014) — both sets are accepted so the eval harness's `legacy` path
  * and a real chat turn's `model` path capture the same way. */
 const DATA_TOOLS = new Set([
   'run_readonly_sql',
@@ -52,7 +52,7 @@ const DATA_TOOLS = new Set([
 ]);
 
 /** SQL-bearing tool names on either path — `run_readonly_sql` (legacy) and
- * `query_entities`/`run_raw_sql` (ADR-0013) all leave a compiled/raw
+ * `query_entities`/`run_raw_sql` (ADR-0014) all leave a compiled/raw
  * statement in `record.input`, re-runnable against a datasource directly
  * (`SessionsService.crossCheckAnswer`/`matchesVerifiedQuery`,
  * `VisualizationService.refreshData`). `sample_records`/`sample_rows` are
@@ -111,7 +111,7 @@ export function toolDataRecord(
       ? safeJson(args['query'])
       : undefined;
   // `run_raw_sql` always flags its contribution as outside the model,
-  // whether or not the statement itself succeeded (ADR-0013 §4).
+  // whether or not the statement itself succeeded (ADR-0014 §4).
   const outsideModel = value.outsideModel === true ? true : undefined;
   // The logical entities behind the call (agents.md 5.1): what the compiled
   // query touched for `query_entities`, the sampled entity for
@@ -132,7 +132,7 @@ export function toolDataRecord(
     };
   }
   if (value.error && typeof value.error === 'object') {
-    // `query_entities`/`run_raw_sql` (ADR-0013) reject with a structured
+    // `query_entities`/`run_raw_sql` (ADR-0014) reject with a structured
     // `{code, message, ...}`, not a string — without this branch a rejected
     // call fell through to the success path below (`rows`/`columns` both
     // default to `[]`), storing a validation failure as a successful
@@ -283,7 +283,7 @@ export function toolRecords(result: unknown): ToolDataRecord[] {
 
 /** The two assistants the grounding guard (and the eval harness) can run
  * against: `model` is the current logical-query-layer assistant
- * (`query_entities`, ADR-0013); `legacy` is the frozen pre-ADR-0013
+ * (`query_entities`, ADR-0014); `legacy` is the frozen pre-ADR-0014
  * SQL-writing assistant (`run_readonly_sql`), kept only for eval comparison.
  * Re-exported here (not just from `assistant.evals.ts`) because the
  * grounding nudge's wording is a property of the prompt, not the eval
@@ -300,7 +300,7 @@ export type AssistantPath = 'model' | 'legacy';
  * correct or retract. `path` picks the tool name that actually exists on the
  * agent being nudged — `assistant-legacy.agent.ts` never learned
  * `query_entities`, and the model-path assistant does not carry
- * `run_readonly_sql` (ADR-0013 §4).
+ * `run_readonly_sql` (ADR-0014 §4).
  */
 export function groundingNudge(
   originalAnswer: string,

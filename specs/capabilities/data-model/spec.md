@@ -1,6 +1,6 @@
 # Data model
 
-Every dataset owns one **data model**: a versioned, storage-neutral description of the data the assistant reasons over. It names the entities, their attributes, the relationships between them and the business metrics, and binds each entity to where its rows physically live. The model exists without user work: it is bootstrapped from the dataset's schema snapshot when the dataset is saved, and for every older dataset when the app starts. Analysts open it from the dataset list to curate it: they edit its YAML or use forms, see each version with a diff, revert, and move it between installs as a `.yaml` file. The assistant never sees a table name or a SQL dialect: it queries the model's logical entities, and one compiler turns those logical queries into SQL for the datasource. Decisions: ADR-0012 (the data model DSL) and ADR-0013 (the logical query layer) in [../../system/architecture.md](../../system/architecture.md). Epic: [BA-2](../../epics/BA-2/spec.md).
+Every dataset owns one **data model**: a versioned, storage-neutral description of the data the assistant reasons over. It names the entities, their attributes, the relationships between them and the business metrics, and binds each entity to where its rows physically live. The model exists without user work: it is bootstrapped from the dataset's schema snapshot when the dataset is saved, and for every older dataset when the app starts. Analysts open it from the dataset list to curate it: they edit its YAML or use forms, see each version with a diff, revert, and move it between installs as a `.yaml` file. The assistant never sees a table name or a SQL dialect: it queries the model's logical entities, and one compiler turns those logical queries into SQL for the datasource. Decisions: ADR-0013 (the data model DSL) and ADR-0014 (the logical query layer) in [../../system/architecture.md](../../system/architecture.md). Epic: [BA-2](../../epics/BA-2/spec.md).
 
 ## Concepts
 
@@ -108,7 +108,7 @@ Capability-local vocabulary:
 - Endpoints: the 19 data model routes (schema, model, versions, version, save, revert, bootstrap, drift with the metrics-import report, resolve, compile, query, export, import, serialize, model metrics list, create, update, delete, metric candidates) in [../../system/api.md](../../system/api.md) section 2.16; the permission of each route in section 1.9; the import-only legacy metrics routes in section 2.4.
 - Collection `data_models` (one document per dataset: versions, current version, last drift, model-managed and deleted metric names, last metrics import), its place among the shared collections, its relation to `datasets` and the startup migration that bootstraps models and imports every owner's metrics: [../../system/data-model.md](../../system/data-model.md) sections 3.13, 3.15, 3.16 and the Migrations table.
 - The assistant's model block, its logical tools (`list_entities`, `describe_entity`, `query_entities`, `sample_records`, `run_raw_sql` flagged outside the model), `query-fixer`, `query-verifier` and `sql-fixer`, and the eval `legacy` path: [../../system/agents.md](../../system/agents.md).
-- Decisions: ADR-0012 and ADR-0013 in [../../system/architecture.md](../../system/architecture.md).
+- Decisions: ADR-0013 and ADR-0014 in [../../system/architecture.md](../../system/architecture.md).
 - Related capabilities: [datasets](../datasets/spec.md) (snapshot, save, delete), [metrics](../metrics/spec.md) (metric rules, Metrics tab, legacy store), [sessions-chat](../sessions-chat/spec.md) (turns that use the model), [admin](../admin/spec.md) (permissions).
 
 ## UI
@@ -147,7 +147,7 @@ Feature: Data model
     Then GET /datasets/<name>/model returns version 1 with source "bootstrap"
 
   Scenario: Metrics created before the change appear in the model and keep working
-    Given a legacy "metrics" row for "avg_attendance" on "world_cup.world_cup.matches" and its dataset doc were seeded directly into SQLite before the app started (predating ADR-0012)
+    Given a legacy "metrics" row for "avg_attendance" on "world_cup.world_cup.matches" and its dataset doc were seeded directly into SQLite before the app started (predating ADR-0013)
     When the backend starts and bootstraps the dataset's model
     Then the model lists the metric "avg_attendance" on entity "matches" with its SQL expression
     And GET /metrics?entities=world_cup.world_cup.matches still returns "avg_attendance" with its original UUID id

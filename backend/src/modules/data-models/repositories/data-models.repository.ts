@@ -10,7 +10,7 @@ import type { DriftReport } from '../drift';
 /**
  * One immutable version of a dataset's data model. Versions are
  * append-only — a save (or a bootstrap refresh) always adds one rather than
- * mutating an existing entry (ADR-0012).
+ * mutating an existing entry (ADR-0013).
  */
 export interface DataModelVersion {
   version: number;
@@ -35,7 +35,7 @@ export interface DataModelDoc {
   /**
    * Metric names authored directly through the model-metrics API (roadmap
    * 1.2.3), lowercase. This is what lets `DataModelsService.syncMetric` /
-   * `removeMetric` (the legacy metrics-panel mirror, ADR-0012) tell "a name
+   * `removeMetric` (the legacy metrics-panel mirror, ADR-0013) tell "a name
    * this model now manages itself" from "a name only the legacy `metrics`
    * store ever wrote" — the model wins for the former; the mirror still
    * applies for the latter. Doc-level (not per-version) because it is

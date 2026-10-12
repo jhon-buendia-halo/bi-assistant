@@ -6,7 +6,7 @@ import { logicalQuerySchema } from '../../modules/data-models/query/logical-quer
 export const queryVerifyOutputSchema = z.object({ query: logicalQuerySchema });
 
 /**
- * Replaces `sql-verifier` in careful mode (ADR-0013 §6): re-derives a
+ * Replaces `sql-verifier` in careful mode (ADR-0014 §6): re-derives a
  * logical query from the question and the rendered model block alone — it
  * never sees the statement the analysis agent ran, so agreement between the
  * two result sets is real corroboration, not an echo of the first answer.

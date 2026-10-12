@@ -10,7 +10,7 @@ export interface VerifiedQueryDoc {
   /** Last successful `run_readonly_sql` statement of that answer. */
   sql: string;
   /** The `query_entities` logical query behind `sql` (JSON), present only
-   * when the answering turn used the logical query layer (ADR-0013) — a
+   * when the answering turn used the logical query layer (ADR-0014) — a
    * `run_readonly_sql`/`run_raw_sql` pair has none. Gates whether this pair
    * is shown to the assistant at all: a SQL-only pair would otherwise
    * re-introduce the physical vocabulary the model is never shown

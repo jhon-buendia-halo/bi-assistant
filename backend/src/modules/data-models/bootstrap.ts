@@ -1,5 +1,5 @@
 /**
- * Bootstraps a v1 `DataModel` from a dataset's physical snapshot (ADR-0012:
+ * Bootstraps a v1 `DataModel` from a dataset's physical snapshot (ADR-0013:
  * "v1 is bootstrapped from the physical snapshot automatically"). Pure and
  * side-effect free save for logging (`Logger.warn`/`.error` calls record
  * dropped data so a silent, lossy bootstrap is at least visible in the
@@ -34,7 +34,7 @@ import { validateDataModel } from './schema/data-model.schema';
 
 const logger = new Logger('data-models/bootstrap');
 
-/** Prompt-grounding sample budget per attribute (ADR-0012's `Attribute.samples`). */
+/** Prompt-grounding sample budget per attribute (ADR-0013's `Attribute.samples`). */
 const MAX_SAMPLES = 6;
 
 /** A column whose name alone implies it is an identity, not a measure. */
@@ -509,7 +509,7 @@ export function keptSourceIdFor(
 }
 
 /**
- * The metrics import (data-model R34, R35; data-model.md M13): the legacy
+ * The metrics import (data-model R34, R35; data-model.md M14): the legacy
  * metrics of every owner whose table is one of `targets` (keyed by the
  * lowercase physical address), in creation-then-id order, the first of each
  * lowercase name imported onto its entity with its owner as `author`. A

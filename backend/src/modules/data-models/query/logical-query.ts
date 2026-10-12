@@ -1,5 +1,5 @@
 /**
- * The logical query layer's input shape (ADR-0013): the assistant never
+ * The logical query layer's input shape (ADR-0014): the assistant never
  * writes SQL, it writes a `LogicalQuery` against the session's composed
  * model (`../session-model.ts`). `logicalQuerySchema` is both the Zod parser
  * for the API (`POST /datasets/:name/model/compile`) and the tool input

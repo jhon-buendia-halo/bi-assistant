@@ -1,6 +1,6 @@
 /**
  * The assistant's prompt, split out so a Jest spec can check its vocabulary
- * (ADR-0013: no catalog/schema/table key, no dialect word) without pulling
+ * (ADR-0014: no catalog/schema/table key, no dialect word) without pulling
  * in `@mastra/core/agent`'s ESM-only transitive dependencies — see
  * `agent-constants.ts`'s header for why that import must stay out of
  * CommonJS-loaded modules. `assistant.agent.ts` is the only other importer.

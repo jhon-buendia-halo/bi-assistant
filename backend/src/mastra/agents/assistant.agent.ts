@@ -1,5 +1,5 @@
 /**
- * The harness's main agent, rewritten to the model vocabulary (ADR-0013,
+ * The harness's main agent, rewritten to the model vocabulary (ADR-0014,
  * roadmap 1.2.2): no catalogs, schemas, tables, SQL dialects, Databricks,
  * PostgreSQL or SQLite anywhere in these instructions — the assistant
  * reasons over the session's data model (entities, attributes,

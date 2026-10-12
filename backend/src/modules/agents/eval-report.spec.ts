@@ -37,7 +37,7 @@ function baseRun(overrides: Partial<EvalRunView> = {}): EvalRunView {
   };
 }
 
-describe('renderEvalRunMarkdown — path and outside-the-model count (ADR-0013)', () => {
+describe('renderEvalRunMarkdown — path and outside-the-model count (ADR-0014)', () => {
   it('reports the path and the outside-the-model count', () => {
     const markdown = renderEvalRunMarkdown(
       baseRun({

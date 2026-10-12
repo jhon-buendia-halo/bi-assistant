@@ -173,7 +173,7 @@ flowchart TB
   - Unreachable endpoints must never fail startup or requests. Exporters drop data instead.
 
 #### ADR-0010 — Multi-user org server mode with Entra ID sign-in and server-enforced roles
-- **Status:** Accepted; private metrics superseded by ADR-0012 (metrics live in the dataset's shared data model)
+- **Status:** Accepted; private metrics superseded by ADR-0013 (metrics live in the dataset's shared data model)
 - **Date:** 2026-10-10
 - **Context:**
   - The vision used to rule out multi-user use ("no login, no roles and no shared server"). The Admin Panel epic ([BA-161](https://halo-powered.atlassian.net/browse/BA-161)) reverses that, from the Figma board "Agent Hub — E2E lifecycle (proposed)", section *Admin panel (draft)*.
@@ -264,7 +264,7 @@ flowchart LR
     mastrasvc["MastraService<br/>(getAgent, ensureSessionWorkspace)"]
     toolsvc["tool-services<br/>(setDatasetToolServices bridge)"]
     resolver["model-resolver<br/>(setAgentModelResolver)"]
-    assistant["assistant agent<br/>(model vocabulary, ADR-0013)"]
+    assistant["assistant agent<br/>(model vocabulary, ADR-0014)"]
     legacyassistant["assistant-legacy agent<br/>(eval legacy path only)"]
     designer["visualization agent"]
     sqlagents["sql-fixer (runtime repair),<br/>query-fixer, query-verifier agents"]
@@ -464,7 +464,7 @@ flowchart LR
   - A renderer whose cache disagrees with the backend (another renderer changed the choice) shows its cached theme for one frame, then switches.
   - Existing users who never chose a theme move from System to Light.
 
-#### ADR-0012 — A storage-neutral data model DSL as the source of truth the assistant reasons over
+#### ADR-0013 — A storage-neutral data model DSL as the source of truth the assistant reasons over
 - **Status:** Accepted. Numbered ADR-0006 on the old BA-2 branch; renumbered when ported onto `main` (roadmap 1.2.4), where ADR-0006 and ADR-0007 were already taken.
 - **Date:** 2026-10-01
 - **Context:** The assistant learned the data model from a physical snapshot (`DatasetDoc.entities[]`), a separate metrics table and knowledge snippets bound to `catalog.schema.table`, rendered as four prompt blocks with independent budgets; nothing was versioned or diffable, and non-SQL datasources (REST today, MongoDB / CSV / JSON later) do not fit a table-shaped model. Evidence and alternatives (Ossie-shaped YAML, Malloy, typed JSON) are in [docs/plans/ba-2-data-model-dsl-alternatives.md](../../docs/plans/ba-2-data-model-dsl-alternatives.md).
@@ -477,10 +477,10 @@ flowchart LR
     - Metrics stop being private to their owner and become part of the shared model, so ADR-0010's owner scope no longer applies to them. At startup, every owner's legacy metrics are imported into the model of the dataset that covers them, reading the raw store without the owner filter, and each imported metric records its `author`. On a lowercase name clash the first by `createdAt`, then id, wins; the rest are listed in a metrics-import report on the model document (`lastMetricsImport`, returned by drift as `metricsImport`). Duplicate names therefore no longer make bootstrap fail validation.
     - The legacy `metrics` store is import-only. A legacy write of a name the model already has from another author is skipped and added to the report; it never overwrites the model's metric.
 
-#### ADR-0013 — The assistant reasons over abstract entities through a logical query layer
+#### ADR-0014 — The assistant reasons over abstract entities through a logical query layer
 - **Status:** Accepted on 2026-10-02 with roadmap 1.2.2. Numbered ADR-0007 on the old BA-2 branch; renumbered when ported onto `main` (roadmap 1.2.4).
 - **Date:** 2026-10-01
-- **Context:** With ADR-0012 the model is storage-neutral, but the assistant still wrote dialect SQL against physical tables, which ties reasoning to the datasource and lets metric and join logic drift per turn. Compiler-based systems report 98–100% accuracy on modelled questions and 0% outside the model; direct SQL keeps coverage but fails silently.
+- **Context:** With ADR-0013 the model is storage-neutral, but the assistant still wrote dialect SQL against physical tables, which ties reasoning to the datasource and lets metric and join logic drift per turn. Compiler-based systems report 98–100% accuracy on modelled questions and 0% outside the model; direct SQL keeps coverage but fails silently.
 - **Decision:** The assistant's prompt and tools speak only the model's vocabulary: `describe_entity`, `query_entities` (a JSON-schema-constrained logical query: from, select, portable predicates, group_by, order_by, limit, traverse along declared relationships) and `sample_records`. One adapter per binding kind compiles the logical query: the `sql` adapter targets Postgres, Databricks SQL and SQLite in one place; `rest` reuses the materialise-to-SQLite path. Raw SQL remains only as an internal fallback when the compiler rejects a query, and every such answer is flagged "outside the model" so evals and trust signals count it. `sql-fixer` keeps repairing runtime errors on already-compiled SQL; `query-fixer` (compile/semantic errors, one automatic retry inside `query_entities`) and `query-verifier` (careful mode's independent second opinion) replace `sql-verifier` at the logical level.
 - **Consequences:**
   - Metrics and joins are correct by construction; dialect differences live in one compiler; a new query grammar without pretraining must stay close to SELECT / WHERE / GROUP BY semantics and be schema-constrained; the compiler is the critical path and ships with the `sql` adapter first. Implemented by roadmap 1.2.2 / BA-86: `backend/src/modules/data-models/session-model.ts` (composition + rendered block), `query/logical-query.ts` (schema + resolution), `query/compile-sql.ts` (the three-dialect compiler), `mastra/tools/model.tools.ts`, and `mastra/agents/{query-fixer,query-verifier}.agent.ts`.

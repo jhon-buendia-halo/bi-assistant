@@ -189,7 +189,7 @@ User agents (definitions)
 - The `agents` collection (user agents) and the built-in pins document: [../../system/data-model.md](../../system/data-model.md) sections 3.10 and 3.2; decision ADR-0008 in [../../system/architecture.md](../../system/architecture.md).
 - Endpoints `GET /agents`, `GET /agents/:key`, `GET /agents/:key/evals`, `POST /agents/:key/evals/run`, `GET /agents/:key/evals/runs`, `GET|DELETE /agents/:key/evals/runs/:jobId`, `GET /agents/:key/evals/runs/:jobId/download`: [../../system/api.md](../../system/api.md).
 - Eval run documents (run, per-question result, check result, tool call, regression summary): [../../system/data-model.md](../../system/data-model.md).
-- The registered agents (the assistant, the hidden `assistant-legacy` and the six system agents), the assistant's tools and memory settings, the judge's prompt and the eval paths: [../../system/agents.md](../../system/agents.md). The data model the assistant is evaluated over: [../data-model/spec.md](../data-model/spec.md); why: ADR-0012 and ADR-0013 in [../../system/architecture.md](../../system/architecture.md).
+- The registered agents (the assistant, the hidden `assistant-legacy` and the six system agents), the assistant's tools and memory settings, the judge's prompt and the eval paths: [../../system/agents.md](../../system/agents.md). The data model the assistant is evaluated over: [../data-model/spec.md](../data-model/spec.md); why: ADR-0013 and ADR-0014 in [../../system/architecture.md](../../system/architecture.md).
 - Sample fixtures and their required entities: [../testing-data/spec.md](../testing-data/spec.md).
 - Terms: [../../product/glossary.md](../../product/glossary.md).
 

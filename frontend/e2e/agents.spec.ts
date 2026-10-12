@@ -55,7 +55,7 @@ test('opens an agent from the Agents list and switches between its tabs', async 
   );
 
   await page.getByTestId('agent-tab-tools').click();
-  // ADR-0013 / roadmap 1.2.2: the assistant speaks the model vocabulary —
+  // ADR-0014 / roadmap 1.2.2: the assistant speaks the model vocabulary —
   // `query_entities`, not the old `run_readonly_sql`.
   await expect(page.getByText('query_entities')).toBeVisible();
   await expect(page.getByText('ask_clarification')).toBeVisible();

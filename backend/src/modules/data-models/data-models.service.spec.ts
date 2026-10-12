@@ -1060,7 +1060,7 @@ describe('DataModelsService delete tombstone (review finding 6): a deleted metri
 });
 
 // --- Metrics import across owners (data-model R34-R36, data-model.md 3.16
-// and M13). Legacy metrics are written straight into the raw store, the way
+// and M14). Legacy metrics are written straight into the raw store, the way
 // `OwnedDocStore` stores them for an org server user: with `ownerId`. ---
 
 const ADA = 'user-ada';
@@ -1411,7 +1411,7 @@ describe('DataModelsService legacy-write mirror with authors (data-model R36)', 
   });
 });
 
-describe('DataModelsService model-metric author (metrics R14, api.md 106-107)', () => {
+describe('DataModelsService model-metric author (metrics R14, api.md 109-110)', () => {
   function orgUser(id: string): CurrentUser {
     return {
       id,

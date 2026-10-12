@@ -8,7 +8,7 @@ This file owns **prompts, tool contracts, per-turn context and model routing**. 
 - The data model the assistant reasons over (entities, attributes, relationships, metrics, bindings, versions) and the logical query grammar's resolution and compile rules: [data-model](../capabilities/data-model/spec.md); its stored shape: [data-model.md](data-model.md).
 - Persisted shapes (chat messages, tool data records, visual metadata, visual version files, knowledge snippets, eval runs, LLM settings): [data-model.md](data-model.md).
 - HTTP endpoints and the chat event stream wire format: [api.md](api.md).
-- Why an agent framework at all, and why visuals are versioned conversation participants: ADR-0004 and ADR-0005 in [architecture.md](architecture.md). Why the assistant reasons over a storage-neutral data model through a logical query layer, never over physical tables: ADR-0012 and ADR-0013 in [architecture.md](architecture.md).
+- Why an agent framework at all, and why visuals are versioned conversation participants: ADR-0004 and ADR-0005 in [architecture.md](architecture.md). Why the assistant reasons over a storage-neutral data model through a logical query layer, never over physical tables: ADR-0013 and ADR-0014 in [architecture.md](architecture.md).
 
 Stack neutrality: the contracts below (agent ids, prompts, tool names and schemas, context blocks, budgets, strings) are what any rebuild must honour. *Implementation notes* name the current libraries (Mastra, Zod, the Vercel AI SDK under Mastra).
 
@@ -43,7 +43,7 @@ All agents are registered once in a single framework instance and looked up by *
 | Registry key | Agent id | Display name | Description (verbatim) |
 |---|---|---|---|
 | `assistant` | `assistant` | Questions to Insights Assistant | Answers business questions over a session's data model — plans the analysis, queries the entities, and explains the result. |
-| `assistant-legacy` | `assistant-legacy` | Questions to Insights Assistant (legacy SQL path) | Pre-ADR-0013 assistant — answers business questions by writing and running SQL directly against the session's physical datasets. Kept only for eval comparison. |
+| `assistant-legacy` | `assistant-legacy` | Questions to Insights Assistant (legacy SQL path) | Pre-ADR-0014 assistant — answers business questions by writing and running SQL directly against the session's physical datasets. Kept only for eval comparison. |
 | `visualization` | `interactive-visual-designer` | Interactive Visual Designer | Turns a completed analysis answer into an interactive visual, and tailors it on request. |
 | `sql-fixer` | `sql-fixer` | SQL Fixer | Repairs a SQL statement that failed to execute, using the engine error as the signal. |
 | `query-fixer` | `query-fixer` | Query Fixer | Repairs a logical query that failed to compile or validate, using the compiler's structured issue as the signal. |
@@ -167,7 +167,7 @@ LenAI deployments are never swapped to `openai/gpt-4.1-mini` (rule 2 requires no
 
 ### 2.1 `assistant` — Questions to Insights Assistant
 
-**Purpose.** The data analyst the user chats with: maps a question to the logical entities, attributes, relationships and metrics of the session's data model ([data-model](../capabilities/data-model/spec.md)), answers it with logical queries that the system compiles and runs read-only, asks one clarification when the question is genuinely ambiguous, and creates/tailors visuals through tools. Its prompt, its per-turn context and its tool results never name a physical table, a datasource id or kind, or a SQL dialect (ADR-0013); the only raw-SQL path is the flagged last resort `run_raw_sql` (3.5).
+**Purpose.** The data analyst the user chats with: maps a question to the logical entities, attributes, relationships and metrics of the session's data model ([data-model](../capabilities/data-model/spec.md)), answers it with logical queries that the system compiles and runs read-only, asks one clarification when the question is genuinely ambiguous, and creates/tailors visuals through tools. Its prompt, its per-turn context and its tool results never name a physical table, a datasource id or kind, or a SQL dialect (ADR-0014); the only raw-SQL path is the flagged last resort `run_raw_sql` (3.5).
 
 **Invoked by.**
 
@@ -242,7 +242,7 @@ LenAI deployments are never swapped to `openai/gpt-4.1-mini` (rule 2 requires no
 - A33. Only call something "top", "highest" or "lowest" when values actually differ and the query ordered by them; when everything ties, say so.
 - A34. A warning attached to a query result is about its own query: act on it and re-run before answering, rather than passing it to the user.
 
-Reference wording of the full prompt: Appendix A. The pre-ADR-0013 prompt, kept by `assistant-legacy`, is Appendix B.
+Reference wording of the full prompt: Appendix A. The pre-ADR-0014 prompt, kept by `assistant-legacy`, is Appendix B.
 
 ### 2.2 `visualization` (id `interactive-visual-designer`) — Interactive Visual Designer
 
@@ -329,7 +329,7 @@ Rules:
 
 ### 2.4 `query-verifier` — Query Verifier
 
-**Purpose.** Careful mode's independent second opinion, at the logical level: re-derives a logical query for the user's question from the question and the rendered model block alone, **without ever seeing the logical query or the SQL the assistant ran**, so agreement between the two result sets is corroboration, not an echo. It replaced the former `sql-verifier`, which re-derived SQL against the physical schema (ADR-0013).
+**Purpose.** Careful mode's independent second opinion, at the logical level: re-derives a logical query for the user's question from the question and the rendered model block alone, **without ever seeing the logical query or the SQL the assistant ran**, so agreement between the two result sets is corroboration, not an echo. It replaced the former `sql-verifier`, which re-derived SQL against the physical schema (ADR-0014).
 
 **Invoked by.** The careful-mode cross-check after a chat turn (5.8).
 
@@ -581,7 +581,7 @@ The report markdown (title, question, meta line, executive summary, body, data a
 
 ### 2.8 `query-fixer` — Query Fixer
 
-**Purpose.** Compile/semantic repair of one logical query that the compiler rejected, using the compiler's structured issues as the signal (ADR-0013). It runs once, automatically, inside `query_entities` and `sample_records` before a fixable issue ever reaches the assistant as an error. The assistant never sees this agent; it sees the result of the corrected query, with a note saying it was auto-corrected.
+**Purpose.** Compile/semantic repair of one logical query that the compiler rejected, using the compiler's structured issues as the signal (ADR-0014). It runs once, automatically, inside `query_entities` and `sample_records` before a fixable issue ever reaches the assistant as an error. The assistant never sees this agent; it sees the result of the corrected query, with a note saying it was auto-corrected.
 
 **Invoked by.** Logical query execution (5.11) when compilation fails with at least one issue of code `unknown_attribute`, `unknown_metric` or `ambiguous_path`. Never by careful mode, which reports a verifier query that fails to compile as an error.
 
@@ -629,7 +629,7 @@ Rules:
 
 ### 2.9 `assistant-legacy` — Questions to Insights Assistant (legacy SQL path)
 
-**Purpose.** The assistant as it was before the logical query layer (ADR-0013), frozen, so the eval harness can run the same questions through both paths and compare them. It writes dialect SQL against fully-qualified physical `catalog.schema.table` names. It is not part of any user-facing flow: it is hidden from the catalogue and the Agent Hub (1.2) and is never used by chat turns, the grounding pass, deep analysis, careful mode or user agents.
+**Purpose.** The assistant as it was before the logical query layer (ADR-0014), frozen, so the eval harness can run the same questions through both paths and compare them. It writes dialect SQL against fully-qualified physical `catalog.schema.table` names. It is not part of any user-facing flow: it is hidden from the catalogue and the Agent Hub (1.2) and is never used by chat turns, the grounding pass, deep analysis, careful mode or user agents.
 
 **Invoked by.** Only the eval harness's `legacy` path (8.6), in generate mode with `maxSteps: 15`, no memory and no effort option.
 
@@ -639,13 +639,13 @@ Rules:
 
 **Model.** The persisted model (1.3); it ignores `agent-overrides`.
 
-**Prompt.** The pre-ADR-0013 assistant prompt, verbatim in Appendix B. Its rules differ from 2.1 in that it names the three datasource kinds and their dialects, works with `sample_rows` and `run_readonly_sql`, cites columns rather than attributes, requires fully-qualified `catalog.schema.table` names in the dialect of the entity's datasource with `datasourceId` when several datasources are in scope, and asks to refine and retry a failed or timed-out query (simpler aggregation, fewer columns, a LIMIT). Its prompt and tools MUST NOT be edited to follow later changes to the assistant: its only purpose is to stay the fixed baseline.
+**Prompt.** The pre-ADR-0014 assistant prompt, verbatim in Appendix B. Its rules differ from 2.1 in that it names the three datasource kinds and their dialects, works with `sample_rows` and `run_readonly_sql`, cites columns rather than attributes, requires fully-qualified `catalog.schema.table` names in the dialect of the entity's datasource with `datasourceId` when several datasources are in scope, and asks to refine and retry a failed or timed-out query (simpler aggregation, fewer columns, a LIMIT). Its prompt and tools MUST NOT be edited to follow later changes to the assistant: its only purpose is to stay the fixed baseline.
 
 ---
 
 ## 3. Tools
 
-Two tool sets exist. The **model tools** (3.1-3.5) belong to the `assistant` and speak only the session model's logical vocabulary (ADR-0013). The **legacy dataset tools** (3.10) belong only to `assistant-legacy`. The visual and clarification tools (3.6-3.8) belong to both. Every tool returns a JSON object; **tools never throw to the model** — failures come back as `{ error: … }` so the model can react. Data tools are scoped by the session's dataset names on the requestContext (4.2).
+Two tool sets exist. The **model tools** (3.1-3.5) belong to the `assistant` and speak only the session model's logical vocabulary (ADR-0014). The **legacy dataset tools** (3.10) belong only to `assistant-legacy`. The visual and clarification tools (3.6-3.8) belong to both. Every tool returns a JSON object; **tools never throw to the model** — failures come back as `{ error: … }` so the model can react. Data tools are scoped by the session's dataset names on the requestContext (4.2).
 
 **Session model.** Every model tool works on the session model composed, at call time, from the current model version of each of the session's datasets (4.1, *Session model*). An entity is named by its logical name, matched case-insensitively. A name that is not in the session model → `Entity "<e>" is not part of this session's model`.
 
@@ -727,7 +727,7 @@ Two tool sets exist. The **model tools** (3.1-3.5) belong to the `assistant` and
 - **Description** (lines joined with a space): `Last resort, only when query_entities reported it cannot express the question (not for a typo you can just fix): run one read-only SQL statement directly against the entity you name. The answer will be marked as outside the data model, so state that plainly if you use this.`
 - **Input:** `{ entity: string ("Logical entity name whose storage this statement runs against"), sql: string ("A single SELECT or WITH statement"), limit?: int 1..500 (default 100), rationale: string }`.
 - **Behaviour:** runs the statement on the named entity's datasource through the read-only guard (5.2) and SQL repair (5.3), with the session's datasets as the fixer's schema. The datasource is resolved exactly as for `query_entities` (5.11 step 2): an entity bound to the placeholder `default` datasource (a dataset saved before datasources existed) runs on the default datasource. It does not check which tables the statement reads. After a successful run the result guards (5.4) inspect the statement that ran and its rows.
-- **Output:** `{ columns, rows, correctedSql?, truncated?, note?, warnings?, outsideModel: true }`. `correctedSql` (and the note asking to cite it) is returned on purpose: the raw path is outside the data model by definition (the assistant writes physical SQL here itself, and the answer is flagged), so the no-physical-names rule of ADR-0013 does not apply to it. It is the only tool result that carries SQL (section 3, *No physical names back to the model*).
+- **Output:** `{ columns, rows, correctedSql?, truncated?, note?, warnings?, outsideModel: true }`. `correctedSql` (and the note asking to cite it) is returned on purpose: the raw path is outside the data model by definition (the assistant writes physical SQL here itself, and the answer is flagged), so the no-physical-names rule of ADR-0014 does not apply to it. It is the only tool result that carries SQL (section 3, *No physical names back to the model*).
 - **Errors:** an unknown entity → `{ error: 'Entity "<e>" is not part of this session\'s model', outsideModel: true }`; a guard rejection or engine failure (after repair) → `{ error: <sanitized message>, outsideModel: true }`.
 - **Side effects:** live read; may invoke `sql-fixer`. Every call, successful or not, is captured as a data record with `outsideModel: true`, which flags the whole answer as outside the data model (5.7) and shows the answer's **Outside the data model** chip ([ui.md](ui.md) 4.12 Session chat).
 
@@ -760,7 +760,7 @@ Because the assistant (and designer) are bound to the session workspace, the fra
 
 ### 3.10 Legacy dataset tools (`assistant-legacy` only)
 
-The pre-ADR-0013 tools, kept unchanged for the eval harness's `legacy` path (8.6). They name physical entities (`catalog.schema.table`) and datasources. They read the saved dataset snapshots, not the data model.
+The pre-ADR-0014 tools, kept unchanged for the eval harness's `legacy` path (8.6). They name physical entities (`catalog.schema.table`) and datasources. They read the saved dataset snapshots, not the data model.
 
 **Entity/datasource resolution rules** (shared by these four tools):
 
@@ -803,7 +803,7 @@ The pre-ADR-0013 tools, kept unchanged for the eval harness's `legacy` path (8.6
 
 ### 4.1 System context blocks
 
-For every assistant call made on behalf of a session (chat turns, the grounding pass, deep-analysis calls) the orchestrator appends these system messages, **in this order**, after the system prompt. Blocks that would be empty are omitted. One rendered model block replaces the former dataset orientation, join-hint and governed-metrics blocks (ADR-0013); `assistant-legacy` never receives these blocks (its eval context is in 8.6).
+For every assistant call made on behalf of a session (chat turns, the grounding pass, deep-analysis calls) the orchestrator appends these system messages, **in this order**, after the system prompt. Blocks that would be empty are omitted. One rendered model block replaces the former dataset orientation, join-hint and governed-metrics blocks (ADR-0014); `assistant-legacy` never receives these blocks (its eval context is in 8.6).
 
 **Session model.** Built at call time from the **current model version** of each of the session's datasets ([data-model](../capabilities/data-model/spec.md)); the `(dataset, version)` pairs used are put on the requestContext (`model-versions`, 4.2) and stored on the answer (5.7). Composition:
 
@@ -1066,7 +1066,7 @@ Composed answer: <guidance>          ← only when composition applies
 
 ### 5.11 Logical query execution
 
-How `query_entities` and `sample_records` (and, from step 2, the careful-mode verifier query) turn a logical query into rows (ADR-0013). Resolution and compile rules are owned by [data-model](../capabilities/data-model/spec.md).
+How `query_entities` and `sample_records` (and, from step 2, the careful-mode verifier query) turn a logical query into rows (ADR-0014). Resolution and compile rules are owned by [data-model](../capabilities/data-model/spec.md).
 
 1. Compose the session model (4.1).
 2. Pick the dialect from the root entity (`from`): a `rest` binding compiles as `sqlite` (the REST connector runs SQL on an in-memory SQLite copy, [datasources](../capabilities/datasources/spec.md) R36); a `sql` binding compiles for its datasource's kind, `postgres` or `databricks`. A binding whose datasource is the placeholder `default` (a dataset saved before datasources existed) resolves to the default datasource. An unknown root entity or an unresolvable datasource falls back to `postgres` and fails clearly later.
@@ -1382,10 +1382,10 @@ A case **passes** when it has at least one check and every check scored 1. Each 
 
 ### 8.6 Eval paths (`model` and `legacy`)
 
-A run exercises one **path** (ADR-0013), chosen when it starts: the `path` field of the run request body ([api.md](api.md) 2.6; `legacy` selects the legacy path, any other value or none selects `model`) or `EVAL_PATH` for the CLI. The Evals UI always starts `model` runs.
+A run exercises one **path** (ADR-0014), chosen when it starts: the `path` field of the run request body ([api.md](api.md) 2.6; `legacy` selects the legacy path, any other value or none selects `model`) or `EVAL_PATH` for the CLI. The Evals UI always starts `model` runs.
 
 - **`model`** — the `assistant` (2.1) with the model tools and the rendered model block. This is what chat runs.
-- **`legacy`** — `assistant-legacy` (2.9) with the legacy dataset tools (3.10) and, instead of the model block, the two pre-ADR-0013 blocks below, so the same questions can be compared before and after the logical query layer. Both blocks read the datasets' saved snapshots.
+- **`legacy`** — `assistant-legacy` (2.9) with the legacy dataset tools (3.10) and, instead of the model block, the two pre-ADR-0014 blocks below, so the same questions can be compared before and after the logical query layer. Both blocks read the datasets' saved snapshots.
 
 Legacy orientation block (dataset half only; evals send no visuals lines):
 
@@ -1582,7 +1582,7 @@ Rules:
 
 ## Appendix B — `assistant-legacy` system prompt (frozen)
 
-The pre-ADR-0013 assistant prompt, kept verbatim by `assistant-legacy` (2.9). Lines are joined with `\n`. It is never edited.
+The pre-ADR-0014 assistant prompt, kept verbatim by `assistant-legacy` (2.9). Lines are joined with `\n`. It is never edited.
 
 ```
 You are the Questions to Insights assistant — a data analyst working over

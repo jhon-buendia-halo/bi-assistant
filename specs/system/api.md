@@ -59,7 +59,7 @@ Clients read the error text from `error.message` (Style B) or `body.message` wit
 
 ### 1.4 Success status codes
 
-POST handlers return the framework default **201 Created**, except where an endpoint states **200**: the two SSE endpoints (5 and 54, 200 once the stream starts, whatever it then carries), `POST /developer-settings/test-endpoint` (55), `POST /testing-data/:fixtureId/load` (56), `POST /auth/logout` (63) and `POST /admin/agents/transfer` (86), the data-model POSTs `revert`, `resolve`, `compile`, `query`, `import` and `serialize` (96, 99, 100, 101, 103, 104); `POST /admin/role-assignments` (79) and `POST /admin/role-mappings` (89) answer 200 when nothing was written. GET/PUT/DELETE return **200**; `DELETE /knowledge/:id` returns **204 No Content**. The file downloads write the response themselves and return **200**. Clients treat any 2xx as success and do not depend on 200 vs 201.
+POST handlers return the framework default **201 Created**, except where an endpoint states **200**: the two SSE endpoints (5 and 54, 200 once the stream starts, whatever it then carries), `POST /developer-settings/test-endpoint` (55), `POST /testing-data/:fixtureId/load` (56), `POST /auth/logout` (63) and `POST /admin/agents/transfer` (86), the data-model POSTs `revert`, `resolve`, `compile`, `query`, `import` and `serialize` (99, 102, 103, 104, 106, 107); `POST /admin/role-assignments` (79) and `POST /admin/role-mappings` (89) answer 200 when nothing was written. GET/PUT/DELETE return **200**; `DELETE /knowledge/:id` returns **204 No Content**. The file downloads write the response themselves and return **200**. Clients treat any 2xx as success and do not depend on 200 vs 201.
 
 ### 1.5 Validation
 
@@ -356,9 +356,9 @@ Controller prefix `/metrics`. Capability: metrics. Shape `MetricDoc` in data-mod
 | 27 | `PUT /metrics/:id` | Replace | yes |
 | 28 | `DELETE /metrics/:id` | Delete | yes |
 
-**Legacy store, import-only.** The `/metrics` store is no longer where metrics are edited: metrics live on the dataset's data model (2.16, endpoints 105-109). At startup every owner's legacy metrics are imported into the model that covers them ([data-model.md](data-model.md) M13), and a write through 26-28 is mirrored into the models that bind its entity unless the model already manages that name itself. A write of a name the model already holds from another author is skipped and appended to that model's metrics-import report (`lastMetricsImport`, 98). A delete (28), and the old name of a rename through 27, removes the name from a model only when the model's metric of that name has the legacy metric's owner as its `author` (both absent in local mode) and the model does not manage the name itself; a model metric of another author is never removed, so a user whose metric was skipped cannot delete another author's shared metric ([data-model](../capabilities/data-model/spec.md) R36). Endpoints 24-28 stay for compatibility; the UI no longer calls them.
+**Legacy store, import-only.** The `/metrics` store is no longer where metrics are edited: metrics live on the dataset's data model (2.16, endpoints 108-112). At startup every owner's legacy metrics are imported into the model that covers them ([data-model.md](data-model.md) M14), and a write through 26-28 is mirrored into the models that bind its entity unless the model already manages that name itself. A write of a name the model already holds from another author is skipped and appended to that model's metrics-import report (`lastMetricsImport`, 101). A delete (28), and the old name of a rename through 27, removes the name from a model only when the model's metric of that name has the legacy metric's owner as its `author` (both absent in local mode) and the model does not manage the name itself; a model metric of another author is never removed, so a user whose metric was skipped cannot delete another author's shared metric ([data-model](../capabilities/data-model/spec.md) R36). Endpoints 24-28 stay for compatibility; the UI no longer calls them.
 
-The model-scoped candidates route `GET /datasets/:name/model/metrics/candidates` is served by the unprefixed `ModelMetricCandidatesController` in the metrics module, in a file of its own; it is endpoint 109 in 2.16.
+The model-scoped candidates route `GET /datasets/:name/model/metrics/candidates` is served by the unprefixed `ModelMetricCandidatesController` in the metrics module, in a file of its own; it is endpoint 112 in 2.16.
 
 `MetricInput` (request body for 26 and 27): `{ name: string; label: string; entity: string; expression: string; description?: string; datasourceId?: string; dimensions?: string[]; sourceVerifiedQueryId?: string }`. Non-string required fields are coerced to `''` before validation.
 
@@ -969,25 +969,25 @@ No controller prefix: `DataModelsController` and `ModelMetricCandidatesControlle
 
 | # | Method + path | Purpose | FE |
 |---|---|---|---|
-| 91 | `GET /data-models/schema.json` | JSON Schema of the model DSL | no |
-| 92 | `GET /datasets/:name/model` | Current version of a dataset's model | yes |
-| 93 | `GET /datasets/:name/model/versions` | Every version, newest data included | yes |
-| 94 | `GET /datasets/:name/model/versions/:version` | One version | yes |
-| 95 | `PUT /datasets/:name/model` | Validate YAML and save it as a new version | yes |
-| 96 | `POST /datasets/:name/model/revert` | Move the current pointer to an older version | yes |
-| 97 | `POST /datasets/:name/model/bootstrap` | Rebuild from the dataset snapshot, keeping the current metrics | yes |
-| 98 | `GET /datasets/:name/model/drift` | Drift report and metrics-import report | yes |
-| 99 | `POST /datasets/:name/model/resolve` | Resolve references against a version | no |
-| 100 | `POST /datasets/:name/model/compile` | Compile a logical query to SQL, no database call | no |
-| 101 | `POST /datasets/:name/model/query` | Run a logical query on the dataset's datasource | no |
-| 102 | `GET /datasets/:name/model/export` | Download a version's YAML | yes |
-| 103 | `POST /datasets/:name/model/import` | Validate an uploaded YAML and save it as a new version | yes |
-| 104 | `POST /datasets/:name/model/serialize` | Serialise a model object to canonical YAML | yes |
-| 105 | `GET /datasets/:name/model/metrics` | Metrics of the current version | yes |
-| 106 | `POST /datasets/:name/model/metrics` | Add a metric (new version) | yes |
-| 107 | `PUT /datasets/:name/model/metrics/:metricName` | Replace a metric (new version) | yes |
-| 108 | `DELETE /datasets/:name/model/metrics/:metricName` | Remove a metric (new version) | yes |
-| 109 | `GET /datasets/:name/model/metrics/candidates` | Verified queries offered as prefilled metric drafts | yes |
+| 94 | `GET /data-models/schema.json` | JSON Schema of the model DSL | no |
+| 95 | `GET /datasets/:name/model` | Current version of a dataset's model | yes |
+| 96 | `GET /datasets/:name/model/versions` | Every version, newest data included | yes |
+| 97 | `GET /datasets/:name/model/versions/:version` | One version | yes |
+| 98 | `PUT /datasets/:name/model` | Validate YAML and save it as a new version | yes |
+| 99 | `POST /datasets/:name/model/revert` | Move the current pointer to an older version | yes |
+| 100 | `POST /datasets/:name/model/bootstrap` | Rebuild from the dataset snapshot, keeping the current metrics | yes |
+| 101 | `GET /datasets/:name/model/drift` | Drift report and metrics-import report | yes |
+| 102 | `POST /datasets/:name/model/resolve` | Resolve references against a version | no |
+| 103 | `POST /datasets/:name/model/compile` | Compile a logical query to SQL, no database call | no |
+| 104 | `POST /datasets/:name/model/query` | Run a logical query on the dataset's datasource | no |
+| 105 | `GET /datasets/:name/model/export` | Download a version's YAML | yes |
+| 106 | `POST /datasets/:name/model/import` | Validate an uploaded YAML and save it as a new version | yes |
+| 107 | `POST /datasets/:name/model/serialize` | Serialise a model object to canonical YAML | yes |
+| 108 | `GET /datasets/:name/model/metrics` | Metrics of the current version | yes |
+| 109 | `POST /datasets/:name/model/metrics` | Add a metric (new version) | yes |
+| 110 | `PUT /datasets/:name/model/metrics/:metricName` | Replace a metric (new version) | yes |
+| 111 | `DELETE /datasets/:name/model/metrics/:metricName` | Remove a metric (new version) | yes |
+| 112 | `GET /datasets/:name/model/metrics/candidates` | Verified queries offered as prefilled metric drafts | yes |
 
 Shared shapes (entities `DataModel`, `Metric`, `DataModelVersion`, `DriftReport` in [data-model.md](data-model.md) 3.16):
 
@@ -997,40 +997,40 @@ interface LogicalQueryIssue { code: 'unknown_entity'|'unknown_attribute'|'unknow
 type ResolveResult = { ref: string; resolved: true; kind: string; target: unknown } | { ref: string; resolved: false }
 ```
 
-**Versions.** A save, import, bootstrap merge or metric write appends an immutable version and moves `currentVersion` to it; nothing is overwritten. Validation is the same for 95, 103 and 106-108: parse (YAML syntax, then the schema), semantic checks (unique and resolvable names, aggregation rules, ratio references), then a check against the dataset's current snapshot. Any failure answers `400 { ok:false, errors }` and the current version is untouched. A rejected body is never stored.
+**Versions.** A save, import, bootstrap merge or metric write appends an immutable version and moves `currentVersion` to it; nothing is overwritten. Validation is the same for 98, 106 and 109-111: parse (YAML syntax, then the schema), semantic checks (unique and resolvable names, aggregation rules, ratio references), then a check against the dataset's current snapshot. Any failure answers `400 { ok:false, errors }` and the current version is untouched. A rejected body is never stored.
 
-#### 91. `GET /data-models/schema.json`
+#### 94. `GET /data-models/schema.json`
 - Response `200`: the JSON Schema of the DSL with the root definition's fields (`properties`, `required`) merged onto the top level and `$defs` alongside, so an editor can read it directly.
 
-#### 92. `GET /datasets/:name/model`
+#### 95. `GET /datasets/:name/model`
 - Response `200`: `{ dataset: string; currentVersion: number; version: DataModelVersion }` (the current version, YAML and parsed model included).
 - Errors: `404` `"No data model for dataset \"<name>\""`.
 
-#### 93. `GET /datasets/:name/model/versions`
+#### 96. `GET /datasets/:name/model/versions`
 - Response `200`: `{ versions: DataModelVersion[] }`: every stored version in append order, each with `yaml` and `model`, so the client diffs without a request per version.
-- Errors: `404` as 92.
+- Errors: `404` as 95.
 
-#### 94. `GET /datasets/:name/model/versions/:version`
+#### 97. `GET /datasets/:name/model/versions/:version`
 - `:version` must be an integer, else `400` `"Validation failed (numeric string is expected)"`.
 - Response `200`: the `DataModelVersion`.
 - Errors: `404` `"Version <n> not found for dataset \"<name>\""`(an unknown dataset answers the same message).
 
-#### 95. `PUT /datasets/:name/model`
+#### 98. `PUT /datasets/:name/model`
 - Body: `{ yaml: string }` (non-string treated as empty).
-- Success `200`: `{ ok:true, version: number }`; the new version has `source:"user"`. Every metric name the current version holds that the saved YAML leaves out is tombstoned like a delete (108): removed from `localMetricNames`, added to `deletedMetricNames`, so the startup metrics import, bootstrap, snapshot merge and the legacy mirror never bring it back; every name the saved YAML holds leaves `deletedMetricNames` ([data-model](../capabilities/data-model/spec.md) R23, [data-model.md](data-model.md) 3.16).
-- Errors: `400 { ok:false, errors: ModelIssue[] }` (YAML syntax and schema errors carry `line`/`col`; semantic and snapshot errors carry `line`/`col` when the path can be located in the text); `404` as 92.
+- Success `200`: `{ ok:true, version: number }`; the new version has `source:"user"`. Every metric name the current version holds that the saved YAML leaves out is tombstoned like a delete (111): removed from `localMetricNames`, added to `deletedMetricNames`, so the startup metrics import, bootstrap, snapshot merge and the legacy mirror never bring it back; every name the saved YAML holds leaves `deletedMetricNames` ([data-model](../capabilities/data-model/spec.md) R23, [data-model.md](data-model.md) 3.16).
+- Errors: `400 { ok:false, errors: ModelIssue[] }` (YAML syntax and schema errors carry `line`/`col`; semantic and snapshot errors carry `line`/`col` when the path can be located in the text); `404` as 95.
 
-#### 96. `POST /datasets/:name/model/revert`
+#### 99. `POST /datasets/:name/model/revert`
 - Body: `{ version: number }`.
 - Success `200`: `{ ok:true, currentVersion: number }`. Only the pointer moves; no version is created or removed, and the assistant reads the reverted version from its next turn.
-- Errors: `404` `"Version <n> not found for dataset \"<name>\""` (also for a missing or non-numeric `version`), `404` as 92.
+- Errors: `404` `"Version <n> not found for dataset \"<name>\""` (also for a missing or non-numeric `version`), `404` as 95.
 
-#### 97. `POST /datasets/:name/model/bootstrap`
+#### 100. `POST /datasets/:name/model/bootstrap`
 - Body: none.
-- Success `201`: `{ ok:true, currentVersion: number }`. **Bootstrap from snapshot** ([data-model](../capabilities/data-model/spec.md) R22): always appends one `source:"bootstrap"` version (no note) rebuilt in full from the dataset's current snapshot: entities, attributes and relationships are derived again, replacing any edit of the current version, and the metrics are every metric of the current version (its definition wins for a shared name) followed by the legacy metrics imported for names it does not hold, model-managed or tombstoned (data-model R34), minus every tombstoned name (`deletedMetricNames`). The previous version stays and can be restored with 96. It does not record a drift report. `lastMetricsImport` is rewritten only when this import imported or skipped something ([data-model.md](data-model.md) 3.16). When the dataset has no model yet it creates version 1 instead, as on a first save.
+- Success `201`: `{ ok:true, currentVersion: number }`. **Bootstrap from snapshot** ([data-model](../capabilities/data-model/spec.md) R22): always appends one `source:"bootstrap"` version (no note) rebuilt in full from the dataset's current snapshot: entities, attributes and relationships are derived again, replacing any edit of the current version, and the metrics are every metric of the current version (its definition wins for a shared name) followed by the legacy metrics imported for names it does not hold, model-managed or tombstoned (data-model R34), minus every tombstoned name (`deletedMetricNames`). The previous version stays and can be restored with 99. It does not record a drift report. `lastMetricsImport` is rewritten only when this import imported or skipped something ([data-model.md](data-model.md) 3.16). When the dataset has no model yet it creates version 1 instead, as on a first save.
 - Errors: `404` `"Dataset \"<name>\" not found"`.
 
-#### 98. `GET /datasets/:name/model/drift`
+#### 101. `GET /datasets/:name/model/drift`
 - Response `200`: `DriftReport & { metricsImport?: MetricsImportReport }`: the last recorded report, or one computed now against the stored snapshot when none was recorded (so a fresh model answers an empty report, not a 404).
   ```ts
   interface DriftReport {
@@ -1046,57 +1046,57 @@ type ResolveResult = { ref: string; resolved: true; kind: string; target: unknow
   }
   ```
   `metricsImport` is absent when no import has run for the model, and is only rewritten by an import pass that imported or skipped something (the startup import of an existing model: only when it imported something). `author` is the legacy metric's owner id and `authorName` that user's display name (left out when the directory has no such user); both absent in local mode. `keptSourceId` is the legacy id of the metric that holds the name, omitted when that model metric did not come from the legacy store. `skipped` lists legacy metrics not imported because a metric with the same lowercase name already won (earliest `createdAt`, then `id`) or the model already held that name from another author.
-- Errors: `404` as 92; `404` `"Dataset \"<name>\" not found"` when no drift was recorded and the dataset is gone.
+- Errors: `404` as 95; `404` `"Dataset \"<name>\" not found"` when no drift was recorded and the dataset is gone.
 
-#### 99. `POST /datasets/:name/model/resolve`
+#### 102. `POST /datasets/:name/model/resolve`
 - Body: `{ refs: string[]; version?: number }` (non-array `refs` treated as empty; `version` defaults to the current one). A ref is an entity, `entity.attribute`, relationship or metric name.
 - Response `200`: `{ results: ResolveResult[] }`, one per ref in order; an unresolved ref is `{ ref, resolved:false }`, not an error.
-- Errors: `404` as 92, or `"Version <n> not found for dataset \"<name>\""`.
+- Errors: `404` as 95, or `"Version <n> not found for dataset \"<name>\""`.
 
-#### 100. `POST /datasets/:name/model/compile`
+#### 103. `POST /datasets/:name/model/compile`
 - Body: `{ query: LogicalQuery; dialect?: 'postgres'|'databricks'|'sqlite' }`. `dialect` defaults to `postgres`. `LogicalQuery` is the logical query shape of the [data-model](../capabilities/data-model/spec.md) capability (root entity, select items of attributes, metrics or aggregations, joins, filters, group-by, order-by, `limit` default 100).
 - Response `200`: `{ sql: string; entities: string[]; notes: string[] }`. Pure: no database call. `notes` carries non-fatal observations (auto-filled group-by, auto-added joins).
-- Errors: `400 { ok:false, errors: LogicalQueryIssue[] }` for a malformed query or an unresolved reference; `404` as 92.
+- Errors: `400 { ok:false, errors: LogicalQueryIssue[] }` for a malformed query or an unresolved reference; `404` as 95.
 
-#### 101. `POST /datasets/:name/model/query`
+#### 104. `POST /datasets/:name/model/query`
 - Body: `{ query: LogicalQuery; limit?: number }` (`limit` overrides the query's).
 - Compiles for the dialect of the datasource bound to the root entity (`postgres` and `databricks` as configured, `rest` as `sqlite`), never from a parameter, and runs it read-only. A repairable engine error goes through the same execution-guided `sql-fixer` repair pass as the chat `query_entities` tool.
 - Response `200`: `{ columns: string[]; rows: object[]; correctedSql?: string; sql: string; notes: string[] }` (`correctedSql` only when a repair changed the statement).
-- Errors: `400 { ok:false, errors: LogicalQueryIssue[] }`; `404` as 92; an engine error that stays unrepaired propagates as `500`.
+- Errors: `400 { ok:false, errors: LogicalQueryIssue[] }`; `404` as 95; an engine error that stays unrepaired propagates as `500`.
 
-#### 102. `GET /datasets/:name/model/export`
+#### 105. `GET /datasets/:name/model/export`
 - Query: `version` (optional; current version when absent or not a number).
-- Response `200`: the version's stored YAML verbatim, `Content-Type: text/yaml`, `Content-Disposition: attachment; filename="<dataset-slug>.model.v<N>.yaml"` (slug: lowercase, runs of non-alphanumerics to `-`, trimmed; `dataset` when empty). Importing the file back (103) yields an identical model.
-- Errors: `404` as 92, or `"Version <n> not found for dataset \"<name>\""`.
+- Response `200`: the version's stored YAML verbatim, `Content-Type: text/yaml`, `Content-Disposition: attachment; filename="<dataset-slug>.model.v<N>.yaml"` (slug: lowercase, runs of non-alphanumerics to `-`, trimmed; `dataset` when empty). Importing the file back (106) yields an identical model.
+- Errors: `404` as 95, or `"Version <n> not found for dataset \"<name>\""`.
 
-#### 103. `POST /datasets/:name/model/import`
-- Body: `{ yaml: string }`. Same validation path and metric tombstones as 95; the new version has `source:"import"`.
-- Success `200`: `{ ok:true, version: number }`. Errors as 95.
+#### 106. `POST /datasets/:name/model/import`
+- Body: `{ yaml: string }`. Same validation path and metric tombstones as 98; the new version has `source:"import"`.
+- Success `200`: `{ ok:true, version: number }`. Errors as 98.
 
-#### 104. `POST /datasets/:name/model/serialize`
+#### 107. `POST /datasets/:name/model/serialize`
 - Body: `{ model: DataModel }`. Pure: no dataset lookup (`:name` is not read), nothing stored. The one YAML writer, so structured forms need none of their own.
 - Response `200`: `{ yaml: string }` in the canonical key order of saved versions.
 - Errors: `400 { ok:false, errors: ModelIssue[] }` when `model` fails the full schema and semantic validation.
 
-#### 105. `GET /datasets/:name/model/metrics`
+#### 108. `GET /datasets/:name/model/metrics`
 - Response `200`: `{ metrics: Metric[] }` of the current version.
-- Errors: `404` as 92.
+- Errors: `404` as 95.
 
-#### 106. `POST /datasets/:name/model/metrics`
+#### 109. `POST /datasets/:name/model/metrics`
 - Body `SaveModelMetricDto`: `{ name: string; label: string; entity: string; description?: string; agg?: 'count'|'sum'|'avg'|'min'|'max'|'count_distinct'|'ratio'; of?: string; numerator?: string; denominator?: string; where?: Predicate; dimensions?: string[]; expressions?: { sql?: string }; sourceVerifiedQueryId?: string }`. `name` is trimmed and lowercased, other strings trimmed, empty optionals omitted. `entity` is a logical entity name.
 - Success `201`: `{ ok:true, version: number }`; the new version has `source:"user"` and `note:"metric <name> added"`. The name is added to `localMetricNames` and removed from `deletedMetricNames` ([data-model.md](data-model.md) 3.16). In org server mode the stored metric's `author` is the caller's owner key (user id) and its `authorName` the caller's display name; in local mode it has neither. The body carries no `author` or `authorName` (any sent are ignored).
-- Errors: `400 { ok:false, errors: ModelIssue[] }` (duplicate name, unresolved `entity`/`of`/`dimensions`/`where`, aggregation rules, `numerator`/`denominator` not metrics); `404` as 92.
+- Errors: `400 { ok:false, errors: ModelIssue[] }` (duplicate name, unresolved `entity`/`of`/`dimensions`/`where`, aggregation rules, `numerator`/`denominator` not metrics); `404` as 95.
 
-#### 107. `PUT /datasets/:name/model/metrics/:metricName`
-- Body as 106; replaces the metric (renaming allowed), keeping the stored `author` and `authorName` (absent stays absent; the editor is never recorded). Note `"metric <metricName> updated"`.
+#### 110. `PUT /datasets/:name/model/metrics/:metricName`
+- Body as 109; replaces the metric (renaming allowed), keeping the stored `author` and `authorName` (absent stays absent; the editor is never recorded). Note `"metric <metricName> updated"`.
 - Success `200`: `{ ok:true, version: number }`.
-- Errors: `404` `"Metric \"<metricName>\" not found on dataset \"<name>\""`; `400` as 106.
+- Errors: `404` `"Metric \"<metricName>\" not found on dataset \"<name>\""`; `400` as 109.
 
-#### 108. `DELETE /datasets/:name/model/metrics/:metricName`
+#### 111. `DELETE /datasets/:name/model/metrics/:metricName`
 - Success `200`: `{ ok:true, version: number }`; note `"metric <metricName> removed"`. The name is tombstoned in `deletedMetricNames`, so bootstrap, snapshot merge and legacy writes never bring it back.
-- Errors: `404` as 107; `400` when another metric's `ratio` still references it.
+- Errors: `404` as 110; `400` when another metric's `ratio` still references it.
 
-#### 109. `GET /datasets/:name/model/metrics/candidates`
+#### 112. `GET /datasets/:name/model/metrics/candidates`
 - Response `200`: `{ candidates: MetricCandidate[] }`, shape and exclusions as endpoint 25, but `entity` is the logical entity name of the model entity bound to the candidate's table. `{ candidates: [] }` when the dataset has no model or no bound entity.
 
 ## 3. Streaming and long-running work

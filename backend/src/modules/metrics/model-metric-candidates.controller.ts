@@ -6,7 +6,7 @@ import type { MetricCandidate } from './entities/metric.entity';
 /**
  * roadmap 1.2.3 — the Metrics tab's promotion path,
  * `GET /datasets/:name/model/metrics/candidates` (api.md 2.16, endpoint
- * 109), scoped to one dataset's model and addressed by logical entity
+ * 112), scoped to one dataset's model and addressed by logical entity
  * names. An unprefixed controller of its own, not a method on
  * `MetricsController` (whose `metrics` prefix every route there
  * shares) nor on `DataModelsController` (which would need

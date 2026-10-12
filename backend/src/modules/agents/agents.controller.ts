@@ -105,7 +105,7 @@ export class AgentsController {
     body: {
       datasourceId?: string;
       caseIds?: string[];
-      /** `model` (default, ADR-0013) or `legacy` — see `EvalRunsService.start`. */
+      /** `model` (default, ADR-0014) or `legacy` — see `EvalRunsService.start`. */
       path?: string;
     },
   ): Promise<{ ok: boolean; message: string; jobId?: string }> {

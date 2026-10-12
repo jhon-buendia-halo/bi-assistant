@@ -1,11 +1,11 @@
 /**
- * The logical query layer's tools (ADR-0013, roadmap 1.2.2): replace
+ * The logical query layer's tools (ADR-0014, roadmap 1.2.2): replace
  * `datasetTools` on the current assistant. Every tool here speaks the
  * session's composed `SessionModel` vocabulary — logical entity/attribute/
  * metric names — and never a physical `catalog.schema.table` key, a
  * datasource id/kind or a SQL dialect word. `assistant-legacy.agent.ts`
  * keeps the old `datasetTools` so the eval harness can still run the
- * pre-change path for comparison (ADR-0013 §7).
+ * pre-change path for comparison (ADR-0014 §7).
  */
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
@@ -33,7 +33,7 @@ export { DATASETS_CONTEXT_KEY };
 
 /**
  * A raw engine error can quote the physical table/column it choked on
- * (ADR-0013 §4: no physical name is allowed back into the model's own
+ * (ADR-0014 §4: no physical name is allowed back into the model's own
  * context) — mapped back to logical names where the session model can, a
  * generic "rejected the query" otherwise. A dotted `word.word.word` token
  * surviving substitution is the telltale a `catalog.schema.table` key (or
@@ -80,7 +80,7 @@ function findEntity(model: SessionModel, name: string) {
 }
 
 /** The model-visible shape of a `runLogicalQuery` result: `sql`/
- * `correctedSql` dropped (ADR-0013 §4), everything else kept. A `delete`
+ * `correctedSql` dropped (ADR-0014 §4), everything else kept. A `delete`
  * on a shallow copy rather than a destructure-and-discard, so there is no
  * `const unused = ...` for `no-unused-vars` to flag. */
 function withoutSql<T extends { sql?: unknown; correctedSql?: unknown }>(
@@ -237,7 +237,7 @@ export const sampleRecordsTool = createTool({
     }
     // A compiled select over the entity's own declared attributes — not the
     // connector's raw `sampleRows` — so a sample never surfaces a physical
-    // column the model was never told about (ADR-0013 §4) and goes through
+    // column the model was never told about (ADR-0014 §4) and goes through
     // the same dialect/repair path as every other query.
     const query: LogicalQuery = {
       from: found.name,
@@ -303,7 +303,7 @@ export const queryEntitiesTool = createTool({
     const setsOwnLimit = query.limit !== undefined;
     const limit = query.limit ?? DEFAULT_QUERY_LIMIT;
     try {
-      // The entity's own datasource kind decides the dialect (ADR-0013 §4):
+      // The entity's own datasource kind decides the dialect (ADR-0014 §4):
       // `sql` bindings compile for the datasource's actual kind, `rest`
       // bindings always compile as sqlite (the materialisation target).
       // Cast: `logicalQuerySchema`'s recursive predicate loses its precise
@@ -324,7 +324,7 @@ export const queryEntitiesTool = createTool({
           setsOwnLimit && !ordered ? [] : ['unordered-limit'],
         ),
       );
-      // `sql`/`correctedSql` never reach the model (ADR-0013 §4) — kept only
+      // `sql`/`correctedSql` never reach the model (ADR-0014 §4) — kept only
       // in `queryEntitiesProvenance`, which `toolDataRecord`
       // (`modules/sessions/turn-data.ts`) reads back for the turn
       // record/visual provenance.
@@ -363,7 +363,7 @@ export const queryEntitiesTool = createTool({
 });
 
 /**
- * The flagged last resort (ADR-0013 §4/§7): the assistant was never shown a
+ * The flagged last resort (ADR-0014 §4/§7): the assistant was never shown a
  * physical table name, so reaching for this tool is itself a signal the
  * model could not express the question — `outsideModel: true` on every
  * result lets `SessionsService` mark the turn/answer as outside the data

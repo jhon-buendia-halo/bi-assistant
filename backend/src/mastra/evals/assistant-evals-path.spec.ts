@@ -1,5 +1,5 @@
 /**
- * Unit coverage for the dual-path eval plumbing (ADR-0013 §7, roadmap 1.2.2):
+ * Unit coverage for the dual-path eval plumbing (ADR-0014 §7, roadmap 1.2.2):
  * path selection (`model` default vs `legacy`), which agent each path
  * targets, and the `outsideModel` counter derived from a `run_raw_sql` tool
  * call. No LLM key is available in this environment, so every mastra/agent

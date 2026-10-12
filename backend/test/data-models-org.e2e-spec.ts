@@ -8,7 +8,7 @@
  * - A caller without Manage datasources cannot change a model
  * - A legacy metric removed in the YAML stays removed after a restart
  *
- * and of data-model R34-R39, api.md 2.16 (92, 95, 98, 102, 104: the drift
+ * and of data-model R34-R39, api.md 2.16 (95, 98, 101, 105, 107: the drift
  * response's `metricsImport`), the 1.9 permission rows for data models and
  * data-model.md 3.16 (`author`, `authorName`, `lastMetricsImport`,
  * `deletedMetricNames`).
@@ -20,7 +20,7 @@
  * first one" does not depend on the clock. The dataset is written straight
  * into `app.sqlite` the way a save stores it, with its entity snapshot, so
  * the startup bootstrap needs no Postgres: it reads only the snapshot
- * (ADR-0012, specs/system/architecture.md).
+ * (ADR-0013, specs/system/architecture.md).
  */
 import { type OrgServer, startOrgServer } from './org-server';
 
@@ -53,14 +53,14 @@ interface ModelVersion {
   model: { metrics: ModelMetric[] } & Record<string, unknown>;
 }
 
-/** `GET /datasets/:name/model` (api.md 92). */
+/** `GET /datasets/:name/model` (api.md 95). */
 interface ModelResponse {
   dataset: string;
   currentVersion: number;
   version: ModelVersion;
 }
 
-/** `MetricsImportReport` (api.md 98, data-model.md 3.16). */
+/** `MetricsImportReport` (api.md 101, data-model.md 3.16). */
 interface MetricsImportReport {
   importedAt: string;
   imported: {
