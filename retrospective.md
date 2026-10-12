@@ -14,6 +14,25 @@ Entry template:
 
 ---
 
+## 2026-10-12 — 0.3.8 / 0.3.9 Observed dev runs and `--dev-observability` (BA-175, BA-176)
+
+### What went well
+- The request came out of a real triage: a visual designer failure that the console log couldn't explain. Bringing up Phoenix and Grafana first, and checking that data reached Loki, Tempo and Prometheus, made the rule concrete before it was written down.
+- Reading `startupDeveloperSettings` before designing kept the flag small: the active setting was already a per-process copy, so forcing it is two lines plus a `forced` bit. No ADR was needed, and `restartRequired` only had to ignore the saved switch while forced.
+- The live check did what the rule promises: the `trace_id` from a server log line found the failed run in Phoenix, with the error on the root span. The same run also showed a misleading chat message ("could not produce a final response" for a missing API key) that the console alone wouldn't have tied to its cause.
+
+### What went wrong
+- `npm run lint` is `eslint --fix`, and it rewrote about 30 unrelated backend files (existing drift; `main` has 243 lint problems). I had to revert them by name. A careless `git add -A` would have shipped them.
+- The new E2E scenario was never run red: I wrote it before the code but first ran it after the implementation. Only the unit tests were seen failing first.
+- BA-111 was already Done, so adding stories meant reopening it. I only noticed this after the user said "yes", and it cost an extra question.
+- `gh` was active on the personal account `jhoncbuendia` while this repo belongs to `jhon-buendia-halo`. I caught it in the pre-push check, not earlier.
+
+### What to do differently
+- Run lint as `npx eslint <changed files>` and compare the full count with `main`. Never run `npm run lint` (it has `--fix`) on a branch you're about to commit, or run it and then `git diff --stat` before staging.
+- When a new E2E scenario is added in step 7, run just that spec (`npx playwright test <spec> -g "<name>"`) before touching production code, and save the red output in the evidence.
+- Before proposing stories under an epic, check the epic's Jira status. If it's Done, offer "reopen" or "new epic" in the same question.
+- Run `gh auth status` when the worktree is created, and switch to the account that owns the repo's remote then.
+
 ## 2026-10-12 — 1.11.3 Task details in the workflow pane (BA-174)
 
 ### What went well
