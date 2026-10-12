@@ -253,7 +253,10 @@ export class SessionsApiService {
         `${API_BASE_URL}/sessions/${encodeURIComponent(id)}/messages/stream`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...this.auth.authHeaders(),
+          },
           body: JSON.stringify({
             content,
             activeVisualizationId,

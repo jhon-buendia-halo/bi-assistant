@@ -62,7 +62,7 @@ Running and progress
 - R25. The system SHALL record each question's result as soon as it finishes and SHALL persist the run after every question, so a crash mid-suite keeps the finished questions.
 - R26. While running, the UI SHALL poll the run every 1.5 seconds and show "<finished>/<questions in the open set> done · <passed> passed", mark the current question "running", and mark finished questions "passed" or "failed" with each check's score beside its chip. A failed question SHALL also show its run error, if any.
 - R27. A run SHALL end `completed` when every ticked question has a result (including failed ones), or `failed` with an error message if the run itself broke. Either way it SHALL get a finish time.
-- R28. At most one run SHALL be active per agent for each user (in org server mode two users MAY each run the same agent's evals at once; R62). Leaving the agent view SHALL stop the UI polling, not the run.
+- R28. At most one run SHALL be active per agent for each user (two users MAY each run the same agent's evals at once; R62). Leaving the agent view SHALL stop the UI polling, not the run.
 
 Scoring
 - R29. A question SHALL pass only if it has at least one check and every check scores exactly 1. A question whose run threw an error SHALL fail with no check results and the error text. Per-check results SHALL carry the check's id, description, score, verdict and, on failure, a reason in plain words, for example `expected "Argentina" in the answer — answer was "…"` or `expected "query_entities" to be called 1×, it was called 0×`.
@@ -160,9 +160,9 @@ User agents (definitions)
   - with no existing dataset in the draft, the panel SHALL say `Select at least one dataset to preview` and the composer SHALL be disabled.
 - R61. A preview conversation SHALL NOT be listed with the sessions or stored in the sessions collection. **Reset preview** SHALL discard it and start an empty one. Leaving the editor, or closing the Details panel, SHALL discard it together with its agent memory and workspace files. Preview conversations left behind when the app stopped SHALL be discarded at the next backend start.
 
-### Ownership and permissions (org server mode)
+### Ownership and permissions
 
-- R62. In org server mode user agents, their pins, pins of built-in agents and eval runs SHALL belong to the user who created them: each user sees only their own user agents (the Mine section) and their own pins and eval runs, and agent names are unique per owner. Viewing the hub, an agent's detail, its eval questions, Start chat and pinning need Use agents; New agent, Edit, Save, Publish, Delete and running, listing, downloading or deleting eval runs need Create, test and version agents, and their controls are hidden without it. Rules: [../admin/spec.md](../admin/spec.md) R21, R25, R29-R31.
+- R62. In both modes user agents, their pins, pins of built-in agents and eval runs SHALL belong to the user who created them: each user sees only their own user agents (the Mine section) and their own pins and eval runs, and agent names are unique per owner. Viewing the hub, an agent's detail, its eval questions, Start chat and pinning need Use agents; New agent, Edit, Save, Publish, Delete and running, listing, downloading or deleting eval runs need Create, test and version agents, and their controls are hidden without it. Rules: [../admin/spec.md](../admin/spec.md) R21, R25, R29-R31.
 
 ## Edge cases and errors
 

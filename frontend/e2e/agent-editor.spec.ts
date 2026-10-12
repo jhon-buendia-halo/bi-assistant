@@ -15,6 +15,7 @@ import {
   saveLenaiSettings,
   seedWorldCupDataset,
 } from './helpers/agents-api';
+import { authHeaders } from './helpers/local-auth';
 import {
   LlmStub,
   STUB_ANSWER,
@@ -110,7 +111,9 @@ function systemsFor(question: string): string {
 }
 
 async function listedSessions(page: Page): Promise<string[]> {
-  const response = await page.request.get(`${apiBase(page)}/sessions`);
+  const response = await page.request.get(`${apiBase(page)}/sessions`, {
+    headers: await authHeaders(page),
+  });
   const body = (await response.json()) as { sessions: { name: string }[] };
   return body.sessions.map((session) => session.name);
 }

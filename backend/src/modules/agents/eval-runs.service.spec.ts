@@ -48,6 +48,11 @@ describe('EvalRunsService dataset validation', () => {
   const knowledge = { definitionBlock: jest.fn().mockResolvedValue('') };
   const users = new CurrentUserService();
   const metrics = { definitionBlock: jest.fn().mockResolvedValue(undefined) };
+  /** As Demo User: nobody is signed in outside `runAs` (ADR-0012). */
+  const asDemoUser =
+    <T>(fn: () => Promise<T>) =>
+    (): Promise<T> =>
+      users.runAs(LOCAL_USER, fn);
   const service = () =>
     new EvalRunsService(
       datasets as any,
@@ -61,102 +66,111 @@ describe('EvalRunsService dataset validation', () => {
 
   beforeEach(() => jest.clearAllMocks());
 
-  it('rejects the reported F1 selection before persisting a run or calling a model', async () => {
-    datasets.list.mockResolvedValue([
-      {
-        name: 'Nick F1 Data source',
-        datasourceId: 'f1',
-        datasourceKind: 'postgres',
-        tables: ['formula1.formula1.race'],
-      },
-      {
-        name: 'F1 Test',
-        datasourceId: 'f1',
-        datasourceKind: 'postgres',
-        tables: ['formula1.formula1.driver'],
-      },
-    ]);
-    const result = await service().start('assistant', 'f1');
-    expect(result).toEqual({
-      error: expect.stringContaining('bundled World Cup sample'),
-    });
-    expect(repository.insert).not.toHaveBeenCalled();
-    expect(createEvalSession).not.toHaveBeenCalled();
-    expect(runAssistantEvalCase).not.toHaveBeenCalled();
-  });
+  it(
+    'rejects the reported F1 selection before persisting a run or calling a model',
+    asDemoUser(async () => {
+      datasets.list.mockResolvedValue([
+        {
+          name: 'Nick F1 Data source',
+          datasourceId: 'f1',
+          datasourceKind: 'postgres',
+          tables: ['formula1.formula1.race'],
+        },
+        {
+          name: 'F1 Test',
+          datasourceId: 'f1',
+          datasourceKind: 'postgres',
+          tables: ['formula1.formula1.driver'],
+        },
+      ]);
+      const result = await service().start('assistant', 'f1');
+      expect(result).toEqual({
+        error: expect.stringContaining('bundled World Cup sample'),
+      });
+      expect(repository.insert).not.toHaveBeenCalled();
+      expect(createEvalSession).not.toHaveBeenCalled();
+      expect(runAssistantEvalCase).not.toHaveBeenCalled();
+    }),
+  );
 
-  it('still starts and completes a run with the fixture scope', async () => {
-    datasets.list.mockResolvedValue([
-      {
-        name: 'Sample',
-        datasourceId: 'wc',
-        datasourceKind: 'postgres',
-        tables: [
-          'tournaments',
-          'teams',
-          'matches',
-          'venues',
-          'players',
-          'goals',
-          'match_team_statistics',
-          'v_match_results',
-          'v_player_goal_totals',
-        ].map((table) => `world_cup.world_cup.${table}`),
-      },
-    ]);
-    const runner = service();
-    const result = await runner.start('assistant', 'wc');
-    expect(result).toEqual({ jobId: expect.any(String) });
-    await new Promise((resolve) => setImmediate(resolve));
-    expect(runAssistantEvalCase).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'champion-2022' }),
-      ['Sample'],
-      'session',
-      '',
-      { path: 'model', metricsBlock: undefined },
-    );
-    if (!('jobId' in result)) throw new Error('Run did not start');
-    expect((await runner.status(result.jobId))?.status).toBe('completed');
-    expect(repository.mostRecentCompleted).toHaveBeenCalledWith(
-      'assistant',
-      result.jobId,
-      'wc',
-      ['Sample'],
-      'model',
-    );
-  });
+  it(
+    'still starts and completes a run with the fixture scope',
+    asDemoUser(async () => {
+      datasets.list.mockResolvedValue([
+        {
+          name: 'Sample',
+          datasourceId: 'wc',
+          datasourceKind: 'postgres',
+          tables: [
+            'tournaments',
+            'teams',
+            'matches',
+            'venues',
+            'players',
+            'goals',
+            'match_team_statistics',
+            'v_match_results',
+            'v_player_goal_totals',
+          ].map((table) => `world_cup.world_cup.${table}`),
+        },
+      ]);
+      const runner = service();
+      const result = await runner.start('assistant', 'wc');
+      expect(result).toEqual({ jobId: expect.any(String) });
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(runAssistantEvalCase).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'champion-2022' }),
+        ['Sample'],
+        'session',
+        '',
+        { path: 'model', metricsBlock: undefined },
+      );
+      if (!('jobId' in result)) throw new Error('Run did not start');
+      expect((await runner.status(result.jobId))?.status).toBe('completed');
+      expect(repository.mostRecentCompleted).toHaveBeenCalledWith(
+        'assistant',
+        result.jobId,
+        'wc',
+        ['Sample'],
+        'model',
+      );
+    }),
+  );
 
-  it("looks for the regression baseline on the run's own path (agents-evals R40)", async () => {
-    datasets.list.mockResolvedValue([
-      {
-        name: 'Sample',
-        datasourceId: 'wc',
-        datasourceKind: 'postgres',
-        tables: [
-          'tournaments',
-          'teams',
-          'matches',
-          'venues',
-          'players',
-          'goals',
-          'match_team_statistics',
-          'v_match_results',
-          'v_player_goal_totals',
-        ].map((table) => `world_cup.world_cup.${table}`),
-      },
-    ]);
-    const runner = service();
-    const result = await runner.start('assistant', 'wc', undefined, 'legacy');
-    await new Promise((resolve) => setImmediate(resolve));
-    if (!('jobId' in result)) throw new Error('Run did not start');
-    expect(repository.mostRecentCompleted).toHaveBeenCalledWith(
-      'assistant',
-      result.jobId,
-      'wc',
-      ['Sample'],
-      'legacy',
-    );
-  });
+  it(
+    "looks for the regression baseline on the run's own path (agents-evals R40)",
+    asDemoUser(async () => {
+      datasets.list.mockResolvedValue([
+        {
+          name: 'Sample',
+          datasourceId: 'wc',
+          datasourceKind: 'postgres',
+          tables: [
+            'tournaments',
+            'teams',
+            'matches',
+            'venues',
+            'players',
+            'goals',
+            'match_team_statistics',
+            'v_match_results',
+            'v_player_goal_totals',
+          ].map((table) => `world_cup.world_cup.${table}`),
+        },
+      ]);
+      const runner = service();
+      const result = await runner.start('assistant', 'wc', undefined, 'legacy');
+      await new Promise((resolve) => setImmediate(resolve));
+      if (!('jobId' in result)) throw new Error('Run did not start');
+      expect(repository.mostRecentCompleted).toHaveBeenCalledWith(
+        'assistant',
+        result.jobId,
+        'wc',
+        ['Sample'],
+        'legacy',
+      );
+    }),
+  );
 });
 
 describe('EvalRunsService ownership (admin R30, R32)', () => {

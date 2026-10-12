@@ -117,9 +117,9 @@ Summary:
 | `role_assignments` | Direct role assignments (org server mode) | `id`; `(userId, role, datasourceId)` unique | n/a | [admin](../capabilities/admin/spec.md) |
 | `group_role_mappings` | Group-to-role mappings (org server mode) | `id`; `(groupId, role, datasourceId)` unique | n/a | [admin](../capabilities/admin/spec.md) |
 | `auth_sessions` | Signed-in browsers (org server mode) | `id` = SHA-256 of the cookie token | n/a | [admin](../capabilities/admin/spec.md) |
-| `activity_events` | Sign-ins, daily activity, SCIM syncs, role and status changes (org server mode) | `id` | `at` desc | [admin](../capabilities/admin/spec.md) |
+| `activity_events` | Sign-ins, daily activity, SCIM syncs (org server mode), role and status changes | `id` | `at` desc | [admin](../capabilities/admin/spec.md) |
 
-Every document in every collection also carries `createdAt` and `updatedAt` (ISO), maintained by the store (section 2.1); they are listed per collection only where they matter. `sessions`, `verified_queries`, `metrics`, `eval_runs`, `knowledge_snippets` and `agents` are **private** and carry `ownerId` in org server mode; `connections`, `settings`, `datasets`, `data_models` and `datasource_inventories` are **shared** (section 3.15). In local mode the seven identity and access collections stay empty. There are **no foreign-key constraints and no cascading deletes** between collections; references are by value (`name`, `id`) and may dangle (section 3.13).
+Every document in every collection also carries `createdAt` and `updatedAt` (ISO), maintained by the store (section 2.1); they are listed per collection only where they matter. `sessions`, `verified_queries`, `metrics`, `eval_runs`, `knowledge_snippets` and `agents` are **private** and carry `ownerId` in both modes (local mode since M13, section 6); `connections`, `settings`, `datasets`, `data_models` and `datasource_inventories` are **shared** (section 3.15). In local mode the identity and access collections hold the five local personas, their seeded role assignments, auth sessions and activity events (admin R69–R71); SCIM never writes there. There are **no foreign-key constraints and no cascading deletes** between collections; references are by value (`name`, `id`) and may dangle (section 3.13).
 
 ### 3.1 `connections` — datasources
 
@@ -180,7 +180,7 @@ The **inventory shape** every connector normalises to (used by section 3.5 and t
 
 ### 3.2 `settings` — LLM settings
 
-Exactly one LLM document, upserted by `key = "llm"`. A second kind of document holds pins of built-in agents, per user: `{ key, pinned: string[] }`, the registry keys a user pinned (see section 3.10). Its `key` is `builtin-agent-pins` for the local user and `builtin-agent-pins:<user id>` for a user of an org server, so pins are private (section 3.15) without a migration. LLM readers filter by `key`, so the kinds never mix. The `llm` document is shared by every user of an org server and only callers with `manage-llm` change it ([api.md](api.md) 1.9).
+Exactly one LLM document, upserted by `key = "llm"`. A second kind of document holds pins of built-in agents, per user: `{ key, pinned: string[] }`, the registry keys a user pinned (see section 3.10). Its `key` is `builtin-agent-pins:<user id>` in both modes, so pins are private (section 3.15). A document stored in local mode before it had sign-in has the bare key `builtin-agent-pins`; M13 renames it to `builtin-agent-pins:local` (Demo User's). LLM readers filter by `key`, so the kinds never mix. The `llm` document is shared by every user, in both modes, and only callers with `manage-llm` change it ([api.md](api.md) 1.9).
 
 | Field | Type | Req | Meaning |
 |---|---|---|---|
@@ -198,12 +198,24 @@ No document stored = "not configured": agents fall back to model `openai/gpt-4o-
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `key` | string | yes | Identity: `"ui-preferences"` for the local user, `"ui-preferences:<user id>"` for a user of an org server, so each user keeps their own theme and drawer state (section 3.15) without a migration. |
+| `key` | string | yes | Identity: `"ui-preferences:<user id>"` in both modes, so each user keeps their own theme and drawer state (section 3.15). A document stored in local mode before it had sign-in has the bare key `"ui-preferences"`; M13 renames it to `"ui-preferences:local"` (Demo User's). |
 | `theme` | enum | no | `system` \| `light` \| `dark`. Absent = never chosen = Light (app-shell R39, R43). |
 | `navExpanded` | boolean | no | Navigation drawer state from the user's last Expand / Collapse click. Absent = expanded (app-shell R50). |
 | `updatedAt` | ISO string | yes | Set on each save. |
 
 Written by `PUT /ui-preferences` ([api.md](api.md) 57) for the caller; ADR-0009.
+
+#### 3.2.2 `settings` document `local-seed`
+
+Local mode only (admin R69, R72; ADR-0012). Remembers which seeded role assignments of the local personas (3.14.1) were already applied, so a seed is applied once and an assignment an admin removed is never added again.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `key` | string | yes | Always `"local-seed"`. |
+| `applied` | string[] | yes | One entry per seed applied: `maker:local-mark`, `approver:local-avery`, and `data-owner:local-dana:<datasource id>` for each datasource Dana Data Owner was made Data owner of. |
+| `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
+
+At startup in local mode the server creates the missing personas, then, for each seed not yet in `applied`, inserts the role assignment (3.14.4) and adds the entry. It does the same for each existing datasource with Dana's seed, and when a datasource is created. Not shared with org server mode, where the document is never read or written.
 
 ### 3.3 `datasets`
 
@@ -480,15 +492,15 @@ Deep-analysis jobs exist only in process memory (bounded history; a backend rest
 
 ---
 
-### 3.14 Identity and access collections (org server mode)
+### 3.14 Identity and access collections
 
-Rules: [../capabilities/admin/spec.md](../capabilities/admin/spec.md). Decisions: ADR-0010 and ADR-0011 in [architecture.md](architecture.md). Written only in org server mode. Endpoints: [api.md](api.md) 2.13-2.15.
+Rules: [../capabilities/admin/spec.md](../capabilities/admin/spec.md). Decisions: ADR-0010, ADR-0011 and ADR-0012 in [architecture.md](architecture.md). Written in both modes; in local mode `groups`, `group_members` and `group_role_mappings` stay empty, since there is no SCIM. Endpoints: [api.md](api.md) 2.13-2.15.
 
 #### 3.14.1 `users`
 
 | Field | Type | Req | Meaning |
 |---|---|---|---|
-| `id` | uuid | yes | The user id: `ownerId` on private documents, the SCIM `id`. The local user's id is the constant `local` and is never stored here. |
+| `id` | string | yes | The user id: `ownerId` on private documents, the SCIM `id`. A uuid, except for the five local personas (admin R69), whose ids are fixed: `local` (Demo User), `local-uma`, `local-mark`, `local-dana` and `local-avery`. |
 | `userName` | string | yes | Sign-in name (Entra ID: the UPN), stored lowercased; unique. From SCIM `userName`, or for a just-in-time user the `preferred_username` claim, else the subject. Sign-in matches on it after `oidcSubject`, and the bootstrap admin list is compared with it (admin R13, R18). |
 | `email` | string | no | Work email, lowercased. For display and search only: never used to match a sign-in or to resolve roles, since the email claim can be unverified (admin R13). |
 | `displayName` | string | yes | Shown name. SCIM `displayName`, else `name.formatted`, else `givenName familyName`, else `userName`. |
@@ -498,7 +510,7 @@ Rules: [../capabilities/admin/spec.md](../capabilities/admin/spec.md). Decisions
 | `releasedUserName` | string | no | Set when SCIM gives this user's name to a different person (another `externalId`, admin R16; [api.md](api.md) 2.14): the former `userName`, kept for display and audit. The user is then **released**: `userName` is `released:<id>` (a colon can't occur in a UPN), `active:false`, `scimDeleted:true`. Sign-in and SCIM lookups by user name skip released users, so the name never matches them again; the id, and so the `ownerId` of their private data and their agents, stays. |
 | `active` | boolean | yes | `false` = deactivated: cannot sign in. |
 | `scimDeleted` | boolean | no | `true` after a SCIM `DELETE`: hidden from SCIM reads. |
-| `source` | enum | yes | `scim` (provisioned) \| `jit` (created at first sign-in). A `jit` user later seen by SCIM becomes `scim`. |
+| `source` | enum | yes | `scim` (provisioned) \| `jit` (created at first sign-in) \| `local` (a local persona, created at startup in local mode; its `userName` and `email` are its `@local.test` address). A `jit` user later seen by SCIM becomes `scim`. |
 | `lastSignInAt` | ISO | no | Absent until the first sign-in. |
 | `lastActiveAt` | ISO | no | The last day the user made a request (updated with the daily `user.active` event, 3.14.7). |
 | `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
@@ -531,7 +543,7 @@ Rules: [../capabilities/admin/spec.md](../capabilities/admin/spec.md). Decisions
 | `userId` | uuid | yes | `users.id`. |
 | `role` | enum | yes | `maker` \| `data-owner` \| `approver` \| `platform-admin`. |
 | `datasourceId` | string | no | Required for `data-owner`, absent otherwise. |
-| `assignedBy` | uuid | yes | The admin who assigned it. |
+| `assignedBy` | string | yes | The id of the admin who assigned it; `local` (Demo User) for the assignments seeded in local mode (admin R69, section 3.2.2). |
 | `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
 
 #### 3.14.5 `group_role_mappings`
@@ -549,18 +561,18 @@ Rules: [../capabilities/admin/spec.md](../capabilities/admin/spec.md). Decisions
 
 | Field | Type | Req | Meaning |
 |---|---|---|---|
-| `id` | string | yes | SHA-256 hex of the `qti_session` cookie token ([api.md](api.md) 1.9). The token itself is never stored, so reading the store does not give a way to sign in. |
+| `id` | string | yes | SHA-256 hex of the auth-session token: the `qti_session` cookie on an org server, the bearer token in local mode ([api.md](api.md) 1.9). The token itself is never stored, so reading the store does not give a way to sign in. |
 | `userId` | uuid | yes | `users.id`. |
-| `lastSeenAt` | ISO | yes | Bumped by a request at most once a minute. The session ends 8 hours after it. |
-| `expiresAt` | ISO | yes | Sign-in time + 7 days; the session ends then whatever its activity. |
+| `lastSeenAt` | ISO | yes | Bumped by a request at most once a minute. On an org server the session ends 8 hours after it; local sessions have no idle limit. |
+| `expiresAt` | ISO | yes | Sign-in time + 7 days on an org server, + 30 days in local mode (admin R9, R71); the session ends then whatever its activity. |
 | `userAgent` | string | no | The browser's `User-Agent`, truncated to 200 characters. |
 | `createdAt`, `updatedAt` | ISO | yes | Store-maintained; `createdAt` is the sign-in time. |
 
-Ended sessions (idle, expired, signed out, user deactivated) are deleted. Expired ones are also swept at startup.
+Ended sessions (idle, expired, signed out, user deactivated) are deleted. Expired ones are also swept at startup, in both modes.
 
 #### 3.14.7 `activity_events`
 
-Append-only. Read by the admin Overview and Users & groups (admin R36, R39-R54).
+Append-only, written in both modes; `scim.request` is never written in local mode. Read by the admin Overview and Users & groups (admin R36, R39-R54).
 
 | Field | Type | Req | Meaning |
 |---|---|---|---|
@@ -574,7 +586,7 @@ Append-only. Read by the admin Overview and Users & groups (admin R36, R39-R54).
 
 | Type | Written by | `actorId` | `subjectId` | `details` |
 |---|---|---|---|---|
-| `sign-in`, `sign-out` | [api.md](api.md) 62, 63 | the user | the user | |
+| `sign-in`, `sign-out` | [api.md](api.md) 62, 63, 92, 93 | the user | the user | |
 | `sign-in.refused` | [api.md](api.md) 62, when the sign-in name matches a user whose `oidcSubject` is another subject (admin R13) | | the matched user | `{ reason: "subject-mismatch" }` |
 | `user.active` | the first authenticated request of a UTC day | the user | the user | |
 | `scim.request` | any SCIM request that passed the token check, at most one a minute | | | |
@@ -601,22 +613,22 @@ Nothing below is stored; each figure is computed when an admin endpoint ([api.md
 | Agents with errors | `agent.turn-failed` events with `at` in the last 7 × 24 h, grouped by `subjectId`, for agents that still exist. The owner shown is the agent's current owner. |
 | Inactive makers | Users with status `inactive` who hold `maker` from a `role_assignments` row or a `group_role_mappings` row of one of their groups. |
 | Agents owned | `agents` documents per `ownerId`. |
-| Last sync | `at` of the newest `scim.request` event (minute precision, since that event is written at most once a minute). |
-| Held roles | As for `GET /me` ([api.md](api.md) 2.13): implicit User, `role_assignments`, `group_role_mappings` of the user's groups, and Platform admin for a bootstrap admin (`userName` in `ORG_BOOTSTRAP_ADMINS`). A Data owner assignment or mapping whose `datasourceId` is not in `connections` grants nothing (3.13), so it counts in no role figure; the user detail still lists such a direct assignment, flagged. |
+| Last sync | `at` of the newest `scim.request` event (minute precision, since that event is written at most once a minute). Always `null` in local mode. |
+| Held roles | As for `GET /me` ([api.md](api.md) 2.13): implicit User, `role_assignments`, `group_role_mappings` of the user's groups, and Platform admin for a bootstrap admin (`userName` in `ORG_BOOTSTRAP_ADMINS`; in local mode `demo@local.test`, Demo User, admin R18). A Data owner assignment or mapping whose `datasourceId` is not in `connections` grants nothing (3.13), so it counts in no role figure; the user detail still lists such a direct assignment, flagged. |
 
 Reads walk `users`, `agents` and `activity_events` across all owners, so the admin module reads the raw (not owner-scoped) stores (3.15). Each admin request reads each collection once and derives every row and figure from that read.
 
 ### 3.15 Ownership (`ownerId`)
 
-Rules: [../capabilities/admin/spec.md](../capabilities/admin/spec.md) R28-R33.
+Rules: [../capabilities/admin/spec.md](../capabilities/admin/spec.md) R28-R33. Scoping applies in both modes (ADR-0012).
 
 - **Private collections:** `sessions`, `verified_queries`, `metrics`, `eval_runs`, `knowledge_snippets`, `agents`, plus the per-user built-in pins and UI preferences documents in `settings` (3.2, 3.2.1). Everything hanging off a session is private through it: visual metadata and files, reports, the session workspace (section 4) and its agent memory thread (section 5).
 - **Shared collections:** `connections`, `datasets`, `data_models`, `datasource_inventories`, and the `llm` document in `settings`. A data model is shared like its dataset: it carries no `ownerId`, every caller sees the same model, and the data model service reads the raw (not owner-scoped) `datasets` and `metrics` stores so the startup import can walk every owner.
-- **Org server mode:** every insert into a private collection stamps `ownerId` with the caller's id, and every find, update, unset and delete ANDs `ownerId = <caller>` into its filter. A document with another `ownerId`, or none, is invisible to the caller. Upserts carry `ownerId`, so they can never take over another owner's document.
-- **Local mode:** no `ownerId` is written and no owner filter is applied: every document belongs to the local user, whether it was stored before or after org server mode existed.
+- **Both modes:** every insert into a private collection stamps `ownerId` with the caller's id, and every find, update, unset and delete ANDs `ownerId = <caller>` into its filter. A document with another `ownerId`, or none, is invisible to the caller. Upserts carry `ownerId`, so they can never take over another owner's document.
+- **Local mode:** the same stamp and filter, with the signed-in persona as the caller. Documents stored in local mode before it had sign-in have no `ownerId`; M13 gives them to Demo User (`ownerId: "local"`) at startup, so they stay with the user who had them. On an org server, a document with no `ownerId`, or with a local persona's, belongs to nobody who can sign in, so nobody sees it.
 - **Uniqueness and dedupe** on private collections apply per owner: agent names, metric names, the verified-query key `(sourceSessionId, sourceMessageAt)`.
-- **In-memory state** keyed by id (preview sessions, in-flight eval runs, deep-analysis jobs) records the owner's id (`local` for the local user) when it is created, and lookups filter by it: another user's entry answers as not found. The one-running-eval-run guard is kept per agent and owner. Work that outlives its request (eval runs, deep analysis) captures the user when it starts and re-enters it for every later step.
-- **Startup work** that walks a private collection across all owners (the verified-query field migration M4, the workspace backfill, the data-model bootstrap and metrics import M14) reads the store without the owner filter.
+- **In-memory state** keyed by id (preview sessions, in-flight eval runs, deep-analysis jobs) records the owner's id when it is created, and lookups filter by it: another user's entry answers as not found. The one-running-eval-run guard is kept per agent and owner. Work that outlives its request (eval runs, deep analysis) captures the user when it starts and re-enters it for every later step.
+- **Startup work** that walks a private collection across all owners (the verified-query field migration M4, the owner backfill M13, the workspace backfill, the data-model bootstrap and metrics import M14) reads the store without the owner filter.
 
 *Implementation note.* An `OwnedDocStore<T>` wrapper around `DocStore<T>` adds the stamp and the filter from the current user (`AsyncLocalStorage`, ADR-0011); the auth module provides it under an owned token per private collection. Repositories of private collections inject the owned token; the raw token stays for startup work (the sessions repository's workspace backfill and the verified-query migration) and for one request-time reader: the admin module's agents repository, which lists agents across owners and moves one to another owner ([api.md](api.md) 81-87; every route reaching it needs `manage-users`). The wrapper reads the caller on every call and fails closed (401) when nobody is signed in; a patch can't change `ownerId` and `ownerId` can't be unset. The built-in pins and UI preferences documents are scoped by their `key` instead (3.2, 3.2.1).
 
@@ -824,16 +836,17 @@ Visuals created before versioning keep their **v1 files directly under `visuals/
 | M14 | Datasets without a data model; legacy metrics of every owner | Data models module init (backend start), after the stores are built | For each `datasets` row (raw store, all datasets) with no `data_models` document, derive and store version 1 from its snapshot (`source: bootstrap`). Then import the legacy `metrics` documents of **every owner** (raw store, no owner filter) into the model of the dataset whose bound table covers each metric's `entity`: lowercase name, `author` = the document's `ownerId` and `authorName` = that user's `displayName` in `users` (3.14.1) when found (both absent in local mode), ordered by `createdAt` then `id`, the first of a lowercase name wins, the rest go to `lastMetricsImport.skipped`; names in `deletedMetricNames` or `localMetricNames` are never imported, so a metric the user deleted or removed in the YAML stays gone. Idempotent: a second run finds the models and the names already there and adds no version. Legacy documents are never changed or deleted. A new dataset gets its model on save, not here. Covered by `bootstrap.spec.ts` and `data-models.service.spec.ts`. |
 | M10 | Pre-versioning visuals; messages without `reasoning`; datasets without `sampleValues`/`references` | Read time | Tolerated by readers (section 4.7; reasoning derived from `data[].rationale`; absent snapshot fields simply omitted). No rewrite. |
 | M12 | Theme choice saved only in browser storage (before ADR-0009) | Renderer start, once the backend answers | If `GET /ui-preferences` returns `theme: null` and `localStorage` holds `system`, `light` or `dark` under `questions-to-insights:theme`, the renderer saves it with `PUT /ui-preferences`. Idempotent: afterwards the backend holds a value. Covered by `theme.service.spec.ts` and the appearance E2E. |
+| M13 | Local data stored before local mode had sign-in (ADR-0012) | Backend start in local mode only (no org server configuration), after M1-M3, before stores are created | For each of `sessions`, `verified_queries`, `metrics`, `eval_runs`, `knowledge_snippets` and `agents` that exists: `UPDATE <table> SET doc = json_set(doc, '$.ownerId', 'local') WHERE json_extract(doc, '$.ownerId') IS NULL`. In `settings`, rename the key `ui-preferences` to `ui-preferences:local` and `builtin-agent-pins` to `builtin-agent-pins:local`, each only when the suffixed key is absent. Raw SQL, so `updatedAt` is untouched. Idempotent (a second run finds nothing ownerless). Never runs on an org server, so ownerless documents there stay invisible (3.15). Covered by `database.module.spec.ts`. |
 
 None for `data_models` beyond M14: it is a new collection, and the store creates the table on first open.
 
 None for `agents`: it is a new collection, and the store creates the table on first open. The built-in pins document is a new `settings` key and needs no migration.
 
-None for org server mode (BA-163): the seven identity and access collections are new, `ownerId` is absent on every document stored before it (and in local mode, which means the local user, section 3.15), and the local user's pins keep the `builtin-agent-pins` key.
+None for org server mode (BA-163): the seven identity and access collections are new, `ownerId` is absent on every document stored before it (in local mode until M13 gives those documents to Demo User, section 3.15).
 
 None for the admin screens (BA-164 to BA-167): they add `activity_events` types and derive every figure from existing fields (3.14.8). Ownership transfer rewrites `ownerId` and `pinned` on existing `agents` documents; no field is renamed.
 
-Tests: the table/field renames (M1-M3) and M4/M5 are covered by `database.module.spec.ts` and the repository/workspace specs.
+Tests: the table/field renames (M1-M3), M13 and M4/M5 are covered by `database.module.spec.ts` and the repository/workspace specs.
 
 ---
 

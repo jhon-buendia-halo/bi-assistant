@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures/app.fixture';
-import { apiUrl } from './helpers/app-actions';
+import { apiFetch } from './helpers/local-auth';
 
 const rail = (page: Page) =>
   page.getByRole('complementary', { name: 'Navigation rail' });
@@ -163,22 +163,33 @@ test('shows the product name', async ({ page }) => {
   );
 });
 
-test('local mode has no sign-in and no Admin item', async ({ page }) => {
-  // The fixture opened the app straight into the shell, without signing in.
+test('local mode signs in as Demo User', async ({ page }) => {
+  // The fixture signed in as Demo User through the local sign-in (admin
+  // R70, R71); local mode never offers the Microsoft sign-in.
   await expect(rail(page)).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Sign in with Microsoft' }),
   ).toHaveCount(0);
 
-  const avatar = rail(page).getByTitle('Demo User', { exact: true });
-  await expect(avatar).toHaveText('D');
-  await expect(page.getByRole('button', { name: 'Account menu' })).toHaveCount(0);
-  await expect(railItem(page, 'Admin')).toHaveCount(0);
+  const avatar = page.getByRole('button', { name: 'Account menu', exact: true });
+  await expect(avatar).toHaveText('DU');
+  await expect(avatar).toHaveAttribute('title', 'Demo User');
+  // Demo User is always a Platform admin (admin R18, R34, R69).
+  await expect(railItem(page, 'Admin')).toBeVisible();
 
-  const me = await page.request.get(apiUrl(page, '/me'));
-  expect(me.ok()).toBe(true);
+  const me = await apiFetch(page, 'GET', '/me');
+  expect(me.status()).toBe(200);
   expect(await me.json()).toMatchObject({
     mode: 'local',
-    user: { displayName: 'Demo User' },
+    user: {
+      id: 'local',
+      displayName: 'Demo User',
+      email: 'demo@local.test',
+      initials: 'DU',
+    },
+    roles: [
+      { role: 'user', source: 'implicit' },
+      { role: 'platform-admin', source: 'bootstrap' },
+    ],
   });
 });

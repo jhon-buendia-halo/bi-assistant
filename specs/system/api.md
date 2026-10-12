@@ -4,7 +4,7 @@ The complete contract between the renderer (or any HTTP client) and the backend,
 
 Contents: [1 Conventions](#1-conventions) · [2 Endpoints](#2-endpoints) · [3 Streaming and long-running work](#3-streaming-and-long-running-work) · [4 Desktop bridge (IPC)](#4-desktop-bridge-ipc) · [5 CLI contract](#5-cli-contract) · [6 Environment variables](#6-environment-variables) · [7 Gaps and open questions](#7-gaps-and-open-questions)
 
-Endpoint total: **76 HTTP route handlers** across 11 controllers (sessions 14, datasources 6, metrics 5, llm 4, datasets 3, agents 13, deep analysis 3, testing data 3, knowledge 6, data models 19: 2.16). Verified queries have **no** HTTP surface (they are created and removed as a side effect of message feedback, and read by the metrics promotion path). Org server mode adds 30 routes: the auth and current-user routes (2.13, 4), the SCIM routes (2.14, 14) and the admin routes (2.15, 12); in local mode those answer 404, except `GET /me`.
+Endpoint total: **76 HTTP route handlers** across 11 controllers (sessions 14, datasources 6, metrics 5, llm 4, datasets 3, agents 13, deep analysis 3, testing data 3, knowledge 6, data models 19: 2.16). Verified queries have **no** HTTP surface (they are created and removed as a side effect of message feedback, and read by the metrics promotion path). Multi-user support adds 33 routes: the auth and current-user routes (2.13, 7: three for org server mode only, three for local mode only, and `GET /me`), the SCIM routes (2.14, 14, org server mode only) and the admin routes (2.15, 12, both modes). A route of one mode answers 404 in the other (1.9).
 
 ---
 
@@ -18,7 +18,7 @@ Endpoint total: **76 HTTP route handlers** across 11 controllers (sessions 14, d
 | Desktop (Electron renderer, `file://`) | Client uses `http://localhost:3000` (hardcoded). The backend child process listens on `PORT`, which the main process sets from `BACKEND_PORT` (default `3000`). See gap G1: a non-default `BACKEND_PORT` breaks the renderer. |
 | Dev (`ng serve` / `electron:dev`, page served from `http://localhost:4200`) | Protocol is `http:`, so the client uses relative URLs against the dev server. No proxy or override exists in the repo (G13). |
 
-The client rule is: `API_BASE_URL = (window.location.protocol === 'file:') ? 'http://localhost:3000' : ''`. All paths below are relative to that base. There is no API prefix and no versioning. Authentication exists only in org server mode (1.9); in local mode there is none.
+The client rule is: `API_BASE_URL = (window.location.protocol === 'file:') ? 'http://localhost:3000' : ''`. All paths below are relative to that base. There is no API prefix and no versioning. Authentication exists in both modes (1.9): a session cookie on an org server, a bearer token in local mode.
 
 ### 1.2 Wire format
 
@@ -72,7 +72,7 @@ POST handlers return the framework default **201 Created**, except where an endp
 
 | Mode | CORS |
 |---|---|
-| Desktop (`main.ts`, Electron-spawned backend) | **Enabled** (`app.enableCors()`, allow-all) because the renderer's origin is `file://` (`Origin: null`). |
+| Desktop (`main.ts`, Electron-spawned backend) | **Enabled** (`app.enableCors()`, allow-all) because the renderer's origin is `file://` (`Origin: null`). Preflights reflect the requested headers, so the `Authorization` header of a local auth session (1.9) is allowed. |
 | Web / CLI | **Disabled**. Same-origin only. |
 | Org server (CLI in org server mode) | **Disabled**. Same-origin only, plus the Origin check of 1.9. |
 
@@ -94,13 +94,13 @@ Everything else keeps the default 404 body (`{statusCode:404, message:"Cannot GE
 - `message` strings from Style A are surfaced directly to the user.
 - Secrets never come back in plaintext: datasource secrets are masked as `••••••••` (8 U+2022 bullets), the LLM key as `••••••••` + last 4 characters. A client may send the mask back unchanged to mean "keep the stored secret" (see 2.2, 2.5).
 
-### 1.9 Authentication, authorization and CSRF (org server mode)
+### 1.9 Authentication, authorization and CSRF
 
-Rules: [admin](../capabilities/admin/spec.md) R1-R36 (the admin screens: R37-R68). Decisions: ADR-0010 and ADR-0011 in [architecture.md](architecture.md).
+Rules: [admin](../capabilities/admin/spec.md) R1-R36 and R69-R74 (the admin screens: R37-R68). Decisions: ADR-0010, ADR-0011 and ADR-0012 in [architecture.md](architecture.md).
 
 **Mode.** The server runs in org server mode when every required `ORG_*` variable (6.1) is set, and in local mode when none is. Some but not all is a startup error naming the missing ones. The Electron-spawned backend is always local (4.3).
 
-**Local mode.** No cookie, no 401, no 403, no Origin check. Every request runs as the local user (id `local`), who holds every permission. Auth routes (2.13, except `GET /me`), SCIM (2.14) and admin (2.15) routes answer `404 { statusCode:404, message:"Not available in local mode", error:"Not Found" }`.
+**Local mode.** The auth session travels as `Authorization: Bearer <token>`, the token answered by `POST /auth/local/sign-in` (2.13); no cookie is set or read. 401 and 403 answer exactly as in org server mode (below). There's no Origin check. Every request runs as the signed-in persona (admin R69), with owner scoping as on an org server. The org auth routes (`GET /auth/login`, `GET /auth/callback`, `POST /auth/logout`) and SCIM (2.14) answer `404 { statusCode:404, message:"Not available in local mode", error:"Not Found" }`; `GET /me`, the local sign-in routes and the admin routes (2.15) are available. In org server mode the local sign-in routes answer the same 404 with `message:"Not available in org server mode"` (admin R73).
 
 **Cookies** (org server mode). Both `HttpOnly`, `SameSite=Lax`, and `Secure` unless `ORG_PUBLIC_BASE_URL` starts with `http://`.
 
@@ -109,7 +109,7 @@ Rules: [admin](../capabilities/admin/spec.md) R1-R36 (the admin screens: R37-R68
 | `qti_session` | `/` | The auth-session token: 32 random bytes, base64url. The server stores only its SHA-256 ([data-model.md](data-model.md) 3.14.6). | Session cookie (no `Max-Age`); the server ends it after 8 h idle or 7 days (admin R9). |
 | `qti_oidc` | `/auth` | The sign-in round trip: `state`, `nonce`, the PKCE verifier and `returnTo`, sealed with the app secret (AES-256-GCM, as in [data-model.md](data-model.md) 2.3). | `Max-Age=600`; cleared by the callback. |
 
-**Unauthenticated.** Any route other than the public ones below, called without a valid `qti_session`, answers:
+**Unauthenticated.** Any route other than the public ones below, called without a valid auth session (`qti_session` in org server mode, the bearer token in local mode), answers:
 
 ```json
 { "statusCode": 401, "message": "Sign in required", "error": "Unauthorized" }
@@ -129,7 +129,7 @@ The renderer shows its own toast for any 403 (`You don't have permission to do t
 
 **Proxy.** In org server mode the app trusts the first proxy hop (`X-Forwarded-Proto`, `X-Forwarded-For`, `X-Forwarded-Host`), so redirects and the `Secure` cookie work behind the organisation's TLS proxy.
 
-**Current user.** Each request in org server mode reads its auth session (one store read), checks that the user is still active, resolves their roles and permissions (admin R20, R21) and runs the handler as that user. Work started by the request (streams, deep analysis, eval runs, knowledge bootstrap) keeps that user (admin R32).
+**Current user.** Each request, in either mode, reads its auth session (one store read), checks that the user is still active, resolves their roles and permissions (admin R20, R21) and runs the handler as that user. Work started by the request (streams, deep analysis, eval runs, knowledge bootstrap) keeps that user (admin R32).
 
 **Permission per route.** Every route declares exactly one requirement, on the handler or on its controller (a handler's own requirement wins); a route with none stops the server at startup (admin R23). Private collections are also filtered by owner (admin R29, R30): another user's item answers as not found.
 
@@ -150,7 +150,7 @@ The renderer shows its own toast for any 403 (`You don't have permission to do t
 | `PUT /llm/settings`, `PUT /llm/reasoning`, `POST /llm/test-connection` | `manage-llm` |
 | Every `/developer-settings` route (2.11) | `edit-policies` |
 | `GET /ui-preferences`, `PUT /ui-preferences` (2.12) | `use-agents` (each user's own theme and drawer state) |
-| `GET /auth/login`, `GET /auth/callback`, `POST /auth/logout`, `GET /me` (2.13) | public: no permission checked (`GET /me` answers 401 itself without an auth session) |
+| `GET /auth/login`, `GET /auth/callback`, `POST /auth/logout`, `GET /auth/local/users`, `POST /auth/local/sign-in`, `POST /auth/local/sign-out`, `GET /me` (2.13) | public: no permission checked (`GET /me` answers 401 itself without an auth session) |
 | Every `/scim/v2` route (2.14) | the SCIM bearer token, no auth session |
 | Every `/admin` route (2.15): role assignments, overview and its export, users, user roles, agent transfer, groups and group mappings | `manage-users` |
 
@@ -737,7 +737,7 @@ interface UiPreferences { theme: ThemePreference | null; navExpanded: boolean | 
 
 ### 2.13 Auth and current user
 
-Controllers `/auth` and `/me`. Capability: [admin](../capabilities/admin/spec.md). Requirement: public (1.9).
+Controllers `/auth`, `/auth/local` and `/me`. Capability: [admin](../capabilities/admin/spec.md). Requirement: public (1.9). Routes 61-63 are org server mode only and 91-93 local mode only; each answers 404 in the other mode (1.9).
 
 | # | Method + path | Purpose | FE |
 |---|---|---|---|
@@ -745,6 +745,9 @@ Controllers `/auth` and `/me`. Capability: [admin](../capabilities/admin/spec.md
 | 62 | `GET /auth/callback` | Finish sign-in (redirect target registered with the identity provider) | no (the identity provider redirects here) |
 | 63 | `POST /auth/logout` | Sign out | yes |
 | 64 | `GET /me` | The current user, roles and permissions | yes |
+| 91 | `GET /auth/local/users` | The personas to sign in as (local mode) | yes (sign-in page) |
+| 92 | `POST /auth/local/sign-in` | Sign in as a persona (local mode) | yes |
+| 93 | `POST /auth/local/sign-out` | Sign out (local mode) | yes |
 
 ```ts
 type RoleId = 'user' | 'maker' | 'data-owner' | 'approver' | 'platform-admin';
@@ -783,9 +786,24 @@ interface MeView {
 - Without an auth session it still answers `200` (signing out twice is harmless).
 
 #### 64. `GET /me`
-- Local mode: `200 { mode:"local", user:{ id:"local", displayName:"Demo User", email:null, initials:"D" }, roles:[{role:"user",source:"implicit"},{role:"platform-admin",source:"implicit"}], permissions:<all eleven> }`.
-- Org server mode, signed in: `200 MeView` with `mode:"org"`. `initials` per [ui.md](ui.md) 1.3. A Data owner assignment or mapping whose datasource no longer exists is not listed and grants nothing ([data-model.md](data-model.md) 3.13).
-- Org server mode, not signed in: `401` (1.9).
+- Signed in: `200 MeView` with `mode:"org"` or `mode:"local"`. `initials` per [ui.md](ui.md) 1.3. A Data owner assignment or mapping whose datasource no longer exists is not listed and grants nothing ([data-model.md](data-model.md) 3.13).
+- Local mode, signed in as Demo User: `200 { mode:"local", user:{ id:"local", displayName:"Demo User", email:"demo@local.test", initials:"DU" }, roles:[{role:"user",source:"implicit"},{role:"platform-admin",source:"bootstrap"}], permissions:<all eleven> }`, plus any direct assignments Demo User holds.
+- Not signed in, in either mode: `401 { statusCode:401, message:"Sign in required", error:"Unauthorized", mode:"local" | "org" }`. The renderer reads `mode` to pick the sign-in page's variant ([ui.md](ui.md) 1.6, 4.17).
+
+#### 91. `GET /auth/local/users`
+- Local mode only (1.9). Public.
+- Response `200 { users: { id: string; displayName: string; email: string | null; initials: string; roles: RoleId[] }[] }`: every directory user who is active and not released ([data-model.md](data-model.md) 3.14.1), sorted by display name (case-insensitive). `roles` are the roles they hold from any source (admin R20), each once, `user` left out, in the order `platform-admin`, `approver`, `data-owner`, `maker`; empty for a user who holds only User. The sign-in page labels each as `<displayName> · <roles>` ([ui.md](ui.md) 4.17.1).
+
+#### 92. `POST /auth/local/sign-in`
+- Local mode only (1.9). Public; no Origin check.
+- Body `{ userId: string }`.
+- The user must exist, be active and not released, else `404 { statusCode:404, message:"User <userId> not found", error:"Not Found" }` and no auth session.
+- Success: creates an `auth_sessions` document ([data-model.md](data-model.md) 3.14.6), stamps the user's `lastSignInAt`, records `sign-in` (3.14.7), and answers `200 { ok:true, message:"Signed in", token: string, me: MeView }`. `token` is the auth-session token (32 random bytes, base64url) to send as `Authorization: Bearer <token>`; the server stores only its SHA-256.
+
+#### 93. `POST /auth/local/sign-out`
+- Local mode only (1.9). Public; the bearer token is optional.
+- Ends the caller's auth session if the token names one, and records `sign-out`.
+- Response `200 { ok:true, message:"Signed out" }`, with or without a session (signing out twice is harmless).
 
 ### 2.14 SCIM 2.0 (directory provisioning)
 
@@ -823,7 +841,7 @@ Controller prefix `/scim/v2`. Capability: [admin](../capabilities/admin/spec.md)
 
 ### 2.15 Admin
 
-Controller prefix `/admin`. Capability: [admin](../capabilities/admin/spec.md) R22 and R37-R68. Requirement: `manage-users` (1.9). Org server mode only. Errors are Style B (1.3); successful writes answer an `ok` body like Style A. Activity events are the `activity_events` types in [data-model.md](data-model.md) 3.14.7; how each figure is derived is in 3.14.8.
+Controller prefix `/admin`. Capability: [admin](../capabilities/admin/spec.md) R22 and R37-R68. Requirement: `manage-users` (1.9). Both modes; in local mode there are no groups, no group mappings and no SCIM requests, so those lists are empty and the last sync is `null` (admin R74). Errors are Style B (1.3); successful writes answer an `ok` body like Style A. Activity events are the `activity_events` types in [data-model.md](data-model.md) 3.14.7; how each figure is derived is in 3.14.8.
 
 | # | Method + path | Purpose | FE |
 |---|---|---|---|
@@ -1253,7 +1271,7 @@ Entry `id` is `<epoch ms>-<sequence>`; `timestamp` ISO. Entries are appended as 
 | Item | Value |
 |---|---|
 | Spawn | Electron's own binary with `ELECTRON_RUN_AS_NODE=1` running `backend/dist/main.js` (packaged: `<resources>/backend/dist/main.js`); `stdio` piped; env passes `PORT`, `APP_DATA_DIR`, `APP_SECRET`, and drops every `ORG_*` variable, so the desktop backend always runs in local mode (1.9). Missing entry file records an error diagnostic and does not start. |
-| Readiness probe | `GET http://127.0.0.1:<BACKEND_PORT>/sessions`, **ready iff status 200**; 500 ms request timeout; retried every 100 ms until a **30 s** deadline. |
+| Readiness probe | `GET http://127.0.0.1:<BACKEND_PORT>/me`, **ready iff status 200 or 401** (nobody is signed in when the backend starts, ADR-0012); 500 ms request timeout; retried every 100 ms until a **30 s** deadline. |
 | Startup | status `starting` → spawn → probe. Ready → `ready`. Deadline missed → error diagnostic, **window opens anyway**, probing continues in the background and pushes `ready` when it succeeds. |
 | Crash handling | Any exit not caused by app quit → status `restarting`, restart after back-off **1 s, 2 s, 4 s** (3 attempts), re-probing after each start. Attempts exhausted → status `down` (error diagnostic, no further restarts). |
 | Stability reset | Backend continuously ready for **60 s** resets the attempt counter. |
@@ -1375,8 +1393,9 @@ No environment variables. The only runtime switch is the page protocol (`file:` 
 - **G7. `POST /sessions` does not verify the named datasets exist.** Open question whether that is intended.
 - **G8. Error-style inconsistency.** Style A (`200 { ok:false }`) vs Style B (real 4xx) is endpoint-specific and also differs in list shapes (`{ sessions }`, `{ datasources }`, `{ metrics }`, `{ datasets }`, bare array for knowledge, bare `SessionDoc`). Several read endpoints (`GET /datasources`, eval-run listing) can still return a framework 500.
 - **G9. Request body size.** No explicit JSON body limit is configured, so the framework default (about 100 kB) applies; large dataset snapshots in `POST /datasets` could exceed it. Not verified against a real large dataset.
-- **G10. Desktop backend bind address.** (Unchanged by org server mode: the desktop app is always local, 1.9.) `main.ts` calls `createApp` without a host, so the Electron-spawned backend listens on **all interfaces** with CORS enabled and no authentication; only the CLI binds `127.0.0.1` by default. Open question whether the desktop backend should bind loopback only.
+- **G10. Desktop backend bind address.** (Unchanged by org server mode: the desktop app is always local, 1.9.) `main.ts` calls `createApp` without a host, so the Electron-spawned backend listens on **all interfaces** with CORS enabled and only the password-less local sign-in (G14); only the CLI binds `127.0.0.1` by default. Open question whether the desktop backend should bind loopback only.
 - **G11. `message` timing on feedback.** `POST …/messages/feedback` with `up` reports `"Answer saved as a verified query"` even when the answer had no SQL and nothing was saved.
 - **G12. Spec of `PUT /metrics/:id` not-found** is thrown as a 400-class exception but surfaced inside the `ok:false` envelope, so clients cannot distinguish "not found" from validation by status.
 - **G13. Dev-mode API routing.** For `ng serve` the client uses relative URLs and the repo has no Angular proxy config, so API calls from a bare `ng serve` page hit the dev server, not the backend. Under `electron:dev` the window loads `http://localhost:4200` (protocol `http:`), so the same relative-URL problem applies. Open question: how the live-reload dev flow reaches the backend (no proxy or `API_BASE_URL` override found).
+- **G14. Local mode is not a security boundary.** Local sign-in (91-93) asks for no password: anyone who can reach the local backend can sign in as any persona, Demo User included, and the desktop backend listens on all interfaces (G10). The personas show what each role can do; they don't protect data ([non-functional.md](../product/non-functional.md) section 3, ADR-0012).
 - **Not an HTTP surface:** verified queries (saved via feedback), the Mastra Studio, and the workspace filesystem have no endpoints of their own.

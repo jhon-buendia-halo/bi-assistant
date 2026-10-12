@@ -356,7 +356,11 @@ describe('SessionsService streaming', () => {
     });
     const { service, agent } = buildStreaming(toolOnlyStream(15));
 
-    await service.streamMessage('session-1', 'Why did Argentina win?', () => {});
+    await service.streamMessage(
+      'session-1',
+      'Why did Argentina win?',
+      () => {},
+    );
 
     const options = (agent.generate as jest.Mock).mock.calls.map(
       ([, opts]: [unknown, { providerOptions?: unknown }]) =>
@@ -1048,7 +1052,9 @@ describe('SessionsService streaming', () => {
      */
     it('propagates the provider failure and leaves the transcript retry-safe', async () => {
       const { service, session } = buildStreaming(
-        failingStream(new Error('Provider request failed (404) — Resource not found')),
+        failingStream(
+          new Error('Provider request failed (404) — Resource not found'),
+        ),
       );
 
       await expect(
@@ -1088,6 +1094,26 @@ describe('SessionsService streaming', () => {
       expect(activity.record).toHaveBeenCalledTimes(1);
       expect(activity.record).toHaveBeenCalledWith('agent.turn-failed', {
         actorId: 'ada',
+        subjectId: 'agent-1',
+        details: { sessionId: 'session-1', message: 'Model unavailable' },
+      });
+    });
+
+    it('records in local mode too, as the signed-in persona (ADR-0012)', async () => {
+      const { service, users, activity } = buildStreaming(
+        failingStream(new Error('Model unavailable')),
+        { userAgent: { id: 'agent-1', live: historian } },
+      );
+      const mark = { ...LOCAL_USER, id: 'local-mark' };
+
+      await expect(
+        users.runAs(mark, () =>
+          service.streamMessage('session-1', 'Who won?', () => {}),
+        ),
+      ).rejects.toThrow('Model unavailable');
+
+      expect(activity.record).toHaveBeenCalledWith('agent.turn-failed', {
+        actorId: 'local-mark',
         subjectId: 'agent-1',
         details: { sessionId: 'session-1', message: 'Model unavailable' },
       });
@@ -1144,7 +1170,6 @@ describe('SessionsService streaming', () => {
         'an agent the session no longer resolves (deleted or transferred)',
         { org: true, userAgent: { id: 'agent-1', live: null } },
       ],
-      ['local mode', { userAgent: { id: 'agent-1', live: historian } }],
     ])('records nothing for %s', async (_label, options) => {
       const { service, users, activity } = buildStreaming(
         failingStream(new Error('Model unavailable')),
@@ -2166,28 +2191,30 @@ describe('SessionsService sessions from a user agent (R52, api.md 2.1)', () => {
 
   describe('preview sessions (agents-evals R60, R61)', () => {
     it('runs the draft in memory and is never stored', async () => {
-      const { service, repository, mastra } = build(
+      const { service, repository, mastra, users } = build(
         { id: 'agent-1', draft: { ...live, name: 'Draft name' } },
         ['World Cup Core'],
       );
+      // As Demo User: nobody is signed in outside `runAs` (ADR-0012).
+      await users.runAs(LOCAL_USER, async () => {
+        const preview = await service.createPreview('agent-1');
 
-      const preview = await service.createPreview('agent-1');
+        expect(preview).toMatchObject({
+          name: 'Preview: Draft name',
+          datasets: ['World Cup Core'],
+          agentId: 'agent-1',
+          preview: true,
+        });
+        expect(preview.id).toMatch(/^preview-/);
+        expect(repository.insert).not.toHaveBeenCalled();
+        expect(await service.get(preview.id)).toMatchObject({ preview: true });
+        expect((await service.toView(preview)).agent?.name).toBe('Draft name');
 
-      expect(preview).toMatchObject({
-        name: 'Preview: Draft name',
-        datasets: ['World Cup Core'],
-        agentId: 'agent-1',
-        preview: true,
+        await service.delete(preview.id);
+        expect(mastra.deleteSessionResources).toHaveBeenCalledWith(preview.id);
+        expect(repository.delete).not.toHaveBeenCalled();
+        await expect(service.get(preview.id)).rejects.toThrow('not found');
       });
-      expect(preview.id).toMatch(/^preview-/);
-      expect(repository.insert).not.toHaveBeenCalled();
-      expect(await service.get(preview.id)).toMatchObject({ preview: true });
-      expect((await service.toView(preview)).agent?.name).toBe('Draft name');
-
-      await service.delete(preview.id);
-      expect(mastra.deleteSessionResources).toHaveBeenCalledWith(preview.id);
-      expect(repository.delete).not.toHaveBeenCalled();
-      await expect(service.get(preview.id)).rejects.toThrow('not found');
     });
 
     it('belongs to the user who opened it (admin R29, R30)', async () => {
@@ -2206,7 +2233,11 @@ describe('SessionsService sessions from a user agent (R52, api.md 2.1)', () => {
         await expect(service.get(preview.id)).rejects.toThrow('not found');
         await expect(service.delete(preview.id)).rejects.toThrow('not found');
       });
-      await expect(service.get(preview.id)).rejects.toThrow('not found');
+      // Demo User is scoped like anyone; outside a request nobody is.
+      await users.runAs(LOCAL_USER, async () => {
+        await expect(service.get(preview.id)).rejects.toThrow('not found');
+      });
+      await expect(service.get(preview.id)).rejects.toThrow('Sign in required');
       expect(mastra.deleteSessionResources).not.toHaveBeenCalled();
       await users.runAs(ada, async () => {
         expect(await service.get(preview.id)).toMatchObject({ preview: true });

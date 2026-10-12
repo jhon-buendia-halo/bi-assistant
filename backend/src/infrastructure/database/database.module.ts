@@ -1,6 +1,7 @@
 import { Global, Module, Provider } from '@nestjs/common';
 import { mkdirSync } from 'fs';
 import { join } from 'path';
+import { loadOrgServerConfig } from '../../config/org-server.config';
 import {
   ACTIVITY_EVENTS_STORE,
   AGENTS_STORE,
@@ -19,6 +20,7 @@ import {
   SESSIONS_STORE,
   DATASETS_STORE,
   DATA_MODELS_STORE,
+  PRIVATE_COLLECTIONS,
   SETTINGS_STORE,
   VERIFIED_QUERIES_STORE,
 } from './doc-store';
@@ -67,6 +69,7 @@ const sqliteDbProvider: Provider = {
     const db = new BetterSqlite3(join(DATA_DIR, 'app.sqlite'));
     renameLegacyTables(db);
     renameLegacyFields(db);
+    if (isLocalMode()) backfillLocalOwners(db);
     return db;
   },
 };
@@ -127,6 +130,63 @@ export function renameLegacyFields(
         WHERE json_extract(doc, '$.${from}') IS NOT NULL
           AND json_extract(doc, '$.${to}') IS NULL`,
     ).run();
+  }
+}
+
+/**
+ * Local mode only: no org server configuration. A partial configuration is
+ * the auth module's startup error to report, so it counts as org here and
+ * M13 never runs on what may be an org server's data.
+ */
+function isLocalMode(): boolean {
+  try {
+    return loadOrgServerConfig() === null;
+  } catch {
+    return false;
+  }
+}
+
+/** The private collections' tables (data-model 3.15), for M13. */
+const PRIVATE_TABLES: string[] = PRIVATE_COLLECTIONS.map(
+  (p) => COLLECTIONS.find((c) => c.token === p.raw)!.table,
+);
+
+/** Demo User's id: local data from before sign-in becomes theirs (M13). */
+const DEMO_USER_ID = 'local';
+
+/** The per-user `settings` keys local mode stored without a user suffix. */
+const LEGACY_SETTINGS_KEYS = ['ui-preferences', 'builtin-agent-pins'];
+
+/**
+ * M13 (data-model 6; ADR-0012): local data stored before local mode had
+ * sign-in belongs to Demo User. Gives every ownerless document of the
+ * private collections `ownerId: "local"`, and renames the bare per-user
+ * settings keys to Demo User's, each only when the suffixed key is absent.
+ * Raw SQL, so `updatedAt` is not restamped; idempotent. Run in local mode
+ * only, so ownerless documents on an org server stay invisible (3.15).
+ */
+export function backfillLocalOwners(
+  db: import('better-sqlite3').Database,
+): void {
+  for (const table of PRIVATE_TABLES) {
+    if (!tableExists(db, table)) continue;
+    db.prepare(
+      `UPDATE "${table}"
+          SET doc = json_set(doc, '$.ownerId', ?)
+        WHERE json_extract(doc, '$.ownerId') IS NULL`,
+    ).run(DEMO_USER_ID);
+  }
+  if (!tableExists(db, 'settings')) return;
+  for (const key of LEGACY_SETTINGS_KEYS) {
+    const suffixed = `${key}:${DEMO_USER_ID}`;
+    db.prepare(
+      `UPDATE settings
+          SET doc = json_set(doc, '$.key', ?)
+        WHERE json_extract(doc, '$.key') = ?
+          AND NOT EXISTS (
+            SELECT 1 FROM settings WHERE json_extract(doc, '$.key') = ?
+          )`,
+    ).run(suffixed, key, suffixed);
   }
 }
 

@@ -23,6 +23,11 @@ import { RoleResolver } from './role-resolver';
 export const SESSION_IDLE_MS = 8 * 60 * 60 * 1000;
 /** ... or this long after sign-in, whichever comes first (admin R9). */
 export const SESSION_MAX_MS = 7 * 24 * 60 * 60 * 1000;
+/**
+ * A local auth session has no idle limit and ends this long after sign-in
+ * (admin R71; data-model 3.14.6).
+ */
+export const LOCAL_SESSION_MAX_MS = 30 * 24 * 60 * 60 * 1000;
 /** `lastSeenAt` is bumped at most once a minute (data-model 3.14.6). */
 const TOUCH_INTERVAL_MS = 60_000;
 
@@ -34,9 +39,10 @@ export const isUsable = (user: UserDoc | null): user is UserDoc =>
   !!user && user.active && !user.scimDeleted;
 
 /**
- * Auth sessions of org server mode (admin R8, R9, R16; data-model 3.14.6):
- * an opaque 32-byte token in the `qti_session` cookie, of which the store
- * keeps only the SHA-256.
+ * Auth sessions (admin R8, R9, R16, R71; data-model 3.14.6): an opaque
+ * 32-byte token, of which the store keeps only the SHA-256. On an org server
+ * it travels in the `qti_session` cookie; in local mode as
+ * `Authorization: Bearer <token>`, never as a cookie.
  */
 @Injectable()
 export class AuthSessionsService implements OnModuleInit {
@@ -52,9 +58,8 @@ export class AuthSessionsService implements OnModuleInit {
     private readonly config: OrgServerConfig | null = null,
   ) {}
 
-  /** Expired and idle sessions are swept at startup. */
+  /** Expired and idle sessions are swept at startup, in both modes. */
   async onModuleInit(): Promise<void> {
-    if (!this.config) return;
     const now = Date.now();
     let swept = 0;
     for (const session of await this.sessions.all()) {
@@ -65,7 +70,7 @@ export class AuthSessionsService implements OnModuleInit {
     if (swept) this.logger.log(`Swept ${swept} ended auth session(s)`);
   }
 
-  /** Start an auth session for `user`; returns the cookie token. */
+  /** Start an auth session for `user`; returns the token. */
   async create(user: UserDoc, userAgent?: string): Promise<string> {
     const token = randomBytes(32).toString('base64url');
     const now = Date.now();
@@ -73,16 +78,28 @@ export class AuthSessionsService implements OnModuleInit {
       id: hashToken(token),
       userId: user.id,
       lastSeenAt: new Date(now).toISOString(),
-      expiresAt: new Date(now + SESSION_MAX_MS).toISOString(),
+      expiresAt: new Date(
+        now + (this.config ? SESSION_MAX_MS : LOCAL_SESSION_MAX_MS),
+      ).toISOString(),
     };
     if (userAgent) session.userAgent = userAgent.slice(0, 200);
     await this.sessions.insert(session);
     return token;
   }
 
-  /** The session behind the request's cookie, if it is still valid. */
+  /**
+   * The request's token: the `qti_session` cookie on an org server, the
+   * bearer token in local mode (admin R71). Each mode ignores the other's.
+   */
+  tokenOf(req: Request): string | undefined {
+    if (this.config) return readCookie(req, SESSION_COOKIE);
+    const match = /^Bearer\s+(.+)$/i.exec(req.headers?.authorization ?? '');
+    return match?.[1].trim() || undefined;
+  }
+
+  /** The session behind the request's token, if it is still valid. */
   async sessionOf(req: Request): Promise<AuthSessionDoc | null> {
-    const token = readCookie(req, SESSION_COOKIE);
+    const token = this.tokenOf(req);
     if (!token) return null;
     const session = await this.sessions.byId(hashToken(token));
     if (!session) return null;
@@ -122,10 +139,11 @@ export class AuthSessionsService implements OnModuleInit {
     await this.sessions.deleteAllOf(userId);
   }
 
+  /** Local sessions have no idle limit (admin R71). */
   private ended(session: AuthSessionDoc, now: number): boolean {
+    if (Date.parse(session.expiresAt) <= now) return true;
     return (
-      Date.parse(session.expiresAt) <= now ||
-      Date.parse(session.lastSeenAt) + SESSION_IDLE_MS <= now
+      !!this.config && Date.parse(session.lastSeenAt) + SESSION_IDLE_MS <= now
     );
   }
 }

@@ -2,6 +2,7 @@ import axe from 'axe-core';
 import type { Page } from '@playwright/test';
 import { expect, RunningApp, test } from './fixtures/app.fixture';
 import { apiUrl } from './helpers/app-actions';
+import { authHeaders } from './helpers/local-auth';
 
 type Theme = 'light' | 'dark';
 
@@ -169,7 +170,10 @@ test('moves a theme chosen before the database stored it', async ({
   page,
 }) => {
   const url = apiUrl(page, '/ui-preferences');
-  expect((await (await page.request.get(url)).json()).theme).toBeNull();
+  const headers = await authHeaders(page);
+  expect(
+    (await (await page.request.get(url, { headers })).json()).theme,
+  ).toBeNull();
   await page.evaluate(() =>
     localStorage.setItem('questions-to-insights:theme', 'dark'),
   );
@@ -177,7 +181,10 @@ test('moves a theme chosen before the database stored it', async ({
   await page.reload();
   await expectTheme(page, 'dark');
   await expect
-    .poll(async () => (await (await page.request.get(url)).json()).theme)
+    .poll(
+      async () =>
+        (await (await page.request.get(url, { headers })).json()).theme,
+    )
     .toBe('dark');
 });
 

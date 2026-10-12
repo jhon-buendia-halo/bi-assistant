@@ -15,12 +15,13 @@ import {
   Search,
 } from 'lucide-angular';
 import { RoleId } from '../../../../core/auth/auth.models';
+import { AuthService } from '../../../../core/auth/auth.service';
 import { ToastService } from '../../../../core/toast/toast.service';
 import {
   AdminGroupRow,
   AdminUserRow,
   DirectoryCounts,
-  NO_GROUPS_YET,
+  noGroupsYet,
   ROLE_BADGE_ORDER,
   ROLE_CHIPS,
   ROLE_LABELS,
@@ -70,12 +71,12 @@ export function roleBadges(row: AdminUserRow): { label: string; chip: string }[]
   }));
 }
 
-/** What an empty table says (admin R57). */
-export function emptyMessage(view: DirectoryView, query: string): string {
+/** What an empty table says (admin R57, R74). */
+export function emptyMessage(view: DirectoryView, query: string, isOrg = true): string {
   if (view === 'users') {
     return query ? 'No users match your search.' : 'No users match this filter.';
   }
-  return query ? 'No groups match your search.' : NO_GROUPS_YET;
+  return query ? 'No groups match your search.' : noGroupsYet(isOrg);
 }
 
 /**
@@ -102,6 +103,8 @@ export class AdminUsersTab implements OnInit, OnDestroy {
 
   private readonly api = inject(AdminApiService);
   private readonly toast = inject(ToastService);
+  /** Org server or local mode: the footer and empty copy differ (R74). */
+  readonly auth = inject(AuthService);
 
   readonly state = signal<'loading' | 'error' | 'ready'>('loading');
   readonly error = signal('');
@@ -133,7 +136,9 @@ export class AdminUsersTab implements OnInit, OnDestroy {
   readonly empty = computed(() =>
     this.view() === 'users' ? this.users().length === 0 : this.groups().length === 0,
   );
-  readonly emptyMessage = computed(() => emptyMessage(this.view(), this.query()));
+  readonly emptyMessage = computed(() =>
+    emptyMessage(this.view(), this.query(), !this.auth.isLocal()),
+  );
   readonly lastSync = computed(() => {
     const at = this.lastSyncAt();
     return at ? { relative: relativeTime(at), full: fullTime(at) } : null;

@@ -195,8 +195,45 @@ describe('Org server API: sign-in, 401, 403 and the Origin check', () => {
       });
     });
 
-    it('GET /me answers 401 without an auth session', async () => {
-      expect((await me(null)).status).toBe(401);
+    it('GET /me answers 401 without an auth session, naming the mode', async () => {
+      const res = await me(null);
+      expect(res.status).toBe(401);
+      expect(res.body).toEqual({
+        statusCode: 401,
+        message: 'Sign in required',
+        error: 'Unauthorized',
+        mode: 'org',
+      });
+    });
+
+    it('the local sign-in routes answer 404 on an org server (R73)', async () => {
+      const notAvailable = {
+        statusCode: 404,
+        message: 'Not available in org server mode',
+        error: 'Not Found',
+      };
+      for (const [method, path] of [
+        ['GET', '/auth/local/users'],
+        ['POST', '/auth/local/sign-in'],
+        ['POST', '/auth/local/sign-out'],
+      ] as const) {
+        const res = await org.api(path, {
+          method,
+          body: method === 'GET' ? undefined : { userId: 'local' },
+        });
+        const body = (await res.json()) as unknown;
+        expect({ path, status: res.status, body }).toEqual({
+          path,
+          status: 404,
+          body: notAvailable,
+        });
+      }
+      // Nobody was signed in: no auth session was created.
+      expect(
+        org.sql<{ n: number }>(
+          "SELECT COUNT(*) AS n FROM auth_sessions WHERE json_extract(doc, '$.userId') = 'local'",
+        ),
+      ).toEqual([{ n: 0 }]);
     });
 
     it('an unknown cookie is the same as none', async () => {

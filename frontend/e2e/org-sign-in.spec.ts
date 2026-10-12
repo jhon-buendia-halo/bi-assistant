@@ -146,3 +146,18 @@ test('an expired session shows the sign-in page', async ({
   await expect(signInButton(page)).toBeVisible();
   await expect(navigationRail(page)).toHaveCount(0);
 });
+
+test('an org server never offers the local sign-in', async ({ page, org }) => {
+  await expect(signInButton(page)).toBeVisible();
+  await expect(page.getByLabel('Sign in as', { exact: true })).toHaveCount(0);
+  await expect(page.locator('select#local-user')).toHaveCount(0);
+
+  // The local sign-in routes don't exist on an org server (admin R73).
+  const signIn = await page.request.post(`${org.url}/auth/local/sign-in`, {
+    data: { userId: 'local' },
+    headers: { Origin: org.url },
+  });
+  expect(signIn.status()).toBe(404);
+  const users = await page.request.get(`${org.url}/auth/local/users`);
+  expect(users.status()).toBe(404);
+});

@@ -2,6 +2,7 @@ import { AdminHeldRole } from '../models/admin.models';
 import { userDetail } from '../testing/admin.fixtures';
 import {
   BOOTSTRAP_REASON,
+  LOCAL_BOOTSTRAP_REASON,
   OWN_ADMIN_REASON,
   desiredGrants,
   initialTicks,
@@ -67,6 +68,17 @@ describe('user-roles', () => {
       }),
     );
     expect(bootstrap[0].reason).toBe(BOOTSTRAP_REASON);
+
+    // In local mode the bootstrap admin is Demo User (admin R69, R74).
+    const demo = roleRows(
+      userDetail({
+        heldRoles: [{ role: 'platform-admin', source: 'bootstrap' }],
+        isBootstrap: true,
+        isSelf: true,
+      }),
+      true,
+    );
+    expect([demo[0].locked, demo[0].reason]).toEqual([true, LOCAL_BOOTSTRAP_REASON]);
 
     const self = roleRows(
       userDetail({
