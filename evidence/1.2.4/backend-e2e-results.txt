@@ -1,0 +1,40 @@
+FAIL test/app.e2e-spec.ts
+  ● Test suite failed to run
+    Must use import to load ES Module: /home/jhonbuendia/projects/bi-assistant/.claude/worktrees/BA-2-data-model-dsl/backend/node_modules/thrift/node_modules/uuid/dist-node/index.js
+    The file contains ESM syntax (import/export) that could not be executed as CommonJS. Either:
+      - Configure a transform (e.g. babel-jest) that compiles this file to CommonJS (see https://jestjs.io/docs/code-transformation)
+      - If the file is in "node_modules", allow it to be transformed by adjusting "transformIgnorePatterns" (see https://jestjs.io/docs/configuration#transformignorepatterns-arraystring)
+      - Use Node v24.9+ where Jest supports require(esm) natively (see https://jestjs.io/docs/ecmascript-modules#require-of-esm)
+      1 | import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+    > 2 | import { DBSQLClient } from '@databricks/sql';
+        | ^
+      3 | import type IDBSQLSession from '@databricks/sql/dist/contracts/IDBSQLSession';
+      4 | import type IOperation from '@databricks/sql/dist/contracts/IOperation';
+      5 | import type {
+      at createRequireEsmError (../node_modules/jest-runtime/build/index.js:452:17)
+      at Object.<anonymous> (../node_modules/thrift/lib/nodejs/lib/thrift/compact_protocol.js:25:56)
+      at Object.<anonymous> (../node_modules/thrift/lib/nodejs/lib/thrift/header_transport.js:21:24)
+      at Object.<anonymous> (../node_modules/thrift/lib/nodejs/lib/thrift/buffered_transport.js:22:24)
+      at Object.<anonymous> (../node_modules/thrift/lib/nodejs/lib/thrift/connection.js:27:26)
+      at Object.<anonymous> (../node_modules/thrift/lib/nodejs/lib/thrift/index.js:26:18)
+      at Object.<anonymous> (../node_modules/@databricks/sql/lib/index.ts:4:1)
+      at Object.<anonymous> (../src/modules/datasources/connectors/databricks.connector.ts:2:1)
+      at Object.<anonymous> (../src/modules/datasources/datasources.service.ts:9:1)
+      at Object.<anonymous> (../src/modules/datasources/datasources.controller.ts:11:1)
+      at Object.<anonymous> (../src/modules/datasources/datasources.module.ts:2:1)
+      at Object.<anonymous> (../src/app.module.ts:3:1)
+      at Object.<anonymous> (app.e2e-spec.ts:5:1)
+PASS test/data-models-org.e2e-spec.ts (5.634 s)
+PASS test/org-auth.e2e-spec.ts
+PASS test/org-admin.e2e-spec.ts
+PASS test/local-auth.e2e-spec.ts
+PASS test/agent-sessions.e2e-spec.ts
+PASS test/user-agents.e2e-spec.ts
+PASS test/scim.e2e-spec.ts
+PASS test/owner-isolation.e2e-spec.ts
+PASS test/data-models.e2e-spec.ts
+PASS test/response-status.e2e-spec.ts
+Test Suites: 1 failed, 1 skipped, 10 passed, 11 of 12 total
+Tests:       11 skipped, 305 passed, 316 total
+Snapshots:   0 total
+Time:        28.01 s

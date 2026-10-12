@@ -1,0 +1,8 @@
+eslint errors per file, no --fix (main ee558d2 vs BA-2):
+main total: 221
+BA-2 total before fixing the 9 formatting errors in the two edited tests: 227
+files that differ (file main BA-2):
+src/mastra/agents/assistant.agent.ts 2 0
+src/mastra/evals/result-set-check.spec.ts 1 0
+test/data-models.e2e-spec.ts 0 7
+test/local-auth.e2e-spec.ts 0 2

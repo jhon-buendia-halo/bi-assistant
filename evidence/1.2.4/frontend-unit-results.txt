@@ -1,0 +1,7 @@
+Chrome Headless 153.0.0.0 (Linux 0.0.0): Executed 355 of 356 (1 FAILED) (0 secs / 1.272 secs)
+Chrome Headless 153.0.0.0 (Linux 0.0.0): Executed 356 of 356 (1 FAILED) (0 secs / 1.274 secs)
+Chrome Headless 153.0.0.0 (Linux 0.0.0): Executed 356 of 356 (1 FAILED) (1.436 secs / 1.274 secs)
+TOTAL: 1 FAILED, 355 SUCCESS
+--- same frontend suite on main (ee558d2):
+Chrome Headless 153.0.0.0 (Linux 0.0.0) App should support keyboard resizing from the separator FAILED
+TOTAL: 1 FAILED, 296 SUCCESS
