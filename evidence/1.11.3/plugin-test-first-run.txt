@@ -1,0 +1,60 @@
+
+tests/rules.test.ts:
+(fail) the file did not load
+  Export named 'completion' not found in module '/home/jhonbuendia/projects/bi-assistant/.claude/worktrees/BA-169-claude-code-workflow-mod/.claude/mods/workflow-steps/hooks/rules.ts'.
+
+tests/workflow-steps.test.ts:
+(fail) task #1 runs from the start and every other step is queued with its future number [88.61ms]
+  AssertionError: expect(received).toBeDefined()
+  
+  Expected: defined
+  Received: undefined
+(fail) reads stay in #1, a question and a roadmap edit are strong signals that start #2 and #3 at once [43.64ms]
+  AssertionError: expect(received).toBeDefined()
+  
+  Expected: defined
+  Received: undefined
+(fail) a weak signal opens a tentative task that earns its number after three matched calls [42.35ms]
+  AssertionError: expect(received).toBeDefined()
+  
+  Expected: defined
+  Received: undefined
+(fail) three unmatched calls drop a tentative task, and a call for the running step drops it too [44.75ms]
+  AssertionError: expect(received).toBeDefined()
+  
+  Expected: defined
+  Received: undefined
+(pass) a step that runs again gets a new number, and a test run is marked failed or passed [42.70ms]
+(pass) turn usage goes to the running task and cost is the session delta [40.47ms]
+(fail) a subagent spawned during a task is listed under it, and done rows count agents [44.25ms]
+  AssertionError: expect(received).toBeDefined()
+  
+  Expected: defined
+  Received: undefined
+(pass) done tasks beyond the last twelve fold into one line [85.08ms]
+(fail) /workflow reset clears the queue, starts #1 again and closes open rows [45.56ms]
+  HooksError: press: no Button of workflow-steps keyed "row-1" is drawn in this Pane on the terminal surface
+(fail) a row's completion is the share of its step checklist met [28.62ms]
+  AssertionError: expect(received).toBeDefined()
+  
+  Expected: defined
+  Received: undefined
+(fail) a press opens a detail under the row, a second press closes it, and two rows can stay open [30.30ms]
+  HooksError: press: no Button of workflow-steps keyed "row-2" is drawn in this Pane on the terminal surface
+(fail) a queued step's detail shows what is expected of it [32.12ms]
+  HooksError: press: no Button of workflow-steps keyed "queued-9" is drawn in this Pane on the terminal surface
+(fail) the header shows the overall completion: the mean of the done, running and queued rows [28.96ms]
+  AssertionError: expect(received).toBeDefined()
+  
+  Expected: defined
+  Received: undefined
+(fail) a subagent's own turn credits its tokens to it and to the task it was spawned under, and marks it finished [31.51ms]
+  AssertionError: expect(received).toBeDefined()
+  
+  Expected: defined
+  Received: undefined
+(pass) without a readable CLAUDE.md the built-in step titles are used [32.27ms]
+
+ 4 pass
+ 12 fail
+Ran 16 tests across 2 files. [0.87s]

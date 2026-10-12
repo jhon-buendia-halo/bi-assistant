@@ -1,0 +1,24 @@
+$ git diff --stat origin/main -- .
+ .../mods/workflow-steps/.claude-plugin/plugin.json |   2 +-
+ .claude/mods/workflow-steps/README.md              |  17 +-
+ .claude/mods/workflow-steps/hooks/register.tsx     | 317 +++++++++++++++++----
+ .claude/mods/workflow-steps/hooks/rules.ts         | 147 ++++++++++
+ .claude/mods/workflow-steps/tests/rules.test.ts    |  66 ++++-
+ .../workflow-steps/tests/workflow-steps.test.ts    | 177 +++++++++++-
+ .claude/mods/workflow-steps/types/index.d.ts       |   9 +-
+ evidence/1.11.3/README.md                          |   3 +
+ evidence/1.11.3/check-specs.txt                    |  14 +
+ evidence/1.11.3/diff-stat.txt                      |   1 +
+ evidence/1.11.3/e2e-impact.md                      |  35 +++
+ evidence/1.11.3/pane-capture.txt                   | 114 ++++++++
+ evidence/1.11.3/plugin-test-first-run.txt          |  60 ++++
+ evidence/1.11.3/plugin-test.txt                    |  38 +++
+ evidence/1.11.3/tsc.txt                            |   2 +
+ evidence/1.11.3/validate.txt                       |  22 ++
+ roadmap.md                                         |   7 +
+ specs/epics/BA-169/spec.md                         |   6 +-
+ specs/system/delivery.md                           |  27 +-
+ 19 files changed, 977 insertions(+), 87 deletions(-)
+
+$ git diff --stat origin/main -- frontend backend
+(empty: no application file)

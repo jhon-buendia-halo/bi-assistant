@@ -2,8 +2,8 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Queue, Step, StepsSource, Task } from '../types'
-import { classify, evidenceKey, isWriteCall } from './rules'
-import type { ToolArgs } from './rules'
+import { classify, completion, evidenceKey, expectedAgent, factsFor, isWriteCall, summarize } from './rules'
+import type { Completion, ToolArgs } from './rules'
 
 const PANE = 'workflow'
 const TITLE = 'Workflow'
@@ -18,6 +18,7 @@ const steps = atom({ plugin: 'workflow-steps', key: 'steps' } as const, [])
 const source = atom({ plugin: 'workflow-steps', key: 'source' } as const, '')
 const firstAction = atom({ plugin: 'workflow-steps', key: 'firstAction' } as const, '')
 const queue = atom({ plugin: 'workflow-steps', key: 'queue' } as const, EMPTY_QUEUE)
+const open = atom({ plugin: 'workflow-steps', key: 'open' } as const, [])
 
 // The workflow as CLAUDE.md spelled it on 2026-10-10, used when the file
 // can't be read or its Workflow section can't be parsed.
@@ -99,12 +100,12 @@ async function loadSteps($: EngineInterface): Promise<void> {
 // ---- the queue ------------------------------------------------------------
 
 const newTask = (step: number, startedAt: number, status: Task['status'], costStart: number): Task => ({
-  seq: null, step, status, startedAt, matched: 0, unmatched: 0, tokens: 0, cached: 0, costStart, cost: 0, agents: [], evidence: {},
+  seq: null, step, status, startedAt, matched: 0, unmatched: 0, tokens: 0, cached: 0, costStart, cost: 0, agents: [], evidence: {}, facts: [],
 })
 
 const cloneQueue = (q: Queue): Queue => ({
   ...q,
-  tasks: q.tasks.map(t => ({ ...t, agents: t.agents.map(a => ({ ...a })), evidence: { ...t.evidence } })),
+  tasks: q.tasks.map(t => ({ ...t, agents: t.agents.map(a => ({ ...a })), evidence: { ...t.evidence }, facts: [...(t.facts ?? [])] })),
 })
 
 async function sessionCost($: EngineInterface): Promise<number> {
@@ -122,6 +123,7 @@ async function startQueue($: EngineInterface): Promise<void> {
   const usd = await sessionCost($)
   const first = { ...newTask(1, now, 'running', usd), seq: 1 }
   await update($, queue, () => ({ tasks: [first], nextSeq: 2, hasWritten: false, firstActionDone: false, startedAt: now, usd }))
+  await update($, open, () => [])
 }
 
 // Applies one tool call's signal to the queue, before the tool runs.
@@ -132,7 +134,9 @@ async function applySignal($: EngineInterface, args: ToolArgs): Promise<void> {
   const now = await $.clock.now()
   const signal = classify(args, q.hasWritten)
   const key = evidenceKey(args, signal)
+  const facts = factsFor(args, signal, !q.hasWritten)
   if (signal.firstAction) q.firstActionDone = true
+  if (!q.hasWritten && !isWriteCall(args)) q.exploredBeforeWrite = true
   if (isWriteCall(args)) q.hasWritten = true
 
   const running = q.tasks.findLast(t => t.status === 'running')
@@ -147,6 +151,7 @@ async function applySignal($: EngineInterface, args: ToolArgs): Promise<void> {
     if (matched) task.matched += 1
     else task.unmatched += 1
     task.evidence[key] = (task.evidence[key] ?? 0) + 1
+    if (matched) for (const fact of facts) if (!task.facts.includes(fact)) task.facts.push(fact)
   }
 
   if (signal.step === null) {
@@ -184,22 +189,39 @@ async function applySignal($: EngineInterface, args: ToolArgs): Promise<void> {
   await update($, queue, () => q)
 }
 
-// After a step-9 command ran: the task takes the command's result.
+// After a call ran: a step-9 task takes its command's result, and an answered
+// question meets step 2's second check.
 async function applyResult($: EngineInterface, args: ToolArgs, isError: boolean): Promise<void> {
   const signal = classify(args, true)
-  if (signal.step !== 9) return
+  if (signal.step !== 9 && args.tool !== 'AskUserQuestion') return
   const current = await read($, queue)
   const q = cloneQueue(current)
   const running = q.tasks.findLast(t => t.status === 'running')
-  if (!running || running.step !== 9) return
-  running.result = isError ? 'failed' : 'passed'
+  if (!running) return
+  if (signal.step === 9 && running.step === 9) running.result = isError ? 'failed' : 'passed'
+  else if (args.tool === 'AskUserQuestion' && running.step === 2 && !isError && !running.facts.includes('answered')) {
+    running.facts.push('answered')
+  } else return
   await update($, queue, () => q)
 }
 
-async function applyUsage($: EngineInterface, input: number, output: number, cached: number): Promise<void> {
+async function applyUsage($: EngineInterface, input: number, output: number, cached: number, agentId?: string): Promise<void> {
   const current = await read($, queue)
   if (current.tasks.length === 0) return
   const q = cloneQueue(current)
+  // A subagent's run ends in its own turn: its usage is the subagent's, in the task it was spawned under.
+  if (agentId !== undefined) {
+    const owner = q.tasks.find(t => t.agents.some(a => a.id === agentId))
+    const agent = owner?.agents.find(a => a.id === agentId)
+    if (owner && agent) {
+      agent.tokens += input + output
+      agent.running = false
+      owner.tokens += input + output
+      owner.cached += cached
+      await update($, queue, () => q)
+      return
+    }
+  }
   const usd = await sessionCost($)
   q.usd = usd
   const running = q.tasks.findLast(t => t.status === 'running')
@@ -217,7 +239,7 @@ async function addAgent($: EngineInterface, type: string, model: string, descrip
   const q = cloneQueue(current)
   const running = q.tasks.findLast(t => t.status === 'running')
   if (!running) return
-  running.agents.push({ id, type, model, description, running: true })
+  running.agents.push({ id, type, model, description, running: true, tokens: 0 })
   await update($, queue, () => q)
 }
 
@@ -232,22 +254,68 @@ const duration = (ms: number): string => {
   const s = Math.max(0, Math.floor(ms / 1000))
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 }
-const agentLabel = (task: Task): string =>
-  task.agents.length === 0 ? 'main' : task.agents.length === 1 ? '1 agent' : `${task.agents.length} agents`
+const agentLabel = (task: Task): string => (task.agents.length === 0 ? 'main' : `main +${task.agents.length}`)
 const confidence = (task: Task): number => {
   const calls = task.matched + task.unmatched
   return calls === 0 ? 1 : task.matched / calls
 }
-const meter = (ratio: number): string => {
-  const filled = Math.round(Math.max(0, Math.min(1, ratio)) * 10)
-  return `${'█'.repeat(filled)}${'░'.repeat(10 - filled)}`
+const percent = (ratio: number): string => `${Math.round(Math.max(0, Math.min(1, ratio)) * 100)}%`
+const BAR = 8
+const meterParts = (ratio: number): [string, string] => {
+  const filled = Math.round(Math.max(0, Math.min(1, ratio)) * BAR)
+  return ['█'.repeat(filled), '░'.repeat(BAR - filled)]
 }
-const evidenceLine = (task: Task): string =>
-  Object.entries(task.evidence)
-    .sort((a, b) => b[1] - a[1])
-    .map(([k, n]) => `${k} ×${n}`)
-    .join(' · ')
+// The row's summary is left out below this many columns; the detail always has it.
+const MIN_SUMMARY = 12
+
+/**
+ * Which columns a row draws in `width` columns, so that a row never wraps (a
+ * Button's children are not truncated). Always: margin, #n, a title of 16, the
+ * % and the caret. Then, while they fit: tokens, cost, agent, bar; the title up
+ * to 28; step, duration; the title up to 34; the summary with what is left.
+ */
+export type RowLayout = {
+  title: number; step: boolean; agent: boolean; duration: boolean; tokens: boolean; cost: boolean; bar: boolean; summary: number
+}
+export const layoutFor = (width: number): RowLayout => {
+  const layout: RowLayout = { title: 16, step: false, agent: false, duration: false, tokens: false, cost: false, bar: false, summary: 0 }
+  let used = 2 + 5 + 16 + 5 + 2
+  const take = (n: number): boolean => {
+    if (used + n > width) return false
+    used += n
+    return true
+  }
+  const grow = (to: number) => {
+    const add = Math.max(0, Math.min(to - layout.title, width - used))
+    layout.title += add
+    used += add
+  }
+  layout.tokens = take(8)
+  layout.cost = take(7)
+  layout.agent = take(10)
+  layout.bar = take(2 + BAR)
+  grow(28)
+  layout.step = take(8)
+  layout.duration = take(5)
+  grow(34)
+  // What is left: a step-9 result first, then the summary when at least MIN_SUMMARY remains.
+  layout.summary = Math.max(0, width - used - 1)
+  return layout
+}
 const titleOf = (list: Step[], step: number): string => list.find(s => s.number === step)?.title ?? `Step ${step}`
+const summaryOf = (task: Task): string => summarize(task.evidence, { subagents: task.agents.length, result: task.result })
+// Step 1's two checks are the session's: the first action, and any read before the first write,
+// whichever task the calls were counted for (a shell read of retrospective.md is a step-11 signal).
+const progressOf = (task: Task, q: Queue): Completion => {
+  const facts = [...(task.facts ?? [])]
+  if (task.step === 1 && q.firstActionDone) facts.push('retro-read')
+  if (task.step === 1 && q.exploredBeforeWrite) facts.push('explored')
+  return completion(task.step, facts, { started: true, agentsRunning: task.agents.some(a => a.running), result: task.result })
+}
+const queuedProgress = (step: number): Completion => completion(step, [], { started: false, agentsRunning: false })
+const rowKey = (task: Task): string => (task.status === 'tentative' ? 'row-tentative' : `row-${task.seq}`)
+const INDENT = '       '
+const LABEL = 10
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
@@ -288,9 +356,13 @@ export const register: Register = on => {
 
   on('turn.complete', async ($, e, next) => {
     const usage = e.usage
-    await applyUsage($, usage?.input_tokens ?? 0, usage?.output_tokens ?? 0, usage?.cache_read_input_tokens ?? 0).catch(
-      () => undefined,
-    )
+    await applyUsage(
+      $,
+      usage?.input_tokens ?? 0,
+      usage?.output_tokens ?? 0,
+      usage?.cache_read_input_tokens ?? 0,
+      e.agentId,
+    ).catch(() => undefined)
     return next(e)
   })
 
@@ -303,12 +375,15 @@ export const register: Register = on => {
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Box, Text } = $.ui.resolve(e)
+    const { Box, Text, Button } = $.ui.resolve(e)
     const list = await read($, steps)
     const from = await read($, source)
     const q = await read($, queue)
+    const opened = new Set(await read($, open))
     const now = await $.clock.now()
     const width = Math.max(40, (e.props.bodyColumns ?? 96) - 2)
+    const toggle = (key: string) => () =>
+      update($, open, keys => (keys.includes(key) ? keys.filter(k => k !== key) : [...keys, key]))
 
     const done = q.tasks.filter(t => t.status === 'done')
     const running = q.tasks.findLast(t => t.status === 'running')
@@ -323,58 +398,180 @@ export const register: Register = on => {
     const foldedTokens = done.slice(0, folded).reduce((n, t) => n + t.tokens, 0)
     const foldedCost = done.slice(0, folded).reduce((n, t) => n + t.cost, 0)
     const totalTokens = q.tasks.reduce((n, t) => n + t.tokens, 0)
-    const titleWidth = Math.max(16, Math.min(34, width - 62))
+    const layout = layoutFor(width)
+    const titleWidth = layout.title
+    // The summary takes what is left of the row, or is left out when that is too little.
+    const summaryText = (text: string, extra: number) => {
+      const room = layout.summary - extra
+      return room < MIN_SUMMARY ? '' : ` ${clip(text, room)}`
+    }
 
-    const row = (task: Task, mark: string, markColor: string) => {
-      const label = task.seq === null ? '#?' : task.status === 'tentative' ? `#${task.seq}?` : `#${task.seq}`
-      const seqText = task.status === 'tentative' ? `#${q.nextSeq}?` : label
+    // Overall completion: the mean of the done, running and queued rows.
+    const ratios = [
+      ...done.map(t => progressOf(t, q).ratio),
+      ...(running ? [progressOf(running, q).ratio] : []),
+      ...queued.map(s => queuedProgress(s.number).ratio),
+    ]
+    const overall = ratios.length === 0 ? 0 : ratios.reduce((a, b) => a + b, 0) / ratios.length
+
+    const bar = (ratio: number, color: string | undefined) => {
+      const [filled, empty] = meterParts(ratio)
+      return [
+        <Text key="filled" color={color}>{filled}</Text>,
+        <Text key="empty" dimColor>{empty}</Text>,
+      ]
+    }
+
+    const row = (task: Task, color: string) => {
+      const key = rowKey(task)
+      const isOpen = opened.has(key)
+      const seqText = task.status === 'tentative' ? `#${q.nextSeq}?` : `#${task.seq}`
       const ended = task.endedAt ?? now
-      const result = task.result === 'failed' ? ' ✗ failed' : task.result === 'passed' ? ' ✓ passed' : ''
+      const progress = progressOf(task, q)
+      const fullResult = task.result === 'failed' ? ' ✗ failed' : task.result === 'passed' ? ' ✓ passed' : ''
+      // The result word when the row has room for it; otherwise the % carries it in red or green.
+      const result = fullResult.length <= layout.summary + 1 ? fullResult : ''
+      const percentColor = result === '' && task.result ? (task.result === 'failed' ? 'red' : 'green') : undefined
       return (
-        <Text key={`task-${task.seq ?? 'tentative'}-${task.step}-${task.startedAt}`} wrap="truncate">
-          {'  '}
-          <Text color={markColor} bold={task.status === 'running'}>{pad(seqText, 5)}</Text>
-          <Text bold={task.status === 'running'}>{pad(titleOf(list, task.step), titleWidth)}</Text>
-          {' '}
-          <Text dimColor>{pad(`step ${task.step}`, 8)}</Text>
-          <Text dimColor>{pad(agentLabel(task), 9)}</Text>
-          {duration(ended - task.startedAt).padStart(5, ' ')}
-          {tokens(task.tokens).padStart(8, ' ')}
-          {dollars(task.cost).padStart(7, ' ')}
-          {'  '}
-          <Text color="cyan">{meter(confidence(task))}</Text>
-          {` ${String(Math.round(confidence(task) * 100)).padStart(3, ' ')}%`}
-          {result ? <Text color={task.result === 'failed' ? 'red' : 'green'}>{result}</Text> : ''}
-          {'  '}
-          <Text dimColor>{evidenceLine(task)}</Text>
-          {mark ? '' : ''}
-        </Text>
+        <Button key={key} plain onPress={toggle(key)}>
+          <Text wrap="truncate">
+            {'  '}
+            <Text color={color} bold={task.status === 'running'}>{pad(seqText, 5)}</Text>
+            <Text bold={task.status === 'running'}>{pad(titleOf(list, task.step), titleWidth)}</Text>
+            {layout.step ? <Text dimColor>{` ${pad(`step ${task.step}`, 7)}`}</Text> : ''}
+            {layout.agent ? <Text dimColor>{` ${pad(agentLabel(task), 9)}`}</Text> : ''}
+            {layout.duration ? duration(ended - task.startedAt).padStart(5, ' ') : ''}
+            {layout.tokens ? tokens(task.tokens).padStart(8, ' ') : ''}
+            {layout.cost ? dollars(task.cost).padStart(7, ' ') : ''}
+            {layout.bar ? '  ' : ''}
+            {layout.bar ? bar(progress.ratio, color) : ''}
+            {' '}
+            <Text color={percentColor}>{percent(progress.ratio).padStart(4, ' ')}</Text>
+            {result ? <Text color={task.result === 'failed' ? 'red' : 'green'}>{result}</Text> : ''}
+            {` ${isOpen ? '▾' : '▸'}`}
+            <Text dimColor>{summaryText(summaryOf(task), result.length)}</Text>
+          </Text>
+        </Button>
       )
     }
 
     const agentLines = (task: Task) =>
       task.agents.map((agent, i) => (
         <Text key={`agent-${task.seq}-${i}`} wrap="truncate" dimColor={!agent.running}>
-          {'       '}
+          {INDENT}
           <Text color="magenta">↳ {agent.type}</Text>
           {` · ${agent.model} · "${clip(agent.description, 40)}"  `}
           {agent.running ? <Text color="yellow">● running</Text> : <Text color="green">✓</Text>}
         </Text>
       ))
 
+    // The detail under an open row (delivery.md §9, Details).
+    const detailLine = (key: string, label: string, body: string) => (
+      <Text key={key} wrap="truncate">
+        {INDENT}
+        <Text dimColor>{label.padEnd(LABEL, ' ')}</Text>
+        {body}
+      </Text>
+    )
+    const checkLines = (progress: Completion, key: string) =>
+      progress.checks.map((check, i) => (
+        <Text key={`${key}-check-${i}`} wrap="truncate">
+          {INDENT}
+          {' '.repeat(LABEL)}
+          <Text color={check.met ? 'green' : undefined} dimColor={!check.met}>{check.met ? '✓' : '○'}</Text>
+          {` ${check.label}`}
+        </Text>
+      ))
+    const progressLine = (key: string, progress: Completion) =>
+      detailLine(`${key}-progress`, 'Progress', `${progress.met} of ${progress.total} checks · ${percent(progress.ratio)}`)
+
+    const detail = (task: Task) => {
+      const key = rowKey(task)
+      const progress = progressOf(task, q)
+      const subagentTokens = task.agents.reduce((n, a) => n + (a.tokens ?? 0), 0)
+      const calls = task.matched + task.unmatched
+      return (
+        <Box key={`${key}-detail`} flexDirection="column">
+          {detailLine(`${key}-summary`, 'Summary', summaryOf(task))}
+          {progressLine(key, progress)}
+          {checkLines(progress, key)}
+          {detailLine(`${key}-agents`, 'Agents', `main  ${tokens(Math.max(0, task.tokens - subagentTokens))}`)}
+          {task.agents.map((agent, i) => (
+            <Text key={`${key}-agent-${i}`} wrap="truncate">
+              {INDENT}
+              {' '.repeat(LABEL)}
+              <Text color="magenta">↳ {agent.type}</Text>
+              {` · ${agent.model} · "${clip(agent.description, 40)}"  ${tokens(agent.tokens ?? 0)}  `}
+              {agent.running ? <Text color="yellow">● running</Text> : <Text color="green">✓</Text>}
+            </Text>
+          ))}
+          {detailLine(
+            `${key}-cost`,
+            'Cost',
+            `${dollars(task.cost)} while the task ran · confidence ${percent(confidence(task))} (${task.matched} of ${calls} calls matched)`,
+          )}
+        </Box>
+      )
+    }
+
+    const queuedRow = (s: Step, seq: number) => {
+      const key = `queued-${s.number}`
+      const isOpen = opened.has(key)
+      return (
+        <Button key={key} plain onPress={toggle(key)}>
+          <Text dimColor wrap="truncate">
+            {'  '}
+            {pad(`#${seq}`, 5)}
+            {pad(s.title, titleWidth)}
+            {layout.step ? ` ${pad(`step ${s.number}`, 7)}` : ''}
+            {layout.agent ? ` ${pad(expectedAgent(s.number), 9)}` : ''}
+            {' '.repeat((layout.duration ? 5 : 0) + (layout.tokens ? 8 : 0) + (layout.cost ? 7 : 0))}
+            {layout.bar ? `  ${'░'.repeat(BAR)}` : ''}
+            {` ${'0%'.padStart(4, ' ')}`}
+            {` ${isOpen ? '▾' : '▸'}`}
+            {summaryText(`Expected: ${s.summary}`, 0)}
+          </Text>
+        </Button>
+      )
+    }
+
+    const queuedDetail = (s: Step) => {
+      const key = `queued-${s.number}`
+      const progress = queuedProgress(s.number)
+      return (
+        <Box key={`${key}-detail`} flexDirection="column">
+          {detailLine(`${key}-summary`, 'Summary', `Expected: ${s.summary}`)}
+          {progressLine(key, progress)}
+          {checkLines(progress, key)}
+          {detailLine(
+            `${key}-agents`,
+            'Agents',
+            expectedAgent(s.number) === '~main' ? 'main (expected)' : 'main with subagents (expected)',
+          )}
+        </Box>
+      )
+    }
+
+    // An open row shows its detail; a closed running or tentative row keeps its subagent lines.
+    const agentLinesIfRunning = (task: Task) => (task.status === 'done' ? [] : agentLines(task))
+    const taskWithDetail = (task: Task, color: string) => [
+      row(task, color),
+      ...(opened.has(rowKey(task)) ? [detail(task)] : agentLinesIfRunning(task)),
+    ]
+
     return (
       <Box flexDirection="column">
         <Text wrap="truncate">
           <Text bold>Development workflow</Text>
-          <Text dimColor>  inferred from tool calls</Text>
           {'    '}
           <Text color="yellow">▸ {running ? `#${running.seq}` : '—'} running · {queued.length} queued</Text>
-          {`   ${tokens(totalTokens)} · ${dollars(q.usd)}`}
+          {`   overall ${percent(overall)}   ${tokens(totalTokens)} · ${dollars(q.usd)}`}
         </Text>
         <Text dimColor wrap="truncate">
           {from === 'claude-md' ? 'From CLAUDE.md' : 'CLAUDE.md not readable here: built-in copy'}
           {` · retrospective read ${q.firstActionDone ? '✓' : '–'} · ${duration(now - q.startedAt)}`}
           {silent.length > 0 ? ` · ${silent.length} step${silent.length === 1 ? '' : 's'} without a signal yet` : ''}
+          {' · inferred from tool calls'}
         </Text>
 
         <Box flexDirection="column" marginTop={1}>
@@ -385,34 +582,28 @@ export const register: Register = on => {
             </Text>
           )}
           {shown.length === 0 && folded === 0 && <Text dimColor>  none yet</Text>}
-          {shown.map(t => row(t, '✓', 'green'))}
+          {shown.flatMap(t => taskWithDetail(t, 'green'))}
         </Box>
 
         <Box flexDirection="column" marginTop={1}>
           <Text dimColor>RUNNING</Text>
-          {running ? row(running, '▸', 'yellow') : <Text dimColor>  none</Text>}
-          {running ? agentLines(running) : ''}
+          {running ? taskWithDetail(running, 'yellow') : <Text dimColor>  none</Text>}
         </Box>
 
         {tentative && (
           <Box flexDirection="column" marginTop={1}>
             <Text dimColor>TENTATIVE</Text>
-            {row(tentative, '?', 'yellow')}
-            {agentLines(tentative)}
+            {taskWithDetail(tentative, 'yellow')}
           </Box>
         )}
 
         <Box flexDirection="column" marginTop={1}>
           <Text dimColor>QUEUED</Text>
           {queued.length === 0 && <Text dimColor>  none</Text>}
-          {queued.map((s, i) => (
-            <Text key={`queued-${s.number}`} dimColor wrap="truncate">
-              {'  '}
-              {pad(`#${firstQueued + i}`, 5)}
-              {pad(s.title, titleWidth)}
-              {` step ${s.number}`}
-            </Text>
-          ))}
+          {queued.flatMap((s, i) => [
+            queuedRow(s, firstQueued + i),
+            ...(opened.has(`queued-${s.number}`) ? [queuedDetail(s)] : []),
+          ])}
         </Box>
 
         {silent.length > 0 && (

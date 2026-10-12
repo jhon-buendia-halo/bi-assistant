@@ -14,6 +14,25 @@ Entry template:
 
 ---
 
+## 2026-10-12 — 1.11.3 Task details in the workflow pane (BA-174)
+
+### What went well
+- Three clickable mockups on one page, with the parts common to all three spelled out (what completion means, where the summary comes from), let the user pick option A in one answer and kept the build to what the page showed.
+- Checking the engine's declarations before writing the spec changed the design twice for the better: a `plain` Button with Text children draws as an ordinary row, and a subagent's run ends in its own `turn.complete` with its `agentId`, so per-agent tokens needed no streaming `turn.step` hook (which would have double counted).
+- The per-agent cost question went to the user before any code: the session reports one cost, and 1.11.2 had ruled out a price table, so it was their call, not a detail to settle quietly.
+
+### What went wrong
+- The tests passed at 96 and 130 columns, but the first live session drew the pane as a 72-column sidebar and every row wrapped onto two lines: inside a `Button`, `wrap="truncate"` does not cut the row as it did in 1.11.2. My first fix (widen the test pane) hid the problem instead of testing the real width.
+- The same live session showed #1 at 0% with the header saying the retrospective was read: Claude read it through a shell command, a step-11 signal under the 1.11.2 rules, so the fact landed on a tentative task that was dropped. I had attached step 1's checks to the task without asking where its calls actually go.
+- The step-9 result word could still overflow a narrow row after the column fix; it took a second pass to give it a place (the %'s color).
+- The first commit went out without this entry: the edit's anchor named the entry that topped `retrospective.md` on an older `main`, the edit failed, and the commit script ran anyway.
+
+### What to do differently
+- For any change to a mod's row or pane layout, add a test at the width the pane really has (the right-hand sidebar is about 72 columns in a 180-column terminal), and run one live session before writing the evidence, not after.
+- When a check is about the session (the first action, anything read before the first write), compute it from session state, never from the facts of whichever task a call happened to land in.
+- Inside a `Button`, build rows that fit the given width yourself; don't rely on `wrap="truncate"` there.
+- Read the first lines of `changelog.md` and `retrospective.md` on the branch right before adding an entry, and make the commit script refuse to run when either file is unchanged.
+
 ## 2026-10-11 — 2.1.7 Local mode: sign in as a seeded persona (BA-161)
 
 ### What went well

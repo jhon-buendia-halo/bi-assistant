@@ -1,0 +1,2 @@
+tsc Version 5.9.3 over: hooks types  (/home/jhonbuendia/projects/bi-assistant/.claude/worktrees/BA-169-claude-code-workflow-mod/.claude/mods/workflow-steps)
+tsc exit=0

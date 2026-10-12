@@ -6,8 +6,16 @@ prompt otherwise) showing the eleven-step development workflow from this reposit
 [CLAUDE.md](../../../CLAUDE.md) as a **task queue inferred from tool calls**.
 
 - Executed tasks are numbered in the order they ran (`#1`, `#2`, …) with the step they
-  correspond to, the agent, duration, tokens, cost, a confidence bar and the evidence
-  (`Edit roadmap.md ×4`). The running task also lists the subagents spawned under it.
+  correspond to, the agent (`main`, `main +2` with subagents), duration, tokens, cost, a
+  completion bar and a one-line summary (`Edited roadmap.md ×2 · 3 reads`). The running task
+  also lists the subagents spawned under it. The header adds the overall completion.
+- Completion is the share of the step's checklist met, from facts read off the task's calls:
+  step 3 counts `roadmap.md` edited, `Acceptance` written and a status set; step 9 counts
+  tests run and the last run passed; and so on for every step.
+- Click a row, or press Enter on it after `ctrl+x tab`, to open its detail: the summary, the
+  checklist with each check met or not, the agents with their own tokens, and the cost and
+  confidence. Press again to close it; several rows can stay open. Queued steps open too,
+  showing what is expected of them and the agent they usually use (`~main`).
 - The mod maps each tool call to a step (roadmap.md is 3, specs are 5, Playwright files
   are 7, source files 8, a test run 9, the changelog 10, the retrospective 11, and so on).
   A step change opens a tentative task (`#n?`) that earns its number after three matched
@@ -22,8 +30,9 @@ prompt otherwise) showing the eleven-step development workflow from this reposit
 - A pane the mod opens by itself only appears in a terminal at least 144 columns wide
   (110 once you opened it yourself); otherwise a toast says to run `/workflow`.
 
-Tokens come from each turn's usage; cost is the session cost delta between a task's start
-and end, as `/cost` counts it. Nothing is stored across sessions. The full rule table is in
+Tokens come from each turn's usage, a subagent's own turns credited to it and to the task it
+was spawned under; cost is the session cost delta between a task's start and end, as `/cost`
+counts it, so there is no cost per agent. Nothing is stored across sessions. The full rule table is in
 [specs/system/delivery.md](../../../specs/system/delivery.md) §9. Written against Claude
 Code 2.1.296; mods need 2.1.287 or later and the hooks API is early access.
 

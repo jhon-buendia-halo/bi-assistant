@@ -25,8 +25,9 @@ const PANE = {
   component: 'Pane',
   requestId: 'workflow',
   viewport: { columns: 160, rows: 60 },
-  props: { title: 'Workflow', isFocused: false, bodyColumns: 96, placement: 'dock', scroll: { offset: 0, bodyRows: 56 }, view: {} },
+  props: { title: 'Workflow', isFocused: false, bodyColumns: 130, placement: 'dock', scroll: { offset: 0, bodyRows: 56 }, view: {} },
 } as const
+const NARROW = { ...PANE, props: { ...PANE.props, bodyColumns: 96 } } as const
 
 type On = Parameters<Parameters<typeof test>[1]>[1]
 
@@ -73,10 +74,11 @@ test('task #1 runs from the start and every other step is queued with its future
   world(on)
   await start($)
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect(await text(ui, /▸ #1 running · 10 queued/)).toBeDefined()
+  expect(await text(ui, /▸ #1 running · 10 queued .*overall 0%/)).toBeDefined()
   expect(await text(ui, /^RUNNING$/)).toBeDefined()
   expect(await text(ui, /#1 .*Understand the goal/)).toBeDefined()
-  expect(await text(ui, /#2 +Ask clarifying questions.*step 2/)).toBeDefined()
+  expect(await text(ui, /#2 +Ask clarifying questions.*step 2 +~main .*0%/)).toBeDefined()
+  expect(await text(ui, /#8 +Implement changes.*step 8 +~main\+sub/)).toBeDefined()
   expect(await text(ui, /#11 +Retrospective.*step 11/)).toBeDefined()
   expect(await text(ui, /retrospective read –/)).toBeDefined()
   await ui.unmount()
@@ -92,9 +94,9 @@ test('reads stay in #1, a question and a roadmap edit are strong signals that st
   await edit($, '/work/roadmap.md')
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await text(ui, /retrospective read ✓/)).toBeDefined()
-  expect(await text(ui, /#1 +Understand the goal.*Read ×2/)).toBeDefined()
-  expect(await text(ui, /#2 +Ask clarifying questions.*AskUserQuestion ×1/)).toBeDefined()
-  expect(await text(ui, /#3 +Update roadmap.*Edit roadmap\.md ×2/)).toBeDefined()
+  expect(await text(ui, /#1 +Understand the goal.*100%.*2 reads/)).toBeDefined()
+  expect(await text(ui, /#2 +Ask clarifying questions.*100%.*1 question/)).toBeDefined()
+  expect(await text(ui, /#3 +Update roadmap.*Edited roadmap\.md ×2/)).toBeDefined()
   expect(await text(ui, /▸ #3 running · 8 queued/)).toBeDefined()
   // Steps 4 to 11 are queued from #4.
   expect(await text(ui, /#4 +Update architecture.*step 4/)).toBeDefined()
@@ -119,7 +121,7 @@ test('a weak signal opens a tentative task that earns its number after three mat
   ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await text(ui, /^TENTATIVE$/)).toBeUndefined()
   expect(await text(ui, /▸ #3 running/)).toBeDefined()
-  expect(await text(ui, /#3 +Update specs.*Read ×3/)).toBeDefined()
+  expect(await text(ui, /#3 +Update specs.*3 reads/)).toBeDefined()
   expect(await text(ui, /#2 +Update roadmap.*step 3/)).toBeDefined()
   await ui.unmount()
 })
@@ -140,7 +142,7 @@ test('three unmatched calls drop a tentative task, and a call for the running st
   await edit($, '/work/roadmap.md')
   ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await text(ui, /^TENTATIVE$/)).toBeUndefined()
-  expect(await text(ui, /#2 +Update roadmap.*Edit roadmap\.md ×2/)).toBeDefined()
+  expect(await text(ui, /#2 +Update roadmap.*Edited roadmap\.md ×2/)).toBeDefined()
   await ui.unmount()
 })
 
@@ -193,7 +195,7 @@ test('a subagent spawned during a task is listed under it, and done rows count a
   await turn($, 100, 10)
   await edit($, '/work/changelog.md')
   ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect(await text(ui, /#2 +Implement changes.*1 agent/)).toBeDefined()
+  expect(await text(ui, /#2 +Implement changes.*main \+1.*1 subagent/)).toBeDefined()
   await ui.unmount()
 })
 
@@ -212,16 +214,169 @@ test('done tasks beyond the last twelve fold into one line', async ($, on) => {
   await ui.unmount()
 })
 
-test('/workflow reset clears the queue and starts #1 again', async ($, on) => {
+test('/workflow reset clears the queue, starts #1 again and closes open rows', async ($, on) => {
   world(on)
   await start($)
   await edit($, '/work/roadmap.md')
   await edit($, '/work/specs/system/ui.md')
+  let ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'row-1' })
+  await ui.unmount()
   const answer = await $.command.run({ command: 'workflow', args: 'reset' })
   expect(answer.text).toMatch(/reset/)
-  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await text(ui, /▸ #1 running · 10 queued/)).toBeDefined()
   expect(await text(ui, /Update specs.*step 5/)).toBeDefined()
+  expect(await text(ui, /Summary/)).toBeUndefined()
+  await ui.unmount()
+})
+
+// ---- task details (1.11.3) ---------------------------------------------------
+
+const ask = ($: Parameters<Parameters<typeof test>[1]>[0]) => $.tool.call({ tool: 'AskUserQuestion', questions: [] })
+const write = ($: Parameters<Parameters<typeof test>[1]>[0], file_path: string, new_string: string) =>
+  $.tool.call({ tool: 'Edit', file_path, old_string: '', new_string })
+
+test('a narrow pane keeps whole titles and the figures, and leaves the summary to the detail', async ($, on) => {
+  world(on)
+  await start($)
+  await write($, '/work/roadmap.md', 'Intent only')
+  let ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
+  expect(await text(ui, /#5 +Component impact-based analysis.*step 6/)).toBeDefined()
+  expect(await text(ui, /#2 +Update roadmap.*33% ▸$/)).toBeDefined()
+  await ui.press({ key: 'row-2' })
+  await ui.unmount()
+  ui = await $.ui.mount({ ...NARROW, surface: 'terminal' })
+  expect(await text(ui, /Summary +Edited roadmap\.md$/)).toBeDefined()
+  await ui.unmount()
+})
+
+test('in a sidebar 74 columns wide every row fits on one line, keeping the title, the figures that fit and the %', async ($, on) => {
+  world(on, { failCommands: /test:e2e/ })
+  await start($)
+  await edit($, '/work/frontend/src/a.ts')
+  await bash($, 'npm run test:e2e')
+  const SIDEBAR = { ...PANE, props: { ...PANE.props, bodyColumns: 74 } } as const
+  const ui = await $.ui.mount({ ...SIDEBAR, surface: 'terminal' })
+  // #1, #2 (step 8) and #3 (step 9, failed) ran; steps 10 and 11 are queued.
+  const rows = (await ui.findAll({ type: 'Text', text: /^  #\d+.* [▸▾]/ })).map(r => r.text ?? '')
+  expect(rows.length).toBe(5)
+  for (const row of rows) expect(row.length).toBeLessThanOrEqual(72)
+  // No room for "✗ failed" here: the % carries the result instead, drawn red.
+  expect(rows.find(r => /#3 +Run E2E and fix/.test(r))).toMatch(/ 50% ▸$/)
+  expect((await ui.find({ type: 'Text', text: /^ 50%$/ }))?.props).toMatchObject({ color: 'red' })
+  expect(rows.find(r => /#4 +Update changelog/.test(r))).toMatch(/ 0% ▸$/)
+  await ui.unmount()
+})
+
+test("step 1's checks are the session's: the first action and reads before the first write, whichever task the calls landed in", async ($, on) => {
+  world(on)
+  await start($)
+  // Found in a live session: a shell read of retrospective.md is a step-11 signal and a read of
+  // roadmap.md a step-3 one, so neither call is counted for #1.
+  await bash($, 'head -120 retrospective.md')
+  await read($, '/work/roadmap.md')
+  await edit($, '/work/frontend/src/a.ts')
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await text(ui, /retrospective read ✓/)).toBeDefined()
+  expect(await text(ui, /#1 +Understand the goal.*100%/)).toBeDefined()
+  await ui.unmount()
+})
+
+test("a row's completion is the share of its step checklist met", async ($, on) => {
+  world(on)
+  await start($)
+  await write($, '/work/roadmap.md', 'Intent only')
+  let ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await text(ui, /#2 +Update roadmap.*33%/)).toBeDefined()
+  await ui.unmount()
+  await write($, '/work/roadmap.md', '`🚧 In progress`\n- **Acceptance:** done')
+  ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await text(ui, /#2 +Update roadmap.*100%/)).toBeDefined()
+  // #1 read nothing before the first write: only the first action can count, and it did not happen.
+  expect(await text(ui, /#1 +Understand the goal.*0%/)).toBeDefined()
+  await ui.unmount()
+})
+
+test('a press opens a detail under the row, a second press closes it, and two rows can stay open', async ($, on) => {
+  world(on)
+  await start($)
+  await read($, '/work/retrospective.md')
+  await write($, '/work/roadmap.md', 'Intent only')
+  let ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await text(ui, /Summary/)).toBeUndefined()
+  await ui.press({ key: 'row-2' })
+  await ui.unmount()
+  ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await text(ui, /#2 +Update roadmap.*▾/)).toBeDefined()
+  expect(await text(ui, /Summary +Edited roadmap\.md$/)).toBeDefined()
+  expect(await text(ui, /Progress +1 of 3 checks · 33%/)).toBeDefined()
+  expect(await text(ui, /✓ roadmap\.md edited/)).toBeDefined()
+  expect(await text(ui, /○ Intent, Scope and Acceptance written/)).toBeDefined()
+  expect(await text(ui, /○ status set/)).toBeDefined()
+  expect(await text(ui, /Cost +\$0\.00 while the task ran · confidence 100% \(1 of 1 calls matched\)/)).toBeDefined()
+  await ui.press({ key: 'row-1' })
+  await ui.unmount()
+  ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await text(ui, /✓ retrospective\.md read/)).toBeDefined()
+  expect(await text(ui, /✓ roadmap\.md edited/)).toBeDefined()
+  await ui.press({ key: 'row-2' })
+  await ui.unmount()
+  ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await text(ui, /roadmap\.md edited/)).toBeUndefined()
+  expect(await text(ui, /✓ retrospective\.md read/)).toBeDefined()
+  await ui.unmount()
+})
+
+test("a queued step's detail shows what is expected of it", async ($, on) => {
+  world(on)
+  await start($)
+  let ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'queued-9' })
+  await ui.unmount()
+  ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await text(ui, /Summary +Expected: run\./)).toBeDefined()
+  expect(await text(ui, /Progress +0 of 2 checks · 0%/)).toBeDefined()
+  expect(await text(ui, /○ tests run/)).toBeDefined()
+  expect(await text(ui, /○ last run passed/)).toBeDefined()
+  expect(await text(ui, /Agents +main \(expected\)/)).toBeDefined()
+  expect(await text(ui, /^ *Cost /)).toBeUndefined()
+  await ui.unmount()
+})
+
+test('the header shows the overall completion: the mean of the done, running and queued rows', async ($, on) => {
+  world(on)
+  await start($)
+  await read($, '/work/retrospective.md')
+  await ask($)
+  // #1 100% (both checks), #2 100% (asked, answered), nine queued at 0%: 200 / 11 rows.
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await text(ui, /#2 +Ask clarifying questions.*100%/)).toBeDefined()
+  expect(await text(ui, /overall 18%/)).toBeDefined()
+  await ui.unmount()
+})
+
+test("a subagent's own turn credits its tokens to it and to the task it was spawned under, and marks it finished", async ($, on) => {
+  world(on)
+  await start($)
+  await edit($, '/work/frontend/src/a.ts')
+  await $.agent.spawn({
+    tool_use_id: 'u1', prompt: 'write tests', description: 'rules tests', subagentType: 'general-purpose',
+    provider: { plugin: 'engine' }, parentModel: 'claude-fable-5-1', background: false, fork: false,
+  })
+  await $.turn.complete({
+    turnId: 's', answer: 'done', durationMs: 1000, isAborted: false, reason: 'answer', agentId: 'agent-1',
+    usage: { input_tokens: 3000, output_tokens: 1100, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, model: 'claude-haiku-4-5' },
+  })
+  await turn($, 2000, 500)
+  let ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await text(ui, /#2 +Implement changes.*main \+1.*6\.6k/)).toBeDefined()
+  await ui.press({ key: 'row-2' })
+  await ui.unmount()
+  ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await text(ui, /Agents +main +2\.5k/)).toBeDefined()
+  expect(await text(ui, /↳ general-purpose · claude-haiku-4-5 · "rules tests" +4\.1k +✓/)).toBeDefined()
+  expect(await text(ui, /✓ no subagent still running/)).toBeDefined()
   await ui.unmount()
 })
 
