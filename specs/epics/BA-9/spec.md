@@ -9,9 +9,10 @@ Know, with numbers, whether a change made answers better or worse, on every data
 ## Scope
 - **One format.** The three eval harnesses on `main` folded into the in-app suite; cases as data files with one reference query per dialect, and a validator that runs every reference with no model call (ADR-0015).
 - **Deterministic first.** Checks tied to a criteria list; a report per category and per criterion; the judge as a run option, off by default, with judge-only checks reported as not scored.
-- **Databricks.** The World Cup data loaded into a Unity Catalog schema, a register-only fixture the preflight accepts, and Databricks-only cases.
-- **REST.** Server variants of the local World Cup API that page, nest, cap, refuse and require a token, with REST-only cases.
-- **Breadth and depth.** Synthetic domain databases (health insurance, genomics, supply chain and banking from the local branch; marketing insight new), growing toward 100 questions per main fixture, split into dev and held-out.
+- **Three fixture families on every kind** (decided 2026-10-13): World Cup, **finance** (the branch's banking domain extended to finance and wealth) and **marketing analytics** (new, the marketing-insight product), each on PostgreSQL, Databricks and REST, loaded from one PostgreSQL source through a JSON dump so the rows are identical on every kind; `samples.tpch` as a Databricks smoke set.
+- **Databricks.** A loader that takes any fixture's dump into a Unity Catalog schema, register-only fixtures the preflight accepts, and Databricks-only cases.
+- **REST.** Server variants of the local API that page, nest, cap, refuse and require a token, the same server serving the domain dumps, and REST-only cases.
+- **Breadth and depth.** Health insurance, genomics and supply chain brought over from the local branch on PostgreSQL as they are; World Cup and finance growing toward 100 questions and marketing analytics toward 60, split into dev and held-out.
 - **Numbers you can trust.** Repeats with intervals, tokens, cost and latency, and a nightly CI run on PostgreSQL.
 - **Trust in the judge and comparisons.** Judge agreement measured against human labels; arms (knowledge on and off, model comparison); component checks and two-turn tasks.
 - **After the beta: evals on the user's own data.** A user eval set per dataset fed by verified queries, templates from the schema and model drafts a person approves, and the eval set carried in the agent bundle.
@@ -33,8 +34,8 @@ The two process stories come first; no implementation story starts before both a
 | pending | Step 1a · One format and a validator | 1.1.4 |
 | pending | Step 1b · Deterministic checks | 1.1.5 |
 | pending | Step 1c · Report by category, judge optional | 1.1.6 |
-| pending | Step 1d · Four synthetic domains on PostgreSQL | 1.1.7 |
-| pending | Step 2 · Databricks fixture and set | 1.1.8 |
+| pending | Step 1d · Domain databases: finance and marketing analytics, plus the branch's domains | 1.1.7 |
+| pending | Step 2 · Databricks fixtures and sets | 1.1.8 |
 | pending | Step 3 · REST connector cases | 1.1.9 |
 | pending | Step 4 · More questions: domains and question banks | 1.1.10 |
 | pending | Step 5 · Numbers you can trust | 1.1.11 |
@@ -51,7 +52,7 @@ The two process stories come first; no implementation story starts before both a
 - **System:** [data-model](../../system/data-model.md) (the case shape; `eval_runs` gains repeats, arm, judge settings, human verdict, usage and tool-call count; the `eval_sets` collection in Step 9); [api](../../system/api.md) (run options; user set endpoints); [agents](../../system/agents.md) (judge rubric versioning; the Databricks dialect note; the eval-bootstrap agent in Step 11); [ui](../../system/ui.md) (category chip and summary, the Pass / Fail control, "Your sets"); [delivery](../../system/delivery.md) (REST server switches, `eval:validate`, the nightly workflow); [architecture](../../system/architecture.md) (ADR-0015).
 
 ## Acceptance
-- **By the beta (2026-10-30), the minimum:** Steps 0, 1a to 1c, 2 (World Cup on Databricks), 3, and the nightly run of Step 5. The suite runs on demand on PostgreSQL, Databricks and REST; it reports per question, per category and per criterion; runs compare with the previous run; the judge is off by default and judge-only checks show as not scored; a nightly PostgreSQL run fails on any regression.
+- **By the beta (2026-10-30), the minimum:** Steps 0, 1a to 1d, 2, 3, and the nightly run of Step 5. World Cup, finance and marketing analytics run on demand on PostgreSQL, Databricks and REST, the two domains with at least 30 questions each; it reports per question, per category and per criterion; runs compare with the previous run; the judge is off by default and judge-only checks show as not scored; a nightly PostgreSQL run fails on any regression.
 - The beta thresholds are written in the agents-evals spec and agreed by 2026-10-23 (proposal in plan 3.9).
 - A knowledge on and off comparison by category is one report (Step 7), which answers [BA-80](https://halo-powered.atlassian.net/browse/BA-80)'s acceptance.
 - The judge agrees with human labels on at least 90% of passes and of fails before its verdict counts (Step 6).
@@ -59,9 +60,10 @@ The two process stories come first; no implementation story starts before both a
 
 ## Dependencies, risks and open questions
 - **Databricks access** (a workspace the team may use for tests, a serverless SQL warehouse, a personal access token, a catalog where it can create a schema): asked on 2026-10-12, needed by 2026-10-14. Step 2 cannot start without it; if it is late, Step 3 goes first.
-- **Open decisions, with dates** (plan 3.0): how the branch work comes over (2026-10-13; recommendation: copy the data by path, rebuild the wiring on `main`); the Databricks fixture, World Cup loaded or the samples catalog only (2026-10-14; recommendation: World Cup loaded, `samples.tpch` as a smoke set); one PR at the end of the epic or an early PR after Step 1c (2026-10-16; recommendation: the early PR, so BA-2, BA-4 and BA-5 can measure against the suite); who writes the health-insurance and marketing-insight briefs (2026-10-16); the beta thresholds (2026-10-23); who labels the judge validation set (after the beta).
+- **Decided on 2026-10-13** (by Claude on the user's delegation; [decision record](../../../evidence/1.1.3/decisions.md)): the branch work comes over by copying the data by path and rebuilding the wiring on `main`; the fixtures are World Cup, finance and marketing analytics on all three kinds, with `samples.tpch` as a smoke set, and health insurance goes to Databricks after the beta.
+- **Open decisions, with dates** (plan 3.0): one PR at the end of the epic or an early PR after Step 1c (2026-10-16; recommendation: the early PR, so BA-2, BA-4 and BA-5 can measure against the suite); who reviews the finance and marketing-analytics briefs that Claude drafts (2026-10-16); the beta thresholds (2026-10-23); who labels the judge validation set (after the beta).
 - **The baseline on `main`** (six runs, action 3 in plan 3.0) is taken before any change; every later step compares with it.
-- **Time:** the minimum is 12 to 16 working days of work against 14 left, so it fits only if Claude does most of the drafting and the code and the Databricks access arrives by 2026-10-14. What moves after the beta, and in which order, is in plan 3.0.
+- **Time:** with the two domains, the minimum is about 19 to 24 days of work against the 14 working days from 2026-10-13, so it fits only if Claude runs the domain work in parallel with the other steps and the Databricks access arrives by 2026-10-14. What moves after the beta, and in which order, is in plan 3.0.
 - **Cost:** real numbers need an LLM key and spend tokens; the judge is off by default, Databricks runs are on demand.
 - **ADR number:** ADR-0013 and ADR-0014 are claimed on other branches; re-check that 0015 is free when this branch merges.
 - The Phase 1 plan's golden-set item ([phase-1-answer-reliability](../../../docs/plans/phase-1-answer-reliability.md), Workstream C) is covered by Steps 1a and 5.

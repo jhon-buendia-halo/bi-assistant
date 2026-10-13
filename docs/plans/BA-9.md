@@ -43,14 +43,14 @@ gantt
   1a format                                           :s1a, 2026-10-15, 2d
   1b checks                                           :s1b, 2026-10-19, 2d
   1c report                                           :s1c, 2026-10-21, 2d
-  1d domains (if time allows)                         :active, s1d, 2026-10-23, 2d
+  1d finance, marketing analytics                     :s1d, 2026-10-19, 5d
   section Step 2 · Databricks
   Step 2 · World Cup on Databricks                    :s2, 2026-10-19, 5d
-  plus health insurance (if time allows)              :active, s2b, 2026-10-26, 3d
+  plus finance, marketing analytics                   :s2b, 2026-10-26, 3d
   section Step 3 · REST
   Step 3 · REST variants                              :s3, 2026-10-22, 4d
   section Step 4 · questions
-  Step 4 · briefs, health insurance, marketing insight (if time allows) :active, s4, 2026-10-21, 8d
+  Step 4 · deepen World Cup, finance, marketing analytics (if time allows) :active, s4, 2026-10-26, 5d
   section Step 5 · trust
   Step 5 · nightly                                    :s5, 2026-10-26, 3d
 ```
@@ -85,23 +85,36 @@ Then Agents, Questions to Insights Assistant, Evals: open World Cup and run it t
 | Decision | Needed by | It blocks | Recommendation | Status |
 |---|---|---|---|---|
 | Databricks access: workspace, warehouse, token, catalog | Wed Oct 14 | Step 2 | Ask today (action 1). | open |
-| How the branch work comes over | Tue Oct 13 | Step 0b's stories; Step 1 | **Copy the data, rebuild the wiring.** A simulated merge of `feat/engine-eval-loop` into `main` (`git merge-tree`, which changes nothing) conflicts in 39 files: 14 specs, 9 frontend files, and the agents, sessions and LLM modules, the parts `main` rewrote since (Agent Hub, admin, LLM settings). The smaller `docs/eval-suites-specs` conflicts in 18. None of the data conflicts: the four domain generators and their init SQL, the seven suite files, the check library, the failure labels and the Databricks loader are new files. Copy those by path on the epic branch (`git checkout feat/engine-eval-loop -- <path>`, never `-- .`), and rebuild the runner, the report and the UI on `main`'s code in Step 1, with the branch as reference. | open |
-| Databricks fixture: World Cup loaded (A) or the samples catalog only (B) | Wed Oct 14, in Step 0b | Step 2's story | A, with `samples.tpch` as a smoke set ([2.7](../research/BA-9.md#27-databricks-and-rest-what-to-test-and-what-it-needs)). | open |
+| How the branch work comes over | Tue Oct 13 | Step 0b's stories; Step 1 | **Copy the data, rebuild the wiring.** A simulated merge of `feat/engine-eval-loop` into `main` (`git merge-tree`, which changes nothing) conflicts in 39 files: 14 specs, 9 frontend files, and the agents, sessions and LLM modules, the parts `main` rewrote since (Agent Hub, admin, LLM settings). The smaller `docs/eval-suites-specs` conflicts in 18. None of the data conflicts: the four domain generators and their init SQL, the seven suite files, the check library, the failure labels and the Databricks loader are new files. Copy those by path on the epic branch (`git checkout feat/engine-eval-loop -- <path>`, never `-- .`), and rebuild the runner, the report and the UI on `main`'s code in Step 1, with the branch as reference. | **Decided 2026-10-13:** copy the data, rebuild the wiring ([Decisions taken](#decisions-taken-2026-10-13)). |
+| Databricks fixture: World Cup loaded (A) or the samples catalog only (B) | Wed Oct 14, in Step 0b | Step 2's story | A, with `samples.tpch` as a smoke set ([2.7](../research/BA-9.md#27-databricks-and-rest-what-to-test-and-what-it-needs)). | **Decided 2026-10-13:** A, plus finance and marketing analytics on all three kinds ([Decisions taken](#decisions-taken-2026-10-13)). |
 | Shipping: one PR when the epic is done (the rule since October 9), or an early PR after Step 1c | Fri Oct 16 | When BA-2, BA-4 and BA-5 can measure their changes against the suite | Ask for the early PR. The epic's purpose is that every change to the DSL, the knowledge store and the connectors is measured before the beta; with one PR at the end, the suite reaches `main` on October 30, too late for that. | open |
-| Who writes the health-insurance and marketing-insight briefs | Fri Oct 16 | Step 4 | Someone from the business; one hour each ([3.4](#34-synthetic-domain-databases-the-right-material-with-conditions)). | open |
+| Who reviews the finance and marketing-analytics briefs | Fri Oct 16 | Step 1d | Claude drafts both briefs from [3.4](#34-synthetic-domain-databases-the-right-material-with-conditions) and the 2026-10-07 product notes; someone who knows the business reviews each in about an hour. | open |
 | The beta thresholds | Fri Oct 23 | Step 5 | The proposal in [3.9](#39-thresholds-to-react-to-a-proposal-not-a-decision). | open |
 | Who labels the judge validation set | After the beta | Step 6 | A reviewer who knows the data, using the Pass and Fail control of Step 6. | open |
+
+#### Decisions taken (2026-10-13)
+
+On 2026-10-13 Sergio handed the two decisions due this week to Claude, and asked that the fixture decision add two domain databases, such as finance and marketing analytics, that work on PostgreSQL, Databricks and REST alike. They are recorded here and in [`evidence/1.1.3/decisions.md`](../../evidence/1.1.3/decisions.md); Sergio can still reverse either when he confirms the epic spec.
+
+- **How the branch work comes over: copy the data, rebuild the wiring.** As recommended in the table: the data files come over by path, the runner, report and UI are rebuilt on `main`'s code with the branch as reference.
+- **Fixtures: three families, each on all three kinds.**
+  - **World Cup**, loaded into Unity Catalog (option A), with `samples.tpch` as a Databricks smoke set. It stays the connector fixture.
+  - **Finance**: the branch's banking domain extended to finance and wealth (accounts, transactions, portfolios, fees).
+  - **Marketing analytics**: new, shaped on the marketing-insight product of the 2026-10-07 notes (carriers, sales by quarter, revenue by period, a benchmark against masked competitors), with its governance question (a user sees only their own carrier).
+  - **One source of truth per fixture.** Its seeded PostgreSQL generator writes the rows and `facts.json`; a dump script exports the schema to JSON, as `scripts/worldcup-rest-api/data/` already holds for World Cup; the local REST server serves any dumped fixture with the same switches, and the Databricks loader loads the same dump into `<catalog>.<schema>`. The rows are identical on the three kinds by construction, so a difference between kinds is the connector's or the dialect's (ADR-0015).
+  - **Health insurance moves from first to third.** It comes over on PostgreSQL as it is (42 questions), with genomics and supply chain, and goes to Databricks and to 100 questions after the beta. Finance and marketing analytics were asked for by name; finance already has a generator to extend; marketing analytics is the second product's domain and the only one with a governance question.
+- **What it costs.** Step 1d grows from 1 to 2 days to 5 to 6 (two domains by the recipe in [3.4](#34-synthetic-domain-databases-the-right-material-with-conditions), each with a starter bank of at least 30 questions), and Steps 2 and 3 grow by about a day each for a loader and a server that take any fixture. The minimum by the beta now includes 1d: about 19 to 24 days of work against the 14 working days from October 13. It fits only if Claude runs the domain work in parallel with Steps 1b, 1c and 2. If time runs short, depth goes first (the banks stay at about 30 questions), then the three other branch domains, then marketing analytics on Databricks and REST.
 
 #### The three weeks
 
 | Week | Steps | What the team sees on Friday |
 |---|---|---|
 | Oct 12 to 16 | Actions 1 to 7: access, branch, baseline, branch decision, Step 0, Step 1a | A measured baseline on PostgreSQL and REST; the research and the plan confirmed; the stories in Jira; the questions in one format with a validator; the Databricks credentials |
-| Oct 19 to 23 | 1b, 1c, Step 2, Step 3 started, Step 4 started, 1d if time allows | Deterministic checks and reports by category with the judge off; World Cup on Databricks; the first REST server variants; the briefs written; the four domains on PostgreSQL if 1d fits |
+| Oct 19 to 23 | 1b, 1c, 1d (finance and marketing analytics), Step 2, Step 3 started | Deterministic checks and reports by category with the judge off; finance and marketing analytics on PostgreSQL with their starter banks; World Cup on Databricks; the first REST server variants |
 | Oct 26 to 30 | Step 3 finished, Step 4, the nightly part of Step 5, a first loop pass; the beta run on Thursday and Friday | Nightly runs with intervals and cost; dev and held-out side by side; the beta report on every kind |
 | After the beta | The rest of Step 5, Steps 6 to 8, then 9 to 12 | Judge agreement, arms, component checks, two-turn tasks; then users' own eval sets |
 
-> **If time runs short.** The minimum by Friday October 30 is Steps 0, 1a to 1c, Step 2 with World Cup on Databricks, Step 3, and the nightly run of Step 5. By the estimates in [3.5](#35-the-build-step-by-step) that is 12 to 16 working days of work against 14 left, so it fits only if Claude does most of the drafting and the code and the Databricks access arrives by Wednesday. If the access is late, Step 3 (REST, no outside dependency) goes ahead of Step 2. What moves after the beta, in this order: 1d (the four domains), health insurance on Databricks, Step 4 beyond the kind-specific cases, the rest of Step 5, then Steps 6 to 8. At the minimum, each kind runs the World Cup questions (21 from main's three harnesses, 46 if the branch's 38-question World Cup suite comes over) plus its own cases: 10 for Databricks, 12 for REST.
+> **If time runs short.** *Updated 2026-10-13: the minimum now also includes Step 1d for finance and marketing analytics, and both domains on Databricks and REST in Steps 2 and 3; the new estimate and the order in which things move are in [Decisions taken](#decisions-taken-2026-10-13). The text below is the estimate before that decision.* The minimum by Friday October 30 is Steps 0, 1a to 1c, Step 2 with World Cup on Databricks, Step 3, and the nightly run of Step 5. By the estimates in [3.5](#35-the-build-step-by-step) that is 12 to 16 working days of work against 14 left, so it fits only if Claude does most of the drafting and the code and the Databricks access arrives by Wednesday. If the access is late, Step 3 (REST, no outside dependency) goes ahead of Step 2. What moves after the beta, in this order: 1d (the four domains), health insurance on Databricks, Step 4 beyond the kind-specific cases, the rest of Step 5, then Steps 6 to 8. At the minimum, each kind runs the World Cup questions (21 from main's three harnesses, 46 if the branch's 38-question World Cup suite comes over) plus its own cases: 10 for Databricks, 12 for REST.
 
 #### Not first
 
@@ -278,9 +291,9 @@ The question raised at the review: why not make Step 1 the creation of synthetic
 
 | Domain | Why | Status | Order |
 |---|---|---|---|
-| **Health insurance**: members, plans, providers, claims, adjustments | The core business. The branch's richest set: 42 questions, 14 categories, cents, test rows, statuses | On the branch | 1. The domain that goes to Databricks with World Cup (Step 2) and is deepened to 100 questions (Step 4) |
-| **Marketing insight**: carriers, sales by quarter, revenue by period, a benchmark against masked competitors | The second product in the 2026-10-07 notes. Also the only domain where a data-governance rule (a user sees only their own carrier, the others masked) can be tested as an eval question | Not written | 2. New, by the recipe below (Step 4) |
-| **Finance and wealth**: portfolios, accounts, transactions, fees | "Wealth" in the manager's three domains. The branch's banking domain (20 questions) covers part of it | Partly on the branch | 3. Extend banking (Step 4) |
+| **Health insurance**: members, plans, providers, claims, adjustments | The core business. The branch's richest set: 42 questions, 14 categories, cents, test rows, statuses | On the branch | 3. Comes over on PostgreSQL as it is (Step 1d); Databricks and 100 questions after the beta (decided 2026-10-13; it was first) |
+| **Marketing analytics** (the marketing-insight product): carriers, sales by quarter, revenue by period, a benchmark against masked competitors | The second product in the 2026-10-07 notes. Also the only domain where a data-governance rule (a user sees only their own carrier, the others masked) can be tested as an eval question | Not written | 2. New, by the recipe below, on all three kinds (Steps 1d, 2, 3); to 60 questions (Step 4) |
+| **Finance and wealth**: portfolios, accounts, transactions, fees | "Wealth" in the manager's three domains. The branch's banking domain (20 questions) covers part of it | Partly on the branch | 1. Extend banking, on all three kinds (Steps 1d, 2, 3); to 100 questions (Step 4) |
 | **Careers and HR**; retail | HR is the third of the manager's domains. HR (10 questions) and retail (6) were added by the expert-mode and learning commits, with fields for those features | On `feat/business-expert-learning` | 4. With those features' epics, or copied later without the fields |
 | Supply chain, genomics | Already written; they add breadth of schema shapes at no writing cost | On `feat/engine-eval-loop` | Come along in Step 1d; grow only after 1 to 3 |
 | World Cup, Formula 1 | The connector fixture on all three kinds, and the scale fixture (48 tables) | On `main` | Kept. Not domain fixtures |
@@ -304,7 +317,7 @@ This is a how-to used in Step 4, not a list of plan steps. About two to three da
 
 | Level | Fixtures and kinds | Questions | What it proves | Cost |
 |---|---|---|---|---|
-| **Beta, Oct 31** | World Cup on all three kinds; health insurance deep on PostgreSQL and Databricks; genomics, supply chain and banking on PostgreSQL as they are; marketing insight new on PostgreSQL | About 100 on World Cup, 100 on health insurance, 60 on marketing insight, the branch's 89 on those three | Connectors on every kind; one enterprise domain in depth; breadth of schema shapes on one kind; the second product's domain | 179 cases on the loop branch are already written; the new work is references in Databricks SQL and SQLite, variants, the two new domains |
+| **Beta, Oct 31** (decided 2026-10-13) | World Cup, finance and marketing analytics on all three kinds; health insurance, genomics and supply chain on PostgreSQL as they are | At least 30 each on finance and marketing analytics at the minimum, toward 100 and 60; World Cup toward 100; the branch's 111 on the other three | Connectors on every kind, on three schema shapes; two enterprise-shaped domains on every kind; the second product's domain and its governance question | Two new domains by the recipe, references in three dialects for every case, a loader and a server that take any fixture |
 | **Q4** | Formula 1 for scale; fixture variants with ties, nulls and empty groups; health insurance on REST; finance and HR deepened | 100 per fixture family | Schema discovery at scale; resistance to lucky matches | A loader per kind per fixture; references per dialect |
 | **Later** | Every domain on all three kinds; a masked copy of a real customer dataset if the team allows it | 100 per domain per kind | Generalisation across domains and kinds | Triple the reference work; a privacy decision |
 
@@ -324,10 +337,10 @@ Effort is a rough estimate for one developer with Claude doing most of the draft
 | **1a** One format | Today the questions sit in three harnesses, in three formats | The 31 existing questions | One file per set, and a validator that runs every reference query with no model call |
 | **1b** Checks | A failed question should say which rule broke, at no token cost | The questions in the new format; the tool trace of each run | Twelve deterministic checks, each tied to a criterion of [2.5](../research/BA-9.md#25-the-criteria-list-for-this-app) |
 | **1c** Report by category | A total such as "24 of 30" hides which kind of question got worse | Runs scored by the new checks | A pass rate per category and per criterion; the judge off by default |
-| **1d** Four domains | Data the model never saw, shaped like a customer's | 131 questions and their data generators on a local branch | Health insurance, genomics, supply chain and banking on PostgreSQL |
+| **1d** Domain databases | Data the model never saw, shaped like a customer's | Two briefs; the branch's generators and 131 questions | Finance and marketing analytics on PostgreSQL with starter banks and a JSON dump each; health insurance, genomics and supply chain as they are (decided 2026-10-13) |
 | **2** Databricks | The manager's first ask; Databricks has no eval today | The World Cup rows; Databricks access; the Step 1 questions | World Cup on Databricks, reported side by side with PostgreSQL |
 | **3** REST | The REST set tests the questions, not the connector | The local World Cup API; the Step 1 questions | API variants that page, nest, cap and fail, with a report per variant |
-| **4** More questions | 30 questions cannot show a change smaller than about 30 points | Steps 1 to 3; a brief per new domain | World Cup and health insurance at 100 questions, marketing insight at 60, each tagged dev or held-out |
+| **4** More questions | 30 questions cannot show a change smaller than about 30 points | Steps 1 to 3; the reviewed briefs | World Cup and finance at 100 questions, marketing analytics at 60, on all three kinds, each tagged dev or held-out (decided 2026-10-13) |
 | **5** Numbers you can trust | One run is one draw; a change has to beat the noise | The full question bank; token usage; model prices | Repeats with intervals, tokens and cost, and a nightly run that fails on a regression |
 | **6** Judge checked | The judge is a model and can be wrong | A reviewer's Pass or Fail on 30 answers | The judge's agreement with people, printed on the report |
 | **7** Arms | To prove a change helps, run with it and without it | Two configurations: knowledge on and off, or two models | Two runs side by side by category; BA-80's acceptance as one report |
@@ -463,29 +476,41 @@ What is new in 1a is the format, the loader and the validator. The questions mov
 
 </details>
 
-#### Step 1d · Four domains on PostgreSQL · 1 to 2 days · from Oct 23, if time allows
+#### Step 1d · Domain databases: finance and marketing analytics, plus the branch's domains · 5 to 6 days · Oct 19 to 23
 
-- **Why:** World Cup is one small schema about a famous event. Synthetic domains the model never saw, with traps planted on purpose, test the assistant on data shaped like a customer's ([3.4](#34-synthetic-domain-databases-the-right-material-with-conditions)). Four are already written on a local branch and come over as new files, with no conflict.
-- **Takes in:** From `feat/engine-eval-loop`: the data generators, the SQL that creates the four databases, their knowledge seeds and their 131 questions.
-- **Gives you:** Health insurance (42 questions), genomics (49), supply chain (20) and banking (20) on the local PostgreSQL, in the new format, each question tagged dev or held-out, each domain with a baseline run.
-- **Example:** The kind of question the health-insurance set holds: "How much did we pay in claims last quarter?" It passes only if the assistant reads amounts stored in cents correctly and leaves out the test members the generator planted. The traps are listed in [3.4](#34-synthetic-domain-databases-the-right-material-with-conditions).
-- **Done when:** The four domains load on the compose PostgreSQL, pass the validator and have a baseline run.
-- **Needs:** Step 1a. HR and retail stay behind, because they carry fields for expert mode and learning.
+*Rewritten 2026-10-13 by the fixture decision ([Decisions taken](#decisions-taken-2026-10-13)).*
+
+- **Why:** World Cup is one small schema about a famous event. Synthetic domains the model never saw, with traps planted on purpose, test the assistant on data shaped like a customer's ([3.4](#34-synthetic-domain-databases-the-right-material-with-conditions)). Finance and marketing analytics are the two that run on every kind; three more are already written on a local branch and come over as new files, with no conflict.
+- **Takes in:** The two briefs (Claude drafts, the business reviews); from `feat/engine-eval-loop`: the data generators, the init SQL, the knowledge seeds and the questions of banking, health insurance, genomics and supply chain.
+- **Gives you:**
+  - **Finance**: the branch's banking generator extended to finance and wealth (accounts, transactions, portfolios, fees), with `facts.json`, a policy document and a starter bank of at least 30 questions.
+  - **Marketing analytics**: a new generator by the recipe in [3.4](#34-synthetic-domain-databases-the-right-material-with-conditions), with `facts.json`, a policy document, its governance question and a starter bank of at least 30 questions.
+  - A dump script that exports each fixture schema to JSON, the input of Steps 2 and 3.
+  - Health insurance (42 questions), genomics (49) and supply chain (20) on PostgreSQL as they are.
+  - Every question in the new format, tagged dev or held-out, with a PostgreSQL reference; each domain with a baseline run.
+- **Example:** A finance question: "What did wealth clients pay in fees last quarter?" It passes only if the assistant reads fees stored in cents, uses the fiscal quarter the policy document defines and leaves out the test accounts the generator planted. A marketing-analytics question asked as a carrier's user: "How do our sales compare with the market this quarter?" The answer names only that carrier; competitors appear only masked.
+- **Done when:** The five domains load on the compose PostgreSQL and pass the validator; finance and marketing analytics have at least 30 questions each and a baseline run; the dump of each matches its PostgreSQL row counts.
+- **Needs:** Step 1a and the two briefs. HR and retail stay behind, because they carry fields for expert mode and learning.
 
 <details><summary>Technical checklist</summary>
 
 - From `feat/engine-eval-loop`, copied by path with no conflict: the generators (`docker/postgres/generate/`), the init SQL for health insurance, genomics, supply chain and banking (`002`, `003`, `006`, `007`), the fixture registration and knowledge seeds (`bootstrap-fixtures.ts`, `fixture-semantics.ts`, `semantics/`), and their 131 questions moved into the format, each tagged dev or held-out ([3.6](#36-the-improvement-loop)).
+- Banking extended into the finance fixture (new tables for portfolios, holdings and fees; fiscal periods; planted traps), its brief at `docs/evals/domains/finance.md`.
+- The marketing-analytics fixture: brief at `docs/evals/domains/marketing-analytics.md`, DDL of 10 to 15 tables, a seeded generator writing `docker/postgres/init/00N_marketing_analytics.sql` and `facts.json`, the semantics seed, the policy document.
+- A dump script (`backend/scripts/dump-fixture.ts --fixture <name>`) writing `scripts/fixtures/<name>/data/*.json`, the same shape as the World Cup dump.
 - HR (10 questions) and retail (6) stay behind: the expert-mode and learning commits added them, with fields for those features (`expectedReasoning`, `learningScenario`).
 
 </details>
 
 > **After Step 1 as a whole.** A developer opens the Evals tab, sees the World Cup set and the domain sets with their categories, runs any of them on PostgreSQL or REST with no judge cost, and reads which category failed. Anyone adds a question by editing a file and running the validator.
 
-#### Step 2 · Databricks fixture and set · 4 to 5 days · the first ask
+#### Step 2 · Databricks fixtures and sets · 5 to 6 days · the first ask
+
+*Widened 2026-10-13 to the finance and marketing-analytics fixtures ([Decisions taken](#decisions-taken-2026-10-13)).*
 
 - **Why:** The manager asked for Databricks first, and today it has no eval at all: the preflight refuses a Databricks datasource. To tell a Databricks problem from a question problem, the same questions must run on the same rows on Databricks as on PostgreSQL.
-- **Takes in:** The World Cup rows (the JSON files the local REST API already serves); Databricks access (workspace, warehouse, token, catalog); the questions from Step 1.
-- **Gives you:** A script that loads World Cup into `<catalog>.world_cup`; a Databricks fixture the preflight accepts; a Databricks reference query for every World Cup question; ten Databricks-only questions; a report with PostgreSQL and Databricks side by side.
+- **Takes in:** The World Cup rows (the JSON files the local REST API already serves) and the finance and marketing-analytics dumps of Step 1d; Databricks access (workspace, warehouse, token, catalog); the questions from Step 1.
+- **Gives you:** A script that loads any fixture's dump into `<catalog>.<schema>`: World Cup, finance and marketing analytics; a Databricks fixture per family that the preflight accepts; a Databricks reference query for every question of the three; ten Databricks-only questions; a report with PostgreSQL and Databricks side by side.
 - **Example:** One question, two reference queries, two results:
 
   ```text
@@ -497,27 +522,29 @@ What is new in 1a is the format, the loader and the validator. The questions mov
   ```
 
   The questions and the rows are the same, so the two questions that pass on PostgreSQL and fail on Databricks point at the Databricks side: the dialect, or a timeout on a cold warehouse. A Databricks-only question: "For each tournament, which match had the highest attendance?" needs a window function written in Databricks SQL.
-- **Done when:** A full run completes on a real warehouse from the Evals tab and from the CLI, with the report and a screenshot in evidence; one cold-start and one warm run are recorded; a reference broken on purpose fails the validator on Databricks too.
-- **Needs:** Step 1, and the Databricks access (a paid or trial workspace; Free Edition is non-commercial). Ask this week, because the warehouse is the long pole.
+- **Done when:** A full run of each of the three families completes on a real warehouse from the Evals tab and from the CLI, with the reports and a screenshot in evidence; one cold-start and one warm run are recorded; a reference broken on purpose fails the validator on Databricks too.
+- **Needs:** Step 1 (1d for the two domains), and the Databricks access (a paid or trial workspace; Free Edition is non-commercial). Ask this week, because the warehouse is the long pole.
 
 <details><summary>Technical checklist</summary>
 
-- A registry entry `world-cup-databricks` with kind `databricks`, register-only, with the setup script named in its description, like the REST one.
-- `backend/scripts/setup-worldcup-databricks.ts`: reads the JSON dump in [`scripts/worldcup-rest-api/data/`](../../backend/scripts/worldcup-rest-api/data/), creates `<catalog>.world_cup.<table>` for the twelve tables and the two views with `CREATE OR REPLACE`, through the `@databricks/sql` client, and registers the datasource and dataset in a running backend the way [`setup-worldcup-rest.ts`](../../backend/scripts/setup-worldcup-rest.ts) does. Idempotent.
+- Registry entries `world-cup-databricks`, `finance-databricks` and `marketing-analytics-databricks` with kind `databricks`, register-only, with the setup script named in their description, like the REST one.
+- `backend/scripts/setup-fixture-databricks.ts --fixture <name>` (World Cup first, then the two domains from the dumps of Step 1d): reads the JSON dump in [`scripts/worldcup-rest-api/data/`](../../backend/scripts/worldcup-rest-api/data/), creates `<catalog>.world_cup.<table>` for the twelve tables and the two views with `CREATE OR REPLACE`, through the `@databricks/sql` client, and registers the datasource and dataset in a running backend the way [`setup-worldcup-rest.ts`](../../backend/scripts/setup-worldcup-rest.ts) does. Idempotent.
 - The preflight accepting the kind, with its own setup hint; its unit spec extended.
 - `expectedSql.databricks` for every World Cup case: backticked catalog, no `::` casts, division already a double; each one run on the warehouse before commit.
 - Ten Databricks-only cases from the dialect list in [2.7](../research/BA-9.md#27-databricks-and-rest-what-to-test-and-what-it-needs): a window function or `QUALIFY`, a date function, a numeric returned as text, a browse-only object, a cold-start timing.
-- If time allows (it needs 1d): the health-insurance domain loaded by the same script (the branch's loader already copies that schema) and its reference queries in Databricks SQL, so the first enterprise-shaped domain is on the first ask's kind.
+- `expectedSql.databricks` for every finance and marketing-analytics case, each run on the warehouse before commit. Health insurance on Databricks moves after the beta (decided 2026-10-13).
 - The Testing Data panel refusing to load the kind, with a message naming the script.
 - Specs: fixture row in [`testing-data/spec.md`](../../specs/capabilities/testing-data/spec.md), preflight rule R20 in [`agents-evals/spec.md`](../../specs/capabilities/agents-evals/spec.md), Databricks dialect note in [`agents.md`](../../specs/system/agents.md); Gherkin: "Refuses a PostgreSQL set on a Databricks datasource" and "Runs the World Cup set on the Databricks sample".
 
 </details>
 
-#### Step 3 · REST connector cases · 3 to 4 days · the second ask
+#### Step 3 · REST connector cases · 4 to 5 days · the second ask
+
+*Widened 2026-10-13 to the finance and marketing-analytics fixtures ([Decisions taken](#decisions-taken-2026-10-13)).*
 
 - **Why:** Today's REST set repeats the PostgreSQL questions on the easiest API there is: flat rows, one paging style, no login. Real APIs, such as the DIGS and RSS APIs of the RFP demo, page in other ways, nest their rows, cap results and fail. Those are the connector's failures, and nothing tests them yet.
-- **Takes in:** The local World Cup REST API ([`serve.ts`](../../backend/scripts/worldcup-rest-api/serve.ts)); the questions from Step 1.
-- **Gives you:** Switches on the local API, one per real-world behaviour (paging style, nested rows, rows under another key, a row cap, an endpoint that refuses, a required token); one datasource per variant; SQLite references for every World Cup question; twelve REST-only questions; a report per variant.
+- **Takes in:** The local World Cup REST API ([`serve.ts`](../../backend/scripts/worldcup-rest-api/serve.ts)); the finance and marketing-analytics dumps of Step 1d; the questions from Step 1.
+- **Gives you:** Switches on the local API, one per real-world behaviour (paging style, nested rows, rows under another key, a row cap, an endpoint that refuses, a required token); one datasource per variant; the same server serving the finance and marketing-analytics dumps, one REST datasource each; SQLite references for every question of the three families; twelve REST-only questions; a report per variant and per family.
 - **Example:** "How many players are in the data?" With the paging switch serving the players endpoint in pages smaller than its 50 rows, the count is right only if the connector reads every page. (Today the server's default page is 100 rows and the REST datasource asks for 200, so the endpoint arrives in one page; see the correction under [Example 3](../research/BA-9.md#28-worked-examples) of the research.)
 
   ```text
@@ -527,13 +554,14 @@ What is new in 1a is the format, the loader and the validator. The questions mov
   ```
 
   A failure like this becomes a bug under BA-11, with the question as its test. The true count is read once from PostgreSQL, where there is no paging, because the reference query goes through the same connector and would be wrong in the same way.
-- **Done when:** Each variant has a run; every failing connector case has a bug filed under BA-11; the DIGS and RSS endpoints are checked against the switch list in writing.
+- **Done when:** Each variant has a run; finance and marketing analytics each have a run on REST; every failing connector case has a bug filed under BA-11; the DIGS and RSS endpoints are checked against the switch list in writing.
 - **Needs:** Step 1.
 
 <details><summary>Technical checklist</summary>
 
 - Switches on [`scripts/worldcup-rest-api/serve.ts`](../../backend/scripts/worldcup-rest-api/serve.ts), each an environment variable so one process serves one variant: paging style (page, offset, cursor), a nested endpoint, a rows-pointer endpoint, a row cap on one endpoint, a refused endpoint, a required bearer token.
 - A setup script option per variant, so each variant is its own datasource record and its runs are reported side by side.
+- `serve.ts` taking `--fixture <name>` to serve any dump from Step 1d with the same switches, and the setup script registering one REST datasource per family; `expectedSql.sqlite` for every finance and marketing-analytics case.
 - `expectedSql.sqlite` for every World Cup case (27 of the ports exist on the branch).
 - Twelve REST-only cases: a count over an endpoint larger than one page (the switch sets a page size below the endpoint's row count; no endpoint has more than 79 rows today), under each paging style; a question over the nested endpoint; one over the rows-pointer endpoint; one that hits the row cap and must say the figures may be partial; one that needs the refused endpoint and must say so; one SQLite dialect case.
 - Specs: the switches in [`delivery.md`](../../specs/system/delivery.md), the cases in [`agents-evals/spec.md`](../../specs/capabilities/agents-evals/spec.md); Gherkin: "Runs the REST set against the cursor-paged API".
@@ -543,19 +571,18 @@ What is new in 1a is the format, the loader and the validator. The questions mov
 #### Step 4 · More questions: domains and question banks · about two weeks, continuous
 
 - **Why:** The book's rule of thumb (p. 207): about 100 questions to see a 10-point change; 30 questions show only about 30 points. With too few questions, an "improvement" can be luck. This step fills each category to at least five questions and each main fixture toward 100.
-- **Takes in:** The format, checks and fixtures of Steps 1 to 3; the recipe in [3.2](#32-how-to-write-a-question-that-holds-up); a one-hour brief per new domain from someone who knows the business ([3.4](#34-synthetic-domain-databases-the-right-material-with-conditions)).
-- **Gives you:** World Cup at 100 questions on all three kinds; health insurance at 100 on PostgreSQL and Databricks; marketing insight, new, at 60; banking extended to finance and wealth; every question tagged dev or held-out; deterministic substitutes on the judge-only questions.
+- **Takes in:** The format, checks and fixtures of Steps 1 to 3; the recipe in [3.2](#32-how-to-write-a-question-that-holds-up); the reviewed briefs of Step 1d ([3.4](#34-synthetic-domain-databases-the-right-material-with-conditions)).
+- **Gives you:** World Cup at 100 questions on all three kinds; finance at 100 and marketing analytics at 60, both on all three kinds (decided 2026-10-13; health insurance deepens after the beta); every question tagged dev or held-out; deterministic substitutes on the judge-only questions.
 - **Example:** A question in the `non-existent` category: "How many goals did Erling Haaland score in the 2022 World Cup?" Norway did not qualify, so he is not in the data.
   - Pass: "No player named Erling Haaland is in the data. It covers the 2018 and 2022 squads."
   - Fail: "He scored 3 goals." The check that no goal count appears catches it with no judge ([Example 5 in 2.8](../research/BA-9.md#28-worked-examples)).
-- **Done when:** 100 World Cup questions with references on all three kinds; 100 health insurance with PostgreSQL and Databricks references; 60 marketing insight on PostgreSQL; a bootstrap over each set (draw with replacement, score, repeat) spreads less than 5 points; dev and held-out within 5 points of each other at baseline.
+- **Done when:** 100 World Cup questions, 100 finance and 60 marketing analytics, each with references on all three kinds; a bootstrap over each set (draw with replacement, score, repeat) spreads less than 5 points; dev and held-out within 5 points of each other at baseline.
 - **Needs:** Steps 1 to 3, and the briefs. The Formula 1 set stays at 10 until these are complete.
 
 <details><summary>Technical checklist</summary>
 
-- The **marketing insight** domain, new, by the recipe in [3.4](#34-synthetic-domain-databases-the-right-material-with-conditions): carriers, sales by quarter, revenue by period, a benchmark against masked competitors, with a governance question in the bank (a user sees only their own carrier).
-- **Health insurance** deepened from 42 to 100 questions: at least five per category, variants, a trap each, references in PostgreSQL and Databricks SQL, a `facts.json` and a policy document added to the branch's generator.
-- The **finance and wealth** extension of the banking domain (portfolios, fees) and its policy document.
+- **Marketing analytics** grown from its starter bank to 60 questions and **finance** to 100: at least five per category, variants, a trap each, references in PostgreSQL, Databricks SQL and SQLite.
+- **Health insurance** deepened from 42 to 100 questions, with Databricks references, after the beta (decided 2026-10-13).
 - **World Cup** to 100 questions on all three kinds, with the categories of [2.6](../research/BA-9.md#26-categories-of-the-golden-dataset) filled to at least five each, and fixture variants with ties, nulls and empty groups.
 - The deterministic substitutes from [2.3](../research/BA-9.md#23-deterministic-checks-and-the-judge-what-the-judge-costs-and-what-you-lose-without-it) attached to every judge case; the `non-existent`, `fuzzy-scope`, `default-filter` and `domain-semantics` categories filled, the last two with the knowledge entries each case needs seeded by the run.
 - Every case tagged `dev` or `held-out` ([3.6](#36-the-improvement-loop)); every reference run on its fixtures before commit, recorded in the evidence folder.
@@ -734,7 +761,7 @@ After the beta, the step a model can take over is step 2 and a draft of step 3: 
 ### 3.7 Where things go (the technical companion, in brief)
 
 - **Cases:** stay next to the suite as TypeScript until Step 1, then one data file per set under `backend/src/mastra/evals/sets/` loaded by the suite, so a case can be reviewed in a pull request without reading code. The shape: `{ id, category, tags, question, intent, checks: [{ type, args, criterion }], judgeRubric, expectedSql: { postgres, databricks, sqlite }, resultSetOptions, knowledge, turns }`. The ADR in Step 0 records the choice.
-- **Fixtures:** `SampleFixture.datasourceKind` gains `'databricks'`; the registry entry mirrors the REST one (register-only, placeholder defaults, a setup script named in the preflight message). Loader: `backend/scripts/setup-worldcup-databricks.ts`, reading the JSON dump in [`scripts/worldcup-rest-api/data/`](../../backend/scripts/worldcup-rest-api/data/).
+- **Fixtures:** `SampleFixture.datasourceKind` gains `'databricks'`; the registry entry mirrors the REST one (register-only, placeholder defaults, a setup script named in the preflight message). Loader: `backend/scripts/setup-fixture-databricks.ts --fixture <name>`, reading the JSON dump in [`scripts/worldcup-rest-api/data/`](../../backend/scripts/worldcup-rest-api/data/). Since 2026-10-13 the loader and the REST server take any fixture's JSON dump (World Cup, finance, marketing analytics), written by `backend/scripts/dump-fixture.ts` ([Decisions taken](#decisions-taken-2026-10-13)).
 - **Preflight:** `assistantEvalDatasetError` gets a third kind label and setup hint; its spec gets the Databricks rows.
 - **Checks:** new scorers in `backend/src/mastra/evals/checks/` built with `createScorer`: `sqlMatches`, `sqlNotMatches`, `noRepairs`, `usesEntities`, `rationaleIsBusinessWords`, `notMatches` (if the installed `@mastra/evals` lacks it). Each carries a `criterion`.
 - **Run record:** `eval_runs` gains `repeats`, `arm`, `judge` (off, categories or on, plus model and rubric version), per-result `humanVerdict`, per-result `usage { inputTokens, outputTokens, cost }`, `toolCallCount`, and per-check `criterion`; recorded in [`data-model.md`](../../specs/system/data-model.md) 3.8. Old runs have none of these and compare only on verdicts, as today.
@@ -907,10 +934,10 @@ Every step of [3.5](#35-the-build-step-by-step) and [4.5](#45-the-build-continue
 | [1a · One format and a validator](#step-1a--one-format-and-a-validator--1-to-15-days--oct-15-to-16) | 1.1.4 | (Jira story pending) | 1 to 1.5 days | Thu to Fri, Oct 15 to 16 | Step 0, and the branch decision (3.0) |
 | [1b · Deterministic checks](#step-1b--deterministic-checks--1-to-15-days--oct-19-to-20) | 1.1.5 | (Jira story pending) | 1 to 1.5 days | Mon to Tue, Oct 19 to 20 | Step 1a |
 | [1c · Report by category, judge optional](#step-1c--report-by-category-judge-optional--1-to-15-days--oct-21-to-22) | 1.1.6 | (Jira story pending) | 1 to 1.5 days | Wed to Thu, Oct 21 to 22 | Step 1b |
-| [1d · Four domains on PostgreSQL](#step-1d--four-domains-on-postgresql--1-to-2-days--from-oct-23-if-time-allows) | 1.1.7 | (Jira story pending) | 1 to 2 days | From Oct 23, if time allows; the first to move after the beta if time runs short | Step 1a |
-| [2 · Databricks fixture and set](#step-2--databricks-fixture-and-set--4-to-5-days--the-first-ask) | 1.1.8 | (Jira story pending) | 4 to 5 days | World Cup on Databricks Oct 19 to 23; health insurance on Databricks Oct 26 to 28, if time allows | Step 1, and the Databricks access |
-| [3 · REST connector cases](#step-3--rest-connector-cases--3-to-4-days--the-second-ask) | 1.1.9 | (Jira story pending) | 3 to 4 days | Oct 22 to 27: started in week 2, finished in week 3; goes ahead of Step 2 if the access is late | Step 1 |
-| [4 · More questions](#step-4--more-questions-domains-and-question-banks--about-two-weeks-continuous) | 1.1.10 | (Jira story pending) | About two weeks, continuous | From Oct 21, if time allows; beyond the kind-specific cases, after the beta | Steps 1 to 3, and the briefs |
+| [1d · Domain databases: finance and marketing analytics, plus the branch's domains](#step-1d--domain-databases-finance-and-marketing-analytics-plus-the-branchs-domains--5-to-6-days--oct-19-to-23) | 1.1.7 | (Jira story pending) | 5 to 6 days | Oct 19 to 23, in parallel with 1b and 1c (decided 2026-10-13) | Step 1a and the two briefs |
+| [2 · Databricks fixtures and sets](#step-2--databricks-fixtures-and-sets--5-to-6-days--the-first-ask) | 1.1.8 | (Jira story pending) | 5 to 6 days | World Cup on Databricks Oct 19 to 23; finance and marketing analytics Oct 26 to 28 | Step 1 (1d for the domains), and the Databricks access |
+| [3 · REST connector cases](#step-3--rest-connector-cases--4-to-5-days--the-second-ask) | 1.1.9 | (Jira story pending) | 4 to 5 days | Oct 22 to 27: started in week 2, finished in week 3; goes ahead of Step 2 if the access is late | Step 1 |
+| [4 · More questions](#step-4--more-questions-domains-and-question-banks--about-two-weeks-continuous) | 1.1.10 | (Jira story pending) | About two weeks, continuous | From Oct 26, if time allows; beyond the starter banks, after the beta | Steps 1 to 3, and the briefs |
 | [5 · Numbers you can trust](#step-5--numbers-you-can-trust--3-to-4-days) | 1.1.11 | (Jira story pending) | 3 to 4 days | The nightly run Oct 26 to 28; the rest after the beta | Step 1; Step 2 for the Databricks numbers |
 | [6 · Judge optional, human verdict, judge validation](#step-6--judge-optional-human-verdict-judge-validation--3-days) | 1.1.12 | (Jira story pending) | 3 days | After the beta | Step 4's questions, and a labeller |
 | [7 · Arms](#step-7--arms-knowledge-on-and-off-model-comparison--2-to-3-days) | 1.1.13 | (Jira story pending) | 2 to 3 days | After the beta | Steps 4 and 5; the branch's levers (2.4), depending on the branch decision in 3.0 |
@@ -931,7 +958,7 @@ Every step of [3.5](#35-the-build-step-by-step) and [4.5](#45-the-build-continue
 | Result-set check | Yes | Dialect-keyed reference queries | Step 1 | |
 | LLM judge | Yes (pass/fail, temp 0) | Validation set, agreement score, version on the run | Step 6 | Pairwise judging; a second judge model |
 | Judge optional, human verdict | No: the judge always runs on its cases | Run option (off, categories, on), gap reporting, a Pass / Fail control on a result | Steps 1, 6 | A judge from a different model family (later, if J1 shows self-preference) |
-| Synthetic domain fixtures | None on main; four on the loop branch (131 questions, knowledge seeds), HR and retail on the expert-mode branch | Bring the four over (1d); health insurance to 100 and onto Databricks; marketing insight new; `facts.json` and a policy document per domain | Steps 1, 2, 4 | Ten domains with ten questions each |
+| Synthetic domain fixtures | None on main; four on the loop branch (131 questions, knowledge seeds), HR and retail on the expert-mode branch | Finance (from banking) and marketing analytics (new) on all three kinds, toward 100 and 60; health insurance, genomics and supply chain over as they are (1d); `facts.json` and a policy document per domain (decided 2026-10-13) | Steps 1d, 2, 3, 4 | Ten domains with ten questions each |
 | Improvement loop | A runbook and a loop runner on the branch; trials and intervals in [`check-answers.ts`](../../backend/scripts/check-answers.ts) | The held-out split on every case, the lever table, the acceptance and stop rules, the loop runner and `eval:diff --draft` | Steps 4, 5, 7 | An automatic loop that changes prompts without review |
 | Databricks fixture and set | No; preflight rejects the kind | Registry entry, loader script, ported queries, `dbx:*` cases | Step 2 | A Databricks CI run (cost) |
 | REST set | 10 shared questions | Server switches and `rest:*` connector cases | Step 3 | Recording real DIGS/RSS responses as fixtures (needs data access and masking) |

@@ -258,33 +258,33 @@ The measurement baseline. Every change to the DSL, knowledge store or connectors
 - **Acceptance:** the spec check and the E2E scenarios pass; one real PostgreSQL run has the table in its report and spent no judge tokens.
 - **Notes:** 1 to 1.5 days. Needs 1.1.5. Jira: story pending.
 
-#### 1.1.7 — Four synthetic domains on PostgreSQL (Step 1d)  `📋 Planned`
-- **Intent:** test the assistant on data the model never saw, shaped like a customer's, with traps planted on purpose.
-- **Scope:** health insurance (42 questions), genomics (49), supply chain (20) and banking (20) copied by path from `feat/engine-eval-loop` (generators, init SQL, knowledge seeds), their questions in the new format, each tagged dev or held-out.
-- **Out of scope:** HR and retail, which carry expert-mode and learning fields; growing the domains (1.1.10).
-- **Acceptance:** the four domains load on the compose PostgreSQL, pass the validator and have a baseline run.
-- **Notes:** 1 to 2 days, if time allows before the beta. Needs 1.1.4. Jira: story pending.
+#### 1.1.7 — Domain databases: finance and marketing analytics, plus the branch's domains (Step 1d)  `📋 Planned`
+- **Intent:** test the assistant on data the model never saw, shaped like a customer's, with traps planted on purpose; two of the domains run on every datasource kind (decided 2026-10-13).
+- **Scope:** finance (the branch's banking generator extended to finance and wealth) and marketing analytics (new, the marketing-insight product), each with a brief, a seeded generator, `facts.json`, a policy document and a starter bank of at least 30 questions; a dump script exporting each fixture to JSON for Steps 2 and 3; health insurance (42 questions), genomics (49) and supply chain (20) copied by path from `feat/engine-eval-loop` as they are; every question in the new format, tagged dev or held-out.
+- **Out of scope:** HR and retail, which carry expert-mode and learning fields; growing the banks past the starter size (1.1.10); health insurance on Databricks (after the beta).
+- **Acceptance:** the five domains load on the compose PostgreSQL and pass the validator; finance and marketing analytics have at least 30 questions each and a baseline run; each dump matches its PostgreSQL row counts.
+- **Notes:** 5 to 6 days, Oct 19 to 23, in parallel with 1.1.5 and 1.1.6; part of the minimum by the beta since 2026-10-13. Needs 1.1.4 and the two briefs (Claude drafts, the business reviews). Decision record: `evidence/1.1.3/decisions.md`. Jira: story pending.
 
-#### 1.1.8 — Databricks fixture and set (Step 2)  `📋 Planned`
+#### 1.1.8 — Databricks fixtures and sets (Step 2)  `📋 Planned`
 - **Intent:** the manager's first ask. Databricks has no eval today; the same questions on the same rows show a Databricks problem as a Databricks problem.
-- **Scope:** `setup-worldcup-databricks.ts` loading World Cup into `<catalog>.world_cup`; a register-only `world-cup-databricks` fixture the preflight accepts; a Databricks reference for every World Cup question; ten Databricks-only questions; PostgreSQL and Databricks side by side in the report.
-- **Out of scope:** Databricks in the nightly CI (cost); health insurance on Databricks unless 1.1.7 lands first.
-- **Acceptance:** a full run completes on a real warehouse from the Evals tab and from the CLI, with the report and a screenshot in evidence; one cold-start and one warm run recorded; a reference broken on purpose fails the validator on Databricks.
-- **Notes:** 4 to 5 days. Needs 1.1.4 to 1.1.6 and Databricks access (workspace, warehouse, token, catalog), asked on 2026-10-12. If access is late, 1.1.9 goes first. Jira: story pending.
+- **Scope:** `setup-fixture-databricks.ts` loading any fixture's JSON dump into `<catalog>.<schema>`: World Cup, finance and marketing analytics; a register-only Databricks fixture per family that the preflight accepts; a Databricks reference for every question of the three; ten Databricks-only questions; PostgreSQL and Databricks side by side in the report.
+- **Out of scope:** Databricks in the nightly CI (cost); health insurance on Databricks (after the beta).
+- **Acceptance:** a full run of each family completes on a real warehouse from the Evals tab and from the CLI, with the report and a screenshot in evidence; one cold-start and one warm run recorded; a reference broken on purpose fails the validator on Databricks.
+- **Notes:** 5 to 6 days (widened on 2026-10-13 to the two domains). Needs 1.1.4 to 1.1.6, 1.1.7 for the domains, and Databricks access (workspace, warehouse, token, catalog), asked on 2026-10-12. If access is late, 1.1.9 goes first. Jira: story pending.
 
 #### 1.1.9 — REST connector cases (Step 3)  `📋 Planned`
 - **Intent:** the manager's second ask. Test what REST changes (paging, nesting, row caps, failures), not only the questions.
-- **Scope:** switches on the local World Cup API, one per behaviour (page, offset and cursor paging; nested rows; rows under another key; a row cap; a refused endpoint; a required token); one datasource per variant; SQLite references for every World Cup question; twelve REST-only questions; a report per variant.
+- **Scope:** switches on the local World Cup API, one per behaviour (page, offset and cursor paging; nested rows; rows under another key; a row cap; a refused endpoint; a required token); one datasource per variant; the same server serving the finance and marketing-analytics dumps, one REST datasource each; SQLite references for every question of the three families; twelve REST-only questions; a report per variant and per family.
 - **Out of scope:** fixing the connector bugs found (filed under BA-11).
-- **Acceptance:** each variant has a run; every failing connector case has a bug under BA-11; the DIGS and RSS endpoints are checked against the switch list in writing.
-- **Notes:** 3 to 4 days. Needs 1.1.4 to 1.1.6. Jira: story pending.
+- **Acceptance:** each variant has a run; finance and marketing analytics each have a run on REST; every failing connector case has a bug under BA-11; the DIGS and RSS endpoints are checked against the switch list in writing.
+- **Notes:** 4 to 5 days (widened on 2026-10-13 to the two domains). Needs 1.1.4 to 1.1.6, and 1.1.7 for the domains. Jira: story pending.
 
 #### 1.1.10 — More questions: domains and question banks (Step 4)  `📋 Planned`
 - **Intent:** enough questions to see a 10-point change (about 100 per fixture) instead of only a 30-point one.
-- **Scope:** World Cup to 100 questions on all three kinds; health insurance to 100 on PostgreSQL and Databricks; marketing insight, new, at 60; banking extended to finance and wealth; every category at five questions or more; every question tagged dev or held-out; deterministic substitutes on the judge-only questions.
+- **Scope:** World Cup to 100 questions, finance to 100 and marketing analytics to 60, all on all three kinds (health insurance deepens after the beta, decided 2026-10-13); every category at five questions or more; every question tagged dev or held-out; deterministic substitutes on the judge-only questions.
 - **Out of scope:** Formula 1 beyond its 10 questions until these are complete.
 - **Acceptance:** the counts above with references run before commit; a bootstrap over each set spreads less than 5 points; dev and held-out within 5 points of each other at baseline.
-- **Notes:** about two weeks, continuous. Needs 1.1.4 to 1.1.9 and a one-hour brief per new domain from someone who knows the business. Jira: story pending.
+- **Notes:** about two weeks, continuous; beyond the starter banks of 1.1.7, after the beta if time runs short. Needs 1.1.4 to 1.1.9. Jira: story pending.
 
 #### 1.1.11 — Numbers you can trust (Step 5)  `📋 Planned`
 - **Intent:** tell a real change from noise, know what a run costs, and catch a regression the day it lands.

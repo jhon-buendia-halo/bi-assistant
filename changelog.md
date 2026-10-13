@@ -2,6 +2,11 @@
 
 Running log of every meaningful change, newest first. See *Logging convention* and *Evidence convention* in [CLAUDE.md](CLAUDE.md). Release versions come from Conventional Commits (`version-on-merge.yml`); this file records what shipped and links to the evidence.
 
+## 2026-10-13
+
+### Changed
+- **BA-9 plan: the two decisions due this week, taken** (roadmap 1.1.3, [BA-128](https://halo-powered.atlassian.net/browse/BA-128), epic [BA-9](https://halo-powered.atlassian.net/browse/BA-9)), by Claude on the user's delegation: the branch work comes over by copying the data by path and rebuilding the wiring on `main`; the fixtures are World Cup, **finance** (the branch's banking domain extended) and **marketing analytics** (new), each on PostgreSQL, Databricks and REST, loaded from one PostgreSQL source through a JSON dump so the rows match on every kind, with `samples.tpch` as a Databricks smoke set. Health insurance moves to Databricks after the beta. Applied to [docs/plans/BA-9.md](docs/plans/BA-9.md) (3.0, 3.4, Steps 1d to 4, story map), the [epic spec](specs/epics/BA-9/spec.md) (still Draft), roadmap 1.1.7 to 1.1.10 and ADR-0015 (still Proposed). The minimum by the beta now includes Step 1d and is estimated at 19 to 24 days of work against 14 working days. Evidence: [evidence/1.1.3/decisions.md](evidence/1.1.3/decisions.md); spec check and link check green; no code or UI change.
+
 ## 2026-10-12
 
 ### Added
