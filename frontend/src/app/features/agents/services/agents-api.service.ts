@@ -68,12 +68,18 @@ export interface AgentEvalCheck {
   description: string;
 }
 
+/** Which half of a set a question belongs to (data-model 4.8). */
+export type AgentEvalSplit = 'dev' | 'held-out';
+
 export interface AgentEvalCase {
   id: string;
   question: string;
   /** What the question probes for. */
   intent: string;
   checks: AgentEvalCheck[];
+  /** The one primary kind of question it is, e.g. `lookup`. */
+  category?: string;
+  split?: AgentEvalSplit;
 }
 
 /** A named group of eval questions sharing one fixture. */
@@ -92,12 +98,23 @@ export interface EvalToolCall {
   error?: string;
 }
 
+/**
+ * How a check or a question came out. `not-scored` is a judge check on a run
+ * with the judge off, or a question whose only unsettled checks are those.
+ */
+export type EvalStatus = 'passed' | 'failed' | 'not-scored';
+
 export interface EvalCheckResult {
   id: string;
   description: string;
   score: number;
+  /** True only when `status` is `passed`. */
   passed: boolean;
-  /** Why the check failed, when the scorer reports it. */
+  /** Absent on runs stored before statuses existed: read `passed`. */
+  status?: EvalStatus;
+  /** The BA-9 criterion the check measures (D1…, G1…, I1…, C1…). */
+  criterion?: string;
+  /** Why the check failed or was not scored, when known. */
   reason?: string;
 }
 
@@ -111,9 +128,41 @@ export interface AgentEvalCaseResult {
   answer: string;
   /** The tool calls the agent made, in order. */
   toolCalls: EvalToolCall[];
+  /** True only when `status` is `passed`. */
   passed: boolean;
+  /** Absent on runs stored before statuses existed: read `passed`. */
+  status?: EvalStatus;
+  category?: string;
   error?: string;
   durationMs: number;
+}
+
+/** What the run button sends; the API also takes `categories`. */
+export type EvalJudgeChoice = 'off' | 'on';
+export type EvalJudgeMode = EvalJudgeChoice | 'categories';
+
+export interface EvalCategoryTally {
+  category: string;
+  passed: number;
+  failed: number;
+  notScored: number;
+  total: number;
+}
+
+export interface EvalCriterionTally {
+  criterion: string;
+  passed: number;
+  failed: number;
+  total: number;
+}
+
+/** A finished run's counts, by question and by criterion. */
+export interface EvalRunSummary {
+  passed: number;
+  failed: number;
+  notScored: number;
+  byCategory: EvalCategoryTally[];
+  byCriterion: EvalCriterionTally[];
 }
 
 export interface EvalRunView {
@@ -129,6 +178,10 @@ export interface EvalRunView {
   error?: string;
   startedAt: string;
   finishedAt?: string;
+  /** Absent on runs stored before the judge could be switched off. */
+  judge?: { mode: EvalJudgeMode; categories?: string[] };
+  /** Absent on older runs; derive it with `evalRunSummary`. */
+  summary?: EvalRunSummary;
 }
 
 /** Body of `POST /agents` and `PUT /agents/:id/draft` (api.md 41, 42). */
@@ -206,14 +259,16 @@ export class AgentsApiService {
     );
   }
 
+  /** Start a run of the given questions; the judge is off unless asked. */
   startEvalRun(
     key: string,
     datasourceId: string,
     caseIds: string[],
+    judge: EvalJudgeChoice = 'off',
   ): Observable<EvalRunStartResult> {
     return this.http.post<EvalRunStartResult>(
       `${API_BASE_URL}/agents/${encodeURIComponent(key)}/evals/run`,
-      { datasourceId, caseIds },
+      { datasourceId, caseIds, judge },
     );
   }
 

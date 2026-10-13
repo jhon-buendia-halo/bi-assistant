@@ -7,7 +7,12 @@ import {
 import { SessionsService } from '../../modules/sessions/sessions.service';
 import { KnowledgeService } from '../../modules/knowledge/knowledge.service';
 import { ASSISTANT_EVAL_SETS, runAssistantEvals } from './assistant.evals';
+import type { AssistantEvalCaseResult } from './assistant.evals';
 import { caseIdsForSet } from './eval-sets';
+import { judgeLabel, judgeSettingFromEnv } from './judge-option';
+import type { EvalJudgeSetting } from './judge-option';
+import { renderSummaryMarkdown, summarizeEvalResults } from './eval-summary';
+import type { EvalStatus } from './eval-summary';
 
 /**
  * CLI entry point for the same suite the Agents → Evals tab runs.
@@ -23,6 +28,10 @@ import { caseIdsForSet } from './eval-sets';
  * `EVAL_SET` names one set (`world-cup`, `world-cup-rest`, …) and runs only
  * its questions. Without it every set is selected, as before, which the
  * one-sample rule refuses while the sets span several samples.
+ *
+ * `EVAL_JUDGE` (`off` by default, `on` or `categories`) and
+ * `EVAL_JUDGE_CATEGORIES` set the judge option (agents-evals R110). With it
+ * off, judge checks are not scored and no judge call is made.
  */
 async function main(): Promise<void> {
   const datasets = (process.env['EVAL_DATASETS'] ?? '')
@@ -48,6 +57,12 @@ async function main(): Promise<void> {
     process.exitCode = 1;
     return;
   }
+  const judge = judgeSettingFromEnv(process.env);
+  if ('error' in judge) {
+    console.error(judge.error);
+    process.exitCode = 1;
+    return;
+  }
 
   const app = await NestFactory.createApplicationContext(AppModule, {
     logger: ['error', 'warn'],
@@ -56,7 +71,9 @@ async function main(): Promise<void> {
   try {
     await app
       .get(CurrentUserService)
-      .runAs(LOCAL_USER, () => runAsDemoUser(app, datasets, caseIds));
+      .runAs(LOCAL_USER, () =>
+        runAsDemoUser(app, datasets, caseIds, judge.setting),
+      );
   } finally {
     await app.close();
   }
@@ -66,6 +83,7 @@ async function runAsDemoUser(
   app: Awaited<ReturnType<typeof NestFactory.createApplicationContext>>,
   datasets: string[],
   caseIds: string[] | undefined,
+  judge: EvalJudgeSetting,
 ): Promise<void> {
   // Same Nest app the eval-runs.service in-app runner uses, so a throwaway
   // session for create_visual/update_visual works here too — no CLI-only
@@ -76,10 +94,11 @@ async function runAsDemoUser(
   const knowledgeBlock = await app
     .get(KnowledgeService)
     .definitionBlock(datasets);
+  console.log(`Judge: ${judgeLabel(judge)}\n`);
   const results = await runAssistantEvals(
     datasets,
     (result) => {
-      const mark = result.passed ? 'PASS' : 'FAIL';
+      const mark = PROGRESS_MARK[result.status];
       console.log(`${mark}  ${result.id}  (${result.durationMs}ms)`);
       if (result.error) console.log(`      error: ${result.error}`);
       for (const [id, score] of Object.entries(result.scores)) {
@@ -89,10 +108,31 @@ async function runAsDemoUser(
     caseIds,
     sessions,
     knowledgeBlock,
+    judge,
   );
-  const passed = results.filter((result) => result.passed).length;
-  console.log(`\n${passed}/${results.length} questions passed`);
-  process.exitCode = passed === results.length ? 0 : 1;
+  const summary = summarizeEvalResults(results);
+  console.log(`\n${summary.passed}/${results.length} questions passed`);
+  if (summary.notScored > 0) console.log(`Not scored: ${summary.notScored}`);
+  console.log(`\n${renderSummaryMarkdown(summary).join('\n')}`);
+  process.exitCode = cliExitCode(results);
+}
+
+/** Each question's line: a not-scored one is neither a pass nor a fail. */
+const PROGRESS_MARK: Readonly<Record<EvalStatus, string>> = {
+  passed: 'PASS',
+  failed: 'FAIL',
+  'not-scored': 'NOT SCORED',
+};
+
+/**
+ * 0 only when no question failed and at least one passed (R110): a
+ * judge-only question left unscored is a gap that does not fail the run, and
+ * a run with nothing scored does not pass.
+ */
+function cliExitCode(results: AssistantEvalCaseResult[]): number {
+  const failed = results.some((result) => result.status === 'failed');
+  const passed = results.some((result) => result.status === 'passed');
+  return !failed && passed ? 0 : 1;
 }
 
 main().catch((err) => {

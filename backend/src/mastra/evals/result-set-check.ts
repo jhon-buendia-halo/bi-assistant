@@ -5,14 +5,15 @@
 // nothing here does, so a spec file can exercise this logic directly without
 // the ESM-only transitive deps that break under CommonJS Jest (same reason
 // `agent-constants.ts` and `context-blocks.ts` stay dependency-free). The one
-// type it borrows from `assistant.evals.ts` (`EvalCheckResult`) is imported
+// type it borrows from `assistant.evals.ts` (`ScoredCheckResult`) is imported
 // with `import type`, which TypeScript erases entirely, so it adds no runtime
 // edge back to that heavier module.
 import { compareResults } from '../../modules/sessions/result-compare';
 import { getDatasetToolServices } from '../tool-services';
 import type { DatasetSnapshot } from '../tool-services';
 import type { ToolDataRecord } from '../../modules/sessions/entities/session.entity';
-import type { EvalCheckResult } from './assistant.evals';
+import type { ScoredCheckResult } from './assistant.evals';
+import { catalogOfEntities, referenceInCatalog } from './databricks-catalog';
 
 export interface ResultSetCheckOptions {
   /** For questions about distinct facts, repeated identical facts are harmless. */
@@ -124,6 +125,11 @@ export function lastSuccessfulSqlRecord(
  * One complete result must match all reference facts (extra columns are fine).
  * Rows from different queries are never combined, nor are extra rows ignored.
  *
+ * On a Databricks datasource the reference is a Databricks set's (the
+ * preflight binds a Databricks set to a Databricks datasource and no other,
+ * R141), so it runs in the catalog of the selected datasets' entities
+ * rather than the canonical `evals` (R148); other references run as written.
+ *
  * Returns `undefined` when the case has no `expectedSql` — callers should
  * skip adding a check in that case rather than reporting a vacuous pass.
  */
@@ -133,7 +139,7 @@ export async function runResultSetCheck(
   datasetSnapshots: DatasetSnapshot[],
   turnRecords: ToolDataRecord[],
   options: ResultSetCheckOptions = {},
-): Promise<EvalCheckResult | undefined> {
+): Promise<ScoredCheckResult | undefined> {
   if (!expectedSql) return undefined;
   const description =
     'Result set matches expectedSql (primary correctness signal)';
@@ -163,7 +169,19 @@ export async function runResultSetCheck(
   }
 
   try {
-    const expectedRows = await runReferenceSql(expectedSql, (sql, limit) =>
+    const selected = datasetSnapshots.filter((snapshot) =>
+      datasets.includes(snapshot.name),
+    );
+    const onDatabricks =
+      selected.length > 0 &&
+      selected.every((snapshot) => snapshot.datasourceKind === 'databricks');
+    const reference = onDatabricks
+      ? referenceInCatalog(
+          expectedSql,
+          catalogOfEntities(selected.flatMap((snapshot) => snapshot.tables)),
+        )
+      : expectedSql;
+    const expectedRows = await runReferenceSql(reference, (sql, limit) =>
       getDatasetToolServices().runReadOnlySql(
         datasourceId,
         sql,
@@ -179,9 +197,14 @@ export async function runResultSetCheck(
     );
     let reason = '';
     for (const candidate of candidates) {
+      // Rows clipped in storage (`rowCount` > rows kept) are not the rows
+      // the assistant saw, so they cannot be compared. A result `truncated`
+      // only because it reached the query's own row limit holds every row
+      // the assistant saw: it is compared like any other, so it matches only
+      // when it carries every reference fact and no other row (R31; the
+      // baseline's `limit: 1` champion answer was a false negative).
       if (
         !Array.isArray(candidate.rows) ||
-        candidate.truncated ||
         (candidate.rowCount !== undefined &&
           candidate.rowCount !== candidate.rows.length)
       ) {
@@ -197,7 +220,9 @@ export async function runResultSetCheck(
           passed: true,
         };
       }
-      reason = comparison.reason;
+      reason = candidate.truncated
+        ? `the result reached its row limit (${candidate.rows.length} rows) and ${comparison.reason}`
+        : comparison.reason;
     }
     return {
       id: RESULT_SET_CHECK_ID,

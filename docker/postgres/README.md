@@ -47,3 +47,13 @@ docker compose up -d postgres
 ```
 
 Set `WORLD_CUP_DB_PORT` before starting Compose if port 55432 is already in use.
+
+## Synthetic domain generators
+
+`generate/` holds the seeded generators of the synthetic eval domains (finance,
+health insurance, genomics, supply chain, marketing analytics). They do not
+write into `init/`: each domain gets its own database, loaded from Settings →
+Testing Data, so the generators write the app's bundled seeds in
+`backend/src/modules/testing-data/fixtures/`. Regenerate one with
+`cd backend && npm run fixtures:<domain>`. How a domain is built and where its
+files live: `docs/evals/domains/README.md`.

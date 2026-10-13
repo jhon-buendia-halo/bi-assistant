@@ -14,6 +14,7 @@ import type { DatasetEntitySnapshot } from '../datasets/repositories/datasets.re
 import type { LoadTestingDataDto } from './dto/testing-data.dto';
 import {
   SAMPLE_FIXTURES,
+  databricksSource,
   findFixture,
   requiredEntityKeys,
   type SampleFixture,
@@ -141,7 +142,11 @@ export class TestingDataService {
         continue;
       }
       // `list()` hands back the masked view, so no password can leak from here.
-      const connection = connectionView(datasource.config);
+      // Only a PostgreSQL datasource has a host:port/database to show.
+      const connection =
+        datasource.kind === 'postgres'
+          ? connectionView(datasource.config)
+          : undefined;
       datasets ??= await this.datasets.list();
       const dataset = datasets.find(
         (candidate) => candidate.name === fixture.datasetName,
@@ -197,6 +202,18 @@ export class TestingDataService {
         message:
           `The ${fixture.name} sample is registered for evals only — create its ` +
           'datasource with scripts/setup-worldcup-rest.ts instead of loading it here.',
+      };
+    }
+    if (fixture.datasourceKind === 'databricks') {
+      // The panel is a PostgreSQL client; a Databricks sample is loaded into
+      // Unity Catalog and registered by its own script (testing-data R22).
+      const source = databricksSource(fixture)?.id ?? fixture.id;
+      return {
+        ok: false,
+        message:
+          `The ${fixture.name} sample is registered for evals only — load it into ` +
+          `Databricks and register it with scripts/setup-fixture-databricks.ts --fixture ${source} ` +
+          'instead of loading it here (runbook: docs/evals/databricks-vdi.md).',
       };
     }
     const parsed = parseConnection(input);

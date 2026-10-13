@@ -84,7 +84,7 @@ Persistence in one line: SQLite documents (better-sqlite3) for app data, LibSQL 
 frontend/   Angular app (Electron renderer) + Electron main process (electron/main.cjs, preload.cjs)
 backend/    NestJS API, Mastra agents, the CLI (npm package source)
 site/       Static product page and download routes (Cloudflare Pages), see delivery.md
-docker/     World Cup sample Postgres init scripts
+docker/     World Cup sample Postgres init scripts (postgres/init/) and the synthetic domain generators (postgres/generate/)
 .github/    version-on-merge, build-desktop, publish-npm workflows
 specs/      this specification
 ```
@@ -205,6 +205,29 @@ Playwright specifics:
 - Before the suite runs, `npm run test:e2e:prepare` compiles the e2e TypeScript and runs the backend's `build:all` (backend plus web UI in `backend/public/`). `test:e2e:prepare:desktop` builds the backend and the Angular app with `--base-href ./` instead. Either way the tests run the *built* app, not the dev server.
 
 Other test-adjacent tooling in `backend/`: a live answer-quality gate that costs real model calls (`npm run check:answers`), the assistant eval CLI (`npm run evals:assistant`), the eval-set validator that runs every reference query with no model call (`npm run eval:validate`), and a World Cup REST API fixture for the REST connector. All are documented in [delivery.md](delivery.md).
+
+Sample fixture data (BA-185; files and formats in [data-model.md](data-model.md) 4.9):
+
+```
+docker/postgres/generate/
+├── lib/rng.ts               the seeded random source and SQL literal helpers every generator uses
+└── <domain>.ts              one generator per synthetic domain: writes the seed SQL (and facts.json)
+backend/src/modules/testing-data/fixtures/
+└── NNN_<schema>.sql[.gz]    the bundled seeds, next to registry.ts (copied into dist)
+backend/src/modules/testing-data/databricks/
+├── fixture-load.ts          dump to Databricks statements: type mapping, batching, row-count check (BA-186)
+└── register.ts              registers a loaded Databricks sample in a running backend
+backend/scripts/
+├── dump-fixture.ts          npm run fixture:dump: a loaded sample to gzipped JSON
+├── setup-fixture-databricks.ts  npm run fixture:databricks: load a dump into a warehouse and register it (BA-186)
+├── setup-fixture-rest.ts    npm run fixture:rest:setup: register a REST variant of a sample (BA-187)
+├── worldcup-rest-api/       the fixture REST API: serve.ts over rest-fixture.ts, with its switches (BA-187)
+└── fixtures/<id>/
+    ├── facts.json           a domain's planted truths
+    └── data/                its dump: <relation>.json.gz and _meta.json
+```
+
+The generators sit outside `backend/` and run with the backend's `ts-node` (`npm run fixtures:<domain>`); they are not part of the build or the package.
 
 ## To rebuild on another stack
 

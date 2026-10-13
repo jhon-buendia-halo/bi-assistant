@@ -113,3 +113,102 @@ describe('eval regression baseline scope', () => {
     });
   });
 });
+
+describe('runs saved before BA-184 are read with defaults (R100, R103, R104)', () => {
+  const old = {
+    jobId: 'old',
+    agentKey: 'assistant',
+    datasourceId: 'wc',
+    datasets: ['World Cup'],
+    caseIds: ['champion-2022', 'out-of-scope'],
+    status: 'completed',
+    totalCases: 2,
+    startedAt: '2026-10-01T00:00:00.000Z',
+    results: [
+      {
+        id: 'champion-2022',
+        question: 'Who won the 2022 World Cup?',
+        scores: {},
+        checkResults: [
+          { id: 'check-includes', description: 'd', score: 1, passed: true },
+        ],
+        answer: 'Argentina',
+        toolCalls: [],
+        passed: true,
+        durationMs: 1,
+      },
+      {
+        id: 'out-of-scope',
+        question: 'How many goals did Pelé score in 1970?',
+        scores: {},
+        checkResults: [
+          { id: 'llm-judge', description: 'j', score: 0, passed: false },
+        ],
+        answer: '',
+        toolCalls: [],
+        passed: false,
+        durationMs: 1,
+      },
+    ],
+  };
+
+  it('fills the judge option, the statuses and the summary on get and list', async () => {
+    const store = {
+      find: jest.fn().mockResolvedValue([old]),
+      findOne: jest.fn().mockResolvedValue(old),
+    } as unknown as DocStore<EvalRunView>;
+    const repository = new EvalRunsRepository(store);
+    for (const run of [
+      await repository.get('old'),
+      (await repository.list('assistant'))[0],
+    ]) {
+      expect(run?.judge).toEqual({ mode: 'on' });
+      expect(run?.results.map((result) => result.status)).toEqual([
+        'passed',
+        'failed',
+      ]);
+      expect(run?.results[1].checkResults[0].status).toBe('failed');
+      expect(run?.summary).toEqual({
+        passed: 1,
+        failed: 1,
+        notScored: 0,
+        byCategory: [
+          {
+            category: 'uncategorised',
+            passed: 1,
+            failed: 1,
+            notScored: 0,
+            total: 2,
+          },
+        ],
+        byCriterion: [],
+      });
+    }
+  });
+
+  it('keeps a stored judge option and returns null for a missing run', async () => {
+    const repository = new EvalRunsRepository({
+      findOne: jest
+        .fn()
+        .mockResolvedValueOnce({ ...old, judge: { mode: 'off' } })
+        .mockResolvedValueOnce(null),
+    } as unknown as DocStore<EvalRunView>);
+    expect((await repository.get('old'))?.judge).toEqual({ mode: 'off' });
+    expect(await repository.get('missing')).toBeNull();
+  });
+
+  it('gives the regression baseline its statuses too', async () => {
+    const repository = new EvalRunsRepository(storeOf([old]));
+    const baseline = await repository.mostRecentCompleted(
+      'assistant',
+      'current',
+      'wc',
+      ['World Cup'],
+      ['champion-2022'],
+    );
+    expect(baseline?.results.map((result) => result.status)).toEqual([
+      'passed',
+      'failed',
+    ]);
+  });
+});

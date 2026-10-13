@@ -2,7 +2,30 @@
 // the service only needs `listAgents()`, which the test passes in.
 jest.mock('../../mastra/mastra.service', () => ({ MastraService: class {} }));
 jest.mock('../../mastra/evals/assistant.evals', () => ({
-  ASSISTANT_EVAL_SETS: [],
+  ASSISTANT_EVAL_SETS: [
+    {
+      id: 'world-cup',
+      name: 'World Cup',
+      description: 'The World Cup sample',
+      fixtureId: 'world-cup',
+      cases: [
+        {
+          id: 'champion-2022',
+          question: 'Who won the 2022 World Cup?',
+          intent: 'Single-hop lookup',
+          category: 'lookup',
+          split: 'dev',
+          scorers: [
+            {
+              id: 'check-includes',
+              name: 'Includes',
+              description: 'Checks if output includes "Argentina"',
+            },
+          ],
+        },
+      ],
+    },
+  ],
 }));
 
 import BetterSqlite3 from 'better-sqlite3';
@@ -197,6 +220,33 @@ describe('AgentsService (built-in and user agents)', () => {
     await expect(ctx.service.delete('sql-fixer')).rejects.toThrow(
       "Built-in agents can't be deleted",
     );
+  });
+
+  it('lists the eval questions with their category and split (R106)', () => {
+    expect(ctx.service.evalSets('assistant')).toEqual([
+      {
+        id: 'world-cup',
+        name: 'World Cup',
+        description: 'The World Cup sample',
+        cases: [
+          {
+            id: 'champion-2022',
+            question: 'Who won the 2022 World Cup?',
+            intent: 'Single-hop lookup',
+            category: 'lookup',
+            split: 'dev',
+            checks: [
+              {
+                id: 'check-includes',
+                name: 'Includes',
+                description: 'Checks if output includes "Argentina"',
+              },
+            ],
+          },
+        ],
+      },
+    ]);
+    expect(ctx.service.evalSets('sql-fixer')).toEqual([]);
   });
 
   it(

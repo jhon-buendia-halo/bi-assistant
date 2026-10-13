@@ -14,6 +14,28 @@ Entry template:
 
 ---
 
+## 2026-10-13 — 1.1.5 to 1.1.9 Checks, report and judge, domains, Databricks and REST (BA-183 to BA-187)
+
+### What went well
+- Six agents worked in parallel in one worktree, each owning a list of files and a range of rule numbers (R68-R89, R90-R99, R100-R119, R120-R139, R140-R159, R160-R169). No two agents overwrote each other, and the shared files (`registry.ts`, `eval-sets.ts`, order-list tests) took minimal insertions only.
+- Splitting Steps 2 and 3 by file rather than by step (REST server, Databricks loader, one agent for every dialect reference) meant only one agent ever edited a set file.
+- Every SQLite reference was checked against PostgreSQL rows (117 of 117 equal). Every Databricks reference passed static checks and a DuckDB proxy run, so the VDI run starts from references that are already very likely right.
+- Asking for the catalog to be a parameter before the VDI run removed the most likely way the first Databricks run would have failed (a workspace without an `evals` catalog).
+- The real runs used two personas in parallel. Six sets of 10 to 68 questions finished in 40 minutes.
+
+### What went wrong
+- Stories that ran in parallel on shared files can't be split into one commit per story without rewriting hunks, so 1.1.5 to 1.1.9 land in one commit.
+- The E2E list of sets changed four times (4, 9, 16, 18) as agents added variants. Each agent edited the Gherkin, and the Playwright list waited for me.
+- The REST agent found that its references needed a sample (`world-cup-rest-connector`) that wasn't in the plan, because a Step 1b guard test failed. That was the right call, but the contract hadn't foreseen it.
+- I wrote two durations into the report page before reading them (50 and 40 seconds against the real 48 and 39). I caught it before publishing the final version.
+- The plan estimated about 20 minutes per run. With the judge off, runs took 8 to 17 minutes for 10 to 68 questions.
+
+### What to do differently
+- When parallel agents share a file that lists items (sets, fixtures), give one agent ownership of the list and have the others report their ids, rather than each editing the list.
+- For parallel stories on one branch, either sequence the stories that share files, or accept one commit and say so in the PR. Decide before dispatching, not at commit time.
+- Read every number for a report from the run records with a script; never type one from memory, even a rough one.
+- A question's done-when that needs a model run should name the persona and the data directory, so parallel runs can be planned up front.
+
 ## 2026-10-13 — 1.1.2 baseline and 1.1.4 One format and a validator (BA-127, BA-182)
 
 ### What went well

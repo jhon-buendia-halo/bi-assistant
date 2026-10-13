@@ -21,22 +21,57 @@
           "type": "includes",
           "args": {
             "text": "Verstappen"
-          }
+          },
+          "criterion": "G1"
         },
         {
           "type": "matches",
           "args": {
             "pattern": "575"
-          }
+          },
+          "criterion": "G1"
         },
         {
           "type": "calledTool",
           "args": {
             "tool": "run_readonly_sql"
-          }
+          },
+          "criterion": "D1"
         },
         {
-          "type": "noToolErrors"
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "args": {
+            "ignore": ["Formula 1"]
+          },
+          "criterion": "G1"
         }
       ],
       "expectedSql": {
@@ -53,22 +88,61 @@
           "type": "includes",
           "args": {
             "text": "Silverstone"
-          }
+          },
+          "criterion": "G1"
         },
         {
           "type": "matches",
           "args": {
             "pattern": "\\b52\\b"
-          }
+          },
+          "criterion": "G1"
         },
         {
           "type": "calledTool",
           "args": {
             "tool": "run_readonly_sql"
-          }
+          },
+          "criterion": "D1"
         },
         {
-          "type": "noToolErrors"
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "args": {
+            "ignore": ["Formula 1"]
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "usesEntities",
+          "criterion": "D2"
         }
       ],
       "expectedSql": {
@@ -85,22 +159,57 @@
           "type": "includes",
           "args": {
             "text": "Hamilton"
-          }
+          },
+          "criterion": "G1"
         },
         {
           "type": "matches",
           "args": {
             "pattern": "\\b106\\b"
-          }
+          },
+          "criterion": "G1"
         },
         {
           "type": "calledTool",
           "args": {
             "tool": "run_readonly_sql"
-          }
+          },
+          "criterion": "D1"
         },
         {
-          "type": "noToolErrors"
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "args": {
+            "ignore": ["Formula 1"]
+          },
+          "criterion": "G1"
         }
       ],
       "expectedSql": {
@@ -118,23 +227,58 @@
           "type": "includes",
           "args": {
             "text": "Schumacher"
-          }
+          },
+          "criterion": "G1"
         },
         {
           "type": "matches",
           "args": {
             "pattern": "Hamilton",
             "flags": "i"
-          }
+          },
+          "criterion": "G1"
         },
         {
           "type": "calledTool",
           "args": {
             "tool": "run_readonly_sql"
-          }
+          },
+          "criterion": "D1"
         },
         {
-          "type": "noToolErrors"
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "args": {
+            "ignore": ["Formula 1"]
+          },
+          "criterion": "G1"
         }
       ],
       "expectedSql": {
@@ -151,23 +295,66 @@
           "type": "includes",
           "args": {
             "text": "Leclerc"
-          }
+          },
+          "criterion": "G1"
         },
         {
           "type": "matches",
           "args": {
             "pattern": "Piastri",
             "flags": "i"
-          }
+          },
+          "criterion": "G1"
         },
         {
           "type": "calledTool",
           "args": {
             "tool": "run_readonly_sql"
-          }
+          },
+          "criterion": "D1"
         },
         {
-          "type": "noToolErrors"
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "args": {
+            "ignore": ["Formula 1"]
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "sqlMatches",
+          "args": {
+            "pattern": "position",
+            "flags": "i"
+          },
+          "criterion": "D2"
         }
       ],
       "expectedSql": {
@@ -184,22 +371,34 @@
           "type": "calledTool",
           "args": {
             "tool": "list_entities"
-          }
+          },
+          "criterion": "D2"
         },
         {
           "type": "includes",
           "args": {
             "text": "driver"
-          }
+          },
+          "criterion": "G1"
         },
         {
           "type": "didNotCall",
           "args": {
             "tool": "run_readonly_sql"
-          }
+          },
+          "criterion": "I4"
         },
         {
-          "type": "noToolErrors"
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
         }
       ]
     },
@@ -213,16 +412,27 @@
           "type": "calledTool",
           "args": {
             "tool": "ask_clarification"
-          }
+          },
+          "criterion": "D5"
         },
         {
           "type": "didNotCall",
           "args": {
             "tool": "run_readonly_sql"
-          }
+          },
+          "criterion": "D5"
         },
         {
-          "type": "noToolErrors"
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "optionCount",
+          "criterion": "I5"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
         }
       ],
       "judgeRubric": "The question (\"Which driver was the most dominant?\") is ambiguous on both the metric (race wins? championships? pole positions? points? win rate?) and the scope (this dataset covers every season from 1950 to 2026, so \"dominant\" could mean a single season, an era, or a whole career). Score pass=true only if the final answer is itself a clarifying question — not an attempt to answer with data — that offers 2-4 concrete, well-formed options grounded in this Formula 1 dataset (e.g. naming an actual metric such as race wins, championships won, pole positions or points, or an actual season or era in the data such as 2023 or the 2010s), and that does not state any driver as the answer or quote any figures as if they were the answer. Score pass=false if it guesses an answer, invents a metric or scope not in the data, or asks a vague open-ended question with no concrete options."
@@ -238,17 +448,51 @@
           "type": "calledTool",
           "args": {
             "tool": "run_readonly_sql"
-          }
+          },
+          "criterion": "D1"
         },
         {
           "type": "matches",
           "args": {
             "pattern": "\\b(pole|grid)\\b",
             "flags": "i"
-          }
+          },
+          "criterion": "G3"
         },
         {
-          "type": "noToolErrors"
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "args": {
+            "ignore": ["Formula 1"]
+          },
+          "criterion": "G1"
         }
       ],
       "judgeRubric": "The question asks whether, in the 2023 Formula 1 season, the driver who started on pole usually won the race. In this dataset the answer is YES: of the 22 races in 2023, the pole-sitter won 14 and failed to win 8 (about 64%). Both readings of \"pole\" — the pole_position flag and grid position 1 — give the same 14 of 22. Score pass=true only if the final answer concludes that the pole-sitter DID usually win, and backs it with counts or percentages consistent with 14 of 22 wins (equivalently 8 non-wins, or roughly 64%). Any query shape is acceptable — a per-race table, a grouped aggregate or a single pivoted row all count, as do minor rewordings and rounding (63%-64%). Score pass=false if it concludes the pole-sitter usually did not win, gives no counts at all, or states counts that contradict 14 of 22."
@@ -260,7 +504,62 @@
       "intent": "The fixture covers Formula 1 only — the agent must say so instead of fabricating a MotoGP result.",
       "checks": [
         {
-          "type": "noToolErrors"
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "args": {
+            "ignore": ["Formula 1"]
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "didNotCall",
+          "args": {
+            "tool": "create_visual"
+          },
+          "criterion": "G2"
+        },
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "Formula\\s*(?:1|One)|\\bF1\\b",
+            "flags": "i"
+          },
+          "criterion": "G2"
+        },
+        {
+          "type": "notMatches",
+          "args": {
+            "pattern": "Bagnaia|Quartararo|M[aá]rquez",
+            "flags": "i"
+          },
+          "criterion": "G2"
         }
       ],
       "judgeRubric": "The question asks about MotoGP, a motorcycle racing series this dataset does not contain — it holds Formula 1 world championship data only, for the seasons 1950 to 2026. Score pass=true only if the final answer clearly states it cannot answer the MotoGP question from this data AND explicitly states what the data DOES cover (Formula 1, and ideally its 1950-2026 season range or the kind of entities it holds such as drivers, constructors, races and standings), without naming a MotoGP champion or inventing any MotoGP fact. Score pass=false if it states or implies any 2023 MotoGP result, or fails to state what the data actually covers."
@@ -275,16 +574,57 @@
           "type": "toolOrder",
           "args": {
             "tools": ["run_readonly_sql", "create_visual"]
-          }
+          },
+          "criterion": "G4"
         },
         {
           "type": "calledTool",
           "args": {
             "tool": "create_visual"
-          }
+          },
+          "criterion": "G4"
         },
         {
-          "type": "noToolErrors"
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "args": {
+            "ignore": ["Formula 1"]
+          },
+          "criterion": "G1"
+        },
+        {
+          "type": "visualKeywords",
+          "args": {
+            "keywords": ["point", "constructor", "2023"]
+          },
+          "criterion": "G4"
         }
       ],
       "judgeRubric": "The user asked for a chart of the total points scored by each constructor in the 2023 Formula 1 season (ten constructors scored, from Red Bull on 860 down to Haas on 12). Score pass=true only if a create_visual (or update_visual) tool call succeeded and its title/description plausibly describes a chart of points per constructor for the 2023 season (not an unrelated metric, an unrelated season, or drivers instead of constructors). Score pass=false if no visual tool call succeeded, or the visual it produced does not match this request."

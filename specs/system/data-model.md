@@ -387,11 +387,15 @@ Persisted record of an eval run (the assistant's regression suite). Rewritten wh
 | `startedAt` | ISO | yes | Sort key (desc) for listings. |
 | `finishedAt` | ISO | no | Set when the run ends. |
 | `comparison` | `EvalRegressionSummary` | no | Set when a run completes and a previous completed run with the same agent, `datasourceId` and the same set of datasets (order-insensitive) exists. Absent on older records and when no comparable run exists. |
+| `judge` | `{ mode: 'off' \| 'on' \| 'categories'; categories?: string[] }` | no | The run's judge option ([agents-evals](../capabilities/agents-evals/spec.md) R100); `categories` only with mode `categories`, in category-list order. Written on every run since BA-184; absent on older records, which read as `{ mode: 'on' }`. |
+| `summary` | `EvalRunSummary` | no | The counts of the finished results (R104), rewritten with the run after every question. Written since BA-184; recomputed from `results` whenever a run is read, so older records get one too. |
 | `ownerId` | string | no | The owning user's id in org server mode; absent in local mode (section 3.15). |
 | `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
 
-`AssistantEvalCaseResult`: `id` (string, case id), `question` (string), `scores` (map<string, number 0..1>, per scorer id; empty when the run threw), `checkResults` (`EvalCheckResult[]`), `answer` (string), `toolCalls` (`EvalToolCall[]`), `passed` (boolean; every scorer scored 1), `error` (string, no; agent run failure), `durationMs` (number).
-`EvalCheckResult`: `id`, `description` (string), `score` (number), `passed` (boolean), `reason` (string, no).
+`AssistantEvalCaseResult`: `id` (string, case id), `question` (string), `category` (string, no; the case's category, section 4.8; absent before BA-184), `scores` (map<string, number 0..1>, per scorer id; empty when the run threw), `checkResults` (`EvalCheckResult[]`), `answer` (string), `toolCalls` (`EvalToolCall[]`), `status` (`passed` \| `failed` \| `not-scored`; R103; absent before BA-184), `passed` (boolean; `status` is `passed`, which before BA-184 meant every scorer scored 1), `error` (string, no; agent run failure), `durationMs` (number).
+`EvalCheckResult`: `id`, `description` (string), `score` (number), `passed` (boolean), `reason` (string, no), `status` (`passed` \| `failed` \| `not-scored`; R102; absent before BA-184), `criterion` (string, no; a criterion id of section 4.8, R102).
+`EvalRunSummary`: `passed`, `failed`, `notScored` (numbers of questions); `byCategory` (`{ category, passed, failed, notScored, total }[]`, category-list order, then others, `uncategorised` last); `byCriterion` (`{ criterion, passed, failed, total }[]`, D, G, I, C order, counting scored checks with a criterion). Rules: R104.
+**Read-time defaults, no migration (BA-184).** A record saved before BA-184 is not rewritten. When read, a missing `judge` is `{ mode: 'on' }`; a result or check without `status` takes `passed` when its `passed` flag is true, else `failed`; a result without `category` counts under `uncategorised`; and `summary` is computed from `results`. The next save of a running run writes the new fields.
 `EvalToolCall`: `name` (string), `input`, `output` (strings, no; JSON-encoded, each truncated to 2000 chars with a trailing `… (truncated)`), `error` (string, no).
 `EvalRegressionSummary`: `previousRunId` (string), `regressions`, `improvements`, `unchanged` (each `{id: string, question: string}[]`); cases present in only one of the two runs are skipped; regression = passed before, fails now; improvement = the reverse.
 
@@ -623,7 +627,7 @@ Rules: [../capabilities/admin/spec.md](../capabilities/admin/spec.md) R28-R33. S
 
 ## 4. Files on disk
 
-Sections 4.1 to 4.7 are files the app writes; 4.8 is a bundled, read-only asset that ships with the backend. All paths in 4.1 to 4.7 are relative to `<app data dir>/workspaces/session-<session-id>/` (the **session workspace**), a contained filesystem root: agents' file tools cannot escape it and the file-delete tool is disabled for them (they may create and edit). The session id used in a directory name must match `^[a-zA-Z0-9_-]+$` (otherwise the operation fails with `Invalid session workspace ID`).
+Sections 4.1 to 4.7 are files the app writes; 4.8 is a bundled, read-only asset that ships with the backend; 4.9 is the sample fixture data, of which only the seed SQL ships. All paths in 4.1 to 4.7 are relative to `<app data dir>/workspaces/session-<session-id>/` (the **session workspace**), a contained filesystem root: agents' file tools cannot escape it and the file-delete tool is disabled for them (they may create and edit). The session id used in a directory name must match `^[a-zA-Z0-9_-]+$` (otherwise the operation fails with `Invalid session workspace ID`).
 
 ### 4.1 Workspace layout
 
@@ -750,7 +754,7 @@ Visuals created before versioning keep their **v1 files directly under `visuals/
 
 ### 4.8 Eval question bank files (bundled, read-only)
 
-The assistant's eval sets are data files that ship with the backend, not files in the app data directory: the app reads them at startup and never writes them. One JSON file per question bank in `backend/src/mastra/evals/sets/`, copied into `dist` next to the compiled loader ([delivery.md](delivery.md)). Today, in this order, which is the order of the sets in the Evals tab: `world-cup.json`, `formula-1.json` and `world-cup-golden.json`. Rules (variant expansion, the loader's refusals, the golden set, the validator): [agents-evals](../capabilities/agents-evals/spec.md) R63-R67; how a case is scored: [agents.md](agents.md) section 8; decision: ADR-0015 in [architecture.md](architecture.md). The questions themselves are a data asset copied verbatim on rebuild (*Data assets* in [../README.md](../README.md)).
+The assistant's eval sets are data files that ship with the backend, not files in the app data directory: the app reads them at startup and never writes them. One JSON file per question bank in `backend/src/mastra/evals/sets/`, copied into `dist` next to the compiled loader ([delivery.md](delivery.md)). Today, in this order, which is the order of the sets in the Evals tab: `world-cup.json`, `formula-1.json`, `world-cup-golden.json`, `world-cup-rest-connector.json` (REST-only, BA-187), `world-cup-databricks-only.json` (Databricks-only, BA-186), then the synthetic domains of BA-185, `finance.json`, `health-insurance.json`, `genomics.json`, `supply-chain.json` and `marketing-analytics.json`. The samples those sets question, their generators, planted facts and JSON dumps: section 4.9. Rules (variant expansion, the loader's refusals, the golden set, the validator, the domain sets' held-out split): [agents-evals](../capabilities/agents-evals/spec.md) R63-R67 and R90; the deterministic checks and their criteria: R68-R82; how a case is scored: [agents.md](agents.md) section 8; decision: ADR-0015 in [architecture.md](architecture.md). The questions themselves are a data asset copied verbatim on rebuild (*Data assets* in [../README.md](../README.md)).
 
 A file is `{ variants: Variant[], cases: Case[] }`, both non-empty. At every level (file, variant, case, check, `args`, `resultSetOptions`) a field not listed below is refused, and every string listed is non-empty. Variant and case ids are lowercase words joined by hyphens (`champion-2022`).
 
@@ -764,6 +768,8 @@ A file is `{ variants: Variant[], cases: Case[] }`, both non-empty. At every lev
 | `fixtureId` | string | yes | The sample fixture the set runs on: a `SampleFixture.id` in the fixture registry ([testing-data](../capabilities/testing-data/spec.md) R1). Its required entities drive the dataset preflight. |
 | `dialect` | `postgres` \| `sqlite` \| `databricks` | yes | Which of each case's reference queries the set uses. It must be the dialect of the fixture's datasource kind: `postgres` for PostgreSQL, `sqlite` for REST (the REST connector's engine, which reads endpoints as `api.<schema>.<table>`), `databricks` for Databricks (`<catalog>.<schema>.<table>`). |
 | `caseIdPrefix` | string | no | Put before every case id of the file to make the set's case ids: lowercase words each followed by a hyphen (`rest-`). Default `""`, which keeps the file's ids. |
+
+Variants of one bank are named by datasource kind ([agents-evals](../capabilities/agents-evals/spec.md) R163): the PostgreSQL variant takes the bank's id with no prefix, the REST variant `<bank>-rest` with the prefix `rest-` and the dialect `sqlite`, the Databricks variant `<bank>-databricks` with the prefix `dbx-` and the dialect `databricks`. How each dialect's reference names its tables (`api.<schema>.<table>`, `` `evals`.<schema>.<table> ``) and what it may not use: agents-evals R161 and R162.
 
 `Case`:
 
@@ -779,15 +785,53 @@ A file is `{ variants: Variant[], cases: Case[] }`, both non-empty. At every lev
 | `checks` | `Check[]` | yes | Non-empty. The scorer checks (below). Each check type at most once per case. |
 | `expectedSql` | `{ postgres?, sqlite?, databricks? }` (strings) | no | One reference query per dialect, at least one. When present it must hold a query for every dialect the file's variants use (agents-evals R64): a reference for every dialect or none. Absent: the case has no result-set match. |
 | `resultSetOptions` | `{ distinctRows?: boolean }` | no | `distinctRows`: compare at the reference grain, so repeated identical rows are harmless (agents-evals R31). |
-| `judgeRubric` | string | no | Rubric for the LLM judge (agents.md 2.6); absent: no judge check. |
+| `judgeRubric` | string | no | Rubric for the LLM judge (agents.md 2.6); absent: no judge check. The judge runs only when the run's judge option allows it, and its check is otherwise not scored; its criterion follows the case's category ([agents-evals](../capabilities/agents-evals/spec.md) R101, R102). |
 
 `Check` = `{ type, args?, criterion? }`:
 
-- `type`: the name of one of the check helpers the suite uses, `includes`, `matches`, `calledTool`, `didNotCall`, `toolOrder` or `noToolErrors` (what each asserts: [agents.md](agents.md) 8.1). Any other value is refused.
-- `args`, by type: `includes` `{ text }`; `matches` `{ pattern, flags? }`, a JavaScript regular expression source and its flags (no `g` or `y`, which make a match stateful; the pattern must compile); `calledTool` and `didNotCall` `{ tool }`; `toolOrder` `{ tools }`, the tool names in order (non-empty); `noToolErrors` none.
-- `criterion`: optional; the criterion of [the research's criteria list](../../docs/research/BA-9.md#25-the-criteria-list-for-this-app) that the check measures.
+- `type`: one of the check types in the table below. Any other value is refused.
+- `args`: as the table says for the type. A pattern (`matches`, `sqlMatches`, `notMatches`) is a JavaScript regular expression source with its `flags`: no `g` or `y`, which make a match stateful, and the pattern must compile. A list (`tools`, `nouns`, `ignore`, `keywords`, `entities`) is a non-empty array of non-empty strings. A type with no arguments takes no `args`, or an empty object.
+- `criterion`: optional; the id of the criterion the check measures, from [the research's criteria list](../../docs/research/BA-9.md#25-the-criteria-list-for-this-app): `D1` to `D6`, `G1` to `G4`, `I1` to `I7` or `C1` to `C4`. Any other value is refused. Absent: the type's default criterion below, or none.
 
-The result-set match and the LLM judge are not listed in `checks`: they follow from `expectedSql` and `judgeRubric`.
+| `type` | `args` | Scorer id | Default criterion | What it asserts |
+|---|---|---|---|---|
+| `includes` | `{ text }` | `check-includes` | none | [agents.md](agents.md) 8.1 |
+| `matches` | `{ pattern, flags? }` | `check-matches` | none | agents.md 8.1 |
+| `calledTool` | `{ tool }` | `check-called-tool` | none | agents.md 8.1 |
+| `didNotCall` | `{ tool }` | `check-did-not-call` | none | agents.md 8.1 |
+| `toolOrder` | `{ tools }`, in call order | `check-tool-order` | none | agents.md 8.1 |
+| `noToolErrors` | none | `check-no-tool-errors` | none | agents.md 8.1 |
+| `noRepairs` | none | `check-no-repairs` | D3 | [agents-evals](../capabilities/agents-evals/spec.md) R69 |
+| `namesNotIds` | `{ nouns? }`, the entity nouns (default `team`, `player`, `club`, `squad`, `driver`, `constructor`) | `check-names-not-ids` | I1 | agents-evals R70 |
+| `numbersGrounded` | `{ ignore? }`, phrases removed from the answer before its numbers are read | `check-numbers-grounded` | G1 | agents-evals R71 |
+| `rationaleOk` | none | `check-rationale-ok` | I3 | agents-evals R72 |
+| `noHtml` | none | `check-no-html` | I4 | agents-evals R73 |
+| `dialect` | none: the set's `dialect` | `check-dialect` | I6 | agents-evals R74 |
+| `qualifiedNames` | none: the set's `dialect` | `check-qualified-names` | I6 | agents-evals R75 |
+| `optionCount` | none | `check-option-count` | I5 | agents-evals R76 |
+| `visualKeywords` | `{ keywords }` | `check-visual-keywords` | G4 | agents-evals R77 |
+| `sqlMatches` | `{ pattern, flags? }` | `check-sql-matches` | none | agents-evals R78 |
+| `notMatches` | `{ pattern, flags?, in? }`, `in` = `answer` (default) or `sql` | `check-not-matches` | none | agents-evals R79 |
+| `usesEntities` | `{ entities? }`; absent: the tables the case's reference query reads, so the case then needs a reference | `check-uses-entities` | D2 | agents-evals R80 |
+
+The result-set match and the LLM judge are not listed in `checks`: they follow from `expectedSql` and `judgeRubric`. In a run's results the result-set match measures `D1`, and the judge the criterion of the case's category (R102).
+
+### 4.9 Sample fixture data: seeds, planted facts and dumps
+
+The data behind the sample fixtures of [testing-data](../capabilities/testing-data/spec.md) R2. The app reads only the seed SQL, and only when the Testing Data loader seeds a sample; everything else is repository tooling.
+
+| What | Where | Ships | Written by |
+|---|---|---|---|
+| Seed SQL | `backend/src/modules/testing-data/fixtures/`: `001_world_cup.sql` (27 KB), `002_formula_1.sql.gz` (5.2 MB), `003_health_insurance.sql` (464 KB), `004_genomics.sql` (405 KB), `005_supply_chain.sql` (572 KB), `006_finance.sql` (1.1 MB), `007_marketing_analytics.sql` (663 KB) | yes, copied into `dist` by the `nest-cli.json` asset rule `modules/testing-data/fixtures/**/*.sql*` ([delivery.md](delivery.md)) | World Cup by hand, Formula 1 by `pg_dump`, `003` to `007` by the generators below |
+| Generators | `docker/postgres/generate/<domain>.ts`, with the seeded random source `docker/postgres/generate/lib/rng.ts` | no | people; run with `npm run fixtures:<domain>` |
+| Planted facts | `backend/scripts/fixtures/<domain>/facts.json`, for the domains written for BA-9 (finance, marketing analytics) | no | the domain's generator, with its seed |
+| JSON dump | `backend/scripts/fixtures/<id>/data/<relation>.json.gz` and `_meta.json`, committed for finance and marketing analytics only | no | `npm run fixture:dump -- --fixture <id>` |
+
+**Seed SQL of a generated domain.** One transaction (`BEGIN` … `COMMIT`) that creates schema `<schema>`, sets the search path to it, creates every table with identity keys, indexes and the views, inserts every row, and comments the columns whose meaning is not obvious (a test flag, a unit, a lookalike column). A generator draws every value from one seeded random source and never reads the clock, so a run writes a byte-identical file; it asserts every planted trap and writes nothing when one drifts. Each domain gets its own database, so none of them is a compose init script. `003` to `005` are byte-identical to the init scripts of `feat/engine-eval-loop`; `006_finance.sql` keeps that branch's banking rows unchanged, drawn from the banking seed, and adds the wealth tables from a second seed.
+
+**Planted facts** (`facts.json`). A JSON object: `generator`, `seeds`, `asOf`, notes on the fiscal year and units, then the planted truths grouped by half of the domain and keyed by trap id (finance: `banking.B4_…` to `B11_…`, `wealth.W1_emptyMonth` to `W12_biggestClient`), each holding the value a reference query must return (amounts named `…Dollars` are in dollars, counts are plain numbers, names are strings). Agents-evals R90 checks references against it.
+
+**JSON dump.** One file per required table and view of the sample, `<relation>.json.gz`: a compact JSON array of row objects, gzipped, ordered by the primary key (by every column for a view). The gzip header carries no timestamp, so a re-dump of unchanged data differs only in `dumpedAt`. NUMERIC, BIGINT and FLOAT values are JSON numbers (a BIGINT beyond 2^53 fails the dump), dates are `YYYY-MM-DD`, timestamps ISO 8601 UTC. `_meta.json` stays plain JSON: `{ dumpedAt, source, fixture, schema, format: "json.gz", tables: { <relation>: <row count> }, columns: { <relation>: [{ name, type, nullable }] } }`, the fields of `backend/scripts/worldcup-rest-api/data/_meta.json` with the fixture, schema, format and column types added. The World Cup REST dump keeps its own format (plain, indented `<relation>.json`). The dump is the one source of the REST server and the Databricks loader of BA-9 Steps 2 and 3, so a sample's rows are identical on every datasource kind (ADR-0015 in [architecture.md](architecture.md)). Only the samples that run on every datasource kind have their dump committed: finance (0.44 MB) and marketing analytics (0.16 MB), decided 2026-10-13. The other domain samples are dumped on demand.
 
 ---
 
@@ -827,6 +871,8 @@ None for `agents`: it is a new collection, and the store creates the table on fi
 None for org server mode (BA-163): the seven identity and access collections are new, `ownerId` is absent on every document stored before it (in local mode until M13 gives those documents to Demo User, section 3.15).
 
 None for the admin screens (BA-164 to BA-167): they add `activity_events` types and derive every figure from existing fields (3.14.8). Ownership transfer rewrites `ownerId` and `pinned` on existing `agents` documents; no field is renamed.
+
+None for the eval run statuses and summary (BA-184): `eval_runs` gains `judge`, `summary`, and `category`, `status` and `criterion` on its results and checks; no field is renamed, and older records are read with the defaults of section 3.8 (like M10, a read-time tolerance, never a rewrite). Covered by `eval-runs.repository.spec.ts`.
 
 Tests: the table/field renames (M1-M3), M13 and M4/M5 are covered by `database.module.spec.ts` and the repository/workspace specs.
 

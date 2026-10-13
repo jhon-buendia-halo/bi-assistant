@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { MastraService } from '../../mastra/mastra.service';
 import { ASSISTANT_EVAL_SETS } from '../../mastra/evals/assistant.evals';
+import { UNCATEGORISED } from '../../mastra/evals/eval-summary';
 import {
   effectiveConfig,
   hasUnpublishedChanges,
@@ -72,6 +73,10 @@ export interface AgentEvalCase {
   question: string;
   /** What the question probes for. */
   intent: string;
+  /** The case's category, shown as a chip (agents-evals R106). */
+  category: string;
+  /** `dev`, or `held-out` for cases kept out of prompt tuning. */
+  split: string;
   checks: AgentEvalCheck[];
 }
 
@@ -239,6 +244,8 @@ export class AgentsService {
         id: evalCase.id,
         question: evalCase.question,
         intent: evalCase.intent,
+        category: evalCase.category ?? UNCATEGORISED,
+        split: evalCase.split ?? 'dev',
         checks: evalCase.scorers.map((scorer) => ({
           id: String(scorer.id ?? ''),
           name: String(scorer.name ?? ''),

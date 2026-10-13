@@ -4,6 +4,7 @@
  * LLM-free so it can be unit tested directly; `EvalRunsService` supplies the
  * two runs' results and persists the outcome on the newer run.
  */
+import type { EvalStatus } from '../../mastra/evals/eval-summary';
 
 /** Enough to point at the case from a report or the API — never the full
  * result (scores, tool calls, answer text), which lives on the run itself. */
@@ -33,12 +34,20 @@ export interface ComparableCaseResult {
   id: string;
   question: string;
   passed: boolean;
+  /** Absent on runs saved before BA-184, whose `passed` says it all. */
+  status?: EvalStatus;
+}
+
+function notScored(result: ComparableCaseResult): boolean {
+  return result.status === 'not-scored';
 }
 
 /**
  * Diff two runs' results by case id. Cases that exist in only one of the two
  * runs (the suite's case list changed between runs) are skipped — there is
- * nothing to compare them against.
+ * nothing to compare them against — and so are cases not scored in either
+ * run (agents-evals R40): a question the judge was off for is a gap, never a
+ * regression or an improvement.
  */
 export function computeRegressionDiff(
   previous: ComparableCaseResult[],
@@ -51,7 +60,7 @@ export function computeRegressionDiff(
 
   for (const result of current) {
     const before = previousById.get(result.id);
-    if (!before) continue;
+    if (!before || notScored(before) || notScored(result)) continue;
     const delta: EvalCaseDelta = { id: result.id, question: result.question };
     if (before.passed && !result.passed) regressions.push(delta);
     else if (!before.passed && result.passed) improvements.push(delta);

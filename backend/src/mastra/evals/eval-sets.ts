@@ -26,13 +26,29 @@
  *   key, so the reference reads `api.<schema>.<table>`, cannot use
  *   PostgreSQL-only syntax (`::` casts, `ILIKE`, `FILTER`) and cannot alias a
  *   table `match` (a SQLite operator keyword).
- * - `databricks` reads `<catalog>.<schema>.<table>` (no fixture yet).
+ * - `databricks` reads `<catalog>.<schema>.<table>`, written with the
+ *   canonical catalog backticked (`` `evals`.world_cup.matches ``); where it
+ *   runs, `databricks-catalog.ts` rewrites `` `evals`. `` to the selected
+ *   datasets' catalog (agents-evals R148).
  */
 import { SAMPLE_FIXTURES } from '../../modules/testing-data/fixtures/registry';
 import type { ResultSetCheckOptions } from './result-set-check';
+import {
+  DETERMINISTIC_CHECK_TYPES,
+  DETERMINISTIC_CHECKS,
+  isDeterministicCheckType,
+} from './checks';
+import type { DeterministicCheckSpec, DeterministicCheckType } from './checks';
 import worldCupSetFile from './sets/world-cup.json';
 import formula1SetFile from './sets/formula-1.json';
 import worldCupGoldenSetFile from './sets/world-cup-golden.json';
+import worldCupRestConnectorSetFile from './sets/world-cup-rest-connector.json';
+import worldCupDatabricksOnlySetFile from './sets/world-cup-databricks-only.json';
+import financeSetFile from './sets/finance.json';
+import healthInsuranceSetFile from './sets/health-insurance.json';
+import genomicsSetFile from './sets/genomics.json';
+import supplyChainSetFile from './sets/supply-chain.json';
+import marketingAnalyticsSetFile from './sets/marketing-analytics.json';
 
 /** The SQL dialects a reference query can be written in. */
 export const EVAL_DIALECTS = ['postgres', 'sqlite', 'databricks'] as const;
@@ -66,9 +82,40 @@ export const EVAL_SPLITS = ['dev', 'held-out'] as const;
 export type EvalSplit = (typeof EVAL_SPLITS)[number];
 
 /**
- * Check types, each mapped to the `@mastra/evals/checks` function of the same
- * name (see `eval-check-scorers.ts`), so scorer ids and descriptions are the
- * ones the Evals tab and stored runs already show.
+ * The ids of the BA-9 criteria list (research 2.5) a check may measure:
+ * domain, generation, instruction-following, cost and latency. J1 and J2
+ * grade the judge, never a question.
+ */
+export const EVAL_CRITERIA = [
+  'D1',
+  'D2',
+  'D3',
+  'D4',
+  'D5',
+  'D6',
+  'G1',
+  'G2',
+  'G3',
+  'G4',
+  'I1',
+  'I2',
+  'I3',
+  'I4',
+  'I5',
+  'I6',
+  'I7',
+  'C1',
+  'C2',
+  'C3',
+  'C4',
+] as const;
+export type EvalCriterion = (typeof EVAL_CRITERIA)[number];
+
+/**
+ * Check types: the six `@mastra/evals/checks` functions of the same name, so
+ * their scorer ids and descriptions are the ones the Evals tab and stored
+ * runs already show, then the deterministic checks of `./checks/`
+ * (agents-evals R68 to R80). `eval-check-scorers.ts` builds both.
  */
 export const EVAL_CHECK_TYPES = [
   'includes',
@@ -77,6 +124,7 @@ export const EVAL_CHECK_TYPES = [
   'didNotCall',
   'toolOrder',
   'noToolErrors',
+  ...DETERMINISTIC_CHECK_TYPES,
 ] as const;
 export type EvalCheckType = (typeof EVAL_CHECK_TYPES)[number];
 
@@ -88,7 +136,8 @@ export type EvalCheckSpec = (
   | { type: 'didNotCall'; args: { tool: string } }
   | { type: 'toolOrder'; args: { tools: string[] } }
   | { type: 'noToolErrors'; args?: Record<string, never> }
-) & { criterion?: string };
+  | DeterministicCheckSpec
+) & { criterion?: EvalCriterion };
 
 /** One variant of a set file: the set a run selects. */
 export interface EvalSetVariant {
@@ -142,12 +191,28 @@ export interface EvalSetFileSource {
 
 /**
  * Every set file, in the order the suite lists its sets: World Cup, World Cup
- * (REST API), Formula 1, then World Cup (golden set).
+ * (REST API), Formula 1, World Cup (golden set), World Cup (REST connector,
+ * BA-187), World Cup (Databricks only, BA-186), then the synthetic domains
+ * (BA-185): Finance, Health Insurance, Genomics, Supply Chain, Marketing
+ * Analytics.
  */
 export const EVAL_SET_FILES: readonly EvalSetFileSource[] = [
   { file: 'world-cup.json', content: worldCupSetFile },
   { file: 'formula-1.json', content: formula1SetFile },
   { file: 'world-cup-golden.json', content: worldCupGoldenSetFile },
+  {
+    file: 'world-cup-rest-connector.json',
+    content: worldCupRestConnectorSetFile,
+  },
+  {
+    file: 'world-cup-databricks-only.json',
+    content: worldCupDatabricksOnlySetFile,
+  },
+  { file: 'finance.json', content: financeSetFile },
+  { file: 'health-insurance.json', content: healthInsuranceSetFile },
+  { file: 'genomics.json', content: genomicsSetFile },
+  { file: 'supply-chain.json', content: supplyChainSetFile },
+  { file: 'marketing-analytics.json', content: marketingAnalyticsSetFile },
 ];
 
 const FILE_KEYS = ['variants', 'cases'];
@@ -177,7 +242,10 @@ const RESULT_SET_OPTION_KEYS = ['distinctRows'];
 
 /** Required and optional `args` per check type. */
 const CHECK_ARGS: Readonly<
-  Record<EvalCheckType, { required: string[]; optional: string[] }>
+  Record<
+    EvalCheckType,
+    { required: readonly string[]; optional: readonly string[] }
+  >
 > = {
   includes: { required: ['text'], optional: [] },
   matches: { required: ['pattern'], optional: ['flags'] },
@@ -185,6 +253,15 @@ const CHECK_ARGS: Readonly<
   didNotCall: { required: ['tool'], optional: [] },
   toolOrder: { required: ['tools'], optional: [] },
   noToolErrors: { required: [], optional: [] },
+  ...(Object.fromEntries(
+    DETERMINISTIC_CHECK_TYPES.map((type) => [
+      type,
+      DETERMINISTIC_CHECKS[type].args,
+    ]),
+  ) as Record<
+    DeterministicCheckType,
+    { required: readonly string[]; optional: readonly string[] }
+  >),
 };
 
 /**
@@ -490,6 +567,17 @@ function parseCase(
   const judgeRubric = optionalString(file, where, raw, 'judgeRubric');
   const checks = parseChecks(file, where, raw.checks);
   const expectedSql = parseExpectedSql(file, where, raw.expectedSql, dialects);
+  checks.forEach((check, index) => {
+    if (!isDeterministicCheckType(check.type)) return;
+    // `usesEntities` without entities reads them from the reference (R81).
+    const problem = DETERMINISTIC_CHECKS[check.type].validateCase?.(
+      (check.args ?? {}) as Json,
+      expectedSql,
+    );
+    if (problem) {
+      throw new EvalSetError(file, `${where}, check #${index + 1}`, problem);
+    }
+  });
   const resultSetOptions = parseResultSetOptions(
     file,
     where,
@@ -546,7 +634,24 @@ function parseChecks(
     }
     seen.add(type as string);
     const args = parseCheckArgs(file, at, type as EvalCheckType, check.args);
-    const criterion = optionalString(file, at, check, 'criterion');
+    const stated = optionalString(file, at, check, 'criterion');
+    if (
+      stated !== undefined &&
+      !EVAL_CRITERIA.includes(stated as EvalCriterion)
+    ) {
+      throw new EvalSetError(
+        file,
+        at,
+        `criterion "${stated}" is not one of ${oneOf(EVAL_CRITERIA)}`,
+      );
+    }
+    // A deterministic check measures its own criterion unless the file says
+    // otherwise (R81); the Mastra helpers have none.
+    const criterion =
+      stated ??
+      (isDeterministicCheckType(type)
+        ? DETERMINISTIC_CHECKS[type].criterion
+        : undefined);
     return {
       type,
       ...(args ? { args } : {}),
@@ -598,6 +703,10 @@ function parseCheckArgs(
         'args."tools" must be a non-empty array of tool names',
       );
     }
+  }
+  if (isDeterministicCheckType(type)) {
+    const problem = DETERMINISTIC_CHECKS[type].validateArgs?.(raw);
+    if (problem) throw new EvalSetError(file, at, problem);
   }
   if (type === 'matches') {
     const flags = raw.flags ?? '';

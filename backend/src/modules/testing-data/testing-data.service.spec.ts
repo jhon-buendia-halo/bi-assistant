@@ -210,6 +210,30 @@ describe('TestingDataService.load', () => {
     expect(datasets.save).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['world-cup-databricks', 'world-cup'],
+    ['finance-databricks', 'finance'],
+    ['marketing-analytics-databricks', 'marketing-analytics'],
+  ])(
+    'refuses the Databricks fixture %s, naming the loader and its sample, before touching anything',
+    async (id, source) => {
+      const { service, datasources, datasets } = build({});
+
+      const result = await service.load(id, DEFAULT_INPUT);
+
+      expect(result).toEqual({
+        ok: false,
+        message:
+          `The ${findFixture(id)?.name} sample is registered for evals only — load it into ` +
+          `Databricks and register it with scripts/setup-fixture-databricks.ts --fixture ${source} ` +
+          'instead of loading it here (runbook: docs/evals/databricks-vdi.md).',
+      });
+      expect(clients).toHaveLength(0);
+      expect(datasources.save).not.toHaveBeenCalled();
+      expect(datasets.save).not.toHaveBeenCalled();
+    },
+  );
+
   it('rejects a bad connection before touching the network', async () => {
     const { service, datasources, datasets } = build({});
 
@@ -540,6 +564,17 @@ describe('a register-only fixture (no bundled SQL)', () => {
       'world-cup',
       'formula-1',
       'world-cup-rest',
+      'finance',
+      'health-insurance',
+      'genomics',
+      'supply-chain',
+      'marketing-analytics',
+      'finance-rest',
+      'marketing-analytics-rest',
+      'world-cup-rest-connector',
+      'world-cup-databricks',
+      'finance-databricks',
+      'marketing-analytics-databricks',
       'register-only',
     ]);
     expect(viewOf(status, 'world-cup').seedable).toBe(true);
@@ -619,6 +654,41 @@ describe('TestingDataService.status', () => {
     });
     // Nothing is registered, so the datasets never need reading.
     expect(datasets.list).not.toHaveBeenCalled();
+  });
+
+  it('shows a registered Databricks sample as loaded, with no PostgreSQL connection', async () => {
+    const sample = findFixture('world-cup-databricks') as SampleFixture;
+    const { service } = build({
+      existing: [
+        {
+          id: 'dbx-1',
+          name: sample.datasourceName,
+          kind: 'databricks',
+          config: {
+            host: 'adb-1.azuredatabricks.net',
+            token: '********',
+            warehouseId: 'abc123',
+          },
+        },
+      ],
+      datasets: [
+        {
+          name: sample.datasetName,
+          tables: sample.requiredTables.map(
+            (table) => `evals.${sample.schema}.${table}`,
+          ),
+        },
+      ],
+    });
+
+    expect(viewOf(await service.status(), sample.id).status).toEqual({
+      loaded: true,
+      datasourceId: 'dbx-1',
+      datasourceName: 'World Cup Databricks',
+      datasetName: 'World Cup (Databricks)',
+      entityCount: 10,
+      requiredCount: 10,
+    });
   });
 
   it('is not loaded when the dataset is missing entities', async () => {

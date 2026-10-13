@@ -77,17 +77,73 @@ Electron loads the renderer from `file://`. An absolute base (`/`) would resolve
 | `start:web` | `node dist/cli.js` | Run the npm CLI from the working tree (needs `build:all` first). |
 | `format` | `prettier --write` on `src` and `test` | Format. |
 | `lint` | `eslint … --fix` | Lint **and auto-fix**; run it on specific files, not project-wide, because it reformats unrelated files. |
-| `test`, `test:watch`, `test:cov`, `test:debug` | Jest | Unit tests (`src/**/*.spec.ts`), watch, coverage, debugger. |
+| `test`, `test:watch`, `test:cov`, `test:debug` | Jest | Unit tests (`src/**/*.spec.ts`, and `scripts/**/*.spec.ts` since BA-187: Jest's `roots` take both), watch, coverage, debugger. |
 | `test:e2e` | `jest --config ./test/jest-e2e.json` | API-level e2e specs in `test/`; the live-data specs skip without the World Cup Postgres. |
 | `check:answers` | `ts-node scripts/check-answers.ts` | Opt-in live answer-quality gate over the World Cup fixture; costs real model calls and needs `OPENAI_API_KEY`. Tunable by `CHECK_TRIALS`, `CHECK_ARM`, `CHECK_MODEL`, `CHECK_TIMEOUT_MS`. |
-| `evals:assistant` | `nest build && node dist/mastra/evals/run-assistant-evals.js` | The assistant eval suite from the command line, same suite the Agents screen runs. Needs `EVAL_DATASETS` (comma-separated saved dataset names). `EVAL_SET` (a set id, such as `world-cup-golden`) runs that set only; without it the run is refused, as [agents-evals](../capabilities/agents-evals/spec.md) R67 explains. Costs model calls. |
+| `evals:assistant` | `nest build && node dist/mastra/evals/run-assistant-evals.js` | The assistant eval suite from the command line, same suite the Agents screen runs. Needs `EVAL_DATASETS` (comma-separated saved dataset names). `EVAL_SET` (a set id, such as `world-cup-golden`) runs that set only; without it the run is refused, as [agents-evals](../capabilities/agents-evals/spec.md) R67 explains. `EVAL_JUDGE` (`off` by default, `on` or `categories`, with `EVAL_JUDGE_CATEGORIES`) sets the judge option (R110); with it off, judge checks are not scored and cost nothing. Costs model calls. |
 | `eval:validate` | `nest build && node dist/mastra/evals/validate-eval-sets.js` | The eval-set validator: checks one set's reference queries on its datasource with no model call; what it runs, prints and exits with is [agents-evals](../capabilities/agents-evals/spec.md) R66. Needs `EVAL_DATASETS` (comma-separated saved dataset names) and `EVAL_SET` (the set id). Boots the backend without an HTTP port, like `evals:assistant`. Both rebuild `dist/` first (`nest build` clears it), so neither should run while the E2E suite or a long eval run uses that build. |
 | `worldcup:api:dump` | `ts-node scripts/worldcup-rest-api/dump.ts` | Snapshot the World Cup Postgres into JSON files for the test REST API (`WORLD_CUP_DB_*` env). |
-| `worldcup:api` | `ts-node scripts/worldcup-rest-api/serve.ts` | Zero-dependency REST + OpenAPI server over that snapshot on `127.0.0.1:55080` (`WORLD_CUP_API_PORT`), for exercising the REST connector. |
-| `worldcup:rest:setup` | `ts-node scripts/setup-worldcup-rest.ts` | Registers that API as a `rest` datasource and a dataset in a running backend through its HTTP API (`BACKEND_URL`, `WORLD_CUP_API_URL`); idempotent. |
+| `fixtures:<domain>` (`fixtures:finance`, `fixtures:health-insurance`, `fixtures:genomics`, `fixtures:supply-chain`, `fixtures:marketing-analytics`) | `ts-node ../docker/postgres/generate/<domain>.ts` | Regenerate a synthetic domain sample's seed SQL (and its planted facts, for the domains written for BA-9) from its fixed seed; byte-identical on every run, and it fails when a planted trap drifts. Files: [data-model.md](data-model.md) 4.9. |
+| `fixture:dump` | `ts-node scripts/dump-fixture.ts --fixture <id> [--database <db>] [--host …] [--port …] [--user …] [--password …]` | Export a loaded PostgreSQL sample to `scripts/fixtures/<id>/data/` (one gzipped compact JSON file, `<relation>.json.gz`, per required table and view, plus a plain `_meta.json`), the source of the REST server and the Databricks loader. Connects with the sample's default coordinates unless overridden. Format: [data-model.md](data-model.md) 4.9. |
+| `fixture:databricks` | `ts-node scripts/setup-fixture-databricks.ts --fixture <world-cup\|finance\|marketing-analytics> [--dry-run [--full]] [--no-register \| --register-only] [--batch-rows <n>]` | Load a sample's JSON dump into a Databricks Unity Catalog schema (`evals.<schema>` by default), check its row counts, and register its datasource and dataset in a running local-mode backend; what it runs and checks is [testing-data](../capabilities/testing-data/spec.md) R22 to R24. Environment: `DATABRICKS_HOST`; `DATABRICKS_HTTP_PATH` (the SQL warehouse's `/sql/1.0/warehouses/<id>`) or `DATABRICKS_WAREHOUSE_ID`; `DATABRICKS_TOKEN` (a token that can create schemas and tables in the catalog); `DATABRICKS_CATALOG` (default `evals`; any catalog works, since the references run in the dataset's catalog, [agents-evals](../capabilities/agents-evals/spec.md) R148); `DATABRICKS_SCHEMA` (default the sample's schema); `BACKEND_URL` (default `http://127.0.0.1:3000`); `BACKEND_USER` (the local persona it signs in as, default `local`). `--dry-run` needs none of them and connects to nothing. Idempotent. Run with a warehouse in the VDI: [docs/evals/databricks-vdi.md](../../docs/evals/databricks-vdi.md). |
+| `worldcup:api`, `finance:api`, `marketing-analytics:api` | `ts-node scripts/worldcup-rest-api/serve.ts [--fixture finance\|marketing-analytics]` | Zero-dependency REST + OpenAPI server over a sample's JSON dump, for exercising the REST connector: World Cup on `127.0.0.1:55080` (the snapshot above), finance on 55081 and marketing analytics on 55082 (their `fixture:dump` files). With no switch it answers as it always did; the switches are under *The fixture REST API* below. |
+| `worldcup:rest:setup` | `ts-node scripts/setup-worldcup-rest.ts` | `fixture:rest:setup` with its World Cup defaults, kept for existing docs (`WORLD_CUP_API_URL` still works). |
+| `fixture:rest:setup`, `finance:rest:setup`, `marketing-analytics:rest:setup` | `ts-node scripts/setup-fixture-rest.ts [--fixture <id>] [flags]` | Registers a running fixture REST API as a `rest` datasource and a dataset in a running backend through its HTTP API, signing in by itself in local mode; one datasource per server variant; idempotent. Flags under *The fixture REST API* below. |
 | `build:web` | `npm --prefix ../frontend run build:web && node scripts/copy-web.js` | Build the UI and copy it to `backend/public/` (gitignored). `copy-web.js` fails if the frontend build has no `index.html`. |
 | `build:all` | `build` then `build:web` | Everything the npm package needs. |
 | `prepack` | `build:all` | `npm pack` / `npm publish` always ship a fresh UI. |
+
+### The fixture REST API: switches, variants and setup
+
+Added 2026-10-13 (BA-187). `scripts/worldcup-rest-api/serve.ts` serves one sample's JSON dump under one set of switches per process: one process is one *variant*. Each switch is an environment variable or the flag of the same name (`REST_API_PAGING=cursor` or `--paging cursor`); a flag beats its variable, and a variable beats the profile. The logic and its unit tests: `scripts/worldcup-rest-api/rest-fixture.ts` and `rest-fixture.spec.ts`.
+
+| Variable / flag | Values (default) | What the server does |
+|---|---|---|
+| `REST_API_FIXTURE` / `--fixture` | `world-cup` (default), `finance`, `marketing-analytics` | Serves `scripts/worldcup-rest-api/data/*.json` or `scripts/fixtures/<id>/data/*.json.gz` ([data-model.md](data-model.md) 4.9). Endpoints are `/api/<schema>/<relation>` (schema `world_cup`, `finance` or `marketing_analytics`), tagged with the schema in the OpenAPI document, so the connector keys them `api.<schema>.<relation>`, the names the SQLite references read. |
+| `REST_API_PORT` / `--port` | 55080, 55081 or 55082 by fixture | `WORLD_CUP_API_PORT` still works. |
+| `REST_API_PAGING` / `--paging` | `page` (default), `offset`, `cursor`, `next-url` | `page`: `?page=&per_page=` returns `{ data, page, per_page, total }`. `offset`: `?offset=&limit=` returns `{ data, offset, limit, total }`. `cursor`: `?cursor=&limit=` returns `{ data, next_cursor }`, null on the last page, no total. `next-url`: `?page_token=&limit=` returns `{ data, next }`, the absolute URL of the next page, as OData's `@odata.nextLink` or Django REST's `next`. A cursor or page token the server did not issue is a 400. |
+| `REST_API_PAGE_SIZE` / `--page-size` | none: 100 per page, at most 500 | Rows per page, and the most one request gets whatever it asks for (1 to 500). |
+| `REST_API_NESTED` / `--nested` | `0` | `1` adds one endpoint whose rows hold objects, built from the dump: World Cup `matches_nested` (`venue`, `home.team`, `away.team` and `winner` as objects, two levels deep), finance `accounts_nested` (`customer`, `account_type`, `branch.region`), marketing analytics `campaign_results_nested` (`campaign`, `funnel`). |
+| `REST_API_WRAPPED` / `--wrapped` | none | Comma-separated endpoints whose rows and page fields sit under `result` (`{ result: { items, … } }`) instead of at the top. |
+| `REST_API_REFUSE` / `--refuse` | none | Comma-separated endpoints that answer 503 with `{ error }`. |
+| `REST_API_RETRY_AFTER` / `--retry-after` | none | Seconds sent as `Retry-After` with each 503. Off by default: the backend's global `fetch` honours it, so `120` stalls every request to the endpoint for two minutes ([evidence/1.1.9/](../../evidence/1.1.9/)). |
+| `REST_API_TOKEN` / `--token` | none | A bearer token every `/api` request must carry, checked first; without it, 401 with `WWW-Authenticate: Bearer`. `/`, `/openapi.json` and `/docs` stay public, and the OpenAPI document declares the bearer scheme. |
+| `REST_API_PROFILE` / `--profile` | none | A named set of the switches above. `connector` (World Cup only): pages of 20, `matches_nested`, `tournament_teams` wrapped, `squad_members` refused, the token `world-cup-test-token`, and, for the setup script, a datasource cap of 20 rows on `match_team_statistics`. |
+
+An unknown fixture, profile or paging style, a wrapped or refused endpoint the sample does not serve, or a page size outside 1 to 500 stops the server with a message. `GET /` lists the endpoints, their row counts and the switches (never the token); the setup script reads it.
+
+The eval variants of [agents-evals](../capabilities/agents-evals/spec.md) R120 to R125 run on ports 55090 and up, clear of the defaults:
+
+```bash
+cd backend
+REST_API_PROFILE=connector REST_API_PAGING=page     REST_API_PORT=55090 npm run worldcup:api
+REST_API_PROFILE=connector REST_API_PAGING=offset   REST_API_PORT=55091 npm run worldcup:api
+REST_API_PROFILE=connector REST_API_PAGING=cursor   REST_API_PORT=55092 npm run worldcup:api
+REST_API_PROFILE=connector REST_API_PAGING=next-url REST_API_PORT=55093 npm run worldcup:api
+npm run finance:api                 # 55081
+npm run marketing-analytics:api     # 55082
+
+npm run fixture:rest:setup -- --api-url http://127.0.0.1:55092 --variant cursor
+npm run fixture:rest:setup -- --api-url http://127.0.0.1:55093 --variant next-url --allow-unavailable
+npm run finance:rest:setup
+npm run marketing-analytics:rest:setup
+```
+
+`scripts/setup-fixture-rest.ts` (tests: `setup-fixture-rest.spec.ts`) reads the API's `/`, checks its token with one request, signs in to the backend, takes the endpoints from the backend's OpenAPI discovery (`POST /datasources/rest/discover`, what the Discover button calls), adds row caps, saves the datasource, refreshes its inventory and saves a dataset of every endpoint. It upserts both by name.
+
+| Flag | Variable | Default | Meaning |
+|---|---|---|---|
+| `--api-url` | `REST_API_URL`, `WORLD_CUP_API_URL` | the fixture's port on 127.0.0.1 | The API to register. |
+| `--fixture` | | what the API serves | `world-cup`, `finance` or `marketing-analytics` (or the `-rest` id). The setup fails when the API serves another; the REST sample `<id>-rest` of the fixture registry gives the names. |
+| `--variant` | | none | Appended to the names: datasource "World Cup REST API (cursor)", dataset "World Cup (REST cursor)". No commas, because `EVAL_DATASETS` is comma-separated. Without it, the registry's names. |
+| `--api-token` | `REST_API_TOKEN` | the profile's token | Saved as the datasource's bearer token. |
+| `--max-rows <endpoint>=<n>` | | the profile's caps | Repeatable or comma-separated: the endpoint's `maxRows` on the datasource. |
+| `--allow-unavailable` | | off | Keeps endpoints the inventory cannot read (the `next-url` variant) instead of failing. Refused endpoints are always expected unreadable and kept with no columns; a refused endpoint the inventory could read fails the setup. |
+| `--backend-url` | `BACKEND_URL` | `http://127.0.0.1:3000` | |
+| `--backend-token` | `BACKEND_TOKEN` | none | A session token, sent as `Authorization: Bearer` (local mode) and as the `qti_session` cookie with an `Origin` of the backend URL, or `BACKEND_ORIGIN` (org server). |
+| `--user` | `BACKEND_USER` | `local` | Without a token, the script calls `GET /datasources`; on a 401 it signs in as this local persona (`POST /auth/local/sign-in`, [api.md](api.md)) and sends the token it gets. On an org server that sign-in does not exist, and the message asks for `BACKEND_TOKEN`. |
+
+Besides the caps asked for, the setup gives an endpoint with more rows than the connector's default cap (10,000) a `maxRows` of its row count, and gives a page or offset endpoint whose rows need more than the connector's 50 pages a bigger page, up to the server's maximum: marketing analytics `policy_sales` (10,822 rows) gets `maxRows` 10,822 and pages of 217. What still cannot be read whole is printed as a warning.
 
 ### Local run recipes
 
@@ -149,7 +205,7 @@ The second, explicit `node_modules` mapping is required: electron-builder silent
 | Registry | GitHub Packages, `https://npm.pkg.github.com` (`publishConfig.registry`). The scope must equal the repository owner (lowercase), which is why the name is scoped; the installed binary is still `questions-to-insights` (`bin` → `dist/cli.js`). |
 | License | `UNLICENSED` (private repository, no LICENSE file) |
 | Node | `engines.node >= 22.13.0` |
-| Tarball contents | `files`: `dist`, `!dist/**/*.tsbuildinfo`, `public`. No `src/`, `test/`. |
+| Tarball contents | `files`: `dist`, `!dist/**/*.tsbuildinfo`, `public`. No `src/`, `test/`, `scripts/`. The sample seed SQL ships inside `dist` (about 8.4 MB uncompressed, 5.2 MB of it the gzipped Formula 1 dump; the five synthetic domain seeds are 3.2 MB of plain SQL, which the tarball's own gzip compresses); the generators, planted facts and JSON dumps do not ([data-model.md](data-model.md) 4.9). |
 | Run | `npx @jhon-buendia-halo/questions-to-insights`, or `npm i -g …` then `questions-to-insights` |
 
 **Consumer auth.** GitHub Packages requires a token for every install, `npx` included. `~/.npmrc` needs:
@@ -364,6 +420,7 @@ Defaults are shared state: the desktop app uses Electron's `userData` directory 
 | Bare backend (`start:dev`) data dir and port | `<cwd>/data`, `PORT` or 3000 | `APP_DATA_DIR`, `PORT` |
 | Secret | persisted `.app-secret` in the data dir | `APP_SECRET` |
 | Sample Postgres | project `questions-to-insights-world-cup`, port 55432 | `docker compose -p <name>` plus `WORLD_CUP_DB_PORT=<port>`; the e2e fixtures read the same variable (and `WORLD_CUP_DB_HOST`) |
+| Fixture REST APIs | 55080 (World Cup), 55081 (finance), 55082 (marketing analytics) | `REST_API_PORT` or `--port`; the eval variants use 55090 and up, and the setup script's `--api-url` points at them (section 2, *The fixture REST API*) |
 | Observability profile | same project; ports 6006, 3001, 4317, 4318 | `docker compose -p <name>` plus `PHOENIX_PORT`, `GRAFANA_PORT`, `OTLP_GRPC_PORT`, `OTLP_HTTP_PORT` (see *Observability profile* above) |
 | Playwright | needs port 3000 free | one e2e run at a time per machine; each test already gets its own temp profile |
 | Org server (CLI) | the CLI's data dir and port | same as the CLI, plus its own `ORG_*` variables; the E2E `org` project picks free ports for the app and the OIDC stub |

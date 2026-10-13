@@ -40,6 +40,18 @@
     "worldcup:api:dump": "ts-node -T -P tsconfig.json scripts/worldcup-rest-api/dump.ts",
     "worldcup:api": "ts-node -T -P tsconfig.json scripts/worldcup-rest-api/serve.ts",
     "worldcup:rest:setup": "ts-node -T -P tsconfig.json scripts/setup-worldcup-rest.ts",
+    "finance:api": "ts-node -T -P tsconfig.json scripts/worldcup-rest-api/serve.ts --fixture finance",
+    "marketing-analytics:api": "ts-node -T -P tsconfig.json scripts/worldcup-rest-api/serve.ts --fixture marketing-analytics",
+    "fixture:rest:setup": "ts-node -T -P tsconfig.json scripts/setup-fixture-rest.ts",
+    "finance:rest:setup": "ts-node -T -P tsconfig.json scripts/setup-fixture-rest.ts --fixture finance",
+    "marketing-analytics:rest:setup": "ts-node -T -P tsconfig.json scripts/setup-fixture-rest.ts --fixture marketing-analytics",
+    "fixtures:finance": "ts-node -T -P tsconfig.json ../docker/postgres/generate/finance.ts",
+    "fixtures:health-insurance": "ts-node -T -P tsconfig.json ../docker/postgres/generate/health-insurance.ts",
+    "fixtures:genomics": "ts-node -T -P tsconfig.json ../docker/postgres/generate/genomics.ts",
+    "fixtures:supply-chain": "ts-node -T -P tsconfig.json ../docker/postgres/generate/supply-chain.ts",
+    "fixtures:marketing-analytics": "ts-node -T -P tsconfig.json ../docker/postgres/generate/marketing-analytics.ts",
+    "fixture:dump": "ts-node -T -P tsconfig.json scripts/dump-fixture.ts",
+    "fixture:databricks": "ts-node -T -P tsconfig.json scripts/setup-fixture-databricks.ts",
     "evals:assistant": "nest build && node dist/mastra/evals/run-assistant-evals.js",
     "eval:validate": "nest build && node dist/mastra/evals/validate-eval-sets.js",
     "build:web": "npm --prefix ../frontend run build:web && node scripts/copy-web.js",
@@ -116,6 +128,10 @@
       "ts"
     ],
     "rootDir": "src",
+    "roots": [
+      "<rootDir>",
+      "<rootDir>/../scripts"
+    ],
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"

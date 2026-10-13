@@ -1,0 +1,89 @@
+Databricks references: world-cup-databricks-only.json (BA-186, 2026-10-13)
+The ten Databricks-only World Cup questions (agents-evals R145 to R147). Nine have a reference query; the
+browse-only question has none, by design. None was executed on a Databricks warehouse: that run is the VDI
+validation (docs/evals/databricks-vdi.md). Every line below is "not executed — VDI".
+The references below are as written in the set file, with the canonical catalog `evals`; where one runs (the
+result-set match, eval:validate) its `evals`. is rewritten to the selected datasets' catalog (agents-evals R148).
+
+How each reference was checked without a warehouse
+- Static (unit test backend/src/mastra/evals/databricks-references.spec.ts, agents-evals R144): the Step 1b
+  dialect check finds nothing for databricks (R74); no '::' cast and no PostgreSQL-only function (age,
+  to_char, generate_series, string_to_array); every table reference has 3 parts, is `evals`.world_cup.<table>
+  with the catalog backticked, and names a required table of the sample. The same test passes on every
+  Databricks reference of every set (126 on 2026-10-13: the 9 here and the 117 the dialect work added).
+- PostgreSQL: the same logic written in PostgreSQL ran on ba9_world_cup_dbx_only, a copy of the World Cup
+  seed (001_world_cup.sql) on the compose server; its rows are the expected answer.
+- Parse and proxy: sqlglot 30.22.0 parses the reference with its Databricks dialect; the parsed statement,
+  transpiled to DuckDB 1.5.6, runs on DuckDB tables that the loader's own SQL created and filled (the World
+  Cup dry run, see databricks-loader-sql-check.txt). Its rows are compared with PostgreSQL's as the result-set
+  match compares them (any row order, 6 significant figures). One transpile needed a workaround: sqlglot
+  expands months_between for DuckDB without parentheses, so the call is wrapped before transpiling.
+
+9 of 9 references: parse as Databricks SQL and return the PostgreSQL rows on the DuckDB proxy
+
+dbx-only-matches-per-tournament  [aggregate; dbx:latency]
+  Q: How many matches does the data hold for each tournament?
+  Databricks: SELECT t.tournament_year, COUNT(*) AS matches FROM `evals`.world_cup.matches m JOIN `evals`.world_cup.tournaments t ON t.id = m.tournament_id GROUP BY t.tournament_year
+  PostgreSQL equivalent: SELECT t.tournament_year, COUNT(*) AS matches FROM world_cup.matches m JOIN world_cup.tournaments t ON t.id = m.tournament_id GROUP BY t.tournament_year
+  PostgreSQL rows (2): 2022, 8; 2018, 8
+  ✓ parses as Databricks SQL; DuckDB proxy 2 rows equal to PostgreSQL: 2018, 8; 2022, 8; not executed on a warehouse — VDI
+
+dbx-only-top-attendance-per-tournament  [ranking; dbx:dialect]
+  Q: For each tournament, which match had the highest attendance?
+  Databricks: SELECT r.home_team, r.away_team, r.attendance FROM `evals`.world_cup.v_match_results r QUALIFY RANK() OVER (PARTITION BY r.tournament_year ORDER BY r.attendance DESC) = 1
+  PostgreSQL equivalent: SELECT home_team, away_team, attendance FROM (SELECT r.home_team, r.away_team, r.attendance, RANK() OVER (PARTITION BY r.tournament_year ORDER BY r.attendance DESC) AS attendance_rank FROM world_cup.v_match_results r) ranked WHERE attendance_rank = 1
+  PostgreSQL rows (4): France, Croatia, 78011; Croatia, England, 78011; Argentina, Croatia, 88966; Argentina, France, 88966
+  ✓ parses as Databricks SQL; DuckDB proxy 4 rows equal to PostgreSQL: Croatia, England, 78011; France, Croatia, 78011; Argentina, Croatia, 88966; Argentina, France, 88966; not executed on a warehouse — VDI
+
+dbx-only-final-weekday  [lookup; dbx:dialect]
+  Q: On which day of the week was each World Cup final played?
+  Databricks: SELECT t.tournament_year, date_format(m.kicked_off_at, 'EEEE') AS weekday FROM `evals`.world_cup.matches m JOIN `evals`.world_cup.tournaments t ON t.id = m.tournament_id WHERE m.stage = 'final'
+  PostgreSQL equivalent: SELECT t.tournament_year, trim(to_char(m.kicked_off_at, 'Day')) AS weekday FROM world_cup.matches m JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE m.stage = 'final'
+  PostgreSQL rows (2): 2018, Sunday; 2022, Sunday
+  ✓ parses as Databricks SQL; DuckDB proxy 2 rows equal to PostgreSQL: 2022, Sunday; 2018, Sunday; not executed on a warehouse — VDI
+
+dbx-only-tournament-length-days  [lookup; dbx:dialect]
+  Q: How many days did each tournament last, counting both the opening day and the day of the final?
+  Databricks: SELECT tournament_year, datediff(ends_on, starts_on) + 1 AS days FROM `evals`.world_cup.tournaments
+  PostgreSQL equivalent: SELECT tournament_year, ends_on - starts_on + 1 AS days FROM world_cup.tournaments
+  PostgreSQL rows (2): 2018, 32; 2022, 29
+  ✓ parses as Databricks SQL; DuckDB proxy 2 rows equal to PostgreSQL: 2018, 32; 2022, 29; not executed on a warehouse — VDI
+
+dbx-only-shot-share-on-target-by-tournament  [ratio; dbx:numeric]
+  Q: In each tournament, what share of all shots were on target?
+  Databricks: SELECT t.tournament_year, SUM(s.shots_on_target) / SUM(s.shots) AS share_on_target FROM `evals`.world_cup.match_team_statistics s JOIN `evals`.world_cup.matches m ON m.id = s.match_id JOIN `evals`.world_cup.tournaments t ON t.id = m.tournament_id GROUP BY t.tournament_year
+  PostgreSQL equivalent: SELECT t.tournament_year, SUM(s.shots_on_target)::numeric / SUM(s.shots) AS share_on_target FROM world_cup.match_team_statistics s JOIN world_cup.matches m ON m.id = s.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id GROUP BY t.tournament_year
+  PostgreSQL rows (2): 2022, 0.38265306122448979592; 2018, 0.31481481481481481481
+  ✓ parses as Databricks SQL; DuckDB proxy 2 rows equal to PostgreSQL: 2018, 0.3148148148148148; 2022, 0.3826530612244898; not executed on a warehouse — VDI
+
+dbx-only-average-possession-by-team-2018  [aggregate; dbx:numeric]
+  Q: What was each team's average possession across its 2018 knockout matches?
+  Databricks: SELECT tm.common_name AS team, AVG(s.possession_pct) AS average_possession_pct FROM `evals`.world_cup.match_team_statistics s JOIN `evals`.world_cup.matches m ON m.id = s.match_id JOIN `evals`.world_cup.tournaments t ON t.id = m.tournament_id JOIN `evals`.world_cup.teams tm ON tm.id = s.team_id WHERE t.tournament_year = 2018 GROUP BY tm.common_name
+  PostgreSQL equivalent: SELECT tm.common_name AS team, AVG(s.possession_pct) AS average_possession_pct FROM world_cup.match_team_statistics s JOIN world_cup.matches m ON m.id = s.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.teams tm ON tm.id = s.team_id WHERE t.tournament_year = 2018 GROUP BY tm.common_name
+  PostgreSQL rows (8): Belgium, 48.6666666666666667; Brazil, 57.0000000000000000; Croatia, 61.3333333333333333; England, 53.3333333333333333; France, 45.0000000000000000; Russia, 36.0000000000000000; Sweden, 43.0000000000000000; Uruguay, 39.0000000000000000
+  ✓ parses as Databricks SQL; DuckDB proxy 8 rows equal to PostgreSQL: Uruguay, 39.0; Sweden, 43.0; Croatia, 61.333333333333336; France, 45.0; Russia, 36.0; Brazil, 57.0; England, 53.333333333333336; Belgium, 48.666666666666664; not executed on a warehouse — VDI
+
+dbx-only-browse-only-player-contracts  [out-of-scope; dbx:browse-only]
+  Q: What annual salary does each player who scored in the 2022 World Cup final earn at his club?
+  no reference query (browse-only table; scored on its checks only)
+
+dbx-only-median-attendance-2022  [aggregate; dbx:dialect]
+  Q: What was the median attendance of the 2022 knockout matches?
+  Databricks: SELECT median(m.attendance) AS median_attendance FROM `evals`.world_cup.matches m JOIN `evals`.world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2022
+  PostgreSQL equivalent: SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY m.attendance) AS median_attendance FROM world_cup.matches m JOIN world_cup.tournaments t ON t.id = m.tournament_id WHERE t.tournament_year = 2022
+  PostgreSQL rows (1): 68594.5
+  ✓ parses as Databricks SQL; DuckDB proxy 1 rows equal to PostgreSQL: 68594.5; not executed on a warehouse — VDI
+
+dbx-only-goals-by-stage-per-tournament  [aggregate; dbx:dialect]
+  Q: How many goals were scored at each stage, with one column for 2018 and one for 2022?
+  Databricks: SELECT m.stage, COUNT_IF(t.tournament_year = 2018) AS goals_2018, COUNT_IF(t.tournament_year = 2022) AS goals_2022 FROM `evals`.world_cup.goals g JOIN `evals`.world_cup.matches m ON m.id = g.match_id JOIN `evals`.world_cup.tournaments t ON t.id = m.tournament_id GROUP BY m.stage
+  PostgreSQL equivalent: SELECT m.stage, COUNT(*) FILTER (WHERE t.tournament_year = 2018) AS goals_2018, COUNT(*) FILTER (WHERE t.tournament_year = 2022) AS goals_2022 FROM world_cup.goals g JOIN world_cup.matches m ON m.id = g.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id GROUP BY m.stage
+  PostgreSQL rows (4): third_place, 2, 3; semi_final, 4, 5; quarter_final, 11, 10; final, 6, 6
+  ✓ parses as Databricks SQL; DuckDB proxy 4 rows equal to PostgreSQL: quarter_final, 11, 10; third_place, 2, 3; final, 6, 6; semi_final, 4, 5; not executed on a warehouse — VDI
+
+dbx-only-youngest-scorer-2022  [join; dbx:dialect]
+  Q: Who was the youngest player to score in the 2022 knockout rounds, and how old was he when he scored?
+  Databricks: SELECT p.full_name, FLOOR(months_between(to_date(m.kicked_off_at), p.date_of_birth) / 12) AS age_in_years FROM `evals`.world_cup.goals g JOIN `evals`.world_cup.matches m ON m.id = g.match_id JOIN `evals`.world_cup.tournaments t ON t.id = m.tournament_id JOIN `evals`.world_cup.players p ON p.id = g.scorer_player_id WHERE t.tournament_year = 2022 AND g.goal_type <> 'own_goal' ORDER BY months_between(to_date(m.kicked_off_at), p.date_of_birth) LIMIT 1
+  PostgreSQL equivalent: SELECT p.full_name, date_part('year', age(m.kicked_off_at::date, p.date_of_birth)) AS age_in_years FROM world_cup.goals g JOIN world_cup.matches m ON m.id = g.match_id JOIN world_cup.tournaments t ON t.id = m.tournament_id JOIN world_cup.players p ON p.id = g.scorer_player_id WHERE t.tournament_year = 2022 AND g.goal_type <> 'own_goal' ORDER BY age(m.kicked_off_at::date, p.date_of_birth) LIMIT 1
+  PostgreSQL rows (1): Josko Gvardiol, 20
+  ✓ parses as Databricks SQL; DuckDB proxy (months_between parenthesised for the DuckDB transpile, sqlglot bug) 1 rows equal to PostgreSQL: Josko Gvardiol, 20.0; not executed on a warehouse — VDI

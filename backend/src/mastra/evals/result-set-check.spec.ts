@@ -7,6 +7,10 @@ import {
 import { setDatasetToolServices } from '../tool-services';
 import type { DatasetToolServices, DatasetSnapshot } from '../tool-services';
 import type { ToolDataRecord } from '../../modules/sessions/entities/session.entity';
+import { toolDataRecord } from '../../modules/sessions/turn-data';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+import { loadEvalSets } from './eval-sets';
 
 function stubServices(
   overrides: Partial<DatasetToolServices> = {},
@@ -18,7 +22,7 @@ function stubServices(
     sampleRows: jest.fn(),
     runReadOnlySql: jest.fn(),
     ...overrides,
-  } as unknown as DatasetToolServices;
+  };
 }
 
 const snapshot: DatasetSnapshot[] = [
@@ -361,7 +365,8 @@ describe('runResultSetCheck', () => {
   it.each([
     { error: 'failed' },
     { tool: 'sample_rows' },
-    { truncated: true },
+    // Clipped in storage: two rows came back, one was kept.
+    { truncated: true, rowCount: 2 },
     { rowCount: 2 },
     { rows: undefined },
   ])('does not accept unusable evidence: %p', async (overrides) => {
@@ -404,5 +409,192 @@ describe('runResultSetCheck', () => {
     );
     expect(result?.passed).toBe(false);
     expect(result?.reason).toContain('reference result is truncated');
+  });
+
+  describe('a result truncated at its own row limit (R31, BA-183)', () => {
+    /**
+     * The real champion-2022 trace of the baseline (evidence/1.1.2): the
+     * model asked for `limit: 1`, got the one right row, and the tool marked
+     * it truncated because the row count reached the limit. Before BA-183
+     * the check refused it, a false negative of the check, not the model.
+     */
+    function championCall(): { name: string; input: string; output: string } {
+      const run = JSON.parse(
+        readFileSync(
+          join(
+            __dirname,
+            '../../../../evidence/1.1.2/baseline/world-cup-postgres-run1.json',
+          ),
+          'utf8',
+        ),
+      ) as {
+        results: {
+          id: string;
+          toolCalls: { name: string; input: string; output: string }[];
+        }[];
+      };
+      return run.results.find((r) => r.id === 'champion-2022')!.toolCalls[0];
+    }
+
+    /** The record `onStepFinish` captures from that call. */
+    function championRecord(): ToolDataRecord {
+      const call = championCall();
+      const record = toolDataRecord(
+        call.name,
+        JSON.parse(call.input) as Record<string, unknown>,
+        JSON.parse(call.output),
+      );
+      if (!record) throw new Error('no record');
+      return record;
+    }
+
+    it('reads the baseline trace as one captured row, flagged truncated', () => {
+      expect(JSON.parse(championCall().input)).toMatchObject({ limit: 1 });
+      expect(championRecord()).toMatchObject({
+        tool: 'run_readonly_sql',
+        rows: [{ champion_team: 'Argentina' }],
+        rowCount: 1,
+        truncated: true,
+      });
+    });
+
+    it('matches when the truncated capture holds every reference row', async () => {
+      reference([{ champion: 'Argentina' }]);
+      const result = await runResultSetCheck(
+        'SELECT reference',
+        ['World Cup'],
+        snapshot,
+        [championRecord()],
+      );
+      expect(result).toMatchObject({ passed: true, score: 1 });
+    });
+
+    it('still fails when the truncated capture misses a reference row', async () => {
+      reference([{ champion: 'Argentina' }, { champion: 'France' }]);
+      const result = await runResultSetCheck(
+        'SELECT reference',
+        ['World Cup'],
+        snapshot,
+        [championRecord()],
+      );
+      expect(result?.passed).toBe(false);
+      expect(result?.reason).toContain(
+        'the result reached its row limit (1 rows) and',
+      );
+      expect(result?.reason).toContain('missing');
+    });
+
+    it('still fails when the truncated capture carries a row the reference lacks', async () => {
+      reference([{ team: 'Argentina' }]);
+      const result = await runResultSetCheck(
+        'SELECT reference',
+        ['World Cup'],
+        snapshot,
+        [
+          {
+            ...sql([{ team: 'Argentina' }, { team: 'France' }]),
+            rowCount: 2,
+            truncated: true,
+          },
+        ],
+      );
+      expect(result?.passed).toBe(false);
+    });
+  });
+});
+
+describe('the catalog a Databricks reference runs in (agents-evals R148)', () => {
+  const REFERENCE = loadEvalSets()
+    .find((set) => set.id === 'world-cup-databricks-only')
+    ?.cases.find((evalCase) => evalCase.id === 'dbx-only-youngest-scorer-2022')
+    ?.expectedSql as string;
+  const AGENT = [
+    {
+      tool: 'run_readonly_sql',
+      input: 'SELECT …',
+      rows: [{ player: 'Josko Gvardiol', age: 20 }],
+    },
+  ];
+  function databricks(tables: string[]): DatasetSnapshot[] {
+    return [
+      {
+        name: 'World Cup (Databricks)',
+        datasourceId: 'dbx-1',
+        datasourceKind: 'databricks',
+        tables,
+      },
+    ];
+  }
+
+  afterEach(() => {
+    setDatasetToolServices(stubServices());
+  });
+
+  it('runs a real reference in the catalog of the selected datasets', async () => {
+    const runReadOnlySql = jest.fn().mockResolvedValue({
+      columns: ['full_name', 'age_in_years'],
+      rows: [{ full_name: 'Josko Gvardiol', age_in_years: 20 }],
+    });
+    setDatasetToolServices(stubServices({ runReadOnlySql }));
+
+    const result = await runResultSetCheck(
+      REFERENCE,
+      ['World Cup (Databricks)'],
+      databricks([
+        'dev_sandbox.world_cup.goals',
+        'dev_sandbox.world_cup.players',
+      ]),
+      AGENT,
+    );
+
+    expect(REFERENCE).toContain('FROM `evals`.world_cup.goals g');
+    const ran = (runReadOnlySql.mock.calls as unknown[][])[0][1] as string;
+    expect(ran).toBe(REFERENCE.split('`evals`.').join('`dev_sandbox`.'));
+    expect(ran).not.toContain('evals');
+    expect(result?.passed).toBe(true);
+  });
+
+  it('refuses datasets whose entities span catalogs, and runs nothing', async () => {
+    const runReadOnlySql = jest.fn();
+    setDatasetToolServices(stubServices({ runReadOnlySql }));
+
+    const result = await runResultSetCheck(
+      REFERENCE,
+      ['World Cup (Databricks)'],
+      databricks(['evals.world_cup.goals', 'main.world_cup.players']),
+      AGENT,
+    );
+
+    expect(runReadOnlySql).not.toHaveBeenCalled();
+    expect(result?.passed).toBe(false);
+    expect(result?.reason).toBe(
+      'expectedSql failed to run — The selected datasets span several catalogs (evals, main); ' +
+        'the Databricks reference queries run in one. Select datasets whose entities are all in one catalog.',
+    );
+  });
+
+  it('runs a reference on any other datasource as written', async () => {
+    const runReadOnlySql = jest.fn().mockResolvedValue({
+      columns: ['n'],
+      rows: [{ n: 1 }],
+    });
+    setDatasetToolServices(stubServices({ runReadOnlySql }));
+    const sql = 'SELECT 1 AS n FROM `evals`.world_cup.goals';
+
+    await runResultSetCheck(
+      sql,
+      ['World Cup'],
+      [
+        {
+          name: 'World Cup',
+          datasourceId: 'ds-1',
+          datasourceKind: 'postgres',
+          tables: ['other.world_cup.goals'],
+        },
+      ],
+      [{ tool: 'run_readonly_sql', input: 'SELECT 1', rows: [{ n: 1 }] }],
+    );
+
+    expect((runReadOnlySql.mock.calls as unknown[][])[0][1]).toBe(sql);
   });
 });

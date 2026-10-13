@@ -11,18 +11,11 @@ import {
   Res,
 } from '@nestjs/common';
 import type { Response } from 'express';
-import {
-  evalRunFilename,
-  renderEvalRunMarkdown,
-} from './eval-report';
+import { evalRunFilename, renderEvalRunMarkdown } from './eval-report';
 import { AgentsService } from './agents.service';
 import { EvalRunsService } from './eval-runs.service';
 import type { EvalRunView } from './eval-runs.service';
-import type {
-  AgentDetail,
-  AgentEvalSet,
-  AgentSummary,
-} from './agents.service';
+import type { AgentDetail, AgentEvalSet, AgentSummary } from './agents.service';
 import type { SaveAgentDto } from '../user-agents/dto/save-agent.dto';
 import type { PinAgentDto } from '../user-agents/dto/pin-agent.dto';
 import type { AgentConfigInput } from '../user-agents/user-agents.service';
@@ -96,17 +89,28 @@ export class AgentsController {
     }));
   }
 
-  /** Start a run against one datasource. Long-running: poll the job below. */
+  /**
+   * Start a run against one datasource. Long-running: poll the job below.
+   * `judge` (`off` when absent) and `judgeCategories` are checked by the
+   * service, after the dataset preflight (agents-evals R19 step 8, R100).
+   */
   @Post(':key/evals/run')
   @RequirePermission('create-agents')
   async runEvals(
     @Param('key') key: string,
-    @Body() body: { datasourceId?: string; caseIds?: string[] },
+    @Body()
+    body: {
+      datasourceId?: string;
+      caseIds?: string[];
+      judge?: unknown;
+      judgeCategories?: unknown;
+    },
   ): Promise<{ ok: boolean; message: string; jobId?: string }> {
     const result = await this.evalRuns.start(
       key,
       body?.datasourceId ?? '',
       Array.isArray(body?.caseIds) ? body.caseIds.map(String) : undefined,
+      { judge: body?.judge, judgeCategories: body?.judgeCategories },
     );
     if ('error' in result) return { ok: false, message: result.error };
     if ('conflictWith' in result) {

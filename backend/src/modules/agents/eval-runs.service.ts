@@ -22,6 +22,10 @@ import {
 } from '../../mastra/evals/assistant.evals';
 import type { SampleFixture } from '../testing-data/fixtures/registry';
 import { CurrentUserService } from '../auth/current-user.service';
+import { parseJudgeSetting } from '../../mastra/evals/judge-option';
+import type { EvalJudgeSetting } from '../../mastra/evals/judge-option';
+import { summarizeEvalResults } from '../../mastra/evals/eval-summary';
+import type { EvalRunSummary } from '../../mastra/evals/eval-summary';
 
 export type EvalRunStatus = 'running' | 'completed' | 'failed';
 
@@ -53,6 +57,19 @@ export interface EvalRunView {
   comparison?: EvalRegressionSummary;
   /** The owning user's id in org server mode, on stored runs (data-model 3.15). */
   ownerId?: string;
+  /**
+   * The run's judge option (agents-evals R100). Runs saved before it read as
+   * `{ mode: 'on' }` (see `EvalRunsRepository`).
+   */
+  judge: EvalJudgeSetting;
+  /** Counts of the finished results, kept current while running (R104). */
+  summary: EvalRunSummary;
+}
+
+/** The judge option as the start request carries it, unchecked. */
+export interface EvalRunJudgeInput {
+  judge?: unknown;
+  judgeCategories?: unknown;
 }
 
 /**
@@ -130,6 +147,7 @@ export class EvalRunsService {
     agentKey: string,
     datasourceId: string,
     caseIds?: string[],
+    judgeInput: EvalRunJudgeInput = {},
   ): Promise<{ jobId: string } | { conflictWith: string } | { error: string }> {
     if (agentKey !== 'assistant') {
       return { error: `Agent "${agentKey}" has no evals to run` };
@@ -171,6 +189,13 @@ export class EvalRunsService {
     );
     if (datasetError) return { error: datasetError };
 
+    // R19 step 8: the judge option, off when none is given (R100).
+    const judge = parseJudgeSetting(
+      judgeInput.judge,
+      judgeInput.judgeCategories,
+    );
+    if ('error' in judge) return { error: judge.error };
+
     const jobId = randomUUID();
     const view: EvalRunView = {
       jobId,
@@ -183,6 +208,8 @@ export class EvalRunsService {
       totalCases: cases.length,
       currentQuestion: cases[0]?.question,
       startedAt: new Date().toISOString(),
+      judge: judge.setting,
+      summary: summarizeEvalResults([]),
     };
     this.runs.set(jobId, { view, ownerId });
     this.active.set(this.activeKey(agentKey, ownerId), jobId);
@@ -228,8 +255,10 @@ export class EvalRunsService {
           view.datasets,
           evalSession?.id,
           knowledgeBlock,
+          view.judge,
         );
         view.results.push(result);
+        view.summary = summarizeEvalResults(view.results);
         view.currentQuestion = cases[index + 1]?.question;
         // Persist as we go so a crash mid-suite still leaves the finished
         // questions on the run.

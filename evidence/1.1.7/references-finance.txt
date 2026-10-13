@@ -1,0 +1,466 @@
+# finance: every reference query, run before it counts (BA-185, 2026-10-13)
+
+Database: ba9_finance on the shared compose PostgreSQL (127.0.0.1:55432), seeded through TestingDataService.load (the Testing Data panel's path) from backend/src/modules/testing-data/fixtures/ in a throwaway app data dir; validator from a scratch compile of the epic branch (dist untouched).
+
+## 1. The validator: EVAL_SET=finance npm run eval:validate
+
+```
+Validating Finance (finance, postgres) on Finance
+✓ wealth-client-count  postgres  1 rows
+✓ aum-fy2025-end  postgres  1 rows
+✓ fee-revenue-fy2025-by-type  postgres  4 rows
+✓ fee-revenue-fy2026-q2  postgres  1 rows
+✓ average-aum-per-client-fy2025-end  postgres  1 rows
+✓ completed-transactions-december-2025  postgres  1 rows
+✓ portfolios-opened-2024  postgres  1 rows
+✓ largest-portfolio-2025-end  postgres  1 rows
+✓ discretionary-portfolios-open  postgres  1 rows
+✓ advisory-fees-billed-march-2025  postgres  1 rows
+✓ positions-held-2024-end  postgres  1 rows
+✓ refunded-fees-2025  postgres  1 rows
+✓ unbilled-fees-2025-end  postgres  1 rows
+✓ collected-fees-fy2026-q1  postgres  1 rows
+✓ advisory-fee-rates  postgres  6 rows
+✓ bond-holdings-2025-end-millions  postgres  1 rows
+✓ most-held-securities-fy2025-end  postgres  2 rows
+✓ top-three-fee-clients-fy2025  postgres  3 rows
+✓ branch-most-assets-2025-end  postgres  1 rows
+✓ largest-security-by-value-2025-end  postgres  1 rows
+✓ top-equity-sectors-fy2025-end  postgres  3 rows
+✓ fee-revenue-by-region-fy2025  postgres  4 rows
+✓ aum-by-segment-fy2025-end  postgres  3 rows
+✓ aum-by-asset-class-2025-end  postgres  4 rows
+✓ open-portfolios-by-region  postgres  4 rows
+✓ wealth-clients-with-mortgage  postgres  1 rows
+✓ waived-share-advisory-fy2025  postgres  1 rows
+✓ advisory-fee-rate-by-mandate-fy2025  postgres  3 rows
+✓ unrealized-gain-percent-fy2025-end  postgres  1 rows
+✓ equity-share-by-risk-profile-2025-end  postgres  3 rows
+✓ performance-share-fee-revenue-fy2025  postgres  1 rows
+✓ quietest-fee-month-2025  postgres  1 rows
+✓ positions-without-cost-fy2025-end  postgres  1 rows
+✓ unrealized-gain-fy2025-end  postgres  1 rows
+✓ portfolios-by-base-currency  postgres  1 rows
+✓ open-portfolios-by-mandate  postgres  3 rows
+✓ fiscal-2026-q2-months  postgres  3 rows
+✓ fee-revenue-latest-quarter  postgres  1 rows
+✓ chart-aum-by-quarter-end  postgres  8 rows
+✓ wealth-client-count-casual  postgres  1 rows
+✓ aum-fy2025-end-typo  postgres  1 rows
+✓ largest-portfolio-2025-end-casual  postgres  1 rows
+✓ interest-share-of-loan-payments-by-product  postgres  3 rows
+✓ outstanding-share-of-principal-by-product  postgres  3 rows
+✓ loans-by-currency  postgres  1 rows
+✓ transactions-with-merchant-category  postgres  1 rows
+✓ branches-opened-12-accounts-2024  postgres  2 rows
+✓ non-performing-loans  postgres  1 rows
+✓ customer-most-card-purchases-2025  postgres  1 rows
+✓ net-customer-flow-by-branch-2025  postgres  8 rows
+✓ transactions-march-2025  postgres  1 rows
+✓ accounts-opened-by-region-2024  postgres  4 rows
+✓ deposit-accounts-per-branch  postgres  8 rows
+✓ customer-deposits-2025-usd  postgres  1 rows
+✓ euro-deposits-2025  postgres  1 rows
+✓ card-spend-december-2025  postgres  1 rows
+✓ customers-per-segment  postgres  3 rows
+✓ branches-per-region  postgres  4 rows
+✓ loans-per-product  postgres  3 rows
+finance: 59 of 59 reference queries passed; 9 cases have no reference query.
+```
+
+## 2. Rows of each reference and its trap query (psql)
+
+
+Summary: 59 references ran, 0 failed, 0 returned 0 rows; trap queries: 51 differ, 0 same or broken, 8 none written; facts.json: 28 match, 0 mismatch
+
+## wealth-client-count  (business-term, dev)
+1 rows: wealth_clients
+  31
+trap: differs (1 rows: 19)
+facts.json: MATCH (expected 31)
+
+## aum-fy2025-end  (business-term, dev)
+1 rows: aum_dollars
+  85727112.350000000000
+trap: differs (1 rows: 92587499.600000000000)
+facts.json: MATCH (expected 85727112.35)
+
+## fee-revenue-fy2025-by-type  (business-term, held-out)
+4 rows: fee_type, revenue_dollars
+  ADVISORY | 478131.970000000000
+  CUSTODY | 61690.280000000000
+  PERFORMANCE | 56014.160000000000
+  TRADING | 6641.8500000000000000
+trap: differs (4 rows: ADVISORY | 514452.120000000000 ; CUSTODY | 61767.580000000000 ; PERFORMANCE | 66637.840000000000)
+facts.json: MATCH (expected {"ADVISORY": 478131.97, "CUSTODY": 61690.28, "PERFORMANCE": 56014.16, "TRADING": 6641.85})
+
+## fee-revenue-fy2026-q2  (business-term, dev)
+1 rows: revenue_dollars
+  167922.470000000000
+trap: differs (1 rows: 97102.450000000000)
+facts.json: MATCH (expected 167922.47)
+
+## average-aum-per-client-fy2025-end  (business-term, dev)
+1 rows: average_aum_dollars
+  2857570.41
+trap: differs (1 rows: 2381308.68)
+
+## completed-transactions-december-2025  (business-term, dev)
+1 rows: completed_transactions
+  243
+trap: differs (1 rows: 279)
+
+## portfolios-opened-2024  (default-filter, dev)
+1 rows: portfolios_opened
+  7
+trap: differs (1 rows: 10)
+facts.json: MATCH (expected 7)
+
+## largest-portfolio-2025-end  (default-filter, held-out)
+1 rows: client, portfolio_value_dollars
+  Alistair Buchanan | 6432139.640000000000
+trap: differs (1 rows: Cornelius Oyelowo | 10687236.710000000000)
+facts.json: MATCH (expected {"owner": "Alistair Buchanan", "number": "PF-021539", "valueDollars": 6432139.64})
+
+## discretionary-portfolios-open  (default-filter, dev)
+1 rows: discretionary_portfolios
+  16
+trap: differs (1 rows: 19)
+
+## advisory-fees-billed-march-2025  (default-filter, dev)
+1 rows: advisory_fees
+  26
+trap: differs (1 rows: 29)
+
+## positions-held-2024-end  (default-filter, dev)
+1 rows: positions
+  244
+trap: differs (1 rows: 269)
+
+## refunded-fees-2025  (encoding, dev)
+1 rows: refunded_dollars
+  23583.010000000000
+trap: differs (1 rows: 26064.820000000000)
+facts.json: MATCH (expected 23583.01)
+
+## unbilled-fees-2025-end  (encoding, dev)
+1 rows: unbilled_dollars
+  70820.020000000000
+trap: differs (1 rows: 7082002)
+facts.json: MATCH (expected 70820.02)
+
+## collected-fees-fy2026-q1  (encoding, held-out)
+1 rows: collected_dollars
+  204142.730000000000
+trap: differs (1 rows: 148865.050000000000)
+facts.json: MATCH (expected 204142.73)
+
+## advisory-fee-rates  (encoding, dev)
+6 rows: annual_fee_percent, open_portfolios
+  1.00000000000000000000 | 9
+  0.90000000000000000000 | 4
+  0.85000000000000000000 | 3
+  0.75000000000000000000 | 7
+  0.65000000000000000000 | 3
+  0.60000000000000000000 | 5
+trap: differs (6 rows: 100 | 9 ; 90 | 4 ; 85 | 3)
+
+## bond-holdings-2025-end-millions  (encoding, dev)
+1 rows: bond_value_millions
+  25.62
+trap: differs (1 rows: 2562.09)
+
+## most-held-securities-fy2025-end  (ranking, dev)
+2 rows: security, portfolios
+  Axle & Mast Industrials 5.60% 2030 | 17
+  Birchwood Holdings 5.10% 2029 | 17
+trap: differs (1 rows: Birchwood Holdings 5.10% 2029 | 20)
+facts.json: MATCH (expected ["Axle & Mast Industrials 5.60% 2030", "Birchwood Holdings 5.10% 2029"] x 17)
+
+## top-three-fee-clients-fy2025  (ranking, held-out)
+3 rows: client, revenue_dollars
+  Alistair Buchanan | 81264.970000000000
+  Vivienne Saint-Clair | 65083.440000000000
+  Cyrus Farahani | 47831.470000000000
+trap: differs (3 rows: Alistair Buchanan | 83763.800000000000 ; Vivienne Saint-Clair | 78798.520000000000 ; Jasper Kowalczyk | 50529.410000000000)
+facts.json: MATCH (expected [{"client": "Alistair Buchanan", "dollars": 81264.97}, {"client": "Vivienne Saint-Clair", "dollars": 65083.44}, {"client": "Cyrus Farahani", "dollars": 47831.47}])
+
+## branch-most-assets-2025-end  (ranking, dev)
+1 rows: branch, assets_dollars
+  Boston Back Bay | 18178382.990000000000
+trap: differs (1 rows: Boston Back Bay | 22538904.470000000000)
+
+## largest-security-by-value-2025-end  (ranking, dev)
+1 rows: security, market_value_dollars
+  Birchwood Holdings 5.10% 2029 | 5927787.800000000000
+trap: differs (1 rows: Meridian Cash Sweep | 4443061.5151)
+
+## top-equity-sectors-fy2025-end  (ranking, dev)
+3 rows: sector, market_value_dollars
+  Health Care | 5657630.860000000000
+  Financials | 5634098.220000000000
+  Technology | 5132214.800000000000
+trap: differs (3 rows: Health Care | 6517887.030000000000 ; Financials | 5887895.640000000000 ; Technology | 5513543.770000000000)
+
+## fee-revenue-by-region-fy2025  (join, dev)
+4 rows: region, revenue_dollars
+  Midwest | 146032.320000000000
+  Northeast | 224013.730000000000
+  Southeast | 115702.340000000000
+  West | 116729.870000000000
+trap: differs (4 rows: Midwest | 70864.060000000000 ; Northeast | 244631.050000000000 ; Southeast | 134163.620000000000)
+facts.json: MATCH (expected [{"region": "Northeast", "dollars": 224013.73}, {"region": "Southeast", "dollars": 115702.34}, {"region": "Midwest", "dollars": 146032.32}, {"region": "West", "dollars": 116729.87}])
+
+## aum-by-segment-fy2025-end  (join, held-out)
+3 rows: segment, aum_dollars
+  BUSINESS | 30010554.050000000000
+  PREMIER | 51192560.540000000000
+  RETAIL | 4523997.760000000000
+trap: differs (3 rows: BUSINESS | 30010554.050000000000 ; PREMIER | 61160024.510000000000 ; RETAIL | 25527726.840000000000)
+
+## aum-by-asset-class-2025-end  (join, dev)
+4 rows: asset_class, market_value_dollars
+  BOND | 25620936.000000000000
+  CASH | 4443061.500000000000
+  EQUITY | 46251880.840000000000
+  FUND | 16271621.260000000000
+trap: differs (4 rows: BOND | 180018959.29000000 ; CASH | 28422927.110000000000 ; EQUITY | 329547279.89000000)
+
+## open-portfolios-by-region  (join, dev)
+4 rows: region, open_portfolios
+  Midwest | 15
+  Northeast | 11
+  Southeast | 9
+  West | 4
+trap: differs (4 rows: Midwest | 12 ; Northeast | 10 ; Southeast | 9)
+
+## wealth-clients-with-mortgage  (join, held-out)
+1 rows: wealth_clients_with_mortgage
+  8
+trap: differs (1 rows: 13)
+
+## waived-share-advisory-fy2025  (ratio, dev)
+1 rows: waived_percent
+  3.3
+trap: differs (1 rows: 4.2)
+
+## advisory-fee-rate-by-mandate-fy2025  (ratio, held-out)
+3 rows: mandate, fee_rate_percent
+  ADVISORY | 0.55
+  DISCRETIONARY | 0.81
+  EXECUTION_ONLY | 0.00
+trap: differs (3 rows: ADVISORY | 0.08 ; DISCRETIONARY | 0.11 ; EXECUTION_ONLY | 0.00)
+
+## unrealized-gain-percent-fy2025-end  (ratio, dev)
+1 rows: gain_percent
+  15.4
+trap: differs (1 rows: 49.2)
+
+## equity-share-by-risk-profile-2025-end  (ratio, dev)
+3 rows: risk_profile, equity_percent
+  BALANCED | 49.8
+  CONSERVATIVE | 31.4
+  GROWTH | 70.2
+trap: differs (3 rows: BALANCED | 45.0 ; CONSERVATIVE | 23.7 ; GROWTH | 72.5)
+
+## performance-share-fee-revenue-fy2025  (ratio, dev)
+1 rows: performance_percent
+  9.3
+trap: differs (1 rows: 1.3)
+facts.json: MATCH (expected 9.3)
+
+## quietest-fee-month-2025  (null, dev)
+1 rows: charged_dollars
+  0.00000000000000000000
+trap: differs (1 rows: 2025-03-01 | 44673.450000000000)
+facts.json: MATCH (expected 0 (2025-08))
+
+## positions-without-cost-fy2025-end  (null, dev)
+1 rows: positions_without_cost
+  62
+trap: differs (1 rows: 67)
+facts.json: MATCH (expected 62)
+
+## unrealized-gain-fy2025-end  (null, held-out)
+1 rows: unrealized_gain_dollars
+  8842156.190000000000
+trap: differs (1 rows: 28256059.450000000000)
+facts.json: MATCH (expected 8842156.19)
+
+## portfolios-by-base-currency  (aggregate, dev)
+1 rows: base_currency, open_portfolios
+  USD | 39
+trap: differs (3 rows: EUR | 11 ; GBP | 5 ; USD | 37)
+facts.json: MATCH (expected USD only)
+
+## open-portfolios-by-mandate  (aggregate, held-out)
+3 rows: mandate, open_portfolios
+  ADVISORY | 15
+  DISCRETIONARY | 16
+  EXECUTION_ONLY | 8
+trap: differs (3 rows: ADVISORY | 15 ; DISCRETIONARY | 19 ; EXECUTION_ONLY | 8)
+
+## fiscal-2026-q2-months  (lookup, dev)
+3 rows: month_start
+  2025-10-01
+  2025-11-01
+  2025-12-01
+trap: differs (3 rows: 2026-04-01 ; 2026-05-01 ; 2026-06-01)
+facts.json: MATCH (expected 2025-10-01, 2025-11-01, 2025-12-01)
+
+## fee-revenue-latest-quarter  (fuzzy-scope, dev)
+1 rows: revenue_dollars
+  167922.470000000000
+trap: none written
+facts.json: MATCH (expected 167922.47)
+
+## chart-aum-by-quarter-end  (visual, dev)
+8 rows: as_of, aum_dollars
+  2024-03-31 | 74022789.050000000000
+  2024-06-30 | 75122448.610000000000
+  2024-09-30 | 73602488.300000000000
+  2024-12-31 | 82168172.080000000000
+  2025-03-31 | 77944865.260000000000
+  2025-06-30 | 85727112.350000000000
+  2025-09-30 | 86279750.700000000000
+  2025-12-31 | 92587499.600000000000
+trap: none written
+facts.json: MATCH (expected {"2024-03-31": 74022789.05, "2024-06-30": 75122448.61, "2024-09-30": 73602488.3, "2024-12-31": 82168172.08, "2025-03-31": 77944865.26, "2025-06-30": 85727112.35, "2025-09-30": 86279750.7, "2025-12-31": 92587499.6})
+
+## wealth-client-count-casual  (paraphrase, dev)
+1 rows: wealth_clients
+  31
+trap: none written
+facts.json: MATCH (expected 31)
+
+## aum-fy2025-end-typo  (paraphrase, dev)
+1 rows: aum_dollars
+  85727112.350000000000
+trap: none written
+facts.json: MATCH (expected 85727112.35)
+
+## largest-portfolio-2025-end-casual  (paraphrase, held-out)
+1 rows: client, portfolio_value_dollars
+  Alistair Buchanan | 6432139.640000000000
+trap: none written
+facts.json: MATCH (expected {"owner": "Alistair Buchanan", "number": "PF-021539", "valueDollars": 6432139.64})
+
+## interest-share-of-loan-payments-by-product  (ratio, held-out)
+3 rows: product, interest_share
+  MORTGAGE | 0.3871
+  PERSONAL | 0.2827
+  AUTO | 0.1817
+trap: differs (3 rows: MORTGAGE | 1.0000 ; PERSONAL | 1.0000 ; AUTO | 1.0000)
+
+## outstanding-share-of-principal-by-product  (ratio, dev)
+3 rows: product, outstanding_share
+  MORTGAGE | 0.8225
+  PERSONAL | 0.3666
+  AUTO | 0.2676
+trap: differs (3 rows: MORTGAGE | 1.0000 ; PERSONAL | 1.0000 ; AUTO | 1.0000)
+
+## loans-by-currency  (aggregate, dev)
+1 rows: currency, loans
+  USD | 110
+trap: differs (3 rows: EUR | 19 ; GBP | 12 ; USD | 106)
+
+## transactions-with-merchant-category  (null, dev)
+1 rows: transactions_with_merchant_category
+  800
+trap: differs (1 rows: 5364)
+
+## branches-opened-12-accounts-2024  (ranking, held-out)
+2 rows: branch, accounts_opened
+  Atlanta Midtown | 12
+  Chicago Loop | 12
+trap: differs (1 rows: Atlanta Midtown | 12)
+facts.json: MATCH (expected ["Atlanta Midtown", "Chicago Loop"])
+
+## non-performing-loans  (encoding, dev)
+1 rows: non_performing_loans
+  12
+trap: differs (1 rows: 8)
+facts.json: MATCH (expected 12)
+
+## customer-most-card-purchases-2025  (ranking, dev)
+1 rows: customer, card_purchases
+  Xiomara Castellanos | 18
+trap: differs (1 rows: 43 | 11)
+facts.json: MATCH (expected Xiomara Castellanos)
+
+## net-customer-flow-by-branch-2025  (business-term, held-out)
+8 rows: branch, net_customer_flow_usd_minor
+  Chicago Loop | 47980354
+  Denver LoDo | 45823688
+  Atlanta Midtown | 34832793
+  Boston Back Bay | 29566384
+  Columbus Short North | 20862294
+  Charlotte Uptown | 19993477
+  Providence College Hill | 18107317
+  Hartford Downtown | 7916372
+trap: differs (8 rows: Charlotte Uptown | 21193117 ; Atlanta Midtown | 37588993 ; Columbus Short North | 19610549)
+
+## transactions-march-2025  (default-filter, held-out)
+1 rows: transactions
+  236
+trap: differs (1 rows: 250)
+facts.json: MATCH (expected 236)
+
+## accounts-opened-by-region-2024  (join, dev)
+4 rows: region, accounts_opened
+  Southeast | 20
+  Midwest | 18
+  Northeast | 13
+  West | 6
+trap: differs (4 rows: Midwest | 17 ; Northeast | 16 ; West | 4)
+facts.json: MATCH (expected {"Northeast": 13, "Southeast": 20, "Midwest": 18, "West": 6})
+
+## deposit-accounts-per-branch  (business-term, dev)
+8 rows: branch, deposit_accounts
+  Chicago Loop | 34
+  Atlanta Midtown | 22
+  Columbus Short North | 17
+  Boston Back Bay | 15
+  Charlotte Uptown | 14
+  Denver LoDo | 14
+  Providence College Hill | 13
+  Hartford Downtown | 9
+trap: differs (8 rows: Chicago Loop | 42 ; Boston Back Bay | 26 ; Charlotte Uptown | 29)
+
+## customer-deposits-2025-usd  (encoding, held-out)
+1 rows: deposits_usd
+  2596749.29
+trap: differs (1 rows: 2555993.20)
+
+## euro-deposits-2025  (encoding, dev)
+1 rows: deposits_eur
+  340142.08
+trap: differs (1 rows: 370332.90)
+
+## card-spend-december-2025  (default-filter, dev)
+1 rows: card_spend_usd
+  3806.52
+trap: differs (1 rows: 5121.82)
+
+## customers-per-segment  (aggregate, dev)
+3 rows: segment, customers
+  RETAIL | 55
+  PREMIER | 19
+  BUSINESS | 16
+trap: none written
+
+## branches-per-region  (aggregate, held-out)
+4 rows: region, branches
+  Northeast | 3
+  Midwest | 2
+  Southeast | 2
+  West | 1
+trap: none written
+
+## loans-per-product  (aggregate, dev)
+3 rows: product, loans
+  AUTO | 46
+  PERSONAL | 40
+  MORTGAGE | 24
+trap: none written
+

@@ -1,0 +1,91 @@
+<div
+  [attr.data-testid]="'eval-run-summary-' + jobId()"
+  class="mt-3 flex flex-wrap items-start gap-x-10 gap-y-4"
+>
+  @if (summary().byCategory.length > 0) {
+    <table class="text-left text-[12px]">
+      <caption
+        class="pb-1.5 text-left text-[11px] font-medium tracking-wide text-fg-muted uppercase"
+      >
+        By category
+      </caption>
+      <thead>
+        <tr class="text-fg-muted">
+          <th scope="col" class="py-1 pr-6 font-medium">Category</th>
+          <th scope="col" class="py-1 pl-4 text-right font-medium">Passed</th>
+          <th scope="col" class="py-1 pl-4 text-right font-medium">Failed</th>
+          <th
+            scope="col"
+            class="py-1 pl-4 text-right font-medium whitespace-nowrap"
+          >
+            Not scored
+          </th>
+          <th scope="col" class="py-1 pl-4 text-right font-medium">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of summary().byCategory; track row.category) {
+          <tr
+            [attr.data-testid]="'eval-run-summary-category-' + row.category"
+            class="border-t border-border"
+          >
+            <th scope="row" class="py-1 pr-6 font-mono font-normal text-fg">
+              {{ row.category }}
+            </th>
+            <td class="py-1 pl-4 text-right text-fg tabular-nums">
+              {{ row.passed }}
+            </td>
+            <td class="py-1 pl-4 text-right text-fg tabular-nums">
+              {{ row.failed }}
+            </td>
+            <td class="py-1 pl-4 text-right text-fg tabular-nums">
+              {{ row.notScored }}
+            </td>
+            <td class="py-1 pl-4 text-right text-fg tabular-nums">
+              {{ row.total }}
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+
+  @if (summary().byCriterion.length > 0) {
+    <table class="text-left text-[12px]">
+      <caption
+        class="pb-1.5 text-left text-[11px] font-medium tracking-wide text-fg-muted uppercase"
+      >
+        By criterion
+      </caption>
+      <thead>
+        <tr class="text-fg-muted">
+          <th scope="col" class="py-1 pr-6 font-medium">Criterion</th>
+          <th scope="col" class="py-1 pl-4 text-right font-medium">Passed</th>
+          <th scope="col" class="py-1 pl-4 text-right font-medium">Failed</th>
+          <th scope="col" class="py-1 pl-4 text-right font-medium">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of summary().byCriterion; track row.criterion) {
+          <tr
+            [attr.data-testid]="'eval-run-summary-criterion-' + row.criterion"
+            class="border-t border-border"
+          >
+            <th scope="row" class="py-1 pr-6 font-mono font-normal text-fg">
+              {{ row.criterion }}
+            </th>
+            <td class="py-1 pl-4 text-right text-fg tabular-nums">
+              {{ row.passed }}
+            </td>
+            <td class="py-1 pl-4 text-right text-fg tabular-nums">
+              {{ row.failed }}
+            </td>
+            <td class="py-1 pl-4 text-right text-fg tabular-nums">
+              {{ row.total }}
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+</div>

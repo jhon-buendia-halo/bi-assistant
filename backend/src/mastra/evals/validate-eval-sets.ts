@@ -11,6 +11,8 @@ import { assistantEvalDatasetError } from './assistant-eval-datasets';
 import { evalSetById, loadEvalSets } from './eval-sets';
 import type { EvalSetDefinition } from './eval-sets';
 import { runReferenceSql } from './result-set-check';
+import { tableReferences } from './checks/sql-text';
+import { catalogOfEntities, referenceInCatalog } from './databricks-catalog';
 
 /**
  * `npm run eval:validate`: run every reference query of one eval set on its
@@ -56,19 +58,59 @@ function oneLine(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
 }
 
+/** The last `count` name parts, lowercased: how R20 compares entities. */
+function lastParts(parts: readonly string[], count: number): string {
+  return parts
+    .slice(-count)
+    .map((part) => part.toLowerCase())
+    .join('.');
+}
+
+/**
+ * The first table or view a reference reads that is not an entity of the
+ * selected datasets (agents-evals R66), or undefined when it reads none.
+ * Names compare as the dataset preflight compares them (R20): on the last
+ * two name parts, ignoring case; a one-part name on its only part. The
+ * reading is conservative (`tableReferences`): a name it cannot tell is a
+ * table is left out, so a reference can slip through but is never refused
+ * for a table it does not read.
+ */
+export function referenceOutsideDatasets(
+  sql: string,
+  datasetEntities: readonly string[],
+): string | undefined {
+  const entities = datasetEntities.map((entity) => entity.split('.'));
+  const byTwo = new Set(entities.map((parts) => lastParts(parts, 2)));
+  const byOne = new Set(entities.map((parts) => lastParts(parts, 1)));
+  for (const parts of tableReferences(sql)) {
+    const known =
+      parts.length >= 2
+        ? byTwo.has(lastParts(parts, 2))
+        : byOne.has(lastParts(parts, 1));
+    if (!known) return parts.join('.');
+  }
+  return undefined;
+}
+
 /**
  * The validator's pure part: run each case's reference through `run`, one at
  * a time, print `✓ <id>  <dialect>  <n> rows` or `✗ <id>  <dialect>  <reason>`
  * per case, then a summary. A failed case does not stop the others. A
- * preflight error prints and runs nothing. A reference that returns no rows
- * fails too: it is almost always a filter on a misspelled value, and an empty
- * answer is better written as a count. Exit code 1 on any failure.
+ * preflight error prints and runs nothing. A reference that reads a table
+ * outside `datasetEntities` fails without running (R66): the database may
+ * hold the table, but a run scoped to the datasets cannot read it. A
+ * reference that returns no rows fails too: it is almost always a filter on
+ * a misspelled value, and an empty answer is better written as a count.
+ * A Databricks set's references run in the catalog of `datasetEntities`,
+ * their `` `evals`. `` rewritten (R148); entities that name no single catalog
+ * fail like the preflight. Exit code 1 on any failure.
  */
 export async function validateEvalSet(
   set: Pick<EvalSetDefinition, 'id' | 'dialect' | 'cases'>,
   preflightError: string | undefined,
   run: ReferenceRunner,
   print: (line: string) => void,
+  datasetEntities?: readonly string[],
 ): Promise<EvalSetValidation> {
   const withoutReference = set.cases.filter(
     (evalCase) => !evalCase.expectedSql,
@@ -78,15 +120,42 @@ export async function validateEvalSet(
     print(`\n${set.id}: the dataset preflight failed; no reference query ran.`);
     return { ran: 0, failed: 0, withoutReference, exitCode: 1 };
   }
+  let inCatalog = (sql: string) => sql;
+  if (set.dialect === 'databricks' && datasetEntities) {
+    let catalog: string;
+    try {
+      catalog = catalogOfEntities(datasetEntities);
+    } catch (err) {
+      print(`✗ dataset preflight  ${oneLine((err as Error).message)}`);
+      print(
+        `\n${set.id}: the dataset preflight failed; no reference query ran.`,
+      );
+      return { ran: 0, failed: 0, withoutReference, exitCode: 1 };
+    }
+    inCatalog = (sql) => referenceInCatalog(sql, catalog);
+  }
   let ran = 0;
   let failed = 0;
   for (const evalCase of set.cases) {
     if (!evalCase.expectedSql) continue;
     ran++;
+    const outside = datasetEntities
+      ? referenceOutsideDatasets(evalCase.expectedSql, datasetEntities)
+      : undefined;
+    if (outside) {
+      failed++;
+      print(
+        `✗ ${evalCase.id}  ${set.dialect}  the reference reads ${outside}, which is not in the selected datasets`,
+      );
+      continue;
+    }
     let line: string;
     try {
       // `<n> rows` whatever n is: the line format of agents-evals R66.
-      const { rowCount } = await run(evalCase.expectedSql, evalCase.id);
+      const { rowCount } = await run(
+        inCatalog(evalCase.expectedSql),
+        evalCase.id,
+      );
       line =
         rowCount === 0
           ? `✗ ${evalCase.id}  ${set.dialect}  the reference returned 0 rows`
@@ -186,6 +255,9 @@ async function validateOnApp(
       ).length,
     }),
     (line) => console.log(line),
+    snapshots
+      .filter((dataset) => datasets.includes(dataset.name))
+      .flatMap((dataset) => dataset.tables),
   );
 }
 

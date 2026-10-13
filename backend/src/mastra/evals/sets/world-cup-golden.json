@@ -7,6 +7,22 @@
       "fixtureId": "world-cup",
       "dialect": "postgres",
       "caseIdPrefix": ""
+    },
+    {
+      "id": "world-cup-golden-rest",
+      "name": "World Cup (golden set, REST API)",
+      "description": "The same golden-set questions against the World Cup sample served by a local REST API ('npm run worldcup:api'). Select its REST API datasource with a saved dataset containing the api.world_cup endpoints; reference SQL runs in SQLite over the fetched endpoints.",
+      "fixtureId": "world-cup-rest",
+      "dialect": "sqlite",
+      "caseIdPrefix": "rest-"
+    },
+    {
+      "id": "world-cup-golden-databricks",
+      "name": "World Cup (golden set, Databricks)",
+      "description": "The same golden-set questions against the World Cup sample in a Databricks Unity Catalog schema, evals.world_cup ('npm run fixture:databricks -- --fixture world-cup' loads it). Select its Databricks datasource with a saved dataset containing the evals.world_cup tables and views; reference SQL is Databricks SQL.",
+      "fixtureId": "world-cup-databricks",
+      "dialect": "databricks",
+      "caseIdPrefix": "dbx-"
     }
   ],
   "cases": [
@@ -21,14 +37,46 @@
           "type": "calledTool",
           "args": {
             "tool": "run_readonly_sql"
-          }
+          },
+          "criterion": "D1"
         },
         {
-          "type": "noToolErrors"
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
         }
       ],
       "expectedSql": {
-        "postgres": "SELECT t.common_name, SUM(s.passes_completed)::numeric / SUM(s.passes_attempted) AS pass_accuracy FROM world_cup.match_team_statistics s JOIN world_cup.teams t ON t.id = s.team_id GROUP BY t.common_name ORDER BY pass_accuracy DESC, t.common_name LIMIT 3"
+        "postgres": "SELECT t.common_name, SUM(s.passes_completed)::numeric / SUM(s.passes_attempted) AS pass_accuracy FROM world_cup.match_team_statistics s JOIN world_cup.teams t ON t.id = s.team_id GROUP BY t.common_name ORDER BY pass_accuracy DESC, t.common_name LIMIT 3",
+        "sqlite": "SELECT t.common_name, CAST(SUM(s.passes_completed) AS REAL) / SUM(s.passes_attempted) AS pass_accuracy FROM api.world_cup.match_team_statistics s JOIN api.world_cup.teams t ON t.id = s.team_id GROUP BY t.common_name ORDER BY pass_accuracy DESC, t.common_name LIMIT 3",
+        "databricks": "SELECT t.common_name, SUM(s.passes_completed) / SUM(s.passes_attempted) AS pass_accuracy FROM `evals`.world_cup.match_team_statistics s JOIN `evals`.world_cup.teams t ON t.id = s.team_id GROUP BY t.common_name ORDER BY pass_accuracy DESC, t.common_name LIMIT 3"
       }
     },
     {
@@ -42,14 +90,46 @@
           "type": "calledTool",
           "args": {
             "tool": "run_readonly_sql"
-          }
+          },
+          "criterion": "D1"
         },
         {
-          "type": "noToolErrors"
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
         }
       ],
       "expectedSql": {
-        "postgres": "SELECT t.common_name, SUM(s.shots_on_target)::numeric / SUM(s.shots) AS shot_accuracy FROM world_cup.match_team_statistics s JOIN world_cup.teams t ON t.id = s.team_id GROUP BY t.common_name ORDER BY shot_accuracy DESC, t.common_name LIMIT 3"
+        "postgres": "SELECT t.common_name, SUM(s.shots_on_target)::numeric / SUM(s.shots) AS shot_accuracy FROM world_cup.match_team_statistics s JOIN world_cup.teams t ON t.id = s.team_id GROUP BY t.common_name ORDER BY shot_accuracy DESC, t.common_name LIMIT 3",
+        "sqlite": "SELECT t.common_name, CAST(SUM(s.shots_on_target) AS REAL) / SUM(s.shots) AS shot_accuracy FROM api.world_cup.match_team_statistics s JOIN api.world_cup.teams t ON t.id = s.team_id GROUP BY t.common_name ORDER BY shot_accuracy DESC, t.common_name LIMIT 3",
+        "databricks": "SELECT t.common_name, SUM(s.shots_on_target) / SUM(s.shots) AS shot_accuracy FROM `evals`.world_cup.match_team_statistics s JOIN `evals`.world_cup.teams t ON t.id = s.team_id GROUP BY t.common_name ORDER BY shot_accuracy DESC, t.common_name LIMIT 3"
       }
     },
     {
@@ -63,14 +143,46 @@
           "type": "calledTool",
           "args": {
             "tool": "run_readonly_sql"
-          }
+          },
+          "criterion": "D1"
         },
         {
-          "type": "noToolErrors"
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
         }
       ],
       "expectedSql": {
-        "postgres": "SELECT t.common_name, COUNT(*) AS goals FROM world_cup.goals g JOIN world_cup.teams t ON t.id = g.scoring_team_id GROUP BY t.common_name ORDER BY goals DESC, t.common_name LIMIT 1"
+        "postgres": "SELECT t.common_name, COUNT(*) AS goals FROM world_cup.goals g JOIN world_cup.teams t ON t.id = g.scoring_team_id GROUP BY t.common_name ORDER BY goals DESC, t.common_name LIMIT 1",
+        "sqlite": "SELECT t.common_name, COUNT(*) AS goals FROM api.world_cup.goals g JOIN api.world_cup.teams t ON t.id = g.scoring_team_id GROUP BY t.common_name ORDER BY goals DESC, t.common_name LIMIT 1",
+        "databricks": "SELECT t.common_name, COUNT(*) AS goals FROM `evals`.world_cup.goals g JOIN `evals`.world_cup.teams t ON t.id = g.scoring_team_id GROUP BY t.common_name ORDER BY goals DESC, t.common_name LIMIT 1"
       }
     },
     {
@@ -85,14 +197,46 @@
           "type": "calledTool",
           "args": {
             "tool": "run_readonly_sql"
-          }
+          },
+          "criterion": "D1"
         },
         {
-          "type": "noToolErrors"
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
         }
       ],
       "expectedSql": {
-        "postgres": "SELECT t.common_name, COUNT(*) AS goals FROM world_cup.goals g JOIN world_cup.teams t ON t.id = g.scoring_team_id GROUP BY t.common_name HAVING COUNT(*) = 4 ORDER BY t.common_name"
+        "postgres": "SELECT t.common_name, COUNT(*) AS goals FROM world_cup.goals g JOIN world_cup.teams t ON t.id = g.scoring_team_id GROUP BY t.common_name HAVING COUNT(*) = 4 ORDER BY t.common_name",
+        "sqlite": "SELECT t.common_name, COUNT(*) AS goals FROM api.world_cup.goals g JOIN api.world_cup.teams t ON t.id = g.scoring_team_id GROUP BY t.common_name HAVING COUNT(*) = 4 ORDER BY t.common_name",
+        "databricks": "SELECT t.common_name, COUNT(*) AS goals FROM `evals`.world_cup.goals g JOIN `evals`.world_cup.teams t ON t.id = g.scoring_team_id GROUP BY t.common_name HAVING COUNT(*) = 4 ORDER BY t.common_name"
       }
     },
     {
@@ -107,14 +251,46 @@
           "type": "calledTool",
           "args": {
             "tool": "run_readonly_sql"
-          }
+          },
+          "criterion": "D1"
         },
         {
-          "type": "noToolErrors"
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
         }
       ],
       "expectedSql": {
-        "postgres": "SELECT card_type, COUNT(*) AS cards FROM world_cup.disciplinary_events GROUP BY card_type ORDER BY cards DESC, card_type"
+        "postgres": "SELECT card_type, COUNT(*) AS cards FROM world_cup.disciplinary_events GROUP BY card_type ORDER BY cards DESC, card_type",
+        "sqlite": "SELECT card_type, COUNT(*) AS cards FROM api.world_cup.disciplinary_events GROUP BY card_type ORDER BY cards DESC, card_type",
+        "databricks": "SELECT card_type, COUNT(*) AS cards FROM `evals`.world_cup.disciplinary_events GROUP BY card_type ORDER BY cards DESC, card_type"
       }
     },
     {
@@ -128,14 +304,54 @@
           "type": "calledTool",
           "args": {
             "tool": "run_readonly_sql"
-          }
+          },
+          "criterion": "D1"
         },
         {
-          "type": "noToolErrors"
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
+        },
+        {
+          "type": "sqlMatches",
+          "args": {
+            "pattern": "assist",
+            "flags": "i"
+          },
+          "criterion": "D2"
         }
       ],
       "expectedSql": {
-        "postgres": "SELECT COUNT(*) AS goals_with_assist FROM world_cup.goals WHERE assist_player_id IS NOT NULL"
+        "postgres": "SELECT COUNT(*) AS goals_with_assist FROM world_cup.goals WHERE assist_player_id IS NOT NULL",
+        "sqlite": "SELECT COUNT(*) AS goals_with_assist FROM api.world_cup.goals WHERE assist_player_id IS NOT NULL",
+        "databricks": "SELECT COUNT(*) AS goals_with_assist FROM `evals`.world_cup.goals WHERE assist_player_id IS NOT NULL"
       }
     },
     {
@@ -150,14 +366,46 @@
           "type": "calledTool",
           "args": {
             "tool": "run_readonly_sql"
-          }
+          },
+          "criterion": "D1"
         },
         {
-          "type": "noToolErrors"
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
         }
       ],
       "expectedSql": {
-        "postgres": "SELECT goal_type, COUNT(*) AS goals FROM world_cup.goals GROUP BY goal_type ORDER BY goals DESC, goal_type"
+        "postgres": "SELECT goal_type, COUNT(*) AS goals FROM world_cup.goals GROUP BY goal_type ORDER BY goals DESC, goal_type",
+        "sqlite": "SELECT goal_type, COUNT(*) AS goals FROM api.world_cup.goals GROUP BY goal_type ORDER BY goals DESC, goal_type",
+        "databricks": "SELECT goal_type, COUNT(*) AS goals FROM `evals`.world_cup.goals GROUP BY goal_type ORDER BY goals DESC, goal_type"
       }
     },
     {
@@ -172,14 +420,46 @@
           "type": "calledTool",
           "args": {
             "tool": "run_readonly_sql"
-          }
+          },
+          "criterion": "D1"
         },
         {
-          "type": "noToolErrors"
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
         }
       ],
       "expectedSql": {
-        "postgres": "SELECT tr.tournament_year, SUM(m.attendance) AS total_attendance FROM world_cup.matches m JOIN world_cup.tournaments tr ON tr.id = m.tournament_id GROUP BY tr.tournament_year ORDER BY tr.tournament_year"
+        "postgres": "SELECT tr.tournament_year, SUM(m.attendance) AS total_attendance FROM world_cup.matches m JOIN world_cup.tournaments tr ON tr.id = m.tournament_id GROUP BY tr.tournament_year ORDER BY tr.tournament_year",
+        "sqlite": "SELECT tr.tournament_year, SUM(m.attendance) AS total_attendance FROM api.world_cup.matches m JOIN api.world_cup.tournaments tr ON tr.id = m.tournament_id GROUP BY tr.tournament_year ORDER BY tr.tournament_year",
+        "databricks": "SELECT tr.tournament_year, SUM(m.attendance) AS total_attendance FROM `evals`.world_cup.matches m JOIN `evals`.world_cup.tournaments tr ON tr.id = m.tournament_id GROUP BY tr.tournament_year ORDER BY tr.tournament_year"
       }
     },
     {
@@ -194,14 +474,46 @@
           "type": "calledTool",
           "args": {
             "tool": "run_readonly_sql"
-          }
+          },
+          "criterion": "D1"
         },
         {
-          "type": "noToolErrors"
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
         }
       ],
       "expectedSql": {
-        "postgres": "SELECT stage, COUNT(*) AS matches FROM world_cup.matches GROUP BY stage ORDER BY matches DESC, stage"
+        "postgres": "SELECT stage, COUNT(*) AS matches FROM world_cup.matches GROUP BY stage ORDER BY matches DESC, stage",
+        "sqlite": "SELECT stage, COUNT(*) AS matches FROM api.world_cup.matches GROUP BY stage ORDER BY matches DESC, stage",
+        "databricks": "SELECT stage, COUNT(*) AS matches FROM `evals`.world_cup.matches GROUP BY stage ORDER BY matches DESC, stage"
       }
     },
     {
@@ -215,14 +527,46 @@
           "type": "calledTool",
           "args": {
             "tool": "run_readonly_sql"
-          }
+          },
+          "criterion": "D1"
         },
         {
-          "type": "noToolErrors"
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
         }
       ],
       "expectedSql": {
-        "postgres": "SELECT t.common_name, SUM(s.passes_completed)::numeric / SUM(s.passes_attempted) AS pass_completion FROM world_cup.match_team_statistics s JOIN world_cup.teams t ON t.id = s.team_id GROUP BY t.common_name ORDER BY t.common_name"
+        "postgres": "SELECT t.common_name, SUM(s.passes_completed)::numeric / SUM(s.passes_attempted) AS pass_completion FROM world_cup.match_team_statistics s JOIN world_cup.teams t ON t.id = s.team_id GROUP BY t.common_name ORDER BY t.common_name",
+        "sqlite": "SELECT t.common_name, CAST(SUM(s.passes_completed) AS REAL) / SUM(s.passes_attempted) AS pass_completion FROM api.world_cup.match_team_statistics s JOIN api.world_cup.teams t ON t.id = s.team_id GROUP BY t.common_name ORDER BY t.common_name",
+        "databricks": "SELECT t.common_name, SUM(s.passes_completed) / SUM(s.passes_attempted) AS pass_completion FROM `evals`.world_cup.match_team_statistics s JOIN `evals`.world_cup.teams t ON t.id = s.team_id GROUP BY t.common_name ORDER BY t.common_name"
       }
     },
     {
@@ -237,14 +581,46 @@
           "type": "calledTool",
           "args": {
             "tool": "run_readonly_sql"
-          }
+          },
+          "criterion": "D1"
         },
         {
-          "type": "noToolErrors"
+          "type": "noToolErrors",
+          "criterion": "D3"
+        },
+        {
+          "type": "noRepairs",
+          "criterion": "D3"
+        },
+        {
+          "type": "rationaleOk",
+          "criterion": "I3"
+        },
+        {
+          "type": "noHtml",
+          "criterion": "I4"
+        },
+        {
+          "type": "dialect",
+          "criterion": "I6"
+        },
+        {
+          "type": "qualifiedNames",
+          "criterion": "I6"
+        },
+        {
+          "type": "namesNotIds",
+          "criterion": "I1"
+        },
+        {
+          "type": "numbersGrounded",
+          "criterion": "G1"
         }
       ],
       "expectedSql": {
-        "postgres": "SELECT COUNT(*) FILTER (WHERE card_type = 'yellow') AS yellow_cards, COUNT(*) AS total_cards FROM world_cup.disciplinary_events"
+        "postgres": "SELECT COUNT(*) FILTER (WHERE card_type = 'yellow') AS yellow_cards, COUNT(*) AS total_cards FROM world_cup.disciplinary_events",
+        "sqlite": "SELECT SUM(CASE WHEN card_type = 'yellow' THEN 1 ELSE 0 END) AS yellow_cards, COUNT(*) AS total_cards FROM api.world_cup.disciplinary_events",
+        "databricks": "SELECT COUNT_IF(card_type = 'yellow') AS yellow_cards, COUNT(*) AS total_cards FROM `evals`.world_cup.disciplinary_events"
       }
     }
   ]

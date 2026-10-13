@@ -12,16 +12,29 @@
     @if (result(); as result) {
       <!-- Verdict -->
       <div class="flex items-center gap-2">
-        @if (result.passed) {
-          <span class="flex items-center gap-1.5 text-[13px] text-on-success-soft">
-            <lucide-angular [img]="CircleCheck" [size]="15" />
-            <span>Passed</span>
-          </span>
-        } @else {
-          <span class="flex items-center gap-1.5 text-[13px] text-on-danger-soft">
-            <lucide-angular [img]="CircleX" [size]="15" />
-            <span>Failed</span>
-          </span>
+        @switch (status()) {
+          @case ("passed") {
+            <span
+              class="flex items-center gap-1.5 text-[13px] text-on-success-soft"
+            >
+              <lucide-angular [img]="CircleCheck" [size]="15" />
+              <span>{{ statusLabels.passed }}</span>
+            </span>
+          }
+          @case ("failed") {
+            <span
+              class="flex items-center gap-1.5 text-[13px] text-on-danger-soft"
+            >
+              <lucide-angular [img]="CircleX" [size]="15" />
+              <span>{{ statusLabels.failed }}</span>
+            </span>
+          }
+          @default {
+            <span class="flex items-center gap-1.5 text-[13px] text-fg-muted">
+              <lucide-angular [img]="CircleMinus" [size]="15" />
+              <span>{{ statusLabels["not-scored"] }}</span>
+            </span>
+          }
         }
         <span class="flex items-center gap-1 text-[12px] text-fg-muted">
           <lucide-angular [img]="Clock" [size]="12" />
@@ -42,13 +55,18 @@
           </p>
         </div>
       } @else if (failedChecks().length > 0) {
-        <div class="flex flex-col gap-1.5">
+        <div
+          data-testid="eval-trace-failed-checks"
+          class="flex flex-col gap-1.5"
+        >
           <p class="text-[11px] tracking-wider text-fg-muted uppercase">
             Why it failed
           </p>
-          @for (check of failedChecks(); track check.id) {
+          @for (check of failedChecks(); track $index) {
             <div class="rounded-md bg-danger-soft px-3 py-2">
-              <p class="text-[12px] text-on-danger-soft">{{ check.description }}</p>
+              <p class="text-[12px] text-on-danger-soft">
+                {{ check.description }}
+              </p>
               @if (check.reason) {
                 <p class="mt-1 text-[11px] text-on-danger-soft">
                   {{ check.reason }}
@@ -62,23 +80,52 @@
       <!-- Every check -->
       <div class="flex flex-col gap-1.5">
         <p class="text-[11px] tracking-wider text-fg-muted uppercase">Checks</p>
-        @for (check of result.checkResults; track check.id) {
+        @for (check of result.checkResults; track $index) {
+          @let checkState = checkStatus(check);
           <div
+            [attr.data-testid]="'eval-trace-check-' + check.id"
             class="flex items-start gap-2 rounded-md bg-surface-muted px-2.5 py-1.5"
           >
-            <lucide-angular
-              [img]="check.passed ? CircleCheck : CircleX"
-              [size]="13"
-              class="mt-0.5 shrink-0"
-              [class.text-on-success-soft]="check.passed"
-              [class.text-on-danger-soft]="!check.passed"
-            />
-            <span class="min-w-0 flex-1 text-[12px] text-fg">{{
-              check.description
-            }}</span>
-            <span class="shrink-0 font-mono text-[11px] text-fg-muted">{{
-              check.score
-            }}</span>
+            @switch (checkState) {
+              @case ("passed") {
+                <lucide-angular
+                  [img]="CircleCheck"
+                  [size]="13"
+                  class="mt-0.5 shrink-0 text-on-success-soft"
+                />
+              }
+              @case ("failed") {
+                <lucide-angular
+                  [img]="CircleX"
+                  [size]="13"
+                  class="mt-0.5 shrink-0 text-on-danger-soft"
+                />
+              }
+              @default {
+                <lucide-angular
+                  [img]="CircleMinus"
+                  [size]="13"
+                  class="mt-0.5 shrink-0 text-fg-muted"
+                />
+              }
+            }
+            <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span class="text-[12px] text-fg">{{ check.description }}</span>
+              @if (checkState === "not-scored" && check.reason) {
+                <span class="text-[11px] text-fg-muted">{{
+                  check.reason
+                }}</span>
+              }
+            </span>
+            @if (checkState === "not-scored") {
+              <span class="shrink-0 text-[11px] text-fg-muted">{{
+                statusLabels["not-scored"]
+              }}</span>
+            } @else {
+              <span class="shrink-0 font-mono text-[11px] text-fg-muted">{{
+                check.score
+              }}</span>
+            }
           </div>
         }
       </div>

@@ -52,13 +52,29 @@ jest.mock('@mastra/evals/checks', () => {
   };
 });
 
+// The deterministic checks are wrapped with `createScorer` from
+// `@mastra/core/evals`, which Jest cannot require either. This stand-in keeps
+// the builder chain and the config (id, name, description) the tab shows;
+// `checks/check-scorer.spec.ts` runs the wrapper itself.
+jest.mock('@mastra/core/evals', () => ({
+  createScorer: (config: Record<string, unknown>) => {
+    const scorer: Record<string, unknown> = { ...config };
+    for (const step of ['analyze', 'generateScore', 'generateReason']) {
+      scorer[step] = () => scorer;
+    }
+    return scorer;
+  },
+}));
+
 import { readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { toAssistantEvalSets } from './eval-check-scorers';
+import { isDeterministicCheckType } from './checks';
 import {
   caseIdsForSet,
   EVAL_CATEGORIES,
   EVAL_SET_FILES,
+  EVAL_SPLITS,
   EvalSetError,
   evalSetById,
   loadEvalSets,
@@ -103,27 +119,61 @@ function snapshotOf(sets: ReturnType<typeof toAssistantEvalSets>) {
 describe('eval set files', () => {
   const sets = toAssistantEvalSets(loadEvalSets());
 
-  it('rebuild the three existing sets exactly as the TypeScript defined them', () => {
-    const moved = snapshotOf(sets.slice(0, 3));
-    // Field by field, so a failure names the case and field that drifted.
-    expect(moved.map((set) => set.id)).toEqual(
-      (BEFORE.sets as { id: string }[]).map((set) => set.id),
-    );
-    moved.forEach((set, index) => expect(set).toEqual(BEFORE.sets[index]));
+  it('keep every question, reference and check the TypeScript defined (a superset since BA-183)', () => {
+    type SnapshotSet = ReturnType<typeof snapshotOf>[number];
+    const before = BEFORE.sets as SnapshotSet[];
+    // The sets the snapshot holds, by id: variants added since (R160) sit
+    // between them in the suite order.
+    const snapshotIds = before.map((set) => set.id);
+    const inSnapshot = sets.filter((set) => snapshotIds.includes(set.id));
+    const moved = snapshotOf(inSnapshot);
+    expect(moved.map((set) => set.id)).toEqual(before.map((set) => set.id));
+    // Field by field, so a failure names the set, case and field that drifted.
+    moved.forEach(({ cases, ...set }, index) => {
+      const { cases: beforeCases, ...beforeSet } = before[index];
+      expect(set).toEqual(beforeSet);
+      expect(cases.map((evalCase) => evalCase.id)).toEqual(
+        beforeCases.map((evalCase) => evalCase.id),
+      );
+      cases.forEach(({ scorers, ...evalCase }, caseIndex) => {
+        const { scorers: beforeScorers, ...beforeCase } =
+          beforeCases[caseIndex];
+        // Question, intent, reference, options and rubric are unchanged.
+        expect(evalCase).toEqual(beforeCase);
+        // Every check of the snapshot is still there, with the same id and
+        // the same arguments (the description carries them); BA-183 only
+        // added checks (agents-evals R82).
+        expect([evalCase.id, scorers]).toEqual([
+          evalCase.id,
+          expect.arrayContaining(beforeScorers),
+        ]);
+      });
+    });
     expect(
-      sets
-        .slice(0, 3)
-        .flatMap((set) => set.cases)
-        .map((evalCase) => evalCase.id),
+      inSnapshot.flatMap((set) => set.cases).map((evalCase) => evalCase.id),
     ).toEqual(BEFORE.caseIds);
   });
 
-  it('lists the sets in the suite order, the golden set last', () => {
+  it('lists the sets in the suite order, the World Cup golden set before the domains', () => {
     expect(sets.map((set) => set.id)).toEqual([
       'world-cup',
       'world-cup-rest',
+      'world-cup-databricks',
       'formula-1',
       'world-cup-golden',
+      'world-cup-golden-rest',
+      'world-cup-golden-databricks',
+      'world-cup-rest-connector',
+      'world-cup-databricks-only',
+      'finance',
+      'finance-rest',
+      'finance-databricks',
+      'health-insurance',
+      'genomics',
+      'supply-chain',
+      'marketing-analytics',
+      'marketing-analytics-rest',
+      'marketing-analytics-databricks',
     ]);
   });
 
@@ -138,9 +188,15 @@ describe('eval set files', () => {
     });
     expect(golden.cases).toHaveLength(11);
     for (const evalCase of golden.cases) {
-      expect(evalCase.checks).toEqual([
-        { type: 'calledTool', args: { tool: 'run_readonly_sql' } },
-        { type: 'noToolErrors' },
+      // The two checks it moved with, now with their criteria, then the
+      // deterministic checks of its category (R65, R82).
+      expect(evalCase.checks.slice(0, 2)).toEqual([
+        {
+          type: 'calledTool',
+          args: { tool: 'run_readonly_sql' },
+          criterion: 'D1',
+        },
+        { type: 'noToolErrors', criterion: 'D3' },
       ]);
       expect(evalCase.expectedSql).toMatch(/^SELECT /);
       expect(evalCase.notes).toBeTruthy();
@@ -159,8 +215,48 @@ describe('eval set files', () => {
     for (const set of loadEvalSets()) {
       for (const evalCase of set.cases) {
         expect(EVAL_CATEGORIES).toContain(evalCase.category);
-        expect(evalCase.split).toBe('dev');
+        expect(EVAL_SPLITS).toContain(evalCase.split);
       }
+    }
+  });
+
+  it('keeps the World Cup and Formula 1 sets all dev', () => {
+    const moved = ['world-cup.json', 'formula-1.json', 'world-cup-golden.json'];
+    for (const set of loadEvalSets().filter((s) => moved.includes(s.file))) {
+      expect(set.cases.every((evalCase) => evalCase.split === 'dev')).toBe(
+        true,
+      );
+    }
+  });
+
+  it('holds out about 30% of every synthetic domain set, each bank on PostgreSQL first (agents-evals R90, R160)', () => {
+    const DOMAIN_FILES = [
+      'finance.json',
+      'health-insurance.json',
+      'genomics.json',
+      'supply-chain.json',
+      'marketing-analytics.json',
+    ];
+    const domains = loadEvalSets().filter((set) =>
+      DOMAIN_FILES.includes(set.file),
+    );
+    expect(domains.length).toBeGreaterThan(0);
+    for (const set of domains) {
+      const heldOut = set.cases.filter(
+        (evalCase) => evalCase.split === 'held-out',
+      ).length;
+      const share = heldOut / set.cases.length;
+      expect([set.id, share >= 0.25 && share <= 0.4]).toEqual([set.id, true]);
+    }
+    // A bank's first variant is its PostgreSQL set; a REST or Databricks
+    // variant repeats its questions on the same rows (R160).
+    for (const file of DOMAIN_FILES) {
+      const first = domains.find((set) => set.file === file);
+      expect([file, first?.id, first?.dialect]).toEqual([
+        file,
+        file.replace(/\.json$/, ''),
+        'postgres',
+      ]);
     }
   });
 
@@ -169,6 +265,134 @@ describe('eval set files', () => {
       .filter((name) => name.endsWith('.json'))
       .sort();
     expect(EVAL_SET_FILES.map((source) => source.file).sort()).toEqual(onDisk);
+  });
+});
+
+describe('the deterministic checks on the moved sets (agents-evals R82)', () => {
+  const MOVED = ['world-cup.json', 'formula-1.json', 'world-cup-golden.json'];
+  const moved = loadEvalSets().filter((set) => MOVED.includes(set.file));
+  const ANSWER = [
+    'noRepairs',
+    'rationaleOk',
+    'noHtml',
+    'dialect',
+    'qualifiedNames',
+    'namesNotIds',
+    'numbersGrounded',
+  ];
+  const BY_CATEGORY: Record<string, string[]> = {
+    discovery: ['noHtml', 'rationaleOk'],
+    ambiguous: ['optionCount', 'noHtml'],
+    join: [...ANSWER, 'usesEntities'],
+    encoding: [...ANSWER, 'sqlMatches'],
+    null: [...ANSWER, 'sqlMatches'],
+    visual: [...ANSWER, 'visualKeywords'],
+    'out-of-scope': [...ANSWER, 'notMatches'],
+  };
+
+  it('attaches the checks of each category to every set of the moved banks', () => {
+    expect(moved.map((set) => set.id)).toEqual([
+      'world-cup',
+      'world-cup-rest',
+      'world-cup-databricks',
+      'formula-1',
+      'world-cup-golden',
+      'world-cup-golden-rest',
+      'world-cup-golden-databricks',
+    ]);
+    for (const set of moved) {
+      for (const evalCase of set.cases) {
+        const deterministic = evalCase.checks
+          .map((check) => check.type)
+          .filter(isDeterministicCheckType);
+        expect([evalCase.id, deterministic]).toEqual([
+          evalCase.id,
+          BY_CATEGORY[evalCase.category] ?? ANSWER,
+        ]);
+      }
+    }
+  });
+
+  it('names a criterion on every check, the moved ones included', () => {
+    for (const set of moved) {
+      for (const evalCase of set.cases) {
+        for (const check of evalCase.checks) {
+          expect([evalCase.id, check.type, check.criterion]).toEqual([
+            evalCase.id,
+            check.type,
+            expect.stringMatching(/^[DGIC]\d$/),
+          ]);
+        }
+      }
+    }
+  });
+
+  it('guards the out-of-scope questions without the judge (G2)', () => {
+    const outOfScope = moved
+      .filter((set) => set.dialect === 'postgres')
+      .flatMap((set) => set.cases)
+      .filter((evalCase) => evalCase.category === 'out-of-scope');
+    expect(outOfScope.map((evalCase) => evalCase.id)).toEqual([
+      'out-of-scope',
+      'f1-out-of-scope-motogp',
+    ]);
+    for (const evalCase of outOfScope) {
+      expect(
+        evalCase.checks
+          .filter((check) => check.criterion === 'G2')
+          .map((check) => check.type),
+      ).toEqual(['didNotCall', 'matches', 'notMatches']);
+    }
+  });
+
+  it('binds the dialect checks to each set, so the REST sets are held to SQLite and the Databricks sets to Databricks SQL', () => {
+    const scorers = toAssistantEvalSets(moved).map((set) => ({
+      id: set.id,
+      dialect: set.cases[0].scorers.find(
+        (scorer) => scorer.id === 'check-dialect',
+      )?.description,
+    }));
+    expect(scorers).toEqual([
+      {
+        id: 'world-cup',
+        dialect: 'Checks that the SQL fits the PostgreSQL dialect',
+      },
+      {
+        id: 'world-cup-rest',
+        dialect:
+          'Checks that the SQL fits the SQLite (the REST connector) dialect',
+      },
+      {
+        id: 'world-cup-databricks',
+        dialect: 'Checks that the SQL fits the Databricks SQL dialect',
+      },
+      {
+        id: 'formula-1',
+        dialect: 'Checks that the SQL fits the PostgreSQL dialect',
+      },
+      {
+        id: 'world-cup-golden',
+        dialect: 'Checks that the SQL fits the PostgreSQL dialect',
+      },
+      {
+        id: 'world-cup-golden-rest',
+        dialect:
+          'Checks that the SQL fits the SQLite (the REST connector) dialect',
+      },
+      {
+        id: 'world-cup-golden-databricks',
+        dialect: 'Checks that the SQL fits the Databricks SQL dialect',
+      },
+    ]);
+    const finalScore = toAssistantEvalSets(moved)[0].cases.find(
+      (evalCase) => evalCase.id === 'final-score-2018',
+    );
+    expect(
+      finalScore?.scorers.find((scorer) => scorer.id === 'check-uses-entities')
+        ?.description,
+    ).toBe(
+      'Checks that one successful SQL query reads matches, tournaments, teams',
+    );
   });
 });
 
@@ -384,6 +608,92 @@ describe('the set loader expands variants', () => {
   });
 });
 
+describe('the deterministic checks in a set file (R68, R81)', () => {
+  const withCheck = (check: unknown, fields: Record<string, unknown> = {}) =>
+    parseEvalSetFile(
+      file({ cases: [evalCase({ checks: [check], ...fields })] }),
+    )[0].cases[0].checks[0];
+
+  it('accepts each new type, with its default criterion unless the file names one', () => {
+    expect(withCheck({ type: 'noHtml' })).toEqual({
+      type: 'noHtml',
+      criterion: 'I4',
+    });
+    expect(withCheck({ type: 'noHtml', criterion: 'G2' })).toEqual({
+      type: 'noHtml',
+      criterion: 'G2',
+    });
+    expect(
+      withCheck({
+        type: 'visualKeywords',
+        args: { keywords: ['goal', '2022'] },
+      }),
+    ).toEqual({
+      type: 'visualKeywords',
+      args: { keywords: ['goal', '2022'] },
+      criterion: 'G4',
+    });
+    // The Mastra helpers, `sqlMatches` and `notMatches` have no default.
+    expect(withCheck({ type: 'noToolErrors' })).toEqual({
+      type: 'noToolErrors',
+    });
+    expect(
+      withCheck({
+        type: 'sqlMatches',
+        args: { pattern: 'penalt', flags: 'i' },
+      }),
+    ).toEqual({ type: 'sqlMatches', args: { pattern: 'penalt', flags: 'i' } });
+  });
+
+  it('refuses a criterion outside the research 2.5 list, on any check', () => {
+    expect(() => withCheck({ type: 'noToolErrors', criterion: 'J1' })).toThrow(
+      /case "c1", check #1: criterion "J1" is not one of D1, D2, D3/,
+    );
+    expect(() => withCheck({ type: 'noHtml', criterion: 'i4' })).toThrow(
+      /criterion "i4" is not one of/,
+    );
+  });
+
+  it('refuses missing, unknown or unusable arguments', () => {
+    expect(() => withCheck({ type: 'visualKeywords' })).toThrow(
+      /"visualKeywords" needs "args" with "keywords"/,
+    );
+    expect(() =>
+      withCheck({ type: 'visualKeywords', args: { keywords: [] } }),
+    ).toThrow(/args."keywords" must be a non-empty array/);
+    expect(() => withCheck({ type: 'noHtml', args: { strict: true } })).toThrow(
+      /unknown field\(s\) "strict"/,
+    );
+    expect(() =>
+      withCheck({ type: 'notMatches', args: { pattern: 'x', in: 'both' } }),
+    ).toThrow(/args."in" must be "answer" or "sql"/);
+    expect(() =>
+      withCheck({ type: 'sqlMatches', args: { pattern: 'a', flags: 'g' } }),
+    ).toThrow(/without "g" or "y"/);
+    expect(() =>
+      withCheck({ type: 'numbersGrounded', args: { ignore: [''] } }),
+    ).toThrow(/args."ignore" must be a non-empty array of non-empty strings/);
+  });
+
+  it('refuses usesEntities with nothing to compare', () => {
+    expect(() => withCheck({ type: 'usesEntities' })).toThrow(
+      /case "c1", check #1: "usesEntities" needs args."entities" or a reference query/,
+    );
+    expect(() =>
+      withCheck(
+        { type: 'usesEntities' },
+        { expectedSql: { postgres: 'SELECT 1' } },
+      ),
+    ).toThrow(/the reference query names no table/);
+    expect(
+      withCheck(
+        { type: 'usesEntities' },
+        { expectedSql: { postgres: 'SELECT 1 FROM world_cup.goals' } },
+      ),
+    ).toEqual({ type: 'usesEntities', criterion: 'D2' });
+  });
+});
+
 describe('choosing one set by id (EVAL_SET)', () => {
   const sets = loadEvalSets();
 
@@ -402,9 +712,67 @@ describe('choosing one set by id (EVAL_SET)', () => {
   });
 
   it('refuses an unknown set, naming the known ones', () => {
-    const message =
-      'Unknown eval set "world-cop". Known sets: world-cup, world-cup-rest, formula-1, world-cup-golden.';
+    const message = `Unknown eval set "world-cop". Known sets: ${sets.map((set) => set.id).join(', ')}.`;
+    expect(message).toContain(
+      'Known sets: world-cup, world-cup-rest, world-cup-databricks, formula-1, world-cup-golden, ',
+    );
     expect(() => caseIdsForSet(sets, 'world-cop')).toThrow(message);
     expect(() => evalSetById(sets, 'world-cop')).toThrow(message);
+  });
+});
+
+describe('the REST-only set (agents-evals R120 to R124, BA-187)', () => {
+  const set = evalSetById(loadEvalSets(), 'world-cup-rest-connector');
+
+  it('holds twelve dev questions on the World Cup REST sample, in SQLite', () => {
+    expect(set).toMatchObject({
+      name: 'World Cup (REST connector)',
+      fixtureId: 'world-cup-rest-connector',
+      dialect: 'sqlite',
+      file: 'world-cup-rest-connector.json',
+    });
+    expect(set.cases).toHaveLength(12);
+    for (const evalCase of set.cases) {
+      expect(evalCase.id).toMatch(/^rest-connector-/);
+      expect(evalCase.split).toBe('dev');
+      expect(evalCase.notes).toBeTruthy();
+    }
+  });
+
+  it('tags every question with one REST tag, four of them paging', () => {
+    const tags = set.cases.map((evalCase) => evalCase.tags);
+    for (const caseTags of tags) {
+      expect(caseTags).toHaveLength(1);
+      expect(caseTags[0]).toMatch(
+        /^rest:(paging|nested|rows-pointer|cap|down|auth|dialect)$/,
+      );
+    }
+    expect(tags.flat().filter((tag) => tag === 'rest:paging')).toHaveLength(4);
+  });
+
+  it('gives every question but the refused one a SQLite reference over api.world_cup, and names a criterion on every check', () => {
+    for (const evalCase of set.cases) {
+      if (evalCase.tags.includes('rest:down')) {
+        // R123: it could never run on the variant it needs.
+        expect(evalCase.expectedSql).toBeUndefined();
+        expect(evalCase.checks.map((check) => check.type)).not.toContain(
+          'noToolErrors',
+        );
+        expect(
+          evalCase.checks
+            .filter((check) => check.criterion === 'G2')
+            .map((check) => check.type),
+        ).toEqual(['matches', 'notMatches']);
+      } else {
+        expect(evalCase.expectedSql).toMatch(/\bapi\.world_cup\.\w+/);
+        expect(evalCase.expectedSql).not.toMatch(/::|\bILIKE\b|FILTER\s*\(/i);
+      }
+      for (const check of evalCase.checks) {
+        expect([evalCase.id, check.criterion]).toEqual([
+          evalCase.id,
+          expect.stringMatching(/^[DGIC]\d$/),
+        ]);
+      }
+    }
   });
 });

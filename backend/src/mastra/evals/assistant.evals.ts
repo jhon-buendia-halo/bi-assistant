@@ -19,8 +19,17 @@ import { entityOrientationLines } from '../context-blocks';
 import { runResultSetCheck } from './result-set-check';
 import type { ResultSetCheckOptions } from './result-set-check';
 import { loadEvalSets } from './eval-sets';
-import type { EvalCategory, EvalSplit } from './eval-sets';
+import type { EvalCategory, EvalCriterion, EvalSplit } from './eval-sets';
 import { toAssistantEvalSets } from './eval-check-scorers';
+import {
+  JUDGE_OFF,
+  JUDGE_OFF_REASON,
+  judgeCriterion,
+  shouldJudge,
+} from './judge-option';
+import type { EvalJudgeSetting } from './judge-option';
+import { questionStatus } from './eval-summary';
+import type { EvalStatus } from './eval-summary';
 import {
   assistantEvalDatasetError,
   evalFixture,
@@ -59,6 +68,11 @@ export interface AssistantEvalCase {
   intent: string;
   scorers: MastraScorer<any, any, any, any>[];
   /**
+   * The criterion each scorer measures (agents-evals R81, R102), one entry
+   * per scorer in the same order; `undefined` where a check names none.
+   */
+  checkCriteria?: (EvalCriterion | undefined)[];
+  /**
    * Trusted SQL against the eval datasource whose live result set is the
    * reference answer. When present, `runAssistantEvalCase` compares it
    * (via `runResultSetCheck`) against the agent's successful
@@ -72,7 +86,8 @@ export interface AssistantEvalCase {
    * the final answer would be too brittle (clarification quality, refusal
    * quality, whether a visual plausibly answers the request). When present,
    * `runAssistantEvalCase` scores it with the LLM judge
-   * (`../agents/eval-judge.agent`) as an additional check.
+   * (`../agents/eval-judge.agent`) as an additional check — when the run's
+   * judge option allows it; otherwise the check is not scored (R101).
    */
   judgeRubric?: string;
   /** The case's primary category (research 2.6); never graded. */
@@ -135,8 +150,8 @@ export interface EvalToolCall {
   error?: string;
 }
 
-/** One scorer's verdict on a question, with why it landed there. */
-export interface EvalCheckResult {
+/** What a check produces before the runner gives it a status. */
+export interface ScoredCheckResult {
   id: string;
   /** The scorer's own description, e.g. 'Checks if output includes "X"'. */
   description: string;
@@ -146,10 +161,20 @@ export interface EvalCheckResult {
   reason?: string;
 }
 
+/** One check's verdict on a question, with why it landed there. */
+export interface EvalCheckResult extends ScoredCheckResult {
+  /** `not-scored` only for a judge check the run did not call (R102). */
+  status: EvalStatus;
+  /** The criterion the check measures, when it has one (R102). */
+  criterion?: string;
+}
+
 /** Outcome of one question. */
 export interface AssistantEvalCaseResult {
   id: string;
   question: string;
+  /** The case's category (R103); absent on runs saved before BA-184. */
+  category?: string;
   /** Score per scorer id, 0..1. Empty when the run threw. */
   scores: Record<string, number>;
   /** Per-check verdicts, in the order the case declares them. */
@@ -158,7 +183,9 @@ export interface AssistantEvalCaseResult {
   answer: string;
   /** The tool calls the agent made, in order — the executed process. */
   toolCalls: EvalToolCall[];
-  /** True when every scorer scored 1. */
+  /** Passed, failed or not scored (R103). */
+  status: EvalStatus;
+  /** True exactly when `status` is `passed`: a not-scored question is not. */
   passed: boolean;
   /** Set when the agent run itself failed (connection, model, tool crash). */
   error?: string;
@@ -444,6 +471,18 @@ function parseJsonObject(text: string | undefined): unknown {
 /** Scorer id for the LLM-judge check, shown in the report's checks table. */
 const LLM_JUDGE_CHECK_ID = 'llm-judge';
 
+/** A scored check with its status from its verdict, and its criterion. */
+function withStatus(
+  check: ScoredCheckResult,
+  criterion: string | undefined,
+): EvalCheckResult {
+  return {
+    ...check,
+    status: check.passed ? 'passed' : 'failed',
+    ...(criterion !== undefined ? { criterion } : {}),
+  };
+}
+
 /**
  * Score a case's tool calls + final answer against its `judgeRubric` with
  * one structured-output `generate` call on `evalJudgeAgent` (same configured
@@ -456,7 +495,7 @@ async function runJudgeCheck(
   evalCase: AssistantEvalCase,
   answer: string,
   toolCalls: EvalToolCall[],
-): Promise<EvalCheckResult | undefined> {
+): Promise<ScoredCheckResult | undefined> {
   if (!evalCase.judgeRubric) return undefined;
   const description = `LLM judge: ${evalCase.judgeRubric}`;
   try {
@@ -528,6 +567,34 @@ async function runJudgeCheck(
 }
 
 /**
+ * The judge check of a case with a rubric (R101, R102): the judge's verdict
+ * when the run's option lets it grade this case's category, else a not-scored
+ * check, with no model call. Its criterion follows the case's category.
+ */
+async function judgeCheckFor(
+  evalCase: AssistantEvalCase,
+  judge: Readonly<EvalJudgeSetting>,
+  answer: string,
+  toolCalls: EvalToolCall[],
+): Promise<EvalCheckResult | undefined> {
+  if (!evalCase.judgeRubric) return undefined;
+  const criterion = judgeCriterion(evalCase.category);
+  if (!shouldJudge(judge, evalCase.category)) {
+    return {
+      id: LLM_JUDGE_CHECK_ID,
+      description: `LLM judge: ${evalCase.judgeRubric}`,
+      score: 0,
+      passed: false,
+      status: 'not-scored',
+      reason: JUDGE_OFF_REASON,
+      criterion,
+    };
+  }
+  const check = await runJudgeCheck(evalCase, answer, toolCalls);
+  return check ? withStatus(check, criterion) : undefined;
+}
+
+/**
  * Run one question. Each case is its own `runEvals` call because `runEvals`
  * keys and averages scores across the data items of a single call — one call
  * for all ten questions would collapse them into one set of numbers.
@@ -544,6 +611,8 @@ export async function runAssistantEvalCase(
    * omitted (or empty) when neither wires one in.
    */
   knowledgeBlock?: string,
+  /** The run's judge option (R100); off unless the caller says otherwise. */
+  judge: Readonly<EvalJudgeSetting> = JUDGE_OFF,
 ): Promise<AssistantEvalCaseResult> {
   const startedAt = Date.now();
   // Captured from the per-item callback: the run itself only reports numbers.
@@ -618,18 +687,23 @@ export async function runAssistantEvalCase(
       scores[id] = typeof value === 'number' ? value : Number(value ?? 0);
     }
 
-    const checkResults: EvalCheckResult[] = evalCase.scorers.map((scorer) => {
-      const id = String(scorer.id ?? '');
-      const score = scores[id] ?? 0;
-      const passed = score === 1;
-      return {
-        id,
-        description: String(scorer.description ?? scorer.name ?? id),
-        score,
-        passed,
-        reason: passed ? undefined : checkReason(scorerPayloads[id]),
-      };
-    });
+    const checkResults: EvalCheckResult[] = evalCase.scorers.map(
+      (scorer, index) => {
+        const id = String(scorer.id ?? '');
+        const score = scores[id] ?? 0;
+        const passed = score === 1;
+        return withStatus(
+          {
+            id,
+            description: String(scorer.description ?? scorer.name ?? id),
+            score,
+            passed,
+            reason: passed ? undefined : checkReason(scorerPayloads[id]),
+          },
+          evalCase.checkCriteria?.[index],
+        );
+      },
+    );
 
     // Result-set comparison (Feature 1) — primary correctness signal for
     // cases with expectedSql, on top of the text/tool scorers above.
@@ -640,32 +714,41 @@ export async function runAssistantEvalCase(
       turnRecords,
       evalCase.resultSetOptions,
     );
-    if (resultSetCheck) checkResults.push(resultSetCheck);
+    if (resultSetCheck) checkResults.push(withStatus(resultSetCheck, 'D1'));
 
     // LLM-judge (Feature 2) — for cases where a regex/text check on the
-    // final answer would be too brittle.
-    const judgeCheck = await runJudgeCheck(evalCase, answer, toolCalls);
+    // final answer would be too brittle. Not called, and not scored, when
+    // the run's judge option leaves this case out (R101).
+    const judgeCheck = await judgeCheckFor(evalCase, judge, answer, toolCalls);
     if (judgeCheck) checkResults.push(judgeCheck);
 
+    const status = questionStatus(checkResults);
     return {
       id: evalCase.id,
       question: evalCase.question,
+      ...(evalCase.category !== undefined
+        ? { category: evalCase.category }
+        : {}),
       scores,
       checkResults,
       answer,
       toolCalls,
-      passed:
-        checkResults.length > 0 && checkResults.every((check) => check.passed),
+      status,
+      passed: status === 'passed',
       durationMs: Date.now() - startedAt,
     };
   } catch (err) {
     return {
       id: evalCase.id,
       question: evalCase.question,
+      ...(evalCase.category !== undefined
+        ? { category: evalCase.category }
+        : {}),
       scores: {},
       checkResults: [],
       answer,
       toolCalls,
+      status: 'failed',
       passed: false,
       error: err instanceof Error ? err.message : String(err),
       durationMs: Date.now() - startedAt,
@@ -689,6 +772,7 @@ export async function runAssistantEvals(
   caseIds?: string[],
   sessions?: SessionsService,
   knowledgeBlock?: string,
+  judge: Readonly<EvalJudgeSetting> = JUDGE_OFF,
 ): Promise<AssistantEvalCaseResult[]> {
   const datasetError = assistantEvalDatasetError(
     datasets,
@@ -707,6 +791,7 @@ export async function runAssistantEvals(
         datasets,
         evalSession?.id,
         knowledgeBlock,
+        judge,
       );
       results.push(result);
       onCaseComplete?.(result);
