@@ -223,12 +223,12 @@ The measurement baseline. Every change to the DSL, knowledge store or connectors
 #### 1.1.1 — Golden dataset and eval suite  `🚫 Cut`
 - **Reason:** split into 1.1.2–1.1.18, one feature per story, by the execution plan (BA-128). Its intent, scope and acceptance carry over into the epic spec.
 
-#### 1.1.2 — Research ([BA-127](https://halo-powered.atlassian.net/browse/BA-127))  `🚧 In progress`
+#### 1.1.2 — Research ([BA-127](https://halo-powered.atlassian.net/browse/BA-127))  `✅ Done`
 - **Intent:** the team agrees on what to measure and why before anything is built: findings, options and a recommendation for the golden dataset and the eval suite.
 - **Scope:** [docs/research/BA-9.md](docs/research/BA-9.md), converted from the "Golden Dataset and Evals Plan" artifact (version 7, 2026-10-12): the book's method (Chip Huyen, *AI Engineering*, chapter 4) and how the market evaluates text-to-SQL and agents; what exists on `main` and only on branches; the criteria list, the categories, what Databricks and REST need; worked examples; the verdict on evals on the user's own data. Every "exists on main" claim re-checked against the branch base.
 - **Out of scope:** the execution plan (1.1.3); any code.
 - **Acceptance:** the research doc is in the repo with every source listed by type; the baseline on `main` (the World Cup set on PostgreSQL and on REST, three runs each, from the Evals tab) is in its evidence folder and summarised in the doc; `python3 scripts/check-specs.py` passes.
-- **Notes:** the baseline is taken by Sergio (action 3 in plan 3.0). Evidence: `evidence/1.1.2/`.
+- **Notes:** the baseline was taken on 2026-10-13 by Claude with the team's OpenAI key (app default `gpt-4o-mini`): PostgreSQL 1, 0 and 0 of 10, REST 0 of 10 three times; why, in the research's "Baseline on main". Evidence: [evidence/1.1.2/](evidence/1.1.2/).
 
 #### 1.1.3 — Execution plan ([BA-128](https://halo-powered.atlassian.net/browse/BA-128))  `✅ Done`
 - **Intent:** no implementation story starts before the scope, the order and the stories are agreed.
@@ -237,7 +237,7 @@ The measurement baseline. Every change to the DSL, knowledge store or connectors
 - **Acceptance:** the epic spec says Confirmed; the stories exist in Jira and their keys are on 1.1.4–1.1.18; `python3 scripts/check-specs.py` passes.
 - **Notes:** drafted on 2026-10-12 next to the research; the epic spec confirmed and the stories BA-182 to BA-196 created on 2026-10-13. The user chose to close it before 1.1.2's baseline exists, so the build starts while the baseline runs. Evidence: [evidence/1.1.3/](evidence/1.1.3/).
 
-#### 1.1.4 — One format and a validator (Step 1a) ([BA-182](https://halo-powered.atlassian.net/browse/BA-182))  `📋 Planned`
+#### 1.1.4 — One format and a validator (Step 1a) ([BA-182](https://halo-powered.atlassian.net/browse/BA-182))  `🚧 In progress`
 - **Intent:** one place and one format to add a question, and wrong reference queries found in seconds without a model call.
 - **Scope:** one data file per set under `backend/src/mastra/evals/sets/` in the case format of ADR-0015; a loader that refuses an incomplete case; the 31 existing questions moved over with no change in behaviour; `npm run eval:validate`; a set option on `npm run evals:assistant`; `npm run eval` and `backend/eval/` removed.
 - **Out of scope:** new questions (1.1.10); retiring `check-answers.ts` (1.1.11).
