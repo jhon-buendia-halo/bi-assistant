@@ -474,7 +474,7 @@ flowchart LR
   - Existing users who never chose a theme move from System to Light.
 
 #### ADR-0015 — Golden dataset as data files with one reference query per dialect; Databricks as a register-only fixture kind
-- **Status:** Proposed; accepted when the BA-9 epic spec is confirmed
+- **Status:** Accepted (2026-10-13, with the BA-9 epic spec)
 - **Date:** 2026-10-12
 - **Context:**
   - Three eval harnesses exist, each with its own format: the in-app suite (30 cases written as TypeScript in `backend/src/mastra/evals/assistant.evals.ts`), the golden set (`backend/eval/golden-set.json`, 9 cases, `npm run eval`) and the answer-quality gate (`backend/scripts/check-answers.ts`, 4 checks). They give no shared number and carry no category; adding a question is a code change; a wrong reference query is found only during a run that has already spent model tokens ([research 2.1](../../docs/research/BA-9.md#21-what-exists-on-main-at-v0300)).
