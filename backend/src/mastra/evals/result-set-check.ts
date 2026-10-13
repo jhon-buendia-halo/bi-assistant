@@ -64,16 +64,44 @@ function compareEvidence(
 export const RESULT_SET_CHECK_ID = 'result-set-match';
 
 /**
- * Connectors clamp `runReadOnlySql` at 500 rows (mirrors the golden-set
- * harness, `scripts/run-eval.ts`) — comparing more than that is moot.
+ * Connectors clamp `runReadOnlySql` at 500 rows — comparing more than that is
+ * moot.
  */
 export const RESULT_SET_ROW_LIMIT = 500;
 
+/** Runs one statement under a row limit; the caller picks the path. */
+export type ReferenceSqlExecutor = (
+  sql: string,
+  limit: number,
+) => Promise<{ rows: Row[]; truncated?: boolean }>;
+
+/**
+ * Run a case's reference query and return its rows. A reference that fills
+ * the row limit is refused: its result may be clipped, so a comparison against
+ * it could not tell a complete answer from a partial one.
+ *
+ * Shared by the result-set check (which runs it through the same
+ * `DatasetToolServices` bridge `run_readonly_sql` uses) and by
+ * `npm run eval:validate` (which runs it on the connector directly, so no
+ * model can repair a broken reference).
+ */
+export async function runReferenceSql(
+  sql: string,
+  execute: ReferenceSqlExecutor,
+): Promise<Row[]> {
+  const result = await execute(sql, RESULT_SET_ROW_LIMIT);
+  if (result.truncated || result.rows.length >= RESULT_SET_ROW_LIMIT) {
+    throw new Error(
+      'reference result is truncated; completeness cannot be verified',
+    );
+  }
+  return result.rows;
+}
+
 /**
  * The last `run_readonly_sql` call that did not error. This may be a coverage
- * lookup or supporting detail rather than the answer. Mirrors `lastSuccessfulSql` in
- * `scripts/run-eval.ts`, applied to the live `turnRecords` an eval run
- * captures via `onStepFinish` instead of a persisted session transcript.
+ * lookup or supporting detail rather than the answer. Read from the live
+ * `turnRecords` an eval run captures via `onStepFinish`.
  */
 export function lastSuccessfulSqlRecord(
   records: ToolDataRecord[],
@@ -135,17 +163,14 @@ export async function runResultSetCheck(
   }
 
   try {
-    const expected = await getDatasetToolServices().runReadOnlySql(
-      datasourceId,
-      expectedSql,
-      RESULT_SET_ROW_LIMIT,
-      datasets,
+    const expectedRows = await runReferenceSql(expectedSql, (sql, limit) =>
+      getDatasetToolServices().runReadOnlySql(
+        datasourceId,
+        sql,
+        limit,
+        datasets,
+      ),
     );
-    if (expected.truncated) {
-      throw new Error(
-        'reference result is truncated; completeness cannot be verified',
-      );
-    }
     const candidates = turnRecords.filter(
       (candidate) =>
         candidate.tool === 'run_readonly_sql' &&
@@ -163,11 +188,7 @@ export async function runResultSetCheck(
         reason = 'captured rows are missing or truncated';
         continue;
       }
-      const comparison = compareEvidence(
-        expected.rows,
-        candidate.rows,
-        options,
-      );
+      const comparison = compareEvidence(expectedRows, candidate.rows, options);
       if (comparison.match) {
         return {
           id: RESULT_SET_CHECK_ID,
@@ -183,7 +204,7 @@ export async function runResultSetCheck(
       description,
       score: 0,
       passed: false,
-      reason: `expectedSql returned ${expected.rows.length} row(s); none of ${candidates.length} successful SQL result(s) matched. The last SQL ("${record.input}") did not match — ${reason}`,
+      reason: `expectedSql returned ${expectedRows.length} row(s); none of ${candidates.length} successful SQL result(s) matched. The last SQL ("${record.input}") did not match — ${reason}`,
     };
   } catch (err) {
     return {

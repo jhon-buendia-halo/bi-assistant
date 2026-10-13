@@ -368,7 +368,7 @@ describe('TestingDataService.load', () => {
     expect(saved.name).toBe(TESTING_DATASET_NAME);
     expect(saved.datasourceId).toBe('ds-1');
     expect(saved.tables).toEqual(REQUIRED_ENTITY_KEYS);
-    expect(saved.entities).toHaveLength(9);
+    expect(saved.entities).toHaveLength(10);
     expect(saved.entities[0]).toEqual({
       key: 'world_cup.world_cup.tournaments',
       columns: [
@@ -379,10 +379,10 @@ describe('TestingDataService.load', () => {
     expect(result).toEqual({
       ok: true,
       message:
-        'Seeded world_cup on 127.0.0.1:55432 and loaded 9 entities into dataset "World Cup"',
+        'Seeded world_cup on 127.0.0.1:55432 and loaded 10 entities into dataset "World Cup"',
       datasourceId: 'ds-1',
       datasetName: TESTING_DATASET_NAME,
-      entityCount: 9,
+      entityCount: 10,
       createdDatabase: false,
       seeded: true,
     });
@@ -615,7 +615,7 @@ describe('TestingDataService.status', () => {
       seedable: true,
       schema: 'world_cup',
       defaults,
-      status: { loaded: false, requiredCount: 9 },
+      status: { loaded: false, requiredCount: 10 },
     });
     // Nothing is registered, so the datasets never need reading.
     expect(datasets.list).not.toHaveBeenCalled();
@@ -638,7 +638,7 @@ describe('TestingDataService.status', () => {
       datasourceName: TESTING_DATASOURCE_NAME,
       datasetName: TESTING_DATASET_NAME,
       entityCount: 8,
-      requiredCount: 9,
+      requiredCount: 10,
       connection: {
         host: '127.0.0.1',
         port: 55432,
@@ -659,7 +659,7 @@ describe('TestingDataService.status', () => {
       loaded: false,
       datasourceId: 'ds-1',
       datasourceName: TESTING_DATASOURCE_NAME,
-      requiredCount: 9,
+      requiredCount: 10,
       connection: {
         host: '127.0.0.1',
         port: 55432,
@@ -670,7 +670,7 @@ describe('TestingDataService.status', () => {
     });
   });
 
-  it('is loaded once the dataset covers all nine entities, and never echoes a password', async () => {
+  it('is loaded once the dataset covers all ten entities, and never echoes a password', async () => {
     const { service } = build({
       existing: [loadedDatasourceView],
       datasets: [
@@ -682,8 +682,8 @@ describe('TestingDataService.status', () => {
     const view = viewOf(await service.status());
 
     expect(view.status.loaded).toBe(true);
-    expect(view.status.entityCount).toBe(9);
-    expect(view.status.requiredCount).toBe(9);
+    expect(view.status.entityCount).toBe(10);
+    expect(view.status.requiredCount).toBe(10);
     expect(view.defaults).toEqual(defaults);
     expect(view.status.connection).toEqual({
       host: '127.0.0.1',

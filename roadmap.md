@@ -237,12 +237,12 @@ The measurement baseline. Every change to the DSL, knowledge store or connectors
 - **Acceptance:** the epic spec says Confirmed; the stories exist in Jira and their keys are on 1.1.4–1.1.18; `python3 scripts/check-specs.py` passes.
 - **Notes:** drafted on 2026-10-12 next to the research; the epic spec confirmed and the stories BA-182 to BA-196 created on 2026-10-13. The user chose to close it before 1.1.2's baseline exists, so the build starts while the baseline runs. Evidence: [evidence/1.1.3/](evidence/1.1.3/).
 
-#### 1.1.4 — One format and a validator (Step 1a) ([BA-182](https://halo-powered.atlassian.net/browse/BA-182))  `🚧 In progress`
+#### 1.1.4 — One format and a validator (Step 1a) ([BA-182](https://halo-powered.atlassian.net/browse/BA-182))  `✅ Done`
 - **Intent:** one place and one format to add a question, and wrong reference queries found in seconds without a model call.
 - **Scope:** one data file per set under `backend/src/mastra/evals/sets/` in the case format of ADR-0015; a loader that refuses an incomplete case; the 31 existing questions moved over with no change in behaviour; `npm run eval:validate`; a set option on `npm run evals:assistant`; `npm run eval` and `backend/eval/` removed.
 - **Out of scope:** new questions (1.1.10); retiring `check-answers.ts` (1.1.11).
 - **Acceptance:** the validator passes on the PostgreSQL and REST fixtures and fails on a reference broken on purpose; a run gives the same verdicts as the baseline, within its run-to-run variation.
-- **Notes:** 1 to 1.5 days. Needs 1.1.3 and the decision on how branch work comes over (plan 3.0). Jira: [BA-182](https://halo-powered.atlassian.net/browse/BA-182).
+- **Notes:** 1 to 1.5 days. Needs 1.1.3 and the decision on how branch work comes over (plan 3.0). Jira: [BA-182](https://halo-powered.atlassian.net/browse/BA-182). Shipped 2026-10-13 with a new set, World Cup (golden set), which holds the golden-set and answer-quality questions; the World Cup sample now requires `disciplinary_events`. Evidence: [evidence/1.1.4/](evidence/1.1.4/).
 
 #### 1.1.5 — Deterministic checks (Step 1b) ([BA-183](https://halo-powered.atlassian.net/browse/BA-183))  `📋 Planned`
 - **Intent:** a failed question names the rule that broke, at no token cost.

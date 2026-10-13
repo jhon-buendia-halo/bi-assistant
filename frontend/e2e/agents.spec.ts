@@ -22,6 +22,7 @@ const WORLD_CUP_EVAL_TABLES = [
   'players',
   'goals',
   'match_team_statistics',
+  'disciplinary_events',
   'v_match_results',
   'v_player_goal_totals',
 ];
@@ -290,4 +291,80 @@ test('downloads an execution as a Markdown report', async ({ page }) => {
   expect(report).toContain('# Eval run — assistant');
   expect(report).toContain('## Summary');
   expect(report).toContain('Who won the 2022 World Cup?');
+});
+
+/**
+ * The sets the question bank files produce (agents-evals R11, R63): the World
+ * Cup file gives two variants, PostgreSQL and REST; Formula 1 and the golden
+ * set one each. Test ids are `eval-set-<set id>` and match exactly, so
+ * `eval-set-world-cup` never matches the `-rest` or `-golden` sets.
+ */
+const EVAL_SETS: ReadonlyArray<[id: string, name: string, questions: number]> =
+  [
+    ['world-cup', 'World Cup', 10],
+    ['world-cup-rest', 'World Cup (REST API)', 10],
+    ['formula-1', 'Formula 1', 10],
+    ['world-cup-golden', 'World Cup (golden set)', 11],
+  ];
+
+test('lists every question set, the golden set among them', async ({
+  page,
+}) => {
+  await page.getByRole('button', { name: 'Agents' }).click();
+  await page.getByTestId('agent-assistant').click();
+  await page.getByTestId('agent-tab-evals').click();
+
+  await expect(page.locator('[data-testid^="eval-set-"]')).toHaveCount(
+    EVAL_SETS.length,
+  );
+  for (const [id, name, questions] of EVAL_SETS) {
+    const set = page.getByTestId(`eval-set-${id}`);
+    await expect(set).toContainText(name);
+    await expect(set).toContainText(`${questions} questions`);
+  }
+
+  // The golden set (R65): the nine golden-set questions and the two
+  // answer-quality ones, each scored as having run SQL with no tool errors.
+  // Its case ids live in the question bank file, so match on question text.
+  await page.getByTestId('eval-set-world-cup-golden').click();
+  const cases = page.locator('[data-testid^="eval-case-"]');
+  await expect(cases).toHaveCount(11);
+  await expect(
+    cases.filter({
+      hasText: 'Which teams scored exactly four goals in total?',
+    }),
+  ).toHaveCount(1);
+  await expect(
+    cases.filter({
+      hasText: 'What share of the disciplinary cards shown were yellow?',
+    }),
+  ).toHaveCount(1);
+  await expect(
+    cases.filter({ hasText: 'Checks that "run_readonly_sql" was called' }),
+  ).toHaveCount(11);
+  await expect(
+    cases.filter({ hasText: 'Checks that no tool calls resulted in errors' }),
+  ).toHaveCount(11);
+});
+
+test('starts a run of the golden set on the World Cup datasource', async ({
+  page,
+}) => {
+  // The golden set is bound to the World Cup PostgreSQL sample, so the same
+  // saved scope as the world-cup set passes its preflight (R19, R20).
+  await createWorldCupDatasource(page);
+  await createWorldCupDataset(page, WORLD_CUP_EVAL_TABLES);
+
+  await page.getByRole('button', { name: 'Agents' }).click();
+  await page.getByTestId('agent-assistant').click();
+  await page.getByTestId('agent-tab-evals').click();
+  await page.getByTestId('eval-set-world-cup-golden').click();
+
+  const run = page.getByTestId('eval-run');
+  await expect(run).toContainText('Run 11 selected');
+
+  // Starting is enough: completing it means live model calls.
+  await run.click();
+  await expect(run).toContainText('Running…');
+  await expect(page.getByText(/0\/11 done/)).toBeVisible();
 });

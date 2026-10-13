@@ -80,6 +80,7 @@ const WORLD_CUP: SampleFixture = {
     'players',
     'goals',
     'match_team_statistics',
+    'disciplinary_events',
     'v_match_results',
     'v_player_goal_totals',
   ],

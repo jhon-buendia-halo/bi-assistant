@@ -1,0 +1,4 @@
+Frontend unit tests, 2026-10-13: npx ng test --watch=false --browsers=ChromeHeadless (CHROME_BIN = Playwright's Chromium 1243, default headless window size)
+Chrome Headless 153.0.0.0 (Mac OS 10.15.7) App should support keyboard resizing from the separator FAILED
+	Expected 501 to be 548.
+TOTAL: 1 FAILED, 296 SUCCESS

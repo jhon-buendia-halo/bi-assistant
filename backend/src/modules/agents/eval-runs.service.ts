@@ -252,7 +252,8 @@ export class EvalRunsService {
 
   /**
    * Diff this run's per-case results against the agent's most recent
-   * previous completed run with the same data scope, and attach the outcome to `view.comparison` —
+   * previous completed run with the same data scope and at least one question
+   * in common (agents-evals R40), and attach the outcome to `view.comparison` —
    * best-effort, so a repository hiccup here degrades the report (no
    * comparison section) rather than marking an otherwise-successful run
    * failed.
@@ -264,6 +265,12 @@ export class EvalRunsService {
         view.jobId,
         view.datasourceId,
         view.datasets,
+        Array.from(
+          new Set([
+            ...view.caseIds,
+            ...view.results.map((result) => result.id),
+          ]),
+        ),
       );
       if (!previous) return;
       const diff = computeRegressionDiff(previous.results, view.results);

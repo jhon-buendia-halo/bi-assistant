@@ -103,6 +103,7 @@ describe('EvalRunsService dataset validation', () => {
             'players',
             'goals',
             'match_team_statistics',
+            'disciplinary_events',
             'v_match_results',
             'v_player_goal_totals',
           ].map((table) => `world_cup.world_cup.${table}`),
@@ -120,11 +121,13 @@ describe('EvalRunsService dataset validation', () => {
       );
       if (!('jobId' in result)) throw new Error('Run did not start');
       expect((await runner.status(result.jobId))?.status).toBe('completed');
+      // R40: the baseline must also share a question with this run.
       expect(repository.mostRecentCompleted).toHaveBeenCalledWith(
         'assistant',
         result.jobId,
         'wc',
         ['Sample'],
+        ['champion-2022'],
       );
     }),
   );
@@ -144,6 +147,7 @@ describe('EvalRunsService ownership (admin R30, R32)', () => {
         'players',
         'goals',
         'match_team_statistics',
+        'disciplinary_events',
         'v_match_results',
         'v_player_goal_totals',
       ].map((table) => `world_cup.world_cup.${table}`),

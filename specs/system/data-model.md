@@ -623,7 +623,7 @@ Rules: [../capabilities/admin/spec.md](../capabilities/admin/spec.md) R28-R33. S
 
 ## 4. Files on disk
 
-All paths in this section are relative to `<app data dir>/workspaces/session-<session-id>/` (the **session workspace**), a contained filesystem root: agents' file tools cannot escape it and the file-delete tool is disabled for them (they may create and edit). The session id used in a directory name must match `^[a-zA-Z0-9_-]+$` (otherwise the operation fails with `Invalid session workspace ID`).
+Sections 4.1 to 4.7 are files the app writes; 4.8 is a bundled, read-only asset that ships with the backend. All paths in 4.1 to 4.7 are relative to `<app data dir>/workspaces/session-<session-id>/` (the **session workspace**), a contained filesystem root: agents' file tools cannot escape it and the file-delete tool is disabled for them (they may create and edit). The session id used in a directory name must match `^[a-zA-Z0-9_-]+$` (otherwise the operation fails with `Invalid session workspace ID`).
 
 ### 4.1 Workspace layout
 
@@ -747,6 +747,47 @@ Visuals created before versioning keep their **v1 files directly under `visuals/
 - A visual with no `versions` and version ≤ 1 resolves to `visuals/<id>/`.
 - Once such a visual gains version 2, `versions` is materialised as `[{version: 1, createdAt: visual.createdAt, sourceMessageAt: visual.sourceMessageAt}, {version: 2, …}]` and v2 is written to `visuals/<id>/v2/`; for version 1 the reader prefers `visuals/<id>/v1/index.html` and falls back to the root when it does not exist.
 - Legacy versions may lack `body.html`, `manifest.json`, `data.json`, `answer.md`, `spec.json`; each reader has a fallback (extract the body from `index.html`, use the session metadata for title/description, use the source answer's `data`). Downloads always regenerate `index.html` so old versions ship with the readable frame.
+
+### 4.8 Eval question bank files (bundled, read-only)
+
+The assistant's eval sets are data files that ship with the backend, not files in the app data directory: the app reads them at startup and never writes them. One JSON file per question bank in `backend/src/mastra/evals/sets/`, copied into `dist` next to the compiled loader ([delivery.md](delivery.md)). Today, in this order, which is the order of the sets in the Evals tab: `world-cup.json`, `formula-1.json` and `world-cup-golden.json`. Rules (variant expansion, the loader's refusals, the golden set, the validator): [agents-evals](../capabilities/agents-evals/spec.md) R63-R67; how a case is scored: [agents.md](agents.md) section 8; decision: ADR-0015 in [architecture.md](architecture.md). The questions themselves are a data asset copied verbatim on rebuild (*Data assets* in [../README.md](../README.md)).
+
+A file is `{ variants: Variant[], cases: Case[] }`, both non-empty. At every level (file, variant, case, check, `args`, `resultSetOptions`) a field not listed below is refused, and every string listed is non-empty. Variant and case ids are lowercase words joined by hyphens (`champion-2022`).
+
+`Variant` (each becomes one eval set):
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `id` | string | yes | The set id (`world-cup`). Unique across all files. |
+| `name` | string | yes | Shown in the Evals tab ("World Cup"). |
+| `description` | string | yes | What the set covers and what it needs to run, shown with the set. |
+| `fixtureId` | string | yes | The sample fixture the set runs on: a `SampleFixture.id` in the fixture registry ([testing-data](../capabilities/testing-data/spec.md) R1). Its required entities drive the dataset preflight. |
+| `dialect` | `postgres` \| `sqlite` \| `databricks` | yes | Which of each case's reference queries the set uses. It must be the dialect of the fixture's datasource kind: `postgres` for PostgreSQL, `sqlite` for REST (the REST connector's engine, which reads endpoints as `api.<schema>.<table>`), `databricks` for Databricks (`<catalog>.<schema>.<table>`). |
+| `caseIdPrefix` | string | no | Put before every case id of the file to make the set's case ids: lowercase words each followed by a hyphen (`rest-`). Default `""`, which keeps the file's ids. |
+
+`Case`:
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `id` | string | yes | Unique in the file; with the variant's prefix, unique across all sets. |
+| `category` | string | yes | One of `lookup`, `aggregate`, `join`, `ranking`, `ratio`, `null`, `encoding`, `reasoning`, `discovery`, `ambiguous`, `fuzzy-scope`, `out-of-scope`, `non-existent`, `business-term`, `default-filter`, `visual`, `follow-up`, `paraphrase`. Defined in [the BA-9 research, section 2.6](../../docs/research/BA-9.md#26-categories-of-the-golden-dataset). |
+| `split` | `dev` \| `held-out` | no | Default `dev`. |
+| `tags` | string[] | no | Additive kind-specific tags, such as `rest:paging` or `dbx:dialect` (same research section). Default `[]`. |
+| `question` | string | yes | Sent verbatim as the user message. |
+| `intent` | string | yes | What the question probes, shown in the Evals tab and the Details panel. |
+| `notes` | string | no | The trap the case guards and how its expected answer was checked, for people. Never graded, not shown in the app. |
+| `checks` | `Check[]` | yes | Non-empty. The scorer checks (below). Each check type at most once per case. |
+| `expectedSql` | `{ postgres?, sqlite?, databricks? }` (strings) | no | One reference query per dialect, at least one. When present it must hold a query for every dialect the file's variants use (agents-evals R64): a reference for every dialect or none. Absent: the case has no result-set match. |
+| `resultSetOptions` | `{ distinctRows?: boolean }` | no | `distinctRows`: compare at the reference grain, so repeated identical rows are harmless (agents-evals R31). |
+| `judgeRubric` | string | no | Rubric for the LLM judge (agents.md 2.6); absent: no judge check. |
+
+`Check` = `{ type, args?, criterion? }`:
+
+- `type`: the name of one of the check helpers the suite uses, `includes`, `matches`, `calledTool`, `didNotCall`, `toolOrder` or `noToolErrors` (what each asserts: [agents.md](agents.md) 8.1). Any other value is refused.
+- `args`, by type: `includes` `{ text }`; `matches` `{ pattern, flags? }`, a JavaScript regular expression source and its flags (no `g` or `y`, which make a match stateful; the pattern must compile); `calledTool` and `didNotCall` `{ tool }`; `toolOrder` `{ tools }`, the tool names in order (non-empty); `noToolErrors` none.
+- `criterion`: optional; the criterion of [the research's criteria list](../../docs/research/BA-9.md#25-the-criteria-list-for-this-app) that the check measures.
+
+The result-set match and the LLM judge are not listed in `checks`: they follow from `expectedSql` and `judgeRubric`.
 
 ---
 

@@ -20,27 +20,37 @@ export class EvalRunsRepository {
   }
 
   /**
-   * The most recently completed run for this agent and data scope, excluding
+   * The most recently completed run for this agent and data scope that
+   * shares at least one question id with `questionIds`, excluding
    * `excludeJobId`. Regression tracking diffs a finishing run against this
-   * baseline. `null` when no comparable completed run exists.
+   * baseline (agents-evals R40). A run of another set on the same datasource
+   * and datasets (`world-cup` and `world-cup-golden`) has no question in
+   * common, so it would skip every question; it is not comparable. `null`
+   * when no comparable completed run exists.
    */
   async mostRecentCompleted(
     agentKey: string,
     excludeJobId: string,
     datasourceId: string,
     datasets: string[],
+    questionIds: string[],
   ): Promise<EvalRunView | null> {
     const completed = await this.store.find(
       { agentKey, status: 'completed', datasourceId },
       { sort: { startedAt: -1 } },
     );
     const scope = new Set(datasets);
+    const questions = new Set(questionIds);
     return (
       completed.find(
         (run) =>
           run.jobId !== excludeJobId &&
           new Set(run.datasets).size === scope.size &&
-          run.datasets.every((dataset) => scope.has(dataset)),
+          run.datasets.every((dataset) => scope.has(dataset)) &&
+          [
+            ...(run.caseIds ?? []),
+            ...(run.results ?? []).map((result) => result.id),
+          ].some((id) => questions.has(id)),
       ) ?? null
     );
   }

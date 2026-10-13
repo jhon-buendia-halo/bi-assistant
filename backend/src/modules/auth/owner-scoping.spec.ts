@@ -270,7 +270,7 @@ describe('owner scoping of private collections', () => {
       agentKey: 'assistant',
       datasourceId: 'wc',
       datasets: ['World Cup'],
-      caseIds: [],
+      caseIds: ['champion-2022'],
       status: 'completed',
       results: [],
       totalCases: 0,
@@ -293,12 +293,24 @@ describe('owner scoping of private collections', () => {
     });
     await expect(
       as(ADA, () =>
-        repo.mostRecentCompleted('assistant', 'x', 'wc', ['World Cup']),
+        repo.mostRecentCompleted(
+          'assistant',
+          'x',
+          'wc',
+          ['World Cup'],
+          ['champion-2022'],
+        ),
       ),
     ).resolves.toMatchObject({ jobId: 'j2' });
     await expect(
       as(BOB, () =>
-        repo.mostRecentCompleted('assistant', 'x', 'wc', ['World Cup']),
+        repo.mostRecentCompleted(
+          'assistant',
+          'x',
+          'wc',
+          ['World Cup'],
+          ['champion-2022'],
+        ),
       ),
     ).resolves.toBeNull();
   });

@@ -863,7 +863,7 @@ The note is whitespace-flattened and capped at 220 chars with `…`. The cross-c
 
 ### 5.9 Result-set comparison
 
-Shared by careful mode, the eval result-set check and the golden-set harness. Two results agree when they hold the same facts regardless of column names, column order, row order, or connector typing:
+Shared by careful mode and the eval result-set check. Two results agree when they hold the same facts regardless of column names, column order, row order, or connector typing:
 
 - **Cell normalization:** null/undefined → `∅`; Date → ISO string; boolean → `true`/`false`; bigint/number or numeric-looking string → number at 6 significant digits; object → JSON; other strings trimmed, whitespace-collapsed, lowercased.
 - **Row key:** the row's normalized values **sorted** and joined — so column order/naming doesn't matter.
@@ -1133,28 +1133,33 @@ Behaviour of the Agents → Evals UI (set list, question selection, runs list, r
 
 ### 8.1 Case and set format
 
+Cases and sets are data: one question bank file per bank, read at startup. The file shape (variants, cases, checks, one reference query per dialect, the allowed categories, splits and dialects) is in [data-model.md](data-model.md) section 4.8; the variant expansion and the loader's refusals are [agents-evals](../capabilities/agents-evals/spec.md) R63 and R64. After loading, each variant is one set, and each of its cases carries a single reference query, the one for the variant's dialect:
+
 ```
-EvalSet  = { id, name, description, fixtureId, cases: EvalCase[] }
+EvalSet  = { id, name, description, fixtureId, dialect, cases: EvalCase[] }
 EvalCase = {
-  id: string                 unique across all sets
+  id: string                 the variant's caseIdPrefix + the file's id; unique across all sets
+  category, split, tags      from the file (split defaults to dev, tags to [])
+  notes?: string             the trap the case guards; for people, never graded
   question: string           sent verbatim as the user message
   intent: string             what the question probes (shown in the UI)
-  scorers: Check[]           text / tool checks; each check type at most once per case
-  expectedSql?: string       trusted SQL whose live result is the reference answer
+  scorers: Check[]           built from the file's checks; each check type at most once per case
+  expectedSql?: string       the case's reference for the set's dialect; its live result is the reference answer
   resultSetOptions?: { distinctRows?: boolean }
   judgeRubric?: string       natural-language rubric for the LLM judge
 }
 ```
 
-Built-in check types used by the cases (each exposes an id, name and a description such as `Checks if output includes "Argentina"`, shown in the UI): `includes(text)`, `matches(regex)`, `calledTool(name)`, `didNotCall(name)`, `toolOrder([names])`, `noToolErrors()`. The report also knows how to explain an `excludes(text)` check, currently unused.
+Check types (each exposes an id, name and a description such as `Checks if output includes "Argentina"`, shown in the UI), named in the file by `type`: `includes(text)`, `matches(pattern)`, `calledTool(name)`, `didNotCall(name)`, `toolOrder([names])`, `noToolErrors()`. The report also knows how to explain an `excludes(text)` check, currently unused.
 
 **Sets** (all expected facts were verified against the bundled fixture data):
 
-| Set id | Name | Fixture | Cases |
-|---|---|---|---|
-| `world-cup` | World Cup | `world-cup` (PostgreSQL) | 10: `champion-2022`, `final-score-2018`, `top-scorer-2022`, `shootouts`, `biggest-venue` (distinctRows), `schema-discovery`, `ambiguous-best-team` (judge), `possession-vs-result` (judge), `out-of-scope` (judge), `visual-request` (judge) |
-| `world-cup-rest` | World Cup (REST API) | `world-cup-rest` (REST) | the same 10 with ids prefixed `rest-` and `expectedSql` ported to SQLite over `api.world_cup.*`; a base case with `expectedSql` but no port is a startup error |
-| `formula-1` | Formula 1 | `formula-1` (PostgreSQL) | `f1-champion-2023`, `f1-british-gp-2023`, `f1-most-race-wins`, `f1-most-titles-tie`, `f1-monaco-2024-podium`, `f1-schema-discovery`, `f1-ambiguous-dominant-driver` (judge), `f1-pole-to-win-2023` (judge), `f1-out-of-scope-motogp` (judge), `f1-visual-request` (judge) |
+| Set id | Name | File | Fixture, dialect | Cases |
+|---|---|---|---|---|
+| `world-cup` | World Cup | `world-cup.json` | `world-cup` (PostgreSQL), `postgres` | 10: `champion-2022`, `final-score-2018`, `top-scorer-2022`, `shootouts`, `biggest-venue` (distinctRows), `schema-discovery`, `ambiguous-best-team` (judge), `possession-vs-result` (judge), `out-of-scope` (judge), `visual-request` (judge) |
+| `world-cup-rest` | World Cup (REST API) | `world-cup.json` | `world-cup-rest` (REST), `sqlite` | the same 10 with the prefix `rest-`; the 5 with a reference carry a SQLite port over `api.world_cup.*` (the `match` alias becomes `m`, a SQLite keyword; no `::`, `ILIKE` or `FILTER`) |
+| `formula-1` | Formula 1 | `formula-1.json` | `formula-1` (PostgreSQL), `postgres` | `f1-champion-2023`, `f1-british-gp-2023`, `f1-most-race-wins`, `f1-most-titles-tie`, `f1-monaco-2024-podium`, `f1-schema-discovery`, `f1-ambiguous-dominant-driver` (judge), `f1-pole-to-win-2023` (judge), `f1-out-of-scope-motogp` (judge), `f1-visual-request` (judge) |
+| `world-cup-golden` | World Cup (golden set) | `world-cup-golden.json` | `world-cup` (PostgreSQL), `postgres` | 11, each with `calledTool(run_readonly_sql)`, `noToolErrors()` and a reference query: the nine former golden-set cases and two answer-quality questions (agents-evals R65) |
 
 Representative cases (pattern every set follows):
 
@@ -1198,10 +1203,10 @@ A case **passes** when it has at least one check and every check scored 1. Each 
 
 ### 8.5 Other entry points
 
-- **CLI** — same suite over `EVAL_DATASETS` (comma-separated saved dataset names), booting the whole backend without HTTP; prints `PASS|FAIL <id> (<ms>)` per case and `<passed>/<total> questions passed`; exit code 1 unless all pass.
-- **Golden-set harness** — a separate developer harness over a JSON golden set (`{name, question, dataset, expectedSql, placeholder?, notes?}`) that runs each question as a **real streamed chat turn** in a throwaway session (300 s timeout) and compares the answer's last successful SQL result with `expectedSql` using 5.9 (strict width). Verdicts `PASS|FAIL|ERROR|SKIP`.
+- **CLI** — same suite over `EVAL_DATASETS` (comma-separated saved dataset names), booting the whole backend without HTTP; `EVAL_SET` picks one set (agents-evals R67); prints `PASS|FAIL <id> (<ms>)` per case and `<passed>/<total> questions passed`; exit code 1 unless all pass.
+- **Validator** — over `EVAL_DATASETS` and `EVAL_SET`, booting the backend the same way: the dataset preflight (8.2) for the set's fixture, then each case's `expectedSql` through the result-set check's reference path (8.3 step 3: the same SQL bridge, row limit 500, a truncated reference fails), with no agent call and no judge. Output and exit code: agents-evals R66.
 
-> Implementation note: `mastra/evals/assistant.evals.ts` (`runEvals` from `@mastra/core/evals`, checks from `@mastra/evals/checks`), `result-set-check.ts`, `assistant-eval-datasets.ts`, `run-assistant-evals.ts` (`npm run evals:assistant`), `modules/agents/eval-runs.service.ts`, `eval-regression.ts`, `eval-report.ts`; golden set `backend/eval/golden-set.json` via `npm run eval` (`scripts/run-eval.ts`).
+> Implementation note: `mastra/evals/sets/*.json` (the question bank files), their loader `eval-sets.ts` and `eval-check-scorers.ts`, which builds the `@mastra/evals/checks` scorer named by each check's `type`; `mastra/evals/assistant.evals.ts` (`runEvals` from `@mastra/core/evals`, checks from `@mastra/evals/checks`), `result-set-check.ts`, `assistant-eval-datasets.ts`, `run-assistant-evals.ts` (`npm run evals:assistant`), `validate-eval-sets.ts` (`npm run eval:validate`), `modules/agents/eval-runs.service.ts`, `eval-regression.ts`, `eval-report.ts`.
 
 ---
 

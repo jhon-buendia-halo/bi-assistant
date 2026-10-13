@@ -69,7 +69,7 @@ Electron loads the renderer from `file://`. An absolute base (`/`) would resolve
 
 | Script | Runs | Purpose |
 |---|---|---|
-| `build` | `nest build` | Compile to `dist/` (clears the folder first; copies `mastra/skills` and testing-data SQL fixtures). |
+| `build` | `nest build` | Compile to `dist/` (clears the folder first; copies `mastra/skills` and the testing-data SQL fixtures; the eval question bank files are imported by their loader, so the set files are copied into `dist` next to the compiled loader, [data-model.md](data-model.md) 4.8). |
 | `start` | `nest start` | Run the API once (port 3000, data in `<cwd>/data`). |
 | `start:dev` | `nest start --watch` | Watch mode. |
 | `start:debug` | `nest start --debug --watch` | Watch mode with the inspector. |
@@ -79,9 +79,9 @@ Electron loads the renderer from `file://`. An absolute base (`/`) would resolve
 | `lint` | `eslint … --fix` | Lint **and auto-fix**; run it on specific files, not project-wide, because it reformats unrelated files. |
 | `test`, `test:watch`, `test:cov`, `test:debug` | Jest | Unit tests (`src/**/*.spec.ts`), watch, coverage, debugger. |
 | `test:e2e` | `jest --config ./test/jest-e2e.json` | API-level e2e specs in `test/`; the live-data specs skip without the World Cup Postgres. |
-| `eval` | `ts-node scripts/run-eval.ts` | Golden-set harness: asks each question in `eval/golden-set.json` in a throwaway session and compares the result set of the SQL the assistant ran with the case's trusted SQL. No HTTP port. |
 | `check:answers` | `ts-node scripts/check-answers.ts` | Opt-in live answer-quality gate over the World Cup fixture; costs real model calls and needs `OPENAI_API_KEY`. Tunable by `CHECK_TRIALS`, `CHECK_ARM`, `CHECK_MODEL`, `CHECK_TIMEOUT_MS`. |
-| `evals:assistant` | `nest build && node dist/mastra/evals/run-assistant-evals.js` | The assistant eval suite from the command line, same suite the Agents screen runs. Needs `EVAL_DATASETS` (comma-separated saved dataset names); optional `EVAL_TIMEOUT_MS`, `EVAL_ROW_LIMIT`. |
+| `evals:assistant` | `nest build && node dist/mastra/evals/run-assistant-evals.js` | The assistant eval suite from the command line, same suite the Agents screen runs. Needs `EVAL_DATASETS` (comma-separated saved dataset names). `EVAL_SET` (a set id, such as `world-cup-golden`) runs that set only; without it the run is refused, as [agents-evals](../capabilities/agents-evals/spec.md) R67 explains. Costs model calls. |
+| `eval:validate` | `nest build && node dist/mastra/evals/validate-eval-sets.js` | The eval-set validator: checks one set's reference queries on its datasource with no model call; what it runs, prints and exits with is [agents-evals](../capabilities/agents-evals/spec.md) R66. Needs `EVAL_DATASETS` (comma-separated saved dataset names) and `EVAL_SET` (the set id). Boots the backend without an HTTP port, like `evals:assistant`. Both rebuild `dist/` first (`nest build` clears it), so neither should run while the E2E suite or a long eval run uses that build. |
 | `worldcup:api:dump` | `ts-node scripts/worldcup-rest-api/dump.ts` | Snapshot the World Cup Postgres into JSON files for the test REST API (`WORLD_CUP_DB_*` env). |
 | `worldcup:api` | `ts-node scripts/worldcup-rest-api/serve.ts` | Zero-dependency REST + OpenAPI server over that snapshot on `127.0.0.1:55080` (`WORLD_CUP_API_PORT`), for exercising the REST connector. |
 | `worldcup:rest:setup` | `ts-node scripts/setup-worldcup-rest.ts` | Registers that API as a `rest` datasource and a dataset in a running backend through its HTTP API (`BACKEND_URL`, `WORLD_CUP_API_URL`); idempotent. |

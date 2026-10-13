@@ -14,6 +14,11 @@ Capability-local vocabulary:
 - **Questions** and **Executions** — the two sub-tabs inside an agent's Evals tab: the suite, and the history of runs.
 - **Regression comparison** — the per-question diff between a finished run and the previous comparable run; see R32.
 - **Details panel** — the right-hand panel ([../app-shell/spec.md](../app-shell/spec.md)); on an agent's detail view it shows one question's scoring and trace.
+- **Question bank file** — a data file, bundled with the app, that holds one bank of eval cases and the variants that turn it into eval sets (R63); its shape is in [../../system/data-model.md](../../system/data-model.md) section 4.8.
+- **Variant** — one entry of a question bank file that becomes one eval set: its id, name, description, sample fixture, SQL dialect (`postgres`, `sqlite` for the REST connector's engine, or `databricks`) and case-id prefix (R63).
+- **Category** — the one primary kind of question a case probes, such as `lookup`, `ratio` or `out-of-scope`. The list of eighteen and what each probes are in [the BA-9 research, section 2.6](../../../docs/research/BA-9.md#26-categories-of-the-golden-dataset).
+- **Split** — `dev` (the default) or `held-out`: whether a case may be used while tuning the assistant or is kept back to measure it. It does not change how a case runs.
+- **Reference query** — a case's trusted SQL, one per dialect, whose live result is the reference answer for the result-set match (R31).
 
 ## Rules
 
@@ -34,7 +39,7 @@ Agent Hub and agent detail
 
 Question sets
 - R10. Only the assistant SHALL have eval sets. Every other agent's Evals tab SHALL show "No evals configured for this agent yet."
-- R11. The system SHALL provide three sets, each bound to one sample fixture and containing 10 questions: `world-cup` ("World Cup", PostgreSQL), `world-cup-rest` ("World Cup (REST API)", the same questions against the REST sample, case ids prefixed `rest-`) and `formula-1` ("Formula 1", PostgreSQL, 1950 to 2026). The question lists are in *Eval suite content* below. Case ids SHALL be unique across all sets.
+- R11. The system SHALL provide four sets, each bound to one sample fixture, listed in this order: `world-cup` ("World Cup", PostgreSQL, 10 questions), `world-cup-rest` ("World Cup (REST API)", the same 10 questions against the REST sample, case ids prefixed `rest-`), `formula-1` ("Formula 1", PostgreSQL, 1950 to 2026, 10 questions) and `world-cup-golden` ("World Cup (golden set)", PostgreSQL, 11 questions; R65). The sets come from question bank files (R63). The question lists are in *Eval suite content* below. Case ids SHALL be unique across all sets.
 - R12. Each set SHALL carry a name, a description of what it covers and what it needs to run, and its cases. Each case SHALL carry an id, the question, an intent (what it probes) and its checks (id, name and description).
 - R13. The Evals tab SHALL open on the list of sets, each showing its name, "<N> questions" and its description, with no question shown and no run button. Clicking a set SHALL open it (revealing its questions, the datasource picker and the run button) and tick all of its questions; clicking the open set again SHALL close it and clear the ticks. Sets SHALL be unselectable while a run is starting or running.
 - R14. An open set SHALL show "<N> questions in <set name>. Each check must score 1.0 for its question to pass.", then the datasource picker, the run button, a **Select all** checkbox and the numbered question list.
@@ -85,11 +90,11 @@ Executions, details and report
 - R39. Downloading a run that does not exist SHALL fail with `Eval run "<id>" not found` (HTTP 404); polling one SHALL answer with ok false and the same message.
 
 Regression comparison
-- R40. When a run completes, the system SHALL compare its per-question verdicts with the most recent earlier completed run of the same agent, same datasource and same set of datasets (order ignored), matching by question id. It SHALL record the previous run's id and three lists, each of id and question: **regressions** (passed before, failing now), **improvements** (failed before, passing now) and **unchanged**. Questions present in only one of the two runs SHALL be skipped. With no comparable earlier run no comparison SHALL be recorded; runs saved before this feature have none. A failure while comparing SHALL NOT fail the run.
+- R40. When a run completes, the system SHALL compare its per-question verdicts with the most recent earlier completed run of the same agent, same datasource and same set of datasets (order ignored) that shares at least one question id with it, matching by question id. An earlier run with no question in common (another set on the same datasource, such as `world-cup` and `world-cup-golden`) SHALL NOT count as comparable (changed 2026-10-13, BA-182). It SHALL record the previous run's id and three lists, each of id and question: **regressions** (passed before, failing now), **improvements** (failed before, passing now) and **unchanged**. Questions present in only one of the two runs SHALL be skipped. With no comparable earlier run no comparison SHALL be recorded; runs saved before this feature have none. A failure while comparing SHALL NOT fail the run.
 - R41. The report SHALL show the comparison as `## Compared to previous run` with "Compared to run `<previous id>`."; "No change from the previous run." when there are neither regressions nor improvements; otherwise "**Regressions** (passed before, now failing):" and/or "**Improvements** (failed before, now passing):", each item as `<id> — <question>`.
 
 Other entry points
-- R42. The same suite SHALL also be runnable without the UI from the command line against named datasets (progress per question, a final "<passed>/<total> questions passed" line, exit code 0 only when all pass), using the same preflight, scoring, throwaway session and knowledge block.
+- R42. The same suite SHALL also be runnable without the UI from the command line against named datasets (progress per question, a final "<passed>/<total> questions passed" line, exit code 0 only when all pass), using the same preflight, scoring, throwaway session and knowledge block. One set is chosen by its id (R67).
 
 ### Eval suite content
 
@@ -122,6 +127,22 @@ Formula 1 set (`formula-1`), ids all prefixed `f1-`:
 | `f1-pole-to-win-2023` | In the 2023 season, did the driver who started on pole usually go on to win the race? | ran SQL; mentions pole or grid; no tool errors; judge: concludes yes, backed by counts consistent with 14 of 22 |
 | `f1-out-of-scope-motogp` | Who won the 2023 MotoGP world championship? | no tool errors; judge: says it cannot answer, states the data is Formula 1 only (1950 to 2026), names no MotoGP champion |
 | `f1-visual-request` | Chart the total points scored by each constructor in the 2023 season. | tools in order `run_readonly_sql` then `create_visual`; called `create_visual`; no tool errors; judge: a visual tool succeeded and plausibly charts constructor points for 2023 |
+
+World Cup golden set (`world-cup-golden`, R65). Every question must hold the same three things: result-set match; ran SQL; no tool errors. Each case keeps, as its note, the trap it guards. The first nine come from the former golden-set harness with their ids unchanged; the last two from the answer-quality gate, where they were named `pass-completion-ratio` and `constant-metric-not-compared`.
+
+| id | Question | Trap it guards |
+|---|---|---|
+| `pass-accuracy-by-team` | Which three teams completed the highest share of their attempted passes across all matches? | a ratio of two different measures (completed over attempted passes), so the rates differ per team |
+| `shot-accuracy-by-team` | Which three teams put the highest share of their shots on target? | the same trap on another pair of columns |
+| `top-scoring-team` | Which team scored the most goals in total? | a clear winner (France, 14), named rather than given as an id |
+| `teams-tied-on-four-goals` | Which teams scored exactly four goals in total? | a tie (Belgium and England), named in full rather than ranked |
+| `card-types-recorded` | What types of disciplinary cards were recorded, and how many of each? | a constant metric: every card is a yellow |
+| `goals-with-recorded-assist` | How many goals have a recorded assisting player? | a mostly empty column (assists on 2 of 47 goals) |
+| `goals-by-type` | How many goals were scored of each goal type? | none: a control for schema linking |
+| `attendance-by-tournament` | What was the total match attendance for each tournament year? | none: a plain aggregate over a join |
+| `matches-by-stage` | How many matches were played at each stage of the tournaments? | ties at the bottom (final and third place, 2 each) |
+| `pass-completion-by-team` | What share of their attempted passes did each team complete? | the same measure divided by itself, reported as a flat rate |
+| `yellow-card-share` | What share of the disciplinary cards shown were yellow? | a metric that is 100% on every row, compared as if it varied |
 
 User agents (definitions)
 - R43. A user agent SHALL be a stored configuration of the assistant with: a `name` (required, trimmed, at most 64 characters, unique among user agents ignoring case), a `description` (at most 280), `instructions` (at most 4,000), `datasets` (dataset names, de-duplicated), `starterQuestions` (at most 5, each at most 200; blanks dropped, de-duplicated) and an optional `model` (a model or deployment name of the configured provider) and optional `reasoningEffort`. Over-long text SHALL be clipped to the limit.
@@ -161,6 +182,21 @@ User agents (definitions)
 
 - R62. In both modes user agents, their pins, pins of built-in agents and eval runs SHALL belong to the user who created them: each user sees only their own user agents (the Mine section) and their own pins and eval runs, and agent names are unique per owner. Viewing the hub, an agent's detail, its eval questions, Start chat and pinning need Use agents; New agent, Edit, Save, Publish, Delete and running, listing, downloading or deleting eval runs need Create, test and version agents, and their controls are hidden without it. Rules: [../admin/spec.md](../admin/spec.md) R21, R25, R29-R31.
 
+### Question bank files and the validator
+
+- R63. The eval sets SHALL be read from question bank files bundled with the app, one file per bank ([../../system/data-model.md](../../system/data-model.md) section 4.8). Each variant of a file SHALL become one set, with the variant's id, name, description and sample fixture, holding every case of the file in file order; the sets follow the order of the files, then of the variants within a file. In that set a case's id SHALL be the variant's case-id prefix followed by the case's id in the file, and its reference query SHALL be the case's reference for the variant's dialect. The World Cup bank SHALL have two variants, `world-cup` on PostgreSQL and `world-cup-rest` on the REST sample with the prefix `rest-`; the Formula 1 bank and the golden bank one each (R11). Adding or changing a question SHALL need a change to a file only, not to code.
+- R64. The system SHALL refuse to start, with an error naming the file and the case or variant at fault, when a question bank file:
+  1. has a case missing a required field (id, category, question, intent or checks);
+  2. has a category, split or dialect outside its list (data-model 4.8);
+  3. has a check of an unknown type, or the same check type twice in one case;
+  4. has a case with reference queries that lacks the reference for a dialect one of the file's variants uses (a case with no reference query at all is allowed);
+  5. produces a set id or a case id that another set already uses (R11);
+  6. names a sample fixture that is not in the fixture registry ([../testing-data/spec.md](../testing-data/spec.md) R1); or
+  7. breaks another format rule of data-model 4.8, such as an unknown field, an id that is not lowercase words joined by hyphens, or a variant whose dialect is not the one its sample's datasource runs.
+- R65. The golden set `world-cup-golden` SHALL hold 11 World Cup questions with known-correct answers, each keeping as its note the trap it guards (listed under *Eval suite content*): the nine questions of the former golden-set harness and the two of the answer-quality gate that the nine do not already ask. Each SHALL be scored by the result-set match (R31), a check that `run_readonly_sql` was called and a check that no tool call returned an error. The set SHALL be bound to the World Cup PostgreSQL sample and behave like any other set (R13 to R42).
+- R66. The system SHALL offer a **validator**, run from the command line with named datasets and one set id, that checks the set's reference queries without calling a model. A set id that matches no set SHALL be refused before any query with `Unknown eval set "<id>". Known sets: <ids>.`. It SHALL then run the dataset preflight of R20 for the set's sample, and on failure print its message and run nothing else. It SHALL then run each case's reference query for the set's dialect, one case at a time, the way the result-set match runs it (R31: read-only, at most 500 rows, a truncated reference fails), and print one line per case with a reference query: `✓ <case id>  <dialect>  <n> rows` when it ran, or `✗ <case id>  <dialect>  <reason>` when it failed. A reference that returns 0 rows SHALL fail, with the reason `the reference returned 0 rows` (it usually means a filter on a value the data does not hold). A failed case SHALL NOT stop the others. The validator SHALL exit with a non-zero code when the preflight or any case failed, and with zero otherwise. A case with no reference query has nothing to validate. No model tokens SHALL be spent.
+- R67. The command-line run of R42 SHALL take an optional set id. With one, it SHALL run only that set's questions, against the sample of that set; an id that matches no set SHALL be refused before any model call with `Unknown eval set "<id>". Known sets: <ids>.`. Without one it SHALL select every set, as before, and is therefore refused by R19 step 6 while the sets span several samples.
+
 ## Edge cases and errors
 
 - Pinning while the backend is unreachable: the card moves, then moves back, and the error toast reads "Backend unreachable".
@@ -179,6 +215,10 @@ User agents (definitions)
 - A failed individual question (model error, tool crash) records a run error on that question and the run continues with the next.
 - If the backend stops while a run is going, the run was persisted after its last finished question and stays marked `running` in history (see Open questions).
 - A question present in an old run but no longer in the suite (the suite changed) is not clickable from the Executions list (no details to open).
+- A question bank file the loader refuses (R64) stops the backend from starting. The error reads `Eval set file <file>, <case or variant>: <what is wrong>`, for example `Eval set file world-cup.json, case "champion-2022": "category" is required`. No set from any file is offered.
+- A reference query that fails (a renamed column, a typo, a dialect mistake) shows in the validator as `✗ <case id>  <dialect>  <reason>` with the database's error as the reason; the other cases still run and the validator exits non-zero (R66).
+- The validator against datasets that miss part of the sample, or that belong to a datasource of another kind, prints the preflight message of R20, runs no reference query and exits non-zero.
+- The command-line run with no set id is refused with `The selected questions span several samples (…) — run one sample at a time.`, because the sets cover the World Cup, World Cup REST and Formula 1 samples (R67).
 
 ## Contracts
 
@@ -186,6 +226,7 @@ User agents (definitions)
 - The `agents` collection (user agents) and the built-in pins document: [../../system/data-model.md](../../system/data-model.md) sections 3.10 and 3.2; decision ADR-0008 in [../../system/architecture.md](../../system/architecture.md).
 - Endpoints `GET /agents`, `GET /agents/:key`, `GET /agents/:key/evals`, `POST /agents/:key/evals/run`, `GET /agents/:key/evals/runs`, `GET|DELETE /agents/:key/evals/runs/:jobId`, `GET /agents/:key/evals/runs/:jobId/download`: [../../system/api.md](../../system/api.md).
 - Eval run documents (run, per-question result, check result, tool call, regression summary): [../../system/data-model.md](../../system/data-model.md).
+- Question bank files (variants, cases, checks, reference queries, the allowed categories, splits and dialects): [../../system/data-model.md](../../system/data-model.md) section 4.8. The command-line run (R42, R67) and the validator (R66), with their settings: [../../system/delivery.md](../../system/delivery.md); how a set is loaded and a case scored: [../../system/agents.md](../../system/agents.md) section 8.
 - The six agents, the assistant's tools and memory settings, and the judge's prompt: [../../system/agents.md](../../system/agents.md).
 - Sample fixtures and their required entities: [../testing-data/spec.md](../testing-data/spec.md).
 - Terms: [../../product/glossary.md](../../product/glossary.md).
@@ -318,6 +359,29 @@ Feature: Agents
     And the report contains "# Eval run — assistant"
     And the report contains "## Summary"
     And the report contains "Who won the 2022 World Cup?"
+
+  Scenario: Lists every question set, the golden set among them
+    When I click "Agents"
+    And I open the "Questions to Insights Assistant" agent
+    And I open the Evals tab
+    Then I see 4 sets
+    And the "world-cup" set shows "World Cup" and "10 questions"
+    And the "world-cup-rest" set shows "World Cup (REST API)" and "10 questions"
+    And the "formula-1" set shows "Formula 1" and "10 questions"
+    And the "world-cup-golden" set shows "World Cup (golden set)" and "11 questions"
+    When I open the "world-cup-golden" set
+    Then 11 questions are listed
+    And they include "Which teams scored exactly four goals in total?" and "What share of the disciplinary cards shown were yellow?"
+    And every one of them lists the checks "Checks that "run_readonly_sql" was called" and "Checks that no tool calls resulted in errors"
+
+  Scenario: Starts a run of the golden set on the World Cup datasource
+    Given a "World Cup PostgreSQL" datasource exists
+    And a dataset containing the World Cup tables and views exists
+    And I am on the "world-cup-golden" set in the agent's Evals tab
+    Then the run button reads "Run 11 selected"
+    When I click the run button
+    Then the run button reads "Running…"
+    And I see "0/11 done"
 ```
 
 E2E: `frontend/e2e/agent-hub.spec.ts`
@@ -636,9 +700,49 @@ Feature: Agent definitions (API)
     Then it is no longer listed
 ```
 
+E2E: none yet
+
+The Feature below runs from the command line, not in the app, so it is not covered by Playwright. The validator scenarios are covered by the backend unit test `backend/src/mastra/evals/validate-eval-sets.spec.ts`; the loader's refusal and the set option by the unit tests of the loader, `backend/src/mastra/evals/eval-sets.ts`.
+
+```gherkin
+Feature: Question sets from the command line
+
+  Scenario: Validates a question set without a model
+    Given the World Cup PostgreSQL datasource and a dataset containing the World Cup tables and views
+    When I run the validator for the "world-cup" set against that dataset
+    Then it prints a "✓" line with the case id, "postgres" and the row count for each of the 5 questions that have a reference query
+    And it exits with code 0
+    And no model was called
+
+  Scenario: A broken reference query fails the validator, naming the case
+    Given the reference query of "champion-2022" names a column that does not exist
+    When I run the validator for the "world-cup" set
+    Then it prints "✗ champion-2022  postgres" followed by the database's error
+    And the other cases still print their lines
+    And it exits with code 1
+
+  Scenario: The validator stops at the dataset preflight
+    Given a dataset containing only the "matches" table
+    When I run the validator for the "world-cup" set against that dataset
+    Then it prints "Missing entities: world_cup.tournaments"
+    And it runs no reference query and exits with code 1
+
+  Scenario: Refuses a question bank file with an incomplete case
+    Given a question bank file with a case that has no category
+    When the backend starts
+    Then it fails to start with an error naming the file and the case
+
+  Scenario: Runs one set from the command line
+    When I run the suite from the command line with the set "world-cup-golden" against the World Cup dataset
+    Then only that set's 11 questions run
+    When I run it with no set
+    Then it is refused with "The selected questions span several samples"
+```
+
 ## Acceptance
 
-- The nine `agents.spec.ts` scenarios pass, the nine `agent-hub.spec.ts` scenarios pass, and the eight `agent-editor.spec.ts` scenarios pass, with the axe scans of the hub and the editor clean in both themes.
+- The eleven `agents.spec.ts` scenarios pass, the nine `agent-hub.spec.ts` scenarios pass, and the eight `agent-editor.spec.ts` scenarios pass, with the axe scans of the hub and the editor clean in both themes.
+- The validator (R66) passes for `world-cup` and `world-cup-golden` against the World Cup PostgreSQL datasource and for `world-cup-rest` against the World Cup REST datasource, and fails, naming the case, when one reference query is broken on purpose. A run of each moved set gives the same verdicts as a run before the move, within the run-to-run variation.
 - Running the `world-cup` set against the bundled sample with a working model finishes, records one result per ticked question, and every question's Details panel shows its checks and executed steps.
 - A second completed run on the same datasource and datasets produces a Markdown report with a "Compared to previous run" section; a run on a different datasource or dataset set does not.
 - Starting against a datasource with no datasets, or with datasets missing required entities, never spends model tokens and never leaves a run in history.
@@ -652,5 +756,6 @@ Feature: Agent definitions (API)
 - The browser saves the report as `eval-run-<agent>-<8-char id>.md` (no date) while the server's attachment name includes the date and time. The gherkin file pattern "eval-run-assistant-…" matches both.
 - A code comment says runs are in-memory and forgotten on restart; in fact they are persisted and survive restarts (R25). The spec follows the behaviour.
 - A failed (not just partial) run or a partial pass is drawn with the same red cross in Executions.
+- A case's category and split are read and checked but not shown or reported yet; the category chip and the report by category come with BA-9 Step 1c (roadmap 1.1.6).
 
-<!-- sources: backend/src/modules/agents/{agents.controller,agents.service,eval-runs.service,eval-regression,eval-report}.ts, backend/src/modules/agents/repositories/eval-runs.repository.ts, backend/src/mastra/evals/{assistant.evals,assistant-eval-datasets,result-set-check,run-assistant-evals}.ts, backend/src/mastra/agents/eval-judge.agent.ts, backend/src/modules/sessions/result-compare.ts, backend/src/modules/testing-data/fixtures/registry.ts, frontend/src/app/features/agents/, frontend/e2e/agents.spec.ts, frontend/e2e/agent-hub.spec.ts -->
+<!-- sources: backend/src/modules/agents/{agents.controller,agents.service,eval-runs.service,eval-regression,eval-report}.ts, backend/src/modules/agents/repositories/eval-runs.repository.ts, backend/src/mastra/evals/{assistant.evals,assistant-eval-datasets,result-set-check,run-assistant-evals,validate-eval-sets}.ts, backend/src/mastra/evals/sets/*.json, backend/src/mastra/agents/eval-judge.agent.ts, backend/src/modules/sessions/result-compare.ts, backend/src/modules/testing-data/fixtures/registry.ts, frontend/src/app/features/agents/, frontend/e2e/agents.spec.ts, frontend/e2e/agent-hub.spec.ts -->

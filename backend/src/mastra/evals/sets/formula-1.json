@@ -1,0 +1,293 @@
+{
+  "variants": [
+    {
+      "id": "formula-1",
+      "name": "Formula 1",
+      "description": "Questions against the bundled Formula 1 sample (1950 to 2026) — seasons, drivers, constructors, circuits, races, standings and the per-session result views. Select its PostgreSQL datasource with a saved dataset containing the formula1 tables and views.",
+      "fixtureId": "formula-1",
+      "dialect": "postgres",
+      "caseIdPrefix": ""
+    }
+  ],
+  "cases": [
+    {
+      "id": "f1-champion-2023",
+      "category": "lookup",
+      "question": "Who won the 2023 Formula 1 drivers' championship, and how many points did they finish on?",
+      "intent": "Single-hop lookup against the season standings — the simplest happy path.",
+      "notes": "The reference is the points total alone: the champion's name lives in `driver` under both `name` and `full_name`, and either projection is a correct answer, so the points are what the comparison pins down.",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "Verstappen"
+          }
+        },
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "575"
+          }
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          }
+        },
+        {
+          "type": "noToolErrors"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT standing.points FROM formula1.season_driver_standing standing WHERE standing.year = 2023 AND standing.position_number = 1"
+      }
+    },
+    {
+      "id": "f1-british-gp-2023",
+      "category": "join",
+      "question": "At which circuit was the 2023 British Grand Prix held, and how many laps did the race run to?",
+      "intent": "Filter a race by season and grand prix, which needs the race/grand_prix (and circuit) join rather than a single table.",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "Silverstone"
+          }
+        },
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "\\b52\\b"
+          }
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          }
+        },
+        {
+          "type": "noToolErrors"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT race.laps FROM formula1.race race JOIN formula1.grand_prix grand_prix ON grand_prix.id = race.grand_prix_id WHERE race.year = 2023 AND grand_prix.name = 'Great Britain'"
+      }
+    },
+    {
+      "id": "f1-most-race-wins",
+      "category": "ranking",
+      "question": "Which driver has won the most Grands Prix in Formula 1 history, and how many did they win?",
+      "intent": "A \"most\" question with a verifiable number — the answer is the same whether it is read off the driver totals or aggregated from race results.",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "Hamilton"
+          }
+        },
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "\\b106\\b"
+          }
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          }
+        },
+        {
+          "type": "noToolErrors"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT driver.total_race_wins AS wins FROM formula1.driver driver ORDER BY driver.total_race_wins DESC LIMIT 1"
+      }
+    },
+    {
+      "id": "f1-most-titles-tie",
+      "category": "ranking",
+      "tags": ["ties"],
+      "question": "Which drivers have won the most Formula 1 drivers' championships, and how many each?",
+      "intent": "A genuine tie at the top (two drivers on seven titles) — a LIMIT 1 answer is wrong here, so this catches agents that rank instead of handling ties.",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "Schumacher"
+          }
+        },
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "Hamilton",
+            "flags": "i"
+          }
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          }
+        },
+        {
+          "type": "noToolErrors"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT driver.name AS driver, COUNT(*) AS championships FROM formula1.season_driver_standing standing JOIN formula1.driver driver ON driver.id = standing.driver_id WHERE standing.position_number = 1 GROUP BY driver.name HAVING COUNT(*) = (SELECT MAX(title_count) FROM (SELECT COUNT(*) AS title_count FROM formula1.season_driver_standing WHERE position_number = 1 GROUP BY driver_id) counts) ORDER BY driver"
+      }
+    },
+    {
+      "id": "f1-monaco-2024-podium",
+      "category": "encoding",
+      "question": "Who finished on the podium at the 2024 Monaco Grand Prix?",
+      "intent": "Needs the race_result view (or the `type` discriminator on race_data) rather than a base table — reading race_data without filtering its type returns every session, not the race.",
+      "checks": [
+        {
+          "type": "includes",
+          "args": {
+            "text": "Leclerc"
+          }
+        },
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "Piastri",
+            "flags": "i"
+          }
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          }
+        },
+        {
+          "type": "noToolErrors"
+        }
+      ],
+      "expectedSql": {
+        "postgres": "SELECT driver.name AS driver FROM formula1.race_result race_result JOIN formula1.race race ON race.id = race_result.race_id JOIN formula1.driver driver ON driver.id = race_result.driver_id WHERE race.year = 2024 AND race.grand_prix_id = 'monaco' AND race_result.position_number <= 3 ORDER BY race_result.position_number"
+      }
+    },
+    {
+      "id": "f1-schema-discovery",
+      "category": "discovery",
+      "question": "What Formula 1 data do I have available to analyse?",
+      "intent": "Pure discovery — must inspect the session datasets rather than invent entities or run SQL.",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "list_entities"
+          }
+        },
+        {
+          "type": "includes",
+          "args": {
+            "text": "driver"
+          }
+        },
+        {
+          "type": "didNotCall",
+          "args": {
+            "tool": "run_readonly_sql"
+          }
+        },
+        {
+          "type": "noToolErrors"
+        }
+      ]
+    },
+    {
+      "id": "f1-ambiguous-dominant-driver",
+      "category": "ambiguous",
+      "question": "Which driver was the most dominant?",
+      "intent": "Ambiguous on both metric and era — 77 seasons of data, and the agent must ask instead of guessing.",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "ask_clarification"
+          }
+        },
+        {
+          "type": "didNotCall",
+          "args": {
+            "tool": "run_readonly_sql"
+          }
+        },
+        {
+          "type": "noToolErrors"
+        }
+      ],
+      "judgeRubric": "The question (\"Which driver was the most dominant?\") is ambiguous on both the metric (race wins? championships? pole positions? points? win rate?) and the scope (this dataset covers every season from 1950 to 2026, so \"dominant\" could mean a single season, an era, or a whole career). Score pass=true only if the final answer is itself a clarifying question — not an attempt to answer with data — that offers 2-4 concrete, well-formed options grounded in this Formula 1 dataset (e.g. naming an actual metric such as race wins, championships won, pole positions or points, or an actual season or era in the data such as 2023 or the 2010s), and that does not state any driver as the answer or quote any figures as if they were the answer. Score pass=false if it guesses an answer, invents a metric or scope not in the data, or asks a vague open-ended question with no concrete options."
+    },
+    {
+      "id": "f1-pole-to-win-2023",
+      "category": "reasoning",
+      "question": "In the 2023 season, did the driver who started on pole usually go on to win the race?",
+      "intent": "Joins the grid/pole position to the race result across 22 races — the answer must be a judgement backed by counts, not a row dump.",
+      "notes": "No expectedSql: the reference answer is two scalar counts, and the result-set check cannot tell that a wide reference row ({won: 14, races: 22}) and the equivalent long aggregate ([{outcome, races}, …]) state the same fact (see possession-vs-result). The counts are graded in the rubric.",
+      "checks": [
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "run_readonly_sql"
+          }
+        },
+        {
+          "type": "matches",
+          "args": {
+            "pattern": "\\b(pole|grid)\\b",
+            "flags": "i"
+          }
+        },
+        {
+          "type": "noToolErrors"
+        }
+      ],
+      "judgeRubric": "The question asks whether, in the 2023 Formula 1 season, the driver who started on pole usually won the race. In this dataset the answer is YES: of the 22 races in 2023, the pole-sitter won 14 and failed to win 8 (about 64%). Both readings of \"pole\" — the pole_position flag and grid position 1 — give the same 14 of 22. Score pass=true only if the final answer concludes that the pole-sitter DID usually win, and backs it with counts or percentages consistent with 14 of 22 wins (equivalently 8 non-wins, or roughly 64%). Any query shape is acceptable — a per-race table, a grouped aggregate or a single pivoted row all count, as do minor rewordings and rounding (63%-64%). Score pass=false if it concludes the pole-sitter usually did not win, gives no counts at all, or states counts that contradict 14 of 22."
+    },
+    {
+      "id": "f1-out-of-scope-motogp",
+      "category": "out-of-scope",
+      "question": "Who won the 2023 MotoGP world championship?",
+      "intent": "The fixture covers Formula 1 only — the agent must say so instead of fabricating a MotoGP result.",
+      "checks": [
+        {
+          "type": "noToolErrors"
+        }
+      ],
+      "judgeRubric": "The question asks about MotoGP, a motorcycle racing series this dataset does not contain — it holds Formula 1 world championship data only, for the seasons 1950 to 2026. Score pass=true only if the final answer clearly states it cannot answer the MotoGP question from this data AND explicitly states what the data DOES cover (Formula 1, and ideally its 1950-2026 season range or the kind of entities it holds such as drivers, constructors, races and standings), without naming a MotoGP champion or inventing any MotoGP fact. Score pass=false if it states or implies any 2023 MotoGP result, or fails to state what the data actually covers."
+    },
+    {
+      "id": "f1-visual-request",
+      "category": "visual",
+      "question": "Chart the total points scored by each constructor in the 2023 season.",
+      "intent": "Answer first, then build a visual — checks the SQL → create_visual ordering.",
+      "checks": [
+        {
+          "type": "toolOrder",
+          "args": {
+            "tools": ["run_readonly_sql", "create_visual"]
+          }
+        },
+        {
+          "type": "calledTool",
+          "args": {
+            "tool": "create_visual"
+          }
+        },
+        {
+          "type": "noToolErrors"
+        }
+      ],
+      "judgeRubric": "The user asked for a chart of the total points scored by each constructor in the 2023 Formula 1 season (ten constructors scored, from Red Bull on 860 down to Haas on 12). Score pass=true only if a create_visual (or update_visual) tool call succeeded and its title/description plausibly describes a chart of points per constructor for the 2023 season (not an unrelated metric, an unrelated season, or drivers instead of constructors). Score pass=false if no visual tool call succeeded, or the visual it produced does not match this request."
+    }
+  ]
+}

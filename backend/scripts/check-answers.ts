@@ -31,9 +31,12 @@
  * teams, and turns where a result guard fired. `CHECK_ARM` is free text echoed
  * in the header so a captured transcript records which arm produced it.
  *
- * Sibling of `scripts/run-eval.ts`: that one compares result sets against
- * trusted SQL, this one asserts the answer is not degenerate. Same boot path,
- * same throwaway-session mechanics.
+ * Sibling of the assistant eval suite's golden set
+ * (`src/mastra/evals/sets/world-cup-golden.json`, run with
+ * `EVAL_SET=world-cup-golden npm run evals:assistant`): that one compares
+ * result sets against trusted SQL, this one asserts the answer is not
+ * degenerate. Its two questions the golden set did not already ask were moved
+ * there (BA-182); this script stays until runs have repeats (BA-9 Step 5).
  */
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
@@ -336,7 +339,7 @@ async function provision(
 /**
  * One turn in a throwaway session through the same path the desktop app drives
  * (`SessionsService.streamMessage` with a no-op emitter), then the persisted
- * assistant message — identical mechanics to `scripts/run-eval.ts`.
+ * assistant message.
  */
 async function ask(
   app: INestApplicationContext,

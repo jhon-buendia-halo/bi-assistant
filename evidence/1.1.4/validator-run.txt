@@ -1,0 +1,39 @@
+=== EVAL_SET=world-cup EVAL_DATASETS="World Cup"
+Validating World Cup (world-cup, postgres) on World Cup
+
+✓ champion-2022  postgres  1 rows
+✓ final-score-2018  postgres  1 rows
+✓ top-scorer-2022  postgres  1 rows
+✓ shootouts  postgres  4 rows
+✓ biggest-venue  postgres  1 rows
+
+world-cup: 5 of 5 reference queries passed; 5 cases have no reference query.
+exit 0
+=== EVAL_SET=world-cup-golden EVAL_DATASETS="World Cup"
+Validating World Cup (golden set) (world-cup-golden, postgres) on World Cup
+
+✓ pass-accuracy-by-team  postgres  3 rows
+✓ shot-accuracy-by-team  postgres  3 rows
+✓ top-scoring-team  postgres  1 rows
+✓ teams-tied-on-four-goals  postgres  2 rows
+✓ card-types-recorded  postgres  1 rows
+✓ goals-with-recorded-assist  postgres  1 rows
+✓ goals-by-type  postgres  5 rows
+✓ attendance-by-tournament  postgres  2 rows
+✓ matches-by-stage  postgres  4 rows
+✓ pass-completion-by-team  postgres  12 rows
+✓ yellow-card-share  postgres  1 rows
+
+world-cup-golden: 11 of 11 reference queries passed.
+exit 0
+=== EVAL_SET=world-cup-rest EVAL_DATASETS="World Cup (REST)"
+Validating World Cup (REST API) (world-cup-rest, sqlite) on World Cup (REST)
+
+✓ rest-champion-2022  sqlite  1 rows
+✓ rest-final-score-2018  sqlite  1 rows
+✓ rest-top-scorer-2022  sqlite  1 rows
+✓ rest-shootouts  sqlite  4 rows
+✓ rest-biggest-venue  sqlite  1 rows
+
+world-cup-rest: 5 of 5 reference queries passed; 5 cases have no reference query.
+exit 0

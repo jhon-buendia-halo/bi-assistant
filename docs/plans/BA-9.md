@@ -184,7 +184,7 @@ A question "holds up" when it cannot pass by luck and cannot fail for a reason t
 9. **Port the reference to each dialect** (PostgreSQL, Databricks SQL, SQLite for REST) and run each one on its fixture.
 10. **Validate without the model.** `npm run eval:validate` (Step 1) checks in seconds: every reference runs and returns fewer than 500 rows, the trap differs, the category is in the list, no check type is used twice, every dialect is present.
 11. **Run it once with the model.** If it fails, decide whether the question or the assistant is wrong. Change the question only if two people would disagree on the verdict; the test Anthropic suggests is "two domain experts would independently reach the same pass/fail verdict".
-12. **Commit it with a note** saying why the question exists and what it guards, the way [`golden-set.json`](../../backend/eval/golden-set.json) does today.
+12. **Commit it with a note** saying why the question exists and what it guards, the way `golden-set.json` (removed in Step 1a, BA-182) does today.
 
 #### One question, end to end
 
@@ -401,7 +401,7 @@ Effort is a rough estimate for one developer with Claude doing most of the draft
 | Tool | Its job | What it holds | Keep | Leave behind | Verdict |
 |---|---|---|---|---|---|
 | **In-app suite**<br>Agents → Evals tab; `npm run evals:assistant` | The regular test of the assistant. It runs from the app, stores every run and lists the questions that got worse since the last run. | 30 questions in 3 sets: World Cup on PostgreSQL (10), the same 10 on the REST API (5 with a SQLite reference), Formula 1 (10). It checks the text and the tool calls, compares rows with a reference query, and calls the judge on 12 questions. | The runner, the Evals tab, the run history and the regression list. This becomes the one tool. All 30 questions. | Questions written as TypeScript code. | **good base** Keep and extend. |
-| **Golden set**<br>[`backend/eval/golden-set.json`](../../backend/eval/golden-set.json); `npm run eval` | Catch wrong SQL. It compares the rows behind the answer with the rows of a trusted query. | 9 World Cup questions, each with a note on the trap it guards: two ratios of two different measures, two questions with ties, a clear winner, a metric that is the same on every row, a mostly empty column, and two plain controls. | The 9 questions and their notes, the best-written cases in the repo. | The runner. It prints to the console and saves nothing, and the in-app suite already compares rows the same way. | **very good questions** Move them; drop the runner. |
+| **Golden set**<br>`backend/eval/golden-set.json` (removed in Step 1a, BA-182); `npm run eval` | Catch wrong SQL. It compares the rows behind the answer with the rows of a trusted query. | 9 World Cup questions, each with a note on the trap it guards: two ratios of two different measures, two questions with ties, a clear winner, a metric that is the same on every row, a mostly empty column, and two plain controls. | The 9 questions and their notes, the best-written cases in the repo. | The runner. It prints to the console and saves nothing, and the in-app suite already compares rows the same way. | **very good questions** Move them; drop the runner. |
 | **Answer-quality gate**<br>[`backend/scripts/check-answers.ts`](../../backend/scripts/check-answers.ts); `npm run check:answers` | Prove that bugs a model once shipped stay fixed, and measure how often, by repeating the set. | 4 questions, one per past bug: a rate divided by itself (100% on every row), a tie reported as a ranking, a metric that is always 100% compared as if it varied, and "Team ID 5" instead of the team's name. It repeats the set N times and gives a pass rate with a 95% interval. | The 2 questions not in the golden set. The check logic, which becomes checks in 1b (names not ids, the ratio check). The repeat and interval code, which moves into Step 5. | The script, once Step 5 has repeats. Its other 2 questions repeat golden-set questions. | **very good checks** Move the parts; retire the script. |
 
 ##### Keep the questions, or write a golden dataset from scratch?
@@ -427,7 +427,7 @@ What is new in 1a is the format, the loader and the validator. The questions mov
 - The existing questions moved over with no change in behaviour: World Cup's 10 with their 5 SQLite references, Formula 1's 10, the 9 golden-set cases with their notes, and the 2 [`check-answers.ts`](../../backend/scripts/check-answers.ts) questions not already in the golden set. That is 21 World Cup questions, or 46 if the branch's 38-question World Cup suite comes over (it already holds 3 of the golden set's 9).
 - `npm run eval:validate`: every reference and trap run on the chosen datasource with no model call, failing with the case id and the reason.
 - A set option on `npm run evals:assistant`, so the CLI runs one set instead of being refused for spanning several samples.
-- Remove `npm run eval` and [`backend/eval/`](../../backend/eval/); keep [`check-answers.ts`](../../backend/scripts/check-answers.ts) until Step 5.
+- Remove `npm run eval` and `backend/eval/` (removed in Step 1a, BA-182); keep [`check-answers.ts`](../../backend/scripts/check-answers.ts) until Step 5.
 - Specs: the case shape in [`data-model.md`](../../specs/system/data-model.md); Gherkin "Validates the set without a model".
 
 </details>

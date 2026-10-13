@@ -14,6 +14,30 @@ Entry template:
 
 ---
 
+## 2026-10-13 — 1.1.2 baseline and 1.1.4 One format and a validator (BA-127, BA-182)
+
+### What went well
+- A snapshot of the old in-code definitions, taken before the move, plus a field-by-field equality test made "no change in behaviour" provable. A one-character regex change made it fail.
+- The baseline ran through the same endpoint the Evals tab calls, from an empty data directory and a separate copy of the World Cup database. It ran in parallel with development and never touched the user's data or the shared `world_cup` database.
+- Reading the traces before reporting "0 of 10" found two concrete causes, rather than "the model is weak": a one-row answer refused as truncated, and the datasource passed as `"<kind> <id>"`. Counting the tool errors across all six runs confirmed the second before it went into the research.
+- The specs agent read the backend agent's files as they appeared and wrote the rules to match them. The backend agent ran the validator for real from a scratch compile while `dist` was frozen.
+
+### What went wrong
+- The plan put the baseline on the user, but the machine had no LLM key in any data dir or in the environment. It also estimated about 20 minutes per run, and real runs took about 5.
+- `npm run worldcup:rest:setup` has been broken on `main` since BA-161: it sends no sign-in token and gets 401. No test covers it.
+- The first full E2E run failed 87 tests because Playwright's Chromium was not installed on this macOS machine, which cost one build cycle.
+- The visual baseline test has no macOS image in the repository, so every fresh macOS run fails it and writes an untracked `application-shell-web-darwin.png`.
+- The Step 1a contract missed that two golden questions read a table outside the World Cup sample's required list. The backend agent found it, and the fix changed the sample from 9 to 10 entities.
+- `tsc --noEmit` with incremental builds wrote `tsbuildinfo` files into the frozen `dist` while the baseline ran. It was harmless, but it broke the rule set for that window.
+- The user mistook the current app for the old one. Their familiar build came from two branches 113 commits behind `main`, and I hadn't said which version and look they would see.
+
+### What to do differently
+- Before planning or promising an eval run, check for a model key (`GET /llm/settings`, `env | grep OPENAI`) and time one run before estimating the rest.
+- On a new macOS machine, run `npx playwright install chromium` before the first E2E run. After a macOS run, move any generated `*-darwin.png` out of the tree; never commit it.
+- When a reference query moves into a set, check that every table it reads is in the fixture's required list. Better: make the validator check that each reference reads only dataset entities (a candidate for Step 1b).
+- When `dist` must not change, type-check with `--tsBuildInfoFile` pointing into the scratchpad.
+- When starting the app for the user, say which commit it runs and that branch builds may look different.
+
 ## 2026-10-12 — 1.1.2 and 1.1.3 BA-9 research and execution plan drafted (BA-127, BA-128)
 
 ### What went well

@@ -21,7 +21,7 @@ Defined once in [the glossary](../../product/glossary.md); used here as follows.
 
   | Id | Name | Schema | Seed | Datasource name | Dataset name | Required entities |
   |---|---|---|---|---|---|---|
-  | `world-cup` | World Cup | `world_cup` | bundled SQL | "World Cup PostgreSQL" | "World Cup" | 9: `tournaments`, `teams`, `matches`, `venues`, `players`, `goals`, `match_team_statistics`, views `v_match_results`, `v_player_goal_totals` |
+  | `world-cup` | World Cup | `world_cup` | bundled SQL | "World Cup PostgreSQL" | "World Cup" | 10: `tournaments`, `teams`, `matches`, `venues`, `players`, `goals`, `match_team_statistics`, `disciplinary_events`, views `v_match_results`, `v_player_goal_totals` (`disciplinary_events` added 2026-10-13, BA-182, because two golden-set questions read it; a World Cup dataset saved before then shows 9/10 until the sample is loaded again) |
   | `formula-1` | Formula 1 | `formula1` | bundled gzipped SQL | "Formula 1 PostgreSQL" | "Formula 1" | 48 (seasons, drivers, constructors, circuits, races, standings and per-session results; full list in the catalogue) |
   | `world-cup-rest` | World Cup (REST API) | `world_cup` | none (register-only, kind REST) | "World Cup REST API" | "World Cup (REST)" | the same 9 names as World Cup, keyed `api.world_cup.<table>` |
 
@@ -115,8 +115,8 @@ Feature: Testing data
     When I click "Load testing data"
     Then I see a warning that schema "world_cup" will be dropped and recreated
     When I click "Confirm"
-    Then I see a message that starts with "Seeded world_cup on 127.0.0.1:55432 and loaded 9 entities into dataset "World Cup""
-    And the sample shows "9/9 entities" with a check mark and "127.0.0.1:55432/world_cup"
+    Then I see a message that starts with "Seeded world_cup on 127.0.0.1:55432 and loaded 10 entities into dataset "World Cup""
+    And the sample shows "10/10 entities" with a check mark and "127.0.0.1:55432/world_cup"
     And "World Cup PostgreSQL" appears under "Datasource Configuration"
     And the "World Cup" dataset appears under "Datasets"
 
@@ -154,7 +154,7 @@ Feature: Testing data
     Given the "World Cup" sample is loaded
     When I expand it and click "Remove" and then "Confirm"
     Then I see "Removed the World Cup datasource and dataset from this app. The database itself was left untouched."
-    And the sample shows "0/9 entities"
+    And the sample shows "0/10 entities"
     And the schema "world_cup" still exists in the database
 
   Scenario: Remove is unavailable when nothing is loaded
@@ -165,7 +165,7 @@ Feature: Testing data
 
 ## Acceptance
 
-1. With the compose database up, loading World Cup from the panel yields a registered "World Cup PostgreSQL" datasource, a "World Cup" dataset with the 9 required entities (with sample values and join references), and a `9/9 entities` status; loading it again recreates the schema without duplicating records.
+1. With the compose database up, loading World Cup from the panel yields a registered "World Cup PostgreSQL" datasource, a "World Cup" dataset with the 10 required entities (with sample values and join references), and a `10/10 entities` status; loading it again recreates the schema without duplicating records.
 2. Loading Formula 1 into a server that lacks the `formula1` database creates it, seeds 48 required tables and reports `48/48 entities`.
 3. Remove clears both app-side records and leaves the database intact; status returns to `0/<required>`.
 4. A failure at any stage (connection, creation, seed, missing entities) produces the corresponding message and does not leave a dataset behind; a seed failure leaves nothing registered.

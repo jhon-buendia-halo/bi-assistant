@@ -81,7 +81,7 @@ Some content is data rather than behaviour. A rebuild copies these files verbati
 |---|---|---|
 | World Cup sample database | `backend/src/modules/testing-data/fixtures/001_world_cup.sql` (identical copy in `docker/postgres/init/`) | [testing-data](capabilities/testing-data/spec.md) |
 | Formula 1 sample database | `backend/src/modules/testing-data/fixtures/002_formula_1.sql.gz` | [testing-data](capabilities/testing-data/spec.md) |
-| Eval suites: questions, reference SQL, checks, judge rubrics | `backend/src/mastra/evals/assistant-eval-datasets.ts` | [agents-evals](capabilities/agents-evals/spec.md), [agents.md](system/agents.md) |
+| Eval question banks: questions, reference SQL per dialect, checks, judge rubrics, categories, notes | `backend/src/mastra/evals/sets/*.json` | [agents-evals](capabilities/agents-evals/spec.md), [data-model.md](system/data-model.md) 4.8, [agents.md](system/agents.md) |
 | Interactive-visuals skill copied into session workspaces | `backend/src/mastra/skills/interactive-visuals/` | [agents.md](system/agents.md) |
 
 ## Formats

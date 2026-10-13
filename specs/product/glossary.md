@@ -64,7 +64,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Eval run.** One execution of selected eval cases against a datasource and its datasets. Records per-question results (pass or fail, scores, tool calls, answer). When a completed earlier run exists for the same agent, datasource and datasets, the run also stores a *regression comparison*.
 
-**Eval set.** A named group of eval cases bound to one *sample fixture* (World Cup on PostgreSQL, World Cup on REST, Formula 1).
+**Eval set.** A named group of eval cases bound to one *sample fixture* (World Cup on PostgreSQL, World Cup on REST, Formula 1, and the World Cup golden set on PostgreSQL). Each set is one variant of a question bank file; see [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md).
 
 **Feedback.** The user's thumbs-up or thumbs-down on an answer. Thumbs-up also saves a *verified query*. Thumbs-down only marks the answer as wrong.
 

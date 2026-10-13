@@ -6,7 +6,8 @@ import {
 } from '../../modules/auth/current-user.service';
 import { SessionsService } from '../../modules/sessions/sessions.service';
 import { KnowledgeService } from '../../modules/knowledge/knowledge.service';
-import { runAssistantEvals } from './assistant.evals';
+import { ASSISTANT_EVAL_SETS, runAssistantEvals } from './assistant.evals';
+import { caseIdsForSet } from './eval-sets';
 
 /**
  * CLI entry point for the same suite the Agents → Evals tab runs.
@@ -18,6 +19,10 @@ import { runAssistantEvals } from './assistant.evals';
  *
  * Outside a request nobody is signed in (ADR-0012), so the run is explicitly
  * Demo User's: its throwaway sessions and knowledge are Demo User's own.
+ *
+ * `EVAL_SET` names one set (`world-cup`, `world-cup-rest`, …) and runs only
+ * its questions. Without it every set is selected, as before, which the
+ * one-sample rule refuses while the sets span several samples.
  */
 async function main(): Promise<void> {
   const datasets = (process.env['EVAL_DATASETS'] ?? '')
@@ -28,8 +33,18 @@ async function main(): Promise<void> {
   if (datasets.length === 0) {
     console.error(
       'Set EVAL_DATASETS to a comma-separated list of saved dataset names, ' +
-        'e.g. EVAL_DATASETS="World Cup Core" npm run evals:assistant',
+        'e.g. EVAL_SET=world-cup EVAL_DATASETS="World Cup" npm run evals:assistant',
     );
+    process.exitCode = 1;
+    return;
+  }
+
+  // Resolved before the app boots, so a mistyped set costs nothing.
+  let caseIds: string[] | undefined;
+  try {
+    caseIds = caseIdsForSet(ASSISTANT_EVAL_SETS, process.env['EVAL_SET']);
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : String(err));
     process.exitCode = 1;
     return;
   }
@@ -41,7 +56,7 @@ async function main(): Promise<void> {
   try {
     await app
       .get(CurrentUserService)
-      .runAs(LOCAL_USER, () => runAsDemoUser(app, datasets));
+      .runAs(LOCAL_USER, () => runAsDemoUser(app, datasets, caseIds));
   } finally {
     await app.close();
   }
@@ -50,6 +65,7 @@ async function main(): Promise<void> {
 async function runAsDemoUser(
   app: Awaited<ReturnType<typeof NestFactory.createApplicationContext>>,
   datasets: string[],
+  caseIds: string[] | undefined,
 ): Promise<void> {
   // Same Nest app the eval-runs.service in-app runner uses, so a throwaway
   // session for create_visual/update_visual works here too — no CLI-only
@@ -70,7 +86,7 @@ async function runAsDemoUser(
         console.log(`      ${id}: ${score}`);
       }
     },
-    undefined,
+    caseIds,
     sessions,
     knowledgeBlock,
   );
