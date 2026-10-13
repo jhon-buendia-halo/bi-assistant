@@ -16,6 +16,15 @@
 - **What it displaces:** health insurance was the first domain (to Databricks and to 100 questions before the beta). It now comes over on PostgreSQL as it is (42 questions) and goes to Databricks after the beta.
 - **Cost:** Step 1d grows from 1 to 2 days to 5 to 6; Steps 2 and 3 by about a day each. The minimum by the beta becomes about 19 to 24 days of work against 14 working days, so it fits only with the domain work run in parallel. If time runs short: depth first (banks stay at about 30 questions), then the three other branch domains, then marketing analytics on Databricks and REST.
 
+## 3. Databricks validated in the VDI (Sergio, 2026-10-13)
+
+- **Decision:** "I have a databricks access but in other place in a VDI ... I want just build the evals, then when we connected in the VDI (though copy the repo there and executing it there) we will be able to test it." Step 2 is built here without a warehouse; the full runs on a real warehouse happen later in the VDI.
+- **Effect:** Step 2's done-when splits into "here" (code, references, unit tests) and "in the VDI" (runs). Until then, Databricks references are written but not executed.
+
+## 4. Synthetic domains with no business review (Sergio, 2026-10-13)
+
+- **Decision:** "just create the database and question related, should be synthetic". Claude writes the finance and marketing-analytics briefs, schemas, generators and questions; Sergio skims them. The check on each question is that its reference query runs and returns the planted facts.
+
 ## Where the decisions are applied
 
 - `docs/plans/BA-9.md`: 3.0 (decisions table, "Decisions taken", calendar, minimum), 3.4 (domain order, the beta level), Steps 1d, 2, 3 and 4, the story map, the have / need table.
@@ -25,6 +34,4 @@
 
 ## Still open
 
-- Databricks access (action 1 of plan 3.0): no workspace, warehouse or token is configured on this machine (`~/.databrickscfg` absent, no `DATABRICKS_*` variables).
-- Who reviews the finance and marketing-analytics briefs (Claude drafts them), due Friday 2026-10-16.
 - Shipping (one PR or an early PR after Step 1c), the beta thresholds, who labels the judge validation set.
