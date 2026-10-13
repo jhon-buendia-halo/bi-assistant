@@ -14,6 +14,28 @@ Entry template:
 
 ---
 
+## 2026-10-12 — 1.1.2 and 1.1.3 BA-9 research and execution plan drafted (BA-127, BA-128)
+
+### What went well
+- Two parallel agents converted the artifact into the research and the plan, each given the other doc's exact heading list. The cross-document anchors worked first time: 407 relative links, none broken.
+- Re-checking the artifact against the code found thirteen errors that seven artifact versions had missed. Examples: the REST players endpoint (50 rows) fits in one page, so the paging example tested nothing; three spec rules cited from the wrong capability (R10, R20, R25); and the 3.8 status command counts 23, not 30.
+- Checking every branch for claimed ADR numbers before writing found ADR-0013 (`feat/hindsight-memory`) and ADR-0014 (`feat/BA-2-data-model-dsl`), so the case-format ADR became ADR-0015 with no collision.
+- Staging an intermediate `roadmap.md` (`git hash-object -w` + `git update-index --cacheinfo`), then running the spec check on an export of the index, gave each story its own green commit while both shared the roadmap.
+
+### What went wrong
+- I asked mid-drafting where Steps 9 to 12 belong. The user answered that the task was Step 0 only. The question concerned the epic spec's wording, a Step 0 deliverable the user confirms anyway, so it should have waited for that confirmation.
+- The research agent's link checker resolved anchors in one direction only. Re-running it on the plan reported 23 false failures, and a second checker had to be written.
+- The plan is committed while BA-128 is still To Do in Jira. BA-127 can't be Done until the baseline on `main` is taken, and BA-128 may only start after BA-127 is Done. Status follows that order; drafting did not.
+- A throwaway check ran `cd $T && … | tail -1; rm -rf $T`. The pipe hid the failure, the folder was deleted before the retry, and the shell's working directory reset to the main checkout.
+- My first retrospective insert anchored on yesterday's top entry; a newer one had arrived with `main`, so the anchor matched nothing (the assertion caught it).
+
+### What to do differently
+- When a decision is part of a deliverable the user will confirm (an epic spec, a story list), draft it with the plan's default and raise it at confirmation. Don't ask mid-drafting.
+- When parallel agents write documents that link to each other, give them one shared link checker that resolves anchors in any `.md` file, and run it once both are done.
+- Before keeping a spec rule number cited in a plan (R10, R20, …), grep the cited capability spec for that rule.
+- In throwaway shell checks, use absolute paths and never pipe into `tail` before an `rm` in the same chain.
+- Anchor retrospective and changelog inserts on the first `## ` heading after the template, read at insert time, not on a remembered entry.
+
 ## 2026-10-12 — 1.11.3 Task details in the workflow pane (BA-174)
 
 ### What went well

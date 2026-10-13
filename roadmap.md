@@ -218,14 +218,10 @@ Evals come first in the order even though they run in parallel: every other mile
 
 ### Milestone 1.1 — Golden Dataset and Evals ([BA-9](https://halo-powered.atlassian.net/browse/BA-9))
 
-The measurement baseline. Every change to the DSL, knowledge store or connectors is measured against it before the beta ships.
+The measurement baseline. Every change to the DSL, knowledge store or connectors is measured against it before the beta ships. Epic spec: [specs/epics/BA-9/spec.md](specs/epics/BA-9/spec.md). Research: [docs/research/BA-9.md](docs/research/BA-9.md). Plan: [docs/plans/BA-9.md](docs/plans/BA-9.md), whose section 3.0 holds the calendar, the open decisions and the minimum by the beta. Features 1.1.4 onward mirror the plan's steps; their Jira stories are created once the epic spec is confirmed.
 
-#### 1.1.1 — Golden dataset and eval suite  `📋 Planned`
-- **Intent:** know, with numbers, whether a change made answers better or worse.
-- **Scope:** a golden dataset of representative questions with known-correct answers on the sample fixtures. An eval suite (LLM judge plus SQL and result checks) that runs against it, building on the existing `assistant-eval-judge` agent and `mastra/evals/` and the Agents → Evals tab.
-- **Out of scope:** evals on customer data.
-- **Acceptance:** the suite runs on demand against the golden dataset and reports per-question and per-category results. Results can be compared run to run, and a knowledge on/off comparison is possible (needed by 1.3.3).
-- **Notes:** Jira has no stories under this epic yet, so this feature mirrors the epic. Split it into stories in Jira first, then mirror them here.
+#### 1.1.1 — Golden dataset and eval suite  `🚫 Cut`
+- **Reason:** split into 1.1.2–1.1.18, one feature per story, by the execution plan (BA-128). Its intent, scope and acceptance carry over into the epic spec.
 
 #### 1.1.2 — Research ([BA-127](https://halo-powered.atlassian.net/browse/BA-127))  `🚧 In progress`
 - **Intent:** the team agrees on what to measure and why before anything is built: findings, options and a recommendation for the golden dataset and the eval suite.
@@ -233,6 +229,118 @@ The measurement baseline. Every change to the DSL, knowledge store or connectors
 - **Out of scope:** the execution plan (1.1.3); any code.
 - **Acceptance:** the research doc is in the repo with every source listed by type; the baseline on `main` (the World Cup set on PostgreSQL and on REST, three runs each, from the Evals tab) is in its evidence folder and summarised in the doc; `python3 scripts/check-specs.py` passes.
 - **Notes:** the baseline is taken by Sergio (action 3 in plan 3.0). Evidence: `evidence/1.1.2/`.
+
+#### 1.1.3 — Execution plan ([BA-128](https://halo-powered.atlassian.net/browse/BA-128))  `📋 Planned`
+- **Intent:** no implementation story starts before the scope, the order and the stories are agreed.
+- **Scope:** [docs/plans/BA-9.md](docs/plans/BA-9.md) (the plan's Part 3 and Part 4.1–4.6, a story map, the have / need table); the epic spec rewritten to this scope; ADR-0015 in [architecture.md](specs/system/architecture.md); features 1.1.4–1.1.18; one Jira story per feature under BA-9.
+- **Out of scope:** any code; the decisions themselves, which the plan records with their dates.
+- **Acceptance:** the epic spec says Confirmed; the stories exist in Jira and their keys are on 1.1.4–1.1.18; `python3 scripts/check-specs.py` passes.
+- **Notes:** drafted on 2026-10-12 next to the research. The story starts formally when 1.1.2 is Done, as BA-128 requires. Evidence: `evidence/1.1.3/`.
+
+#### 1.1.4 — One format and a validator (Step 1a)  `📋 Planned`
+- **Intent:** one place and one format to add a question, and wrong reference queries found in seconds without a model call.
+- **Scope:** one data file per set under `backend/src/mastra/evals/sets/` in the case format of ADR-0015; a loader that refuses an incomplete case; the 31 existing questions moved over with no change in behaviour; `npm run eval:validate`; a set option on `npm run evals:assistant`; `npm run eval` and `backend/eval/` removed.
+- **Out of scope:** new questions (1.1.10); retiring `check-answers.ts` (1.1.11).
+- **Acceptance:** the validator passes on the PostgreSQL and REST fixtures and fails on a reference broken on purpose; a run gives the same verdicts as the baseline, within its run-to-run variation.
+- **Notes:** 1 to 1.5 days. Needs 1.1.3 and the decision on how branch work comes over (plan 3.0). Jira: story pending.
+
+#### 1.1.5 — Deterministic checks (Step 1b)  `📋 Planned`
+- **Intent:** a failed question names the rule that broke, at no token cost.
+- **Scope:** twelve checks built with `createScorer`, one file each, each tagged with a criterion of the research's criteria list (2.5): `noRepairs`, `namesNotIds`, `numbersGrounded`, `rationaleOk`, `noHtml`, `dialect`, `qualifiedNames`, `optionCount`, `visualKeywords`, `sqlMatches`, `notMatches`, `usesEntities`; attached to every moved question.
+- **Out of scope:** the report by category (1.1.6).
+- **Acceptance:** each check has a unit test; one PostgreSQL run scores every check.
+- **Notes:** 1 to 1.5 days. Needs 1.1.4. Jira: story pending.
+
+#### 1.1.6 — Report by category, judge optional (Step 1c)  `📋 Planned`
+- **Intent:** see which kind of question got worse, and stop paying for the judge on every run.
+- **Scope:** a category chip per question on the Evals tab; a pass rate per category and per criterion on every finished run; a run option `judge: off | categories | on`, off by default, with judge checks shown as "not scored" when it is off.
+- **Out of scope:** repeats and intervals (1.1.11); judge validation (1.1.12).
+- **Acceptance:** the spec check and the E2E scenarios pass; one real PostgreSQL run has the table in its report and spent no judge tokens.
+- **Notes:** 1 to 1.5 days. Needs 1.1.5. Jira: story pending.
+
+#### 1.1.7 — Four synthetic domains on PostgreSQL (Step 1d)  `📋 Planned`
+- **Intent:** test the assistant on data the model never saw, shaped like a customer's, with traps planted on purpose.
+- **Scope:** health insurance (42 questions), genomics (49), supply chain (20) and banking (20) copied by path from `feat/engine-eval-loop` (generators, init SQL, knowledge seeds), their questions in the new format, each tagged dev or held-out.
+- **Out of scope:** HR and retail, which carry expert-mode and learning fields; growing the domains (1.1.10).
+- **Acceptance:** the four domains load on the compose PostgreSQL, pass the validator and have a baseline run.
+- **Notes:** 1 to 2 days, if time allows before the beta. Needs 1.1.4. Jira: story pending.
+
+#### 1.1.8 — Databricks fixture and set (Step 2)  `📋 Planned`
+- **Intent:** the manager's first ask. Databricks has no eval today; the same questions on the same rows show a Databricks problem as a Databricks problem.
+- **Scope:** `setup-worldcup-databricks.ts` loading World Cup into `<catalog>.world_cup`; a register-only `world-cup-databricks` fixture the preflight accepts; a Databricks reference for every World Cup question; ten Databricks-only questions; PostgreSQL and Databricks side by side in the report.
+- **Out of scope:** Databricks in the nightly CI (cost); health insurance on Databricks unless 1.1.7 lands first.
+- **Acceptance:** a full run completes on a real warehouse from the Evals tab and from the CLI, with the report and a screenshot in evidence; one cold-start and one warm run recorded; a reference broken on purpose fails the validator on Databricks.
+- **Notes:** 4 to 5 days. Needs 1.1.4 to 1.1.6 and Databricks access (workspace, warehouse, token, catalog), asked on 2026-10-12. If access is late, 1.1.9 goes first. Jira: story pending.
+
+#### 1.1.9 — REST connector cases (Step 3)  `📋 Planned`
+- **Intent:** the manager's second ask. Test what REST changes (paging, nesting, row caps, failures), not only the questions.
+- **Scope:** switches on the local World Cup API, one per behaviour (page, offset and cursor paging; nested rows; rows under another key; a row cap; a refused endpoint; a required token); one datasource per variant; SQLite references for every World Cup question; twelve REST-only questions; a report per variant.
+- **Out of scope:** fixing the connector bugs found (filed under BA-11).
+- **Acceptance:** each variant has a run; every failing connector case has a bug under BA-11; the DIGS and RSS endpoints are checked against the switch list in writing.
+- **Notes:** 3 to 4 days. Needs 1.1.4 to 1.1.6. Jira: story pending.
+
+#### 1.1.10 — More questions: domains and question banks (Step 4)  `📋 Planned`
+- **Intent:** enough questions to see a 10-point change (about 100 per fixture) instead of only a 30-point one.
+- **Scope:** World Cup to 100 questions on all three kinds; health insurance to 100 on PostgreSQL and Databricks; marketing insight, new, at 60; banking extended to finance and wealth; every category at five questions or more; every question tagged dev or held-out; deterministic substitutes on the judge-only questions.
+- **Out of scope:** Formula 1 beyond its 10 questions until these are complete.
+- **Acceptance:** the counts above with references run before commit; a bootstrap over each set spreads less than 5 points; dev and held-out within 5 points of each other at baseline.
+- **Notes:** about two weeks, continuous. Needs 1.1.4 to 1.1.9 and a one-hour brief per new domain from someone who knows the business. Jira: story pending.
+
+#### 1.1.11 — Numbers you can trust (Step 5)  `📋 Planned`
+- **Intent:** tell a real change from noise, know what a run costs, and catch a regression the day it lands.
+- **Scope:** tokens and cost per question (assistant and judge apart); seconds at P50 and P90; tool calls per question; a `repeats` option (1, 3 or 5) with pass^k, a flaky count and a Wilson interval per category; the beta thresholds in the spec; a nightly CI run on PostgreSQL with the judge off that fails on any regression; `check-answers.ts` retired.
+- **Out of scope:** Databricks in the nightly run.
+- **Acceptance:** a week of nightly runs in evidence; the threshold table in the spec and agreed.
+- **Notes:** 3 to 4 days; the nightly part is in the minimum by the beta. Needs 1.1.4; 1.1.8 for the Databricks numbers. Jira: story pending.
+
+#### 1.1.12 — Judge validation and human verdict (Step 6)  `📋 Planned`
+- **Intent:** measure how often the judge agrees with a person before its verdict counts.
+- **Scope:** a Pass / Fail control on a finished question in the Details panel; a 30-case validation set from those labels; a script that prints agreement on passes and fails separately; rubric version, judge model and temperature on every run; a weekly run with the judge on.
+- **Out of scope:** making the judge the gate.
+- **Acceptance:** agreement at least 90% on both passes and fails, or the rubrics rewritten until it is.
+- **Notes:** 3 days, after the beta. Needs 1.1.10 and a labeller. Jira: story pending.
+
+#### 1.1.13 — Arms: knowledge on and off, model comparison (Step 7)  `📋 Planned`
+- **Intent:** prove whether a change helps by running the same questions with it and without it.
+- **Scope:** an `arm` option on a run (knowledge on or off; a model override), stored on the run; a side-by-side report of two runs by category; the loop runner and `eval:diff --draft`.
+- **Out of scope:** automating the improvement loop.
+- **Acceptance:** 1.3.3's acceptance (knowledge on and off, no category gets worse) is answered by one report.
+- **Notes:** 2 to 3 days. Needs 1.1.10 and 1.1.11. Jira: story pending.
+
+#### 1.1.14 — Component checks and two-turn tasks (Step 8)  `📋 Planned`
+- **Intent:** a wrong answer names the part that failed, and a clarification counts only if the answer after it is right.
+- **Scope:** checks on intermediate outputs (tables used, repair count, query time against the reference, the verifier's agreement in careful mode); a `turns` field on a case; at least ten tasks in the `follow-up` category.
+- **Out of scope:** none named in the plan.
+- **Acceptance:** a failed task names the component that failed.
+- **Notes:** about a week, after the beta. Jira: story pending.
+
+#### 1.1.15 — Verified queries become cases; a user eval set per dataset (Step 9)  `📋 Planned`
+- **Intent:** a user gets a pass rate on their own data from the answers they already approved.
+- **Scope:** the `eval_sets` collection; every verified query promoted into its dataset's set as an approved case; the thumbs-down correction flow storing a draft; a "Your sets" section on the Evals tab run through the same runner; approved accuracy, paraphrase agreement, coverage and "too few questions to tell" under 30.
+- **Out of scope:** templates (1.1.16) and model drafts (1.1.17).
+- **Acceptance:** the E2E scenarios pass; a run completes end to end on a database that is not a fixture.
+- **Notes:** about a week, after the beta. Needs 1.1.4 and 1.1.11. Jira: story pending.
+
+#### 1.1.16 — Templates for any datasource (Step 10)  `📋 Planned`
+- **Intent:** a newly connected datasource gets a correctness number in minutes, with no one writing a question.
+- **Scope:** about 20 template cases per dataset from the inventory and sample rows, with reference SQL per dialect; a *Generate from schema* button; template accuracy reported apart from approved accuracy; the health check defined as templates plus the reference-free checks.
+- **Out of scope:** model-written questions.
+- **Acceptance:** the generator runs on the World Cup fixtures on all three kinds and on one database it has never seen; every template's SQL runs in every dialect; a capped REST endpoint produces a case marked partial.
+- **Notes:** 3 to 4 days, after the beta. Needs 1.1.15. Jira: story pending.
+
+#### 1.1.17 — Draft with AI from schema, knowledge and documents (Step 11)  `📋 Planned`
+- **Intent:** a user attaches a data dictionary or a past report and gets draft questions with answers to review.
+- **Scope:** an eval-bootstrap agent; document attachment on the Evals tab; drafts validated by execution and de-duplicated; a review screen (approve, edit, reject) showing SQL and rows; provenance; a cap and a cost line per click; a privacy sentence.
+- **Out of scope:** drafts counting before a person approves them.
+- **Acceptance:** on the World Cup fixture with its glossary attached, at least 70% of drafts survive validation and a reviewer approves at least half without edits (targets confirmed in the first trial).
+- **Notes:** 1 to 2 weeks, after the beta. Needs 1.1.15 and 1.1.16. Jira: story pending.
+
+#### 1.1.18 — The eval set travels with the agent (Step 12)  `📋 Planned`
+- **Intent:** an SME agent is handed over with its own evals.
+- **Scope:** the agent bundle export carrying prompt, knowledge and eval set; import as drafts only; approved accuracy on the agent card and detail view; evals for user agents.
+- **Out of scope:** multi-reviewer approval; Genie benchmark export.
+- **Acceptance:** an exported agent imports with its set as drafts, and its card shows the approved accuracy after review. (Derived from the step's scope; the plan gives no done-when for Step 12.)
+- **Notes:** 3 to 4 days, after the beta. Needs 1.1.15 and the bundle format from the Agent Hub work. Jira: story pending.
 
 ### Milestone 1.2 — Data Model DSL ([BA-2](https://halo-powered.atlassian.net/browse/BA-2))
 

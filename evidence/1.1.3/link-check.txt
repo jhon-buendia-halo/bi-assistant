@@ -1,0 +1,2 @@
+Link check, 2026-10-12, after the corrections (script: links_both.py, session scratchpad)
+Checked 139 relative links in docs/plans/BA-9.md: 0 failed (files must exist; anchors into .md files must match a heading slug, GitHub rule). External URLs not re-opened.

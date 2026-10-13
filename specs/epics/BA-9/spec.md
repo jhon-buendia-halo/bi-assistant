@@ -1,34 +1,67 @@
 # BA-9 — Golden Dataset and Evals
 
-- **Jira:** [BA-9](https://halo-powered.atlassian.net/browse/BA-9) · **Roadmap:** Milestone 1.1 · **Status:** Draft — confirmation waived by the user on 2026-10-04 (one-time exception); work on its stories may start
+- **Jira:** [BA-9](https://halo-powered.atlassian.net/browse/BA-9) · **Roadmap:** Milestone 1.1 · **Status:** Draft — rewritten on 2026-10-12 to the scope of the execution plan ([BA-128](https://halo-powered.atlassian.net/browse/BA-128)); waiting for the user's confirmation. The waiver of 2026-10-04 covered the earlier draft only.
+- **Research:** [docs/research/BA-9.md](../../../docs/research/BA-9.md) ([BA-127](https://halo-powered.atlassian.net/browse/BA-127)) · **Plan:** [docs/plans/BA-9.md](../../../docs/plans/BA-9.md) ([BA-128](https://halo-powered.atlassian.net/browse/BA-128)) · **ADR:** ADR-0015 in [architecture.md](../../system/architecture.md)
 
 ## Goal
-Know, with numbers, whether a change made answers better or worse. A golden dataset of representative questions with known-correct answers on the sample fixtures, and an eval suite (LLM judge plus SQL and result checks) that runs against it. It runs throughout October so every change to the DSL, knowledge store or connectors is measured before the beta ships.
+Know, with numbers, whether a change made answers better or worse, on every datasource kind the app supports: PostgreSQL, Databricks and REST. One golden dataset of questions with known-correct answers on fixtures we control, scored first by deterministic checks that cost no tokens, with the LLM judge as a run option. It runs throughout October so every change to the DSL ([BA-2](../BA-2/spec.md)), the knowledge store ([BA-4](../BA-4/spec.md)) and the connectors ([BA-5](../BA-5/spec.md)) is measured before the beta ships. The manager's priority (2026-10-12): as many evals as possible for Databricks and REST. After the beta, the same runner and report give users a number they can trust on their own data.
 
 ## Scope
-- The golden dataset: questions with known-correct answers on the sample fixtures, grouped by category.
-- An eval suite on demand with per-question and per-category results, run-to-run comparison and a knowledge on/off comparison.
-- Built on the existing `assistant-eval-judge` agent, `mastra/evals/` and the Agents, Evals tab.
+- **One format.** The three eval harnesses on `main` folded into the in-app suite; cases as data files with one reference query per dialect, and a validator that runs every reference with no model call (ADR-0015).
+- **Deterministic first.** Checks tied to a criteria list; a report per category and per criterion; the judge as a run option, off by default, with judge-only checks reported as not scored.
+- **Databricks.** The World Cup data loaded into a Unity Catalog schema, a register-only fixture the preflight accepts, and Databricks-only cases.
+- **REST.** Server variants of the local World Cup API that page, nest, cap, refuse and require a token, with REST-only cases.
+- **Breadth and depth.** Synthetic domain databases (health insurance, genomics, supply chain and banking from the local branch; marketing insight new), growing toward 100 questions per main fixture, split into dev and held-out.
+- **Numbers you can trust.** Repeats with intervals, tokens, cost and latency, and a nightly CI run on PostgreSQL.
+- **Trust in the judge and comparisons.** Judge agreement measured against human labels; arms (knowledge on and off, model comparison); component checks and two-turn tasks.
+- **After the beta: evals on the user's own data.** A user eval set per dataset fed by verified queries, templates from the schema and model drafts a person approves, and the eval set carried in the agent bundle.
 
 ## Out of scope
-- Evals on customer data.
+- Customer data in the developer suite: it runs on fixtures we control. A masked copy of a real dataset is a later privacy decision.
+- A wholesale merge of `feat/engine-eval-loop` or `feat/knowledge-learning-evals`; expert mode, learning and memory belong to other epics.
+- The HR and retail domains, which carry expert-mode and learning fields.
+- Databricks in the nightly CI run, because of cost; Databricks runs are on demand.
+- An agent that proposes changes from the scores (automating the improvement loop); approval by more than one reviewer; export as a Genie benchmark; evals on documents an agent reads.
 
 ## Stories
-Jira lists **no child issues**; the roadmap mirrors the epic as one feature.
+The two process stories come first; no implementation story starts before both are Done. Keys for 1.1.4 onward are created in Jira once this spec is confirmed.
 
 | Story | Summary | Roadmap feature |
 |---|---|---|
-| — | Golden dataset and eval suite | 1.1.1 |
+| [BA-127](https://halo-powered.atlassian.net/browse/BA-127) | Research | 1.1.2 |
+| [BA-128](https://halo-powered.atlassian.net/browse/BA-128) | Execution plan | 1.1.3 |
+| pending | Step 1a · One format and a validator | 1.1.4 |
+| pending | Step 1b · Deterministic checks | 1.1.5 |
+| pending | Step 1c · Report by category, judge optional | 1.1.6 |
+| pending | Step 1d · Four synthetic domains on PostgreSQL | 1.1.7 |
+| pending | Step 2 · Databricks fixture and set | 1.1.8 |
+| pending | Step 3 · REST connector cases | 1.1.9 |
+| pending | Step 4 · More questions: domains and question banks | 1.1.10 |
+| pending | Step 5 · Numbers you can trust | 1.1.11 |
+| pending | Step 6 · Judge validation and human verdict | 1.1.12 |
+| pending | Step 7 · Arms: knowledge on and off, model comparison | 1.1.13 |
+| pending | Step 8 · Component checks and two-turn tasks | 1.1.14 |
+| pending | Step 9 · Verified queries become cases; a user eval set per dataset | 1.1.15 |
+| pending | Step 10 · Templates for any datasource | 1.1.16 |
+| pending | Step 11 · Draft with AI from schema, knowledge and documents | 1.1.17 |
+| pending | Step 12 · The eval set travels with the agent | 1.1.18 |
 
 ## Specs touched
-- Capabilities: [agents-evals](../../capabilities/agents-evals/spec.md) (question sets, runs, reports, comparison), [testing-data](../../capabilities/testing-data/spec.md) (fixtures the golden set is bound to).
-- System: [agents](../../system/agents.md) (`assistant-eval-judge`), [api](../../system/api.md) (eval run endpoints), [data-model](../../system/data-model.md) (eval sets and runs).
+- **Capabilities:** [agents-evals](../../capabilities/agents-evals/spec.md) (criteria and categories, run options `judge`, `repeats` and `arm`, reports by category and criterion, user sets, Gherkin); [testing-data](../../capabilities/testing-data/spec.md) (the Databricks fixture, register-only kinds); [sessions-chat](../../capabilities/sessions-chat/spec.md) (verified queries and corrections becoming cases, Step 9).
+- **System:** [data-model](../../system/data-model.md) (the case shape; `eval_runs` gains repeats, arm, judge settings, human verdict, usage and tool-call count; the `eval_sets` collection in Step 9); [api](../../system/api.md) (run options; user set endpoints); [agents](../../system/agents.md) (judge rubric versioning; the Databricks dialect note; the eval-bootstrap agent in Step 11); [ui](../../system/ui.md) (category chip and summary, the Pass / Fail control, "Your sets"); [delivery](../../system/delivery.md) (REST server switches, `eval:validate`, the nightly workflow); [architecture](../../system/architecture.md) (ADR-0015).
 
 ## Acceptance
-From the roadmap (Jira has none): the suite runs on demand against the golden dataset and reports per-question and per-category results; results compare run to run; knowledge on/off comparison is possible (needed by [BA-80](../BA-4/spec.md)). Exact pass thresholds: To be agreed.
+- **By the beta (2026-10-30), the minimum:** Steps 0, 1a to 1c, 2 (World Cup on Databricks), 3, and the nightly run of Step 5. The suite runs on demand on PostgreSQL, Databricks and REST; it reports per question, per category and per criterion; runs compare with the previous run; the judge is off by default and judge-only checks show as not scored; a nightly PostgreSQL run fails on any regression.
+- The beta thresholds are written in the agents-evals spec and agreed by 2026-10-23 (proposal in plan 3.9).
+- A knowledge on and off comparison by category is one report (Step 7), which answers [BA-80](https://halo-powered.atlassian.net/browse/BA-80)'s acceptance.
+- The judge agrees with human labels on at least 90% of passes and of fails before its verdict counts (Step 6).
+- Steps 9 to 12 meet the done-when of each step in the plan.
 
 ## Dependencies, risks and open questions
-- **Already built:** the Agents feature has an Evals tab (question suite, executions, Markdown report, run regression in `eval-regression.ts`, `eval-report.ts`), `assistant.evals.ts` and `result-set-check.ts`, bound to a sample fixture registry. Open: what is missing for a "golden" set and for run-to-run and knowledge on/off comparison?
-- Needs an LLM key to produce real numbers; the DSL model-vs-legacy comparison ([BA-2](../BA-2/spec.md)) is waiting on it.
-- Jira has no stories, no assignee and no fix version; split into stories before starting.
-- Phase 1 plan's golden-set item: [phase-1-answer-reliability](../../../docs/plans/phase-1-answer-reliability.md) (Workstream C).
+- **Databricks access** (a workspace the team may use for tests, a serverless SQL warehouse, a personal access token, a catalog where it can create a schema): asked on 2026-10-12, needed by 2026-10-14. Step 2 cannot start without it; if it is late, Step 3 goes first.
+- **Open decisions, with dates** (plan 3.0): how the branch work comes over (2026-10-13; recommendation: copy the data by path, rebuild the wiring on `main`); the Databricks fixture, World Cup loaded or the samples catalog only (2026-10-14; recommendation: World Cup loaded, `samples.tpch` as a smoke set); one PR at the end of the epic or an early PR after Step 1c (2026-10-16; recommendation: the early PR, so BA-2, BA-4 and BA-5 can measure against the suite); who writes the health-insurance and marketing-insight briefs (2026-10-16); the beta thresholds (2026-10-23); who labels the judge validation set (after the beta).
+- **The baseline on `main`** (six runs, action 3 in plan 3.0) is taken before any change; every later step compares with it.
+- **Time:** the minimum is 12 to 16 working days of work against 14 left, so it fits only if Claude does most of the drafting and the code and the Databricks access arrives by 2026-10-14. What moves after the beta, and in which order, is in plan 3.0.
+- **Cost:** real numbers need an LLM key and spend tokens; the judge is off by default, Databricks runs are on demand.
+- **ADR number:** ADR-0013 and ADR-0014 are claimed on other branches; re-check that 0015 is free when this branch merges.
+- The Phase 1 plan's golden-set item ([phase-1-answer-reliability](../../../docs/plans/phase-1-answer-reliability.md), Workstream C) is covered by Steps 1a and 5.
