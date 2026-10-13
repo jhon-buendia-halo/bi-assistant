@@ -227,6 +227,13 @@ The measurement baseline. Every change to the DSL, knowledge store or connectors
 - **Acceptance:** the suite runs on demand against the golden dataset and reports per-question and per-category results. Results can be compared run to run, and a knowledge on/off comparison is possible (needed by 1.3.3).
 - **Notes:** Jira has no stories under this epic yet, so this feature mirrors the epic. Split it into stories in Jira first, then mirror them here.
 
+#### 1.1.2 — Research ([BA-127](https://halo-powered.atlassian.net/browse/BA-127))  `🚧 In progress`
+- **Intent:** the team agrees on what to measure and why before anything is built: findings, options and a recommendation for the golden dataset and the eval suite.
+- **Scope:** [docs/research/BA-9.md](docs/research/BA-9.md), converted from the "Golden Dataset and Evals Plan" artifact (version 7, 2026-10-12): the book's method (Chip Huyen, *AI Engineering*, chapter 4) and how the market evaluates text-to-SQL and agents; what exists on `main` and only on branches; the criteria list, the categories, what Databricks and REST need; worked examples; the verdict on evals on the user's own data. Every "exists on main" claim re-checked against the branch base.
+- **Out of scope:** the execution plan (1.1.3); any code.
+- **Acceptance:** the research doc is in the repo with every source listed by type; the baseline on `main` (the World Cup set on PostgreSQL and on REST, three runs each, from the Evals tab) is in its evidence folder and summarised in the doc; `python3 scripts/check-specs.py` passes.
+- **Notes:** the baseline is taken by Sergio (action 3 in plan 3.0). Evidence: `evidence/1.1.2/`.
+
 ### Milestone 1.2 — Data Model DSL ([BA-2](https://halo-powered.atlassian.net/browse/BA-2))
 
 The structure the assistant reasons over, as a single, versionable source of truth.
