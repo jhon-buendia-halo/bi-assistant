@@ -25,27 +25,19 @@ Know, with numbers, whether a change made answers better or worse, on every data
 - An agent that proposes changes from the scores (automating the improvement loop); approval by more than one reviewer; export as a Genie benchmark; evals on documents an agent reads.
 
 ## Stories
-The two process stories come first. The stories for 1.1.4 onward were created on 2026-10-13, once this spec was confirmed.
+The two process stories come first; five stories cover the plan's steps.
 
-| Story | Summary | Roadmap feature |
+| Story | Summary | Roadmap features |
 |---|---|---|
 | [BA-127](https://halo-powered.atlassian.net/browse/BA-127) | Research | 1.1.2 |
 | [BA-128](https://halo-powered.atlassian.net/browse/BA-128) | Execution plan | 1.1.3 |
-| [BA-182](https://halo-powered.atlassian.net/browse/BA-182) | Step 1a · One format and a validator | 1.1.4 |
-| [BA-183](https://halo-powered.atlassian.net/browse/BA-183) | Step 1b · Deterministic checks | 1.1.5 |
-| [BA-184](https://halo-powered.atlassian.net/browse/BA-184) | Step 1c · Report by category, judge optional | 1.1.6 |
-| [BA-185](https://halo-powered.atlassian.net/browse/BA-185) | Step 1d · Domain databases: finance and marketing analytics, plus the branch's domains | 1.1.7 |
-| [BA-186](https://halo-powered.atlassian.net/browse/BA-186) | Step 2 · Databricks fixtures and sets | 1.1.8 |
-| [BA-187](https://halo-powered.atlassian.net/browse/BA-187) | Step 3 · REST connector cases | 1.1.9 |
-| [BA-188](https://halo-powered.atlassian.net/browse/BA-188) | Step 4 · More questions: domains and question banks | 1.1.10 |
-| [BA-189](https://halo-powered.atlassian.net/browse/BA-189) | Step 5 · Numbers you can trust | 1.1.11 |
-| [BA-190](https://halo-powered.atlassian.net/browse/BA-190) | Step 6 · Judge validation and human verdict | 1.1.12 |
-| [BA-191](https://halo-powered.atlassian.net/browse/BA-191) | Step 7 · Arms: knowledge on and off, model comparison | 1.1.13 |
-| [BA-192](https://halo-powered.atlassian.net/browse/BA-192) | Step 8 · Component checks and two-turn tasks | 1.1.14 |
-| [BA-193](https://halo-powered.atlassian.net/browse/BA-193) | Step 9 · Verified queries become cases; a user eval set per dataset | 1.1.15 |
-| [BA-194](https://halo-powered.atlassian.net/browse/BA-194) | Step 10 · Templates for any datasource | 1.1.16 |
-| [BA-195](https://halo-powered.atlassian.net/browse/BA-195) | Step 11 · Draft with AI from schema, knowledge and documents | 1.1.17 |
-| [BA-196](https://halo-powered.atlassian.net/browse/BA-196) | Step 12 · The eval set travels with the agent | 1.1.18 |
+| [BA-182](https://halo-powered.atlassian.net/browse/BA-182) | Foundation: one format, deterministic checks, report by category, domain databases (Steps 1a-1d) | 1.1.4-1.1.7 |
+| [BA-186](https://halo-powered.atlassian.net/browse/BA-186) | Databricks and REST evals (Steps 2-3) | 1.1.8-1.1.9 |
+| [BA-188](https://halo-powered.atlassian.net/browse/BA-188) | More questions and numbers you can trust (Steps 4-5) | 1.1.10-1.1.11 |
+| [BA-190](https://halo-powered.atlassian.net/browse/BA-190) | Judge validation, arms and component checks (Steps 6-8, after the beta) | 1.1.12-1.1.14 |
+| [BA-193](https://halo-powered.atlassian.net/browse/BA-193) | Evals on the user's own data (Steps 9-12, after the beta) | 1.1.15-1.1.18 |
+
+The 15 step stories created on 2026-10-13 (BA-182 to BA-196) were compacted to these five the same day at the user's request; the ten merged issues (BA-183, BA-184, BA-185, BA-187, BA-189, BA-191, BA-192, BA-194, BA-195, BA-196) are closed as duplicates of their story and taken out of the epic. Record: [evidence/1.1.3/jira-compaction.tsv](../../../evidence/1.1.3/jira-compaction.tsv).
 
 ## Specs touched
 - **Capabilities:** [agents-evals](../../capabilities/agents-evals/spec.md) (criteria and categories, run options `judge`, `repeats` and `arm`, reports by category and criterion, user sets, Gherkin); [testing-data](../../capabilities/testing-data/spec.md) (the Databricks fixture, register-only kinds); [sessions-chat](../../capabilities/sessions-chat/spec.md) (verified queries and corrections becoming cases, Step 9).

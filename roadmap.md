@@ -218,7 +218,7 @@ Evals come first in the order even though they run in parallel: every other mile
 
 ### Milestone 1.1 — Golden Dataset and Evals ([BA-9](https://halo-powered.atlassian.net/browse/BA-9))
 
-The measurement baseline. Every change to the DSL, knowledge store or connectors is measured against it before the beta ships. Epic spec: [specs/epics/BA-9/spec.md](specs/epics/BA-9/spec.md). Research: [docs/research/BA-9.md](docs/research/BA-9.md). Plan: [docs/plans/BA-9.md](docs/plans/BA-9.md), whose section 3.0 holds the calendar, the open decisions and the minimum by the beta. Features 1.1.4 onward mirror the plan's steps, one Jira story each (BA-182 to BA-196, created 2026-10-13).
+The measurement baseline. Every change to the DSL, knowledge store or connectors is measured against it before the beta ships. Epic spec: [specs/epics/BA-9/spec.md](specs/epics/BA-9/spec.md). Research: [docs/research/BA-9.md](docs/research/BA-9.md). Plan: [docs/plans/BA-9.md](docs/plans/BA-9.md), whose section 3.0 holds the calendar, the open decisions and the minimum by the beta. Features 1.1.4 onward mirror the plan's steps. Their 15 Jira stories were compacted to 5 on 2026-10-13 at the user's request, so here several features share one story: 1.1.4-1.1.7 → [BA-182](https://halo-powered.atlassian.net/browse/BA-182) (Done), 1.1.8-1.1.9 → [BA-186](https://halo-powered.atlassian.net/browse/BA-186) (In Progress), 1.1.10-1.1.11 → [BA-188](https://halo-powered.atlassian.net/browse/BA-188), 1.1.12-1.1.14 → [BA-190](https://halo-powered.atlassian.net/browse/BA-190), 1.1.15-1.1.18 → [BA-193](https://halo-powered.atlassian.net/browse/BA-193). The ten merged issues are closed as duplicates and out of the epic; the features keep their own evidence folders.
 
 #### 1.1.1 — Golden dataset and eval suite  `🚫 Cut`
 - **Reason:** split into 1.1.2–1.1.18, one feature per story, by the execution plan (BA-128). Its intent, scope and acceptance carry over into the epic spec.
@@ -244,26 +244,26 @@ The measurement baseline. Every change to the DSL, knowledge store or connectors
 - **Acceptance:** the validator passes on the PostgreSQL and REST fixtures and fails on a reference broken on purpose; a run gives the same verdicts as the baseline, within its run-to-run variation.
 - **Notes:** 1 to 1.5 days. Needs 1.1.3 and the decision on how branch work comes over (plan 3.0). Jira: [BA-182](https://halo-powered.atlassian.net/browse/BA-182). Shipped 2026-10-13 with a new set, World Cup (golden set), which holds the golden-set and answer-quality questions; the World Cup sample now requires `disciplinary_events`. Evidence: [evidence/1.1.4/](evidence/1.1.4/).
 
-#### 1.1.5 — Deterministic checks (Step 1b) ([BA-183](https://halo-powered.atlassian.net/browse/BA-183))  `✅ Done`
+#### 1.1.5 — Deterministic checks (Step 1b) ([BA-182](https://halo-powered.atlassian.net/browse/BA-182); was BA-183)  `✅ Done`
 - **Intent:** a failed question names the rule that broke, at no token cost.
 - **Scope:** twelve checks built with `createScorer`, one file each, each tagged with a criterion of the research's criteria list (2.5): `noRepairs`, `namesNotIds`, `numbersGrounded`, `rationaleOk`, `noHtml`, `dialect`, `qualifiedNames`, `optionCount`, `visualKeywords`, `sqlMatches`, `notMatches`, `usesEntities`; attached to every moved question.
 - **Out of scope:** the report by category (1.1.6).
 - **Acceptance:** each check has a unit test; one PostgreSQL run scores every check.
-- **Notes:** 1 to 1.5 days. Needs 1.1.4. Jira: [BA-183](https://halo-powered.atlassian.net/browse/BA-183). Shipped 2026-10-13: twelve checks, the R31 fix for a result truncated at the model's own limit, and the validator's dataset-entity rule. Evidence: [evidence/1.1.5/](evidence/1.1.5/).
+- **Notes:** 1 to 1.5 days. Needs 1.1.4. Jira: [BA-182](https://halo-powered.atlassian.net/browse/BA-182) (was BA-183, merged on 2026-10-13). Shipped 2026-10-13: twelve checks, the R31 fix for a result truncated at the model's own limit, and the validator's dataset-entity rule. Evidence: [evidence/1.1.5/](evidence/1.1.5/).
 
-#### 1.1.6 — Report by category, judge optional (Step 1c) ([BA-184](https://halo-powered.atlassian.net/browse/BA-184))  `✅ Done`
+#### 1.1.6 — Report by category, judge optional (Step 1c) ([BA-182](https://halo-powered.atlassian.net/browse/BA-182); was BA-184)  `✅ Done`
 - **Intent:** see which kind of question got worse, and stop paying for the judge on every run.
 - **Scope:** a category chip per question on the Evals tab; a pass rate per category and per criterion on every finished run; a run option `judge: off | categories | on`, off by default, with judge checks shown as "not scored" when it is off.
 - **Out of scope:** repeats and intervals (1.1.11); judge validation (1.1.12).
 - **Acceptance:** the spec check and the E2E scenarios pass; one real PostgreSQL run has the table in its report and spent no judge tokens.
-- **Notes:** 1 to 1.5 days. Needs 1.1.5. Jira: [BA-184](https://halo-powered.atlassian.net/browse/BA-184). Shipped 2026-10-13: judge off by default, statuses passed / failed / not scored, and the by-category and by-criterion summary in Executions and the report. Evidence: [evidence/1.1.6/](evidence/1.1.6/).
+- **Notes:** 1 to 1.5 days. Needs 1.1.5. Jira: [BA-182](https://halo-powered.atlassian.net/browse/BA-182) (was BA-184, merged on 2026-10-13). Shipped 2026-10-13: judge off by default, statuses passed / failed / not scored, and the by-category and by-criterion summary in Executions and the report. Evidence: [evidence/1.1.6/](evidence/1.1.6/).
 
-#### 1.1.7 — Domain databases: finance and marketing analytics, plus the branch's domains (Step 1d) ([BA-185](https://halo-powered.atlassian.net/browse/BA-185))  `✅ Done`
+#### 1.1.7 — Domain databases: finance and marketing analytics, plus the branch's domains (Step 1d) ([BA-182](https://halo-powered.atlassian.net/browse/BA-182); was BA-185)  `✅ Done`
 - **Intent:** test the assistant on data the model never saw, shaped like a customer's, with traps planted on purpose; two of the domains run on every datasource kind (decided 2026-10-13).
 - **Scope:** finance (the branch's banking generator extended to finance and wealth) and marketing analytics (new, the marketing-insight product), each with a brief, a seeded generator, `facts.json`, a policy document and a starter bank of at least 30 questions; a dump script exporting each fixture to JSON for Steps 2 and 3; health insurance (42 questions), genomics (49) and supply chain (20) copied by path from `feat/engine-eval-loop` as they are; every question in the new format, tagged dev or held-out.
 - **Out of scope:** HR and retail, which carry expert-mode and learning fields; growing the banks past the starter size (1.1.10); health insurance on Databricks (after the beta).
 - **Acceptance:** the five domains load on the compose PostgreSQL and pass the validator; finance and marketing analytics have at least 30 questions each and a baseline run; each dump matches its PostgreSQL row counts.
-- **Notes:** 5 to 6 days, Oct 19 to 23, in parallel with 1.1.5 and 1.1.6; part of the minimum by the beta since 2026-10-13. Needs 1.1.4. Claude writes the briefs, data and questions, all synthetic, with no business review (decided 2026-10-13). Decision record: `evidence/1.1.3/decisions.md`. Jira: [BA-185](https://halo-powered.atlassian.net/browse/BA-185). Shipped 2026-10-13: finance 68, marketing analytics 50, health insurance 42, genomics 49, supply chain 20 questions, every reference run on its data. Evidence: [evidence/1.1.7/](evidence/1.1.7/).
+- **Notes:** 5 to 6 days, Oct 19 to 23, in parallel with 1.1.5 and 1.1.6; part of the minimum by the beta since 2026-10-13. Needs 1.1.4. Claude writes the briefs, data and questions, all synthetic, with no business review (decided 2026-10-13). Decision record: `evidence/1.1.3/decisions.md`. Jira: [BA-182](https://halo-powered.atlassian.net/browse/BA-182) (was BA-185, merged on 2026-10-13). Shipped 2026-10-13: finance 68, marketing analytics 50, health insurance 42, genomics 49, supply chain 20 questions, every reference run on its data. Evidence: [evidence/1.1.7/](evidence/1.1.7/).
 
 #### 1.1.8 — Databricks fixtures and sets (Step 2) ([BA-186](https://halo-powered.atlassian.net/browse/BA-186))  `🚧 In progress`
 - **Intent:** the manager's first ask. Databricks has no eval today; the same questions on the same rows show a Databricks problem as a Databricks problem.
@@ -272,12 +272,12 @@ The measurement baseline. Every change to the DSL, knowledge store or connectors
 - **Acceptance:** here, the loader, the three fixtures and every Databricks reference are written and unit-tested, and the validator can run them against a configured warehouse. In the VDI, later (decided 2026-10-13): a full run of each family completes on a real warehouse from the Evals tab and from the CLI, with the report and a screenshot in evidence; one cold-start and one warm run recorded; a reference broken on purpose fails the validator on Databricks.
 - **Notes:** 5 to 6 days (widened on 2026-10-13 to the two domains). Needs 1.1.4 to 1.1.6, 1.1.7 for the domains, and Databricks access (workspace, warehouse, token, catalog), asked on 2026-10-12. If access is late, 1.1.9 goes first. Jira: [BA-186](https://halo-powered.atlassian.net/browse/BA-186). Built 2026-10-13 without a warehouse (loader, fixtures, 126 Databricks references checked statically and through DuckDB, catalog rewrite R148); stays In progress until the VDI run (`docs/evals/databricks-vdi.md`). Evidence: [evidence/1.1.8/](evidence/1.1.8/).
 
-#### 1.1.9 — REST connector cases (Step 3) ([BA-187](https://halo-powered.atlassian.net/browse/BA-187))  `🚧 In progress`
+#### 1.1.9 — REST connector cases (Step 3) ([BA-186](https://halo-powered.atlassian.net/browse/BA-186); was BA-187)  `🚧 In progress`
 - **Intent:** the manager's second ask. Test what REST changes (paging, nesting, row caps, failures), not only the questions.
 - **Scope:** switches on the local World Cup API, one per behaviour (page, offset and cursor paging; nested rows; rows under another key; a row cap; a refused endpoint; a required token); one datasource per variant; the same server serving the finance and marketing-analytics dumps, one REST datasource each; SQLite references for every question of the three families; twelve REST-only questions; a report per variant and per family.
 - **Out of scope:** fixing the connector bugs found (filed under BA-11).
 - **Acceptance:** each variant has a run; finance and marketing analytics each have a run on REST; every failing connector case has a bug under BA-11; the DIGS and RSS endpoints are checked against the switch list in writing.
-- **Notes:** 4 to 5 days (widened on 2026-10-13 to the two domains). Needs 1.1.4 to 1.1.6, and 1.1.7 for the domains. Jira: [BA-187](https://halo-powered.atlassian.net/browse/BA-187). Built 2026-10-13 (switches, setup fix for the 401, SQLite references for 117 questions, the 12-question connector set, real runs); stays In progress until the seven connector bugs are filed under BA-11 and the DIGS and RSS endpoints are checked. Evidence: [evidence/1.1.9/](evidence/1.1.9/).
+- **Notes:** 4 to 5 days (widened on 2026-10-13 to the two domains). Needs 1.1.4 to 1.1.6, and 1.1.7 for the domains. Jira: [BA-186](https://halo-powered.atlassian.net/browse/BA-186) (was BA-187, merged on 2026-10-13). Built 2026-10-13 (switches, setup fix for the 401, SQLite references for 117 questions, the 12-question connector set, real runs); stays In progress until the seven connector bugs are filed under BA-11 and the DIGS and RSS endpoints are checked. Evidence: [evidence/1.1.9/](evidence/1.1.9/).
 
 #### 1.1.10 — More questions: domains and question banks (Step 4) ([BA-188](https://halo-powered.atlassian.net/browse/BA-188))  `📋 Planned`
 - **Intent:** enough questions to see a 10-point change (about 100 per fixture) instead of only a 30-point one.
@@ -286,12 +286,12 @@ The measurement baseline. Every change to the DSL, knowledge store or connectors
 - **Acceptance:** the counts above with references run before commit; a bootstrap over each set spreads less than 5 points; dev and held-out within 5 points of each other at baseline.
 - **Notes:** about two weeks, continuous; beyond the starter banks of 1.1.7, after the beta if time runs short. Needs 1.1.4 to 1.1.9. Jira: [BA-188](https://halo-powered.atlassian.net/browse/BA-188).
 
-#### 1.1.11 — Numbers you can trust (Step 5) ([BA-189](https://halo-powered.atlassian.net/browse/BA-189))  `📋 Planned`
+#### 1.1.11 — Numbers you can trust (Step 5) ([BA-188](https://halo-powered.atlassian.net/browse/BA-188); was BA-189)  `📋 Planned`
 - **Intent:** tell a real change from noise, know what a run costs, and catch a regression the day it lands.
 - **Scope:** tokens and cost per question (assistant and judge apart); seconds at P50 and P90; tool calls per question; a `repeats` option (1, 3 or 5) with pass^k, a flaky count and a Wilson interval per category; the beta thresholds in the spec; a nightly CI run on PostgreSQL with the judge off that fails on any regression; `check-answers.ts` retired.
 - **Out of scope:** Databricks in the nightly run.
 - **Acceptance:** a week of nightly runs in evidence; the threshold table in the spec and agreed.
-- **Notes:** 3 to 4 days; the nightly part is in the minimum by the beta. Needs 1.1.4; 1.1.8 for the Databricks numbers. Jira: [BA-189](https://halo-powered.atlassian.net/browse/BA-189).
+- **Notes:** 3 to 4 days; the nightly part is in the minimum by the beta. Needs 1.1.4; 1.1.8 for the Databricks numbers. Jira: [BA-188](https://halo-powered.atlassian.net/browse/BA-188) (was BA-189, merged on 2026-10-13).
 
 #### 1.1.12 — Judge validation and human verdict (Step 6) ([BA-190](https://halo-powered.atlassian.net/browse/BA-190))  `📋 Planned`
 - **Intent:** measure how often the judge agrees with a person before its verdict counts.
@@ -300,19 +300,19 @@ The measurement baseline. Every change to the DSL, knowledge store or connectors
 - **Acceptance:** agreement at least 90% on both passes and fails, or the rubrics rewritten until it is.
 - **Notes:** 3 days, after the beta. Needs 1.1.10 and a labeller. Jira: [BA-190](https://halo-powered.atlassian.net/browse/BA-190).
 
-#### 1.1.13 — Arms: knowledge on and off, model comparison (Step 7) ([BA-191](https://halo-powered.atlassian.net/browse/BA-191))  `📋 Planned`
+#### 1.1.13 — Arms: knowledge on and off, model comparison (Step 7) ([BA-190](https://halo-powered.atlassian.net/browse/BA-190); was BA-191)  `📋 Planned`
 - **Intent:** prove whether a change helps by running the same questions with it and without it.
 - **Scope:** an `arm` option on a run (knowledge on or off; a model override), stored on the run; a side-by-side report of two runs by category; the loop runner and `eval:diff --draft`.
 - **Out of scope:** automating the improvement loop.
 - **Acceptance:** 1.3.3's acceptance (knowledge on and off, no category gets worse) is answered by one report.
-- **Notes:** 2 to 3 days. Needs 1.1.10 and 1.1.11. Jira: [BA-191](https://halo-powered.atlassian.net/browse/BA-191).
+- **Notes:** 2 to 3 days. Needs 1.1.10 and 1.1.11. Jira: [BA-190](https://halo-powered.atlassian.net/browse/BA-190) (was BA-191, merged on 2026-10-13).
 
-#### 1.1.14 — Component checks and two-turn tasks (Step 8) ([BA-192](https://halo-powered.atlassian.net/browse/BA-192))  `📋 Planned`
+#### 1.1.14 — Component checks and two-turn tasks (Step 8) ([BA-190](https://halo-powered.atlassian.net/browse/BA-190); was BA-192)  `📋 Planned`
 - **Intent:** a wrong answer names the part that failed, and a clarification counts only if the answer after it is right.
 - **Scope:** checks on intermediate outputs (tables used, repair count, query time against the reference, the verifier's agreement in careful mode); a `turns` field on a case; at least ten tasks in the `follow-up` category.
 - **Out of scope:** none named in the plan.
 - **Acceptance:** a failed task names the component that failed.
-- **Notes:** about a week, after the beta. Jira: [BA-192](https://halo-powered.atlassian.net/browse/BA-192).
+- **Notes:** about a week, after the beta. Jira: [BA-190](https://halo-powered.atlassian.net/browse/BA-190) (was BA-192, merged on 2026-10-13).
 
 #### 1.1.15 — Verified queries become cases; a user eval set per dataset (Step 9) ([BA-193](https://halo-powered.atlassian.net/browse/BA-193))  `📋 Planned`
 - **Intent:** a user gets a pass rate on their own data from the answers they already approved.
@@ -321,26 +321,26 @@ The measurement baseline. Every change to the DSL, knowledge store or connectors
 - **Acceptance:** the E2E scenarios pass; a run completes end to end on a database that is not a fixture.
 - **Notes:** about a week, after the beta. Needs 1.1.4 and 1.1.11. Jira: [BA-193](https://halo-powered.atlassian.net/browse/BA-193).
 
-#### 1.1.16 — Templates for any datasource (Step 10) ([BA-194](https://halo-powered.atlassian.net/browse/BA-194))  `📋 Planned`
+#### 1.1.16 — Templates for any datasource (Step 10) ([BA-193](https://halo-powered.atlassian.net/browse/BA-193); was BA-194)  `📋 Planned`
 - **Intent:** a newly connected datasource gets a correctness number in minutes, with no one writing a question.
 - **Scope:** about 20 template cases per dataset from the inventory and sample rows, with reference SQL per dialect; a *Generate from schema* button; template accuracy reported apart from approved accuracy; the health check defined as templates plus the reference-free checks.
 - **Out of scope:** model-written questions.
 - **Acceptance:** the generator runs on the World Cup fixtures on all three kinds and on one database it has never seen; every template's SQL runs in every dialect; a capped REST endpoint produces a case marked partial.
-- **Notes:** 3 to 4 days, after the beta. Needs 1.1.15. Jira: [BA-194](https://halo-powered.atlassian.net/browse/BA-194).
+- **Notes:** 3 to 4 days, after the beta. Needs 1.1.15. Jira: [BA-193](https://halo-powered.atlassian.net/browse/BA-193) (was BA-194, merged on 2026-10-13).
 
-#### 1.1.17 — Draft with AI from schema, knowledge and documents (Step 11) ([BA-195](https://halo-powered.atlassian.net/browse/BA-195))  `📋 Planned`
+#### 1.1.17 — Draft with AI from schema, knowledge and documents (Step 11) ([BA-193](https://halo-powered.atlassian.net/browse/BA-193); was BA-195)  `📋 Planned`
 - **Intent:** a user attaches a data dictionary or a past report and gets draft questions with answers to review.
 - **Scope:** an eval-bootstrap agent; document attachment on the Evals tab; drafts validated by execution and de-duplicated; a review screen (approve, edit, reject) showing SQL and rows; provenance; a cap and a cost line per click; a privacy sentence.
 - **Out of scope:** drafts counting before a person approves them.
 - **Acceptance:** on the World Cup fixture with its glossary attached, at least 70% of drafts survive validation and a reviewer approves at least half without edits (targets confirmed in the first trial).
-- **Notes:** 1 to 2 weeks, after the beta. Needs 1.1.15 and 1.1.16. Jira: [BA-195](https://halo-powered.atlassian.net/browse/BA-195).
+- **Notes:** 1 to 2 weeks, after the beta. Needs 1.1.15 and 1.1.16. Jira: [BA-193](https://halo-powered.atlassian.net/browse/BA-193) (was BA-195, merged on 2026-10-13).
 
-#### 1.1.18 — The eval set travels with the agent (Step 12) ([BA-196](https://halo-powered.atlassian.net/browse/BA-196))  `📋 Planned`
+#### 1.1.18 — The eval set travels with the agent (Step 12) ([BA-193](https://halo-powered.atlassian.net/browse/BA-193); was BA-196)  `📋 Planned`
 - **Intent:** an SME agent is handed over with its own evals.
 - **Scope:** the agent bundle export carrying prompt, knowledge and eval set; import as drafts only; approved accuracy on the agent card and detail view; evals for user agents.
 - **Out of scope:** multi-reviewer approval; Genie benchmark export.
 - **Acceptance:** an exported agent imports with its set as drafts, and its card shows the approved accuracy after review. (Derived from the step's scope; the plan gives no done-when for Step 12.)
-- **Notes:** 3 to 4 days, after the beta. Needs 1.1.15 and the bundle format from the Agent Hub work. Jira: [BA-196](https://halo-powered.atlassian.net/browse/BA-196).
+- **Notes:** 3 to 4 days, after the beta. Needs 1.1.15 and the bundle format from the Agent Hub work. Jira: [BA-193](https://halo-powered.atlassian.net/browse/BA-193) (was BA-196, merged on 2026-10-13).
 
 ### Milestone 1.2 — Data Model DSL ([BA-2](https://halo-powered.atlassian.net/browse/BA-2))
 
