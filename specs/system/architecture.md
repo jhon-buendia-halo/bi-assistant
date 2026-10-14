@@ -434,7 +434,7 @@ flowchart LR
   - The theme is per renderer origin, so the desktop app and the npm CLI's browser tab can hold different preferences.
 
 #### ADR-0008 — User-built agents are stored configurations of the assistant
-- **Status:** Accepted
+- **Status:** Accepted; which tools and skills a user agent gets is narrowed by ADR-0021
 - **Date:** 2026-10-09
 - **Context:**
   - The Agent Hub ([BA-150](https://halo-powered.atlassian.net/browse/BA-150)) lets users build their own agents: a name, a description, instructions, datasets, starter questions and an optional model override. Each one is drafted, published and chatted with.
@@ -541,6 +541,28 @@ flowchart LR
   - No built-in skill ships a script today, so `run_skill_script` isn't offered until one does. It is tested with a fixture skill.
   - Every assistant call carries the Tools section (about 1,000 characters) and, since `curated-knowledge` is always listed, the Skills section and `read_file`.
   - Whether a knowledge rule applies now depends on the model reading the skill, which ADR-0018 avoided by loading it in code. The evals must pass at 100% before the PR (the workflow rule of 2026-10-14).
+
+#### ADR-0021 — User agents choose their tools from the assistant's set and get skills written in the app, stored per user and copied into the Live version
+- **Status:** Accepted
+- **Date:** 2026-10-14
+- **Context:**
+  - ADR-0008 made a user agent a stored configuration of the `assistant`. It "can't add tools or relax the guard", and in practice it gets all of the assistant's tools and skills. Its only lever is a block of instructions.
+  - The user asked on 2026-10-14 for agents whose builders choose their tools, write new skills and reuse them across agents.
+  - The assistant's prompt and tools are built once, when its module loads (ADR-0020). Only its model is resolved per call, from the requestContext.
+  - [BA-211](https://halo-powered.atlassian.net/browse/BA-211) removes the user and project skill folders (ADR-0019), so the folders are no source for a user's own skills. On the org server they were shared by everyone, and the app never writes them.
+  - Measured on 2026-10-14: the prompt is 8,729 characters. `curated-knowledge` is on demand, so every call already carries the `## Skills` section (904) and `read_file`. A catalog entry costs about 160 characters.
+- **Decision:**
+  - **Tools are a subset of the assistant's own.** An agent's configuration names its optional tools: `sample_rows`, `ask_clarification`, and Visuals (`create_visual` with `update_visual`). `list_entities`, `describe_entity` and `run_readonly_sql` are always given. No configuration adds a tool, and none can switch off a guard enforced in code (ADR-0008 stands on that).
+  - **The prompt and tools are built per call.** The `assistant` resolves `tools` and `instructions` from the requestContext, as it already does for `model`. A call with no agent configuration, or with every tool on, gets today's prompt and tools unchanged. A working rule that names a tool that is off is replaced, as a whole block, by tool-free wording.
+  - **In-app skills are documents.** A new owner-scoped `skills` collection holds each skill's name, description, body and reference files, checked with the rules file skills follow (ADR-0018, ADR-0019): a `Use when` description, no name shared with a built-in skill, and every linked file present. They are text only and never run.
+  - **Skills reach a call only through an agent.** An agent's draft names skills from its owner's library. Publishing copies their content into the Live version, so a Live agent changes only when it is republished, as with its instructions. The catalog of an agent's session is the built-in on-demand skills plus the agent's skills. `read_file` reads an in-app skill through a virtual location resolved from the call's agent configuration, never from the disk.
+- **Consequences:**
+  - ADR-0008's "user agents inherit every assistant tool" becomes "every tool their configuration selects". Its guarantee that no configuration relaxes a guard is unchanged.
+  - Up to eight prompt variants exist. The plain assistant's prompt stays byte-identical (a golden test), and the most restrictive variants get eval cases that must pass at 100%.
+  - The eval harness can run a case under an agent configuration.
+  - A skill's content lives in a draft reference and in each Live copy, so deleting or editing a skill never breaks a Live agent. The cost is duplicated text in the `agents` collection, bounded by the skill size limits.
+  - In-app skills are prompt content written by their owner and read only by that owner's agents, so they add no cross-user injection path. Sharing them waits for a later epic, as agent sharing does (ADR-0010).
+  - Transferring an agent (ADR-0010) must carry its draft's skill references to the new owner.
 
 ## Level 4 — Code
 

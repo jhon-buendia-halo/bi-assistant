@@ -784,6 +784,38 @@ A behaviour-preserving refactor of the app's Mastra agents to the Agent Skills l
 - **Acceptance:** unit tests for the three behaviours. The world-cup evals pass at 100% over 3 runs.
 - **Notes:** `ambiguous-best-team` passed 1 of 4 runs and `visual-request` failed once with `create_visual({})`, both on the base before BA-207.
 
+### Milestone 1.14 — Agent Hub: tools and skills per agent ([BA-213](https://halo-powered.atlassian.net/browse/BA-213))
+
+A user agent's builder chooses its tools from the assistant's own set, writes skills in the app and assigns them to any of their agents. Instructions stay layered on the fixed core prompt, and every guard enforced in code holds for every agent. Builds on Milestone 1.9 (ADR-0008) and Milestone 1.13 (ADR-0020); 1.14.3 and 1.14.4 depend on [BA-211](https://halo-powered.atlassian.net/browse/BA-211). All stories are built on the branch `feat/BA-213-agent-tools-skills` and ship as one PR. Epic spec: [specs/epics/BA-213/spec.md](specs/epics/BA-213/spec.md). Decision: ADR-0021 in [specs/system/architecture.md](specs/system/architecture.md).
+
+#### 1.14.1 — ADR, epic spec and roadmap for agent tools and skills ([BA-214](https://halo-powered.atlassian.net/browse/BA-214))  `✅ Done`
+- **Intent:** the epic is scoped, its runtime approach decided and its prompt cost measured before any code.
+- **Scope:** ADR-0021 in `specs/system/architecture.md`; the BA-213 epic spec, with the per-section prompt measurement; this milestone with one feature per story; the epic row in `specs/README.md`.
+- **Out of scope:** product code, and capability, system or glossary spec changes for behaviour that hasn't shipped yet. Each later story updates those itself.
+- **Acceptance:** the user confirms the epic spec (`Status: Confirmed`) and ADR-0021 (`Accepted`); `python3 scripts/check-specs.py` passes.
+- **Notes:** measured on 2026-10-14 from the compiled assistant at `513009d`: prompt 8,729 characters, `## Skills` 904, about 160 per extra catalog entry. Epic spec and ADR-0021 confirmed by the user on 2026-10-14. Evidence: [evidence/1.14.1/](evidence/1.14.1/).
+
+#### 1.14.2 — Choose an agent's tools ([BA-217](https://halo-powered.atlassian.net/browse/BA-217))  `📋 Planned`
+- **Intent:** an agent's builder decides which of the assistant's tools it gets, and the model is offered only those.
+- **Scope:** `tools` in the agent configuration (absent means all); the assistant's tools and prompt built per call from the requestContext; `list_entities`, `describe_entity` and `run_readonly_sql` always on; `sample_rows`, `ask_clarification` and Visuals (`create_visual` + `update_visual`) optional; tool-free replacement wording for the rules that name a tool that is off; a tool picker in the agent editor; the preview runs the draft's tools; eval cases with clarification off and with Visuals off.
+- **Out of scope:** new tools; tools for the System agents.
+- **Acceptance:** a golden test proves the plain assistant's prompt is unchanged; a recording-stub E2E proves a tool turned off is not offered; the world-cup evals and the new cases pass at 100% over 3 runs.
+- **Notes:** does not depend on BA-211.
+
+#### 1.14.3 — Write skills in the app ([BA-215](https://halo-powered.atlassian.net/browse/BA-215))  `📋 Planned`
+- **Intent:** a user captures reusable know-how as a skill without touching the disk or restarting the app.
+- **Scope:** an owner-scoped `skills` collection (name, description, body, reference files); create, list, get, update and delete endpoints; a skills library page and a skill editor in the Agents area; the file-skill checks (kebab-case name unique per owner and not a built-in name, `Use when` description, linked files present) and size limits.
+- **Out of scope:** scripts; overriding built-in skills; sharing skills between users.
+- **Acceptance:** Playwright covers create → edit → delete and each refusal; an API test proves two users never see each other's skills.
+- **Notes:** depends on BA-211 being merged.
+
+#### 1.14.4 — Assign skills to an agent ([BA-216](https://halo-powered.atlassian.net/browse/BA-216))  `📋 Planned`
+- **Intent:** the same skill serves several agents, and a Live agent never changes until it is republished.
+- **Scope:** `skills` in the agent configuration; a skill picker in the agent editor; the agent session's catalog (built-in on-demand skills plus the agent's); `read_file` over a virtual location for in-app skills; publish copies the skills' content into the Live version; the agent page's Skills tab for user agents; agent transfer carries the draft's skill references.
+- **Out of scope:** in-app skills for the plain assistant.
+- **Acceptance:** a recording-stub E2E proves an assigned skill is in the catalog, `read_file` returns its body, and a Live session keeps the published copy after the skill is edited; the world-cup evals pass at 100% over 3 runs.
+- **Notes:** depends on 1.14.3 and on BA-211 being merged.
+
 ## Release 2 — Multi-user  (no target date yet)
 
 The app becomes multi-user. An organisation self-hosts it as an org server, with sign-in, roles and an admin panel. Local mode stays the default. Direction: [specs/product/vision.md](specs/product/vision.md). Not part of the 1.0 Beta.

@@ -14,6 +14,22 @@ Entry template:
 
 ---
 
+## 2026-10-14 — 1.14.1 ADR, epic spec and roadmap for agent tools and skills (BA-214)
+
+### What went well
+- Searching Jira for open issues on skills before creating the epic found BA-211 (remove the user and project skill folders), which contradicted the plan's "pick existing folder skills". One question settled it before any issue was created, and the stories were reordered around it.
+- Measuring the prompt from the compiled agent (`assistantAgent.getInstructions()`), not from the spec text, gave exact numbers per section. It showed the `## Skills` section is already sent on every call, which made the cost of assigning skills small and easy to argue.
+
+### What went wrong
+- My first suggestion said the first user skill would add about 1,045 characters to every turn. I took that from agents.md 7.4 ("No built-in skill is on demand"), which is stale: `curated-knowledge` has been on demand since ADR-0020, so the section was already there.
+- I proposed reusing folder skills without first checking Jira for open work on skills. BA-211, created the same morning, removed them.
+- Jira from the worktree took three tries: no `.env` there, a blocked attempt to copy the credentials, and a create refused over `$'…'` quoting. `JIRA_CONFIG_FILE` was in the script all along.
+
+### What to do differently
+- Before proposing a design for a subsystem, search Jira for open issues about it (`project = BA AND summary ~ "<area>" AND statusCategory != Done`) and read any created in the last two weeks.
+- Take prompt sizes from the compiled agent, never from spec prose. Keep `evidence/1.14.1/measure-prompt.cjs` as the way to do it.
+- In a worktree, run `jira.sh` with `JIRA_CONFIG_FILE=<main checkout>/.env`, pass plain double-quoted one-line descriptions, and never copy the `.env`.
+
 ## 2026-10-14 — 1.13.9 to 1.13.12: sectioned assistant prompt, own skill catalog, lint clean, eval checks, assistant reliability (BA-207 to BA-210)
 
 ### What went well

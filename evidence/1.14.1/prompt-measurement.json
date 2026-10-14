@@ -1,0 +1,21 @@
+{
+  "fullPrompt": 8729,
+  "identity": 429,
+  "workingRules": 5894,
+  "toolsSection": 1470,
+  "toolLines": {
+    "list_entities": 190,
+    "describe_entity": 190,
+    "sample_rows": 107,
+    "run_readonly_sql": 132,
+    "create_visual": 143,
+    "update_visual": 170,
+    "ask_clarification": 357,
+    "read_file": 174
+  },
+  "clarificationParagraph": 1347,
+  "visualsBlock": 428,
+  "skillsSectionOneSkill": 716,
+  "skillsSectionPerExtraSkill": 164,
+  "sampleRowsMentions": 3
+}
