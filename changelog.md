@@ -25,6 +25,14 @@ Running log of every meaningful change, newest first. See *Logging convention* a
 
 ## 2026-10-14
 
+### Removed
+- **User and project skill levels** (roadmap 1.13.13, [BA-211](https://halo-powered.atlassian.net/browse/BA-211), epic [BA-198](https://halo-powered.atlassian.net/browse/BA-198), ADR-0021 superseding ADR-0019). Agents use only the skills that ship with the app:
+  - **Backend.** Skills load only from the bundle. `<data dir>/skills/` is ignored (not read, not deleted) and `QUESTIONS_TO_INSIGHTS_PROJECT_SKILLS_DIR` is gone, with no overrides, skipped skills or warnings. A broken built-in skill still stops startup.
+  - **API.** `GET /agents/:key/skills` answers `{ skills: [{ name, description, loading, files }] }`.
+  - **Skills tab.** Drops "Where skills come from", the level badges, "Overrides …", the warnings, the Skipped section and the "Restart the app" line.
+  - The assistant's prompt, catalog and tools are unchanged (byte-identical prompt).
+  - Specs: architecture ADR-0021; agents.md 2.2, 7.2-7.4; api.md 34a and environment table; ui.md 4.5; data-model.md 4.8; glossary *Skill*; agents-evals R63-R67 and "Agent skills"; sessions-chat "Skills the assistant is given"; BA-198 epic spec. Evidence: [evidence/1.13.13/](evidence/1.13.13/).
+
 ### Added
 - **Skill levels** (roadmap 1.13.7, [BA-205](https://halo-powered.atlassian.net/browse/BA-205), epic [BA-198](https://halo-powered.atlassian.net/browse/BA-198), ADR-0019). Agents read skills from three levels, and a later level overrides an earlier one by name:
   - **Levels.** Built-in (the bundle) < user (`<data dir>/skills/`) < project (the folder `QUESTIONS_TO_INSIGHTS_PROJECT_SKILLS_DIR` names).

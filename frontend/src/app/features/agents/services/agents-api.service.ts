@@ -131,17 +131,6 @@ export interface EvalRunView {
   finishedAt?: string;
 }
 
-/** Where a skill comes from (agents.md 7.3). */
-export type SkillLevel = 'built-in' | 'user' | 'project';
-
-/** One skill level's folder, as the backend resolved it at startup. */
-export interface AgentSkillLevel {
-  level: SkillLevel;
-  /** Null for built-in, and for project when the variable is unset. */
-  path: string | null;
-  found: boolean;
-}
-
 export interface AgentSkillFileEntry {
   /** Relative to the skill's folder, '/'-separated. */
   path: string;
@@ -151,28 +140,14 @@ export interface AgentSkillFileEntry {
 export interface AgentSkill {
   name: string;
   description: string;
-  level: SkillLevel;
   loading: 'on-demand' | 'harness';
-  /** Lower levels that also hold a valid skill with this name, lowest first. */
-  overrides: SkillLevel[];
   /** Every file in the folder, `SKILL.md` first, then sorted. */
   files: AgentSkillFileEntry[];
-  warnings: string[];
-}
-
-export interface AgentSkippedSkill {
-  /** The skill's folder name. */
-  name: string;
-  level: 'user' | 'project';
-  problems: string[];
 }
 
 /** `GET /agents/:key/skills` (api.md 34a). */
 export interface AgentSkillsView {
-  /** Always built-in, user, project, in that order. */
-  levels: AgentSkillLevel[];
   skills: AgentSkill[];
-  skipped: AgentSkippedSkill[];
 }
 
 /** `GET /agents/:key/skills/:name/file` (api.md 34b). */

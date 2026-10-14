@@ -12,11 +12,7 @@ import {
 
 let root: string;
 
-function skill(
-  name: string,
-  files: Record<string, string>,
-  level: AppSkill['level'] = 'built-in',
-): AppSkill {
+function skill(name: string, files: Record<string, string>): AppSkill {
   const dir = join(root, name);
   for (const [path, text] of Object.entries(files)) {
     mkdirSync(join(dir, path, '..'), { recursive: true });
@@ -27,11 +23,8 @@ function skill(
     description: `Use when ${name}.`,
     dir,
     document: files['SKILL.md'] ?? '',
-    level,
     loading: 'on-demand',
     agents: ['assistant'],
-    overrides: [],
-    warnings: [],
   };
 }
 
@@ -98,7 +91,7 @@ describe('read_file', () => {
 });
 
 describe('run_skill_script', () => {
-  it('lists only a built-in skill’s Node scripts under scripts/', () => {
+  it('lists only a skill’s Node scripts under scripts/', () => {
     const files = {
       'SKILL.md': 'b',
       'scripts/check.js': '',
@@ -110,22 +103,13 @@ describe('run_skill_script', () => {
       'scripts/check.js',
       'scripts/lib/util.mjs',
     ]);
-    expect(skillScripts(skill('mine', files, 'user'))).toEqual([]);
   });
 
-  it('refuses an unknown skill, a user skill or a file that is not a script', () => {
+  it('refuses an unknown skill or a file that is not a script', () => {
     const tool = skill('tool', { 'SKILL.md': 'b', 'scripts/check.js': '' });
-    const mine = skill(
-      'mine',
-      { 'SKILL.md': 'b', 'scripts/check.js': '' },
-      'user',
-    );
 
-    expect(resolveScript([tool, mine], 'nope', 'scripts/check.js')).toEqual({
+    expect(resolveScript([tool], 'nope', 'scripts/check.js')).toEqual({
       error: 'Unknown skill: nope',
-    });
-    expect(resolveScript([tool, mine], 'mine', 'scripts/check.js')).toEqual({
-      error: 'Unknown skill: mine',
     });
     expect(resolveScript([tool], 'tool', '../tool/SKILL.md')).toEqual({
       error: 'Not a script of tool: ../tool/SKILL.md',
@@ -183,7 +167,7 @@ describe('run_skill_script', () => {
 });
 
 describe('skillToolsFor', () => {
-  it('offers nothing without skills, read_file for text skills, and run_skill_script only with a built-in script', () => {
+  it('offers nothing without skills, read_file for text skills, and run_skill_script only with a script', () => {
     const text = skill('text', { 'SKILL.md': 'b' });
     const withScript = skill('tool', {
       'SKILL.md': 'b',
