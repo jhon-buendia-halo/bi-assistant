@@ -51,14 +51,20 @@ function edited(name: string) {
 afterEach(() => setSkillOverrides([]));
 
 describe('BuiltInSkillsService', () => {
-  it('lists the four built-in skills, unmodified, sorted by name', async () => {
+  it('lists the built-in skills, unmodified, sorted by name', async () => {
     const { service } = build();
     const list = await service.list();
     expect(list.map((skill) => skill.name)).toEqual([
       'curated-knowledge',
       'deep-analysis',
       'interactive-visuals',
-      'rfp-process',
+      'rfp-carriers',
+      'rfp-client-renewal',
+      'rfp-current-program',
+      'rfp-market-scope',
+      'rfp-package',
+      'rfp-requirements',
+      'rfp-timeline',
     ]);
     expect(list[0]).toMatchObject({
       loading: 'on-demand',
@@ -68,6 +74,29 @@ describe('BuiltInSkillsService', () => {
       updatedAt: null,
     });
     expect(list[1]).toMatchObject({ loading: 'harness' });
+  });
+
+  it('names the tools a built-in body links, and nothing for one that links none', async () => {
+    const { service } = build();
+    const list = await service.list();
+    const byName = new Map(list.map((skill) => [skill.name, skill]));
+    expect(byName.get('rfp-carriers')).toMatchObject({
+      agents: ['rfp'],
+      tools: [
+        'get_rfp',
+        'list_carriers',
+        'get_client_commercials',
+        'set_rfp_carriers',
+        'update_rfp',
+      ],
+    });
+    for (const name of [
+      'curated-knowledge',
+      'deep-analysis',
+      'interactive-visuals',
+    ]) {
+      expect(byName.get(name)).not.toHaveProperty('tools');
+    }
   });
 
   it('answers an unknown built-in skill as not found, or as a refusal', async () => {

@@ -1,7 +1,15 @@
+---
+name: rfp-client-renewal
+description: Use when starting an RFP, at stage 1 (client and renewal): find the client, read its renewals, agree the plan year and create the RFP record, or reopen a draft.
+---
 # Stage 1 — Client and renewal
 
 Goal: agree with the consultant which client the RFP is for and which plan
 year it buys, then open the RFP record. Nothing is marketed yet.
+
+Tools for this stage: [[tool:list_clients]], [[tool:list_rfps]],
+[[tool:get_client_renewals]], [[tool:ask_clarification]], [[tool:get_rfp]],
+[[tool:create_rfp]], [[tool:update_rfp]].
 
 ## Read
 

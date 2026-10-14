@@ -48,6 +48,8 @@ export interface BuiltInSkillSummary {
   description: string;
   loading: 'on-demand' | 'harness';
   agents: string[];
+  /** The tools the served body links; left out when none (api.md 99). */
+  tools?: string[];
   modified: boolean;
   /** Modified, and the shipped version changed since the override (R79). */
   builtInChanged: boolean;

@@ -39,7 +39,7 @@ const RFP_EVAL_CASES: AssistantEvalCase[] = [
     id: 'rfp-skill-first',
     question: 'Start an RFP for Orchard Manufacturing',
     intent:
-      'Stage 1 from a cold start: load the rfp-process skill first, then find the client and read its renewals.',
+      'Stage 1 from a cold start: load the stage-1 skill (rfp-client-renewal) with the skill tool first, then find the client and read its renewals.',
     scorers: [
       checks.calledTool('skill'),
       checks.toolOrder(['skill', 'list_clients']),

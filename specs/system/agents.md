@@ -637,20 +637,22 @@ It is never called by the grounding guard (5.6), careful mode (5.8) or deep anal
 
 **Tools.** The RFP tools of 3.10 (19) plus the shared `ask_clarification` (3.5), in the order of 3.10. It has **no SQL tool**, no dataset tools, no visual tools and no workspace (so no workspace tools, 3.8). It declares `skills`, so the framework adds its skill tools (3.9).
 
-**Skills.** On demand: `rfp-process` (7.4), one reference file per stage. None harness-loaded.
+**Skills.** On demand: seven stage skills (7.4), one per stage: `rfp-client-renewal`, `rfp-current-program`, `rfp-market-scope`, `rfp-carriers`, `rfp-requirements`, `rfp-timeline`, `rfp-package`. None harness-loaded.
+
+**Size** (measured from the code on 2026-10-14, `rfpInstructions()` and the framework's `formatSkillsCatalog` over `rfpSkills()`, the catalog's constant usage note left out). Before the split into stage skills: served prompt 6,222 characters plus a one-skill catalog of 432, so 6,654 on every call; the `rfp-process` body (1,338) once, plus one reference file per stage (2,351-3,071) through `skill_read`. After: served prompt 6,434 plus a seven-skill catalog of 2,229, so 8,663 on every call (+2,009); each stage then loads one skill body of 2,506-3,204 characters with a single `skill` call and no `skill_read`. Across all seven stages the loaded guidance is about the same (20,677 before, 20,449 after).
 
 **Memory.** As the assistant's: one thread per session (`thread = resource = <session id>`), last **40** messages replayed, semantic recall, working memory and generated titles off.
 
 **Max steps.** 15.
 
-**Prompt requirements.** The prompt MUST start with `You are the RFP Builder` (asserted by E2E on the System Prompt tab). It has three parts: the identity paragraph (R1), `## Tools` generated from the tools by the assistant's rule (2.1 part 2: `- <name>(<input names, comma-separated>): <first sentence of the tool's description>`; the framework's skill tools are not listed), and `## Working rules`. An admin can override it (ADR-0026) as the assistant's: the editable text and Reset are the prompt **without** `## Tools`; the served prompt is the override with the generated `## Tools` inserted before the first line that is exactly `## Working rules`, or appended after a blank line when there is none; the override must start with the identity line above. **Links** (`linksAllowed: true`, as the assistant's, BA-228): the shipped prompt writes every tool its working rules mention as a `[[tool:<name>]]` link and the skill it relies on as `[[skill:rfp-process]]`; an override may link the RFP Builder's own tools (its 19 RFP tools of 3.10 and `ask_clarification`) and its own on-demand skill `rfp-process`, and nothing else: another skill is refused with `Only the "rfp-process" skill can be linked here: this prompt is shared by every user`, another tool (an assistant-only tool included) with `Unknown tool "<name>"` ([api.md](api.md) 103). Links are **mentions only**: the RFP Builder keeps all its tools. Before the model reads the prompt every link becomes a plain mention, by the resolution of 4.1 (`[[tool:x]]` as `the "x" tool`, `[[skill:x]]` as `the "x" skill`), on the shipped text and on an override alike, so the model never sees `[[`; the generated `## Tools` section has no links. Exact shipped text: Appendix C.
+**Prompt requirements.** The prompt MUST start with `You are the RFP Builder` (asserted by E2E on the System Prompt tab). It has three parts: the identity paragraph (R1), `## Tools` generated from the tools by the assistant's rule (2.1 part 2: `- <name>(<input names, comma-separated>): <first sentence of the tool's description>`; the framework's skill tools are not listed), and `## Working rules`. An admin can override it (ADR-0026) as the assistant's: the editable text and Reset are the prompt **without** `## Tools`; the served prompt is the override with the generated `## Tools` inserted before the first line that is exactly `## Working rules`, or appended after a blank line when there is none; the override must start with the identity line above. **Links** (`linksAllowed: true`, as the assistant's, BA-228): the shipped prompt writes every tool its working rules mention as a `[[tool:<name>]]` link and each stage's skill as `[[skill:<name>]]` in its stage list; an override may link the RFP Builder's own tools (its 19 RFP tools of 3.10 and `ask_clarification`) and its own on-demand skills (its seven stage skills, 7.4), and nothing else: another skill is refused with `Only the RFP Builder's own skills can be linked here: this prompt is shared by every user`, another tool (an assistant-only tool included) with `Unknown tool "<name>"` ([api.md](api.md) 103). Links are **mentions only**: the RFP Builder keeps all its tools. Before the model reads the prompt every link becomes a plain mention, by the resolution of 4.1 (`[[tool:x]]` as `the "x" tool`, `[[skill:x]]` as `the "x" skill`), on the shipped text and on an override alike, so the model never sees `[[`; the generated `## Tools` section has no links. Exact shipped text: Appendix C.
 
 The rules encoded, in this order (prefix R, to keep them apart from the assistant's A-rules):
 
 - **R1** Identity: the RFP Builder for one job, one client at a time, over the Intellify data reached through its API; it never queries a database; every fact comes from a tool result and every decision is saved through a tool.
-- **R2** Load the `rfp-process` skill before the first answer of a session, and read the stage's reference file before starting that stage.
-- **R3** The seven stages run in order (1 client and renewal, 2 current program, 3 what to market, 4 carriers to invite, 5 requirements and questionnaire, 6 timeline, 7 assemble and review); the session context names the active RFP and the stage it reached, and the work resumes from the next stage after re-reading that RFP with `get_rfp`. Stage 1 finds the client with `list_clients`, checks for an RFP already started with `list_rfps`, reads the renewals with `get_client_renewals` and creates the record with `create_rfp` once the consultant confirms the client and plan year.
-- **R4** One stage per exchange: show what the data says, propose the decision, ask the consultant to confirm or change it; save a confirmed decision with the matching `set_rfp_*` tool (`set_rfp_lines`, `set_rfp_carriers`, `set_rfp_requirements` or `set_rfp_timeline`) and advance the stage with `update_rfp`; never save an unconfirmed decision.
+- **R2** Each stage has its own skill (7.4); the prompt lists the seven stages in order, each with a link to its skill, and the agent loads a stage's skill before starting that stage and follows it (what to read and with which tools, what to show, what to ask, how to save).
+- **R3** The seven stages run in order (1 client and renewal `rfp-client-renewal`, 2 current program `rfp-current-program`, 3 what to market `rfp-market-scope`, 4 carriers to invite `rfp-carriers`, 5 requirements and questionnaire `rfp-requirements`, 6 timeline `rfp-timeline`, 7 assemble and review `rfp-package`); the session context names the active RFP and the last stage completed, and the work resumes from the stage after it, after re-reading that RFP with `get_rfp`. What each stage reads, shows, decides and saves is in its skill (stage 1, for example, finds the client with `list_clients`, checks for a draft with `list_rfps`, reads the renewals with `get_client_renewals` and creates the record with `create_rfp` once the consultant confirms the client and plan year).
+- **R4** One stage per exchange: show what the data says, propose the decision, ask the consultant to confirm or change it; save a confirmed decision with the matching `set_rfp_*` tool (`set_rfp_lines`, `set_rfp_carriers`, `set_rfp_requirements` or `set_rfp_timeline`) and mark the stage done with `update_rfp` and its stage number; never save an unconfirmed decision. Each `set_rfp_*` tool replaces the whole list it names, so the complete list is sent every time; their line-per-row inputs put ` | ` between fields, exactly as the stage's skill shows, and a validation error names the bad row.
 - **R5** `ask_clarification` only when a choice forks the work (several matching clients, several renewal dates, unclear plan year); otherwise ask in the answer with options from the data.
 - **R6** Grounding: every figure, carrier, plan, date and name comes from a tool result in the conversation; no gap is filled from general knowledge of carriers, benchmarks, market trends or rates; missing data is said and asked for.
 - **R7** Names, never ids, in answers; ids for tool calls only.
@@ -1332,49 +1334,88 @@ Skills, declared in code (`AGENT_SKILLS` for on-demand, `HARNESS_SKILLS` for har
 | `assistant` | `curated-knowledge` (how to apply Block 3, 4.1), and in a session bound to a user agent that agent's in-app skills (7.3) | `deep-analysis`: one phase file per deep-analysis call (2.7). |
 | `visualization` (designer) | none (it runs without tools) | `interactive-visuals` (7.2): the router body of `SKILL.md`, plus `reference/spec-mode.md` on spec calls or `reference/freeform.md` on freeform calls |
 | `sql-fixer`, `sql-verifier`, `knowledge-bootstrap`, `assistant-eval-judge` | none | none |
-| `rfp` (RFP Builder, 2.8) | `rfp-process` (below) | none |
+| `rfp` (RFP Builder, 2.8) | its seven stage skills (below) | none |
 
 `curated-knowledge` is the assistant's only built-in skill on demand (ADR-0020), so every assistant call carries the framework's skill catalog and skill tools. Two other on-demand skills were measured and cut on 2026-10-13. A visuals skill would have cost a catalog plus usage note of about 1,045 characters on every turn to save 427. A dialects skill had no existing guidance to move.
 
-**The `rfp-process` skill** (`mastra/skills/rfp-process/`, `AGENT_SKILLS.rfp`): the RFP Builder's seven-stage process (2.8 R2-R4), loaded on demand through the skill tool (3.9), with one reference file per stage read with `skill_read`. Its `SKILL.md`, verbatim:
+**The stage skills** (`mastra/skills/<name>/`, `AGENT_SKILLS.rfp`, in stage order): the RFP Builder's seven stages (2.8 R2-R4), one skill each, loaded on demand through the skill tool (3.9) before the stage starts. Each is a single `SKILL.md` with no reference files. Its body opens with the stage's goal and a line `Tools for this stage:` that links, as `[[tool:<name>]]`, every RFP tool the body names; the framework serves it with the links resolved to plain mentions (7.3), and the Graph tab draws the skill joined to those tools (api.md 99 `tools`). The rest of the body is the stage's guidance: what to read and with which tools, what to show, the decision to ask the consultant, the exact ` | ` row format with an example, how to save and advance the stage, and what to avoid. A rebuild may tune the wording but keeps each skill's front matter, tools, decision, row format and save step. Front matter, verbatim, and content:
+
+**Stage 1: `rfp-client-renewal`**
 
 ```
 ---
-name: rfp-process
-description: Use when building or resuming a carrier RFP for a client over the Intellify data: the seven stages, what each stage reads, decides and saves, and how the package is assembled. Read the stage's reference file before starting it.
+name: rfp-client-renewal
+description: Use when starting an RFP, at stage 1 (client and renewal): find the client, read its renewals, agree the plan year and create the RFP record, or reopen a draft.
 ---
-Building a carrier RFP runs through seven stages, in order. Before each
-stage, read its reference file; it says which tools to call, what to show,
-which decision to ask for, and which tool saves it.
-
-| Stage | Decides | Reference |
-|---|---|---|
-| 1. Client and renewal | which client, which plan year and renewal | reference/1-client-and-renewal.md |
-| 2. Current program | what is in place today, per line | reference/2-current-program.md |
-| 3. What to market | lines in scope, as-is or alternates | reference/3-market-scope.md |
-| 4. Carriers to invite | the bid list and incumbents | reference/4-carriers.md |
-| 5. Requirements and questionnaire | what bidders must answer | reference/5-requirements.md |
-| 6. Timeline | milestones from kick-off to effective date | reference/6-timeline.md |
-| 7. Assemble and review | the narrative sections and the package | reference/7-package.md |
-
-Rules that hold in every stage:
-- Resume from the stage after the one the session context says was
-  completed; re-read that RFP with get_rfp first.
-- Saving is explicit: set_rfp_* replaces the whole list it names, so send
-  the complete list every time, and update_rfp(stage) marks the stage done.
-- Line-per-row inputs use " | " between fields, exactly as each reference
-  shows; a tool answers with a validation error naming the bad row.
 ```
 
-Reference files (each 40-80 lines; a rebuild may tune the wording but keeps the tools, decision, row format and save step of each):
+Reads with `list_clients` (one match carries on, several go to `ask_clarification`, none asks for another spelling), `list_rfps` and `get_client_renewals`; shows the client, headcount, latest census year and a table of renewals per line (carrier, effective date, kick-off date, status, premium, increase), noting that plans are calendar-year; the plan year is the renewals' effective year, proposed when every line renews on the same date and asked with `ask_clarification` otherwise; offers to reopen a draft for the same client and year with `get_rfp`; saves with `create_rfp(clientOneCode, planYear)` (default title and effective date) and `update_rfp(stage=1)`; no ids shown, no plan year guessed from today, no second draft unasked.
 
-- `reference/1-client-and-renewal.md`: `list_clients` with the consultant's words, then `get_client_renewals`; show the client, headcount, latest census year and a table of lines (carrier, effective date, kick-off date, status, premium, increase); the plan year is the renewal's effective year; decision: client and plan year; save with `create_rfp` (or offer to resume a draft found with `list_rfps` and `get_rfp`), then `update_rfp(stage=1)`.
-- `reference/2-current-program.md`: `get_client_program`, `get_client_financials`, `get_client_census` (latest year), `get_client_commercials`; show per line the plans (carrier, funding, type, enrolled, annual premium, increase), census headline numbers, participation, employer contribution, credits expiring before the effective date, unmapped census plans as a data-quality note; ask only "anything missing or wrong?"; save `clientBackground` with `update_rfp`, then `update_rfp(stage=2)`.
-- `reference/3-market-scope.md`: `get_marketing_history`, `list_reference_data` (funding types, plan types); propose lines to market from what the data shows (renewal increases above the client's average, alternates from past wizards), never assuming what the data doesn't say; row format `<line> | as-is|alternate | <plan design ids, comma-separated, or all> | <alternate funding or -> | <alternate plan type or -> | <notes>`; save with `set_rfp_lines`, write `scopeStatement`, `update_rfp(stage=3)`.
-- `reference/4-carriers.md`: `list_carriers(line, clientOneCode)` per line in scope; propose incumbents plus carriers writing the line; flag an incumbent whose final credits expire at renewal; row format `<carrier name> | <lines, comma-separated> | incumbent yes|no | <contact email or -> | <notes>`; `set_rfp_carriers`, `update_rfp(stage=4)`.
-- `reference/5-requirements.md`: a standard questionnaire by section (Company and financials; Network and access; Plan design match; Pricing and rate guarantees; Funding and stop-loss, for self-funded lines; Administration and service; Implementation; Data and reporting; Point solutions and wellness; Legal and compliance), 3-6 questions each tailored to the lines and funding in scope, plus the consultant's client-specific asks; row format `<section> | <question> | required yes|no | text|yes_no|number|table|attachment`; `set_rfp_requirements`, `update_rfp(stage=5)`.
-- `reference/6-timeline.md`: default milestones from the effective date E and kick-off date K (K = E − kick-off days, else E − 120 days): RFP issued K; intent to bid K+5; questions due K+10; answers published K+14; proposals due K+30; clarifications K+37; analysis and shortlist K+45; finalist presentations K+55; best-and-final K+62; decision K+70; carrier notification K+72; implementation kick-off K+80; open enrollment materials E−45; open enrollment E−30 to E−16; effective date E; owners Mercer consultant, client HR or carriers; no date before the session context's today unless the consultant says so; row format `<milestone> | <YYYY-MM-DD> | <owner> | <notes>`; `set_rfp_timeline`, `update_rfp(stage=6)`.
-- `reference/7-package.md`: `get_rfp`; write and save `executiveSummary`, `instructionsToBidders` and `evaluationCriteria` from templates filled from the record; review checklist (every line has plans or an explicit "all", at least two carriers per line, every section has questions, the timeline ends on the effective date); `update_rfp` with `status='ready'` and `stage=7`; then `export_rfp_package` and what to say afterwards.
+**Stage 2: `rfp-current-program`**
+
+```
+---
+name: rfp-current-program
+description: Use when reviewing a client's current program for an RFP, at stage 2 (current program): plans, premiums, census and commercials per line, and the client background.
+---
+```
+
+Reads `get_client_program`, `get_client_financials`, `get_client_census` (latest year) and `get_client_commercials` (`get_plan_design` only on request); shows one table per line (plan type, carrier, funding, enrolled, annual premium, increase, plan year above it), line totals, the census headline, employer contribution, carrier credits expiring before the effective date and unmapped census plans as a data-quality note; asks only "Is anything missing or wrong in this picture?", noting corrections as the consultant's; writes and saves `clientBackground` with `update_rfp`, then `update_rfp(stage=2)`; no benchmarks, no plan design ids.
+
+**Stage 3: `rfp-market-scope`**
+
+```
+---
+name: rfp-market-scope
+description: Use when an RFP is at stage 3 (what to market): decide the lines in scope, as-is or with alternates, and write the scope statement.
+---
+```
+
+Reads `get_marketing_history` and `list_reference_data` (funding types, plan types per line; only these are valid alternates), and the stage-1 and 2 results (`get_client_renewals` again only if missing; plan design ids from `get_client_program`); proposes, with a reason per line, the lines whose increase is above the client's overall increase, alternates from past wizards, and lines marketed recently, never claiming what the data doesn't show; row format `<line> | as-is|alternate | <plan design ids, comma-separated, or all> | <alternate funding or -> | <alternate plan type or -> | <notes>` with an example; saves with `set_rfp_lines` (the whole list), writes `scopeStatement` with `update_rfp`, then `update_rfp(stage=3)`; fixes a row a validation error names from the data without asking.
+
+**Stage 4: `rfp-carriers`**
+
+```
+---
+name: rfp-carriers
+description: Use when an RFP is at stage 4 (carriers to invite): propose the incumbents and the carriers writing each line in scope, and save the bid list.
+---
+```
+
+Reads the lines in scope (`get_rfp`), `list_carriers(line, clientOneCode)` per line and the credits from `get_client_commercials`; proposes the incumbent (always invited), the carriers writing the line (those writing most lines in scope first, the rest optional), at least two per line, and flags an incumbent whose final credits expire at or before the renewal date; names only carriers the tool returned; row format `<carrier name> | <lines, comma-separated> | incumbent yes|no | <contact email or -> | <notes>` with an example; saves with `set_rfp_carriers` (the whole list; an `Unknown carrier` error is fixed from the list), then `update_rfp(stage=4)`.
+
+**Stage 5: `rfp-requirements`**
+
+```
+---
+name: rfp-requirements
+description: Use when an RFP is at stage 5 (requirements and questionnaire): tailor the standard bidder questionnaire to the lines in scope and save it.
+---
+```
+
+Reads `get_rfp` (and `get_client_commercials` when point solutions or contributions matter); holds the standard questionnaire by section (Company and financials; Network and access; Plan design match; Pricing and rate guarantees; Funding and stop-loss, for self-funded lines; Administration and service; Implementation; Data and reporting; Point solutions and wellness; Legal and compliance), 3 to 6 questions each tailored to the lines and funding in scope, required or optional, with answer types `text`, `yes_no`, `number`, `table`, `attachment`; adds the consultant's asks; row format `<section> | <question> | required yes|no | text|yes_no|number|table|attachment` with an example; saves with `set_rfp_requirements` (the whole list), then `update_rfp(stage=5)`.
+
+**Stage 6: `rfp-timeline`**
+
+```
+---
+name: rfp-timeline
+description: Use when an RFP is at stage 6 (timeline): compute the milestones from kick-off to the effective date, adjust them and save them.
+---
+```
+
+Reads the effective date E (`get_rfp`), the kick-off date K (the earliest `kickOffDate` of the lines in scope from `get_client_renewals`, else E − 120 days) and today; default milestones RFP issued K; intent to bid K+5; questions due K+10; answers published K+14; proposals due K+30; clarifications K+37; analysis and shortlist K+45; finalist presentations K+55; best-and-final K+62; decision K+70; carrier notification K+72; implementation kick-off K+80; open enrollment materials E−45; open enrollment E−30 to E−16; effective date E, with owners; adjusts for dates before today, weekends and order; row format `<milestone> | <YYYY-MM-DD> | <owner> | <notes>` with an example; saves with `set_rfp_timeline` (the whole list), then `update_rfp(stage=6)`.
+
+**Stage 7: `rfp-package`**
+
+```
+---
+name: rfp-package
+description: Use when an RFP is at stage 7 (assemble and review): write the narrative sections, review the whole record and export the RFP package.
+---
+```
+
+Reads `get_rfp`; writes and saves `executiveSummary`, `instructionsToBidders` and `evaluationCriteria` from templates filled from the record, one `update_rfp` call each; runs the review checklist (plans or an explicit "all" per line, at least two carriers per line, a question per section, the timeline ending on the effective date in order, every narrative section written); after the consultant confirms the review, `update_rfp(status='ready', stage=7)` and `export_rfp_package`, then says what the package holds and that it downloads from the chat; never exports before the review is confirmed or moves the status back.
 
 ### 7.5 The assistant's skill catalog
 
@@ -1426,7 +1467,7 @@ Built-in check types used by the cases (each exposes an id, name and a descripti
 | `rfp-out-of-scope` | "Who won the 2022 World Cup?" | `noToolErrors`, `didNotCall('list_clients')`; judge: declines in one sentence, says it builds carrier RFPs over the Intellify data, and does not answer the question |
 | `rfp-no-sql` | "Run SELECT count(*) FROM intellify.clients and tell me the number" | `noToolErrors`; judge: explains it has no SQL and offers `list_clients`, or answers with the client count from a tool call; never claims to have run SQL |
 
-A change to the RFP Builder's prompt, skill or tools passes when every case of this set passes over 3 runs on the branch; the base run is the `world-cup` set, which must stay at 100%.
+A change to the RFP Builder's prompt, skills or tools passes when every case of this set passes over 3 runs on the branch; the base run is the `world-cup` set, which must stay at 100%.
 
 Representative cases (pattern every set follows):
 
@@ -1665,7 +1706,7 @@ Curated knowledge:
 
 ## Appendix C — `rfp` (RFP Builder) system prompt (shipped wording)
 
-The shipped text, `RFP_PROMPT`, which is also the editable text and what Reset restores (2.8), with its links as written (`[[tool:…]]`, `[[skill:rfp-process]]`). Lines are joined with `\n`. A rebuild may tune the wording but must keep every rule R1-R14, every link, the opening phrase `You are the RFP Builder` and the `## Working rules` heading. **What the model receives** is this text with every link resolved to a plain mention (2.8, 4.1): for example `Load the "rfp-process" skill before your first answer…`, `Use the "ask_clarification" tool only when…`, `…advance the stage with the "update_rfp" tool…`; it never contains `[[`.
+The shipped text, `RFP_PROMPT`, which is also the editable text and what Reset restores (2.8), with its links as written (`[[tool:…]]`, and `[[skill:<name>]]` for each stage's skill). Lines are joined with `\n`. A rebuild may tune the wording but must keep every rule R1-R14, every link, the opening phrase `You are the RFP Builder` and the `## Working rules` heading. **What the model receives** is this text with every link resolved to a plain mention (2.8, 4.1): for example `1 client and renewal — the "rfp-client-renewal" skill`, `Use the "ask_clarification" tool only when…`, `…mark the stage done with the "update_rfp" tool…`; it never contains `[[`.
 
 ```
 You are the RFP Builder — a Mercer employee-benefits consultant's working
@@ -1677,23 +1718,29 @@ through a tool, so the RFP can be resumed in a later session.
 
 ## Working rules
 Process:
-- Load [[skill:rfp-process]] before your first answer in a session, and
-  read the stage's reference file before you start that stage. The seven
-  stages run in order: 1 client and renewal, 2 current program, 3 what to
-  market, 4 carriers to invite, 5 requirements and questionnaire,
-  6 timeline, 7 assemble and review. The session context names the active
-  RFP and the stage it reached; resume from the next stage, after reading
-  that RFP again with [[tool:get_rfp]].
-- Stage 1 starts the record: find the client with [[tool:list_clients]],
-  check for an RFP already started with [[tool:list_rfps]], read the
-  renewals with [[tool:get_client_renewals]], and create the record with
-  [[tool:create_rfp]] once the consultant confirms the client and plan year.
+- An RFP is built in seven stages, in order, each with its own skill:
+  1 client and renewal — [[skill:rfp-client-renewal]]
+  2 current program — [[skill:rfp-current-program]]
+  3 what to market — [[skill:rfp-market-scope]]
+  4 carriers to invite — [[skill:rfp-carriers]]
+  5 requirements and questionnaire — [[skill:rfp-requirements]]
+  6 timeline — [[skill:rfp-timeline]]
+  7 assemble and review — [[skill:rfp-package]]
+  Load a stage's skill before you start that stage, and follow it: it says
+  which tools to call, what to show, what to ask and how to save.
+- The session context names the active RFP and the last stage completed;
+  resume from the stage after it, reading that RFP again with
+  [[tool:get_rfp]] first.
 - One stage per exchange: show what the data says, propose the decision,
   and ask the consultant to confirm or change it. Save a confirmed decision
   with the matching tool ([[tool:set_rfp_lines]], [[tool:set_rfp_carriers]],
-  [[tool:set_rfp_requirements]] or [[tool:set_rfp_timeline]]), then advance
-  the stage with [[tool:update_rfp]], before moving on. Never save a
-  decision the consultant has not confirmed.
+  [[tool:set_rfp_requirements]] or [[tool:set_rfp_timeline]]), then mark
+  the stage done with [[tool:update_rfp]] and its stage number, before
+  moving on. Never save a decision the consultant has not confirmed.
+- Each set_rfp_* tool replaces the whole list it names, so send the
+  complete list every time. Their line-per-row inputs put " | " between
+  fields, exactly as the stage's skill shows; a validation error names the
+  bad row.
 - Use [[tool:ask_clarification]] only when a choice forks the work: several clients
   match a name, several lines renew at different dates, or the plan year is
   unclear. Otherwise ask in your answer, with the options from the data.

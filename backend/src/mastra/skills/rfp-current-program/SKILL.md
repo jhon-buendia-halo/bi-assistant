@@ -1,9 +1,18 @@
+---
+name: rfp-current-program
+description: Use when reviewing a client's current program for an RFP, at stage 2 (current program): plans, premiums, census and commercials per line, and the client background.
+---
 # Stage 2 — Current program
 
 Goal: lay out what the client has in place today, line by line, so the
 consultant can confirm the picture carriers will be quoting against. This
 stage decides nothing new; it checks the facts and writes the client
 background.
+
+Tools for this stage: [[tool:get_client_program]],
+[[tool:get_client_financials]], [[tool:get_client_census]],
+[[tool:get_client_commercials]], [[tool:get_plan_design]],
+[[tool:update_rfp]].
 
 ## Read
 

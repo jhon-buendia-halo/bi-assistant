@@ -351,7 +351,7 @@ flowchart LR
   mastrasvc --> bootstrap
   mastrasvc --> rfpagent
   rfpagent --> rfptools
-  rfpagent -.->|"rfp-process (catalog + skill tool)"| skills
+  rfpagent -.->|"its seven stage skills (catalog + skill tool)"| skills
   rfptools -->|"restTarget(), exportRfpPackage()"| toolsvc
   assistant --> tools
   assistant -.->|"its skills (catalog + skill tools)"| skills
@@ -700,6 +700,7 @@ flowchart LR
   - The hub has two Official agents; Start chat semantics depend on whether the agent declares a dataset.
   - The eval harness runs a case on the set's agent, and an `rfp` eval set exists; prompt, skill or tool changes to the agent must pass it at 100% over 3 runs.
   - Evals that create RFPs write to `rfp.*`; they tag records with `created_by = eval:<jobId>` and delete them afterwards.
+  - Note (2026-10-14, not a new decision): the single `rfp-process` skill with one reference file per stage was split into seven on-demand stage skills, one per stage; the loading mechanism is unchanged (agents.md 7.4).
 
 ## Level 4 — Code
 

@@ -23,6 +23,8 @@ export interface BuiltInSkillSummary {
   loading: 'on-demand' | 'harness';
   /** Registry keys (agents.md 7.4). */
   agents: string[];
+  /** The tools the served body links (`[[tool:…]]`); left out when none. */
+  tools?: string[];
   modified: boolean;
   /** Modified, and the shipped built-in's hash differs from `baseHash`. */
   builtInChanged: boolean;

@@ -9,8 +9,8 @@ import {
 /**
  * The links of an Official agent's shared prompt (agents-evals R99, R105;
  * agents.md 2.1, 2.8): the assistant links the library tools and its
- * built-in skills, the RFP Builder its own tools and `rfp-process`. Links are
- * mentions: every tool of the agent stays on.
+ * built-in skills, the RFP Builder its own tools and its stage skills. Links
+ * are mentions: every tool of the agent stays on.
  */
 
 const ASSISTANT_KEY = 'assistant';
@@ -47,7 +47,10 @@ export function officialLinkSkills<
   );
 }
 
-/** What the Graph tab of an Official agent draws: its skills and every tool, always on. */
+/**
+ * What the Graph tab of an Official agent draws: its skills with the tools
+ * each body links, and every tool, always on.
+ */
 export function officialGraphInput(
   agent: {
     key: string;
@@ -58,18 +61,25 @@ export function officialGraphInput(
     name: string;
     loading: 'on-demand' | 'harness';
     agents?: string[];
+    tools?: string[];
   }[],
 ): { skills: { name: string; tools: string[] }[]; toolLinks: AgentToolLink[] } {
   const linked = linkedNames(agent.prompt?.editable ?? '', 'tool');
+  const graphSkills = officialLinkSkills(skills, agent.key).map((skill) => ({
+    name: skill.name,
+    tools: [...(skill.tools ?? [])],
+  }));
   return {
-    skills: officialLinkSkills(skills, agent.key).map((skill) => ({
-      name: skill.name,
-      tools: [] as string[],
-    })),
+    skills: graphSkills,
     toolLinks: officialLinkTools(agent).map((tool) => ({
       name: tool.name,
       status: 'always-on' as const,
-      linkedVia: { instructions: linked.includes(tool.name), skills: [] },
+      linkedVia: {
+        instructions: linked.includes(tool.name),
+        skills: graphSkills
+          .filter((skill) => skill.tools.includes(tool.name))
+          .map((skill) => skill.name),
+      },
     })),
   };
 }

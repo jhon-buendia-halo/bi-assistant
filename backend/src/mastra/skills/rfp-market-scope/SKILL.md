@@ -1,8 +1,16 @@
+---
+name: rfp-market-scope
+description: Use when an RFP is at stage 3 (what to market): decide the lines in scope, as-is or with alternates, and write the scope statement.
+---
 # Stage 3 — What to market
 
 Goal: decide which lines of coverage go out to bid, and for each whether
 carriers quote the current plans as they are or an alternate funding type
 or plan type.
+
+Tools for this stage: [[tool:get_marketing_history]],
+[[tool:list_reference_data]], [[tool:get_client_renewals]],
+[[tool:get_client_program]], [[tool:set_rfp_lines]], [[tool:update_rfp]].
 
 ## Read
 

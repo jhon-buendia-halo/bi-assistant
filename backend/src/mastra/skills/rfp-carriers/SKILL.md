@@ -1,7 +1,15 @@
+---
+name: rfp-carriers
+description: Use when an RFP is at stage 4 (carriers to invite): propose the incumbents and the carriers writing each line in scope, and save the bid list.
+---
 # Stage 4 — Carriers to invite
 
 Goal: agree the bid list for every line in scope: the incumbents, plus the
 carriers that write the line.
+
+Tools for this stage: [[tool:get_rfp]], [[tool:list_carriers]],
+[[tool:get_client_commercials]], [[tool:set_rfp_carriers]],
+[[tool:update_rfp]].
 
 ## Read
 

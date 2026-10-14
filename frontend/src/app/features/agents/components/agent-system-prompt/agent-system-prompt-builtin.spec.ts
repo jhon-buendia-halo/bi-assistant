@@ -149,11 +149,11 @@ describe('AgentSystemPrompt (built-in agents)', () => {
     );
   });
 
-  it("shows the RFP Builder's links as chips, known against its own tools and skill", () => {
+  it("shows the RFP Builder's links as chips, known against its own tools and skills", () => {
     const rfp = {
       ...builtIn('rfp', {
         editable:
-          'You are the RFP Builder. Load [[skill:rfp-process]], call [[tool:list_clients]] and not [[tool:run_readonly_sql]].',
+          'You are the RFP Builder. Load [[skill:rfp-client-renewal]], call [[tool:list_clients]] and not [[tool:run_readonly_sql]].',
         linksAllowed: true,
       }),
       name: 'RFP Builder',
@@ -171,8 +171,8 @@ describe('AgentSystemPrompt (built-in agents)', () => {
     fixture.componentRef.setInput('agent', rfp);
     fixture.componentRef.setInput('builtInSkills', [
       {
-        name: 'rfp-process',
-        description: 'The stages.',
+        name: 'rfp-client-renewal',
+        description: 'Stage 1.',
         loading: 'on-demand',
         agents: ['rfp'],
         modified: false,
@@ -196,7 +196,7 @@ describe('AgentSystemPrompt (built-in agents)', () => {
       [...view.querySelectorAll('span')].find(
         (span) => span.textContent?.trim() === name,
       );
-    expect(chip('rfp-process')?.className).toContain('chip-info');
+    expect(chip('rfp-client-renewal')?.className).toContain('chip-info');
     expect(chip('list_clients')?.className).toContain('chip-neutral');
     // An assistant-only tool is not one of the RFP Builder's.
     expect(chip('run_readonly_sql')?.className).toContain('chip-danger');
@@ -207,7 +207,7 @@ describe('AgentSystemPrompt (built-in agents)', () => {
       'list_clients',
     ]);
     expect(component.officialSkills().map((skill) => skill.name)).toEqual([
-      'rfp-process',
+      'rfp-client-renewal',
     ]);
   });
 

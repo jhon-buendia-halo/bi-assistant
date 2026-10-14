@@ -1,8 +1,15 @@
+---
+name: rfp-requirements
+description: Use when an RFP is at stage 5 (requirements and questionnaire): tailor the standard bidder questionnaire to the lines in scope and save it.
+---
 # Stage 5 — Requirements and questionnaire
 
 Goal: agree what every bidder must answer. Start from the standard
 questionnaire below, tailor it to the lines and funding in scope, then add
 the consultant's client-specific asks.
+
+Tools for this stage: [[tool:get_rfp]], [[tool:get_client_commercials]],
+[[tool:set_rfp_requirements]], [[tool:update_rfp]].
 
 ## Read
 

@@ -13,7 +13,18 @@ const SKILLS = [
     agents: ['assistant'],
   },
   { name: 'deep-analysis', loading: 'harness' as const, agents: ['assistant'] },
-  { name: 'rfp-process', loading: 'on-demand' as const, agents: ['rfp'] },
+  {
+    name: 'rfp-client-renewal',
+    loading: 'on-demand' as const,
+    agents: ['rfp'],
+    tools: ['list_clients', 'get_rfp'],
+  },
+  {
+    name: 'rfp-package',
+    loading: 'on-demand' as const,
+    agents: ['rfp'],
+    tools: ['get_rfp'],
+  },
 ];
 
 const RFP = {
@@ -26,7 +37,7 @@ const RFP = {
   ],
   prompt: {
     editable:
-      'You are the RFP Builder. Load [[skill:rfp-process]], then [[tool:list_clients]].',
+      'You are the RFP Builder. Load [[skill:rfp-client-renewal]], then [[tool:list_clients]].',
   },
 };
 
@@ -51,24 +62,31 @@ describe('official-links (agents-evals R99, R105)', () => {
       'curated-knowledge',
     ]);
     expect(officialLinkSkills(SKILLS, 'rfp').map((s) => s.name)).toEqual([
-      'rfp-process',
+      'rfp-client-renewal',
+      'rfp-package',
     ]);
     expect(officialLinkSkills(null, 'rfp')).toEqual([]);
   });
 
-  it("draws the RFP Builder's graph: its skill and every tool, always on", () => {
+  it("draws the RFP Builder's graph: its skills with the tools each links, and every tool, always on", () => {
     const graph = officialGraphInput(RFP, SKILLS);
-    expect(graph.skills).toEqual([{ name: 'rfp-process', tools: [] }]);
+    expect(graph.skills).toEqual([
+      { name: 'rfp-client-renewal', tools: ['list_clients', 'get_rfp'] },
+      { name: 'rfp-package', tools: ['get_rfp'] },
+    ]);
     expect(graph.toolLinks).toEqual([
       {
         name: 'list_clients',
         status: 'always-on',
-        linkedVia: { instructions: true, skills: [] },
+        linkedVia: { instructions: true, skills: ['rfp-client-renewal'] },
       },
       {
         name: 'get_rfp',
         status: 'always-on',
-        linkedVia: { instructions: false, skills: [] },
+        linkedVia: {
+          instructions: false,
+          skills: ['rfp-client-renewal', 'rfp-package'],
+        },
       },
       {
         name: 'ask_clarification',

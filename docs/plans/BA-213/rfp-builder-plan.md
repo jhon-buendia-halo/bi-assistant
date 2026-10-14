@@ -2,6 +2,8 @@
 
 Jira (created 2026-10-14, parent BA-213): 1.14.12 BA-225 · 1.14.13 BA-226 · 1.14.14 BA-227 · 1.14.15 BA-228 · 1.14.16 BA-229. Epic amendment, ADR-0027/0028 and every default in this plan confirmed by the user on 2026-10-14.
 
+> **Note (2026-10-14, after this plan):** the `rfp-process` skill of 3.4 and its seven reference files were split into seven on-demand stage skills, one per stage (`rfp-client-renewal`, `rfp-current-program`, `rfp-market-scope`, `rfp-carriers`, `rfp-requirements`, `rfp-timeline`, `rfp-package`); the prompt lists the stages with a link to each skill, and each skill body links the tools of its stage. The plan below is kept as written; the current design is in agents.md 2.8 and 7.4.
+
 Read before use: CLAUDE.md, retrospective.md (top 6 entries), specs/README.md, specs/epics/BA-213/spec.md, architecture.md (ADR-0008, 0022–0026, containers/components), agents.md (1, 2.1, 3, 4, 7, 8, 9, Appendix A), api.md (1.3, 1.9, 2.1, 2.2, 2.6, 2.9, 5, 6), data-model.md (3, 3.1, 3.4, 3.10.x, 6), capabilities agents-evals / datasources / testing-data / sessions-chat, and the code: `backend/src/mastra/**`, `modules/agents`, `modules/sessions`, `modules/datasources` (REST connector, `buildHeaders`, OpenAPI discovery), `modules/testing-data` (registry, loader), `app-bootstrap.ts`, `cli.ts`, `frontend/electron/main.cjs`, `frontend/e2e/fixtures/app.fixture.ts`, `e2e/helpers/llm-stub.ts`, the frontend `agents` feature, `scripts/generate-intellify-seed.py`, `backend/scripts/worldcup-rest-api/serve.ts`, `scripts/check-specs.py`.
 
 Facts that shape the design (verified in the worktree at `7dfdbb9`, branch `feat/BA-213-agent-tools-skills`):

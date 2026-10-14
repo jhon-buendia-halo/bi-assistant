@@ -1,5 +1,6 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { parseLinks } from './agent-links';
 import {
   AGENT_SKILLS,
   HARNESS_SKILLS,
@@ -7,126 +8,175 @@ import {
   builtInOnDemandSkillNames,
   catalogSkills,
   loadAppSkills,
+  skillBody,
   skillsRoot,
   validateAgentSkills,
 } from './app-skills';
+import { rfpTools } from './tools/rfp.tools';
 
-/** The `rfp-process` skill (agents.md 7.4), checked as the backend checks it at start. */
-const SKILL_DIR = join(skillsRoot(), 'rfp-process');
+/**
+ * The RFP Builder's stage skills (agents.md 7.4), one per stage in stage
+ * order, checked as the backend checks them at start. Each keeps the tools,
+ * row format and save step of its stage.
+ */
+const STAGE_SKILLS: [string, string[]][] = [
+  [
+    'rfp-client-renewal',
+    [
+      'list_clients',
+      'get_client_renewals',
+      'create_rfp',
+      'list_rfps',
+      'get_rfp',
+      'stage=1',
+    ],
+  ],
+  [
+    'rfp-current-program',
+    [
+      'get_client_program',
+      'get_client_financials',
+      'get_client_census',
+      'get_client_commercials',
+      'clientBackground',
+      'stage=2',
+    ],
+  ],
+  [
+    'rfp-market-scope',
+    [
+      'get_marketing_history',
+      'list_reference_data',
+      'set_rfp_lines',
+      'scopeStatement',
+      'stage=3',
+      '<line> | as-is|alternate | <plan design ids, comma-separated, or all> | <alternate funding or -> | <alternate plan type or -> | <notes>',
+    ],
+  ],
+  [
+    'rfp-carriers',
+    [
+      'list_carriers',
+      'set_rfp_carriers',
+      'stage=4',
+      '<carrier name> | <lines, comma-separated> | incumbent yes|no | <contact email or -> | <notes>',
+    ],
+  ],
+  [
+    'rfp-requirements',
+    [
+      'set_rfp_requirements',
+      'stage=5',
+      '<section> | <question> | required yes|no | text|yes_no|number|table|attachment',
+    ],
+  ],
+  [
+    'rfp-timeline',
+    [
+      'set_rfp_timeline',
+      'stage=6',
+      '<milestone> | <YYYY-MM-DD> | <owner> | <notes>',
+      'K+30',
+      'E−45',
+    ],
+  ],
+  [
+    'rfp-package',
+    [
+      'get_rfp',
+      'executiveSummary',
+      'instructionsToBidders',
+      'evaluationCriteria',
+      "status='ready'",
+      'stage=7',
+      'export_rfp_package',
+    ],
+  ],
+];
+const NAMES = STAGE_SKILLS.map(([name]) => name);
 
-const STAGE_FILES: Record<string, string[]> = {
-  '1-client-and-renewal.md': [
-    'list_clients',
-    'get_client_renewals',
-    'create_rfp',
-    'list_rfps',
-    'get_rfp',
-    'stage=1',
-  ],
-  '2-current-program.md': [
-    'get_client_program',
-    'get_client_financials',
-    'get_client_census',
-    'get_client_commercials',
-    'clientBackground',
-    'stage=2',
-  ],
-  '3-market-scope.md': [
-    'get_marketing_history',
-    'list_reference_data',
-    'set_rfp_lines',
-    'scopeStatement',
-    'stage=3',
-    '<line> | as-is|alternate | <plan design ids, comma-separated, or all> | <alternate funding or -> | <alternate plan type or -> | <notes>',
-  ],
-  '4-carriers.md': [
-    'list_carriers',
-    'set_rfp_carriers',
-    'stage=4',
-    '<carrier name> | <lines, comma-separated> | incumbent yes|no | <contact email or -> | <notes>',
-  ],
-  '5-requirements.md': [
-    'set_rfp_requirements',
-    'stage=5',
-    '<section> | <question> | required yes|no | text|yes_no|number|table|attachment',
-  ],
-  '6-timeline.md': [
-    'set_rfp_timeline',
-    'stage=6',
-    '<milestone> | <YYYY-MM-DD> | <owner> | <notes>',
-    'K+30',
-    'E−45',
-  ],
-  '7-package.md': [
-    'get_rfp',
-    'executiveSummary',
-    'instructionsToBidders',
-    'evaluationCriteria',
-    "status='ready'",
-    'stage=7',
-    'export_rfp_package',
-  ],
-};
+const document = (name: string) =>
+  readFileSync(join(skillsRoot(), name, 'SKILL.md'), 'utf8');
 
-/** agents.md 7.4's `SKILL.md`, verbatim. */
-function specSkillDocument(): string {
-  const spec = readFileSync(
-    join(__dirname, '..', '..', '..', 'specs', 'system', 'agents.md'),
-    'utf8',
+/** The tools a body names in backticks, as a call or a name. */
+function toolsNamed(body: string): string[] {
+  return Object.keys(rfpTools).filter((tool) =>
+    new RegExp(`\`${tool}\\b`).test(body),
   );
-  const at = spec.indexOf('**The `rfp-process` skill**');
-  const start = spec.indexOf('```\n', at) + 4;
-  const end = spec.indexOf('\n```', start);
-  return `${spec.slice(start, end)}\n`;
 }
 
-describe('the rfp-process skill (agents.md 7.3, 7.4)', () => {
-  it('passes the start-up skill check', () => {
+describe("the RFP Builder's stage skills (agents.md 7.3, 7.4)", () => {
+  it('are its on-demand skills, in stage order, and pass the start-up skill check', () => {
+    expect(AGENT_SKILLS.rfp).toEqual(NAMES);
     const skills = loadAppSkills(skillsRoot());
     expect(() => validateAgentSkills(skills, AGENT_SKILLS)).not.toThrow();
     expect(() => validateAgentSkills(skills, HARNESS_SKILLS)).not.toThrow();
+    expect(skills.has('rfp-process')).toBe(false);
 
-    const skill = skills.get('rfp-process');
-    expect(skill).toMatchObject({
-      name: 'rfp-process',
-      loading: 'on-demand',
-      agents: ['rfp'],
+    NAMES.forEach((name, n) => {
+      expect(skills.get(name)).toMatchObject({
+        name,
+        loading: 'on-demand',
+        agents: ['rfp'],
+      });
+      // The description names its stage, so the model loads the right one.
+      expect(skills.get(name)?.description).toMatch(
+        new RegExp(`^Use when .*at stage ${n + 1} \\(`),
+      );
     });
-    expect(skill?.description.startsWith('Use when')).toBe(true);
   });
 
-  it('ships the SKILL.md of agents.md 7.4 verbatim', () => {
-    expect(readFileSync(join(SKILL_DIR, 'SKILL.md'), 'utf8')).toBe(
-      specSkillDocument(),
+  it("ships each SKILL.md's front matter as agents.md 7.4 lists it", () => {
+    const spec = readFileSync(
+      join(__dirname, '..', '..', '..', 'specs', 'system', 'agents.md'),
+      'utf8',
     );
+    for (const name of NAMES) {
+      const frontMatter = /^---\n[\s\S]*?\n---\n/.exec(document(name))?.[0];
+      expect(frontMatter).toBeDefined();
+      expect(spec).toContain(frontMatter as string);
+    }
   });
 
-  it.each(Object.entries(STAGE_FILES))(
-    'reference/%s is 40-80 lines and keeps its tools, row format and save step',
-    (file, mentions) => {
-      const text = readFileSync(join(SKILL_DIR, 'reference', file), 'utf8');
-      const lines = text.trimEnd().split('\n').length;
+  it.each(STAGE_SKILLS)(
+    '%s keeps its tools, row format and save step, and links every tool it names',
+    (name, mentions) => {
+      const text = document(name);
+      const body = skillBody(text);
+      const lines = body.split('\n').length;
       expect(lines).toBeGreaterThanOrEqual(40);
-      expect(lines).toBeLessThanOrEqual(80);
-      for (const mention of mentions) expect(text).toContain(mention);
+      expect(lines).toBeLessThanOrEqual(90);
+      for (const mention of mentions) expect(body).toContain(mention);
+      // The "Tools for this stage" line links exactly the tools the body uses.
+      const links = parseLinks(body);
+      expect(links.skills).toEqual([]);
+      expect([...links.tools].sort()).toEqual(toolsNamed(body).sort());
+      for (const tool of links.tools) {
+        expect(Object.keys(rfpTools)).toContain(tool);
+      }
     },
   );
 
-  it('reaches the RFP Builder only', () => {
-    expect(catalogSkills('rfp').map((skill) => skill.name)).toEqual([
-      'rfp-process',
-    ]);
-    expect(catalogSkills('assistant').map((skill) => skill.name)).not.toContain(
-      'rfp-process',
+  it('reach the RFP Builder only', () => {
+    expect(catalogSkills('rfp').map((skill) => skill.name)).toEqual(
+      [...NAMES].sort(),
     );
-    // A prompt or a user agent linking it would name a skill the assistant lacks.
-    expect(builtInOnDemandSkillNames()).not.toContain('rfp-process');
-    expect(agentSkillsView('rfp').skills).toEqual([
-      expect.objectContaining({
-        name: 'rfp-process',
-        level: 'built-in',
-        loading: 'on-demand',
-      }),
-    ]);
+    const assistant = catalogSkills('assistant').map((skill) => skill.name);
+    // A prompt or a user agent linking one would name a skill the assistant lacks.
+    const linkable = builtInOnDemandSkillNames();
+    for (const name of NAMES) {
+      expect(assistant).not.toContain(name);
+      expect(linkable).not.toContain(name);
+    }
+    expect(agentSkillsView('rfp').skills).toEqual(
+      [...NAMES].sort().map((name): unknown =>
+        expect.objectContaining({
+          name,
+          level: 'built-in',
+          loading: 'on-demand',
+          files: [expect.objectContaining({ path: 'SKILL.md' })],
+        }),
+      ),
+    );
   });
 });

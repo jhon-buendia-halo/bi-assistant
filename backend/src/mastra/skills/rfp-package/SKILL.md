@@ -1,7 +1,14 @@
+---
+name: rfp-package
+description: Use when an RFP is at stage 7 (assemble and review): write the narrative sections, review the whole record and export the RFP package.
+---
 # Stage 7 — Assemble and review
 
 Goal: write the remaining narrative sections, review the whole RFP with the
 consultant, and export the package.
+
+Tools for this stage: [[tool:get_rfp]], [[tool:update_rfp]],
+[[tool:export_rfp_package]].
 
 ## Read
 

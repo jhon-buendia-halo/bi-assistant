@@ -85,6 +85,17 @@ const TOOL_NAMES = [
   'ask_clarification',
 ];
 
+/** Its stage skills, in stage order (agents.md 7.4). */
+const STAGE_SKILLS = [
+  'rfp-client-renewal',
+  'rfp-current-program',
+  'rfp-market-scope',
+  'rfp-carriers',
+  'rfp-requirements',
+  'rfp-timeline',
+  'rfp-package',
+];
+
 afterEach(() => setAgentPromptOverrides([]));
 
 describe('the RFP Builder (agents.md 2.8)', () => {
@@ -187,18 +198,14 @@ describe("the RFP Builder's prompt (agents.md 2.8, Appendix C)", () => {
     expect(withToolSection(resolveLinks(RFP_PROMPT), rfpTools)).toBe(GOLDEN);
   });
 
-  it('links its skill and the tools its working rules use (BA-228)', () => {
+  it('links its seven stage skills, in order, and the tools its working rules use (BA-228)', () => {
     const links = parseLinks(RFP_PROMPT);
-    expect(links.skills).toEqual(['rfp-process']);
+    expect(links.skills).toEqual(STAGE_SKILLS);
     expect([...links.tools].sort()).toEqual(
       [
         'ask_clarification',
-        'create_rfp',
         'export_rfp_package',
-        'get_client_renewals',
         'get_rfp',
-        'list_clients',
-        'list_rfps',
         'set_rfp_carriers',
         'set_rfp_lines',
         'set_rfp_requirements',
@@ -213,8 +220,15 @@ describe("the RFP Builder's prompt (agents.md 2.8, Appendix C)", () => {
   it('sends the model plain mentions, never link syntax', () => {
     const served = rfpInstructions();
     expect(served).not.toContain('[[');
-    expect(served).toContain('the "list_clients" tool');
-    expect(served).toContain('Load the "rfp-process" skill before');
+    expect(served).toContain('the "get_rfp" tool');
+    for (const [n, skill] of STAGE_SKILLS.entries()) {
+      expect(served).toMatch(
+        new RegExp(`\\n  ${n + 1} [^\\n]+ — the "${skill}" skill\\n`),
+      );
+    }
+    expect(served).toContain(
+      "Load a stage's skill before you start that stage",
+    );
     expect(served).toContain('Use the "ask_clarification" tool only when');
   });
 
@@ -223,7 +237,7 @@ describe("the RFP Builder's prompt (agents.md 2.8, Appendix C)", () => {
       {
         key: 'rfp',
         prompt:
-          'You are the RFP Builder.\n\n## Working rules\n- Load [[skill:rfp-process]], then call [[tool:list_clients]].',
+          'You are the RFP Builder.\n\n## Working rules\n- Load [[skill:rfp-client-renewal]], then call [[tool:list_clients]].',
         baseHash: 'x',
       },
     ]);
@@ -232,33 +246,29 @@ describe("the RFP Builder's prompt (agents.md 2.8, Appendix C)", () => {
 
     expect(served).not.toContain('[[');
     expect(served).toContain(
-      '- Load the "rfp-process" skill, then call the "list_clients" tool.',
+      '- Load the "rfp-client-renewal" skill, then call the "list_clients" tool.',
     );
   });
 });
 
 describe("the RFP Builder's skills (agents.md 7.4)", () => {
-  it('declares rfp-process on demand, with its seven stage files', async () => {
+  it('declares its seven stage skills on demand, sorted by name, with no reference files', async () => {
     const skills = await (
       rfpAgent as unknown as { resolveSkills(): Promise<InlineSkill[]> }
     ).resolveSkills();
 
-    expect(skills.map((skill) => skill.name)).toEqual(['rfp-process']);
-    const [skill] = skills;
-    expect(skill.description.startsWith('Use when building or resuming')).toBe(
-      true,
+    expect(skills.map((skill) => skill.name)).toEqual([...STAGE_SKILLS].sort());
+    for (const skill of skills) {
+      expect(skill.description).toMatch(/^Use when .*at stage [1-7] \(/);
+      // Tool links reach the model as plain mentions (agents.md 4.1).
+      expect(skill.instructions).not.toContain('[[');
+      expect(skill.instructions).toMatch(/^Tools for this stage: the "/m);
+      expect([...(skill.references ?? [])]).toEqual([]);
+    }
+    const stage1 = skills.find((skill) => skill.name === 'rfp-client-renewal');
+    expect(stage1?.instructions).toContain('the "list_clients" tool');
+    expect(stage1?.instructions).toContain(
+      '`create_rfp(clientOneCode, planYear)`',
     );
-    // The body's `reference/` paths point where Mastra serves the files.
-    expect(skill.instructions).toContain('references/1-client-and-renewal.md');
-    expect(skill.instructions).not.toMatch(/\breference\//);
-    expect([...(skill.references ?? [])].sort()).toEqual([
-      '1-client-and-renewal.md',
-      '2-current-program.md',
-      '3-market-scope.md',
-      '4-carriers.md',
-      '5-requirements.md',
-      '6-timeline.md',
-      '7-package.md',
-    ]);
   });
 });

@@ -1,6 +1,13 @@
+---
+name: rfp-timeline
+description: Use when an RFP is at stage 6 (timeline): compute the milestones from kick-off to the effective date, adjust them and save them.
+---
 # Stage 6 — Timeline
 
 Goal: agree the milestones from issuing the RFP to the effective date.
+
+Tools for this stage: [[tool:get_rfp]], [[tool:get_client_renewals]],
+[[tool:set_rfp_timeline]], [[tool:update_rfp]].
 
 ## Read
 

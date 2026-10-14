@@ -39,7 +39,8 @@ const RFP_KEY = 'rfp';
 
 /**
  * What the RFP Builder's prompt may link (agents.md 2.8, BA-228): its own
- * tools and its own on-demand skill. Links are mentions; it keeps every tool.
+ * tools and its own on-demand skills, one per stage. Links are mentions; it
+ * keeps every tool.
  */
 function rfpLinkTargets(): { tools: string[]; skills: string[] } {
   return {
@@ -172,7 +173,7 @@ function validatePrompt(key: string, value: unknown): string {
     const allowed = rfpLinkTargets();
     if (links.skills.some((name) => !allowed.skills.includes(name))) {
       throw new BadRequestException(
-        `Only the ${allowed.skills.map((name) => `"${name}"`).join(', ')} skill can be linked here: this prompt is shared by every user`,
+        "Only the RFP Builder's own skills can be linked here: this prompt is shared by every user",
       );
     }
     const unknown = links.tools.find((name) => !allowed.tools.includes(name));

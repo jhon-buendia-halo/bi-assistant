@@ -5,6 +5,7 @@ import {
   shippedBuiltIn,
   shippedSkills,
 } from '../../mastra/app-skills';
+import { parseLinks } from '../../mastra/agent-links';
 import { setSkillOverrides } from '../../mastra/skill-overrides';
 import { CurrentUserService } from '../auth/current-user.service';
 import { validateOverride } from './built-in-skill-rules';
@@ -89,11 +90,14 @@ export class BuiltInSkillsService implements OnModuleInit {
   ): BuiltInSkillSummary {
     const bundled = shippedSkills().get(name);
     const shipped = shippedBuiltIn(name) as ShippedBuiltIn;
+    // The tools the served body links, for an Official agent's Graph tab.
+    const tools = parseLinks(override?.body ?? shipped.body).tools;
     return {
       name,
       description: override?.description ?? shipped.description,
       loading: bundled?.loading ?? 'on-demand',
       agents: [...(bundled?.agents ?? [])],
+      ...(tools.length ? { tools } : {}),
       modified: !!override,
       builtInChanged: !!override && override.baseHash !== builtInHash(shipped),
       updatedAt: override?.updatedAt ?? null,

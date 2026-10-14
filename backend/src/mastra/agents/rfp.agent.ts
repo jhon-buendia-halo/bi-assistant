@@ -41,7 +41,7 @@ export function rfpInstructions(): string {
   return served.text;
 }
 
-/** Its on-demand skills (`rfp-process`), built per call (agents.md 7.3, 7.4). */
+/** Its on-demand skills (one per stage), built per call (agents.md 7.3, 7.4). */
 export function rfpSkills() {
   return catalogFrameworkSkills(RFP_AGENT_KEY);
 }

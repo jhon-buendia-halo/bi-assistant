@@ -87,11 +87,9 @@ describe('AgentPromptsService (ADR-0026)', () => {
     });
     // Its detail shows the links as written, for the chips and the Graph tab.
     expect((await service.view('rfp'))?.editable).toContain(
-      'Load [[skill:rfp-process]] before',
+      '1 client and renewal — [[skill:rfp-client-renewal]]',
     );
-    expect((await service.view('rfp'))?.editable).toContain(
-      '[[tool:list_clients]]',
-    );
+    expect((await service.view('rfp'))?.editable).toContain('[[tool:get_rfp]]');
     expect(await service.view('user-1')).toBeUndefined();
   });
 
@@ -186,7 +184,7 @@ describe('AgentPromptsService (ADR-0026)', () => {
         'The RFP Builder\'s prompt must start with "You are the RFP Builder"',
       );
       const skillRefusal =
-        'Only the "rfp-process" skill can be linked here: this prompt is shared by every user';
+        "Only the RFP Builder's own skills can be linked here: this prompt is shared by every user";
       expect(
         await refusal('rfp', 'You are the RFP Builder. [[skill:x]] [[tool:x]]'),
       ).toBe(skillRefusal);
@@ -204,7 +202,7 @@ describe('AgentPromptsService (ADR-0026)', () => {
       expect(
         await refusal(
           'rfp',
-          'You are the RFP Builder. [[skill:rfp-process]] [[tool:run_readonly_sql]]',
+          'You are the RFP Builder. [[skill:rfp-carriers]] [[tool:run_readonly_sql]]',
         ),
       ).toBe('Unknown tool "run_readonly_sql"');
     });
@@ -213,10 +211,10 @@ describe('AgentPromptsService (ADR-0026)', () => {
       const { service } = build();
       await service.save('rfp', {
         prompt:
-          'You are the RFP Builder. Load [[skill:rfp-process]], then call [[tool:list_clients]], [[tool:set_rfp_timeline]] and [[tool:ask_clarification]].',
+          'You are the RFP Builder. Load [[skill:rfp-client-renewal]] and [[skill:rfp-package]], then call [[tool:list_clients]], [[tool:set_rfp_timeline]] and [[tool:ask_clarification]].',
       });
       expect(agentPromptOverrideFor('rfp')?.prompt).toContain(
-        '[[skill:rfp-process]]',
+        '[[skill:rfp-client-renewal]]',
       );
       // Its shipped prompt, links and all, saves as an override.
       await expect(
@@ -226,7 +224,7 @@ describe('AgentPromptsService (ADR-0026)', () => {
 
     it("refuses the RFP Builder's tools and skill in the assistant prompt", async () => {
       expect(
-        await refusal('assistant', `${IDENTITY}. [[skill:rfp-process]]`),
+        await refusal('assistant', `${IDENTITY}. [[skill:rfp-timeline]]`),
       ).toBe(
         'Only built-in skills can be linked here: this prompt is shared by every user',
       );

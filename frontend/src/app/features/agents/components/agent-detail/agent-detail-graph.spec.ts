@@ -35,7 +35,7 @@ function builtIn(
     prompt: {
       editable:
         key === 'rfp'
-          ? 'You are the RFP Builder. Load [[skill:rfp-process]], then [[tool:list_clients]].'
+          ? 'You are the RFP Builder. Load [[skill:rfp-client-renewal]], then read the RFP with [[tool:get_rfp]].'
           : 'Fix it.',
       shipped: '',
       modified: false,
@@ -74,10 +74,11 @@ describe('AgentDetail Graph tab (agents-evals R88, R105)', () => {
       req.flush({
         skills: [
           {
-            name: 'rfp-process',
-            description: 'The stages.',
+            name: 'rfp-client-renewal',
+            description: 'Stage 1.',
             loading: 'on-demand',
             agents: ['rfp'],
+            tools: ['list_clients'],
           },
           {
             name: 'curated-knowledge',
@@ -93,14 +94,22 @@ describe('AgentDetail Graph tab (agents-evals R88, R105)', () => {
     return fixture.nativeElement as HTMLElement;
   }
 
-  it("draws the RFP Builder's links: its skill and its tools", () => {
+  it("draws the RFP Builder's links: its stage skill, the tools the skill links, and its tools", () => {
     const el = open(builtIn('rfp', 'official', true));
     expect(el.querySelector('[data-testid="agent-graph"]')).not.toBeNull();
     expect(el.textContent).not.toContain('This agent has no links');
     const text = el.querySelector('[data-testid="agent-graph"]')!.textContent;
-    expect(text).toContain('rfp-process');
+    expect(text).toContain('rfp-client-renewal');
     expect(text).toContain('list_clients');
     expect(text).toContain('get_rfp');
+    expect(text).toContain(
+      'The instructions link the rfp-client-renewal skill',
+    );
+    expect(text).toContain('The instructions link the get_rfp tool');
+    // The stage skill's body links its tools (api.md 99 `tools`).
+    expect(text).toContain(
+      'The rfp-client-renewal skill links the list_clients tool',
+    );
     // The assistant's skill is not the RFP Builder's.
     expect(text).not.toContain('curated-knowledge');
   });

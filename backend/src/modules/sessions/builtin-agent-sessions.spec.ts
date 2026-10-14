@@ -452,7 +452,7 @@ describe('SessionsService sessions bound to a built-in agent (ADR-0028)', () => 
           toolResult('c2', 'get_rfp', {
             error: '404 not_found: RFP "nope" not found',
           }),
-          toolCall('c3', 'skill', { name: 'rfp-process' }),
+          toolCall('c3', 'skill', { name: 'rfp-package' }),
           toolResult('c3', 'skill', { instructions: '...' }),
           toolCall('c4', 'export_rfp_package', { rfpId: RFP_ID }),
           toolResult('c4', 'export_rfp_package', exported),
