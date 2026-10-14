@@ -12,11 +12,9 @@ import {
 } from '../../infrastructure/crypto/crypto.service';
 import { LlmService, lenaiModelConfig } from './llm.service';
 import { LlmSettingsRepository } from './repositories/llm-settings.repository';
+import type { LlmSettingsDoc } from './llm.types';
 
-function serviceWith(opts?: {
-  settings?: Awaited<ReturnType<LlmSettingsRepository['get']>>;
-  decryptedKey?: string;
-}) {
+function serviceWith(opts?: Parameters<typeof serviceWithMocks>[0]) {
   const { service } = serviceWithMocks(opts);
   return service;
 }
@@ -37,11 +35,11 @@ function serviceWithMocks(opts?: {
   let doc = opts?.settings ?? null;
   const repository = {
     get: jest.fn().mockImplementation(() => Promise.resolve(doc)),
-    save: jest.fn().mockImplementation((patch) => {
+    save: jest.fn().mockImplementation((patch: Omit<LlmSettingsDoc, 'key'>) => {
       doc = { key: 'llm', ...patch };
       return Promise.resolve(doc);
     }),
-    patch: jest.fn().mockImplementation((patch) => {
+    patch: jest.fn().mockImplementation((patch: Partial<LlmSettingsDoc>) => {
       if (!doc) return Promise.resolve(null);
       doc = { ...doc, ...patch };
       return Promise.resolve(doc);
@@ -316,7 +314,7 @@ describe('save() enforces test-before-save', () => {
       ok: false,
       status: 404,
       text: jest.fn().mockResolvedValue('Resource not found'),
-    }) as unknown as typeof fetch;
+    });
     const { service, repository } = serviceWithMocks();
 
     await expect(
@@ -338,7 +336,7 @@ describe('save() enforces test-before-save', () => {
         choices: [{ message: { content: '{"status":"ok"}' } }],
       }),
       text: jest.fn().mockResolvedValue(''),
-    }) as unknown as typeof fetch;
+    });
     const { service, repository } = serviceWithMocks();
 
     const view = await service.save({
@@ -348,7 +346,7 @@ describe('save() enforces test-before-save', () => {
     });
 
     expect(view.configured).toBe(true);
-    expect(repository.save).toHaveBeenCalledTimes(1);
+    expect(jest.spyOn(repository, 'save')).toHaveBeenCalledTimes(1);
   });
 });
 

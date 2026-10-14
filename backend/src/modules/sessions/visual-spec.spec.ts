@@ -600,9 +600,7 @@ describe('validateSpecAgainstData', () => {
     );
 
     expect(problems).toEqual([
-      expect.stringContaining(
-        'chart.sort.by: "denial_rate" is not "x", "y"',
-      ),
+      expect.stringContaining('chart.sort.by: "denial_rate" is not "x", "y"'),
     ]);
   });
 

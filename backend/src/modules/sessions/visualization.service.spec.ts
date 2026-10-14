@@ -90,7 +90,12 @@ const specOutput = {
   spec: {
     spec: 1,
     kpis: [
-      { label: 'Total claims', select: ['month', 'n'], column: 'n', agg: 'sum' },
+      {
+        label: 'Total claims',
+        select: ['month', 'n'],
+        column: 'n',
+        agg: 'sum',
+      },
     ],
     chart: { form: 'line', select: ['month', 'n'], x: 'month', y: 'n' },
     table: { select: ['month', 'n'], columns: ['month', 'n'], collapsed: true },
@@ -131,11 +136,14 @@ function sessionWithRows(stored: number, rowCount: number): SessionDoc {
 function build() {
   const filesystem = {
     // Freeform visuals have no spec.json — a real filesystem throws for it.
-    readFile: jest.fn(async (path: string) => {
-      if (String(path).endsWith('spec.json')) throw new Error('ENOENT');
-      return '# skill';
+    readFile: jest.fn((path: string) => {
+      if (String(path).endsWith('spec.json'))
+        return Promise.reject(new Error('ENOENT'));
+      return Promise.resolve('# skill');
     }),
-    writeFile: jest.fn().mockResolvedValue(undefined),
+    writeFile: jest
+      .fn<Promise<void>, [path: string, data: unknown]>()
+      .mockResolvedValue(undefined),
   };
   const agent = { generate: jest.fn().mockResolvedValue({ object: bundle }) };
   const mastra = {
@@ -458,7 +466,7 @@ describe('VisualizationService.download answer.md reasoning section', () => {
 
     await service.download(withVisual(session), 'visual-1');
 
-    const files = (createZip as jest.Mock).mock.calls[0][0] as {
+    const files = jest.mocked(createZip).mock.calls[0][0] as {
       name: string;
       data: string;
     }[];
@@ -477,7 +485,7 @@ describe('VisualizationService.download answer.md reasoning section', () => {
 
     await service.download(withVisual(sessionWithRows(20, 20)), 'visual-1');
 
-    const files = (createZip as jest.Mock).mock.calls[0][0] as {
+    const files = jest.mocked(createZip).mock.calls[0][0] as {
       name: string;
       data: string;
     }[];
@@ -797,9 +805,13 @@ describe('VisualizationService spec pipeline', () => {
       '<div id="qti-chart-root"></div>',
     );
     expect(files.get('visuals/<id>/v1/styles.css')).toBe('');
-    expect(files.get('visuals/<id>/v1/script.js')).toBe('window.qtiChart.mount();');
+    expect(files.get('visuals/<id>/v1/script.js')).toBe(
+      'window.qtiChart.mount();',
+    );
     expect(files.get('visuals/<id>/v1/qti-chart.js')).toBe('/* runtime */');
-    expect(files.get('visuals/<id>/v1/qti-frame.js')).toBe('/* frame bridge */');
+    expect(files.get('visuals/<id>/v1/qti-frame.js')).toBe(
+      '/* frame bridge */',
+    );
     expect(
       JSON.parse(files.get('visuals/<id>/v1/manifest.json')!) as {
         renderer: string;
@@ -853,7 +865,9 @@ describe('VisualizationService spec pipeline', () => {
     await service.create(sessionWithRows(20, 20), undefined);
 
     expect(agent.generate).toHaveBeenCalledTimes(3);
-    expect(promptAt(agent, 2)).toContain('HTML, CSS, and JavaScript bundle below');
+    expect(promptAt(agent, 2)).toContain(
+      'HTML, CSS, and JavaScript bundle below',
+    );
   });
 
   it('skips the spec attempt entirely when the answer carries no rows', async () => {
@@ -864,7 +878,9 @@ describe('VisualizationService spec pipeline', () => {
     await service.create(session, undefined);
 
     expect(agent.generate).toHaveBeenCalledTimes(1);
-    expect(promptAt(agent, 0)).toContain('HTML, CSS, and JavaScript bundle below');
+    expect(promptAt(agent, 0)).toContain(
+      'HTML, CSS, and JavaScript bundle below',
+    );
   });
 
   describe('tailoring a spec visual', () => {
@@ -872,9 +888,10 @@ describe('VisualizationService spec pipeline', () => {
     function buildWithStoredSpec() {
       const built = build();
       (built.filesystem.readFile as jest.Mock).mockImplementation(
-        async (path: string) => {
-          if (path.endsWith('spec.json')) return JSON.stringify(specOutput.spec);
-          return '# skill';
+        (path: string) => {
+          if (path.endsWith('spec.json'))
+            return Promise.resolve(JSON.stringify(specOutput.spec));
+          return Promise.resolve('# skill');
         },
       );
       return built;
@@ -981,7 +998,7 @@ describe('VisualizationService spec pipeline', () => {
         specOutput.spec,
       );
       expect(
-        (filesystem.writeFile as jest.Mock).mock.calls.some(
+        filesystem.writeFile.mock.calls.some(
           (call) => call[0] === 'visuals/visual-1/v1/index.html',
         ),
       ).toBe(true);
@@ -993,7 +1010,7 @@ describe('VisualizationService spec pipeline', () => {
 
       await service.download(withVisual(sessionWithRows(20, 20)), 'visual-1');
 
-      const files = (createZip as jest.Mock).mock.calls[0][0] as {
+      const files = jest.mocked(createZip).mock.calls[0][0] as {
         name: string;
         data: string;
       }[];
@@ -1179,7 +1196,7 @@ describe('VisualizationService.refreshData', () => {
     expect(metadata.versions).toHaveLength(1);
     expect(metadata.versions?.[0]?.refreshedAt).toEqual(expect.any(String));
 
-    const dataWrite = (filesystem.writeFile as jest.Mock).mock.calls.find(
+    const dataWrite = filesystem.writeFile.mock.calls.find(
       (call) => call[0] === 'visuals/visual-1/v1/data.json',
     );
     expect(dataWrite).toBeDefined();
@@ -1194,7 +1211,7 @@ describe('VisualizationService.refreshData', () => {
       expect.any(String),
     );
     expect(
-      (filesystem.writeFile as jest.Mock).mock.calls.some((call) =>
+      filesystem.writeFile.mock.calls.some((call) =>
         String(call[0]).includes('/v2/'),
       ),
     ).toBe(false);
@@ -1211,7 +1228,7 @@ describe('VisualizationService.refreshData', () => {
     const session = withVisual(sessionWithRows(20, 20));
     await service.refreshData(session, 'visual-1');
 
-    const dataWrite = (filesystem.writeFile as jest.Mock).mock.calls.find(
+    const dataWrite = filesystem.writeFile.mock.calls.find(
       (call) => call[0] === 'visuals/visual-1/v1/data.json',
     );
     const written = JSON.parse(dataWrite![1] as string) as ToolDataRecord[];
@@ -1237,7 +1254,7 @@ describe('VisualizationService.refreshData', () => {
     await service.refreshData(session, 'visual-1');
 
     expect(runReadOnlySql).not.toHaveBeenCalled();
-    const dataWrite = (filesystem.writeFile as jest.Mock).mock.calls.find(
+    const dataWrite = filesystem.writeFile.mock.calls.find(
       (call) => call[0] === 'visuals/visual-1/v1/data.json',
     );
     const written = JSON.parse(dataWrite![1] as string) as ToolDataRecord[];
@@ -1253,15 +1270,14 @@ describe('VisualizationService.refreshData', () => {
       rows: [{ month: 99, n: 999 }],
       rowCount: 1,
     };
-    (filesystem.readFile as jest.Mock).mockImplementation(
-      async (path: string) => {
-        if (path.endsWith('spec.json')) throw new Error('ENOENT');
-        if (path.endsWith('data.json')) {
-          return JSON.stringify([refreshedRecord]);
-        }
-        return '# skill';
-      },
-    );
+    (filesystem.readFile as jest.Mock).mockImplementation((path: string) => {
+      if (path.endsWith('spec.json'))
+        return Promise.reject(new Error('ENOENT'));
+      if (path.endsWith('data.json')) {
+        return Promise.resolve(JSON.stringify([refreshedRecord]));
+      }
+      return Promise.resolve('# skill');
+    });
 
     await service.load(withVisual(sessionWithRows(20, 20)), 'visual-1', 1);
 
@@ -1283,7 +1299,9 @@ describe('VisualizationService turnRecords merge', () => {
     const call = (filesystem.writeFile.mock.calls as unknown[][]).find(
       (c) => c[0] === path,
     );
-    return call ? (JSON.parse(call[1] as string) as ToolDataRecord[]) : undefined;
+    return call
+      ? (JSON.parse(call[1] as string) as ToolDataRecord[])
+      : undefined;
   };
   /** Same as `writtenDataJson`, matching by suffix — `create()` mints a random visual id. */
   const writtenDataJsonBySuffix = (
@@ -1293,13 +1311,15 @@ describe('VisualizationService turnRecords merge', () => {
     const call = (filesystem.writeFile.mock.calls as unknown[][]).find((c) =>
       String(c[0]).endsWith(suffix),
     );
-    return call ? (JSON.parse(call[1] as string) as ToolDataRecord[]) : undefined;
+    return call
+      ? (JSON.parse(call[1] as string) as ToolDataRecord[])
+      : undefined;
   };
   const promptOf = (agent: { generate: jest.Mock }) =>
     (agent.generate.mock.calls as unknown[][])[0][0] as string;
 
   describe('update()', () => {
-    it('merges the turn\'s records onto the current version\'s stored data, deduping by SQL (fresh wins)', async () => {
+    it("merges the turn's records onto the current version's stored data, deduping by SQL (fresh wins)", async () => {
       const { service, agent, filesystem } = build();
       const session = withVisual(sessionWithRows(20, 20));
       const turnRecords: ToolDataRecord[] = [
@@ -1336,7 +1356,10 @@ describe('VisualizationService turnRecords merge', () => {
 
       // The new version's data.json is the deduped merge, not the answer's
       // original rows and not a duplicate of the re-run query.
-      const written = writtenDataJson(filesystem, 'visuals/visual-1/v2/data.json');
+      const written = writtenDataJson(
+        filesystem,
+        'visuals/visual-1/v2/data.json',
+      );
       expect(written).toHaveLength(2);
       const stale = written!.find((r) => r.input === STALE_SQL);
       expect(stale?.rows).toEqual([{ month: 1, n: 111 }]);
@@ -1362,9 +1385,17 @@ describe('VisualizationService turnRecords merge', () => {
         },
       ];
 
-      await service.update(session, 'visual-1', 'retry the stage split', turnRecords);
+      await service.update(
+        session,
+        'visual-1',
+        'retry the stage split',
+        turnRecords,
+      );
 
-      const written = writtenDataJson(filesystem, 'visuals/visual-1/v2/data.json');
+      const written = writtenDataJson(
+        filesystem,
+        'visuals/visual-1/v2/data.json',
+      );
       const matches = written!.filter((r) => r.input === STAGE_SQL);
       expect(matches).toHaveLength(1);
       expect(matches[0].rows).toEqual([{ stage: 'A', n: 2 }]);
@@ -1378,14 +1409,17 @@ describe('VisualizationService turnRecords merge', () => {
 
       const prompt = promptOf(agent);
       expect(prompt).toContain('"n": 19');
-      const written = writtenDataJson(filesystem, 'visuals/visual-1/v2/data.json');
+      const written = writtenDataJson(
+        filesystem,
+        'visuals/visual-1/v2/data.json',
+      );
       expect(written).toHaveLength(1);
       expect(written![0].input).toBe(STALE_SQL);
     });
   });
 
   describe('create()', () => {
-    it('merges turn records onto the source answer\'s data for a brand-new visual', async () => {
+    it("merges turn records onto the source answer's data for a brand-new visual", async () => {
       const { service, agent, filesystem } = build();
       const session = sessionWithRows(20, 20);
       const turnRecords: ToolDataRecord[] = [

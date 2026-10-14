@@ -136,9 +136,9 @@ describe('SessionsService streaming', () => {
     };
     const repository = {
       get: jest.fn().mockResolvedValue(session),
-      update: jest.fn().mockImplementation(async (_id, patch) => {
+      update: jest.fn().mockImplementation((_id, patch) => {
         Object.assign(session, patch);
-        return session;
+        return Promise.resolve(session);
       }),
     };
     const live = options.userAgent?.live;
@@ -284,7 +284,7 @@ describe('SessionsService streaming', () => {
       () => {},
     );
 
-    const options = (agent.generate as jest.Mock).mock.calls.map(
+    const options = agent.generate.mock.calls.map(
       ([, opts]: [unknown, { providerOptions?: unknown }]) =>
         opts?.providerOptions,
     );
@@ -1298,7 +1298,7 @@ describe('SessionsService SQL self-correction', () => {
       expect.objectContaining({
         rows: [{ n: 3 }],
         correctedSql: 'SELECT count(claim_id) AS n FROM main.health.claims',
-        note: expect.stringContaining('auto-corrected'),
+        note: expect.stringContaining('auto-corrected') as string,
       }),
     );
   });
@@ -1341,7 +1341,7 @@ describe('SessionsService SQL self-correction', () => {
 
     await run('SELECT\n  count(claimid) AS n\nFROM main.health.claims');
 
-    const warnings = warn.mock.calls.map((call) => call[0]);
+    const warnings = warn.mock.calls.map((call): unknown => call[0]);
     expect(warnings).toEqual([
       expect.stringContaining(
         // Newlines collapsed so one failure stays one log line.
@@ -1445,9 +1445,9 @@ describe('SessionsService visual tool bridge (turn records)', () => {
     const repository = {
       listAllOwners: jest.fn().mockResolvedValue([]),
       get: jest.fn().mockResolvedValue(session),
-      update: jest.fn().mockImplementation(async (_id, patch) => {
+      update: jest.fn().mockImplementation((_id, patch) => {
         Object.assign(session, patch);
-        return session;
+        return Promise.resolve(session);
       }),
     };
     const meta = (currentVersion: number) => ({
@@ -1556,9 +1556,9 @@ describe('SessionsService answer feedback', () => {
   function build(session: SessionDoc) {
     const repository = {
       get: jest.fn().mockResolvedValue(session),
-      update: jest.fn().mockImplementation(async (_id, patch) => {
+      update: jest.fn().mockImplementation((_id, patch) => {
         Object.assign(session, patch);
-        return session;
+        return Promise.resolve(session);
       }),
     };
     const verifiedQueries = {
@@ -1687,7 +1687,7 @@ describe('SessionsService answer feedback', () => {
 });
 
 /** SQL runs followed by a written answer — the ordinary completed turn. */
-async function* answerStream(
+function* answerChunks(
   runs: {
     sql: string;
     rows?: Record<string, unknown>[];
@@ -1730,7 +1730,7 @@ async function* answerStream(
 }
 
 /** One SQL run, then the model asks for a clarification and the turn ends. */
-async function* clarificationStream() {
+function* clarificationChunks() {
   yield {
     type: 'tool-call',
     payload: {
@@ -1763,7 +1763,7 @@ async function* clarificationStream() {
   };
 }
 
-async function* toolOnlyStream(count: number) {
+function* toolOnlyChunks(count: number) {
   for (let index = 0; index < count; index++) {
     const toolCallId = `call-${index}`;
     yield {
@@ -1785,10 +1785,32 @@ async function* toolOnlyStream(count: number) {
   }
 }
 
-/** A stream that fails outright — a provider error, a dead connection. */
-// eslint-disable-next-line @typescript-eslint/require-yield
-async function* failingStream(error: unknown) {
-  throw error;
+/**
+ * Hands chunks out one at a time through an async iterator, the way a model's
+ * `fullStream` delivers them.
+ */
+async function* streamOf<T>(chunks: Iterable<T>): AsyncGenerator<T> {
+  for (const chunk of chunks) yield Promise.resolve(chunk);
+}
+
+function answerStream(...args: Parameters<typeof answerChunks>) {
+  return streamOf(answerChunks(...args));
+}
+
+function clarificationStream() {
+  return streamOf(clarificationChunks());
+}
+
+function toolOnlyStream(count: number) {
+  return streamOf(toolOnlyChunks(count));
+}
+
+/**
+ * A stream that fails outright — a provider error, a dead connection: the
+ * first read rejects.
+ */
+async function* failingStream(error: Error): AsyncGenerator<never> {
+  yield await Promise.reject(error);
 }
 
 describe('SessionsService visual tailoring and repair', () => {
@@ -1819,9 +1841,9 @@ describe('SessionsService visual tailoring and repair', () => {
     };
     const repository = {
       get: jest.fn().mockResolvedValue(session),
-      update: jest.fn().mockImplementation(async (_id, patch) => {
+      update: jest.fn().mockImplementation((_id, patch) => {
         Object.assign(session, patch);
-        return session;
+        return Promise.resolve(session);
       }),
     };
     const visuals = {
@@ -1837,18 +1859,18 @@ describe('SessionsService visual tailoring and repair', () => {
         ),
       update: jest
         .fn()
-        .mockImplementation(async () => ({ metadata: visual(2) })),
+        .mockImplementation(() => Promise.resolve({ metadata: visual(2) })),
       repair: jest
         .fn()
-        .mockImplementation(async () => ({ metadata: visual(2) })),
-      load: jest
-        .fn()
-        .mockImplementation(async (_doc, id: string, version: number) => ({
+        .mockImplementation(() => Promise.resolve({ metadata: visual(2) })),
+      load: jest.fn().mockImplementation((_doc, id: string, version: number) =>
+        Promise.resolve({
           ...visual(version),
           id,
           version,
           document: '<html></html>',
-        })),
+        }),
+      ),
     };
     const service = new SessionsService(
       repository as never,

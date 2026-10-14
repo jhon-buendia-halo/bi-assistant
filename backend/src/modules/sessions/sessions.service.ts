@@ -1325,7 +1325,9 @@ export class SessionsService implements OnModuleInit {
             // does not keep analysing (and spending) behind the card.
             const args = payload.args ?? {};
             clarification = {
-              question: String(args['question'] ?? 'Can you clarify?'),
+              question: String(
+                (args['question'] as string | undefined) ?? 'Can you clarify?',
+              ),
               options: Array.isArray(args['options'])
                 ? (args['options'] as { label: string; description?: string }[])
                 : [],

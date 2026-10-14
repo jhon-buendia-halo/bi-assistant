@@ -83,7 +83,7 @@ export const updateVisualTool = createTool({
     visualId: z.string().optional().describe('Visual to change'),
     instruction: z
       .string()
-      .describe('What to change, in the user\'s words plus any needed detail'),
+      .describe("What to change, in the user's words plus any needed detail"),
   }),
   execute: async ({ visualId, instruction }, { requestContext }) => {
     const sessionId = contextString(requestContext, SESSION_ID_CONTEXT_KEY);

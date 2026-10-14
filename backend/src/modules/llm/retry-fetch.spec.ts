@@ -10,7 +10,9 @@ describe('createRetryFetch', () => {
       .fn()
       .mockResolvedValueOnce(response(429, { 'Retry-After': '2' }))
       .mockResolvedValueOnce(response(200));
-    const sleep = jest.fn().mockResolvedValue(undefined);
+    const sleep = jest
+      .fn<Promise<void>, [number]>()
+      .mockResolvedValue(undefined);
 
     const fetch = createRetryFetch(base, { sleep });
     const res = await fetch('https://example.test/chat/completions');
@@ -27,7 +29,9 @@ describe('createRetryFetch', () => {
       .mockResolvedValueOnce(response(429))
       .mockResolvedValueOnce(response(429))
       .mockResolvedValueOnce(response(200));
-    const sleep = jest.fn().mockResolvedValue(undefined);
+    const sleep = jest
+      .fn<Promise<void>, [number]>()
+      .mockResolvedValue(undefined);
 
     const fetch = createRetryFetch(base, { sleep });
     const res = await fetch('https://example.test/chat/completions');
@@ -37,11 +41,10 @@ describe('createRetryFetch', () => {
   });
 
   it('gives up after 3 retries (4 attempts total) on sustained 429s', async () => {
-    const base = jest
-      .fn()
-      .mockResolvedValue(response(429))
-      .mockName('base');
-    const sleep = jest.fn().mockResolvedValue(undefined);
+    const base = jest.fn().mockResolvedValue(response(429)).mockName('base');
+    const sleep = jest
+      .fn<Promise<void>, [number]>()
+      .mockResolvedValue(undefined);
 
     const fetch = createRetryFetch(base, { sleep });
     const res = await fetch('https://example.test/chat/completions');
@@ -56,7 +59,9 @@ describe('createRetryFetch', () => {
       .fn()
       .mockResolvedValueOnce(response(503))
       .mockResolvedValueOnce(response(200));
-    const sleep = jest.fn().mockResolvedValue(undefined);
+    const sleep = jest
+      .fn<Promise<void>, [number]>()
+      .mockResolvedValue(undefined);
 
     const fetch = createRetryFetch(base, { sleep });
     const res = await fetch('https://example.test/chat/completions');
@@ -67,7 +72,9 @@ describe('createRetryFetch', () => {
 
   it('passes a 404 straight through with no retry', async () => {
     const base = jest.fn().mockResolvedValue(response(404));
-    const sleep = jest.fn().mockResolvedValue(undefined);
+    const sleep = jest
+      .fn<Promise<void>, [number]>()
+      .mockResolvedValue(undefined);
 
     const fetch = createRetryFetch(base, { sleep });
     const res = await fetch('https://example.test/chat/completions');
@@ -97,7 +104,7 @@ describe('installRetryFetch', () => {
 
   it('wraps globalThis.fetch once and is a no-op on a second install', () => {
     const base = jest.fn();
-    globalThis.fetch = base as unknown as typeof fetch;
+    globalThis.fetch = base;
 
     installRetryFetch();
     const wrapped = globalThis.fetch;

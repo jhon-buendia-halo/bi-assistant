@@ -263,8 +263,8 @@ export class AgentsService {
       memory: describeMemory(memory),
       model: model
         ? {
-            id: String((model as { modelId?: unknown }).modelId ?? ''),
-            provider: String((model as { provider?: unknown }).provider ?? ''),
+            id: String((model as { modelId?: string }).modelId ?? ''),
+            provider: String((model as { provider?: string }).provider ?? ''),
           }
         : null,
     };
@@ -370,7 +370,7 @@ function describeTools(tools: unknown): AgentToolDetail[] {
     .map(([name, tool]) => ({
       name,
       description: String(
-        (tool as { description?: unknown })?.description ?? '',
+        (tool as { description?: string })?.description ?? '',
       ),
       inputs: schemaKeys((tool as { inputSchema?: unknown })?.inputSchema),
     }))
@@ -407,7 +407,7 @@ function describeMemory(memory: unknown): AgentMemoryDetail | null {
     storage: storageName || null,
     lastMessages:
       typeof config.lastMessages === 'number' || config.lastMessages === false
-        ? (config.lastMessages as number | false)
+        ? config.lastMessages
         : null,
     semanticRecall: Boolean(config.semanticRecall),
     workingMemory: Boolean(

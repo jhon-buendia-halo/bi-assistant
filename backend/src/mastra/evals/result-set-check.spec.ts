@@ -18,7 +18,7 @@ function stubServices(
     sampleRows: jest.fn(),
     runReadOnlySql: jest.fn(),
     ...overrides,
-  } as unknown as DatasetToolServices;
+  };
 }
 
 const snapshot: DatasetSnapshot[] = [

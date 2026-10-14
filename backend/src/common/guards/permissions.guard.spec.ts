@@ -2,6 +2,7 @@ import { Controller, Get, INestApplication, Post } from '@nestjs/common';
 import { APP_GUARD, DiscoveryModule } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
+import type { App } from 'supertest/types';
 import {
   LocalModeOnly,
   OrgServerOnly,
@@ -107,7 +108,7 @@ async function appWith(
   controllers: Array<new (...args: never[]) => unknown>,
   currentUser: FakeCurrentUser,
   activity = { recordScimRequest: jest.fn(() => Promise.resolve()) },
-): Promise<INestApplication> {
+): Promise<INestApplication<App>> {
   const moduleRef = await Test.createTestingModule({
     imports: [DiscoveryModule],
     controllers,
@@ -121,14 +122,16 @@ async function appWith(
       { provide: APP_GUARD, useClass: PermissionsGuard },
     ],
   }).compile();
-  const app = moduleRef.createNestApplication({ logger: false });
+  const app = moduleRef.createNestApplication<INestApplication<App>>({
+    logger: false,
+  });
   await app.init();
   return app;
 }
 
 describe('PermissionsGuard', () => {
   const currentUser = new FakeCurrentUser();
-  let app: INestApplication;
+  let app: INestApplication<App>;
 
   beforeAll(async () => {
     app = await appWith([ThingsController, AdminThingsController], currentUser);
@@ -197,14 +200,16 @@ describe('PermissionsGuard', () => {
 
   it('opens local-mode-only routes in local mode, without a user', async () => {
     currentUser.user = undefined;
-    await request(app.getHttpServer()).post('/things/local-sign-in').expect(201);
+    await request(app.getHttpServer())
+      .post('/things/local-sign-in')
+      .expect(201);
   });
 });
 
 describe('PermissionsGuard in org server mode', () => {
   const currentUser = new FakeCurrentUser('org');
   const activity = { recordScimRequest: jest.fn(() => Promise.resolve()) };
-  let app: INestApplication;
+  let app: INestApplication<App>;
 
   beforeAll(async () => {
     app = await appWith([ThingsController], currentUser, activity);

@@ -679,10 +679,16 @@ export interface AssistantEvalCaseResult {
 /** Tool payloads can be whole result sets; keep the trace readable. */
 const MAX_TRACE_FIELD = 2000;
 
+/** Anything `String()` can render: every non-nullish value. */
+type Stringable = { toString(): string };
+
 function encode(value: unknown): string | undefined {
   if (value === undefined || value === null) return undefined;
+  const stringable: Stringable = value;
   const text =
-    typeof value === 'string' ? value : (safeStringify(value) ?? String(value));
+    typeof value === 'string'
+      ? value
+      : (safeStringify(value) ?? String(stringable));
   return text.length > MAX_TRACE_FIELD
     ? `${text.slice(0, MAX_TRACE_FIELD)}… (truncated)`
     : text;
@@ -708,40 +714,62 @@ function safeStringify(value: unknown): string | undefined {
  * "unknown". Both shapes are still accepted, in case a future upgrade
  * flattens the chunk again.
  */
-function extractToolCalls(targetResult: any): EvalToolCall[] {
-  const steps: any[] = Array.isArray(targetResult?.steps)
-    ? targetResult.steps
+function extractToolCalls(targetResult: unknown): EvalToolCall[] {
+  const resultSteps = field(targetResult, 'steps');
+  const steps: unknown[] = Array.isArray(resultSteps)
+    ? (resultSteps as unknown[])
     : [targetResult];
 
   const calls: EvalToolCall[] = [];
   for (const step of steps) {
     if (!step) continue;
-    const stepCalls: any[] = Array.isArray(step.toolCalls)
-      ? step.toolCalls
-      : [];
-    const stepResults: any[] = Array.isArray(step.toolResults)
-      ? step.toolResults
-      : [];
+    const stepCalls = arrayField(step, 'toolCalls');
+    const stepResults = arrayField(step, 'toolResults');
 
     for (const call of stepCalls) {
-      const callPayload = call?.payload ?? call;
+      const callPayload = field(call, 'payload') ?? call;
       const match = stepResults.find((result) => {
-        const resultPayload = result?.payload ?? result;
-        return resultPayload?.toolCallId === callPayload?.toolCallId;
+        const resultPayload = field(result, 'payload') ?? result;
+        return (
+          field(resultPayload, 'toolCallId') ===
+          field(callPayload, 'toolCallId')
+        );
       });
-      const matchPayload = match?.payload ?? match;
-      const output = matchPayload?.output ?? matchPayload?.result;
+      const matchPayload = field(match, 'payload') ?? match;
+      const output =
+        field(matchPayload, 'output') ?? field(matchPayload, 'result');
+      const name: Stringable =
+        field(callPayload, 'toolName') ??
+        field(callPayload, 'name') ??
+        'unknown';
       calls.push({
-        name: String(callPayload?.toolName ?? callPayload?.name ?? 'unknown'),
-        input: encode(callPayload?.input ?? callPayload?.args),
-        output: matchPayload?.isError ? undefined : encode(output),
-        error: matchPayload?.isError
+        name: String(name),
+        input: encode(
+          field(callPayload, 'input') ?? field(callPayload, 'args'),
+        ),
+        output: field(matchPayload, 'isError') ? undefined : encode(output),
+        error: field(matchPayload, 'isError')
           ? (encode(output) ?? 'Tool call failed')
           : undefined,
       });
     }
   }
   return calls;
+}
+
+/**
+ * `value?.[key]` for a value of unknown shape: undefined when the value is
+ * nullish, the property (own or inherited) otherwise.
+ */
+function field(value: unknown, key: string): unknown {
+  if (value === null || value === undefined) return undefined;
+  return (value as Record<string, unknown>)[key];
+}
+
+/** `value?.[key]` when it is an array, else an empty list. */
+function arrayField(value: unknown, key: string): unknown[] {
+  const entry = field(value, key);
+  return Array.isArray(entry) ? (entry as unknown[]) : [];
 }
 
 /** A one-line preview of the answer, for reasons that hinge on the output. */
@@ -759,42 +787,51 @@ function outputHint(output: unknown): string {
  * into a sentence. Unknown shapes fall back to the raw payload so a new check
  * still explains itself, just less prettily.
  */
-function checkReason(payload: any): string | undefined {
-  const detail = payload?.preprocessStepResult;
+function checkReason(payload: unknown): string | undefined {
+  const detail = field(payload, 'preprocessStepResult');
   if (detail && typeof detail === 'object') {
+    const at = (key: string): unknown => field(detail, key);
     if ('target' in detail && 'found' in detail) {
-      return `expected ${JSON.stringify(detail.target)} in the answer — ${outputHint(detail.output)}`;
+      return `expected ${JSON.stringify(at('target'))} in the answer — ${outputHint(at('output'))}`;
     }
     if ('target' in detail && 'excluded' in detail) {
-      return `expected ${JSON.stringify(detail.target)} NOT to appear — ${outputHint(detail.output)}`;
+      return `expected ${JSON.stringify(at('target'))} NOT to appear — ${outputHint(at('output'))}`;
     }
     if ('pattern' in detail && 'matched' in detail) {
-      return `expected the answer to match ${detail.pattern} — ${outputHint(detail.output)}`;
+      return `expected the answer to match ${templateText(at('pattern'))} — ${outputHint(at('output'))}`;
     }
     if ('toolName' in detail && 'actualCount' in detail) {
-      const expected = detail.expectedTimes ?? 1;
-      return `expected "${detail.toolName}" to be called ${expected}×, it was called ${detail.actualCount}×`;
+      const expected = at('expectedTimes') ?? 1;
+      return `expected "${templateText(at('toolName'))}" to be called ${templateText(expected)}×, it was called ${templateText(at('actualCount'))}×`;
     }
     if ('toolName' in detail && 'called' in detail) {
-      return `expected "${detail.toolName}" NOT to be called, it was`;
+      return `expected "${templateText(at('toolName'))}" NOT to be called, it was`;
     }
     if ('expectedOrder' in detail) {
-      const actual = Array.isArray(detail.actualOrder)
-        ? detail.actualOrder.join(' → ')
+      const actualOrder = at('actualOrder');
+      const expectedOrder = at('expectedOrder');
+      const actual = Array.isArray(actualOrder)
+        ? actualOrder.join(' → ')
         : 'nothing';
-      const expected = Array.isArray(detail.expectedOrder)
-        ? detail.expectedOrder.join(' → ')
-        : String(detail.expectedOrder);
+      const expected = Array.isArray(expectedOrder)
+        ? expectedOrder.join(' → ')
+        : String(expectedOrder);
       return `expected the tool order ${expected}, got ${actual || 'nothing'}`;
     }
     if ('errors' in detail || 'toolErrors' in detail) {
-      const errors = detail.errors ?? detail.toolErrors;
+      const errors = at('errors') ?? at('toolErrors');
       return `a tool call failed: ${encode(errors) ?? 'unknown error'}`;
     }
     const encoded = encode(detail);
     if (encoded) return encoded;
   }
-  return typeof payload?.reason === 'string' ? payload.reason : undefined;
+  const reason = field(payload, 'reason');
+  return typeof reason === 'string' ? reason : undefined;
+}
+
+/** What a template literal renders for a scorer field of unknown type. */
+function templateText(value: unknown): string {
+  return String(value);
 }
 
 /**
@@ -867,12 +904,12 @@ function evalRequestContext(
  * earlier steps already captured, the same way production threads a live
  * records array through requestContext during `streamMessage`.
  */
-function captureStepRecords(step: any, turnRecords: ToolDataRecord[]): void {
-  const results: any[] = Array.isArray(step?.toolResults)
-    ? step.toolResults
-    : [];
-  for (const entry of results) {
-    const payload = (entry?.payload ?? entry) as {
+function captureStepRecords(
+  step: unknown,
+  turnRecords: ToolDataRecord[],
+): void {
+  for (const entry of arrayField(step, 'toolResults')) {
+    const payload = (field(entry, 'payload') ?? entry) as {
       toolName?: string;
       args?: Record<string, unknown>;
       result?: unknown;

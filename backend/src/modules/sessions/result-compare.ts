@@ -31,7 +31,9 @@ export function normalizeValue(value: unknown): string {
   if (typeof value === 'bigint') return normalizeNumber(Number(value));
   if (typeof value === 'number') return normalizeNumber(value);
   if (typeof value === 'object') return JSON.stringify(value);
-  const text = String(value).trim().replace(/\s+/g, ' ');
+  // Only strings, symbols and functions are left.
+  const rest = value as string | symbol | ((...args: unknown[]) => unknown);
+  const text = String(rest).trim().replace(/\s+/g, ' ');
   if (text && NUMERIC.test(text)) return normalizeNumber(Number(text));
   return text.toLowerCase();
 }
@@ -93,7 +95,9 @@ function containsAllRows(
   const unused = wide.map(rowValues);
   for (const row of narrow) {
     const values = rowValues(row);
-    const index = unused.findIndex((candidate) => rowContains(candidate, values));
+    const index = unused.findIndex((candidate) =>
+      rowContains(candidate, values),
+    );
     if (index === -1) return false;
     unused.splice(index, 1);
   }

@@ -35,5 +35,5 @@ export const askClarificationTool = createTool({
       .min(2)
       .max(4),
   }),
-  execute: async () => ({ delivered: true }),
+  execute: () => Promise.resolve({ delivered: true }),
 });

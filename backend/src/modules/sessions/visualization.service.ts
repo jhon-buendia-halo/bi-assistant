@@ -546,7 +546,7 @@ export class VisualizationService {
     );
     const filesystem = workspace.filesystem;
     if (!filesystem) throw new Error('session workspace has no filesystem');
-    return { workspace, filesystem: filesystem as WorkspaceFilesystem };
+    return { workspace, filesystem };
   }
 
   /**
@@ -821,7 +821,8 @@ export class VisualizationService {
       () => abortController.abort(),
       GENERATION_TIMEOUT_MS,
     );
-    let result;
+    // The fields of Mastra's `FullOutput` this method reads.
+    let result: { object: unknown; text: string; error: Error | undefined };
     try {
       result = await agent.generate(prompt, {
         maxSteps: 1,
@@ -881,7 +882,9 @@ export class VisualizationService {
       const issues = parsed.error.issues
         .map((i) => `${i.path.join('.') || 'root'}: ${i.message}`)
         .join('; ');
-      this.logger.warn(`Visualization ${mode} output validation failed: ${issues}`);
+      this.logger.warn(
+        `Visualization ${mode} output validation failed: ${issues}`,
+      );
       throw new Error(
         mode === 'spec'
           ? `visualization agent returned an invalid spec (${issues})`
@@ -939,7 +942,8 @@ export class VisualizationService {
       ...(reasoning.length ? { reasoning } : {}),
       sessionName: session.name,
       version,
-      generatedAt: generatedAt ?? entry?.refreshedAt ?? entry?.createdAt ?? meta.createdAt,
+      generatedAt:
+        generatedAt ?? entry?.refreshedAt ?? entry?.createdAt ?? meta.createdAt,
       ...(block?.truncatedFrom
         ? {
             chartRows: {
@@ -1051,7 +1055,8 @@ export class VisualizationService {
             ...(truncated ? { truncated: true } : {}),
           };
         } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
+          const message =
+            error instanceof Error ? error.message : String(error);
           this.logger.warn(`Refresh failed for a query: ${message}`);
           return {
             tool: record.tool,
@@ -1083,12 +1088,20 @@ export class VisualizationService {
       version,
       generatedAt,
       ...(block?.truncatedFrom
-        ? { chartRows: { shown: block.shown, truncatedFrom: block.truncatedFrom } }
+        ? {
+            chartRows: {
+              shown: block.shown,
+              truncatedFrom: block.truncatedFrom,
+            },
+          }
         : {}),
     };
 
     await Promise.all([
-      filesystem.writeFile(`${dir}/data.json`, JSON.stringify(refreshed, null, 2)),
+      filesystem.writeFile(
+        `${dir}/data.json`,
+        JSON.stringify(refreshed, null, 2),
+      ),
       filesystem.writeFile(
         `${dir}/index.html`,
         storedVisualizationDocument(bundle, context),
@@ -1127,7 +1140,12 @@ export class VisualizationService {
         storedVisualizationDocument(bundle, context),
       ),
       ...(context.answer
-        ? [filesystem.writeFile(`${dir}/answer.md`, answerMarkdown(bundle, context))]
+        ? [
+            filesystem.writeFile(
+              `${dir}/answer.md`,
+              answerMarkdown(bundle, context),
+            ),
+          ]
         : []),
       ...(context.data?.length
         ? [
@@ -1142,7 +1160,10 @@ export class VisualizationService {
       // index.html inlines the frame bridge (window.qti.select +
       // data-qti-value delegation); the file is kept beside it as the source
       // a reader can edit.
-      filesystem.writeFile(`${dir}/${FRAME_SCRIPT_FILENAME}`, FRAME_SELECT_SCRIPT),
+      filesystem.writeFile(
+        `${dir}/${FRAME_SCRIPT_FILENAME}`,
+        FRAME_SELECT_SCRIPT,
+      ),
       filesystem.writeFile(`${dir}/styles.css`, bundle.css),
       filesystem.writeFile(`${dir}/script.js`, bundle.javascript),
       // Spec visuals: the spec is the source of truth (everything else above
@@ -1243,9 +1264,13 @@ export class VisualizationService {
     try {
       const parsed = visualSpecSchema.safeParse(JSON.parse(raw));
       if (parsed.success) return parsed.data;
-      this.logger.warn(`Stored spec at ${dir} is invalid; rendering the stored files`);
+      this.logger.warn(
+        `Stored spec at ${dir} is invalid; rendering the stored files`,
+      );
     } catch {
-      this.logger.warn(`Stored spec at ${dir} is not JSON; rendering the stored files`);
+      this.logger.warn(
+        `Stored spec at ${dir} is not JSON; rendering the stored files`,
+      );
     }
     return undefined;
   }
@@ -1319,6 +1344,7 @@ export function isSchemaEnvelopeError(message: string): boolean {
 /** Compile-only check: `new Function` parses without executing. */
 export function validateJavascript(javascript: string): string | null {
   try {
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval -- compile-only syntax check: the function is built, never called
     new Function(javascript);
     return null;
   } catch (error) {
@@ -1423,7 +1449,9 @@ function answerMarkdown(
         : step.rowCount !== undefined
           ? `${step.rowCount.toLocaleString('en-US')} row${step.rowCount === 1 ? '' : 's'}`
           : undefined;
-      lines.push(`${step.step}. ${step.rationale}${outcome ? ` (${outcome})` : ''}`);
+      lines.push(
+        `${step.step}. ${step.rationale}${outcome ? ` (${outcome})` : ''}`,
+      );
     });
     lines.push('');
   }

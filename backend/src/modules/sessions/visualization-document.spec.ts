@@ -17,13 +17,11 @@ jest.mock('./visual-runtime', () => ({
 import {
   BLANK_RENDER_MESSAGE,
   scopedStyle,
-  FRAME_SCRIPT_FILENAME,
   FRAME_SELECT_SCRIPT,
   sandboxedVisualizationDocument,
   storedVisualizationDocument,
   VisualContext,
 } from './visualization-document';
-import { VISUAL_RUNTIME_FILENAME } from './visual-runtime';
 import type { VisualSpec } from './visual-spec';
 import type { ReasoningStep } from './entities/session.entity';
 
@@ -137,7 +135,9 @@ describe('injected qti-data block', () => {
       chartData,
     });
 
-    expect(document).toContain('<script type="application/json" id="qti-data">');
+    expect(document).toContain(
+      '<script type="application/json" id="qti-data">',
+    );
     expect(document.indexOf('id="qti-data"')).toBeLessThan(
       document.indexOf(FRAME_SELECT_SCRIPT),
     );
@@ -147,7 +147,9 @@ describe('injected qti-data block', () => {
   it('defaults to an empty array when no chart data is supplied', () => {
     const document = sandboxedVisualizationDocument(bundle);
 
-    expect(document).toContain('<script type="application/json" id="qti-data">[]</script>');
+    expect(document).toContain(
+      '<script type="application/json" id="qti-data">[]</script>',
+    );
   });
 
   it('escapes a closing script tag inside the data so the document stays intact', () => {
@@ -165,7 +167,9 @@ describe('injected qti-data block', () => {
   it('is also embedded ahead of the scripts in the stored document', () => {
     const document = storedVisualizationDocument(bundle, { chartData });
 
-    expect(document).toContain('<script type="application/json" id="qti-data">');
+    expect(document).toContain(
+      '<script type="application/json" id="qti-data">',
+    );
     expect(document).toContain(JSON.stringify(chartData));
     expect(document.indexOf('id="qti-data"')).toBeLessThan(
       document.indexOf(FRAME_SELECT_SCRIPT),
@@ -244,8 +248,12 @@ describe('spec-rendered documents', () => {
   });
 
   it('ships no spec block or runtime for a freeform visual', () => {
-    expect(sandboxedVisualizationDocument(bundle)).not.toContain('id="qti-spec"');
-    expect(sandboxedVisualizationDocument(bundle)).not.toContain('/* runtime */');
+    expect(sandboxedVisualizationDocument(bundle)).not.toContain(
+      'id="qti-spec"',
+    );
+    expect(sandboxedVisualizationDocument(bundle)).not.toContain(
+      '/* runtime */',
+    );
     expect(storedVisualizationDocument(bundle)).not.toContain('id="qti-spec"');
     expect(storedVisualizationDocument(bundle)).not.toContain('/* runtime */');
   });
@@ -255,7 +263,9 @@ describe('frame bridge data + refresh API', () => {
   it('exposes window.qti.data, onRefresh, and a qti-data message listener', () => {
     expect(FRAME_SELECT_SCRIPT).toContain("getElementById('qti-data')");
     expect(FRAME_SELECT_SCRIPT).toContain('window.qti.data = initialData;');
-    expect(FRAME_SELECT_SCRIPT).toContain('window.qti.onRefresh = function (cb)');
+    expect(FRAME_SELECT_SCRIPT).toContain(
+      'window.qti.onRefresh = function (cb)',
+    );
     expect(FRAME_SELECT_SCRIPT).toContain("message.type === 'qti-data'");
     expect(FRAME_SELECT_SCRIPT).toContain('pristineData = message.data;');
   });
@@ -268,13 +278,15 @@ describe('frame bridge dashboard filtering', () => {
     expect(FRAME_SELECT_SCRIPT).toContain('activeFilters = message.filters;');
     expect(FRAME_SELECT_SCRIPT).toContain('var pristineData = initialData;');
     expect(FRAME_SELECT_SCRIPT).toContain('var applyFilters = function ()');
-    expect(FRAME_SELECT_SCRIPT).toContain('if (!activeFilters.length) return pristineData;');
+    expect(FRAME_SELECT_SCRIPT).toContain(
+      'if (!activeFilters.length) return pristineData;',
+    );
   });
 
   it('ANDs multiple filters and skips records that lack the filtered column', () => {
     expect(FRAME_SELECT_SCRIPT).toContain('recordHasColumn(record, f.column)');
     expect(FRAME_SELECT_SCRIPT).toContain(
-      "(f.values || []).indexOf(String(row[f.column])) !== -1",
+      '(f.values || []).indexOf(String(row[f.column])) !== -1',
     );
     expect(FRAME_SELECT_SCRIPT).toContain('applicable.every(function (f)');
   });
@@ -282,13 +294,15 @@ describe('frame bridge dashboard filtering', () => {
   it('re-applies filters on top of a fresh qti-data refresh', () => {
     // pristineData is reassigned from the refresh, then filters recompute
     // window.qti.data — a refresh never bypasses an active filter.
-    expect(FRAME_SELECT_SCRIPT.indexOf('pristineData = message.data;')).toBeGreaterThan(
+    expect(
+      FRAME_SELECT_SCRIPT.indexOf('pristineData = message.data;'),
+    ).toBeGreaterThan(
       FRAME_SELECT_SCRIPT.indexOf("message.type === 'qti-data'"),
     );
     expect(FRAME_SELECT_SCRIPT).toContain('setData(applyFilters());');
   });
 
-  it('includes the mark\'s data-qti-column in the visual-select payload', () => {
+  it("includes the mark's data-qti-column in the visual-select payload", () => {
     expect(FRAME_SELECT_SCRIPT).toContain("getAttribute('data-qti-column')");
     expect(FRAME_SELECT_SCRIPT).toContain(
       'column: column === null || column === undefined ? undefined : String(column)',

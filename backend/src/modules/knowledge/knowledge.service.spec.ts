@@ -343,8 +343,8 @@ describe('KnowledgeService.definitionBlock', () => {
 
     const block = await service.definitionBlock(['World Cup']);
 
-    expect(block!.indexOf('Scoped rule')).toBeLessThan(
-      block!.indexOf('Global rule'),
+    expect(block.indexOf('Scoped rule')).toBeLessThan(
+      block.indexOf('Global rule'),
     );
   });
 
@@ -380,7 +380,7 @@ describe('KnowledgeService.definitionBlock', () => {
 
     const block = await service.definitionBlock([]);
 
-    expect(block!.length).toBeLessThanOrEqual(2_200);
+    expect(block.length).toBeLessThanOrEqual(2_200);
     expect(block).toContain('Term 0');
   });
 });

@@ -15,8 +15,7 @@ import { visualSpecSchema } from '../../modules/sessions/visual-spec';
  * everything else is kept.
  */
 const VISUAL_MODEL_OVERRIDE = process.env.VISUAL_MODEL as
-  | `${string}/${string}`
-  | undefined;
+  `${string}/${string}` | undefined;
 const REASONING_FAMILY = /^openai\/(gpt-5|o\d)/;
 const VISUAL_FALLBACK = 'openai/gpt-4.1-mini' as const;
 /** `nano` as a delimited token, so a deployment named `…nanotech…` is kept. */
@@ -49,7 +48,8 @@ export async function resolveVisualizationModel() {
     if (REASONING_FAMILY.test(configured)) return VISUAL_FALLBACK;
     return miniSibling(configured) ?? configured;
   }
-  if (VISUAL_MODEL_OVERRIDE) return { ...configured, id: VISUAL_MODEL_OVERRIDE };
+  if (VISUAL_MODEL_OVERRIDE)
+    return { ...configured, id: VISUAL_MODEL_OVERRIDE };
   if (REASONING_FAMILY.test(configured.id) && !configured.url) {
     return { ...configured, id: VISUAL_FALLBACK };
   }

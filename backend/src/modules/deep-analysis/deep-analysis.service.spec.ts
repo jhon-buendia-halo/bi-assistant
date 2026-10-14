@@ -55,7 +55,10 @@ const asDemoUser =
 
 /** A service wired to one job, with the agent and the workspace stubbed. */
 function build(responses: unknown[], options: { plannerFails?: boolean } = {}) {
-  const generate = jest.fn();
+  const generate = jest.fn<
+    Promise<unknown>,
+    [unknown, Record<string, unknown>?]
+  >();
   for (const response of responses) {
     generate.mockResolvedValueOnce(response);
   }
@@ -78,9 +81,9 @@ function build(responses: unknown[], options: { plannerFails?: boolean } = {}) {
       .mockResolvedValue({ maxSteps: 15, context: [], requestContext: {} }),
     appendAssistantMessage: jest
       .fn()
-      .mockImplementation(async (_id: string, message: never) => {
+      .mockImplementation((_id: string, message: never) => {
         appended.push(message);
-        return SESSION;
+        return Promise.resolve(SESSION);
       }),
   };
   const service = new DeepAnalysisService(

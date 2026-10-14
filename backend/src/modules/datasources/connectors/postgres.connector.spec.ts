@@ -97,7 +97,10 @@ describe('PostgresConnector foreignKeys', () => {
     expect(params).toEqual([['world_cup', 'staging']]);
     expect(edges).toEqual([
       {
-        from: { entity: 'world_cup.world_cup.goals', column: 'scoring_team_id' },
+        from: {
+          entity: 'world_cup.world_cup.goals',
+          column: 'scoring_team_id',
+        },
         to: { entity: 'world_cup.world_cup.teams', column: 'id' },
       },
     ]);
@@ -180,14 +183,11 @@ describe('PostgresConnector error reporting', () => {
   it("appends Postgres' own HINT and DETAIL so the repair loop sees them", async () => {
     respond = (sql) => {
       if (!sql.startsWith('SELECT')) return [];
-      const err = Object.assign(
-        new Error('column "team_id" does not exist'),
-        {
-          code: '42703',
-          detail: 'referenced in the query',
-          hint: 'Perhaps you meant to reference the column "g.scoring_team_id".',
-        },
-      );
+      const err = Object.assign(new Error('column "team_id" does not exist'), {
+        code: '42703',
+        detail: 'referenced in the query',
+        hint: 'Perhaps you meant to reference the column "g.scoring_team_id".',
+      });
       throw err;
     };
 
@@ -211,8 +211,6 @@ describe('PostgresConnector error reporting', () => {
     await expect(
       new PostgresConnector().runReadOnlySql(config, 'SELECT FROM', 10),
       // Exact message: nothing is appended when there is no hint or detail.
-    ).rejects.toThrow(
-      new Error('Postgres — syntax error at or near "FROM"'),
-    );
+    ).rejects.toThrow(new Error('Postgres — syntax error at or near "FROM"'));
   });
 });
