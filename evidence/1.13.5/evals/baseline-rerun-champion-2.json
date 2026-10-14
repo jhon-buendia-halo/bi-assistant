@@ -1,0 +1,48 @@
+[
+  {
+    "id": "champion-2022",
+    "question": "Who won the 2022 World Cup?",
+    "scores": {
+      "check-includes": 1,
+      "check-called-tool": 1,
+      "check-no-tool-errors": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-includes",
+        "description": "Checks if output includes \"Argentina\"",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "check-called-tool",
+        "description": "Checks that \"run_readonly_sql\" was called",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "result-set-match",
+        "description": "Result set matches expectedSql (primary correctness signal)",
+        "score": 0,
+        "passed": false,
+        "reason": "expectedSql returned 1 row(s); none of 1 successful SQL result(s) matched. The last SQL (\"SELECT t.id, t.tournament_year as year, m.id as match_id, m.stage, wt.common_name as winner_team, ht.common_name as home_team, at.common_name as away_team, m.home_goals, m.away_goals, m.home_penalties, m.away_penalties\nFROM world_cup.world_cup.tournaments t\nJOIN world_cup.world_cup.matches m ON m.tournament_id = t.id\nLEFT JOIN world_cup.world_cup.teams wt ON wt.id = m.winner_team_id\nJOIN world_cup.world_cup.teams ht ON ht.id = m.home_team_id\nJOIN world_cup.world_cup.teams at ON at.id = m.away_team_id\nWHERE t.tournament_year = 2022 AND m.stage ILIKE '%final%'\nORDER BY m.id\") did not match — the figures differ (compared 1 columns against 11)"
+      }
+    ],
+    "answer": "Argentina won the 2022 FIFA World Cup. In the final (match id 1), Argentina drew with France 3–3 after regulation/extra time and won the penalty shootout 4–2, per world_cup.world_cup.matches and world_cup.world_cup.teams (via world_cup.world_cup.tournaments filtered to year 2022, stage = \"final\").",
+    "toolCalls": [
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT t.id, t.year, m.id as match_id, m.stage, wt.name as winner_team, ht.name as home_team, at.name as away_team, m.home_score, m.away_score, m.penalty_home_score, m.penalty_away_score\\nFROM world_cup.world_cup.tournaments t\\nJOIN world_cup.world_cup.matches m ON m.tournament_id = t.id\\nLEFT JOIN world_cup.world_cup.teams wt ON wt.id = m.winner_team_id\\nJOIN world_cup.world_cup.teams ht ON ht.id = m.home_team_id\\nJOIN world_cup.world_cup.teams at ON at.id = m.away_team_id\\nWHERE t.year = 2022 AND m.stage ILIKE '%final%'\\nORDER BY m.id\",\n  \"rationale\": \"I'm locating the 2022 World Cup final match and its recorded winner to answer who won the tournament.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"id\",\n    \"year\",\n    \"match_id\",\n    \"stage\",\n    \"winner_team\",\n    \"home_team\",\n    \"away_team\",\n    \"home_goals\",\n    \"away_goals\",\n    \"home_penalties\",\n    \"away_penalties\"\n  ],\n  \"rows\": [\n    {\n      \"id\": \"2\",\n      \"year\": 2022,\n      \"match_id\": \"1\",\n      \"stage\": \"final\",\n      \"winner_team\": \"Argentina\",\n      \"home_team\": \"Argentina\",\n      \"away_team\": \"France\",\n      \"home_goals\": 3,\n      \"away_goals\": 3,\n      \"home_penalties\": 4,\n      \"away_penalties\": 2\n    },\n    {\n      \"id\": \"2\",\n      \"year\": 2022,\n      \"match_id\": \"2\",\n      \"stage\": \"semi_final\",\n      \"winner_team\": \"Argentina\",\n      \"home_team\": \"Argentina\",\n      \"away_team\": \"Croatia\",\n      \"home_goals\": 3,\n      \"away_goals\": 0,\n      \"home_penalties\": null,\n      \"away_penalties\": null\n    },\n    {\n      \"id\": \"2\",\n      \"year\": 2022,\n      \"match_id\": \"3\",\n      \"stage\": \"quarter_final\",\n      \"winner_team\": \"Argentina\",\n      \"home_team\": \"Netherlands\",\n      \"away_team\": \"Argentina\",\n      \"home_goals\": 2,\n      \"away_goals\": 2,\n      \"home_penalties\": 3,\n      \"away_penalties\": 4\n    },\n    {\n      \"id\": \"2\",\n      \"year\": 2022,\n      \"match_id\": \"9\",\n      \"stage\": \"quarter_final\",\n      \"winner_team\": \"Croatia\",\n      \"home_team\": \"Croatia\",\n      \"away_team\": \"Brazil\",\n      \"home_goals\": 1,\n      \"away_goals\": 1,\n      \"home_penalties\": 4,\n      \"away_penalties\": 2\n    },\n    {\n      \"id\": \"2\",\n      \"year\": 2022,\n      \"match_id\": \"11\",\n      \"stage\": \"semi_final\",\n      \"winner_team\": \"France\",\n      \"home_team\": \"France\",\n      \"away_team\": \"Morocco\",\n      \"home_goals\": 2,\n      \"away_goals\": 0,\n      \"home_penalties\": null,\n      \"away_penalties\": null\n    },\n    {\n      \"id\": \"2\",\n      \"year\": 2022,\n      \"match_id\": \"12\",\n      \"stage\": \"quarter_final\",\n      \"winner_team\": \"France\",\n      \"home_team\": \"England\",\n      \"away_team\": \"France\",\n      \"home_goals\": 1,\n      \"away_goals\": 2,\n      \"home_penalties\": null,\n      \"away_penalties\": nul… (truncated)"
+      }
+    ],
+    "passed": false,
+    "durationMs": 9348
+  }
+]

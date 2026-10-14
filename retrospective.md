@@ -14,6 +14,45 @@ Entry template:
 
 ---
 
+## 2026-10-13 — 1.13.5 Split interactive-visuals into spec-mode and freeform references (BA-203)
+
+### What went well
+- The references were cut verbatim from line ranges of the old file, and a diff against `f3ef18e` proved it. So the visual rules that are a contract (agents.md §7.2) cannot have drifted, and the only change the model sees is which half arrives.
+- The recording-stub E2E drives the real designer pipeline end to end. Every earlier visual E2E mocked the designer route, so the designer's request had never been asserted.
+
+### What went wrong
+- Both this story and 1.13.2 added an `appSkillBody` to `app-skills.ts` in parallel worktrees, with different trimming. The brief warned about the name but not the semantics. The cherry-pick conflicted, and one test had to change to the trimmed form.
+- The after-epic eval run flipped `champion-2022`, and it took six extra runs to show the case is flaky on both builds (2/4 before, 1/4 after). A single run before and a single run after can't tell a 50% case from a 25% one.
+
+### What to do differently
+- When two parallel briefs might add the same helper, specify its exact behaviour in both briefs (signature *and* output, e.g. "trimmed at both ends"), or have one unit own it and the other import it after the merge.
+- For a behaviour-preserving prompt change, run each eval case at least 3 times per build before comparing. A single run is a sample of one from a flaky distribution.
+
+## 2026-10-13 — 1.13.4 Phased deep-analysis skill (BA-202)
+
+### What went well
+- The golden tests were captured from the code *before* the refactor and kept unchanged after it. That proves the model receives byte-identical prompts, which is stronger and cheaper than a stub E2E of a multi-call background job.
+- Placeholder filling is one-pass and never re-scans inserted text, so a user question containing `{{…}}` reaches the model unchanged. It fails loudly on an unfilled or missing placeholder.
+
+### What went wrong
+- Nothing user-visible. The subagent's report needed the agents.md text rewritten: it lives in a protected file I edit myself, and the proposal text wasn't in the part of the transcript I could read.
+
+### What to do differently
+- Ask subagents to write their spec-text proposals to a file in their worktree (`proposals/agents-md.md`), not only in the final report, so the text survives a truncated transcript.
+
+## 2026-10-13 — 1.13.2 Slim assistant core prompt: curated-knowledge skill, harness-loaded (BA-200)
+
+### What went well
+- One helper, `knowledgeContext(block)`, is the only way to send Block 3, so the chat turn, the grounding pass, deep analysis and the eval suite cannot drift apart.
+- Checking agents.md Appendix A against the prompt the code builds, and Appendix B against the skill body, gave an exact equality check instead of a read-through.
+
+### What went wrong
+- The re-scope (cut `visual-tailoring`, merge BA-201) came after the epic spec was confirmed. That is already recorded under 1.13.1, and it is the same lesson.
+- Jira has no "Won't do" transition in project BA, so BA-201 stays "To Do" with an explanatory comment. It shows as open work on the board.
+
+### What to do differently
+- When a story is cut, ask the user how to close it in Jira (which transition, or delete) at the moment of the cut, instead of leaving it open with a comment.
+
 ## 2026-10-13 — 1.13.1 ADR, epic spec and skill loader for app-owned skills (BA-199)
 
 ### What went well

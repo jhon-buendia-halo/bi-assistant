@@ -1,0 +1,57 @@
+[
+  {
+    "id": "champion-2022",
+    "question": "Who won the 2022 World Cup?",
+    "scores": {
+      "check-includes": 1,
+      "check-called-tool": 1,
+      "check-no-tool-errors": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-includes",
+        "description": "Checks if output includes \"Argentina\"",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "check-called-tool",
+        "description": "Checks that \"run_readonly_sql\" was called",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "result-set-match",
+        "description": "Result set matches expectedSql (primary correctness signal)",
+        "score": 1,
+        "passed": true
+      }
+    ],
+    "answer": "Argentina won the 2022 FIFA World Cup. In the final on December 18, 2022, they drew 3–3 with France after regulation and extra time, then won 4–2 on penalties.\n\n(Source: world_cup.world_cup.matches, joined with world_cup.world_cup.teams and world_cup.world_cup.tournaments)",
+    "toolCalls": [
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT t.id, t.name, t.year, m.id as match_id, m.winner_team_id, tm.name as winner_name\\nFROM world_cup.world_cup.tournaments t\\nJOIN world_cup.world_cup.matches m ON m.tournament_id = t.id\\nLEFT JOIN world_cup.world_cup.teams tm ON tm.id = m.winner_team_id\\nWHERE t.year = 2022 AND m.stage ILIKE '%final%' \\nORDER BY m.id\",\n  \"rationale\": \"I need to find the final match of the 2022 World Cup and identify the winning team.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"id\",\n    \"name\",\n    \"tournament_year\",\n    \"match_id\",\n    \"winner_team_id\",\n    \"winner_name\"\n  ],\n  \"rows\": [\n    {\n      \"id\": \"2\",\n      \"name\": \"2022 FIFA World Cup\",\n      \"tournament_year\": 2022,\n      \"match_id\": \"1\",\n      \"winner_team_id\": \"1\",\n      \"winner_name\": \"Argentina\"\n    },\n    {\n      \"id\": \"2\",\n      \"name\": \"2022 FIFA World Cup\",\n      \"tournament_year\": 2022,\n      \"match_id\": \"2\",\n      \"winner_team_id\": \"1\",\n      \"winner_name\": \"Argentina\"\n    },\n    {\n      \"id\": \"2\",\n      \"name\": \"2022 FIFA World Cup\",\n      \"tournament_year\": 2022,\n      \"match_id\": \"3\",\n      \"winner_team_id\": \"1\",\n      \"winner_name\": \"Argentina\"\n    },\n    {\n      \"id\": \"2\",\n      \"name\": \"2022 FIFA World Cup\",\n      \"tournament_year\": 2022,\n      \"match_id\": \"9\",\n      \"winner_team_id\": \"4\",\n      \"winner_name\": \"Croatia\"\n    },\n    {\n      \"id\": \"2\",\n      \"name\": \"2022 FIFA World Cup\",\n      \"tournament_year\": 2022,\n      \"match_id\": \"11\",\n      \"winner_team_id\": \"6\",\n      \"winner_name\": \"France\"\n    },\n    {\n      \"id\": \"2\",\n      \"name\": \"2022 FIFA World Cup\",\n      \"tournament_year\": 2022,\n      \"match_id\": \"12\",\n      \"winner_team_id\": \"6\",\n      \"winner_name\": \"France\"\n    },\n    {\n      \"id\": \"2\",\n      \"name\": \"2022 FIFA World Cup\",\n      \"tournament_year\": 2022,\n      \"match_id\": \"16\",\n      \"winner_team_id\": \"7\",\n      \"winner_name\": \"Morocco\"\n    }\n  ],\n  \"correctedSql\": \"SELECT t.id, t.name, t.tournament_year, m.id as match_id, m.winner_team_id, tm.common_name as winner_name FROM world_cup.world_cup.tournaments t JOIN world_cup.world_cup.matches m ON m.tournament_id = t.id LEFT JOIN world_cup.world_cup.teams tm ON tm.id = m.winner_team_id WHERE t.tournament_year = 2022 AND m.stage ILIKE '%final%' ORDER BY m.id\",\n  \"note\": \"original query failed and was auto-corrected — cite the corrected SQL\"\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT DISTINCT stage FROM world_cup.world_cup.matches m JOIN world_cup.world_cup.tournaments t ON m.tournament_id=t.id WHERE t.tournament_year=2022\",\n  \"rationale\": \"I want to see the exact stage labels used so I can pick the true championship final match rather than quarter/semi-finals.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"stage\"\n  ],\n  \"rows\": [\n    {\n      \"stage\": \"final\"\n    },\n    {\n      \"stage\": \"quarter_final\"\n    },\n    {\n      \"stage\": \"semi_final\"\n    },\n    {\n      \"stage\": \"third_place\"\n    }\n  ]\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT m.id, m.match_date, ht.common_name as home, at.common_name as away, m.home_score, m.away_score, m.home_penalty_score, m.away_penalty_score, wt.common_name as winner\\nFROM world_cup.world_cup.matches m\\nJOIN world_cup.world_cup.tournaments t ON m.tournament_id=t.id\\nJOIN world_cup.world_cup.teams ht ON ht.id=m.home_team_id\\nJOIN world_cup.world_cup.teams at ON at.id=m.away_team_id\\nLEFT JOIN world_cup.world_cup.teams wt ON wt.id=m.winner_team_id\\nWHERE t.tournament_year=2022 AND m.stage='final'\",\n  \"rationale\": \"Now I pull the actual final match details including score and winner to confirm the champion.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"id\",\n    \"kicked_off_at\",\n    \"home\",\n    \"away\",\n    \"home_goals\",\n    \"away_goals\",\n    \"home_penalties\",\n    \"away_penalties\",\n    \"winner\"\n  ],\n  \"rows\": [\n    {\n      \"id\": \"1\",\n      \"kicked_off_at\": \"2022-12-18T15:00:00.000Z\",\n      \"home\": \"Argentina\",\n      \"away\": \"France\",\n      \"home_goals\": 3,\n      \"away_goals\": 3,\n      \"home_penalties\": 4,\n      \"away_penalties\": 2,\n      \"winner\": \"Argentina\"\n    }\n  ],\n  \"correctedSql\": \"SELECT m.id, m.kicked_off_at, ht.common_name as home, at.common_name as away, m.home_goals, m.away_goals, m.home_penalties, m.away_penalties, wt.common_name as winner FROM world_cup.world_cup.matches m JOIN world_cup.world_cup.tournaments t ON m.tournament_id=t.id JOIN world_cup.world_cup.teams ht ON ht.id=m.home_team_id JOIN world_cup.world_cup.teams at ON at.id=m.away_team_id LEFT JOIN world_cup.world_cup.teams wt ON wt.id=m.winner_team_id WHERE t.tournament_year=2022 AND m.stage='final'\",\n  \"note\": \"original query failed and was auto-corrected — cite the corrected SQL\"\n}"
+      }
+    ],
+    "passed": true,
+    "durationMs": 14305
+  }
+]

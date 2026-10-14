@@ -1,0 +1,437 @@
+❯ Building...
+✔ Building...
+Initial chunk files                                                                             | Names                                                                                        |  Raw size
+chunk-UAJ5QSTN.js                                                                               | -                                                                                            |   1.16 MB | 
+chunk-KGKTW4W6.js                                                                               | -                                                                                            |   1.14 MB | 
+polyfills.js                                                                                    | polyfills                                                                                    |   1.04 MB | 
+chunk-HKVHT6EF.js                                                                               | -                                                                                            | 317.21 kB | 
+chunk-FVML5ABW.js                                                                               | -                                                                                            | 204.87 kB | 
+chunk-TJLZLC6W.js                                                                               | -                                                                                            | 193.87 kB | 
+chunk-2DRZU4YV.js                                                                               | -                                                                                            |  97.66 kB | 
+jasmine-cleanup-1.js                                                                            | jasmine-cleanup-1                                                                            |  67.22 kB | 
+styles.css                                                                                      | styles                                                                                       |  54.35 kB | 
+chunk-WLNQZITE.js                                                                               | -                                                                                            |  43.54 kB | 
+chunk-77L2RLCZ.js                                                                               | -                                                                                            |  37.41 kB | 
+chunk-4X2UOSTF.js                                                                               | -                                                                                            |  31.89 kB | 
+chunk-BKTFKMHB.js                                                                               | -                                                                                            |  28.93 kB | 
+spec-app-features-sessions-components-session-chat-session-chat.spec.js                         | spec-app-features-sessions-components-session-chat-session-chat.spec                         |  27.48 kB | 
+chunk-X66O6RN7.js                                                                               | -                                                                                            |  23.46 kB | 
+test_main.js                                                                                    | test_main                                                                                    |  22.00 kB | 
+chunk-LX35S7DP.js                                                                               | -                                                                                            |  21.14 kB | 
+chunk-V5FPQNYP.js                                                                               | -                                                                                            |  17.83 kB | 
+chunk-QFRR4KXZ.js                                                                               | -                                                                                            |  17.13 kB | 
+chunk-CRKKYWTT.js                                                                               | -                                                                                            |  15.86 kB | 
+chunk-NCVIDNRQ.js                                                                               | -                                                                                            |  13.75 kB | 
+spec-app-features-sessions-components-interactive-visual-panel-interactive-visual-panel.spec.js | spec-app-features-sessions-components-interactive-visual-panel-interactive-visual-panel.spec |  13.71 kB | 
+spec-app-features-admin-components-user-detail-panel-user-detail-panel.spec.js                  | spec-app-features-admin-components-user-detail-panel-user-detail-panel.spec                  |  12.71 kB | 
+chunk-AQDNEUYX.js                                                                               | -                                                                                            |  12.28 kB | 
+spec-app-features-admin-components-admin-users-admin-users.spec.js                              | spec-app-features-admin-components-admin-users-admin-users.spec                              |  11.99 kB | 
+spec-app-app.spec.js                                                                            | spec-app-app.spec                                                                            |  11.49 kB | 
+spec-app-core-auth-auth.service.spec.js                                                         | spec-app-core-auth-auth.service.spec                                                         |  10.85 kB | 
+spec-app-core-auth-sign-in-page-sign-in-page.spec.js                                            | spec-app-core-auth-sign-in-page-sign-in-page.spec                                            |  10.69 kB | 
+chunk-YE72WDQU.js                                                                               | -                                                                                            |  10.01 kB | 
+spec-app-features-sessions-services-sessions-api.service.spec.js                                | spec-app-features-sessions-services-sessions-api.service.spec                                |   9.71 kB | 
+chunk-DXGE3NNG.js                                                                               | -                                                                                            |   9.65 kB | 
+chunk-673TP4KD.js                                                                               | -                                                                                            |   8.99 kB | 
+chunk-MDQHMOAM.js                                                                               | -                                                                                            |   8.77 kB | 
+spec-app-features-admin-components-admin-overview-admin-overview.spec.js                        | spec-app-features-admin-components-admin-overview-admin-overview.spec                        |   8.74 kB | 
+chunk-QQRLKBEE.js                                                                               | -                                                                                            |   8.51 kB | 
+spec-app-features-agents-services-agent-editor.service.spec.js                                  | spec-app-features-agents-services-agent-editor.service.spec                                  |   8.17 kB | 
+spec-app-features-agents-services-agent-hub.util.spec.js                                        | spec-app-features-agents-services-agent-hub.util.spec                                        |   8.01 kB | 
+spec-app-features-admin-components-admin-roles-admin-roles.spec.js                              | spec-app-features-admin-components-admin-roles-admin-roles.spec                              |   7.98 kB | 
+spec-app-core-interceptors-auth.interceptor.spec.js                                             | spec-app-core-interceptors-auth.interceptor.spec                                             |   7.01 kB | 
+spec-app-features-admin-components-assign-role-dialog-assign-role-dialog.spec.js                | spec-app-features-admin-components-assign-role-dialog-assign-role-dialog.spec                |   6.96 kB | 
+spec-app-root.spec.js                                                                           | spec-app-root.spec                                                                           |   6.94 kB | 
+chunk-UET2TVWZ.js                                                                               | -                                                                                            |   6.87 kB | 
+spec-app-features-admin-components-transfer-agents-dialog-transfer-agents-dialog.spec.js        | spec-app-features-admin-components-transfer-agents-dialog-transfer-agents-dialog.spec        |   6.85 kB | 
+spec-app-features-admin-components-admin-area-admin-area.spec.js                                | spec-app-features-admin-components-admin-area-admin-area.spec                                |   6.80 kB | 
+chunk-7GGN5V3D.js                                                                               | -                                                                                            |   6.39 kB | 
+spec-app-features-admin-components-add-mapping-dialog-add-mapping-dialog.spec.js                | spec-app-features-admin-components-add-mapping-dialog-add-mapping-dialog.spec                |   6.31 kB | 
+chunk-4LVUYHFS.js                                                                               | -                                                                                            |   6.08 kB | 
+chunk-E4BB4BSG.js                                                                               | -                                                                                            |   5.90 kB | 
+chunk-W5TKOSWQ.js                                                                               | -                                                                                            |   5.74 kB | 
+spec-app-features-admin-services-user-roles.spec.js                                             | spec-app-features-admin-services-user-roles.spec                                             |   5.72 kB | 
+spec-app-features-agents-services-agent-editor.util.spec.js                                     | spec-app-features-agents-services-agent-editor.util.spec                                     |   5.60 kB | 
+spec-app-features-admin-components-inactive-makers-dialog-inactive-makers-dialog.spec.js        | spec-app-features-admin-components-inactive-makers-dialog-inactive-makers-dialog.spec        |   5.33 kB | 
+spec-app-core-diagnostics-log-runs.spec.js                                                      | spec-app-core-diagnostics-log-runs.spec                                                      |   5.32 kB | 
+chunk-3OMMXDGU.js                                                                               | -                                                                                            |   5.17 kB | 
+spec-app-shared-components-system-logs-panel-system-logs-panel.spec.js                          | spec-app-shared-components-system-logs-panel-system-logs-panel.spec                          |   5.04 kB | 
+spec-app-features-admin-components-directory-picker-directory-picker.spec.js                    | spec-app-features-admin-components-directory-picker-directory-picker.spec                    |   4.84 kB | 
+spec-app-features-admin-services-admin-api.service.spec.js                                      | spec-app-features-admin-services-admin-api.service.spec                                      |   4.66 kB | 
+chunk-PHAMAKGR.js                                                                               | -                                                                                            |   4.38 kB | 
+spec-app-core-auth-account-menu-account-menu.spec.js                                            | spec-app-core-auth-account-menu-account-menu.spec                                            |   4.37 kB | 
+chunk-MQFTXTYK.js                                                                               | -                                                                                            |   4.27 kB | 
+spec-app-features-knowledge-components-knowledge-list-knowledge-list.spec.js                    | spec-app-features-knowledge-components-knowledge-list-knowledge-list.spec                    |   4.25 kB | 
+chunk-PGJILBRR.js                                                                               | -                                                                                            |   4.24 kB | 
+chunk-DRQR4ZG2.js                                                                               | -                                                                                            |   4.16 kB | 
+chunk-3II4OJIO.js                                                                               | -                                                                                            |   4.00 kB | 
+chunk-IWLIRDME.js                                                                               | -                                                                                            |   3.98 kB | 
+chunk-5M3XHVUX.js                                                                               | -                                                                                            |   3.93 kB | 
+spec-app-features-admin-components-admin-dialog-admin-dialog.spec.js                            | spec-app-features-admin-components-admin-dialog-admin-dialog.spec                            |   3.81 kB | 
+spec-app-features-admin-services-admin-format.spec.js                                           | spec-app-features-admin-services-admin-format.spec                                           |   3.81 kB | 
+chunk-ZYPYOM2D.js                                                                               | -                                                                                            |   3.76 kB | 
+chunk-2HCLFHPT.js                                                                               | -                                                                                            |   3.65 kB | 
+chunk-RKV7BW6M.js                                                                               | -                                                                                            |   3.53 kB | 
+chunk-UL4K67CI.js                                                                               | -                                                                                            |   3.41 kB | 
+spec-app-core-preferences-ui-preferences.service.spec.js                                        | spec-app-core-preferences-ui-preferences.service.spec                                        |   3.38 kB | 
+chunk-AHT6DLJD.js                                                                               | -                                                                                            |   3.37 kB | 
+chunk-LE66KRXN.js                                                                               | -                                                                                            |   3.34 kB | 
+spec-app-features-agents-components-agent-card-agent-card.spec.js                               | spec-app-features-agents-components-agent-card-agent-card.spec                               |   3.16 kB | 
+spec-app-core-theme-theme.service.spec.js                                                       | spec-app-core-theme-theme.service.spec                                                       |   3.00 kB | 
+spec-app-features-datasets-services-metrics-api.service.spec.js                                 | spec-app-features-datasets-services-metrics-api.service.spec                                 |   2.99 kB | 
+spec-app-features-knowledge-services-knowledge-api.service.spec.js                              | spec-app-features-knowledge-services-knowledge-api.service.spec                              |   2.96 kB | 
+chunk-Z6HKQTCL.js                                                                               | -                                                                                            |   2.37 kB | 
+chunk-O2XCJ7UZ.js                                                                               | -                                                                                            |   2.22 kB | 
+chunk-3FMBEB3S.js                                                                               | -                                                                                            |   2.13 kB | 
+chunk-AIZ6Q5ZZ.js                                                                               | -                                                                                            |   1.85 kB | 
+spec-app-features-sessions-models-session.model.spec.js                                         | spec-app-features-sessions-models-session.model.spec                                         |   1.69 kB | 
+chunk-ZRD63KHH.js                                                                               | -                                                                                            |   1.65 kB | 
+chunk-PURJ5ECJ.js                                                                               | -                                                                                            |   1.65 kB | 
+chunk-OB6AZRQZ.js                                                                               | -                                                                                            |   1.53 kB | 
+chunk-2XKJB4QK.js                                                                               | -                                                                                            |   1.38 kB | 
+chunk-6VCKJK6H.js                                                                               | -                                                                                            | 978 bytes | 
+chunk-Q577JIME.js                                                                               | -                                                                                            | 660 bytes | 
+jasmine-cleanup-0.js                                                                            | jasmine-cleanup-0                                                                            | 540 bytes | 
+chunk-YUXGOREZ.js                                                                               | -                                                                                            | 412 bytes | 
+
+                                                                                                | Initial total                                                                                |   4.96 MB
+
+Application bundle generation complete. [4.522 seconds] - 2026-10-14T04:35:14.731Z
+
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mDeprecation[0m [1m[35m[plugin angular-sass][0m
+
+    src/styles.scss:1:8:
+[37m      1 │ @import [32m[37m"tailwindcss";
+        ╵         [32m^[0m
+
+
+  Sass @import rules are deprecated and will be removed in Dart Sass 3.0.0.
+  
+  More info and automated migrator: [4mhttps://sass-lang.com/d/import[0m
+
+  The plugin "angular-sass" was triggered by this import
+
+    angular:styles/global:styles:5:8:
+[37m      5 │ @import [32m'src/styles.scss'[37m;
+        ╵         [32m~~~~~~~~~~~~~~~~~[0m
+
+
+[32m13 10 2026 23:35:14.870:INFO [karma-server]: [39mKarma v6.4.4 server started at http://localhost:9876/
+[32m13 10 2026 23:35:14.870:INFO [launcher]: [39mLaunching browsers ChromeHeadless with concurrency unlimited
+[32m13 10 2026 23:35:14.873:INFO [launcher]: [39mStarting browser ChromeHeadless
+[32m13 10 2026 23:35:18.047:INFO [Chrome Headless 153.0.0.0 (Linux 0.0.0)]: [39mConnected on socket Ro03HTrAleinq7qMAAAA with id 73661765
+Chrome Headless 153.0.0.0 (Linux 0.0.0): Executed 0 of 297[32m SUCCESS[39m (0 secs / 0 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 1 of 297[32m SUCCESS[39m (0 secs / 0.003 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 2 of 297[32m SUCCESS[39m (0 secs / 0.004 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 3 of 297[32m SUCCESS[39m (0 secs / 1.095 secs)
+[33m13 10 2026 23:35:20.114:WARN [web-server]: [39m404: /base/media/noto-sans-latin-600-normal.woff2
+[33m13 10 2026 23:35:20.114:WARN [web-server]: [39m404: /base/media/noto-sans-latin-400-normal.woff2
+[33m13 10 2026 23:35:20.114:WARN [web-server]: [39m404: /base/media/noto-sans-latin-500-normal.woff2
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 4 of 297[32m SUCCESS[39m (0 secs / 1.102 secs)
+[33m13 10 2026 23:35:20.124:WARN [web-server]: [39m404: /base/media/noto-sans-latin-600-normal.woff
+[33m13 10 2026 23:35:20.124:WARN [web-server]: [39m404: /base/media/noto-sans-latin-400-normal.woff
+[33m13 10 2026 23:35:20.125:WARN [web-server]: [39m404: /base/media/noto-sans-latin-500-normal.woff
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 5 of 297[32m SUCCESS[39m (0 secs / 1.111 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 6 of 297[32m SUCCESS[39m (0 secs / 1.444 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 7 of 297[32m SUCCESS[39m (0 secs / 1.451 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 8 of 297[32m SUCCESS[39m (0 secs / 1.451 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 9 of 297[32m SUCCESS[39m (0 secs / 1.451 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 10 of 297[32m SUCCESS[39m (0 secs / 1.451 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 11 of 297[32m SUCCESS[39m (0 secs / 1.464 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 12 of 297[32m SUCCESS[39m (0 secs / 1.464 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 13 of 297[32m SUCCESS[39m (0 secs / 1.468 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 14 of 297[32m SUCCESS[39m (0 secs / 1.468 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 15 of 297[32m SUCCESS[39m (0 secs / 1.469 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 16 of 297[32m SUCCESS[39m (0 secs / 1.469 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 17 of 297[32m SUCCESS[39m (0 secs / 1.47 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 18 of 297[32m SUCCESS[39m (0 secs / 1.47 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 19 of 297[32m SUCCESS[39m (0 secs / 1.471 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 20 of 297[32m SUCCESS[39m (0 secs / 1.481 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 21 of 297[32m SUCCESS[39m (0 secs / 1.486 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 22 of 297[32m SUCCESS[39m (0 secs / 1.494 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 23 of 297[32m SUCCESS[39m (0 secs / 1.501 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 24 of 297[32m SUCCESS[39m (0 secs / 1.506 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 25 of 297[32m SUCCESS[39m (0 secs / 1.511 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 26 of 297[32m SUCCESS[39m (0 secs / 1.513 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 27 of 297[32m SUCCESS[39m (0 secs / 1.515 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 28 of 297[32m SUCCESS[39m (0 secs / 1.517 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 29 of 297[32m SUCCESS[39m (0 secs / 1.519 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 30 of 297[32m SUCCESS[39m (0 secs / 1.521 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 31 of 297[32m SUCCESS[39m (0 secs / 1.522 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 32 of 297[32m SUCCESS[39m (0 secs / 1.523 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 33 of 297[32m SUCCESS[39m (0 secs / 1.523 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 34 of 297[32m SUCCESS[39m (0 secs / 1.523 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 35 of 297[32m SUCCESS[39m (0 secs / 1.523 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 36 of 297[32m SUCCESS[39m (0 secs / 1.523 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 37 of 297[32m SUCCESS[39m (0 secs / 1.594 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 38 of 297[32m SUCCESS[39m (0 secs / 1.606 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 39 of 297[32m SUCCESS[39m (0 secs / 1.609 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 40 of 297[32m SUCCESS[39m (0 secs / 1.622 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 41 of 297[32m SUCCESS[39m (0 secs / 1.626 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 42 of 297[32m SUCCESS[39m (0 secs / 1.631 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 43 of 297[32m SUCCESS[39m (0 secs / 1.636 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 44 of 297[32m SUCCESS[39m (0 secs / 1.64 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 45 of 297[32m SUCCESS[39m (0 secs / 1.64 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 46 of 297[32m SUCCESS[39m (0 secs / 1.647 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 47 of 297[32m SUCCESS[39m (0 secs / 1.651 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 48 of 297[32m SUCCESS[39m (0 secs / 1.651 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 49 of 297[32m SUCCESS[39m (0 secs / 1.652 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 50 of 297[32m SUCCESS[39m (0 secs / 1.653 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 51 of 297[32m SUCCESS[39m (0 secs / 1.654 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 52 of 297[32m SUCCESS[39m (0 secs / 1.654 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 53 of 297[32m SUCCESS[39m (0 secs / 1.654 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 54 of 297[32m SUCCESS[39m (0 secs / 1.655 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 55 of 297[32m SUCCESS[39m (0 secs / 1.655 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 56 of 297[32m SUCCESS[39m (0 secs / 1.69 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 57 of 297[32m SUCCESS[39m (0 secs / 1.697 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 58 of 297[32m SUCCESS[39m (0 secs / 1.703 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 59 of 297[32m SUCCESS[39m (0 secs / 1.736 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 60 of 297[32m SUCCESS[39m (0 secs / 1.745 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 61 of 297[32m SUCCESS[39m (0 secs / 1.746 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 62 of 297[32m SUCCESS[39m (0 secs / 1.753 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 63 of 297[32m SUCCESS[39m (0 secs / 1.757 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 64 of 297[32m SUCCESS[39m (0 secs / 1.762 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 65 of 297[32m SUCCESS[39m (0 secs / 1.766 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 66 of 297[32m SUCCESS[39m (0 secs / 1.769 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 67 of 297[32m SUCCESS[39m (0 secs / 1.772 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 68 of 297[32m SUCCESS[39m (0 secs / 1.774 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 69 of 297[32m SUCCESS[39m (0 secs / 1.776 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 70 of 297[32m SUCCESS[39m (0 secs / 1.778 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 71 of 297[32m SUCCESS[39m (0 secs / 1.785 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 72 of 297[32m SUCCESS[39m (0 secs / 1.788 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 73 of 297[32m SUCCESS[39m (0 secs / 1.791 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 74 of 297[32m SUCCESS[39m (0 secs / 1.794 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 75 of 297[32m SUCCESS[39m (0 secs / 1.796 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 76 of 297[32m SUCCESS[39m (0 secs / 1.8 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 77 of 297[32m SUCCESS[39m (0 secs / 1.804 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 78 of 297[32m SUCCESS[39m (0 secs / 1.805 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 79 of 297[32m SUCCESS[39m (0 secs / 1.815 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 80 of 297[32m SUCCESS[39m (0 secs / 1.817 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 81 of 297[32m SUCCESS[39m (0 secs / 1.819 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 82 of 297[32m SUCCESS[39m (0 secs / 1.821 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 83 of 297[32m SUCCESS[39m (0 secs / 1.821 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 84 of 297[32m SUCCESS[39m (0 secs / 1.822 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 85 of 297[32m SUCCESS[39m (0 secs / 1.824 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 86 of 297[32m SUCCESS[39m (0 secs / 1.824 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 87 of 297[32m SUCCESS[39m (0 secs / 1.824 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 88 of 297[32m SUCCESS[39m (0 secs / 1.824 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 89 of 297[32m SUCCESS[39m (0 secs / 1.824 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 90 of 297[32m SUCCESS[39m (0 secs / 1.825 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 91 of 297[32m SUCCESS[39m (0 secs / 1.827 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 92 of 297[32m SUCCESS[39m (0 secs / 1.828 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 93 of 297[32m SUCCESS[39m (0 secs / 1.829 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 94 of 297[32m SUCCESS[39m (0 secs / 1.831 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 95 of 297[32m SUCCESS[39m (0 secs / 2.141 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 96 of 297[32m SUCCESS[39m (0 secs / 2.144 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 97 of 297[32m SUCCESS[39m (0 secs / 2.154 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 98 of 297[32m SUCCESS[39m (0 secs / 2.16 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 99 of 297[32m SUCCESS[39m (0 secs / 2.165 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 100 of 297[32m SUCCESS[39m (0 secs / 2.171 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 101 of 297[32m SUCCESS[39m (0 secs / 2.173 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 102 of 297[32m SUCCESS[39m (0 secs / 2.175 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 103 of 297[32m SUCCESS[39m (0 secs / 2.182 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 104 of 297[32m SUCCESS[39m (0 secs / 2.183 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 105 of 297[32m SUCCESS[39m (0 secs / 2.183 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 106 of 297[32m SUCCESS[39m (0 secs / 2.184 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 107 of 297[32m SUCCESS[39m (0 secs / 2.185 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 108 of 297[32m SUCCESS[39m (0 secs / 2.186 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 109 of 297[32m SUCCESS[39m (0 secs / 2.187 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 110 of 297[32m SUCCESS[39m (0 secs / 2.188 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 111 of 297[32m SUCCESS[39m (0 secs / 2.189 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 112 of 297[32m SUCCESS[39m (0 secs / 2.19 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 113 of 297[32m SUCCESS[39m (0 secs / 2.191 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 114 of 297[32m SUCCESS[39m (0 secs / 2.191 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 115 of 297[32m SUCCESS[39m (0 secs / 2.191 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 116 of 297[32m SUCCESS[39m (0 secs / 2.192 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 117 of 297[32m SUCCESS[39m (0 secs / 2.193 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 118 of 297[32m SUCCESS[39m (0 secs / 2.194 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 119 of 297[32m SUCCESS[39m (0 secs / 2.195 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 120 of 297[32m SUCCESS[39m (0 secs / 2.197 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 121 of 297[32m SUCCESS[39m (0 secs / 2.198 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 122 of 297[32m SUCCESS[39m (0 secs / 2.199 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 123 of 297[32m SUCCESS[39m (0 secs / 2.2 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 124 of 297[32m SUCCESS[39m (0 secs / 2.201 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 125 of 297[32m SUCCESS[39m (0 secs / 2.201 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 126 of 297[32m SUCCESS[39m (0 secs / 2.206 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 127 of 297[32m SUCCESS[39m (0 secs / 2.213 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 128 of 297[32m SUCCESS[39m (0 secs / 2.213 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 129 of 297[32m SUCCESS[39m (0 secs / 2.22 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 130 of 297[32m SUCCESS[39m (0 secs / 2.227 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 131 of 297[32m SUCCESS[39m (0 secs / 2.227 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 132 of 297[32m SUCCESS[39m (0 secs / 2.227 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 133 of 297[32m SUCCESS[39m (0 secs / 2.227 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 134 of 297[32m SUCCESS[39m (0 secs / 2.227 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 135 of 297[32m SUCCESS[39m (0 secs / 2.227 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 136 of 297[32m SUCCESS[39m (0 secs / 2.227 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 137 of 297[32m SUCCESS[39m (0 secs / 2.227 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 138 of 297[32m SUCCESS[39m (0 secs / 2.227 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 139 of 297[32m SUCCESS[39m (0 secs / 2.229 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 140 of 297[32m SUCCESS[39m (0 secs / 2.229 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 141 of 297[32m SUCCESS[39m (0 secs / 2.229 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 142 of 297[32m SUCCESS[39m (0 secs / 2.23 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 143 of 297[32m SUCCESS[39m (0 secs / 2.231 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 144 of 297[32m SUCCESS[39m (0 secs / 2.584 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 145 of 297[32m SUCCESS[39m (0 secs / 2.588 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 146 of 297[32m SUCCESS[39m (0 secs / 2.59 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 147 of 297[32m SUCCESS[39m (0 secs / 2.604 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 148 of 297[32m SUCCESS[39m (0 secs / 2.607 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 149 of 297[32m SUCCESS[39m (0 secs / 2.61 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 150 of 297[32m SUCCESS[39m (0 secs / 2.616 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 151 of 297[32m SUCCESS[39m (0 secs / 2.618 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 152 of 297[32m SUCCESS[39m (0 secs / 2.619 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 153 of 297[32m SUCCESS[39m (0 secs / 2.62 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 154 of 297[32m SUCCESS[39m (0 secs / 2.621 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 155 of 297[32m SUCCESS[39m (0 secs / 2.622 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 156 of 297[32m SUCCESS[39m (0 secs / 2.622 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 157 of 297[32m SUCCESS[39m (0 secs / 2.625 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 158 of 297[32m SUCCESS[39m (0 secs / 2.632 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 159 of 297[32m SUCCESS[39m (0 secs / 2.644 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 160 of 297[32m SUCCESS[39m (0 secs / 2.647 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 161 of 297[32m SUCCESS[39m (0 secs / 2.651 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 162 of 297[32m SUCCESS[39m (0 secs / 2.66 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 163 of 297[32m SUCCESS[39m (0 secs / 2.664 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 164 of 297[32m SUCCESS[39m (0 secs / 2.67 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 165 of 297[32m SUCCESS[39m (0 secs / 2.675 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 166 of 297[32m SUCCESS[39m (0 secs / 2.678 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 167 of 297[32m SUCCESS[39m (0 secs / 2.683 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 168 of 297[32m SUCCESS[39m (0 secs / 2.686 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 169 of 297[32m SUCCESS[39m (0 secs / 2.691 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 170 of 297[32m SUCCESS[39m (0 secs / 2.695 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 171 of 297[32m SUCCESS[39m (0 secs / 2.699 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 172 of 297[32m SUCCESS[39m (0 secs / 2.705 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 173 of 297[32m SUCCESS[39m (0 secs / 2.714 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 174 of 297[32m SUCCESS[39m (0 secs / 2.717 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 175 of 297[32m SUCCESS[39m (0 secs / 2.72 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 176 of 297[32m SUCCESS[39m (0 secs / 2.724 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 177 of 297[32m SUCCESS[39m (0 secs / 2.728 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 178 of 297[32m SUCCESS[39m (0 secs / 2.738 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 179 of 297[32m SUCCESS[39m (0 secs / 2.741 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 180 of 297[32m SUCCESS[39m (0 secs / 2.745 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 181 of 297[32m SUCCESS[39m (0 secs / 2.75 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 182 of 297[32m SUCCESS[39m (0 secs / 2.754 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 183 of 297[32m SUCCESS[39m (0 secs / 2.758 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 184 of 297[32m SUCCESS[39m (0 secs / 2.761 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 185 of 297[32m SUCCESS[39m (0 secs / 2.761 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 186 of 297[32m SUCCESS[39m (0 secs / 2.762 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 187 of 297[32m SUCCESS[39m (0 secs / 2.762 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 188 of 297[32m SUCCESS[39m (0 secs / 2.762 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 189 of 297[32m SUCCESS[39m (0 secs / 2.762 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 190 of 297[32m SUCCESS[39m (0 secs / 2.763 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 191 of 297[32m SUCCESS[39m (0 secs / 2.763 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 192 of 297[32m SUCCESS[39m (0 secs / 2.763 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 193 of 297[32m SUCCESS[39m (0 secs / 2.764 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 194 of 297[32m SUCCESS[39m (0 secs / 2.766 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 195 of 297[32m SUCCESS[39m (0 secs / 2.771 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 196 of 297[32m SUCCESS[39m (0 secs / 2.773 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 197 of 297[32m SUCCESS[39m (0 secs / 2.775 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 198 of 297[32m SUCCESS[39m (0 secs / 2.777 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 199 of 297[32m SUCCESS[39m (0 secs / 2.779 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 200 of 297[32m SUCCESS[39m (0 secs / 2.782 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 201 of 297[32m SUCCESS[39m (0 secs / 2.784 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 202 of 297[32m SUCCESS[39m (0 secs / 2.785 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 203 of 297[32m SUCCESS[39m (0 secs / 2.789 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 204 of 297[32m SUCCESS[39m (0 secs / 2.792 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 205 of 297[32m SUCCESS[39m (0 secs / 3.136 secs)
+[33m13 10 2026 23:35:22.288:WARN [web-server]: [39m404: /base/media/noto-sans-latin-700-normal.woff2
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 206 of 297[32m SUCCESS[39m (0 secs / 3.14 secs)
+[33m13 10 2026 23:35:22.296:WARN [web-server]: [39m404: /base/media/noto-sans-latin-700-normal.woff
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 207 of 297[32m SUCCESS[39m (0 secs / 3.144 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 208 of 297[32m SUCCESS[39m (0 secs / 3.148 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 209 of 297[32m SUCCESS[39m (0 secs / 3.149 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 210 of 297[32m SUCCESS[39m (0 secs / 3.152 secs)
+[1A[2KWARN: [36m'NG0955: The provided track expression resulted in duplicated keys for a given collection. Adjust the tracking expression such that it uniquely identifies all the items in the collection. Duplicated keys were: 
+key "2026-10-14T04:35:22.314Zuser" at index "0" and "2", 
+key "2026-10-14T04:35:22.315Zassistant" at index "1" and "3". Find more at https://v20.angular.dev/errors/NG0955'[39m
+Chrome Headless 153.0.0.0 (Linux 0.0.0): Executed 210 of 297[32m SUCCESS[39m (0 secs / 3.152 secs)
+WARN: 'NG0955: The provided track expression resulted in duplicated keys for a given collection. Adjust the tracking expression such that it uniquely identifies all the items in the collection. Duplicated keys were: 
+key "2026-10-14T04:35:22.314Zuser" at index "0" and "2", 
+key "2026-10-14T04:35:22.315Zassistant" at index "1" and "3". Find more at https://v20.angular.dev/errors/NG0955'
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 211 of 297[32m SUCCESS[39m (0 secs / 3.157 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 212 of 297[32m SUCCESS[39m (0 secs / 3.161 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 213 of 297[32m SUCCESS[39m (0 secs / 3.161 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 214 of 297[32m SUCCESS[39m (0 secs / 3.161 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 215 of 297[32m SUCCESS[39m (0 secs / 3.161 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 216 of 297[32m SUCCESS[39m (0 secs / 3.162 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 217 of 297[32m SUCCESS[39m (0 secs / 3.164 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 218 of 297[32m SUCCESS[39m (0 secs / 3.165 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 219 of 297[32m SUCCESS[39m (0 secs / 3.166 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 220 of 297[32m SUCCESS[39m (0 secs / 3.166 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 221 of 297[32m SUCCESS[39m (0 secs / 3.166 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 222 of 297[32m SUCCESS[39m (0 secs / 3.166 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 223 of 297[32m SUCCESS[39m (0 secs / 3.166 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 224 of 297[32m SUCCESS[39m (0 secs / 3.173 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 225 of 297[32m SUCCESS[39m (0 secs / 3.177 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 226 of 297[32m SUCCESS[39m (0 secs / 3.18 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 227 of 297[32m SUCCESS[39m (0 secs / 3.184 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 228 of 297[32m SUCCESS[39m (0 secs / 3.188 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 229 of 297[32m SUCCESS[39m (0 secs / 3.19 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 230 of 297[32m SUCCESS[39m (0 secs / 3.199 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 231 of 297[32m SUCCESS[39m (0 secs / 3.2 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 232 of 297[32m SUCCESS[39m (0 secs / 3.202 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 233 of 297[32m SUCCESS[39m (0 secs / 3.204 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 234 of 297[32m SUCCESS[39m (0 secs / 3.206 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 235 of 297[32m SUCCESS[39m (0 secs / 3.208 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 236 of 297[32m SUCCESS[39m (0 secs / 3.209 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 237 of 297[32m SUCCESS[39m (0 secs / 3.21 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 238 of 297[32m SUCCESS[39m (0 secs / 3.212 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 239 of 297[32m SUCCESS[39m (0 secs / 3.215 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 240 of 297[32m SUCCESS[39m (0 secs / 3.218 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 241 of 297[32m SUCCESS[39m (0 secs / 3.22 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 242 of 297[32m SUCCESS[39m (0 secs / 3.22 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 243 of 297[32m SUCCESS[39m (0 secs / 3.22 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 244 of 297[32m SUCCESS[39m (0 secs / 3.22 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 245 of 297[32m SUCCESS[39m (0 secs / 3.22 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 246 of 297[32m SUCCESS[39m (0 secs / 3.22 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 247 of 297[32m SUCCESS[39m (0 secs / 3.226 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 248 of 297[32m SUCCESS[39m (0 secs / 3.227 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 249 of 297[32m SUCCESS[39m (0 secs / 3.227 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 250 of 297[32m SUCCESS[39m (0 secs / 3.227 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 251 of 297[32m SUCCESS[39m (0 secs / 3.233 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 252 of 297[32m SUCCESS[39m (0 secs / 3.239 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 253 of 297[32m SUCCESS[39m (0 secs / 3.245 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 254 of 297[32m SUCCESS[39m (0 secs / 3.251 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 255 of 297[32m SUCCESS[39m (0 secs / 3.258 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 256 of 297[32m SUCCESS[39m (0 secs / 3.268 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 257 of 297[32m SUCCESS[39m (0 secs / 3.271 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 258 of 297[32m SUCCESS[39m (0 secs / 3.274 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 259 of 297[32m SUCCESS[39m (0 secs / 3.276 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 260 of 297[32m SUCCESS[39m (0 secs / 3.279 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 261 of 297[32m SUCCESS[39m (0 secs / 3.282 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 262 of 297[32m SUCCESS[39m (0 secs / 3.285 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 263 of 297[32m SUCCESS[39m (0 secs / 3.287 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 264 of 297[32m SUCCESS[39m (0 secs / 3.289 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 265 of 297[32m SUCCESS[39m (0 secs / 3.29 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 266 of 297[32m SUCCESS[39m (0 secs / 3.295 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 267 of 297[32m SUCCESS[39m (0 secs / 3.297 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 268 of 297[32m SUCCESS[39m (0 secs / 3.298 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 269 of 297[32m SUCCESS[39m (0 secs / 3.299 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 270 of 297[32m SUCCESS[39m (0 secs / 3.301 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 271 of 297[32m SUCCESS[39m (0 secs / 3.303 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 272 of 297[32m SUCCESS[39m (0 secs / 3.304 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 273 of 297[32m SUCCESS[39m (0 secs / 3.306 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 274 of 297[32m SUCCESS[39m (0 secs / 3.307 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 275 of 297[32m SUCCESS[39m (0 secs / 3.308 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 276 of 297[32m SUCCESS[39m (0 secs / 3.309 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 277 of 297[32m SUCCESS[39m (0 secs / 3.31 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 278 of 297[32m SUCCESS[39m (0 secs / 3.31 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 279 of 297[32m SUCCESS[39m (0 secs / 3.311 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 280 of 297[32m SUCCESS[39m (0 secs / 3.311 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 281 of 297[32m SUCCESS[39m (0 secs / 3.311 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 282 of 297[32m SUCCESS[39m (0 secs / 3.311 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 283 of 297[32m SUCCESS[39m (0 secs / 3.311 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 284 of 297[32m SUCCESS[39m (0 secs / 3.316 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 285 of 297[32m SUCCESS[39m (0 secs / 3.321 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 286 of 297[32m SUCCESS[39m (0 secs / 3.326 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 287 of 297[32m SUCCESS[39m (0 secs / 3.331 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 288 of 297[32m SUCCESS[39m (0 secs / 3.336 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 289 of 297[32m SUCCESS[39m (0 secs / 3.339 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 290 of 297[32m SUCCESS[39m (0 secs / 3.342 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 291 of 297[32m SUCCESS[39m (0 secs / 3.345 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 292 of 297[32m SUCCESS[39m (0 secs / 3.345 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 293 of 297[32m SUCCESS[39m (0 secs / 3.345 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 294 of 297[32m SUCCESS[39m (0 secs / 3.346 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 295 of 297[32m SUCCESS[39m (0 secs / 3.347 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 296 of 297[32m SUCCESS[39m (0 secs / 3.348 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 297 of 297[32m SUCCESS[39m (0 secs / 3.349 secs)
+[1A[2KChrome Headless 153.0.0.0 (Linux 0.0.0): Executed 297 of 297[32m SUCCESS[39m (3.56 secs / 3.349 secs)
+[32mTOTAL: 297 SUCCESS[39m

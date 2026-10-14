@@ -5,6 +5,23 @@ Running log of every meaningful change, newest first. See *Logging convention* a
 ## 2026-10-13
 
 ### Changed
+- **The designer reads only the instructions for the mode it runs** (roadmap 1.13.5, [BA-203](https://halo-powered.atlassian.net/browse/BA-203), epic [BA-198](https://halo-powered.atlassian.net/browse/BA-198)):
+  - `interactive-visuals/SKILL.md` is now a 918-character router. The spec rules are in `references/spec-mode.md` and the freeform fallback in `references/freeform.md`, both moved verbatim.
+  - A spec call carries the router plus `spec-mode.md`, about 4.1k characters instead of the whole 12k skill. A freeform call, including the fallback after two failed spec attempts, carries the router plus `freeform.md`.
+  - Specs: agents.md §2.2, §6.4, §7.2 and §7.4; visuals R5 and the Feature "Skills the designer is given".
+  - Tests: `frontend/e2e/designer-skills.spec.ts` (recording stub) and `visualization.service.spec.ts`.
+  - Evidence: [evidence/1.13.5/](evidence/1.13.5/), including the epic's before and after evals.
+- **Deep-analysis prompts live in a phased skill** (roadmap 1.13.4, [BA-202](https://halo-powered.atlassian.net/browse/BA-202)):
+  - `skills/deep-analysis/` holds a phase map plus `phases/1-plan.md`, `2-investigate.md` and `3-report.md`.
+  - The service loads one phase per call and fills its `{{placeholders}}`. A placeholder left unfilled fails the call.
+  - Golden tests prove that the prompts sent to the model are byte-identical to before.
+  - Specs: agents.md §2.7 and §7.4.
+  - Evidence: [evidence/1.13.4/](evidence/1.13.4/).
+- **Curated-knowledge rules reach the model only with the knowledge they govern** (roadmap 1.13.2, [BA-200](https://halo-powered.atlassian.net/browse/BA-200)):
+  - The assistant's base prompt drops its "Curated knowledge:" section, going from 7,380 to 5,694 characters.
+  - The section is now the `curated-knowledge` skill. `knowledgeContext()` sends it right after the knowledge block on every call that carries one: chat turn, grounding pass, deep analysis and evals.
+  - Specs: agents.md §2.1, §4.1, Appendix A and the new Appendix B; knowledge R19; two scenarios in sessions-chat "Skills the assistant is given".
+  - Evidence: [evidence/1.13.2/](evidence/1.13.2/).
 - **Each agent gets only its own skills, from the app bundle, checked at startup** (roadmap 1.13.1, [BA-199](https://halo-powered.atlassian.net/browse/BA-199), epic [BA-198](https://halo-powered.atlassian.net/browse/BA-198)):
   - Session workspaces no longer seed or discover skills. Before, every session got a copy of `interactive-visuals`, so the assistant's catalog listed the designer's skill and it was offered the `skill`, `skill_search` and `skill_read` tools. Now the assistant gets no catalog and none of those tools.
   - The designer reads `interactive-visuals/SKILL.md` from the bundle. Its description now starts with "Use when".
@@ -13,6 +30,9 @@ Running log of every meaningful change, newest first. See *Logging convention* a
   - Specs: ADR-0018; agents.md §2.1, §2.2, §3.8 (the workspace tools the assistant is really offered, closing an open question), §7.1–§7.4; data-model §4.1 and §4.6; sessions-chat Feature "Skills the assistant is given"; the BA-198 epic spec and Milestone 1.13. The epic was re-scoped with the user: `visual-tailoring` and `sql-dialects` are cut, and 1.13.3 is merged into 1.13.2.
   - Tests: `frontend/e2e/assistant-skills.spec.ts`, `mastra/app-skills.spec.ts`, a designer skill test in `visualization.service.spec.ts`.
   - Evidence: [evidence/1.13.1/](evidence/1.13.1/).
+
+### Cut
+- **1.13.3 curated-knowledge and sql-dialects skills** ([BA-201](https://halo-powered.atlassian.net/browse/BA-201)): curated-knowledge was merged into 1.13.2. sql-dialects was dropped because the app has no dialect guidance to move. The on-demand `visual-tailoring` skill planned in 1.13.2 was also cut: its 427 characters of rules would have cost a catalog and usage note of about 1,045 characters on every turn. Both were decided with the user on 2026-10-13.
 
 ## 2026-10-12
 

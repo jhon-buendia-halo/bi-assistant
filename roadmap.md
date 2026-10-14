@@ -676,23 +676,24 @@ A behaviour-preserving refactor of the app's Mastra agents to the Agent Skills l
 - **Acceptance:** loader unit tests (missing name, missing description, description not starting "Use when", dangling link, missing root); the recorded request shows the assistant's catalog holding exactly its declared skills (none today), so no `interactive-visuals` entry and no skill tools; designer visual E2E green; existing sessions with old `.agents/skills` copies still open and chat.
 - **Notes:** decisions with the user 2026-10-13: the app's agents, not the repo's Claude Code workflow; no new approval gates; eval tokens approved (world-cup set, before and after). Recorded on `main`: the assistant's catalog listed the designer's `interactive-visuals`, and it was offered `skill`, `skill_search` and `skill_read`. Evidence: [evidence/1.13.1/](evidence/1.13.1/).
 
-#### 1.13.2 — Slim assistant core prompt: curated-knowledge skill, harness-loaded ([BA-200](https://halo-powered.atlassian.net/browse/BA-200))  `📋 Planned`
+#### 1.13.2 — Slim assistant core prompt: curated-knowledge skill, harness-loaded ([BA-200](https://halo-powered.atlassian.net/browse/BA-200))  `✅ Done`
 - **Intent:** the assistant's every-turn prompt carries only the rules every data question needs; the curated-knowledge rules reach the model only on turns that carry a knowledge block, and always on those turns.
-- **Scope:** `curated-knowledge` skill (the rules now under "Curated knowledge:" in the prompt, about 23% of it) sent as a system message right after the knowledge block, by every caller that sends the block (chat turn, grounding pass, deep analysis, eval suite); the knowledge-related clause of the describe_entity rule follows it; `agents.md` §2.1 and §4.1.
+- **Scope:** `curated-knowledge` skill (the rules under "Curated knowledge:" in the prompt, about 23% of it) sent as a system message right after the knowledge block, by every caller that sends the block (chat turn, grounding pass, deep analysis, eval suite); the describe_entity rule that mentions a curated [term] stays in the core prompt; `agents.md` §2.1, §4.1, Appendices A and B.
 - **Out of scope:** changing the knowledge block format; any other prompt section.
 - **Acceptance:** the prompt tab still starts with `You are the Questions to Insights assistant`; recorded requests: a turn without knowledge has no curated-knowledge rules, a turn with a block has them right after it; knowledge E2E green; the eval set shows no regressions.
-- **Notes:** re-scoped 2026-10-13 with the user. The on-demand `visual-tailoring` skill was cut: 427 characters of rules against a catalog and usage note of about 1,045 on every turn, and a risk of never loading. BA-201 was merged in.
+- **Notes:** re-scoped 2026-10-13 with the user. The on-demand `visual-tailoring` skill was cut: 427 characters of rules against a catalog and usage note of about 1,045 on every turn, and a risk of never loading. BA-201 was merged in. Evidence: [evidence/1.13.2/](evidence/1.13.2/).
 
 #### 1.13.3 — curated-knowledge and sql-dialects skills, harness-loaded ([BA-201](https://halo-powered.atlassian.net/browse/BA-201))  `🚫 Cut`
 - **Reason:** curated-knowledge merged into 1.13.2. sql-dialects cut: the app has no dialect guidance to move (one line in the prompt and the tool description), so the skill would be new behaviour written for failures nobody has observed. Revisit if evals show dialect errors.
 
-#### 1.13.4 — Phased deep-analysis skill ([BA-202](https://halo-powered.atlassian.net/browse/BA-202))  `📋 Planned`
+#### 1.13.4 — Phased deep-analysis skill ([BA-202](https://halo-powered.atlassian.net/browse/BA-202))  `✅ Done`
 - **Intent:** deep analysis follows a skill with a phase map, loading one phase per call, instead of prompts inlined in the service.
 - **Scope:** `deep-analysis` skill (`SKILL.md`, `phases/1-plan.md`, `2-investigate.md`, `3-report.md`); the service injects the phase file for each call; `agents.md` §2.7.
 - **Out of scope:** an approval gate between phases; new phases.
 - **Acceptance:** each recorded deep-analysis call carries only its phase; deep-analysis unit tests and E2E green.
+- **Notes:** Evidence: [evidence/1.13.4/](evidence/1.13.4/).
 
-#### 1.13.5 — Split interactive-visuals into spec-mode and freeform references ([BA-203](https://halo-powered.atlassian.net/browse/BA-203))  `📋 Planned`
+#### 1.13.5 — Split interactive-visuals into spec-mode and freeform references ([BA-203](https://halo-powered.atlassian.net/browse/BA-203))  `✅ Done`
 - **Intent:** the designer reads only the instructions for the mode it runs.
 - **Scope:** `interactive-visuals/SKILL.md` as a router; `references/spec-mode.md`, `references/freeform.md`; the pipeline injects the mode's file; `agents.md` §6.4 and §7.2.
 - **Out of scope:** changing the visual spec or the runtime.
@@ -705,6 +706,7 @@ The app becomes multi-user. An organisation self-hosts it as an org server, with
 ### Milestone 2.1 — Admin Panel ([BA-161](https://halo-powered.atlassian.net/browse/BA-161))
 
 Org server mode with Entra ID sign-in, SCIM directory sync and five roles enforced by the backend. Datasources and datasets are shared across the organisation, and everything else is private to its owner. Platform admins get an admin panel with Overview, Users & groups, Edit a user, and Roles & permissions (Figma board *Agent Hub — E2E lifecycle (proposed)*, screens P1–P4). Requests, Registry, Policies and Audit log are out. Stories 2.1.1–2.1.6 were built on the branch `feat/BA-161-admin-panel` and shipped as one PR (#69). The follow-up 2.1.7 ships on a new `feat/BA-161-admin-panel` branch and PR, opened after PR #69 merged. Epic spec: [specs/epics/BA-161/spec.md](specs/epics/BA-161/spec.md). Decision: ADR-0010 in [specs/system/architecture.md](specs/system/architecture.md).
+- **Notes:** Evidence: [evidence/1.13.5/](evidence/1.13.5/).
 
 #### 2.1.1 — ADR, epic spec, vision and roadmap ([BA-162](https://halo-powered.atlassian.net/browse/BA-162))  `✅ Done`
 - **Intent:** the move to multi-user is decided and scoped before any code, so each later story can be built and reviewed on its own.

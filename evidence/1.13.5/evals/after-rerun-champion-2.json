@@ -1,0 +1,48 @@
+[
+  {
+    "id": "champion-2022",
+    "question": "Who won the 2022 World Cup?",
+    "scores": {
+      "check-includes": 1,
+      "check-called-tool": 1,
+      "check-no-tool-errors": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-includes",
+        "description": "Checks if output includes \"Argentina\"",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "check-called-tool",
+        "description": "Checks that \"run_readonly_sql\" was called",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "result-set-match",
+        "description": "Result set matches expectedSql (primary correctness signal)",
+        "score": 0,
+        "passed": false,
+        "reason": "expectedSql returned 1 row(s); none of 1 successful SQL result(s) matched. The last SQL (\"select t.name, m.winner_team_id, tm.common_name as winner_name, m.home_team_id, m.away_team_id, m.home_goals, m.away_goals, m.stage\nfrom world_cup.world_cup.matches m\njoin world_cup.world_cup.tournaments t on m.tournament_id = t.id\nleft join world_cup.world_cup.teams tm on m.winner_team_id = tm.id\nwhere t.tournament_year = 2022 and lower(m.stage) like '%final%'\norder by m.id\") did not match — the figures differ (compared 1 columns against 8)"
+      }
+    ],
+    "answer": "**Argentina** won the 2022 FIFA World Cup.\n\nIn the final, Argentina drew France 3–3 after extra time and won the match (on penalties, as is well known for that final) — the data records Argentina as the `winner_team_id` for the final, having also beaten Croatia 3–0 in the semi-final en route to the title.\n\nSource: `world_cup.world_cup.matches` joined with `world_cup.world_cup.tournaments` and `world_cup.world_cup.teams`, filtered to the 2022 tournament's final and knockout stages.",
+    "toolCalls": [
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"select t.name, m.winner_team_id, tm.name as winner_name, m.home_team_id, m.away_team_id, m.home_score, m.away_score, m.stage\\nfrom world_cup.world_cup.matches m\\njoin world_cup.world_cup.tournaments t on m.tournament_id = t.id\\nleft join world_cup.world_cup.teams tm on m.winner_team_id = tm.id\\nwhere t.year = 2022 and lower(m.stage) like '%final%'\\norder by m.id\",\n  \"rationale\": \"I'm finding the final match of the 2022 World Cup tournament and its winning team to directly answer who won.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"name\",\n    \"winner_team_id\",\n    \"winner_name\",\n    \"home_team_id\",\n    \"away_team_id\",\n    \"home_goals\",\n    \"away_goals\",\n    \"stage\"\n  ],\n  \"rows\": [\n    {\n      \"name\": \"2022 FIFA World Cup\",\n      \"winner_team_id\": \"1\",\n      \"winner_name\": \"Argentina\",\n      \"home_team_id\": \"1\",\n      \"away_team_id\": \"6\",\n      \"home_goals\": 3,\n      \"away_goals\": 3,\n      \"stage\": \"final\"\n    },\n    {\n      \"name\": \"2022 FIFA World Cup\",\n      \"winner_team_id\": \"1\",\n      \"winner_name\": \"Argentina\",\n      \"home_team_id\": \"1\",\n      \"away_team_id\": \"4\",\n      \"home_goals\": 3,\n      \"away_goals\": 0,\n      \"stage\": \"semi_final\"\n    },\n    {\n      \"name\": \"2022 FIFA World Cup\",\n      \"winner_team_id\": \"1\",\n      \"winner_name\": \"Argentina\",\n      \"home_team_id\": \"8\",\n      \"away_team_id\": \"1\",\n      \"home_goals\": 2,\n      \"away_goals\": 2,\n      \"stage\": \"quarter_final\"\n    },\n    {\n      \"name\": \"2022 FIFA World Cup\",\n      \"winner_team_id\": \"4\",\n      \"winner_name\": \"Croatia\",\n      \"home_team_id\": \"4\",\n      \"away_team_id\": \"3\",\n      \"home_goals\": 1,\n      \"away_goals\": 1,\n      \"stage\": \"quarter_final\"\n    },\n    {\n      \"name\": \"2022 FIFA World Cup\",\n      \"winner_team_id\": \"6\",\n      \"winner_name\": \"France\",\n      \"home_team_id\": \"6\",\n      \"away_team_id\": \"7\",\n      \"home_goals\": 2,\n      \"away_goals\": 0,\n      \"stage\": \"semi_final\"\n    },\n    {\n      \"name\": \"2022 FIFA World Cup\",\n      \"winner_team_id\": \"6\",\n      \"winner_name\": \"France\",\n      \"home_team_id\": \"5\",\n      \"away_team_id\": \"6\",\n      \"home_goals\": 1,\n      \"away_goals\": 2,\n      \"stage\": \"quarter_final\"\n    },\n    {\n      \"name\": \"2022 FIFA World Cup\",\n      \"winner_team_id\": \"7\",\n      \"winner_name\": \"Morocco\",\n      \"home_team_id\": \"7\",\n      \"away_team_id\": \"9\",\n      \"home_goals\": 1,\n      \"away_goals\": 0,\n      \"stage\": \"quarter_final\"\n    }\n  ],\n  \"correctedSql\": \"select t.name, m.winner_team_id, tm.common_name as winner_name, m.home_team_id, m.away_team_id, m.home_goals, m.away_g… (truncated)"
+      }
+    ],
+    "passed": false,
+    "durationMs": 7563
+  }
+]

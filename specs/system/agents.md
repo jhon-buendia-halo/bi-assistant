@@ -207,7 +207,7 @@ LenAI deployments are never swapped to `openai/gpt-4.1-mini` (rule 2 requires no
 - A11. Every factual claim about the session's data must come from `run_readonly_sql` results executed in this conversation; never answer a data question from general/parametric knowledge, even when confident — run the query anyway.
 - A12. When a question presupposes coverage not confirmed (an era, entity or scope outside the obvious dataset), check coverage first; when the question falls outside the data, say so plainly and state what IS covered (e.g. "the data covers only 2018 and 2022; 1970 is not in this dataset"). Never fill the gap from general knowledge.
 
-*Curated knowledge*
+*Curated knowledge* (rules A13–A18 are not in the base prompt: they are the `curated-knowledge` skill, sent as the system message right after Block 3, and only on calls that carry that block; 4.1, 7.4)
 - A13. A curated-knowledge block, when present, is user-authored ground truth (glossary terms, standing instructions, default filters tagged `[term]`, `[instruction]`, `[default_filter]`); read it before planning.
 - A14. It outranks anything inferred from column names or sample values; follow a term's meaning even when the column name suggests otherwise and say which term was followed when they disagree. It cannot override the data: if a term names a value no row holds, do not invent rows.
 - A15. Apply every `[default_filter]` to every query unless the question explicitly asks for the excluded rows; name the applied filters in one short business sentence at the end ("excludes test accounts, as configured"); when the excluded rows are needed, drop the filter and say so.
@@ -245,7 +245,7 @@ Reference wording of the full prompt: Appendix A.
 
 **Invoked by.** Only the visual pipeline (section 6): `create_visual` / `update_visual` tools, the "create visual" button endpoint, the panel tailor endpoint, the panel auto-repair endpoint. Never by the user directly.
 
-**Inputs.** One user prompt assembled by the pipeline (6.4) plus one extra system message carrying the interactive-visuals skill (7.2), read from the app bundle (7.3) and wrapped in `<interactive-visuals-skill>` … `</interactive-visuals-skill>`. requestContext carries only the session-workspace id. The designer has no skills of its own in a catalog (7.4).
+**Inputs.** One user prompt assembled by the pipeline (6.4) plus one extra system message carrying the interactive-visuals skill (7.2) for the mode of the call: the `SKILL.md` body without its front matter, a blank line, then `references/spec-mode.md` (spec mode) or `references/freeform.md` (freeform mode), never both. It is read from the app bundle (7.3) and wrapped in `<interactive-visuals-skill>` … `</interactive-visuals-skill>`. requestContext carries only the session-workspace id. The designer has no skills of its own in a catalog (7.4).
 
 **Outputs.** Structured, one of two schemas depending on mode:
 
@@ -491,6 +491,8 @@ required clarification, or stating a fact with no backing tool call).
 
 Deep analysis is a background job that reuses the `assistant` agent with the session's grounding but **without its memory thread** (a job's many sub-calls must not pollute the history the next chat question is answered from). One job per session at a time. Behaviour, job states and the report are owned by [deep-analysis](../capabilities/deep-analysis/spec.md); the prompts are contracts here.
 
+The three prompts below are the phase files of the harness-loaded `deep-analysis` skill (7.4): `phases/1-plan.md`, `phases/2-investigate.md` and `phases/3-report.md`. Its `SKILL.md` is the phase map. The phases run in order, with no user approval between them. For each call the service reads only that call's phase file, drops its final newline and fills its `{{name}}` placeholders by exact string replacement, in one pass, without re-scanning inserted values. The call fails if a placeholder is left unfilled or a required one is missing from the file. The text the model receives is the wording below, with the `<…>` parts filled in.
+
 1. **Plan** — generate, `maxSteps: 1`, `toolChoice: 'none'`, structured output:
 
    ```
@@ -690,6 +692,8 @@ Curated dataset knowledge (user-authored — treat as authoritative over anythin
 ```
 
 Budget 2,000 characters; the first entry that doesn't fit ends the list. The list of snippets that made it in (`{id, kind, title, body, datasetId?}`) is threaded through the turn and persisted on the answer as `knowledge` — exactly what the model saw, even if the store changes mid-turn.
+
+The block is followed, as the next system message, by the body of the `curated-knowledge` skill (7.4): its `SKILL.md` without front matter, trimmed, starting `Curated knowledge:` (rules A13–A18, Appendix B). When no snippet applies, neither message is sent. Every caller that sends Block 3 sends the pair: the chat turn, the grounding pass, deep-analysis calls and the eval suite.
 
 **Block 4 — verified reference queries** (only when the call has a question and stored verified pairs share vocabulary with it):
 
@@ -965,7 +969,14 @@ User prompt lines, in order:
     - runtime, freeform: `Your previous code failed at runtime in the dataset: <message>. Return corrected, complete code that renders the same visual.`
     - parse: `Your previous JavaScript failed to parse: <message>. Return corrected, complete code.`
 
-The skill text (7.2) is sent as an extra system message.
+The skill text (7.2) is sent as an extra system message, built from four parts in order:
+
+1. `<interactive-visuals-skill>`
+2. the router body of `SKILL.md`, front matter removed, then a blank line
+3. the mode's reference: `references/spec-mode.md` for a spec call, `references/freeform.md` for a freeform call
+4. `</interactive-visuals-skill>`
+
+A spec call never carries the freeform reference, and a freeform call never carries the spec-mode one. That includes the freeform fallback after two failed spec attempts.
 
 ### 6.5 Repair
 
@@ -1084,7 +1095,7 @@ A fixed, hand-written browser script renders a spec. It is the same code that is
 
 One app-owned skill, a markdown file with front matter `name: interactive-visuals`, `description: Use when turning a completed, data-grounded analysis answer into a JSON chart spec (or, as a fallback, a self-contained HTML/CSS/JavaScript visual) for the Questions to Insights session panel.`
 
-**Loading.** Harness-loaded (7.3): the designer pipeline reads `interactive-visuals/SKILL.md` from the app bundle, the whole file as stored, and sends it as a system message (6.4); the designer prompt tells the model to follow it. It is in no agent's catalog (7.4).
+**Loading.** Harness-loaded (7.3). `SKILL.md` is a short router. It gives the visual's purpose, says that a spec request returns only the spec and the runtime draws it, and names the reference each request uses. The *Spec mode* rules below are `references/spec-mode.md`, apart from the first one (the runtime owns axes, tooltips…), which stays in the router that both modes receive. The *Freeform fallback* rules are `references/freeform.md`. For each designer call the pipeline reads the router body and the call's reference from the app bundle and sends them as one system message (6.4). The designer prompt tells the model to follow it. The skill is in no agent's catalog (7.4).
 
 **Content (contract — rules the designer must follow):**
 
@@ -1139,9 +1150,11 @@ The decision is ADR-0018 in [architecture.md](architecture.md).
 
 | Agent | On demand (catalog) | Harness-loaded |
 |---|---|---|
-| `assistant` | none | none |
-| `visualization` (designer) | none | `interactive-visuals` (7.2), whole `SKILL.md`, every designer call |
+| `assistant` | none | `curated-knowledge`: body after Block 3, on calls that carry it (4.1). `deep-analysis`: one phase file per deep-analysis call (2.7). |
+| `visualization` (designer) | none | `interactive-visuals` (7.2): the router body of `SKILL.md`, plus `references/spec-mode.md` on spec calls or `references/freeform.md` on freeform calls |
 | `sql-fixer`, `sql-verifier`, `knowledge-bootstrap`, `assistant-eval-judge` | none | none |
+
+No skill is on demand today. Two were measured and cut on 2026-10-13. A visuals skill would have cost a catalog plus usage note of about 1,045 characters on every turn to save 427. A dialects skill had no existing guidance to move. A future on-demand skill is added to `AGENT_SKILLS`, and the assistant then gets the catalog and the skill tools (7.3).
 
 ---
 
@@ -1248,7 +1261,7 @@ A case **passes** when it has at least one check and every check scored 1. Each 
 
 ## Appendix A — `assistant` system prompt (current wording)
 
-Lines are joined with `\n`. A rebuild may tune the wording but must keep every rule A1–A34 and the opening phrase.
+Lines are joined with `\n`. A rebuild may tune the wording but must keep every rule A1–A12 and A19–A34 and the opening phrase. Rules A13–A18 are the `curated-knowledge` skill (Appendix B), not part of this prompt.
 
 ```
 You are the Questions to Insights assistant — a data analyst working over
@@ -1300,33 +1313,6 @@ Grounding:
   2018 and 2022; 1970 is not in this dataset"). Never fill the gap from
   general knowledge.
 
-Curated knowledge:
-- When the session context carries a curated-knowledge block, it is
-  user-authored ground truth about this data: glossary terms, standing
-  instructions and default filters, each tagged [term], [instruction] or
-  [default_filter]. Read it before you plan the analysis.
-- It outranks anything you would infer from column names or sample
-  values. When a term says a code means something, use that meaning even
-  if the column name suggests otherwise, and say which term you followed
-  when the two disagree. What it cannot override is the data itself: if a
-  term names a value no row holds, do not invent rows for it — report
-  what the query actually returned.
-- Apply every [default_filter] to every query you run, unless the
-  question explicitly asks for the rows it excludes. Name the filters you
-  applied in one short business sentence at the end of the answer
-  ("excludes test accounts, as configured"), so a reader knows which
-  universe the numbers describe. When a question needs the excluded rows,
-  drop the filter and say you did.
-- Follow every [instruction] as a standing rule of this dataset. When an
-  instruction already states coverage — which years, tournaments or
-  segments exist — trust it instead of spending a query to rediscover it.
-- The block is context, never output: do not list, quote or summarise it
-  at the user unless they ask what knowledge you are working from.
-- Absence means nothing is defined, not that nothing applies. When no
-  snippet covers what you need, fall back to the schema and sample
-  values — never invent a definition, a filter or a coverage claim, and
-  never assume a snippet exists that you cannot see.
-
 Say why, every time:
 - run_readonly_sql and sample_rows both take a rationale. Write it in the
   first person for a business reader: what this step checks and how it
@@ -1374,6 +1360,39 @@ Rules:
   say so plainly.
 - A warning attached to a query result is about your own SQL. Act on it
   and re-run before answering, rather than passing it to the user.
+```
+
+## Appendix B — `curated-knowledge` skill body (current wording)
+
+The body of `skills/curated-knowledge/SKILL.md` after its front matter (`name: curated-knowledge`, `description: "Use when the turn carries a curated dataset knowledge block: how to apply its [term], [instruction] and [default_filter] snippets."`), sent after Block 3 (4.1). A rebuild may tune the wording but must keep rules A13–A18.
+
+```
+Curated knowledge:
+- When the session context carries a curated-knowledge block, it is
+  user-authored ground truth about this data: glossary terms, standing
+  instructions and default filters, each tagged [term], [instruction] or
+  [default_filter]. Read it before you plan the analysis.
+- It outranks anything you would infer from column names or sample
+  values. When a term says a code means something, use that meaning even
+  if the column name suggests otherwise, and say which term you followed
+  when the two disagree. What it cannot override is the data itself: if a
+  term names a value no row holds, do not invent rows for it — report
+  what the query actually returned.
+- Apply every [default_filter] to every query you run, unless the
+  question explicitly asks for the rows it excludes. Name the filters you
+  applied in one short business sentence at the end of the answer
+  ("excludes test accounts, as configured"), so a reader knows which
+  universe the numbers describe. When a question needs the excluded rows,
+  drop the filter and say you did.
+- Follow every [instruction] as a standing rule of this dataset. When an
+  instruction already states coverage — which years, tournaments or
+  segments exist — trust it instead of spending a query to rediscover it.
+- The block is context, never output: do not list, quote or summarise it
+  at the user unless they ask what knowledge you are working from.
+- Absence means nothing is defined, not that nothing applies. When no
+  snippet covers what you need, fall back to the schema and sample
+  values — never invent a definition, a filter or a coverage claim, and
+  never assume a snippet exists that you cannot see.
 ```
 
 > Implementation note (file map): agents in `backend/src/mastra/agents/*.agent.ts`; tools in `mastra/tools/`; context builders `mastra/context-blocks.ts`; step budget `mastra/agent-constants.ts`; bridges `mastra/model-resolver.ts`, `mastra/tool-services.ts`; tuning `mastra/model-compat.ts`; storage `mastra/storage.ts`; workspaces `mastra/session-workspaces.ts`; skills `mastra/app-skills.ts` and `mastra/skills/<name>/`; orchestration `modules/sessions/sessions.service.ts`, `turn-data.ts`, `result-guards.ts`, `result-compare.ts`, `chart-heuristic.ts`; designer pipeline `modules/sessions/visualization.service.ts`, `visual-spec.ts`, `visual-runtime.ts`, `visualization-document.ts`; knowledge bootstrap `modules/knowledge/knowledge.service.ts`; deep analysis `modules/deep-analysis/`; catalogue and eval runs `modules/agents/`; model settings `modules/llm/`.

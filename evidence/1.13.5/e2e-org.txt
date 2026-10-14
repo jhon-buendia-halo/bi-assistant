@@ -1,0 +1,51 @@
+
+Running 47 tests using 1 worker
+
+[1/47] [org] › e2e/org-admin-edit-user.spec.ts:49:5 › selecting a user opens their details
+[2/47] [org] › e2e/org-admin-edit-user.spec.ts:98:5 › changing roles changes what the user can do
+[3/47] [org] › e2e/org-admin-edit-user.spec.ts:125:5 › data owner names its datasource
+[4/47] [org] › e2e/org-admin-edit-user.spec.ts:150:5 › a role from a group mapping can't be unticked
+[5/47] [org] › e2e/org-admin-edit-user.spec.ts:167:5 › an admin can't remove their own Platform admin role
+[6/47] [org] › e2e/org-admin-edit-user.spec.ts:186:5 › transferring agents hands them to another user
+[7/47] [org] › e2e/org-admin-edit-user.spec.ts:228:5 › a transfer that would duplicate a name is refused
+[8/47] [org] › e2e/org-admin-edit-user.spec.ts:255:5 › a user with no groups and no agents
+[9/47] [org] › e2e/org-admin-edit-user.spec.ts:269:5 › a user without the admin permission can't change roles
+[10/47] [org] › e2e/org-admin-overview.spec.ts:40:5 › the overview shows the tiles, the chart and what needs attention
+[11/47] [org] › e2e/org-admin-overview.spec.ts:86:5 › a new org server shows empty states
+[12/47] [org] › e2e/org-admin-overview.spec.ts:104:5 › agents whose owner is deactivated get a new owner
+[13/47] [org] › e2e/org-admin-overview.spec.ts:140:5 › agents with errors can be inspected
+[14/47] [org] › e2e/org-admin-overview.spec.ts:174:5 › inactive makers are cleaned up
+[15/47] [org] › e2e/org-admin-overview.spec.ts:202:5 › export report downloads the overview as CSV
+[16/47] [org] › e2e/org-admin-overview.spec.ts:230:5 › a user without the admin permission can't reach the overview
+[17/47] [org] › e2e/org-admin-roles.spec.ts:39:5 › the matrix shows what each role can do
+[18/47] [org] › e2e/org-admin-roles.spec.ts:68:5 › a group mapping gives the group's members the role
+[19/47] [org] › e2e/org-admin-roles.spec.ts:95:5 › removing a mapping takes the role away
+[20/47] [org] › e2e/org-admin-roles.spec.ts:123:5 › a data owner mapping names its datasource
+[21/47] [org] › e2e/org-admin-roles.spec.ts:146:5 › add mapping needs a group
+[22/47] [org] › e2e/org-admin-roles.spec.ts:160:5 › a user without the admin permission can't add a mapping
+[23/47] [org] › e2e/org-admin-users.spec.ts:49:5 › the users table shows each person's roles, groups and status
+[24/47] [org] › e2e/org-admin-users.spec.ts:113:5 › search finds users by name, email or group
+[25/47] [org] › e2e/org-admin-users.spec.ts:137:5 › role filter chips narrow the list
+[26/47] [org] › e2e/org-admin-users.spec.ts:163:5 › a deactivated user is shown as deactivated
+[27/47] [org] › e2e/org-admin-users.spec.ts:178:5 › the users table is paged
+[28/47] [org] › e2e/org-admin-users.spec.ts:201:5 › the Groups view lists groups, members and mapped roles
+[29/47] [org] › e2e/org-admin-users.spec.ts:231:5 › assign role gives a user a role
+[30/47] [org] › e2e/org-admin-users.spec.ts:251:5 › a user without the admin permission can't list users
+[31/47] [org] › e2e/org-isolation.spec.ts:34:5 › users share datasources and datasets
+[32/47] [org] › e2e/org-isolation.spec.ts:48:5 › sessions are private to their owner
+[33/47] [org] › e2e/org-isolation.spec.ts:68:5 › agents and pins are private to their owner
+[34/47] [org] › e2e/org-isolation.spec.ts:110:5 › knowledge is private to its owner
+[35/47] [org] › e2e/org-permissions.spec.ts:46:5 › a User sees no maker, data or admin controls
+[36/47] [org] › e2e/org-permissions.spec.ts:73:5 › a Maker can create an agent
+[37/47] [org] › e2e/org-permissions.spec.ts:86:5 › a bootstrap admin sees the Admin area
+[38/47] [org] › e2e/org-permissions.spec.ts:127:5 › a Platform admin manages shared settings
+[39/47] [org] › e2e/org-permissions.spec.ts:143:5 › an action the user lost the right to is refused
+[40/47] [org] › e2e/org-sign-in.spec.ts:25:5 › an unauthenticated visitor sees only the sign-in page
+[41/47] [org] › e2e/org-sign-in.spec.ts:42:5 › signing in opens the app as that user
+[42/47] [org] › e2e/org-sign-in.spec.ts:72:5 › a person not yet provisioned is added at first sign-in
+[43/47] [org] › e2e/org-sign-in.spec.ts:87:5 › signing out returns to the sign-in page
+[44/47] [org] › e2e/org-sign-in.spec.ts:105:5 › a failed sign-in shows an error
+[45/47] [org] › e2e/org-sign-in.spec.ts:116:5 › deactivating a user ends their session and blocks sign-in
+[46/47] [org] › e2e/org-sign-in.spec.ts:135:5 › an expired session shows the sign-in page
+[47/47] [org] › e2e/org-sign-in.spec.ts:150:5 › an org server never offers the local sign-in
+  47 passed (5.6m)
