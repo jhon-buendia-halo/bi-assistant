@@ -1,4 +1,9 @@
-import { AgentConfig, AgentStatus, SaveAgentInput } from './agents-api.service';
+import {
+  AgentConfig,
+  AgentStatus,
+  AgentToolId,
+  SaveAgentInput,
+} from './agents-api.service';
 
 /** The R43 limits the editor's fields enforce as the user types (R55). */
 export const AGENT_FIELD_LIMITS = {
@@ -21,6 +26,20 @@ export const REASONING_EFFORT_CHOICES: {
   { value: 'high', label: 'High' },
 ];
 
+/** The tools the editor offers, in canonical order (R55). */
+export const AGENT_TOOL_CHOICES: { id: AgentToolId; label: string }[] = [
+  { id: 'sample_rows', label: 'Sample rows' },
+  { id: 'ask_clarification', label: 'Ask clarifying questions' },
+  { id: 'visuals', label: 'Create and change visuals' },
+];
+
+const ALL_TOOLS: AgentToolId[] = AGENT_TOOL_CHOICES.map((tool) => tool.id);
+
+/** The ticked tools, deduplicated and in canonical order. */
+function canonicalTools(tools: AgentToolId[]): AgentToolId[] {
+  return ALL_TOOLS.filter((id) => tools.includes(id));
+}
+
 /** The agent editor's form, as typed. `''` model or effort = the default. */
 export interface AgentForm {
   name: string;
@@ -28,6 +47,7 @@ export interface AgentForm {
   instructions: string;
   datasets: string[];
   starterQuestions: string[];
+  tools: AgentToolId[];
   model: string;
   reasoningEffort: ReasoningEffortChoice;
 }
@@ -39,6 +59,7 @@ export function emptyAgentForm(): AgentForm {
     instructions: '',
     datasets: [],
     starterQuestions: [],
+    tools: [...ALL_TOOLS],
     model: '',
     reasoningEffort: '',
   };
@@ -52,6 +73,7 @@ export function agentFormFromConfig(config: AgentConfig): AgentForm {
     instructions: config.instructions ?? '',
     datasets: [...(config.datasets ?? [])],
     starterQuestions: [...(config.starterQuestions ?? [])],
+    tools: config.tools ? canonicalTools(config.tools) : [...ALL_TOOLS],
     model: config.model ?? '',
     reasoningEffort: config.reasoningEffort ?? '',
   };
@@ -69,6 +91,7 @@ export function normalizeAgentForm(form: AgentForm): AgentForm {
     instructions: form.instructions.trim(),
     datasets: uniqueNonBlank(form.datasets),
     starterQuestions: uniqueNonBlank(form.starterQuestions),
+    tools: canonicalTools(form.tools),
     model: form.model.trim(),
     reasoningEffort: form.reasoningEffort,
   };
@@ -85,6 +108,7 @@ export function agentFormChanged(form: AgentForm, saved: AgentForm): boolean {
     // Ticking order carries no meaning.
     !sameList([...a.datasets].sort(), [...b.datasets].sort()) ||
     !sameList(a.starterQuestions, b.starterQuestions) ||
+    !sameList(a.tools, b.tools) ||
     a.model !== b.model ||
     a.reasoningEffort !== b.reasoningEffort
   );
@@ -99,6 +123,7 @@ export function agentSaveInput(form: AgentForm): SaveAgentInput {
     instructions: normalized.instructions,
     datasets: normalized.datasets,
     starterQuestions: normalized.starterQuestions,
+    tools: normalized.tools,
     ...(normalized.model ? { model: normalized.model } : {}),
     ...(normalized.reasoningEffort
       ? { reasoningEffort: normalized.reasoningEffort }

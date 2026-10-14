@@ -4,6 +4,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
+import {
+  normalizeAgentTools,
+  OPTIONAL_AGENT_TOOLS,
+  type OptionalAgentTool,
+} from '../../mastra/agent-tools';
 import { REASONING_EFFORTS, type ReasoningEffort } from '../llm/llm.types';
 import { DatasetsRepository } from '../datasets/repositories/datasets.repository';
 import {
@@ -23,6 +28,8 @@ export interface AgentConfigInput {
   starterQuestions?: string[];
   model?: string;
   reasoningEffort?: ReasoningEffort;
+  /** The optional tools selected; undefined keeps every tool (R43). */
+  tools?: string[];
 }
 
 /**
@@ -156,6 +163,13 @@ export function normalizeAgentConfig(input: AgentConfigInput): AgentConfig {
   ) {
     config.reasoningEffort = input.reasoningEffort;
   }
+  if (Array.isArray(input.tools)) {
+    try {
+      config.tools = normalizeAgentTools(input.tools);
+    } catch (error) {
+      throw new BadRequestException((error as Error).message);
+    }
+  }
   return config;
 }
 
@@ -189,8 +203,14 @@ function sameConfig(a: AgentConfig, b: AgentConfig): boolean {
     sameList(a.datasets, b.datasets) &&
     sameList(a.starterQuestions, b.starterQuestions) &&
     (a.model ?? '') === (b.model ?? '') &&
-    (a.reasoningEffort ?? '') === (b.reasoningEffort ?? '')
+    (a.reasoningEffort ?? '') === (b.reasoningEffort ?? '') &&
+    sameList(selectedTools(a), selectedTools(b))
   );
+}
+
+/** A config's tool selection, absent read as every tool (data-model 3.10). */
+export function selectedTools(config: AgentConfig): OptionalAgentTool[] {
+  return config.tools ? [...config.tools] : [...OPTIONAL_AGENT_TOOLS];
 }
 
 function sameList(a: string[] = [], b: string[] = []): boolean {

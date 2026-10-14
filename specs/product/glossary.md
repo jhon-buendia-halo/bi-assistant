@@ -158,11 +158,13 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Tool call.** One invocation of a capability by the assistant during a turn. Data tools: `list_entities`, `describe_entity`, `sample_rows`, `run_readonly_sql`. Visual tools: `create_visual`, `update_visual`. UI tool: `ask_clarification`. Calls to the data tools are captured as *data records*.
 
+**Tool selection.** The optional *tool calls* a *user agent* lets the assistant make: any of `sample_rows`, `ask_clarification` and the visual tools. The data tools that list, describe and query the datasets are always on. A tool left out is not offered to the model, and the working rules that name it are replaced. See [../system/agents.md](../system/agents.md) 2.1 and ADR-0021.
+
 **Turn.** One user message and everything the assistant does in response, up to its final answer or a clarification. Includes streamed reasoning, tool calls and their results.
 
 **User status.** How the Admin area describes a directory user: **Active**, **Inactive** (no activity for 90 days or more), **Not signed in** (provisioned but never signed in) or **Deactivated** (turned off by the identity provider). Derived, never stored. See [../capabilities/admin/spec.md](../capabilities/admin/spec.md) R39.
 
-**User agent.** An agent a user builds: a name, a description, instructions, the datasets it may query, starter questions and an optional model or reasoning-effort override. It runs on the *assistant* with the same tools and guards, and it has a *draft* and, once published, a *Live* version.
+**User agent.** An agent a user builds: a name, a description, instructions, the datasets it may query, starter questions and an optional model or reasoning-effort override. It runs on the *assistant* with the same guards and the tools its *tool selection* gives it, and it has a *draft* and, once published, a *Live* version.
 
 **Verified answer.** An answer whose final SQL matches a stored *verified query*, or that the user thumbed up. Shown with a "Verified" badge.
 

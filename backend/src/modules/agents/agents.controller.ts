@@ -235,5 +235,6 @@ function toInput(dto: SaveAgentDto): AgentConfigInput {
     starterQuestions: strings(dto?.starterQuestions),
     model: text(dto?.model),
     reasoningEffort: dto?.reasoningEffort,
+    tools: strings(dto?.tools),
   };
 }

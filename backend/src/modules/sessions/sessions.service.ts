@@ -15,6 +15,12 @@ import {
   type AgentOverrides,
   resolveAgentModel,
 } from '../../mastra/model-resolver';
+import {
+  AGENT_TOOLS_CONTEXT_KEY,
+  isFullSelection,
+  selects,
+  toolSelectionFrom,
+} from '../../mastra/agent-tools';
 import { UserAgentsService } from '../user-agents/user-agents.service';
 import type { AgentConfig } from '../user-agents/entities/user-agent.entity';
 import {
@@ -300,6 +306,23 @@ export class SessionsService implements OnModuleInit {
     if (overrides.model || overrides.reasoningEffort) {
       requestContext.set(AGENT_OVERRIDES_CONTEXT_KEY, overrides);
     }
+    // The agent's tool selection (ADR-0021): only a list without all three
+    // optional tools goes on the context; otherwise every tool is offered.
+    const agentTools = agent?.tools;
+    if (agentTools && !isFullSelection(agentTools)) {
+      requestContext.set(AGENT_TOOLS_CONTEXT_KEY, [...agentTools]);
+    }
+    const selection = toolSelectionFrom(requestContext);
+    const visualsBlock = selects(selection, 'visuals')
+      ? [
+          '',
+          'Interactive visuals in this session (id — title, current version):',
+          ...(visualLines.length ? visualLines : ['(none yet)']),
+          activeVisualId
+            ? `Visual currently open in the right panel: ${activeVisualId}.`
+            : 'No visual is open in the right panel.',
+        ]
+      : [];
     return {
       // Analysis often chains several schema + SQL tool calls per turn.
       maxSteps: ASSISTANT_MAX_STEPS,
@@ -313,13 +336,8 @@ export class SessionsService implements OnModuleInit {
         {
           role: 'system' as const,
           content: [
-            ...entityOrientationLines(session.datasets, datasets),
-            '',
-            'Interactive visuals in this session (id — title, current version):',
-            ...(visualLines.length ? visualLines : ['(none yet)']),
-            activeVisualId
-              ? `Visual currently open in the right panel: ${activeVisualId}.`
-              : 'No visual is open in the right panel.',
+            ...entityOrientationLines(session.datasets, datasets, selection),
+            ...visualsBlock,
           ].join('\n'),
         },
         ...(metrics ? [{ role: 'system' as const, content: metrics }] : []),

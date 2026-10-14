@@ -1,4 +1,5 @@
 import type { ReasoningEffort } from '../../llm/llm.types';
+import type { OptionalAgentTool } from '../../../mastra/agent-tools';
 
 /** `official` = the assistant, `system` = the five helpers, `user` = built here. */
 export type AgentKind = 'official' | 'system' | 'user';
@@ -19,6 +20,11 @@ export interface AgentConfig {
   /** A model or deployment name of the configured provider. */
   model?: string;
   reasoningEffort?: ReasoningEffort;
+  /**
+   * The optional assistant tools the agent gets, de-duplicated and in
+   * canonical order; absent means all three, empty means none (ADR-0021).
+   */
+  tools?: OptionalAgentTool[];
 }
 
 /** One document in the `agents` collection. */

@@ -1,5 +1,6 @@
 import { join } from 'path';
 import type { AppSkill } from '../app-skills';
+import { type OptionalAgentTool, selects } from '../agent-tools';
 
 /**
  * The assistant's sectioned system prompt (ADR-0020, agents.md 2.1, 7.5 and
@@ -119,6 +120,108 @@ export const ASSISTANT_WORKING_RULES: readonly string[] = [
   '  query.',
 ];
 
+/**
+ * The clarification paragraph (A4-A7) when `ask_clarification` is not
+ * selected (agents.md 2.1, ADR-0021).
+ */
+export const NO_CLARIFICATION_RULES: readonly string[] = [
+  "You can't ask the user a question back in this session. When a question is",
+  'ambiguous — an undefined measure such as "best", "top" or "performed well",',
+  'a fuzzy scope, or a name with several plausible matches in the data — pick',
+  'the most natural reading the data supports, run the analysis over it, and',
+  `state the assumption in the answer, e.g. "Taking 'best' as most matches`,
+  'won: ...". When answering every reasonable reading is cheap, cover them all',
+  'instead.',
+];
+
+/** The *Interactive visuals* block (A21-A23) when `visuals` is not selected. */
+export const NO_VISUALS_RULES: readonly string[] = [
+  'Interactive visuals:',
+  "- You can't create or change visuals in this session. When the user asks",
+  '  for a chart or visual, say so in one short sentence and give the numbers',
+  '  in the answer instead.',
+  '- Never paste HTML, CSS or JavaScript into the chat.',
+];
+
+/** Index of the line `text` in `lines`; throws when it is missing. */
+function lineIndex(lines: readonly string[], text: string, from = 0): number {
+  const index = lines.indexOf(text, from);
+  if (index < 0) throw new Error(`Working rules line not found: ${text}`);
+  return index;
+}
+
+/** `lines` with `[start, end]` (inclusive) replaced by `replacement`. */
+function replaceLines(
+  lines: readonly string[],
+  start: number,
+  end: number,
+  replacement: readonly string[],
+): string[] {
+  return [...lines.slice(0, start), ...replacement, ...lines.slice(end + 1)];
+}
+
+/** `lines` with the single line `from` replaced by `to`. */
+function swapLine(
+  lines: readonly string[],
+  from: string,
+  to: string,
+): string[] {
+  const index = lineIndex(lines, from);
+  return replaceLines(lines, index, index, [to]);
+}
+
+/**
+ * The `## Working rules` for a tool selection (agents.md 2.1): today's rules
+ * for every tool (undefined), else each rule that names an unselected tool
+ * replaced as a whole, word for word.
+ */
+export function assistantWorkingRules(
+  selection?: readonly OptionalAgentTool[],
+): string[] {
+  let rules = [...ASSISTANT_WORKING_RULES];
+  if (!selects(selection, 'sample_rows')) {
+    // Its three mentions: A5, step 1 of the method, and A19.
+    rules = swapLine(
+      rules,
+      'then the options must quote the actual values you found (via sample_rows',
+      'then the options must quote the actual values you found (via',
+    );
+    rules = swapLine(
+      rules,
+      '/ describe_entity), not invented ones. When only the scope is fuzzy —',
+      'describe_entity), not invented ones. When only the scope is fuzzy —',
+    );
+    rules = swapLine(
+      rules,
+      '   describe_entity; sample_rows when value formats are unclear).',
+      '   describe_entity).',
+    );
+    rules = swapLine(
+      rules,
+      '- run_readonly_sql and sample_rows both take a rationale. Write it in the',
+      '- run_readonly_sql takes a rationale. Write it in the',
+    );
+  }
+  if (!selects(selection, 'ask_clarification')) {
+    const start = lineIndex(
+      rules,
+      'Call ask_clarification only when interpretations diverge materially —',
+    );
+    const end = lineIndex(rules, 're-asking.', start);
+    rules = replaceLines(rules, start, end, NO_CLARIFICATION_RULES);
+  }
+  if (!selects(selection, 'visuals')) {
+    const start = lineIndex(rules, 'Interactive visuals:');
+    const end = lineIndex(
+      rules,
+      '- Never paste HTML, CSS or JavaScript into the chat.',
+      start,
+    );
+    rules = replaceLines(rules, start, end, NO_VISUALS_RULES);
+  }
+  return rules;
+}
+
 /** What the Tools section needs from a tool: its description and inputs. */
 export interface PromptTool {
   description?: string;
@@ -190,10 +293,15 @@ export function skillsSection(
   ];
 }
 
-/** The whole prompt, lines joined with `\n`. */
+/**
+ * The whole prompt, lines joined with `\n`. `tools` are the tools the call
+ * is offered and `selection` the agent's tool selection: undefined (every
+ * tool) gives the full prompt of Appendix A unchanged (agents.md 2.1).
+ */
 export function buildAssistantInstructions(
   tools: Record<string, PromptTool>,
   skills: readonly Pick<AppSkill, 'name' | 'description' | 'dir'>[],
+  selection?: readonly OptionalAgentTool[],
 ): string {
   const skillLines = skillsSection(skills, 'run_skill_script' in tools);
   return [
@@ -203,7 +311,7 @@ export function buildAssistantInstructions(
     ...toolLines(tools),
     '',
     '## Working rules',
-    ...ASSISTANT_WORKING_RULES,
+    ...assistantWorkingRules(selection),
     ...(skillLines.length ? ['', ...skillLines] : []),
   ].join('\n');
 }

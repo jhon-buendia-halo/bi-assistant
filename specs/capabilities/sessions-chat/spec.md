@@ -186,7 +186,8 @@ Agents are defined in [agents-evals](../agents-evals/spec.md) (R43-R52); decisio
 - R53. A session started from an agent SHALL keep the datasets it was created with (R5). Republishing the agent with other datasets SHALL NOT change them.
 - R54. Every assistant call made for a session bound to an agent that still exists (chat turns, the grounding pass and deep-analysis calls) SHALL apply the agent's **current Live version**:
   - its instructions, when not empty, as a system context block labelled as user-supplied, after every other context block (R24; the block is in [agents.md](../../system/agents.md) section 4.1, and only the grounding pass's own nudge follows it);
-  - its model override and reasoning-effort override, when set (R56).
+  - its model override and reasoning-effort override, when set (R56);
+  - its tool selection: only the tools it selects are offered, and the prompt's tool list and working rules match them ([agents.md](../../system/agents.md) 2.1).
 
   Publishing a new version SHALL change the next turn of every session bound to the agent. A draft SHALL never apply to a session. The only exception is the agent editor's preview chat, an in-memory session that runs the draft (agents-evals R60, R61).
 - R55. An agent's instructions SHALL NOT relax any rule enforced in code: the read-only SQL guard, dataset scoping (R22), SQL repair (R25-R28), the grounding pass (R19) and the result-quality warnings hold whatever the instructions say. A write statement attempted under an agent's instructions SHALL be rejected by the read-only guard and shown as a failed tool call.

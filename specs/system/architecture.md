@@ -563,6 +563,7 @@ flowchart LR
   - A skill's content lives in a draft reference and in each Live copy, so deleting or editing a skill never breaks a Live agent. The cost is duplicated text in the `agents` collection, bounded by the skill size limits.
   - In-app skills are prompt content written by their owner and read only by that owner's agents, so they add no cross-user injection path. Sharing them waits for a later epic, as agent sharing does (ADR-0010).
   - Transferring an agent (ADR-0010) must carry its draft's skill references to the new owner.
+  - In `@mastra/core` 1.66 a function-valued `tools` is not copied into the Mastra instance's tool registry, so the assistant's tools no longer appear there as standalone tools (Mastra's dev studio). No app code reads that registry.
 
 ## Level 4 — Code
 

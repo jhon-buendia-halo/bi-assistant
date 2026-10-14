@@ -442,8 +442,9 @@ User-built agents: a stored configuration of the assistant, with a working draft
 | `starterQuestions` | string[] | yes | Up to 5, each up to 200 characters; blank ones dropped, de-duplicated. |
 | `model` | string | no | A model or deployment name of the configured provider. |
 | `reasoningEffort` | enum | no | `low` \| `medium` \| `high`. |
+| `tools` | string[] | no | The optional assistant tools the agent gets: any of `sample_rows`, `ask_clarification` and `visuals` (`create_visual` with `update_visual`), de-duplicated and stored in that order. Absent means all three; an empty list means none. `list_entities`, `describe_entity` and `run_readonly_sql` are always given and never listed ([agents.md](agents.md) 2.1). No migration: a document without the field keeps every tool (ADR-0021). |
 
-Saving a draft replaces the whole `draft` object. Publishing sets `live` to a copy of `draft`. "Unpublished changes" is derived (`live` exists and differs from `draft`), not stored.
+Saving a draft replaces the whole `draft` object. Publishing sets `live` to a copy of `draft`. "Unpublished changes" is derived (`live` exists and differs from `draft`), not stored. When comparing, an absent `tools` list counts as all three tools.
 
 In org server mode a Platform admin can transfer an agent to another owner ([api.md](api.md) 86, admin R64): its `ownerId` changes and `pinned` resets to `false`; `draft`, `live` and `publishedAt` are kept. Sessions keep their `agentId` and `ownerId`, so for the former owner the agent no longer resolves and their sessions behave as for a deleted agent.
 

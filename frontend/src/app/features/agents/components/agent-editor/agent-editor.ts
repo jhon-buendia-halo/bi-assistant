@@ -17,9 +17,11 @@ import {
   Upload,
   X,
 } from 'lucide-angular';
+import { AgentToolId } from '../../services/agents-api.service';
 import { AgentEditorService } from '../../services/agent-editor.service';
 import {
   AGENT_FIELD_LIMITS,
+  AGENT_TOOL_CHOICES,
   REASONING_EFFORT_CHOICES,
   ReasoningEffortChoice,
   modelPlaceholder,
@@ -45,6 +47,7 @@ export class AgentEditor implements OnInit, OnDestroy {
   readonly X = X;
 
   readonly limits = AGENT_FIELD_LIMITS;
+  readonly toolChoices = AGENT_TOOL_CHOICES;
   readonly efforts = REASONING_EFFORT_CHOICES;
   readonly instructionsHint =
     "Added to the assistant's context in every turn. The assistant's own rules and the read-only guard still apply.";
@@ -91,6 +94,10 @@ export class AgentEditor implements OnInit, OnDestroy {
 
   onDataset(name: string, event: Event): void {
     this.editor.toggleDataset(name, (event.target as HTMLInputElement).checked);
+  }
+
+  onTool(id: AgentToolId, event: Event): void {
+    this.editor.toggleTool(id, (event.target as HTMLInputElement).checked);
   }
 
   onStarter(index: number, event: Event): void {

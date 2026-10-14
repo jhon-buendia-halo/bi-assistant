@@ -61,11 +61,7 @@
           class="btn btn-primary"
         >
           @if (editor.publishing()) {
-            <lucide-angular
-              [img]="Loader2"
-              [size]="14"
-              class="animate-spin"
-            />
+            <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
             <span>Publishing…</span>
           } @else {
             <lucide-angular [img]="Upload" [size]="14" />
@@ -159,6 +155,25 @@
           <p class="text-[13px] text-fg-muted">
             No datasets yet — create one in Datasets first.
           </p>
+        }
+      </fieldset>
+
+      <fieldset class="flex flex-col gap-2">
+        <legend class="field-label mb-1.5">Tools</legend>
+        <p class="text-[12px] text-fg-muted">
+          The agent can always list, describe and query its datasets.
+        </p>
+        @for (tool of toolChoices; track tool.id) {
+          <label class="flex w-fit items-center gap-2 text-[13px] text-fg">
+            <input
+              type="checkbox"
+              [attr.data-testid]="'agent-tool-' + tool.id"
+              [checked]="editor.form().tools.includes(tool.id)"
+              (change)="onTool(tool.id, $event)"
+              class="h-3.5 w-3.5 accent-primary"
+            />
+            <span>{{ tool.label }}</span>
+          </label>
         }
       </fieldset>
 

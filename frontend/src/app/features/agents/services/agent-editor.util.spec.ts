@@ -82,7 +82,11 @@ describe('agent editor: save', () => {
       canSaveAgent({ form: form(), changed: true, saving: false }),
     ).toBeTrue();
     expect(
-      canSaveAgent({ form: form({ name: '  ' }), changed: true, saving: false }),
+      canSaveAgent({
+        form: form({ name: '  ' }),
+        changed: true,
+        saving: false,
+      }),
     ).toBeFalse();
     expect(
       canSaveAgent({ form: form(), changed: false, saving: false }),
@@ -107,6 +111,7 @@ describe('agent editor: save', () => {
       instructions: '',
       datasets: ['A'],
       starterQuestions: ['Who won?'],
+      tools: ['sample_rows', 'ask_clarification', 'visuals'],
     });
     expect(
       agentSaveInput(form({ model: ' gpt-4.1 ', reasoningEffort: 'high' })),
@@ -143,10 +148,11 @@ describe('agent editor: Publish visibility (R57)', () => {
 describe('agent editor: datasets', () => {
   it('lists existing datasets, then the saved ones that are missing', () => {
     expect(
-      datasetOptions(['World Cup Core', 'Claims'], ['World Cup Core', 'Gone'], [
-        'World Cup Core',
-        'Gone',
-      ]),
+      datasetOptions(
+        ['World Cup Core', 'Claims'],
+        ['World Cup Core', 'Gone'],
+        ['World Cup Core', 'Gone'],
+      ),
     ).toEqual([
       { name: 'World Cup Core', missing: false, checked: true },
       { name: 'Claims', missing: false, checked: false },
@@ -174,5 +180,49 @@ describe('agent editor: Model placeholder (R55)', () => {
   it('names the configured model, or just Default', () => {
     expect(modelPlaceholder('gpt-4.1')).toBe('Default (gpt-4.1)');
     expect(modelPlaceholder(null)).toBe('Default');
+  });
+});
+
+describe('agent editor: tools (R55)', () => {
+  it('a new agent has all three tools ticked', () => {
+    expect(emptyAgentForm().tools).toEqual([
+      'sample_rows',
+      'ask_clarification',
+      'visuals',
+    ]);
+  });
+
+  it('a draft without tools loads all ticked; with tools, exactly those', () => {
+    const base = {
+      name: 'A',
+      description: '',
+      instructions: '',
+      datasets: [],
+      starterQuestions: [],
+    };
+    expect(agentFormFromConfig(base).tools.length).toBe(3);
+    expect(agentFormFromConfig({ ...base, tools: ['visuals'] }).tools).toEqual([
+      'visuals',
+    ]);
+    expect(agentFormFromConfig({ ...base, tools: [] }).tools).toEqual([]);
+  });
+
+  it('saves the ticked tools in canonical order, empty when none', () => {
+    expect(
+      agentSaveInput(form({ tools: ['visuals', 'sample_rows'] })).tools,
+    ).toEqual(['sample_rows', 'visuals']);
+    expect(agentSaveInput(form({ tools: [] })).tools).toEqual([]);
+  });
+
+  it('counts toggling a tool as a change, but not its ticking order', () => {
+    expect(
+      agentFormChanged(form({ tools: ['sample_rows'] }), form()),
+    ).toBeTrue();
+    expect(
+      agentFormChanged(
+        form({ tools: ['visuals', 'ask_clarification', 'sample_rows'] }),
+        form(),
+      ),
+    ).toBeFalse();
   });
 });

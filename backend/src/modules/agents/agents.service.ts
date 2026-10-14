@@ -8,7 +8,12 @@ import {
   agentSkillsView,
   type AgentSkillsView,
 } from '../../mastra/app-skills';
+import { RequestContext } from '@mastra/core/request-context';
 import { MastraService } from '../../mastra/mastra.service';
+import {
+  AGENT_TOOLS_CONTEXT_KEY,
+  isFullSelection,
+} from '../../mastra/agent-tools';
 import { ASSISTANT_EVAL_SETS } from '../../mastra/evals/assistant.evals';
 import {
   effectiveConfig,
@@ -36,7 +41,8 @@ export interface AgentSummary {
   name: string;
   description: string;
   /** Tool names the agent can call, sorted alphabetically. A user agent
-   * runs on the assistant, so it lists the assistant's. */
+   * runs on the assistant, so it lists the assistant's tools its effective
+   * configuration selects (ADR-0021). */
   tools: string[];
   kind: AgentKind;
   status: AgentStatus;
@@ -116,19 +122,24 @@ export class AgentsService {
   /** Built-in and user agents together, alphabetical by name (R48). */
   async list(): Promise<AgentSummary[]> {
     const registry = this.mastra.listAgents();
-    const [pins, docs, datasetNames, assistantTools] = await Promise.all([
+    const [pins, docs, datasetNames] = await Promise.all([
       this.userAgents.builtinPins(),
       this.userAgents.list(),
       this.userAgents.datasetNames(),
-      this.assistantToolNames(),
     ]);
     const builtins = await Promise.all(
       Object.entries(registry).map(([key, agent]) =>
         this.summarize(key, agent, pins),
       ),
     );
-    const users = docs.map((doc) =>
-      summarizeUserAgent(doc, assistantTools, datasetNames),
+    const users = await Promise.all(
+      docs.map(async (doc) =>
+        summarizeUserAgent(
+          doc,
+          await this.assistantToolNames(doc),
+          datasetNames,
+        ),
+      ),
     );
     return [...builtins, ...users].sort((a, b) => a.name.localeCompare(b.name));
   }
@@ -142,10 +153,14 @@ export class AgentsService {
     const doc = await this.userAgents.get(key);
     if (!doc) return null;
 
-    const assistant = await this.builtinDetail(OFFICIAL_AGENT_KEY);
+    // The assistant as this agent's tool selection gives it (R49).
+    const assistant = await this.builtinDetail(
+      OFFICIAL_AGENT_KEY,
+      toolSelectionContext(doc),
+    );
     const summary = summarizeUserAgent(
       doc,
-      assistant?.tools ?? [],
+      await this.assistantToolNames(doc),
       await this.userAgents.datasetNames(),
     );
     return {
@@ -230,19 +245,30 @@ export class AgentsService {
 
   private async userSummary(doc: UserAgentDoc): Promise<AgentSummary> {
     const [tools, datasetNames] = await Promise.all([
-      this.assistantToolNames(),
+      this.assistantToolNames(doc),
       this.userAgents.datasetNames(),
     ]);
     return summarizeUserAgent(doc, tools, datasetNames);
   }
 
-  private async assistantToolNames(): Promise<string[]> {
+  /** The assistant's tools that a user agent's effective config selects. */
+  private async assistantToolNames(doc: UserAgentDoc): Promise<string[]> {
     const assistant = this.mastra.listAgents()[OFFICIAL_AGENT_KEY];
     if (!assistant) return [];
-    return Object.keys((await safe(() => assistant.listTools())) ?? {}).sort();
+    const requestContext = toolSelectionContext(doc);
+    return Object.keys(
+      (await safe(() => assistant.listTools({ requestContext }))) ?? {},
+    ).sort();
   }
 
-  private async builtinDetail(key: string): Promise<AgentDetail | null> {
+  /**
+   * A built-in agent's detail; `requestContext` (a user agent's tool
+   * selection) shapes the assistant's prompt and tools.
+   */
+  private async builtinDetail(
+    key: string,
+    requestContext?: RequestContext,
+  ): Promise<AgentDetail | null> {
     const agent = this.mastra.listAgents()[key];
     if (!agent) return null;
 
@@ -250,8 +276,8 @@ export class AgentsService {
       this.userAgents
         .builtinPins()
         .then((pins) => this.summarize(key, agent, pins)),
-      safe(() => agent.getInstructions()),
-      safe(() => agent.listTools()),
+      safe(() => agent.getInstructions({ requestContext })),
+      safe(() => agent.listTools({ requestContext })),
       safe(() => agent.getMemory()),
       safe(() => agent.getModel()),
     ]);
@@ -339,6 +365,20 @@ function summarizeUserAgent(
 }
 
 type AgentLike = ReturnType<MastraService['listAgents']>[string];
+
+/**
+ * A requestContext carrying a user agent's tool selection from its effective
+ * configuration (Live, else draft), the way its sessions' turns get it
+ * (agents.md 4.2). It carries none when the agent keeps every tool.
+ */
+function toolSelectionContext(doc: UserAgentDoc): RequestContext {
+  const requestContext = new RequestContext();
+  const tools = effectiveConfig(doc).tools;
+  if (tools && !isFullSelection(tools)) {
+    requestContext.set(AGENT_TOOLS_CONTEXT_KEY, [...tools]);
+  }
+  return requestContext;
+}
 
 /** Agent accessors may be dynamic and throw without a request context. */
 async function safe<T>(read: () => T | Promise<T>): Promise<T | undefined> {

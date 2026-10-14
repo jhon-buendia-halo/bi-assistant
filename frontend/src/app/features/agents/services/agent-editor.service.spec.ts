@@ -94,6 +94,39 @@ describe('AgentEditorService', () => {
     expect(editor.status()).toBe('draft');
   });
 
+  it('a new agent has all tools ticked; toggling one marks it changed and is saved', async () => {
+    await open(null);
+    expect(editor.form().tools).toEqual([
+      'sample_rows',
+      'ask_clarification',
+      'visuals',
+    ]);
+    editor.update({ name: 'Cup historian' });
+    editor.toggleTool('sample_rows', false);
+    expect(editor.changed()).toBeTrue();
+    editor.toggleTool('visuals', false);
+    editor.toggleTool('visuals', true);
+
+    const saved = editor.save();
+    const req = http.expectOne(`${API_BASE_URL}/agents`);
+    expect(req.request.body.tools).toEqual(['ask_clarification', 'visuals']);
+    req.flush({
+      ok: true,
+      message: 'saved',
+      agent: { key: 'cup-historian', id: 'cup-historian', status: 'draft' },
+    });
+    await saved;
+    expect(editor.changed()).toBeFalse();
+  });
+
+  it('a draft saved before tools could be chosen opens with all ticked and unchanged', async () => {
+    await open('cup-historian');
+    expect(editor.form().tools.length).toBe(3);
+    expect(editor.changed()).toBeFalse();
+    editor.toggleTool('ask_clarification', false);
+    expect(editor.changed()).toBeTrue();
+  });
+
   it('a refused save changes nothing', async () => {
     await open(null);
     editor.update({ name: 'Health plan analyst' });

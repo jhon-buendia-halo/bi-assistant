@@ -89,6 +89,26 @@ describe('normalizeAgentConfig', () => {
     expect(config).not.toHaveProperty('model');
     expect(config).not.toHaveProperty('reasoningEffort');
   });
+
+  it('stores tools de-duplicated in canonical order, and none when omitted (ADR-0021)', () => {
+    expect(
+      normalizeAgentConfig({
+        name: 'A',
+        tools: ['visuals', 'sample_rows', 'visuals'],
+      }).tools,
+    ).toEqual(['sample_rows', 'visuals']);
+    expect(normalizeAgentConfig({ name: 'A', tools: [] }).tools).toEqual([]);
+    expect(normalizeAgentConfig({ name: 'A' })).not.toHaveProperty('tools');
+  });
+
+  it('refuses an unknown tool', () => {
+    expect(() =>
+      normalizeAgentConfig({
+        name: 'A',
+        tools: ['sample_rows', 'create_visual'],
+      }),
+    ).toThrow('Unknown tool "create_visual"');
+  });
 });
 
 describe('hasUnpublishedChanges / missingDatasets', () => {
@@ -103,6 +123,22 @@ describe('hasUnpublishedChanges / missingDatasets', () => {
     expect(
       hasUnpublishedChanges({
         draft: { ...draft, instructions: 'new' },
+        live: draft,
+      }),
+    ).toBe(true);
+  });
+
+  it('compares tool selections, reading an absent list as every tool', () => {
+    const all = ['sample_rows', 'ask_clarification', 'visuals'] as const;
+    expect(
+      hasUnpublishedChanges({
+        draft: { ...draft, tools: [...all] },
+        live: draft,
+      }),
+    ).toBe(false);
+    expect(
+      hasUnpublishedChanges({
+        draft: { ...draft, tools: ['sample_rows'] },
         live: draft,
       }),
     ).toBe(true);
@@ -189,6 +225,28 @@ describe('UserAgentsService', () => {
     expect(hasUnpublishedChanges(edited)).toBe(true);
     const republished = await ctx.service.publish(agent.id);
     expect(republished.live?.instructions).toBe('v2');
+  });
+
+  it('saves the tool selection in the draft and publishes it with the rest', async () => {
+    const agent = await ctx.service.create({
+      name: 'Analyst',
+      datasets: ['World Cup Core'],
+      tools: ['visuals', 'sample_rows'],
+    });
+    expect(agent.draft.tools).toEqual(['sample_rows', 'visuals']);
+    const published = await ctx.service.publish(agent.id);
+    expect(published.live?.tools).toEqual(['sample_rows', 'visuals']);
+    const edited = await ctx.service.saveDraft(agent.id, {
+      name: 'Analyst',
+      datasets: ['World Cup Core'],
+      tools: [],
+    });
+    expect(edited.draft.tools).toEqual([]);
+    expect(edited.live?.tools).toEqual(['sample_rows', 'visuals']);
+    await expect(
+      ctx.service.saveDraft(agent.id, { name: 'Analyst', tools: ['charts'] }),
+    ).rejects.toThrow('Unknown tool "charts"');
+    expect((await ctx.service.get(agent.id))?.draft.tools).toEqual([]);
   });
 
   it('refuses to publish without a dataset', async () => {

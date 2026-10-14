@@ -18,6 +18,12 @@ import {
 } from '../tools/visual.tools';
 import { getDatasetToolServices } from '../tool-services';
 import { entityOrientationLines, knowledgeContext } from '../context-blocks';
+import {
+  AGENT_TOOLS_CONTEXT_KEY,
+  isFullSelection,
+  type OptionalAgentTool,
+  toolSelectionFrom,
+} from '../agent-tools';
 import { runResultSetCheck } from './result-set-check';
 import type { ResultSetCheckOptions } from './result-set-check';
 import {
@@ -72,6 +78,11 @@ export interface AssistantEvalCase {
    * (`../agents/eval-judge.agent`) as an additional check.
    */
   judgeRubric?: string;
+  /**
+   * Run the case with this tool selection, as a session bound to a user
+   * agent would (agents.md 2.1, 4.2). Omitted = every tool.
+   */
+  agentTools?: OptionalAgentTool[];
 }
 
 /**
@@ -289,6 +300,53 @@ const WORLD_CUP_EVAL_CASES: AssistantEvalCase[] = [
       'chart that clearly covers something else). Score pass=false if no ' +
       'visual tool call succeeded, or the visual it produced does not match ' +
       'this request.',
+  },
+  {
+    id: 'no-clarification-best-team',
+    question: 'Which team performed best?',
+    intent:
+      'The ambiguous question again, for an agent without ask_clarification — it must pick a reading, answer it and state the assumption.',
+    agentTools: ['sample_rows', 'visuals'],
+    scorers: [
+      checks.calledTool('run_readonly_sql'),
+      checks.didNotCall('ask_clarification'),
+      checks.noToolErrors(),
+    ],
+    judgeRubric:
+      'The question ("Which team performed best?") does not say what "best" ' +
+      'means, and this assistant cannot ask the user a question back, so it ' +
+      'must pick a reading itself and answer it. Score pass=true only if the ' +
+      'final answer explicitly names the measure it took as "best" (e.g. ' +
+      'matches won, final placing, goals scored) and gives figures for that ' +
+      'measure that come from the queries it ran, naming the team or teams ' +
+      'that come out on top. Covering several measures is fine as long as ' +
+      'each is named and backed by figures. Score pass=false if the answer ' +
+      'asks the user which measure they mean instead of answering, gives no ' +
+      'figures, does not say which measure it used, or states figures the ' +
+      'tool calls do not support.',
+  },
+  {
+    id: 'no-visuals-chart-request',
+    question: 'Show me a chart of goals scored per World Cup tournament.',
+    intent:
+      'A chart request for an agent without visuals — it must say it cannot draw one here and give the numbers instead.',
+    agentTools: ['sample_rows', 'ask_clarification'],
+    scorers: [
+      checks.calledTool('run_readonly_sql'),
+      checks.didNotCall('create_visual'),
+      checks.noToolErrors(),
+    ],
+    judgeRubric:
+      'The user asked for a chart of goals scored per World Cup tournament, ' +
+      'but this assistant cannot create visuals. In this dataset the ' +
+      'knockout matches of 2018 have 23 goals and those of 2022 have 24 ' +
+      '(penalty shootouts not counted). Score pass=true only if the final ' +
+      'answer says, briefly, that it cannot draw a chart or visual here AND ' +
+      'gives the goals per tournament with figures consistent with 23 for ' +
+      '2018 and 24 for 2022 (a table or list is fine; shootout penalties ' +
+      'shown separately are fine). Score pass=false if it claims to have ' +
+      'created a chart, pastes HTML, CSS or JavaScript, gives no figures, or ' +
+      'states totals that contradict 23 and 24.',
   },
 ];
 
@@ -892,12 +950,18 @@ function evalRequestContext(
   sessionId: string | undefined,
   turnRecords: ToolDataRecord[],
   question: string,
+  agentTools?: readonly OptionalAgentTool[],
 ): RequestContext {
   const requestContext = new RequestContext();
   requestContext.set(DATASETS_CONTEXT_KEY, datasets);
   if (sessionId) requestContext.set(SESSION_ID_CONTEXT_KEY, sessionId);
   requestContext.set(TURN_QUESTION_CONTEXT_KEY, question);
   requestContext.set(TURN_RECORDS_CONTEXT_KEY, turnRecords);
+  // The case's tool selection, as a session bound to a user agent carries
+  // it (agents.md 4.2); none when the case keeps every tool.
+  if (agentTools && !isFullSelection(agentTools)) {
+    requestContext.set(AGENT_TOOLS_CONTEXT_KEY, [...agentTools]);
+  }
   return requestContext;
 }
 
@@ -1108,22 +1172,22 @@ export async function runAssistantEvalCase(
   try {
     const datasetSnapshots =
       await getDatasetToolServices().getDatasets(datasets);
-    const orientation = entityOrientationLines(datasets, datasetSnapshots).join(
-      '\n',
+    const requestContext = evalRequestContext(
+      datasets,
+      sessionId,
+      turnRecords,
+      evalCase.question,
+      evalCase.agentTools,
     );
+    // Block 1's dataset half, in the variant the case's tool selection gives.
+    const orientation = entityOrientationLines(
+      datasets,
+      datasetSnapshots,
+      toolSelectionFrom(requestContext),
+    ).join('\n');
 
     const result = await runEvals({
-      data: [
-        {
-          input: evalCase.question,
-          requestContext: evalRequestContext(
-            datasets,
-            sessionId,
-            turnRecords,
-            evalCase.question,
-          ),
-        },
-      ],
+      data: [{ input: evalCase.question, requestContext }],
       scorers: evalCase.scorers,
       target: assistantAgent,
       // Same step budget and dataset/entity + join-hint grounding a real chat
@@ -1164,6 +1228,8 @@ export async function runAssistantEvalCase(
         providerOptionsFor(await resolveAgentModel(), {
           reasoningEffort: 'medium',
         }),
+        undefined,
+        requestContext,
       );
     }
 

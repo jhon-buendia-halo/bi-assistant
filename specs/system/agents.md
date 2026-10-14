@@ -50,7 +50,7 @@ All agents are registered once in a single framework instance and looked up by *
 
 Lookup of an unknown key throws. The catalogue lists agents sorted by display name.
 
-**User agents** are not registry entries. They are stored documents ([data-model.md](data-model.md) section 3.10) and run on the `assistant`; the decision is ADR-0008 in [architecture.md](architecture.md). The catalogue endpoint merges them with the six registered agents ([api.md](api.md) section 2.6). A session started from a user agent runs the `assistant` with the agent's Live instructions as context Block 5 (4.1), its datasets as the session's datasets, and its model and effort overrides (1.3, 1.4) passed on the requestContext (4.2). Rules: sessions-chat R52-R59.
+**User agents** are not registry entries. They are stored documents ([data-model.md](data-model.md) section 3.10) and run on the `assistant`; the decision is ADR-0008 in [architecture.md](architecture.md). The catalogue endpoint merges them with the six registered agents ([api.md](api.md) section 2.6). A session started from a user agent runs the `assistant` with the agent's Live instructions as context Block 5 (4.1), its datasets as the session's datasets, its model and effort overrides (1.3, 1.4) passed on the requestContext (4.2), and only the tools its tool selection gives it (2.1, ADR-0021). Rules: sessions-chat R52-R59.
 
 Not registered (never listed in the catalogue):
 
@@ -180,6 +180,36 @@ LenAI deployments are never swapped to `openai/gpt-4.1-mini` (rule 2 requires no
 **Output.** Free text (markdown) — the answer. Tool calls along the way are captured by the orchestrator (5.1).
 
 **Tools.** `list_entities`, `describe_entity`, `sample_rows`, `run_readonly_sql`, `create_visual`, `update_visual`, `ask_clarification` (section 3). It is also bound to the session workspace, whose file tools it is offered (3.8), and it is given its own skills (7.4).
+
+**Tool selection (ADR-0021).** A call for a session bound to a user agent carries the agent's tool selection on the requestContext (`agent-tools`, 4.2): the optional tools its Live version (a preview's draft) selects, from `sample_rows`, `ask_clarification` and `visuals` (`create_visual` with `update_visual`). `list_entities`, `describe_entity` and `run_readonly_sql` are always given, and so is `read_file` while the assistant has on-demand skills. A call with no selection on its context, or with all three selected, gets the tools and prompt described in the rest of this section, unchanged. Otherwise the `assistant` builds both for the call:
+
+- **Tools offered:** only the always-given tools and the selected ones, in the usual order. A tool that is not selected is not offered, so the model can't call it whatever the prompt or instructions say.
+- **`## Tools`:** one line per tool offered (the rule above), so an unselected tool has no line.
+- **`## Working rules`:** each rule that names an unselected tool is replaced as a whole, word for word:
+  - **`ask_clarification` not selected:** the clarification paragraph (A4-A7) becomes:
+    ```
+    You can't ask the user a question back in this session. When a question is
+    ambiguous — an undefined measure such as "best", "top" or "performed well",
+    a fuzzy scope, or a name with several plausible matches in the data — pick
+    the most natural reading the data supports, run the analysis over it, and
+    state the assumption in the answer, e.g. "Taking 'best' as most matches
+    won: ...". When answering every reasonable reading is cheap, cover them all
+    instead.
+    ```
+  - **`visuals` not selected:** the *Interactive visuals* block (A21-A23) becomes:
+    ```
+    Interactive visuals:
+    - You can't create or change visuals in this session. When the user asks
+      for a chart or visual, say so in one short sentence and give the numbers
+      in the answer instead.
+    - Never paste HTML, CSS or JavaScript into the chat.
+    ```
+  - **`sample_rows` not selected:** its three mentions go: step 1 of the method reads `(list_entities, describe_entity)`; A5 reads `(via describe_entity)`; A19 reads `run_readonly_sql takes a rationale`. The existing line breaks are kept, so A5's two lines become `…you found (via` / `describe_entity), not invented ones. …`.
+
+  Each replacement is sent with the line breaks shown. Appendix A keeps the full-selection prompt only.
+- **Context Block 1 (4.1):** without `visuals`, the visuals half is left out (the blank separator, the `Interactive visuals in this session…` heading, the visual lines or `(none yet)`, and the open-visual line), so the block ends with its dataset half; without `sample_rows`, its hint reads `Use describe_entity / run_readonly_sql to inspect and query them.`
+
+The prompt and tools depend only on the selection, so there are eight variants. The deep-analysis calls (2.7), the grounding pass (5.6) and the tool-only synthesis pass (5.5) run with the turn's requestContext and so with the same selection.
 
 **Memory.** One persistent thread per session: `thread = resource = <session id>`. The last **40** messages are replayed into each turn; semantic recall off; working memory off; auto-generated thread titles off. Deleting a session deletes its thread. The Agents UI shows "Recent messages replayed" / "40 messages" (asserted by E2E).
 
@@ -691,7 +721,7 @@ Datasets for this session: <dataset names, comma-separated>.
 Entities available (fully-qualified catalog.schema.table):
 - <entity key> (dataset: <dataset>; datasource: <kind or "unknown"> <datasource id>)
 …                                   ← or "(none — the datasets are empty)"
-Use describe_entity / sample_rows / run_readonly_sql to inspect and query them.
+Use describe_entity / sample_rows / run_readonly_sql to inspect and query them.   ← "describe_entity / run_readonly_sql" without sample_rows (2.1)
 
 How these entities join (-> declared by the datasource, ~> inferred from
 naming; join on these columns rather than guessing a key name):
@@ -699,7 +729,7 @@ naming; join on these columns rather than guessing a key name):
 - <entity>.<column> ~> <ref entity>.<ref column>
 …                                   ← join section only when any column has a reference
 
-Interactive visuals in this session (id — title, current version):
+Interactive visuals in this session (id — title, current version):   ← this line and the next three are left out without visuals (2.1)
 - <visualId> — "<title>" v<currentVersion> (from the answer at <sourceMessageAt>)
 …                                   ← or "(none yet)"
 Visual currently open in the right panel: <visualId>.   ← or "No visual is open in the right panel."
@@ -749,7 +779,7 @@ Agent instructions (user-supplied by whoever built the agent "<agent Live name>"
 
 No budget beyond the 4,000-character limit on instructions (agents-evals R43). It is the last per-turn block, so the base prompt and every curated block come first; only the grounding pass's own nudge (5.6) follows it. The agent framework may still add its own system messages after the per-turn blocks, such as its workspace, available-skills and skills-usage messages (section 7); those are not per-turn blocks. The tool-only synthesis pass (5.5) sends no context blocks, so it carries no Block 5, but it runs with the turn's requestContext and provider options, so the agent's model and effort overrides still apply. The read-only guard, dataset scoping and the grounding pass are enforced in code (section 5), so nothing in this block can switch them off. The Live version is read when the call starts. A draft is used only by a **preview session** (agents-evals R60): there Block 5 and the overrides come from the agent's current draft instead.
 
-The eval harness (8.5) sends only Block 1's dataset half (no visuals lines) plus Block 3.
+The eval harness (8.5) sends only Block 1's dataset half (no visuals lines) plus Block 3; a case with `agentTools` gets its selection's hint (2.1), and its tool-only synthesis pass (5.5) runs with the case's requestContext.
 
 ### 4.2 requestContext keys
 
@@ -763,6 +793,7 @@ The eval harness (8.5) sends only Block 1's dataset half (no visuals lines) plus
 | `session-workspace-id` | every session-scoped call; designer calls | `session-<id>` | workspace resolver (7.1) |
 | `knowledge-used` | every session-scoped call | the knowledge snippets put in Block 3 | persistence of the answer's `knowledge` field |
 | `agent-overrides` | session-scoped assistant calls, only for a session bound to a user agent that still exists and whose Live version (for a preview session, its draft) sets an override | `{ model?: string; reasoningEffort?: 'low'\|'medium'\|'high' }` from the Live version | the `assistant`'s model function (1.3); the turn's provider options (1.4) |
+| `agent-tools` | session-scoped assistant calls, only for a session bound to a user agent that still exists and whose Live version (for a preview session, its draft) has a `tools` list without all three optional tools; eval cases with `agentTools` (8.1) | the selected optional tools, e.g. `['sample_rows']` | the `assistant`'s tools and instructions functions (2.1); Block 1 (4.1) |
 
 A fresh context object is created per call, so nothing leaks between turns or sessions.
 
@@ -1217,7 +1248,7 @@ Built-in skills, declared in code (`AGENT_SKILLS` for on-demand, `HARNESS_SKILLS
 | `visualization` (designer) | none (it runs without tools) | `interactive-visuals` (7.2): the router body of `SKILL.md`, plus `reference/spec-mode.md` on spec calls or `reference/freeform.md` on freeform calls |
 | `sql-fixer`, `sql-verifier`, `knowledge-bootstrap`, `assistant-eval-judge` | none | none |
 
-No built-in skill is on demand. Two were measured and cut on 2026-10-13. A visuals skill would have cost a catalog plus usage note of about 1,045 characters on every turn to save 427. A dialects skill had no existing guidance to move. The first user or project skill that reaches the `assistant` gives it the `## Skills` section and `read_file` on every turn (7.3).
+`curated-knowledge` is the only built-in skill on demand (ADR-0020), so every assistant call carries the `## Skills` section and `read_file`. Two other on-demand skills were measured and cut on 2026-10-13. A visuals skill would have cost a catalog plus usage note of about 1,045 characters on every turn to save 427. A dialects skill had no existing guidance to move. The first user or project skill that reaches the `assistant` gives it the `## Skills` section and `read_file` on every turn (7.3).
 
 ### 7.5 The assistant's `## Skills` section
 
@@ -1263,6 +1294,7 @@ EvalCase = {
   expectedSql?: string       trusted SQL whose live result is the reference answer
   resultSetOptions?: { distinctRows?: boolean }
   judgeRubric?: string       natural-language rubric for the LLM judge
+  agentTools?: string[]      run the case with this tool selection (2.1, 4.2); omitted = every tool
 }
 ```
 
@@ -1272,8 +1304,8 @@ Built-in check types used by the cases (each exposes an id, name and a descripti
 
 | Set id | Name | Fixture | Cases |
 |---|---|---|---|
-| `world-cup` | World Cup | `world-cup` (PostgreSQL) | 10: `champion-2022`, `final-score-2018`, `top-scorer-2022`, `shootouts`, `biggest-venue` (distinctRows), `schema-discovery`, `ambiguous-best-team` (judge), `possession-vs-result` (judge), `out-of-scope` (judge), `visual-request` (judge) |
-| `world-cup-rest` | World Cup (REST API) | `world-cup-rest` (REST) | the same 10 with ids prefixed `rest-` and `expectedSql` ported to SQLite over `api.world_cup.*`; a base case with `expectedSql` but no port is a startup error |
+| `world-cup` | World Cup | `world-cup` (PostgreSQL) | 12: `champion-2022`, `final-score-2018`, `top-scorer-2022`, `shootouts`, `biggest-venue` (distinctRows), `schema-discovery`, `ambiguous-best-team` (judge), `possession-vs-result` (judge), `out-of-scope` (judge), `visual-request` (judge), `no-clarification-best-team` (judge, `agentTools` without `ask_clarification`), `no-visuals-chart-request` (judge, `agentTools` without `visuals`) |
+| `world-cup-rest` | World Cup (REST API) | `world-cup-rest` (REST) | the same 12 with ids prefixed `rest-` and `expectedSql` ported to SQLite over `api.world_cup.*`; a base case with `expectedSql` but no port is a startup error |
 | `formula-1` | Formula 1 | `formula-1` (PostgreSQL) | `f1-champion-2023`, `f1-british-gp-2023`, `f1-most-race-wins`, `f1-most-titles-tie`, `f1-monaco-2024-podium`, `f1-schema-discovery`, `f1-ambiguous-dominant-driver` (judge), `f1-pole-to-win-2023` (judge), `f1-out-of-scope-motogp` (judge), `f1-visual-request` (judge) |
 
 Representative cases (pattern every set follows):
@@ -1283,6 +1315,7 @@ Representative cases (pattern every set follows):
 - *Ambiguity* — must call `ask_clarification` and not `run_readonly_sql`; judge checks the answer is itself a clarifying question with 2-4 concrete options grounded in the dataset and no figures.
 - *Out of scope* — only `noToolErrors`; judge requires stating it cannot answer for the uncovered scope **and** what the data does cover, with no invented statistic.
 - *Visual* — toolOrder `run_readonly_sql` → `create_visual`, calledTool `create_visual`; judge checks the created visual's title/description matches the request.
+- *Tool selection* — `no-clarification-best-team` asks "Which team performed best?" with `agentTools: ['sample_rows', 'visuals']`: must call `run_readonly_sql`, not `ask_clarification`, and make no tool errors; the judge checks the answer names the measure it took as "best" and gives figures for it. `no-visuals-chart-request` asks "Show me a chart of goals scored per World Cup tournament." with `agentTools: ['sample_rows', 'ask_clarification']`: must call `run_readonly_sql`, not `create_visual`, and make no tool errors; the judge checks the answer says it can't draw a visual here and gives the goals per tournament (23 in 2018, 24 in 2022, checked against the fixture on 2026-10-14).
 - *Judgement over counts* (`possession-vs-result`) — no expectedSql (a wide pivot vs a long aggregate state the same fact but don't compare positionally); the judge rubric states the true answer (2 won / 6 lost of 8).
 
 The exact questions, regexes, reference SQL and rubrics are a data asset copied verbatim on rebuild; see *Data assets* in [specs/README.md](../README.md). The question list is in [agents-evals](../capabilities/agents-evals/spec.md).

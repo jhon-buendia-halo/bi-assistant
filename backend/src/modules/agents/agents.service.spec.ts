@@ -15,15 +15,37 @@ import { UserAgentsRepository } from '../user-agents/repositories/user-agents.re
 import { UserAgentsService } from '../user-agents/user-agents.service';
 import { AgentsService } from './agents.service';
 
-/** A registry entry with just the accessors `AgentsService` reads. */
+type Context = { requestContext?: { get(key: string): unknown } };
+
+/** The tool selection a call carries, as the real assistant reads it. */
+const selectionOf = (args?: Context) =>
+  args?.requestContext?.get('agent-tools') as string[] | undefined;
+
+/**
+ * A registry entry with just the accessors `AgentsService` reads. Like the
+ * real assistant, it drops `create_visual` and says so in its prompt when
+ * the call's tool selection leaves out `visuals` (ADR-0021).
+ */
 function fakeAgent(name: string, tools: string[], instructions = '') {
   return {
     id: name,
     name,
     getDescription: () => `${name} description`,
-    listTools: () =>
-      Object.fromEntries(tools.map((tool) => [tool, { description: tool }])),
-    getInstructions: () => instructions,
+    listTools: (args?: Context) =>
+      Object.fromEntries(
+        tools
+          .filter(
+            (tool) =>
+              tool !== 'create_visual' ||
+              !selectionOf(args) ||
+              selectionOf(args)!.includes('visuals'),
+          )
+          .map((tool) => [tool, { description: tool }]),
+      ),
+    getInstructions: (args?: Context) =>
+      selectionOf(args)
+        ? `${instructions} [tools: ${selectionOf(args)!.join(',')}]`
+        : instructions,
     getMemory: () => undefined,
     getModel: () => {
       throw new Error('no LLM settings');
@@ -184,6 +206,58 @@ describe('AgentsService (built-in and user agents)', () => {
         'run_readonly_sql',
       ]);
       expect(await ctx.service.get('unknown')).toBeNull();
+    }),
+  );
+
+  it(
+    "shows the tools and prompt a user agent's selection gives it, Live else draft (R49)",
+    asDemoUser(async () => {
+      const created = await ctx.service.create({
+        name: 'KPI lookup',
+        datasets: ['World Cup Core'],
+        tools: ['sample_rows'],
+      });
+
+      // Draft only: the draft's selection.
+      let summary = (await ctx.service.list()).find(
+        (agent) => agent.key === created.id,
+      );
+      expect(summary?.tools).toEqual(['run_readonly_sql']);
+      expect(created.tools).toEqual(['run_readonly_sql']);
+      let detail = await ctx.service.get(created.id);
+      expect(detail?.tools).toEqual(['run_readonly_sql']);
+      expect(detail?.toolDetails.map((tool) => tool.name)).toEqual([
+        'run_readonly_sql',
+      ]);
+      expect(detail?.instructions).toBe(
+        'You are the assistant. [tools: sample_rows]',
+      );
+
+      // Live with every tool, while the draft goes back to one tool: Live wins.
+      await ctx.service.saveDraft(created.id, {
+        name: 'KPI lookup',
+        datasets: ['World Cup Core'],
+        tools: ['sample_rows', 'ask_clarification', 'visuals'],
+      });
+      await ctx.service.publish(created.id);
+      await ctx.service.saveDraft(created.id, {
+        name: 'KPI lookup',
+        datasets: ['World Cup Core'],
+        tools: [],
+      });
+      summary = (await ctx.service.list()).find(
+        (agent) => agent.key === created.id,
+      );
+      expect(summary?.tools).toEqual(['create_visual', 'run_readonly_sql']);
+      detail = await ctx.service.get(created.id);
+      expect(detail?.instructions).toBe('You are the assistant.');
+      expect(detail?.draft?.tools).toEqual([]);
+
+      // The built-in assistant is unchanged.
+      expect((await ctx.service.get('assistant'))?.tools).toEqual([
+        'create_visual',
+        'run_readonly_sql',
+      ]);
     }),
   );
 

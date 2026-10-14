@@ -13,4 +13,6 @@ export class SaveAgentDto {
   starterQuestions?: string[];
   model?: string;
   reasoningEffort?: ReasoningEffort;
+  /** Any of `sample_rows`, `ask_clarification`, `visuals`; omitted = all. */
+  tools?: string[];
 }

@@ -34,7 +34,7 @@ Agent Hub and agent detail
 
 Question sets
 - R10. Only the assistant SHALL have eval sets. Every other agent's Evals tab SHALL show "No evals configured for this agent yet."
-- R11. The system SHALL provide three sets, each bound to one sample fixture and containing 10 questions: `world-cup` ("World Cup", PostgreSQL), `world-cup-rest` ("World Cup (REST API)", the same questions against the REST sample, case ids prefixed `rest-`) and `formula-1` ("Formula 1", PostgreSQL, 1950 to 2026). The question lists are in *Eval suite content* below. Case ids SHALL be unique across all sets.
+- R11. The system SHALL provide three sets, each bound to one sample fixture: `world-cup` ("World Cup", PostgreSQL, 12 questions), `world-cup-rest` ("World Cup (REST API)", the same 12 questions against the REST sample, case ids prefixed `rest-`) and `formula-1` ("Formula 1", PostgreSQL, 1950 to 2026, 10 questions). The question lists are in *Eval suite content* below. Case ids SHALL be unique across all sets.
 - R12. Each set SHALL carry a name, a description of what it covers and what it needs to run, and its cases. Each case SHALL carry an id, the question, an intent (what it probes) and its checks (id, name and description).
 - R13. The Evals tab SHALL open on the list of sets, each showing its name, "<N> questions" and its description, with no question shown and no run button. Clicking a set SHALL open it (revealing its questions, the datasource picker and the run button) and tick all of its questions; clicking the open set again SHALL close it and clear the ticks. Sets SHALL be unselectable while a run is starting or running.
 - R14. An open set SHALL show "<N> questions in <set name>. Each check must score 1.0 for its question to pass.", then the datasource picker, the run button, a **Select all** checkbox and the numbered question list.
@@ -107,6 +107,8 @@ World Cup set (`world-cup`; the REST set repeats these ten with ids `rest-<id>`,
 | `possession-vs-result` | In the 2022 knockout rounds, did the team with more possession usually win? | ran SQL; mentions possession or %; no tool errors; judge: concludes no, backed by counts consistent with 2 won and 6 lost of 8 |
 | `out-of-scope` | How many goals did Pelé score in the 1970 World Cup? | no tool errors; judge: says it cannot answer for 1970, states the data covers 2018 and/or 2022, invents no figure |
 | `visual-request` | Chart the goals scored by each team in the 2022 knockout stage. | tools called in order `run_readonly_sql` then `create_visual`; called `create_visual`; no tool errors; judge: a visual tool succeeded and plausibly charts goals per team for the 2022 knockouts |
+| `no-clarification-best-team` | Which team performed best? | run with the tools `sample_rows` and `visuals` (no `ask_clarification`); called `run_readonly_sql`; did not call `ask_clarification`; no tool errors; judge: the answer names the measure it took as "best" and gives figures for it |
+| `no-visuals-chart-request` | Show me a chart of goals scored per World Cup tournament. | run with the tools `sample_rows` and `ask_clarification` (no `visuals`); called `run_readonly_sql`; did not call `create_visual`; no tool errors; judge: the answer says it can't draw a visual here and gives the goals per tournament (23 in 2018, 24 in 2022) |
 
 Formula 1 set (`formula-1`), ids all prefixed `f1-`:
 
@@ -124,13 +126,13 @@ Formula 1 set (`formula-1`), ids all prefixed `f1-`:
 | `f1-visual-request` | Chart the total points scored by each constructor in the 2023 season. | tools in order `run_readonly_sql` then `create_visual`; called `create_visual`; no tool errors; judge: a visual tool succeeded and plausibly charts constructor points for 2023 |
 
 User agents (definitions)
-- R43. A user agent SHALL be a stored configuration of the assistant with: a `name` (required, trimmed, at most 64 characters, unique among user agents ignoring case), a `description` (at most 280), `instructions` (at most 4,000), `datasets` (dataset names, de-duplicated), `starterQuestions` (at most 5, each at most 200; blanks dropped, de-duplicated) and an optional `model` (a model or deployment name of the configured provider) and optional `reasoningEffort`. Over-long text SHALL be clipped to the limit.
+- R43. A user agent SHALL be a stored configuration of the assistant with: a `name` (required, trimmed, at most 64 characters, unique among user agents ignoring case), a `description` (at most 280), `instructions` (at most 4,000), `datasets` (dataset names, de-duplicated), `starterQuestions` (at most 5, each at most 200; blanks dropped, de-duplicated) an optional `model` (a model or deployment name of the configured provider), an optional `reasoningEffort`, and an optional `tools` list: the optional assistant tools it gets, any of `sample_rows`, `ask_clarification` and `visuals`, with every tool when absent ([agents.md](../../system/agents.md) 2.1). Over-long text SHALL be clipped to the limit. Any other `tools` entry SHALL be refused with `Unknown tool "<name>"`.
 - R44. Every user agent SHALL have a **draft**. Publishing SHALL copy the draft to the **Live** version and record when. The status SHALL be `live` when a Live version exists, else `draft`. An agent has **unpublished changes** when it is Live and its draft differs from its Live version. Saving a draft SHALL NOT change the Live version.
 - R45. Publishing SHALL require a name and at least one dataset, else `Select at least one dataset to publish`. Creating a draft SHALL require only a name, else `Agent name is required`. A name already used by another user agent SHALL be refused with `An agent named "<name>" already exists`.
 - R46. Built-in agents SHALL NOT be created, edited, published or deleted through these operations: `Built-in agents can't be edited` and `Built-in agents can't be deleted`.
 - R47. Any agent, built-in or user-built, SHALL be pinnable and unpinnable. A user agent's pin SHALL be stored with it and a built-in agent's pin in the app settings, so pins survive a restart.
 - R48. The agent catalogue SHALL list built-in and user agents together. Each entry SHALL carry its kind (`official` for the assistant, `system` for the five helpers, `user`), status (`builtin`, `draft` or `live`), pinned flag, owner (`Official`, `System` or `You`), whether it has unpublished changes, its datasets and starter questions, and `missingDatasets`: the dataset names in its effective configuration (Live version, else draft) that no longer exist.
-- R49. Requesting one agent SHALL resolve the key as a built-in agent first, then as a user-agent id. A user agent's detail SHALL report the assistant's tools, memory and resolved model, because it runs on the assistant, together with its draft and its Live version.
+- R49. Requesting one agent SHALL resolve the key as a built-in agent first, then as a user-agent id. A user agent's detail SHALL report the assistant's memory and resolved model, because it runs on the assistant, and the tools and prompt its tool selection gives it (Live version, else draft), together with its draft and its Live version.
 - R50. Deleting a user agent SHALL remove only its definition. Sessions that reference it SHALL keep their transcript (their behaviour is in [../sessions-chat/spec.md](../sessions-chat/spec.md)).
 - R51. Saving a draft, publishing, deleting or pinning an agent that does not exist SHALL fail with `Agent "<id>" not found` (an `ok: false` answer); requesting the detail of one SHALL fail with HTTP 404 as in R8.
 - R52. User agents SHALL persist across restarts of the backend.
@@ -146,14 +148,15 @@ User agents (definitions)
   - **Datasets**: one checkbox per existing dataset, by name. A dataset in the draft that no longer exists SHALL stay listed, ticked, as `<name> (missing)`, so the user can untick it. With no datasets at all: `No datasets yet — create one in Datasets first.`;
   - **Starter questions**: up to 5 single-line fields of at most 200 characters, each with a **Remove starter question** button, and **Add starter question**, disabled at 5;
   - **Model**: free text, a model or deployment name of the configured provider, with the placeholder `Default (<configured model>)`, or `Default` when no LLM is configured;
-  - **Reasoning effort**: `Default`, `Low`, `Medium` or `High`.
+  - **Reasoning effort**: `Default`, `Low`, `Medium` or `High`;
+  - **Tools**: one checkbox per optional tool (`Sample rows`, `Ask clarifying questions`, `Create and change visuals`), all ticked on a new agent and on an agent saved before tools could be chosen. The hint SHALL say the agent can always list, describe and query its datasets.
 - R56. **Save** SHALL store the form as the draft, creating the agent on its first save (R45), and show the backend's message as a toast (`Agent "<name>" saved as draft`, then `Draft saved`). A refusal (`Agent name is required`, `An agent named "<name>" already exists`) SHALL show as an error toast and change nothing. Save SHALL be disabled while the name is blank, while nothing changed since the last save, or while a save is in flight.
 - R57. **Publish** SHALL first save the form when it has changes (R56; a refusal stops it), then publish the draft (R44, R45) and show `Agent "<name>" is Live` or the refusal, such as `Select at least one dataset to publish`. It SHALL be shown while the agent is new, has no Live version, has unpublished changes, or the form has changes.
 - R58. The editor's header SHALL show the agent's `Draft` or `Live` chip and, when it applies, `Unpublished changes`, updated after every save and publish. Editing a Live agent SHALL change only its draft: its sessions keep the Live version until the draft is published (R44; sessions-chat R54).
 - R59. **Back** SHALL return to the agent's detail view, or to the hub for an agent that was never saved. Leaving the editor in any way (Back, the rail, the drawer) with unsaved changes SHALL first ask `Discard unsaved changes?`. Cancelling SHALL keep the editor open with its changes.
 - R60. **Preview** SHALL open the **preview chat** in the right Details panel, beside the form (app-shell R10). While the editor is open, the Details panel SHALL always hold the preview chat, however it is opened. The preview SHALL behave like a session started from the agent (sessions-chat R54, R55, R58), titled `Preview`, except that it runs the saved **draft**:
   - sending a preview message SHALL first save the form when it has changes (R56; a refusal stops the send), so the preview always runs what Save stored;
-  - each preview turn SHALL use the draft's current instructions, model and effort overrides, and those of its datasets that exist;
+  - each preview turn SHALL use the draft's current instructions, model and effort overrides, tool selection, and those of its datasets that exist;
   - with no existing dataset in the draft, the panel SHALL say `Select at least one dataset to preview` and the composer SHALL be disabled.
 - R61. A preview conversation SHALL NOT be listed with the sessions or stored in the sessions collection. **Reset preview** SHALL discard it and start an empty one. Leaving the editor, or closing the Details panel, SHALL discard it together with its agent memory and workspace files. Preview conversations left behind when the app stopped SHALL be discarded at the next backend start.
 
@@ -232,13 +235,13 @@ Feature: Agents
     When I open the Model tab
     Then I see "Provider"
     When I open the Evals tab
-    Then I see the "world-cup" set listed with "10 questions"
+    Then I see the "world-cup" set listed with "12 questions"
     And no individual question is shown
     And the run button is hidden
     When I open the "world-cup" set
     Then the "champion-2022" question shows "Who won the 2022 World Cup?"
     And it lists the check "Checks if output includes "Argentina""
-    And 10 questions are listed
+    And 12 questions are listed
     When I click the open "world-cup" set again
     Then no questions are listed
     When I click "All agents"
@@ -313,15 +316,15 @@ Feature: Agents
     Given a "World Cup PostgreSQL" datasource exists
     And a dataset containing the World Cup tables and views exists
     And I am on the "world-cup" set in the agent's Evals tab
-    Then the Questions sub-tab is shown with 10 questions
+    Then the Questions sub-tab is shown with 12 questions
     When I open the executions sub-tab
     Then I see "No eval runs yet"
     And no questions are listed
     When I return to the Questions sub-tab and click the run button
     And I open the executions sub-tab
-    Then the first execution shows "0/10 passed"
+    Then the first execution shows "0/12 passed"
     When I return to the Questions sub-tab
-    Then 10 questions are listed
+    Then 12 questions are listed
 
   Scenario: Downloads an execution as a Markdown report
     Given a "World Cup PostgreSQL" datasource exists
@@ -603,6 +606,21 @@ Feature: Agent editor
     Then the editor shows "Live" without "Unpublished changes"
     When I open the "Cup historian" session and send "And in 2010?"
     Then the model received "Talk like a pirate."
+
+  Scenario: Tools left unticked are not offered to the model
+    When I click "Agents"
+    And I click "New agent"
+    Then "Sample rows", "Ask clarifying questions" and "Create and change visuals" are ticked
+    When I type "KPI lookup" into "Name"
+    And I tick "World Cup Core"
+    And I untick "Ask clarifying questions"
+    And I untick "Create and change visuals"
+    And I click "Save"
+    And I send "Who won in 2014?" in the preview
+    Then the model was offered "sample_rows" but not "ask_clarification", "create_visual" or "update_visual"
+    And the model's prompt says "You can't ask the user a question back in this session."
+    When I click "Back"
+    Then the "Tools" tab lists "sample_rows" and not "create_visual"
 
   Scenario: Sending in the preview saves the form first
     Given a draft user agent "Cup historian" over "World Cup Core" with the instructions "Answer in one sentence."

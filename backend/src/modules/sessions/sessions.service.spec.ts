@@ -599,6 +599,74 @@ describe('SessionsService streaming', () => {
       ).toBe(false);
     });
 
+    it("puts the agent's tool selection on the turn and trims Block 1 (ADR-0021)", async () => {
+      const { service, agent } = buildStreaming(answerStream([]), {
+        userAgent: {
+          id: 'agent-1',
+          live: { ...historian, tools: ['ask_clarification'] },
+        },
+      });
+
+      await service.streamMessage('session-1', 'Who won in 2014?', () => {});
+
+      const options = turnOptions(agent);
+      expect(options.requestContext.get('agent-tools')).toEqual([
+        'ask_clarification',
+      ]);
+      const block1 = options.context[0].content;
+      expect(block1).toContain(
+        'Use describe_entity / run_readonly_sql to inspect and query them.',
+      );
+      expect(block1).not.toContain('sample_rows');
+      expect(block1).not.toContain('Interactive visuals in this session');
+      expect(block1).not.toContain('right panel');
+    });
+
+    it('keeps the full Block 1 and no selection when the agent selects every tool', async () => {
+      for (const tools of [
+        undefined,
+        ['visuals', 'sample_rows', 'ask_clarification'],
+      ]) {
+        const { service, agent } = buildStreaming(answerStream([]), {
+          userAgent: {
+            id: 'agent-1',
+            live: { ...historian, ...(tools ? { tools } : {}) },
+          },
+        });
+
+        await service.streamMessage('session-1', 'Who won in 2014?', () => {});
+
+        const options = turnOptions(agent);
+        expect(options.requestContext.get('agent-tools')).toBeUndefined();
+        const block1 = options.context[0].content;
+        expect(block1).toContain(
+          'Use describe_entity / sample_rows / run_readonly_sql to inspect and query them.',
+        );
+        expect(block1).toContain(
+          'Interactive visuals in this session (id — title, current version):\n(none yet)\nNo visual is open in the right panel.',
+        );
+      }
+    });
+
+    it('keeps the visuals lines and drops only the sample_rows hint without sample_rows', async () => {
+      const { service, agent } = buildStreaming(answerStream([]), {
+        userAgent: {
+          id: 'agent-1',
+          live: { ...historian, tools: ['visuals'] },
+        },
+      });
+
+      await service.streamMessage('session-1', 'Who won in 2014?', () => {});
+
+      const options = turnOptions(agent);
+      expect(options.requestContext.get('agent-tools')).toEqual(['visuals']);
+      const block1 = options.context[0].content;
+      expect(block1).toContain(
+        'Use describe_entity / run_readonly_sql to inspect and query them.',
+      );
+      expect(block1).toContain('Interactive visuals in this session');
+    });
+
     it('re-stamps the agent name when the agent was renamed', async () => {
       const { service, repository, session } = buildStreaming(
         answerStream([]),

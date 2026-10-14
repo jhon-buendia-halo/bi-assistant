@@ -8,6 +8,7 @@ import { SessionsApiService } from '../../sessions/services/sessions-api.service
 import {
   AgentMutationResult,
   AgentStatus,
+  AgentToolId,
   AgentsApiService,
 } from './agents-api.service';
 import {
@@ -169,6 +170,15 @@ export class AgentEditorService {
       datasets: checked
         ? [...form.datasets.filter((item) => item !== name), name]
         : form.datasets.filter((item) => item !== name),
+    }));
+  }
+
+  toggleTool(id: AgentToolId, checked: boolean): void {
+    this.form.update((form) => ({
+      ...form,
+      tools: checked
+        ? [...form.tools.filter((item) => item !== id), id]
+        : form.tools.filter((item) => item !== id),
     }));
   }
 

@@ -795,7 +795,7 @@ A user agent's builder chooses its tools from the assistant's own set, writes sk
 - **Acceptance:** the user confirms the epic spec (`Status: Confirmed`) and ADR-0021 (`Accepted`); `python3 scripts/check-specs.py` passes.
 - **Notes:** measured on 2026-10-14 from the compiled assistant at `513009d`: prompt 8,729 characters, `## Skills` 904, about 160 per extra catalog entry. Epic spec and ADR-0021 confirmed by the user on 2026-10-14. Evidence: [evidence/1.14.1/](evidence/1.14.1/).
 
-#### 1.14.2 — Choose an agent's tools ([BA-217](https://halo-powered.atlassian.net/browse/BA-217))  `📋 Planned`
+#### 1.14.2 — Choose an agent's tools ([BA-217](https://halo-powered.atlassian.net/browse/BA-217))  `🚧 In progress`
 - **Intent:** an agent's builder decides which of the assistant's tools it gets, and the model is offered only those.
 - **Scope:** `tools` in the agent configuration (absent means all); the assistant's tools and prompt built per call from the requestContext; `list_entities`, `describe_entity` and `run_readonly_sql` always on; `sample_rows`, `ask_clarification` and Visuals (`create_visual` + `update_visual`) optional; tool-free replacement wording for the rules that name a tool that is off; a tool picker in the agent editor; the preview runs the draft's tools; eval cases with clarification off and with Visuals off.
 - **Out of scope:** new tools; tools for the System agents.

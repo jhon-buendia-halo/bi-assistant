@@ -3,6 +3,7 @@
 // datasets), and `KnowledgeService` (mining drafts from a dataset's schema).
 // No Nest DI here, same pattern as `tool-services.ts`.
 import type { DatasetColumnSnapshot, DatasetSnapshot } from './tool-services';
+import { type OptionalAgentTool, selects } from './agent-tools';
 
 /** One per-turn system message (agents.md 4.1). */
 export interface SystemBlock {
@@ -87,6 +88,8 @@ function joinHintHeader(lines: string[]): string {
 export function entityOrientationLines(
   datasetNames: string[],
   datasets: DatasetSnapshot[],
+  /** The call's tool selection (agents.md 2.1); undefined = every tool. */
+  selection?: readonly OptionalAgentTool[],
 ): string[] {
   const entityLines = datasets.flatMap((s) =>
     s.tables.map(
@@ -99,7 +102,9 @@ export function entityOrientationLines(
     `Datasets for this session: ${datasetNames.join(', ')}.`,
     'Entities available (fully-qualified catalog.schema.table):',
     ...(entityLines.length ? entityLines : ['(none — the datasets are empty)']),
-    'Use describe_entity / sample_rows / run_readonly_sql to inspect and query them.',
+    selects(selection, 'sample_rows')
+      ? 'Use describe_entity / sample_rows / run_readonly_sql to inspect and query them.'
+      : 'Use describe_entity / run_readonly_sql to inspect and query them.',
     ...(joinHints ? ['', joinHints] : []),
   ];
 }

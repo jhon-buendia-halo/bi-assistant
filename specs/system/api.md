@@ -453,12 +453,12 @@ Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra regi
 
 #### 33. `GET /agents`
 - Response `200`: `{ agents: AgentSummary[] }` sorted by `name`, built-in and user agents together.
-- `AgentSummary = { key, id, name, description, tools: string[] /* sorted tool names; a user agent shows the assistant's */, kind: 'official'|'system'|'user', status: 'builtin'|'draft'|'live', pinned: boolean, owner: 'Official'|'System'|'You', hasUnpublishedChanges: boolean, missingDatasets: string[], datasets: string[], starterQuestions: string[] }`.
-- For a user agent `key` equals `id`, and `name`, `description`, `datasets` and `starterQuestions` come from the Live version when there is one, else the draft. For a built-in agent `status` is `builtin`, `hasUnpublishedChanges` is `false` and `datasets`, `starterQuestions` and `missingDatasets` are empty. `kind` is `official` for `assistant` and `system` for the other five.
+- `AgentSummary = { key, id, name, description, tools: string[] /* sorted tool names; a user agent shows those its effective configuration selects (agents.md 2.1) */, kind: 'official'|'system'|'user', status: 'builtin'|'draft'|'live', pinned: boolean, owner: 'Official'|'System'|'You', hasUnpublishedChanges: boolean, missingDatasets: string[], datasets: string[], starterQuestions: string[] }`.
+- For a user agent `key` equals `id`, and `name`, `description`, `datasets`, `starterQuestions` and `tools` come from the Live version when there is one, else the draft. For a built-in agent `status` is `builtin`, `hasUnpublishedChanges` is `false` and `datasets`, `starterQuestions` and `missingDatasets` are empty. `kind` is `official` for `assistant` and `system` for the other five.
 
 #### 34. `GET /agents/:key`
 - Response `200`: `AgentDetail = AgentSummary & { draft?: AgentConfig; live?: AgentConfig /* user agents only; shapes in data-model 3.10 */; instructions: string /* prompt flattened to text */; toolDetails: { name, description, inputs: string[] /* top-level input param names */ }[]; memory: { storage: string|null; lastMessages: number|false|null; semanticRecall: boolean; workingMemory: boolean; generateTitle: boolean } | null; model: { id: string; provider: string } | null /* null when no LLM settings saved */ }`.
-- A user agent runs on the assistant, so its `instructions`, `toolDetails`, `memory` and `model` describe the assistant. Its own instructions are in `draft` and `live`.
+- A user agent runs on the assistant, so its `instructions`, `toolDetails`, `memory` and `model` describe the assistant, with the prompt and tools that the agent's tool selection gives it (Live version, else draft; [agents.md](agents.md) 2.1). Its own instructions are in `draft` and `live`.
 - Errors (Style B): `404 "Agent \"<key>\" not found"`. `:key` is resolved as a registry key first, then as a user-agent id.
 
 #### 34a. `GET /agents/:key/skills`
@@ -509,14 +509,14 @@ Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra regi
 - Success: `{ ok:true, message:"Run deleted" }`. A run still `running`, or an unknown id, returns `{ ok:false, message:"Cannot delete a run that is still going" }` (the same message for both cases).
 
 #### 41. `POST /agents`
-- Body: `{ name: string; description?: string; instructions?: string; datasets?: string[]; starterQuestions?: string[]; model?: string; reasoningEffort?: 'low'|'medium'|'high' }`. Limits and normalisation: R43.
+- Body: `{ name: string; description?: string; instructions?: string; datasets?: string[]; starterQuestions?: string[]; model?: string; reasoningEffort?: 'low'|'medium'|'high'; tools?: ('sample_rows'|'ask_clarification'|'visuals')[] }`. Limits and normalisation: R43. `tools` omitted means every tool ([data-model.md](data-model.md) 3.10).
 - Success: `{ ok:true, message:"Agent \"<name>\" saved as draft", agent: AgentSummary }`. The agent is a draft, not pinned.
-- Failures (Style A): `"Agent name is required"`; `"An agent named \"<name>\" already exists"`.
+- Failures (Style A): `"Agent name is required"`; `"An agent named \"<name>\" already exists"`; `"Unknown tool \"<name>\""` for a `tools` entry that is not one of the three.
 
 #### 42. `PUT /agents/:id/draft`
 - Body: as endpoint 41. Replaces the whole draft; a Live version is untouched.
 - Success: `{ ok:true, message:"Draft saved", agent: AgentSummary }`.
-- Failures (Style A): `"Agent \"<id>\" not found"`; `"Agent name is required"`; `"An agent named \"<name>\" already exists"`; `"Built-in agents can't be edited"` (`:id` is a registry key).
+- Failures (Style A): `"Agent \"<id>\" not found"`; `"Agent name is required"`; `"An agent named \"<name>\" already exists"`; `"Unknown tool \"<name>\""`; `"Built-in agents can't be edited"` (`:id` is a registry key).
 
 #### 43. `POST /agents/:id/publish`
 - No body. Copies the draft to the Live version and stamps `publishedAt`.
