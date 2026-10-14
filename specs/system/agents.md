@@ -1229,7 +1229,11 @@ A case **passes** when it has at least one check and every check scored 1. Each 
 
 ### 8.5 Other entry points
 
-- **CLI** — same suite over `EVAL_DATASETS` (comma-separated saved dataset names), booting the whole backend without HTTP; prints `PASS|FAIL <id> (<ms>)` per case and `<passed>/<total> questions passed`; exit code 1 unless all pass.
+- **CLI** — same suite over `EVAL_DATASETS` (comma-separated saved dataset names), booting the whole backend without HTTP. Exactly one of these selects the questions:
+  - `EVAL_SET`: a set id (`world-cup`, `world-cup-rest`, `formula-1`); runs every case of that set.
+  - `EVAL_CASES`: comma-separated case ids, which must all belong to one set's fixture. The data preflight (8.2) refuses a mix.
+
+  With neither, both, an unknown set id or an unknown case id, it runs nothing, makes no model call, prints the error and exits 1. The errors are `Set EVAL_SET to one question set (world-cup, world-cup-rest, formula-1) or EVAL_CASES to comma-separated case ids`, `Set EVAL_SET or EVAL_CASES, not both`, `Unknown question set "<id>" (known: …)` and `Unknown eval case(s): <ids>`. It prints `PASS|FAIL <id> (<ms>)` per case and `<passed>/<total> questions passed`, and exits 1 unless all pass.
 - **Golden-set harness** — a separate developer harness over a JSON golden set (`{name, question, dataset, expectedSql, placeholder?, notes?}`) that runs each question as a **real streamed chat turn** in a throwaway session (300 s timeout) and compares the answer's last successful SQL result with `expectedSql` using 5.9 (strict width). Verdicts `PASS|FAIL|ERROR|SKIP`.
 
 > Implementation note: `mastra/evals/assistant.evals.ts` (`runEvals` from `@mastra/core/evals`, checks from `@mastra/evals/checks`), `result-set-check.ts`, `assistant-eval-datasets.ts`, `run-assistant-evals.ts` (`npm run evals:assistant`), `modules/agents/eval-runs.service.ts`, `eval-regression.ts`, `eval-report.ts`; golden set `backend/eval/golden-set.json` via `npm run eval` (`scripts/run-eval.ts`).

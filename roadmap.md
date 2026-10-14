@@ -699,6 +699,13 @@ A behaviour-preserving refactor of the app's Mastra agents to the Agent Skills l
 - **Out of scope:** changing the visual spec or the runtime.
 - **Acceptance:** a recorded spec-mode call carries `spec-mode.md` and not `freeform.md` (and the reverse for the fallback); visuals E2E and the `visual-request` eval case stay green.
 
+#### 1.13.6 — Fix: `npm run evals:assistant` always refuses ([BA-204](https://halo-powered.atlassian.net/browse/BA-204))  `✅ Done`
+- **Intent:** a developer can run the assistant eval suite from the command line, as `delivery.md` documents. As shipped, the CLI passes no case ids, so every set is selected and the one-fixture preflight always refuses.
+- **Scope:** the CLI selects the questions from `EVAL_SET` (one set id) or `EVAL_CASES` (case ids). With neither or both, or with an unknown id, it exits 1 before any model call, naming the valid ids. Specs: agents.md §8.5, api.md environment table, delivery.md scripts table.
+- **Out of scope:** the eval checks themselves. The strict `result-set-match` behaves as specified (§8.3): it needs a result whose rows *are* the reference answer, and loosening it would let a query that lists every team pass "who won".
+- **Acceptance:** unit tests for the selection (set, cases, neither, both, unknown set, unknown case); a real `npm run evals:assistant` run with one case (`EVAL_CASES=shootouts`) reaches the case and prints its verdict; with no selection it exits 1 with the message and makes no model call.
+- **Notes:** found while running the BA-198 evals; the before/after runs used a scratch driver. Evidence: [evidence/1.13.6/](evidence/1.13.6/).
+
 ## Release 2 — Multi-user  (no target date yet)
 
 The app becomes multi-user. An organisation self-hosts it as an org server, with sign-in, roles and an admin panel. Local mode stays the default. Direction: [specs/product/vision.md](specs/product/vision.md). Not part of the 1.0 Beta.

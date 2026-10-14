@@ -4,6 +4,14 @@ Running log of every meaningful change, newest first. See *Logging convention* a
 
 ## 2026-10-13
 
+### Fixed
+- **`npm run evals:assistant` runs again** (roadmap 1.13.6, [BA-204](https://halo-powered.atlassian.net/browse/BA-204), epic [BA-198](https://halo-powered.atlassian.net/browse/BA-198)):
+  - The CLI passed no case ids, so every set was selected and the one-fixture preflight always refused.
+  - It now takes `EVAL_SET` (a set id) or `EVAL_CASES` (case ids). With neither, both or an unknown id, it exits 1 before booting or calling a model.
+  - Specs: agents.md §8.5, api.md environment table, delivery.md scripts table.
+  - Test: `eval-cli-selection.spec.ts`.
+  - Evidence: [evidence/1.13.6/](evidence/1.13.6/).
+
 ### Changed
 - **The designer reads only the instructions for the mode it runs** (roadmap 1.13.5, [BA-203](https://halo-powered.atlassian.net/browse/BA-203), epic [BA-198](https://halo-powered.atlassian.net/browse/BA-198)):
   - `interactive-visuals/SKILL.md` is now a 918-character router. The spec rules are in `references/spec-mode.md` and the freeform fallback in `references/freeform.md`, both moved verbatim.

@@ -1,0 +1,14 @@
+$ EVAL_DATASETS="World Cup Core" EVAL_CASES=shootouts npm run evals:assistant
+> @jhon-buendia-halo/questions-to-insights@0.31.0 evals:assistant
+> nest build && node dist/mastra/evals/run-assistant-evals.js
+          Error: Scorer with id check-includes not found
+          Error: Scorer with id check-matches not found
+          Error: Scorer with id check-called-tool not found
+          Error: Scorer with id check-no-tool-errors not found
+PASS  shootouts  (9153ms)
+      check-includes: 1
+      check-matches: 1
+      check-called-tool: 1
+      check-no-tool-errors: 1
+1/1 questions passed
+exit 0

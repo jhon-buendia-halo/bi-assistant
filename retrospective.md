@@ -14,6 +14,21 @@ Entry template:
 
 ---
 
+## 2026-10-13 — 1.13.6 Fix: `npm run evals:assistant` always refuses (BA-204)
+
+### What went well
+- I looked for the root cause of the second suspect, `result-set-match` rejecting correct answers, before fixing it. It behaves as specified: the model's `stage LIKE '%final%'` returned 4 to 11 rows where the reference has 1. Loosening the check would have let "list every team" pass "who won", so it stayed as it is.
+- The selection is a pure function checked before the backend boots, so a bad selection costs nothing. The unit test needs no Nest, Mastra or ESM mocks.
+- The real CLI run was built in a scratch checkout, so the app Jhon was testing from this worktree's `dist/` never changed under him.
+
+### What went wrong
+- The bug shipped because nothing ever ran the CLI. The in-app runner passes case ids, so its tests stayed green while the documented script couldn't run at all.
+- "Fix all the issues in this PR" was ambiguous: there was no PR yet, and two of the issues I'd listed weren't defects. It took an interruption to settle it.
+
+### What to do differently
+- For every documented npm script that wraps app code, keep one cheap test that runs the real entry point's refusal path (no model call).
+- When a report lists "issues", tag each one *bug*, *behaves as specified* or *decision for you*, so "fix all the issues" has one meaning.
+
 ## 2026-10-13 — 1.13.5 Split interactive-visuals into spec-mode and freeform references (BA-203)
 
 ### What went well

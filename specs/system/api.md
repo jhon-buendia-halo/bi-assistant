@@ -1208,6 +1208,8 @@ Argument parsing is **strict**: an unknown flag or malformed argument prints `qu
 | `ORG_SCIM_TOKEN` | org server config | The SCIM bearer token given to the identity provider. At least 32 characters (shorter is a startup error). Required for org server mode. Never logged. | unset |
 | `ORG_BOOTSTRAP_ADMINS` | org server config | Comma-separated user names that always hold Platform admin (admin R18), matched against the directory `userName`: for Entra ID the UPN (`preferred_username`, SCIM `userName`), which usually looks like an email. Never matched against the email. Optional; blanks ignored, case-insensitive. | unset |
 | `EVAL_DATASETS` | `mastra/evals/run-assistant-evals.ts` (CLI eval script only) | Comma-separated dataset names to run the assistant evals against. Required by that script. | none |
+| `EVAL_SET` | `mastra/evals/run-assistant-evals.ts` (CLI eval script only) | The question set to run (`world-cup`, `world-cup-rest`, `formula-1`). That script needs this or `EVAL_CASES`, not both ([agents.md](agents.md) 8.5). | none |
+| `EVAL_CASES` | `mastra/evals/run-assistant-evals.ts` (CLI eval script only) | Comma-separated eval case ids to run instead of a whole set; all from one set's fixture. | none |
 
 ### 6.2 CLI-only
 

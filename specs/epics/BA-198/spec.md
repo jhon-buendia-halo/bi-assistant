@@ -38,6 +38,7 @@ The refactor keeps what the user sees unchanged. Answers, clarifications, visual
 | [BA-201](https://halo-powered.atlassian.net/browse/BA-201) | *Cut, merged into BA-200* (was: curated-knowledge and sql-dialects skills) | 1.13.3 🚫 |
 | [BA-202](https://halo-powered.atlassian.net/browse/BA-202) | Phased deep-analysis skill | 1.13.4 |
 | [BA-203](https://halo-powered.atlassian.net/browse/BA-203) | Split interactive-visuals into spec-mode and freeform references | 1.13.5 |
+| [BA-204](https://halo-powered.atlassian.net/browse/BA-204) (Bug) | Fix: `npm run evals:assistant` always refuses | 1.13.6 |
 
 All stories are built on `refactor/BA-198-assistant-skills` (worktree `.claude/worktrees/BA-198-assistant-skills`) and ship as one PR.
 
