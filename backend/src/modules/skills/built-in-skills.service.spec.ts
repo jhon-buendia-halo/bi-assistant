@@ -51,13 +51,14 @@ function edited(name: string) {
 afterEach(() => setSkillOverrides([]));
 
 describe('BuiltInSkillsService', () => {
-  it('lists the three built-in skills, unmodified, sorted by name', async () => {
+  it('lists the four built-in skills, unmodified, sorted by name', async () => {
     const { service } = build();
     const list = await service.list();
     expect(list.map((skill) => skill.name)).toEqual([
       'curated-knowledge',
       'deep-analysis',
       'interactive-visuals',
+      'rfp-process',
     ]);
     expect(list[0]).toMatchObject({
       loading: 'on-demand',

@@ -30,7 +30,8 @@ import { effortLevelsFor, nearestEffort } from '../../mastra/effort-levels';
 import { LlmService } from '../llm/llm.service';
 import { AgentPromptsService } from './agent-prompts.service';
 import type { AgentPromptView } from './entities/agent-prompt-override.entity';
-import { ASSISTANT_EVAL_SETS } from '../../mastra/evals/assistant.evals';
+import { evalSetsFor } from '../../mastra/evals/eval-sets';
+import { builtinAgentSession } from './builtin-sessions';
 import {
   effectiveConfig,
   hasUnpublishedChanges,
@@ -48,6 +49,8 @@ import type {
 
 /** The registry key of the official agent; every other built-in is `system`. */
 const OFFICIAL_AGENT_KEY = 'assistant';
+/** The built-in agents shown as Official (api.md 2.6 #33): the assistant and the RFP Builder. */
+const OFFICIAL_AGENT_KEYS: readonly string[] = [OFFICIAL_AGENT_KEY, 'rfp'];
 
 export interface AgentSummary {
   /** Registry key the agent is registered under in the Mastra instance. */
@@ -71,6 +74,11 @@ export interface AgentSummary {
   /** Effective configuration (Live, else draft); empty for built-ins. */
   datasets: string[];
   starterQuestions: string[];
+  /**
+   * A built-in agent that declares a dataset (ADR-0028): why Start chat is
+   * blocked while that dataset is missing. Absent otherwise.
+   */
+  chatRequirement?: string;
 }
 
 export interface AgentToolDetail {
@@ -453,8 +461,8 @@ export class AgentsService {
 
   /** The eval question sets defined for an agent; empty when it has none. */
   evalSets(key: string): AgentEvalSet[] {
-    if (key !== 'assistant') return [];
-    return ASSISTANT_EVAL_SETS.map((set) => ({
+    // A set's agent is its `agentKey`, the assistant by default (agents.md 8.1).
+    return evalSetsFor(key).map((set) => ({
       id: set.id,
       name: set.name,
       description: set.description,
@@ -476,7 +484,15 @@ export class AgentsService {
     agent: AgentLike,
     pins: string[],
   ): Promise<AgentSummary> {
-    const official = key === OFFICIAL_AGENT_KEY;
+    const official = OFFICIAL_AGENT_KEYS.includes(key);
+    // A built-in agent with a dataset of its own (the RFP Builder) shows it,
+    // and while it is missing, why Start chat is blocked (api.md 2.6 #33).
+    const builtinSession = builtinAgentSession(key);
+    const missing =
+      builtinSession &&
+      !(await this.userAgents.datasetNames()).has(builtinSession.datasetName)
+        ? [builtinSession.datasetName]
+        : [];
     return {
       key,
       id: agent.id ?? key,
@@ -488,9 +504,12 @@ export class AgentsService {
       pinned: pins.includes(key),
       owner: official ? 'Official' : 'System',
       hasUnpublishedChanges: false,
-      missingDatasets: [],
-      datasets: [],
+      missingDatasets: missing,
+      datasets: builtinSession ? [builtinSession.datasetName] : [],
       starterQuestions: [],
+      ...(builtinSession && missing.length
+        ? { chatRequirement: builtinSession.requirement }
+        : {}),
     };
   }
 }

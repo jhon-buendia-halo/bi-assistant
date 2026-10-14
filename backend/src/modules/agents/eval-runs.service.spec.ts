@@ -7,6 +7,22 @@ jest.mock('../sessions/sessions.service', () => ({
 jest.mock('../knowledge/knowledge.service', () => ({
   KnowledgeService: class {},
 }));
+// One set per agent: a set's agent is its `agentKey`, `assistant` by default.
+jest.mock('../../mastra/evals/eval-sets', () => {
+  const sets = [
+    { id: 'world-cup', cases: [{ id: 'champion-2022' }] },
+    { id: 'rfp', agentKey: 'rfp', cases: [{ id: 'rfp-skill-first' }] },
+  ];
+  const targets: Record<string, unknown> = {
+    assistant: { agentKey: 'assistant' },
+    rfp: { agentKey: 'rfp', finish: jest.fn().mockResolvedValue(undefined) },
+  };
+  return {
+    evalSetsFor: (key: string) =>
+      sets.filter((set) => (set.agentKey ?? 'assistant') === key),
+    evalTargetFor: (key: string) => targets[key],
+  };
+});
 jest.mock('../../mastra/evals/assistant.evals', () => ({
   selectEvalCases: jest.fn(() => [
     { id: 'champion-2022', question: 'Who won the 2022 World Cup?' },
@@ -31,8 +47,11 @@ import { EvalRunsService } from './eval-runs.service';
 import { CurrentUserService, LOCAL_USER } from '../auth/current-user.service';
 import {
   createEvalSession,
+  fixtureForCases,
   runAssistantEvalCase,
+  selectEvalCases,
 } from '../../mastra/evals/assistant.evals';
+import { evalTargetFor } from '../../mastra/evals/eval-sets';
 
 describe('EvalRunsService dataset validation', () => {
   const datasets = { list: jest.fn() };
@@ -117,6 +136,7 @@ describe('EvalRunsService dataset validation', () => {
         ['Sample'],
         'session',
         '',
+        { agentKey: 'assistant' },
       );
       if (!('jobId' in result)) throw new Error('Run did not start');
       expect((await runner.status(result.jobId))?.status).toBe('completed');
@@ -128,6 +148,94 @@ describe('EvalRunsService dataset validation', () => {
       );
     }),
   );
+});
+
+describe('EvalRunsService eval sets per agent (agents.md 8.1)', () => {
+  const sample = [
+    {
+      name: 'Sample',
+      datasourceId: 'wc',
+      datasourceKind: 'postgres',
+      tables: [
+        'tournaments',
+        'teams',
+        'matches',
+        'venues',
+        'players',
+        'goals',
+        'match_team_statistics',
+        'v_match_results',
+        'v_player_goal_totals',
+      ].map((table) => `world_cup.world_cup.${table}`),
+    },
+  ];
+  const users = new CurrentUserService();
+  const repository = {
+    insert: jest.fn(),
+    save: jest.fn(),
+    mostRecentCompleted: jest.fn(),
+  };
+  const service = () =>
+    new EvalRunsService(
+      { list: jest.fn().mockResolvedValue(sample) } as never,
+      repository as never,
+      {} as never,
+      {} as never,
+      { definitionBlock: jest.fn().mockResolvedValue('') } as never,
+      users,
+    );
+
+  beforeEach(() => jest.clearAllMocks());
+
+  it('refuses an agent with no eval set', async () => {
+    await expect(
+      users.runAs(LOCAL_USER, () => service().start('visualization', 'wc')),
+    ).resolves.toEqual({ error: 'Agent "visualization" has no evals to run' });
+    expect(repository.insert).not.toHaveBeenCalled();
+  });
+
+  it("runs the rfp set on the RFP Builder's target and cleans up after it", async () => {
+    jest
+      .mocked(selectEvalCases)
+      .mockReturnValueOnce([
+        { id: 'rfp-skill-first', question: 'Start an RFP for Orchard' },
+      ] as never);
+    jest
+      .mocked(runAssistantEvalCase)
+      .mockResolvedValueOnce({ id: 'rfp-skill-first', passed: true } as never);
+
+    const started = await users.runAs(LOCAL_USER, () =>
+      service().start('rfp', 'wc', ['rfp-skill-first']),
+    );
+
+    expect(started).toEqual({ jobId: expect.any(String) as string });
+    const rfpSets = [
+      { id: 'rfp', agentKey: 'rfp', cases: [{ id: 'rfp-skill-first' }] },
+    ];
+    expect(selectEvalCases).toHaveBeenCalledWith(['rfp-skill-first'], rfpSets);
+    expect(fixtureForCases).toHaveBeenCalledWith(['rfp-skill-first'], rfpSets);
+    expect(repository.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentKey: 'rfp',
+        caseIds: ['rfp-skill-first'],
+        totalCases: 1,
+      }),
+    );
+    for (let i = 0; i < 5; i++) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    const target = evalTargetFor('rfp', 'any') as unknown as {
+      finish: jest.Mock;
+    };
+    expect(runAssistantEvalCase).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'rfp-skill-first' }),
+      ['Sample'],
+      'session',
+      '',
+      target,
+    );
+    expect(target.finish).toHaveBeenCalledWith(['Sample']);
+  });
 });
 
 describe('EvalRunsService ownership (admin R30, R32)', () => {

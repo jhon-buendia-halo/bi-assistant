@@ -32,6 +32,8 @@ function servicesWith(createVisual: CreateVisualMock): DatasetToolServices {
     runReadOnlySql: jest.fn(),
     createVisual,
     updateVisual: jest.fn(),
+    restTarget: jest.fn(),
+    exportRfpPackage: jest.fn(),
   };
 }
 

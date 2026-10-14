@@ -488,7 +488,7 @@ function buildUrl(
   return url.toString();
 }
 
-function buildHeaders(config: RestApiConfig): Record<string, string> {
+export function buildHeaders(config: RestApiConfig): Record<string, string> {
   const headers: Record<string, string> = {
     Accept: 'application/json',
     ...(config.headers ?? {}),

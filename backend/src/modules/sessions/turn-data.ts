@@ -31,13 +31,19 @@ export function statedRationale(value: unknown): string | undefined {
     : flat;
 }
 
-/** Turn a data-bearing tool result into a compact, storable record. */
+/**
+ * Turn a data-bearing tool result into a compact, storable record: a SQL run
+ * or a sample, or any other tool's result that carries `columns` and `rows`
+ * (the RFP Builder's `get_client_financials`; agents.md 5.1).
+ */
 export function toolDataRecord(
   tool: string,
   args: Record<string, unknown>,
   result: unknown,
 ): ToolDataRecord | null {
-  if (tool !== 'run_readonly_sql' && tool !== 'sample_rows') return null;
+  if (tool !== 'run_readonly_sql' && tool !== 'sample_rows') {
+    return tabularRecord(tool, args, result);
+  }
   const value = (result ?? {}) as {
     columns?: unknown;
     rows?: unknown;
@@ -90,6 +96,38 @@ export function toolDataRecord(
     ...(truncated ? { truncated: true } : {}),
     ...(rationale ? { rationale } : {}),
     ...(warnings.length ? { warnings } : {}),
+  };
+}
+
+/**
+ * A record from a non-SQL tool whose result carries `columns` and `rows`;
+ * `input` summarises the call's scalar arguments (e.g. the client and line).
+ * Null for anything else, so no other tool's result becomes a record.
+ */
+function tabularRecord(
+  tool: string,
+  args: Record<string, unknown>,
+  result: unknown,
+): ToolDataRecord | null {
+  const value = (result ?? {}) as { columns?: unknown; rows?: unknown };
+  if (!Array.isArray(value.columns) || !Array.isArray(value.rows)) return null;
+  const rows = value.rows as Record<string, unknown>[];
+  const input = Object.entries(args)
+    .filter(
+      ([key, arg]) =>
+        key !== 'rationale' &&
+        (typeof arg === 'string' || typeof arg === 'number') &&
+        String(arg).trim(),
+    )
+    .map(([, arg]) => String(arg).trim())
+    .join(' · ');
+  return {
+    tool,
+    ...(input ? { input } : {}),
+    columns: value.columns.map((c) => String(c)),
+    rows: rows.slice(0, STORED_ROWS_CAP),
+    rowCount: rows.length,
+    ...(rows.length > STORED_ROWS_CAP ? { truncated: true } : {}),
   };
 }
 

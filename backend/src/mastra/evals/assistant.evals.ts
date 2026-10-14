@@ -2,6 +2,7 @@ import { checks } from '@mastra/evals/checks';
 import { runEvals } from '@mastra/core/evals';
 import { RequestContext } from '@mastra/core/request-context';
 import type { MastraScorer } from '@mastra/core/evals';
+import type { Agent } from '@mastra/core/agent';
 import { assistantAgent } from '../agents/assistant.agent';
 import { resolveAgentModel } from '../model-resolver';
 import { providerOptionsFor } from '../model-compat';
@@ -17,6 +18,7 @@ import {
   TURN_RECORDS_CONTEXT_KEY,
 } from '../tools/visual.tools';
 import { getDatasetToolServices } from '../tool-services';
+import type { DatasetSnapshot } from '../tool-services';
 import { entityOrientationLines, knowledgeContext } from '../context-blocks';
 import {
   AGENT_TOOLS_CONTEXT_KEY,
@@ -103,6 +105,11 @@ export interface AssistantEvalSet {
    * lives in exactly one place for both the loader and the suite.
    */
   fixtureId: string;
+  /**
+   * The registry key of the agent the set runs on (agents.md 8.1); absent
+   * means the `assistant`.
+   */
+  agentKey?: string;
   cases: AssistantEvalCase[];
 }
 
@@ -695,6 +702,54 @@ export const ASSISTANT_EVAL_SETS: AssistantEvalSet[] = [
 export const ASSISTANT_EVAL_CASES: AssistantEvalCase[] =
   ASSISTANT_EVAL_SETS.flatMap((set) => set.cases);
 
+/** What the orientation builder of an eval target gets for one case. */
+export interface EvalOrientationInput {
+  datasets: string[];
+  snapshots: DatasetSnapshot[];
+  requestContext: RequestContext;
+}
+
+/**
+ * The agent a set's cases run on and what each case sends it (agents.md
+ * 8.1, `agentKey`): the assistant by default, the RFP Builder for the `rfp`
+ * set (`rfp.evals.ts`).
+ */
+export interface EvalTarget {
+  /** Registry key of the agent. */
+  agentKey: string;
+  agent: Agent;
+  /** The sets that run on this agent. */
+  sets: AssistantEvalSet[];
+  /** The orientation system message of a case (Block 1's dataset half, or Block R1). */
+  orientation(input: EvalOrientationInput): string | Promise<string>;
+  /** Whether the curated-knowledge block (Block 3) is sent. */
+  sendsKnowledge: boolean;
+  /** Adds the agent's own keys to a case's requestContext. */
+  configureContext?(requestContext: RequestContext): void;
+  /** The question a case sends, after any setup it needs. */
+  prepareQuestion?(
+    evalCase: AssistantEvalCase,
+    input: Omit<EvalOrientationInput, 'requestContext'>,
+  ): Promise<string>;
+  /** Clean-up once a run's cases are done (or it failed). Never throws. */
+  finish?(datasets: string[]): Promise<void>;
+}
+
+/** The assistant's sets, run as they always have been. */
+export const ASSISTANT_EVAL_TARGET: EvalTarget = {
+  agentKey: 'assistant',
+  agent: assistantAgent,
+  sets: ASSISTANT_EVAL_SETS,
+  // Block 1's dataset half, in the variant the case's tool selection gives.
+  orientation: ({ datasets, snapshots, requestContext }) =>
+    entityOrientationLines(
+      datasets,
+      snapshots,
+      toolSelectionFrom(requestContext),
+    ).join('\n'),
+  sendsKnowledge: true,
+};
+
 /** One tool the agent called while answering, in call order. */
 export interface EvalToolCall {
   name: string;
@@ -899,17 +954,27 @@ function templateText(value: unknown): string {
  * list at all. An explicit empty list selects nothing — it must not be read as
  * "run everything", or an empty selection would start a full (paid) run.
  */
-export function selectEvalCases(caseIds?: string[]): AssistantEvalCase[] {
-  if (!caseIds) return ASSISTANT_EVAL_CASES;
+export function selectEvalCases(
+  caseIds?: string[],
+  sets: AssistantEvalSet[] = ASSISTANT_EVAL_SETS,
+): AssistantEvalCase[] {
+  const all =
+    sets === ASSISTANT_EVAL_SETS
+      ? ASSISTANT_EVAL_CASES
+      : sets.flatMap((set) => set.cases);
+  if (!caseIds) return all;
   const wanted = new Set(caseIds);
-  return ASSISTANT_EVAL_CASES.filter((evalCase) => wanted.has(evalCase.id));
+  return all.filter((evalCase) => wanted.has(evalCase.id));
 }
 
 /** The sets the selection touches — every set when nothing is named. */
-export function selectEvalSets(caseIds?: string[]): AssistantEvalSet[] {
-  if (!caseIds) return ASSISTANT_EVAL_SETS;
+export function selectEvalSets(
+  caseIds?: string[],
+  sets: AssistantEvalSet[] = ASSISTANT_EVAL_SETS,
+): AssistantEvalSet[] {
+  if (!caseIds) return sets;
   const wanted = new Set(caseIds);
-  return ASSISTANT_EVAL_SETS.filter((set) =>
+  return sets.filter((set) =>
     set.cases.some((evalCase) => wanted.has(evalCase.id)),
   );
 }
@@ -920,8 +985,11 @@ export function selectEvalSets(caseIds?: string[]): AssistantEvalSet[] {
  * unrelated — a run scoped to one cannot answer the other), or to a fixture id
  * the registry does not know.
  */
-export function fixtureForCases(caseIds?: string[]): SampleFixture {
-  const sets = selectEvalSets(caseIds);
+export function fixtureForCases(
+  caseIds?: string[],
+  from: AssistantEvalSet[] = ASSISTANT_EVAL_SETS,
+): SampleFixture {
+  const sets = selectEvalSets(caseIds, from);
   if (sets.length === 0) {
     throw new Error(
       'No question set matches the selected questions, so there is no sample ' +
@@ -1071,12 +1139,14 @@ async function runJudgeCheck(
   evalCase: AssistantEvalCase,
   answer: string,
   toolCalls: EvalToolCall[],
+  /** The question as sent, when the target's setup filled it in. */
+  question: string = evalCase.question,
 ): Promise<EvalCheckResult | undefined> {
   if (!evalCase.judgeRubric) return undefined;
   const description = `LLM judge: ${evalCase.judgeRubric}`;
   try {
     const prompt = [
-      `Question asked: ${evalCase.question}`,
+      `Question asked: ${question}`,
       '',
       'Rubric:',
       evalCase.judgeRubric,
@@ -1159,8 +1229,12 @@ export async function runAssistantEvalCase(
    * omitted (or empty) when neither wires one in.
    */
   knowledgeBlock?: string,
+  /** The agent the case runs on; the assistant when omitted (agents.md 8.1). */
+  target: EvalTarget = ASSISTANT_EVAL_TARGET,
 ): Promise<AssistantEvalCaseResult> {
   const startedAt = Date.now();
+  // The question sent: the case's own, unless the target's setup fills it.
+  let question = evalCase.question;
   // Captured from the per-item callback: the run itself only reports numbers.
   let answer = '';
   let toolCalls: EvalToolCall[] = [];
@@ -1172,24 +1246,30 @@ export async function runAssistantEvalCase(
   try {
     const datasetSnapshots =
       await getDatasetToolServices().getDatasets(datasets);
+    if (target.prepareQuestion) {
+      question = await target.prepareQuestion(evalCase, {
+        datasets,
+        snapshots: datasetSnapshots,
+      });
+    }
     const requestContext = evalRequestContext(
       datasets,
       sessionId,
       turnRecords,
-      evalCase.question,
+      question,
       evalCase.agentTools,
     );
-    // Block 1's dataset half, in the variant the case's tool selection gives.
-    const orientation = entityOrientationLines(
+    target.configureContext?.(requestContext);
+    const orientation = await target.orientation({
       datasets,
-      datasetSnapshots,
-      toolSelectionFrom(requestContext),
-    ).join('\n');
+      snapshots: datasetSnapshots,
+      requestContext,
+    });
 
     const result = await runEvals({
-      data: [{ input: evalCase.question, requestContext }],
+      data: [{ input: question, requestContext }],
       scorers: evalCase.scorers,
-      target: assistantAgent,
+      target: target.agent,
       // Same step budget and dataset/entity + join-hint grounding a real chat
       // turn gets from SessionsService.agentContext — without this the model
       // used to run out of steps mid-analysis (the AI-SDK default cap is 5)
@@ -1198,7 +1278,7 @@ export async function runAssistantEvalCase(
         maxSteps: ASSISTANT_MAX_STEPS,
         context: [
           { role: 'system', content: orientation },
-          ...knowledgeContext(knowledgeBlock),
+          ...(target.sendsKnowledge ? knowledgeContext(knowledgeBlock) : []),
         ],
         onStepFinish: (step: unknown) => captureStepRecords(step, turnRecords),
       },
@@ -1221,8 +1301,8 @@ export async function runAssistantEvalCase(
     // model routinely finishing without prose.
     if (!answer.trim() && toolCalls.length > 0) {
       answer = await synthesizeToolOnlyTurn(
-        assistantAgent,
-        evalCase.question,
+        target.agent,
+        question,
         turnRecords,
         new AbortController().signal,
         providerOptionsFor(await resolveAgentModel(), {
@@ -1264,12 +1344,17 @@ export async function runAssistantEvalCase(
 
     // LLM-judge (Feature 2) — for cases where a regex/text check on the
     // final answer would be too brittle.
-    const judgeCheck = await runJudgeCheck(evalCase, answer, toolCalls);
+    const judgeCheck = await runJudgeCheck(
+      evalCase,
+      answer,
+      toolCalls,
+      question,
+    );
     if (judgeCheck) checkResults.push(judgeCheck);
 
     return {
       id: evalCase.id,
-      question: evalCase.question,
+      question,
       scores,
       checkResults,
       answer,
@@ -1281,7 +1366,7 @@ export async function runAssistantEvalCase(
   } catch (err) {
     return {
       id: evalCase.id,
-      question: evalCase.question,
+      question,
       scores: {},
       checkResults: [],
       answer,
@@ -1309,11 +1394,13 @@ export async function runAssistantEvals(
   caseIds?: string[],
   sessions?: SessionsService,
   knowledgeBlock?: string,
+  /** The agent and sets to run; the assistant's when omitted (agents.md 8.1). */
+  target: EvalTarget = ASSISTANT_EVAL_TARGET,
 ): Promise<AssistantEvalCaseResult[]> {
   const datasetError = assistantEvalDatasetError(
     datasets,
     await getDatasetToolServices().getDatasets(datasets),
-    fixtureForCases(caseIds),
+    fixtureForCases(caseIds, target.sets),
   );
   if (datasetError) throw new Error(datasetError);
   const evalSession = sessions
@@ -1321,18 +1408,20 @@ export async function runAssistantEvals(
     : undefined;
   try {
     const results: AssistantEvalCaseResult[] = [];
-    for (const evalCase of selectEvalCases(caseIds)) {
+    for (const evalCase of selectEvalCases(caseIds, target.sets)) {
       const result = await runAssistantEvalCase(
         evalCase,
         datasets,
         evalSession?.id,
         knowledgeBlock,
+        target,
       );
       results.push(result);
       onCaseComplete?.(result);
     }
     return results;
   } finally {
+    await target.finish?.(datasets);
     await cleanupEvalSession(sessions, evalSession);
   }
 }

@@ -27,6 +27,7 @@ import {
   ShieldOff,
   Sparkles,
   Square,
+  FileArchive,
   Telescope,
   ThumbsDown,
   ThumbsUp,
@@ -37,6 +38,7 @@ import {
 import { SessionsApiService } from '../../services/sessions-api.service';
 import {
   AnalysisReport,
+  RfpPackage,
   ChatMessage,
   CrossCheck,
   DataPointSelection,
@@ -153,6 +155,7 @@ export class SessionChat implements OnDestroy {
   readonly Sparkles = Sparkles;
   readonly Square = Square;
   readonly Telescope = Telescope;
+  readonly FileArchive = FileArchive;
   readonly ThumbsDown = ThumbsDown;
   readonly ThumbsUp = ThumbsUp;
   readonly TriangleAlert = TriangleAlert;
@@ -742,6 +745,37 @@ export class SessionChat implements OnDestroy {
         this.toast.error(err?.error?.message ?? 'Report download failed');
       },
     });
+  }
+
+  /** `rfpId/file` being downloaded right now (`rfpId/` for the zip). */
+  readonly rfpDownloading = signal<string | null>(null);
+
+  /** Save an RFP package's zip, or one of its files (ui.md 4.12). */
+  downloadRfpPackage(pkg: RfpPackage, file?: string): void {
+    if (this.rfpDownloading()) return;
+    this.rfpDownloading.set(`${pkg.rfpId}/${file ?? ''}`);
+    this.api
+      .downloadRfpPackage(this.session().id, pkg.rfpId, file)
+      .subscribe({
+        next: (blob) => {
+          this.rfpDownloading.set(null);
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = file
+            ? (file.split('/').pop() ?? file)
+            : `${pkg.rfpId}.zip`;
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 0);
+          this.toast.success('RFP package downloaded');
+        },
+        error: (err) => {
+          this.rfpDownloading.set(null);
+          this.toast.error(err?.error?.message ?? 'RFP package download failed');
+        },
+      });
   }
 
   // --------------------------------------------------- cross-check chip

@@ -17,6 +17,8 @@ function stubServices(
     getDatasets: jest.fn(),
     sampleRows: jest.fn(),
     runReadOnlySql: jest.fn(),
+    restTarget: jest.fn(),
+    exportRfpPackage: jest.fn(),
     ...overrides,
   };
 }

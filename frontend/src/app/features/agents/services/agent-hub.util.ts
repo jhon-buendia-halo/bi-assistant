@@ -145,10 +145,25 @@ export const NO_DATASETS_LEFT = "None of this agent's datasets exist";
  * run: a user agent none of whose datasets still exist (R53).
  */
 export function startChatBlockedReason(agent: Agent): string | null {
-  if (agentKind(agent) !== 'user') return null;
+  const kind = agentKind(agent);
+  if (kind === 'official') {
+    // An Official agent with a dataset (the RFP Builder) waits for it.
+    return agent.chatRequirement && (agent.missingDatasets ?? []).length > 0
+      ? agent.chatRequirement
+      : null;
+  }
+  if (kind !== 'user') return null;
   const datasets = agent.datasets ?? [];
   const missing = agent.missingDatasets ?? [];
   return datasets.length > 0 && missing.length >= datasets.length
     ? NO_DATASETS_LEFT
     : null;
+}
+
+/**
+ * Whether Start chat opens the New-session composer (the Official agent with
+ * no dataset of its own) rather than creating the session from the agent.
+ */
+export function startsInComposer(agent: Agent): boolean {
+  return agentKind(agent) === 'official' && (agent.datasets ?? []).length === 0;
 }

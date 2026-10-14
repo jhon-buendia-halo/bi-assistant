@@ -6,6 +6,7 @@ import { DatasetsModule } from './modules/datasets/datasets.module';
 import { MastraModule } from './mastra/mastra.module';
 import { AgentsModule } from './modules/agents/agents.module';
 import { SessionsModule } from './modules/sessions/sessions.module';
+import { RfpPackagesModule } from './modules/rfp-packages/rfp-packages.module';
 import { VerifiedQueriesModule } from './modules/verified-queries/verified-queries.module';
 import { MetricsModule } from './modules/metrics/metrics.module';
 import { KnowledgeModule } from './modules/knowledge/knowledge.module';
@@ -31,6 +32,7 @@ import { SkillsModule } from './modules/skills/skills.module';
     MetricsModule,
     KnowledgeModule,
     SessionsModule,
+    RfpPackagesModule,
     DeepAnalysisModule,
     TestingDataModule,
     DeveloperSettingsModule,

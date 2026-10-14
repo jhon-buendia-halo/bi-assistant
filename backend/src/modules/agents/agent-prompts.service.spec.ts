@@ -4,6 +4,7 @@ jest.mock('../../mastra/mastra.service', () => ({ MastraService: class {} }));
 jest.mock('../../mastra/evals/assistant.evals', () => ({
   ASSISTANT_EVAL_SETS: [],
 }));
+jest.mock('../../mastra/evals/eval-sets', () => ({ evalSetsFor: () => [] }));
 jest.mock('../llm/llm.service', () => ({ LlmService: class {} }));
 jest.mock('../datasources/datasources.service', () => ({
   DatasourcesService: class {},
@@ -165,6 +166,15 @@ describe('AgentPromptsService (ADR-0026)', () => {
       );
       await expect(service.reset('user-1')).rejects.toThrow(
         "Only built-in agents have a shared system prompt; edit a user agent's instructions instead",
+      );
+    });
+
+    it("the RFP Builder's identity, then links", async () => {
+      expect(await refusal('rfp', 'Be brief.')).toBe(
+        'The RFP Builder\'s prompt must start with "You are the RFP Builder"',
+      );
+      expect(await refusal('rfp', 'You are the RFP Builder. [[tool:x]]')).toBe(
+        "This agent's prompt can't contain links",
       );
     });
 

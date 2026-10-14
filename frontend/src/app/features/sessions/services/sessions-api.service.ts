@@ -7,6 +7,7 @@ import {
   DeepAnalysisResult,
   InteractiveVisualization,
   MessageFeedback,
+  RfpPackage,
   Session,
   SessionActionResult,
   ToolDataRecord,
@@ -209,6 +210,21 @@ export class SessionsApiService {
     );
   }
 
+  /** The package as a zip, or one of its files when `file` is given (#105). */
+  downloadRfpPackage(
+    sessionId: string,
+    rfpId: string,
+    file?: string,
+  ): Observable<Blob> {
+    return this.http.get(
+      `${API_BASE_URL}/sessions/${encodeURIComponent(sessionId)}/rfp-packages/${encodeURIComponent(rfpId)}/download`,
+      {
+        responseType: 'blob',
+        ...(file ? { params: { file } } : {}),
+      },
+    );
+  }
+
   sendMessage(id: string, content: string): Observable<SessionActionResult> {
     return this.http.post<SessionActionResult>(
       `${API_BASE_URL}/sessions/${encodeURIComponent(id)}/messages`,
@@ -239,6 +255,8 @@ export class SessionsApiService {
       /** Summary of one finished call, including why it was run. */
       onToolResult?: (summary: ToolDataRecord) => void;
       onVisualUpdated?: (event: VisualEvent) => void;
+      /** `export_rfp_package` stored a package this turn. */
+      onRfpPackage?: (rfpPackage: RfpPackage) => void;
       onDone?: (session: Session) => void;
       onError?: (message: string) => void;
     },
@@ -319,6 +337,13 @@ export class SessionsApiService {
               case 'visual-updated':
                 try {
                   handlers.onVisualUpdated?.(JSON.parse(event.content ?? '{}'));
+                } catch {
+                  // Malformed event — ignore.
+                }
+                break;
+              case 'rfp-package':
+                try {
+                  handlers.onRfpPackage?.(JSON.parse(event.content ?? '{}'));
                 } catch {
                   // Malformed event — ignore.
                 }

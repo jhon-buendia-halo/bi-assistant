@@ -16,12 +16,12 @@ import { catalogSkills, skillBody, skillReferences } from './app-skills';
  */
 
 /** The key Mastra serves a file under, as `references/<key>`. */
-function referenceKey(path: string): string {
+export function referenceKey(path: string): string {
   return path.replace(/^references?\//, '');
 }
 
 /** Points `reference/<file>` mentions at `references/<file>`, where Mastra serves them. */
-function servedPaths(text: string): string {
+export function servedPaths(text: string): string {
   return text.replace(/\breference\//g, 'references/');
 }
 

@@ -112,6 +112,21 @@ export interface ChatMessage {
    * the report's executive summary; the full markdown lives in the workspace.
    */
   report?: AnalysisReport;
+  /**
+   * Present when this turn's `export_rfp_package` call stored an RFP package
+   * in the session workspace (`rfp/<rfpId>/`; data-model 3.4.1). RFP Builder
+   * sessions only.
+   */
+  rfpPackage?: RfpPackageRef;
+}
+
+/** An RFP package stored in the session workspace (data-model 3.4.1). */
+export interface RfpPackageRef {
+  rfpId: string;
+  title: string;
+  /** Paths relative to `rfp/<rfpId>/`, e.g. `exhibits/exhibit-a-census.csv`. */
+  files: { name: string; bytes: number }[];
+  exportedAt: string;
 }
 
 export interface AnalysisReport {
@@ -187,6 +202,14 @@ export interface SessionDoc {
   agentId?: string;
   /** The agent's Live name, re-stamped by each turn that applies it (R59). */
   agentName?: string;
+  /**
+   * The registry key of the built-in agent the session is bound to (today
+   * only `rfp`; ADR-0028). Every turn runs that agent; never set with
+   * `agentId`.
+   */
+  agentKey?: string;
+  /** `agentKey: 'rfp'` only: the active RFP, stamped from `turn-rfp`. */
+  rfpId?: string;
   /** An agent editor's preview, held in memory only (agents-evals R60). */
   preview?: boolean;
   messages: ChatMessage[];

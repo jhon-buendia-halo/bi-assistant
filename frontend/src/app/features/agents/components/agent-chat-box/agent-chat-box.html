@@ -65,7 +65,11 @@
 } @else {
   <div class="flex flex-col items-start gap-4">
     <p class="text-[13px] text-fg-muted">
-      Chats with the assistant run over datasets you choose.
+      @if (agent().key === "rfp") {
+        Chats with the RFP Builder run over the "Intellify RFP API" dataset.
+      } @else {
+        Chats with the assistant run over datasets you choose.
+      }
     </p>
     <button
       type="button"

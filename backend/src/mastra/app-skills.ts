@@ -27,6 +27,8 @@ export const AGENT_SKILLS: Readonly<Record<string, readonly string[]>> = {
   // How to apply the curated-knowledge block: the model loads it with
   // Mastra's skill tool when a call carries the block (ADR-0025).
   assistant: ['curated-knowledge'],
+  // The RFP Builder's seven-stage process (agents.md 7.4).
+  rfp: ['rfp-process'],
 };
 
 /** Built-in skills code sends to each agent itself (agents.md 7.4). */
@@ -423,11 +425,16 @@ export function builtInSkillNames(): string[] {
 
 /**
  * The built-in on-demand skills a prompt may link as mentions (BA-224):
- * every agent gets them, so a link names one without gating anything.
+ * the assistant's, which every agent running on it gets, so a link names one
+ * without gating anything. Another agent's skills (the RFP Builder's
+ * `rfp-process`) are not among them.
  */
 export function builtInOnDemandSkillNames(): string[] {
   return [...shippedSkills().values()]
-    .filter((skill) => skill.loading === 'on-demand')
+    .filter(
+      (skill) =>
+        skill.loading === 'on-demand' && skill.agents.includes('assistant'),
+    )
     .map((skill) => skill.name);
 }
 

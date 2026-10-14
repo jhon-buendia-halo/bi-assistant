@@ -65,7 +65,7 @@ import { SkillEditorService } from './features/agents/services/skill-editor.serv
 import { AgentEditorService } from './features/agents/services/agent-editor.service';
 import { AgentPageState } from './features/agents/services/agent-page-state.service';
 import { Agent } from './features/agents/services/agents-api.service';
-import { agentKind } from './features/agents/services/agent-hub.util';
+import { startsInComposer } from './features/agents/services/agent-hub.util';
 import { KnowledgeList } from './features/knowledge/components/knowledge-list/knowledge-list';
 import { CatalogBrowser } from './features/datasets/components/catalog-browser/catalog-browser';
 import { EntityDetails } from './features/datasets/components/entity-details/entity-details';
@@ -385,7 +385,7 @@ export class App {
    * (sessions-chat R52). A refusal keeps the user where they are.
    */
   startChatWithAgent(agent: Agent): void {
-    if (agentKind(agent) === 'official') {
+    if (startsInComposer(agent)) {
       this.openComposer();
       return;
     }

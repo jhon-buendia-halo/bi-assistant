@@ -41,6 +41,8 @@ export interface Agent {
   /** Dataset names in the effective configuration that no longer exist. */
   missingDatasets?: string[];
   datasets?: string[];
+  /** Official agents with a dataset: what must exist before Start chat. */
+  chatRequirement?: string;
   starterQuestions?: string[];
 }
 

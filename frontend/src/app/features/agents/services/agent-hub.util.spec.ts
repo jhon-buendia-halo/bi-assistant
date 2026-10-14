@@ -7,6 +7,7 @@ import {
   hubEmptyMessage,
   matchesQuery,
   startChatBlockedReason,
+  startsInComposer,
   visibleCards,
 } from './agent-hub.util';
 
@@ -237,5 +238,25 @@ describe('startChatBlockedReason', () => {
 
   it('never blocks the Official agent, which has no datasets', () => {
     expect(startChatBlockedReason(assistant)).toBeNull();
+  });
+});
+
+describe('RFP Builder start chat', () => {
+  const rfp: Agent = {
+    ...agent('rfp', 'RFP Builder', 'official'),
+    datasets: ['Intellify RFP API'],
+    chatRequirement: 'Load the sample first',
+  };
+
+  it('is blocked with the requirement while its dataset is missing', () => {
+    expect(
+      startChatBlockedReason({ ...rfp, missingDatasets: ['Intellify RFP API'] }),
+    ).toBe('Load the sample first');
+    expect(startChatBlockedReason(rfp)).toBeNull();
+  });
+
+  it('creates the session from the agent; the assistant opens the composer', () => {
+    expect(startsInComposer(rfp)).toBe(false);
+    expect(startsInComposer(agent('assistant', 'A', 'official'))).toBe(true);
   });
 });

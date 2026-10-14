@@ -371,6 +371,42 @@ describe('SessionChat deep analysis', () => {
     expect(download).toHaveBeenCalledWith('session-1', 'job-1');
   });
 
+  it('renders the RFP package card and downloads the zip and one file', () => {
+    const el = mount([
+      {
+        role: 'assistant',
+        content: 'Package ready.',
+        at: '2026-01-01T00:00:02.000Z',
+        rfpPackage: {
+          rfpId: 'rfp-1',
+          title: 'Acme RFP',
+          files: [
+            { name: 'rfp.md', bytes: 10 },
+            { name: 'rfp.pdf', bytes: 20 },
+          ],
+          exportedAt: '2026-01-01T00:00:02.000Z',
+        },
+      },
+    ]);
+    const card = el.querySelector('[data-testid="rfp-package-card"]')!;
+    expect(card.textContent).toContain('Acme RFP');
+    expect(card.textContent).toContain('RFP package · 2 files');
+    expect(card.textContent).toContain('Download package (.zip)');
+
+    const api = TestBed.inject(SessionsApiService);
+    const download = spyOn(api, 'downloadRfpPackage').and.returnValue(
+      of(new Blob(['x'])),
+    );
+    card
+      .querySelector<HTMLButtonElement>('[data-testid="rfp-package-download"]')!
+      .click();
+    expect(download).toHaveBeenCalledWith('session-1', 'rfp-1', undefined);
+    card
+      .querySelectorAll<HTMLButtonElement>('[data-testid="rfp-package-file"]')[1]
+      .click();
+    expect(download).toHaveBeenCalledWith('session-1', 'rfp-1', 'rfp.pdf');
+  });
+
   it('sends the draft as a job, polls it, and refreshes on completion', fakeAsync(() => {
     const el = mount();
     const api = TestBed.inject(SessionsApiService);

@@ -374,6 +374,7 @@ describe('skill folders', () => {
           'curated-knowledge',
           'deep-analysis',
           'interactive-visuals',
+          'rfp-process',
         ]);
         expect(
           fresh.catalogSkills('assistant').map((skill) => skill.name),

@@ -28,6 +28,9 @@ const ASSISTANT_IDENTITY_START = 'You are the Questions to Insights assistant';
 
 const ASSISTANT_KEY = 'assistant';
 
+/** Where the RFP Builder's prompt must start (agents.md 2.8, rfp R1). */
+const RFP_IDENTITY_START = 'You are the RFP Builder';
+
 /** Any `[[…]]` link. */
 const ANY_LINK = /\[\[.*?\]\]/;
 
@@ -142,6 +145,10 @@ function validatePrompt(key: string, value: unknown): string {
     }
     const unknown = links.tools.find((name) => !isLibraryTool(name));
     if (unknown) throw new BadRequestException(`Unknown tool "${unknown}"`);
+  } else if (key === 'rfp' && !prompt.startsWith(RFP_IDENTITY_START)) {
+    throw new BadRequestException(
+      `The RFP Builder's prompt must start with "${RFP_IDENTITY_START}"`,
+    );
   } else if (ANY_LINK.test(prompt)) {
     throw new BadRequestException("This agent's prompt can't contain links");
   }

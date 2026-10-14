@@ -20,6 +20,7 @@ import {
   runAssistantEvalCase,
   selectEvalCases,
 } from '../../mastra/evals/assistant.evals';
+import { evalSetsFor, evalTargetFor } from '../../mastra/evals/eval-sets';
 import type { SampleFixture } from '../testing-data/fixtures/registry';
 import { CurrentUserService } from '../auth/current-user.service';
 
@@ -131,7 +132,9 @@ export class EvalRunsService {
     datasourceId: string,
     caseIds?: string[],
   ): Promise<{ jobId: string } | { conflictWith: string } | { error: string }> {
-    if (agentKey !== 'assistant') {
+    // The agent's own sets: those whose `agentKey` (default `assistant`) is it.
+    const sets = evalSetsFor(agentKey);
+    if (sets.length === 0) {
       return { error: `Agent "${agentKey}" has no evals to run` };
     }
     const ownerId = this.currentUser.ownerKey();
@@ -149,7 +152,7 @@ export class EvalRunsService {
       };
     }
 
-    const cases = selectEvalCases(caseIds);
+    const cases = selectEvalCases(caseIds, sets);
     if (cases.length === 0) {
       return { error: 'Pick at least one question to run' };
     }
@@ -159,7 +162,7 @@ export class EvalRunsService {
     // fixture the registry no longer has must fail the start, not run blind.
     let fixture: SampleFixture;
     try {
-      fixture = fixtureForCases(caseIds);
+      fixture = fixtureForCases(caseIds, sets);
     } catch (err) {
       return { error: err instanceof Error ? err.message : String(err) };
     }
@@ -202,6 +205,9 @@ export class EvalRunsService {
     cases: AssistantEvalCase[],
     ownerId: string,
   ): Promise<void> {
+    // The agent the cases run on, with its context and clean-up (agents.md
+    // 8.1); the RFP Builder tags its drafts with this run.
+    const target = evalTargetFor(view.agentKey, view.jobId);
     // A throwaway session so create_visual/update_visual behave the way they
     // do in a real chat turn (see assistant.evals.ts). Best-effort: a run
     // still measures the agent without one, just with visual-tool support
@@ -228,6 +234,7 @@ export class EvalRunsService {
           view.datasets,
           evalSession?.id,
           knowledgeBlock,
+          target,
         );
         view.results.push(result);
         view.currentQuestion = cases[index + 1]?.question;
@@ -246,6 +253,8 @@ export class EvalRunsService {
       view.finishedAt = new Date().toISOString();
       this.active.delete(this.activeKey(view.agentKey, ownerId));
       await this.repository.save(view);
+      // The agent's own clean-up: the RFP Builder's drafts of this run.
+      await target.finish?.(view.datasets);
       await cleanupEvalSession(this.sessions, evalSession);
     }
   }

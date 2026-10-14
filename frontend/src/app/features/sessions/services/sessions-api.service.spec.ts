@@ -23,6 +23,23 @@ describe('SessionsApiService feedback', () => {
 
   afterEach(() => http.verify());
 
+  it('downloads an RFP package zip or one file as a blob', () => {
+    service.downloadRfpPackage('s 1', 'rfp-1').subscribe();
+    const zip = http.expectOne(
+      `${API_BASE_URL}/sessions/s%201/rfp-packages/rfp-1/download`,
+    );
+    expect(zip.request.responseType).toBe('blob');
+    zip.flush(new Blob(['z']));
+
+    service.downloadRfpPackage('s 1', 'rfp-1', 'exhibits/a.csv').subscribe();
+    const one = http.expectOne(
+      (r) =>
+        r.url === `${API_BASE_URL}/sessions/s%201/rfp-packages/rfp-1/download` &&
+        r.params.get('file') === 'exhibits/a.csv',
+    );
+    one.flush(new Blob(['c']));
+  });
+
   it('posts the rating for a message', () => {
     service
       .sendMessageFeedback('session 1', '2026-01-01T00:00:00.000Z', 'up')

@@ -87,6 +87,8 @@ export interface ChatMessage {
    * report's executive summary; the full markdown is downloadable.
    */
   report?: AnalysisReport;
+  /** Present when the RFP Builder exported an RFP package this turn. */
+  rfpPackage?: RfpPackage;
   /**
    * Set on a client-only bubble rendered when a turn's stream failed
    * (provider error, dropped connection, backend crash mid-turn). Never
@@ -95,6 +97,14 @@ export interface ChatMessage {
    * instead of duplicating it (see `SessionsService.appendUserMessage`).
    */
   error?: boolean;
+}
+
+/** A stored RFP package (data-model 3.4.1); `rfp-package` stream payload. */
+export interface RfpPackage {
+  rfpId: string;
+  title: string;
+  files: { name: string; bytes: number }[];
+  exportedAt: string;
 }
 
 export interface AnalysisReport {

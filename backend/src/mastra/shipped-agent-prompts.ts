@@ -3,6 +3,7 @@ import { assistantShippedPrompt } from './agents/assistant-prompt';
 import {
   EVAL_JUDGE_PROMPT,
   KNOWLEDGE_BOOTSTRAP_PROMPT,
+  RFP_PROMPT,
   SQL_FIXER_PROMPT,
   SQL_VERIFIER_PROMPT,
   VISUALIZATION_PROMPT,
@@ -10,8 +11,9 @@ import {
 
 /**
  * The shipped, editable system prompt of each built-in agent, by registry
- * key (ADR-0026, data-model 3.10.3): the assistant's without its generated
- * `## Tools` section, a System agent's whole static instructions.
+ * key (ADR-0026, data-model 3.10.3): the assistant's and the RFP Builder's
+ * without their generated `## Tools` section, a System agent's whole static
+ * instructions.
  */
 const SHIPPED: Readonly<Record<string, string>> = {
   assistant: assistantShippedPrompt(),
@@ -20,6 +22,7 @@ const SHIPPED: Readonly<Record<string, string>> = {
   'sql-verifier': SQL_VERIFIER_PROMPT,
   'knowledge-bootstrap': KNOWLEDGE_BOOTSTRAP_PROMPT,
   'assistant-eval-judge': EVAL_JUDGE_PROMPT,
+  rfp: RFP_PROMPT,
 };
 
 /** The shipped editable prompt of a built-in agent; undefined for any other key. */

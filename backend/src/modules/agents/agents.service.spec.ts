@@ -4,6 +4,9 @@ jest.mock('../../mastra/mastra.service', () => ({ MastraService: class {} }));
 jest.mock('../../mastra/evals/assistant.evals', () => ({
   ASSISTANT_EVAL_SETS: [],
 }));
+jest.mock('../../mastra/evals/eval-sets', () => ({
+  evalSetsFor: () => [],
+}));
 jest.mock('../llm/llm.service', () => ({ LlmService: class {} }));
 
 import BetterSqlite3 from 'better-sqlite3';

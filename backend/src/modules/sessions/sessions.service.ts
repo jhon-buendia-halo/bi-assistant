@@ -9,6 +9,17 @@ import {
 import { randomUUID } from 'crypto';
 import { RequestContext } from '@mastra/core/request-context';
 import { parseClarification } from '../../mastra/tools/clarification.tool';
+import { rfpTools } from '../../mastra/tools/rfp.tools';
+import {
+  RFP_CREATED_BY_CONTEXT_KEY,
+  TURN_RFP_CONTEXT_KEY,
+  isoToday,
+  rfpOrientationBlock,
+  type RfpOrientationRecord,
+  type TurnRfpHolder,
+} from '../../mastra/rfp-context';
+import { builtinAgentSession } from '../agents/builtin-sessions';
+import { RfpPackagesService } from '../rfp-packages/rfp-packages.service';
 import { MastraService } from '../../mastra/mastra.service';
 import {
   AGENT_OVERRIDES_CONTEXT_KEY,
@@ -35,7 +46,11 @@ import {
   type ProviderOptions,
 } from '../../mastra/model-compat';
 import { setDatasetToolServices } from '../../mastra/tool-services';
-import type { DatasetSnapshot, SqlRunResult } from '../../mastra/tool-services';
+import type {
+  DatasetSnapshot,
+  RfpPackageResult,
+  SqlRunResult,
+} from '../../mastra/tool-services';
 import { ASSISTANT_MAX_STEPS } from '../../mastra/agent-constants';
 import { sqlFixOutputSchema } from '../../mastra/agents/sql-fixer.agent';
 import { sqlVerifyOutputSchema } from '../../mastra/agents/sql-verifier.agent';
@@ -86,11 +101,21 @@ import {
   SessionView,
   SessionVisualization,
   ReasoningStep,
+  RfpPackageRef,
   ToolDataRecord,
   VisualEvent,
 } from './entities/session.entity';
 
 const VISUAL_TOOLS = new Set(['create_visual', 'update_visual']);
+/** The agent a session without `agentKey` runs (agents.md 5.1). */
+const ASSISTANT_AGENT_KEY = 'assistant';
+/** The RFP Builder's registry key (agents.md 2.8, ADR-0028). */
+const RFP_AGENT_KEY = 'rfp';
+/** The RFP tools of agents.md 3.10: each emits a `tool-result` (api.md 3.1). */
+const RFP_TOOLS = new Set(
+  Object.keys(rfpTools).filter((name) => name !== 'ask_clarification'),
+);
+const EXPORT_RFP_PACKAGE_TOOL = 'export_rfp_package';
 /**
  * requestContext key carrying the curated-knowledge snippets this turn's
  * system block was built from, so the persist step can record them on the
@@ -126,7 +151,13 @@ const CROSS_CHECK_ROW_LIMIT = STORED_ROWS_CAP;
 
 export type StreamEvent = {
   type:
-    'reasoning' | 'text' | 'tool' | 'tool-result' | 'visual-updated' | 'done';
+    | 'reasoning'
+    | 'text'
+    | 'tool'
+    | 'tool-result'
+    | 'visual-updated'
+    | 'rfp-package'
+    | 'done';
   content?: string;
   session?: SessionDoc;
 };
@@ -177,6 +208,8 @@ export class SessionsService implements OnModuleInit {
     private readonly currentUser: CurrentUserService = new CurrentUserService(),
     // Records agent errors in org server mode (admin R40); absent in unit tests.
     @Optional() private readonly activity?: ActivityService,
+    // The RFP Builder's REST target and package export (agents.md 3.10).
+    @Optional() private readonly rfpPackages?: RfpPackagesService,
   ) {}
 
   /** The current user's preview with this id, if any. */
@@ -223,6 +256,14 @@ export class SessionsService implements OnModuleInit {
         await this.saveVisualMetadata(session, metadata);
         return this.toolResult(metadata);
       },
+      restTarget: (datasourceId) =>
+        this.requireRfpPackages().restTarget(datasourceId),
+      exportRfpPackage: (sessionId, datasourceId, rfpId) =>
+        this.requireRfpPackages().exportRfpPackage(
+          sessionId,
+          datasourceId,
+          rfpId,
+        ),
     });
 
     // A preview left open when the app stopped has no session left to own
@@ -427,6 +468,10 @@ export class SessionsService implements OnModuleInit {
     abortSignal?: AbortSignal,
     activeVisualId?: string,
   ) {
+    // A session bound to the RFP Builder gets its own context (ADR-0028).
+    if (session.agentKey === RFP_AGENT_KEY) {
+      return this.rfpAgentOptions(session, question, abortSignal);
+    }
     return {
       ...(await this.agentContext(
         session,
@@ -437,6 +482,105 @@ export class SessionsService implements OnModuleInit {
       // Each session is an isolated, persistent Mastra conversation.
       memory: { thread: session.id, resource: session.id },
     };
+  }
+
+  /**
+   * A turn of the RFP Builder (agents.md 4.1, 4.2, 5.1): Block R1 only, no
+   * metrics, knowledge, verified-query or agent-instructions block, and the
+   * `rfp` requestContext keys, with a fresh `turn-rfp` holder per turn.
+   */
+  private async rfpAgentOptions(
+    session: SessionDoc,
+    question?: string,
+    abortSignal?: AbortSignal,
+  ) {
+    const requestContext = new RequestContext();
+    requestContext.set(DATASETS_CONTEXT_KEY, session.datasets);
+    requestContext.set(SESSION_ID_CONTEXT_KEY, session.id);
+    if (question) requestContext.set(TURN_QUESTION_CONTEXT_KEY, question);
+    const workspace = await this.mastra.ensureSessionWorkspace(
+      session.id,
+      session.name,
+    );
+    requestContext.set(SESSION_WORKSPACE_CONTEXT_KEY, workspace.id);
+    requestContext.set(RFP_CREATED_BY_CONTEXT_KEY, this.currentUser.ownerKey());
+    const turnRfp: TurnRfpHolder = {};
+    requestContext.set(TURN_RFP_CONTEXT_KEY, turnRfp);
+    const { reasoningEffort } = await this.llmService.getView();
+    return {
+      maxSteps: ASSISTANT_MAX_STEPS,
+      providerOptions: await this.providerOptions({ reasoningEffort }),
+      context: [
+        {
+          role: 'system' as const,
+          content: await this.rfpOrientation(session),
+        },
+      ],
+      requestContext,
+      abortSignal,
+      memory: { thread: session.id, resource: session.id },
+    };
+  }
+
+  /**
+   * Block R1 (agents.md 4.1): the REST datasource the RFP tools resolve, the
+   * session's active RFP read from the API when the turn starts, and today.
+   * An RFP that can't be read is reported as none active, never as an error.
+   */
+  private async rfpOrientation(session: SessionDoc): Promise<string> {
+    const datasource = await this.rfpDatasource(session);
+    if (!datasource) {
+      return [
+        'Intellify RFP API for this session: none (no dataset of this session is bound to a REST datasource).',
+        'No RFP is active in this session yet: start at stage 1.',
+        `Today is ${isoToday()}.`,
+      ].join('\n');
+    }
+    let rfp: RfpOrientationRecord | undefined;
+    if (session.rfpId && this.rfpPackages) {
+      try {
+        rfp = (await this.rfpPackages.getJson(
+          datasource.id,
+          `/v1/rfps/${encodeURIComponent(session.rfpId)}`,
+        )) as RfpOrientationRecord;
+      } catch (error) {
+        this.logger.warn(
+          `Could not read the active RFP ${session.rfpId} of session ${session.id}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+    return rfpOrientationBlock({
+      datasourceId: datasource.id,
+      datasourceName: datasource.name,
+      ...(rfp ? { rfp: { ...rfp, id: rfp.id ?? session.rfpId } } : {}),
+      today: isoToday(),
+    });
+  }
+
+  /** The first of the session's datasets bound to a REST datasource. */
+  private async rfpDatasource(
+    session: SessionDoc,
+  ): Promise<{ id: string; name: string } | undefined> {
+    const datasets = await this.boundDatasets(session.datasets);
+    const rest = session.datasets
+      .map((name) => datasets.find((dataset) => dataset.name === name))
+      .find((dataset) => dataset?.datasourceKind === 'rest');
+    if (!rest?.datasourceId) return undefined;
+    let name = rest.datasourceId;
+    try {
+      name = (await this.datasourcesService.get(rest.datasourceId)).name;
+    } catch {
+      // The id still names it.
+    }
+    return { id: rest.datasourceId, name };
+  }
+
+  /** The RFP package service, which only a unit test leaves out. */
+  private requireRfpPackages(): RfpPackagesService {
+    if (!this.rfpPackages) {
+      throw new Error('RFP packages are not available in this process');
+    }
+    return this.rfpPackages;
   }
 
   /**
@@ -871,9 +1015,23 @@ export class SessionsService implements OnModuleInit {
   /**
    * Start chat on a Live user agent (sessions-chat R52): named after the
    * agent, over those of its Live datasets that still exist, bound to it.
-   * Built-in agents are not stored, so their keys are "not found".
+   * A built-in agent that declares a dataset (the RFP Builder, R61) gets a
+   * session over that dataset, bound by its registry key; any other
+   * built-in key is "not found".
    */
   async createFromAgent(agentId: string): Promise<SessionDoc> {
+    const builtin = this.builtinSessionAgent(agentId);
+    if (builtin) {
+      const { datasetName, requirement } = builtin.session;
+      const existing = await this.userAgents.datasetNames();
+      if (!existing.has(datasetName)) {
+        throw new BadRequestException(requirement);
+      }
+      return this.insertSession(builtin.name, [datasetName], {
+        agentKey: agentId,
+        agentName: builtin.name,
+      });
+    }
     const agent = await this.userAgents.get(agentId);
     if (!agent) throw new NotFoundException(`Agent "${agentId}" not found`);
     if (!agent.live) {
@@ -976,7 +1134,7 @@ export class SessionsService implements OnModuleInit {
   private async insertSession(
     name: string,
     datasets: string[],
-    agent?: Pick<SessionDoc, 'agentId' | 'agentName'>,
+    agent?: Pick<SessionDoc, 'agentId' | 'agentName' | 'agentKey'>,
   ): Promise<SessionDoc> {
     const id = randomUUID();
     const workspace = await this.mastra.ensureSessionWorkspace(id, name);
@@ -996,6 +1154,9 @@ export class SessionsService implements OnModuleInit {
    * `agent` (api.md 2.1). Computed on every read, never stored.
    */
   async toView(session: SessionDoc): Promise<SessionView> {
+    if (session.agentKey) {
+      return { ...session, agent: this.builtinAgentRef(session) };
+    }
     if (!session.agentId) return session;
     const doc = await this.userAgents.get(session.agentId);
     // A preview shows the draft it runs (api.md 2.1).
@@ -1005,18 +1166,56 @@ export class SessionsService implements OnModuleInit {
 
   /** `toView` for a list, reading the agents once. */
   async toViews(sessions: SessionDoc[]): Promise<SessionView[]> {
-    if (!sessions.some((session) => session.agentId)) return sessions;
-    const agents = new Map(
-      (await this.userAgents.list()).map((doc) => [doc.id, doc.live]),
-    );
+    if (!sessions.some((session) => session.agentId || session.agentKey)) {
+      return sessions;
+    }
+    const agents = sessions.some((session) => session.agentId)
+      ? new Map((await this.userAgents.list()).map((doc) => [doc.id, doc.live]))
+      : new Map<string, AgentConfig | undefined>();
     return sessions.map((session) =>
-      session.agentId
-        ? {
-            ...session,
-            agent: agentRef(session, agents.get(session.agentId)),
-          }
-        : session,
+      session.agentKey
+        ? { ...session, agent: this.builtinAgentRef(session) }
+        : session.agentId
+          ? {
+              ...session,
+              agent: agentRef(session, agents.get(session.agentId)),
+            }
+          : session,
     );
+  }
+
+  /**
+   * A registered built-in agent that declares a dataset for its sessions
+   * (ADR-0028), with its name; undefined for any other key.
+   */
+  private builtinSessionAgent(key: string) {
+    const session = builtinAgentSession(key);
+    const agent = session ? this.mastra.listAgents()[key] : undefined;
+    if (!session || !agent) return undefined;
+    return { agent, session, name: agent.name ?? key };
+  }
+
+  /**
+   * The `agent` of a session bound to a built-in agent (api.md 2.1): the
+   * registered agent's name and description and its built-in starters;
+   * never deleted.
+   */
+  private builtinAgentRef(session: SessionDoc): SessionAgentRef {
+    const key = session.agentKey ?? '';
+    const agent = this.mastra.listAgents()[key];
+    let description = '';
+    try {
+      description = agent?.getDescription() ?? '';
+    } catch {
+      description = '';
+    }
+    return {
+      id: key,
+      name: agent?.name ?? session.agentName ?? key,
+      deleted: false,
+      description,
+      starterQuestions: [...(builtinAgentSession(key)?.starterQuestions ?? [])],
+    };
   }
 
   // ------------------------------------------------------------- visuals
@@ -1057,6 +1256,19 @@ export class SessionsService implements OnModuleInit {
     version?: number,
   ): Promise<{ filename: string; archive: Buffer }> {
     return this.visuals.download(await this.get(id), visualizationId, version);
+  }
+
+  /**
+   * An RFP package stored in the session workspace, or one of its files
+   * (api.md #105). Owner-scoped: another user's session is not found.
+   */
+  async downloadRfpPackage(
+    id: string,
+    rfpId: string,
+    file?: string,
+  ): Promise<{ filename: string; contentType: string; body: Buffer }> {
+    const session = await this.get(id);
+    return this.requireRfpPackages().download(session.id, rfpId, file);
   }
 
   async revertVisualization(
@@ -1225,7 +1437,9 @@ export class SessionsService implements OnModuleInit {
     const session = await this.get(id);
     try {
       this.appendUserMessage(session, trimmed);
-      const agent = this.mastra.getAgent('assistant');
+      const agent = this.mastra.getAgent(
+        session.agentKey ?? ASSISTANT_AGENT_KEY,
+      );
       const input = await this.agentInput(agent, session);
       const options = await this.agentOptions(session, trimmed);
       const result = await agent.generate(input, options);
@@ -1240,6 +1454,7 @@ export class SessionsService implements OnModuleInit {
       });
       const updated = await this.updateDoc(id, {
         messages: session.messages,
+        ...turnRfpPatch(session, options.requestContext),
       });
       return updated ?? session;
     } catch (error) {
@@ -1327,7 +1542,11 @@ export class SessionsService implements OnModuleInit {
     // provider is still connecting, and that turn should survive a reload.
     await this.updateDoc(id, { messages: session.messages });
 
-    const agent = this.mastra.getAgent('assistant');
+    // The session's agent: the assistant, or the built-in agent it is bound
+    // to (agents.md 5.1, ADR-0028).
+    const agentKey = session.agentKey ?? ASSISTANT_AGENT_KEY;
+    const isAssistant = agentKey === ASSISTANT_AGENT_KEY;
+    const agent = this.mastra.getAgent(agentKey);
     const input = await this.agentInput(agent, session);
     // Own controller so a clarification can end the model turn without the
     // client having disconnected.
@@ -1346,12 +1565,15 @@ export class SessionsService implements OnModuleInit {
     // tailored visual needs but that never touched the source answer). Fresh
     // RequestContext + array per call — no leakage across turns or sessions.
     const data: ToolDataRecord[] = [];
-    options.requestContext.set(TURN_RECORDS_CONTEXT_KEY, data);
+    // Only the assistant's visual tools read them (agents.md 4.2).
+    if (isAssistant) options.requestContext.set(TURN_RECORDS_CONTEXT_KEY, data);
     const stream = await agent.stream(input, options);
 
     let text = '';
     let clarification: ChatMessage['clarification'] | null = null;
     let visualEvent: VisualEvent | undefined;
+    // The package an `export_rfp_package` call stored this turn (RFP Builder).
+    let rfpPackage: RfpPackageRef | undefined;
     const pendingCalls = new Map<string, Record<string, unknown>>();
     // Every tool name the model actually invoked this turn — the zero-SQL-
     // turn grounding guard below fires only when this stays empty.
@@ -1445,6 +1667,30 @@ export class SessionsService implements OnModuleInit {
             });
             continue;
           }
+          if (!isAssistant && RFP_TOOLS.has(toolName)) {
+            // Every RFP tool shows its step (api.md 3.1); a result with
+            // columns and rows is also kept as a data record (agents.md 5.1).
+            const error = resultError(payload.result);
+            if (toolName === EXPORT_RFP_PACKAGE_TOOL && !error) {
+              const stored = rfpPackageRef(payload.result);
+              if (stored) {
+                rfpPackage = stored;
+                emit({ type: 'rfp-package', content: JSON.stringify(stored) });
+              }
+            }
+            const record = toolDataRecord(toolName, args, payload.result);
+            if (record) data.push(record);
+            emit({
+              type: 'tool-result',
+              content: JSON.stringify({
+                tool: toolName,
+                input: firstStringArgument(args),
+                rowCount: record?.rowCount,
+                error,
+              }),
+            });
+            continue;
+          }
           const record = toolDataRecord(toolName, args, payload.result);
           if (record) {
             data.push(record);
@@ -1503,6 +1749,7 @@ export class SessionsService implements OnModuleInit {
     // it does not keep the streamed deltas), so overwriting `text` here is
     // enough to make the corrected answer the one the user ends up seeing.
     if (
+      isAssistant &&
       !turn.signal.aborted &&
       !clarification &&
       text.trim() &&
@@ -1537,12 +1784,14 @@ export class SessionsService implements OnModuleInit {
         ...(entities.length ? { entities } : {}),
         ...(reasoning ? { reasoning } : {}),
         ...(knowledge ? { knowledge } : {}),
+        ...(rfpPackage ? { rfpPackage } : {}),
       });
     } else if (text.trim() || visualEvent) {
       const interpretation = interpretationLine(data, entities);
       // Careful mode only, and only when there is a result set to corroborate.
+      // The assistant's only: another agent runs no SQL to cross-check.
       const crossChecked =
-        careful && !turn.signal.aborted
+        careful && isAssistant && !turn.signal.aborted
           ? await this.crossCheckAnswer(session, trimmed, data)
           : undefined;
       messages.push({
@@ -1561,9 +1810,13 @@ export class SessionsService implements OnModuleInit {
           : {}),
         ...(visualEvent ? { visual: visualEvent } : {}),
         ...(crossChecked ? { crossCheck: crossChecked } : {}),
+        ...(rfpPackage ? { rfpPackage } : {}),
       });
     }
-    const updated = await this.updateDoc(id, { messages });
+    const updated = await this.updateDoc(id, {
+      messages,
+      ...turnRfpPatch(session, options.requestContext),
+    });
     if (!turn.signal.aborted || clarification) {
       emit({ type: 'done', session: await this.toView(updated ?? fresh) });
     }
@@ -1803,6 +2056,59 @@ function reasoningTrail(
     });
   }
   return steps.length ? steps : undefined;
+}
+
+/**
+ * The session's new active RFP, from this turn's `turn-rfp` holder (agents.md
+ * 4.2, 5.1); nothing when the turn opened none or the same one.
+ */
+function turnRfpPatch(
+  session: SessionDoc,
+  requestContext: { get(key: string): unknown } | undefined,
+): Pick<SessionDoc, 'rfpId'> {
+  const holder = requestContext?.get(TURN_RFP_CONTEXT_KEY) as
+    TurnRfpHolder | undefined;
+  const rfpId = holder?.rfpId;
+  return typeof rfpId === 'string' && rfpId && rfpId !== session.rfpId
+    ? { rfpId }
+    : {};
+}
+
+/** The `{ error }` a tool answered with, if any. */
+function resultError(result: unknown): string | undefined {
+  const error = (result as { error?: unknown } | null | undefined)?.error;
+  return typeof error === 'string' ? error : undefined;
+}
+
+/** A tool call's first string argument: the step's input (api.md 3.1). */
+function firstStringArgument(
+  args: Record<string, unknown>,
+): string | undefined {
+  return Object.values(args).find(
+    (value): value is string => typeof value === 'string',
+  );
+}
+
+/** `export_rfp_package`'s result as the answer stores it (data-model 3.4.1). */
+function rfpPackageRef(result: unknown): RfpPackageRef | undefined {
+  const value = (result ?? {}) as Partial<RfpPackageResult>;
+  if (
+    typeof value.rfpId !== 'string' ||
+    typeof value.title !== 'string' ||
+    !Array.isArray(value.files) ||
+    typeof value.exportedAt !== 'string'
+  ) {
+    return undefined;
+  }
+  return {
+    rfpId: value.rfpId,
+    title: value.title,
+    files: value.files.map((file) => ({
+      name: String(file?.name ?? ''),
+      bytes: Number(file?.bytes ?? 0),
+    })),
+    exportedAt: value.exportedAt,
+  };
 }
 
 /** A session's `agent`: its Live version, or the stored name once deleted. */
