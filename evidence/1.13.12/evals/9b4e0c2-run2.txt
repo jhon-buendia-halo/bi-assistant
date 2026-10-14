@@ -1,0 +1,13 @@
+PASS  champion-2022  (12174ms)
+PASS  final-score-2018  (10776ms)
+PASS  top-scorer-2022  (20516ms)
+PASS  shootouts  (13573ms)
+PASS  biggest-venue  (7974ms)
+PASS  schema-discovery  (17692ms)
+FAIL  ambiguous-best-team  (12643ms)
+      check-no-tool-errors: {
+PASS  possession-vs-result  (42093ms)
+PASS  out-of-scope  (14999ms)
+PASS  visual-request  (39623ms)
+9/10 questions passed
+exit 0

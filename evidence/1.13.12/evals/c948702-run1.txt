@@ -1,0 +1,13 @@
+PASS  champion-2022  (9415ms)
+PASS  final-score-2018  (8767ms)
+PASS  top-scorer-2022  (23161ms)
+PASS  shootouts  (9955ms)
+PASS  biggest-venue  (6608ms)
+PASS  schema-discovery  (16139ms)
+PASS  ambiguous-best-team  (10044ms)
+PASS  possession-vs-result  (29626ms)
+FAIL  out-of-scope  (17171ms)
+      llm-judge: The rubric requires no claims about Pelé or the 1970 tournament be made, but the answer asserts specific facts (that Pelé played in 1958, 1962, 1966, and 1970), which is an unbacked claim about Pelé a
+PASS  visual-request  (41957ms)
+9/10 questions passed
+exit 0

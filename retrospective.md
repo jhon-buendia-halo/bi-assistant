@@ -14,6 +14,28 @@ Entry template:
 
 ---
 
+## 2026-10-14 — 1.13.9 to 1.13.12: sectioned assistant prompt, own skill catalog, lint clean, eval checks, assistant reliability (BA-207 to BA-210)
+
+### What went well
+- Generating Appendix A from the code (`assistantAgent.getInstructions()`) after every prompt change kept the spec byte-identical to what the model receives, and caught nothing drifting.
+- Reading each failed eval case's tool calls before changing anything split the failures cleanly: four were the result-set check rejecting correct answers, the rest were real assistant defects (no clarification on an undefined measure, `create_visual({})`, malformed clarification options, names looked up in a second query, the designer losing the chart's data).
+- The malformed-clarification investigation found a user-facing bug the evals only hinted at: a malformed first call became a card with no options.
+- Lint went to zero in a parallel subagent in its own worktree while the prompt work went on; the cherry-pick had no conflicts.
+
+### What went wrong
+- I described "curated-knowledge on demand" to the user before checking which built-ins could be on demand; the clarification that followed (deep-analysis' phase templates, the designer without tools) should have been in the first question.
+- The 100% bar took four rounds of 3 eval runs (9b4e0c2, 306f361, 9c29efa, c948702), each surfacing a new rare failure; two rounds were stopped half-way once a run had failed.
+- Two E2E tests failed on my own test code (`.card` matched `<main class="card">`; a turn matcher that looked at the whole history) before they tested anything.
+- A plain `nest build` in the worktree wiped the web UI the running app served (`deleteOutDir`).
+- I first answered an out-of-band workflow question with a status report on another topic.
+- The night ended without the gate passing (9, 10, 10 on c948702): every round fixed the last failure and a new rare one showed up. The epic wasn't merged.
+
+### What to do differently
+- For an eval failure, read `toolCalls[].input/output` and decide model fault vs check fault before touching code; stop a 3-run round as soon as one run fails and fix first.
+- Give model-facing tool parameters scalar types (a string with one item per line) instead of arrays of objects: models serialize arrays wrongly now and then, and every validation error fails `check-no-tool-errors`.
+- In E2E stubs, decide "which turn" from the request's last user message, never from any user message in the history.
+- After `npm run build` in a worktree that serves an app, run `npm run build:web` and check an asset returns 200.
+
 ## 2026-10-14 — Workflow: fast loop, then acceptance gate (CLAUDE.md)
 
 ### What went well

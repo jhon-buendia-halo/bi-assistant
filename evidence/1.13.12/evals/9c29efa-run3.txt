@@ -1,0 +1,13 @@
+PASS  champion-2022  (21399ms)
+PASS  final-score-2018  (7551ms)
+PASS  top-scorer-2022  (22971ms)
+PASS  shootouts  (8642ms)
+PASS  biggest-venue  (4918ms)
+PASS  schema-discovery  (16127ms)
+PASS  ambiguous-best-team  (7720ms)
+PASS  possession-vs-result  (26159ms)
+PASS  out-of-scope  (14585ms)
+FAIL  visual-request  (51093ms)
+      llm-judge: The create_visual tool call did not produce the requested chart: its title/description indicate it created a table of match-level results ('Goals Scored in Each 2022 World Cup Knockout Match', listing
+9/10 questions passed
+exit 0

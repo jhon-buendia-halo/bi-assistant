@@ -1,0 +1,38 @@
+[1/36] [web] › e2e/agent-editor.spec.ts:129:5 › creates an agent, previews it, publishes it and deletes it
+[2/36] [web] › e2e/agent-editor.spec.ts:178:5 › editing a Live agent keeps its sessions on the Live version until republished
+[3/36] [web] › e2e/agent-editor.spec.ts:232:5 › sending in the preview saves the form first
+[4/36] [web] › e2e/agent-editor.spec.ts:251:5 › reset and leaving the editor discard the preview
+[5/36] [web] › e2e/agent-editor.spec.ts:280:5 › preview needs a dataset, and names must be unique
+[6/36] [web] › e2e/agent-editor.spec.ts:302:5 › leaving with unsaved changes asks first
+[7/36] [web] › e2e/agent-editor.spec.ts:325:5 › a dataset that no longer exists stays visible in the editor
+[8/36] [web] › e2e/agent-editor.spec.ts:347:5 › the editor has no detectable accessibility violations in either theme
+[9/36] [web] › e2e/agent-hub.spec.ts:92:5 › shows the built-in agents and mine in sections
+[10/36] [web] › e2e/agent-hub.spec.ts:143:5 › search narrows the agents by name or description
+[11/36] [web] › e2e/agent-hub.spec.ts:159:5 › filters limit the hub to one kind of agent
+[12/36] [web] › e2e/agent-hub.spec.ts:181:5 › pinned agents come first in their own section and survive a restart
+[13/36] [web] › e2e/agent-hub.spec.ts:241:5 › flags an agent whose dataset no longer exists
+[14/36] [web] › e2e/agent-hub.spec.ts:258:5 › a card opens the agent's detail view with its actions
+[15/36] [web] › e2e/agent-hub.spec.ts:284:5 › publishing a draft makes it Live
+[16/36] [web] › e2e/agent-hub.spec.ts:310:5 › deleting an agent asks first
+[17/36] [web] › e2e/agent-hub.spec.ts:338:5 › the hub has no detectable accessibility violations in either theme
+[18/36] [web] › e2e/agents.spec.ts:29:5 › opens an agent from the Agents list and switches between its tabs
+[19/36] [web] › e2e/agents.spec.ts:98:5 › shows the stateless, no-tool agents accurately
+[20/36] [web] › e2e/agents.spec.ts:119:5 › offers the configured datasources and starts a run from the evals tab
+[21/36] [web] › e2e/agents.spec.ts:145:5 › runs only the ticked questions
+[22/36] [web] › e2e/agents.spec.ts:174:5 › refuses to run against a datasource with no datasets
+[23/36] [web] › e2e/agents.spec.ts:188:5 › explains an incomplete eval dataset without starting a run
+[24/36] [web] › e2e/agents.spec.ts:205:5 › opens a question in the right panel with what it is scored on
+[25/36] [web] › e2e/agents.spec.ts:231:5 › separates the question suite from past executions
+[26/36] [web] › e2e/agents.spec.ts:260:5 › downloads an execution as a Markdown report
+[27/36] [web] › e2e/assistant-skills.spec.ts:96:5 › the assistant is offered only its own skills
+[28/36] [web] › e2e/assistant-skills.spec.ts:130:5 › a turn without curated knowledge carries no knowledge rules
+[29/36] [web] › e2e/assistant-skills.spec.ts:144:5 › a turn with curated knowledge carries the block, and the rules stay on demand
+[30/36] [web] › e2e/assistant-skills.spec.ts:223:5 › a user-level skill is offered to the assistant on demand
+[31/36] [web] › e2e/assistant-skills.spec.ts:256:5 › the assistant reads a skill's files with read_file, and only those
+[32/36] [web] › e2e/assistant-skills.spec.ts:296:5 › a user-level override of the curated-knowledge skill is the one the model reads
+[33/36] [web] › e2e/chat-and-visuals.spec.ts:141:5 › renders streamed reasoning, tool activity, final Markdown, and supports stopping
+[34/36] [web] › e2e/chat-and-visuals.spec.ts:170:5 › renders a deterministic interactive visualization and its version controls
+[35/36] [web] › e2e/designer-skills.spec.ts:94:5 › a spec-mode designer call carries only the spec-mode reference
+[36/36] [web] › e2e/designer-skills.spec.ts:130:5 › a chart asked for in the chat is designed from my request when the model gives no instruction
+  36 passed (2.9m)
+exit 0

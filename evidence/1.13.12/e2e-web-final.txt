@@ -1,0 +1,23 @@
+[1/21] [web] › e2e/agents.spec.ts:29:5 › opens an agent from the Agents list and switches between its tabs
+[2/21] [web] › e2e/agents.spec.ts:98:5 › shows the stateless, no-tool agents accurately
+[3/21] [web] › e2e/agents.spec.ts:119:5 › offers the configured datasources and starts a run from the evals tab
+[4/21] [web] › e2e/agents.spec.ts:145:5 › runs only the ticked questions
+[5/21] [web] › e2e/agents.spec.ts:174:5 › refuses to run against a datasource with no datasets
+[6/21] [web] › e2e/agents.spec.ts:188:5 › explains an incomplete eval dataset without starting a run
+[7/21] [web] › e2e/agents.spec.ts:205:5 › opens a question in the right panel with what it is scored on
+[8/21] [web] › e2e/agents.spec.ts:231:5 › separates the question suite from past executions
+[9/21] [web] › e2e/agents.spec.ts:260:5 › downloads an execution as a Markdown report
+[10/21] [web] › e2e/assistant-skills.spec.ts:96:5 › the assistant is offered only its own skills
+[11/21] [web] › e2e/assistant-skills.spec.ts:130:5 › a turn without curated knowledge carries no knowledge rules
+[12/21] [web] › e2e/assistant-skills.spec.ts:144:5 › a turn with curated knowledge carries the block, and the rules stay on demand
+[13/21] [web] › e2e/assistant-skills.spec.ts:223:5 › a user-level skill is offered to the assistant on demand
+[14/21] [web] › e2e/assistant-skills.spec.ts:256:5 › the assistant reads a skill's files with read_file, and only those
+[15/21] [web] › e2e/assistant-skills.spec.ts:296:5 › a user-level override of the curated-knowledge skill is the one the model reads
+[16/21] [web] › e2e/chat-and-visuals.spec.ts:141:5 › renders streamed reasoning, tool activity, final Markdown, and supports stopping
+[17/21] [web] › e2e/chat-and-visuals.spec.ts:170:5 › renders a deterministic interactive visualization and its version controls
+[18/21] [web] › e2e/chat-clarification.spec.ts:53:5 › answering a clarification
+[19/21] [web] › e2e/chat-clarification.spec.ts:95:5 › a malformed clarification is asked again, never shown without options
+[20/21] [web] › e2e/designer-skills.spec.ts:94:5 › a spec-mode designer call carries only the spec-mode reference
+[21/21] [web] › e2e/designer-skills.spec.ts:130:5 › a chart asked for in the chat is designed from my request when the model gives no instruction
+  21 passed (1.6m)
+exit 0
