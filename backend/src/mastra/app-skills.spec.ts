@@ -16,7 +16,7 @@ import {
   resolveSkills,
   skillBody,
   skillFiles,
-  skillPathsFor,
+  catalogSkills,
   skillsRoot,
   validateAgentSkills,
 } from './app-skills';
@@ -123,14 +123,14 @@ describe('loadAppSkills', () => {
     );
   });
 
-  it('fails on a multi-line or unknown front-matter key', () => {
+  it('fails on a multi-line name or an unknown front-matter key', () => {
     skill(
       'folded',
       [
         '---',
-        'name: folded',
-        'description: >',
-        '  Use when folded.',
+        'name: >',
+        '  folded',
+        'description: Use when x.',
         '---',
         'b',
       ].join('\n'),
@@ -148,8 +148,42 @@ describe('loadAppSkills', () => {
     );
 
     const message = problems();
-    expect(message).toContain('folded: description must be on one line');
+    expect(message).toContain('folded: name must be on one line');
     expect(message).toContain('extra: unknown front-matter key "license"');
+  });
+
+  it('joins a description that wraps onto indented lines or uses a block', () => {
+    const wrapped = (name: string, lines: string[]) =>
+      skill(name, ['---', `name: ${name}`, ...lines, '---', 'b'].join('\n'));
+    // The user's own example (2026-10-14): a plain scalar on two lines.
+    wrapped('plain', [
+      'description: Use when converting a legacy data flow to a new pipeline, or reviewing',
+      '  such a conversion. Covers intake, mapping plan, and verification.',
+    ]);
+    wrapped('folded', [
+      'description: >-',
+      '  Use when folded',
+      '  over lines.',
+    ]);
+    wrapped('literal', ['description: |', '  Use when literal.']);
+
+    const skills = loadAppSkills(root);
+
+    expect(skills.get('plain')?.description).toBe(
+      'Use when converting a legacy data flow to a new pipeline, or reviewing such a conversion. Covers intake, mapping plan, and verification.',
+    );
+    expect(skills.get('folded')?.description).toBe(
+      'Use when folded over lines.',
+    );
+    expect(skills.get('literal')?.description).toBe('Use when literal.');
+  });
+
+  it('treats an empty description as missing', () => {
+    skill(
+      'blank',
+      ['---', 'name: blank', 'description: >', '---', 'b'].join('\n'),
+    );
+    expect(problems()).toContain('blank: description is missing');
   });
 
   it('fails when the body names a phase or reference that does not exist', () => {
@@ -221,10 +255,11 @@ describe('the bundled skills', () => {
     expect(appSkillDocument('interactive-visuals')).toMatch(
       /^---\nname: interactive-visuals\ndescription: Use when /,
     );
-    expect(skillPathsFor('assistant')).toEqual(
-      (AGENT_SKILLS.assistant ?? []).map((name) => join(skillsRoot(), name)),
-    );
-    expect(skillPathsFor('sql-fixer')).toEqual([]);
+    // No built-in skill is on demand, and no user or project level exists
+    // in the test environment, so every catalog is empty.
+    expect(AGENT_SKILLS.assistant).toEqual([]);
+    expect(catalogSkills('assistant')).toEqual([]);
+    expect(catalogSkills('sql-fixer')).toEqual([]);
   });
 
   it('serve the curated-knowledge rules as a harness-loaded body', () => {

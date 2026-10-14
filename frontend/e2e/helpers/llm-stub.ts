@@ -97,9 +97,13 @@ function chunk(delta: Record<string, unknown>, finish: string | null): string {
   })}\n\n`;
 }
 
+/** Real providers give every call its own id; reusing one merges them. */
+let toolCallCount = 0;
+
 function toolCall(name: string, args: Record<string, unknown>) {
+  toolCallCount += 1;
   return {
-    id: 'call_stub_1',
+    id: `call_stub_${toolCallCount}`,
     type: 'function',
     function: { name, arguments: JSON.stringify(args) },
   };

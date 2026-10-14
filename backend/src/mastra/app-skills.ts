@@ -139,7 +139,8 @@ interface FrontMatter {
  * Read the front matter. `strict` (built-in skills) allows only `name` and
  * `description`. Otherwise `agents` is read too and any other key is ignored
  * with its continuation lines, so a standard skill carrying `license` or a
- * nested `metadata` map still loads.
+ * nested `metadata` map still loads. `description` may wrap onto indented
+ * lines or use a `>` / `|` block; its lines are joined with single spaces.
  */
 function parseFrontMatter(
   text: string,
@@ -162,6 +163,12 @@ function parseFrontMatter(
     const pair = /^([A-Za-z_-]+):\s*(.*)$/.exec(line);
     if (!pair) {
       if (lastKey && !lastKnown) continue;
+      if (lastKey === 'description' && /^\s/.test(line)) {
+        values.description = [values.description, line.trim()]
+          .filter(Boolean)
+          .join(' ');
+        continue;
+      }
       problems.push(
         lastKey
           ? `${lastKey} must be on one line`
@@ -177,9 +184,14 @@ function parseFrontMatter(
       continue;
     }
     const value = raw.trim().replace(/^(['"])(.*)\1$/, '$2');
-    if (/^[|>]/.test(value) || (key === 'agents' && !value)) {
+    if (key === 'description') {
+      // A `>` or `|` block starts empty; its indented lines follow.
+      values.description = /^[|>][+-]?$/.test(value) ? '' : value;
+      continue;
+    }
+    if (/^[|>]/.test(value) || !value) {
       problems.push(`${key} must be on one line`);
-      if (key !== 'agents') values[key as 'name' | 'description'] = '';
+      if (key === 'name') values.name = '';
       continue;
     }
     if (key === 'agents') {
@@ -189,7 +201,7 @@ function parseFrontMatter(
         .map((item) => item.trim().replace(/^(['"])(.*)\1$/, '$2'))
         .filter(Boolean);
     } else {
-      values[key as 'name' | 'description'] = value;
+      values.name = value;
     }
   }
   return values;
@@ -228,8 +240,7 @@ function readSkill(root: string, folder: string, strict: boolean): ReadSkill {
     else if (values.name !== folder) {
       problems.push(`name "${values.name}" does not match its folder`);
     }
-    if (values.description === undefined)
-      problems.push('description is missing');
+    if (!values.description) problems.push('description is missing');
     else if (values.description && !values.description.startsWith('Use when')) {
       problems.push('description must start with "Use when"');
     }
@@ -510,14 +521,17 @@ function winningSkill(name: string): AppSkill {
   return skill;
 }
 
-/** Folders of the on-demand skills an agent gets (Mastra `skills`), by name. */
-export function skillPathsFor(agent: string): string[] {
+/**
+ * The on-demand skills an agent gets, sorted by name: the catalog the app
+ * renders into its prompt and the only folders `read_file` may read
+ * (agents.md 7.3, 7.5).
+ */
+export function catalogSkills(agent: string): AppSkill[] {
   return [...appSkills().values()]
     .filter(
       (skill) => skill.loading === 'on-demand' && skill.agents.includes(agent),
     )
-    .sort((a, b) => (a.name < b.name ? -1 : 1))
-    .map((skill) => skill.dir);
+    .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 }
 
 /** A harness-loaded skill's whole `SKILL.md`. */
