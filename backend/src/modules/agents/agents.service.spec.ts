@@ -219,4 +219,54 @@ describe('AgentsService (built-in and user agents)', () => {
       );
     }),
   );
+
+  it(
+    "shows a built-in agent's skills, and the assistant's for a user agent",
+    asDemoUser(async () => {
+      const names = (view: { skills: { name: string }[] }) =>
+        view.skills.map((skill) => skill.name);
+      const assistant = await ctx.service.skills('assistant');
+      expect(names(assistant)).toEqual(['curated-knowledge', 'deep-analysis']);
+      expect(assistant.skills[0]).toMatchObject({
+        level: 'built-in',
+        loading: 'harness',
+      });
+
+      const created = await ctx.service.create({ name: 'Analyst' });
+      expect(names(await ctx.service.skills(created.id))).toEqual(
+        names(assistant),
+      );
+      expect((await ctx.service.skills('sql-fixer')).skills).toEqual([]);
+      await expect(ctx.service.skills('nope')).rejects.toThrow(
+        'Agent "nope" not found',
+      );
+    }),
+  );
+
+  it(
+    "serves a skill file and refuses what is not one of the agent's files",
+    asDemoUser(async () => {
+      const file = await ctx.service.skillFile(
+        'assistant',
+        'deep-analysis',
+        'phases/1-plan.md',
+      );
+      expect(file.path).toBe('phases/1-plan.md');
+      expect(file.content).toContain('{{');
+
+      await expect(
+        ctx.service.skillFile('sql-fixer', 'deep-analysis', 'SKILL.md'),
+      ).rejects.toThrow('Agent "sql-fixer" has no skill "deep-analysis"');
+      await expect(
+        ctx.service.skillFile(
+          'assistant',
+          'deep-analysis',
+          '../../app-skills.ts',
+        ),
+      ).rejects.toThrow('Invalid skill file path "../../app-skills.ts"');
+      await expect(
+        ctx.service.skillFile('assistant', 'deep-analysis', 'phases/9.md'),
+      ).rejects.toThrow('Skill "deep-analysis" has no file "phases/9.md"');
+    }),
+  );
 });

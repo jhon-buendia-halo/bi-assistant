@@ -1,4 +1,13 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import {
+  agentSkillFile,
+  agentSkillsView,
+  type AgentSkillsView,
+} from '../../mastra/app-skills';
 import { MastraService } from '../../mastra/mastra.service';
 import { ASSISTANT_EVAL_SETS } from '../../mastra/evals/assistant.evals';
 import {
@@ -148,6 +157,39 @@ export class AgentsService {
       memory: assistant?.memory ?? null,
       model: assistant?.model ?? null,
     };
+  }
+
+  /**
+   * The skills an agent gets, resolved at startup (agents.md 7.3, api.md
+   * 34a). A user agent runs on the assistant, so it shows the assistant's.
+   */
+  async skills(key: string): Promise<AgentSkillsView> {
+    return agentSkillsView(await this.skillsAgent(key));
+  }
+
+  /** One file of one of an agent's skills (api.md 34b). */
+  async skillFile(
+    key: string,
+    name: string,
+    path: string,
+  ): Promise<{ path: string; size: number; content: string | null }> {
+    const agent = await this.skillsAgent(key);
+    const result = agentSkillFile(agent, name, path ?? '');
+    if (!('error' in result)) return result;
+    if (result.error === 'no-skill') {
+      throw new NotFoundException(`Agent "${key}" has no skill "${name}"`);
+    }
+    if (result.error === 'invalid-path') {
+      throw new BadRequestException(`Invalid skill file path "${path ?? ''}"`);
+    }
+    throw new NotFoundException(`Skill "${name}" has no file "${path}"`);
+  }
+
+  /** The registry key whose skills `key` shows; 404 when it names no agent. */
+  private async skillsAgent(key: string): Promise<string> {
+    if (this.isBuiltin(key)) return key;
+    if (await this.userAgents.get(key)) return OFFICIAL_AGENT_KEY;
+    throw new NotFoundException(`Agent "${key}" not found`);
   }
 
   async create(input: AgentConfigInput): Promise<AgentSummary> {
