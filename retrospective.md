@@ -14,6 +14,20 @@ Entry template:
 
 ---
 
+## 2026-10-14 — Workflow: fast loop, then acceptance gate (CLAUDE.md)
+
+### What went well
+- The user's manual test now comes right after the code, so a change he rejects no longer costs an impact analysis, E2E edits, a full suite, evidence and a retrospective.
+
+### What went wrong
+- For every change he requested, the whole eleven-step workflow ran from scratch, including two full E2E suites (web and org, about 10 minutes) and evidence, before he could try it. Several of those changes were then reworked, and the evidence was redone.
+- The first answer to his question about the workflow went unanswered behind a status report on an unrelated check.
+
+### What to do differently
+- After step 8 and the quick checks, hand over the running app and stop. Start steps 6, 7, 9, 10 and 11 only once the user says the change is accepted.
+- In step 9, run the spec files step 6 lists, not the suite. When an agent's prompt, skills, tools, context or model routing changed, run its evals on the base commit and on the branch, and re-run any flipped case until each build has 3+ runs.
+- Answer an out-of-band question in the very next reply, before any status update.
+
 ## 2026-10-14 — 1.13.8 Agent page Skills tab (BA-206)
 
 ### What went well

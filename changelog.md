@@ -17,6 +17,10 @@ Running log of every meaningful change, newest first. See *Logging convention* a
   - **API.** New routes `GET /agents/:key/skills` and `GET /agents/:key/skills/:name/file`. A user agent shows the assistant's skills.
   - Specs: api.md 34a/34b, ui.md §4.5, agents-evals R63-R67 and the Feature "Agent skills". Evidence: [evidence/1.13.8/](evidence/1.13.8/).
 
+### Changed
+
+- **Workflow: fast loop, then acceptance gate** ([CLAUDE.md](CLAUDE.md) *Workflow*). A requested change now goes through steps 1–5 and 8 plus quick checks, and the running app is handed over for a manual test. Steps 6, 7, 9, 10 and 11 run once the user has accepted the change, once per story. Step 9 runs only the impacted E2E specs, and the evals must pass (no case regresses against the base commit) whenever an agent's prompt, skills, tools, context or model routing changes. The *E2E test convention* follows suit. Evidence: process change, no app behaviour change; `check-specs` passes and the `workflow-steps` mod still reads all eleven steps.
+
 ## 2026-10-13
 
 ### Fixed
