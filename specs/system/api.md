@@ -146,7 +146,7 @@ The renderer shows its own toast for any 403 (`You don't have permission to do t
 | Every `/testing-data` route (2.9) | `manage-datasources` |
 | `GET /llm/settings`, `GET /llm/effort-levels` | `use-agents` |
 | `PUT /llm/settings`, `PUT /llm/reasoning`, `POST /llm/test-connection` | `manage-llm` |
-| Every `/developer-settings` route (2.11); `PUT /skills/built-in/:name`, `DELETE /skills/built-in/:name` | `edit-policies` |
+| Every `/developer-settings` route (2.11); `PUT /skills/built-in/:name`, `DELETE /skills/built-in/:name`; `PUT /agents/:key/prompt`, `DELETE /agents/:key/prompt` | `edit-policies` |
 | `GET /ui-preferences`, `PUT /ui-preferences` (2.12) | `use-agents` (each user's own theme and drawer state) |
 | `GET /auth/login`, `GET /auth/callback`, `POST /auth/logout`, `GET /auth/local/users`, `POST /auth/local/sign-in`, `POST /auth/local/sign-out`, `GET /me` (2.13) | public: no permission checked (`GET /me` answers 401 itself without an auth session) |
 | Every `/scim/v2` route (2.14) | the SCIM bearer token, no auth session |
@@ -431,7 +431,7 @@ interface LlmSettingsView {
 
 ### 2.6 Agents, hub and evals
 
-Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra registry key (`assistant`, `interactive-visual-designer`, `sql-fixer`, `sql-verifier`, `knowledge-bootstrap`, `assistant-eval-judge`; see [agents.md](agents.md)) **or** the id of a user agent ([data-model.md](data-model.md) section 3.10); the registry is checked first. `:id` is always a user-agent id. The catalogue merges both kinds. Rules: R43-R52 in [agents-evals](../capabilities/agents-evals/spec.md). The user-agent routes are declared before `GET /agents/:key`.
+Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra registry key (`assistant`, `visualization`, `sql-fixer`, `sql-verifier`, `knowledge-bootstrap`, `assistant-eval-judge`; see [agents.md](agents.md)) **or** the id of a user agent ([data-model.md](data-model.md) section 3.10); the registry is checked first. `:id` is always a user-agent id. The catalogue merges both kinds. Rules: R43-R52 and R97-R104 in [agents-evals](../capabilities/agents-evals/spec.md). The user-agent routes are declared before `GET /agents/:key`.
 
 | # | Method + path | Purpose | FE |
 |---|---|---|---|
@@ -450,6 +450,8 @@ Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra regi
 | 43 | `POST /agents/:id/publish` | Publish the draft (makes it Live) | yes |
 | 44 | `DELETE /agents/:id` | Delete a user agent | yes |
 | 45 | `PUT /agents/:key/pin` | Pin or unpin any agent | yes |
+| 103 | `PUT /agents/:key/prompt` | Save a built-in agent's system prompt (an override) | yes |
+| 104 | `DELETE /agents/:key/prompt` | Reset a built-in agent's system prompt to the shipped one | yes |
 
 #### 33. `GET /agents`
 - Response `200`: `{ agents: AgentSummary[] }` sorted by `name`, built-in and user agents together.
@@ -457,7 +459,8 @@ Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra regi
 - For a user agent `key` equals `id`, and `name`, `description`, `datasets`, `starterQuestions` and `tools` come from the Live version when there is one, else the draft. For a built-in agent `status` is `builtin`, `hasUnpublishedChanges` is `false` and `datasets`, `starterQuestions` and `missingDatasets` are empty. `kind` is `official` for `assistant` and `system` for the other five.
 
 #### 34. `GET /agents/:key`
-- Response `200`: `AgentDetail = AgentSummary & { draft?: AgentConfig; live?: AgentConfig /* user agents only; shapes in data-model 3.10 */; instructions: string /* prompt flattened to text */; toolDetails: { name, description, inputs: string[] /* top-level input param names */ }[]; memory: { storage: string|null; lastMessages: number|false|null; semanticRecall: boolean; workingMemory: boolean; generateTitle: boolean } | null; model: { id: string; provider: string } | null /* null when no LLM settings saved */; toolLinks?: { name: string; status: 'always-on'|'linked'|'not-linked'; linkedVia: { instructions: boolean; skills: string[] /* skill names, sorted */ } }[] /* user agents only: every library tool sorted by name, from the Live version, else the draft */; llm: { provider: string | null; providerName: string | null; model: string | null; apiKeyConfigured: boolean; maxOutputTokens: number | null; reasoningEffort: string | null } /* the effective LLM settings the agent resolves to; never the key; every field null/false when no LLM is saved */ }`.
+- Response `200`: `AgentDetail = AgentSummary & { draft?: AgentConfig; live?: AgentConfig /* user agents only; shapes in data-model 3.10 */; instructions: string /* prompt flattened to text */; toolDetails: { name, description, inputs: string[] /* top-level input param names */ }[]; memory: { storage: string|null; lastMessages: number|false|null; semanticRecall: boolean; workingMemory: boolean; generateTitle: boolean } | null; model: { id: string; provider: string } | null /* null when no LLM settings saved */; toolLinks?: { name: string; status: 'always-on'|'linked'|'not-linked'; linkedVia: { instructions: boolean; skills: string[] /* skill names, sorted */ } }[] /* user agents only: every library tool sorted by name, from the Live version, else the draft */; llm: { provider: string | null; providerName: string | null; model: string | null; apiKeyConfigured: boolean; maxOutputTokens: number | null; reasoningEffort: string | null } /* the effective LLM settings the agent resolves to; never the key; every field null/false when no LLM is saved */; prompt?: { editable: string /* as served: the override, else the shipped text */; shipped: string; modified: boolean; builtInChanged: boolean /* modified and the shipped text's hash differs from baseHash */; linksAllowed: boolean /* true for assistant */; updatedAt: string | null /* the override's */ } /* built-in agents only */ }`.
+- For a built-in agent, `instructions` is the prompt as served, so it reflects an override (ADR-0025), and `prompt` carries the editable text, the shipped text and the override state ([data-model.md](data-model.md) 3.10.3). For the `assistant`, `editable` and `shipped` exclude the generated `## Tools` section ([agents.md](agents.md) 2.1).
 - A user agent runs on the assistant, so its `instructions`, `toolDetails`, `memory` and `model` describe the assistant, with the prompt and tools that the agent's tool selection gives it (Live version, else draft; [agents.md](agents.md) 2.1). Its own instructions are in `draft` and `live`, with links as written (R81). `toolLinks` (user agents) says why each library tool is there: `always-on` for `list_entities`, `describe_entity` and `run_readonly_sql`, `linked` when the instructions or a linked skill's body link it, else `not-linked`; the tools of its skills come from the Live copies, else the current skills. `llm.model` is the agent's own `model` override when a user agent sets one, else the configured model; `llm.reasoningEffort` is the agent's override, else the configured one. `llm` never carries the API key, only whether one is saved ([../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R87-R89).
 - Errors (Style B): `404 "Agent \"<key>\" not found"`. `:key` is resolved as a registry key first, then as a user-agent id.
 
@@ -611,6 +614,16 @@ The `built-in` routes are declared before `/skills/:id`.
 #### 102. `DELETE /skills/built-in/:name`
 - Success: `{ ok:true, message:"Built-in skill \"<name>\" reset" }`, also when there was no override.
 - Failures (Style A): `"Unknown built-in skill \"<name>\""`.
+
+#### 103. `PUT /agents/:key/prompt`
+- Body: `{ prompt: string }`, trimmed; the checks below run on the trimmed text. Saves the override (ADR-0025); it applies to the next call of every session, user agent, deep analysis, visual and eval run.
+- Success: `{ ok:true, message:"System prompt of \"<name>\" saved", agent: AgentDetail }`.
+- Failures (Style A), the first that applies: `"Agent \"<key>\" not found"`; `"Only built-in agents have a shared system prompt; edit a user agent's instructions instead"` (`:key` is a user-agent id); `"The prompt is empty"`; `"The prompt is at most 20,000 characters"`; for the `assistant` only: `"The assistant's prompt must start with \"You are the Questions to Insights assistant\""`, `"Skills can't be linked here: this prompt is shared by every user"` (a `[[skill:…]]`), `"Unknown tool \"<name>\""` (a `[[tool:…]]` not in the library, as in 41); for a System agent only: `"This agent's prompt can't contain links"` (any `[[…]]`).
+- Declared before the `GET /agents/:key` catch-alls.
+
+#### 104. `DELETE /agents/:key/prompt`
+- Success: `{ ok:true, message:"System prompt of \"<name>\" reset", agent: AgentDetail }`, also when there was no override.
+- Failures (Style A): `"Agent \"<key>\" not found"`; the user-agent refusal of 103.
 
 ### 2.7 Deep analysis
 

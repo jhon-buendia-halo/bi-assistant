@@ -70,6 +70,7 @@ export const KNOWLEDGE_STORE = 'DOC_STORE_knowledge';
 export const AGENTS_STORE = 'DOC_STORE_agents';
 export const SKILLS_STORE = 'DOC_STORE_skills';
 export const SKILL_OVERRIDES_STORE = 'DOC_STORE_skill_overrides';
+export const AGENT_PROMPT_OVERRIDES_STORE = 'DOC_STORE_agent_prompt_overrides';
 
 /** Identity and access collections, org server mode only (data-model 3.14). */
 export const USERS_STORE = 'DOC_STORE_users';

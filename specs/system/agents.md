@@ -20,7 +20,7 @@ Stack neutrality: the contracts below (agent ids, prompts, tool names and schema
 An **agent** is a named, stateless-by-default LLM wrapper with:
 
 - a stable **registry key** (used by the backend and the UI to look it up) and its own **id**, **display name** and one-line **description** (shown in the Agents catalogue);
-- a **system prompt** ("instructions"), a fixed array of lines joined with `\n`;
+- a **system prompt** ("instructions"), a fixed array of lines joined with `\n`. The prompt of a built-in agent can be **overridden** in the app by a Platform admin: the saved text is stored in `agent_prompt_overrides` ([data-model.md](data-model.md) 3.10.3), read at every call (like the built-in skills' overrides, 7.3) and replaces the shipped text, so a save applies to the next call, a Reset restores the shipped text, and with no override every prompt is the shipped one, byte for byte (ADR-0025). The override reaches every caller of the agent: chat turns, user agents (they run on the assistant), deep analysis, the grounding pass, evals, the designer pipeline, the SQL fixer and verifier, the knowledge bootstrap and the judge. It changes the prompt only: tools, output schemas, guards and harness-loaded skills stay in code;
 - a **model**, resolved *at call time* (never at construction) from the persisted LLM settings — see 1.3;
 - optionally a **tool set**, a **conversation memory** and a **workspace** (a per-session sandboxed folder, see 7).
 
@@ -48,7 +48,7 @@ All agents are registered once in a single framework instance and looked up by *
 | `assistant-eval-judge` | `assistant-eval-judge` | Assistant Eval Judge | Grades one assistant eval case's tool calls and final answer against a rubric. |
 | `knowledge-bootstrap` | `knowledge-bootstrap` | Knowledge Bootstrap | Mines business-glossary terms, instructions and coverage facts from a dataset's schema and sample rows. |
 
-Lookup of an unknown key throws. The catalogue lists agents sorted by display name.
+The prompt each row's agent runs on is the shipped one unless overridden (1.1). Lookup of an unknown key throws. The catalogue lists agents sorted by display name.
 
 **User agents** are not registry entries. They are stored documents ([data-model.md](data-model.md) section 3.10) and run on the `assistant`; the decision is ADR-0008 in [architecture.md](architecture.md). The catalogue endpoint merges them with the six registered agents ([api.md](api.md) section 2.6). A session started from a user agent runs the `assistant` with the agent's Live instructions as context Block 5 (4.1), its datasets as the session's datasets, its model and effort overrides (1.3, 1.4) passed on the requestContext (4.2), only the tools its tool selection gives it (2.1, ADR-0021), and its in-app skills given to the model through the framework's skill tools (7.3, ADR-0024). Rules: sessions-chat R52-R59.
 
@@ -215,7 +215,14 @@ The prompt and tools depend only on the selection, so there are eight variants; 
 
 **Max steps.** 15 (`ASSISTANT_MAX_STEPS`), shared by production turns and the eval harness so evals measure the same constraints.
 
-**Prompt requirements.** The prompt MUST start with `You are the Questions to Insights assistant` (asserted by E2E on the Prompt tab). It has three parts, in this order (ADR-0024; exact text in Appendix A). The on-demand skills are not part of it: the framework adds its own `<available_skills>` system message and skill tools (7.3, 7.5).
+**Prompt requirements.** The prompt MUST start with `You are the Questions to Insights assistant` (asserted by E2E on the Prompt tab). An admin can override the prompt (ADR-0025), under these requirements:
+
+- **Editable text.** What the admin edits, and what Reset restores, is the prompt **without** its `## Tools` section: the identity paragraph, a blank line, `## Working rules`, then the rules, as built for the full tool selection. The override must start with the identity line above ([api.md](api.md) 103).
+- **Serving.** The prompt is the override with the generated `## Tools` section (part 2 below: the tools the call offers) inserted before the first line that is exactly `## Working rules`, or appended at the end after a blank line when the override has no such line.
+- **Links.** The override may contain `[[tool:<name>]]` links, resolved to plain mentions like all links (4.1, ADR-0023). They are **mentions only**: the assistant keeps all its tools, since user agents gate their tools through their own instructions and gating the base would strip every agent. It may not contain `[[skill:…]]` links: in-app skills are private and the prompt is shared.
+- **Tool selection.** The replacements for unselected tools (the Tool selection list above) apply only to blocks of the override that match the shipped block verbatim; a block the admin edited is left as written. Without an override nothing changes.
+
+Without an override the prompt has three parts, in this order (ADR-0024; exact text in Appendix A). The on-demand skills are not part of it: the framework adds its own `<available_skills>` system message and skill tools (7.3, 7.5).
 
 1. **Identity:** the A1-A3 paragraph.
 2. **`## Tools`:** one line per tool the assistant is given, in the order it is given them: `- <name>(<input names, comma-separated>): <first sentence of the tool's description>`. The lines are generated from the tools, so a tool change updates this section. The framework's workspace tools (3.8) and skill tools (3.9) are not listed.
@@ -297,7 +304,7 @@ After validation the title is trimmed and capped at 100 characters (empty → `I
 
 **Model.** Section 1.5. Effort `low`; output cap 6.7.
 
-**Prompt (verbatim, joined by newlines):**
+**Prompt (the shipped text, verbatim, joined by newlines; a saved override replaces it, 1.1, ADR-0025):**
 
 ```
 You create compact interactive visuals from completed data-analysis answers.
@@ -339,7 +346,7 @@ Dialect: <databricks|postgres|sqlite>
 
 **Tools / memory / steps.** None / stateless / 1, `toolChoice: 'none'`, effort `low`.
 
-**Prompt (verbatim):**
+**Prompt (the shipped text, verbatim; a saved override replaces it, 1.1, ADR-0025):**
 
 ```
 You repair a single SQL statement that failed to execute.
@@ -387,7 +394,7 @@ Dialect: <databricks|postgres|sqlite>
 
 **Tools / memory / steps.** None / stateless / 1, `toolChoice: 'none'`, effort = user setting.
 
-**Prompt (verbatim):**
+**Prompt (the shipped text, verbatim; a saved override replaces it, 1.1, ADR-0025):**
 
 ```
 You independently derive the SQL that answers a business question.
@@ -449,7 +456,7 @@ Draft = {
 
 **Tools / memory / steps.** None / stateless / 1, `toolChoice: 'none'`, no effort option.
 
-**Prompt (verbatim):**
+**Prompt (the shipped text, verbatim; a saved override replaces it, 1.1, ADR-0025):**
 
 ```
 You are given one dataset's entity schemas (fully-qualified
@@ -507,7 +514,7 @@ Assistant's final answer to the user:
 
 **Tools / memory / steps.** None / stateless / 1, `toolChoice: 'none'`, provider option `temperature: 0`. Same model as the assistant.
 
-**Prompt (verbatim):**
+**Prompt (the shipped text, verbatim; a saved override replaces it, 1.1, ADR-0025):**
 
 ```
 You are a strict, impartial grader for an automated eval suite.
@@ -694,7 +701,7 @@ The assistant's on-demand skills (7.3) are loaded by the framework's skill tools
 
 ### 4.1 System context blocks
 
-For every assistant call made on behalf of a session (chat turns, the grounding pass, deep-analysis calls) the orchestrator appends these system messages, **in this order**, after the system prompt. Blocks that would be empty are omitted.
+For every assistant call made on behalf of a session (chat turns, the grounding pass, deep-analysis calls) the orchestrator appends these system messages, **in this order**, after the system prompt (the one served: an override of it, 2.1, changes only that prompt, never these blocks). Blocks that would be empty are omitted.
 
 **Block 1 — orientation (always present):**
 
@@ -853,7 +860,7 @@ After every successful `run_readonly_sql`, cheap dialect-agnostic heuristics ins
 
 ### 5.5 Tool-only turn synthesis
 
-If a completed turn produced neither text nor a visual (the model spent every step on tools), make one extra **tool-free** call on the assistant with the instructions overridden to `You are a data analyst writing the final answer from completed query results.`, `maxSteps: 1`, `toolChoice: 'none'`, and input:
+If a completed turn produced neither text nor a visual (the model spent every step on tools), make one extra **tool-free** call on the assistant with the instructions overridden to `You are a data analyst writing the final answer from completed query results.`, `maxSteps: 1`, `toolChoice: 'none'`, and input (this per-call instructions override replaces whatever prompt the assistant would serve, an override of ADR-0025 included, so it is unaffected by one):
 
 ```
 Answer the original user question using only the tool results below.
@@ -1331,7 +1338,7 @@ A case **passes** when it has at least one check and every check scored 1. Each 
 
 ## 9. Agents catalogue (introspection contract)
 
-`GET /agents` and `GET /agents/:key` expose, per registered agent: `key`, `id`, `name`, `description`, `tools` (sorted names); detail adds `instructions` (prompt flattened to text; for a user agent it follows the agent's tool selection but does not list its in-app skills), `toolDetails` (`{name, description, inputs: top-level input field names}`), `memory` (`null` when none, else `{storage, lastMessages, semanticRecall, workingMemory, generateTitle}`), and `model` (`{id, provider}` of the currently resolved model, `null` when it cannot be resolved without settings). An agent's skills are a separate endpoint, `GET /agents/:key/skills` (7.3, [api.md](api.md) 2.6). Any accessor that throws is reported as empty. UI strings for agents without tools/memory/evals (`This agent runs in a single step with no tools.`, `This agent is stateless — no memory is configured.`, `No evals configured for this agent yet.`) are owned by [agents-evals](../capabilities/agents-evals/spec.md).
+`GET /agents` and `GET /agents/:key` expose, per registered agent: `key`, `id`, `name`, `description`, `tools` (sorted names); detail adds `instructions` (prompt flattened to text, as served: a built-in agent's override is reflected, 1.1; for a user agent it follows the agent's tool selection but does not list its in-app skills), for a built-in agent `prompt` (`{editable, shipped, modified, builtInChanged, linksAllowed, updatedAt}`, [api.md](api.md) 34), `toolDetails` (`{name, description, inputs: top-level input field names}`), `memory` (`null` when none, else `{storage, lastMessages, semanticRecall, workingMemory, generateTitle}`), and `model` (`{id, provider}` of the currently resolved model, `null` when it cannot be resolved without settings). An agent's skills are a separate endpoint, `GET /agents/:key/skills` (7.3, [api.md](api.md) 2.6). Any accessor that throws is reported as empty. UI strings for agents without tools/memory/evals (`This agent runs in a single step with no tools.`, `This agent is stateless — no memory is configured.`, `No evals configured for this agent yet.`) are owned by [agents-evals](../capabilities/agents-evals/spec.md).
 
 ---
 

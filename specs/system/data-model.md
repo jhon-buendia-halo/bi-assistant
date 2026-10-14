@@ -112,6 +112,7 @@ Summary:
 | `agents` | User-built agents (a draft, an optional Live version, pin) | `id` | `updatedAt` desc | [agents-evals](../capabilities/agents-evals/spec.md) |
 | `skills` | In-app skills a user writes and assigns to their agents | `id`; `name` unique per owner | `updatedAt` desc | [agents-evals](../capabilities/agents-evals/spec.md) |
 | `skill_overrides` | Org-wide overrides of built-in skills, edited in the app | `name` (a built-in skill's name) | n/a | [agents-evals](../capabilities/agents-evals/spec.md) |
+| `agent_prompt_overrides` | Org-wide overrides of built-in agents' system prompts, edited in the app | `key` (a built-in agent's registry key) | n/a | [agents-evals](../capabilities/agents-evals/spec.md) |
 | `users` | Directory users (org server mode) | `id`; `userName` unique | `displayName` asc | [admin](../capabilities/admin/spec.md) |
 | `groups` | Directory groups (org server mode) | `id`; `displayName` unique | `displayName` asc | [admin](../capabilities/admin/spec.md) |
 | `group_members` | Group memberships (org server mode) | `id`; `(groupId, userId)` unique | n/a | [admin](../capabilities/admin/spec.md) |
@@ -120,7 +121,7 @@ Summary:
 | `auth_sessions` | Signed-in browsers (org server mode) | `id` = SHA-256 of the cookie token | n/a | [admin](../capabilities/admin/spec.md) |
 | `activity_events` | Sign-ins, daily activity, SCIM syncs (org server mode), role and status changes | `id` | `at` desc | [admin](../capabilities/admin/spec.md) |
 
-Every document in every collection also carries `createdAt` and `updatedAt` (ISO), maintained by the store (section 2.1); they are listed per collection only where they matter. `sessions`, `verified_queries`, `metrics`, `eval_runs`, `knowledge_snippets`, `agents` and `skills` are **private** and carry `ownerId` in both modes (local mode since M13, section 6); `connections`, `settings`, `datasets`, `datasource_inventories` and `skill_overrides` are **shared** (section 3.15). In local mode the identity and access collections hold the five local personas, their seeded role assignments, auth sessions and activity events (admin R69–R71); SCIM never writes there. There are **no foreign-key constraints and no cascading deletes** between collections; references are by value (`name`, `id`) and may dangle (section 3.13).
+Every document in every collection also carries `createdAt` and `updatedAt` (ISO), maintained by the store (section 2.1); they are listed per collection only where they matter. `sessions`, `verified_queries`, `metrics`, `eval_runs`, `knowledge_snippets`, `agents` and `skills` are **private** and carry `ownerId` in both modes (local mode since M13, section 6); `connections`, `settings`, `datasets`, `datasource_inventories`, `skill_overrides` and `agent_prompt_overrides` are **shared** (section 3.15). In local mode the identity and access collections hold the five local personas, their seeded role assignments, auth sessions and activity events (admin R69–R71); SCIM never writes there. There are **no foreign-key constraints and no cascading deletes** between collections; references are by value (`name`, `id`) and may dangle (section 3.13).
 
 ### 3.1 `connections` — datasources
 
@@ -484,6 +485,18 @@ One document per overridden built-in skill, shared by every user (ADR-0022). Rul
 | `updatedBy` | string | yes | The id of the user who saved it (`local` when nobody is signed in). |
 | `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
 
+### 3.10.3 `agent_prompt_overrides` — built-in agents' system prompts edited in the app
+
+One document per built-in agent whose system prompt was edited, shared by every user (ADR-0025). Rules: [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R97-R104; resolution: [agents.md](agents.md) 1.1 and 2.1-2.6.
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `key` | string | yes | The built-in agent's registry key (`assistant`, `visualization`, `sql-fixer`, `sql-verifier`, `knowledge-bootstrap`, `assistant-eval-judge`); the identity. An override of a key that is no longer built in is ignored. |
+| `prompt` | string | yes | Not empty; at most 20,000 characters. For the `assistant` it is the editable text, without the generated `## Tools` section ([agents.md](agents.md) 2.1). |
+| `baseHash` | string | yes | SHA-256 (hex) of the shipped editable text the override was saved against. A different hash for the shipped text means the built-in changed since. |
+| `updatedBy` | string | yes | The id of the user who saved it (`local` when nobody is signed in). |
+| `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
+
 ### 3.11 Deep-analysis jobs (not persisted)
 
 Deep-analysis jobs exist only in process memory (bounded history; a backend restart forgets them). Persisted outputs are the report file (`workspaces/session-<id>/reports/<jobId>.md`, section 4.5) and the assistant message carrying `report` (3.4.1). For completeness the in-memory job shape is: `id`, `sessionId`, `question`, `status` (`planning` \| `investigating` \| `writing` \| `done` \| `error`), `progress?`, `step?`, `steps?`, `title?`, `path?`, `error?`, `startedAt`, `finishedAt?`. The planner output schema is `{title: string, angles: [{title, question}] (3..5 intended, min 1)}` and the writer output `{title, executiveSummary, report}`; see [../capabilities/deep-analysis/spec.md](../capabilities/deep-analysis/spec.md) and [agents.md](agents.md).
@@ -649,7 +662,7 @@ Reads walk `users`, `agents` and `activity_events` across all owners, so the adm
 Rules: [../capabilities/admin/spec.md](../capabilities/admin/spec.md) R28-R33. Scoping applies in both modes (ADR-0012).
 
 - **Private collections:** `sessions`, `verified_queries`, `metrics`, `eval_runs`, `knowledge_snippets`, `agents`, `skills`, plus the per-user built-in pins and UI preferences documents in `settings` (3.2, 3.2.1). Everything hanging off a session is private through it: visual metadata and files, reports, the session workspace (section 4) and its agent memory thread (section 5).
-- **Shared collections:** `connections`, `datasets`, `datasource_inventories`, `skill_overrides`, and the `llm` document in `settings`.
+- **Shared collections:** `connections`, `datasets`, `datasource_inventories`, `skill_overrides`, `agent_prompt_overrides`, and the `llm` document in `settings`.
 - **Both modes:** every insert into a private collection stamps `ownerId` with the caller's id, and every find, update, unset and delete ANDs `ownerId = <caller>` into its filter. A document with another `ownerId`, or none, is invisible to the caller. Upserts carry `ownerId`, so they can never take over another owner's document.
 - **Local mode:** the same stamp and filter, with the signed-in persona as the caller. Documents stored in local mode before it had sign-in have no `ownerId`; M13 gives them to Demo User (`ownerId: "local"`) at startup, so they stay with the user who had them. On an org server, a document with no `ownerId`, or with a local persona's, belongs to nobody who can sign in, so nobody sees it.
 - **Uniqueness and dedupe** on private collections apply per owner: agent names, skill names, metric names, the verified-query key `(sourceSessionId, sourceMessageAt)`.

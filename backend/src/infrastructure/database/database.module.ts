@@ -22,6 +22,7 @@ import {
   PRIVATE_COLLECTIONS,
   SETTINGS_STORE,
   SKILLS_STORE,
+  AGENT_PROMPT_OVERRIDES_STORE,
   SKILL_OVERRIDES_STORE,
   VERIFIED_QUERIES_STORE,
 } from './doc-store';
@@ -52,6 +53,7 @@ const COLLECTIONS = [
   { token: AGENTS_STORE, table: 'agents' },
   { token: SKILLS_STORE, table: 'skills' },
   { token: SKILL_OVERRIDES_STORE, table: 'skill_overrides' },
+  { token: AGENT_PROMPT_OVERRIDES_STORE, table: 'agent_prompt_overrides' },
   { token: USERS_STORE, table: 'users' },
   { token: GROUPS_STORE, table: 'groups' },
   { token: GROUP_MEMBERS_STORE, table: 'group_members' },

@@ -66,7 +66,7 @@ Capability-local vocabulary:
   | Manage datasources and datasets | `manage-datasources` | | | | | ✓ |
   | Manage LLM configuration | `manage-llm` | | | | | ✓ |
 
-  `share-agents-team`, `request-publishing`, `approve-publishing`, `approve-datasource-access` and `view-audit-log` guard no action yet; the epics that add sharing, requests and the audit log use them.
+  `share-agents-team`, `request-publishing`, `approve-publishing`, `approve-datasource-access` and `view-audit-log` guard no action yet; the epics that add sharing, requests and the audit log use them. `edit-policies` guards the developer settings, the built-in skills' overrides (agents-evals R80) and the built-in agents' system prompts (agents-evals R104).
 - R22. A Platform admin SHALL be able to assign a role to a user and remove a direct assignment. Assigning Data owner SHALL require a datasource. Assigning a role the user already holds directly (for Data owner, on the same datasource) SHALL change nothing.
 
 ### Enforcement

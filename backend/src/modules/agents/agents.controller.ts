@@ -13,6 +13,7 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { evalRunFilename, renderEvalRunMarkdown } from './eval-report';
+import { AgentPromptsService } from './agent-prompts.service';
 import { AgentsService } from './agents.service';
 import type { AgentSkillsView } from '../../mastra/app-skills';
 import { EvalRunsService } from './eval-runs.service';
@@ -34,6 +35,7 @@ export class AgentsController {
   constructor(
     private readonly agents: AgentsService,
     private readonly evalRuns: EvalRunsService,
+    private readonly prompts: AgentPromptsService,
   ) {}
 
   @Get()
@@ -74,6 +76,35 @@ export class AgentsController {
     return styleA(async () => {
       const agent = await this.agents.publish(id);
       return { message: `Agent "${agent.name}" is Live`, agent };
+    });
+  }
+
+  /** Save a built-in agent's shared system prompt override (ADR-0025). */
+  @Put(':key/prompt')
+  @RequirePermission('edit-policies')
+  savePrompt(
+    @Param('key') key: string,
+    @Body() body: { prompt?: unknown },
+  ): Promise<AgentResult> {
+    return styleA(async () => {
+      const name = await this.prompts.save(key, body);
+      return {
+        message: `System prompt of "${name}" saved`,
+        agent: (await this.agents.get(key)) ?? undefined,
+      };
+    });
+  }
+
+  /** Reset a built-in agent's system prompt to the shipped one (ADR-0025). */
+  @Delete(':key/prompt')
+  @RequirePermission('edit-policies')
+  resetPrompt(@Param('key') key: string): Promise<AgentResult> {
+    return styleA(async () => {
+      const name = await this.prompts.reset(key);
+      return {
+        message: `System prompt of "${name}" reset`,
+        agent: (await this.agents.get(key)) ?? undefined,
+      };
     });
   }
 

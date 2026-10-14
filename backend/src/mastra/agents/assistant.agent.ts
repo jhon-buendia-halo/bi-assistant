@@ -14,7 +14,14 @@ import {
   selects,
   toolSelectionFrom,
 } from '../agent-tools';
-import { buildAssistantInstructions } from './assistant-prompt';
+import {
+  agentPromptOverrideFor,
+  agentPromptOverridesVersion,
+} from '../agent-prompt-overrides';
+import {
+  buildAssistantInstructions,
+  buildOverriddenAssistantInstructions,
+} from './assistant-prompt';
 
 /** Every tool the assistant can be given, in the order its prompt lists them. */
 const ALL_TOOLS = {
@@ -28,7 +35,8 @@ type AssistantTools = Partial<typeof ALL_TOOLS>;
 /** The tools and prompt of one tool selection, built once each (8 variants). */
 interface AssistantVariant {
   tools: AssistantTools;
-  instructions: string;
+  /** The prompt as served: the shipped one, or the in-app override's (ADR-0025). */
+  readonly instructions: string;
 }
 
 const variants = new Map<string, AssistantVariant>();
@@ -53,10 +61,29 @@ export function assistantVariant(
   const tools = Object.fromEntries(
     Object.entries(ALL_TOOLS).filter(([name]) => !dropped.has(name)),
   ) as AssistantTools;
-  const variant = {
+  // Identity, ## Tools, ## Working rules (agents.md 2.1; ADR-0024).
+  const shipped = buildAssistantInstructions(tools, selection);
+  // With an override, its text with the Tools section inserted, rebuilt when
+  // the overrides change (ADR-0025).
+  let served: { version: number; text: string } | undefined;
+  const variant: AssistantVariant = {
     tools,
-    // Identity, ## Tools, ## Working rules (agents.md 2.1; ADR-0024).
-    instructions: buildAssistantInstructions(tools, selection),
+    get instructions(): string {
+      const override = agentPromptOverrideFor('assistant');
+      if (!override) return shipped;
+      const version = agentPromptOverridesVersion();
+      if (served?.version !== version) {
+        served = {
+          version,
+          text: buildOverriddenAssistantInstructions(
+            override.prompt,
+            tools,
+            selection,
+          ),
+        };
+      }
+      return served.text;
+    },
   };
   variants.set(key, variant);
   return variant;

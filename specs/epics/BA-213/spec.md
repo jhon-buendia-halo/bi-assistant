@@ -12,7 +12,7 @@ This epic lets the user:
 - **write skills in the app**: named, reusable know-how ("how we compute churn", "our fiscal calendar") with a "Use when…" description and optional reference files;
 - **assign skills to any of their agents**, so the same skill serves several agents.
 
-The agent's instructions stay layered on the fixed core prompt. The read-only SQL guard, grounding, SQL repair and trust signals hold for every agent whatever it is configured with (ADR-0008). The decision is ADR-0021 in [system/architecture.md](../../system/architecture.md).
+The agent's instructions stay layered on the core prompt, which a Platform admin can edit since BA-224 (ADR-0025). The read-only SQL guard, grounding, SQL repair and trust signals hold for every agent whatever it is configured with (ADR-0008). The decision is ADR-0021 in [system/architecture.md](../../system/architecture.md).
 
 ## Scope
 
@@ -70,10 +70,15 @@ No configuration this epic allows makes an agent's prompt longer than today's by
   - BA-223: the assistant gets its on-demand skills through Mastra's `skills` option, resolved per request, with the framework's own catalog and skill tool. The app's `## Skills` section, `read_file`, `run_skill_script` and the `/in-app-skills/` paths are removed.
   - The design is in [proposals/ba-222-223-design.md](../../../proposals/ba-222-223-design.md).
 
+- **Every agent's System Prompt editable** ([BA-224](https://halo-powered.atlassian.net/browse/BA-224), added on 2026-10-14 at the user's request; ADR-0025).
+  - A Platform admin edits the System Prompt of the Official assistant and of the five System agents from the agent page, as org-wide overrides in a shared `agent_prompt_overrides` collection, with **Save prompt**, **Reset to built-in**, a **Modified** chip and a drift notice, as for built-in skills (BA-218). A save applies to the next call of every session and user agent.
+  - The assistant's `## Tools` section stays generated and is not part of the edited text; its override may link tools as mentions and may not link skills. System agents' overrides replace their static instructions.
+  - With no override every prompt is byte-identical to today's.
+
 ## Out of scope
 
 - **New tools**, custom code tools, MCP servers or any tool the assistant doesn't already have.
-- **Replacing the core prompt.** Instructions stay Block 5 (ADR-0008).
+- **Per-agent core prompts.** A user agent's instructions stay Block 5 (ADR-0008); only the shared core prompt can be edited, by an admin (BA-224, ADR-0025), so the edit applies to every agent.
 - **User and project skill folders.** They stay as they are here; [BA-211](https://halo-powered.atlassian.net/browse/BA-211) removes them separately.
 - Skills for the System agents other than the built-in `interactive-visuals` (BA-218 lets an admin edit it).
 - **Sharing skills** with other users. Skills are private to their owner, like agents (ADR-0010); sharing waits for a Requests/Registry epic.
@@ -94,6 +99,7 @@ No configuration this epic allows makes an agent's prompt longer than today's by
 | [BA-221](https://halo-powered.atlassian.net/browse/BA-221) | Tools library, Graph and LLM Config tabs | 1.14.8 |
 | [BA-222](https://halo-powered.atlassian.net/browse/BA-222) | Agent page as in the reference: Chat Box, editable System Prompt and Skills tabs | 1.14.9 |
 | [BA-223](https://halo-powered.atlassian.net/browse/BA-223) | Skills reach the model through Mastra's skill tool | 1.14.10 |
+| [BA-224](https://halo-powered.atlassian.net/browse/BA-224) | Edit every agent's System Prompt, built-in agents included | 1.14.11 |
 
 All stories are built on one branch, `feat/BA-213-agent-tools-skills`, and ship as one PR.
 
@@ -109,6 +115,7 @@ All stories are built on one branch, `feat/BA-213-agent-tools-skills`, and ship 
 - [system/ui.md](../../system/ui.md): the editor's Tools and Skills fields (4.5.1), the skills library and skill editor, and their copy.
 - [product/glossary.md](../../product/glossary.md): *in-app skill*, *tool selection*, *link (skill or tool)*.
 - BA-222 and BA-223: ADR-0024 (supersedes ADR-0020); capability [agents-evals](../../capabilities/agents-evals/spec.md) R5, R6, R60, R61, R63, R86 change and R90-R96 are new, with new Agent editor scenarios; [sessions-chat](../../capabilities/sessions-chat/spec.md) R54 and the Skills Feature; agents.md 1.2, 2.1, 3.9 (replaces 3.9 and 3.10), 4.2, 7.3-7.5 and Appendix A; ui.md 4.5 and 4.5.8-4.5.10; glossary *Skill*.
+- BA-224: ADR-0025; capability [agents-evals](../../capabilities/agents-evals/spec.md) R6, R46, R91 and R92 change and R97-R104 are new, with a new Built-in agent prompts Feature; [admin](../../capabilities/admin/spec.md) R21 (what `edit-policies` guards); data-model.md 3.10.3 and 3.15; api.md 34, 103, 104 and the permission table; agents.md 1.1, 1.2, 2.1-2.6, 4.1, 5.5, 9; ui.md 4.5.11; glossary *Built-in agent prompt override*.
 - BA-219 to BA-221: capability R43, R55, R60, R63, R70, R72 change and R81-R89 are new in [agents-evals](../../capabilities/agents-evals/spec.md); api.md 34, 41, 42, 94, 96-98; data-model.md 3.10 and 3.10.1; agents.md 2.1, 4.1, 4.2, 7.3; ui.md 4.5, 4.5.1, 4.5.3, 4.5.5-4.5.7; tech-stack.md (Tiptap).
 
 ## Acceptance
@@ -136,3 +143,4 @@ All stories are built on one branch, `feat/BA-213-agent-tools-skills`, and ship 
 - **Decision 6: links replace the pickers** (2026-10-14, ADR-0023). The BA-216 skill picker and the BA-217 tool picker are replaced by links in the instructions. Decision 3 stands in spirit: skills reach a session only through an agent that **links** them, no longer one that has them ticked; decision 2 (Visuals is one switch) holds, now as linking either visual tool; decision 4's 10-skill cap counts distinct linked skills. The stored `tools` and `skills` lists stay, derived from the links, so no migration.
 - **Decision 5: agent transfer (org mode).** When an admin transfers an agent, its Live version keeps its skill copies and keeps working. The draft's skill references are copied into the new owner's library as new skills, renamed on a name clash. It is built last in BA-216.
 - **Decision 7: reference-style agent page and skill tool** (2026-10-14, ADR-0024). The agent page and the way skills reach the model follow the agent-poc reference. The page keeps this app's database storage, per-user agents, fixed core prompt, built-in overrides and links (ADR-0023); only the instructions are editable on the System Prompt tab. The assistant declares its on-demand skills through Mastra's `skills` option and the framework renders the catalog and provides the skill tool, replacing the app's own (ADR-0020). Decisions 3 and 6 stand. Acceptance: the world-cup evals pass at 100% (3 runs per case) on `claude-sonnet-5`, base versus branch.
+- **Decision 8: every agent's System Prompt is editable** (2026-10-14, ADR-0025). The Official assistant's and the five System agents' prompts are edited by Platform admins as org-wide overrides, the same pattern as built-in skills (ADR-0022), as in the agent-poc reference. This narrows decision 7's "fixed core prompt" and supersedes ADR-0008's fixed core: the assistant's core prompt can change without a release, for every session and user agent, and the generated `## Tools` section stays out of the edited text. The assistant keeps all its tools whatever links its prompt has (links are mentions), and the code-enforced guards hold whatever a prompt says. Acceptance: no override means byte-identical prompts, and the world-cup evals pass at 100% (3 runs per case) with no override.

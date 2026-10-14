@@ -103,6 +103,155 @@
         >{{ agent().instructions }}</pre>
     </details>
   }
+} @else if (builtIn(); as prompt) {
+  <div class="flex flex-wrap items-center gap-3">
+    <h3 class="text-[12px] font-medium tracking-wider text-fg-muted uppercase">
+      System prompt
+    </h3>
+    <span class="chip">Built-in</span>
+    @if (prompt.modified) {
+      <span class="chip chip-warning" data-testid="agent-prompt-modified"
+        >Modified</span
+      >
+    }
+    @if (canEditBuiltIn() && !editing()) {
+      <div class="ml-auto flex shrink-0 items-center gap-2">
+        @if (prompt.modified) {
+          <button
+            type="button"
+            data-testid="agent-prompt-reset"
+            (click)="resetBuiltIn()"
+            [disabled]="resetting()"
+            class="btn btn-secondary"
+          >
+            <lucide-angular [img]="RotateCcw" [size]="14" />
+            <span>Reset to built-in</span>
+          </button>
+        }
+        <button
+          type="button"
+          data-testid="agent-prompt-edit"
+          (click)="startEditingBuiltIn()"
+          class="btn btn-secondary"
+        >
+          <lucide-angular [img]="Pencil" [size]="14" />
+          <span>Edit</span>
+        </button>
+      </div>
+    }
+  </div>
+
+  @if (prompt.builtInChanged) {
+    <div
+      class="mt-3 flex flex-col items-start gap-1 rounded-md bg-warning-soft px-3 py-2.5 text-[13px] text-on-warning-soft"
+    >
+      <p data-testid="agent-prompt-drift">{{ builtInDriftNotice }}</p>
+      <button
+        type="button"
+        data-testid="agent-prompt-show-shipped"
+        (click)="showShipped.set(!showShipped())"
+        class="btn btn-ghost"
+      >
+        {{
+          showShipped()
+            ? "Hide the built-in version"
+            : "Show the built-in version"
+        }}
+      </button>
+    </div>
+    @if (showShipped()) {
+      <pre
+        data-testid="agent-prompt-shipped"
+        class="mt-3 max-w-full overflow-x-auto rounded-xl bg-surface-muted p-4 font-mono text-[12px] leading-relaxed whitespace-pre-wrap text-fg"
+        >{{ prompt.shipped }}</pre>
+    }
+  }
+
+  @if (editing()) {
+    <div class="mt-3 flex flex-col gap-3" data-testid="agent-prompt-editing">
+      <p
+        data-testid="agent-prompt-banner"
+        class="rounded-md bg-warning-soft px-3 py-2.5 text-[13px] text-on-warning-soft"
+      >
+        {{ builtInBanner }}
+      </p>
+      @if (prompt.linksAllowed) {
+        <!-- Tiptap loads on its own, so it stays out of the first paint. -->
+        @defer (on immediate) {
+          <app-prompt-editor
+            [value]="draft()"
+            [linkSkills]="false"
+            toolbar="kinds"
+            [toolbarHint]="builtInToolbarHint"
+            label="System prompt"
+            [maxLength]="builtInLimit"
+            countTestId="agent-prompt-count"
+            (valueChange)="draft.set($event)"
+          />
+        } @placeholder {
+          <p class="text-[13px] text-fg-muted">Loading editor…</p>
+        }
+        <p
+          data-testid="agent-prompt-tools-note"
+          class="text-[12px] text-fg-muted"
+        >
+          {{ builtInToolsNote }}
+        </p>
+      } @else {
+        <textarea
+          data-testid="agent-prompt-textarea"
+          rows="16"
+          aria-label="System prompt"
+          [maxLength]="builtInLimit"
+          [value]="draft()"
+          (input)="onDraftInput($event)"
+          class="field resize-y font-mono text-[13px]"
+        ></textarea>
+        <span
+          data-testid="agent-prompt-count"
+          class="self-end text-[12px] text-fg-muted"
+          >{{ draft().length.toLocaleString("en-US") }}/{{
+            builtInLimit.toLocaleString("en-US")
+          }}</span
+        >
+      }
+      <div class="flex items-center justify-end gap-2">
+        <button
+          type="button"
+          data-testid="agent-prompt-cancel"
+          (click)="cancel()"
+          [disabled]="saving()"
+          class="btn btn-ghost"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          data-testid="agent-prompt-save"
+          (click)="saveBuiltIn()"
+          [disabled]="!canSaveBuiltIn()"
+          class="btn btn-primary"
+        >
+          @if (saving()) {
+            <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+            <span>Saving…</span>
+          } @else {
+            <span>Save prompt</span>
+          }
+        </button>
+      </div>
+    </div>
+  } @else if (agent().instructions) {
+    <pre
+      data-testid="agent-prompt-view"
+      class="mt-3 max-w-full overflow-x-auto rounded-xl bg-surface-muted p-4 font-mono text-[12px] leading-relaxed whitespace-pre-wrap text-fg"
+    ><app-linked-text [text]="agent().instructions" [known]="builtInKnown()" /></pre>
+  } @else {
+    <p class="mt-3 text-[13px] text-fg-muted">
+      This agent builds its prompt at request time, so there is no static
+      template to show.
+    </p>
+  }
 } @else {
   @if (agent().instructions) {
     <pre

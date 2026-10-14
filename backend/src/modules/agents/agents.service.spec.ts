@@ -122,6 +122,35 @@ describe('AgentsService (built-in and user agents)', () => {
   );
 
   it(
+    "adds the editable prompt to a built-in agent's detail only (ADR-0025)",
+    asDemoUser(async () => {
+      const view = {
+        editable: 'E',
+        shipped: 'S',
+        modified: true,
+        builtInChanged: false,
+        linksAllowed: false,
+        updatedAt: null,
+      };
+      const prompts = {
+        view: jest.fn((key: string) =>
+          Promise.resolve(key === 'sql-fixer' ? view : undefined),
+        ),
+      };
+      const service = new AgentsService(
+        (ctx.service as unknown as { mastra: MastraService }).mastra,
+        (ctx.service as unknown as { userAgents: UserAgentsService })
+          .userAgents,
+        undefined,
+        prompts as never,
+      );
+      expect((await service.get('sql-fixer'))?.prompt).toEqual(view);
+      const user = await service.create({ name: 'Mine' });
+      expect(await service.get(user.id)).not.toHaveProperty('prompt');
+    }),
+  );
+
+  it(
     'merges user agents into the catalogue, sorted by name',
     asDemoUser(async () => {
       const created = await ctx.service.create({

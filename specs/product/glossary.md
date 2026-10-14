@@ -76,6 +76,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Group mapping.** A rule that gives every member of an identity-provider group a *role* (for *Data owner*, on one datasource). Members get the role on their next request. Groups themselves come from the identity provider and are read-only in the app. See [../capabilities/admin/spec.md](../capabilities/admin/spec.md).
 
+**Built-in agent prompt override.** A Platform admin's edit of the *system prompt* of a built-in agent (the assistant or a System agent), made on the agent's System Prompt tab. It is stored in the database, shared by every user, and replaces the shipped prompt on the next call, for every session and user agent, until **Reset to built-in** deletes it. The assistant's generated `## Tools` section is not part of the edited text. See [../system/data-model.md](../system/data-model.md) 3.10.3 and ADR-0025.
+
 **Built-in skill override.** A Platform admin's edit of a built-in *skill*, made in the skills library. It is stored in the database, shared by every user, and replaces the shipped skill on the next call until **Reset to built-in** deletes it. See [../system/data-model.md](../system/data-model.md) 3.10.2 and ADR-0022.
 
 **In-app skill.** A *skill* a user writes in the app (the skills library) instead of a folder: a name, a "Use when…" description, a body and reference files, stored in the database and private to its owner. It reaches a session only through a *user agent* whose instructions *link* it, and a *Live* agent runs on the copy taken when it was published. See [../system/data-model.md](../system/data-model.md) 3.10.1 and ADR-0021.

@@ -77,7 +77,21 @@ export interface AgentLlm {
   reasoningEffort: string | null;
 }
 
+/** A built-in agent's editable system prompt (api.md 34, BA-224). */
+export interface AgentPromptView {
+  /** As served: the override, else the shipped text. */
+  editable: string;
+  shipped: string;
+  modified: boolean;
+  builtInChanged: boolean;
+  /** True for the assistant: `[[tool:…]]` links are allowed. */
+  linksAllowed: boolean;
+  updatedAt: string | null;
+}
+
 export interface AgentDetail extends Agent {
+  /** Built-in agents only: the editable system prompt and its override state. */
+  prompt?: AgentPromptView;
   /** User agents only: each library tool with its link status. */
   toolLinks?: AgentToolLink[];
   /** The LLM configuration the agent uses (LLM Config tab). */
@@ -225,6 +239,13 @@ export interface AgentMutationResult {
   agent?: Agent;
 }
 
+/** Answer of `PUT`/`DELETE /agents/:key/prompt` (api.md 103, 104). */
+export interface AgentPromptResult {
+  ok: boolean;
+  message: string;
+  agent?: AgentDetail;
+}
+
 export interface EvalRunStartResult {
   ok: boolean;
   message: string;
@@ -281,6 +302,21 @@ export class AgentsApiService {
     return this.http.put<AgentMutationResult>(
       `${API_BASE_URL}/agents/${encodeURIComponent(key)}/pin`,
       { pinned },
+    );
+  }
+
+  /** Save a built-in agent's shared system prompt (`edit-policies`). */
+  savePrompt(key: string, prompt: string): Observable<AgentPromptResult> {
+    return this.http.put<AgentPromptResult>(
+      `${API_BASE_URL}/agents/${encodeURIComponent(key)}/prompt`,
+      { prompt },
+    );
+  }
+
+  /** Restore a built-in agent's shipped system prompt. */
+  resetPrompt(key: string): Observable<AgentPromptResult> {
+    return this.http.delete<AgentPromptResult>(
+      `${API_BASE_URL}/agents/${encodeURIComponent(key)}/prompt`,
     );
   }
 

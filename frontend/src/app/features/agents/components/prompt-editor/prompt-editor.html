@@ -8,9 +8,6 @@
     >
       + Link skill or tool
     </button>
-    @if (toolbarHint()) {
-      <span class="text-[12px] text-fg-muted">{{ toolbarHint() }}</span>
-    }
   } @else {
     @if (linkSkills()) {
       <button
@@ -30,6 +27,9 @@
     >
       + Link tool
     </button>
+  }
+  @if (toolbarHint()) {
+    <span class="text-[12px] text-fg-muted">{{ toolbarHint() }}</span>
   }
 </div>
 

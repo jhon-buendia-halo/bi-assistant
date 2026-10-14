@@ -1,3 +1,4 @@
+import { resolveLinks } from '../agent-links';
 import { type OptionalAgentTool, selects } from '../agent-tools';
 
 /**
@@ -266,4 +267,126 @@ export function buildAssistantInstructions(
     '## Working rules',
     ...assistantWorkingRules(selection),
   ].join('\n');
+}
+
+/**
+ * The shipped editable text of the assistant (ADR-0025): the prompt without
+ * its generated `## Tools` section — identity, a blank line, `## Working
+ * rules`, then the rules for the full tool selection.
+ */
+export function assistantShippedPrompt(): string {
+  return [
+    ...ASSISTANT_IDENTITY,
+    '',
+    '## Working rules',
+    ...ASSISTANT_WORKING_RULES,
+  ].join('\n');
+}
+
+type Swap = [readonly string[], readonly string[]];
+
+/** First index at which `block` occurs as consecutive lines of `lines`. */
+function findBlock(lines: readonly string[], block: readonly string[]): number {
+  for (let i = 0; i + block.length <= lines.length; i += 1) {
+    if (block.every((line, j) => lines[i + j] === line)) return i;
+  }
+  return -1;
+}
+
+/** `lines` with the first verbatim `from` block swapped for `to`; as is when absent. */
+function swapBlock(lines: string[], [from, to]: Swap): string[] {
+  const at = findBlock(lines, from);
+  return at < 0 ? lines : replaceLines(lines, at, at + from.length - 1, to);
+}
+
+/** The shipped rules from `startLine` to `endLine`, to be replaced by `to`. */
+function shippedBlock(
+  startLine: string,
+  endLine: string,
+  to: readonly string[],
+): Swap {
+  const start = lineIndex(ASSISTANT_WORKING_RULES, startLine);
+  const end = lineIndex(ASSISTANT_WORKING_RULES, endLine, start);
+  return [ASSISTANT_WORKING_RULES.slice(start, end + 1), to];
+}
+
+/**
+ * The BA-217 replacements an unselected tool triggers, as whole blocks (the
+ * ones `assistantWorkingRules` applies to the shipped rules). The whole-
+ * paragraph ones come first: the `sample_rows` lines also sit inside the
+ * clarification paragraph.
+ */
+function selectionReplacements(
+  selection?: readonly OptionalAgentTool[],
+): Swap[] {
+  const swaps: Swap[] = [];
+  if (!selects(selection, 'ask_clarification')) {
+    swaps.push(
+      shippedBlock(
+        'Call ask_clarification only when interpretations diverge materially —',
+        're-asking.',
+        NO_CLARIFICATION_RULES,
+      ),
+    );
+  }
+  if (!selects(selection, 'visuals')) {
+    swaps.push(
+      shippedBlock(
+        'Interactive visuals:',
+        '- Never paste HTML, CSS or JavaScript into the chat.',
+        NO_VISUALS_RULES,
+      ),
+    );
+  }
+  if (!selects(selection, 'sample_rows')) {
+    swaps.push(
+      [
+        [
+          'then the options must quote the actual values you found (via sample_rows',
+        ],
+        ['then the options must quote the actual values you found (via'],
+      ],
+      [
+        [
+          '/ describe_entity), not invented ones. When only the scope is fuzzy —',
+        ],
+        ['describe_entity), not invented ones. When only the scope is fuzzy —'],
+      ],
+      [
+        ['   describe_entity; sample_rows when value formats are unclear).'],
+        ['   describe_entity).'],
+      ],
+      [
+        [
+          '- run_readonly_sql and sample_rows both take a rationale. Write it in the',
+        ],
+        ['- run_readonly_sql takes a rationale. Write it in the'],
+      ],
+    );
+  }
+  return swaps;
+}
+
+/**
+ * The prompt of a call under an in-app override (ADR-0025, agents.md 2.1):
+ * the override text with the BA-217 rule replacements applied to the blocks
+ * that match the shipped ones verbatim (an edited block stays as written),
+ * links turned into plain mentions, and the generated `## Tools` section
+ * inserted before the first line that is exactly `## Working rules`, or
+ * appended after a blank line when there is none.
+ */
+export function buildOverriddenAssistantInstructions(
+  override: string,
+  tools: Record<string, PromptTool>,
+  selection?: readonly OptionalAgentTool[],
+): string {
+  let lines = override.split('\n');
+  for (const swap of selectionReplacements(selection)) {
+    lines = swapBlock(lines, swap);
+  }
+  const body = resolveLinks(lines.join('\n')).split('\n');
+  const section = ['## Tools', ...toolLines(tools)];
+  const at = body.indexOf('## Working rules');
+  if (at < 0) return `${body.join('\n').trimEnd()}\n\n${section.join('\n')}`;
+  return [...body.slice(0, at), ...section, '', ...body.slice(at)].join('\n');
 }

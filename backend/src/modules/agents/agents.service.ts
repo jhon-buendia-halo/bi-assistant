@@ -28,6 +28,8 @@ import {
 } from '../../mastra/agent-links';
 import { effortLevelsFor, nearestEffort } from '../../mastra/effort-levels';
 import { LlmService } from '../llm/llm.service';
+import { AgentPromptsService } from './agent-prompts.service';
+import type { AgentPromptView } from './entities/agent-prompt-override.entity';
 import { ASSISTANT_EVAL_SETS } from '../../mastra/evals/assistant.evals';
 import {
   effectiveConfig,
@@ -151,6 +153,8 @@ export interface AgentDetail extends AgentSummary {
   toolLinks?: AgentToolLink[];
   /** The LLM settings the agent runs on, an agent's overrides applied. */
   llm: AgentLlmDetail;
+  /** Built-in agents only: the editable system prompt (api.md 34, ADR-0025). */
+  prompt?: AgentPromptView;
 }
 
 @Injectable()
@@ -159,6 +163,7 @@ export class AgentsService {
     private readonly mastra: MastraService,
     private readonly userAgents: UserAgentsService,
     private readonly llm?: LlmService,
+    private readonly prompts?: AgentPromptsService,
   ) {}
 
   /** Built-in and user agents together, alphabetical by name (R48). */
@@ -195,7 +200,13 @@ export class AgentsService {
   async get(key: string): Promise<AgentDetail | null> {
     if (this.isBuiltin(key)) {
       const detail = await this.builtinDetail(key);
-      return detail && { ...detail, llm: await this.llmDetail() };
+      if (!detail) return null;
+      const prompt = await this.prompts?.view(key);
+      return {
+        ...detail,
+        llm: await this.llmDetail(),
+        ...(prompt ? { prompt } : {}),
+      };
     }
     const doc = await this.userAgents.get(key);
     if (!doc) return null;
