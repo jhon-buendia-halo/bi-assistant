@@ -1168,7 +1168,7 @@ The decisions are ADR-0018 and ADR-0019 in [architecture.md](architecture.md).
 - **User and project check.** A user or project skill is checked with the same rules, apart from the extra keys it may carry, and with three more:
   - its `agents` names only agents that load skills on demand. The problems are `unknown agent "<key>"` and `agent "<key>" does not load skills on demand`;
   - an override of a harness-loaded skill has a non-empty body (`the body is empty`);
-  - an override of a harness-loaded skill has every file the built-in has under `phases/` and `reference/` (`<path> is missing (the skill it overrides has it)`), each with exactly the same `{{placeholders}}` (`<path> must use the placeholders {{a}}, {{b}}`).
+  - an override of a harness-loaded skill has every file the built-in has under `phases/` and `reference/` (`<path> is missing (the skill it overrides has it)`), each with exactly the same `{{placeholders}}` (`<path> must use the placeholders {{a}}, {{b}}`, or `<path> must use no placeholders` when the built-in file has none).
 
   A skill with any problem is **skipped**: the backend keeps running, logs the warning `[skills] Skipped <level> skill "<folder>": <problem>; <problem>`, and the agent page lists it under Skipped ([agents-evals](../capabilities/agents-evals/spec.md) R63-R67). A skipped override leaves the skill of the level below in place. A skill that passes may carry **warnings**, shown on the agent page: `agents is ignored on an override`, and `scripts/ is not run for user and project skills`.
 

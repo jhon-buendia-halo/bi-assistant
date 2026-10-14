@@ -35,7 +35,7 @@
         @for (skill of skills(); track skill.name) {
           <div
             [attr.data-testid]="'agent-skill-' + skill.name"
-            class="rounded-xl border border-border"
+            class="@container rounded-xl border border-border"
           >
             <button
               type="button"
@@ -82,8 +82,11 @@
             </button>
 
             @if (open()[skill.name]; as state) {
-              <div class="flex gap-4 border-t border-border px-4 py-3">
-                <div class="flex w-56 shrink-0 flex-col gap-0.5">
+              <!-- Stacked in a narrow row (Details panel open); side by side from 42rem. -->
+              <div
+                class="flex flex-col gap-4 border-t border-border px-4 py-3 @2xl:flex-row"
+              >
+                <div class="flex w-full shrink-0 flex-col gap-0.5 @2xl:w-56">
                   @for (file of skill.files; track file.path) {
                     <button
                       type="button"

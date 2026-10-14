@@ -14,6 +14,35 @@ Entry template:
 
 ---
 
+## 2026-10-14 — 1.13.8 Agent page Skills tab (BA-206)
+
+### What went well
+- Writing api.md 34a/34b before any code let the frontend worker and the backend run in parallel against one contract. The two halves met on the first integrated run, with no shape mismatch.
+- The screenshot with the Details panel open caught the side-by-side file view collapsing to about 200 px of content, a defect no E2E assertion could see. A container query (`@2xl:flex-row`, as admin-overview uses) fixed it.
+
+### What went wrong
+- My own E2E helper raced the hub render: `if (await showMore.isVisible())` read "not yet rendered" as "not needed", so one scenario failed in the full suite. Earlier it had passed by luck.
+- The spec named a `danger` text colour that has no token, and said the skills load "when the tab is first opened". The tab label needs the count first, so both were corrected after review.
+
+### What to do differently
+- Never branch on `isVisible()` in an E2E helper to decide whether to click: it doesn't wait. Click the control the flow needs unconditionally, or `await expect(...).toBeVisible()` first.
+- Before writing UI copy and colours into ui.md, grep `tokens.css` for each token named, and check where any count in a label comes from.
+
+## 2026-10-14 — 1.13.7 Skill levels: built-in, user and project skills (BA-205)
+
+### What went well
+- Overrides are checked generically against the built-in's own files: every `phases/` and `reference/` file, with the same `{{placeholders}}`. There's no per-skill table to keep in sync, and an override that would break deep analysis's placeholder fill is skipped at startup instead of failing in a background job.
+- The red-first E2E reused the recording stub, so "a user skill reaches the catalog" and "an override reaches the turn" are proved on the real request, not inferred from the loader.
+- `resolveSkills(builtIn, roots, warn)` is pure apart from reading files, so every precedence and skip rule has a temp-dir unit test without the process-wide cache.
+
+### What went wrong
+- The Kanban tracking cards were created `ready`, the state the dispatcher picks up. A worker it auto-assigned pushed the branch and opened PR #74 without approval, and it had to be closed.
+- The first design draft let any agent be named in `agents:`. Only reading `visualization.agent.ts` showed the designer has no tools, so it could never load an on-demand skill.
+
+### What to do differently
+- Create Kanban tracking cards blocked or done, never ready, and confirm the state with `hermes kanban list` straight after creating them.
+- Before letting configuration name an agent for on-demand skills, check that the agent runs with tools and passes `skills:`. Keep that list in code (`ON_DEMAND_AGENTS`).
+
 ## 2026-10-13 — 1.13.6 Fix: `npm run evals:assistant` always refuses (BA-204)
 
 ### What went well

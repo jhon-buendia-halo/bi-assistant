@@ -39,9 +39,9 @@ function skillMd(name: string, description: string | null, body: string) {
 
 async function openAgent(page: Page, key: string): Promise<void> {
   await page.getByRole('button', { name: 'Agents' }).click();
-  const showMore = page.getByTestId('agent-show-more-system');
-  if (key !== 'assistant' && (await showMore.isVisible())) {
-    await showMore.click();
+  // The System section shows its first row until "Show more" (agents-evals R3).
+  if (key !== 'assistant') {
+    await page.getByTestId('agent-show-more-system').click();
   }
   await page.getByTestId(`agent-${key}`).click();
 }

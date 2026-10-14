@@ -1,0 +1,20 @@
+$ QUESTIONS_TO_INSIGHTS_PROJECT_SKILLS_DIR=<scratch>/project node dist/cli.js --no-open --port 50929 --data-dir <scratch>/data
+  <scratch>/data/skills/sql-style/      SKILL.md (Use when writing SQL.), reference/style.md
+  <scratch>/data/skills/broken/         SKILL.md with no description
+  <scratch>/project/curated-knowledge/  SKILL.md overriding the built-in
+
+GET /agents/assistant/skills
+  levels:  built-in (null, found) · user (~/data/skills, found) · project (~/project, found)
+  skills:  curated-knowledge  project   harness    overrides built-in   files SKILL.md
+           deep-analysis      built-in  harness    -                    files SKILL.md, phases/1-plan.md, phases/2-investigate.md, phases/3-report.md
+           sql-style          user      on-demand  -                    files SKILL.md, reference/style.md
+  skipped: broken (user): description is missing
+
+GET /agents/assistant/skills/sql-style/file?path=reference/style.md      200 {"path":"reference/style.md","size":21,"content":"One clause per line.\n"}
+GET /agents/assistant/skills/sql-style/file?path=../broken/SKILL.md      400 Invalid skill file path "../broken/SKILL.md"
+GET /agents/assistant/skills/sql-style/file?path=nope.md                 404 Skill "sql-style" has no file "nope.md"
+GET /agents/assistant/skills/interactive-visuals/file?path=SKILL.md      404 Agent "assistant" has no skill "interactive-visuals"
+GET /agents/nope/skills                                                  404
+
+Backend log:
+[skills] Skipped user skill "broken": description is missing

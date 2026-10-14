@@ -2,6 +2,21 @@
 
 Running log of every meaningful change, newest first. See *Logging convention* and *Evidence convention* in [CLAUDE.md](CLAUDE.md). Release versions come from Conventional Commits (`version-on-merge.yml`); this file records what shipped and links to the evidence.
 
+## 2026-10-14
+
+### Added
+- **Skill levels** (roadmap 1.13.7, [BA-205](https://halo-powered.atlassian.net/browse/BA-205), epic [BA-198](https://halo-powered.atlassian.net/browse/BA-198), ADR-0019). Agents read skills from three levels, and a later level overrides an earlier one by name:
+  - **Levels.** Built-in (the bundle) < user (`<data dir>/skills/`) < project (the folder `QUESTIONS_TO_INSIGHTS_PROJECT_SKILLS_DIR` names).
+  - **Targeting.** A new user or project skill is on demand for the agents its `agents:` key names (default `assistant`). An override keeps the agents and loading mode of the skill it replaces.
+  - **Broken skills.** A broken user or project skill is skipped and logged, and the backend keeps running; a broken built-in still stops startup.
+  - **Override checks.** An override of a harness-loaded skill must keep its phase and reference files and their placeholders.
+  - **Text only.** User and project skills are never run as scripts. `interactive-visuals/references/` became `reference/`.
+  - Specs: agents.md §7.3-7.4, api.md environment table, data-model.md §4.8. Evidence: [evidence/1.13.7/](evidence/1.13.7/).
+- **Skills tab on the agent page** (roadmap 1.13.8, [BA-206](https://halo-powered.atlassian.net/browse/BA-206)). It's read-only:
+  - **What it shows.** Where each level's skills come from, the agent's skills (level, loading, what each overrides, description, warnings), each skill's files and their content, and the skipped skills with their problems.
+  - **API.** New routes `GET /agents/:key/skills` and `GET /agents/:key/skills/:name/file`. A user agent shows the assistant's skills.
+  - Specs: api.md 34a/34b, ui.md §4.5, agents-evals R63-R67 and the Feature "Agent skills". Evidence: [evidence/1.13.8/](evidence/1.13.8/).
+
 ## 2026-10-13
 
 ### Fixed

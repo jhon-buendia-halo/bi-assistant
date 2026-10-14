@@ -706,7 +706,7 @@ A behaviour-preserving refactor of the app's Mastra agents to the Agent Skills l
 - **Acceptance:** unit tests for the selection (set, cases, neither, both, unknown set, unknown case); a real `npm run evals:assistant` run with one case (`EVAL_CASES=shootouts`) reaches the case and prints its verdict; with no selection it exits 1 with the message and makes no model call.
 - **Notes:** found while running the BA-198 evals; the before/after runs used a scratch driver. Evidence: [evidence/1.13.6/](evidence/1.13.6/).
 
-#### 1.13.7 — Skill levels: built-in, user and project skills that override by name ([BA-205](https://halo-powered.atlassian.net/browse/BA-205))  `🚧 In progress`
+#### 1.13.7 — Skill levels: built-in, user and project skills that override by name ([BA-205](https://halo-powered.atlassian.net/browse/BA-205))  `✅ Done`
 - **Intent:** a user or administrator can add a skill to the assistant, or adjust a built-in one, by dropping a folder in the data dir or in a project skills folder, without a release.
 - **Scope:** ADR-0019.
   - **Levels.** Built-in (bundle) < user (`<data dir>/skills/`) < project (the folder `QUESTIONS_TO_INSIGHTS_PROJECT_SKILLS_DIR` names), read once at startup. A later level overrides an earlier one by name.
@@ -716,19 +716,21 @@ A behaviour-preserving refactor of the app's Mastra agents to the Agent Skills l
   - **Layout.** The built-ins move to the confirmed layout: `interactive-visuals/references/` becomes `reference/`.
   - **Specs.** agents.md §6.4, §7.2-7.4 and §9; api.md environment table; data-model.md §4.8; ADR-0019.
 - **Out of scope:** per-person skills on the org server; editing skills in the app; reloading without a restart; the script runner.
+- **Notes:** Evidence: [evidence/1.13.7/](evidence/1.13.7/).
 - **Acceptance:**
   - Unit tests cover precedence across the three levels, `agents` targeting, every skip reason, the override checks and the warnings.
   - A recorded request (stub LLM) shows a user-level skill in the assistant's catalog with the skill tools, and a user-level `curated-knowledge` override sent after the knowledge block.
   - A broken user skill leaves the backend running.
   - Full web and org E2E, backend and frontend unit tests, builds and `check-specs.py` pass.
 
-#### 1.13.8 — Agent page Skills tab: an agent's skills, their level, files and contents ([BA-206](https://halo-powered.atlassian.net/browse/BA-206))  `🚧 In progress`
+#### 1.13.8 — Agent page Skills tab: an agent's skills, their level, files and contents ([BA-206](https://halo-powered.atlassian.net/browse/BA-206))  `✅ Done`
 - **Intent:** anyone looking at an agent can see which skills it has, where each comes from, what it overrides and exactly what it says, and why a dropped-in skill was skipped.
 - **Scope:**
   - **API.** `GET /agents/:key/skills` (levels with their folders, the agent's skills, skipped skills) and `GET /agents/:key/skills/:name/file?path=`. Both need `use-agents`; a user agent shows the assistant's skills.
   - **Tab.** A read-only **Skills (<n>)** tab after Tools: where skills come from, one row per skill (level, loading, overrides, description, warnings), its file tree and the selected file's content, and a Skipped section.
   - **Specs.** api.md §2.6, ui.md §4.5, agents-evals rules and a new Feature with `agent-skills.spec.ts`.
 - **Out of scope:** creating, editing or deleting skills; a restart button.
+- **Notes:** Evidence: [evidence/1.13.8/](evidence/1.13.8/).
 - **Acceptance:**
   - E2E: the designer shows `interactive-visuals` (Built-in, Loaded by the app) and its `reference/spec-mode.md` content.
   - E2E: with a user skill and a project override seeded, the assistant shows each skill's level and what it overrides.
