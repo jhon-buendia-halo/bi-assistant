@@ -1,11 +1,8 @@
 import {
-  copyFileSync,
   existsSync,
   mkdirSync,
   readdirSync,
-  readFileSync,
   renameSync,
-  unlinkSync,
   watch,
   type FSWatcher,
 } from 'fs';
@@ -23,30 +20,6 @@ export const SESSION_WORKSPACE_CONTEXT_KEY = 'session-workspace-id';
 const WORKSPACE_PREFIX = 'session-';
 const workspacesDir = join(mastraDataDir, 'workspaces');
 const initialization = new Map<string, Promise<Workspace>>();
-const interactiveVisualSkillCandidates = [
-  // Mastra Studio serves from src/mastra/public, beside src/mastra/skills.
-  join(process.cwd(), '..', 'skills', 'interactive-visuals', 'SKILL.md'),
-  // Electron's backend cwd is dist/; standalone builds commonly run at the
-  // backend root; Mastra Studio runs from source at that same root.
-  join(process.cwd(), 'mastra', 'skills', 'interactive-visuals', 'SKILL.md'),
-  join(
-    process.cwd(),
-    'dist',
-    'mastra',
-    'skills',
-    'interactive-visuals',
-    'SKILL.md',
-  ),
-  join(
-    process.cwd(),
-    'src',
-    'mastra',
-    'skills',
-    'interactive-visuals',
-    'SKILL.md',
-  ),
-];
-
 mkdirSync(workspacesDir, { recursive: true });
 renameLegacyWorkspaceDirectories();
 
@@ -93,7 +66,6 @@ export function createSessionWorkspace(
   const id = sessionWorkspaceId(sessionId);
   const basePath = sessionWorkspacePath(sessionId);
   mkdirSync(basePath, { recursive: true });
-  seedInteractiveVisualSkill(basePath);
 
   return new Workspace({
     id,
@@ -103,79 +75,15 @@ export function createSessionWorkspace(
       basePath,
       contained: true,
     }),
-    skills: ['.agents/skills'],
+    // No `skills`: each agent declares its own from the app bundle
+    // (app-skills.ts, ADR-0018). A `.agents/skills` copy left in an old
+    // workspace is never read.
     tools: {
       // A session workspace is persistent; agents may create and edit artifacts,
       // but should not be able to remove them implicitly.
       [WORKSPACE_TOOLS.FILESYSTEM.DELETE]: { enabled: false },
     },
   });
-}
-
-/**
- * Copy app-owned reusable skills into each persistent session workspace.
- * Best-effort: this runs on every session load (including at module-load
- * time, restoring workspaces from earlier processes), so a locked target —
- * enterprise antivirus or roaming-profile sync holding SKILL.md — must never
- * abort session creation.
- */
-function seedInteractiveVisualSkill(basePath: string): void {
-  try {
-    const source = interactiveVisualSkillCandidates.find(existsSync);
-    if (!source) {
-      console.warn('[workspace] interactive-visuals skill asset not found');
-      return;
-    }
-    const targetDir = join(
-      basePath,
-      '.agents',
-      'skills',
-      'interactive-visuals',
-    );
-    mkdirSync(targetDir, { recursive: true });
-    const target = join(targetDir, 'SKILL.md');
-
-    // Skip the rewrite when the file is already current: avoids re-touching
-    // (and re-locking) it on every startup for the common case.
-    if (
-      existsSync(target) &&
-      readFileSync(source).equals(readFileSync(target))
-    ) {
-      return;
-    }
-
-    copySkillFile(source, target);
-  } catch (error) {
-    console.warn('[workspace] failed to seed interactive-visuals skill', error);
-  }
-}
-
-/**
- * Copy via a temp file + rename so a reader never sees a half-written
- * SKILL.md, retrying a few times since a lock from antivirus/roaming-profile
- * sync is usually momentary. Runs at synchronous module load, so retries are
- * immediate rather than backed off with an async sleep.
- */
-function copySkillFile(source: string, target: string): void {
-  const tmpPath = `${target}.tmp-${process.pid}`;
-  const maxAttempts = 3;
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    try {
-      copyFileSync(source, tmpPath);
-      renameSync(tmpPath, target);
-      return;
-    } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code;
-      const retryable =
-        code === 'EBUSY' || code === 'EPERM' || code === 'EACCES';
-      try {
-        unlinkSync(tmpPath);
-      } catch {
-        // Best-effort cleanup only; a leftover tmp file is harmless.
-      }
-      if (!retryable || attempt === maxAttempts) throw error;
-    }
-  }
 }
 
 /** Permanently remove the contained filesystem owned by a deleted session. */

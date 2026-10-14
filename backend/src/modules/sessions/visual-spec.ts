@@ -86,7 +86,8 @@ export interface ChartSpecShape {
   x?: string;
   y?: string | string[];
   series?: string;
-  sort?: { by: 'x' | 'y' | string; dir: 'asc' | 'desc' };
+  /** `by` is 'x', 'y' or a column name (resolved to 'x'/'y' where it matches one). */
+  sort?: { by: string; dir: 'asc' | 'desc' };
   topN?: number;
   stacked?: boolean;
   labels?: boolean;
@@ -117,7 +118,9 @@ export const chartSpecSchema = z
     series: columnName
       .nullable()
       .optional()
-      .describe('Column that splits the data into series, or null when there is none'),
+      .describe(
+        'Column that splits the data into series, or null when there is none',
+      ),
     sort: z
       .object({
         by: z
@@ -165,7 +168,8 @@ export const chartSpecSchema = z
     // plain language, and the runtime never sees anything but "x"/"y".
     let sort = chart.sort;
     if (sort && sort.by !== 'x' && sort.by !== 'y') {
-      const by = sort.by === x ? 'x' : measures.includes(sort.by) ? 'y' : sort.by;
+      const by =
+        sort.by === x ? 'x' : measures.includes(sort.by) ? 'y' : sort.by;
       sort = { ...sort, by };
     }
     return {

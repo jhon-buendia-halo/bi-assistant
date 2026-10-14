@@ -665,6 +665,125 @@ Developer tooling, not an application change: a Claude Code mod in the repositor
 - **Acceptance:** `claude plugin validate` and `claude plugin test` pass, the tests covering every step's checklist facts, the summary, the expected agent, the overall %, a subagent's tokens credited to it and its task, and a press that opens and a second press that closes a row; `tsc` over the hooks against the engine's declarations is clean; a live session shows a row opening on a click and on Enter; nothing under `backend/` or `frontend/` changes.
 - **Notes:** chosen 2026-10-12 from three clickable mockups (option A, expand in place). Decisions with the user: several rows can stay open; tokens per agent, cost at task level only. Found in a live session and fixed with tests: a row inside a `Button` is not truncated, so columns now drop to fit the pane; step 1's checks are the session's, because its calls often count for other steps. Verified with the mod's tests and a live session in a 180-column tmux (keyboard press); a mouse click raises the same `ui.press` and is covered by the test kit's press, not by the live run. Evidence: [evidence/1.11.3/](evidence/1.11.3/).
 
+### Milestone 1.13 — Assistant skills: progressive-disclosure agent structure ([BA-198](https://halo-powered.atlassian.net/browse/BA-198))
+
+A behaviour-preserving refactor of the app's Mastra agents to the Agent Skills layout: a slim always-on assistant prompt, and skills (`SKILL.md` + `phases/` + `reference/`) that the model loads on demand or the harness injects when a condition holds in code. Extended on 2026-10-14 with user and project skill levels that override the built-in skills by name, and a read-only Skills tab on the agent page (ADR-0019). Proven by the world-cup eval set before and after (same model) and the full E2E suite. All stories are built on `refactor/BA-198-assistant-skills` and ship as one PR. Epic spec: [specs/epics/BA-198/spec.md](specs/epics/BA-198/spec.md). (1.12 is held by the BA-82 branch.)
+
+#### 1.13.1 — ADR, epic spec and skill loader for app-owned skills ([BA-199](https://halo-powered.atlassian.net/browse/BA-199))  `✅ Done`
+- **Intent:** every agent gets its skills from one place, declared per agent, checked at startup, so later stories only move text.
+- **Scope:** ADR-0018; the epic spec; a skill loader over `backend/src/mastra/skills/` (one resolved bundle root for CLI, Electron and Studio) that validates front matter (`name`, a `Use when…` description) and every file `SKILL.md` links, failing the backend at startup; agent-level `skills` per agent (assistant: its own list; designer: none in the catalog, loaded by the pipeline); session workspaces stop seeding and discovering `.agents/skills`; the designer reads its skill from the bundle; a stub-LLM API test that records the assistant's request and asserts its catalog; `agents.md` §7 and the open question on attached tools resolved.
+- **Out of scope:** moving any prompt text (1.13.2–1.13.5).
+- **Acceptance:** loader unit tests (missing name, missing description, description not starting "Use when", dangling link, missing root); the recorded request shows the assistant's catalog holding exactly its declared skills (none today), so no `interactive-visuals` entry and no skill tools; designer visual E2E green; existing sessions with old `.agents/skills` copies still open and chat.
+- **Notes:** decisions with the user 2026-10-13: the app's agents, not the repo's Claude Code workflow; no new approval gates; eval tokens approved (world-cup set, before and after). Recorded on `main`: the assistant's catalog listed the designer's `interactive-visuals`, and it was offered `skill`, `skill_search` and `skill_read`. Evidence: [evidence/1.13.1/](evidence/1.13.1/).
+
+#### 1.13.2 — Slim assistant core prompt: curated-knowledge skill, harness-loaded ([BA-200](https://halo-powered.atlassian.net/browse/BA-200))  `✅ Done`
+- **Intent:** the assistant's every-turn prompt carries only the rules every data question needs; the curated-knowledge rules reach the model only on turns that carry a knowledge block, and always on those turns.
+- **Scope:** `curated-knowledge` skill (the rules under "Curated knowledge:" in the prompt, about 23% of it) sent as a system message right after the knowledge block, by every caller that sends the block (chat turn, grounding pass, deep analysis, eval suite); the describe_entity rule that mentions a curated [term] stays in the core prompt; `agents.md` §2.1, §4.1, Appendices A and B.
+- **Out of scope:** changing the knowledge block format; any other prompt section.
+- **Acceptance:** the prompt tab still starts with `You are the Questions to Insights assistant`; recorded requests: a turn without knowledge has no curated-knowledge rules, a turn with a block has them right after it; knowledge E2E green; the eval set shows no regressions.
+- **Notes:** re-scoped 2026-10-13 with the user. The on-demand `visual-tailoring` skill was cut: 427 characters of rules against a catalog and usage note of about 1,045 on every turn, and a risk of never loading. BA-201 was merged in. Evidence: [evidence/1.13.2/](evidence/1.13.2/).
+
+#### 1.13.3 — curated-knowledge and sql-dialects skills, harness-loaded ([BA-201](https://halo-powered.atlassian.net/browse/BA-201))  `🚫 Cut`
+- **Reason:** curated-knowledge merged into 1.13.2. sql-dialects cut: the app has no dialect guidance to move (one line in the prompt and the tool description), so the skill would be new behaviour written for failures nobody has observed. Revisit if evals show dialect errors.
+
+#### 1.13.4 — Phased deep-analysis skill ([BA-202](https://halo-powered.atlassian.net/browse/BA-202))  `✅ Done`
+- **Intent:** deep analysis follows a skill with a phase map, loading one phase per call, instead of prompts inlined in the service.
+- **Scope:** `deep-analysis` skill (`SKILL.md`, `phases/1-plan.md`, `2-investigate.md`, `3-report.md`); the service injects the phase file for each call; `agents.md` §2.7.
+- **Out of scope:** an approval gate between phases; new phases.
+- **Acceptance:** each recorded deep-analysis call carries only its phase; deep-analysis unit tests and E2E green.
+- **Notes:** Evidence: [evidence/1.13.4/](evidence/1.13.4/).
+
+#### 1.13.5 — Split interactive-visuals into spec-mode and freeform references ([BA-203](https://halo-powered.atlassian.net/browse/BA-203))  `✅ Done`
+- **Intent:** the designer reads only the instructions for the mode it runs.
+- **Scope:** `interactive-visuals/SKILL.md` as a router; `references/spec-mode.md`, `references/freeform.md`; the pipeline injects the mode's file; `agents.md` §6.4 and §7.2.
+- **Out of scope:** changing the visual spec or the runtime.
+- **Acceptance:** a recorded spec-mode call carries `spec-mode.md` and not `freeform.md` (and the reverse for the fallback); visuals E2E and the `visual-request` eval case stay green.
+
+#### 1.13.6 — Fix: `npm run evals:assistant` always refuses ([BA-204](https://halo-powered.atlassian.net/browse/BA-204))  `✅ Done`
+- **Intent:** a developer can run the assistant eval suite from the command line, as `delivery.md` documents. As shipped, the CLI passes no case ids, so every set is selected and the one-fixture preflight always refuses.
+- **Scope:** the CLI selects the questions from `EVAL_SET` (one set id) or `EVAL_CASES` (case ids). With neither or both, or with an unknown id, it exits 1 before any model call, naming the valid ids. Specs: agents.md §8.5, api.md environment table, delivery.md scripts table.
+- **Out of scope:** the eval checks themselves. The strict `result-set-match` behaves as specified (§8.3): it needs a result whose rows *are* the reference answer, and loosening it would let a query that lists every team pass "who won".
+- **Acceptance:** unit tests for the selection (set, cases, neither, both, unknown set, unknown case); a real `npm run evals:assistant` run with one case (`EVAL_CASES=shootouts`) reaches the case and prints its verdict; with no selection it exits 1 with the message and makes no model call.
+- **Notes:** found while running the BA-198 evals; the before/after runs used a scratch driver. Evidence: [evidence/1.13.6/](evidence/1.13.6/).
+
+#### 1.13.7 — Skill levels: built-in, user and project skills that override by name ([BA-205](https://halo-powered.atlassian.net/browse/BA-205))  `✅ Done`
+- **Intent:** a user or administrator can add a skill to the assistant, or adjust a built-in one, by dropping a folder in the data dir or in a project skills folder, without a release.
+- **Scope:** ADR-0019.
+  - **Levels.** Built-in (bundle) < user (`<data dir>/skills/`) < project (the folder `QUESTIONS_TO_INSIGHTS_PROJECT_SKILLS_DIR` names), read once at startup. A later level overrides an earlier one by name.
+  - **Targeting.** A new skill is on demand, for the agents its optional `agents` front-matter key names (default `assistant`; only agents that load skills on demand). An override keeps the built-in's agents and loading mode.
+  - **Validation.** A broken built-in still stops startup. A broken user or project skill is skipped and logged. An override of a harness-loaded built-in must carry its phase and reference files with the same placeholders.
+  - **Text only.** User and project skills are never run as scripts. The runner for built-in scripts is reserved, not built.
+  - **Layout.** The built-ins move to the confirmed layout: `interactive-visuals/references/` becomes `reference/`.
+  - **Specs.** agents.md §6.4, §7.2-7.4 and §9; api.md environment table; data-model.md §4.8; ADR-0019.
+- **Out of scope:** per-person skills on the org server; editing skills in the app; reloading without a restart; the script runner.
+- **Notes:** Evidence: [evidence/1.13.7/](evidence/1.13.7/).
+- **Acceptance:**
+  - Unit tests cover precedence across the three levels, `agents` targeting, every skip reason, the override checks and the warnings.
+  - A recorded request (stub LLM) shows a user-level skill in the assistant's catalog with the skill tools, and a user-level `curated-knowledge` override sent after the knowledge block.
+  - A broken user skill leaves the backend running.
+  - Full web and org E2E, backend and frontend unit tests, builds and `check-specs.py` pass.
+
+#### 1.13.8 — Agent page Skills tab: an agent's skills, their level, files and contents ([BA-206](https://halo-powered.atlassian.net/browse/BA-206))  `✅ Done`
+- **Intent:** anyone looking at an agent can see which skills it has, where each comes from, what it overrides and exactly what it says, and why a dropped-in skill was skipped.
+- **Scope:**
+  - **API.** `GET /agents/:key/skills` (levels with their folders, the agent's skills, skipped skills) and `GET /agents/:key/skills/:name/file?path=`. Both need `use-agents`; a user agent shows the assistant's skills.
+  - **Tab.** A read-only **Skills (<n>)** tab after Tools: where skills come from, one row per skill (level, loading, overrides, description, warnings), its file tree and the selected file's content, and a Skipped section.
+  - **Specs.** api.md §2.6, ui.md §4.5, agents-evals rules and a new Feature with `agent-skills.spec.ts`.
+- **Out of scope:** creating, editing or deleting skills; a restart button.
+- **Notes:** Evidence: [evidence/1.13.8/](evidence/1.13.8/).
+- **Acceptance:**
+  - E2E: the designer shows `interactive-visuals` (Built-in, Loaded by the app) and its `reference/spec-mode.md` content.
+  - E2E: with a user skill and a project override seeded, the assistant shows each skill's level and what it overrides.
+  - E2E: a broken user skill is listed under Skipped with its problem.
+  - A file outside the skill is refused.
+  - Screenshots of the tab with the Details panel open.
+
+#### 1.13.9 — Sectioned assistant prompt with the app's own skill catalog, `read_file` and `run_skill_script` ([BA-207](https://halo-powered.atlassian.net/browse/BA-207))  `✅ Done`
+- **Intent:** the assistant's prompt reads like the Agent Skills template the user gave (identity, Tools, Working rules, Skills), and the model reads and uses skills with tools the app controls.
+- **Scope:** ADR-0020.
+  - **Prompt.** The identity paragraph, then `## Tools` generated from the assistant's tools (name, input names, first sentence of the description), then `## Working rules` (today's rules, word for word), then `## Skills` when the assistant has on-demand skills: the user's instructions plus an `<available_skills>` catalog with name, description and the absolute `SKILL.md` path.
+  - **`read_file(path)`.** Read-only, limited to the regular files of the listed skills. It replaces the framework's catalog and its `skill`, `skill_search` and `skill_read` tools.
+  - **`run_skill_script(skill, script, args)`.** For built-in skills' Node scripts: no shell, `scripts/` only, a minimal environment, a 30-second timeout, output returned verbatim. Offered only when such a skill exists.
+  - **`curated-knowledge` on demand** (added 2026-10-14 at the user's request). The built-in skill is listed in the catalog and the knowledge block travels without its rules. `deep-analysis` and `interactive-visuals` stay harness-loaded.
+  - **Descriptions.** `SKILL.md` descriptions may wrap over several lines.
+  - **Specs.** agents.md §2.1, §3.9-3.10, §7.3-7.4 and Appendices A and C; the sessions-chat Feature "Skills the assistant is given".
+- **Out of scope:** a shell or bash tool; Python scripts; scripts in user or project skills; moving `deep-analysis` or `interactive-visuals` into a catalog; rewording the working rules.
+- **Acceptance:**
+  - A recorded request (stub LLM) shows the four sections in order, the catalog with the `SKILL.md` path, `read_file` offered and no framework skill tools.
+  - A scripted `read_file` call returns the file, and one outside the skills is refused.
+  - Unit tests cover the read and script limits and a wrapped description.
+  - The impacted E2E specs, unit tests and builds pass. The world-cup evals pass at 100%.
+
+#### 1.13.10 — Backend lint and format clean ([BA-208](https://halo-powered.atlassian.net/browse/BA-208))  `✅ Done`
+- **Intent:** `hermes verify` and `npm run lint` pass on the backend, so a lint or type error is always new.
+- **Scope:** fix the 217 ESLint errors in 35 files, the 21 files Prettier would rewrite and the 4 `tsc` errors in specs, with no behaviour change. No rule is disabled in the config; a per-line disable needs a reason.
+- **Out of scope:** the frontend (it has no lint script); the 2 remaining warnings in production code.
+- **Acceptance:** in `backend/`, ESLint without `--fix` reports 0 errors, `prettier --check` passes, `tsc --noEmit` reports 0 errors, and Jest and the build pass with the same test count.
+
+#### 1.13.11 — Eval checks: a wider correct query passes; discovery cases don't require `list_entities` ([BA-209](https://halo-powered.atlassian.net/browse/BA-209))  `✅ Done`
+- **Intent:** the assistant evals fail only when an answer is wrong, so the 100% bar (CLAUDE.md, step 9) measures the assistant and not the checks.
+- **Scope:**
+  - `result-set-match` passes when one complete, untruncated query contains every reference row in a row of its own, with extra rows allowed.
+  - `schema-discovery` and `f1-schema-discovery` drop `calledTool('list_entities')`, because the session context already lists the entities.
+  - The rules are in agents-evals R31 and agents.md 8.
+- **Out of scope:** careful mode's comparison (`result-compare.ts`) and the golden-set harness.
+- **Acceptance:** unit tests cover a wider query that passes, a missing reference row that fails, and rows from two queries that are never combined. The world-cup evals pass at 100% (3 runs).
+- **Notes:** decided with the user 2026-10-14. The cases had failed on every run before this change, with correct answers.
+
+#### 1.13.12 — Assistant reliability for the 100% eval bar ([BA-210](https://halo-powered.atlassian.net/browse/BA-210))  `✅ Done`
+- **Intent:** the assistant asks when "best" has no measure, and charts what the user asked, so the world-cup evals can pass at 100% (CLAUDE.md, step 9).
+- **Scope:**
+  - **Rule A4.** A new sentence: a "best/top/performed well" question with no measure is ambiguous even when several measures could be covered, so the model asks before any query (agents.md 2.1, Appendix A).
+  - **`create_visual`.** With no instruction it uses the turn's user message, carried as the new requestContext key `turn-question` (agents.md 3.6, 4.2).
+  - **`ask_clarification`.** `options` is one string, one option per line (`Title — explanation`), split into the stored `{label, description}`. The model serialized array parameters (a list of objects, then a list of strings) wrongly now and then. A list, a JSON-encoded list and a leaked `<parameter name="…">` wrapper are all normalized to lines.
+  - **Designer data.** When `create_visual` gets an instruction and more than 3 result sets, it keeps the 3 that match the instruction's words, instead of the 3 largest, so the chart's own query is never dropped (agents.md 6.2). A call that fails the schema is no longer turned into a card: the model gets the error and asks again (agents.md 3.5, 5.1; sessions-chat R42).
+  - **Rule A12.** A question outside the data gets nothing from general knowledge, not even background about the person, team or event it names (the model added Pelé's career years).
+  - **Rule A32.** "Join to the entity holding the name" becomes "in the same query", so one result holds the whole answer (the model was looking names up in a second query).
+  - **Rule A35.** A question about what data the user has is answered from the session context and `describe_entity`, without running a query (the `schema-discovery` check kept by 1.13.11).
+- **Out of scope:** checks and reference SQL (1.13.11); other wording of the working rules.
+- **Acceptance:** unit tests for the three behaviours. The world-cup evals pass at 100% over 3 runs.
+- **Notes:** `ambiguous-best-team` passed 1 of 4 runs and `visual-request` failed once with `create_visual({})`, both on the base before BA-207.
+
 ## Release 2 — Multi-user  (no target date yet)
 
 The app becomes multi-user. An organisation self-hosts it as an org server, with sign-in, roles and an admin panel. Local mode stays the default. Direction: [specs/product/vision.md](specs/product/vision.md). Not part of the 1.0 Beta.
@@ -672,6 +791,7 @@ The app becomes multi-user. An organisation self-hosts it as an org server, with
 ### Milestone 2.1 — Admin Panel ([BA-161](https://halo-powered.atlassian.net/browse/BA-161))
 
 Org server mode with Entra ID sign-in, SCIM directory sync and five roles enforced by the backend. Datasources and datasets are shared across the organisation, and everything else is private to its owner. Platform admins get an admin panel with Overview, Users & groups, Edit a user, and Roles & permissions (Figma board *Agent Hub — E2E lifecycle (proposed)*, screens P1–P4). Requests, Registry, Policies and Audit log are out. Stories 2.1.1–2.1.6 were built on the branch `feat/BA-161-admin-panel` and shipped as one PR (#69). The follow-up 2.1.7 ships on a new `feat/BA-161-admin-panel` branch and PR, opened after PR #69 merged. Epic spec: [specs/epics/BA-161/spec.md](specs/epics/BA-161/spec.md). Decision: ADR-0010 in [specs/system/architecture.md](specs/system/architecture.md).
+- **Notes:** Evidence: [evidence/1.13.5/](evidence/1.13.5/).
 
 #### 2.1.1 — ADR, epic spec, vision and roadmap ([BA-162](https://halo-powered.atlassian.net/browse/BA-162))  `✅ Done`
 - **Intent:** the move to multi-user is decided and scoped before any code, so each later story can be built and reviewed on its own.

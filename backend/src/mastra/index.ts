@@ -10,6 +10,11 @@ import { visualizationAgent } from './agents/visualization.agent';
 import { developerTraceExporters } from './developer-exporters';
 import { mastraStorage } from './storage';
 import { watchSessionWorkspaceRegistry } from './session-workspaces';
+import { appSkills } from './app-skills';
+
+// Validate every bundled skill before anything is served: a broken skill
+// stops the backend here (agents.md 7.3).
+appSkills();
 
 // Canonical Mastra entry point — the backbone of the agentic harness. Agents
 // (and later tools/workflows) are registered here; the NestJS MastraService

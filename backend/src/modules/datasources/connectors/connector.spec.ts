@@ -36,13 +36,7 @@ describe('assertReadOnlySql', () => {
   });
 
   it('strips several stacked comments interleaved with blank lines', () => {
-    const sql = [
-      '-- one',
-      '',
-      '/* two */',
-      '-- three',
-      'SELECT 1',
-    ].join('\n');
+    const sql = ['-- one', '', '/* two */', '-- three', 'SELECT 1'].join('\n');
     expect(assertReadOnlySql(sql)).toBe('SELECT 1');
   });
 
@@ -52,9 +46,9 @@ describe('assertReadOnlySql', () => {
   });
 
   it('still rejects a write statement that follows a leading comment', () => {
-    expect(() =>
-      assertReadOnlySql('-- comment\nDROP TABLE t'),
-    ).toThrow(BadRequestException);
+    expect(() => assertReadOnlySql('-- comment\nDROP TABLE t')).toThrow(
+      BadRequestException,
+    );
     expect(() => assertReadOnlySql('-- comment\nDROP TABLE t')).toThrow(
       'Only read-only SELECT / WITH queries can be run.',
     );
@@ -73,9 +67,7 @@ describe('assertReadOnlySql', () => {
     // gets discarded — nothing is "relocated" into the statement that runs,
     // so this is not a bypass: the query that actually executes is a plain
     // single SELECT.
-    const result = assertReadOnlySql(
-      '/* ignore; DROP TABLE x */ SELECT 1',
-    );
+    const result = assertReadOnlySql('/* ignore; DROP TABLE x */ SELECT 1');
     expect(result).toBe('SELECT 1');
   });
 

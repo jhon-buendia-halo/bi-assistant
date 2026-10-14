@@ -1,4 +1,13 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import {
+  agentSkillFile,
+  agentSkillsView,
+  type AgentSkillsView,
+} from '../../mastra/app-skills';
 import { MastraService } from '../../mastra/mastra.service';
 import { ASSISTANT_EVAL_SETS } from '../../mastra/evals/assistant.evals';
 import {
@@ -150,6 +159,39 @@ export class AgentsService {
     };
   }
 
+  /**
+   * The skills an agent gets, resolved at startup (agents.md 7.3, api.md
+   * 34a). A user agent runs on the assistant, so it shows the assistant's.
+   */
+  async skills(key: string): Promise<AgentSkillsView> {
+    return agentSkillsView(await this.skillsAgent(key));
+  }
+
+  /** One file of one of an agent's skills (api.md 34b). */
+  async skillFile(
+    key: string,
+    name: string,
+    path: string,
+  ): Promise<{ path: string; size: number; content: string | null }> {
+    const agent = await this.skillsAgent(key);
+    const result = agentSkillFile(agent, name, path ?? '');
+    if (!('error' in result)) return result;
+    if (result.error === 'no-skill') {
+      throw new NotFoundException(`Agent "${key}" has no skill "${name}"`);
+    }
+    if (result.error === 'invalid-path') {
+      throw new BadRequestException(`Invalid skill file path "${path ?? ''}"`);
+    }
+    throw new NotFoundException(`Skill "${name}" has no file "${path}"`);
+  }
+
+  /** The registry key whose skills `key` shows; 404 when it names no agent. */
+  private async skillsAgent(key: string): Promise<string> {
+    if (this.isBuiltin(key)) return key;
+    if (await this.userAgents.get(key)) return OFFICIAL_AGENT_KEY;
+    throw new NotFoundException(`Agent "${key}" not found`);
+  }
+
   async create(input: AgentConfigInput): Promise<AgentSummary> {
     return this.userSummary(await this.userAgents.create(input));
   }
@@ -221,8 +263,8 @@ export class AgentsService {
       memory: describeMemory(memory),
       model: model
         ? {
-            id: String((model as { modelId?: unknown }).modelId ?? ''),
-            provider: String((model as { provider?: unknown }).provider ?? ''),
+            id: String((model as { modelId?: string }).modelId ?? ''),
+            provider: String((model as { provider?: string }).provider ?? ''),
           }
         : null,
     };
@@ -328,7 +370,7 @@ function describeTools(tools: unknown): AgentToolDetail[] {
     .map(([name, tool]) => ({
       name,
       description: String(
-        (tool as { description?: unknown })?.description ?? '',
+        (tool as { description?: string })?.description ?? '',
       ),
       inputs: schemaKeys((tool as { inputSchema?: unknown })?.inputSchema),
     }))
@@ -365,7 +407,7 @@ function describeMemory(memory: unknown): AgentMemoryDetail | null {
     storage: storageName || null,
     lastMessages:
       typeof config.lastMessages === 'number' || config.lastMessages === false
-        ? (config.lastMessages as number | false)
+        ? config.lastMessages
         : null,
     semanticRecall: Boolean(config.semanticRecall),
     workingMemory: Boolean(

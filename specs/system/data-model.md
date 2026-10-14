@@ -33,7 +33,7 @@ The directory is created (recursively) at backend start if it does not exist.
 | **App document store** | `app.sqlite` | Embedded SQLite, one table per collection, one JSON document per row | The application collections in section 3: connections, settings, datasets, sessions, inventories, verified queries, metrics, eval runs, knowledge, agents; and the seven identity and access collections used in org server mode (section 3.14): users, groups, group members, role assignments, group role mappings, auth sessions, activity events | App backend |
 | **Agent memory store** | `mastra.sqlite` | LibSQL file (Mastra runtime storage) | Conversation memory threads/messages for the `assistant` agent (section 5); any other Mastra runtime state | Agent framework |
 | **Observability store** | `observability.duckdb` | DuckDB (memory limit 512 MB, 2 threads) | Agent traces, metrics and logs written by the framework's storage exporter (service name `questions-to-insights`, log level `info`) | Agent framework |
-| **Session workspaces** | `workspaces/session-<session-id>/` | Plain directories, a contained filesystem root per session | Visual bundles, deep-analysis reports, seeded skills (section 4) | App backend + agents (agents can create/edit files there but cannot delete) |
+| **Session workspaces** | `workspaces/session-<session-id>/` | Plain directories, a contained filesystem root per session | Visual bundles and deep-analysis reports (section 4) | App backend + agents (agents can create/edit files there but cannot delete) |
 | **Developer settings** | `developer-settings.json` | JSON file, written atomically (temp file + rename) | `{ observabilityEnabled: boolean, phoenixEndpoint: string, otlpEndpoint: string, updatedAt: ISO string }`. Absent until the first save, and absent means the defaults (`false`, `http://localhost:6006`, `http://localhost:4318`). Invalid or missing values fall back to their defaults. Read synchronously by the backend at startup, before any app module loads (ADR-0006). See [../capabilities/developer-settings/spec.md](../capabilities/developer-settings/spec.md). | App backend |
 | **App secret** | `.app-secret` | Text file, mode `0600` | 64 lowercase hex characters (32 random bytes). The key material for encrypting stored secrets (section 2.3). Read if present and non-empty, else generated once and written. `APP_SECRET` env var, when set, wins and the file is not used. Created by the launcher (Electron main or CLI); a backend started without `APP_SECRET` reads or creates the same file itself. | Launcher, else backend |
 | **Diagnostics log** (desktop app only) | `<Electron userData>/logs/system.ndjson`, rotated to `system.previous.ndjson` when larger than 5 MiB at startup | Newline-delimited JSON | System log entries `{id, timestamp, level, source, message, details}` (redacted), at most the last 2000 reloaded at startup. Lives under Electron `userData`, **not** the app data dir (they differ on Windows). See [../capabilities/diagnostics/spec.md](../capabilities/diagnostics/spec.md). | Electron main |
@@ -630,10 +630,6 @@ All paths in this section are relative to `<app data dir>/workspaces/session-<se
 ```
 workspaces/
   session-<session-id>/
-    .agents/
-      skills/
-        interactive-visuals/
-          SKILL.md                 seeded app asset (4.6)
     visuals/
       <visual-id>/                 one directory per visual
         v1/                        version directories (4.2)
@@ -643,7 +639,7 @@ workspaces/
       <job-id>.md                  deep-analysis reports (4.5)
 ```
 
-The workspace directory is created with the session (`createSessionWorkspace`) and registered with the agent framework under id `session-<session-id>` (display name `<session name> Workspace`, skills path `.agents/skills`). At backend start, and whenever the `workspaces/` directory changes, every `session-*` directory on disk is (re)registered, so workspaces survive restarts and are visible to a second framework process (the dev studio). Directories not starting with `session-` are ignored.
+The workspace directory is created with the session (`createSessionWorkspace`) and registered with the agent framework under id `session-<session-id>` (display name `<session name> Workspace`, no skills; 4.6). At backend start, and whenever the `workspaces/` directory changes, every `session-*` directory on disk is (re)registered, so workspaces survive restarts and are visible to a second framework process (the dev studio). Directories not starting with `session-` are ignored.
 
 ### 4.2 Visual version directory
 
@@ -736,9 +732,13 @@ A spec visual's synthetic bundle is: body `<div id="qti-chart-root"></div>`, emp
 
 `reports/<job-id>.md` — one Markdown file per finished deep-analysis job (`job-id` matches `^[a-zA-Z0-9-]+$`). Structure assembled by the app, not the model: `# <title>`; `**Question:** <question>`; a line `Deep analysis · session: <name> · <n> angle(s) · generated <ISO>`; `## Executive summary` + summary; the model-written body (starting `## Findings by angle`); `## Data appendix` with, per angle, `### <i>. <angle title>`, the angle question, and each SQL statement in a ```sql fence (or `_No SQL was recorded for this angle._`); then `---` and `Report <job-id>`. Downloaded as `<slug of title, ≤64>.md` (or `deep-analysis-<first 8 of id>.md`).
 
-### 4.6 Skills copied into workspaces
+### 4.6 No skills in workspaces
 
-At workspace creation/registration and on every session load, the app copies its bundled skill `interactive-visuals/SKILL.md` into `.agents/skills/interactive-visuals/SKILL.md` of each session workspace (creating directories). Rules: skip the write when the target is byte-identical; otherwise copy through a temporary sibling file and rename so a reader never sees a half-written file, retrying up to 3 times on `EBUSY`/`EPERM`/`EACCES` (antivirus or roaming-sync locks); all failures are swallowed with a warning — a locked or missing skill must never abort session creation. The source asset is searched in several candidate locations relative to the backend working directory (`../skills/…`, `mastra/skills/…`, `dist/mastra/skills/…`, `src/mastra/skills/…`) so it resolves under the dev studio, the Electron-staged backend and standalone runs. The skill's content (the visual-designer guidance: the spec format above, selection rules, the freeform fallback) is specified in [agents.md](agents.md) under the visual designer; the asset must ship with the backend.
+Workspaces hold no skills. Skills ship with the backend build and each agent declares its own ([agents.md](agents.md) sections 7.3 and 7.4). Until version 0.31, every workspace got a copy of the `interactive-visuals` skill at `.agents/skills/interactive-visuals/SKILL.md`, and the framework discovered skills there. Those copies are left on disk untouched and are never read, so no migration is needed.
+
+### 4.8 User and project skill folders
+
+Two folders hold skills that add to or override the built-in ones ([agents.md](agents.md) 7.3, ADR-0019): `<APP_DATA_DIR>/skills/<name>/` (user level) and `<QUESTIONS_TO_INSIGHTS_PROJECT_SKILLS_DIR>/<name>/` (project level). Each skill folder holds a `SKILL.md` and the files it links (`phases/`, `reference/`). Other files, `scripts/` included, are allowed but never run. The app only reads these folders, once at startup. It never creates or writes them, so nothing in them needs a migration. Deleting a skill folder and restarting removes the skill.
 
 ### 4.7 Legacy visual layout
 

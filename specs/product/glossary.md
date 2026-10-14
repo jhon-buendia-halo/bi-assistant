@@ -138,6 +138,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Session.** One conversation with the assistant, bound to one or more *datasets*. Holds the transcript, the visuals, and owns one *workspace* and one memory thread. Needs a name and at least one dataset. A session started from a *Live* *user agent* is bound to that agent and runs with its instructions (see [../capabilities/sessions-chat/spec.md](../capabilities/sessions-chat/spec.md), R52-R59). Legacy name: *project* (collection `projects`, workspace folders `project-<id>`).
 
+**Skill.** A folder of instructions an agent gets: a `SKILL.md` (a name, a "Use when…" description, then a short phase map or router) plus the `phases/` and `reference/` files it names. It loads *on demand* (the model sees it in a catalog and reads it when a request matches) or *by the app* (code sends it when a condition holds). Skills come from three *skill levels* (built-in, user and project), and a later level overrides an earlier one with the same name. The agent page's Skills tab shows them (see [../system/agents.md](../system/agents.md) 7.3, [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R63-R67).
+
 **Starter question.** One of up to five example questions a *user agent* carries. An empty session started from the agent offers them in its welcome block; clicking one fills the composer without sending it.
 
 **SQL repair.** When a statement fails with an engine error, the *SQL fixer* agent rewrites it and it is re-run, up to 2 repair attempts. The corrected SQL is what gets cited. Guard rejections and transport or auth failures are not repaired.

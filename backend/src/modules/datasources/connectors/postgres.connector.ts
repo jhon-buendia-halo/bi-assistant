@@ -301,7 +301,9 @@ function describeError(err: unknown): string {
       ['HINT', hint],
     ]
       .filter(([, value]) => typeof value === 'string' && value.trim())
-      .map(([label, value]) => `${label as string}: ${(value as string).trim()}`);
+      .map(
+        ([label, value]) => `${label as string}: ${(value as string).trim()}`,
+      );
     return [base, ...extras].join(' — ');
   }
   return String(err) || 'unknown error';

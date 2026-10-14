@@ -45,7 +45,9 @@ function caseSection(result: AssistantEvalCaseResult, index: number): string {
   if (result.checkResults.length > 0) {
     lines.push('', '| Check | Score | Why |', '| --- | --- | --- |');
     for (const check of result.checkResults) {
-      const why = check.passed ? '' : (check.reason ?? '').replace(/\|/g, '\\|');
+      const why = check.passed
+        ? ''
+        : (check.reason ?? '').replace(/\|/g, '\\|');
       lines.push(
         `| ${check.description.replace(/\|/g, '\\|')} | ${check.score} | ${why.replace(/\n/g, ' ')} |`,
       );
@@ -62,7 +64,10 @@ function caseSection(result: AssistantEvalCaseResult, index: number): string {
   }
 
   lines.push('', '#### Answer');
-  lines.push('', result.answer ? result.answer : '_The agent returned no text._');
+  lines.push(
+    '',
+    result.answer ? result.answer : '_The agent returned no text._',
+  );
   return lines.join('\n');
 }
 
@@ -87,7 +92,10 @@ function comparisonSection(comparison: EvalRegressionSummary): string[] {
     `_Compared to run \`${comparison.previousRunId}\`._`,
   ];
 
-  if (comparison.regressions.length === 0 && comparison.improvements.length === 0) {
+  if (
+    comparison.regressions.length === 0 &&
+    comparison.improvements.length === 0
+  ) {
     lines.push('', 'No change from the previous run.');
     return lines;
   }

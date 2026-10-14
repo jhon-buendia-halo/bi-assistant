@@ -40,6 +40,7 @@ import {
 } from './visual-runtime';
 import { recommendedFormBlock } from './chart-heuristic';
 import { createZip } from './zip-archive';
+import { appSkillBody, appSkillFile } from '../../mastra/app-skills';
 import {
   ChatMessage,
   InteractiveVisualization,
@@ -58,6 +59,25 @@ type Bundle = InteractiveVisualBundle;
 
 /** What the designer is asked to return on a given attempt. */
 type DesignerMode = 'spec' | 'freeform';
+
+/** The interactive-visuals reference each designer mode reads (agents.md 7.2). */
+const DESIGNER_REFERENCES: Record<DesignerMode, string> = {
+  spec: 'reference/spec-mode.md',
+  freeform: 'reference/freeform.md',
+};
+
+/**
+ * The skill text one designer call gets: the `interactive-visuals` router,
+ * a blank line, then the reference for the mode it runs, never the other.
+ * Harness-loaded from the app bundle (agents.md 6.4, 7.2, 7.4).
+ */
+function designerSkill(mode: DesignerMode): string {
+  return [
+    appSkillBody('interactive-visuals').trimEnd(),
+    '',
+    appSkillFile('interactive-visuals', DESIGNER_REFERENCES[mode]).trimEnd(),
+  ].join('\n');
+}
 
 /** The spec-mode structured output: title, takeaway and the spec itself. */
 type SpecOutput = z.infer<typeof specVisualOutputSchema>;
@@ -193,8 +213,13 @@ export class VisualizationService {
     const answer = this.findSourceAnswer(session, sourceMessageAt);
     const question = this.findQuestion(session, answer);
     const { workspace, filesystem } = await this.workspaceFor(session);
-    const mergedData = mergeToolDataRecords(answer.data, turnRecords);
-    const bundle = await this.design(workspace, filesystem, {
+    // With more result sets than the designer sees, keep the ones the
+    // instruction is about, so the chart's data is never cut (agents.md 6.2).
+    const mergedData = focusRecords(
+      mergeToolDataRecords(answer.data, turnRecords),
+      instruction,
+    );
+    const bundle = await this.design(workspace, {
       question,
       answer,
       instruction,
@@ -265,7 +290,7 @@ export class VisualizationService {
         this.currentVersion(meta),
       )) ?? answer?.data;
     const mergedData = mergeToolDataRecords(baseData, turnRecords);
-    const bundle = await this.design(workspace, filesystem, {
+    const bundle = await this.design(workspace, {
       question,
       answer,
       instruction: trimmed,
@@ -313,7 +338,7 @@ export class VisualizationService {
       (m) => m.role === 'assistant' && m.at === meta.sourceMessageAt,
     );
     const question = answer ? this.findQuestion(session, answer) : undefined;
-    const bundle = await this.design(workspace, filesystem, {
+    const bundle = await this.design(workspace, {
       question,
       answer,
       current,
@@ -526,7 +551,7 @@ export class VisualizationService {
     );
     const filesystem = workspace.filesystem;
     if (!filesystem) throw new Error('session workspace has no filesystem');
-    return { workspace, filesystem: filesystem as WorkspaceFilesystem };
+    return { workspace, filesystem };
   }
 
   /**
@@ -543,13 +568,8 @@ export class VisualizationService {
    */
   private async design(
     workspace: Awaited<ReturnType<MastraService['ensureSessionWorkspace']>>,
-    filesystem: WorkspaceFilesystem,
     context: DesignContext,
   ): Promise<Bundle> {
-    const skill = await this.readText(
-      filesystem,
-      '.agents/skills/interactive-visuals/SKILL.md',
-    );
     const requestContext = new RequestContext();
     requestContext.set(SESSION_WORKSPACE_CONTEXT_KEY, workspace.id);
 
@@ -560,24 +580,18 @@ export class VisualizationService {
     const specEligible =
       records.length > 0 && (!context.current || !!context.current.spec);
     if (specEligible) {
-      const bundle = await this.designSpec(
-        requestContext,
-        skill,
-        context,
-        records,
-      );
+      const bundle = await this.designSpec(requestContext, context, records);
       if (bundle) return bundle;
       this.logger.warn(
         'Spec attempts failed; falling back to the freeform HTML/CSS/JS designer',
       );
     }
-    return this.designFreeform(requestContext, skill, context);
+    return this.designFreeform(requestContext, context);
   }
 
   /** Up to two spec attempts; `undefined` means "fall back to freeform". */
   private async designSpec(
     requestContext: RequestContext,
-    skill: string,
     context: DesignContext,
     records: ChartDataRecord[],
   ): Promise<Bundle | undefined> {
@@ -587,7 +601,6 @@ export class VisualizationService {
       try {
         output = await this.runDesigner(
           requestContext,
-          skill,
           context,
           feedback,
           'spec',
@@ -631,7 +644,6 @@ export class VisualizationService {
   /** Legacy path: freeform HTML/CSS/JS, retried once when it will not parse. */
   private async designFreeform(
     requestContext: RequestContext,
-    skill: string,
     context: DesignContext,
   ): Promise<Bundle> {
     let feedback: DesignerFeedback | undefined =
@@ -639,7 +651,6 @@ export class VisualizationService {
     for (let attempt = 0; attempt < 2; attempt++) {
       const bundle = await this.runDesigner(
         requestContext,
-        skill,
         context,
         feedback,
         'freeform',
@@ -758,21 +769,18 @@ export class VisualizationService {
 
   private async runDesigner(
     requestContext: RequestContext,
-    skill: string,
     context: DesignContext,
     feedback: DesignerFeedback | undefined,
     mode: 'spec',
   ): Promise<SpecOutput>;
   private async runDesigner(
     requestContext: RequestContext,
-    skill: string,
     context: DesignContext,
     feedback?: DesignerFeedback,
     mode?: 'freeform',
   ): Promise<Bundle>;
   private async runDesigner(
     requestContext: RequestContext,
-    skill: string,
     context: DesignContext,
     feedback?: DesignerFeedback,
     mode: DesignerMode = 'freeform',
@@ -818,7 +826,8 @@ export class VisualizationService {
       () => abortController.abort(),
       GENERATION_TIMEOUT_MS,
     );
-    let result;
+    // The fields of Mastra's `FullOutput` this method reads.
+    let result: { object: unknown; text: string; error: Error | undefined };
     try {
       result = await agent.generate(prompt, {
         maxSteps: 1,
@@ -834,7 +843,7 @@ export class VisualizationService {
             role: 'system',
             content: [
               '<interactive-visuals-skill>',
-              skill,
+              designerSkill(mode),
               '</interactive-visuals-skill>',
             ].join('\n'),
           },
@@ -878,7 +887,9 @@ export class VisualizationService {
       const issues = parsed.error.issues
         .map((i) => `${i.path.join('.') || 'root'}: ${i.message}`)
         .join('; ');
-      this.logger.warn(`Visualization ${mode} output validation failed: ${issues}`);
+      this.logger.warn(
+        `Visualization ${mode} output validation failed: ${issues}`,
+      );
       throw new Error(
         mode === 'spec'
           ? `visualization agent returned an invalid spec (${issues})`
@@ -936,7 +947,8 @@ export class VisualizationService {
       ...(reasoning.length ? { reasoning } : {}),
       sessionName: session.name,
       version,
-      generatedAt: generatedAt ?? entry?.refreshedAt ?? entry?.createdAt ?? meta.createdAt,
+      generatedAt:
+        generatedAt ?? entry?.refreshedAt ?? entry?.createdAt ?? meta.createdAt,
       ...(block?.truncatedFrom
         ? {
             chartRows: {
@@ -1048,7 +1060,8 @@ export class VisualizationService {
             ...(truncated ? { truncated: true } : {}),
           };
         } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
+          const message =
+            error instanceof Error ? error.message : String(error);
           this.logger.warn(`Refresh failed for a query: ${message}`);
           return {
             tool: record.tool,
@@ -1080,12 +1093,20 @@ export class VisualizationService {
       version,
       generatedAt,
       ...(block?.truncatedFrom
-        ? { chartRows: { shown: block.shown, truncatedFrom: block.truncatedFrom } }
+        ? {
+            chartRows: {
+              shown: block.shown,
+              truncatedFrom: block.truncatedFrom,
+            },
+          }
         : {}),
     };
 
     await Promise.all([
-      filesystem.writeFile(`${dir}/data.json`, JSON.stringify(refreshed, null, 2)),
+      filesystem.writeFile(
+        `${dir}/data.json`,
+        JSON.stringify(refreshed, null, 2),
+      ),
       filesystem.writeFile(
         `${dir}/index.html`,
         storedVisualizationDocument(bundle, context),
@@ -1124,7 +1145,12 @@ export class VisualizationService {
         storedVisualizationDocument(bundle, context),
       ),
       ...(context.answer
-        ? [filesystem.writeFile(`${dir}/answer.md`, answerMarkdown(bundle, context))]
+        ? [
+            filesystem.writeFile(
+              `${dir}/answer.md`,
+              answerMarkdown(bundle, context),
+            ),
+          ]
         : []),
       ...(context.data?.length
         ? [
@@ -1139,7 +1165,10 @@ export class VisualizationService {
       // index.html inlines the frame bridge (window.qti.select +
       // data-qti-value delegation); the file is kept beside it as the source
       // a reader can edit.
-      filesystem.writeFile(`${dir}/${FRAME_SCRIPT_FILENAME}`, FRAME_SELECT_SCRIPT),
+      filesystem.writeFile(
+        `${dir}/${FRAME_SCRIPT_FILENAME}`,
+        FRAME_SELECT_SCRIPT,
+      ),
       filesystem.writeFile(`${dir}/styles.css`, bundle.css),
       filesystem.writeFile(`${dir}/script.js`, bundle.javascript),
       // Spec visuals: the spec is the source of truth (everything else above
@@ -1240,9 +1269,13 @@ export class VisualizationService {
     try {
       const parsed = visualSpecSchema.safeParse(JSON.parse(raw));
       if (parsed.success) return parsed.data;
-      this.logger.warn(`Stored spec at ${dir} is invalid; rendering the stored files`);
+      this.logger.warn(
+        `Stored spec at ${dir} is invalid; rendering the stored files`,
+      );
     } catch {
-      this.logger.warn(`Stored spec at ${dir} is not JSON; rendering the stored files`);
+      this.logger.warn(
+        `Stored spec at ${dir} is not JSON; rendering the stored files`,
+      );
     }
     return undefined;
   }
@@ -1283,6 +1316,62 @@ export function mergeToolDataRecords(
   return merged;
 }
 
+/** Lower-case words of 2+ letters or digits, split at anything else. */
+function words(text: string): string[] {
+  return text.toLowerCase().match(/[\p{L}\p{N}]{2,}/gu) ?? [];
+}
+
+/**
+ * How many of the instruction's words a record holds, in its column names
+ * or its cell values: a measure of which result set a chart request is about.
+ */
+function relevance(record: ToolDataRecord, wanted: Set<string>): number {
+  const found = new Set<string>();
+  const add = (text: string) => {
+    for (const word of words(text)) if (wanted.has(word)) found.add(word);
+  };
+  for (const column of record.columns ?? []) add(column);
+  for (const row of (record.rows ?? []).slice(0, VISUAL_ROWS_CAP)) {
+    for (const value of Object.values(row)) {
+      if (typeof value === 'string' || typeof value === 'number') {
+        add(String(value));
+      }
+    }
+  }
+  return found.size;
+}
+
+/**
+ * With more successful result sets than the designer is shown, keep the
+ * `VISUAL_RECORDS_CAP` that best match the instruction (size breaks ties,
+ * then run order), and drop the other successful ones. Without an
+ * instruction, or within the cap, the records pass unchanged. Records with
+ * no rows or an error stay: `visualizationData` skips them anyway.
+ */
+export function focusRecords(
+  records: ToolDataRecord[] | undefined,
+  instruction: string | undefined,
+): ToolDataRecord[] | undefined {
+  const successful = (records ?? []).filter(
+    (r) => !r.error && (r.rows?.length ?? 0) > 0,
+  );
+  if (!records || !instruction?.trim()) return records;
+  if (successful.length <= VISUAL_RECORDS_CAP) return records;
+  const wanted = new Set(words(instruction));
+  const ranked = successful
+    .map((record, index) => ({
+      record,
+      index,
+      score: relevance(record, wanted),
+      size: record.rows?.length ?? 0,
+    }))
+    .sort((a, b) => b.score - a.score || b.size - a.size || a.index - b.index);
+  const kept = new Set(
+    ranked.slice(0, VISUAL_RECORDS_CAP).map((entry) => entry.record),
+  );
+  return records.filter((r) => !successful.includes(r) || kept.has(r));
+}
+
 /** Fields the spec-mode envelope hides under `properties`. */
 const ENVELOPE_FIELDS = ['title', 'description', 'spec'];
 
@@ -1316,6 +1405,7 @@ export function isSchemaEnvelopeError(message: string): boolean {
 /** Compile-only check: `new Function` parses without executing. */
 export function validateJavascript(javascript: string): string | null {
   try {
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval -- compile-only syntax check: the function is built, never called
     new Function(javascript);
     return null;
   } catch (error) {
@@ -1420,7 +1510,9 @@ function answerMarkdown(
         : step.rowCount !== undefined
           ? `${step.rowCount.toLocaleString('en-US')} row${step.rowCount === 1 ? '' : 's'}`
           : undefined;
-      lines.push(`${step.step}. ${step.rationale}${outcome ? ` (${outcome})` : ''}`);
+      lines.push(
+        `${step.step}. ${step.rationale}${outcome ? ` (${outcome})` : ''}`,
+      );
     });
     lines.push('');
   }

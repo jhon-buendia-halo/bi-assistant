@@ -148,7 +148,7 @@ describe('legacy datastore migrations', () => {
       expect(docs('connections')).toEqual([{ id: 'shared' }]);
     });
 
-    it('renames the bare per-user settings keys to Demo User\'s', () => {
+    it("renames the bare per-user settings keys to Demo User's", () => {
       createTable('settings');
       insert('settings', { key: 'llm', provider: 'openai' });
       insert('settings', { key: 'ui-preferences', theme: 'dark' });

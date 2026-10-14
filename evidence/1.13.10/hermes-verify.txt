@@ -1,0 +1,9 @@
+hermes verify backend --phase build --phase test (scratch checkout of the epic head, c948702)
+
+build: npm run build -> ok
+test: npm run test -> ok
+test: npm run lint -> ok
+test: npm run format -> ok
+overall: ok
+Tests:       1152 passed, 1152 total
+git status after verify: clean (lint --fix and format changed nothing)

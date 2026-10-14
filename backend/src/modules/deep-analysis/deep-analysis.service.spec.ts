@@ -10,6 +10,7 @@ import {
 } from './deep-analysis.service';
 import type { ChatMessage } from '../sessions/entities/session.entity';
 import { CurrentUserService, LOCAL_USER } from '../auth/current-user.service';
+import * as appSkills from '../../mastra/app-skills';
 
 const SESSION = {
   id: 'session-1',
@@ -54,7 +55,10 @@ const asDemoUser =
 
 /** A service wired to one job, with the agent and the workspace stubbed. */
 function build(responses: unknown[], options: { plannerFails?: boolean } = {}) {
-  const generate = jest.fn();
+  const generate = jest.fn<
+    Promise<unknown>,
+    [unknown, Record<string, unknown>?]
+  >();
   for (const response of responses) {
     generate.mockResolvedValueOnce(response);
   }
@@ -77,9 +81,9 @@ function build(responses: unknown[], options: { plannerFails?: boolean } = {}) {
       .mockResolvedValue({ maxSteps: 15, context: [], requestContext: {} }),
     appendAssistantMessage: jest
       .fn()
-      .mockImplementation(async (_id: string, message: never) => {
+      .mockImplementation((_id: string, message: never) => {
         appended.push(message);
-        return SESSION;
+        return Promise.resolve(SESSION);
       }),
   };
   const service = new DeepAnalysisService(
@@ -337,6 +341,338 @@ describe('DeepAnalysisService', () => {
     const { service } = build([]);
     expect(() => service.status(SESSION.id, 'nope')).toThrow(/not found/);
   });
+});
+
+// Golden prompts, captured from the service before the phase text moved into
+// the deep-analysis skill (BA-202). The model must keep receiving exactly
+// these strings, byte for byte.
+const GOLDEN_PLAN =
+  'Plan a deep analysis of the question below.\n' +
+  'Produce between 3 and 5 investigation angles: distinct, answerable\n' +
+  'sub-questions over the entities listed in the session context —\n' +
+  'different dimensions, comparisons, time windows or drivers, never\n' +
+  'restatements of one another.\n' +
+  'Plan only: run no queries, ask no clarifying questions.\n' +
+  '\n' +
+  '<question>\n' +
+  'Why are denials rising?\n' +
+  '</question>';
+
+const GOLDEN_ANGLE_1 =
+  'Deep analysis — angle 1 of 3: By payer\n' +
+  '\n' +
+  'Investigate this angle with SQL over the session entities and\n' +
+  'report what you found. This is one section of a longer report, so\n' +
+  'stay on this angle.\n' +
+  '\n' +
+  '<overall-question>\n' +
+  'Why are denials rising?\n' +
+  '</overall-question>\n' +
+  '\n' +
+  '<angle>\n' +
+  'Which payers deny most?\n' +
+  '</angle>\n' +
+  '\n' +
+  'Rules:\n' +
+  '- Run the queries yourself. Never ask the user anything and never\n' +
+  '  call ask_clarification; when something is ambiguous pick the most\n' +
+  '  reasonable reading and state the assumption.\n' +
+  '- Do not create or update visuals.\n' +
+  '- Report concrete numbers — values, counts, shares, deltas — and\n' +
+  '  name the entities behind them. Flag anomalies you notice.\n' +
+  '- Finish with a "SQL used" section listing every statement you ran,\n' +
+  '  each in its own ```sql fenced block.';
+
+const GOLDEN_ANGLE_2 =
+  'Deep analysis — angle 2 of 3: By month\n' +
+  '\n' +
+  'Investigate this angle with SQL over the session entities and\n' +
+  'report what you found. This is one section of a longer report, so\n' +
+  'stay on this angle.\n' +
+  '\n' +
+  '<overall-question>\n' +
+  'Why are denials rising?\n' +
+  '</overall-question>\n' +
+  '\n' +
+  '<angle>\n' +
+  'How did denials trend?\n' +
+  '</angle>\n' +
+  '\n' +
+  'Rules:\n' +
+  '- Run the queries yourself. Never ask the user anything and never\n' +
+  '  call ask_clarification; when something is ambiguous pick the most\n' +
+  '  reasonable reading and state the assumption.\n' +
+  '- Do not create or update visuals.\n' +
+  '- Report concrete numbers — values, counts, shares, deltas — and\n' +
+  '  name the entities behind them. Flag anomalies you notice.\n' +
+  '- Finish with a "SQL used" section listing every statement you ran,\n' +
+  '  each in its own ```sql fenced block.';
+
+const GOLDEN_ANGLE_3 =
+  'Deep analysis — angle 3 of 3: By reason\n' +
+  '\n' +
+  'Investigate this angle with SQL over the session entities and\n' +
+  'report what you found. This is one section of a longer report, so\n' +
+  'stay on this angle.\n' +
+  '\n' +
+  '<overall-question>\n' +
+  'Why are denials rising?\n' +
+  '</overall-question>\n' +
+  '\n' +
+  '<angle>\n' +
+  'Which reasons dominate?\n' +
+  '</angle>\n' +
+  '\n' +
+  'Rules:\n' +
+  '- Run the queries yourself. Never ask the user anything and never\n' +
+  '  call ask_clarification; when something is ambiguous pick the most\n' +
+  '  reasonable reading and state the assumption.\n' +
+  '- Do not create or update visuals.\n' +
+  '- Report concrete numbers — values, counts, shares, deltas — and\n' +
+  '  name the entities behind them. Flag anomalies you notice.\n' +
+  '- Finish with a "SQL used" section listing every statement you ran,\n' +
+  '  each in its own ```sql fenced block.';
+
+const GOLDEN_REPORT =
+  'Write the deep-analysis report for the question below from the\n' +
+  'investigation findings that follow. Use only what the findings\n' +
+  'contain — never invent numbers.\n' +
+  '\n' +
+  'The body must start at "## Findings by angle" (one subsection per\n' +
+  'angle, with its numbers), then "## Anomalies and drivers", then\n' +
+  '"## Recommendations" (concrete next actions). Do not write an\n' +
+  'executive summary or a data appendix in the body — those are added\n' +
+  'around it.\n' +
+  '\n' +
+  '<question>\n' +
+  'Why are denials rising?\n' +
+  '</question>\n' +
+  '\n' +
+  '<findings>\n' +
+  '### Angle 1: By payer\n' +
+  'Which payers deny most?\n' +
+  '\n' +
+  'Angle 1: the rate is 10%.\n' +
+  '\n' +
+  'SQL used\n' +
+  '\n' +
+  '```sql\n' +
+  'select 1\n' +
+  '```\n' +
+  '\n' +
+  '### Angle 2: By month\n' +
+  'How did denials trend?\n' +
+  '\n' +
+  'Angle 2: the rate is 20%.\n' +
+  '\n' +
+  'SQL used\n' +
+  '\n' +
+  '```sql\n' +
+  'select 2\n' +
+  '```\n' +
+  '\n' +
+  '### Angle 3: By reason\n' +
+  'Which reasons dominate?\n' +
+  '\n' +
+  'Angle 3: the rate is 30%.\n' +
+  '\n' +
+  'SQL used\n' +
+  '\n' +
+  '```sql\n' +
+  'select 3\n' +
+  '```\n' +
+  '</findings>';
+
+const GOLDEN_TRICKY_PLAN =
+  'Plan a deep analysis of the question below.\n' +
+  'Produce between 3 and 5 investigation angles: distinct, answerable\n' +
+  'sub-questions over the entities listed in the session context —\n' +
+  'different dimensions, comparisons, time windows or drivers, never\n' +
+  'restatements of one another.\n' +
+  'Plan only: run no queries, ask no clarifying questions.\n' +
+  '\n' +
+  '<question>\n' +
+  'Why $& rise? {{angleTitle}} $1\n' +
+  '</question>';
+
+const GOLDEN_TRICKY_ANGLE_1 =
+  'Deep analysis — angle 1 of 3: By payer\n' +
+  '\n' +
+  'Investigate this angle with SQL over the session entities and\n' +
+  'report what you found. This is one section of a longer report, so\n' +
+  'stay on this angle.\n' +
+  '\n' +
+  '<overall-question>\n' +
+  'Why $& rise? {{angleTitle}} $1\n' +
+  '</overall-question>\n' +
+  '\n' +
+  '<angle>\n' +
+  'Which payers deny most?\n' +
+  '</angle>\n' +
+  '\n' +
+  'Rules:\n' +
+  '- Run the queries yourself. Never ask the user anything and never\n' +
+  '  call ask_clarification; when something is ambiguous pick the most\n' +
+  '  reasonable reading and state the assumption.\n' +
+  '- Do not create or update visuals.\n' +
+  '- Report concrete numbers — values, counts, shares, deltas — and\n' +
+  '  name the entities behind them. Flag anomalies you notice.\n' +
+  '- Finish with a "SQL used" section listing every statement you ran,\n' +
+  '  each in its own ```sql fenced block.';
+
+/** Instruction text unique to each phase. */
+const PHASE_MARKERS = {
+  plan: [
+    'Plan a deep analysis of the question below.',
+    'Plan only: run no queries, ask no clarifying questions.',
+  ],
+  investigate: [
+    'Investigate this angle with SQL over the session entities and',
+    'Finish with a "SQL used" section listing every statement you ran,',
+  ],
+  report: [
+    'Write the deep-analysis report for the question below from the',
+    'The body must start at "## Findings by angle"',
+  ],
+};
+
+function prompts(generate: jest.Mock): string[] {
+  return generate.mock.calls.map((call: unknown[]) => call[0] as string);
+}
+
+describe('deep-analysis prompts', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it(
+    'sends the plan, each angle and the report byte-identical to the golden prompts',
+    asDemoUser(async () => {
+      const { service, generate } = build([
+        PLAN,
+        finding(1),
+        finding(2),
+        finding(3),
+        REPORT,
+      ]);
+
+      await settle(service, await startJob(service));
+
+      expect(prompts(generate)).toEqual([
+        GOLDEN_PLAN,
+        GOLDEN_ANGLE_1,
+        GOLDEN_ANGLE_2,
+        GOLDEN_ANGLE_3,
+        GOLDEN_REPORT,
+      ]);
+    }),
+  );
+
+  it(
+    'passes the question through verbatim, whatever characters it holds',
+    asDemoUser(async () => {
+      const { service, generate } = build([
+        PLAN,
+        finding(1),
+        finding(2),
+        finding(3),
+        REPORT,
+      ]);
+      const question = 'Why $& rise? {{angleTitle}} $1';
+
+      const started = await service.start(SESSION.id, question);
+      await settle(service, (started as { jobId: string }).jobId);
+
+      const sent = prompts(generate);
+      expect(sent[0]).toBe(GOLDEN_TRICKY_PLAN);
+      expect(sent[1]).toBe(GOLDEN_TRICKY_ANGLE_1);
+      expect(sent[4]).toContain(`<question>\n${question}\n</question>`);
+    }),
+  );
+
+  it(
+    'loads one phase file per call and sends only that phase',
+    asDemoUser(async () => {
+      const read = jest.spyOn(appSkills, 'appSkillFile');
+      const { service, generate } = build([
+        PLAN,
+        finding(1),
+        finding(2),
+        finding(3),
+        REPORT,
+      ]);
+
+      await settle(service, await startJob(service));
+
+      expect(read.mock.calls).toEqual([
+        ['deep-analysis', 'phases/1-plan.md'],
+        ['deep-analysis', 'phases/2-investigate.md'],
+        ['deep-analysis', 'phases/2-investigate.md'],
+        ['deep-analysis', 'phases/2-investigate.md'],
+        ['deep-analysis', 'phases/3-report.md'],
+      ]);
+      const phases = [
+        'plan',
+        'investigate',
+        'investigate',
+        'investigate',
+        'report',
+      ] as const;
+      prompts(generate).forEach((prompt, call) => {
+        for (const [phase, markers] of Object.entries(PHASE_MARKERS)) {
+          for (const marker of markers) {
+            if (phase === phases[call]) expect(prompt).toContain(marker);
+            else expect(prompt).not.toContain(marker);
+          }
+        }
+        // The phase map itself never reaches the model.
+        expect(prompt).not.toContain('phases/');
+        expect(prompt).not.toContain('name: deep-analysis');
+      });
+    }),
+  );
+
+  it(
+    'fails the job when a phase file leaves a placeholder unfilled',
+    asDemoUser(async () => {
+      jest
+        .spyOn(appSkills, 'appSkillFile')
+        .mockReturnValue('Plan {{question}} for {{audience}}\n');
+      const { service, generate } = build([PLAN]);
+
+      const jobId = await startJob(service);
+      await settle(service, jobId);
+
+      const view = service.status(SESSION.id, jobId);
+      expect(view.status).toBe('error');
+      expect(view.error).toContain('unfilled placeholder {{audience}}');
+      expect(generate).not.toHaveBeenCalled();
+    }),
+  );
+
+  it(
+    'fails the job, rather than one angle, when the investigate phase is broken',
+    asDemoUser(async () => {
+      const real = appSkills.appSkillFile;
+      jest
+        .spyOn(appSkills, 'appSkillFile')
+        .mockImplementation((name: string, path: string) =>
+          path === 'phases/2-investigate.md'
+            ? 'Angle {{angleTitle}} without the rest\n'
+            : real(name, path),
+        );
+      const { service, generate, filesystem } = build([PLAN]);
+
+      const jobId = await startJob(service);
+      await settle(service, jobId);
+
+      const view = service.status(SESSION.id, jobId);
+      expect(view.status).toBe('error');
+      expect(view.error).toMatch(
+        /^deep-analysis phase phases\/2-investigate\.md has no \{\{\w+\}\} placeholder$/,
+      );
+      expect(generate).toHaveBeenCalledTimes(1);
+      expect(filesystem.writeFile).not.toHaveBeenCalled();
+    }),
+  );
 });
 
 describe('report assembly', () => {

@@ -1,0 +1,635 @@
+[
+  {
+    "id": "champion-2022",
+    "question": "Who won the 2022 World Cup?",
+    "scores": {
+      "check-includes": 1,
+      "check-called-tool": 1,
+      "check-no-tool-errors": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-includes",
+        "description": "Checks if output includes \"Argentina\"",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "check-called-tool",
+        "description": "Checks that \"run_readonly_sql\" was called",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "result-set-match",
+        "description": "Result set matches expectedSql (primary correctness signal)",
+        "score": 1,
+        "passed": true
+      }
+    ],
+    "answer": "**Argentina** won the 2022 FIFA World Cup, based on the match record for the final (match id 1): Argentina drew France 3–3 after extra time in the final, with the \"winner\" field recording Argentina as the match winner (they won on penalties, as the regulation/extra-time score was tied).\n\nFor context from the knockout stage data (world_cup.world_cup.matches joined to world_cup.world_cup.teams):\n- Final: Argentina 3–3 France → Argentina won\n- Third-place playoff: Croatia beat Morocco 2–1\n- Semi-finals: Argentina beat Croatia 3–0; France beat Morocco 2–0",
+    "toolCalls": [
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT t.year, m.id, ht.name AS home_team, at.name AS away_team, wt.name AS winner, m.home_score, m.away_score, m.stage\\nFROM world_cup.world_cup.matches m\\nJOIN world_cup.world_cup.tournaments t ON m.tournament_id = t.id\\nLEFT JOIN world_cup.world_cup.teams ht ON m.home_team_id = ht.id\\nLEFT JOIN world_cup.world_cup.teams at ON m.away_team_id = at.id\\nLEFT JOIN world_cup.world_cup.teams wt ON m.winner_team_id = wt.id\\nWHERE t.year = 2022\\nORDER BY m.id\",\n  \"rationale\": \"I need to find the final match of the 2022 World Cup tournament and identify the winning team.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"tournament_year\",\n    \"id\",\n    \"home_team\",\n    \"away_team\",\n    \"winner\",\n    \"home_goals\",\n    \"away_goals\",\n    \"stage\"\n  ],\n  \"rows\": [\n    {\n      \"tournament_year\": 2022,\n      \"id\": \"1\",\n      \"home_team\": \"Argentina\",\n      \"away_team\": \"France\",\n      \"winner\": \"Argentina\",\n      \"home_goals\": 3,\n      \"away_goals\": 3,\n      \"stage\": \"final\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"id\": \"2\",\n      \"home_team\": \"Argentina\",\n      \"away_team\": \"Croatia\",\n      \"winner\": \"Argentina\",\n      \"home_goals\": 3,\n      \"away_goals\": 0,\n      \"stage\": \"semi_final\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"id\": \"3\",\n      \"home_team\": \"Netherlands\",\n      \"away_team\": \"Argentina\",\n      \"winner\": \"Argentina\",\n      \"home_goals\": 2,\n      \"away_goals\": 2,\n      \"stage\": \"quarter_final\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"id\": \"6\",\n      \"home_team\": \"Croatia\",\n      \"away_team\": \"Morocco\",\n      \"winner\": \"Croatia\",\n      \"home_goals\": 2,\n      \"away_goals\": 1,\n      \"stage\": \"third_place\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"id\": \"9\",\n      \"home_team\": \"Croatia\",\n      \"away_team\": \"Brazil\",\n      \"winner\": \"Croatia\",\n      \"home_goals\": 1,\n      \"away_goals\": 1,\n      \"stage\": \"quarter_final\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"id\": \"11\",\n      \"home_team\": \"France\",\n      \"away_team\": \"Morocco\",\n      \"winner\": \"France\",\n      \"home_goals\": 2,\n      \"away_goals\": 0,\n      \"stage\": \"semi_final\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"id\": \"12\",\n      \"home_team\": \"England\",\n      \"away_team\": \"France\",\n      \"winner\": \"France\",\n      \"home_goals\": 1,\n      \"away_goals\": 2,\n      \"stage\": \"quarter_final\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"id\": \"16\",\n      \"home_team\": \"Morocco\",\n      \"away_team\": \"Portugal\",\n      \"winner\": \"Morocco\",\n      \"home_goals\": 1,\n      \"away_goals\": 0,\n      \"stage\": \"quarter_final\"\n    }\n  ],\n  \"correctedSql\": \"SELECT t.tournam… (truncated)"
+      }
+    ],
+    "passed": true,
+    "durationMs": 10705
+  },
+  {
+    "id": "final-score-2018",
+    "question": "What was the score of the 2018 World Cup final?",
+    "scores": {
+      "check-matches": 1,
+      "check-includes": 1,
+      "check-called-tool": 1,
+      "check-no-tool-errors": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-matches",
+        "description": "Checks if output matches pattern /4\\s*[-–:]\\s*2/",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "check-includes",
+        "description": "Checks if output includes \"France\"",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "check-called-tool",
+        "description": "Checks that \"run_readonly_sql\" was called",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "result-set-match",
+        "description": "Result set matches expectedSql (primary correctness signal)",
+        "score": 1,
+        "passed": true
+      }
+    ],
+    "answer": "The 2018 World Cup final was played on July 15, 2018: **France 4–2 Croatia**, with France winning the title.\n\n(Source: world_cup.world_cup.matches joined with world_cup.world_cup.tournaments and world_cup.world_cup.teams.)",
+    "toolCalls": [
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT m.id, t.year, m.stage, m.match_date, ht.name as home_team, at.name as away_team, m.home_score, m.away_score, wt.name as winner\\nFROM world_cup.world_cup.matches m\\nJOIN world_cup.world_cup.tournaments t ON m.tournament_id = t.id\\nJOIN world_cup.world_cup.teams ht ON m.home_team_id = ht.id\\nJOIN world_cup.world_cup.teams at ON m.away_team_id = at.id\\nLEFT JOIN world_cup.world_cup.teams wt ON m.winner_team_id = wt.id\\nWHERE t.year = 2018 AND m.stage ILIKE '%final%'\\nORDER BY m.match_date\",\n  \"rationale\": \"I need to locate the 2018 World Cup final match and its score, so I'm filtering matches to that tournament and final stage.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"id\",\n    \"tournament_year\",\n    \"stage\",\n    \"kicked_off_at\",\n    \"home_team\",\n    \"away_team\",\n    \"home_goals\",\n    \"away_goals\",\n    \"winner\"\n  ],\n  \"rows\": [\n    {\n      \"id\": \"13\",\n      \"tournament_year\": 2018,\n      \"stage\": \"quarter_final\",\n      \"kicked_off_at\": \"2018-07-06T14:00:00.000Z\",\n      \"home_team\": \"Uruguay\",\n      \"away_team\": \"France\",\n      \"home_goals\": 0,\n      \"away_goals\": 2,\n      \"winner\": \"France\"\n    },\n    {\n      \"id\": \"5\",\n      \"tournament_year\": 2018,\n      \"stage\": \"quarter_final\",\n      \"kicked_off_at\": \"2018-07-06T18:00:00.000Z\",\n      \"home_team\": \"Brazil\",\n      \"away_team\": \"Belgium\",\n      \"home_goals\": 1,\n      \"away_goals\": 2,\n      \"winner\": \"Belgium\"\n    },\n    {\n      \"id\": \"10\",\n      \"tournament_year\": 2018,\n      \"stage\": \"quarter_final\",\n      \"kicked_off_at\": \"2018-07-07T15:00:00.000Z\",\n      \"home_team\": \"Sweden\",\n      \"away_team\": \"England\",\n      \"home_goals\": 0,\n      \"away_goals\": 2,\n      \"winner\": \"England\"\n    },\n    {\n      \"id\": \"8\",\n      \"tournament_year\": 2018,\n      \"stage\": \"quarter_final\",\n      \"kicked_off_at\": \"2018-07-07T18:00:00.000Z\",\n      \"home_team\": \"Russia\",\n      \"away_team\": \"Croatia\",\n      \"home_goals\": 2,\n      \"away_goals\": 2,\n      \"winner\": \"Croatia\"\n    },\n    {\n      \"id\": \"15\",\n      \"tournament_year\": 2018,\n      \"stage\": \"semi_final\",\n      \"kicked_off_at\": \"2018-07-10T18:00:00.000Z\",\n      \"home_team\": \"France\",\n      \"away_team\": \"Belgium\",\n      \"home_goals\": 1,\n      \"away_goals\": 0,\n      \"winner\": \"France\"\n    },\n    {\n      \"id\": \"7\",\n      \"tournament_year\": 2018,\n      \"stage\": \"semi_final\",\n      \"kicked_off_at\": \"2018-07-11T18:00:00.000Z\",\n      \"home_team\": \"Croatia\",\n      \"away_team\": \"England\",\n      \"home_goals\": 2,\n      \"away_goals\": 1,\n      \"winner\": \"Croatia\"\n    },\n    {\n      \"id\": \"14\",\n      \"tournament_year\": 2018,\n      \"stage\": \"final\",\n      \"kicked_off_at\": \"2018-07-15T15:00:00.000Z\",\n      \"home_team\": \"France\",\n      \"away… (truncated)"
+      }
+    ],
+    "passed": true,
+    "durationMs": 8281
+  },
+  {
+    "id": "top-scorer-2022",
+    "question": "Who scored the most goals in the 2022 World Cup, and how many?",
+    "scores": {
+      "check-includes": 1,
+      "check-matches": 1,
+      "check-called-tool": 1,
+      "check-no-tool-errors": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-includes",
+        "description": "Checks if output includes \"Messi\"",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "check-matches",
+        "description": "Checks if output matches pattern /\\b4\\b/",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "check-called-tool",
+        "description": "Checks that \"run_readonly_sql\" was called",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "result-set-match",
+        "description": "Result set matches expectedSql (primary correctness signal)",
+        "score": 1,
+        "passed": true
+      }
+    ],
+    "answer": "Important caveat first: the dataset only covers the **knockout stage from the quarter-finals onward** of the 2022 World Cup (8 matches: quarter-finals, semi-finals, third-place playoff, and the final). It does not include the group stage or round of 16, so this is a partial view of the tournament, not the full competition.\n\nWithin that knockout-stage data (`world_cup.world_cup.goals`, `matches`, `tournaments`, `players`), the top scorer is:\n\n**Lionel Messi (Argentina) — 4 goals**, followed by Kylian Mbappé (France) with 3, and Wout Weghorst (Netherlands) and Julian Álvarez (Argentina) tied at 2 each.\n\nTakeaway: Messi's 4 goals across the quarter-final-to-final stretch (including his semi-final and final strikes) make him the clear leading scorer in the portion of the 2022 tournament captured here — though the real-world Golden Boot winner, Mbappé, scored more across the full tournament including group-stage goals not present in this dataset.",
+    "toolCalls": [
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"\\nSELECT p.name AS player_name, t.name AS team_name, COUNT(*) AS goals\\nFROM world_cup.world_cup.goals g\\nJOIN world_cup.world_cup.matches m ON g.match_id = m.id\\nJOIN world_cup.world_cup.tournaments tr ON m.tournament_id = tr.id\\nJOIN world_cup.world_cup.players p ON g.scorer_player_id = p.id\\nLEFT JOIN world_cup.world_cup.teams t ON p.national_team_id = t.id\\nWHERE tr.year = 2022\\nGROUP BY p.name, t.name\\nORDER BY goals DESC\\nLIMIT 10\\n\",\n  \"rationale\": \"I need to count goals per scorer for matches in the 2022 tournament to find the top scorer.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"player_name\",\n    \"team_name\",\n    \"goals\"\n  ],\n  \"rows\": [\n    {\n      \"player_name\": \"Lionel Messi\",\n      \"team_name\": \"Argentina\",\n      \"goals\": \"4\"\n    },\n    {\n      \"player_name\": \"Kylian Mbappe\",\n      \"team_name\": \"France\",\n      \"goals\": \"3\"\n    },\n    {\n      \"player_name\": \"Wout Weghorst\",\n      \"team_name\": \"Netherlands\",\n      \"goals\": \"2\"\n    },\n    {\n      \"player_name\": \"Julian Alvarez\",\n      \"team_name\": \"Argentina\",\n      \"goals\": \"2\"\n    },\n    {\n      \"player_name\": \"Harry Kane\",\n      \"team_name\": \"England\",\n      \"goals\": \"1\"\n    },\n    {\n      \"player_name\": \"Josko Gvardiol\",\n      \"team_name\": \"Croatia\",\n      \"goals\": \"1\"\n    },\n    {\n      \"player_name\": \"Mislav Orsic\",\n      \"team_name\": \"Croatia\",\n      \"goals\": \"1\"\n    },\n    {\n      \"player_name\": \"Nahuel Molina\",\n      \"team_name\": \"Argentina\",\n      \"goals\": \"1\"\n    },\n    {\n      \"player_name\": \"Neymar\",\n      \"team_name\": \"Brazil\",\n      \"goals\": \"1\"\n    },\n    {\n      \"player_name\": \"Olivier Giroud\",\n      \"team_name\": \"France\",\n      \"goals\": \"1\"\n    }\n  ],\n  \"correctedSql\": \"SELECT p.full_name AS player_name, t.common_name AS team_name, COUNT(*) AS goals FROM world_cup.world_cup.goals g JOIN world_cup.world_cup.matches m ON g.match_id = m.id JOIN world_cup.world_cup.tournaments tr ON m.tournament_id = tr.id JOIN world_cup.world_cup.players p ON g.scorer_player_id = p.id LEFT JOIN world_cup.world_cup.teams t ON p.national_team_id = t.id WHERE tr.tournament_year = 2022 GROUP BY p.full_name, t.common_name ORDER BY goals DESC LIMIT 10\",\n  \"note\": \"original query failed and was auto-corrected — cite the corrected SQL\"\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"\\nSELECT COUNT(*) AS total_goals, COUNT(DISTINCT m.id) AS matches_with_goals\\nFROM world_cup.world_cup.goals g\\nJOIN world_cup.world_cup.matches m ON g.match_id = m.id\\nJOIN world_cup.world_cup.tournaments tr ON m.tournament_id = tr.id\\nWHERE tr.tournament_year = 2022\\n\",\n  \"rationale\": \"I want to check how many total goals are recorded for the 2022 tournament to make sure the data set is reasonably complete before reporting a top scorer.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"total_goals\",\n    \"matches_with_goals\"\n  ],\n  \"rows\": [\n    {\n      \"total_goals\": \"24\",\n      \"matches_with_goals\": \"8\"\n    }\n  ]\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"\\nSELECT tr.tournament_year, COUNT(*) AS num_matches\\nFROM world_cup.world_cup.matches m\\nJOIN world_cup.world_cup.tournaments tr ON m.tournament_id = tr.id\\nGROUP BY tr.tournament_year\\nORDER BY tr.tournament_year\\n\",\n  \"rationale\": \"The goal count for 2022 looked low, so I'm checking how many matches each tournament year actually has in the data to see if 2022 coverage is partial.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"tournament_year\",\n    \"num_matches\"\n  ],\n  \"rows\": [\n    {\n      \"tournament_year\": 2018,\n      \"num_matches\": \"8\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"num_matches\": \"8\"\n    }\n  ]\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"\\nSELECT m.id, m.match_date, m.stage, ht.common_name AS home, at.common_name AS away, m.home_score, m.away_score\\nFROM world_cup.world_cup.matches m\\nJOIN world_cup.world_cup.tournaments tr ON m.tournament_id = tr.id\\nJOIN world_cup.world_cup.teams ht ON m.home_team_id = ht.id\\nJOIN world_cup.world_cup.teams at ON m.away_team_id = at.id\\nWHERE tr.tournament_year = 2022\\nORDER BY m.match_date\\n\",\n  \"rationale\": \"I want to see exactly which 2022 matches are in the data to understand what portion of the tournament this dataset covers, so I can caveat the goal-scoring answer accurately.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"id\",\n    \"kicked_off_at\",\n    \"stage\",\n    \"home\",\n    \"away\",\n    \"home_goals\",\n    \"away_goals\"\n  ],\n  \"rows\": [\n    {\n      \"id\": \"9\",\n      \"kicked_off_at\": \"2022-12-09T15:00:00.000Z\",\n      \"stage\": \"quarter_final\",\n      \"home\": \"Croatia\",\n      \"away\": \"Brazil\",\n      \"home_goals\": 1,\n      \"away_goals\": 1\n    },\n    {\n      \"id\": \"3\",\n      \"kicked_off_at\": \"2022-12-09T19:00:00.000Z\",\n      \"stage\": \"quarter_final\",\n      \"home\": \"Netherlands\",\n      \"away\": \"Argentina\",\n      \"home_goals\": 2,\n      \"away_goals\": 2\n    },\n    {\n      \"id\": \"16\",\n      \"kicked_off_at\": \"2022-12-10T15:00:00.000Z\",\n      \"stage\": \"quarter_final\",\n      \"home\": \"Morocco\",\n      \"away\": \"Portugal\",\n      \"home_goals\": 1,\n      \"away_goals\": 0\n    },\n    {\n      \"id\": \"12\",\n      \"kicked_off_at\": \"2022-12-10T19:00:00.000Z\",\n      \"stage\": \"quarter_final\",\n      \"home\": \"England\",\n      \"away\": \"France\",\n      \"home_goals\": 1,\n      \"away_goals\": 2\n    },\n    {\n      \"id\": \"2\",\n      \"kicked_off_at\": \"2022-12-13T19:00:00.000Z\",\n      \"stage\": \"semi_final\",\n      \"home\": \"Argentina\",\n      \"away\": \"Croatia\",\n      \"home_goals\": 3,\n      \"away_goals\": 0\n    },\n    {\n      \"id\": \"11\",\n      \"kicked_off_at\": \"2022-12-14T19:00:00.000Z\",\n      \"stage\": \"semi_final\",\n      \"home\": \"France\",\n      \"away\": \"Morocco\",\n      \"home_goals\": 2,\n      \"away_goals\": 0\n    },\n    {\n      \"id\": \"6\",\n      \"kicked_off_at\": \"2022-12-17T15:00:00.000Z\",\n      \"stage\": \"third_place\",\n      \"home\": \"Croatia\",\n      \"away\": \"Morocco\",\n      \"home_goals\": 2,\n      \"away_goals\": 1\n    },\n    {\n      \"id\": \"1\",\n      \"kicked_off_at\": \"2022-12-18T15:00:00.000Z\",\n      \"stage\": \"final\",\n      \"home\": \"Argentina\",\n      \"away\": \"France\",\n      \"home_goals\": 3,\n      \"away_goals\": 3\n    }\n  ],\n  \"correctedSql\": \"SELECT m.id, m.kicked_off_at, m.stage, ht.common_name AS home, at.common_name AS away, m.home_goals, m.away_goals FROM world_cup.world_cup.matches m JOIN world_cup.world_cup.tourname… (truncated)"
+      }
+    ],
+    "passed": true,
+    "durationMs": 25055
+  },
+  {
+    "id": "shootouts",
+    "question": "Which knockout matches went to a penalty shootout, and who advanced?",
+    "scores": {
+      "check-includes": 1,
+      "check-matches": 1,
+      "check-called-tool": 1,
+      "check-no-tool-errors": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-includes",
+        "description": "Checks if output includes \"Croatia\"",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "check-matches",
+        "description": "Checks if output matches pattern /Argentina/i",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "check-called-tool",
+        "description": "Checks that \"run_readonly_sql\" was called",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "result-set-match",
+        "description": "Result set matches expectedSql (primary correctness signal)",
+        "score": 1,
+        "passed": true
+      }
+    ],
+    "answer": "Now querying the matches that went to penalty shootouts (knockout stages only, excluding group matches).## Knockout matches decided by penalty shootout\n\nUsing `world_cup.world_cup.v_match_results` (regulation/extra-time goals plus penalty scores), 4 knockout matches in this dataset (2018 and 2022 World Cups) went to a shootout:\n\n| Tournament | Stage | Match | Score (after extra time) | Penalties | Advanced |\n|---|---|---|---|---|---|\n| 2018 | Quarter-final | Russia vs Croatia | 2–2 | 3–4 | **Croatia** |\n| 2022 | Quarter-final | Croatia vs Brazil | 1–1 | 4–2 | **Croatia** |\n| 2022 | Quarter-final | Netherlands vs Argentina | 2–2 | 3–4 | **Argentina** |\n| 2022 | Final | Argentina vs France | 3–3 | 4–2 | **Argentina** |\n\n**Takeaway:** All four shootouts in this dataset came from the two most recent tournaments covered (2018 and 2022) — no group-stage or earlier-round matches end in penalties, which fits World Cup rules (shootouts only apply to knockout ties). Croatia and Argentina each won two shootouts; Argentina's came in back-to-back knockout rounds in 2022, culminating in their shootout win over France in the final to become champions.",
+    "toolCalls": [
+      {
+        "name": "describe_entity",
+        "input": "{\n  \"entity\": \"world_cup.world_cup.matches\"\n}",
+        "output": "{\n  \"entity\": \"world_cup.world_cup.matches\",\n  \"datasourceId\": \"60eca17c-1d06-4cf7-a6c3-108bb59e4635\",\n  \"datasourceKind\": \"postgres\",\n  \"columns\": [\n    {\n      \"name\": \"id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"1\",\n        \"2\",\n        \"3\",\n        \"4\",\n        \"5\"\n      ]\n    },\n    {\n      \"name\": \"tournament_id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"2\",\n        \"1\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.tournaments\",\n        \"column\": \"id\",\n        \"source\": \"declared\"\n      }\n    },\n    {\n      \"name\": \"match_number\",\n      \"type\": \"integer\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"64\",\n        \"61\",\n        \"58\",\n        \"63\",\n        \"62\"\n      ]\n    },\n    {\n      \"name\": \"stage\",\n      \"type\": \"text\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"final\",\n        \"semi_final\",\n        \"quarter_final\",\n        \"third_place\"\n      ]\n    },\n    {\n      \"name\": \"group_letter\",\n      \"type\": \"character\",\n      \"nullable\": true\n    },\n    {\n      \"name\": \"kicked_off_at\",\n      \"type\": \"timestamp with time zone\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"2022-12-18T15:00:00.000Z\",\n        \"2022-12-13T19:00:00.000Z\",\n        \"2022-12-09T19:00:00.000Z\",\n        \"2018-07-14T14:00:00.000Z\",\n        \"2018-07-06T18:00:00.000Z\"\n      ]\n    },\n    {\n      \"name\": \"venue_id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"9\",\n        \"3\",\n        \"5\",\n        \"4\",\n        \"2\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.venues\",\n        \"column\": \"id\",\n        \"source\": \"declared\"\n      }\n    },\n    {\n      \"name\": \"home_team_id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"1\",\n        \"8\",\n        \"2\",\n        \"3\",\n        \"4\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.teams\",\n        … (truncated)"
+      },
+      {
+        "name": "describe_entity",
+        "input": "{\n  \"entity\": \"world_cup.world_cup.v_match_results\"\n}",
+        "output": "{\n  \"entity\": \"world_cup.world_cup.v_match_results\",\n  \"datasourceId\": \"60eca17c-1d06-4cf7-a6c3-108bb59e4635\",\n  \"datasourceKind\": \"postgres\",\n  \"columns\": [\n    {\n      \"name\": \"tournament_year\",\n      \"type\": \"integer\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"2018\",\n        \"2022\"\n      ]\n    },\n    {\n      \"name\": \"match_number\",\n      \"type\": \"integer\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"64\",\n        \"58\",\n        \"60\",\n        \"59\",\n        \"57\"\n      ]\n    },\n    {\n      \"name\": \"stage\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"final\",\n        \"quarter_final\",\n        \"semi_final\",\n        \"third_place\"\n      ]\n    },\n    {\n      \"name\": \"kicked_off_at\",\n      \"type\": \"timestamp with time zone\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"2018-07-15T15:00:00.000Z\",\n        \"2018-07-06T18:00:00.000Z\",\n        \"2018-07-07T18:00:00.000Z\",\n        \"2018-07-07T15:00:00.000Z\",\n        \"2018-07-06T14:00:00.000Z\"\n      ]\n    },\n    {\n      \"name\": \"venue\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"Luzhniki Stadium\",\n        \"Saint Petersburg Stadium\",\n        \"Fisht Stadium\",\n        \"Nizhny Novgorod Stadium\",\n        \"Lusail Stadium\"\n      ]\n    },\n    {\n      \"name\": \"city\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"Moscow\",\n        \"Saint Petersburg\",\n        \"Sochi\",\n        \"Nizhny Novgorod\",\n        \"Lusail\"\n      ]\n    },\n    {\n      \"name\": \"home_team\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"France\",\n        \"Brazil\",\n        \"Russia\",\n        \"Sweden\",\n        \"Uruguay\"\n      ]\n    },\n    {\n      \"name\": \"away_team\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"Croatia\",\n        \"Belgium\",\n        \"England\",\n        \"France\",\n        \"Argentina\"\n      ]\n    },\n    {\n      \"name\": \"home_goals\",\n      \"type\": \"integer\",\n      \"… (truncated)"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT tournament_year, stage, kicked_off_at::date as match_date, home_team, away_team, home_goals, away_goals, home_penalties, away_penalties, winner\\nFROM world_cup.world_cup.v_match_results\\nWHERE home_penalties IS NOT NULL AND away_penalties IS NOT NULL\\nORDER BY tournament_year, kicked_off_at\",\n  \"rationale\": \"I need to find all knockout matches where the score went to penalties, identifying the two teams, the shootout score, and which team moved on.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"tournament_year\",\n    \"stage\",\n    \"match_date\",\n    \"home_team\",\n    \"away_team\",\n    \"home_goals\",\n    \"away_goals\",\n    \"home_penalties\",\n    \"away_penalties\",\n    \"winner\"\n  ],\n  \"rows\": [\n    {\n      \"tournament_year\": 2018,\n      \"stage\": \"quarter_final\",\n      \"match_date\": \"2018-07-07T05:00:00.000Z\",\n      \"home_team\": \"Russia\",\n      \"away_team\": \"Croatia\",\n      \"home_goals\": 2,\n      \"away_goals\": 2,\n      \"home_penalties\": 3,\n      \"away_penalties\": 4,\n      \"winner\": \"Croatia\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"stage\": \"quarter_final\",\n      \"match_date\": \"2022-12-09T05:00:00.000Z\",\n      \"home_team\": \"Croatia\",\n      \"away_team\": \"Brazil\",\n      \"home_goals\": 1,\n      \"away_goals\": 1,\n      \"home_penalties\": 4,\n      \"away_penalties\": 2,\n      \"winner\": \"Croatia\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"stage\": \"quarter_final\",\n      \"match_date\": \"2022-12-09T05:00:00.000Z\",\n      \"home_team\": \"Netherlands\",\n      \"away_team\": \"Argentina\",\n      \"home_goals\": 2,\n      \"away_goals\": 2,\n      \"home_penalties\": 3,\n      \"away_penalties\": 4,\n      \"winner\": \"Argentina\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"stage\": \"final\",\n      \"match_date\": \"2022-12-18T05:00:00.000Z\",\n      \"home_team\": \"Argentina\",\n      \"away_team\": \"France\",\n      \"home_goals\": 3,\n      \"away_goals\": 3,\n      \"home_penalties\": 4,\n      \"away_penalties\": 2,\n      \"winner\": \"Argentina\"\n    }\n  ]\n}"
+      }
+    ],
+    "passed": true,
+    "durationMs": 9877
+  },
+  {
+    "id": "biggest-venue",
+    "question": "Which stadium hosted the best-attended match, and what was the attendance?",
+    "scores": {
+      "check-includes": 1,
+      "check-matches": 1,
+      "check-called-tool": 1,
+      "check-no-tool-errors": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-includes",
+        "description": "Checks if output includes \"Lusail\"",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "check-matches",
+        "description": "Checks if output matches pattern /88[,.]?966/",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "check-called-tool",
+        "description": "Checks that \"run_readonly_sql\" was called",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "result-set-match",
+        "description": "Result set matches expectedSql (primary correctness signal)",
+        "score": 1,
+        "passed": true
+      }
+    ],
+    "answer": "**Lusail Stadium** in Lusail, Qatar hosted the best-attended match, with an attendance of **88,966**. This figure is tied between the 2022 World Cup semi-final (Dec 13, 2022, Argentina vs Croatia) and the final (Dec 18, 2022, Argentina vs France) — both drew exactly 88,966 fans, the top attendance recorded across the dataset (covering the 2018 and 2022 tournaments).\n\nFor comparison, the next tier down was the Luzhniki Stadium in Moscow, which hosted the 2018 semi-final and final both at 78,011 — notably lower than Lusail's capacity crowd.",
+    "toolCalls": [
+      {
+        "name": "describe_entity",
+        "input": "{\n  \"entity\": \"world_cup.world_cup.matches\"\n}",
+        "output": "{\n  \"entity\": \"world_cup.world_cup.matches\",\n  \"datasourceId\": \"60eca17c-1d06-4cf7-a6c3-108bb59e4635\",\n  \"datasourceKind\": \"postgres\",\n  \"columns\": [\n    {\n      \"name\": \"id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"1\",\n        \"2\",\n        \"3\",\n        \"4\",\n        \"5\"\n      ]\n    },\n    {\n      \"name\": \"tournament_id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"2\",\n        \"1\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.tournaments\",\n        \"column\": \"id\",\n        \"source\": \"declared\"\n      }\n    },\n    {\n      \"name\": \"match_number\",\n      \"type\": \"integer\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"64\",\n        \"61\",\n        \"58\",\n        \"63\",\n        \"62\"\n      ]\n    },\n    {\n      \"name\": \"stage\",\n      \"type\": \"text\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"final\",\n        \"semi_final\",\n        \"quarter_final\",\n        \"third_place\"\n      ]\n    },\n    {\n      \"name\": \"group_letter\",\n      \"type\": \"character\",\n      \"nullable\": true\n    },\n    {\n      \"name\": \"kicked_off_at\",\n      \"type\": \"timestamp with time zone\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"2022-12-18T15:00:00.000Z\",\n        \"2022-12-13T19:00:00.000Z\",\n        \"2022-12-09T19:00:00.000Z\",\n        \"2018-07-14T14:00:00.000Z\",\n        \"2018-07-06T18:00:00.000Z\"\n      ]\n    },\n    {\n      \"name\": \"venue_id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"9\",\n        \"3\",\n        \"5\",\n        \"4\",\n        \"2\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.venues\",\n        \"column\": \"id\",\n        \"source\": \"declared\"\n      }\n    },\n    {\n      \"name\": \"home_team_id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"1\",\n        \"8\",\n        \"2\",\n        \"3\",\n        \"4\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.teams\",\n        … (truncated)"
+      },
+      {
+        "name": "describe_entity",
+        "input": "{\n  \"entity\": \"world_cup.world_cup.venues\"\n}",
+        "output": "{\n  \"entity\": \"world_cup.world_cup.venues\",\n  \"datasourceId\": \"60eca17c-1d06-4cf7-a6c3-108bb59e4635\",\n  \"datasourceKind\": \"postgres\",\n  \"columns\": [\n    {\n      \"name\": \"id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"1\",\n        \"2\",\n        \"3\",\n        \"4\",\n        \"5\"\n      ]\n    },\n    {\n      \"name\": \"tournament_id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"1\",\n        \"2\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.tournaments\",\n        \"column\": \"id\",\n        \"source\": \"declared\"\n      }\n    },\n    {\n      \"name\": \"name\",\n      \"type\": \"text\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"Nizhny Novgorod Stadium\",\n        \"Fisht Stadium\",\n        \"Saint Petersburg Stadium\",\n        \"Luzhniki Stadium\",\n        \"Khalifa International Stadium\"\n      ]\n    },\n    {\n      \"name\": \"city\",\n      \"type\": \"text\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"Nizhny Novgorod\",\n        \"Sochi\",\n        \"Saint Petersburg\",\n        \"Moscow\",\n        \"Al Rayyan\"\n      ]\n    },\n    {\n      \"name\": \"capacity\",\n      \"type\": \"integer\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"43319\",\n        \"44287\",\n        \"64468\",\n        \"78011\",\n        \"45857\"\n      ]\n    }\n  ]\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT v.name AS stadium, v.city, m.attendance, m.stage, t.name AS tournament, m.kicked_off_at\\nFROM world_cup.world_cup.matches m\\nJOIN world_cup.world_cup.venues v ON m.venue_id = v.id\\nJOIN world_cup.world_cup.tournaments t ON m.tournament_id = t.id\\nORDER BY m.attendance DESC NULLS LAST\\nLIMIT 5\",\n  \"rationale\": \"I need the match with the highest recorded attendance along with its stadium name, to identify the best-attended match.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"stadium\",\n    \"city\",\n    \"attendance\",\n    \"stage\",\n    \"tournament\",\n    \"kicked_off_at\"\n  ],\n  \"rows\": [\n    {\n      \"stadium\": \"Lusail Stadium\",\n      \"city\": \"Lusail\",\n      \"attendance\": 88966,\n      \"stage\": \"semi_final\",\n      \"tournament\": \"2022 FIFA World Cup\",\n      \"kicked_off_at\": \"2022-12-13T19:00:00.000Z\"\n    },\n    {\n      \"stadium\": \"Lusail Stadium\",\n      \"city\": \"Lusail\",\n      \"attendance\": 88966,\n      \"stage\": \"final\",\n      \"tournament\": \"2022 FIFA World Cup\",\n      \"kicked_off_at\": \"2022-12-18T15:00:00.000Z\"\n    },\n    {\n      \"stadium\": \"Lusail Stadium\",\n      \"city\": \"Lusail\",\n      \"attendance\": 88235,\n      \"stage\": \"quarter_final\",\n      \"tournament\": \"2022 FIFA World Cup\",\n      \"kicked_off_at\": \"2022-12-09T19:00:00.000Z\"\n    },\n    {\n      \"stadium\": \"Luzhniki Stadium\",\n      \"city\": \"Moscow\",\n      \"attendance\": 78011,\n      \"stage\": \"semi_final\",\n      \"tournament\": \"2018 FIFA World Cup\",\n      \"kicked_off_at\": \"2018-07-11T18:00:00.000Z\"\n    },\n    {\n      \"stadium\": \"Luzhniki Stadium\",\n      \"city\": \"Moscow\",\n      \"attendance\": 78011,\n      \"stage\": \"final\",\n      \"tournament\": \"2018 FIFA World Cup\",\n      \"kicked_off_at\": \"2018-07-15T15:00:00.000Z\"\n    }\n  ]\n}"
+      }
+    ],
+    "passed": true,
+    "durationMs": 17889
+  },
+  {
+    "id": "schema-discovery",
+    "question": "What data do I have available to analyse?",
+    "scores": {
+      "check-includes": 1,
+      "check-did-not-call": 1,
+      "check-no-tool-errors": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-includes",
+        "description": "Checks if output includes \"matches\"",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "check-did-not-call",
+        "description": "Checks that \"run_readonly_sql\" was NOT called",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      }
+    ],
+    "answer": "## What's in this World Cup dataset\n\nIt's a single Postgres database (**World Cup Core**) covering the **2018 (Russia) and 2022 (Qatar) FIFA World Cups**, organized around these entities:\n\n**Tournament structure**\n- `tournaments` — the 2 World Cups, host country, dates, champion/runner-up\n- `venues` — stadiums per tournament, city, capacity\n- `matches` — every match: stage (group/round of 16/quarter/semi/final/third-place), teams, scores, extra time, penalties, winner, attendance\n- `tournament_teams` — each team's participation per tournament: group, final rank, whether it reached knockout stage\n\n**Teams & players**\n- `teams` / `countries` / `confederations` — team identities linked to country and confederation (UEFA, CONMEBOL, CAF, AFC, CONCACAF)\n- `players` — name, position, date of birth, national team\n- `squad_members` — tournament rosters with shirt numbers and squad positions\n\n**Match events**\n- `goals` — every goal: scorer, assist, minute, type (open play, penalty, own goal, header, free kick), running score\n- `disciplinary_events` — cards: player, team, minute, card type, reason\n- `match_team_statistics` — per-team match stats: possession, shots, shots on target, corners, fouls, offsides, passes, expected goals\n\n**Pre-built summary views** (handy shortcuts)\n- `v_match_results` — matches with team/venue names already joined in, human-readable\n- `v_player_goal_totals` — goals/penalties/own-goals per player per tournament\n- `v_seeded_team_performance` — team-level rollups per tournament: wins, goals for/against, possession, shots, expected goals, attendance\n\n**What you could analyze:** top scorers, team performance and rankings, card/discipline patterns, match statistics (possession, shooting efficiency, expected goals vs actual), attendance trends across venues, confederation strength, squad composition by position/age, and comparisons between the 2018 and 2022 tournaments.\n\nLet me know what angle you'd like to dig into — e.g., top goal scorers, which teams over/under-performed their expected goals, disciplinary trends, or attendance by venue.",
+    "toolCalls": [
+      {
+        "name": "describe_entity",
+        "input": "{\n  \"entity\": \"world_cup.world_cup.confederations\"\n}",
+        "output": "{\n  \"entity\": \"world_cup.world_cup.confederations\",\n  \"datasourceId\": \"60eca17c-1d06-4cf7-a6c3-108bb59e4635\",\n  \"datasourceKind\": \"postgres\",\n  \"columns\": [\n    {\n      \"name\": \"code\",\n      \"type\": \"text\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"AFC\",\n        \"CAF\",\n        \"CONCACAF\",\n        \"CONMEBOL\",\n        \"UEFA\"\n      ]\n    },\n    {\n      \"name\": \"name\",\n      \"type\": \"text\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"Asian Football Confederation\",\n        \"Confederation of African Football\",\n        \"Confederation of North, Central America …\",\n        \"South American Football Confederation\",\n        \"Union of European Football Associations\"\n      ]\n    }\n  ]\n}"
+      },
+      {
+        "name": "describe_entity",
+        "input": "{\n  \"entity\": \"world_cup.world_cup.countries\"\n}",
+        "output": "{\n  \"entity\": \"world_cup.world_cup.countries\",\n  \"datasourceId\": \"60eca17c-1d06-4cf7-a6c3-108bb59e4635\",\n  \"datasourceKind\": \"postgres\",\n  \"columns\": [\n    {\n      \"name\": \"code\",\n      \"type\": \"character\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"ARG\",\n        \"BEL\",\n        \"BRA\",\n        \"CRO\",\n        \"ENG\"\n      ]\n    },\n    {\n      \"name\": \"name\",\n      \"type\": \"text\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"Argentina\",\n        \"Belgium\",\n        \"Brazil\",\n        \"Croatia\",\n        \"England\"\n      ]\n    },\n    {\n      \"name\": \"confederation_code\",\n      \"type\": \"text\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"CONMEBOL\",\n        \"UEFA\",\n        \"CAF\",\n        \"AFC\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.confederations\",\n        \"column\": \"code\",\n        \"source\": \"declared\"\n      }\n    }\n  ]\n}"
+      },
+      {
+        "name": "describe_entity",
+        "input": "{\n  \"entity\": \"world_cup.world_cup.disciplinary_events\"\n}",
+        "output": "{\n  \"entity\": \"world_cup.world_cup.disciplinary_events\",\n  \"datasourceId\": \"60eca17c-1d06-4cf7-a6c3-108bb59e4635\",\n  \"datasourceKind\": \"postgres\",\n  \"columns\": [\n    {\n      \"name\": \"id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"1\",\n        \"2\",\n        \"3\",\n        \"4\",\n        \"5\"\n      ]\n    },\n    {\n      \"name\": \"match_id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"3\",\n        \"1\",\n        \"9\",\n        \"5\",\n        \"8\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.matches\",\n        \"column\": \"id\",\n        \"source\": \"declared\"\n      }\n    },\n    {\n      \"name\": \"team_id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"1\",\n        \"3\",\n        \"4\",\n        \"5\",\n        \"8\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.teams\",\n        \"column\": \"id\",\n        \"source\": \"declared\"\n      }\n    },\n    {\n      \"name\": \"player_id\",\n      \"type\": \"bigint\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"3\",\n        \"5\",\n        \"11\",\n        \"12\",\n        \"19\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.players\",\n        \"column\": \"id\",\n        \"source\": \"declared\"\n      }\n    },\n    {\n      \"name\": \"minute\",\n      \"type\": \"integer\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"90\",\n        \"116\",\n        \"68\",\n        \"47\",\n        \"38\"\n      ]\n    },\n    {\n      \"name\": \"stoppage_minute\",\n      \"type\": \"integer\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"0\"\n      ]\n    },\n    {\n      \"name\": \"card_type\",\n      \"type\": \"text\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"yellow\"\n      ]\n    },\n    {\n      \"name\": \"reason\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"Unsporting behaviour\",\n        \"Time wasting\",\n        \"Reckless challenge\",\n        \"Persistent infringement\",\n        \"Dissent\"\n     … (truncated)"
+      },
+      {
+        "name": "describe_entity",
+        "input": "{\n  \"entity\": \"world_cup.world_cup.goals\"\n}",
+        "output": "{\n  \"entity\": \"world_cup.world_cup.goals\",\n  \"datasourceId\": \"60eca17c-1d06-4cf7-a6c3-108bb59e4635\",\n  \"datasourceKind\": \"postgres\",\n  \"columns\": [\n    {\n      \"name\": \"id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"1\",\n        \"2\",\n        \"3\",\n        \"4\",\n        \"5\"\n      ]\n    },\n    {\n      \"name\": \"match_id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"1\",\n        \"2\",\n        \"3\",\n        \"4\",\n        \"5\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.matches\",\n        \"column\": \"id\",\n        \"source\": \"declared\"\n      }\n    },\n    {\n      \"name\": \"scoring_team_id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"1\",\n        \"2\",\n        \"3\",\n        \"4\",\n        \"5\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.teams\",\n        \"column\": \"id\",\n        \"source\": \"declared\"\n      }\n    },\n    {\n      \"name\": \"scorer_player_id\",\n      \"type\": \"bigint\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"3\",\n        \"1\",\n        \"2\",\n        \"4\",\n        \"7\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.players\",\n        \"column\": \"id\",\n        \"source\": \"declared\"\n      }\n    },\n    {\n      \"name\": \"assist_player_id\",\n      \"type\": \"bigint\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"3\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.players\",\n        \"column\": \"id\",\n        \"source\": \"declared\"\n      }\n    },\n    {\n      \"name\": \"minute\",\n      \"type\": \"integer\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"108\",\n        \"36\",\n        \"23\",\n        \"39\",\n        \"34\"\n      ]\n    },\n    {\n      \"name\": \"stoppage_minute\",\n      \"type\": \"integer\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"0\",\n        \"1\",\n        \"11\"\n      ]\n    },\n    {\n      \"name\": \"goal_type\",\n      \"type\": \"text\",\n      \"nullable\": false,\n   … (truncated)"
+      },
+      {
+        "name": "describe_entity",
+        "input": "{\n  \"entity\": \"world_cup.world_cup.match_team_statistics\"\n}",
+        "output": "{\n  \"entity\": \"world_cup.world_cup.match_team_statistics\",\n  \"datasourceId\": \"60eca17c-1d06-4cf7-a6c3-108bb59e4635\",\n  \"datasourceKind\": \"postgres\",\n  \"columns\": [\n    {\n      \"name\": \"match_id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"14\",\n        \"4\",\n        \"7\",\n        \"15\",\n        \"8\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.matches\",\n        \"column\": \"id\",\n        \"source\": \"declared\"\n      }\n    },\n    {\n      \"name\": \"team_id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"6\",\n        \"2\",\n        \"4\",\n        \"10\",\n        \"11\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.teams\",\n        \"column\": \"id\",\n        \"source\": \"declared\"\n      }\n    },\n    {\n      \"name\": \"possession_pct\",\n      \"type\": \"numeric\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"34.00\",\n        \"43.00\",\n        \"54.00\",\n        \"40.00\",\n        \"36.00\"\n      ]\n    },\n    {\n      \"name\": \"shots\",\n      \"type\": \"integer\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"8\",\n        \"12\",\n        \"22\",\n        \"19\",\n        \"13\"\n      ]\n    },\n    {\n      \"name\": \"shots_on_target\",\n      \"type\": \"integer\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"6\",\n        \"4\",\n        \"7\",\n        \"5\",\n        \"3\"\n      ]\n    },\n    {\n      \"name\": \"corners\",\n      \"type\": \"integer\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"2\",\n        \"4\",\n        \"8\",\n        \"6\",\n        \"1\"\n      ]\n    },\n    {\n      \"name\": \"fouls_committed\",\n      \"type\": \"integer\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"14\",\n        \"11\",\n        \"23\",\n        \"6\",\n        \"25\"\n      ]\n    },\n    {\n      \"name\": \"offsides\",\n      \"type\": \"integer\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"1\",\n        \"2\",\n        \"0\",\n        \"4\",\n        \"3\"\n      ]\n    },\n    {\n      \"name\": \"passes_completed\",\n      \"… (truncated)"
+      },
+      {
+        "name": "describe_entity",
+        "input": "{\n  \"entity\": \"world_cup.world_cup.matches\"\n}",
+        "output": "{\n  \"entity\": \"world_cup.world_cup.matches\",\n  \"datasourceId\": \"60eca17c-1d06-4cf7-a6c3-108bb59e4635\",\n  \"datasourceKind\": \"postgres\",\n  \"columns\": [\n    {\n      \"name\": \"id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"1\",\n        \"2\",\n        \"3\",\n        \"4\",\n        \"5\"\n      ]\n    },\n    {\n      \"name\": \"tournament_id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"2\",\n        \"1\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.tournaments\",\n        \"column\": \"id\",\n        \"source\": \"declared\"\n      }\n    },\n    {\n      \"name\": \"match_number\",\n      \"type\": \"integer\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"64\",\n        \"61\",\n        \"58\",\n        \"63\",\n        \"62\"\n      ]\n    },\n    {\n      \"name\": \"stage\",\n      \"type\": \"text\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"final\",\n        \"semi_final\",\n        \"quarter_final\",\n        \"third_place\"\n      ]\n    },\n    {\n      \"name\": \"group_letter\",\n      \"type\": \"character\",\n      \"nullable\": true\n    },\n    {\n      \"name\": \"kicked_off_at\",\n      \"type\": \"timestamp with time zone\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"2022-12-18T15:00:00.000Z\",\n        \"2022-12-13T19:00:00.000Z\",\n        \"2022-12-09T19:00:00.000Z\",\n        \"2018-07-14T14:00:00.000Z\",\n        \"2018-07-06T18:00:00.000Z\"\n      ]\n    },\n    {\n      \"name\": \"venue_id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"9\",\n        \"3\",\n        \"5\",\n        \"4\",\n        \"2\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.venues\",\n        \"column\": \"id\",\n        \"source\": \"declared\"\n      }\n    },\n    {\n      \"name\": \"home_team_id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"1\",\n        \"8\",\n        \"2\",\n        \"3\",\n        \"4\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.teams\",\n        … (truncated)"
+      },
+      {
+        "name": "describe_entity",
+        "input": "{\n  \"entity\": \"world_cup.world_cup.players\"\n}",
+        "output": "{\n  \"entity\": \"world_cup.world_cup.players\",\n  \"datasourceId\": \"60eca17c-1d06-4cf7-a6c3-108bb59e4635\",\n  \"datasourceKind\": \"postgres\",\n  \"columns\": [\n    {\n      \"name\": \"id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"1\",\n        \"2\",\n        \"3\",\n        \"4\",\n        \"5\"\n      ]\n    },\n    {\n      \"name\": \"national_team_id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"1\",\n        \"2\",\n        \"3\",\n        \"4\",\n        \"5\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.teams\",\n        \"column\": \"id\",\n        \"source\": \"declared\"\n      }\n    },\n    {\n      \"name\": \"full_name\",\n      \"type\": \"text\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"Angel Di Maria\",\n        \"Julian Alvarez\",\n        \"Lionel Messi\",\n        \"Nahuel Molina\",\n        \"Emiliano Martinez\"\n      ]\n    },\n    {\n      \"name\": \"position\",\n      \"type\": \"text\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"MF\",\n        \"FW\",\n        \"DF\",\n        \"GK\"\n      ]\n    },\n    {\n      \"name\": \"date_of_birth\",\n      \"type\": \"date\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"1988-02-14T05:00:00.000Z\",\n        \"2000-01-31T05:00:00.000Z\",\n        \"1987-06-24T05:00:00.000Z\",\n        \"1998-04-06T05:00:00.000Z\",\n        \"1992-09-02T04:00:00.000Z\"\n      ]\n    }\n  ]\n}"
+      },
+      {
+        "name": "describe_entity",
+        "input": "{\n  \"entity\": \"world_cup.world_cup.squad_members\"\n}",
+        "output": "{\n  \"entity\": \"world_cup.world_cup.squad_members\",\n  \"datasourceId\": \"60eca17c-1d06-4cf7-a6c3-108bb59e4635\",\n  \"datasourceKind\": \"postgres\",\n  \"columns\": [\n    {\n      \"name\": \"tournament_team_id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"1\",\n        \"2\",\n        \"3\",\n        \"4\",\n        \"5\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.tournament_teams\",\n        \"column\": \"id\",\n        \"source\": \"declared\"\n      }\n    },\n    {\n      \"name\": \"player_id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"5\",\n        \"4\",\n        \"1\",\n        \"2\",\n        \"3\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.players\",\n        \"column\": \"id\",\n        \"source\": \"declared\"\n      }\n    },\n    {\n      \"name\": \"shirt_number\",\n      \"type\": \"integer\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"1\",\n        \"2\",\n        \"3\",\n        \"4\",\n        \"5\"\n      ]\n    },\n    {\n      \"name\": \"squad_position\",\n      \"type\": \"text\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"GK\",\n        \"DF\",\n        \"MF\",\n        \"FW\"\n      ]\n    }\n  ]\n}"
+      },
+      {
+        "name": "describe_entity",
+        "input": "{\n  \"entity\": \"world_cup.world_cup.teams\"\n}",
+        "output": "{\n  \"entity\": \"world_cup.world_cup.teams\",\n  \"datasourceId\": \"60eca17c-1d06-4cf7-a6c3-108bb59e4635\",\n  \"datasourceKind\": \"postgres\",\n  \"columns\": [\n    {\n      \"name\": \"id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"1\",\n        \"2\",\n        \"3\",\n        \"4\",\n        \"5\"\n      ]\n    },\n    {\n      \"name\": \"country_code\",\n      \"type\": \"character\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"ARG\",\n        \"BEL\",\n        \"BRA\",\n        \"CRO\",\n        \"ENG\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.countries\",\n        \"column\": \"code\",\n        \"source\": \"declared\"\n      }\n    },\n    {\n      \"name\": \"common_name\",\n      \"type\": \"text\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"Argentina\",\n        \"Belgium\",\n        \"Brazil\",\n        \"Croatia\",\n        \"England\"\n      ]\n    },\n    {\n      \"name\": \"fifa_code\",\n      \"type\": \"character\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"ARG\",\n        \"BEL\",\n        \"BRA\",\n        \"CRO\",\n        \"ENG\"\n      ]\n    }\n  ]\n}"
+      },
+      {
+        "name": "describe_entity",
+        "input": "{\n  \"entity\": \"world_cup.world_cup.tournament_teams\"\n}",
+        "output": "{\n  \"entity\": \"world_cup.world_cup.tournament_teams\",\n  \"datasourceId\": \"60eca17c-1d06-4cf7-a6c3-108bb59e4635\",\n  \"datasourceKind\": \"postgres\",\n  \"columns\": [\n    {\n      \"name\": \"id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"1\",\n        \"2\",\n        \"3\",\n        \"4\",\n        \"5\"\n      ]\n    },\n    {\n      \"name\": \"tournament_id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"2\",\n        \"1\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.tournaments\",\n        \"column\": \"id\",\n        \"source\": \"declared\"\n      }\n    },\n    {\n      \"name\": \"team_id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"1\",\n        \"2\",\n        \"3\",\n        \"4\",\n        \"5\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.teams\",\n        \"column\": \"id\",\n        \"source\": \"declared\"\n      }\n    },\n    {\n      \"name\": \"group_letter\",\n      \"type\": \"character\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"C\",\n        \"G\",\n        \"E\",\n        \"F\",\n        \"D\"\n      ]\n    },\n    {\n      \"name\": \"final_rank\",\n      \"type\": \"integer\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"1\",\n        \"3\",\n        \"7\",\n        \"6\",\n        \"2\"\n      ]\n    },\n    {\n      \"name\": \"qualified_for_knockout\",\n      \"type\": \"boolean\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"true\"\n      ]\n    }\n  ]\n}"
+      },
+      {
+        "name": "describe_entity",
+        "input": "{\n  \"entity\": \"world_cup.world_cup.tournaments\"\n}",
+        "output": "{\n  \"entity\": \"world_cup.world_cup.tournaments\",\n  \"datasourceId\": \"60eca17c-1d06-4cf7-a6c3-108bb59e4635\",\n  \"datasourceKind\": \"postgres\",\n  \"columns\": [\n    {\n      \"name\": \"id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"1\",\n        \"2\"\n      ]\n    },\n    {\n      \"name\": \"name\",\n      \"type\": \"text\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"2018 FIFA World Cup\",\n        \"2022 FIFA World Cup\"\n      ]\n    },\n    {\n      \"name\": \"tournament_year\",\n      \"type\": \"integer\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"2018\",\n        \"2022\"\n      ]\n    },\n    {\n      \"name\": \"host_country_code\",\n      \"type\": \"character\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"RUS\",\n        \"QAT\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.countries\",\n        \"column\": \"code\",\n        \"source\": \"declared\"\n      }\n    },\n    {\n      \"name\": \"starts_on\",\n      \"type\": \"date\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"2018-06-14T05:00:00.000Z\",\n        \"2022-11-20T05:00:00.000Z\"\n      ]\n    },\n    {\n      \"name\": \"ends_on\",\n      \"type\": \"date\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"2018-07-15T05:00:00.000Z\",\n        \"2022-12-18T05:00:00.000Z\"\n      ]\n    },\n    {\n      \"name\": \"champion_team_id\",\n      \"type\": \"bigint\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"6\",\n        \"1\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.teams\",\n        \"column\": \"id\",\n        \"source\": \"declared\"\n      }\n    },\n    {\n      \"name\": \"runner_up_team_id\",\n      \"type\": \"bigint\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"4\",\n        \"6\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.teams\",\n        \"column\": \"id\",\n        \"source\": \"declared\"\n      }\n    }\n  ]\n}"
+      },
+      {
+        "name": "describe_entity",
+        "input": "{\n  \"entity\": \"world_cup.world_cup.v_match_results\"\n}",
+        "output": "{\n  \"entity\": \"world_cup.world_cup.v_match_results\",\n  \"datasourceId\": \"60eca17c-1d06-4cf7-a6c3-108bb59e4635\",\n  \"datasourceKind\": \"postgres\",\n  \"columns\": [\n    {\n      \"name\": \"tournament_year\",\n      \"type\": \"integer\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"2018\",\n        \"2022\"\n      ]\n    },\n    {\n      \"name\": \"match_number\",\n      \"type\": \"integer\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"64\",\n        \"58\",\n        \"60\",\n        \"59\",\n        \"57\"\n      ]\n    },\n    {\n      \"name\": \"stage\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"final\",\n        \"quarter_final\",\n        \"semi_final\",\n        \"third_place\"\n      ]\n    },\n    {\n      \"name\": \"kicked_off_at\",\n      \"type\": \"timestamp with time zone\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"2018-07-15T15:00:00.000Z\",\n        \"2018-07-06T18:00:00.000Z\",\n        \"2018-07-07T18:00:00.000Z\",\n        \"2018-07-07T15:00:00.000Z\",\n        \"2018-07-06T14:00:00.000Z\"\n      ]\n    },\n    {\n      \"name\": \"venue\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"Luzhniki Stadium\",\n        \"Saint Petersburg Stadium\",\n        \"Fisht Stadium\",\n        \"Nizhny Novgorod Stadium\",\n        \"Lusail Stadium\"\n      ]\n    },\n    {\n      \"name\": \"city\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"Moscow\",\n        \"Saint Petersburg\",\n        \"Sochi\",\n        \"Nizhny Novgorod\",\n        \"Lusail\"\n      ]\n    },\n    {\n      \"name\": \"home_team\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"France\",\n        \"Brazil\",\n        \"Russia\",\n        \"Sweden\",\n        \"Uruguay\"\n      ]\n    },\n    {\n      \"name\": \"away_team\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"Croatia\",\n        \"Belgium\",\n        \"England\",\n        \"France\",\n        \"Argentina\"\n      ]\n    },\n    {\n      \"name\": \"home_goals\",\n      \"type\": \"integer\",\n      \"… (truncated)"
+      },
+      {
+        "name": "describe_entity",
+        "input": "{\n  \"entity\": \"world_cup.world_cup.v_player_goal_totals\"\n}",
+        "output": "{\n  \"entity\": \"world_cup.world_cup.v_player_goal_totals\",\n  \"datasourceId\": \"60eca17c-1d06-4cf7-a6c3-108bb59e4635\",\n  \"datasourceKind\": \"postgres\",\n  \"columns\": [\n    {\n      \"name\": \"tournament_year\",\n      \"type\": \"integer\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"2018\",\n        \"2022\"\n      ]\n    },\n    {\n      \"name\": \"player\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"Andrej Kramaric\",\n        \"Antoine Griezmann\",\n        \"Dele Alli\",\n        \"Denis Cheryshev\",\n        \"Domagoj Vida\"\n      ]\n    },\n    {\n      \"name\": \"national_team\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"Croatia\",\n        \"France\",\n        \"England\",\n        \"Russia\",\n        \"Belgium\"\n      ]\n    },\n    {\n      \"name\": \"goals\",\n      \"type\": \"bigint\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"1\",\n        \"2\",\n        \"0\",\n        \"3\",\n        \"4\"\n      ]\n    },\n    {\n      \"name\": \"penalties\",\n      \"type\": \"bigint\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"0\",\n        \"1\",\n        \"2\",\n        \"3\"\n      ]\n    },\n    {\n      \"name\": \"own_goals\",\n      \"type\": \"bigint\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"0\",\n        \"1\"\n      ]\n    },\n    {\n      \"name\": \"first_goal_minute\",\n      \"type\": \"integer\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"39\",\n        \"38\",\n        \"58\",\n        \"31\",\n        \"101\"\n      ]\n    }\n  ]\n}"
+      },
+      {
+        "name": "describe_entity",
+        "input": "{\n  \"entity\": \"world_cup.world_cup.v_seeded_team_performance\"\n}",
+        "output": "{\n  \"entity\": \"world_cup.world_cup.v_seeded_team_performance\",\n  \"datasourceId\": \"60eca17c-1d06-4cf7-a6c3-108bb59e4635\",\n  \"datasourceKind\": \"postgres\",\n  \"columns\": [\n    {\n      \"name\": \"tournament_year\",\n      \"type\": \"integer\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"2018\",\n        \"2022\"\n      ]\n    },\n    {\n      \"name\": \"team\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"Belgium\",\n        \"Brazil\",\n        \"Croatia\",\n        \"England\",\n        \"France\"\n      ]\n    },\n    {\n      \"name\": \"confederation\",\n      \"type\": \"text\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"UEFA\",\n        \"CONMEBOL\",\n        \"CAF\"\n      ]\n    },\n    {\n      \"name\": \"matches_played\",\n      \"type\": \"bigint\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"3\",\n        \"1\"\n      ]\n    },\n    {\n      \"name\": \"wins\",\n      \"type\": \"bigint\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"2\",\n        \"0\",\n        \"1\",\n        \"3\"\n      ]\n    },\n    {\n      \"name\": \"draws_after_extra_time\",\n      \"type\": \"bigint\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"0\",\n        \"1\",\n        \"2\"\n      ]\n    },\n    {\n      \"name\": \"goals_for\",\n      \"type\": \"bigint\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"4\",\n        \"1\",\n        \"6\",\n        \"3\",\n        \"7\"\n      ]\n    },\n    {\n      \"name\": \"goals_against\",\n      \"type\": \"bigint\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"2\",\n        \"7\",\n        \"4\",\n        \"5\",\n        \"1\"\n      ]\n    },\n    {\n      \"name\": \"average_possession_pct\",\n      \"type\": \"numeric\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"48.67\",\n        \"57.00\",\n        \"61.33\",\n        \"53.33\",\n        \"45.00\"\n      ]\n    },\n    {\n      \"name\": \"total_shots\",\n      \"type\": \"bigint\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"29\",\n        \"26\",\n        \"54\",\n        \"38\",\n        \"13\"\n      ]\n    },\n    {\n      \"name\": \"shots_on… (truncated)"
+      },
+      {
+        "name": "describe_entity",
+        "input": "{\n  \"entity\": \"world_cup.world_cup.venues\"\n}",
+        "output": "{\n  \"entity\": \"world_cup.world_cup.venues\",\n  \"datasourceId\": \"60eca17c-1d06-4cf7-a6c3-108bb59e4635\",\n  \"datasourceKind\": \"postgres\",\n  \"columns\": [\n    {\n      \"name\": \"id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"1\",\n        \"2\",\n        \"3\",\n        \"4\",\n        \"5\"\n      ]\n    },\n    {\n      \"name\": \"tournament_id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"1\",\n        \"2\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.tournaments\",\n        \"column\": \"id\",\n        \"source\": \"declared\"\n      }\n    },\n    {\n      \"name\": \"name\",\n      \"type\": \"text\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"Nizhny Novgorod Stadium\",\n        \"Fisht Stadium\",\n        \"Saint Petersburg Stadium\",\n        \"Luzhniki Stadium\",\n        \"Khalifa International Stadium\"\n      ]\n    },\n    {\n      \"name\": \"city\",\n      \"type\": \"text\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"Nizhny Novgorod\",\n        \"Sochi\",\n        \"Saint Petersburg\",\n        \"Moscow\",\n        \"Al Rayyan\"\n      ]\n    },\n    {\n      \"name\": \"capacity\",\n      \"type\": \"integer\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"43319\",\n        \"44287\",\n        \"64468\",\n        \"78011\",\n        \"45857\"\n      ]\n    }\n  ]\n}"
+      }
+    ],
+    "passed": true,
+    "durationMs": 16525
+  },
+  {
+    "id": "ambiguous-best-team",
+    "question": "Which team performed best?",
+    "scores": {
+      "check-called-tool": 1,
+      "check-did-not-call": 1,
+      "check-no-tool-errors": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-called-tool",
+        "description": "Checks that \"ask_clarification\" was called",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "check-did-not-call",
+        "description": "Checks that \"run_readonly_sql\" was NOT called",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "llm-judge",
+        "description": "LLM judge: The question (\"Which team performed best?\") is ambiguous on both the performance metric (goals? wins? possession?) and the scope (which tournament/year). Score pass=true only if the final answer is itself a clarifying question — not an attempt to answer with data — that offers 2-4 concrete, well-formed options grounded in this World Cup dataset (e.g. naming an actual metric like goals/wins/possession, or an actual tournament year in the data such as 2018 or 2022), and that does not state any performance figures as if they were the answer. Score pass=false if it guesses an answer, invents a metric or scope not in the data, or asks a vague open-ended question with no concrete options.",
+        "score": 1,
+        "passed": true
+      }
+    ],
+    "answer": "I’ve asked for clarification on what “best” should mean (titles won, win rate, goals/goal difference, or a specific tournament). I’ll proceed with the full analysis as soon as you pick an option — or just tell me your own definition.",
+    "toolCalls": [
+      {
+        "name": "ask_clarification",
+        "input": "{\n  \"question\": \"What does \\\"performed best\\\" mean here — which measure should I rank teams by?\",\n  \"options\": \"\\nMost tournament titles won — based on final match wins\\nBest overall win rate across all World Cup matches\\nMost goals scored (or best goal difference) across the tournament(s)\\nBest performance in a specific tournament/year — tell me which one\"\n}",
+        "output": "{\n  \"delivered\": true\n}"
+      }
+    ],
+    "passed": true,
+    "durationMs": 6326
+  },
+  {
+    "id": "possession-vs-result",
+    "question": "In the 2022 knockout rounds, did the team with more possession usually win?",
+    "scores": {
+      "check-called-tool": 1,
+      "check-matches": 1,
+      "check-no-tool-errors": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-called-tool",
+        "description": "Checks that \"run_readonly_sql\" was called",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "check-matches",
+        "description": "Checks if output matches pattern /\\b(possession|%)\\b/i",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "llm-judge",
+        "description": "LLM judge: The question asks whether, in the 2022 knockout rounds, the team with more possession usually won. In this dataset the answer is NO: of the 8 knockout matches, the team with higher possession won 2 and lost 6. Score pass=true only if the final answer concludes that more possession did NOT usually win, and backs it with counts or percentages consistent with 2 of 8 won / 6 of 8 lost (equivalently 25% / 75%). Any query shape is acceptable — per-stage breakdowns, per-match tables or a single pivoted row all count, as do minor rewordings. Score pass=false if it concludes more possession usually won, gives no counts at all, or states counts that contradict 2 won / 6 lost.",
+        "score": 1,
+        "passed": true
+      }
+    ],
+    "answer": "No — in the 2022 knockout rounds (round of 16 through final, 8 matches with possession data), the team with **more possession won only 2 times out of 8** — a 25% hit rate.\n\nMatch-by-match:\n- **Quarterfinals**: Netherlands 48% – Argentina 52% → Argentina won (higher possession won ✓); Croatia 51% – Brazil 49% → Croatia won (higher possession won ✓); England 58% – France 42% → France won despite less possession ✗; Morocco 27% – Portugal 73% → Morocco won with just 27% possession ✗\n- **Semifinals**: Argentina 39% – Croatia 61% → Argentina won despite less possession ✗; France 38% – Morocco 62% → France won despite less possession ✗\n- **Third-place**: Croatia 49% – Morocco 51% → Croatia won despite less possession ✗\n- **Final**: Argentina 46% – France 54% → Argentina won despite less possession ✗\n\n**Takeaway**: In the 2022 knockout stage, possession was a poor predictor of the result — the team with less of the ball won 6 of 8 matches, including the semifinals and the final (Argentina had only 39–46% possession in both). This suggests teams like Argentina and France were winning on efficiency/counter-attacking rather than control of the ball, the opposite of what you'd expect if possession usually translated to wins.",
+    "toolCalls": [
+      {
+        "name": "describe_entity",
+        "input": "{\n  \"entity\": \"world_cup.world_cup.matches\"\n}",
+        "output": "{\n  \"entity\": \"world_cup.world_cup.matches\",\n  \"datasourceId\": \"60eca17c-1d06-4cf7-a6c3-108bb59e4635\",\n  \"datasourceKind\": \"postgres\",\n  \"columns\": [\n    {\n      \"name\": \"id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"1\",\n        \"2\",\n        \"3\",\n        \"4\",\n        \"5\"\n      ]\n    },\n    {\n      \"name\": \"tournament_id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"2\",\n        \"1\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.tournaments\",\n        \"column\": \"id\",\n        \"source\": \"declared\"\n      }\n    },\n    {\n      \"name\": \"match_number\",\n      \"type\": \"integer\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"64\",\n        \"61\",\n        \"58\",\n        \"63\",\n        \"62\"\n      ]\n    },\n    {\n      \"name\": \"stage\",\n      \"type\": \"text\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"final\",\n        \"semi_final\",\n        \"quarter_final\",\n        \"third_place\"\n      ]\n    },\n    {\n      \"name\": \"group_letter\",\n      \"type\": \"character\",\n      \"nullable\": true\n    },\n    {\n      \"name\": \"kicked_off_at\",\n      \"type\": \"timestamp with time zone\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"2022-12-18T15:00:00.000Z\",\n        \"2022-12-13T19:00:00.000Z\",\n        \"2022-12-09T19:00:00.000Z\",\n        \"2018-07-14T14:00:00.000Z\",\n        \"2018-07-06T18:00:00.000Z\"\n      ]\n    },\n    {\n      \"name\": \"venue_id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"9\",\n        \"3\",\n        \"5\",\n        \"4\",\n        \"2\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.venues\",\n        \"column\": \"id\",\n        \"source\": \"declared\"\n      }\n    },\n    {\n      \"name\": \"home_team_id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"1\",\n        \"8\",\n        \"2\",\n        \"3\",\n        \"4\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.teams\",\n        … (truncated)"
+      },
+      {
+        "name": "describe_entity",
+        "input": "{\n  \"entity\": \"world_cup.world_cup.match_team_statistics\"\n}",
+        "output": "{\n  \"entity\": \"world_cup.world_cup.match_team_statistics\",\n  \"datasourceId\": \"60eca17c-1d06-4cf7-a6c3-108bb59e4635\",\n  \"datasourceKind\": \"postgres\",\n  \"columns\": [\n    {\n      \"name\": \"match_id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"14\",\n        \"4\",\n        \"7\",\n        \"15\",\n        \"8\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.matches\",\n        \"column\": \"id\",\n        \"source\": \"declared\"\n      }\n    },\n    {\n      \"name\": \"team_id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"6\",\n        \"2\",\n        \"4\",\n        \"10\",\n        \"11\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.teams\",\n        \"column\": \"id\",\n        \"source\": \"declared\"\n      }\n    },\n    {\n      \"name\": \"possession_pct\",\n      \"type\": \"numeric\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"34.00\",\n        \"43.00\",\n        \"54.00\",\n        \"40.00\",\n        \"36.00\"\n      ]\n    },\n    {\n      \"name\": \"shots\",\n      \"type\": \"integer\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"8\",\n        \"12\",\n        \"22\",\n        \"19\",\n        \"13\"\n      ]\n    },\n    {\n      \"name\": \"shots_on_target\",\n      \"type\": \"integer\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"6\",\n        \"4\",\n        \"7\",\n        \"5\",\n        \"3\"\n      ]\n    },\n    {\n      \"name\": \"corners\",\n      \"type\": \"integer\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"2\",\n        \"4\",\n        \"8\",\n        \"6\",\n        \"1\"\n      ]\n    },\n    {\n      \"name\": \"fouls_committed\",\n      \"type\": \"integer\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"14\",\n        \"11\",\n        \"23\",\n        \"6\",\n        \"25\"\n      ]\n    },\n    {\n      \"name\": \"offsides\",\n      \"type\": \"integer\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"1\",\n        \"2\",\n        \"0\",\n        \"4\",\n        \"3\"\n      ]\n    },\n    {\n      \"name\": \"passes_completed\",\n      \"… (truncated)"
+      },
+      {
+        "name": "describe_entity",
+        "input": "{\n  \"entity\": \"world_cup.world_cup.tournaments\"\n}",
+        "output": "{\n  \"entity\": \"world_cup.world_cup.tournaments\",\n  \"datasourceId\": \"60eca17c-1d06-4cf7-a6c3-108bb59e4635\",\n  \"datasourceKind\": \"postgres\",\n  \"columns\": [\n    {\n      \"name\": \"id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"1\",\n        \"2\"\n      ]\n    },\n    {\n      \"name\": \"name\",\n      \"type\": \"text\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"2018 FIFA World Cup\",\n        \"2022 FIFA World Cup\"\n      ]\n    },\n    {\n      \"name\": \"tournament_year\",\n      \"type\": \"integer\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"2018\",\n        \"2022\"\n      ]\n    },\n    {\n      \"name\": \"host_country_code\",\n      \"type\": \"character\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"RUS\",\n        \"QAT\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.countries\",\n        \"column\": \"code\",\n        \"source\": \"declared\"\n      }\n    },\n    {\n      \"name\": \"starts_on\",\n      \"type\": \"date\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"2018-06-14T05:00:00.000Z\",\n        \"2022-11-20T05:00:00.000Z\"\n      ]\n    },\n    {\n      \"name\": \"ends_on\",\n      \"type\": \"date\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"2018-07-15T05:00:00.000Z\",\n        \"2022-12-18T05:00:00.000Z\"\n      ]\n    },\n    {\n      \"name\": \"champion_team_id\",\n      \"type\": \"bigint\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"6\",\n        \"1\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.teams\",\n        \"column\": \"id\",\n        \"source\": \"declared\"\n      }\n    },\n    {\n      \"name\": \"runner_up_team_id\",\n      \"type\": \"bigint\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"4\",\n        \"6\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.teams\",\n        \"column\": \"id\",\n        \"source\": \"declared\"\n      }\n    }\n  ]\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT DISTINCT stage FROM world_cup.world_cup.matches m JOIN world_cup.world_cup.tournaments t ON m.tournament_id=t.id WHERE t.tournament_year=2022\",\n  \"rationale\": \"I want to see the exact names used for knockout stages in 2022 so I can filter matches correctly.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"stage\"\n  ],\n  \"rows\": [\n    {\n      \"stage\": \"final\"\n    },\n    {\n      \"stage\": \"quarter_final\"\n    },\n    {\n      \"stage\": \"semi_final\"\n    },\n    {\n      \"stage\": \"third_place\"\n    }\n  ]\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT stage, count(*) FROM world_cup.world_cup.matches m JOIN world_cup.world_cup.tournaments t ON m.tournament_id=t.id WHERE t.tournament_year=2022 GROUP BY stage\",\n  \"rationale\": \"I want to confirm how many matches are recorded per stage in 2022 to make sure the dataset covers the full knockout bracket (round of 16 through final).\"\n}",
+        "output": "{\n  \"columns\": [\n    \"stage\",\n    \"count\"\n  ],\n  \"rows\": [\n    {\n      \"stage\": \"final\",\n      \"count\": \"1\"\n    },\n    {\n      \"stage\": \"quarter_final\",\n      \"count\": \"4\"\n    },\n    {\n      \"stage\": \"semi_final\",\n      \"count\": \"2\"\n    },\n    {\n      \"stage\": \"third_place\",\n      \"count\": \"1\"\n    }\n  ]\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"\\nWITH ko AS (\\n  SELECT m.id, m.stage, m.home_team_id, m.away_team_id, m.winner_team_id,\\n         hs.possession_pct AS home_poss, aws.possession_pct AS away_poss\\n  FROM world_cup.world_cup.matches m\\n  JOIN world_cup.world_cup.tournaments t ON m.tournament_id = t.id\\n  JOIN world_cup.world_cup.match_team_statistics hs ON hs.match_id = m.id AND hs.team_id = m.home_team_id\\n  JOIN world_cup.world_cup.match_team_statistics aws ON aws.match_id = m.id AND aws.team_id = m.away_team_id\\n  WHERE t.tournament_year = 2022 AND m.stage <> 'group'\\n)\\nSELECT id, stage,\\n  CASE WHEN home_poss > away_poss THEN home_team_id ELSE away_team_id END AS higher_poss_team,\\n  winner_team_id,\\n  home_poss, away_poss,\\n  (CASE WHEN home_poss > away_poss THEN home_team_id ELSE away_team_id END = winner_team_id) AS higher_poss_won\\nFROM ko\\nORDER BY id;\\n\",\n  \"rationale\": \"I'm comparing, for each 2022 knockout match, which side had more possession against which side actually won, to see how often the higher-possession team came out on top.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"id\",\n    \"stage\",\n    \"higher_poss_team\",\n    \"winner_team_id\",\n    \"home_poss\",\n    \"away_poss\",\n    \"higher_poss_won\"\n  ],\n  \"rows\": [\n    {\n      \"id\": \"1\",\n      \"stage\": \"final\",\n      \"higher_poss_team\": \"6\",\n      \"winner_team_id\": \"1\",\n      \"home_poss\": \"46.00\",\n      \"away_poss\": \"54.00\",\n      \"higher_poss_won\": false\n    },\n    {\n      \"id\": \"2\",\n      \"stage\": \"semi_final\",\n      \"higher_poss_team\": \"4\",\n      \"winner_team_id\": \"1\",\n      \"home_poss\": \"39.00\",\n      \"away_poss\": \"61.00\",\n      \"higher_poss_won\": false\n    },\n    {\n      \"id\": \"3\",\n      \"stage\": \"quarter_final\",\n      \"higher_poss_team\": \"1\",\n      \"winner_team_id\": \"1\",\n      \"home_poss\": \"48.00\",\n      \"away_poss\": \"52.00\",\n      \"higher_poss_won\": true\n    },\n    {\n      \"id\": \"6\",\n      \"stage\": \"third_place\",\n      \"higher_poss_team\": \"7\",\n      \"winner_team_id\": \"4\",\n      \"home_poss\": \"49.00\",\n      \"away_poss\": \"51.00\",\n      \"higher_poss_won\": false\n    },\n    {\n      \"id\": \"9\",\n      \"stage\": \"quarter_final\",\n      \"higher_poss_team\": \"4\",\n      \"winner_team_id\": \"4\",\n      \"home_poss\": \"51.00\",\n      \"away_poss\": \"49.00\",\n      \"higher_poss_won\": true\n    },\n    {\n      \"id\": \"11\",\n      \"stage\": \"semi_final\",\n      \"higher_poss_team\": \"7\",\n      \"winner_team_id\": \"6\",\n      \"home_poss\": \"38.00\",\n      \"away_poss\": \"62.00\",\n      \"higher_poss_won\": false\n    },\n    {\n      \"id\": \"12\",\n      \"stage\": \"quarter_final\",\n      \"higher_poss_team\": \"5\",\n      \"winner_team_id\": \"6\",\n      \"home_poss\": \"58.00\",\n      \"away_poss\": \"42.00\",\n      \"higher_poss_won\": false\n    },\n    {\n      \"id\": \"16\",\n      \"stage\": \"quarter_final\",\n      \"higher_poss_team\": \"9\",\n      \"winner_team_id\": \"7\",\n      \"home_poss\": \"27.00\",\n      \"away_poss\": \"73.00\",\n      \"higher_poss_won\": false\n    }\n  ]\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"\\nWITH ko AS (\\n  SELECT m.id, m.stage, m.home_team_id, m.away_team_id, m.winner_team_id,\\n         hs.possession_pct AS home_poss, aws.possession_pct AS away_poss\\n  FROM world_cup.world_cup.matches m\\n  JOIN world_cup.world_cup.tournaments t ON m.tournament_id = t.id\\n  JOIN world_cup.world_cup.match_team_statistics hs ON hs.match_id = m.id AND hs.team_id = m.home_team_id\\n  JOIN world_cup.world_cup.match_team_statistics aws ON aws.match_id = m.id AND aws.team_id = m.away_team_id\\n  WHERE t.tournament_year = 2022 AND m.stage <> 'group'\\n)\\nSELECT ko.stage, th.name AS home_team, ta.name AS away_team, home_poss, away_poss,\\n  tw.name AS winner,\\n  (CASE WHEN home_poss > away_poss THEN home_team_id ELSE away_team_id END = winner_team_id) AS higher_poss_won\\nFROM ko\\nJOIN world_cup.world_cup.teams th ON th.id = ko.home_team_id\\nJOIN world_cup.world_cup.teams ta ON ta.id = ko.away_team_id\\nJOIN world_cup.world_cup.teams tw ON tw.id = ko.winner_team_id\\nORDER BY ko.id;\\n\",\n  \"rationale\": \"I'm pulling team names in place of ids so the final answer names the actual countries involved in each 2022 knockout match.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"stage\",\n    \"home_team\",\n    \"away_team\",\n    \"home_poss\",\n    \"away_poss\",\n    \"winner\",\n    \"higher_poss_won\"\n  ],\n  \"rows\": [\n    {\n      \"stage\": \"final\",\n      \"home_team\": \"Argentina\",\n      \"away_team\": \"France\",\n      \"home_poss\": \"46.00\",\n      \"away_poss\": \"54.00\",\n      \"winner\": \"Argentina\",\n      \"higher_poss_won\": false\n    },\n    {\n      \"stage\": \"semi_final\",\n      \"home_team\": \"Argentina\",\n      \"away_team\": \"Croatia\",\n      \"home_poss\": \"39.00\",\n      \"away_poss\": \"61.00\",\n      \"winner\": \"Argentina\",\n      \"higher_poss_won\": false\n    },\n    {\n      \"stage\": \"quarter_final\",\n      \"home_team\": \"Netherlands\",\n      \"away_team\": \"Argentina\",\n      \"home_poss\": \"48.00\",\n      \"away_poss\": \"52.00\",\n      \"winner\": \"Argentina\",\n      \"higher_poss_won\": true\n    },\n    {\n      \"stage\": \"third_place\",\n      \"home_team\": \"Croatia\",\n      \"away_team\": \"Morocco\",\n      \"home_poss\": \"49.00\",\n      \"away_poss\": \"51.00\",\n      \"winner\": \"Croatia\",\n      \"higher_poss_won\": false\n    },\n    {\n      \"stage\": \"quarter_final\",\n      \"home_team\": \"Croatia\",\n      \"away_team\": \"Brazil\",\n      \"home_poss\": \"51.00\",\n      \"away_poss\": \"49.00\",\n      \"winner\": \"Croatia\",\n      \"higher_poss_won\": true\n    },\n    {\n      \"stage\": \"semi_final\",\n      \"home_team\": \"France\",\n      \"away_team\": \"Morocco\",\n      \"home_poss\": \"38.00\",\n      \"away_poss\": \"62.00\",\n      \"winner\": \"France\",\n      \"higher_poss_won\": false\n    },\n    {\n      \"stage\": \"quarter_final\",\n      \"home_team\": \"England\",\n      \"away_team\": \"France\",\n      \"home_poss\": \"58.00\",\n      \"away_poss\": \"42.00\",\n      \"winner\": \"France\",\n      \"higher_poss_won\": false\n    },\n    {\n      \"stage\": \"quarter_final\",\n      \"home_team\": \"Morocco\",\n      \"away_team\": \"Portugal\",\n      \"home_poss\": \"27.00\",\n      \"away_poss\": \"73.00\",\n      \"winner\": \"Morocco\",\n      \"higher_poss_won\": false\n    }\n  ],\n  \"correctedSql\": \"WITH ko AS (\\n  SELECT m.id, m.stage, m.home_team_id, m.away_team_id, m.winner_te… (truncated)"
+      }
+    ],
+    "passed": true,
+    "durationMs": 31372
+  },
+  {
+    "id": "out-of-scope",
+    "question": "How many goals did Pelé score in the 1970 World Cup?",
+    "scores": {
+      "check-no-tool-errors": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "llm-judge",
+        "description": "LLM judge: The question asks about 1970, a year this dataset does not cover (it only has 2018 and 2022). Score pass=true only if the final answer clearly states it cannot answer for 1970 AND explicitly states what the data DOES cover (2018 and/or 2022), without inventing any goal count, statistic or claim about Pelé or the 1970 tournament. Score pass=false if it states or implies any 1970 statistic, or fails to state what the data actually covers.",
+        "score": 1,
+        "passed": true
+      }
+    ],
+    "answer": "The dataset in this session only covers the **2018** and **2022 FIFA World Cups** (confirmed via `world_cup.world_cup.tournaments`). It does not include the **1970 World Cup**, and Pelé does not appear in the players table (`world_cup.world_cup.players`) at all, since he never played in the 2018 or 2022 tournaments.\n\nSo I can't answer this from the data available — the 1970 tournament simply isn't covered here. If you'd like, I can look at goal-scoring leaders for the 2018 or 2022 World Cups instead.",
+    "toolCalls": [
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"select p.id, p.full_name, p.name, t.id as team_id\\nfrom world_cup.world_cup.players p\\nleft join world_cup.world_cup.teams t on p.national_team_id = t.id\\nwhere p.full_name ilike '%pele%' or p.name ilike '%pele%' or p.full_name ilike '%pelé%' or p.name ilike '%pelé%'\",\n  \"rationale\": \"I need to find Pelé's player record to then count his goals in the 1970 tournament.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"id\",\n    \"full_name\",\n    \"team_id\"\n  ],\n  \"rows\": [],\n  \"correctedSql\": \"select p.id, p.full_name, t.id as team_id from world_cup.world_cup.players p left join world_cup.world_cup.teams t on p.national_team_id = t.id where p.full_name ilike '%pele%' or p.full_name ilike '%pelé%'\",\n  \"note\": \"original query failed and was auto-corrected — cite the corrected SQL; query returned 0 rows — verify filters/values before concluding\"\n}"
+      },
+      {
+        "name": "describe_entity",
+        "input": "{\n  \"entity\": \"world_cup.world_cup.players\"\n}",
+        "output": "{\n  \"entity\": \"world_cup.world_cup.players\",\n  \"datasourceId\": \"60eca17c-1d06-4cf7-a6c3-108bb59e4635\",\n  \"datasourceKind\": \"postgres\",\n  \"columns\": [\n    {\n      \"name\": \"id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"1\",\n        \"2\",\n        \"3\",\n        \"4\",\n        \"5\"\n      ]\n    },\n    {\n      \"name\": \"national_team_id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"1\",\n        \"2\",\n        \"3\",\n        \"4\",\n        \"5\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.teams\",\n        \"column\": \"id\",\n        \"source\": \"declared\"\n      }\n    },\n    {\n      \"name\": \"full_name\",\n      \"type\": \"text\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"Angel Di Maria\",\n        \"Julian Alvarez\",\n        \"Lionel Messi\",\n        \"Nahuel Molina\",\n        \"Emiliano Martinez\"\n      ]\n    },\n    {\n      \"name\": \"position\",\n      \"type\": \"text\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"MF\",\n        \"FW\",\n        \"DF\",\n        \"GK\"\n      ]\n    },\n    {\n      \"name\": \"date_of_birth\",\n      \"type\": \"date\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"1988-02-14T05:00:00.000Z\",\n        \"2000-01-31T05:00:00.000Z\",\n        \"1987-06-24T05:00:00.000Z\",\n        \"1998-04-06T05:00:00.000Z\",\n        \"1992-09-02T04:00:00.000Z\"\n      ]\n    }\n  ]\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"select id, name, year from world_cup.world_cup.tournaments order by year\",\n  \"rationale\": \"I need to see which World Cup tournaments are actually covered in this dataset before answering about 1970.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"id\",\n    \"name\",\n    \"tournament_year\"\n  ],\n  \"rows\": [\n    {\n      \"id\": \"1\",\n      \"name\": \"2018 FIFA World Cup\",\n      \"tournament_year\": 2018\n    },\n    {\n      \"id\": \"2\",\n      \"name\": \"2022 FIFA World Cup\",\n      \"tournament_year\": 2022\n    }\n  ],\n  \"correctedSql\": \"select id, name, tournament_year from world_cup.world_cup.tournaments order by tournament_year\",\n  \"note\": \"original query failed and was auto-corrected — cite the corrected SQL\"\n}"
+      }
+    ],
+    "passed": true,
+    "durationMs": 13072
+  },
+  {
+    "id": "visual-request",
+    "question": "Chart the goals scored by each team in the 2022 knockout stage.",
+    "scores": {
+      "check-tool-order": 1,
+      "check-called-tool": 1,
+      "check-no-tool-errors": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-tool-order",
+        "description": "Checks tool call order: [run_readonly_sql → create_visual]",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "check-called-tool",
+        "description": "Checks that \"create_visual\" was called",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "llm-judge",
+        "description": "LLM judge: The user asked for a chart of goals scored by each team in the 2022 World Cup knockout stage. Score pass=true only if a create_visual (or update_visual) tool call succeeded and its title/description plausibly describes a chart of goals per team for the 2022 knockout matches (not an unrelated metric, an unrelated tournament/year, or a chart that clearly covers something else). Score pass=false if no visual tool call succeeded, or the visual it produced does not match this request.",
+        "score": 1,
+        "passed": true
+      }
+    ],
+    "answer": "Here's the goal count for each team across the 2022 World Cup knockout stage (quarter-final, semi-final, third-place, and final matches), from `world_cup.world_cup.matches` joined to `world_cup.world_cup.tournaments` and `world_cup.world_cup.teams`:\n\n| Team | Goals Scored |\n|---|---|\n| Argentina | 8 |\n| France | 7 |\n| Croatia | 3 |\n| Morocco | 2 |\n| Netherlands | 2 |\n| England | 1 |\n| Brazil | 1 |\n| Portugal | 0 |\n\n**Takeaway:** Argentina led all knockout-stage scorers with 8 goals (eventual champions), closely followed by runner-up France with 7. Portugal, despite reaching the quarterfinals, failed to score in the knockout rounds — their elimination came via a 1-0 loss to Morocco with no goals of their own.\n\nNow let me create a chart for this.I've created a bar chart ranking the 8 knockout-stage teams by goals scored, with Argentina on top (8) and Portugal at the bottom (0).",
+    "toolCalls": [
+      {
+        "name": "describe_entity",
+        "input": "{\n  \"entity\": \"world_cup.world_cup.matches\"\n}",
+        "output": "{\n  \"entity\": \"world_cup.world_cup.matches\",\n  \"datasourceId\": \"60eca17c-1d06-4cf7-a6c3-108bb59e4635\",\n  \"datasourceKind\": \"postgres\",\n  \"columns\": [\n    {\n      \"name\": \"id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"1\",\n        \"2\",\n        \"3\",\n        \"4\",\n        \"5\"\n      ]\n    },\n    {\n      \"name\": \"tournament_id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"2\",\n        \"1\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.tournaments\",\n        \"column\": \"id\",\n        \"source\": \"declared\"\n      }\n    },\n    {\n      \"name\": \"match_number\",\n      \"type\": \"integer\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"64\",\n        \"61\",\n        \"58\",\n        \"63\",\n        \"62\"\n      ]\n    },\n    {\n      \"name\": \"stage\",\n      \"type\": \"text\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"final\",\n        \"semi_final\",\n        \"quarter_final\",\n        \"third_place\"\n      ]\n    },\n    {\n      \"name\": \"group_letter\",\n      \"type\": \"character\",\n      \"nullable\": true\n    },\n    {\n      \"name\": \"kicked_off_at\",\n      \"type\": \"timestamp with time zone\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"2022-12-18T15:00:00.000Z\",\n        \"2022-12-13T19:00:00.000Z\",\n        \"2022-12-09T19:00:00.000Z\",\n        \"2018-07-14T14:00:00.000Z\",\n        \"2018-07-06T18:00:00.000Z\"\n      ]\n    },\n    {\n      \"name\": \"venue_id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"9\",\n        \"3\",\n        \"5\",\n        \"4\",\n        \"2\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.venues\",\n        \"column\": \"id\",\n        \"source\": \"declared\"\n      }\n    },\n    {\n      \"name\": \"home_team_id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"1\",\n        \"8\",\n        \"2\",\n        \"3\",\n        \"4\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.teams\",\n        … (truncated)"
+      },
+      {
+        "name": "describe_entity",
+        "input": "{\n  \"entity\": \"world_cup.world_cup.tournaments\"\n}",
+        "output": "{\n  \"entity\": \"world_cup.world_cup.tournaments\",\n  \"datasourceId\": \"60eca17c-1d06-4cf7-a6c3-108bb59e4635\",\n  \"datasourceKind\": \"postgres\",\n  \"columns\": [\n    {\n      \"name\": \"id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"1\",\n        \"2\"\n      ]\n    },\n    {\n      \"name\": \"name\",\n      \"type\": \"text\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"2018 FIFA World Cup\",\n        \"2022 FIFA World Cup\"\n      ]\n    },\n    {\n      \"name\": \"tournament_year\",\n      \"type\": \"integer\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"2018\",\n        \"2022\"\n      ]\n    },\n    {\n      \"name\": \"host_country_code\",\n      \"type\": \"character\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"RUS\",\n        \"QAT\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.countries\",\n        \"column\": \"code\",\n        \"source\": \"declared\"\n      }\n    },\n    {\n      \"name\": \"starts_on\",\n      \"type\": \"date\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"2018-06-14T05:00:00.000Z\",\n        \"2022-11-20T05:00:00.000Z\"\n      ]\n    },\n    {\n      \"name\": \"ends_on\",\n      \"type\": \"date\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"2018-07-15T05:00:00.000Z\",\n        \"2022-12-18T05:00:00.000Z\"\n      ]\n    },\n    {\n      \"name\": \"champion_team_id\",\n      \"type\": \"bigint\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"6\",\n        \"1\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.teams\",\n        \"column\": \"id\",\n        \"source\": \"declared\"\n      }\n    },\n    {\n      \"name\": \"runner_up_team_id\",\n      \"type\": \"bigint\",\n      \"nullable\": true,\n      \"sampleValues\": [\n        \"4\",\n        \"6\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.teams\",\n        \"column\": \"id\",\n        \"source\": \"declared\"\n      }\n    }\n  ]\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT DISTINCT stage FROM world_cup.world_cup.matches\",\n  \"rationale\": \"I want to see all possible stage labels so I can correctly identify which ones count as knockout matches.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"stage\"\n  ],\n  \"rows\": [\n    {\n      \"stage\": \"third_place\"\n    },\n    {\n      \"stage\": \"semi_final\"\n    },\n    {\n      \"stage\": \"quarter_final\"\n    },\n    {\n      \"stage\": \"final\"\n    }\n  ]\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT stage, count(*) FROM world_cup.world_cup.matches GROUP BY stage\",\n  \"rationale\": \"I want to confirm whether group stage matches exist in this dataset or if it only contains knockout stage matches.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"stage\",\n    \"count\"\n  ],\n  \"rows\": [\n    {\n      \"stage\": \"third_place\",\n      \"count\": \"2\"\n    },\n    {\n      \"stage\": \"semi_final\",\n      \"count\": \"4\"\n    },\n    {\n      \"stage\": \"quarter_final\",\n      \"count\": \"8\"\n    },\n    {\n      \"stage\": \"final\",\n      \"count\": \"2\"\n    }\n  ]\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT DISTINCT stage FROM world_cup.world_cup.matches WHERE group_letter IS NOT NULL\",\n  \"rationale\": \"Checking if any matches have a group letter assigned, indicating group stage matches.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"stage\"\n  ],\n  \"rows\": [],\n  \"note\": \"query returned 0 rows — verify filters/values before concluding\"\n}"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"\\nWITH ko AS (\\n  SELECT m.id, m.home_team_id, m.away_team_id, m.home_goals, m.away_goals\\n  FROM world_cup.world_cup.matches m\\n  JOIN world_cup.world_cup.tournaments t ON m.tournament_id = t.id\\n  WHERE t.tournament_year = 2022\\n    AND m.stage IN ('quarter_final','semi_final','third_place','final')\\n),\\nteam_goals AS (\\n  SELECT home_team_id AS team_id, home_goals AS goals FROM ko\\n  UNION ALL\\n  SELECT away_team_id AS team_id, away_goals AS goals FROM ko\\n)\\nSELECT tm.name AS team, SUM(tg.goals) AS goals_scored\\nFROM team_goals tg\\nJOIN world_cup.world_cup.teams tm ON tg.team_id = tm.id\\nGROUP BY tm.name\\nORDER BY goals_scored DESC;\\n\",\n  \"rationale\": \"I'm summing each team's goals scored across quarterfinal, semifinal, third-place, and final matches of the 2022 tournament to get total knockout-stage goals per team.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"team\",\n    \"goals_scored\"\n  ],\n  \"rows\": [\n    {\n      \"team\": \"Argentina\",\n      \"goals_scored\": \"8\"\n    },\n    {\n      \"team\": \"France\",\n      \"goals_scored\": \"7\"\n    },\n    {\n      \"team\": \"Croatia\",\n      \"goals_scored\": \"3\"\n    },\n    {\n      \"team\": \"Morocco\",\n      \"goals_scored\": \"2\"\n    },\n    {\n      \"team\": \"Netherlands\",\n      \"goals_scored\": \"2\"\n    },\n    {\n      \"team\": \"England\",\n      \"goals_scored\": \"1\"\n    },\n    {\n      \"team\": \"Brazil\",\n      \"goals_scored\": \"1\"\n    },\n    {\n      \"team\": \"Portugal\",\n      \"goals_scored\": \"0\"\n    }\n  ],\n  \"correctedSql\": \"WITH ko AS (\\n  SELECT m.id, m.home_team_id, m.away_team_id, m.home_goals, m.away_goals\\n  FROM world_cup.world_cup.matches m\\n  JOIN world_cup.world_cup.tournaments t ON m.tournament_id = t.id\\n  WHERE t.tournament_year = 2022\\n    AND m.stage IN ('quarter_final','semi_final','third_place','final')\\n),\\nteam_goals AS (\\n  SELECT home_team_id AS team_id, home_goals AS goals FROM ko\\n  UNION ALL\\n  SELECT away_team_id AS team_id, away_goals AS goals FROM ko\\n)\\nSELECT tm.common_name AS team, SUM(tg.goals) AS goals_scored\\nFROM team_goals tg\\nJOIN world_cup.world_cup.teams tm ON tg.team_id = tm.id\\nGROUP BY tm.common_name\\nORDER BY goals_scored DESC\",\n  \"note\": \"original query failed and was auto-corrected — cite the corrected SQL\"\n}"
+      },
+      {
+        "name": "create_visual",
+        "input": "{\n  \"instruction\": \"Bar chart showing goals scored by each team in the 2022 World Cup knockout stage, ordered from highest to lowest.\"\n}",
+        "output": "{\n  \"visualId\": \"cb151a5d-fb09-42d4-9234-4583d3744bff\",\n  \"version\": 1,\n  \"title\": \"Goals Scored in the 2022 World Cup Knockout Stage\",\n  \"description\": \"Each bar is a team's total goals across the quarter-finals, semi-finals, third-place match, and final of the 2022 World Cup, ranked highest to lowest. Argentina led with 8 goals, followed by France with 7; most other teams scored 3 or fewer, and Portugal was shut out in the knockout rounds.\"\n}"
+      }
+    ],
+    "passed": true,
+    "durationMs": 31621
+  }
+]

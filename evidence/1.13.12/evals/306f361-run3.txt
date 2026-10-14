@@ -1,0 +1,14 @@
+PASS  champion-2022  (19148ms)
+FAIL  final-score-2018  (9722ms)
+      result-set-match: expectedSql returned 1 row(s); none of 2 successful SQL result(s) matched. The last SQL ("SELECT id, common_name FROM world_cup.world_cup.teams WHERE id IN ('6','4')") did not match — the result omits
+PASS  top-scorer-2022  (6757ms)
+PASS  shootouts  (9230ms)
+PASS  biggest-venue  (10391ms)
+PASS  schema-discovery  (18966ms)
+FAIL  ambiguous-best-team  (8246ms)
+      check-no-tool-errors: {
+PASS  possession-vs-result  (30396ms)
+PASS  out-of-scope  (14701ms)
+PASS  visual-request  (44832ms)
+8/10 questions passed
+exit 0

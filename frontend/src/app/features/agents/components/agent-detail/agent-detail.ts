@@ -11,6 +11,7 @@ import {
 import {
   LucideAngularModule,
   ArrowLeft,
+  BookOpen,
   Bot,
   Brain,
   CircleCheck,
@@ -34,6 +35,7 @@ import {
   AgentEvalCase,
   AgentEvalCaseResult,
   AgentEvalSet,
+  AgentSkillsView,
   AgentsApiService,
   EvalRunView,
 } from '../../services/agents-api.service';
@@ -49,19 +51,21 @@ import {
   kindLabel,
 } from '../../../datasources/models/datasource.model';
 import { DatasourcesApiService } from '../../../datasources/services/datasources-api.service';
+import { AgentSkills } from '../agent-skills/agent-skills';
 
-type AgentTab = 'prompt' | 'tools' | 'memory' | 'model' | 'evals';
+type AgentTab = 'prompt' | 'tools' | 'skills' | 'memory' | 'model' | 'evals';
 /** Sub-tabs inside the evals tab. */
 type EvalTab = 'questions' | 'runs';
 
 @Component({
   selector: 'app-agent-detail',
-  imports: [LucideAngularModule],
+  imports: [LucideAngularModule, AgentSkills],
   templateUrl: './agent-detail.html',
   styleUrl: './agent-detail.scss',
 })
 export class AgentDetail implements OnDestroy {
   readonly ArrowLeft = ArrowLeft;
+  readonly BookOpen = BookOpen;
   readonly Bot = Bot;
   readonly Brain = Brain;
   readonly CircleCheck = CircleCheck;
@@ -117,8 +121,14 @@ export class AgentDetail implements OnDestroy {
   readonly agent = signal<AgentDetailModel | null>(null);
   readonly activeTab = signal<AgentTab>('prompt');
 
+  /** The skills tab's content, loaded with the agent (R63). */
+  readonly skills = signal<AgentSkillsView | null>(null);
+  readonly skillsLoading = signal(true);
+  readonly skillsError = signal<string | null>(null);
+
   readonly tabs = computed(() => {
     const agent = this.agent();
+    const skills = this.skills();
     return [
       {
         id: 'prompt' as const,
@@ -129,6 +139,12 @@ export class AgentDetail implements OnDestroy {
         id: 'tools' as const,
         label: `Tools${agent ? ` (${agent.toolDetails.length})` : ''}`,
         icon: this.Wrench,
+      },
+      {
+        id: 'skills' as const,
+        // Skipped skills don't count (R66).
+        label: `Skills${skills ? ` (${skills.skills.length})` : ''}`,
+        icon: this.BookOpen,
       },
       { id: 'memory' as const, label: 'Memory', icon: this.Brain },
       { id: 'model' as const, label: 'Model', icon: this.Cpu },
@@ -164,6 +180,26 @@ export class AgentDetail implements OnDestroy {
       this.publishing.set(false);
       this.deleting.set(false);
       this.loadAgent(key);
+      this.loadSkills(key);
+    });
+  }
+
+  private loadSkills(key: string): void {
+    this.skills.set(null);
+    this.skillsLoading.set(true);
+    this.skillsError.set(null);
+    this.api.skills(key).subscribe({
+      next: (view) => {
+        // A late answer for an agent no longer on screen is dropped.
+        if (this.agentKey() !== key) return;
+        this.skills.set(view);
+        this.skillsLoading.set(false);
+      },
+      error: (err) => {
+        if (this.agentKey() !== key) return;
+        this.skillsError.set(err?.error?.message ?? 'Backend unreachable');
+        this.skillsLoading.set(false);
+      },
     });
   }
 

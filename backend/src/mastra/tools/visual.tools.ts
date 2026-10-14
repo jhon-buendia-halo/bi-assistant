@@ -15,6 +15,12 @@ export const ACTIVE_VISUAL_CONTEXT_KEY = 'active-visual-id';
  * leakage between turns or between sessions.
  */
 export const TURN_RECORDS_CONTEXT_KEY = 'turn-data-records';
+/**
+ * The user's message for this turn. `create_visual` uses it as the
+ * instruction when the model passes none, so the designer charts what was
+ * asked instead of guessing from the turn's data (agents.md 3.6, BA-210).
+ */
+export const TURN_QUESTION_CONTEXT_KEY = 'turn-question';
 
 function contextString(
   requestContext: { get: (key: string) => unknown },
@@ -37,9 +43,10 @@ export const createVisualTool = createTool({
   description: [
     'Create a new interactive visual (HTML/CSS/JS chart) from one of your',
     'completed analysis answers. Defaults to your most recent answer; pass',
-    'sourceMessageAt to target another. Optional instruction steers the',
-    'design (chart type, focus, styling). Use update_visual instead when the',
-    'user wants to change an existing visual.',
+    'sourceMessageAt to target another. Pass instruction with what to chart',
+    "in the user's words plus any design guidance (chart type, focus,",
+    "styling); without it the user's request is used. Use update_visual",
+    'instead when the user wants to change an existing visual.',
   ].join(' '),
   inputSchema: z.object({
     sourceMessageAt: z
@@ -49,7 +56,7 @@ export const createVisualTool = createTool({
     instruction: z
       .string()
       .optional()
-      .describe('Design guidance from the user, if any'),
+      .describe("What to chart, in the user's words, plus any design guidance"),
   }),
   execute: async ({ sourceMessageAt, instruction }, { requestContext }) => {
     const sessionId = contextString(requestContext, SESSION_ID_CONTEXT_KEY);
@@ -58,11 +65,14 @@ export const createVisualTool = createTool({
       requestContext,
       TURN_RECORDS_CONTEXT_KEY,
     );
+    const steer =
+      instruction?.trim() ||
+      contextString(requestContext, TURN_QUESTION_CONTEXT_KEY);
     try {
       return await getDatasetToolServices().createVisual(
         sessionId,
         sourceMessageAt,
-        instruction,
+        steer,
         turnRecords,
       );
     } catch (err) {
@@ -83,7 +93,7 @@ export const updateVisualTool = createTool({
     visualId: z.string().optional().describe('Visual to change'),
     instruction: z
       .string()
-      .describe('What to change, in the user\'s words plus any needed detail'),
+      .describe("What to change, in the user's words plus any needed detail"),
   }),
   execute: async ({ visualId, instruction }, { requestContext }) => {
     const sessionId = contextString(requestContext, SESSION_ID_CONTEXT_KEY);

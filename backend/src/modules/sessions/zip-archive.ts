@@ -29,7 +29,10 @@ function dosTimestamp(date: Date): { time: number; date: number } {
 }
 
 /** Create a dependency-free, standards-compliant ZIP using stored entries. */
-export function createZip(entries: ZipEntry[], modifiedAt = new Date()): Buffer {
+export function createZip(
+  entries: ZipEntry[],
+  modifiedAt = new Date(),
+): Buffer {
   const localParts: Buffer[] = [];
   const centralParts: Buffer[] = [];
   const stamp = dosTimestamp(modifiedAt);

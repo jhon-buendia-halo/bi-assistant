@@ -1,0 +1,62 @@
+[
+  {
+    "id": "champion-2022",
+    "question": "Who won the 2022 World Cup?",
+    "scores": {
+      "check-includes": 1,
+      "check-called-tool": 1,
+      "check-no-tool-errors": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-includes",
+        "description": "Checks if output includes \"Argentina\"",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "check-called-tool",
+        "description": "Checks that \"run_readonly_sql\" was called",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "result-set-match",
+        "description": "Result set matches expectedSql (primary correctness signal)",
+        "score": 1,
+        "passed": true
+      }
+    ],
+    "answer": "I already have the final match data (match id 1, tournament 2 = 2022 World Cup). Let me get the team name.**Argentina won the 2022 FIFA World Cup.**\n\nIn the final on December 18, 2022, Argentina drew with France 3–3 after extra time, then won the penalty shootout 4–2, per `world_cup.world_cup.matches` joined with `world_cup.world_cup.teams`.",
+    "toolCalls": [
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT t.id, t.name, t.year FROM world_cup.world_cup.tournaments t WHERE t.year = 2022\",\n  \"rationale\": \"I need to find the tournament record for the 2022 World Cup so I can locate its final match.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"id\",\n    \"name\",\n    \"tournament_year\"\n  ],\n  \"rows\": [\n    {\n      \"id\": \"2\",\n      \"name\": \"2022 FIFA World Cup\",\n      \"tournament_year\": 2022\n    }\n  ],\n  \"correctedSql\": \"SELECT t.id, t.name, t.tournament_year FROM world_cup.world_cup.tournaments t WHERE t.tournament_year = 2022\",\n  \"note\": \"original query failed and was auto-corrected — cite the corrected SQL\"\n}"
+      },
+      {
+        "name": "describe_entity",
+        "input": "{\n  \"entity\": \"world_cup.world_cup.matches\"\n}",
+        "output": "{\n  \"entity\": \"world_cup.world_cup.matches\",\n  \"datasourceId\": \"60eca17c-1d06-4cf7-a6c3-108bb59e4635\",\n  \"datasourceKind\": \"postgres\",\n  \"columns\": [\n    {\n      \"name\": \"id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"1\",\n        \"2\",\n        \"3\",\n        \"4\",\n        \"5\"\n      ]\n    },\n    {\n      \"name\": \"tournament_id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"2\",\n        \"1\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.tournaments\",\n        \"column\": \"id\",\n        \"source\": \"declared\"\n      }\n    },\n    {\n      \"name\": \"match_number\",\n      \"type\": \"integer\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"64\",\n        \"61\",\n        \"58\",\n        \"63\",\n        \"62\"\n      ]\n    },\n    {\n      \"name\": \"stage\",\n      \"type\": \"text\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"final\",\n        \"semi_final\",\n        \"quarter_final\",\n        \"third_place\"\n      ]\n    },\n    {\n      \"name\": \"group_letter\",\n      \"type\": \"character\",\n      \"nullable\": true\n    },\n    {\n      \"name\": \"kicked_off_at\",\n      \"type\": \"timestamp with time zone\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"2022-12-18T15:00:00.000Z\",\n        \"2022-12-13T19:00:00.000Z\",\n        \"2022-12-09T19:00:00.000Z\",\n        \"2018-07-14T14:00:00.000Z\",\n        \"2018-07-06T18:00:00.000Z\"\n      ]\n    },\n    {\n      \"name\": \"venue_id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"9\",\n        \"3\",\n        \"5\",\n        \"4\",\n        \"2\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.venues\",\n        \"column\": \"id\",\n        \"source\": \"declared\"\n      }\n    },\n    {\n      \"name\": \"home_team_id\",\n      \"type\": \"bigint\",\n      \"nullable\": false,\n      \"sampleValues\": [\n        \"1\",\n        \"8\",\n        \"2\",\n        \"3\",\n        \"4\"\n      ],\n      \"references\": {\n        \"entity\": \"world_cup.world_cup.teams\",\n        … (truncated)"
+      },
+      {
+        "name": "sample_rows",
+        "input": "{\n  \"entity\": \"world_cup.world_cup.matches\",\n  \"rationale\": \"I want to see how match stage/round is labeled so I can identify the final match of the 2022 tournament.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"id\",\n    \"tournament_id\",\n    \"match_number\",\n    \"stage\",\n    \"group_letter\",\n    \"kicked_off_at\",\n    \"venue_id\",\n    \"home_team_id\",\n    \"away_team_id\",\n    \"home_goals\",\n    \"away_goals\",\n    \"went_to_extra_time\",\n    \"home_penalties\",\n    \"away_penalties\",\n    \"winner_team_id\",\n    \"attendance\"\n  ],\n  \"rows\": [\n    {\n      \"id\": \"1\",\n      \"tournament_id\": \"2\",\n      \"match_number\": 64,\n      \"stage\": \"final\",\n      \"group_letter\": null,\n      \"kicked_off_at\": \"2022-12-18T15:00:00.000Z\",\n      \"venue_id\": \"9\",\n      \"home_team_id\": \"1\",\n      \"away_team_id\": \"6\",\n      \"home_goals\": 3,\n      \"away_goals\": 3,\n      \"went_to_extra_time\": true,\n      \"home_penalties\": 4,\n      \"away_penalties\": 2,\n      \"winner_team_id\": \"1\",\n      \"attendance\": 88966\n    },\n    {\n      \"id\": \"2\",\n      \"tournament_id\": \"2\",\n      \"match_number\": 61,\n      \"stage\": \"semi_final\",\n      \"group_letter\": null,\n      \"kicked_off_at\": \"2022-12-13T19:00:00.000Z\",\n      \"venue_id\": \"9\",\n      \"home_team_id\": \"1\",\n      \"away_team_id\": \"4\",\n      \"home_goals\": 3,\n      \"away_goals\": 0,\n      \"went_to_extra_time\": false,\n      \"home_penalties\": null,\n      \"away_penalties\": null,\n      \"winner_team_id\": \"1\",\n      \"attendance\": 88966\n    },\n    {\n      \"id\": \"3\",\n      \"tournament_id\": \"2\",\n      \"match_number\": 58,\n      \"stage\": \"quarter_final\",\n      \"group_letter\": null,\n      \"kicked_off_at\": \"2022-12-09T19:00:00.000Z\",\n      \"venue_id\": \"9\",\n      \"home_team_id\": \"8\",\n      \"away_team_id\": \"1\",\n      \"home_goals\": 2,\n      \"away_goals\": 2,\n      \"went_to_extra_time\": true,\n      \"home_penalties\": 3,\n      \"away_penalties\": 4,\n      \"winner_team_id\": \"1\",\n      \"attendance\": 88235\n    },\n    {\n      \"id\": \"4\",\n      \"tournament_id\": \"1\",\n      \"match_number\": 63,\n      \"stage\": \"third_place\",\n      \"group_letter\": null,\n      \"kicked_off_at\": \"2018-07-14T14:00:00.000Z\",\n      \"venue_id\": \"3\",\n      \"home_team_id\": \"2\",\n      \"away_team_id\": \"5\",\n      \"home_goals\"… (truncated)"
+      },
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT t.name AS winner, m.home_goals, m.away_goals, m.went_to_extra_time, m.home_penalties, m.away_penalties, ht.name AS home_team, at.name AS away_team\\nFROM world_cup.world_cup.matches m\\nJOIN world_cup.world_cup.teams t ON t.id = m.winner_team_id\\nJOIN world_cup.world_cup.teams ht ON ht.id = m.home_team_id\\nJOIN world_cup.world_cup.teams at ON at.id = m.away_team_id\\nWHERE m.tournament_id = 2 AND m.stage = 'final'\",\n  \"rationale\": \"I need the team names for the 2022 final match to state the winner and the score clearly.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"winner\",\n    \"home_goals\",\n    \"away_goals\",\n    \"went_to_extra_time\",\n    \"home_penalties\",\n    \"away_penalties\",\n    \"home_team\",\n    \"away_team\"\n  ],\n  \"rows\": [\n    {\n      \"winner\": \"Argentina\",\n      \"home_goals\": 3,\n      \"away_goals\": 3,\n      \"went_to_extra_time\": true,\n      \"home_penalties\": 4,\n      \"away_penalties\": 2,\n      \"home_team\": \"Argentina\",\n      \"away_team\": \"France\"\n    }\n  ],\n  \"correctedSql\": \"SELECT t.common_name AS winner, m.home_goals, m.away_goals, m.went_to_extra_time, m.home_penalties, m.away_penalties, ht.common_name AS home_team, at.common_name AS away_team\\nFROM world_cup.world_cup.matches m\\nJOIN world_cup.world_cup.teams t ON t.id = m.winner_team_id\\nJOIN world_cup.world_cup.teams ht ON ht.id = m.home_team_id\\nJOIN world_cup.world_cup.teams at ON at.id = m.away_team_id\\nWHERE m.tournament_id = 2 AND m.stage = 'final'\",\n  \"note\": \"original query failed and was auto-corrected — cite the corrected SQL\"\n}"
+      }
+    ],
+    "passed": true,
+    "durationMs": 13372
+  }
+]

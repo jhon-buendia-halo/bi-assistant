@@ -23,10 +23,7 @@ function build() {
     if (owner === undefined) throw new Error('Sign in required');
     return owner;
   });
-  const as = async <T>(
-    who: string | undefined,
-    fn: () => Promise<T>,
-  ) => {
+  const as = async <T>(who: string | undefined, fn: () => Promise<T>) => {
     const previous = owner;
     owner = who;
     try {
@@ -149,9 +146,9 @@ describe('OwnedDocStore', () => {
     // Demo User sees only their own documents, like any user.
     await as('a', () => store.insert({ id: 'theirs' }));
     await as('local', () => store.insert({ id: 'mine' }));
-    expect(
-      (await as('local', () => store.find({}))).map((d) => d.id),
-    ).toEqual(['mine']);
+    expect((await as('local', () => store.find({}))).map((d) => d.id)).toEqual([
+      'mine',
+    ]);
   });
 
   it('fails closed when nobody is signed in', async () => {

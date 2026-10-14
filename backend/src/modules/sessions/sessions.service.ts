@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { RequestContext } from '@mastra/core/request-context';
+import { parseClarification } from '../../mastra/tools/clarification.tool';
 import { MastraService } from '../../mastra/mastra.service';
 import {
   AGENT_OVERRIDES_CONTEXT_KEY,
@@ -30,6 +31,7 @@ import { DATASETS_CONTEXT_KEY } from '../../mastra/tools/dataset.tools';
 import {
   ACTIVE_VISUAL_CONTEXT_KEY,
   SESSION_ID_CONTEXT_KEY,
+  TURN_QUESTION_CONTEXT_KEY,
   TURN_RECORDS_CONTEXT_KEY,
 } from '../../mastra/tools/visual.tools';
 import {
@@ -39,6 +41,7 @@ import {
 import type { KnowledgeUse } from '../knowledge/entities/knowledge-snippet.entity';
 import {
   entityOrientationLines,
+  knowledgeContext,
   schemaSnapshotBlock,
 } from '../../mastra/context-blocks';
 import { DatasetsRepository } from '../datasets/repositories/datasets.repository';
@@ -263,6 +266,7 @@ export class SessionsService implements OnModuleInit {
     const requestContext = new RequestContext();
     requestContext.set(DATASETS_CONTEXT_KEY, session.datasets);
     requestContext.set(SESSION_ID_CONTEXT_KEY, session.id);
+    if (question) requestContext.set(TURN_QUESTION_CONTEXT_KEY, question);
     if (activeVisualId) {
       requestContext.set(ACTIVE_VISUAL_CONTEXT_KEY, activeVisualId);
     }
@@ -319,9 +323,9 @@ export class SessionsService implements OnModuleInit {
           ].join('\n'),
         },
         ...(metrics ? [{ role: 'system' as const, content: metrics }] : []),
-        ...(knowledge.block
-          ? [{ role: 'system' as const, content: knowledge.block }]
-          : []),
+        // The knowledge block; its rules are the on-demand curated-knowledge
+        // skill in the catalog (ADR-0020).
+        ...knowledgeContext(knowledge.block),
         ...(verified ? [{ role: 'system' as const, content: verified }] : []),
         // Last, so the base prompt and every curated block come first.
         ...(agent?.instructions.trim()
@@ -1318,17 +1322,17 @@ export class SessionsService implements OnModuleInit {
             args?: Record<string, unknown>;
           };
           if (payload.toolName) calledTools.add(payload.toolName);
-          if (payload.toolName === 'ask_clarification') {
-            // Clarification ends the turn — the card renders in the UI and the
-            // user's pick arrives as the next message. Abort so the model
-            // does not keep analysing (and spending) behind the card.
-            const args = payload.args ?? {};
-            clarification = {
-              question: String(args['question'] ?? 'Can you clarify?'),
-              options: Array.isArray(args['options'])
-                ? (args['options'] as { label: string; description?: string }[])
-                : [],
-            };
+          // A valid clarification ends the turn — the card renders in the UI
+          // and the user's pick arrives as the next message. Abort so the
+          // model does not keep analysing (and spending) behind the card. A
+          // malformed one runs like any tool: the model gets the validation
+          // error and asks again (agents.md 3.5, 5.1).
+          const asked =
+            payload.toolName === 'ask_clarification'
+              ? parseClarification(payload.args)
+              : undefined;
+          if (asked) {
+            clarification = asked;
             turn.abort();
             break;
           }

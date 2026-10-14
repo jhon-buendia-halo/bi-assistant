@@ -2,6 +2,86 @@
 
 Running log of every meaningful change, newest first. See *Logging convention* and *Evidence convention* in [CLAUDE.md](CLAUDE.md). Release versions come from Conventional Commits (`version-on-merge.yml`); this file records what shipped and links to the evidence.
 
+## 2026-10-15
+
+### Changed
+- **Sectioned assistant prompt and the app's own skill catalog** (roadmap 1.13.9, [BA-207](https://halo-powered.atlassian.net/browse/BA-207), epic [BA-198](https://halo-powered.atlassian.net/browse/BA-198), ADR-0020):
+  - **Prompt.** Identity, then `## Tools` (generated from the tools), `## Working rules`, then `## Skills` with an `<available_skills>` catalog the app renders (name, description, `SKILL.md` path).
+  - **Tools.** `read_file` reads only listed skills' files, and replaces the framework's `skill`/`skill_search`/`skill_read`. `run_skill_script` runs a built-in skill's Node scripts with no shell, a minimal environment and a timeout; none ships yet.
+  - **`curated-knowledge` on demand.** The knowledge block travels without its rules, and the model reads them with `read_file`.
+  - **Descriptions.** A `SKILL.md` description may wrap.
+  - Specs: agents.md 2.1, 3.9, 3.10, 7.3-7.5 and Appendix A; sessions-chat "Skills the assistant is given". Evidence: [evidence/1.13.9/](evidence/1.13.9/).
+- **Eval checks** (roadmap 1.13.11, [BA-209](https://halo-powered.atlassian.net/browse/BA-209)). `result-set-match` passes a single complete query that holds every reference row, with extra rows and columns allowed. `schema-discovery` and `f1-schema-discovery` no longer require `list_entities`. Specs: agents-evals R31, agents.md 8. Evidence: [evidence/1.13.11/](evidence/1.13.11/).
+- **Workflow eval bar** ([CLAUDE.md](CLAUDE.md) step 9). The evals must pass at 100%: every case in 3 runs out of 3.
+
+### Fixed
+- **Assistant reliability** (roadmap 1.13.12, [BA-210](https://halo-powered.atlassian.net/browse/BA-210)):
+  - **Rules.** A4: asks when "best" has no measure. A12: adds nothing from general knowledge about what the data doesn't cover. A32: joins names in the same query. A35: answers "what data do I have" without a query.
+  - **`create_visual`.** With no instruction it uses the user's request (`turn-question`).
+  - **Designer data.** The designer is shown the result sets the instruction is about, not the largest.
+  - **`ask_clarification`.** It takes one string with one option per line, and a malformed call is retried instead of shown as a card with no options.
+  - Specs: agents.md 2.1, 3.5, 3.6, 4.2, 5.1, 6.2; sessions-chat R42 and a new scenario; visuals "Skills the designer is given". World-cup evals at 10/10 in 3 of 3 runs. Evidence: [evidence/1.13.12/](evidence/1.13.12/).
+- **Backend lint, format and types** (roadmap 1.13.10, [BA-208](https://halo-powered.atlassian.net/browse/BA-208)). ESLint went from 217 errors to 0, Prettier is clean and `tsc` reports 0 errors, with no behaviour change. Evidence: [evidence/1.13.10/](evidence/1.13.10/).
+
+## 2026-10-14
+
+### Added
+- **Skill levels** (roadmap 1.13.7, [BA-205](https://halo-powered.atlassian.net/browse/BA-205), epic [BA-198](https://halo-powered.atlassian.net/browse/BA-198), ADR-0019). Agents read skills from three levels, and a later level overrides an earlier one by name:
+  - **Levels.** Built-in (the bundle) < user (`<data dir>/skills/`) < project (the folder `QUESTIONS_TO_INSIGHTS_PROJECT_SKILLS_DIR` names).
+  - **Targeting.** A new user or project skill is on demand for the agents its `agents:` key names (default `assistant`). An override keeps the agents and loading mode of the skill it replaces.
+  - **Broken skills.** A broken user or project skill is skipped and logged, and the backend keeps running; a broken built-in still stops startup.
+  - **Override checks.** An override of a harness-loaded skill must keep its phase and reference files and their placeholders.
+  - **Text only.** User and project skills are never run as scripts. `interactive-visuals/references/` became `reference/`.
+  - Specs: agents.md §7.3-7.4, api.md environment table, data-model.md §4.8. Evidence: [evidence/1.13.7/](evidence/1.13.7/).
+- **Skills tab on the agent page** (roadmap 1.13.8, [BA-206](https://halo-powered.atlassian.net/browse/BA-206)). It's read-only:
+  - **What it shows.** Where each level's skills come from, the agent's skills (level, loading, what each overrides, description, warnings), each skill's files and their content, and the skipped skills with their problems.
+  - **API.** New routes `GET /agents/:key/skills` and `GET /agents/:key/skills/:name/file`. A user agent shows the assistant's skills.
+  - Specs: api.md 34a/34b, ui.md §4.5, agents-evals R63-R67 and the Feature "Agent skills". Evidence: [evidence/1.13.8/](evidence/1.13.8/).
+
+### Changed
+
+- **Workflow: fast loop, then acceptance gate** ([CLAUDE.md](CLAUDE.md) *Workflow*). A requested change now goes through steps 1–5 and 8 plus quick checks, and the running app is handed over for a manual test. Steps 6, 7, 9, 10 and 11 run once the user has accepted the change, once per story. Step 9 runs only the impacted E2E specs, and the evals must pass (no case regresses against the base commit) whenever an agent's prompt, skills, tools, context or model routing changes. The *E2E test convention* follows suit. Evidence: process change, no app behaviour change; `check-specs` passes and the `workflow-steps` mod still reads all eleven steps.
+
+## 2026-10-13
+
+### Fixed
+- **`npm run evals:assistant` runs again** (roadmap 1.13.6, [BA-204](https://halo-powered.atlassian.net/browse/BA-204), epic [BA-198](https://halo-powered.atlassian.net/browse/BA-198)):
+  - The CLI passed no case ids, so every set was selected and the one-fixture preflight always refused.
+  - It now takes `EVAL_SET` (a set id) or `EVAL_CASES` (case ids). With neither, both or an unknown id, it exits 1 before booting or calling a model.
+  - Specs: agents.md §8.5, api.md environment table, delivery.md scripts table.
+  - Test: `eval-cli-selection.spec.ts`.
+  - Evidence: [evidence/1.13.6/](evidence/1.13.6/).
+
+### Changed
+- **The designer reads only the instructions for the mode it runs** (roadmap 1.13.5, [BA-203](https://halo-powered.atlassian.net/browse/BA-203), epic [BA-198](https://halo-powered.atlassian.net/browse/BA-198)):
+  - `interactive-visuals/SKILL.md` is now a 918-character router. The spec rules are in `references/spec-mode.md` and the freeform fallback in `references/freeform.md`, both moved verbatim.
+  - A spec call carries the router plus `spec-mode.md`, about 4.1k characters instead of the whole 12k skill. A freeform call, including the fallback after two failed spec attempts, carries the router plus `freeform.md`.
+  - Specs: agents.md §2.2, §6.4, §7.2 and §7.4; visuals R5 and the Feature "Skills the designer is given".
+  - Tests: `frontend/e2e/designer-skills.spec.ts` (recording stub) and `visualization.service.spec.ts`.
+  - Evidence: [evidence/1.13.5/](evidence/1.13.5/), including the epic's before and after evals.
+- **Deep-analysis prompts live in a phased skill** (roadmap 1.13.4, [BA-202](https://halo-powered.atlassian.net/browse/BA-202)):
+  - `skills/deep-analysis/` holds a phase map plus `phases/1-plan.md`, `2-investigate.md` and `3-report.md`.
+  - The service loads one phase per call and fills its `{{placeholders}}`. A placeholder left unfilled fails the call.
+  - Golden tests prove that the prompts sent to the model are byte-identical to before.
+  - Specs: agents.md §2.7 and §7.4.
+  - Evidence: [evidence/1.13.4/](evidence/1.13.4/).
+- **Curated-knowledge rules reach the model only with the knowledge they govern** (roadmap 1.13.2, [BA-200](https://halo-powered.atlassian.net/browse/BA-200)):
+  - The assistant's base prompt drops its "Curated knowledge:" section, going from 7,380 to 5,694 characters.
+  - The section is now the `curated-knowledge` skill. `knowledgeContext()` sends it right after the knowledge block on every call that carries one: chat turn, grounding pass, deep analysis and evals.
+  - Specs: agents.md §2.1, §4.1, Appendix A and the new Appendix B; knowledge R19; two scenarios in sessions-chat "Skills the assistant is given".
+  - Evidence: [evidence/1.13.2/](evidence/1.13.2/).
+- **Each agent gets only its own skills, from the app bundle, checked at startup** (roadmap 1.13.1, [BA-199](https://halo-powered.atlassian.net/browse/BA-199), epic [BA-198](https://halo-powered.atlassian.net/browse/BA-198)):
+  - Session workspaces no longer seed or discover skills. Before, every session got a copy of `interactive-visuals`, so the assistant's catalog listed the designer's skill and it was offered the `skill`, `skill_search` and `skill_read` tools. Now the assistant gets no catalog and none of those tools.
+  - The designer reads `interactive-visuals/SKILL.md` from the bundle. Its description now starts with "Use when".
+  - New `mastra/app-skills.ts` loads `skills/<name>/`. Each agent declares its on-demand skills in one table, which is empty for now. Every skill is validated when the backend starts: front matter, name equal to its folder, a "Use when" description and every linked `phases/` / `references/` file. A broken skill stops the backend with `Invalid app skills:`.
+  - Workspace copies left by earlier versions stay on disk and are never read.
+  - Specs: ADR-0018; agents.md §2.1, §2.2, §3.8 (the workspace tools the assistant is really offered, closing an open question), §7.1–§7.4; data-model §4.1 and §4.6; sessions-chat Feature "Skills the assistant is given"; the BA-198 epic spec and Milestone 1.13. The epic was re-scoped with the user: `visual-tailoring` and `sql-dialects` are cut, and 1.13.3 is merged into 1.13.2.
+  - Tests: `frontend/e2e/assistant-skills.spec.ts`, `mastra/app-skills.spec.ts`, a designer skill test in `visualization.service.spec.ts`.
+  - Evidence: [evidence/1.13.1/](evidence/1.13.1/).
+
+### Cut
+- **1.13.3 curated-knowledge and sql-dialects skills** ([BA-201](https://halo-powered.atlassian.net/browse/BA-201)): curated-knowledge was merged into 1.13.2. sql-dialects was dropped because the app has no dialect guidance to move. The on-demand `visual-tailoring` skill planned in 1.13.2 was also cut: its 427 characters of rules would have cost a catalog and usage note of about 1,045 characters on every turn. Both were decided with the user on 2026-10-13.
+
 ## 2026-10-12
 
 ### Added

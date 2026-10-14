@@ -1,0 +1,11 @@
+[1/9] [org] › e2e/org-isolation.spec.ts:34:5 › users share datasources and datasets
+[2/9] [org] › e2e/org-isolation.spec.ts:48:5 › sessions are private to their owner
+[3/9] [org] › e2e/org-isolation.spec.ts:68:5 › agents and pins are private to their owner
+[4/9] [org] › e2e/org-isolation.spec.ts:110:5 › knowledge is private to its owner
+[5/9] [org] › e2e/org-permissions.spec.ts:46:5 › a User sees no maker, data or admin controls
+[6/9] [org] › e2e/org-permissions.spec.ts:73:5 › a Maker can create an agent
+[7/9] [org] › e2e/org-permissions.spec.ts:86:5 › a bootstrap admin sees the Admin area
+[8/9] [org] › e2e/org-permissions.spec.ts:127:5 › a Platform admin manages shared settings
+[9/9] [org] › e2e/org-permissions.spec.ts:143:5 › an action the user lost the right to is refused
+  9 passed (37.4s)
+exit 0

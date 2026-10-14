@@ -1,0 +1,25 @@
+{
+  "sessionId": "b3262f40-6397-494c-b699-1a3df73f3680",
+  "workspaceSkillCopyExistedBeforeUpgrade": true,
+  "workspaceSkillCopyStillOnDisk": true,
+  "newBuildAnswered": true,
+  "modelCalls": 1,
+  "anySystemMessageHasSkillCatalog": false,
+  "anySystemMessageMentionsInteractiveVisuals": false,
+  "toolsOffered": [
+    "list_entities",
+    "describe_entity",
+    "sample_rows",
+    "run_readonly_sql",
+    "create_visual",
+    "update_visual",
+    "ask_clarification",
+    "mastra_workspace_read_file",
+    "mastra_workspace_write_file",
+    "mastra_workspace_edit_file",
+    "mastra_workspace_list_files",
+    "mastra_workspace_file_stat",
+    "mastra_workspace_mkdir",
+    "mastra_workspace_grep"
+  ]
+}

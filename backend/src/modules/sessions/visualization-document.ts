@@ -152,7 +152,7 @@ export function renderMarkdown(markdown: string): string {
     async: false,
     gfm: true,
     breaks: true,
-  }) as string;
+  });
   return sanitizeHtml(html, {
     allowedTags: [
       'p',
@@ -202,12 +202,14 @@ export function sourceEntities(data: ToolDataRecord[] | undefined): string[] {
 }
 
 function formatCell(value: unknown): string {
-  const text =
-    value === null || value === undefined
-      ? '—'
-      : typeof value === 'object'
-        ? JSON.stringify(value)
-        : String(value);
+  let text: string;
+  if (value === null || value === undefined) text = '—';
+  else if (typeof value === 'object') text = JSON.stringify(value);
+  else {
+    // Only primitives (or a function) are left.
+    const scalar = value as string | number | boolean | bigint | symbol;
+    text = String(scalar);
+  }
   return escapeHtml(
     text.length > CELL_CHARS ? `${text.slice(0, CELL_CHARS)}…` : text,
   );

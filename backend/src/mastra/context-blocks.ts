@@ -4,6 +4,23 @@
 // No Nest DI here, same pattern as `tool-services.ts`.
 import type { DatasetColumnSnapshot, DatasetSnapshot } from './tool-services';
 
+/** One per-turn system message (agents.md 4.1). */
+export interface SystemBlock {
+  role: 'system';
+  content: string;
+}
+
+/**
+ * Block 3 of a turn (agents.md 4.1): the curated-knowledge block alone. How
+ * to apply it is the on-demand `curated-knowledge` skill in the assistant's
+ * catalog (7.4, ADR-0020). Nothing when no knowledge applies. Every caller
+ * that sends the block goes through here.
+ */
+export function knowledgeContext(block: string | undefined): SystemBlock[] {
+  if (!block?.trim()) return [];
+  return [{ role: 'system', content: block }];
+}
+
 /** Join hints shown up front to the assistant — enough for a wide dataset. */
 const JOIN_HINT_CHARS = 1_500;
 /** Default character budget for `schemaSnapshotBlock` when unspecified. */

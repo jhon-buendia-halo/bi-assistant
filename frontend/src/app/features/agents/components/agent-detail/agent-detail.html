@@ -233,6 +233,22 @@
             </div>
           }
         }
+        @case ("skills") {
+          @if (skillsLoading()) {
+            <div class="flex items-center gap-2.5 text-[13px] text-fg-muted">
+              <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+              <span>Loading skills…</span>
+            </div>
+          } @else if (skillsError(); as skillsErr) {
+            <p class="text-[13px] text-on-danger-soft">{{ skillsErr }}</p>
+          } @else if (skills(); as skillsView) {
+            <app-agent-skills
+              [agentKey]="agent.key"
+              [view]="skillsView"
+              [userAgent]="isUserAgent()"
+            />
+          }
+        }
         @case ("memory") {
           @if (agent.memory; as memory) {
             <div class="flex max-w-[520px] flex-col gap-2.5 text-[13px]">

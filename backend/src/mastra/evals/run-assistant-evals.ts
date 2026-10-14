@@ -6,7 +6,8 @@ import {
 } from '../../modules/auth/current-user.service';
 import { SessionsService } from '../../modules/sessions/sessions.service';
 import { KnowledgeService } from '../../modules/knowledge/knowledge.service';
-import { runAssistantEvals } from './assistant.evals';
+import { ASSISTANT_EVAL_SETS, runAssistantEvals } from './assistant.evals';
+import { selectCliEvalCases } from './eval-cli-selection';
 
 /**
  * CLI entry point for the same suite the Agents → Evals tab runs.
@@ -28,8 +29,16 @@ async function main(): Promise<void> {
   if (datasets.length === 0) {
     console.error(
       'Set EVAL_DATASETS to a comma-separated list of saved dataset names, ' +
-        'e.g. EVAL_DATASETS="World Cup Core" npm run evals:assistant',
+        'e.g. EVAL_DATASETS="World Cup Core" EVAL_SET=world-cup npm run evals:assistant',
     );
+    process.exitCode = 1;
+    return;
+  }
+  // Pick the questions before booting anything: with no selection every set
+  // would run, and the one-fixture preflight refuses that (agents.md 8.5).
+  const selection = selectCliEvalCases(process.env, ASSISTANT_EVAL_SETS);
+  if ('error' in selection) {
+    console.error(selection.error);
     process.exitCode = 1;
     return;
   }
@@ -41,7 +50,7 @@ async function main(): Promise<void> {
   try {
     await app
       .get(CurrentUserService)
-      .runAs(LOCAL_USER, () => runAsDemoUser(app, datasets));
+      .runAs(LOCAL_USER, () => runAsDemoUser(app, datasets, selection.caseIds));
   } finally {
     await app.close();
   }
@@ -50,6 +59,7 @@ async function main(): Promise<void> {
 async function runAsDemoUser(
   app: Awaited<ReturnType<typeof NestFactory.createApplicationContext>>,
   datasets: string[],
+  caseIds: string[],
 ): Promise<void> {
   // Same Nest app the eval-runs.service in-app runner uses, so a throwaway
   // session for create_visual/update_visual works here too — no CLI-only
@@ -70,7 +80,7 @@ async function runAsDemoUser(
         console.log(`      ${id}: ${score}`);
       }
     },
-    undefined,
+    caseIds,
     sessions,
     knowledgeBlock,
   );

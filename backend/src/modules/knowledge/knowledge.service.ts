@@ -451,10 +451,7 @@ function validateCreate(
     ...(synonyms.length ? { synonyms } : {}),
     ...(entities.length ? { entities } : {}),
     enabled: input?.enabled ?? true,
-  } as Pick<
-    KnowledgeSnippet,
-    'kind' | 'scope' | 'title' | 'body' | 'synonyms' | 'entities' | 'enabled'
-  >;
+  };
 }
 
 /** Partial validation for `update` — only fields present on `input` are checked/applied. */

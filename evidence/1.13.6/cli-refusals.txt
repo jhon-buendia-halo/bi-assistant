@@ -1,0 +1,11 @@
+$ EVAL_DATASETS="World Cup Core" node dist/mastra/evals/run-assistant-evals.js
+Set EVAL_SET to one question set (world-cup, world-cup-rest, formula-1) or EVAL_CASES to comma-separated case ids
+exit 1
+
+$ EVAL_DATASETS="World Cup Core" EVAL_SET=tennis node dist/...
+Unknown question set "tennis" (known: world-cup, world-cup-rest, formula-1)
+exit 1
+
+$ EVAL_DATASETS="World Cup Core" EVAL_SET=world-cup EVAL_CASES=shootouts node dist/...
+Set EVAL_SET or EVAL_CASES, not both
+exit 1

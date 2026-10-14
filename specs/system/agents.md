@@ -179,13 +179,20 @@ LenAI deployments are never swapped to `openai/gpt-4.1-mini` (rule 2 requires no
 
 **Output.** Free text (markdown) — the answer. Tool calls along the way are captured by the orchestrator (5.1).
 
-**Tools.** `list_entities`, `describe_entity`, `sample_rows`, `run_readonly_sql`, `create_visual`, `update_visual`, `ask_clarification` (section 3). It is also bound to the session workspace (7).
+**Tools.** `list_entities`, `describe_entity`, `sample_rows`, `run_readonly_sql`, `create_visual`, `update_visual`, `ask_clarification` (section 3). It is also bound to the session workspace, whose file tools it is offered (3.8), and it is given its own skills (7.4).
 
 **Memory.** One persistent thread per session: `thread = resource = <session id>`. The last **40** messages are replayed into each turn; semantic recall off; working memory off; auto-generated thread titles off. Deleting a session deletes its thread. The Agents UI shows "Recent messages replayed" / "40 messages" (asserted by E2E).
 
 **Max steps.** 15 (`ASSISTANT_MAX_STEPS`), shared by production turns and the eval harness so evals measure the same constraints.
 
-**Prompt requirements.** The prompt MUST start with `You are the Questions to Insights assistant` (asserted by E2E on the Prompt tab). It encodes these rules, in this order:
+**Prompt requirements.** The prompt MUST start with `You are the Questions to Insights assistant` (asserted by E2E on the Prompt tab). It has four parts, in this order (ADR-0020; exact text in Appendix A, Skills section in 7.5):
+
+1. **Identity:** the A1-A3 paragraph.
+2. **`## Tools`:** one line per tool the assistant is given, in the order it is given them: `- <name>(<input names, comma-separated>): <first sentence of the tool's description>`. The lines are generated from the tools, so a tool change updates this section. `read_file` and `run_skill_script` (3.9, 3.10) are listed only when they are offered. The framework's workspace tools (3.8) are not listed.
+3. **`## Working rules`:** rules A4-A12 and A19-A35 below, word for word as before, apart from what 1.13.12 added: a sentence in A4, the last sentence of A12, "in the same query" in A32, and A35.
+4. **`## Skills`:** only when the assistant has on-demand skills (7.3). Fixed instructions, then the `<available_skills>` catalog (7.5).
+
+The rules encoded, in this order:
 
 *Role*
 - A1. Identity: "the Questions to Insights assistant — a data analyst working over the catalogs, schemas and entities in the user's session datasets."
@@ -193,7 +200,7 @@ LenAI deployments are never swapped to `openai/gpt-4.1-mini` (rule 2 requires no
 - A3. Job: figure out how each question can be answered with the existing entities and data, then answer it itself.
 
 *Clarification*
-- A4. Call `ask_clarification` only when interpretations diverge materially — the metric or meaning is undefined ("best", "performed well", "top") or the choice would fundamentally change the analysis. Then ask first: one short question with 2-4 concrete options grounded in the dataset entities, then stop and wait.
+- A4. Call `ask_clarification` only when interpretations diverge materially — the metric or meaning is undefined ("best", "performed well", "top") or the choice would fundamentally change the analysis. Then ask first: one short question with 2-4 concrete options grounded in the dataset entities, then stop and wait. A question asking who or what is "best", "top" or "performed well" without naming a measure is such a case even when several measures could be covered in one answer: ask before running any query, and don't settle it by checking coverage or reporting every measure (added in 1.13.12).
 - A5. May clarify mid-analysis when the real data is ambiguous (a filter value, member or entity name with several plausible matches); the options must then quote actual values found via `sample_rows` / `describe_entity`, not invented ones.
 - A6. When only the scope is fuzzy (which year, tournament or subset) and answering every reasonable scope is cheap, do NOT ask: run over the full scope (or the most natural default) and state the assumption (e.g. "Covering both tournaments in the data: ...").
 - A7. At most ONE clarification per user question; when the intent is clear, the user just answered a clarification, or they say to proceed, continue without re-asking.
@@ -205,9 +212,9 @@ LenAI deployments are never swapped to `openai/gpt-4.1-mini` (rule 2 requires no
 
 *Grounding*
 - A11. Every factual claim about the session's data must come from `run_readonly_sql` results executed in this conversation; never answer a data question from general/parametric knowledge, even when confident — run the query anyway.
-- A12. When a question presupposes coverage not confirmed (an era, entity or scope outside the obvious dataset), check coverage first; when the question falls outside the data, say so plainly and state what IS covered (e.g. "the data covers only 2018 and 2022; 1970 is not in this dataset"). Never fill the gap from general knowledge.
+- A12. When a question presupposes coverage not confirmed (an era, entity or scope outside the obvious dataset), check coverage first; when the question falls outside the data, say so plainly and state what IS covered (e.g. "the data covers only 2018 and 2022; 1970 is not in this dataset"). Never fill the gap from general knowledge. Add nothing about what the data doesn't cover: no background, dates or career facts about the person, team or event the question names (added in 1.13.12).
 
-*Curated knowledge*
+*Curated knowledge* (rules A13–A18 are not in the base prompt: they are the on-demand `curated-knowledge` skill, listed in the assistant's `## Skills` catalog, which the model reads with `read_file` when a call carries Block 3; 4.1, 7.4)
 - A13. A curated-knowledge block, when present, is user-authored ground truth (glossary terms, standing instructions, default filters tagged `[term]`, `[instruction]`, `[default_filter]`); read it before planning.
 - A14. It outranks anything inferred from column names or sample values; follow a term's meaning even when the column name suggests otherwise and say which term was followed when they disagree. It cannot override the data: if a term names a value no row holds, do not invent rows.
 - A15. Apply every `[default_filter]` to every query unless the question explicitly asks for the excluded rows; name the applied filters in one short business sentence at the end ("excludes test accounts, as configured"); when the excluded rows are needed, drop the filter and say so.
@@ -233,9 +240,10 @@ LenAI deployments are never swapped to `openai/gpt-4.1-mini` (rule 2 requires no
 - A29. Ground every claim in retrieved data; never invent values.
 - A30. A ratio needs two genuinely different measures; never divide a sum by itself or alias the same expression twice (that returns 1 everywhere); look for the real denominator.
 - A31. A metric identical on every row — above all 1 or 0 — is a fault in its own query: fix it before answering, never report it as a finding.
-- A32. Identifiers are not answers: join to the entity holding the id's name and report the name ("a reader … cannot act on 'id 5'").
+- A32. Identifiers are not answers: join to the entity holding the id's name in the same query, so one result holds the whole answer, and report the name ("a reader … cannot act on 'id 5'"). "In the same query" was added in 1.13.12.
 - A33. Only call something "top", "highest" or "lowest" when values actually differ and the query ordered by them; when everything ties, say so.
 - A34. A warning attached to a query result is about its own SQL: act on it and re-run before answering, rather than passing it to the user.
+- A35. When the user asks what data they have, describe the datasets from the session context and `describe_entity` alone, without running any query (added in 1.13.12).
 
 Reference wording of the full prompt: Appendix A.
 
@@ -245,7 +253,7 @@ Reference wording of the full prompt: Appendix A.
 
 **Invoked by.** Only the visual pipeline (section 6): `create_visual` / `update_visual` tools, the "create visual" button endpoint, the panel tailor endpoint, the panel auto-repair endpoint. Never by the user directly.
 
-**Inputs.** One user prompt assembled by the pipeline (6.4) plus one extra system message carrying the interactive-visuals skill (7.2) wrapped in `<interactive-visuals-skill>` … `</interactive-visuals-skill>`. requestContext carries only the session-workspace id.
+**Inputs.** One user prompt assembled by the pipeline (6.4) plus one extra system message carrying the interactive-visuals skill (7.2) for the mode of the call: the `SKILL.md` body without its front matter, a blank line, then `reference/spec-mode.md` (spec mode) or `reference/freeform.md` (freeform mode), never both. It is read from the skill that wins for its name (7.3: the built-in one unless a user or project skill overrides it) and wrapped in `<interactive-visuals-skill>` … `</interactive-visuals-skill>`. requestContext carries only the session-workspace id. The designer has no skills of its own in a catalog (7.4).
 
 **Outputs.** Structured, one of two schemas depending on mode:
 
@@ -491,6 +499,8 @@ required clarification, or stating a fact with no backing tool call).
 
 Deep analysis is a background job that reuses the `assistant` agent with the session's grounding but **without its memory thread** (a job's many sub-calls must not pollute the history the next chat question is answered from). One job per session at a time. Behaviour, job states and the report are owned by [deep-analysis](../capabilities/deep-analysis/spec.md); the prompts are contracts here.
 
+The three prompts below are the phase files of the harness-loaded `deep-analysis` skill (7.4): `phases/1-plan.md`, `phases/2-investigate.md` and `phases/3-report.md`. Its `SKILL.md` is the phase map. The phases run in order, with no user approval between them. For each call the service reads only that call's phase file, drops its final newline and fills its `{{name}}` placeholders by exact string replacement, in one pass, without re-scanning inserted values. The call fails if a placeholder is left unfilled or a required one is missing from the file. The text the model receives is the wording below, with the `<…>` parts filled in.
+
 1. **Plan** — generate, `maxSteps: 1`, `toolChoice: 'none'`, structured output:
 
    ```
@@ -618,14 +628,15 @@ All tools belong to the `assistant`. Every tool returns a JSON object; **tools n
 ### 3.5 `ask_clarification`
 
 - **Description:** `Ask the user ONE clarifying question with 2-4 concrete answer options, either before starting an analysis when their question is ambiguous (unclear scope, metric, timeframe, or entity), or mid-analysis when the data itself is ambiguous — a filter value, member/entity name or timeframe with several plausible matches. When the ambiguity is about values, quote the actual values found in the data as the options. The user picks an option or types their own answer, which arrives as the next message; continue the analysis from there. At most one call per user question — do not call this when the intent is already clear or the user just answered a clarification.`
-- **Input:** `{ question: string ("The clarifying question, short and direct"), options: [{ label: string ("Short option title"), description?: string ("One line explaining what this option means") }] (2..4) }`.
+- **Input:** `{ question: string ("The clarifying question, short and direct"), options: string ("2-4 answer options, one per line. Each is a short title, optionally followed by \" — \" and one line explaining it") }`. One string rather than a list, because models serialize an array parameter wrongly now and then (1.13.12). Before validation, a leaked `<parameter name="…">` / `</parameter>` wrapper is dropped (a tool-call glitch seen with Claude models), and a list of strings, or one JSON-encoded as a string, is joined into lines. It must then hold 2-4 non-empty lines (a leading `-`, `*`, `•` or `1.` is dropped); otherwise it's a validation error (`Give 2-4 options, one per line`).
+- **Options as stored:** each line becomes `{label, description?}` (the persisted `ClarificationOption`, [data-model.md](data-model.md)): split at the first ` — ` or ` – ` (a dash with a space on each side), label before it, description after; with no such dash the whole string is the label.
 - **Output:** `{ delivered: true }` (placeholder; never actually reaches the model in a streamed turn).
-- **Side effects:** in a streamed turn the orchestrator intercepts the *call* and ends the turn (5.1).
+- **Side effects:** in a streamed turn the orchestrator intercepts a *valid* call and ends the turn (5.1). A call whose input fails the schema is not intercepted: it runs like any tool, the model gets the validation error and can retry, so no card is ever shown without options.
 
 ### 3.6 `create_visual`
 
-- **Description:** `Create a new interactive visual (HTML/CSS/JS chart) from one of your completed analysis answers. Defaults to your most recent answer; pass sourceMessageAt to target another. Optional instruction steers the design (chart type, focus, styling). Use update_visual instead when the user wants to change an existing visual.`
-- **Input:** `{ sourceMessageAt?: string ("ISO timestamp of the assistant answer to visualize"), instruction?: string ("Design guidance from the user, if any") }`.
+- **Description:** `Create a new interactive visual (HTML/CSS/JS chart) from one of your completed analysis answers. Defaults to your most recent answer; pass sourceMessageAt to target another. Pass instruction with what to chart in the user's words plus any design guidance (chart type, focus, styling); without it the user's request is used. Use update_visual instead when the user wants to change an existing visual.`
+- **Input:** `{ sourceMessageAt?: string ("ISO timestamp of the assistant answer to visualize"), instruction?: string ("What to chart, in the user's words, plus any design guidance") }`. With no instruction, or a blank one, the tool sends the designer the turn's `turn-question` (4.2), so it charts what the user asked rather than guessing from the turn's data.
 - **Output:** `{ visualId, version, title, description }`.
 - **Errors:** no `session-id` in context → `No session in context`; no completed answer found → `completed assistant answer not found`; any pipeline error (designer timeout, invalid output) → its message.
 - **Side effects:** runs the designer pipeline (section 6) with the source answer's data **merged with this turn's captured records** (6.2); writes visual version 1 to the session workspace; upserts the visual's metadata on the session. A "completed answer" is an assistant message that is not a clarification and has non-empty content.
@@ -640,7 +651,30 @@ All tools belong to the `assistant`. Every tool returns a JSON object; **tools n
 
 ### 3.8 Workspace tools
 
-Because the assistant (and designer) are bound to the session workspace, the framework also offers its filesystem capabilities with **delete disabled**, and discovers skills under `.agents/skills`. The prompts never mention them. See Open questions.
+Because the assistant (and designer) are bound to the session workspace, the framework also offers its filesystem tools, with **delete disabled**: `mastra_workspace_read_file`, `mastra_workspace_write_file`, `mastra_workspace_edit_file`, `mastra_workspace_list_files`, `mastra_workspace_file_stat`, `mastra_workspace_mkdir` and `mastra_workspace_grep`. With them comes one framework system message that names the workspace folder and says relative paths resolve from it. The prompts never mention these tools. The framework's skill tools (`skill`, `skill_search`, `skill_read`) are never offered: the assistant reads skills with `read_file` (3.9) instead (ADR-0020).
+
+### 3.9 `read_file`
+
+Offered to the assistant only when it has on-demand skills (7.3). Read-only.
+
+- **Description:** `Read one file of an installed skill by its absolute path: the location the skill list gives for SKILL.md, or that folder joined with a path SKILL.md names. Only files inside the listed skills' folders can be read.`
+- **Input:** `path` (string): an absolute path.
+- **Output:** `{ path, content }` for a text file, the path being as given. A file larger than 256 KB or not UTF-8 text answers `{ path, error: "This file is larger than 256 KB or isn't text, so it can't be read." }`.
+- **Limits:** the path, normalised, must be a regular file inside the folder of a skill the assistant's catalog lists. Symbolic links are neither followed nor read. Anything else answers `{ error: "Not a file of an installed skill: <path>. Use the skill's location folder joined with the path SKILL.md names." }`.
+
+### 3.10 `run_skill_script`
+
+Offered to the assistant only when its catalog lists a built-in skill with at least one script (7.3). No built-in skill has one today, so it isn't offered yet.
+
+- **Description:** `Run one of a built-in skill's bundled scripts and return its output. Use it instead of reading the script. Arguments are passed as a list, never through a shell.`
+- **Input:** `skill` (string), the skill's name; `script` (string), the script's path in the skill folder, e.g. `scripts/validate.js`; `args` (string list, optional, at most 20, each at most 2,000 characters).
+- **Runs:**
+  - only a listed regular file under that built-in skill's `scripts/` ending in `.js`, `.mjs` or `.cjs`;
+  - with the backend's own Node runtime (`ELECTRON_RUN_AS_NODE=1` set, so the desktop app's runtime acts as Node) and no shell;
+  - in the skill's folder, with an environment of only `PATH`, `ELECTRON_RUN_AS_NODE` and `NODE_ENV`, so no app secret or API key reaches the script;
+  - with 30 seconds before it is killed.
+- **Output:** `{ exitCode, stdout, stderr }`, each stream capped at 20,000 characters with `…[truncated]` appended. A timeout adds `timedOut: true` with `exitCode: null`.
+- **Refusals:** `{ error: "Unknown skill: <skill>" }` (not a listed built-in skill) and `{ error: "Not a script of <skill>: <script>" }`.
 
 ---
 
@@ -691,6 +725,8 @@ Curated dataset knowledge (user-authored — treat as authoritative over anythin
 
 Budget 2,000 characters; the first entry that doesn't fit ends the list. The list of snippets that made it in (`{id, kind, title, body, datasetId?}`) is threaded through the turn and persisted on the answer as `knowledge` — exactly what the model saw, even if the store changes mid-turn.
 
+No rules travel with the block. How to apply it is the on-demand `curated-knowledge` skill (7.4, rules A13–A18, Appendix B): the assistant's catalog always lists it, and its description tells the model to read it when the call carries this block. When no snippet applies, the block is not sent. Every caller that sends Block 3 sends it the same way: the chat turn, the grounding pass, deep-analysis calls and the eval suite.
+
 **Block 4 — verified reference queries** (only when the call has a question and stored verified pairs share vocabulary with it):
 
 ```
@@ -722,6 +758,7 @@ The eval harness (8.5) sends only Block 1's dataset half (no visuals lines) plus
 | `datasets` | every session-scoped assistant call; evals | array of the session's dataset names | data tools (scoping) |
 | `session-id` | every session-scoped call; evals (when a throwaway session exists) | session id | `create_visual`, `update_visual` |
 | `active-visual-id` | chat turns, only when the client sent the open visual's id | visual id | `update_visual` default target |
+| `turn-question` | every assistant call that has a question (chat turn, grounding pass, deep analysis); evals (the case question) | the user's message for this turn | `create_visual`, as the instruction when the model passes none |
 | `turn-data-records` | streamed chat turn (fresh empty array per turn), evals | **live** array of this turn's captured data records, appended as tool results arrive | `create_visual` / `update_visual` (merge into the visual's data) |
 | `session-workspace-id` | every session-scoped call; designer calls | `session-<id>` | workspace resolver (7.1) |
 | `knowledge-used` | every session-scoped call | the knowledge snippets put in Block 3 | persistence of the answer's `knowledge` field |
@@ -749,7 +786,7 @@ User prompts are trimmed; an empty prompt is a 400 `message is required`. When t
 3. Consume the stream:
    - `reasoning-delta` → emit `reasoning` event with the delta.
    - `text-delta` → append to the answer, emit `text`.
-   - `tool-call` named `ask_clarification` → capture `{question (default "Can you clarify?"), options}` and **abort the model turn** (it must not keep analysing behind the card).
+   - `tool-call` named `ask_clarification` whose input passes the tool's schema (3.5) → capture `{question, options}` (options split as 3.5 says) and **abort the model turn** (it must not keep analysing behind the card). A call that fails the schema is handled like any other tool call, so the model sees the validation error and retries.
    - any other `tool-call` → emit `tool` with `{ name, rationale? }` (the rationale travels with the call so the UI shows the reason before the result).
    - `tool-result` of `create_visual` / `update_visual` → when it has `visualId` and `version`, remember a visual event `{visualId, version, title (default "Interactive visual"), action: created|updated}` and emit `visual-updated` with it; then emit `tool-result` `{ tool, input: <instruction>, error? }`. Not captured as data.
    - `tool-result` of `run_readonly_sql` or `sample_rows` → convert to a **data record** and push it onto the live `turn-data-records` array; emit `tool-result` `{ tool, input, rowCount, error?, rationale? }`.
@@ -917,7 +954,7 @@ User-facing behaviour (create, tailor, version, revert, refresh, repair, export,
 
 ### 6.2 Data handed to the designer
 
-From the effective records: keep successful records with rows; keep the **3 largest** (by rows), restored to run order; each keeps up to `max(20, floor(100 / kept))` rows; serialize as JSON (1-space indent) of `[{tool, input, columns, rowCount, rows}]`; while the JSON exceeds 40,000 chars and some record has > 5 rows, halve the largest record's rows (min 5). `shown` = rows kept; `truncatedFrom` = total rowCount of successful records when larger than `shown`. The same bounded records are injected into the rendered document as `window.qti.data`, so the visual renders exactly what the designer saw.
+When a new visual is created with an instruction and the merged records hold more than 3 successful result sets, the creation first keeps the 3 that share the most words with the instruction (lower-case words of two or more letters or digits, matched against column names and cell values), size breaking ties and then run order, and drops the other successful ones (1.13.12). The kept records are the visual's data, so the designer and the rendered document see the same ones. From the effective records: keep successful records with rows; keep the **3 largest** (by rows), restored to run order; each keeps up to `max(20, floor(100 / kept))` rows; serialize as JSON (1-space indent) of `[{tool, input, columns, rowCount, rows}]`; while the JSON exceeds 40,000 chars and some record has > 5 rows, halve the largest record's rows (min 5). `shown` = rows kept; `truncatedFrom` = total rowCount of successful records when larger than `shown`. The same bounded records are injected into the rendered document as `window.qti.data`, so the visual renders exactly what the designer saw.
 
 ### 6.3 Modes and loop
 
@@ -965,7 +1002,14 @@ User prompt lines, in order:
     - runtime, freeform: `Your previous code failed at runtime in the dataset: <message>. Return corrected, complete code that renders the same visual.`
     - parse: `Your previous JavaScript failed to parse: <message>. Return corrected, complete code.`
 
-The skill text (7.2) is sent as an extra system message.
+The skill text (7.2) is sent as an extra system message, built from four parts in order:
+
+1. `<interactive-visuals-skill>`
+2. the router body of `SKILL.md`, front matter removed, then a blank line
+3. the mode's reference: `reference/spec-mode.md` for a spec call, `reference/freeform.md` for a freeform call
+4. `</interactive-visuals-skill>`
+
+A spec call never carries the freeform reference, and a freeform call never carries the spec-mode one. That includes the freeform fallback after two failed spec attempts.
 
 ### 6.5 Repair
 
@@ -1071,8 +1115,8 @@ A fixed, hand-written browser script renders a spec. It is the same code that is
 
 ### 7.1 Session workspaces
 
-- Each session owns a contained folder `<APP_DATA_DIR>/workspaces/session-<sessionId>` (session ids must match `^[a-zA-Z0-9_-]+$`, else `Invalid session workspace ID: <id>`), registered with the agent framework as workspace `session-<id>` named `<session name> Workspace`. Agents can create and edit files there but **cannot delete** them. Skills are discovered under `.agents/skills`.
-- Created on session creation; backfilled for every existing session at startup (and the session's `workspaceId` field corrected); on every load the skill is re-seeded (7.2).
+- Each session owns a contained folder `<APP_DATA_DIR>/workspaces/session-<sessionId>` (session ids must match `^[a-zA-Z0-9_-]+$`, else `Invalid session workspace ID: <id>`), registered with the agent framework as workspace `session-<id>` named `<session name> Workspace`. Agents can create and edit files there but **cannot delete** them. Workspaces carry no skills: none are copied in and none are discovered there (7.3). A `.agents/skills/` folder left by an earlier version is ignored.
+- Created on session creation; backfilled for every existing session at startup (and the session's `workspaceId` field corrected).
 - Agents resolve their workspace per call from requestContext `session-workspace-id`; no id → no workspace.
 - Visual versions (`visuals/<visualId>/v<N>/…`) and deep-analysis reports (`reports/<jobId>.md`) are written into this folder by the backend, not by agents.
 - Deleting a session deletes its memory thread, unregisters the workspace and removes the folder.
@@ -1082,11 +1126,9 @@ A fixed, hand-written browser script renders a spec. It is the same code that is
 
 ### 7.2 The `interactive-visuals` skill
 
-One app-owned skill, a markdown file with front matter `name: interactive-visuals`, `description: Describe a completed, data-grounded analysis answer as a JSON chart spec (or, as a fallback, as a self-contained HTML/CSS/JavaScript visual) for rendering inside the Questions to Insights session panel.`
+One app-owned skill, a markdown file with front matter `name: interactive-visuals`, `description: Use when turning a completed, data-grounded analysis answer into a JSON chart spec (or, as a fallback, a self-contained HTML/CSS/JavaScript visual) for the Questions to Insights session panel.`
 
-**Seeding.** Copied into each workspace at `.agents/skills/interactive-visuals/SKILL.md` when missing or different (byte comparison), via temp file + rename, retrying up to 3 times on `EBUSY`/`EPERM`/`EACCES` (antivirus/roaming-profile locks). Best effort: a failure only logs a warning and never blocks session creation. The source file is looked up next to the backend build/source in several candidate locations.
-
-**Use.** The designer pipeline reads the workspace copy and sends it as a system message (6.4); the designer prompt tells the model to follow it.
+**Loading.** Harness-loaded (7.3). `SKILL.md` is a short router. It gives the visual's purpose, says that a spec request returns only the spec and the runtime draws it, and names the reference each request uses. The *Spec mode* rules below are `reference/spec-mode.md`, apart from the first one (the runtime owns axes, tooltips…), which stays in the router that both modes receive. The *Freeform fallback* rules are `reference/freeform.md`. For each designer call the pipeline reads the router body and the call's reference from the skill that wins for the name `interactive-visuals` (7.3) and sends them as one system message (6.4). The designer prompt tells the model to follow it. The skill is in no agent's catalog (7.4).
 
 **Content (contract — rules the designer must follow):**
 
@@ -1124,6 +1166,84 @@ One app-owned skill, a markdown file with front matter `name: interactive-visual
 - Composed answers (when `<recommended-form>` has "Composed answer:"): KPI tiles row (2-4, deltas only when both sides are in the rows, sparkline in `.qti-kpi-spark` when a per-period series exists), then the main chart, then a closed `<details>` detail table labelled with the row count; one fragment/stylesheet/script; every tile, mark and row clickable; within 20,000 chars; all three read `window.qti.data`; stack to one column at narrow widths.
 
 The full current wording lives with the skill asset; a rebuild may reword it but must keep every rule above.
+
+### 7.3 Skills: levels, layout, loading and validation
+
+The decisions are ADR-0018 and ADR-0019 in [architecture.md](architecture.md).
+
+- **Levels.** Skills come from three levels, one folder per skill (`<level folder>/<name>/`):
+  1. **Built-in:** ships with the backend build (`skills/<name>/`).
+  2. **User:** `<data dir>/skills/<name>/`. The data dir is `APP_DATA_DIR` (the CLI's `--data-dir`, the desktop app's user-data folder). A missing `skills/` folder means the level is empty.
+  3. **Project:** `<QUESTIONS_TO_INSIGHTS_PROJECT_SKILLS_DIR>/<name>/` when that variable is set ([api.md](api.md) environment table). A relative path resolves against the launch directory (1.7). When the variable is not set the level is empty. When it names a folder that does not exist, the backend logs `[skills] Project skills folder not found: <path>` and the level is empty.
+
+  The levels mean the same in local mode and on an org server, where both folders are on the server and shared by every user. The backend reads all three once, when it starts. A change is picked up only after a restart. The app never writes the user or project folder. Folders whose name starts with `.` are ignored.
+- **Override by name.** A later level overrides an earlier one with the same name: project over user over built-in. The skill that wins is the only one with that name any agent gets. Its body and files replace the others' wholesale; nothing is merged.
+- **Layout.** `SKILL.md` starts with front matter between `---` lines:
+  - `name` equal to the folder name, and `description`, which starts with `Use when`. Both are required. `name` is on one line. `description` may wrap onto indented continuation lines, or use a `>` or `|` block; the lines are joined with single spaces.
+  - `agents` (user and project skills only): one agent registry key, or a one-line list such as `[assistant]`.
+  - A built-in skill holds no other key. A user or project skill may carry others, such as `license` or `metadata`; they are ignored.
+
+  The body that follows is short: a phase map or a router that names the files to read. Linked files sit under `phases/` (steps run in order) and `reference/` (material read when a step needs it; `references/` is accepted too), and `SKILL.md` names each one by its relative path. Other files in the folder are allowed and can be read on demand. An exact check is TypeScript in the backend, and the skill names the tool or guard that applies it.
+- **Scripts.** `scripts/` holds a skill's bundled scripts. Only a built-in skill's Node scripts run, through `run_skill_script` (3.10, ADR-0020): no shell, a minimal environment and a timeout. No built-in skill has a script today. A user or project skill's `scripts/` is never run.
+- **Which agents get a skill.**
+  - A built-in skill reaches the agents 7.4 names, in the loading mode it names.
+  - A new user or project skill is on demand for the agents its `agents` key names, or for the `assistant` when it has none. Only an agent that can load a skill on demand may be named. Today that is the `assistant`; the other agents run without tools.
+  - An override keeps the agents and the loading mode of the skill it replaces. Its own `agents` key is ignored.
+  - User agents and eval runs run on the `assistant` (1.2, 8), so they get its skills, user and project ones included.
+- **On demand.** The on-demand skills an agent gets make up its catalog, sorted by name. The app renders the catalog itself into the `## Skills` section of the assistant's prompt (2.1, 7.5): `<available_skills>` with each skill's name, its description and the absolute path of its `SKILL.md` as `<location>`. The model reads a skill with `read_file` (3.9) and runs a built-in skill's scripts with `run_skill_script` (3.10). The framework's skill catalog, usage note and `skill` / `skill_search` / `skill_read` tools are not used (ADR-0020). An agent with no on-demand skills gets no Skills section and no `read_file`.
+- **Harness-loaded.** A skill whose condition the code can decide is kept out of every catalog. The caller reads the body, or the one linked file it needs, from the skill that wins for that name, and sends it as a system message on that call.
+- **Built-in check.** When the backend starts, it validates every built-in skill folder:
+  - `SKILL.md` is present, both keys are present (`name` on one line) and no other key is used;
+  - `name` equals the folder, and `description` starts with `Use when`;
+  - every `phases/…` or `reference/…` path the body names is present.
+
+  A missing built-in folder fails the same way. Any failure stops the backend with `Invalid app skills:` followed by one line per problem (`<skill>: <problem>`). The two tables in 7.4 must name existing built-in skills, otherwise startup fails with `Unknown skill "<name>" declared for agent "<agent>"`.
+- **User and project check.** A user or project skill is checked with the same rules, apart from the extra keys it may carry, and with three more:
+  - its `agents` names only agents that load skills on demand. The problems are `unknown agent "<key>"` and `agent "<key>" does not load skills on demand`;
+  - an override of a harness-loaded skill has a non-empty body (`the body is empty`);
+  - an override of a harness-loaded skill has every file the built-in has under `phases/` and `reference/` (`<path> is missing (the skill it overrides has it)`), each with exactly the same `{{placeholders}}` (`<path> must use the placeholders {{a}}, {{b}}`, or `<path> must use no placeholders` when the built-in file has none).
+
+  A skill with any problem is **skipped**: the backend keeps running, logs the warning `[skills] Skipped <level> skill "<folder>": <problem>; <problem>`, and the agent page lists it under Skipped ([agents-evals](../capabilities/agents-evals/spec.md) R63-R67). A skipped override leaves the skill of the level below in place. A skill that passes may carry **warnings**, shown on the agent page: `agents is ignored on an override`, and `scripts/ is not run for user and project skills`.
+
+> Implementation note: `mastra/app-skills.ts` resolves the bundle root (`skills/` next to the compiled file, with the Mastra Studio source layout as fallback), the user root from `APP_DATA_DIR` (as `mastra/storage.ts` does) and the project root from the variable. It validates and resolves all three when `mastra/index.ts` is loaded, and serves `appSkillDocument(name)` / `appSkillBody(name)` / `appSkillFile(name, path)` from the winning skill. `catalogSkills(agent)` gives an agent's on-demand skills. `mastra/skill-tools.ts` builds `read_file` and `run_skill_script` over them, and `mastra/agents/assistant-prompt.ts` builds the sectioned prompt. Agents are given no framework `skills`, and workspaces are built without a `skills` option. `agentSkillsView(agent)` feeds `GET /agents/:key/skills` ([api.md](api.md) 2.6).
+
+### 7.4 Skills per agent
+
+Built-in skills, declared in code (`AGENT_SKILLS` for on-demand, `HARNESS_SKILLS` for harness-loaded):
+
+| Agent | On demand (catalog) | Harness-loaded |
+|---|---|---|
+| `assistant` | `curated-knowledge` (how to apply Block 3, 4.1), and any user or project skill that targets it (7.3) | `deep-analysis`: one phase file per deep-analysis call (2.7). |
+| `visualization` (designer) | none (it runs without tools) | `interactive-visuals` (7.2): the router body of `SKILL.md`, plus `reference/spec-mode.md` on spec calls or `reference/freeform.md` on freeform calls |
+| `sql-fixer`, `sql-verifier`, `knowledge-bootstrap`, `assistant-eval-judge` | none | none |
+
+No built-in skill is on demand. Two were measured and cut on 2026-10-13. A visuals skill would have cost a catalog plus usage note of about 1,045 characters on every turn to save 427. A dialects skill had no existing guidance to move. The first user or project skill that reaches the `assistant` gives it the `## Skills` section and `read_file` on every turn (7.3).
+
+### 7.5 The assistant's `## Skills` section
+
+Appended after `## Working rules`, separated by a blank line, only when the assistant has on-demand skills (7.3). `<name>`, `<description>` and the path are XML-escaped. Skills are sorted by name. The script sentence depends on whether `run_skill_script` is offered:
+
+```
+## Skills
+Skills are folders of instructions, scripts and references for specific kinds
+of work. Below is the list of installed skills (name, description, location).
+
+Before starting any task that matches a skill's description, read that skill's
+SKILL.md with read_file and follow it. Several skills may apply; read each one.
+Read files that SKILL.md references only when the current step needs them.
+<script sentence>
+
+<available_skills>
+  <skill>
+    <name>sql-style</name>
+    <description>Use when writing or reviewing SQL.</description>
+    <location>/abs/path/to/skills/sql-style/SKILL.md</location>
+  </skill>
+</available_skills>
+```
+
+- With `run_skill_script` offered, the script sentence is: `Run bundled scripts with run_skill_script rather than reading them into context, unless SKILL.md says otherwise.`
+- Without it: `Bundled scripts can't be run here: don't read them into context unless SKILL.md says otherwise.`
 
 ---
 
@@ -1184,7 +1304,7 @@ Per case, one `assistant` generate with: input = the question; `maxSteps: 15`; c
 
 1. Built-in checks score the agent's own output (scored before any fallback).
 2. If the answer text is empty but tools were called, a tool-only synthesis (5.5, effort `medium`) produces the *reported* answer (scores unchanged).
-3. **Result-set check** (`result-set-match`, "Result set matches expectedSql (primary correctness signal)") when `expectedSql` exists: run the reference through the same SQL bridge (row limit 500; a truncated reference fails `reference result is truncated; completeness cannot be verified`), then pass if **any** successful, complete (`rows` present, not truncated, rowCount = rows length) `run_readonly_sql` record of the case matches: width-tolerant comparison where each candidate row must have at least the reference's width; with `distinctRows`, set equality at the reference grain (every reference row contained in some candidate row and vice versa). Failure reasons: `the agent ran no successful run_readonly_sql to compare`, `could not resolve a datasource for the expectedSql comparison`, `expectedSql returned <n> row(s); none of <k> successful SQL result(s) matched. The last SQL ("<sql>") did not match — <reason>`, `expectedSql failed to run — <error>`.
+3. **Result-set check** (`result-set-match`, "Result set matches expectedSql (primary correctness signal)") when `expectedSql` exists: run the reference through the same SQL bridge (row limit 500; a truncated reference fails `reference result is truncated; completeness cannot be verified`), then pass if **any** successful, complete (`rows` present, not truncated, rowCount = rows length) `run_readonly_sql` record of the case matches: every reference row must be contained in a row of its own in that one record (each candidate row at least the reference's width, values compared as in 5.9); extra rows and extra columns are allowed, because the answer-text checks judge whether the answer states the right fact. With `distinctRows`, several reference rows may be found in the same candidate row. Failure reasons: `the agent ran no successful run_readonly_sql to compare`, `could not resolve a datasource for the expectedSql comparison`, `expectedSql returned <n> row(s); none of <k> successful SQL result(s) matched. The last SQL ("<sql>") did not match — <reason>`, `expectedSql failed to run — <error>`.
 4. **LLM judge** (`llm-judge`, description `LLM judge: <rubric>`) when `judgeRubric` exists (2.6). Invalid JSON → score 0 `judge error: the judge did not return valid JSON`; thrown error → `judge error: <message>`.
 
 A case **passes** when it has at least one check and every check scored 1. Each check result is `{id, description, score 0..1, passed, reason?}`; reasons for built-in failures are rendered from the scorer payload (`expected "<x>" in the answer — answer began "<first line ≤120 chars>…"`, `expected the answer to match <pattern> — …`, `expected "<tool>" to be called 1×, it was called <n>×`, `expected "<tool>" NOT to be called, it was`, `expected the tool order a → b, got …`, `a tool call failed: …`). The case result also carries the answer, the ordered tool calls `{name, input?, output?, error?}` (JSON, each field capped at 2,000 chars with `… (truncated)`), raw scores, `error` when the agent run itself threw, and duration.
@@ -1198,7 +1318,11 @@ A case **passes** when it has at least one check and every check scored 1. Each 
 
 ### 8.5 Other entry points
 
-- **CLI** — same suite over `EVAL_DATASETS` (comma-separated saved dataset names), booting the whole backend without HTTP; prints `PASS|FAIL <id> (<ms>)` per case and `<passed>/<total> questions passed`; exit code 1 unless all pass.
+- **CLI** — same suite over `EVAL_DATASETS` (comma-separated saved dataset names), booting the whole backend without HTTP. Exactly one of these selects the questions:
+  - `EVAL_SET`: a set id (`world-cup`, `world-cup-rest`, `formula-1`); runs every case of that set.
+  - `EVAL_CASES`: comma-separated case ids, which must all belong to one set's fixture. The data preflight (8.2) refuses a mix.
+
+  With neither, both, an unknown set id or an unknown case id, it runs nothing, makes no model call, prints the error and exits 1. The errors are `Set EVAL_SET to one question set (world-cup, world-cup-rest, formula-1) or EVAL_CASES to comma-separated case ids`, `Set EVAL_SET or EVAL_CASES, not both`, `Unknown question set "<id>" (known: …)` and `Unknown eval case(s): <ids>`. It prints `PASS|FAIL <id> (<ms>)` per case and `<passed>/<total> questions passed`, and exits 1 unless all pass.
 - **Golden-set harness** — a separate developer harness over a JSON golden set (`{name, question, dataset, expectedSql, placeholder?, notes?}`) that runs each question as a **real streamed chat turn** in a throwaway session (300 s timeout) and compares the answer's last successful SQL result with `expectedSql` using 5.9 (strict width). Verdicts `PASS|FAIL|ERROR|SKIP`.
 
 > Implementation note: `mastra/evals/assistant.evals.ts` (`runEvals` from `@mastra/core/evals`, checks from `@mastra/evals/checks`), `result-set-check.ts`, `assistant-eval-datasets.ts`, `run-assistant-evals.ts` (`npm run evals:assistant`), `modules/agents/eval-runs.service.ts`, `eval-regression.ts`, `eval-report.ts`; golden set `backend/eval/golden-set.json` via `npm run eval` (`scripts/run-eval.ts`).
@@ -1207,7 +1331,7 @@ A case **passes** when it has at least one check and every check scored 1. Each 
 
 ## 9. Agents catalogue (introspection contract)
 
-`GET /agents` and `GET /agents/:key` expose, per registered agent: `key`, `id`, `name`, `description`, `tools` (sorted names); detail adds `instructions` (prompt flattened to text), `toolDetails` (`{name, description, inputs: top-level input field names}`), `memory` (`null` when none, else `{storage, lastMessages, semanticRecall, workingMemory, generateTitle}`), and `model` (`{id, provider}` of the currently resolved model, `null` when it cannot be resolved without settings). Any accessor that throws is reported as empty. UI strings for agents without tools/memory/evals (`This agent runs in a single step with no tools.`, `This agent is stateless — no memory is configured.`, `No evals configured for this agent yet.`) are owned by [agents-evals](../capabilities/agents-evals/spec.md).
+`GET /agents` and `GET /agents/:key` expose, per registered agent: `key`, `id`, `name`, `description`, `tools` (sorted names); detail adds `instructions` (prompt flattened to text), `toolDetails` (`{name, description, inputs: top-level input field names}`), `memory` (`null` when none, else `{storage, lastMessages, semanticRecall, workingMemory, generateTitle}`), and `model` (`{id, provider}` of the currently resolved model, `null` when it cannot be resolved without settings). An agent's skills are a separate endpoint, `GET /agents/:key/skills` (7.3, [api.md](api.md) 2.6). Any accessor that throws is reported as empty. UI strings for agents without tools/memory/evals (`This agent runs in a single step with no tools.`, `This agent is stateless — no memory is configured.`, `No evals configured for this agent yet.`) are owned by [agents-evals](../capabilities/agents-evals/spec.md).
 
 ---
 
@@ -1217,7 +1341,6 @@ A case **passes** when it has at least one check and every check scored 1. Each 
 - **Note:** besides swapping gpt-5/o-series models to `openai/gpt-4.1-mini` (LenAI deployments kept), the designer also upgrades any `nano` model, LenAI included, to its `mini` sibling. The old CLAUDE.md omitted this; this spec is now the reference.
 - **Open question:** the designer's effort/cap tuning is computed from `resolveVisualizationModel()`, but the per-call bucket for the chat is computed from the plain resolved model — consistent today; confirm that `VISUAL_MODEL` pointing at a different provider than the saved key is supported (it reuses the saved API key with the overridden id).
 - **Open question:** the eval judge sends `temperature: 0` as a *provider option*; for OpenAI/LenAI buckets this is likely an unknown option rather than the sampling temperature. Is temperature actually applied?
-- **Open question:** whether the workspace filesystem/skill tools the framework attaches (3.8) are really offered to the assistant and designer at run time, and under which names; the catalogue's `tools` list shows only the 7 declared tools.
 - **Gap:** deep-analysis investigation calls keep `ask_clarification`, `create_visual` and `update_visual` available; only the prompt forbids them, and nothing intercepts a clarification in `generate` mode. Should these tools be removed for background calls?
 - **Gap:** `list_entities`' description says the kind is "databricks or postgres", omitting `rest` (which the SQL tool description and prompt do mention).
 - **Gap:** the non-streamed chat endpoint persists no `data`, `entities`, `interpretation`, clarification, grounding guard or cross-check. Is it still used by any client? (The frontend service still has a caller.)
@@ -1231,7 +1354,7 @@ A case **passes** when it has at least one check and every check scored 1. Each 
 
 ## Appendix A — `assistant` system prompt (current wording)
 
-Lines are joined with `\n`. A rebuild may tune the wording but must keep every rule A1–A34 and the opening phrase.
+Lines are joined with `\n`. A rebuild may tune the wording but must keep every rule A1–A12 and A19–A35, the opening phrase and the section headings (2.1). Rules A13–A18 are the `curated-knowledge` skill (Appendix B), not part of this prompt. The `## Tools` lines are generated from the tools (2.1). The built-in `curated-knowledge` skill is always in the catalog, so the shipped prompt always ends with the `## Skills` section (7.5) after a blank line, and `- read_file(path): …` follows `ask_clarification` (plus `- run_skill_script(skill, script, args): …` when offered). Below: the prompt up to the end of the working rules, then the Skills section with the built-in catalog, `<bundle>` being the folder the app's built-in skills are installed in.
 
 ```
 You are the Questions to Insights assistant — a data analyst working over
@@ -1242,11 +1365,26 @@ context tells you which. Your job
 is to figure out how each question can be answered with the existing
 entities and data, then answer it yourself.
 
+## Tools
+- list_entities(): List the entities (fully-qualified catalog.schema.table) available in this session's datasets, with the datasource (id and kind: databricks or postgres) each one lives in.
+- describe_entity(entity, datasourceId): Describe one dataset entity: its columns with types, nullability, and — when captured at save time — a description and real sample values per column.
+- sample_rows(entity, datasourceId, limit, rationale): Fetch up to 100 sample rows from one dataset entity.
+- run_readonly_sql(sql, datasourceId, limit, rationale): Run a single read-only SELECT/WITH statement (live) against one datasource.
+- create_visual(sourceMessageAt, instruction): Create a new interactive visual (HTML/CSS/JS chart) from one of your completed analysis answers.
+- update_visual(visualId, instruction): Tailor an existing interactive visual: change chart type, colours, labels, filters, which series or how many items are shown, etc.
+- ask_clarification(question, options): Ask the user ONE clarifying question with 2-4 concrete answer options, either before starting an analysis when their question is ambiguous (unclear scope, metric, timeframe, or entity), or mid-analysis when the data itself is ambiguous — a filter value, member/entity name or timeframe with several plausible matches.
+- read_file(path): Read one file of an installed skill by its absolute path: the location the skill list gives for SKILL.md, or that folder joined with a path SKILL.md names.
+
+## Working rules
 Call ask_clarification only when interpretations diverge materially —
 the metric or meaning itself is undefined ("best", "performed well",
 "top") or the choice would fundamentally change the analysis. In that
 case, ask first: one short question with 2-4 concrete options grounded
-in the dataset entities, then stop and wait for the answer. You may also
+in the dataset entities, then stop and wait for the answer. A question
+that asks who or what is "best", "top" or "performed well" without
+naming a measure is such a case, even when you could cover several
+measures in one answer: ask before running any query, and do not settle
+it by checking coverage or by reporting every measure. You may also
 clarify mid-analysis when the real data turns out to be ambiguous — a
 filter value, member or entity name with several plausible matches — and
 then the options must quote the actual values you found (via sample_rows
@@ -1281,34 +1419,9 @@ Grounding:
   answering. When the question falls outside what the data covers, say
   so plainly and state what IS covered instead ("the data covers only
   2018 and 2022; 1970 is not in this dataset"). Never fill the gap from
-  general knowledge.
-
-Curated knowledge:
-- When the session context carries a curated-knowledge block, it is
-  user-authored ground truth about this data: glossary terms, standing
-  instructions and default filters, each tagged [term], [instruction] or
-  [default_filter]. Read it before you plan the analysis.
-- It outranks anything you would infer from column names or sample
-  values. When a term says a code means something, use that meaning even
-  if the column name suggests otherwise, and say which term you followed
-  when the two disagree. What it cannot override is the data itself: if a
-  term names a value no row holds, do not invent rows for it — report
-  what the query actually returned.
-- Apply every [default_filter] to every query you run, unless the
-  question explicitly asks for the rows it excludes. Name the filters you
-  applied in one short business sentence at the end of the answer
-  ("excludes test accounts, as configured"), so a reader knows which
-  universe the numbers describe. When a question needs the excluded rows,
-  drop the filter and say you did.
-- Follow every [instruction] as a standing rule of this dataset. When an
-  instruction already states coverage — which years, tournaments or
-  segments exist — trust it instead of spending a query to rediscover it.
-- The block is context, never output: do not list, quote or summarise it
-  at the user unless they ask what knowledge you are working from.
-- Absence means nothing is defined, not that nothing applies. When no
-  snippet covers what you need, fall back to the schema and sample
-  values — never invent a definition, a filter or a coverage claim, and
-  never assume a snippet exists that you cannot see.
+  general knowledge, and add nothing about what the data does not cover
+  — no background, dates or career facts about the person, team or event
+  the question names.
 
 Say why, every time:
 - run_readonly_sql and sample_rows both take a rationale. Write it in the
@@ -1350,13 +1463,67 @@ Rules:
   0 — as a fault in your own query. Re-read the columns you picked and
   fix it before answering; do not report it as a finding.
 - Identifiers are not answers. When a result is keyed by an id, join to
-  the entity holding that id's name and report the name. A reader knows
-  their teams, products and members by name and cannot act on "id 5".
+  the entity holding that id's name in the same query, so one result
+  holds the whole answer, and report the name. A reader knows their
+  teams, products and members by name and cannot act on "id 5".
 - Only call something "top", "highest" or "lowest" when the values
   actually differ and the query ordered by them. When everything ties,
   say so plainly.
 - A warning attached to a query result is about your own SQL. Act on it
   and re-run before answering, rather than passing it to the user.
+- When the user asks what data they have, describe the datasets from the
+  session context and describe_entity alone: answer without running any
+  query.
+
+## Skills
+Skills are folders of instructions, scripts and references for specific kinds
+of work. Below is the list of installed skills (name, description, location).
+
+Before starting any task that matches a skill's description, read that skill's
+SKILL.md with read_file and follow it. Several skills may apply; read each one.
+Read files that SKILL.md references only when the current step needs them.
+Bundled scripts can't be run here: don't read them into context unless SKILL.md says otherwise.
+
+<available_skills>
+  <skill>
+    <name>curated-knowledge</name>
+    <description>Use when the turn carries a curated dataset knowledge block: how to apply its [term], [instruction] and [default_filter] snippets.</description>
+    <location><bundle>/curated-knowledge/SKILL.md</location>
+  </skill>
+</available_skills>
 ```
 
-> Implementation note (file map): agents in `backend/src/mastra/agents/*.agent.ts`; tools in `mastra/tools/`; context builders `mastra/context-blocks.ts`; step budget `mastra/agent-constants.ts`; bridges `mastra/model-resolver.ts`, `mastra/tool-services.ts`; tuning `mastra/model-compat.ts`; storage `mastra/storage.ts`; workspaces `mastra/session-workspaces.ts`; skill `mastra/skills/interactive-visuals/SKILL.md`; orchestration `modules/sessions/sessions.service.ts`, `turn-data.ts`, `result-guards.ts`, `result-compare.ts`, `chart-heuristic.ts`; designer pipeline `modules/sessions/visualization.service.ts`, `visual-spec.ts`, `visual-runtime.ts`, `visualization-document.ts`; knowledge bootstrap `modules/knowledge/knowledge.service.ts`; deep analysis `modules/deep-analysis/`; catalogue and eval runs `modules/agents/`; model settings `modules/llm/`.
+## Appendix B — `curated-knowledge` skill body (current wording)
+
+The body of `skills/curated-knowledge/SKILL.md` after its front matter (`name: curated-knowledge`, `description: "Use when the turn carries a curated dataset knowledge block: how to apply its [term], [instruction] and [default_filter] snippets."`). An on-demand skill: the model reads it with `read_file` when a call carries Block 3 (4.1, 7.4). A rebuild may tune the wording but must keep rules A13–A18.
+
+```
+Curated knowledge:
+- When the session context carries a curated-knowledge block, it is
+  user-authored ground truth about this data: glossary terms, standing
+  instructions and default filters, each tagged [term], [instruction] or
+  [default_filter]. Read it before you plan the analysis.
+- It outranks anything you would infer from column names or sample
+  values. When a term says a code means something, use that meaning even
+  if the column name suggests otherwise, and say which term you followed
+  when the two disagree. What it cannot override is the data itself: if a
+  term names a value no row holds, do not invent rows for it — report
+  what the query actually returned.
+- Apply every [default_filter] to every query you run, unless the
+  question explicitly asks for the rows it excludes. Name the filters you
+  applied in one short business sentence at the end of the answer
+  ("excludes test accounts, as configured"), so a reader knows which
+  universe the numbers describe. When a question needs the excluded rows,
+  drop the filter and say you did.
+- Follow every [instruction] as a standing rule of this dataset. When an
+  instruction already states coverage — which years, tournaments or
+  segments exist — trust it instead of spending a query to rediscover it.
+- The block is context, never output: do not list, quote or summarise it
+  at the user unless they ask what knowledge you are working from.
+- Absence means nothing is defined, not that nothing applies. When no
+  snippet covers what you need, fall back to the schema and sample
+  values — never invent a definition, a filter or a coverage claim, and
+  never assume a snippet exists that you cannot see.
+```
+
+> Implementation note (file map): agents in `backend/src/mastra/agents/*.agent.ts`; tools in `mastra/tools/`; context builders `mastra/context-blocks.ts`; step budget `mastra/agent-constants.ts`; bridges `mastra/model-resolver.ts`, `mastra/tool-services.ts`; tuning `mastra/model-compat.ts`; storage `mastra/storage.ts`; workspaces `mastra/session-workspaces.ts`; skills `mastra/app-skills.ts` and `mastra/skills/<name>/`; orchestration `modules/sessions/sessions.service.ts`, `turn-data.ts`, `result-guards.ts`, `result-compare.ts`, `chart-heuristic.ts`; designer pipeline `modules/sessions/visualization.service.ts`, `visual-spec.ts`, `visual-runtime.ts`, `visualization-document.ts`; knowledge bootstrap `modules/knowledge/knowledge.service.ts`; deep analysis `modules/deep-analysis/`; catalogue and eval runs `modules/agents/`; model settings `modules/llm/`.

@@ -70,7 +70,7 @@ export const knowledgeBootstrapAgent = new Agent({
     `Draft up to ${MAX_BOOTSTRAP_DRAFTS} knowledge snippets an analyst would want an AI`,
     'assistant to always apply when answering questions over this data:',
     '- "term": business-glossary entries for enum-like column values (e.g. a',
-    '  status column\'s distinct codes) or domain jargon evident from the',
+    "  status column's distinct codes) or domain jargon evident from the",
     '  schema/samples. `title` is the term name, `body` is its definition or',
     '  code-to-meaning mapping.',
     '- "instruction": formatting conventions and data quirks (e.g. a column',

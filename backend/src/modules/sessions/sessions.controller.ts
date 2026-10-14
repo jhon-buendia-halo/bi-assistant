@@ -188,10 +188,7 @@ export class SessionsController {
       );
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Length', archive.length);
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="${filename}"`,
-    );
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(archive);
   }
 

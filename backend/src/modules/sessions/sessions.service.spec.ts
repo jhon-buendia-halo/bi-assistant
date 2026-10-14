@@ -66,6 +66,7 @@ jest.mock('./visualization-document', () => ({
 
 import { BadRequestException, Logger } from '@nestjs/common';
 import { resolveAgentModel } from '../../mastra/model-resolver';
+import { appSkillBody } from '../../mastra/app-skills';
 
 /** No session in these tests was started from a user agent. */
 const userAgentsStub = {
@@ -135,9 +136,9 @@ describe('SessionsService streaming', () => {
     };
     const repository = {
       get: jest.fn().mockResolvedValue(session),
-      update: jest.fn().mockImplementation(async (_id, patch) => {
+      update: jest.fn().mockImplementation((_id, patch) => {
         Object.assign(session, patch);
-        return session;
+        return Promise.resolve(session);
       }),
     };
     const live = options.userAgent?.live;
@@ -283,7 +284,7 @@ describe('SessionsService streaming', () => {
       () => {},
     );
 
-    const options = (agent.generate as jest.Mock).mock.calls.map(
+    const options = agent.generate.mock.calls.map(
       ([, opts]: [unknown, { providerOptions?: unknown }]) =>
         opts?.providerOptions,
     );
@@ -352,6 +353,86 @@ describe('SessionsService streaming', () => {
     await service.streamMessage('session-1', 'Why?', () => {});
 
     expect(session.messages.at(-1)?.knowledge).toEqual(used);
+  });
+
+  describe('the curated-knowledge block, its skill on demand (agents.md 4.1, 7.4)', () => {
+    const BLOCK =
+      'Curated dataset knowledge (user-authored — treat as authoritative over anything you infer from schema):\n- [instruction] Coverage: only 2018 and 2022.';
+    type Context = { role: string; content: string }[];
+    const streamedContext = (agent: { stream: jest.Mock }) =>
+      ((agent.stream.mock.calls as unknown[][])[0][1] as { context: Context })
+        .context;
+    /** The block is sent, and the skill's rules are not (ADR-0020). */
+    const expectBlockWithoutRules = (context: Context) => {
+      expect(context.filter((m) => m.content === BLOCK)).toHaveLength(1);
+      expect(
+        context.some((m) => m.content.includes('Curated knowledge:')),
+      ).toBe(false);
+      expect(
+        context.some((m) => m.content === appSkillBody('curated-knowledge')),
+      ).toBe(false);
+    };
+
+    it('sends the knowledge block without the skill', async () => {
+      const { service, agent } = buildStreaming(
+        answerStream([{ sql: 'select 1', rows: [{ n: 1 }] }]),
+        { knowledgeBlock: BLOCK },
+      );
+
+      await service.streamMessage('session-1', 'Who won?', () => {});
+
+      expectBlockWithoutRules(streamedContext(agent));
+    });
+
+    it('sends no knowledge rules when no knowledge applies', async () => {
+      const { service, agent } = buildStreaming(
+        answerStream([{ sql: 'select 1', rows: [{ n: 1 }] }]),
+      );
+
+      await service.streamMessage('session-1', 'Who won?', () => {});
+
+      const text = streamedContext(agent)
+        .map((m) => m.content)
+        .join('\n');
+      expect(text).not.toContain('Curated dataset knowledge');
+      expect(text).not.toContain('Curated knowledge:');
+    });
+
+    it('sends the same block, without the skill, in the grounding pass', async () => {
+      const { service, agent } = buildStreaming(answerStream([]), {
+        knowledgeBlock: BLOCK,
+        answer: 'France won.',
+      });
+
+      await service.streamMessage('session-1', 'Who won?', () => {});
+
+      const [, corrective] = (agent.generate.mock.calls as unknown[][])[0] as [
+        string,
+        { context: Context },
+      ];
+      expectBlockWithoutRules(corrective.context);
+    });
+
+    it('gives a deep-analysis call the same block, without the skill', async () => {
+      const { service, session } = buildStreaming(answerStream([]), {
+        knowledgeBlock: BLOCK,
+      });
+
+      const options = await service.backgroundAgentOptions(session, 'Why?');
+
+      expectBlockWithoutRules(options.context);
+      expect(options).not.toHaveProperty('memory');
+    });
+
+    it('gives a deep-analysis call no rules when no knowledge applies', async () => {
+      const { service, session } = buildStreaming(answerStream([]));
+
+      const options = await service.backgroundAgentOptions(session, 'Why?');
+
+      expect(options.context.map((m) => m.content).join('\n')).not.toContain(
+        'Curated knowledge:',
+      );
+    });
   });
 
   it('omits the knowledge record when no snippet applied', async () => {
@@ -454,6 +535,7 @@ describe('SessionsService streaming', () => {
       expect(last).toContain(
         '<agent-instructions>\nAlways name the tournament year.\n</agent-instructions>',
       );
+      // The knowledge block (agents.md 4.1) comes right before it.
       expect(context[context.length - 2].content).toContain(
         'Curated dataset knowledge',
       );
@@ -557,10 +639,30 @@ describe('SessionsService streaming', () => {
 
     const message = session.messages.at(-1)!;
     expect(message.clarification?.question).toBe('Which season?');
+    // Option strings are split into the stored label and description.
+    expect(message.clarification?.options).toEqual([
+      { label: '2022' },
+      { label: '2018', description: 'the earlier tournament' },
+    ]);
     expect(message.data).toEqual([
       expect.objectContaining({ tool: 'run_readonly_sql', input: 'select 1' }),
     ]);
     expect(message.entities).toEqual(['main.football.matches']);
+  });
+
+  it('shows no card for a malformed clarification, only the one the model asks again', async () => {
+    const { service, session } = buildStreaming(
+      streamOf(retriedClarificationChunks()),
+    );
+
+    await service.streamMessage('session-1', 'Which team?', () => {});
+
+    const cards = session.messages.filter((m) => m.clarification);
+    expect(cards).toHaveLength(1);
+    expect(cards[0].clarification?.options).toEqual([
+      { label: 'Most titles' },
+      { label: 'Highest win rate', description: 'share of matches won' },
+    ]);
   });
 
   it('marks a record truncated when storage keeps fewer rows than returned', async () => {
@@ -1216,7 +1318,7 @@ describe('SessionsService SQL self-correction', () => {
       expect.objectContaining({
         rows: [{ n: 3 }],
         correctedSql: 'SELECT count(claim_id) AS n FROM main.health.claims',
-        note: expect.stringContaining('auto-corrected'),
+        note: expect.stringContaining('auto-corrected') as string,
       }),
     );
   });
@@ -1259,7 +1361,7 @@ describe('SessionsService SQL self-correction', () => {
 
     await run('SELECT\n  count(claimid) AS n\nFROM main.health.claims');
 
-    const warnings = warn.mock.calls.map((call) => call[0]);
+    const warnings = warn.mock.calls.map((call): unknown => call[0]);
     expect(warnings).toEqual([
       expect.stringContaining(
         // Newlines collapsed so one failure stays one log line.
@@ -1363,9 +1465,9 @@ describe('SessionsService visual tool bridge (turn records)', () => {
     const repository = {
       listAllOwners: jest.fn().mockResolvedValue([]),
       get: jest.fn().mockResolvedValue(session),
-      update: jest.fn().mockImplementation(async (_id, patch) => {
+      update: jest.fn().mockImplementation((_id, patch) => {
         Object.assign(session, patch);
-        return session;
+        return Promise.resolve(session);
       }),
     };
     const meta = (currentVersion: number) => ({
@@ -1474,9 +1576,9 @@ describe('SessionsService answer feedback', () => {
   function build(session: SessionDoc) {
     const repository = {
       get: jest.fn().mockResolvedValue(session),
-      update: jest.fn().mockImplementation(async (_id, patch) => {
+      update: jest.fn().mockImplementation((_id, patch) => {
         Object.assign(session, patch);
-        return session;
+        return Promise.resolve(session);
       }),
     };
     const verifiedQueries = {
@@ -1605,7 +1707,7 @@ describe('SessionsService answer feedback', () => {
 });
 
 /** SQL runs followed by a written answer — the ordinary completed turn. */
-async function* answerStream(
+function* answerChunks(
   runs: {
     sql: string;
     rows?: Record<string, unknown>[];
@@ -1648,7 +1750,7 @@ async function* answerStream(
 }
 
 /** One SQL run, then the model asks for a clarification and the turn ends. */
-async function* clarificationStream() {
+function* clarificationChunks() {
   yield {
     type: 'tool-call',
     payload: {
@@ -1675,13 +1777,13 @@ async function* clarificationStream() {
       toolName: 'ask_clarification',
       args: {
         question: 'Which season?',
-        options: [{ label: '2022' }, { label: '2018' }],
+        options: ['2022', '2018 — the earlier tournament'],
       },
     },
   };
 }
 
-async function* toolOnlyStream(count: number) {
+function* toolOnlyChunks(count: number) {
   for (let index = 0; index < count; index++) {
     const toolCallId = `call-${index}`;
     yield {
@@ -1703,10 +1805,66 @@ async function* toolOnlyStream(count: number) {
   }
 }
 
-/** A stream that fails outright — a provider error, a dead connection. */
-// eslint-disable-next-line @typescript-eslint/require-yield
-async function* failingStream(error: unknown) {
-  throw error;
+/**
+ * Hands chunks out one at a time through an async iterator, the way a model's
+ * `fullStream` delivers them.
+ */
+async function* streamOf<T>(chunks: Iterable<T>): AsyncGenerator<T> {
+  for (const chunk of chunks) yield Promise.resolve(chunk);
+}
+
+function answerStream(...args: Parameters<typeof answerChunks>) {
+  return streamOf(answerChunks(...args));
+}
+
+function clarificationStream() {
+  return streamOf(clarificationChunks());
+}
+
+/** A malformed ask_clarification call, its validation error, then a valid one. */
+function* retriedClarificationChunks() {
+  yield {
+    type: 'tool-call',
+    payload: {
+      toolCallId: 'call-0',
+      toolName: 'ask_clarification',
+      args: {
+        question: 'Which measure?',
+        options: '\n<parameter name="label">Most titles',
+      },
+    },
+  };
+  yield {
+    type: 'tool-result',
+    payload: {
+      toolCallId: 'call-0',
+      toolName: 'ask_clarification',
+      result: { error: true, message: 'Tool input validation failed' },
+    },
+  };
+  yield {
+    type: 'tool-call',
+    payload: {
+      toolCallId: 'call-1',
+      toolName: 'ask_clarification',
+      args: {
+        question: 'Which measure?',
+        options: ['Most titles', 'Highest win rate — share of matches won'],
+      },
+    },
+  };
+}
+
+function toolOnlyStream(count: number) {
+  return streamOf(toolOnlyChunks(count));
+}
+
+/**
+ * A stream that fails outright — a provider error, a dead connection: the
+ * first read rejects.
+ */
+async function* failingStream(error: Error): AsyncGenerator<never> {
+  yield await Promise.reject(error);
 }
 
 describe('SessionsService visual tailoring and repair', () => {
@@ -1737,9 +1895,9 @@ describe('SessionsService visual tailoring and repair', () => {
     };
     const repository = {
       get: jest.fn().mockResolvedValue(session),
-      update: jest.fn().mockImplementation(async (_id, patch) => {
+      update: jest.fn().mockImplementation((_id, patch) => {
         Object.assign(session, patch);
-        return session;
+        return Promise.resolve(session);
       }),
     };
     const visuals = {
@@ -1755,18 +1913,18 @@ describe('SessionsService visual tailoring and repair', () => {
         ),
       update: jest
         .fn()
-        .mockImplementation(async () => ({ metadata: visual(2) })),
+        .mockImplementation(() => Promise.resolve({ metadata: visual(2) })),
       repair: jest
         .fn()
-        .mockImplementation(async () => ({ metadata: visual(2) })),
-      load: jest
-        .fn()
-        .mockImplementation(async (_doc, id: string, version: number) => ({
+        .mockImplementation(() => Promise.resolve({ metadata: visual(2) })),
+      load: jest.fn().mockImplementation((_doc, id: string, version: number) =>
+        Promise.resolve({
           ...visual(version),
           id,
           version,
           document: '<html></html>',
-        })),
+        }),
+      ),
     };
     const service = new SessionsService(
       repository as never,

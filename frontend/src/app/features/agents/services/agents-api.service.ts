@@ -131,6 +131,58 @@ export interface EvalRunView {
   finishedAt?: string;
 }
 
+/** Where a skill comes from (agents.md 7.3). */
+export type SkillLevel = 'built-in' | 'user' | 'project';
+
+/** One skill level's folder, as the backend resolved it at startup. */
+export interface AgentSkillLevel {
+  level: SkillLevel;
+  /** Null for built-in, and for project when the variable is unset. */
+  path: string | null;
+  found: boolean;
+}
+
+export interface AgentSkillFileEntry {
+  /** Relative to the skill's folder, '/'-separated. */
+  path: string;
+  size: number;
+}
+
+export interface AgentSkill {
+  name: string;
+  description: string;
+  level: SkillLevel;
+  loading: 'on-demand' | 'harness';
+  /** Lower levels that also hold a valid skill with this name, lowest first. */
+  overrides: SkillLevel[];
+  /** Every file in the folder, `SKILL.md` first, then sorted. */
+  files: AgentSkillFileEntry[];
+  warnings: string[];
+}
+
+export interface AgentSkippedSkill {
+  /** The skill's folder name. */
+  name: string;
+  level: 'user' | 'project';
+  problems: string[];
+}
+
+/** `GET /agents/:key/skills` (api.md 34a). */
+export interface AgentSkillsView {
+  /** Always built-in, user, project, in that order. */
+  levels: AgentSkillLevel[];
+  skills: AgentSkill[];
+  skipped: AgentSkippedSkill[];
+}
+
+/** `GET /agents/:key/skills/:name/file` (api.md 34b). */
+export interface AgentSkillFile {
+  path: string;
+  size: number;
+  /** Null when the file is larger than 256 KB or isn't text. */
+  content: string | null;
+}
+
 /** Body of `POST /agents` and `PUT /agents/:id/draft` (api.md 41, 42). */
 export type SaveAgentInput = Partial<AgentConfig> & { name: string };
 
@@ -197,6 +249,24 @@ export class AgentsApiService {
     return this.http.put<AgentMutationResult>(
       `${API_BASE_URL}/agents/${encodeURIComponent(key)}/pin`,
       { pinned },
+    );
+  }
+
+  /** The skills the agent gets; a user agent answers with the assistant's. */
+  skills(key: string): Observable<AgentSkillsView> {
+    return this.http.get<AgentSkillsView>(
+      `${API_BASE_URL}/agents/${encodeURIComponent(key)}/skills`,
+    );
+  }
+
+  /** One file of a skill; `path` is relative to the skill's folder. */
+  skillFile(
+    key: string,
+    name: string,
+    path: string,
+  ): Observable<AgentSkillFile> {
+    return this.http.get<AgentSkillFile>(
+      `${API_BASE_URL}/agents/${encodeURIComponent(key)}/skills/${encodeURIComponent(name)}/file?path=${encodeURIComponent(path)}`,
     );
   }
 

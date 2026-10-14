@@ -4,7 +4,7 @@ The complete contract between the renderer (or any HTTP client) and the backend,
 
 Contents: [1 Conventions](#1-conventions) · [2 Endpoints](#2-endpoints) · [3 Streaming and long-running work](#3-streaming-and-long-running-work) · [4 Desktop bridge (IPC)](#4-desktop-bridge-ipc) · [5 CLI contract](#5-cli-contract) · [6 Environment variables](#6-environment-variables) · [7 Gaps and open questions](#7-gaps-and-open-questions)
 
-Endpoint total: **57 HTTP route handlers** across 9 controllers (sessions 14, datasources 6, metrics 5, llm 4, datasets 3, agents 13, deep analysis 3, testing data 3, knowledge 6). Verified queries have **no** HTTP surface (they are created and removed as a side effect of message feedback, and read by the metrics promotion path). Multi-user support adds 33 routes: the auth and current-user routes (2.13, 7: three for org server mode only, three for local mode only, and `GET /me`), the SCIM routes (2.14, 14, org server mode only) and the admin routes (2.15, 12, both modes). A route of one mode answers 404 in the other (1.9).
+Endpoint total: **59 HTTP route handlers** across 9 controllers (sessions 14, datasources 6, metrics 5, llm 4, datasets 3, agents 15, deep analysis 3, testing data 3, knowledge 6). Verified queries have **no** HTTP surface (they are created and removed as a side effect of message feedback, and read by the metrics promotion path). Multi-user support adds 33 routes: the auth and current-user routes (2.13, 7: three for org server mode only, three for local mode only, and `GET /me`), the SCIM routes (2.14, 14, org server mode only) and the admin routes (2.15, 12, both modes). A route of one mode answers 404 in the other (1.9).
 
 ---
 
@@ -136,7 +136,7 @@ The renderer shows its own toast for any 403 (`You don't have permission to do t
 | Routes | Requirement |
 |---|---|
 | Every `/sessions` route (2.1), including the chat stream, feedback, visuals and deep analysis (2.7) | `use-agents` |
-| `GET /agents`, `GET /agents/:key`, `GET /agents/:key/evals`, `PUT /agents/:key/pin` | `use-agents` |
+| `GET /agents`, `GET /agents/:key`, `GET /agents/:key/skills`, `GET /agents/:key/skills/:name/file`, `GET /agents/:key/evals`, `PUT /agents/:key/pin` | `use-agents` |
 | `POST /agents`, `PUT /agents/:id/draft`, `POST /agents/:id/publish`, `DELETE /agents/:id`, `POST /agents/:key/evals/run`, `GET /agents/:key/evals/runs`, `GET /agents/:key/evals/runs/:jobId`, `GET /agents/:key/evals/runs/:jobId/download`, `DELETE /agents/:key/evals/runs/:jobId` | `create-agents` |
 | Every `/knowledge` route (2.8) and every `/metrics` route (2.4) | `use-agents` |
 | `GET /datasources`, `GET /datasources/:id/inventory` | `use-agents` |
@@ -437,6 +437,8 @@ Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra regi
 |---|---|---|---|
 | 33 | `GET /agents` | Agent catalogue | yes |
 | 34 | `GET /agents/:key` | One agent in detail | yes |
+| 34a | `GET /agents/:key/skills` | The agent's skills, their levels and the skipped skills | yes |
+| 34b | `GET /agents/:key/skills/:name/file` | One file of one of the agent's skills | yes |
 | 35 | `GET /agents/:key/evals` | Eval question sets | yes |
 | 36 | `POST /agents/:key/evals/run` | Start an eval run | yes |
 | 37 | `GET /agents/:key/evals/runs` | Run history | yes |
@@ -458,6 +460,31 @@ Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra regi
 - Response `200`: `AgentDetail = AgentSummary & { draft?: AgentConfig; live?: AgentConfig /* user agents only; shapes in data-model 3.10 */; instructions: string /* prompt flattened to text */; toolDetails: { name, description, inputs: string[] /* top-level input param names */ }[]; memory: { storage: string|null; lastMessages: number|false|null; semanticRecall: boolean; workingMemory: boolean; generateTitle: boolean } | null; model: { id: string; provider: string } | null /* null when no LLM settings saved */ }`.
 - A user agent runs on the assistant, so its `instructions`, `toolDetails`, `memory` and `model` describe the assistant. Its own instructions are in `draft` and `live`.
 - Errors (Style B): `404 "Agent \"<key>\" not found"`. `:key` is resolved as a registry key first, then as a user-agent id.
+
+#### 34a. `GET /agents/:key/skills`
+- Response `200`: `AgentSkillsView`. A user agent runs on the assistant, so it answers with the assistant's skills. The levels, override rules and checks are in [agents.md](agents.md) 7.3; the response shows what the backend resolved when it started.
+  ```ts
+  type SkillLevel = 'built-in' | 'user' | 'project';
+  AgentSkillsView = {
+    levels: { level: SkillLevel; path: string | null /* null for built-in, and for project when the variable is unset */; found: boolean }[]; // always the three, in this order
+    skills: {
+      name: string; description: string; level: SkillLevel;
+      loading: 'on-demand' | 'harness';
+      overrides: SkillLevel[];      // lower levels that also hold a valid skill with this name, lowest first
+      files: { path: string; size: number }[]; // every regular file in the folder, relative, '/'-separated; SKILL.md first, then sorted
+      warnings: string[];           // agents.md 7.3
+    }[];                            // sorted by name
+    skipped: { name: string /* folder */; level: 'user' | 'project'; problems: string[] }[]; // sorted by level, then name
+  }
+  ```
+- A skipped skill is listed for the agents it would have reached: those its `agents` key names when that is readable, the agents of the skill it would override, else `assistant`.
+- Errors (Style B): `404 "Agent \"<key>\" not found"`.
+
+#### 34b. `GET /agents/:key/skills/:name/file`
+- Query: `path` (required), a path relative to the skill's folder as listed in `files`.
+- Response `200`: `{ path: string; size: number; content: string | null }`. `content` is `null` when the file is larger than 256 KB or is not UTF-8 text (it holds a NUL byte); the UI says so instead of showing it.
+- Reads only the winning skill's folder (34a). Symbolic links are neither listed nor read.
+- Errors (Style B): `404 "Agent \"<key>\" not found"`; `404 "Agent \"<key>\" has no skill \"<name>\""`; `400 "Invalid skill file path \"<path>\""` for an empty, absolute or `..` path; `404 "Skill \"<name>\" has no file \"<path>\""`.
 
 #### 35. `GET /agents/:key/evals`
 - Response `200`: `{ sets: AgentEvalSet[] }`. Only `assistant` has sets; any other key returns `{ sets: [] }` (no 404). `AgentEvalSet = { id, name, description, cases: { id, question, intent, checks: { id, name, description }[] }[] }`.
@@ -1194,10 +1221,11 @@ Argument parsing is **strict**: an unknown flag or malformed argument prints `qu
 | Variable | Read in | Meaning | Default |
 |---|---|---|---|
 | `PORT` | `main.ts` (Electron-spawned/standalone start) | Listen port. The Electron main process sets it from `BACKEND_PORT`. Ignored by the CLI (which uses `--port`). | `3000` |
-| `APP_DATA_DIR` | database module, Mastra storage; set by CLI and Electron main | Directory for `app.sqlite`, `mastra.sqlite`, `observability.duckdb`, `workspaces/`. | database: `<cwd>/data`; Mastra storage: `<INIT_CWD or PWD or cwd>/data` |
+| `APP_DATA_DIR` | database module, Mastra storage, app skills; set by CLI and Electron main | Directory for `app.sqlite`, `mastra.sqlite`, `observability.duckdb`, `workspaces/`, and the user skills folder `skills/`. | database: `<cwd>/data`; Mastra storage: `<INIT_CWD or PWD or cwd>/data` |
 | `APP_SECRET` | crypto service; set by CLI and Electron main | Key material for encrypting API keys at rest (SHA-256 to an AES-256-GCM key). Missing: the crypto service reads `<APP_DATA_DIR>/.app-secret`, or generates it (32 random bytes hex, mode 0600) and logs where. Must stay stable across launches. | `<APP_DATA_DIR>/.app-secret` |
 | `WEB_ROOT` | `app-bootstrap.ts` | Directory holding the built web UI (`index.html`). | `<package>/public` |
 | `INIT_CWD`, `PWD` | Mastra storage | Launch directory used to place the fallback `data/` folder (Studio changes `cwd`). | process cwd |
+| `QUESTIONS_TO_INSIGHTS_PROJECT_SKILLS_DIR` | `mastra/app-skills.ts`, at startup | The project skills folder, the highest of the three skill levels ([agents.md](agents.md) 7.3). Relative paths resolve against the launch directory. On an org server it applies to every user. | unset: no project skills |
 | `VISUAL_MODEL` | visual designer agent | Forces the designer model (router id `provider/model`). Unset: reasoning-family models are swapped for `openai/gpt-4.1-mini` and `nano` models upgraded to their `mini` sibling; others kept. | unset |
 | `OPENAI_API_KEY` | Mastra's env-bound model router (via model resolver) | Fallback model credential (`openai/gpt-4o-mini`) when no LLM settings are saved. | unset |
 | `WORLD_CUP_DB_PORT` | testing-data fixture registry | Port of the sample PostgreSQL server in the form prefill and compose stack. | `55432` |
@@ -1208,6 +1236,8 @@ Argument parsing is **strict**: an unknown flag or malformed argument prints `qu
 | `ORG_SCIM_TOKEN` | org server config | The SCIM bearer token given to the identity provider. At least 32 characters (shorter is a startup error). Required for org server mode. Never logged. | unset |
 | `ORG_BOOTSTRAP_ADMINS` | org server config | Comma-separated user names that always hold Platform admin (admin R18), matched against the directory `userName`: for Entra ID the UPN (`preferred_username`, SCIM `userName`), which usually looks like an email. Never matched against the email. Optional; blanks ignored, case-insensitive. | unset |
 | `EVAL_DATASETS` | `mastra/evals/run-assistant-evals.ts` (CLI eval script only) | Comma-separated dataset names to run the assistant evals against. Required by that script. | none |
+| `EVAL_SET` | `mastra/evals/run-assistant-evals.ts` (CLI eval script only) | The question set to run (`world-cup`, `world-cup-rest`, `formula-1`). That script needs this or `EVAL_CASES`, not both ([agents.md](agents.md) 8.5). | none |
+| `EVAL_CASES` | `mastra/evals/run-assistant-evals.ts` (CLI eval script only) | Comma-separated eval case ids to run instead of a whole set; all from one set's fixture. | none |
 
 ### 6.2 CLI-only
 

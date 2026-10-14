@@ -8,7 +8,7 @@ describe('eval regression baseline scope', () => {
       { jobId: 'partial', datasets: ['Core'] },
       { jobId: 'baseline', datasets: ['Stats', 'Core'] },
     ]);
-    const repository = new EvalRunsRepository({ find } as any);
+    const repository = new EvalRunsRepository({ find } as never);
     const baseline = await repository.mostRecentCompleted(
       'assistant',
       'current',
@@ -25,7 +25,7 @@ describe('eval regression baseline scope', () => {
   it('returns no baseline when only incompatible scopes exist', async () => {
     const repository = new EvalRunsRepository({
       find: jest.fn().mockResolvedValue([{ jobId: 'other', datasets: ['F1'] }]),
-    } as any);
+    } as never);
     expect(
       await repository.mostRecentCompleted('assistant', 'current', 'wc', [
         'World Cup',

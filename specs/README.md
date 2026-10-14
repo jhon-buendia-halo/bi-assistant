@@ -66,6 +66,7 @@ A Gherkin Feature that spans capabilities lives in the capability that owns its 
 | BA-159 LLM configuration | [epics/BA-159](epics/BA-159/spec.md) |
 | BA-161 Admin Panel | [epics/BA-161](epics/BA-161/spec.md) |
 | BA-169 Claude Code workflow mod | [epics/BA-169](epics/BA-169/spec.md) |
+| BA-198 Assistant skills: progressive-disclosure agent structure | [epics/BA-198](epics/BA-198/spec.md) |
 
 ## Stack neutrality
 

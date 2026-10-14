@@ -1,0 +1,12 @@
+Error: Invalid app skills:
+interactive-visuals: description must start with "Use when"
+    at loadAppSkills (/home/jhonbuendia/projects/bi-assistant/.claude/worktrees/BA-198-assistant-skills/backend/dist/mastra/app-skills.js:114:15)
+    at appSkills (/home/jhonbuendia/projects/bi-assistant/.claude/worktrees/BA-198-assistant-skills/backend/dist/mastra/app-skills.js:130:24)
+    at Object.<anonymous> (/home/jhonbuendia/projects/bi-assistant/.claude/worktrees/BA-198-assistant-skills/backend/dist/mastra/index.js:17:28)
+    at Module._compile (node:internal/modules/cjs/loader:1929:14)
+    at Object..js (node:internal/modules/cjs/loader:2060:10)
+    at Module.load (node:internal/modules/cjs/loader:1651:32)
+    at Module._load (node:internal/modules/cjs/loader:1443:12)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:261:19)
+    at Module.require (node:internal/modules/cjs/loader:1674:12)
+    at require (node:internal/modules/helpers:157:16)

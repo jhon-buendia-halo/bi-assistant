@@ -1,0 +1,48 @@
+[
+  {
+    "id": "champion-2022",
+    "question": "Who won the 2022 World Cup?",
+    "scores": {
+      "check-includes": 1,
+      "check-called-tool": 1,
+      "check-no-tool-errors": 1
+    },
+    "checkResults": [
+      {
+        "id": "check-includes",
+        "description": "Checks if output includes \"Argentina\"",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "check-called-tool",
+        "description": "Checks that \"run_readonly_sql\" was called",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "check-no-tool-errors",
+        "description": "Checks that no tool calls resulted in errors",
+        "score": 1,
+        "passed": true
+      },
+      {
+        "id": "result-set-match",
+        "description": "Result set matches expectedSql (primary correctness signal)",
+        "score": 0,
+        "passed": false,
+        "reason": "expectedSql returned 1 row(s); none of 1 successful SQL result(s) matched. The last SQL (\"SELECT t.tournament_year, t.name, m.stage, m.kicked_off_at, ht.common_name as home, at.common_name as away, m.home_goals, m.away_goals, wt.common_name as winner FROM world_cup.world_cup.matches m JOIN world_cup.world_cup.tournaments t ON m.tournament_id = t.id JOIN world_cup.world_cup.teams ht ON m.home_team_id = ht.id JOIN world_cup.world_cup.teams at ON m.away_team_id = at.id LEFT JOIN world_cup.world_cup.teams wt ON m.winner_team_id = wt.id WHERE t.tournament_year = 2022 AND lower(m.stage) LIKE '%final%' ORDER BY m.kicked_off_at\") did not match — the figures differ (compared 1 columns against 9)"
+      }
+    ],
+    "answer": "**Argentina** won the 2022 FIFA World Cup.\n\nIn the final on 18 December 2022, Argentina drew 3–3 with France after regulation and extra time, and the match record lists Argentina as the winner (decided on penalties, as is well known for that match — the data records the winner but not a shootout score). Along the way, Argentina beat Croatia 3–0 in the semi-final, while France beat Morocco 2–0, setting up the final.\n\nSource: `world_cup.world_cup.matches` joined with `world_cup.world_cup.tournaments` and `world_cup.world_cup.teams`, filtered to the 2022 tournament and final/semi-final/quarter-final stages.",
+    "toolCalls": [
+      {
+        "name": "run_readonly_sql",
+        "input": "{\n  \"sql\": \"SELECT t.year, t.name, m.round, m.match_date, ht.name as home, at.name as away, m.home_score, m.away_score, wt.name as winner\\nFROM world_cup.world_cup.matches m\\nJOIN world_cup.world_cup.tournaments t ON m.tournament_id = t.id\\nJOIN world_cup.world_cup.teams ht ON m.home_team_id = ht.id\\nJOIN world_cup.world_cup.teams at ON m.away_team_id = at.id\\nLEFT JOIN world_cup.world_cup.teams wt ON m.winner_team_id = wt.id\\nWHERE t.year = 2022 AND lower(m.round) LIKE '%final%'\\nORDER BY m.match_date\",\n  \"rationale\": \"I need to find the 2022 World Cup final match and its winner.\"\n}",
+        "output": "{\n  \"columns\": [\n    \"tournament_year\",\n    \"name\",\n    \"stage\",\n    \"kicked_off_at\",\n    \"home\",\n    \"away\",\n    \"home_goals\",\n    \"away_goals\",\n    \"winner\"\n  ],\n  \"rows\": [\n    {\n      \"tournament_year\": 2022,\n      \"name\": \"2022 FIFA World Cup\",\n      \"stage\": \"quarter_final\",\n      \"kicked_off_at\": \"2022-12-09T15:00:00.000Z\",\n      \"home\": \"Croatia\",\n      \"away\": \"Brazil\",\n      \"home_goals\": 1,\n      \"away_goals\": 1,\n      \"winner\": \"Croatia\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"name\": \"2022 FIFA World Cup\",\n      \"stage\": \"quarter_final\",\n      \"kicked_off_at\": \"2022-12-09T19:00:00.000Z\",\n      \"home\": \"Netherlands\",\n      \"away\": \"Argentina\",\n      \"home_goals\": 2,\n      \"away_goals\": 2,\n      \"winner\": \"Argentina\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"name\": \"2022 FIFA World Cup\",\n      \"stage\": \"quarter_final\",\n      \"kicked_off_at\": \"2022-12-10T15:00:00.000Z\",\n      \"home\": \"Morocco\",\n      \"away\": \"Portugal\",\n      \"home_goals\": 1,\n      \"away_goals\": 0,\n      \"winner\": \"Morocco\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"name\": \"2022 FIFA World Cup\",\n      \"stage\": \"quarter_final\",\n      \"kicked_off_at\": \"2022-12-10T19:00:00.000Z\",\n      \"home\": \"England\",\n      \"away\": \"France\",\n      \"home_goals\": 1,\n      \"away_goals\": 2,\n      \"winner\": \"France\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"name\": \"2022 FIFA World Cup\",\n      \"stage\": \"semi_final\",\n      \"kicked_off_at\": \"2022-12-13T19:00:00.000Z\",\n      \"home\": \"Argentina\",\n      \"away\": \"Croatia\",\n      \"home_goals\": 3,\n      \"away_goals\": 0,\n      \"winner\": \"Argentina\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"name\": \"2022 FIFA World Cup\",\n      \"stage\": \"semi_final\",\n      \"kicked_off_at\": \"2022-12-14T19:00:00.000Z\",\n      \"home\": \"France\",\n      \"away\": \"Morocco\",\n      \"home_goals\": 2,\n      \"away_goals\": 0,\n      \"winner\": \"France\"\n    },\n    {\n      \"tournament_year\": 2022,\n      \"name\": \"2022 FIFA World Cup\",\n      \"stage\": \"final\",\n      \"k… (truncated)"
+      }
+    ],
+    "passed": false,
+    "durationMs": 18043
+  }
+]

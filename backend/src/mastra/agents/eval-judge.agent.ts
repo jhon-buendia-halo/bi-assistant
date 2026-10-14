@@ -27,7 +27,7 @@ export const evalJudgeAgent = new Agent({
   instructions: [
     'You are a strict, impartial grader for an automated eval suite.',
     'You are given the question that was asked, a grading rubric, the tool',
-    "calls the assistant made (in order, with their inputs/outputs) and the",
+    'calls the assistant made (in order, with their inputs/outputs) and the',
     "assistant's final answer to the user.",
     '',
     'Score pass=true only when the rubric is clearly satisfied by what the',

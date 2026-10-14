@@ -8,21 +8,16 @@ import {
   Param,
   Post,
   Put,
+  Query,
   Res,
 } from '@nestjs/common';
 import type { Response } from 'express';
-import {
-  evalRunFilename,
-  renderEvalRunMarkdown,
-} from './eval-report';
+import { evalRunFilename, renderEvalRunMarkdown } from './eval-report';
 import { AgentsService } from './agents.service';
+import type { AgentSkillsView } from '../../mastra/app-skills';
 import { EvalRunsService } from './eval-runs.service';
 import type { EvalRunView } from './eval-runs.service';
-import type {
-  AgentDetail,
-  AgentEvalSet,
-  AgentSummary,
-} from './agents.service';
+import type { AgentDetail, AgentEvalSet, AgentSummary } from './agents.service';
 import type { SaveAgentDto } from '../user-agents/dto/save-agent.dto';
 import type { PinAgentDto } from '../user-agents/dto/pin-agent.dto';
 import type { AgentConfigInput } from '../user-agents/user-agents.service';
@@ -181,6 +176,22 @@ export class AgentsController {
   }
 
   // Declared before ':key' so the more specific path wins.
+  @Get(':key/skills')
+  @RequirePermission('use-agents')
+  skills(@Param('key') key: string): Promise<AgentSkillsView> {
+    return this.agents.skills(key);
+  }
+
+  @Get(':key/skills/:name/file')
+  @RequirePermission('use-agents')
+  skillFile(
+    @Param('key') key: string,
+    @Param('name') name: string,
+    @Query('path') path: string,
+  ): Promise<{ path: string; size: number; content: string | null }> {
+    return this.agents.skillFile(key, name, path);
+  }
+
   @Get(':key/evals')
   @RequirePermission('use-agents')
   evals(@Param('key') key: string): { sets: AgentEvalSet[] } {

@@ -50,11 +50,11 @@ describe('EvalRunsService dataset validation', () => {
       users.runAs(LOCAL_USER, fn);
   const service = () =>
     new EvalRunsService(
-      datasets as any,
-      repository as any,
-      {} as any,
-      {} as any,
-      knowledge as any,
+      datasets as never,
+      repository as never,
+      {} as never,
+      {} as never,
+      knowledge as never,
       users,
     );
 
@@ -79,7 +79,7 @@ describe('EvalRunsService dataset validation', () => {
       ]);
       const result = await service().start('assistant', 'f1');
       expect(result).toEqual({
-        error: expect.stringContaining('bundled World Cup sample'),
+        error: expect.stringContaining('bundled World Cup sample') as string,
       });
       expect(repository.insert).not.toHaveBeenCalled();
       expect(createEvalSession).not.toHaveBeenCalled();
@@ -110,7 +110,7 @@ describe('EvalRunsService dataset validation', () => {
       ]);
       const runner = service();
       const result = await runner.start('assistant', 'wc');
-      expect(result).toEqual({ jobId: expect.any(String) });
+      expect(result).toEqual({ jobId: expect.any(String) as string });
       await new Promise((resolve) => setImmediate(resolve));
       expect(runAssistantEvalCase).toHaveBeenCalledWith(
         expect.objectContaining({ id: 'champion-2022' }),
