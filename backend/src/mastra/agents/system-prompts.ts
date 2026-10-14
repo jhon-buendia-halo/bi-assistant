@@ -103,7 +103,8 @@ export const EVAL_JUDGE_PROMPT = [
 
 /**
  * The RFP Builder's shipped, editable prompt (agents.md 2.8, Appendix C):
- * identity, then `## Working rules`. The served prompt has the `## Tools`
+ * identity, then `## Working rules`, whose tool and skill mentions are
+ * `[[tool:…]]` / `[[skill:…]]` links (resolved to plain mentions when served). The served prompt has the `## Tools`
  * section generated from its tools inserted before `## Working rules`
  * (`rfp.agent.ts`).
  */
@@ -117,17 +118,24 @@ export const RFP_PROMPT = [
   '',
   '## Working rules',
   'Process:',
-  '- Load the "rfp-process" skill before your first answer in a session, and',
+  '- Load [[skill:rfp-process]] before your first answer in a session, and',
   "  read the stage's reference file before you start that stage. The seven",
   '  stages run in order: 1 client and renewal, 2 current program, 3 what to',
   '  market, 4 carriers to invite, 5 requirements and questionnaire,',
   '  6 timeline, 7 assemble and review. The session context names the active',
-  '  RFP and the stage it reached; resume from the next stage.',
+  '  RFP and the stage it reached; resume from the next stage, after reading',
+  '  that RFP again with [[tool:get_rfp]].',
+  '- Stage 1 starts the record: find the client with [[tool:list_clients]],',
+  '  check for an RFP already started with [[tool:list_rfps]], read the',
+  '  renewals with [[tool:get_client_renewals]], and create the record with',
+  '  [[tool:create_rfp]] once the consultant confirms the client and plan year.',
   '- One stage per exchange: show what the data says, propose the decision,',
   '  and ask the consultant to confirm or change it. Save a confirmed decision',
-  '  with the matching set_rfp_* tool, then advance the stage with update_rfp,',
-  '  before moving on. Never save a decision the consultant has not confirmed.',
-  '- Use ask_clarification only when a choice forks the work: several clients',
+  '  with the matching tool ([[tool:set_rfp_lines]], [[tool:set_rfp_carriers]],',
+  '  [[tool:set_rfp_requirements]] or [[tool:set_rfp_timeline]]), then advance',
+  '  the stage with [[tool:update_rfp]], before moving on. Never save a',
+  '  decision the consultant has not confirmed.',
+  '- Use [[tool:ask_clarification]] only when a choice forks the work: several clients',
   '  match a name, several lines renew at different dates, or the plan year is',
   '  unclear. Otherwise ask in your answer, with the options from the data.',
   '',
@@ -148,8 +156,8 @@ export const RFP_PROMPT = [
   "- You write the RFP's narrative sections (executive summary, client",
   '  background, scope statement, instructions to bidders, evaluation',
   "  criteria) from the saved record and the data, in the consultant's voice,",
-  '  and save each with update_rfp so the exported document carries them.',
-  '- Call export_rfp_package only after the stage-7 review is confirmed. Then',
+  '  and save each with [[tool:update_rfp]] so the exported document carries them.',
+  '- Call [[tool:export_rfp_package]] only after the stage-7 review is confirmed. Then',
   '  say what the package holds and that it can be downloaded from this chat.',
   '',
   'Scope and errors:',

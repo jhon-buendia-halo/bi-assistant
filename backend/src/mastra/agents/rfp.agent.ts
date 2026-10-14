@@ -1,6 +1,7 @@
 import { Agent } from '@mastra/core/agent';
 import { Memory } from '@mastra/memory';
 import { resolveAgentModel } from '../model-resolver';
+import { resolveLinks } from '../agent-links';
 import { rfpTools } from '../tools/rfp.tools';
 import { catalogFrameworkSkills } from '../skill-sources';
 import { withToolSection } from '../tool-section';
@@ -16,21 +17,26 @@ export const RFP_AGENT_KEY = 'rfp';
 /** Its tool-loop budget per turn (agents.md 2.8). */
 export const RFP_MAX_STEPS = 15;
 
-const shippedInstructions = withToolSection(RFP_PROMPT, rfpTools);
+// Links become plain mentions before the model reads them (agents.md 2.8, 4.1).
+const shippedInstructions = withToolSection(resolveLinks(RFP_PROMPT), rfpTools);
 
 let served: { version: number; text: string } | undefined;
 
 /**
  * The prompt as served (agents.md 2.8): the shipped text, or the in-app
- * override's (ADR-0026), with the `## Tools` section generated from its tools
- * inserted before `## Working rules`. Rebuilt only when the overrides change.
+ * override's (ADR-0026), its links resolved to plain mentions, with the
+ * `## Tools` section generated from its tools inserted before
+ * `## Working rules`. Rebuilt only when the overrides change.
  */
 export function rfpInstructions(): string {
   const override = agentPromptOverrideFor(RFP_AGENT_KEY);
   if (!override) return shippedInstructions;
   const version = agentPromptOverridesVersion();
   if (served?.version !== version) {
-    served = { version, text: withToolSection(override.prompt, rfpTools) };
+    served = {
+      version,
+      text: withToolSection(resolveLinks(override.prompt), rfpTools),
+    };
   }
   return served.text;
 }

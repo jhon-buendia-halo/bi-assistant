@@ -35,6 +35,11 @@ import {
   linkableBuiltInSkills,
 } from '../../services/prompt-links';
 import { BuiltInSkillSummary, SkillSummary } from '../../services/skills-api.service';
+import {
+  officialLinkSkills,
+  officialLinkTools,
+  officialPromptCopy,
+} from '../../services/official-links';
 import { LinkedText } from '../linked-text/linked-text';
 import { PromptEditor } from '../prompt-editor/prompt-editor';
 
@@ -105,8 +110,15 @@ export class AgentSystemPrompt implements OnDestroy {
   readonly linkableSkills = computed(() =>
     linkableBuiltInSkills(this.builtInSkills()),
   );
+  /** An Official agent's own tools and skills, which its shared prompt links (R99, R105). */
+  readonly officialTools = computed(() => officialLinkTools(this.agent()));
+  readonly officialSkills = computed(() =>
+    officialLinkSkills(this.builtInSkills(), this.agent().key),
+  );
+  /** The editor hint and notes, naming the agent (`the assistant`, `the RFP Builder`). */
+  readonly officialCopy = computed(() => officialPromptCopy(this.agent()));
   readonly builtInKnown = computed(() =>
-    knownLinks([], undefined, this.linkableSkills()),
+    knownLinks([], this.officialTools(), this.officialSkills()),
   );
   readonly builtInUnchanged = computed(
     () => this.draft().trim() === (this.builtIn()?.editable ?? '').trim(),

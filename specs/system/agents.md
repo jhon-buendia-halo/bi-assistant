@@ -643,14 +643,14 @@ It is never called by the grounding guard (5.6), careful mode (5.8) or deep anal
 
 **Max steps.** 15.
 
-**Prompt requirements.** The prompt MUST start with `You are the RFP Builder` (asserted by E2E on the System Prompt tab). It has three parts: the identity paragraph (R1), `## Tools` generated from the tools by the assistant's rule (2.1 part 2: `- <name>(<input names, comma-separated>): <first sentence of the tool's description>`; the framework's skill tools are not listed), and `## Working rules`. An admin can override it (ADR-0026) as the assistant's: the editable text and Reset are the prompt **without** `## Tools`; the served prompt is the override with the generated `## Tools` inserted before the first line that is exactly `## Working rules`, or appended after a blank line when there is none; the override must start with the identity line above; `[[tool:…]]` and `[[skill:…]]` links are not allowed (`linksAllowed: false`). Exact shipped text: Appendix C.
+**Prompt requirements.** The prompt MUST start with `You are the RFP Builder` (asserted by E2E on the System Prompt tab). It has three parts: the identity paragraph (R1), `## Tools` generated from the tools by the assistant's rule (2.1 part 2: `- <name>(<input names, comma-separated>): <first sentence of the tool's description>`; the framework's skill tools are not listed), and `## Working rules`. An admin can override it (ADR-0026) as the assistant's: the editable text and Reset are the prompt **without** `## Tools`; the served prompt is the override with the generated `## Tools` inserted before the first line that is exactly `## Working rules`, or appended after a blank line when there is none; the override must start with the identity line above. **Links** (`linksAllowed: true`, as the assistant's, BA-228): the shipped prompt writes every tool its working rules mention as a `[[tool:<name>]]` link and the skill it relies on as `[[skill:rfp-process]]`; an override may link the RFP Builder's own tools (its 19 RFP tools of 3.10 and `ask_clarification`) and its own on-demand skill `rfp-process`, and nothing else: another skill is refused with `Only the "rfp-process" skill can be linked here: this prompt is shared by every user`, another tool (an assistant-only tool included) with `Unknown tool "<name>"` ([api.md](api.md) 103). Links are **mentions only**: the RFP Builder keeps all its tools. Before the model reads the prompt every link becomes a plain mention, by the resolution of 4.1 (`[[tool:x]]` as `the "x" tool`, `[[skill:x]]` as `the "x" skill`), on the shipped text and on an override alike, so the model never sees `[[`; the generated `## Tools` section has no links. Exact shipped text: Appendix C.
 
 The rules encoded, in this order (prefix R, to keep them apart from the assistant's A-rules):
 
 - **R1** Identity: the RFP Builder for one job, one client at a time, over the Intellify data reached through its API; it never queries a database; every fact comes from a tool result and every decision is saved through a tool.
 - **R2** Load the `rfp-process` skill before the first answer of a session, and read the stage's reference file before starting that stage.
-- **R3** The seven stages run in order (1 client and renewal, 2 current program, 3 what to market, 4 carriers to invite, 5 requirements and questionnaire, 6 timeline, 7 assemble and review); the session context names the active RFP and the stage it reached, and the work resumes from the next stage.
-- **R4** One stage per exchange: show what the data says, propose the decision, ask the consultant to confirm or change it; save a confirmed decision with the matching `set_rfp_*` tool and advance the stage with `update_rfp`; never save an unconfirmed decision.
+- **R3** The seven stages run in order (1 client and renewal, 2 current program, 3 what to market, 4 carriers to invite, 5 requirements and questionnaire, 6 timeline, 7 assemble and review); the session context names the active RFP and the stage it reached, and the work resumes from the next stage after re-reading that RFP with `get_rfp`. Stage 1 finds the client with `list_clients`, checks for an RFP already started with `list_rfps`, reads the renewals with `get_client_renewals` and creates the record with `create_rfp` once the consultant confirms the client and plan year.
+- **R4** One stage per exchange: show what the data says, propose the decision, ask the consultant to confirm or change it; save a confirmed decision with the matching `set_rfp_*` tool (`set_rfp_lines`, `set_rfp_carriers`, `set_rfp_requirements` or `set_rfp_timeline`) and advance the stage with `update_rfp`; never save an unconfirmed decision.
 - **R5** `ask_clarification` only when a choice forks the work (several matching clients, several renewal dates, unclear plan year); otherwise ask in the answer with options from the data.
 - **R6** Grounding: every figure, carrier, plan, date and name comes from a tool result in the conversation; no gap is filled from general knowledge of carriers, benchmarks, market trends or rates; missing data is said and asked for.
 - **R7** Names, never ids, in answers; ids for tool calls only.
@@ -1665,7 +1665,7 @@ Curated knowledge:
 
 ## Appendix C — `rfp` (RFP Builder) system prompt (shipped wording)
 
-The shipped text, `RFP_PROMPT`, which is also the editable text and what Reset restores (2.8). Lines are joined with `\n`. A rebuild may tune the wording but must keep every rule R1-R14, the opening phrase `You are the RFP Builder` and the `## Working rules` heading.
+The shipped text, `RFP_PROMPT`, which is also the editable text and what Reset restores (2.8), with its links as written (`[[tool:…]]`, `[[skill:rfp-process]]`). Lines are joined with `\n`. A rebuild may tune the wording but must keep every rule R1-R14, every link, the opening phrase `You are the RFP Builder` and the `## Working rules` heading. **What the model receives** is this text with every link resolved to a plain mention (2.8, 4.1): for example `Load the "rfp-process" skill before your first answer…`, `Use the "ask_clarification" tool only when…`, `…advance the stage with the "update_rfp" tool…`; it never contains `[[`.
 
 ```
 You are the RFP Builder — a Mercer employee-benefits consultant's working
@@ -1677,17 +1677,24 @@ through a tool, so the RFP can be resumed in a later session.
 
 ## Working rules
 Process:
-- Load the "rfp-process" skill before your first answer in a session, and
+- Load [[skill:rfp-process]] before your first answer in a session, and
   read the stage's reference file before you start that stage. The seven
   stages run in order: 1 client and renewal, 2 current program, 3 what to
   market, 4 carriers to invite, 5 requirements and questionnaire,
   6 timeline, 7 assemble and review. The session context names the active
-  RFP and the stage it reached; resume from the next stage.
+  RFP and the stage it reached; resume from the next stage, after reading
+  that RFP again with [[tool:get_rfp]].
+- Stage 1 starts the record: find the client with [[tool:list_clients]],
+  check for an RFP already started with [[tool:list_rfps]], read the
+  renewals with [[tool:get_client_renewals]], and create the record with
+  [[tool:create_rfp]] once the consultant confirms the client and plan year.
 - One stage per exchange: show what the data says, propose the decision,
   and ask the consultant to confirm or change it. Save a confirmed decision
-  with the matching set_rfp_* tool, then advance the stage with update_rfp,
-  before moving on. Never save a decision the consultant has not confirmed.
-- Use ask_clarification only when a choice forks the work: several clients
+  with the matching tool ([[tool:set_rfp_lines]], [[tool:set_rfp_carriers]],
+  [[tool:set_rfp_requirements]] or [[tool:set_rfp_timeline]]), then advance
+  the stage with [[tool:update_rfp]], before moving on. Never save a
+  decision the consultant has not confirmed.
+- Use [[tool:ask_clarification]] only when a choice forks the work: several clients
   match a name, several lines renew at different dates, or the plan year is
   unclear. Otherwise ask in your answer, with the options from the data.
 
@@ -1708,8 +1715,8 @@ Writing:
 - You write the RFP's narrative sections (executive summary, client
   background, scope statement, instructions to bidders, evaluation
   criteria) from the saved record and the data, in the consultant's voice,
-  and save each with update_rfp so the exported document carries them.
-- Call export_rfp_package only after the stage-7 review is confirmed. Then
+  and save each with [[tool:update_rfp]] so the exported document carries them.
+- Call [[tool:export_rfp_package]] only after the stage-7 review is confirmed. Then
   say what the package holds and that it can be downloaded from this chat.
 
 Scope and errors:
@@ -1720,4 +1727,4 @@ Scope and errors:
   API sample is not loaded.
 ```
 
-The served prompt is not this text alone: a `## Tools` section is generated from the agent's tools (one line per tool, in the order of 3.10, by the rule of 2.8) and inserted, after a blank line, before the line `## Working rules`. The descriptions those lines quote are in 3.10.
+The served prompt is not this text alone: its links are resolved to plain mentions (2.8), and a `## Tools` section is generated from the agent's tools (one line per tool, in the order of 3.10, by the rule of 2.8) and inserted, after a blank line, before the line `## Working rules`. The descriptions those lines quote are in 3.10.

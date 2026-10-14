@@ -294,12 +294,12 @@
               </div>
             }
           } @else if (agent.prompt?.linksAllowed) {
-            <!-- The Official assistant: its prompt's links, every tool on. -->
-            @if (builtInSkills()) {
+            <!-- An Official agent: its prompt's links, every one of its tools on. -->
+            @if (officialGraph(); as graph) {
               <app-agent-graph
                 [instructions]="agent.prompt!.editable"
-                [skills]="assistantGraphSkills()"
-                [toolLinks]="assistantToolLinks"
+                [skills]="graph.skills"
+                [toolLinks]="graph.toolLinks"
               />
             } @else {
               <div class="flex items-center gap-2.5 text-[13px] text-fg-muted">

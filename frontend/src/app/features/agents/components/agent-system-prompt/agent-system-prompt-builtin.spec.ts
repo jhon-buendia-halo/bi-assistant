@@ -149,6 +149,68 @@ describe('AgentSystemPrompt (built-in agents)', () => {
     );
   });
 
+  it("shows the RFP Builder's links as chips, known against its own tools and skill", () => {
+    const rfp = {
+      ...builtIn('rfp', {
+        editable:
+          'You are the RFP Builder. Load [[skill:rfp-process]], call [[tool:list_clients]] and not [[tool:run_readonly_sql]].',
+        linksAllowed: true,
+      }),
+      name: 'RFP Builder',
+      kind: 'official',
+      toolDetails: [
+        {
+          name: 'list_clients',
+          description: 'List the clients. More text.',
+          inputs: [],
+        },
+      ],
+    } as AgentDetail;
+    fixture = TestBed.createComponent(AgentSystemPrompt);
+    component = fixture.componentInstance;
+    fixture.componentRef.setInput('agent', rfp);
+    fixture.componentRef.setInput('builtInSkills', [
+      {
+        name: 'rfp-process',
+        description: 'The stages.',
+        loading: 'on-demand',
+        agents: ['rfp'],
+        modified: false,
+        builtInChanged: false,
+        updatedAt: null,
+      },
+      {
+        name: 'curated-knowledge',
+        description: 'Curated.',
+        loading: 'on-demand',
+        agents: ['assistant'],
+        modified: false,
+        builtInChanged: false,
+        updatedAt: null,
+      },
+    ]);
+    fixture.detectChanges();
+    const view = byId('agent-prompt-view')!;
+    expect(view.textContent).not.toContain('[[');
+    const chip = (name: string) =>
+      [...view.querySelectorAll('span')].find(
+        (span) => span.textContent?.trim() === name,
+      );
+    expect(chip('rfp-process')?.className).toContain('chip-info');
+    expect(chip('list_clients')?.className).toContain('chip-neutral');
+    // An assistant-only tool is not one of the RFP Builder's.
+    expect(chip('run_readonly_sql')?.className).toContain('chip-danger');
+    expect(byId('agent-prompt-tools-note')?.textContent).toContain(
+      '## Tools — generated from the tools the RFP Builder gets',
+    );
+    expect(component.officialTools().map((tool) => tool.name)).toEqual([
+      'list_clients',
+    ]);
+    expect(component.officialSkills().map((skill) => skill.name)).toEqual([
+      'rfp-process',
+    ]);
+  });
+
   it('marks the page dirty while an edit is unsaved', () => {
     render(builtIn('sql-fixer'));
     const state = TestBed.inject(AgentPageState);

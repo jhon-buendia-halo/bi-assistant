@@ -80,6 +80,18 @@ describe('AgentPromptsService (ADR-0026)', () => {
         updatedAt: null,
       });
     }
+    // The RFP Builder, the other Official agent, links too (BA-228).
+    expect(await service.view('rfp')).toMatchObject({
+      editable: shippedAgentPrompt('rfp'),
+      linksAllowed: true,
+    });
+    // Its detail shows the links as written, for the chips and the Graph tab.
+    expect((await service.view('rfp'))?.editable).toContain(
+      'Load [[skill:rfp-process]] before',
+    );
+    expect((await service.view('rfp'))?.editable).toContain(
+      '[[tool:list_clients]]',
+    );
     expect(await service.view('user-1')).toBeUndefined();
   });
 
@@ -169,13 +181,58 @@ describe('AgentPromptsService (ADR-0026)', () => {
       );
     });
 
-    it("the RFP Builder's identity, then links", async () => {
+    it("the RFP Builder's identity, then skill links, then tools not its own", async () => {
       expect(await refusal('rfp', 'Be brief.')).toBe(
         'The RFP Builder\'s prompt must start with "You are the RFP Builder"',
       );
+      const skillRefusal =
+        'Only the "rfp-process" skill can be linked here: this prompt is shared by every user';
+      expect(
+        await refusal('rfp', 'You are the RFP Builder. [[skill:x]] [[tool:x]]'),
+      ).toBe(skillRefusal);
+      // The assistant's built-in skill is not the RFP Builder's.
+      expect(
+        await refusal(
+          'rfp',
+          'You are the RFP Builder. [[skill:curated-knowledge]]',
+        ),
+      ).toBe(skillRefusal);
       expect(await refusal('rfp', 'You are the RFP Builder. [[tool:x]]')).toBe(
-        "This agent's prompt can't contain links",
+        'Unknown tool "x"',
       );
+      // An assistant-only tool is not one of its tools.
+      expect(
+        await refusal(
+          'rfp',
+          'You are the RFP Builder. [[skill:rfp-process]] [[tool:run_readonly_sql]]',
+        ),
+      ).toBe('Unknown tool "run_readonly_sql"');
+    });
+
+    it("accepts the RFP Builder's own tools and skill in its prompt", async () => {
+      const { service } = build();
+      await service.save('rfp', {
+        prompt:
+          'You are the RFP Builder. Load [[skill:rfp-process]], then call [[tool:list_clients]], [[tool:set_rfp_timeline]] and [[tool:ask_clarification]].',
+      });
+      expect(agentPromptOverrideFor('rfp')?.prompt).toContain(
+        '[[skill:rfp-process]]',
+      );
+      // Its shipped prompt, links and all, saves as an override.
+      await expect(
+        service.save('rfp', { prompt: shippedAgentPrompt('rfp') }),
+      ).resolves.toBe('rfp');
+    });
+
+    it("refuses the RFP Builder's tools and skill in the assistant prompt", async () => {
+      expect(
+        await refusal('assistant', `${IDENTITY}. [[skill:rfp-process]]`),
+      ).toBe(
+        'Only built-in skills can be linked here: this prompt is shared by every user',
+      );
+      expect(
+        await refusal('assistant', `${IDENTITY}. [[tool:list_clients]]`),
+      ).toBe('Unknown tool "list_clients"');
     });
 
     it('an empty prompt, then one over 20,000 characters', async () => {

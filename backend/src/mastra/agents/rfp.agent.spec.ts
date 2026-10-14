@@ -40,6 +40,7 @@ jest.mock('@mastra/memory', () => ({
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import type { InlineSkill } from '@mastra/core/skills';
+import { parseLinks, resolveLinks } from '../agent-links';
 import { setAgentPromptOverrides } from '../agent-prompt-overrides';
 import { shippedAgentPrompt } from '../shipped-agent-prompts';
 import { toolSection, withToolSection } from '../tool-section';
@@ -48,8 +49,8 @@ import { rfpAgent, rfpInstructions } from './rfp.agent';
 import { RFP_PROMPT } from './system-prompts';
 
 /**
- * agents.md Appendix C, verbatim, and the served prompt: Appendix C with the
- * `## Tools` lines of 3.10 (first sentences and input names written from the
+ * agents.md Appendix C, verbatim, and the served prompt: Appendix C, its
+ * links resolved to plain mentions, with the `## Tools` lines of 3.10 (first sentences and input names written from the
  * spec, not from the code) inserted before `## Working rules`.
  */
 const SHIPPED = readFileSync(
@@ -183,7 +184,56 @@ describe("the RFP Builder's prompt (agents.md 2.8, Appendix C)", () => {
       },
     ]);
     expect(rfpInstructions()).toBe(GOLDEN);
-    expect(withToolSection(RFP_PROMPT, rfpTools)).toBe(GOLDEN);
+    expect(withToolSection(resolveLinks(RFP_PROMPT), rfpTools)).toBe(GOLDEN);
+  });
+
+  it('links its skill and the tools its working rules use (BA-228)', () => {
+    const links = parseLinks(RFP_PROMPT);
+    expect(links.skills).toEqual(['rfp-process']);
+    expect([...links.tools].sort()).toEqual(
+      [
+        'ask_clarification',
+        'create_rfp',
+        'export_rfp_package',
+        'get_client_renewals',
+        'get_rfp',
+        'list_clients',
+        'list_rfps',
+        'set_rfp_carriers',
+        'set_rfp_lines',
+        'set_rfp_requirements',
+        'set_rfp_timeline',
+        'update_rfp',
+      ].sort(),
+    );
+    // Every link names one of its own tools.
+    for (const tool of links.tools) expect(TOOL_NAMES).toContain(tool);
+  });
+
+  it('sends the model plain mentions, never link syntax', () => {
+    const served = rfpInstructions();
+    expect(served).not.toContain('[[');
+    expect(served).toContain('the "list_clients" tool');
+    expect(served).toContain('Load the "rfp-process" skill before');
+    expect(served).toContain('Use the "ask_clarification" tool only when');
+  });
+
+  it("resolves an override's links before serving it", () => {
+    setAgentPromptOverrides([
+      {
+        key: 'rfp',
+        prompt:
+          'You are the RFP Builder.\n\n## Working rules\n- Load [[skill:rfp-process]], then call [[tool:list_clients]].',
+        baseHash: 'x',
+      },
+    ]);
+
+    const served = rfpInstructions();
+
+    expect(served).not.toContain('[[');
+    expect(served).toContain(
+      '- Load the "rfp-process" skill, then call the "list_clients" tool.',
+    );
   });
 });
 

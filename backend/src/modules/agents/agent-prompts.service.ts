@@ -6,7 +6,11 @@ import {
 } from '@nestjs/common';
 import { isLibraryTool, parseLinks } from '../../mastra/agent-links';
 import { setAgentPromptOverrides } from '../../mastra/agent-prompt-overrides';
-import { builtInOnDemandSkillNames } from '../../mastra/app-skills';
+import {
+  AGENT_SKILLS,
+  builtInOnDemandSkillNames,
+} from '../../mastra/app-skills';
+import { rfpTools } from '../../mastra/tools/rfp.tools';
 import { MastraService } from '../../mastra/mastra.service';
 import {
   agentPromptHash,
@@ -30,6 +34,19 @@ const ASSISTANT_KEY = 'assistant';
 
 /** Where the RFP Builder's prompt must start (agents.md 2.8, rfp R1). */
 const RFP_IDENTITY_START = 'You are the RFP Builder';
+
+const RFP_KEY = 'rfp';
+
+/**
+ * What the RFP Builder's prompt may link (agents.md 2.8, BA-228): its own
+ * tools and its own on-demand skill. Links are mentions; it keeps every tool.
+ */
+function rfpLinkTargets(): { tools: string[]; skills: string[] } {
+  return {
+    tools: Object.keys(rfpTools),
+    skills: [...(AGENT_SKILLS[RFP_KEY] ?? [])],
+  };
+}
 
 /** Any `[[…]]` link. */
 const ANY_LINK = /\[\[.*?\]\]/;
@@ -117,7 +134,7 @@ export class AgentPromptsService implements OnModuleInit {
       modified: !!override,
       builtInChanged:
         !!override && override.baseHash !== agentPromptHash(shipped),
-      linksAllowed: key === ASSISTANT_KEY,
+      linksAllowed: key === ASSISTANT_KEY || key === RFP_KEY,
       updatedAt: override?.updatedAt ?? null,
     };
   }
@@ -145,10 +162,21 @@ function validatePrompt(key: string, value: unknown): string {
     }
     const unknown = links.tools.find((name) => !isLibraryTool(name));
     if (unknown) throw new BadRequestException(`Unknown tool "${unknown}"`);
-  } else if (key === 'rfp' && !prompt.startsWith(RFP_IDENTITY_START)) {
-    throw new BadRequestException(
-      `The RFP Builder's prompt must start with "${RFP_IDENTITY_START}"`,
-    );
+  } else if (key === RFP_KEY) {
+    if (!prompt.startsWith(RFP_IDENTITY_START)) {
+      throw new BadRequestException(
+        `The RFP Builder's prompt must start with "${RFP_IDENTITY_START}"`,
+      );
+    }
+    const links = parseLinks(prompt);
+    const allowed = rfpLinkTargets();
+    if (links.skills.some((name) => !allowed.skills.includes(name))) {
+      throw new BadRequestException(
+        `Only the ${allowed.skills.map((name) => `"${name}"`).join(', ')} skill can be linked here: this prompt is shared by every user`,
+      );
+    }
+    const unknown = links.tools.find((name) => !allowed.tools.includes(name));
+    if (unknown) throw new BadRequestException(`Unknown tool "${unknown}"`);
   } else if (ANY_LINK.test(prompt)) {
     throw new BadRequestException("This agent's prompt can't contain links");
   }

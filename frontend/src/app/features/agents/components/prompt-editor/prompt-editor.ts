@@ -60,6 +60,8 @@ export class PromptEditor implements OnDestroy {
   readonly skills = input<{ name: string; description: string }[]>([]);
   /** Built-in on-demand skills offered after `skills`, marked Built-in. */
   readonly builtInSkills = input<{ name: string; description: string }[]>([]);
+  /** Tools offered in the "/" menu: the library by default, an Official agent's own otherwise. */
+  readonly tools = input<LinkOption[]>(LINKABLE_TOOLS);
   /** Whether skills can be linked at all (not in a skill body). */
   readonly linkSkills = input(true);
   /** The field's label, as the editor's accessible name. */
@@ -96,7 +98,7 @@ export class PromptEditor implements OnDestroy {
       description: skill.description,
       builtIn: true,
     })),
-    ...LINKABLE_TOOLS,
+    ...this.tools(),
   ]);
   /** Whether the menu has skills at all: the user's or the built-in ones. */
   protected readonly hasSkills = computed(

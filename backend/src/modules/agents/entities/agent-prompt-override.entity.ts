@@ -20,7 +20,7 @@ export interface AgentPromptView {
   modified: boolean;
   /** Modified, and the shipped text's hash differs from `baseHash`. */
   builtInChanged: boolean;
-  /** True for the assistant: its prompt may link tools. */
+  /** True for the Official agents (the assistant, the RFP Builder): their prompt may link tools and skills. */
   linksAllowed: boolean;
   /** The override's, or null. */
   updatedAt: string | null;

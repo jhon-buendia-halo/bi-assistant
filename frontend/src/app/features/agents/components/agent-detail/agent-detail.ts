@@ -38,7 +38,6 @@ import {
   AgentEvalCaseResult,
   AgentEvalSet,
   AgentSkillsView,
-  AgentToolLink,
   AgentsApiService,
   EvalRunView,
 } from '../../services/agents-api.service';
@@ -70,8 +69,8 @@ import {
   skillsCount,
 } from '../../services/agent-page.util';
 import { agentKind } from '../../services/agent-hub.util';
+import { officialGraphInput } from '../../services/official-links';
 import {
-  LINKABLE_TOOLS,
   knownLinks,
   linkableBuiltInSkills,
 } from '../../services/prompt-links';
@@ -321,19 +320,15 @@ export class AgentDetail implements OnDestroy {
     });
   }
 
-  /** The built-in skills the assistant's prompt links, for its Graph tab. */
-  readonly assistantGraphSkills = computed(() =>
-    linkableBuiltInSkills(this.builtInSkills()).map((skill) => ({
-      name: skill.name,
-      tools: [] as string[],
-    })),
-  );
-  /** The assistant keeps every tool: each is always on. */
-  readonly assistantToolLinks: AgentToolLink[] = LINKABLE_TOOLS.map((tool) => ({
-    name: tool.name,
-    status: 'always-on',
-    linkedVia: { instructions: false, skills: [] },
-  }));
+  /**
+   * The Graph tab of an Official agent (R105): the skills it gets and every
+   * one of its tools, always on. Null while the built-in skills load.
+   */
+  readonly officialGraph = computed(() => {
+    const agent = this.agent();
+    const skills = this.builtInSkills();
+    return agent && skills ? officialGraphInput(agent, skills) : null;
+  });
 
   /** Reload the owner's skills after the Skills tab changed one. */
   reloadLibrary(): void {
