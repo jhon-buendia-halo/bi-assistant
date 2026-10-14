@@ -14,6 +14,27 @@ Entry template:
 
 ---
 
+## 2026-10-14 — 1.13.13 Built-in skills only: remove user and project skill levels (BA-211)
+
+### What went well
+- Fixing the API shape and the UI removals in the prompt let the specs agent and the code agent work in parallel; the specs matched the code on the first `check-specs.py` run.
+- Hashing `assistantAgent.getInstructions()` before and after proved the prompt byte-identical, which settled that the evals didn't need to run.
+- The E2E agent ran the updated specs against a base-commit build, so the three BA-211 scenarios are shown to fail on base for the intended reasons.
+- Running the one failing frontend unit test on a `git archive` copy of the base proved it fails on `main` too, without stashing or touching another worktree.
+
+### What went wrong
+- The frontend lock file is out of sync with `package.json` (electron-builder's Windows deps), so `npm ci` fails in a fresh worktree; I had to install with `--no-package-lock` to keep tracked files clean.
+- My brief to the specs agent named the file endpoint `…/files`; it is `…/file`. The agent caught it, but a contract in a brief should be copied from api.md, not from memory.
+- The first E2E run showed "an agent without skills says so" failing in a scenario planned as re-run-as-is: a shared helper waited on copy the change removed. Step 6 looked at scenarios, not at helpers.
+- The updated read_file scenario passes on base too: it only dropped its dependency on user skills, so it does not prove BA-211.
+- Several compound shell commands (`git` after `cd &&`, `$(…)` around `jira.sh`) were refused in the isolated worktree and had to be split.
+
+### What to do differently
+- In step 6, grep the impacted spec files' helpers for the copy and test ids the change removes, and list those helpers with the scenarios.
+- When a brief states an endpoint or shape, copy it from api.md.
+- Run `npm install` in `frontend/` and commit the lock file in a separate change, so `npm ci` works in new worktrees.
+- In an isolated worktree, run `git` and `jira.sh` as plain commands from the worktree root, and pass JSON bodies inline in single quotes.
+
 ## 2026-10-14 — 1.13.9 to 1.13.12: sectioned assistant prompt, own skill catalog, lint clean, eval checks, assistant reliability (BA-207 to BA-210)
 
 ### What went well

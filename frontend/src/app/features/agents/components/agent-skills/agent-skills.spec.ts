@@ -11,36 +11,24 @@ import {
 import { AgentSkills } from './agent-skills';
 
 const view: AgentSkillsView = {
-  levels: [
-    { level: 'built-in', path: null, found: true },
-    { level: 'user', path: '/data/skills', found: false },
-    { level: 'project', path: null, found: false },
-  ],
   skills: [
     {
       name: 'sql-style',
       description: 'Use when writing SQL for the World Cup data.',
-      level: 'user',
       loading: 'on-demand',
-      overrides: [],
       files: [
         { path: 'SKILL.md', size: 120 },
         { path: 'reference/style.md', size: 40 },
         { path: 'reference/logo.png', size: 9000 },
       ],
-      warnings: ['the name is longer than 64 characters'],
     },
     {
       name: 'curated-knowledge',
       description: 'Use when the turn carries a curated knowledge block.',
-      level: 'project',
       loading: 'harness',
-      overrides: ['built-in', 'user'],
       files: [{ path: 'SKILL.md', size: 80 }],
-      warnings: [],
     },
   ],
-  skipped: [],
 };
 
 describe('AgentSkills', () => {
@@ -70,11 +58,6 @@ describe('AgentSkills', () => {
     el.querySelector<HTMLElement>(`[data-testid="${id}"]`);
   const text = (node: Element | null) =>
     node?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
-  /** A level row as `<label> · <detail>`. */
-  const levelRow = (el: HTMLElement, level: string) =>
-    Array.from(byTestId(el, `skill-level-${level}`)!.children)
-      .map((child) => text(child))
-      .join(' · ');
 
   function openRow(el: HTMLElement, name: string): HTMLButtonElement {
     const button = byTestId(el, `agent-skill-${name}`)!.querySelector(
@@ -91,12 +74,14 @@ describe('AgentSkills', () => {
     );
   }
 
-  it('says skills are read at startup, and nothing more for a built-in agent', async () => {
+  it('shows no intro line, levels or Skipped section for a built-in agent', async () => {
     const el = await render();
-    expect(text(el)).toContain(
-      'Skills are read when the app starts. Restart the app to pick up changes.',
-    );
     expect(text(el)).not.toContain('This agent runs on the assistant');
+    expect(text(el)).not.toContain('Restart the app');
+    expect(text(el)).not.toContain('Where skills come from');
+    expect(text(el)).not.toContain('Skipped');
+    expect(el.querySelectorAll('h3').length).toBe(0);
+    expect(el.querySelector('[data-testid^="skill-level-"]')).toBeNull();
   });
 
   it("says a user agent uses the assistant's skills", async () => {
@@ -106,29 +91,7 @@ describe('AgentSkills', () => {
     );
   });
 
-  it('shows where each level comes from, not found and not set (R65)', async () => {
-    const el = await render();
-    expect(text(el)).toContain('Where skills come from');
-    expect(levelRow(el, 'built-in')).toBe('Built-in · Ships with the app');
-    expect(levelRow(el, 'user')).toBe('User · /data/skills (not found)');
-    expect(levelRow(el, 'project')).toBe(
-      'Project · Not set (QUESTIONS_TO_INSIGHTS_PROJECT_SKILLS_DIR)',
-    );
-  });
-
-  it('shows a found project folder by its path alone', async () => {
-    const el = await render({
-      ...view,
-      levels: [
-        view.levels[0],
-        view.levels[1],
-        { level: 'project', path: '/repo/skills', found: true },
-      ],
-    });
-    expect(levelRow(el, 'project')).toBe('Project · /repo/skills');
-  });
-
-  it('lists the skills by name with level, loading, overrides and warnings (R63)', async () => {
+  it('lists the skills by name with loading mode and description (R63)', async () => {
     const el = await render();
     const rows = Array.from(
       el.querySelectorAll<HTMLElement>('[data-testid^="agent-skill-"]'),
@@ -138,18 +101,25 @@ describe('AgentSkills', () => {
       'agent-skill-sql-style',
     ]);
 
-    const knowledge = text(rows[0]);
-    expect(knowledge).toContain('curated-knowledge');
-    expect(knowledge).toContain('Project');
-    expect(knowledge).toContain('Loaded by the app');
-    expect(knowledge).toContain('Overrides built-in and user');
-
-    const style = text(rows[1]);
-    expect(style).toContain('User');
-    expect(style).toContain('On demand');
-    expect(style).not.toContain('Overrides');
-    expect(style).toContain('Use when writing SQL for the World Cup data.');
-    expect(style).toContain('the name is longer than 64 characters');
+    // Name, the loading badge and the description: no level badge,
+    // overrides label or warnings.
+    const parts = (row: HTMLElement) =>
+      Array.from(
+        row.querySelectorAll<HTMLElement>('button > span > span, button > span'),
+      )
+        .filter((span) => span.children.length === 0)
+        .map((span) => text(span));
+    expect(parts(rows[0])).toEqual([
+      'curated-knowledge',
+      'Loaded by the app',
+      'Use when the turn carries a curated knowledge block.',
+    ]);
+    expect(parts(rows[1])).toEqual([
+      'sql-style',
+      'On demand',
+      'Use when writing SQL for the World Cup data.',
+    ]);
+    expect(rows[0].querySelector('lucide-angular')).toBeNull();
     expect(rows[1].querySelector('button')!.getAttribute('aria-expanded')).toBe(
       'false',
     );
@@ -269,34 +239,6 @@ describe('AgentSkills', () => {
     expect(text(error)).toBe(
       'Skill "curated-knowledge" has no file "SKILL.md"',
     );
-  });
-
-  it('lists skipped skills with their level and problems (R66)', async () => {
-    const el = await render({
-      ...view,
-      skipped: [
-        {
-          name: 'broken',
-          level: 'user',
-          problems: ['description is missing', 'name is missing'],
-        },
-      ],
-    });
-    expect(text(el)).toContain('Skipped');
-    const card = byTestId(el, 'skipped-skill-broken')!;
-    expect(text(card)).toContain('broken');
-    expect(text(card)).toContain('User');
-    expect(Array.from(card.querySelectorAll('p')).map((p) => text(p))).toEqual([
-      'description is missing',
-      'name is missing',
-    ]);
-    expect(byTestId(el, 'agent-skill-broken')).toBeNull();
-  });
-
-  it('has no Skipped section when nothing was skipped', async () => {
-    const el = await render();
-    const headings = Array.from(el.querySelectorAll('h3')).map((h) => text(h));
-    expect(headings).toEqual(['Where skills come from']);
   });
 });
 

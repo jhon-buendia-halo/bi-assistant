@@ -667,7 +667,7 @@ Developer tooling, not an application change: a Claude Code mod in the repositor
 
 ### Milestone 1.13 — Assistant skills: progressive-disclosure agent structure ([BA-198](https://halo-powered.atlassian.net/browse/BA-198))
 
-A behaviour-preserving refactor of the app's Mastra agents to the Agent Skills layout: a slim always-on assistant prompt, and skills (`SKILL.md` + `phases/` + `reference/`) that the model loads on demand or the harness injects when a condition holds in code. Extended on 2026-10-14 with user and project skill levels that override the built-in skills by name, and a read-only Skills tab on the agent page (ADR-0019). Proven by the world-cup eval set before and after (same model) and the full E2E suite. All stories are built on `refactor/BA-198-assistant-skills` and ship as one PR. Epic spec: [specs/epics/BA-198/spec.md](specs/epics/BA-198/spec.md). (1.12 is held by the BA-82 branch.)
+A behaviour-preserving refactor of the app's Mastra agents to the Agent Skills layout: a slim always-on assistant prompt, and skills (`SKILL.md` + `phases/` + `reference/`) that the model loads on demand or the harness injects when a condition holds in code. Extended on 2026-10-14 with user and project skill levels that override the built-in skills by name, and a read-only Skills tab on the agent page (ADR-0019). The levels were removed again the same day, after 0.32 shipped them: only built-in skills load (1.13.13, ADR-0021). Proven by the world-cup eval set before and after (same model) and the full E2E suite. All stories are built on `refactor/BA-198-assistant-skills` and ship as one PR. Epic spec: [specs/epics/BA-198/spec.md](specs/epics/BA-198/spec.md). (1.12 is held by the BA-82 branch.)
 
 #### 1.13.1 — ADR, epic spec and skill loader for app-owned skills ([BA-199](https://halo-powered.atlassian.net/browse/BA-199))  `✅ Done`
 - **Intent:** every agent gets its skills from one place, declared per agent, checked at startup, so later stories only move text.
@@ -716,7 +716,7 @@ A behaviour-preserving refactor of the app's Mastra agents to the Agent Skills l
   - **Layout.** The built-ins move to the confirmed layout: `interactive-visuals/references/` becomes `reference/`.
   - **Specs.** agents.md §6.4, §7.2-7.4 and §9; api.md environment table; data-model.md §4.8; ADR-0019.
 - **Out of scope:** per-person skills on the org server; editing skills in the app; reloading without a restart; the script runner.
-- **Notes:** Evidence: [evidence/1.13.7/](evidence/1.13.7/).
+- **Notes:** Evidence: [evidence/1.13.7/](evidence/1.13.7/). Removed by 1.13.13: only built-in skills load since (ADR-0021).
 - **Acceptance:**
   - Unit tests cover precedence across the three levels, `agents` targeting, every skip reason, the override checks and the warnings.
   - A recorded request (stub LLM) shows a user-level skill in the assistant's catalog with the skill tools, and a user-level `curated-knowledge` override sent after the knowledge block.
@@ -730,7 +730,7 @@ A behaviour-preserving refactor of the app's Mastra agents to the Agent Skills l
   - **Tab.** A read-only **Skills (<n>)** tab after Tools: where skills come from, one row per skill (level, loading, overrides, description, warnings), its file tree and the selected file's content, and a Skipped section.
   - **Specs.** api.md §2.6, ui.md §4.5, agents-evals rules and a new Feature with `agent-skills.spec.ts`.
 - **Out of scope:** creating, editing or deleting skills; a restart button.
-- **Notes:** Evidence: [evidence/1.13.8/](evidence/1.13.8/).
+- **Notes:** Evidence: [evidence/1.13.8/](evidence/1.13.8/). 1.13.13 removes the levels, overrides, warnings and Skipped section from the tab.
 - **Acceptance:**
   - E2E: the designer shows `interactive-visuals` (Built-in, Loaded by the app) and its `reference/spec-mode.md` content.
   - E2E: with a user skill and a project override seeded, the assistant shows each skill's level and what it overrides.
@@ -783,6 +783,22 @@ A behaviour-preserving refactor of the app's Mastra agents to the Agent Skills l
 - **Out of scope:** checks and reference SQL (1.13.11); other wording of the working rules.
 - **Acceptance:** unit tests for the three behaviours. The world-cup evals pass at 100% over 3 runs.
 - **Notes:** `ambiguous-best-team` passed 1 of 4 runs and `visual-request` failed once with `create_visual({})`, both on the base before BA-207.
+
+#### 1.13.13 — Built-in skills only: remove user and project skill levels ([BA-211](https://halo-powered.atlassian.net/browse/BA-211))  `✅ Done`
+- **Intent:** agents get only the skills that ship with the app, reviewed and covered by the evals, so no folder on disk can change what an agent is told. Reverses 1.13.7.
+- **Scope:** ADR-0021, superseding ADR-0019.
+  - **Backend.** Skills load only from the bundle (`src/mastra/skills/<name>/`). No user level (`<data dir>/skills/`), no project level and no `QUESTIONS_TO_INSIGHTS_PROJECT_SKILLS_DIR`. No overrides by name, skipped skills or per-skill warnings. A broken built-in skill still stops the backend at startup. A `<data dir>/skills/` folder left by 0.32 is ignored: neither read nor deleted.
+  - **API.** `GET /agents/:key/skills` answers `{ skills: [{ name, description, loading, files }] }`, without `levels`, `skipped` or each skill's `level`, `overrides` and `warnings`. The file endpoint is unchanged.
+  - **Skills tab.** Removes "Where skills come from", the level pill, "Overrides …", the warnings, the Skipped section and the "Restart the app" line. Keeps the user-agent line, the loading pill, the description, the file list and file view, and "This agent has no skills."
+  - **Unchanged.** The assistant's prompt and catalog (same built-in skills), `read_file` and `run_skill_script`.
+  - **Specs.** ADR-0021; agents.md §2.2, §7.2-7.4; api.md 34a and environment table; ui.md §4.5 and copy table; data-model.md §4.8; glossary *Skill*; agents-evals R63-R67 and the Feature "Agent skills"; sessions-chat Feature "Skills the assistant is given"; the BA-198 epic spec.
+- **Out of scope:** deleting `<data dir>/skills/` folders left by 0.32; a desktop E2E run.
+- **Acceptance:**
+  - Unit tests: only built-in skills load; a skill folder in the data dir and a set `QUESTIONS_TO_INSIGHTS_PROJECT_SKILLS_DIR` have no effect; a broken built-in still stops startup.
+  - A recorded request (stub LLM) with an old skills folder in the data dir shows the assistant's catalog listing only `curated-knowledge`.
+  - E2E: the Skills tab shows each skill's loading mode and files, with no levels, overrides or Skipped section; the assistant lists `curated-knowledge` and `deep-analysis` only.
+  - The impacted E2E specs, backend and frontend unit tests, lint, builds and `check-specs.py` pass. The assistant receives the same prompt, catalog and tools as on the base commit; the step-9 eval rule applies if the recorded request shows otherwise.
+- **Notes:** decided by the user on 2026-10-14: "delete user and project skills, for now we are going to use only the built-in skills."
 
 ## Release 2 — Multi-user  (no target date yet)
 

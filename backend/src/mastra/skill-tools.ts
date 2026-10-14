@@ -55,9 +55,8 @@ export function readSkillPath(skills: AppSkill[], path: string): ReadResult {
   return refused;
 }
 
-/** A built-in skill's runnable scripts: listed `scripts/*.js|mjs|cjs` files. */
+/** A skill's runnable scripts: listed `scripts/*.js|mjs|cjs` files. */
 export function skillScripts(skill: AppSkill): string[] {
-  if (skill.level !== 'built-in') return [];
   return skillFiles(skill.dir)
     .map((file) => file.path)
     .filter((path) => SCRIPT_FILE.test(path));
@@ -138,9 +137,7 @@ export function resolveScript(
   name: string,
   script: string,
 ): { skill: AppSkill; script: string } | { error: string } {
-  const skill = skills.find(
-    (candidate) => candidate.name === name && candidate.level === 'built-in',
-  );
+  const skill = skills.find((candidate) => candidate.name === name);
   if (!skill) return { error: `Unknown skill: ${name}` };
   if (!skillScripts(skill).includes(script)) {
     return { error: `Not a script of ${name}: ${script}` };

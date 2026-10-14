@@ -6,19 +6,12 @@ import {
   input,
   signal,
 } from '@angular/core';
-import {
-  LucideAngularModule,
-  ChevronRight,
-  Loader2,
-  TriangleAlert,
-} from 'lucide-angular';
+import { LucideAngularModule, ChevronRight, Loader2 } from 'lucide-angular';
 import {
   AgentSkill,
   AgentSkillFile,
-  AgentSkillLevel,
   AgentSkillsView,
   AgentsApiService,
-  SkillLevel,
 } from '../../services/agents-api.service';
 
 /** What an expanded skill row shows on its right: the selected file. */
@@ -30,19 +23,9 @@ interface OpenSkill {
   file: AgentSkillFile | null;
 }
 
-const LEVEL_LABELS: Record<SkillLevel, string> = {
-  'built-in': 'Built-in',
-  user: 'User',
-  project: 'Project',
-};
-
-export const PROJECT_SKILLS_VARIABLE =
-  'QUESTIONS_TO_INSIGHTS_PROJECT_SKILLS_DIR';
-
 /**
  * The read-only Skills tab of the agent detail (agents-evals R63-R67,
- * ui.md 4.5): where skills come from, the agent's skills with their files,
- * and the skills that were skipped.
+ * ui.md 4.5): the agent's built-in skills with their files.
  */
 @Component({
   selector: 'app-agent-skills',
@@ -52,7 +35,6 @@ export const PROJECT_SKILLS_VARIABLE =
 export class AgentSkills {
   readonly ChevronRight = ChevronRight;
   readonly Loader2 = Loader2;
-  readonly TriangleAlert = TriangleAlert;
 
   private readonly api = inject(AgentsApiService);
 
@@ -78,23 +60,8 @@ export class AgentSkills {
     });
   }
 
-  levelLabel(level: SkillLevel): string {
-    return LEVEL_LABELS[level];
-  }
-
-  /** The level row's detail: where that level's skills are read from. */
-  levelDetail(level: AgentSkillLevel): string {
-    if (level.level === 'built-in') return 'Ships with the app';
-    if (level.path === null) return `Not set (${PROJECT_SKILLS_VARIABLE})`;
-    return level.found ? level.path : `${level.path} (not found)`;
-  }
-
   loadingLabel(skill: AgentSkill): string {
     return skill.loading === 'on-demand' ? 'On demand' : 'Loaded by the app';
-  }
-
-  overridesLabel(skill: AgentSkill): string {
-    return `Overrides ${skill.overrides.join(' and ')}`;
   }
 
   /** One indent step per folder level of the file's path. */

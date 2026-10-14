@@ -4,7 +4,6 @@ import { join } from 'path';
 import { symlinkSync } from 'fs';
 import {
   AGENT_SKILLS,
-  AppSkill,
   HARNESS_SKILLS,
   agentSkillFile,
   agentSkillsView,
@@ -13,7 +12,6 @@ import {
   appSkillFile,
   loadAppSkills,
   readSkillFile,
-  resolveSkills,
   skillBody,
   skillFiles,
   catalogSkills,
@@ -255,8 +253,7 @@ describe('the bundled skills', () => {
     expect(appSkillDocument('interactive-visuals')).toMatch(
       /^---\nname: interactive-visuals\ndescription: Use when /,
     );
-    // curated-knowledge is the only built-in on-demand skill (ADR-0020), and
-    // no user or project level exists in the test environment.
+    // curated-knowledge is the only on-demand skill (ADR-0020).
     expect(AGENT_SKILLS.assistant).toEqual(['curated-knowledge']);
     expect(catalogSkills('assistant').map((skill) => skill.name)).toEqual([
       'curated-knowledge',
@@ -316,290 +313,76 @@ describe('the bundled skills', () => {
   });
 });
 
-/** A SKILL.md with the given front-matter lines and body. */
-function md(lines: string[], body: string): string {
-  return ['---', ...lines, '---', '', body, ''].join('\n');
-}
+describe('skill folders', () => {
+  it('ignores dot-folders and symbolic links to folders', () => {
+    const builtInRoot = join(root, 'built-in');
+    mkdirSync(builtInRoot);
+    const write = (base: string, name: string) => {
+      mkdirSync(join(base, name), { recursive: true });
+      writeFileSync(
+        join(base, name, 'SKILL.md'),
+        ['---', `name: ${name}`, 'description: Use when x.', '---', 'b'].join(
+          '\n',
+        ),
+      );
+    };
+    write(builtInRoot, 'kept');
+    write(builtInRoot, '.hidden');
+    write(root, 'linked');
+    symlinkSync(join(root, 'linked'), join(builtInRoot, 'linked'));
 
-describe('resolveSkills (built-in < user < project)', () => {
-  let builtInRoot: string;
-  let userRoot: string;
-  let projectRoot: string;
-  let builtIn: Map<string, AppSkill>;
-  let warnings: string[];
-
-  function write(base: string, name: string, files: Record<string, string>) {
-    for (const [path, text] of Object.entries(files)) {
-      const target = join(base, name, path);
-      mkdirSync(join(target, '..'), { recursive: true });
-      writeFileSync(target, text);
-    }
-  }
-
-  function resolve() {
-    return resolveSkills(
-      builtIn,
-      { user: userRoot, project: projectRoot },
-      (message) => warnings.push(message),
-    );
-  }
-
-  const knowledge = (body: string) => ({
-    'SKILL.md': md(
-      ['name: curated-knowledge', 'description: Use when knowledge applies.'],
-      body,
-    ),
-  });
-  const deepAnalysis = (plan: string) => ({
-    'SKILL.md': md(
-      ['name: deep-analysis', 'description: Use when analysing deeply.'],
-      'Phase 1 is phases/1-plan.md.',
-    ),
-    'phases/1-plan.md': plan,
+    expect([...loadAppSkills(builtInRoot).keys()]).toEqual(['kept']);
   });
 
-  beforeEach(() => {
-    builtInRoot = join(root, 'built-in');
-    userRoot = join(root, 'user');
-    projectRoot = join(root, 'project');
-    warnings = [];
-    write(builtInRoot, 'curated-knowledge', knowledge('Built-in rules.'));
-    write(
-      builtInRoot,
-      'deep-analysis',
-      deepAnalysis('Plan {{question}} over {{datasets}}.'),
-    );
-    builtIn = loadAppSkills(builtInRoot);
-  });
-
-  it('keeps the built-ins, with their tables, when no other level exists', () => {
-    const { skills, skipped, levels } = resolve();
-
-    expect([...skills.keys()].sort()).toEqual([
-      'curated-knowledge',
-      'deep-analysis',
-    ]);
+  it('takes agents and loading mode from the two tables only', () => {
+    const skills = loadAppSkills(skillsRoot());
+    expect(skills.get('curated-knowledge')).toMatchObject({
+      loading: 'on-demand',
+      agents: ['assistant'],
+    });
     expect(skills.get('deep-analysis')).toMatchObject({
-      level: 'built-in',
       loading: 'harness',
       agents: ['assistant'],
-      overrides: [],
     });
-    expect(skipped).toEqual([]);
-    expect(levels).toEqual([
-      { level: 'built-in', path: null, found: true },
-      { level: 'user', path: userRoot, found: false },
-      { level: 'project', path: projectRoot, found: false },
-    ]);
-    expect(warnings).toEqual([
-      `[skills] Project skills folder not found: ${projectRoot}`,
+    expect(Object.keys(skills.get('deep-analysis')!).sort()).toEqual([
+      'agents',
+      'description',
+      'dir',
+      'document',
+      'loading',
+      'name',
     ]);
   });
 
-  it('reports no project level when the variable is not set', () => {
-    const { levels } = resolveSkills(builtIn, {
-      user: userRoot,
-      project: null,
-    });
-    expect(levels[2]).toEqual({ level: 'project', path: null, found: false });
-  });
-
-  it('gives a new user skill to the assistant, on demand', () => {
-    write(userRoot, 'sql-style', {
-      'SKILL.md': md(
-        ['name: sql-style', 'description: Use when writing SQL.'],
-        'Rules in reference/style.md.',
+  it('ignores a skills folder in the data dir', () => {
+    const dataDir = join(root, 'data');
+    const own = join(dataDir, 'skills', 'sql-style');
+    mkdirSync(own, { recursive: true });
+    writeFileSync(
+      join(own, 'SKILL.md'),
+      ['---', 'name: sql-style', 'description: Use when SQL.', '---', 'b'].join(
+        '\n',
       ),
-      'reference/style.md': 'One clause per line.',
-    });
-
-    const style = resolve().skills.get('sql-style');
-
-    expect(style).toMatchObject({
-      level: 'user',
-      loading: 'on-demand',
-      agents: ['assistant'],
-      overrides: [],
-      warnings: [],
-      dir: join(userRoot, 'sql-style'),
-    });
-  });
-
-  it('lets project override user override built-in, by name, keeping the loading mode', () => {
-    mkdirSync(projectRoot, { recursive: true });
-    write(userRoot, 'curated-knowledge', knowledge('User rules.'));
-    write(projectRoot, 'curated-knowledge', knowledge('Project rules.'));
-
-    const winner = resolve().skills.get('curated-knowledge')!;
-
-    expect(winner).toMatchObject({
-      level: 'project',
-      loading: 'on-demand',
-      agents: ['assistant'],
-      overrides: ['built-in', 'user'],
-    });
-    expect(skillBody(winner.document)).toBe('Project rules.');
-  });
-
-  it('reads the agents key: a one-line list, and only agents that load skills on demand', () => {
-    const named = (name: string, agents: string) => ({
-      'SKILL.md': md(
-        [
-          `name: ${name}`,
-          `description: Use when ${name}.`,
-          `agents: ${agents}`,
-        ],
-        'b',
-      ),
-    });
-    write(userRoot, 'listed', named('listed', '[assistant]'));
-    write(userRoot, 'designer', named('designer', 'visualization'));
-    write(userRoot, 'ghost', named('ghost', '[nope, assistant]'));
-
-    const { skills, skipped } = resolve();
-
-    expect(skills.get('listed')?.agents).toEqual(['assistant']);
-    expect(skipped).toEqual([
-      {
-        name: 'designer',
-        level: 'user',
-        dir: join(userRoot, 'designer'),
-        problems: ['agent "visualization" does not load skills on demand'],
-        agents: ['visualization'],
-      },
-      {
-        name: 'ghost',
-        level: 'user',
-        dir: join(userRoot, 'ghost'),
-        problems: ['unknown agent "nope"'],
-        agents: ['assistant'],
-      },
-    ]);
-  });
-
-  it('skips a broken user skill, logs it and keeps going', () => {
-    write(userRoot, 'broken', {
-      'SKILL.md': md(['name: broken'], 'Read reference/gone.md.'),
-    });
-    write(userRoot, 'renamed', {
-      'SKILL.md': md(['name: other', 'description: Use when x.'], 'b'),
-    });
-    write(userRoot, 'fine', {
-      'SKILL.md': md(['name: fine', 'description: Use when fine.'], 'b'),
-    });
-
-    const { skills, skipped } = resolve();
-
-    expect(skills.has('fine')).toBe(true);
-    expect(skills.has('broken')).toBe(false);
-    expect(skipped.map((skill) => [skill.name, skill.problems])).toEqual([
-      ['broken', ['description is missing', 'reference/gone.md is missing']],
-      ['renamed', ['name "other" does not match its folder']],
-    ]);
-    expect(warnings).toContain(
-      '[skills] Skipped user skill "broken": description is missing; reference/gone.md is missing',
     );
-  });
-
-  it('ignores extra front-matter keys and nested maps in user skills', () => {
-    write(userRoot, 'standard', {
-      'SKILL.md': md(
-        [
-          'name: standard',
-          'description: Use when a standard skill applies.',
-          'license: MIT',
-          'metadata:',
-          '  author: someone',
-          '  tags: [a, b]',
-        ],
-        'b',
-      ),
-    });
-
-    expect(resolve().skills.get('standard')?.description).toBe(
-      'Use when a standard skill applies.',
-    );
-  });
-
-  it('checks an override of a harness-loaded skill against the built-in files and placeholders', () => {
-    mkdirSync(projectRoot, { recursive: true });
-    write(userRoot, 'deep-analysis', deepAnalysis('Plan {{question}} only.'));
-    write(projectRoot, 'deep-analysis', {
-      ...deepAnalysis('Plan {{datasets}} for {{question}}.'),
-      'SKILL.md': md(
-        ['name: deep-analysis', 'description: Use when analysing deeply.'],
-        '',
-      ),
-    });
-
-    const { skills, skipped } = resolve();
-
-    expect(
-      skipped.map((skill) => [skill.name, skill.level, skill.problems]),
-    ).toEqual([
-      [
-        'deep-analysis',
-        'user',
-        [
-          'phases/1-plan.md must use the placeholders {{datasets}}, {{question}}',
-        ],
-      ],
-      ['deep-analysis', 'project', ['the body is empty']],
-    ]);
-    // A skipped override leaves the level below in place.
-    expect(skills.get('deep-analysis')?.level).toBe('built-in');
-  });
-
-  it('needs every phase file of the harness-loaded skill it overrides', () => {
-    write(userRoot, 'deep-analysis', {
-      'SKILL.md': md(
-        ['name: deep-analysis', 'description: Use when analysing deeply.'],
-        'No phases here.',
-      ),
-    });
-
-    expect(resolve().skipped[0].problems).toEqual([
-      'phases/1-plan.md is missing (the skill it overrides has it)',
-    ]);
-  });
-
-  it('accepts a matching override and warns about ignored agents and scripts', () => {
-    write(userRoot, 'deep-analysis', {
-      ...deepAnalysis('Plan {{datasets}} for {{question}}, my way.'),
-      'SKILL.md': md(
-        [
-          'name: deep-analysis',
-          'description: Use when analysing deeply.',
-          'agents: [assistant]',
-        ],
-        'Phase 1 is phases/1-plan.md.',
-      ),
-      'scripts/run.py': 'print(1)',
-    });
-
-    const winner = resolve().skills.get('deep-analysis');
-
-    expect(winner).toMatchObject({ level: 'user', overrides: ['built-in'] });
-    expect(winner?.warnings).toEqual([
-      'agents is ignored on an override',
-      'scripts/ is not run for user and project skills',
-    ]);
-  });
-
-  it('ignores dot-folders and symbolic links to folders', () => {
-    write(userRoot, '.hidden', {
-      'SKILL.md': md(['name: .hidden', 'description: Use when x.'], 'b'),
-    });
-    write(root, 'elsewhere', {
-      'SKILL.md': md(['name: linked', 'description: Use when x.'], 'b'),
-    });
-    symlinkSync(join(root, 'elsewhere'), join(userRoot, 'linked'));
-
-    const { skills, skipped } = resolve();
-
-    expect(skills.has('.hidden')).toBe(false);
-    expect(skills.has('linked')).toBe(false);
-    expect(skipped).toEqual([]);
+    const saved = process.env.APP_DATA_DIR;
+    process.env.APP_DATA_DIR = dataDir;
+    try {
+      jest.isolateModules(() => {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const fresh = require('./app-skills') as typeof import('./app-skills');
+        expect([...fresh.appSkills().keys()].sort()).toEqual([
+          'curated-knowledge',
+          'deep-analysis',
+          'interactive-visuals',
+        ]);
+        expect(
+          fresh.catalogSkills('assistant').map((skill) => skill.name),
+        ).toEqual(['curated-knowledge']);
+      });
+    } finally {
+      if (saved === undefined) delete process.env.APP_DATA_DIR;
+      else process.env.APP_DATA_DIR = saved;
+    }
   });
 });
 
@@ -651,24 +434,20 @@ describe('agent skills view (bundled)', () => {
   it('shows the designer its interactive-visuals skill with every file', () => {
     const view = agentSkillsView('visualization');
 
-    expect(view.levels.map((level) => level.level)).toEqual([
-      'built-in',
-      'user',
-      'project',
-    ]);
-    expect(view.skills).toEqual([
-      expect.objectContaining({
-        name: 'interactive-visuals',
-        level: 'built-in',
-        loading: 'harness',
-        overrides: [],
-        files: [
-          expect.objectContaining({ path: 'SKILL.md' }),
-          expect.objectContaining({ path: 'reference/freeform.md' }),
-          expect.objectContaining({ path: 'reference/spec-mode.md' }),
-        ],
-      }),
-    ]);
+    expect(view).toEqual({
+      skills: [
+        {
+          name: 'interactive-visuals',
+          description: expect.stringMatching(/^Use when /) as string,
+          loading: 'harness',
+          files: [
+            expect.objectContaining({ path: 'SKILL.md' }),
+            expect.objectContaining({ path: 'reference/freeform.md' }),
+            expect.objectContaining({ path: 'reference/spec-mode.md' }),
+          ],
+        },
+      ],
+    });
     expect(agentSkillsView('sql-fixer').skills).toEqual([]);
   });
 

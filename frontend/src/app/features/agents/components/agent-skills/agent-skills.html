@@ -1,33 +1,11 @@
-<div class="flex flex-col">
-  <p class="text-[12px] text-fg-muted">
-    Skills are read when the app starts. Restart the app to pick up changes.
-  </p>
+<div class="flex flex-col gap-4">
   @if (userAgent()) {
-    <p class="mt-1 text-[12px] text-fg-muted">
+    <p class="text-[12px] text-fg-muted">
       This agent runs on the assistant, so it uses the assistant's skills.
     </p>
   }
 
-  <h3
-    class="mt-6 text-[12px] font-medium tracking-wider text-fg-muted uppercase"
-  >
-    Where skills come from
-  </h3>
-  <div class="mt-2 flex max-w-[720px] flex-col gap-2.5 text-[13px]">
-    @for (level of view().levels; track level.level) {
-      <div
-        [attr.data-testid]="'skill-level-' + level.level"
-        class="flex items-baseline gap-4 border-b border-border pb-2.5 last:border-b-0"
-      >
-        <span class="w-20 shrink-0 text-fg">{{ levelLabel(level.level) }}</span>
-        <span class="min-w-0 font-mono text-[12px] break-all text-fg-muted">{{
-          levelDetail(level)
-        }}</span>
-      </div>
-    }
-  </div>
-
-  <div class="mt-6">
+  <div>
     @if (skills().length === 0) {
       <p class="text-[13px] text-fg-muted">This agent has no skills.</p>
     } @else {
@@ -48,36 +26,15 @@
                   skill.name
                 }}</span>
                 <span
-                  class="rounded-md bg-surface-muted px-2 py-0.5 text-[11px] text-fg-muted"
-                  >{{ levelLabel(skill.level) }}</span
-                >
-                <span
                   class="rounded-md border border-border px-2 py-0.5 text-[11px] text-fg-muted"
                   >{{ loadingLabel(skill) }}</span
                 >
-                @if (skill.overrides.length > 0) {
-                  <span class="text-[12px] text-fg-muted">{{
-                    overridesLabel(skill)
-                  }}</span>
-                }
               </span>
               @if (skill.description) {
                 <span
                   class="block max-w-[80ch] text-[12px] leading-relaxed text-fg-muted"
                   >{{ skill.description }}</span
                 >
-              }
-              @for (warning of skill.warnings; track $index) {
-                <span
-                  class="flex items-start gap-1.5 text-[12px] text-fg-muted"
-                >
-                  <lucide-angular
-                    [img]="TriangleAlert"
-                    [size]="13"
-                    class="mt-0.5 shrink-0"
-                  />
-                  <span>{{ warning }}</span>
-                </span>
               }
             </button>
 
@@ -134,31 +91,4 @@
       </div>
     }
   </div>
-
-  @if (view().skipped.length > 0) {
-    <h3
-      class="mt-6 text-[12px] font-medium tracking-wider text-fg-muted uppercase"
-    >
-      Skipped
-    </h3>
-    <div class="mt-2 flex flex-col gap-2">
-      @for (skipped of view().skipped; track skipped.level + skipped.name) {
-        <div
-          [attr.data-testid]="'skipped-skill-' + skipped.name"
-          class="rounded-xl bg-danger-soft px-4 py-3 text-on-danger-soft"
-        >
-          <div class="flex flex-wrap items-center gap-2">
-            <span class="font-mono text-[13px]">{{ skipped.name }}</span>
-            <span
-              class="rounded-md bg-surface-muted px-2 py-0.5 text-[11px] text-fg-muted"
-              >{{ levelLabel(skipped.level) }}</span
-            >
-          </div>
-          @for (problem of skipped.problems; track $index) {
-            <p class="mt-1 text-[12px]">{{ problem }}</p>
-          }
-        </div>
-      }
-    </div>
-  }
 </div>
