@@ -14,6 +14,7 @@ import {
   parseLinks,
 } from '../../mastra/agent-links';
 import { REASONING_EFFORTS, type ReasoningEffort } from '../llm/llm.types';
+import { builtInOnDemandSkillNames } from '../../mastra/app-skills';
 import { SkillsRepository } from '../skills/repositories/skills.repository';
 import {
   SKILL_LIMITS,
@@ -188,7 +189,10 @@ export class UserAgentsService {
       (await this.skills.list()).map((doc) => [doc.name, doc.id]),
     );
     const ids: string[] = [];
+    const builtIn = builtInOnDemandSkillNames();
     for (const name of links.skills) {
+      // A built-in on-demand skill is a mention: every agent has it.
+      if (builtIn.includes(name)) continue;
       const id = owned.get(name);
       if (!id) throw new BadRequestException(`Unknown skill "${name}"`);
       ids.push(id);

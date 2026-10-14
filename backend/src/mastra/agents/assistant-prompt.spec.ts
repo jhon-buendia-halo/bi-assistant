@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { resolveLinks } from '../agent-links';
 import {
   ASSISTANT_IDENTITY,
   ASSISTANT_WORKING_RULES,
@@ -48,8 +49,13 @@ describe('buildAssistantInstructions', () => {
         ...toolLines(TOOLS),
         '',
         '## Working rules',
-        ...ASSISTANT_WORKING_RULES,
+        ...ASSISTANT_WORKING_RULES.map(resolveLinks),
       ].join('\n'),
+    );
+    expect(prompt).not.toContain('[[');
+    expect(prompt).toContain('Call the "ask_clarification" tool only when');
+    expect(prompt).toContain(
+      '[term] (see the "curated-knowledge" skill) outranks',
     );
     expect(
       prompt.startsWith('You are the Questions to Insights assistant'),
@@ -91,6 +97,7 @@ describe('assistantWorkingRules (tool selection, ADR-0021)', () => {
         FULL_RULES.slice(FULL_RULES.indexOf('\n\nFor every question:')),
     );
     expect(rules).not.toContain('ask_clarification');
+    expect(rules).not.toContain('[[tool:ask_clarification]]');
     expect(rules).not.toContain('Ask at most ONE clarification');
   });
 
@@ -106,6 +113,7 @@ describe('assistantWorkingRules (tool selection, ADR-0021)', () => {
         FULL_RULES.slice(FULL_RULES.indexOf('\n\nRules:')),
     );
     expect(rules).not.toMatch(/create_visual|update_visual/);
+    expect(rules).toContain('[[skill:curated-knowledge]]');
   });
 
   it('drops the three sample_rows mentions without sample_rows', () => {
@@ -115,13 +123,13 @@ describe('assistantWorkingRules (tool selection, ADR-0021)', () => {
 
     expect(rules).not.toContain('sample_rows');
     expect(rules).toContain(
-      '1. Map the question to concrete entities and columns (list_entities,\n   describe_entity).\n',
+      '1. Map the question to concrete entities and columns ([[tool:list_entities]],\n   [[tool:describe_entity]]).\n',
     );
     expect(rules).toContain(
-      'then the options must quote the actual values you found (via\ndescribe_entity), not invented ones.',
+      'then the options must quote the actual values you found (via\n[[tool:describe_entity]]), not invented ones.',
     );
     expect(rules).toContain(
-      '- run_readonly_sql takes a rationale. Write it in the\n  first person',
+      '- [[tool:run_readonly_sql]] takes a rationale. Write it in the\n  first person',
     );
     expect(rules.split('\n')).toHaveLength(ASSISTANT_WORKING_RULES.length);
   });
@@ -133,8 +141,8 @@ describe('assistantWorkingRules (tool selection, ADR-0021)', () => {
       rules.startsWith(`${NO_CLARIFICATION}\n\nFor every question:\n`),
     ).toBe(true);
     expect(rules).toContain(`\n\n${NO_VISUALS}\n\nRules:\n`);
-    expect(rules).toContain('   describe_entity).\n');
-    expect(rules).toContain('- run_readonly_sql takes a rationale.');
+    expect(rules).toContain('   [[tool:describe_entity]]).\n');
+    expect(rules).toContain('- [[tool:run_readonly_sql]] takes a rationale.');
     expect(rules).not.toMatch(
       /sample_rows|ask_clarification|create_visual|update_visual/,
     );
@@ -147,6 +155,55 @@ describe('assistantWorkingRules (tool selection, ADR-0021)', () => {
     expect(prompt).toContain(`\n${NO_VISUALS}\n`);
     expect(buildAssistantInstructions(TOOLS, undefined)).toBe(
       buildAssistantInstructions(TOOLS),
+    );
+  });
+});
+
+describe('the linked mentions (BA-224)', () => {
+  it('writes every tool mention of the shipped rules as a link', () => {
+    for (const tool of [
+      'ask_clarification',
+      'sample_rows',
+      'describe_entity',
+      'list_entities',
+      'run_readonly_sql',
+      'update_visual',
+      'create_visual',
+    ]) {
+      expect(FULL_RULES).toContain(`[[tool:${tool}]]`);
+      expect(FULL_RULES.replace(/\[\[tool:[a-z_]+\]\]/g, '')).not.toContain(
+        tool,
+      );
+    }
+    expect(FULL_RULES).toContain('[[skill:curated-knowledge]]');
+  });
+
+  it.each([
+    [undefined],
+    [[]],
+    [['sample_rows']],
+    [['visuals']],
+    [['ask_clarification']],
+    [['sample_rows', 'visuals']],
+    [['sample_rows', 'ask_clarification']],
+    [['visuals', 'ask_clarification']],
+    [['sample_rows', 'visuals', 'ask_clarification']],
+  ] as const)('serves no link for the selection %j', (selection) => {
+    const prompt = buildAssistantInstructions(TOOLS, selection);
+    expect(prompt).not.toContain('[[');
+    expect(prompt).toContain('the "curated-knowledge" skill');
+  });
+
+  it('resolves the linked mentions the replacements leave', () => {
+    const prompt = buildAssistantInstructions(TOOLS, ['ask_clarification']);
+    expect(prompt).toContain(
+      '(the "list_entities" tool,\n   the "describe_entity" tool).',
+    );
+    expect(prompt).toContain(
+      '(via\nthe "describe_entity" tool), not invented ones.',
+    );
+    expect(prompt).toContain(
+      '- the "run_readonly_sql" tool takes a rationale. Write it in the',
     );
   });
 });

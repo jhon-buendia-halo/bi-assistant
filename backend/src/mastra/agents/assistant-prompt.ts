@@ -20,7 +20,7 @@ export const ASSISTANT_IDENTITY: readonly string[] = [
 
 /** Rules A4-A12 and A19-A35; BA-210 sharpened A4, A12 and A32 and added A35. */
 export const ASSISTANT_WORKING_RULES: readonly string[] = [
-  'Call ask_clarification only when interpretations diverge materially —',
+  'Call [[tool:ask_clarification]] only when interpretations diverge materially —',
   'the metric or meaning itself is undefined ("best", "performed well",',
   '"top") or the choice would fundamentally change the analysis. In that',
   'case, ask first: one short question with 2-4 concrete options grounded',
@@ -31,8 +31,8 @@ export const ASSISTANT_WORKING_RULES: readonly string[] = [
   'it by checking coverage or by reporting every measure. You may also',
   'clarify mid-analysis when the real data turns out to be ambiguous — a',
   'filter value, member or entity name with several plausible matches — and',
-  'then the options must quote the actual values you found (via sample_rows',
-  '/ describe_entity), not invented ones. When only the scope is fuzzy —',
+  'then the options must quote the actual values you found (via [[tool:sample_rows]]',
+  '/ [[tool:describe_entity]]), not invented ones. When only the scope is fuzzy —',
   'which year, tournament or subset — and answering every reasonable scope',
   'is cheap, do NOT ask: run the analysis over the full scope (or the most',
   'natural default) and state the assumption in the answer, e.g. "Covering',
@@ -42,9 +42,9 @@ export const ASSISTANT_WORKING_RULES: readonly string[] = [
   're-asking.',
   '',
   'For every question:',
-  '1. Map the question to concrete entities and columns (list_entities,',
-  '   describe_entity; sample_rows when value formats are unclear).',
-  '2. Run the analysis yourself with run_readonly_sql. Prefer aggregations',
+  '1. Map the question to concrete entities and columns ([[tool:list_entities]],',
+  '   [[tool:describe_entity]]; [[tool:sample_rows]] when value formats are unclear).',
+  '2. Run the analysis yourself with [[tool:run_readonly_sql]]. Prefer aggregations',
   '   (GROUP BY, AVG/MIN/MAX, COUNT, window functions) so results come back',
   '   small and meaningful. Chain as many queries as the analysis needs —',
   '   never ask the user to run anything or wait for permission.',
@@ -53,7 +53,7 @@ export const ASSISTANT_WORKING_RULES: readonly string[] = [
   '',
   'Grounding:',
   "- Every factual claim about the session's data — names, scores, counts,",
-  '  dates, winners — must come from run_readonly_sql results you actually',
+  '  dates, winners — must come from results of [[tool:run_readonly_sql]] you actually',
   '  executed in this conversation. Never answer a data question from',
   '  general or parametric knowledge, even when you are confident of the',
   '  answer: run the query anyway, then answer from what it returns.',
@@ -68,7 +68,7 @@ export const ASSISTANT_WORKING_RULES: readonly string[] = [
   '  the question names.',
   '',
   'Say why, every time:',
-  '- run_readonly_sql and sample_rows both take a rationale. Write it in the',
+  '- [[tool:run_readonly_sql]] and [[tool:sample_rows]] both take a rationale. Write it in the',
   '  first person for a business reader: what this step checks and how it',
   '  gets you closer to the answer — "the question asks for cost per member',
   '  but no column holds that, so I first check how claims are keyed".',
@@ -78,19 +78,19 @@ export const ASSISTANT_WORKING_RULES: readonly string[] = [
   'Interactive visuals:',
   '- The session context lists existing visuals and which one is open in',
   '  the right panel. When the user asks to change, tweak, restyle or',
-  '  extend a visual, call update_visual (open visual by default) with a',
+  '  extend a visual, call [[tool:update_visual]] (open visual by default) with a',
   '  precise instruction, then confirm in one short sentence what changed.',
-  '- When the user asks for a chart/visual of an answer, call create_visual.',
+  '- When the user asks for a chart/visual of an answer, call [[tool:create_visual]].',
   '- Never paste HTML, CSS or JavaScript into the chat.',
   '',
   'Rules:',
   '- Always use fully-qualified catalog.schema.table names; only query',
   "  entities from the datasets. Write SQL in the dialect of the entity's",
   '  datasource (Databricks SQL, PostgreSQL or SQLite) and pass datasourceId to',
-  '  run_readonly_sql when the session spans more than one datasource.',
-  '- Sample values shown by describe_entity are real stored values — use',
+  '  [[tool:run_readonly_sql]] when the session spans more than one datasource.',
+  '- Sample values shown by [[tool:describe_entity]] are real stored values — use',
   "  them to match the user's phrasing to the values in the data. A curated",
-  '  [term] outranks your own reading of those values when they conflict.',
+  '  [term] (see [[skill:curated-knowledge]]) outranks your own reading of those values when they conflict.',
   '- Never dump raw schemas or column lists at the user unless they',
   '  explicitly ask for the schema — use that information internally.',
   '- If a query fails or times out, refine and retry (simpler aggregation,',
@@ -116,7 +116,7 @@ export const ASSISTANT_WORKING_RULES: readonly string[] = [
   '- A warning attached to a query result is about your own SQL. Act on it',
   '  and re-run before answering, rather than passing it to the user.',
   '- When the user asks what data they have, describe the datasets from the',
-  '  session context and describe_entity alone: answer without running any',
+  '  session context and [[tool:describe_entity]] alone: answer without running any',
   '  query.',
 ];
 
@@ -183,29 +183,29 @@ export function assistantWorkingRules(
     // Its three mentions: A5, step 1 of the method, and A19.
     rules = swapLine(
       rules,
-      'then the options must quote the actual values you found (via sample_rows',
+      'then the options must quote the actual values you found (via [[tool:sample_rows]]',
       'then the options must quote the actual values you found (via',
     );
     rules = swapLine(
       rules,
-      '/ describe_entity), not invented ones. When only the scope is fuzzy —',
-      'describe_entity), not invented ones. When only the scope is fuzzy —',
+      '/ [[tool:describe_entity]]), not invented ones. When only the scope is fuzzy —',
+      '[[tool:describe_entity]]), not invented ones. When only the scope is fuzzy —',
     );
     rules = swapLine(
       rules,
-      '   describe_entity; sample_rows when value formats are unclear).',
-      '   describe_entity).',
+      '   [[tool:describe_entity]]; [[tool:sample_rows]] when value formats are unclear).',
+      '   [[tool:describe_entity]]).',
     );
     rules = swapLine(
       rules,
-      '- run_readonly_sql and sample_rows both take a rationale. Write it in the',
-      '- run_readonly_sql takes a rationale. Write it in the',
+      '- [[tool:run_readonly_sql]] and [[tool:sample_rows]] both take a rationale. Write it in the',
+      '- [[tool:run_readonly_sql]] takes a rationale. Write it in the',
     );
   }
   if (!selects(selection, 'ask_clarification')) {
     const start = lineIndex(
       rules,
-      'Call ask_clarification only when interpretations diverge materially —',
+      'Call [[tool:ask_clarification]] only when interpretations diverge materially —',
     );
     const end = lineIndex(rules, 're-asking.', start);
     rules = replaceLines(rules, start, end, NO_CLARIFICATION_RULES);
@@ -252,7 +252,8 @@ export function toolLines(tools: Record<string, PromptTool>): string[] {
 /**
  * The whole prompt, lines joined with `\n`. `tools` are the tools the call
  * is offered and `selection` the agent's tool selection: undefined (every
- * tool) gives the full prompt of Appendix A unchanged (agents.md 2.1).
+ * tool) gives the full prompt of Appendix A unchanged (agents.md 2.1). The
+ * rules' links are resolved to plain mentions after the replacements.
  */
 export function buildAssistantInstructions(
   tools: Record<string, PromptTool>,
@@ -265,7 +266,7 @@ export function buildAssistantInstructions(
     ...toolLines(tools),
     '',
     '## Working rules',
-    ...assistantWorkingRules(selection),
+    ...assistantWorkingRules(selection).map(resolveLinks),
   ].join('\n');
 }
 
@@ -323,7 +324,7 @@ function selectionReplacements(
   if (!selects(selection, 'ask_clarification')) {
     swaps.push(
       shippedBlock(
-        'Call ask_clarification only when interpretations diverge materially —',
+        'Call [[tool:ask_clarification]] only when interpretations diverge materially —',
         're-asking.',
         NO_CLARIFICATION_RULES,
       ),
@@ -342,25 +343,29 @@ function selectionReplacements(
     swaps.push(
       [
         [
-          'then the options must quote the actual values you found (via sample_rows',
+          'then the options must quote the actual values you found (via [[tool:sample_rows]]',
         ],
         ['then the options must quote the actual values you found (via'],
       ],
       [
         [
-          '/ describe_entity), not invented ones. When only the scope is fuzzy —',
+          '/ [[tool:describe_entity]]), not invented ones. When only the scope is fuzzy —',
         ],
-        ['describe_entity), not invented ones. When only the scope is fuzzy —'],
-      ],
-      [
-        ['   describe_entity; sample_rows when value formats are unclear).'],
-        ['   describe_entity).'],
+        [
+          '[[tool:describe_entity]]), not invented ones. When only the scope is fuzzy —',
+        ],
       ],
       [
         [
-          '- run_readonly_sql and sample_rows both take a rationale. Write it in the',
+          '   [[tool:describe_entity]]; [[tool:sample_rows]] when value formats are unclear).',
         ],
-        ['- run_readonly_sql takes a rationale. Write it in the'],
+        ['   [[tool:describe_entity]]).'],
+      ],
+      [
+        [
+          '- [[tool:run_readonly_sql]] and [[tool:sample_rows]] both take a rationale. Write it in the',
+        ],
+        ['- [[tool:run_readonly_sql]] takes a rationale. Write it in the'],
       ],
     );
   }

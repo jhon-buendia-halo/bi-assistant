@@ -135,6 +135,7 @@
           <app-prompt-editor
             [value]="editor.form().instructions"
             [skills]="editor.librarySkills()"
+            [builtInSkills]="editor.builtInSkills()"
             label="Instructions"
             [maxLength]="limits.instructions"
             countTestId="agent-instructions-count"

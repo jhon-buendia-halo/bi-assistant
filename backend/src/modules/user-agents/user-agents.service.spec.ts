@@ -334,6 +334,22 @@ describe('user agent skills (ADR-0021; R43, R44, R60)', () => {
     expect(agent.draft.skills).toEqual(['b', 'a']);
   });
 
+  it('accepts a built-in on-demand skill link without counting it as a skill', async () => {
+    const ids = Array.from({ length: 10 }, (_, i) => `s${i}`);
+    for (const id of ids) await ctx.skills.insert(skill(id));
+    const agent = await ctx.service.create({
+      ...base,
+      instructions: `[[skill:curated-knowledge]] ${link(...ids)}`,
+    });
+    expect(agent.draft.skills).toEqual(ids);
+    const only = await ctx.service.create({
+      ...base,
+      name: 'Other',
+      instructions: 'See [[skill:curated-knowledge]].',
+    });
+    expect(only.draft.skills).toEqual([]);
+  });
+
   it('refuses an unknown skill, more than ten skills, then an unknown tool, by name', async () => {
     await expect(
       ctx.service.create({

@@ -11,7 +11,12 @@ import {
   AgentStatus,
   AgentsApiService,
 } from './agents-api.service';
-import { SkillSummary, SkillsApiService } from './skills-api.service';
+import { linkableBuiltInSkills } from './prompt-links';
+import {
+  BuiltInSkillSummary,
+  SkillSummary,
+  SkillsApiService,
+} from './skills-api.service';
 import {
   AgentForm,
   agentFormChanged,
@@ -63,6 +68,8 @@ export class AgentEditorService {
   readonly existingDatasets = signal<string[]>([]);
   /** The user's skills library, sorted by name (R55). */
   readonly librarySkills = signal<SkillSummary[]>([]);
+  /** The built-in on-demand skills, linkable as mentions. */
+  readonly builtInSkills = signal<BuiltInSkillSummary[]>([]);
   /** The configured LLM's model, for the Model placeholder. */
   readonly configuredModel = signal<string | null>(null);
   readonly saving = signal(false);
@@ -119,6 +126,7 @@ export class AgentEditorService {
     this.loadError.set(null);
     this.existingDatasets.set([]);
     this.librarySkills.set([]);
+    this.builtInSkills.set([]);
     this.legacyNotice.set(false);
     this.configuredModel.set(null);
     this.loading.set(agentId !== null);
@@ -146,6 +154,14 @@ export class AgentEditorService {
       },
       () => undefined,
     );
+    this.skillsApi.listBuiltIn().subscribe({
+      next: (res) => {
+        if (generation === this.generation) {
+          this.builtInSkills.set(linkableBuiltInSkills(res.skills));
+        }
+      },
+      error: () => undefined,
+    });
     let draftConfig: AgentConfig | null = null;
     const agent =
       agentId === null

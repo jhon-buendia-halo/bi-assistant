@@ -38,6 +38,7 @@ import {
   AgentEvalCaseResult,
   AgentEvalSet,
   AgentSkillsView,
+  AgentToolLink,
   AgentsApiService,
   EvalRunView,
 } from '../../services/agents-api.service';
@@ -69,7 +70,11 @@ import {
   skillsCount,
 } from '../../services/agent-page.util';
 import { agentKind } from '../../services/agent-hub.util';
-import { knownLinks } from '../../services/prompt-links';
+import {
+  LINKABLE_TOOLS,
+  knownLinks,
+  linkableBuiltInSkills,
+} from '../../services/prompt-links';
 import {
   BuiltInSkillSummary,
   SkillSummary,
@@ -272,7 +277,11 @@ export class AgentDetail implements OnDestroy {
   readonly librarySkillsError = signal<string | null>(null);
   /** The names that exist, so a link to anything else shows as not found. */
   readonly knownLinkSet = computed(() =>
-    knownLinks(this.librarySkills() ?? []),
+    knownLinks(
+      this.librarySkills() ?? [],
+      undefined,
+      linkableBuiltInSkills(this.builtInSkills()),
+    ),
   );
 
   private loadLibrarySkills(key: string): void {
@@ -312,6 +321,20 @@ export class AgentDetail implements OnDestroy {
     });
   }
 
+  /** The built-in skills the assistant's prompt links, for its Graph tab. */
+  readonly assistantGraphSkills = computed(() =>
+    linkableBuiltInSkills(this.builtInSkills()).map((skill) => ({
+      name: skill.name,
+      tools: [] as string[],
+    })),
+  );
+  /** The assistant keeps every tool: each is always on. */
+  readonly assistantToolLinks: AgentToolLink[] = LINKABLE_TOOLS.map((tool) => ({
+    name: tool.name,
+    status: 'always-on',
+    linkedVia: { instructions: false, skills: [] },
+  }));
+
   /** Reload the owner's skills after the Skills tab changed one. */
   reloadLibrary(): void {
     this.loadLibrarySkills(this.agentKey());
@@ -333,6 +356,9 @@ export class AgentDetail implements OnDestroy {
         if (agent.kind === 'user') {
           this.loadLibrarySkills(key);
           if (initial) this.loadBuiltInSkills(key);
+        } else if (agent.prompt?.linksAllowed && initial) {
+          // The assistant's prompt links built-in skills too.
+          this.loadBuiltInSkills(key);
         }
       },
       error: (err) => {

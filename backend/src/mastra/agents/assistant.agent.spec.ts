@@ -46,6 +46,7 @@ import { AGENT_SKILLS_CONTEXT_KEY, type AgentSkill } from '../agent-skills';
 import { appSkillBody } from '../app-skills';
 import { setSkillOverrides } from '../skill-overrides';
 import { setAgentPromptOverrides } from '../agent-prompt-overrides';
+import { resolveLinks } from '../agent-links';
 import { assistantAgent, assistantVariant } from './assistant.agent';
 import { assistantShippedPrompt } from './assistant-prompt';
 
@@ -270,8 +271,14 @@ describe("the assistant's prompt override (ADR-0025, agents.md 2.1)", () => {
   it('has the shipped editable text without the Tools section', () => {
     const shipped = assistantShippedPrompt();
     expect(shipped).not.toContain('## Tools');
-    expect(shipped).toContain('\n\n## Working rules\nCall ask_clarification');
-    expect(GOLDEN.replace(/## Tools\n(?:- .*\n)+\n/, '')).toBe(shipped);
+    expect(shipped).toContain(
+      '\n\n## Working rules\nCall [[tool:ask_clarification]]',
+    );
+    expect(shipped).toContain('[[skill:curated-knowledge]]');
+    expect(GOLDEN.replace(/## Tools\n(?:- .*\n)+\n/, '')).toBe(
+      resolveLinks(shipped),
+    );
+    expect(GOLDEN).not.toContain('[[');
   });
 
   it('serves the shipped text as an override exactly as the unedited prompt, for every selection', async () => {
@@ -351,26 +358,40 @@ describe("the assistant's prompt override (ADR-0025, agents.md 2.1)", () => {
     const shipped = assistantShippedPrompt();
     // Edit the visuals block; leave the clarification paragraph as shipped.
     const edited = shipped.replace(
-      '- When the user asks for a chart/visual of an answer, call create_visual.',
-      '- Draw a chart with create_visual when asked.',
+      '- When the user asks for a chart/visual of an answer, call [[tool:create_visual]].',
+      '- Draw a chart with [[tool:create_visual]] when asked.',
     );
     expect(edited).not.toBe(shipped);
     override(edited);
     const text = await prompt([]);
-    expect(text).toContain('- Draw a chart with create_visual when asked.');
+    expect(text).toContain(
+      '- Draw a chart with the "create_visual" tool when asked.',
+    );
     expect(text).not.toContain("- You can't create or change visuals");
     expect(text).toContain("You can't ask the user a question back");
-    expect(text).not.toContain('Call ask_clarification only when');
+    expect(text).not.toContain('only when interpretations diverge');
   });
 
   it('keeps an edited sample_rows rule as written when the tool is not selected', async () => {
     const edited = assistantShippedPrompt().replace(
-      '- run_readonly_sql and sample_rows both take a rationale. Write it in the',
-      '- run_readonly_sql and sample_rows both take a rationale. Write it in a',
+      '- [[tool:run_readonly_sql]] and [[tool:sample_rows]] both take a rationale. Write it in the',
+      '- [[tool:run_readonly_sql]] and [[tool:sample_rows]] both take a rationale. Write it in a',
     );
     override(edited);
     const text = await prompt([]);
     expect(text).toContain('both take a rationale. Write it in a');
-    expect(text).toContain('   describe_entity).');
+    expect(text).toContain('   the "describe_entity" tool).');
+    expect(text).not.toContain('[[');
+  });
+
+  it('serves links in an override as mentions, a built-in skill link included', async () => {
+    override(
+      `${IDENTITY}\n\n## Working rules\nUse [[tool:sample_rows]], see [[skill:curated-knowledge]].`,
+    );
+    const text = await prompt();
+    expect(text).toContain(
+      'Use the "sample_rows" tool, see the "curated-knowledge" skill.',
+    );
+    expect(text).not.toContain('[[');
   });
 });

@@ -77,6 +77,7 @@ describe('AgentEditorService', () => {
       .expectOne(`${API_BASE_URL}/datasets`)
       .flush({ datasets: [{ name: 'World Cup Core', tables: [] }] });
     http.expectOne(`${API_BASE_URL}/skills`).flush({ skills: SKILLS });
+    http.expectOne(`${API_BASE_URL}/skills/built-in`).flush({ skills: [] });
     if (agentId) {
       http.expectOne(`${API_BASE_URL}/agents/${agentId}`).flush({
         key: agentId,

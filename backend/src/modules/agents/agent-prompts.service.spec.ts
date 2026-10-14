@@ -187,11 +187,26 @@ describe('AgentPromptsService (ADR-0025)', () => {
       expect(
         await refusal('assistant', `${IDENTITY}. [[skill:x]] [[tool:nope]]`),
       ).toBe(
-        "Skills can't be linked here: this prompt is shared by every user",
+        'Only built-in skills can be linked here: this prompt is shared by every user',
       );
+      expect(
+        await refusal(
+          'assistant',
+          `${IDENTITY}. [[skill:curated-knowledge]] [[tool:nope]]`,
+        ),
+      ).toBe('Unknown tool "nope"');
       expect(await refusal('assistant', `${IDENTITY}. [[tool:nope]]`)).toBe(
         'Unknown tool "nope"',
       );
+    });
+
+    it('accepts a built-in on-demand skill link in the assistant prompt', async () => {
+      const { service } = build();
+      await expect(
+        service.save('assistant', {
+          prompt: `${IDENTITY}. See [[skill:curated-knowledge]] and [[tool:sample_rows]].`,
+        }),
+      ).resolves.toBe('Questions to Insights Assistant');
     });
 
     it('any link in a System agent prompt', async () => {

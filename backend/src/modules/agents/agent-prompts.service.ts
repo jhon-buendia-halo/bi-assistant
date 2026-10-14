@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { isLibraryTool, parseLinks } from '../../mastra/agent-links';
 import { setAgentPromptOverrides } from '../../mastra/agent-prompt-overrides';
+import { builtInOnDemandSkillNames } from '../../mastra/app-skills';
 import { MastraService } from '../../mastra/mastra.service';
 import {
   agentPromptHash,
@@ -133,9 +134,10 @@ function validatePrompt(key: string, value: unknown): string {
       );
     }
     const links = parseLinks(prompt);
-    if (links.skills.length) {
+    const builtIn = builtInOnDemandSkillNames();
+    if (links.skills.some((name) => !builtIn.includes(name))) {
       throw new BadRequestException(
-        "Skills can't be linked here: this prompt is shared by every user",
+        'Only built-in skills can be linked here: this prompt is shared by every user',
       );
     }
     const unknown = links.tools.find((name) => !isLibraryTool(name));

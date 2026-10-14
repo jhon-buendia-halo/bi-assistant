@@ -645,6 +645,16 @@ export function builtInSkillNames(): string[] {
 }
 
 /**
+ * The built-in on-demand skills a prompt may link as mentions (BA-224):
+ * every agent gets them, so a link names one without gating anything.
+ */
+export function builtInOnDemandSkillNames(): string[] {
+  return [...shippedSkills().values()]
+    .filter((skill) => skill.loading === 'on-demand')
+    .map((skill) => skill.name);
+}
+
+/**
  * The `phases/…` and `reference(s)/….md` paths a skill body names: what the
  * folder-skill check requires to exist, and what an in-app skill's body may
  * only name when the skill has them (data-model 3.10.1).

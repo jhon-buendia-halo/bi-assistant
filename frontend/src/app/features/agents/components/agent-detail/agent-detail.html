@@ -181,6 +181,7 @@
         <app-agent-system-prompt
           [agent]="agent"
           [library]="librarySkills()"
+          [builtInSkills]="builtInSkills()"
           (saved)="reloadAgent()"
         />
       </div>
@@ -281,6 +282,24 @@
                 [instructions]="agentInstructions()"
                 [skills]="library"
                 [toolLinks]="toolLinks"
+              />
+            } @else {
+              <div class="flex items-center gap-2.5 text-[13px] text-fg-muted">
+                <lucide-angular
+                  [img]="Loader2"
+                  [size]="14"
+                  class="animate-spin"
+                />
+                <span>Loading graph…</span>
+              </div>
+            }
+          } @else if (agent.prompt?.linksAllowed) {
+            <!-- The Official assistant: its prompt's links, every tool on. -->
+            @if (builtInSkills()) {
+              <app-agent-graph
+                [instructions]="agent.prompt!.editable"
+                [skills]="assistantGraphSkills()"
+                [toolLinks]="assistantToolLinks"
               />
             } @else {
               <div class="flex items-center gap-2.5 text-[13px] text-fg-muted">

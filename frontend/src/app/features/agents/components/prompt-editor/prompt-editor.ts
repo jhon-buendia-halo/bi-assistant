@@ -58,6 +58,8 @@ export class PromptEditor implements OnDestroy {
   readonly value = input.required<string>();
   /** Skills offered in the "/" menu; none where only tools can be linked. */
   readonly skills = input<{ name: string; description: string }[]>([]);
+  /** Built-in on-demand skills offered after `skills`, marked Built-in. */
+  readonly builtInSkills = input<{ name: string; description: string }[]>([]);
   /** Whether skills can be linked at all (not in a skill body). */
   readonly linkSkills = input(true);
   /** The field's label, as the editor's accessible name. */
@@ -88,8 +90,18 @@ export class PromptEditor implements OnDestroy {
           description: skill.description,
         }))
       : []),
+    ...this.builtInSkills().map((skill) => ({
+      kind: 'skill' as const,
+      name: skill.name,
+      description: skill.description,
+      builtIn: true,
+    })),
     ...LINKABLE_TOOLS,
   ]);
+  /** Whether the menu has skills at all: the user's or the built-in ones. */
+  protected readonly hasSkills = computed(
+    () => this.linkSkills() || this.builtInSkills().length > 0,
+  );
   private readonly known = computed(
     () => new Set(this.options().map((o) => `${o.kind}:${o.name}`)),
   );
@@ -190,9 +202,11 @@ export class PromptEditor implements OnDestroy {
               (o.name.toLowerCase().includes(q) ||
                 o.description.toLowerCase().includes(q)),
           );
-          // Up to 6 of each kind, skills first, so neither crowds out the other.
+          // Up to 6 of each kind, skills first (the user's, then the built-in
+          // ones), so none crowds out the others.
           return [
-            ...matches.filter((o) => o.kind === 'skill').slice(0, 6),
+            ...matches.filter((o) => o.kind === 'skill' && !o.builtIn).slice(0, 6),
+            ...matches.filter((o) => o.kind === 'skill' && o.builtIn).slice(0, 6),
             ...matches.filter((o) => o.kind === 'tool').slice(0, 6),
           ];
         },

@@ -64,11 +64,11 @@ No configuration this epic allows makes an agent's prompt longer than today's by
   - The model never sees the syntax: links become plain mentions in the instructions and in a skill's body when the skill tool serves it.
   - A skill that a draft links can't be deleted or renamed. An agent saved before links gets a `Tools and skills:` line when opened in the editor.
   - The agent page's Tools tab shows the whole library with how each tool is linked; a new **Graph** tab draws instructions to skills to tools; the Model tab becomes **LLM Config**, which shows whether the API key is set and never the key.
-  - The design is in [proposals/ba-219-221-design.md](../../../proposals/ba-219-221-design.md).
+  - The design is in [docs/plans/BA-213/ba-219-221-design.md](../../../docs/plans/BA-213/ba-219-221-design.md).
 - **The agent page as in the reference, and skills through the skill tool** ([BA-222](https://halo-powered.atlassian.net/browse/BA-222), [BA-223](https://halo-powered.atlassian.net/browse/BA-223); added on 2026-10-14 at the user's request; ADR-0024).
   - BA-222: the agent page gets a **Chat Box** tab (chat with the draft), a **System Prompt** tab whose agent instructions are editable in place with links, and an inline **Skills** tab (the user's library with `Linked` and `Not linked`), in the tab order Chat Box, System Prompt, Skills, Tools, Graph, Memory, Evals, LLM Config.
   - BA-223: the assistant gets its on-demand skills through Mastra's `skills` option, resolved per request, with the framework's own catalog and skill tool. The app's `## Skills` section, `read_file`, `run_skill_script` and the `/in-app-skills/` paths are removed.
-  - The design is in [proposals/ba-222-223-design.md](../../../proposals/ba-222-223-design.md).
+  - The design is in [docs/plans/BA-213/ba-222-223-design.md](../../../docs/plans/BA-213/ba-222-223-design.md).
 
 - **Every agent's System Prompt editable** ([BA-224](https://halo-powered.atlassian.net/browse/BA-224), added on 2026-10-14 at the user's request; ADR-0025).
   - A Platform admin edits the System Prompt of the Official assistant and of the five System agents from the agent page, as org-wide overrides in a shared `agent_prompt_overrides` collection, with **Save prompt**, **Reset to built-in**, a **Modified** chip and a drift notice, as for built-in skills (BA-218). A save applies to the next call of every session and user agent.

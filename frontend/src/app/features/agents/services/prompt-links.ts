@@ -15,6 +15,8 @@ export interface LinkOption {
   kind: LinkKind;
   name: string;
   description: string;
+  /** A built-in on-demand skill: every agent has it, so a link is a mention. */
+  builtIn?: boolean;
 }
 
 /** Every assistant tool an author can link (`read_file` is not one). */
@@ -99,9 +101,11 @@ export function chipClass(
 export function knownLinks(
   skills: { name: string }[],
   tools: { name: string }[] = LINKABLE_TOOLS,
+  builtInSkills: { name: string }[] = [],
 ): Set<string> {
   return new Set([
     ...skills.map((skill) => `skill:${skill.name}`),
+    ...builtInSkills.map((skill) => `skill:${skill.name}`),
     ...tools.map((tool) => `tool:${tool.name}`),
   ]);
 }
@@ -128,4 +132,11 @@ export function withLegacyLinks(
   if (links.length === 0) return null;
   const line = `Tools and skills: ${links.join(' ')}`;
   return instructions === '' ? line : `${instructions}\n${line}`;
+}
+
+/** The built-in skills a prompt can link: the on-demand ones (the harness ones load on their own). */
+export function linkableBuiltInSkills<
+  T extends { name: string; loading: 'on-demand' | 'harness' },
+>(skills: readonly T[] | null | undefined): T[] {
+  return (skills ?? []).filter((skill) => skill.loading === 'on-demand');
 }

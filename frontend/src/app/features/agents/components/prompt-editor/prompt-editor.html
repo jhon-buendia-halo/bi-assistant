@@ -9,7 +9,7 @@
       + Link skill or tool
     </button>
   } @else {
-    @if (linkSkills()) {
+    @if (hasSkills()) {
       <button
         type="button"
         data-testid="link-skill"
@@ -47,7 +47,7 @@
   <div
     class="link-menu"
     role="listbox"
-    [attr.aria-label]="linkSkills() ? 'Skills and tools' : 'Tools'"
+    [attr.aria-label]="hasSkills() ? 'Skills and tools' : 'Tools'"
     [style.top.px]="m.top"
     [style.left.px]="m.left"
   >
@@ -65,13 +65,18 @@
         [attr.aria-selected]="i === m.active"
         (mousedown)="$event.preventDefault(); choose(option)"
       >
-        <span class="name">{{ option.name }}</span>
+        <span class="name"
+          >{{ option.name }}
+          @if (option.builtIn) {
+            <span class="chip ml-1.5">Built-in</span>
+          }</span
+        >
         <span class="description">{{ option.description }}</span>
       </button>
     } @empty {
       <p class="none">
         {{
-          linkSkills() ? "No matching skills or tools." : "No matching tools."
+          hasSkills() ? "No matching skills or tools." : "No matching tools."
         }}
       </p>
     }

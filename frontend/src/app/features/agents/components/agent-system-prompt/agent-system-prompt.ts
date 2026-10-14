@@ -29,8 +29,12 @@ import {
   AgentDetail,
   AgentsApiService,
 } from '../../services/agents-api.service';
-import { chipClass, knownLinks } from '../../services/prompt-links';
-import { SkillSummary } from '../../services/skills-api.service';
+import {
+  chipClass,
+  knownLinks,
+  linkableBuiltInSkills,
+} from '../../services/prompt-links';
+import { BuiltInSkillSummary, SkillSummary } from '../../services/skills-api.service';
 import { LinkedText } from '../linked-text/linked-text';
 import { PromptEditor } from '../prompt-editor/prompt-editor';
 
@@ -58,6 +62,8 @@ export class AgentSystemPrompt implements OnDestroy {
   readonly agent = input.required<AgentDetail>();
   /** The owner's skills; null while loading, which disables Edit. */
   readonly library = input<SkillSummary[] | null>(null);
+  /** The built-in skills, linkable as mentions; null while loading. */
+  readonly builtInSkills = input<BuiltInSkillSummary[] | null>(null);
   /** Emitted after the draft is saved; the page reloads the agent. */
   readonly saved = output<void>();
 
@@ -68,9 +74,11 @@ export class AgentSystemPrompt implements OnDestroy {
   readonly builtInBanner =
     'Changes apply to every session and agent as soon as you save. Run the evals to check them.';
   readonly builtInToolbarHint =
-    'Type / to link a tool. Links here are mentions; the assistant keeps all its tools.';
+    'Type / to link a tool or a built-in skill. Links here are mentions; the assistant keeps all its tools.';
   readonly builtInToolsNote =
     'The ## Tools list is generated from the tools the assistant gets and is inserted before ## Working rules.';
+  readonly generatedToolsNote =
+    '## Tools — generated from the tools the assistant gets';
   readonly builtInDriftNotice =
     "The app's built-in version changed since this was edited. Review it, then save again or reset.";
   readonly builtInLimit = 20000;
@@ -93,7 +101,13 @@ export class AgentSystemPrompt implements OnDestroy {
   readonly canEditBuiltIn = computed(
     () => this.builtIn() !== null && this.auth.can('edit-policies'),
   );
-  readonly builtInKnown = computed(() => knownLinks([]));
+  /** The built-in on-demand skills a prompt can link, as `/` menu entries. */
+  readonly linkableSkills = computed(() =>
+    linkableBuiltInSkills(this.builtInSkills()),
+  );
+  readonly builtInKnown = computed(() =>
+    knownLinks([], undefined, this.linkableSkills()),
+  );
   readonly builtInUnchanged = computed(
     () => this.draft().trim() === (this.builtIn()?.editable ?? '').trim(),
   );
@@ -109,7 +123,9 @@ export class AgentSystemPrompt implements OnDestroy {
     const agent = this.agent();
     return (agent.draft ?? agent.live)?.instructions ?? '';
   });
-  readonly known = computed(() => knownLinks(this.library() ?? []));
+  readonly known = computed(() =>
+    knownLinks(this.library() ?? [], undefined, this.linkableSkills()),
+  );
   readonly links = computed(() => draftLinks(this.draft(), this.known()));
   readonly broken = computed(() => brokenLinks(this.links()));
   readonly brokenMessage = computed(() => brokenLinkMessage(this.broken()));
