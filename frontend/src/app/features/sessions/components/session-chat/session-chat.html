@@ -484,7 +484,7 @@
                 </button>
               }
             </div>
-            @if (message.content.trim()) {
+            @if (runsAssistant() && message.content.trim()) {
               <div class="mt-2 flex flex-wrap items-start gap-2">
                 <button
                   type="button"
@@ -662,6 +662,7 @@
       ></textarea>
       <div class="mt-1 flex items-center justify-between gap-2">
         <div class="flex items-center gap-2">
+        @if (runsAssistant()) {
         <!-- Careful mode: cross-check this turn's answer with a second query -->
         <button
           type="button"
@@ -699,6 +700,7 @@
           <lucide-angular [img]="Telescope" [size]="12" class="shrink-0" />
           Deep analysis
         </button>
+        }
         </div>
         @if (sending()) {
           <button

@@ -407,6 +407,30 @@ describe('SessionChat deep analysis', () => {
     expect(download).toHaveBeenCalledWith('session-1', 'rfp-1', 'rfp.pdf');
   });
 
+  it('hides Careful, Deep analysis and visuals in a session bound to a built-in agent', () => {
+    const answer: ChatMessage = {
+      role: 'assistant',
+      content: 'Orchard Manufacturing renews on 1 January 2027.',
+      at: '2026-01-01T00:00:02.000Z',
+    };
+    const assistantEl = mount([answer]);
+    expect(assistantEl.querySelector('[aria-label="Careful mode"]')).toBeTruthy();
+    expect(assistantEl.textContent).toContain('Generate interactive visuals');
+
+    fixture.componentRef.setInput('session', {
+      id: 'session-2',
+      name: 'RFP Builder',
+      datasets: ['Intellify RFP API'],
+      agentKey: 'rfp',
+      messages: [answer],
+    } satisfies Session);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('[aria-label="Careful mode"]')).toBeNull();
+    expect(el.querySelector('[aria-label="Deep analysis"]')).toBeNull();
+    expect(el.textContent).not.toContain('Generate interactive visuals');
+  });
+
   it('sends the draft as a job, polls it, and refreshes on completion', fakeAsync(() => {
     const el = mount();
     const api = TestBed.inject(SessionsApiService);

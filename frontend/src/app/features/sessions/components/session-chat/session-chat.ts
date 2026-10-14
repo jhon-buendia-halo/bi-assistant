@@ -227,6 +227,11 @@ export class SessionChat implements OnDestroy {
   readonly showWelcome = computed(
     () => this.messages().length === 0 && !this.sending(),
   );
+  /**
+   * False for a session bound to a built-in agent such as the RFP Builder,
+   * which hides the assistant's own controls (rfp R15).
+   */
+  readonly runsAssistant = computed(() => !this.session().agentKey);
   /** Datasets wired to this session, named in the welcome block. */
   readonly welcomeDatasets = computed(() => this.session().datasets ?? []);
   /**

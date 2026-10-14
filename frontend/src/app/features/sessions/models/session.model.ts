@@ -206,7 +206,9 @@ export interface Session {
   agentId?: string;
   /** The agent's name as last seen for this session. */
   agentName?: string;
-  /** Present exactly when `agentId` is. */
+  /** Set when the session is bound to a built-in agent (e.g. `rfp`). */
+  agentKey?: string;
+  /** Present when `agentId` or `agentKey` is. */
   agent?: SessionAgent;
   /**
    * An agent editor's preview conversation: held in memory by the backend,

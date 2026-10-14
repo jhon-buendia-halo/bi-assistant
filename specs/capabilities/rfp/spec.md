@@ -42,6 +42,7 @@ Capability-local vocabulary:
 ### Evals
 
 - R14. The RFP Builder SHALL have one eval set, `rfp`, bound to the "Intellify RFP API" sample and run on the RFP Builder itself, with the cases `rfp-skill-first`, `rfp-program-review`, `rfp-create-draft`, `rfp-carriers-dental`, `rfp-resume-drafts`, `rfp-bad-rows-recovers`, `rfp-out-of-scope` and `rfp-no-sql`. Records an eval run creates SHALL be tagged with that run and deleted when it ends. A change to the agent's prompt, skill or tools SHALL pass the set at 100% over 3 runs. Eval rules: [agents-evals](../agents-evals/spec.md).
+- R15. A chat bound to the RFP Builder SHALL NOT offer the assistant's own controls: no **Careful** or **Deep analysis** toggle in the composer and no **Generate interactive visuals** button under an answer, because the RFP Builder runs no SQL to cross-check, has no deep-analysis job and draws no visuals (added 2026-10-14 at the user's request).
 
 ## Edge cases and errors
 
