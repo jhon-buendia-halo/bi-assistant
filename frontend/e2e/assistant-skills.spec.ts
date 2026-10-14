@@ -28,7 +28,7 @@ import {
  */
 
 /** App skills only other agents or the harness use. */
-const OTHER_SKILLS = ['interactive-visuals'];
+const OTHER_SKILLS = ['interactive-visuals', 'deep-analysis'];
 /** The framework's skill tools, never offered (ADR-0020). */
 const FRAMEWORK_SKILL_TOOLS = ['skill', 'skill_search', 'skill_read'];
 
@@ -72,6 +72,18 @@ function toolResults(request: StubRequest): string[] {
     .map(messageText);
 }
 
+/** The `<location>` the catalog gives for one skill, or undefined. */
+function catalogLocation(
+  request: StubRequest,
+  name: string,
+): string | undefined {
+  const text = systemTexts(request).join('\n');
+  const entry = new RegExp(
+    `<name>${name}</name>[\\s\\S]*?<location>([^<]+)</location>`,
+  ).exec(text);
+  return entry?.[1];
+}
+
 /** Skill names in the `<available_skills>` catalog of a request. */
 function catalogSkills(request: StubRequest): string[] {
   const catalog = systemTexts(request)
@@ -89,18 +101,28 @@ test('the assistant is offered only its own skills', async ({ page }) => {
   expect(prompt.startsWith(BASE_PROMPT_START)).toBe(true);
   const tools = prompt.indexOf('\n## Tools\n');
   const rules = prompt.indexOf('\n## Working rules\n');
+  const skills = prompt.indexOf('\n## Skills\n');
   expect(tools, 'a ## Tools section').toBeGreaterThan(0);
   expect(rules, '## Working rules after ## Tools').toBeGreaterThan(tools);
-  expect(prompt).not.toContain('## Skills');
+  expect(skills, '## Skills after ## Working rules').toBeGreaterThan(rules);
   expect(prompt).toContain(
     '\n- run_readonly_sql(sql, datasourceId, limit, rationale): ',
   );
   expect(prompt).toContain('\n- ask_clarification(question, options): ');
-  expect(catalogSkills(request)).toEqual([]);
+  expect(prompt).toContain('\n- read_file(path): ');
+  // The built-in curated-knowledge skill is the whole catalog (ADR-0020).
+  expect(catalogSkills(request)).toEqual(['curated-knowledge']);
+  const location = catalogLocation(request, 'curated-knowledge') ?? '';
+  expect(location.endsWith(path.join('curated-knowledge', 'SKILL.md'))).toBe(
+    true,
+  );
+  expect(fs.existsSync(location), location).toBe(true);
   for (const name of OTHER_SKILLS) {
     expect(systemTexts(request).join('\n')).not.toContain(`name: ${name}`);
+    expect(catalogSkills(request)).not.toContain(name);
   }
-  for (const tool of ['read_file', ...FRAMEWORK_SKILL_TOOLS]) {
+  expect(request.tools).toContain('read_file');
+  for (const tool of FRAMEWORK_SKILL_TOOLS) {
     expect(request.tools).not.toContain(tool);
   }
 });
@@ -119,7 +141,7 @@ test('a turn without curated knowledge carries no knowledge rules', async ({
   expect(all).not.toContain(KNOWLEDGE_RULE);
 });
 
-test('a turn with curated knowledge carries the rules right after the block', async ({
+test('a turn with curated knowledge carries the block, and the rules stay on demand', async ({
   page,
 }) => {
   const instruction = 'Only the 2018 and 2022 tournaments are in this data.';
@@ -144,13 +166,11 @@ test('a turn with curated knowledge carries the rules right after the block', as
   expect(systems[blocks[0]]).toContain(
     `- [instruction] Coverage: ${instruction}`,
   );
-  const next = systems[blocks[0] + 1] ?? '';
-  expect(next.startsWith(KNOWLEDGE_RULES_START), next.slice(0, 80)).toBe(true);
-  expect(next).toContain(KNOWLEDGE_RULE);
-  // Sent once, and only there.
-  expect(systems.filter((text) => text.includes(KNOWLEDGE_RULE))).toHaveLength(
-    1,
-  );
+  // The rules travel only if the model reads the skill, and this stub doesn't.
+  const all = systems.join('\n');
+  expect(all).not.toContain(KNOWLEDGE_RULES_START);
+  expect(all).not.toContain(KNOWLEDGE_RULE);
+  expect(catalogSkills(request)).toContain('curated-knowledge');
 });
 
 /**
@@ -221,7 +241,7 @@ test('a user-level skill is offered to the assistant on demand', async ({
     prompt.indexOf('\n## Working rules\n'),
   );
   expect(prompt.trimEnd().endsWith('</available_skills>')).toBe(true);
-  expect(catalogSkills(request)).toEqual(['sql-style']);
+  expect(catalogSkills(request)).toEqual(['curated-knowledge', 'sql-style']);
   expect(prompt).toContain(`<description>${description}</description>`);
   expect(prompt).toContain(
     `<location>${path.join(appDataDir, 'skills', 'sql-style', 'SKILL.md')}</location>`,
@@ -273,7 +293,7 @@ test("the assistant reads a skill's files with read_file, and only those", async
   expect(results[1]).not.toContain('SQLite format');
 });
 
-test('a user-level override of the curated-knowledge skill reaches the turn', async ({
+test('a user-level override of the curated-knowledge skill is the one the model reads', async ({
   app,
   appDataDir,
   launchApp,
@@ -292,16 +312,36 @@ test('a user-level override of the curated-knowledge skill reaches the turn', as
     body: 'Only the 2018 and 2022 tournaments are in this data.',
     datasetId: WORLD_CUP_DATASET,
   });
+  // The model reads whatever SKILL.md the catalog lists for the skill.
+  let turn = 0;
+  stub.reply = (request) => {
+    const isTurn =
+      request.stream &&
+      request.messages.some(
+        (message) =>
+          message.role === 'user' && messageText(message).includes(QUESTION),
+      );
+    if (!isTurn) return { text: STUB_ANSWER };
+    turn += 1;
+    const location = catalogLocation(request, 'curated-knowledge');
+    if (turn === 1 && location)
+      return { toolCall: { name: 'read_file', arguments: { path: location } } };
+    return { text: STUB_ANSWER };
+  };
   await createWorldCupSession(page);
   const request = await ask(page, QUESTION);
 
-  const systems = systemTexts(request);
-  const block = systems.findIndex((text) =>
-    text.startsWith(KNOWLEDGE_BLOCK_START),
+  expect(catalogLocation(request, 'curated-knowledge')).toBe(
+    path.join(appDataDir, 'skills', 'curated-knowledge', 'SKILL.md'),
   );
-  expect(block, 'a curated-knowledge block').toBeGreaterThanOrEqual(0);
-  expect(systems[block + 1]).toBe(override);
+  const systems = systemTexts(request);
+  expect(
+    systems.some((text) => text.startsWith(KNOWLEDGE_BLOCK_START)),
+    'a curated-knowledge block',
+  ).toBe(true);
+  const results = toolResults(turnRequests(stub, QUESTION).at(-1)!);
+  expect(results).toHaveLength(1);
+  expect(results[0]).toContain(override);
+  expect(results[0]).not.toContain(KNOWLEDGE_RULE);
   expect(systems.join('\n')).not.toContain(KNOWLEDGE_RULE);
-  // The override is a harness-loaded skill, so it is in no catalog.
-  expect(catalogSkills(request)).toEqual([]);
 });

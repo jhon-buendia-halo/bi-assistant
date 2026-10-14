@@ -158,7 +158,8 @@ test('a user skill and a project override reach the assistant', async ({
 
     const knowledge = skill(page, 'curated-knowledge');
     await expect(knowledge).toContainText('Project');
-    await expect(knowledge).toContainText('Loaded by the app');
+    // On demand since ADR-0020: the model reads it from the catalog.
+    await expect(knowledge).toContainText('On demand');
     await expect(knowledge).toContainText('Overrides built-in and user');
     await knowledge.getByRole('button', { name: /curated-knowledge/ }).click();
     await expect(knowledge.locator('pre')).toContainText(
