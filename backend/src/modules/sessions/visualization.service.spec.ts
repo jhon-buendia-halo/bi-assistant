@@ -68,6 +68,7 @@ import {
   unwrapSchemaEnvelope,
   VisualizationService,
   visualizationData,
+  focusRecords,
 } from './visualization.service';
 import type {
   SessionDoc,
@@ -1589,5 +1590,110 @@ describe('isSchemaEnvelopeError', () => {
         'chart.y: column "amount" is not in the selected result set',
       ),
     ).toBe(false);
+  });
+});
+
+function focusSql(
+  input: string,
+  columns: string[],
+  rows: Record<string, unknown>[],
+): ToolDataRecord {
+  return { tool: 'run_readonly_sql', input, columns, rows };
+}
+
+/** The five result sets of the turn that lost its chart data (2026-10-14). */
+const stages = focusSql(
+  'stages',
+  ['stage'],
+  [
+    { stage: 'final' },
+    { stage: 'semi_final' },
+    { stage: 'quarter_final' },
+    { stage: 'third_place' },
+  ],
+);
+const stageCounts = focusSql(
+  'stage counts',
+  ['tournament_year', 'stage', 'count'],
+  Array.from({ length: 8 }, (_, n) => ({
+    tournament_year: 2018 + 4 * (n % 2),
+    stage: 'final',
+    count: n,
+  })),
+);
+const perTeam = focusSql(
+  'per team',
+  ['team', 'goals_scored'],
+  [
+    { team: 'Argentina', goals_scored: '8' },
+    { team: 'France', goals_scored: '7' },
+    { team: 'Croatia', goals_scored: '3' },
+    { team: 'Morocco', goals_scored: '2' },
+  ],
+);
+const teams = focusSql(
+  'teams',
+  ['common_name'],
+  Array.from({ length: 8 }, (_, n) => ({ common_name: `Team ${n}` })),
+);
+const matches = focusSql(
+  'matches',
+  ['stage', 'home', 'home_goals', 'away', 'away_goals'],
+  Array.from({ length: 8 }, (_, n) => ({
+    stage: 'quarter_final',
+    home: `Home ${n}`,
+    home_goals: 1,
+    away: `Away ${n}`,
+    away_goals: 0,
+  })),
+);
+const turn = [stages, stageCounts, perTeam, teams, matches];
+
+describe('focusRecords (agents.md 6.2)', () => {
+  it('keeps the result sets a chart request is about, even when smaller', () => {
+    const kept = focusRecords(
+      turn,
+      'Bar chart showing goals scored by each team in the 2022 World Cup knockout stage: Argentina 8, France 7, Croatia 3.',
+    );
+    expect(kept).toContain(perTeam);
+    expect(kept).toHaveLength(3);
+    // Run order is kept.
+    expect(kept!.map((r) => r.input)).toEqual(
+      turn.filter((r) => kept!.includes(r)).map((r) => r.input),
+    );
+  });
+
+  it("keeps the chart's data from the user's own words as well", () => {
+    const kept = focusRecords(
+      turn,
+      'Chart the goals scored by each team in the 2022 knockout stage.',
+    );
+    expect(kept).toContain(perTeam);
+  });
+
+  it('changes nothing without an instruction or within the cap', () => {
+    expect(focusRecords(turn, undefined)).toBe(turn);
+    expect(focusRecords(turn, '   ')).toBe(turn);
+    const three = [stages, perTeam, matches];
+    expect(focusRecords(three, 'goals by team')).toBe(three);
+    expect(focusRecords(undefined, 'goals by team')).toBeUndefined();
+  });
+
+  it('keeps failed and empty records, which the designer skips anyway', () => {
+    const failed: ToolDataRecord = {
+      tool: 'run_readonly_sql',
+      input: 'bad',
+      error: 'boom',
+    };
+    const empty = focusSql('empty', ['x'], []);
+    const kept = focusRecords([failed, ...turn, empty], 'goals by team');
+    expect(kept).toContain(failed);
+    expect(kept).toContain(empty);
+    expect(kept!.filter((r) => r.rows?.length)).toHaveLength(3);
+  });
+
+  it('falls back to size, then run order, when nothing matches', () => {
+    const kept = focusRecords(turn, 'zzz qqq');
+    expect(kept).toEqual([stageCounts, teams, matches]);
   });
 });

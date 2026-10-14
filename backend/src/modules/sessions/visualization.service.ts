@@ -213,7 +213,12 @@ export class VisualizationService {
     const answer = this.findSourceAnswer(session, sourceMessageAt);
     const question = this.findQuestion(session, answer);
     const { workspace, filesystem } = await this.workspaceFor(session);
-    const mergedData = mergeToolDataRecords(answer.data, turnRecords);
+    // With more result sets than the designer sees, keep the ones the
+    // instruction is about, so the chart's data is never cut (agents.md 6.2).
+    const mergedData = focusRecords(
+      mergeToolDataRecords(answer.data, turnRecords),
+      instruction,
+    );
     const bundle = await this.design(workspace, {
       question,
       answer,
@@ -1309,6 +1314,62 @@ export function mergeToolDataRecords(
     else merged.push(record);
   }
   return merged;
+}
+
+/** Lower-case words of 2+ letters or digits, split at anything else. */
+function words(text: string): string[] {
+  return text.toLowerCase().match(/[\p{L}\p{N}]{2,}/gu) ?? [];
+}
+
+/**
+ * How many of the instruction's words a record holds, in its column names
+ * or its cell values: a measure of which result set a chart request is about.
+ */
+function relevance(record: ToolDataRecord, wanted: Set<string>): number {
+  const found = new Set<string>();
+  const add = (text: string) => {
+    for (const word of words(text)) if (wanted.has(word)) found.add(word);
+  };
+  for (const column of record.columns ?? []) add(column);
+  for (const row of (record.rows ?? []).slice(0, VISUAL_ROWS_CAP)) {
+    for (const value of Object.values(row)) {
+      if (typeof value === 'string' || typeof value === 'number') {
+        add(String(value));
+      }
+    }
+  }
+  return found.size;
+}
+
+/**
+ * With more successful result sets than the designer is shown, keep the
+ * `VISUAL_RECORDS_CAP` that best match the instruction (size breaks ties,
+ * then run order), and drop the other successful ones. Without an
+ * instruction, or within the cap, the records pass unchanged. Records with
+ * no rows or an error stay: `visualizationData` skips them anyway.
+ */
+export function focusRecords(
+  records: ToolDataRecord[] | undefined,
+  instruction: string | undefined,
+): ToolDataRecord[] | undefined {
+  const successful = (records ?? []).filter(
+    (r) => !r.error && (r.rows?.length ?? 0) > 0,
+  );
+  if (!records || !instruction?.trim()) return records;
+  if (successful.length <= VISUAL_RECORDS_CAP) return records;
+  const wanted = new Set(words(instruction));
+  const ranked = successful
+    .map((record, index) => ({
+      record,
+      index,
+      score: relevance(record, wanted),
+      size: record.rows?.length ?? 0,
+    }))
+    .sort((a, b) => b.score - a.score || b.size - a.size || a.index - b.index);
+  const kept = new Set(
+    ranked.slice(0, VISUAL_RECORDS_CAP).map((entry) => entry.record),
+  );
+  return records.filter((r) => !successful.includes(r) || kept.has(r));
 }
 
 /** Fields the spec-mode envelope hides under `properties`. */

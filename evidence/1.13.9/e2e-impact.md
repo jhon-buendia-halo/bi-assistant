@@ -61,3 +61,11 @@ Not re-run, because they touch none of these files: `appearance`, `layout-access
 ### BA-210: rule A32 "in the same query"; a leaked parameter wrapper around `options` is dropped
 
 No scenario changes: re-run as-is `chat-clarification.spec.ts`, `assistant-skills.spec.ts` and `agents.spec.ts` (the prompt and the clarification tool).
+
+### BA-210: `options` as one string with one option per line; the designer keeps the result sets the instruction is about
+
+| Feature (spec) | Scenario | Decision |
+|---|---|---|
+| Chat answers and reliability signals (`chat-clarification.spec.ts`) | both scenarios | Re-run as-is (the stub sends a list, which is joined into lines) |
+| Skills the designer is given (`designer-skills.spec.ts`) | both scenarios | Re-run as-is (one result set, under the cap) |
+| Chat and visuals (`chat-and-visuals.spec.ts`), Agents (`agents.spec.ts`), Skills the assistant is given (`assistant-skills.spec.ts`) | all | Re-run as-is |

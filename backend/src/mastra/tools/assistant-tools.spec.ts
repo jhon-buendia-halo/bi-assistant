@@ -6,7 +6,7 @@ import {
   askClarificationTool,
   clarificationOptions,
   parseClarification,
-  parseJsonList,
+  optionLines,
 } from './clarification.tool';
 import {
   SESSION_ID_CONTEXT_KEY,
@@ -94,69 +94,58 @@ describe('create_visual (agents.md 3.6)', () => {
 
 describe('ask_clarification options (agents.md 3.5)', () => {
   const schema = askClarificationTool.inputSchema as unknown as z.ZodType;
-  const options = ['Most titles — tournaments won', 'Best win rate'];
+  const lines = 'Most titles — tournaments won\nBest win rate';
+  const valid = (options: unknown) =>
+    schema.safeParse({ question: 'Which?', options }).success;
 
-  it('takes a flat list of 2-4 option strings', () => {
-    expect(schema.safeParse({ question: 'Which?', options }).success).toBe(
-      true,
-    );
+  it('takes one string with 2-4 options, one per line', () => {
+    expect(valid(lines)).toBe(true);
+    expect(valid('- Most titles\n- Best win rate\n- Most goals')).toBe(true);
   });
 
-  it('reads a well-formed JSON-encoded list as the list', () => {
-    const parsed = schema.safeParse({
-      question: 'How should I measure "best"?',
-      options: JSON.stringify(options),
-    });
-    expect(parsed.success).toBe(true);
-    expect((parsed.data as { options: unknown }).options).toEqual(options);
+  it('joins a list, or a JSON-encoded one, into lines', () => {
+    const list = ['Most titles — tournaments won', 'Best win rate'];
+    expect(optionLines(list)).toBe(lines);
+    expect(optionLines(JSON.stringify(list))).toBe(lines);
+    expect(valid(list)).toBe(true);
   });
 
-  it('rejects malformed options: broken JSON, objects, blanks, or outside 2-4', () => {
+  it('drops a leaked tool-call parameter wrapper', () => {
+    const leaked = `\n<parameter name="options">${lines}</parameter>`;
+    expect(optionLines(leaked)).toBe(lines);
+    expect(
+      optionLines(
+        '\n<parameter name="options">["Most titles", "Best win rate"]',
+      ),
+    ).toBe('Most titles\nBest win rate');
+    expect(valid(leaked)).toBe(true);
+  });
+
+  it('rejects fewer than 2 or more than 4 options, objects and blanks', () => {
     for (const value of [
       '\n<parameter name="label">Most titles',
       '["Most titles", "label": "Best win rate"]',
       [{ label: 'Most titles' }, { label: 'Best win rate' }],
       ['Most titles', '  '],
-      ['Only one'],
-      ['a', 'b', 'c', 'd', 'e'],
+      'Only one',
+      'a\nb\nc\nd\ne',
+      '',
     ]) {
-      expect(
-        schema.safeParse({ question: 'Which?', options: value }).success,
-      ).toBe(false);
+      expect(valid(value)).toBe(false);
     }
-  });
-
-  it('reads a JSON list wrapped in leaked tool-call parameter text', () => {
-    const leaked = `\n<parameter name="options">${JSON.stringify(options)}`;
-    expect(parseJsonList(leaked)).toEqual(options);
-    expect(parseJsonList(`${leaked}</parameter>`)).toEqual(options);
-    expect(
-      schema.safeParse({ question: 'Which?', options: leaked }).success,
-    ).toBe(true);
-    // A leaked wrapper around a single title is still not a list.
-    expect(
-      schema.safeParse({
-        question: 'Which?',
-        options: '\n<parameter name="label">Most titles',
-      }).success,
-    ).toBe(false);
-  });
-
-  it('leaves anything that is not a JSON array untouched', () => {
-    expect(parseJsonList('not json')).toBe('not json');
-    expect(parseJsonList('{"a": 1}')).toBe('{"a": 1}');
-    expect(parseJsonList(options)).toBe(options);
   });
 
   it('splits each option at the first spaced dash into label and description', () => {
     expect(
-      clarificationOptions([
-        'Most titles — tournaments won outright',
-        'Win rate – share of matches won — all tournaments',
-        'Goals scored',
-        'Ratio — ',
-        'Head-to-head',
-      ]),
+      clarificationOptions(
+        [
+          '1. Most titles — tournaments won outright',
+          'Win rate – share of matches won — all tournaments',
+          '- Goals scored',
+          'Ratio — ',
+          'Head-to-head',
+        ].join('\n'),
+      ),
     ).toEqual([
       { label: 'Most titles', description: 'tournaments won outright' },
       {
@@ -170,7 +159,7 @@ describe('ask_clarification options (agents.md 3.5)', () => {
   });
 
   it('turns only a valid call into a clarification', () => {
-    expect(parseClarification({ question: 'Which?', options })).toEqual({
+    expect(parseClarification({ question: 'Which?', options: lines })).toEqual({
       question: 'Which?',
       options: [
         { label: 'Most titles', description: 'tournaments won' },

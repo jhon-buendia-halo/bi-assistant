@@ -3,37 +3,58 @@ import { z } from 'zod';
 
 /**
  * Tool-call text Claude models sometimes leak around an argument:
- * `<parameter name="options">[…]</parameter>`.
+ * `<parameter name="options">…</parameter>`.
  */
 const LEAKED_PARAMETER =
   /^\s*<parameter name="[^"]*">\s*|\s*<\/parameter>\s*$/g;
 
 /**
- * A JSON-encoded array becomes the array, after dropping a leaked parameter
- * wrapper around it; anything else passes as is.
+ * The options as one string, one option per line. A list (or a JSON-encoded
+ * list) is joined into lines, and a leaked parameter wrapper is dropped.
  */
-export function parseJsonList(value: unknown): unknown {
+export function optionLines(value: unknown): unknown {
+  const join = (items: unknown[]) =>
+    items.every((item) => typeof item === 'string') ? items.join('\n') : items;
+  if (Array.isArray(value)) return join(value);
   if (typeof value !== 'string') return value;
   const text = value.replace(LEAKED_PARAMETER, '').trim();
-  if (!text.startsWith('[')) return value;
-  try {
-    const parsed: unknown = JSON.parse(text);
-    return Array.isArray(parsed) ? parsed : value;
-  } catch {
-    return value;
+  if (text.startsWith('[')) {
+    try {
+      const parsed: unknown = JSON.parse(text);
+      if (Array.isArray(parsed)) return join(parsed);
+    } catch {
+      // Not JSON: read it as lines.
+    }
   }
+  return text;
+}
+
+/** Non-empty lines, each without a leading list marker (`-`, `*`, `1.`). */
+function splitLines(text: string): string[] {
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.replace(/^\s*(?:[-*•]|\d+[.)])\s+/, '').trim())
+    .filter(Boolean);
 }
 
 /** The tool's input, shared with the orchestrator's check. */
 const clarificationInput = z.object({
   question: z.string().describe('The clarifying question, short and direct'),
-  // A flat list of strings: models serialize a list of objects wrongly
-  // now and then. A JSON-encoded list sent as one string is read as the
-  // list itself (agents.md 3.5, BA-210).
+  // One string, one option per line: models serialize an array parameter
+  // wrongly now and then, a string reliably (agents.md 3.5, BA-210).
   options: z
-    .preprocess(parseJsonList, z.array(z.string().trim().min(1)).min(2).max(4))
+    .preprocess(
+      optionLines,
+      z.string().refine(
+        (text) => {
+          const count = splitLines(text).length;
+          return count >= 2 && count <= 4;
+        },
+        { message: 'Give 2-4 options, one per line' },
+      ),
+    )
     .describe(
-      '2-4 answer options. Each is a short title, optionally followed by " — " and one line explaining it',
+      '2-4 answer options, one per line. Each is a short title, optionally followed by " — " and one line explaining it',
     ),
 });
 
@@ -47,8 +68,11 @@ export interface ClarificationOption {
 const OPTION_SEPARATOR = /\s+[—–](?:\s+|$)/;
 
 /** Split each option string into its label and optional description. */
-export function clarificationOptions(options: string[]): ClarificationOption[] {
-  return options.map((option) => {
+export function clarificationOptions(
+  options: string | string[],
+): ClarificationOption[] {
+  const lines = Array.isArray(options) ? options : splitLines(options);
+  return lines.map((option) => {
     const text = option.trim();
     const match = OPTION_SEPARATOR.exec(text);
     if (!match) return { label: text };
