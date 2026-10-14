@@ -2,6 +2,18 @@
 
 Running log of every meaningful change, newest first. See *Logging convention* and *Evidence convention* in [CLAUDE.md](CLAUDE.md). Release versions come from Conventional Commits (`version-on-merge.yml`); this file records what shipped and links to the evidence.
 
+## 2026-10-13
+
+### Changed
+- **Each agent gets only its own skills, from the app bundle, checked at startup** (roadmap 1.13.1, [BA-199](https://halo-powered.atlassian.net/browse/BA-199), epic [BA-198](https://halo-powered.atlassian.net/browse/BA-198)):
+  - Session workspaces no longer seed or discover skills. Before, every session got a copy of `interactive-visuals`, so the assistant's catalog listed the designer's skill and it was offered the `skill`, `skill_search` and `skill_read` tools. Now the assistant gets no catalog and none of those tools.
+  - The designer reads `interactive-visuals/SKILL.md` from the bundle. Its description now starts with "Use when".
+  - New `mastra/app-skills.ts` loads `skills/<name>/`. Each agent declares its on-demand skills in one table, which is empty for now. Every skill is validated when the backend starts: front matter, name equal to its folder, a "Use when" description and every linked `phases/` / `references/` file. A broken skill stops the backend with `Invalid app skills:`.
+  - Workspace copies left by earlier versions stay on disk and are never read.
+  - Specs: ADR-0018; agents.md §2.1, §2.2, §3.8 (the workspace tools the assistant is really offered, closing an open question), §7.1–§7.4; data-model §4.1 and §4.6; sessions-chat Feature "Skills the assistant is given"; the BA-198 epic spec and Milestone 1.13. The epic was re-scoped with the user: `visual-tailoring` and `sql-dialects` are cut, and 1.13.3 is merged into 1.13.2.
+  - Tests: `frontend/e2e/assistant-skills.spec.ts`, `mastra/app-skills.spec.ts`, a designer skill test in `visualization.service.spec.ts`.
+  - Evidence: [evidence/1.13.1/](evidence/1.13.1/).
+
 ## 2026-10-12
 
 ### Added

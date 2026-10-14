@@ -548,6 +548,28 @@ Feature: Sessions started from an agent
     Then the model received no agent instructions
 ```
 
+### Feature: Skills the assistant is given
+
+E2E: `frontend/e2e/assistant-skills.spec.ts`
+
+What the assistant is told about skills, checked on the request the model receives. "The model" is the recording stub described under the Feature "Sessions started from an agent". Which skills each agent gets, and how they load: [agents.md](../../system/agents.md) sections 7.3 and 7.4; decision ADR-0018.
+
+```gherkin
+Feature: Skills the assistant is given
+
+  Background:
+    Given a "World Cup Core" dataset exists
+    And the model is the recording stub
+
+  Scenario: The assistant is offered only its own skills
+    Given a session over "World Cup Core"
+    When I send "Who won the 2022 World Cup?"
+    Then I see the stub's answer
+    And the skill catalog the model received lists exactly the assistant's skills
+    And the model received nothing of the "interactive-visuals" skill
+    And the model is offered the "skill" and "skill_read" tools only when the assistant has skills
+```
+
 ## Acceptance
 
 - Every scenario above passes. The covered Feature runs in `chat-and-visuals.spec.ts`.

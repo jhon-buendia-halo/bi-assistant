@@ -97,7 +97,7 @@ flowchart TB
     appdb[("app.sqlite<br/>(better-sqlite3 DocStore;<br/>org mode adds users, groups,<br/>roles, auth sessions, activity)")]
     mastradb[("mastra.sqlite<br/>(LibSQL memory, threads)")]
     obsdb[("observability.duckdb<br/>(Mastra traces)")]
-    ws["workspaces/session-id<br/>(filesystem: skills, visuals)"]
+    ws["workspaces/session-id<br/>(filesystem: visuals, reports)"]
   end
 
   ext["External: datasources, LLM providers"]
@@ -288,7 +288,7 @@ flowchart LR
     sqlagents["sql-fixer, sql-verifier agents"]
     bootstrap["knowledge-bootstrap agent"]
     tools["tools/<br/>(dataset, create/update_visual, ask_clarification)"]
-    skills["skills/interactive-visuals<br/>(copied into session workspaces)"]
+    skills["skills/<br/>(app-owned, declared per agent; ADR-0018)"]
     evals["evals/<br/>(assistant evals, eval-judge agent)"]
   end
 
@@ -326,7 +326,8 @@ flowchart LR
   mastrasvc --> sqlagents
   mastrasvc --> bootstrap
   assistant --> tools
-  assistant -.->|"workspace skills"| skills
+  assistant -.->|"its skills (catalog + skill tools)"| skills
+  designer -.->|"interactive-visuals (pipeline-loaded)"| skills
   tools -->|"getDatasetToolServices()"| toolsvc
   evals --> assistant
   assistant -.->|"model: async resolveAgentModel()"| resolver
@@ -472,6 +473,28 @@ flowchart LR
   - A new `settings` key and two endpoints; no new collection and no table migration.
   - A renderer whose cache disagrees with the backend (another renderer changed the choice) shows its cached theme for one frame, then switches.
   - Existing users who never chose a theme move from System to Light.
+
+#### ADR-0018 — Agent know-how as app-owned skills with progressive disclosure, declared per agent
+- **Status:** Accepted
+- **Date:** 2026-10-13
+- **Context:**
+  - The `assistant` sends one ~160-line system prompt on every call. It mixes rules every question needs (grounding, SQL safety) with rules only some turns need: curated knowledge, visuals, dialects. Deep analysis inlines its own phase prompts in `DeepAnalysisService`, and the designer gets the whole `interactive-visuals` skill (spec mode and freeform) on every call.
+  - Mastra (ADR-0004) implements Agent Skills. A `SKILL.md` front matter holds a `name` and `description`, and the framework injects only those into an `<available_skills>` catalog. A `skill` tool loads a skill's body and `skill_read` loads any file in its folder. An agent can declare its own skills (`skills`, paths on disk, resolved per request), and they merge with the skills of its workspace.
+  - Today the one skill is copied into every session workspace and discovered from there. Every agent bound to the workspace, the assistant included, sees it in its catalog, although only the designer pipeline uses it.
+  - Loading by the model is probabilistic. A rule that must hold on a given turn can't depend on the model noticing it.
+  - The user asked on 2026-10-13 for the SKILL.md, `phases/`, `references/` and `scripts/` layout. The workspace has no sandbox, and the packaged app ships no interpreter.
+- **Decision:**
+  - **App-owned skills in the bundle.** Skills live in `backend/src/mastra/skills/<name>/` and the build copies them to `dist/`. A skill is a `SKILL.md` (front matter `name` equal to the folder and a `description` that starts with "Use when", then a short phase map or router) plus the `phases/*.md` and `references/*.md` files it links.
+  - **Declared per agent.** Each agent lists its skills by name in one table in code. Session workspaces no longer seed or discover skills, so an agent sees only its own catalog. Copies already in old workspaces are ignored.
+  - **Two loading modes.** A skill is *on demand* when only the model can tell it applies: it is listed in the agent's catalog and loaded with `skill` / `skill_read`. A skill is *harness-loaded* when code knows the condition, such as a knowledge block being present, a deep-analysis phase or the designer's mode. The code then sends the needed body or file as a system message, and the skill is kept out of the catalog.
+  - **No scripts the model runs.** Checks that have to be exact stay in TypeScript (the read-only guard, the result guards, visual-spec validation). A skill names the tool or guard that applies its rule. `scripts/` is not part of the layout.
+  - **Fail at startup.** The backend validates every skill when it loads: front matter, the "Use when" description, name equal to the folder, and every linked file present. An invalid skill or a missing skills folder stops the backend before it serves.
+- **Consequences:**
+  - The assistant's every-turn prompt shrinks to the rules every data question needs. What a turn sends depends on the turn, and the specs say which skill reaches which call ([agents.md](agents.md) section 7).
+  - On-demand skills add a tool round trip when they load, and they can fail to trigger. That's why only rules the model must judge go on demand, and evals measure them.
+  - Editing a skill is a prompt change. It ships with the build and is covered by the same evals and E2E as an edit to an agent's instructions.
+  - Mastra's skill catalog, tools and agent-level `skills` are framework behaviour (1.66). A Mastra upgrade re-runs the request-recording E2E that asserts what each call carries.
+
 ## Level 4 — Code
 
 ```mermaid

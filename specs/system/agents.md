@@ -179,7 +179,7 @@ LenAI deployments are never swapped to `openai/gpt-4.1-mini` (rule 2 requires no
 
 **Output.** Free text (markdown) — the answer. Tool calls along the way are captured by the orchestrator (5.1).
 
-**Tools.** `list_entities`, `describe_entity`, `sample_rows`, `run_readonly_sql`, `create_visual`, `update_visual`, `ask_clarification` (section 3). It is also bound to the session workspace (7).
+**Tools.** `list_entities`, `describe_entity`, `sample_rows`, `run_readonly_sql`, `create_visual`, `update_visual`, `ask_clarification` (section 3). It is also bound to the session workspace, whose file tools it is offered (3.8), and it is given its own skills (7.4).
 
 **Memory.** One persistent thread per session: `thread = resource = <session id>`. The last **40** messages are replayed into each turn; semantic recall off; working memory off; auto-generated thread titles off. Deleting a session deletes its thread. The Agents UI shows "Recent messages replayed" / "40 messages" (asserted by E2E).
 
@@ -245,7 +245,7 @@ Reference wording of the full prompt: Appendix A.
 
 **Invoked by.** Only the visual pipeline (section 6): `create_visual` / `update_visual` tools, the "create visual" button endpoint, the panel tailor endpoint, the panel auto-repair endpoint. Never by the user directly.
 
-**Inputs.** One user prompt assembled by the pipeline (6.4) plus one extra system message carrying the interactive-visuals skill (7.2) wrapped in `<interactive-visuals-skill>` … `</interactive-visuals-skill>`. requestContext carries only the session-workspace id.
+**Inputs.** One user prompt assembled by the pipeline (6.4) plus one extra system message carrying the interactive-visuals skill (7.2), read from the app bundle (7.3) and wrapped in `<interactive-visuals-skill>` … `</interactive-visuals-skill>`. requestContext carries only the session-workspace id. The designer has no skills of its own in a catalog (7.4).
 
 **Outputs.** Structured, one of two schemas depending on mode:
 
@@ -640,7 +640,7 @@ All tools belong to the `assistant`. Every tool returns a JSON object; **tools n
 
 ### 3.8 Workspace tools
 
-Because the assistant (and designer) are bound to the session workspace, the framework also offers its filesystem capabilities with **delete disabled**, and discovers skills under `.agents/skills`. The prompts never mention them. See Open questions.
+Because the assistant (and designer) are bound to the session workspace, the framework also offers its filesystem tools, with **delete disabled**: `mastra_workspace_read_file`, `mastra_workspace_write_file`, `mastra_workspace_edit_file`, `mastra_workspace_list_files`, `mastra_workspace_file_stat`, `mastra_workspace_mkdir` and `mastra_workspace_grep`. With them comes one framework system message that names the workspace folder and says relative paths resolve from it. The prompts never mention these tools. The skill tools (`skill`, `skill_search`, `skill_read`) come with an agent's skills, not with the workspace (7.3).
 
 ---
 
@@ -1071,8 +1071,8 @@ A fixed, hand-written browser script renders a spec. It is the same code that is
 
 ### 7.1 Session workspaces
 
-- Each session owns a contained folder `<APP_DATA_DIR>/workspaces/session-<sessionId>` (session ids must match `^[a-zA-Z0-9_-]+$`, else `Invalid session workspace ID: <id>`), registered with the agent framework as workspace `session-<id>` named `<session name> Workspace`. Agents can create and edit files there but **cannot delete** them. Skills are discovered under `.agents/skills`.
-- Created on session creation; backfilled for every existing session at startup (and the session's `workspaceId` field corrected); on every load the skill is re-seeded (7.2).
+- Each session owns a contained folder `<APP_DATA_DIR>/workspaces/session-<sessionId>` (session ids must match `^[a-zA-Z0-9_-]+$`, else `Invalid session workspace ID: <id>`), registered with the agent framework as workspace `session-<id>` named `<session name> Workspace`. Agents can create and edit files there but **cannot delete** them. Workspaces carry no skills: none are copied in and none are discovered there (7.3). A `.agents/skills/` folder left by an earlier version is ignored.
+- Created on session creation; backfilled for every existing session at startup (and the session's `workspaceId` field corrected).
 - Agents resolve their workspace per call from requestContext `session-workspace-id`; no id → no workspace.
 - Visual versions (`visuals/<visualId>/v<N>/…`) and deep-analysis reports (`reports/<jobId>.md`) are written into this folder by the backend, not by agents.
 - Deleting a session deletes its memory thread, unregisters the workspace and removes the folder.
@@ -1082,11 +1082,9 @@ A fixed, hand-written browser script renders a spec. It is the same code that is
 
 ### 7.2 The `interactive-visuals` skill
 
-One app-owned skill, a markdown file with front matter `name: interactive-visuals`, `description: Describe a completed, data-grounded analysis answer as a JSON chart spec (or, as a fallback, as a self-contained HTML/CSS/JavaScript visual) for rendering inside the Questions to Insights session panel.`
+One app-owned skill, a markdown file with front matter `name: interactive-visuals`, `description: Use when turning a completed, data-grounded analysis answer into a JSON chart spec (or, as a fallback, a self-contained HTML/CSS/JavaScript visual) for the Questions to Insights session panel.`
 
-**Seeding.** Copied into each workspace at `.agents/skills/interactive-visuals/SKILL.md` when missing or different (byte comparison), via temp file + rename, retrying up to 3 times on `EBUSY`/`EPERM`/`EACCES` (antivirus/roaming-profile locks). Best effort: a failure only logs a warning and never blocks session creation. The source file is looked up next to the backend build/source in several candidate locations.
-
-**Use.** The designer pipeline reads the workspace copy and sends it as a system message (6.4); the designer prompt tells the model to follow it.
+**Loading.** Harness-loaded (7.3): the designer pipeline reads `interactive-visuals/SKILL.md` from the app bundle, the whole file as stored, and sends it as a system message (6.4); the designer prompt tells the model to follow it. It is in no agent's catalog (7.4).
 
 **Content (contract — rules the designer must follow):**
 
@@ -1124,6 +1122,26 @@ One app-owned skill, a markdown file with front matter `name: interactive-visual
 - Composed answers (when `<recommended-form>` has "Composed answer:"): KPI tiles row (2-4, deltas only when both sides are in the rows, sparkline in `.qti-kpi-spark` when a per-period series exists), then the main chart, then a closed `<details>` detail table labelled with the row count; one fragment/stylesheet/script; every tile, mark and row clickable; within 20,000 chars; all three read `window.qti.data`; stack to one column at narrow widths.
 
 The full current wording lives with the skill asset; a rebuild may reword it but must keep every rule above.
+
+### 7.3 App skills: layout, loading and the startup check
+
+The decision is ADR-0018 in [architecture.md](architecture.md).
+
+- **Where.** Every skill is app-owned and ships with the backend build, one folder per skill: `skills/<name>/`. There are no user-authored skills.
+- **Layout.** `SKILL.md` starts with front matter holding exactly two keys, each on one line: `name`, equal to the folder name, and `description`, which starts with `Use when`. The body that follows is short: a phase map or a router that names the files to read. Linked files sit under `phases/` (steps run in order) and `references/` (material read when a step needs it), and `SKILL.md` names each one by its relative path. Skills hold no scripts: an exact check is TypeScript in the backend, and the skill names the tool or guard that applies it.
+- **On demand.** The skills an agent declares (7.4) are listed in that agent's catalog. The framework adds the catalog as a system message (`<available_skills>` with each skill's name, description and location), followed by its usage note, and offers the agent the `skill`, `skill_search` and `skill_read` tools. `skill` returns the body of `SKILL.md` and `skill_read` returns one file by its path in the skill's folder. An agent with no declared skills gets no catalog and none of the three tools.
+- **Harness-loaded.** A skill whose condition the code can decide is kept out of every catalog. The caller reads the body or the one linked file it needs from the bundle and sends it as a system message on that call.
+- **Startup check.** When the backend starts, it validates every skill folder: `SKILL.md` present, both keys present on one line each, `name` equal to the folder, `description` starting with `Use when`, and every `phases/…` or `references/…` path the body names present. A missing skills folder fails the same way. Any failure stops the backend with `Invalid app skills:` followed by one line per problem (`<skill>: <problem>`). Each agent's skill list (7.4) must name existing skills, otherwise startup fails with `Unknown skill "<name>" declared for agent "<agent>"`.
+
+> Implementation note: `mastra/app-skills.ts` resolves the bundle root (`skills/` next to the compiled file, with the Mastra Studio source layout as fallback), validates it when `mastra/index.ts` is loaded, and serves `appSkillDocument(name)` / `appSkillFile(name, path)` to callers. Agents pass `skills: skillPathsFor('<agent>')` (Mastra agent-level skills); workspaces are built without a `skills` option.
+
+### 7.4 Skills per agent
+
+| Agent | On demand (catalog) | Harness-loaded |
+|---|---|---|
+| `assistant` | none | none |
+| `visualization` (designer) | none | `interactive-visuals` (7.2), whole `SKILL.md`, every designer call |
+| `sql-fixer`, `sql-verifier`, `knowledge-bootstrap`, `assistant-eval-judge` | none | none |
 
 ---
 
@@ -1217,7 +1235,6 @@ A case **passes** when it has at least one check and every check scored 1. Each 
 - **Note:** besides swapping gpt-5/o-series models to `openai/gpt-4.1-mini` (LenAI deployments kept), the designer also upgrades any `nano` model, LenAI included, to its `mini` sibling. The old CLAUDE.md omitted this; this spec is now the reference.
 - **Open question:** the designer's effort/cap tuning is computed from `resolveVisualizationModel()`, but the per-call bucket for the chat is computed from the plain resolved model — consistent today; confirm that `VISUAL_MODEL` pointing at a different provider than the saved key is supported (it reuses the saved API key with the overridden id).
 - **Open question:** the eval judge sends `temperature: 0` as a *provider option*; for OpenAI/LenAI buckets this is likely an unknown option rather than the sampling temperature. Is temperature actually applied?
-- **Open question:** whether the workspace filesystem/skill tools the framework attaches (3.8) are really offered to the assistant and designer at run time, and under which names; the catalogue's `tools` list shows only the 7 declared tools.
 - **Gap:** deep-analysis investigation calls keep `ask_clarification`, `create_visual` and `update_visual` available; only the prompt forbids them, and nothing intercepts a clarification in `generate` mode. Should these tools be removed for background calls?
 - **Gap:** `list_entities`' description says the kind is "databricks or postgres", omitting `rest` (which the SQL tool description and prompt do mention).
 - **Gap:** the non-streamed chat endpoint persists no `data`, `entities`, `interpretation`, clarification, grounding guard or cross-check. Is it still used by any client? (The frontend service still has a caller.)
@@ -1359,4 +1376,4 @@ Rules:
   and re-run before answering, rather than passing it to the user.
 ```
 
-> Implementation note (file map): agents in `backend/src/mastra/agents/*.agent.ts`; tools in `mastra/tools/`; context builders `mastra/context-blocks.ts`; step budget `mastra/agent-constants.ts`; bridges `mastra/model-resolver.ts`, `mastra/tool-services.ts`; tuning `mastra/model-compat.ts`; storage `mastra/storage.ts`; workspaces `mastra/session-workspaces.ts`; skill `mastra/skills/interactive-visuals/SKILL.md`; orchestration `modules/sessions/sessions.service.ts`, `turn-data.ts`, `result-guards.ts`, `result-compare.ts`, `chart-heuristic.ts`; designer pipeline `modules/sessions/visualization.service.ts`, `visual-spec.ts`, `visual-runtime.ts`, `visualization-document.ts`; knowledge bootstrap `modules/knowledge/knowledge.service.ts`; deep analysis `modules/deep-analysis/`; catalogue and eval runs `modules/agents/`; model settings `modules/llm/`.
+> Implementation note (file map): agents in `backend/src/mastra/agents/*.agent.ts`; tools in `mastra/tools/`; context builders `mastra/context-blocks.ts`; step budget `mastra/agent-constants.ts`; bridges `mastra/model-resolver.ts`, `mastra/tool-services.ts`; tuning `mastra/model-compat.ts`; storage `mastra/storage.ts`; workspaces `mastra/session-workspaces.ts`; skills `mastra/app-skills.ts` and `mastra/skills/<name>/`; orchestration `modules/sessions/sessions.service.ts`, `turn-data.ts`, `result-guards.ts`, `result-compare.ts`, `chart-heuristic.ts`; designer pipeline `modules/sessions/visualization.service.ts`, `visual-spec.ts`, `visual-runtime.ts`, `visualization-document.ts`; knowledge bootstrap `modules/knowledge/knowledge.service.ts`; deep analysis `modules/deep-analysis/`; catalogue and eval runs `modules/agents/`; model settings `modules/llm/`.

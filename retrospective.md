@@ -14,6 +14,25 @@ Entry template:
 
 ---
 
+## 2026-10-13 — 1.13.1 ADR, epic spec and skill loader for app-owned skills (BA-199)
+
+### What went well
+- Reading Mastra 1.66's own code (the skills processor, `createSkillTools`, the agent-level `skills` option) before writing the spec gave a design that uses the framework rather than working around it. Each agent declares its skills, and workspaces carry none.
+- A throwaway probe spec recorded what the assistant's request really carried before any change: the designer's skill in its catalog, three skill tools and seven workspace file tools. That turned a guess into the story's failing E2E, and it closed an open question in agents.md.
+- Measuring the prompt section by section (curated knowledge 1,683 chars; visuals 427; catalog plus usage note 1,045) settled the scope with numbers. Two confirmed skills were cut before any code was written for them.
+- The startup check was proven on the built CLI with a broken skill in `dist/`, and the upgrade path with a session created by the previous build.
+
+### What went wrong
+- The first eval baseline used the `gpt-4o-mini` fallback and scored 0/10. The model passes `limit: 1`, so every result-set check fails, and that cost a run before a real model was chosen. The shipped `npm run evals:assistant` can't run at all: it passes no case ids, so the one-fixture preflight always refuses.
+- The epic spec was confirmed with `visual-tailoring` and `sql-dialects` in it. Neither survived contact with the code: the first costs more tokens than it saves, and the second had no existing text to move. I measured after confirmation instead of before.
+- The first old-session check proved nothing: the old build looks its skill up relative to `cwd`, my spawn didn't set it, and no copy was seeded. I caught it only because the script reported `workspaceSkillCopyExistedBeforeUpgrade: false`.
+- The designer unit test was written after the service change, not before it.
+
+### What to do differently
+- Before proposing a skill split, measure every prompt section and the framework's per-turn catalog overhead, and grep for the content each skill would hold. Put the numbers in the epic spec, so a skill with nothing to move or a net token cost never reaches confirmation.
+- Pick the eval model with the user before the first eval run, and check that its key is set (`awk -F= '/^[A-Z_]+=/{print $1, length($2)}' .env.llm.local`). Never use the env fallback model as a regression baseline.
+- When a check script compares an old build with a new one, make it assert its own preconditions (the state the old build should leave) and fail when they don't hold. Start each build with the `cwd` the real launcher uses.
+
 ## 2026-10-12 — 1.11.3 Task details in the workflow pane (BA-174)
 
 ### What went well

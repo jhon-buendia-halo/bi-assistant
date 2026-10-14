@@ -1,6 +1,6 @@
 ---
 name: interactive-visuals
-description: Describe a completed, data-grounded analysis answer as a JSON chart spec (or, as a fallback, as a self-contained HTML/CSS/JS visual) for rendering inside the Questions to Insights session panel.
+description: Use when turning a completed, data-grounded analysis answer into a JSON chart spec (or, as a fallback, a self-contained HTML/CSS/JavaScript visual) for the Questions to Insights session panel.
 ---
 
 # Interactive Visuals

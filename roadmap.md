@@ -665,6 +665,39 @@ Developer tooling, not an application change: a Claude Code mod in the repositor
 - **Acceptance:** `claude plugin validate` and `claude plugin test` pass, the tests covering every step's checklist facts, the summary, the expected agent, the overall %, a subagent's tokens credited to it and its task, and a press that opens and a second press that closes a row; `tsc` over the hooks against the engine's declarations is clean; a live session shows a row opening on a click and on Enter; nothing under `backend/` or `frontend/` changes.
 - **Notes:** chosen 2026-10-12 from three clickable mockups (option A, expand in place). Decisions with the user: several rows can stay open; tokens per agent, cost at task level only. Found in a live session and fixed with tests: a row inside a `Button` is not truncated, so columns now drop to fit the pane; step 1's checks are the session's, because its calls often count for other steps. Verified with the mod's tests and a live session in a 180-column tmux (keyboard press); a mouse click raises the same `ui.press` and is covered by the test kit's press, not by the live run. Evidence: [evidence/1.11.3/](evidence/1.11.3/).
 
+### Milestone 1.13 — Assistant skills: progressive-disclosure agent structure ([BA-198](https://halo-powered.atlassian.net/browse/BA-198))
+
+A behaviour-preserving refactor of the app's Mastra agents to the Agent Skills layout: a slim always-on assistant prompt, and app-owned skills (`SKILL.md` + `phases/` + `references/`) that the model loads on demand or the harness injects when a condition holds in code. Proven by the world-cup eval set before and after (same model) and the full E2E suite. All stories are built on `refactor/BA-198-assistant-skills` and ship as one PR. Epic spec: [specs/epics/BA-198/spec.md](specs/epics/BA-198/spec.md). (1.12 is held by the BA-82 branch.)
+
+#### 1.13.1 — ADR, epic spec and skill loader for app-owned skills ([BA-199](https://halo-powered.atlassian.net/browse/BA-199))  `✅ Done`
+- **Intent:** every agent gets its skills from one place, declared per agent, checked at startup, so later stories only move text.
+- **Scope:** ADR-0018; the epic spec; a skill loader over `backend/src/mastra/skills/` (one resolved bundle root for CLI, Electron and Studio) that validates front matter (`name`, a `Use when…` description) and every file `SKILL.md` links, failing the backend at startup; agent-level `skills` per agent (assistant: its own list; designer: none in the catalog, loaded by the pipeline); session workspaces stop seeding and discovering `.agents/skills`; the designer reads its skill from the bundle; a stub-LLM API test that records the assistant's request and asserts its catalog; `agents.md` §7 and the open question on attached tools resolved.
+- **Out of scope:** moving any prompt text (1.13.2–1.13.5).
+- **Acceptance:** loader unit tests (missing name, missing description, description not starting "Use when", dangling link, missing root); the recorded request shows the assistant's catalog holding exactly its declared skills (none today), so no `interactive-visuals` entry and no skill tools; designer visual E2E green; existing sessions with old `.agents/skills` copies still open and chat.
+- **Notes:** decisions with the user 2026-10-13: the app's agents, not the repo's Claude Code workflow; no new approval gates; eval tokens approved (world-cup set, before and after). Recorded on `main`: the assistant's catalog listed the designer's `interactive-visuals`, and it was offered `skill`, `skill_search` and `skill_read`. Evidence: [evidence/1.13.1/](evidence/1.13.1/).
+
+#### 1.13.2 — Slim assistant core prompt: curated-knowledge skill, harness-loaded ([BA-200](https://halo-powered.atlassian.net/browse/BA-200))  `📋 Planned`
+- **Intent:** the assistant's every-turn prompt carries only the rules every data question needs; the curated-knowledge rules reach the model only on turns that carry a knowledge block, and always on those turns.
+- **Scope:** `curated-knowledge` skill (the rules now under "Curated knowledge:" in the prompt, about 23% of it) sent as a system message right after the knowledge block, by every caller that sends the block (chat turn, grounding pass, deep analysis, eval suite); the knowledge-related clause of the describe_entity rule follows it; `agents.md` §2.1 and §4.1.
+- **Out of scope:** changing the knowledge block format; any other prompt section.
+- **Acceptance:** the prompt tab still starts with `You are the Questions to Insights assistant`; recorded requests: a turn without knowledge has no curated-knowledge rules, a turn with a block has them right after it; knowledge E2E green; the eval set shows no regressions.
+- **Notes:** re-scoped 2026-10-13 with the user. The on-demand `visual-tailoring` skill was cut: 427 characters of rules against a catalog and usage note of about 1,045 on every turn, and a risk of never loading. BA-201 was merged in.
+
+#### 1.13.3 — curated-knowledge and sql-dialects skills, harness-loaded ([BA-201](https://halo-powered.atlassian.net/browse/BA-201))  `🚫 Cut`
+- **Reason:** curated-knowledge merged into 1.13.2. sql-dialects cut: the app has no dialect guidance to move (one line in the prompt and the tool description), so the skill would be new behaviour written for failures nobody has observed. Revisit if evals show dialect errors.
+
+#### 1.13.4 — Phased deep-analysis skill ([BA-202](https://halo-powered.atlassian.net/browse/BA-202))  `📋 Planned`
+- **Intent:** deep analysis follows a skill with a phase map, loading one phase per call, instead of prompts inlined in the service.
+- **Scope:** `deep-analysis` skill (`SKILL.md`, `phases/1-plan.md`, `2-investigate.md`, `3-report.md`); the service injects the phase file for each call; `agents.md` §2.7.
+- **Out of scope:** an approval gate between phases; new phases.
+- **Acceptance:** each recorded deep-analysis call carries only its phase; deep-analysis unit tests and E2E green.
+
+#### 1.13.5 — Split interactive-visuals into spec-mode and freeform references ([BA-203](https://halo-powered.atlassian.net/browse/BA-203))  `📋 Planned`
+- **Intent:** the designer reads only the instructions for the mode it runs.
+- **Scope:** `interactive-visuals/SKILL.md` as a router; `references/spec-mode.md`, `references/freeform.md`; the pipeline injects the mode's file; `agents.md` §6.4 and §7.2.
+- **Out of scope:** changing the visual spec or the runtime.
+- **Acceptance:** a recorded spec-mode call carries `spec-mode.md` and not `freeform.md` (and the reverse for the fallback); visuals E2E and the `visual-request` eval case stay green.
+
 ## Release 2 — Multi-user  (no target date yet)
 
 The app becomes multi-user. An organisation self-hosts it as an org server, with sign-in, roles and an admin panel. Local mode stays the default. Direction: [specs/product/vision.md](specs/product/vision.md). Not part of the 1.0 Beta.

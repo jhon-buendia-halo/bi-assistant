@@ -40,6 +40,7 @@ import {
 } from './visual-runtime';
 import { recommendedFormBlock } from './chart-heuristic';
 import { createZip } from './zip-archive';
+import { appSkillDocument } from '../../mastra/app-skills';
 import {
   ChatMessage,
   InteractiveVisualization,
@@ -194,7 +195,7 @@ export class VisualizationService {
     const question = this.findQuestion(session, answer);
     const { workspace, filesystem } = await this.workspaceFor(session);
     const mergedData = mergeToolDataRecords(answer.data, turnRecords);
-    const bundle = await this.design(workspace, filesystem, {
+    const bundle = await this.design(workspace, {
       question,
       answer,
       instruction,
@@ -265,7 +266,7 @@ export class VisualizationService {
         this.currentVersion(meta),
       )) ?? answer?.data;
     const mergedData = mergeToolDataRecords(baseData, turnRecords);
-    const bundle = await this.design(workspace, filesystem, {
+    const bundle = await this.design(workspace, {
       question,
       answer,
       instruction: trimmed,
@@ -313,7 +314,7 @@ export class VisualizationService {
       (m) => m.role === 'assistant' && m.at === meta.sourceMessageAt,
     );
     const question = answer ? this.findQuestion(session, answer) : undefined;
-    const bundle = await this.design(workspace, filesystem, {
+    const bundle = await this.design(workspace, {
       question,
       answer,
       current,
@@ -543,13 +544,10 @@ export class VisualizationService {
    */
   private async design(
     workspace: Awaited<ReturnType<MastraService['ensureSessionWorkspace']>>,
-    filesystem: WorkspaceFilesystem,
     context: DesignContext,
   ): Promise<Bundle> {
-    const skill = await this.readText(
-      filesystem,
-      '.agents/skills/interactive-visuals/SKILL.md',
-    );
+    // Harness-loaded from the app bundle (agents.md 7.2, 7.4).
+    const skill = appSkillDocument('interactive-visuals');
     const requestContext = new RequestContext();
     requestContext.set(SESSION_WORKSPACE_CONTEXT_KEY, workspace.id);
 

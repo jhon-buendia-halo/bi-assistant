@@ -5,6 +5,7 @@ import { datasetTools } from '../tools/dataset.tools';
 import { askClarificationTool } from '../tools/clarification.tool';
 import { visualTools } from '../tools/visual.tools';
 import { SESSION_WORKSPACE_CONTEXT_KEY } from '../session-workspaces';
+import { skillPathsFor } from '../app-skills';
 
 // The harness's main agent. Its tools are scoped per call to the session's
 // datasets via requestContext (see ../tools/dataset.tools).
@@ -157,6 +158,9 @@ export const assistantAgent = new Agent({
     if (typeof workspaceId !== 'string' || !mastra) return undefined;
     return mastra.listWorkspaces()[workspaceId]?.workspace;
   },
+  // Only the assistant's own on-demand skills reach its catalog (agents.md
+  // 7.4); harness-loaded skills are sent by their callers.
+  skills: skillPathsFor('assistant'),
   tools: {
     ...datasetTools,
     ...visualTools,

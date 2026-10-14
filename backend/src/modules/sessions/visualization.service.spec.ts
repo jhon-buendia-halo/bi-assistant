@@ -62,6 +62,7 @@ import { getDatasetToolServices } from '../../mastra/tool-services';
 import { resolveVisualizationModel } from '../../mastra/agents/visualization.agent';
 import { setAgentModelResolver } from '../../mastra/model-resolver';
 import { createZip } from './zip-archive';
+import { appSkillDocument } from '../../mastra/app-skills';
 import {
   isSchemaEnvelopeError,
   unwrapSchemaEnvelope,
@@ -237,6 +238,32 @@ describe('visualizationData', () => {
     expect(block.shown).toBe(99);
     // The dropped record's rows count as truncation, not as silent loss.
     expect(block.truncatedFrom).toBe(155);
+  });
+});
+
+describe('VisualizationService skill', () => {
+  it('sends the bundled interactive-visuals skill, not a workspace copy', async () => {
+    const { service, agent, filesystem } = build();
+
+    await service.create(sessionWithRows(3, 3), undefined);
+
+    const options = (agent.generate.mock.calls as unknown[][])[0][1] as {
+      context: { role: string; content: string }[];
+    };
+    expect(options.context).toEqual([
+      {
+        role: 'system',
+        content: [
+          '<interactive-visuals-skill>',
+          appSkillDocument('interactive-visuals'),
+          '</interactive-visuals-skill>',
+        ].join('\n'),
+      },
+    ]);
+    const reads = (filesystem.readFile.mock.calls as unknown[][]).map(
+      ([path]) => String(path),
+    );
+    expect(reads.filter((path) => path.includes('.agents'))).toEqual([]);
   });
 });
 
