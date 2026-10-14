@@ -5,11 +5,23 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import {
-  normalizeAgentTools,
   OPTIONAL_AGENT_TOOLS,
   type OptionalAgentTool,
 } from '../../mastra/agent-tools';
+import {
+  isLibraryTool,
+  optionalToolsOf,
+  parseLinks,
+} from '../../mastra/agent-links';
 import { REASONING_EFFORTS, type ReasoningEffort } from '../llm/llm.types';
+import { SkillsRepository } from '../skills/repositories/skills.repository';
+import {
+  SKILL_LIMITS,
+  sameSkillContent,
+  toSkillCopy,
+  type SkillCopy,
+  type SkillDoc,
+} from '../skills/entities/skill.entity';
 import { DatasetsRepository } from '../datasets/repositories/datasets.repository';
 import {
   AGENT_LIMITS,
@@ -28,8 +40,10 @@ export interface AgentConfigInput {
   starterQuestions?: string[];
   model?: string;
   reasoningEffort?: ReasoningEffort;
-  /** The optional tools selected; undefined keeps every tool (R43). */
+  /** Ignored: derived from the instructions' links (ADR-0023). */
   tools?: string[];
+  /** Ignored: derived from the instructions' links (ADR-0023). */
+  skills?: string[];
 }
 
 /**
@@ -43,6 +57,7 @@ export class UserAgentsService {
     private readonly repository: UserAgentsRepository,
     private readonly pins: BuiltinAgentPinsRepository,
     private readonly datasets: DatasetsRepository,
+    private readonly skills: SkillsRepository,
   ) {}
 
   list(): Promise<UserAgentDoc[]> {
@@ -54,16 +69,18 @@ export class UserAgentsService {
   }
 
   async create(input: AgentConfigInput): Promise<UserAgentDoc> {
-    const draft = normalizeAgentConfig(input);
-    await this.assertNameAvailable(draft.name);
+    const parsed = normalizeAgentConfig(input);
+    await this.assertNameAvailable(parsed.name);
+    const draft = await this.withLinks(parsed);
     return this.repository.insert({ id: randomUUID(), draft, pinned: false });
   }
 
   /** Replace the whole draft; the Live version is untouched (R44). */
   async saveDraft(id: string, input: AgentConfigInput): Promise<UserAgentDoc> {
     await this.require(id);
-    const draft = normalizeAgentConfig(input);
-    await this.assertNameAvailable(draft.name, id);
+    const parsed = normalizeAgentConfig(input);
+    await this.assertNameAvailable(parsed.name, id);
+    const draft = await this.withLinks(parsed);
     return this.patch(id, { draft });
   }
 
@@ -75,10 +92,43 @@ export class UserAgentsService {
     if (!doc.draft.datasets.length) {
       throw new BadRequestException('Select at least one dataset to publish');
     }
+    // The skills the draft names are copied as they are now; a Live agent
+    // runs on these copies until it is published again (R44, ADR-0021).
+    const copies = (await this.skillsFor(doc.draft.skills)).map(toSkillCopy);
+    const live: AgentConfig = { ...doc.draft };
+    if (doc.draft.skills) live.skills = copies.map((copy) => copy.id);
     return this.patch(id, {
-      live: { ...doc.draft },
+      live,
+      ...(copies.length || doc.liveSkills ? { liveSkills: copies } : {}),
       publishedAt: new Date().toISOString(),
     });
+  }
+
+  /**
+   * The caller's skills with these ids, in the order given; an id with no
+   * skill (deleted) is skipped. A preview runs on these (R60).
+   */
+  async skillsFor(ids: readonly string[] | undefined): Promise<SkillDoc[]> {
+    if (!ids?.length) return [];
+    const found = await Promise.all(ids.map((id) => this.skills.get(id)));
+    return found.filter((doc): doc is SkillDoc => !!doc);
+  }
+
+  /** Every skill of the caller by id, to tell which changed since a publish. */
+  async skillsById(): Promise<Map<string, SkillDoc>> {
+    return new Map((await this.skills.list()).map((doc) => [doc.id, doc]));
+  }
+
+  /**
+   * Names of the caller's agents whose draft instructions link the skill
+   * `name`, sorted; a skill they link cannot be deleted or renamed
+   * (ADR-0023). Live copies are not checked: they keep running.
+   */
+  async draftsLinking(name: string): Promise<string[]> {
+    return (await this.repository.list())
+      .filter((doc) => parseLinks(doc.draft.instructions).skills.includes(name))
+      .map((doc) => doc.draft.name)
+      .sort((a, b) => a.localeCompare(b));
   }
 
   /** Remove the definition only; sessions keep their transcript (R50). */
@@ -126,6 +176,35 @@ export class UserAgentsService {
     return updated;
   }
 
+  /**
+   * Derive `skills` and `tools` from the instructions' links (ADR-0023): the
+   * skills are the caller's in-app skills the links name, the tools the
+   * optional ones linked directly. Refuses an unknown skill, more than 10
+   * skills, then an unknown tool, by name.
+   */
+  private async withLinks(config: AgentConfig): Promise<AgentConfig> {
+    const links = parseLinks(config.instructions);
+    const owned = new Map(
+      (await this.skills.list()).map((doc) => [doc.name, doc.id]),
+    );
+    const ids: string[] = [];
+    for (const name of links.skills) {
+      const id = owned.get(name);
+      if (!id) throw new BadRequestException(`Unknown skill "${name}"`);
+      ids.push(id);
+    }
+    if (ids.length > SKILL_LIMITS.perAgent) {
+      throw new BadRequestException(
+        `An agent can have at most ${SKILL_LIMITS.perAgent} skills`,
+      );
+    }
+    const unknownTool = links.tools.find((name) => !isLibraryTool(name));
+    if (unknownTool !== undefined) {
+      throw new BadRequestException(`Unknown tool "${unknownTool}"`);
+    }
+    return { ...config, tools: optionalToolsOf(links.tools), skills: ids };
+  }
+
   /** Names are unique among user agents, ignoring case (R43, R45). */
   private async assertNameAvailable(name: string, selfId?: string) {
     if (!name) throw new BadRequestException('Agent name is required');
@@ -163,13 +242,6 @@ export function normalizeAgentConfig(input: AgentConfigInput): AgentConfig {
   ) {
     config.reasoningEffort = input.reasoningEffort;
   }
-  if (Array.isArray(input.tools)) {
-    try {
-      config.tools = normalizeAgentTools(input.tools);
-    } catch (error) {
-      throw new BadRequestException((error as Error).message);
-    }
-  }
   return config;
 }
 
@@ -180,11 +252,32 @@ export function effectiveConfig(
   return doc.live ?? doc.draft;
 }
 
-/** Live and its draft differ (R44). Derived, never stored. */
+/**
+ * Live and its draft differ, or a skill the draft names changed since its
+ * copy was taken (R44). Derived, never stored. `current` is the owner's
+ * skills by id; without it only the configurations are compared.
+ */
 export function hasUnpublishedChanges(
-  doc: Pick<UserAgentDoc, 'draft' | 'live'>,
+  doc: Pick<UserAgentDoc, 'draft' | 'live' | 'liveSkills'>,
+  current?: ReadonlyMap<string, SkillDoc>,
 ): boolean {
-  return Boolean(doc.live) && !sameConfig(doc.draft, doc.live!);
+  if (!doc.live) return false;
+  if (!sameConfig(doc.draft, doc.live)) return true;
+  return skillsChanged(doc.draft.skills ?? [], doc.liveSkills ?? [], current);
+}
+
+/** A named skill with no copy, or whose current content differs from it. */
+function skillsChanged(
+  ids: readonly string[],
+  copies: readonly SkillCopy[],
+  current?: ReadonlyMap<string, SkillDoc>,
+): boolean {
+  return ids.some((id) => {
+    const copy = copies.find((entry) => entry.id === id);
+    if (!copy) return true;
+    const now = current?.get(id);
+    return !!now && !sameSkillContent(copy, now);
+  });
 }
 
 /** Dataset names in `config` that are not among `existing` (R48). */
@@ -204,7 +297,8 @@ function sameConfig(a: AgentConfig, b: AgentConfig): boolean {
     sameList(a.starterQuestions, b.starterQuestions) &&
     (a.model ?? '') === (b.model ?? '') &&
     (a.reasoningEffort ?? '') === (b.reasoningEffort ?? '') &&
-    sameList(selectedTools(a), selectedTools(b))
+    sameList(selectedTools(a), selectedTools(b)) &&
+    sameList(a.skills, b.skills)
   );
 }
 

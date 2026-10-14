@@ -110,6 +110,8 @@ Summary:
 | `eval_runs` | Past and in-flight eval runs | `jobId` | `startedAt` desc (per agent) | [agents-evals](../capabilities/agents-evals/spec.md) |
 | `knowledge_snippets` | Curated knowledge entries | `id` | `updatedAt` desc | [knowledge](../capabilities/knowledge/spec.md) |
 | `agents` | User-built agents (a draft, an optional Live version, pin) | `id` | `updatedAt` desc | [agents-evals](../capabilities/agents-evals/spec.md) |
+| `skills` | In-app skills a user writes and assigns to their agents | `id`; `name` unique per owner | `updatedAt` desc | [agents-evals](../capabilities/agents-evals/spec.md) |
+| `skill_overrides` | Org-wide overrides of built-in skills, edited in the app | `name` (a built-in skill's name) | n/a | [agents-evals](../capabilities/agents-evals/spec.md) |
 | `users` | Directory users (org server mode) | `id`; `userName` unique | `displayName` asc | [admin](../capabilities/admin/spec.md) |
 | `groups` | Directory groups (org server mode) | `id`; `displayName` unique | `displayName` asc | [admin](../capabilities/admin/spec.md) |
 | `group_members` | Group memberships (org server mode) | `id`; `(groupId, userId)` unique | n/a | [admin](../capabilities/admin/spec.md) |
@@ -118,7 +120,7 @@ Summary:
 | `auth_sessions` | Signed-in browsers (org server mode) | `id` = SHA-256 of the cookie token | n/a | [admin](../capabilities/admin/spec.md) |
 | `activity_events` | Sign-ins, daily activity, SCIM syncs (org server mode), role and status changes | `id` | `at` desc | [admin](../capabilities/admin/spec.md) |
 
-Every document in every collection also carries `createdAt` and `updatedAt` (ISO), maintained by the store (section 2.1); they are listed per collection only where they matter. `sessions`, `verified_queries`, `metrics`, `eval_runs`, `knowledge_snippets` and `agents` are **private** and carry `ownerId` in both modes (local mode since M13, section 6); `connections`, `settings`, `datasets` and `datasource_inventories` are **shared** (section 3.15). In local mode the identity and access collections hold the five local personas, their seeded role assignments, auth sessions and activity events (admin R69–R71); SCIM never writes there. There are **no foreign-key constraints and no cascading deletes** between collections; references are by value (`name`, `id`) and may dangle (section 3.13).
+Every document in every collection also carries `createdAt` and `updatedAt` (ISO), maintained by the store (section 2.1); they are listed per collection only where they matter. `sessions`, `verified_queries`, `metrics`, `eval_runs`, `knowledge_snippets`, `agents` and `skills` are **private** and carry `ownerId` in both modes (local mode since M13, section 6); `connections`, `settings`, `datasets`, `datasource_inventories` and `skill_overrides` are **shared** (section 3.15). In local mode the identity and access collections hold the five local personas, their seeded role assignments, auth sessions and activity events (admin R69–R71); SCIM never writes there. There are **no foreign-key constraints and no cascading deletes** between collections; references are by value (`name`, `id`) and may dangle (section 3.13).
 
 ### 3.1 `connections` — datasources
 
@@ -428,6 +430,7 @@ User-built agents: a stored configuration of the assistant, with a working draft
 | `live` | `AgentConfig` | no | The published copy. Absent until the first publish. |
 | `publishedAt` | ISO | no | Set at each publish. |
 | `pinned` | boolean | yes | `false` on create. |
+| `liveSkills` | `SkillCopy[]` | no | Copies of the skills the Live version names, taken at each publish, in the order of `live.skills`: `{ id, name, description, body, files }` as in 3.10.1. A Live agent runs on these copies, never on the current skills (ADR-0021). Keeps only the ids that still have a skill to copy, so it is `[]` after a republish that drops every skill. Absent until a publish whose Live version names a skill. |
 | `ownerId` | string | no | The owning user's id in org server mode; absent in local mode (section 3.15). |
 | `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
 
@@ -437,16 +440,49 @@ User-built agents: a stored configuration of the assistant, with a working draft
 |---|---|---|---|
 | `name` | string | yes | Trimmed, 1 to 64 characters, unique among the owner's user agents (case-insensitive). |
 | `description` | string | yes | Up to 280 characters; may be empty. |
-| `instructions` | string | yes | Up to 4,000 characters; may be empty. |
+| `instructions` | string | yes | Up to 4,000 characters; may be empty. Stored as written, with links `[[skill:<name>]]` and `[[tool:<name>]]` (R81 of the agents spec; resolved to plain mentions only when the model sees them, [agents.md](agents.md) 4.1). |
 | `datasets` | string[] | yes | Dataset **names**; de-duplicated. At least one to publish. |
 | `starterQuestions` | string[] | yes | Up to 5, each up to 200 characters; blank ones dropped, de-duplicated. |
 | `model` | string | no | A model or deployment name of the configured provider. |
 | `reasoningEffort` | enum | no | `low` \| `medium` \| `high`. |
-| `tools` | string[] | no | The optional assistant tools the agent gets: any of `sample_rows`, `ask_clarification` and `visuals` (`create_visual` with `update_visual`), de-duplicated and stored in that order. Absent means all three; an empty list means none. `list_entities`, `describe_entity` and `run_readonly_sql` are always given and never listed ([agents.md](agents.md) 2.1). No migration: a document without the field keeps every tool (ADR-0021). |
+| `skills` | string[] | no | Ids of the in-app skills (3.10.1) of the agent's owner that `instructions` link, at most 10, de-duplicated, in the order of the links. **Derived from the links on every create and draft save** (ADR-0023); the request's own list is ignored. Absent means none. |
+| `tools` | string[] | no | The optional tool groups the agent's `instructions` link directly: any of `sample_rows`, `ask_clarification` and `visuals` (`create_visual` with `update_visual`), de-duplicated and stored in that order. **Derived from the links on every create and draft save** (ADR-0023); the request's own list is ignored. Absent means all three (a draft saved before links); an empty list means none. The tools an agent gets at call time are this list plus the optional tools its linked skills' bodies link ([agents.md](agents.md) 2.1); that union is not stored. `list_entities`, `describe_entity` and `run_readonly_sql` are always given and never listed ([agents.md](agents.md) 2.1). No migration: a document without the field keeps every tool (ADR-0021); the editor adds links for it when opened (R85). |
 
-Saving a draft replaces the whole `draft` object. Publishing sets `live` to a copy of `draft`. "Unpublished changes" is derived (`live` exists and differs from `draft`), not stored. When comparing, an absent `tools` list counts as all three tools.
+Saving a draft replaces the whole `draft` object. Publishing sets `live` to a copy of `draft`. "Unpublished changes" is derived (`live` exists and differs from `draft`), not stored. When comparing, an absent `tools` list counts as all three tools, and an absent `skills` list as an empty one. The agent also has unpublished changes when a skill its draft names differs (name, description, body or files) from its copy in `liveSkills`, or has no copy there.
 
-In org server mode a Platform admin can transfer an agent to another owner ([api.md](api.md) 86, admin R64): its `ownerId` changes and `pinned` resets to `false`; `draft`, `live` and `publishedAt` are kept. Sessions keep their `agentId` and `ownerId`, so for the former owner the agent no longer resolves and their sessions behave as for a deleted agent.
+Deleting a skill, or renaming it, is refused while the `draft` of any of its owner's agents links it by name (`"<name>" is linked by <agent names>. Unlink it first.`), so a draft's `skills` never holds an id without a skill. `live.skills` and `liveSkills` are untouched either way, so Live agents keep the copy they run on.
+
+In org server mode a Platform admin can transfer an agent to another owner ([api.md](api.md) 86, admin R64): its `ownerId` changes and `pinned` resets to `false`; `draft`, `live` and `publishedAt` are kept. Sessions keep their `agentId` and `ownerId`, so for the former owner the agent no longer resolves and their sessions behave as for a deleted agent. The skills the draft names are copied into the new owner's `skills` as new documents (a clashing name gets `-2`, `-3`, … appended; a name that would pass 64 characters is cut before the suffix), and the ids in `draft.skills`, `live.skills` and `liveSkills` are replaced by the copies' ids. When a copy was renamed, every `[[skill:<old name>]]` link in the agent's draft and Live instructions is rewritten to the copy's name, and its `liveSkills` copy takes that name (ADR-0023). Only skills the draft names are copied: an id that only `live.skills` and `liveSkills` name keeps its old id, since its `liveSkills` copy is self-contained. The former owner keeps their skills.
+
+### 3.10.1 `skills` — in-app skills
+
+Skills a user writes in the app and assigns to their agents (ADR-0021). They are text only and never run. Rules: [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R68-R74; how an agent's session reads them: [agents.md](agents.md) 7.3.
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `id` | uuid | yes | |
+| `name` | string | yes | Lowercase letters, digits and single hyphens (`^[a-z0-9]+(-[a-z0-9]+)*$`), at most 64 characters. Unique among the owner's skills, and never the name of a built-in skill. |
+| `description` | string | yes | Starts with `Use when`; at most 300 characters. It is the skill's catalog entry, the text the model decides by. |
+| `body` | string | yes | Not empty; at most 20,000 characters. May link tools with `[[tool:<name>]]`, never skills (ADR-0023); nothing extra is stored, the tools a skill links are read from its body. |
+| `files` | `{ path, content }[]` | yes | Reference files, at most 10. `path` is `reference/<file name>`, the file name matching `^[A-Za-z0-9][A-Za-z0-9._-]*$` and at most 100 characters; paths are unique. `content` is at most 20,000 characters. Every `reference/…` path the body names is one of them. May be empty. |
+| `ownerId` | string | yes | The owning user (3.15). |
+| `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
+
+`SkillCopy` (embedded in `agents.liveSkills`, not a collection) is `{ id, name, description, body, files }`, the skill as it was when the agent was published.
+
+### 3.10.2 `skill_overrides` — built-in skills edited in the app
+
+One document per overridden built-in skill, shared by every user (ADR-0022). Rules: [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R75-R80; resolution: [agents.md](agents.md) 7.3.
+
+| Field | Type | Req | Meaning |
+|---|---|---|---|
+| `name` | string | yes | The built-in skill's name; the identity. An override of a name that is no longer built in is ignored. |
+| `description` | string | yes | Starts with `Use when`; at most 300 characters. |
+| `body` | string | yes | Not empty; at most 20,000 characters. |
+| `files` | `{ path, content }[]` | yes | Exactly the built-in's `phases/` and `reference/` files, same paths, each `content` at most 20,000 characters and with the same `{{placeholders}}` as the built-in's file; stored in the built-in's file order. |
+| `baseHash` | string | yes | SHA-256 (hex) of the built-in it was saved against: of `JSON.stringify([description, body, [[path, content], …]])`, the files sorted by path. A different hash for the shipped built-in means the built-in changed since. |
+| `updatedBy` | string | yes | The id of the user who saved it (`local` when nobody is signed in). |
+| `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
 
 ### 3.11 Deep-analysis jobs (not persisted)
 
@@ -612,11 +648,11 @@ Reads walk `users`, `agents` and `activity_events` across all owners, so the adm
 
 Rules: [../capabilities/admin/spec.md](../capabilities/admin/spec.md) R28-R33. Scoping applies in both modes (ADR-0012).
 
-- **Private collections:** `sessions`, `verified_queries`, `metrics`, `eval_runs`, `knowledge_snippets`, `agents`, plus the per-user built-in pins and UI preferences documents in `settings` (3.2, 3.2.1). Everything hanging off a session is private through it: visual metadata and files, reports, the session workspace (section 4) and its agent memory thread (section 5).
-- **Shared collections:** `connections`, `datasets`, `datasource_inventories`, and the `llm` document in `settings`.
+- **Private collections:** `sessions`, `verified_queries`, `metrics`, `eval_runs`, `knowledge_snippets`, `agents`, `skills`, plus the per-user built-in pins and UI preferences documents in `settings` (3.2, 3.2.1). Everything hanging off a session is private through it: visual metadata and files, reports, the session workspace (section 4) and its agent memory thread (section 5).
+- **Shared collections:** `connections`, `datasets`, `datasource_inventories`, `skill_overrides`, and the `llm` document in `settings`.
 - **Both modes:** every insert into a private collection stamps `ownerId` with the caller's id, and every find, update, unset and delete ANDs `ownerId = <caller>` into its filter. A document with another `ownerId`, or none, is invisible to the caller. Upserts carry `ownerId`, so they can never take over another owner's document.
 - **Local mode:** the same stamp and filter, with the signed-in persona as the caller. Documents stored in local mode before it had sign-in have no `ownerId`; M13 gives them to Demo User (`ownerId: "local"`) at startup, so they stay with the user who had them. On an org server, a document with no `ownerId`, or with a local persona's, belongs to nobody who can sign in, so nobody sees it.
-- **Uniqueness and dedupe** on private collections apply per owner: agent names, metric names, the verified-query key `(sourceSessionId, sourceMessageAt)`.
+- **Uniqueness and dedupe** on private collections apply per owner: agent names, skill names, metric names, the verified-query key `(sourceSessionId, sourceMessageAt)`.
 - **In-memory state** keyed by id (preview sessions, in-flight eval runs, deep-analysis jobs) records the owner's id when it is created, and lookups filter by it: another user's entry answers as not found. The one-running-eval-run guard is kept per agent and owner. Work that outlives its request (eval runs, deep analysis) captures the user when it starts and re-enters it for every later step.
 - **Startup work** that walks a private collection across all owners (the verified-query field migration M4, the owner backfill M13, the workspace backfill) reads the store without the owner filter.
 

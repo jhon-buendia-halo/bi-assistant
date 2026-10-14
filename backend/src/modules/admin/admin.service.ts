@@ -23,7 +23,10 @@ import type {
 import { ROLE_IDS } from '../auth/permissions';
 import { DirectoryRepository } from '../auth/repositories/directory.repository';
 import { RolesRepository } from '../auth/repositories/roles.repository';
-import type { UserAgentDoc } from '../user-agents/entities/user-agent.entity';
+import type {
+  AgentConfig,
+  UserAgentDoc,
+} from '../user-agents/entities/user-agent.entity';
 import {
   AdminDirectoryReader,
   type DatasourceRef,
@@ -38,6 +41,49 @@ import type {
   GroupRoleMappingView,
 } from './entities/admin-views.entity';
 import { AllOwnersAgentsRepository } from './repositories/all-owners-agents.repository';
+import { AllOwnersSkillsRepository } from './repositories/all-owners-skills.repository';
+import { randomUUID } from 'node:crypto';
+import { resolveSkillLinkNames } from '../../mastra/agent-links';
+import { SKILL_LIMITS } from '../skills/entities/skill.entity';
+
+/** `name`, or `name-2`, `name-3`, … when the new owner already has it. */
+function freeSkillName(name: string, taken: ReadonlySet<string>): string {
+  if (!taken.has(name)) return name;
+  for (let n = 2; ; n++) {
+    const suffix = `-${n}`;
+    const candidate = `${name.slice(0, SKILL_LIMITS.name - suffix.length)}${suffix}`;
+    if (!taken.has(candidate)) return candidate;
+  }
+}
+
+/** The agent's skill ids replaced by the copies' in draft, Live and copies. */
+function remapSkills(
+  agent: UserAgentDoc,
+  copied: ReadonlyMap<string, string>,
+  renamed: ReadonlyMap<string, string> = new Map(),
+): Partial<UserAgentDoc> {
+  if (!copied.size) return {};
+  const remap = (id: string) => copied.get(id) ?? id;
+  // A copy under a new name: the instructions' links follow it (ADR-0023).
+  const relink = (config: AgentConfig): AgentConfig => ({
+    ...config,
+    instructions: resolveSkillLinkNames(config.instructions, renamed),
+    ...(config.skills ? { skills: config.skills.map(remap) } : {}),
+  });
+  return {
+    draft: relink(agent.draft),
+    ...(agent.live ? { live: relink(agent.live) } : {}),
+    ...(agent.liveSkills
+      ? {
+          liveSkills: agent.liveSkills.map((copy) => ({
+            ...copy,
+            id: remap(copy.id),
+            name: renamed.get(copy.name) ?? copy.name,
+          })),
+        }
+      : {}),
+  };
+}
 
 /** A role to assign or map, validated (api.md 79). */
 interface RoleSpec {
@@ -101,6 +147,7 @@ export class AdminService {
     @Inject(CONNECTIONS_STORE)
     private readonly connections: DocStore<DatasourceRef>,
     private readonly agents: AllOwnersAgentsRepository,
+    private readonly skills: AllOwnersSkillsRepository,
     @Inject(DOC_STORE_TRANSACTIONS)
     private readonly transactions: DocStoreTransactions,
     private readonly reader: AdminDirectoryReader,
@@ -307,8 +354,38 @@ export class AdminService {
     }
 
     await this.transactions.run(async () => {
+      // The skills the drafts name are copied to the new owner, once each,
+      // under a free name (data-model 3.10).
+      const copied = new Map<string, string>();
+      const renamed = new Map<string, string>();
+      const takenSkills = new Set(
+        (await this.skills.allOf(toUser.id)).map((skill) => skill.name),
+      );
       for (const agent of moving) {
-        await this.agents.moveTo(agent.id, toUser.id);
+        for (const id of agent.draft?.skills ?? []) {
+          if (copied.has(id)) continue;
+          const source = await this.skills.ofOwner(id, agent.ownerId ?? '');
+          if (!source) continue;
+          const name = freeSkillName(source.name, takenSkills);
+          takenSkills.add(name);
+          if (name !== source.name) renamed.set(source.name, name);
+          const copy = await this.skills.insert({
+            id: randomUUID(),
+            name,
+            description: source.description,
+            body: source.body,
+            files: source.files.map((file) => ({ ...file })),
+            ownerId: toUser.id,
+          });
+          copied.set(id, copy.id);
+        }
+      }
+      for (const agent of moving) {
+        await this.agents.moveTo(
+          agent.id,
+          toUser.id,
+          remapSkills(agent, copied, renamed),
+        );
         await this.activity.record('agent.transferred', {
           actorId: adminId,
           subjectId: agent.id,

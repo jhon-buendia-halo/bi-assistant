@@ -15,6 +15,7 @@ import { DeveloperSettingsModule } from './modules/developer-settings/developer-
 import { UiPreferencesModule } from './modules/ui-preferences/ui-preferences.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { SkillsModule } from './modules/skills/skills.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { AdminModule } from './modules/admin/admin.module';
     DatasetsModule,
     MastraModule,
     AgentsModule,
+    SkillsModule,
     VerifiedQueriesModule,
     MetricsModule,
     KnowledgeModule,

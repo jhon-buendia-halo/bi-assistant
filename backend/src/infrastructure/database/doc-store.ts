@@ -68,6 +68,8 @@ export const METRICS_STORE = 'DOC_STORE_metrics';
 export const EVAL_RUNS_STORE = 'DOC_STORE_eval_runs';
 export const KNOWLEDGE_STORE = 'DOC_STORE_knowledge';
 export const AGENTS_STORE = 'DOC_STORE_agents';
+export const SKILLS_STORE = 'DOC_STORE_skills';
+export const SKILL_OVERRIDES_STORE = 'DOC_STORE_skill_overrides';
 
 /** Identity and access collections, org server mode only (data-model 3.14). */
 export const USERS_STORE = 'DOC_STORE_users';
@@ -90,6 +92,7 @@ export const OWNED_METRICS_STORE = 'OWNED_DOC_STORE_metrics';
 export const OWNED_EVAL_RUNS_STORE = 'OWNED_DOC_STORE_eval_runs';
 export const OWNED_KNOWLEDGE_STORE = 'OWNED_DOC_STORE_knowledge';
 export const OWNED_AGENTS_STORE = 'OWNED_DOC_STORE_agents';
+export const OWNED_SKILLS_STORE = 'OWNED_DOC_STORE_skills';
 
 /** Each private collection's owned token and the raw store it wraps. */
 export const PRIVATE_COLLECTIONS: { owned: string; raw: string }[] = [
@@ -99,6 +102,7 @@ export const PRIVATE_COLLECTIONS: { owned: string; raw: string }[] = [
   { owned: OWNED_EVAL_RUNS_STORE, raw: EVAL_RUNS_STORE },
   { owned: OWNED_KNOWLEDGE_STORE, raw: KNOWLEDGE_STORE },
   { owned: OWNED_AGENTS_STORE, raw: AGENTS_STORE },
+  { owned: OWNED_SKILLS_STORE, raw: SKILLS_STORE },
 ];
 
 export function isExistsCondition(v: FilterValue): v is ExistsCondition {

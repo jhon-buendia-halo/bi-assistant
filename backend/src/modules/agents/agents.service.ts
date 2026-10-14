@@ -9,11 +9,25 @@ import {
   type AgentSkillsView,
 } from '../../mastra/app-skills';
 import { RequestContext } from '@mastra/core/request-context';
+import {
+  renderSkillDocument,
+  type AgentSkill,
+} from '../../mastra/agent-skills';
+import { toSkillCopy, type SkillDoc } from '../skills/entities/skill.entity';
 import { MastraService } from '../../mastra/mastra.service';
 import {
   AGENT_TOOLS_CONTEXT_KEY,
   isFullSelection,
 } from '../../mastra/agent-tools';
+import {
+  ALWAYS_ON_TOOLS,
+  effectiveOptionalTools,
+  LIBRARY_TOOLS,
+  optionalToolOf,
+  parseLinks,
+} from '../../mastra/agent-links';
+import { effortLevelsFor, nearestEffort } from '../../mastra/effort-levels';
+import { LlmService } from '../llm/llm.service';
 import { ASSISTANT_EVAL_SETS } from '../../mastra/evals/assistant.evals';
 import {
   effectiveConfig,
@@ -99,6 +113,29 @@ export interface AgentEvalSet {
   cases: AgentEvalCase[];
 }
 
+/** One library tool of a user agent and how it reaches the agent (api.md 34). */
+export interface AgentToolLink {
+  name: string;
+  status: 'always-on' | 'linked' | 'not-linked';
+  linkedVia: { instructions: boolean; skills: string[] };
+}
+
+/** The LLM an agent runs on; never carries the key (api.md 34). */
+export interface AgentLlmDetail {
+  provider: string | null;
+  providerName: string | null;
+  model: string | null;
+  apiKeyConfigured: boolean;
+  maxOutputTokens: number | null;
+  reasoningEffort: string | null;
+}
+
+const PROVIDER_NAMES: Record<string, string> = {
+  openai: 'OpenAI',
+  anthropic: 'Anthropic',
+  lenai: 'LenAI',
+};
+
 export interface AgentDetail extends AgentSummary {
   /** User agents only. */
   draft?: AgentConfig;
@@ -110,6 +147,10 @@ export interface AgentDetail extends AgentSummary {
   memory: AgentMemoryDetail | null;
   /** Null when no LLM settings are saved, since the model resolves lazily. */
   model: { id: string; provider: string } | null;
+  /** User agents only: every library tool and how it is linked. */
+  toolLinks?: AgentToolLink[];
+  /** The LLM settings the agent runs on, an agent's overrides applied. */
+  llm: AgentLlmDetail;
 }
 
 @Injectable()
@@ -117,6 +158,7 @@ export class AgentsService {
   constructor(
     private readonly mastra: MastraService,
     private readonly userAgents: UserAgentsService,
+    private readonly llm?: LlmService,
   ) {}
 
   /** Built-in and user agents together, alphabetical by name (R48). */
@@ -132,12 +174,14 @@ export class AgentsService {
         this.summarize(key, agent, pins),
       ),
     );
+    const skillsById = await this.userAgents.skillsById();
     const users = await Promise.all(
       docs.map(async (doc) =>
         summarizeUserAgent(
           doc,
           await this.assistantToolNames(doc),
           datasetNames,
+          skillsById,
         ),
       ),
     );
@@ -149,19 +193,24 @@ export class AgentsService {
    * (R49). Null when neither matches.
    */
   async get(key: string): Promise<AgentDetail | null> {
-    if (this.isBuiltin(key)) return this.builtinDetail(key);
+    if (this.isBuiltin(key)) {
+      const detail = await this.builtinDetail(key);
+      return detail && { ...detail, llm: await this.llmDetail() };
+    }
     const doc = await this.userAgents.get(key);
     if (!doc) return null;
 
     // The assistant as this agent's tool selection gives it (R49).
+    const skills = await this.callSkills(doc);
     const assistant = await this.builtinDetail(
       OFFICIAL_AGENT_KEY,
-      toolSelectionContext(doc),
+      toolSelectionContext(doc, skills),
     );
     const summary = summarizeUserAgent(
       doc,
       await this.assistantToolNames(doc),
       await this.userAgents.datasetNames(),
+      await this.userAgents.skillsById(),
     );
     return {
       ...summary,
@@ -171,7 +220,48 @@ export class AgentsService {
       toolDetails: assistant?.toolDetails ?? [],
       memory: assistant?.memory ?? null,
       model: assistant?.model ?? null,
+      toolLinks: toolLinks(doc, skills),
+      llm: await this.llmDetail(effectiveConfig(doc)),
     };
+  }
+
+  /**
+   * The settings an agent's turns run on (api.md 34): the saved provider,
+   * model and key state, with the agent's model and effort overrides; the
+   * effort is moved onto the model's own levels as a call does. The
+   * assistant sets no output cap, so `maxOutputTokens` is null.
+   */
+  private async llmDetail(config?: AgentConfig): Promise<AgentLlmDetail> {
+    const view = await safe(() => this.llm?.getView());
+    if (!view?.provider || !view.model) {
+      return {
+        provider: null,
+        providerName: null,
+        model: null,
+        apiKeyConfigured: false,
+        maxOutputTokens: null,
+        reasoningEffort: null,
+      };
+    }
+    const model = config?.model || view.model;
+    const wanted = config?.reasoningEffort ?? view.reasoningEffort;
+    const levels = effortLevelsFor(model);
+    return {
+      provider: view.provider,
+      providerName: PROVIDER_NAMES[view.provider] ?? view.provider,
+      model,
+      apiKeyConfigured: view.configured,
+      maxOutputTokens: null,
+      reasoningEffort: levels.length ? nearestEffort(levels, wanted) : null,
+    };
+  }
+
+  /**
+   * The in-app skills a user agent's calls carry: its Live copies, else the
+   * current skills its draft names (agents.md 4.2).
+   */
+  private callSkills(doc: UserAgentDoc): Promise<AgentSkill[]> {
+    return this.inAppSkillsOf(doc);
   }
 
   /**
@@ -179,7 +269,45 @@ export class AgentsService {
    * 34a). A user agent runs on the assistant, so it shows the assistant's.
    */
   async skills(key: string): Promise<AgentSkillsView> {
-    return agentSkillsView(await this.skillsAgent(key));
+    const view = agentSkillsView(await this.skillsAgent(key));
+    if (this.isBuiltin(key)) return view;
+    // A user agent's own skills follow the assistant's (api.md 34a).
+    const own = await this.inAppSkills(key);
+    return {
+      ...view,
+      skills: [
+        ...view.skills,
+        ...own.map((skill) => ({
+          name: skill.name,
+          description: skill.description,
+          level: 'in-app' as const,
+          loading: 'on-demand' as const,
+          overrides: [],
+          files: inAppFiles(skill).map(({ path, content }) => ({
+            path,
+            size: Buffer.byteLength(content),
+          })),
+          warnings: [],
+        })),
+      ],
+    };
+  }
+
+  /**
+   * A user agent's in-app skills as its sessions see them: the copies its
+   * Live version runs on, else the current skills its draft names, sorted by
+   * name (api.md 34a). Empty for a built-in agent or an unknown id.
+   */
+  private async inAppSkills(key: string): Promise<AgentSkill[]> {
+    const doc = await this.userAgents.get(key);
+    return doc ? this.inAppSkillsOf(doc) : [];
+  }
+
+  private async inAppSkillsOf(doc: UserAgentDoc): Promise<AgentSkill[]> {
+    const skills = doc.live
+      ? (doc.liveSkills ?? [])
+      : (await this.userAgents.skillsFor(doc.draft.skills)).map(toSkillCopy);
+    return [...skills].sort((a, b) => (a.name < b.name ? -1 : 1));
   }
 
   /** One file of one of an agent's skills (api.md 34b). */
@@ -189,6 +317,20 @@ export class AgentsService {
     path: string,
   ): Promise<{ path: string; size: number; content: string | null }> {
     const agent = await this.skillsAgent(key);
+    const own = this.isBuiltin(key)
+      ? undefined
+      : (await this.inAppSkills(key)).find((skill) => skill.name === name);
+    if (own) {
+      const file = inAppFiles(own).find((entry) => entry.path === path);
+      if (!file) {
+        throw new NotFoundException(`Skill "${name}" has no file "${path}"`);
+      }
+      return {
+        path: file.path,
+        size: Buffer.byteLength(file.content),
+        content: file.content,
+      };
+    }
     const result = agentSkillFile(agent, name, path ?? '');
     if (!('error' in result)) return result;
     if (result.error === 'no-skill') {
@@ -244,18 +386,22 @@ export class AgentsService {
   }
 
   private async userSummary(doc: UserAgentDoc): Promise<AgentSummary> {
-    const [tools, datasetNames] = await Promise.all([
+    const [tools, datasetNames, skillsById] = await Promise.all([
       this.assistantToolNames(doc),
       this.userAgents.datasetNames(),
+      this.userAgents.skillsById(),
     ]);
-    return summarizeUserAgent(doc, tools, datasetNames);
+    return summarizeUserAgent(doc, tools, datasetNames, skillsById);
   }
 
   /** The assistant's tools that a user agent's effective config selects. */
   private async assistantToolNames(doc: UserAgentDoc): Promise<string[]> {
     const assistant = this.mastra.listAgents()[OFFICIAL_AGENT_KEY];
     if (!assistant) return [];
-    const requestContext = toolSelectionContext(doc);
+    const requestContext = toolSelectionContext(
+      doc,
+      await this.callSkills(doc),
+    );
     return Object.keys(
       (await safe(() => assistant.listTools({ requestContext }))) ?? {},
     ).sort();
@@ -268,7 +414,7 @@ export class AgentsService {
   private async builtinDetail(
     key: string,
     requestContext?: RequestContext,
-  ): Promise<AgentDetail | null> {
+  ): Promise<Omit<AgentDetail, 'llm'> | null> {
     const agent = this.mastra.listAgents()[key];
     if (!agent) return null;
 
@@ -345,6 +491,7 @@ function summarizeUserAgent(
   doc: UserAgentDoc,
   assistantTools: string[],
   datasetNames: Set<string>,
+  skillsById?: ReadonlyMap<string, SkillDoc>,
 ): AgentSummary {
   const config = effectiveConfig(doc);
   return {
@@ -357,11 +504,19 @@ function summarizeUserAgent(
     status: doc.live ? 'live' : 'draft',
     pinned: Boolean(doc.pinned),
     owner: 'You',
-    hasUnpublishedChanges: hasUnpublishedChanges(doc),
+    hasUnpublishedChanges: hasUnpublishedChanges(doc, skillsById),
     missingDatasets: missingDatasets(config, datasetNames),
     datasets: [...config.datasets],
     starterQuestions: [...config.starterQuestions],
   };
+}
+
+/** `SKILL.md` as rendered (agents.md 7.3), then the reference files. */
+function inAppFiles(skill: AgentSkill): { path: string; content: string }[] {
+  return [
+    { path: 'SKILL.md', content: renderSkillDocument(skill) },
+    ...skill.files,
+  ];
 }
 
 type AgentLike = ReturnType<MastraService['listAgents']>[string];
@@ -371,13 +526,73 @@ type AgentLike = ReturnType<MastraService['listAgents']>[string];
  * configuration (Live, else draft), the way its sessions' turns get it
  * (agents.md 4.2). It carries none when the agent keeps every tool.
  */
-function toolSelectionContext(doc: UserAgentDoc): RequestContext {
+function toolSelectionContext(
+  doc: UserAgentDoc,
+  skills: readonly AgentSkill[],
+): RequestContext {
   const requestContext = new RequestContext();
-  const tools = effectiveConfig(doc).tools;
-  if (tools && !isFullSelection(tools)) {
-    requestContext.set(AGENT_TOOLS_CONTEXT_KEY, [...tools]);
+  const direct = effectiveConfig(doc).tools;
+  if (direct) {
+    const tools = effectiveOptionalTools(direct, skills);
+    if (!isFullSelection(tools)) {
+      requestContext.set(AGENT_TOOLS_CONTEXT_KEY, tools);
+    }
   }
   return requestContext;
+}
+
+/**
+ * Every library tool of a user agent with its status and where the link
+ * comes from, for the Tools and Graph tabs: the Live version, else the
+ * draft. A tool the effective selection gives without a link (a config
+ * saved before ADR-0023) shows as `linked` with no source.
+ */
+function toolLinks(
+  doc: UserAgentDoc,
+  skills: readonly AgentSkill[],
+): AgentToolLink[] {
+  const config = effectiveConfig(doc);
+  const fromInstructions = parseLinks(config.instructions).tools;
+  const fromSkills = skills.map((skill) => ({
+    name: skill.name,
+    tools: parseLinks(skill.body).tools,
+  }));
+  const selected = new Set<string>(
+    effectiveOptionalTools(config.tools, skills),
+  );
+  // Linking one tool of a pair (create_visual / update_visual) links both.
+  const sameGroup = (a: string, b: string) =>
+    a === b || (!!optionalToolOf(a) && optionalToolOf(a) === optionalToolOf(b));
+  return [...LIBRARY_TOOLS]
+    .sort((a, b) => a.localeCompare(b))
+    .map((name) => {
+      const instructions = fromInstructions.some((t) => sameGroup(t, name));
+      const via = fromSkills
+        .filter((skill) => skill.tools.some((t) => sameGroup(t, name)))
+        .map((skill) => skill.name)
+        .sort((a, b) => a.localeCompare(b));
+      const optional = optionalToolOf(name);
+      const status: AgentToolLink['status'] = ALWAYS_ON_TOOLS.includes(name)
+        ? 'always-on'
+        : optional && selected.has(optional)
+          ? 'linked'
+          : 'not-linked';
+      return {
+        name,
+        status,
+        linkedVia: {
+          instructions: ALWAYS_ON_TOOLS.includes(name)
+            ? fromInstructions.includes(name)
+            : instructions,
+          skills: ALWAYS_ON_TOOLS.includes(name)
+            ? fromSkills
+                .filter((skill) => skill.tools.includes(name))
+                .map((skill) => skill.name)
+                .sort((a, b) => a.localeCompare(b))
+            : via,
+        },
+      };
+    });
 }
 
 /** Agent accessors may be dynamic and throw without a request context. */

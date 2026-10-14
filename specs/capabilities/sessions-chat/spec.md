@@ -187,7 +187,8 @@ Agents are defined in [agents-evals](../agents-evals/spec.md) (R43-R52); decisio
 - R54. Every assistant call made for a session bound to an agent that still exists (chat turns, the grounding pass and deep-analysis calls) SHALL apply the agent's **current Live version**:
   - its instructions, when not empty, as a system context block labelled as user-supplied, after every other context block (R24; the block is in [agents.md](../../system/agents.md) section 4.1, and only the grounding pass's own nudge follows it);
   - its model override and reasoning-effort override, when set (R56);
-  - its tool selection: only the tools it selects are offered, and the prompt's tool list and working rules match them ([agents.md](../../system/agents.md) 2.1).
+  - its tool selection: only the tools it selects are offered, and the prompt's tool list and working rules match them ([agents.md](../../system/agents.md) 2.1);
+  - its skills: the copies taken when it was published, listed in the assistant's skill catalog and read from those copies ([agents.md](../../system/agents.md) 7.3).
 
   Publishing a new version SHALL change the next turn of every session bound to the agent. A draft SHALL never apply to a session. The only exception is the agent editor's preview chat, an in-memory session that runs the draft (agents-evals R60, R61).
 - R55. An agent's instructions SHALL NOT relax any rule enforced in code: the read-only SQL guard, dataset scoping (R22), SQL repair (R25-R28), the grounding pass (R19) and the result-quality warnings hold whatever the instructions say. A write statement attempted under an agent's instructions SHALL be rejected by the read-only guard and shown as a failed tool call.
@@ -553,6 +554,17 @@ Feature: Sessions started from an agent
     And the page header shows "Cup historian · agent deleted"
     When I send "And in 2010?"
     Then the model received no agent instructions
+
+  Scenario: The agent's tool selection and skills apply to every turn
+    Given a skill "fiscal-calendar" with the description "Use when a question names a fiscal year."
+    And a Live user agent "Finance helper" over "World Cup Core" that offers only "Sample rows" and has the skill "fiscal-calendar"
+    And I started a chat with "Finance helper"
+    When I send "Who won in 2014?"
+    Then the model was offered "sample_rows" but not "ask_clarification", "create_visual" or "update_visual"
+    And the model's catalog lists "fiscal-calendar" at "/in-app-skills/fiscal-calendar/SKILL.md"
+    When I send "And in 2010?"
+    Then the model was offered "sample_rows" but not "ask_clarification", "create_visual" or "update_visual"
+    And the model's catalog lists "fiscal-calendar" at "/in-app-skills/fiscal-calendar/SKILL.md"
 ```
 
 ### Feature: Skills the assistant is given

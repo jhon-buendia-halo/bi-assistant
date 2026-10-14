@@ -57,6 +57,11 @@ import { AgentDetail } from './features/agents/components/agent-detail/agent-det
 import { EvalTrace } from './features/agents/components/eval-trace/eval-trace';
 import { AgentEditor } from './features/agents/components/agent-editor/agent-editor';
 import { AgentPreview } from './features/agents/components/agent-preview/agent-preview';
+import { SkillsLibrary } from './features/agents/components/skills-library/skills-library';
+import { SkillEditor } from './features/agents/components/skill-editor/skill-editor';
+import { BuiltInSkillEditor } from './features/agents/components/builtin-skill-editor/builtin-skill-editor';
+import { BuiltInSkillEditorService } from './features/agents/services/builtin-skill-editor.service';
+import { SkillEditorService } from './features/agents/services/skill-editor.service';
 import { AgentEditorService } from './features/agents/services/agent-editor.service';
 import { Agent } from './features/agents/services/agents-api.service';
 import { agentKind } from './features/agents/services/agent-hub.util';
@@ -110,6 +115,9 @@ type MainView =
   | 'agents'
   | 'agent-detail'
   | 'agent-editor'
+  | 'skills'
+  | 'skill-editor'
+  | 'builtin-skill-editor'
   | 'knowledge'
   | 'sessions'
   | 'conversation-new'
@@ -140,6 +148,9 @@ const AREA_OF_VIEW: Partial<Record<MainView, Area>> = {
   agents: 'agents',
   'agent-detail': 'agents',
   'agent-editor': 'agents',
+  skills: 'agents',
+  'skill-editor': 'agents',
+  'builtin-skill-editor': 'agents',
   knowledge: 'knowledge',
   sessions: 'sessions',
   'conversation-new': 'sessions',
@@ -169,6 +180,9 @@ const RIGHT_PANEL_WIDTH_STORAGE_KEY = 'questions-to-insights:right-panel-width';
     AgentDetail,
     EvalTrace,
     AgentEditor,
+    SkillsLibrary,
+    SkillEditor,
+    BuiltInSkillEditor,
     AgentPreview,
     KnowledgeList,
     CatalogBrowser,
@@ -277,9 +291,51 @@ export class App {
    * (R59). Leaving destroys the editor, which discards its preview (R61).
    */
   private confirmLeaveAgentEditor(): boolean {
-    if (this.settingsOpen() || this.mainView() !== 'agent-editor') return true;
-    if (!this.agentEditor.changed()) return true;
+    if (this.settingsOpen()) return true;
+    const view = this.mainView();
+    const changed =
+      view === 'agent-editor'
+        ? this.agentEditor.changed()
+        : view === 'skill-editor'
+          ? this.skillEditor.changed()
+          : view === 'builtin-skill-editor' &&
+            this.builtInSkillEditor.changed();
+    if (!changed) return true;
     return window.confirm('Discard unsaved changes?');
+  }
+
+  readonly skillEditor = inject(SkillEditorService);
+  readonly builtInSkillEditor = inject(BuiltInSkillEditorService);
+  /** The built-in skill open in its editor. */
+  readonly editingBuiltInName = signal<string | null>(null);
+  /** The skill open in the skill editor; null = a new skill. */
+  readonly editingSkillId = signal<string | null>(null);
+
+  /** Skills on the hub, Back in the skill editor, or deleting a skill. */
+  openSkillsLibrary(): void {
+    if (!this.confirmLeaveAgentEditor()) return;
+    this.mainView.set('skills');
+  }
+
+  /** New skill, or a row in the library. */
+  openSkillEditor(skillId: string | null): void {
+    this.editingSkillId.set(skillId);
+    this.mainView.set('skill-editor');
+  }
+
+  /** A built-in row in the library. */
+  openBuiltInSkillEditor(name: string): void {
+    this.editingBuiltInName.set(name);
+    this.mainView.set('builtin-skill-editor');
+  }
+
+  /** An editor is open: its unsaved changes are asked about before leaving. */
+  private inEditor(): boolean {
+    return (
+      this.mainView() === 'agent-editor' ||
+      this.mainView() === 'skill-editor' ||
+      this.mainView() === 'builtin-skill-editor'
+    );
   }
 
   readonly agentLabel = sessionAgentLabel;
@@ -789,7 +845,7 @@ export class App {
           this.activeVisualization.set(null);
           this.visualizationError.set(null);
           // The agent editor is never left without asking (agents-evals R59).
-          if (this.mainView() !== 'agent-editor') this.mainView.set('sessions');
+          if (!this.inEditor()) this.mainView.set('sessions');
         }
         this.toast.success(res.message);
       },
@@ -985,14 +1041,13 @@ export class App {
   selectArea(area: Area): void {
     // The rail is a way out of the agent editor, Agents included: it returns
     // to the hub (agents-evals R59).
-    const leavingEditor =
-      !this.settingsOpen() && this.mainView() === 'agent-editor';
+    const leavingEditor = !this.settingsOpen() && this.inEditor();
     const alreadyShown = this.currentArea() === area && !leavingEditor;
     if (!alreadyShown && !this.confirmLeaveAgentEditor()) return;
     if (area === 'settings') {
       // Settings covers the main view; the editor closes rather than wait
       // behind it, so its preview never shows beside a settings form.
-      if (this.mainView() === 'agent-editor') this.mainView.set('agents');
+      if (this.inEditor()) this.mainView.set('agents');
       this.settingsOpen.set(true);
       return;
     }

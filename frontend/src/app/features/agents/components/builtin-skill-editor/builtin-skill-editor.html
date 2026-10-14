@@ -1,0 +1,178 @@
+<div class="flex flex-col">
+  <button type="button" (click)="back.emit()" class="btn btn-ghost w-fit">
+    <lucide-angular [img]="ArrowLeft" [size]="15" />
+    <span>Back</span>
+  </button>
+
+  <div class="mt-4 flex flex-wrap items-center gap-3">
+    <h2
+      class="min-w-0 truncate font-mono text-[24px] leading-8 font-light tracking-[0.12px] text-fg-strong"
+    >
+      {{ skillName() }}
+    </h2>
+    <span class="chip">Built-in</span>
+    @if (editor.modified()) {
+      <span class="chip chip-warning">Modified</span>
+    }
+    @if (editor.canEdit()) {
+      <div class="ml-auto flex shrink-0 items-center gap-2">
+        @if (editor.modified()) {
+          <button
+            type="button"
+            data-testid="builtin-skill-reset"
+            (click)="reset()"
+            [disabled]="editor.resetting() || editor.loading()"
+            class="btn btn-secondary"
+          >
+            <lucide-angular [img]="RotateCcw" [size]="14" />
+            <span>Reset to built-in</span>
+          </button>
+        }
+        <button
+          type="button"
+          data-testid="builtin-skill-save"
+          (click)="save()"
+          [disabled]="!editor.canSave()"
+          class="btn btn-primary"
+        >
+          @if (editor.saving()) {
+            <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+            <span>Saving…</span>
+          } @else {
+            <span>Save</span>
+          }
+        </button>
+      </div>
+    }
+  </div>
+
+  @if (editor.loading()) {
+    <div class="mt-10 flex items-center gap-2.5 text-fg-muted">
+      <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
+      <span>Loading skill…</span>
+    </div>
+  } @else if (editor.loadError(); as err) {
+    <p
+      class="mt-8 rounded-md bg-danger-soft px-3 py-2.5 text-[13px] text-on-danger-soft"
+    >
+      {{ err }}
+    </p>
+  } @else {
+    <div
+      data-testid="builtin-skill-banner"
+      class="mt-6 flex flex-col items-start gap-1 rounded-md bg-warning-soft px-3 py-2.5 text-[13px] text-on-warning-soft"
+    >
+      <p>{{ banner }}</p>
+      @if (editor.builtInChanged()) {
+        <p data-testid="builtin-skill-drift">{{ driftNotice }}</p>
+        <button
+          type="button"
+          data-testid="builtin-skill-show-shipped"
+          (click)="editor.toggleShipped()"
+          class="btn btn-ghost"
+        >
+          {{
+            editor.showShipped()
+              ? "Hide the built-in version"
+              : "Show the built-in version"
+          }}
+        </button>
+      }
+    </div>
+
+    <div class="card mt-4 flex flex-col gap-5 p-6">
+      <div class="flex flex-col gap-1.5">
+        <label for="builtin-skill-description" class="field-label"
+          >Description</label
+        >
+        <textarea
+          id="builtin-skill-description"
+          rows="2"
+          [maxLength]="limits.description"
+          [value]="editor.form().description"
+          [readOnly]="!editor.canEdit()"
+          (input)="onText('description', $event)"
+          class="field resize-y"
+        ></textarea>
+        <span
+          data-testid="builtin-skill-description-count"
+          class="self-end text-[12px] text-fg-muted"
+          >{{ editor.form().description.length }}/{{ limits.description }}</span
+        >
+      </div>
+
+      <div class="flex flex-col gap-1.5">
+        <h3
+          class="text-[12px] font-medium tracking-wider text-fg-muted uppercase"
+        >
+          What the agent sees
+        </h3>
+        <div
+          data-testid="builtin-skill-catalog-preview"
+          class="rounded-lg bg-surface-muted p-3 font-mono text-[12px] text-fg"
+        >
+          <div>{{ skillName() }}</div>
+          <div class="text-fg-muted">
+            {{ editor.form().description.trim() }}
+          </div>
+        </div>
+      </div>
+
+      <div class="flex flex-col gap-1.5">
+        <label for="builtin-skill-body" class="field-label">Body</label>
+        <textarea
+          id="builtin-skill-body"
+          rows="16"
+          [maxLength]="limits.body"
+          [value]="editor.form().body"
+          [readOnly]="!editor.canEdit()"
+          (input)="onText('body', $event)"
+          class="field resize-y font-mono text-[13px]"
+        ></textarea>
+        <span class="self-end text-[12px] text-fg-muted"
+          >{{ editor.form().body.length.toLocaleString("en-US") }}/{{
+            limits.body.toLocaleString("en-US")
+          }}</span
+        >
+      </div>
+
+      @if (editor.form().files.length > 0) {
+        <fieldset class="flex flex-col gap-3">
+          <legend class="field-label mb-1.5">Files</legend>
+          @for (file of editor.form().files; track file.path; let i = $index) {
+            <div class="flex flex-col gap-2">
+              <span class="font-mono text-[12px] text-fg-muted">{{
+                file.path
+              }}</span>
+              <textarea
+                rows="10"
+                [attr.aria-label]="'Content of ' + file.path"
+                [maxLength]="limits.fileContent"
+                [value]="file.content"
+                [readOnly]="!editor.canEdit()"
+                (input)="onFile(i, $event)"
+                class="field resize-y font-mono text-[13px]"
+              ></textarea>
+            </div>
+          }
+        </fieldset>
+      }
+    </div>
+
+    @if (editor.showShipped() && editor.skill(); as skill) {
+      <div
+        data-testid="builtin-skill-shipped"
+        class="mt-4 flex flex-col gap-3 rounded-lg bg-surface-muted p-4 font-mono text-[12px] text-fg"
+      >
+        <div class="text-fg-muted">{{ skill.builtIn.description }}</div>
+        <pre class="whitespace-pre-wrap">{{ skill.builtIn.body }}</pre>
+        @for (file of skill.builtIn.files; track file.path) {
+          <div>
+            <div class="text-fg-muted">{{ file.path }}</div>
+            <pre class="whitespace-pre-wrap">{{ file.content }}</pre>
+          </div>
+        }
+      </div>
+    }
+  }
+</div>

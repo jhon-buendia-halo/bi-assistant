@@ -8,6 +8,7 @@ import {
   readSkillFile,
   skillFiles,
 } from './app-skills';
+import { agentSkillsFrom, readInAppPath } from './agent-skills';
 
 /**
  * The assistant's skill tools (ADR-0020, agents.md 3.9 and 3.10): a
@@ -32,16 +33,24 @@ export type ReadResult =
  * regular file `skillFiles` lists inside one of `skills`' folders, so a
  * symbolic link or a path outside them is refused.
  */
-export function readSkillPath(skills: AppSkill[], path: string): ReadResult {
+export function readSkillPath(
+  skills: AppSkill[],
+  path: string,
+  agentSkills?: Parameters<typeof readInAppPath>[0],
+): ReadResult {
   const refused = {
     error: `Not a file of an installed skill: ${path}. Use the skill's location folder joined with the path SKILL.md names.`,
   };
+  // An in-app skill is answered from the call's copies, never from the disk
+  // (agents.md 3.9); any other `/in-app-skills/` path is refused.
+  const virtual = readInAppPath(agentSkills, path);
+  if (virtual !== undefined) return virtual ?? refused;
   if (typeof path !== 'string' || !isAbsolute(path)) return refused;
   const target = normalize(path);
   for (const skill of skills) {
     const inside = relative(skill.dir, target);
     if (!inside || inside.startsWith('..') || isAbsolute(inside)) continue;
-    const result = readSkillFile(skill.dir, inside.split(sep).join('/'));
+    const result = readSkillFile(skill.dir, inside.split(sep).join('/'), skill);
     if ('error' in result) return refused;
     if (result.content === null) {
       return {
@@ -161,8 +170,13 @@ export const RUN_SKILL_SCRIPT_DESCRIPTION =
  */
 export function skillToolsFor(
   agent: string,
-  skills = catalogSkills(agent),
+  fixed?: AppSkill[],
 ): Record<string, ReturnType<typeof createTool>> {
+  // The catalog is read per call (ADR-0022): an override saved in the app
+  // changes the description and the served files without a restart. The
+  // tools themselves depend only on which skills exist and have scripts.
+  const current = () => fixed ?? catalogSkills(agent);
+  const skills = current();
   if (!skills.length) return {};
   const readFile = createTool({
     id: 'read_file',
@@ -170,7 +184,17 @@ export function skillToolsFor(
     inputSchema: z.object({
       path: z.string().describe('Absolute path of the skill file to read'),
     }),
-    execute: ({ path }) => Promise.resolve(readSkillPath(skills, path)),
+    execute: ({ path }, context) =>
+      Promise.resolve(
+        readSkillPath(
+          current(),
+          path,
+          agentSkillsFrom(
+            (context as { requestContext?: { get(key: string): unknown } })
+              ?.requestContext,
+          ),
+        ),
+      ),
   });
   if (!skills.some((skill) => skillScripts(skill).length)) {
     return { read_file: readFile };
@@ -194,7 +218,7 @@ export function skillToolsFor(
         .describe('Arguments, one per item'),
     }),
     execute: async ({ skill, script, args }) => {
-      const resolved = resolveScript(skills, skill, script);
+      const resolved = resolveScript(current(), skill, script);
       if ('error' in resolved) return resolved;
       return runSkillScript(resolved.skill, resolved.script, args ?? []);
     },

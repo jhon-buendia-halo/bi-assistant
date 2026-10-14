@@ -9,6 +9,8 @@ import { MetricsRepository } from '../metrics/repositories/metrics.repository';
 import type { MetricDoc } from '../metrics/entities/metric.entity';
 import { SessionsRepository } from '../sessions/repositories/sessions.repository';
 import type { SessionDoc } from '../sessions/entities/session.entity';
+import { SkillsRepository } from '../skills/repositories/skills.repository';
+import type { SkillDoc } from '../skills/entities/skill.entity';
 import { UiPreferencesRepository } from '../ui-preferences/repositories/ui-preferences.repository';
 import { BuiltinAgentPinsRepository } from '../user-agents/repositories/builtin-agent-pins.repository';
 import { UserAgentsRepository } from '../user-agents/repositories/user-agents.repository';
@@ -153,6 +155,27 @@ describe('owner scoping of private collections', () => {
       get: () => repo.get('a1'),
       update: () => repo.update('a1', { pinned: true }),
       remove: () => repo.delete('a1'),
+    });
+  });
+
+  it('skills', async () => {
+    const { raw, owned } = stores<SkillDoc>('skills');
+    const repo = new SkillsRepository(owned);
+    const skill = (id: string): SkillDoc => ({
+      id,
+      name: 'fiscal-calendar',
+      description: 'Use when a question names a fiscal year.',
+      body: 'Our fiscal year starts on 1 July.',
+      files: [],
+    });
+    await expectPrivate({
+      raw,
+      create: () => repo.insert(skill('s1')),
+      legacy: skill('legacy'),
+      list: () => repo.list(),
+      get: () => repo.get('s1'),
+      update: () => repo.update('s1', { body: 'Changed.' }),
+      remove: () => repo.delete('s1'),
     });
   });
 

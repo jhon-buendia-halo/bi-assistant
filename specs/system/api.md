@@ -136,8 +136,8 @@ The renderer shows its own toast for any 403 (`You don't have permission to do t
 | Routes | Requirement |
 |---|---|
 | Every `/sessions` route (2.1), including the chat stream, feedback, visuals and deep analysis (2.7) | `use-agents` |
-| `GET /agents`, `GET /agents/:key`, `GET /agents/:key/skills`, `GET /agents/:key/skills/:name/file`, `GET /agents/:key/evals`, `PUT /agents/:key/pin` | `use-agents` |
-| `POST /agents`, `PUT /agents/:id/draft`, `POST /agents/:id/publish`, `DELETE /agents/:id`, `POST /agents/:key/evals/run`, `GET /agents/:key/evals/runs`, `GET /agents/:key/evals/runs/:jobId`, `GET /agents/:key/evals/runs/:jobId/download`, `DELETE /agents/:key/evals/runs/:jobId` | `create-agents` |
+| `GET /agents`, `GET /agents/:key`, `GET /agents/:key/skills`, `GET /agents/:key/skills/:name/file`, `GET /agents/:key/evals`, `PUT /agents/:key/pin`, `GET /skills`, `GET /skills/:id`, `GET /skills/built-in`, `GET /skills/built-in/:name` | `use-agents` |
+| `POST /skills`, `PUT /skills/:id`, `DELETE /skills/:id`, `POST /agents`, `PUT /agents/:id/draft`, `POST /agents/:id/publish`, `DELETE /agents/:id`, `POST /agents/:key/evals/run`, `GET /agents/:key/evals/runs`, `GET /agents/:key/evals/runs/:jobId`, `GET /agents/:key/evals/runs/:jobId/download`, `DELETE /agents/:key/evals/runs/:jobId` | `create-agents` |
 | Every `/knowledge` route (2.8) and every `/metrics` route (2.4) | `use-agents` |
 | `GET /datasources`, `GET /datasources/:id/inventory` | `use-agents` |
 | `POST /datasources`, `POST /datasources/test-connection`, `POST /datasources/rest/discover`, `DELETE /datasources/:id` | `manage-datasources` |
@@ -146,7 +146,7 @@ The renderer shows its own toast for any 403 (`You don't have permission to do t
 | Every `/testing-data` route (2.9) | `manage-datasources` |
 | `GET /llm/settings`, `GET /llm/effort-levels` | `use-agents` |
 | `PUT /llm/settings`, `PUT /llm/reasoning`, `POST /llm/test-connection` | `manage-llm` |
-| Every `/developer-settings` route (2.11) | `edit-policies` |
+| Every `/developer-settings` route (2.11); `PUT /skills/built-in/:name`, `DELETE /skills/built-in/:name` | `edit-policies` |
 | `GET /ui-preferences`, `PUT /ui-preferences` (2.12) | `use-agents` (each user's own theme and drawer state) |
 | `GET /auth/login`, `GET /auth/callback`, `POST /auth/logout`, `GET /auth/local/users`, `POST /auth/local/sign-in`, `POST /auth/local/sign-out`, `GET /me` (2.13) | public: no permission checked (`GET /me` answers 401 itself without an auth session) |
 | Every `/scim/v2` route (2.14) | the SCIM bearer token, no auth session |
@@ -457,14 +457,14 @@ Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra regi
 - For a user agent `key` equals `id`, and `name`, `description`, `datasets`, `starterQuestions` and `tools` come from the Live version when there is one, else the draft. For a built-in agent `status` is `builtin`, `hasUnpublishedChanges` is `false` and `datasets`, `starterQuestions` and `missingDatasets` are empty. `kind` is `official` for `assistant` and `system` for the other five.
 
 #### 34. `GET /agents/:key`
-- Response `200`: `AgentDetail = AgentSummary & { draft?: AgentConfig; live?: AgentConfig /* user agents only; shapes in data-model 3.10 */; instructions: string /* prompt flattened to text */; toolDetails: { name, description, inputs: string[] /* top-level input param names */ }[]; memory: { storage: string|null; lastMessages: number|false|null; semanticRecall: boolean; workingMemory: boolean; generateTitle: boolean } | null; model: { id: string; provider: string } | null /* null when no LLM settings saved */ }`.
-- A user agent runs on the assistant, so its `instructions`, `toolDetails`, `memory` and `model` describe the assistant, with the prompt and tools that the agent's tool selection gives it (Live version, else draft; [agents.md](agents.md) 2.1). Its own instructions are in `draft` and `live`.
+- Response `200`: `AgentDetail = AgentSummary & { draft?: AgentConfig; live?: AgentConfig /* user agents only; shapes in data-model 3.10 */; instructions: string /* prompt flattened to text */; toolDetails: { name, description, inputs: string[] /* top-level input param names */ }[]; memory: { storage: string|null; lastMessages: number|false|null; semanticRecall: boolean; workingMemory: boolean; generateTitle: boolean } | null; model: { id: string; provider: string } | null /* null when no LLM settings saved */; toolLinks?: { name: string; status: 'always-on'|'linked'|'not-linked'; linkedVia: { instructions: boolean; skills: string[] /* skill names, sorted */ } }[] /* user agents only: every library tool sorted by name, from the Live version, else the draft */; llm: { provider: string | null; providerName: string | null; model: string | null; apiKeyConfigured: boolean; maxOutputTokens: number | null; reasoningEffort: string | null } /* the effective LLM settings the agent resolves to; never the key; every field null/false when no LLM is saved */ }`.
+- A user agent runs on the assistant, so its `instructions`, `toolDetails`, `memory` and `model` describe the assistant, with the prompt and tools that the agent's tool selection gives it (Live version, else draft; [agents.md](agents.md) 2.1). Its own instructions are in `draft` and `live`, with links as written (R81). `toolLinks` (user agents) says why each library tool is there: `always-on` for `list_entities`, `describe_entity` and `run_readonly_sql`, `linked` when the instructions or a linked skill's body link it, else `not-linked`; the tools of its skills come from the Live copies, else the current skills. `llm.model` is the agent's own `model` override when a user agent sets one, else the configured model; `llm.reasoningEffort` is the agent's override, else the configured one. `llm` never carries the API key, only whether one is saved ([../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R87-R89).
 - Errors (Style B): `404 "Agent \"<key>\" not found"`. `:key` is resolved as a registry key first, then as a user-agent id.
 
 #### 34a. `GET /agents/:key/skills`
-- Response `200`: `AgentSkillsView`. A user agent runs on the assistant, so it answers with the assistant's skills. The levels, override rules and checks are in [agents.md](agents.md) 7.3; the response shows what the backend resolved when it started.
+- Response `200`: `AgentSkillsView`. A user agent runs on the assistant, so it answers with the assistant's skills, followed by its own in-app skills, sorted by name among themselves (level `in-app`, loading `on-demand`, no overrides or warnings): the `liveSkills` copies when it has a Live version, else the current skills its draft names. Their `files` are `SKILL.md` (rendered as in [agents.md](agents.md) 7.3) and the reference files, and 34b reads them. The levels, override rules and checks are in [agents.md](agents.md) 7.3; the response shows what the backend resolved when it started.
   ```ts
-  type SkillLevel = 'built-in' | 'user' | 'project';
+  type SkillLevel = 'built-in' | 'user' | 'project' | 'in-app'; // 'in-app' appears only in skills[], never in levels[]
   AgentSkillsView = {
     levels: { level: SkillLevel; path: string | null /* null for built-in, and for project when the variable is unset */; found: boolean }[]; // always the three, in this order
     skills: {
@@ -473,6 +473,7 @@ Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra regi
       overrides: SkillLevel[];      // lower levels that also hold a valid skill with this name, lowest first
       files: { path: string; size: number }[]; // every regular file in the folder, relative, '/'-separated; SKILL.md first, then sorted
       warnings: string[];           // agents.md 7.3
+      modified?: boolean;           // true when an in-app override of a built-in is served (data-model 3.10.2)
     }[];                            // sorted by name
     skipped: { name: string /* folder */; level: 'user' | 'project'; problems: string[] }[]; // sorted by level, then name
   }
@@ -509,17 +510,17 @@ Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra regi
 - Success: `{ ok:true, message:"Run deleted" }`. A run still `running`, or an unknown id, returns `{ ok:false, message:"Cannot delete a run that is still going" }` (the same message for both cases).
 
 #### 41. `POST /agents`
-- Body: `{ name: string; description?: string; instructions?: string; datasets?: string[]; starterQuestions?: string[]; model?: string; reasoningEffort?: 'low'|'medium'|'high'; tools?: ('sample_rows'|'ask_clarification'|'visuals')[] }`. Limits and normalisation: R43. `tools` omitted means every tool ([data-model.md](data-model.md) 3.10).
+- Body: `{ name: string; description?: string; instructions?: string /* may link skills and tools: [[skill:<name>]], [[tool:<name>]] */; datasets?: string[]; starterQuestions?: string[]; model?: string; reasoningEffort?: 'low'|'medium'|'high' }`. Limits and normalisation: R43. The agent's `tools` and `skills` are **derived from the links in `instructions`** and stored ([data-model.md](data-model.md) 3.10); a `tools` or `skills` field in the body is ignored.
 - Success: `{ ok:true, message:"Agent \"<name>\" saved as draft", agent: AgentSummary }`. The agent is a draft, not pinned.
-- Failures (Style A): `"Agent name is required"`; `"An agent named \"<name>\" already exists"`; `"Unknown tool \"<name>\""` for a `tools` entry that is not one of the three.
+- Failures (Style A): `"Agent name is required"`; `"An agent named \"<name>\" already exists"`; `"Unknown skill \"<name>\""` for a `[[skill:<name>]]` that is not one of the caller's in-app skills; `"Unknown tool \"<name>\""` for a `[[tool:<name>]]` that is not a library tool (`list_entities`, `describe_entity`, `sample_rows`, `run_readonly_sql`, `create_visual`, `update_visual`, `ask_clarification`); `"An agent can have at most 10 skills"`. Checked after the name checks, in this order: unknown skill, the 10-skill limit on the distinct linked skills, then unknown tool.
 
 #### 42. `PUT /agents/:id/draft`
 - Body: as endpoint 41. Replaces the whole draft; a Live version is untouched.
 - Success: `{ ok:true, message:"Draft saved", agent: AgentSummary }`.
-- Failures (Style A): `"Agent \"<id>\" not found"`; `"Agent name is required"`; `"An agent named \"<name>\" already exists"`; `"Unknown tool \"<name>\""`; `"Built-in agents can't be edited"` (`:id` is a registry key).
+- Failures (Style A): `"Agent \"<id>\" not found"`; `"Agent name is required"`; `"An agent named \"<name>\" already exists"`; `"Unknown skill \"<name>\""`; `"Unknown tool \"<name>\""`; `"An agent can have at most 10 skills"` (as 41); `"Built-in agents can't be edited"` (`:id` is a registry key).
 
 #### 43. `POST /agents/:id/publish`
-- No body. Copies the draft to the Live version and stamps `publishedAt`.
+- No body. Copies the draft to the Live version, copies the skills it names into `liveSkills` ([data-model.md](data-model.md) 3.10), and stamps `publishedAt`.
 - Success: `{ ok:true, message:"Agent \"<name>\" is Live", agent: AgentSummary }`.
 - Failures (Style A): `"Agent \"<id>\" not found"`; `"Select at least one dataset to publish"`; `"Agent name is required"`; `"Built-in agents can't be edited"`.
 
@@ -555,6 +556,61 @@ interface AssistantEvalCaseResult {
   error?: string; durationMs: number;
 }
 ```
+
+### 2.6.1 Skills
+
+Controller prefix `/skills`. Capability: agents-evals (R68-R74). In-app skills are private to their owner ([data-model.md](data-model.md) 3.10.1, 3.15): another user's skill answers as not found.
+
+| # | Method + path | Purpose | Style A |
+|---|---|---|---|
+| 94 | `GET /skills` | The caller's skills | no |
+| 95 | `GET /skills/:id` | One skill in full | no |
+| 96 | `POST /skills` | Create a skill | yes |
+| 97 | `PUT /skills/:id` | Save a skill | yes |
+| 98 | `DELETE /skills/:id` | Delete a skill | yes |
+| 99 | `GET /skills/built-in` | The built-in skills and their override state | no |
+| 100 | `GET /skills/built-in/:name` | One built-in skill, as served and as shipped | no |
+| 101 | `PUT /skills/built-in/:name` | Save an override | yes |
+| 102 | `DELETE /skills/built-in/:name` | Reset to the built-in | yes |
+
+The `built-in` routes are declared before `/skills/:id`.
+
+#### 94. `GET /skills`
+- Response `200`: `{ skills: SkillSummary[] }` sorted by `name`. `SkillSummary = { id, name, description, fileCount: number, agents: string[] /* names of the caller's agents whose draft or Live version names the skill, sorted; each is the agent's draft name */, tools: string[] /* the tools its body links, sorted, distinct */, updatedAt }`.
+
+#### 95. `GET /skills/:id`
+- Response `200`: `Skill = SkillSummary & { body: string; files: { path: string; content: string }[] }`.
+- Errors (Style B): `404 "Skill \"<id>\" not found"`.
+
+#### 96. `POST /skills`
+- Body: `{ name: string; description: string; body: string; files?: { path: string; content: string }[] }`. Name and description are trimmed.
+- Success: `{ ok:true, message:"Skill \"<name>\" created", skill: Skill }`.
+- Failures (Style A), checked in this order, the first that applies: `"Skill name is required"`; `"Use lowercase letters, digits and single hyphens in a skill name"`; `"A skill name is at most 64 characters"`; `"\"<name>\" is the name of a built-in skill"`; `"A skill named \"<name>\" already exists"`; `"The description must start with \"Use when\""`; `"The description is at most 300 characters"`; `"The body is empty"`; `"The body is at most 20,000 characters"`; `"A skill has at most 10 reference files"`; `"Name reference files reference/<file name>"`; `"Two reference files are named \"<path>\""`; `"\"<path>\" is at most 20,000 characters"`; `"The body names <path>, which this skill doesn't have"`; `"Skills can link tools only"` (the body has a `[[skill:…]]`); `"Unknown tool \"<name>\""` (a `[[tool:…]]` that is not in the library, as in 41).
+
+#### 97. `PUT /skills/:id`
+- Body: as 96. Replaces the whole skill; its id stays, so the agents that link it keep it. Live agents keep their copies until republished.
+- Success: `{ ok:true, message:"Skill saved", skill: Skill }`.
+- Failures (Style A): `"Skill \"<id>\" not found"`; as 96; `"\"<name>\" is linked by <agent names, comma-separated>. Unlink it first."` when the name changes while the draft of any of the caller's agents links the skill (agent names sorted).
+
+#### 98. `DELETE /skills/:id`
+- Success: `{ ok:true, message:"Skill \"<name>\" deleted" }`. Nothing else changes ([data-model.md](data-model.md) 3.10).
+- Failures (Style A): `"Skill \"<id>\" not found"`; `"\"<name>\" is linked by <agent names, comma-separated>. Unlink it first."` while the draft of any of the caller's agents links the skill (names sorted); Live agents don't block it.
+
+#### 99. `GET /skills/built-in`
+- Response `200`: `{ skills: BuiltInSkillSummary[] }` sorted by name. `BuiltInSkillSummary = { name, description /* as served */, loading: 'on-demand' | 'harness', agents: string[] /* registry keys, agents.md 7.4 */, modified: boolean, builtInChanged: boolean /* modified and the shipped built-in's hash differs from baseHash */, updatedAt: string | null /* the override's */ }`.
+
+#### 100. `GET /skills/built-in/:name`
+- Response `200`: `BuiltInSkill = BuiltInSkillSummary & { body: string; files: { path, content }[] /* as served */; builtIn: { description, body, files } /* as shipped */ }`.
+- Errors (Style B): `404 "Unknown built-in skill \"<name>\""`.
+
+#### 101. `PUT /skills/built-in/:name`
+- Body: `{ description: string; body: string; files: { path: string; content: string }[] }`. Saves the override (ADR-0022); it applies to the next call.
+- Success: `{ ok:true, message:"Built-in skill \"<name>\" saved", skill: BuiltInSkill }`.
+- Failures (Style A), the first that applies: `"Unknown built-in skill \"<name>\""`; `"The description must start with \"Use when\""`; `"The description is at most 300 characters"`; `"The body is empty"`; `"The body is at most 20,000 characters"`; `"<path> is not a file of this skill"`; `"<path> is missing (the skill it overrides has it)"`; `"\"<path>\" is at most 20,000 characters"`; `"<path> must use the placeholders {{a}}, {{b}}"` or `"<path> must use no placeholders"`.
+
+#### 102. `DELETE /skills/built-in/:name`
+- Success: `{ ok:true, message:"Built-in skill \"<name>\" reset" }`, also when there was no override.
+- Failures (Style A): `"Unknown built-in skill \"<name>\""`.
 
 ### 2.7 Deep analysis
 

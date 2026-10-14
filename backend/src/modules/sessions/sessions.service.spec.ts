@@ -106,6 +106,10 @@ describe('SessionsService streaming', () => {
         id: string;
         agentName?: string;
         live: Record<string, unknown> | null;
+        /** The copies taken at the last publish (ADR-0021). */
+        liveSkills?: Record<string, unknown>[];
+        /** The current skill documents the draft names (a preview). */
+        currentSkills?: Record<string, unknown>[];
       };
       /** Org server mode (admin R40): the turn runs as a signed-in user. */
       org?: boolean;
@@ -144,11 +148,21 @@ describe('SessionsService streaming', () => {
     const live = options.userAgent?.live;
     const userAgents = {
       ...userAgentsStub,
-      get: jest
+      get: jest.fn().mockResolvedValue(
+        live
+          ? {
+              id: options.userAgent!.id,
+              draft: live,
+              live,
+              ...(options.userAgent!.liveSkills
+                ? { liveSkills: options.userAgent!.liveSkills }
+                : {}),
+            }
+          : null,
+      ),
+      skillsFor: jest
         .fn()
-        .mockResolvedValue(
-          live ? { id: options.userAgent!.id, draft: live, live } : null,
-        ),
+        .mockResolvedValue(options.userAgent?.currentSkills ?? []),
     };
     const agent = {
       getMemory: jest.fn().mockResolvedValue({
@@ -665,6 +679,128 @@ describe('SessionsService streaming', () => {
         'Use describe_entity / run_readonly_sql to inspect and query them.',
       );
       expect(block1).toContain('Interactive visuals in this session');
+    });
+
+    it("puts the agent's skill copies on the turn, and none for a plain session (ADR-0021)", async () => {
+      const copy = {
+        id: 'skill-1',
+        name: 'fiscal-calendar',
+        description: 'Use when a question names a fiscal year.',
+        body: 'Our fiscal year starts on 1 July.',
+        files: [],
+      };
+      const { service, agent } = buildStreaming(answerStream([]), {
+        userAgent: {
+          id: 'agent-1',
+          live: { ...historian, skills: ['skill-1'] },
+          liveSkills: [copy],
+          // A later edit of the skill must not reach a Live agent.
+          currentSkills: [{ ...copy, body: 'Changed.' }],
+        },
+      });
+
+      await service.streamMessage('session-1', 'Who won in 2014?', () => {});
+
+      expect(turnOptions(agent).requestContext.get('agent-skills')).toEqual([
+        copy,
+      ]);
+
+      const plain = buildStreaming(answerStream([]), {
+        userAgent: { id: 'agent-1', live: historian },
+      });
+      await plain.service.streamMessage('session-1', 'Who?', () => {});
+      expect(
+        turnOptions(plain.agent).requestContext.get('agent-skills'),
+      ).toBeUndefined();
+    });
+
+    it('runs a preview on the current skills its draft names, skipping deleted ones', async () => {
+      const current = {
+        id: 'skill-1',
+        name: 'fiscal-calendar',
+        description: 'Use when a question names a fiscal year.',
+        body: 'Our fiscal year starts on 1 April.',
+        files: [],
+      };
+      const { service, agent } = buildStreaming(answerStream([]), {
+        preview: true,
+        userAgent: {
+          id: 'agent-1',
+          live: { ...historian, skills: ['skill-1', 'gone'] },
+          liveSkills: [{ ...current, body: 'Old.' }],
+          currentSkills: [{ ...current, ownerId: 'x' }],
+        },
+      });
+
+      await service.streamMessage('session-1', 'Who won in 2014?', () => {});
+
+      const skills = turnOptions(agent).requestContext.get('agent-skills') as {
+        body: string;
+      }[];
+      expect(skills.map((skill) => skill.body)).toEqual([current.body]);
+    });
+
+    it('turns links in the instructions into plain mentions in Block 5 (ADR-0023)', async () => {
+      const { service, agent } = buildStreaming(answerStream([]), {
+        userAgent: {
+          id: 'agent-1',
+          live: {
+            ...historian,
+            instructions:
+              'Follow [[skill:fiscal-calendar]], use [[tool:sample_rows]].',
+          },
+        },
+      });
+
+      await service.streamMessage('session-1', 'Who won in 2014?', () => {});
+
+      const { context } = turnOptions(agent);
+      const last = context[context.length - 1].content;
+      expect(last).toContain(
+        'Follow the "fiscal-calendar" skill, use the "sample_rows" tool.',
+      );
+      expect(last).not.toContain('[[');
+    });
+
+    it('offers the tools a linked skill links, from the Live copies, and the current skills in a preview', async () => {
+      const skill = (body: string) => ({
+        id: 'skill-1',
+        name: 'fiscal-calendar',
+        description: 'Use when a question names a fiscal year.',
+        body,
+        files: [],
+      });
+      const live = {
+        ...historian,
+        tools: ['ask_clarification'],
+        skills: ['skill-1'],
+      };
+      const published = buildStreaming(answerStream([]), {
+        userAgent: {
+          id: 'agent-1',
+          live,
+          liveSkills: [skill('Use [[tool:sample_rows]].')],
+          currentSkills: [skill('Use [[tool:create_visual]].')],
+        },
+      });
+      await published.service.streamMessage('session-1', 'Who?', () => {});
+      expect(
+        turnOptions(published.agent).requestContext.get('agent-tools'),
+      ).toEqual(['sample_rows', 'ask_clarification']);
+
+      const preview = buildStreaming(answerStream([]), {
+        preview: true,
+        userAgent: {
+          id: 'agent-1',
+          live,
+          liveSkills: [skill('Use [[tool:sample_rows]].')],
+          currentSkills: [skill('Use [[tool:create_visual]].')],
+        },
+      });
+      await preview.service.streamMessage('session-1', 'Who?', () => {});
+      expect(
+        turnOptions(preview.agent).requestContext.get('agent-tools'),
+      ).toEqual(['ask_clarification', 'visuals']);
     });
 
     it('re-stamps the agent name when the agent was renamed', async () => {

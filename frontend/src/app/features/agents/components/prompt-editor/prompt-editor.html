@@ -1,0 +1,65 @@
+<div class="mb-2 flex flex-wrap items-center gap-2">
+  @if (linkSkills()) {
+    <button
+      type="button"
+      data-testid="link-skill"
+      (click)="openLinkMenu('skill')"
+      class="btn btn-ghost px-2 py-1"
+    >
+      + Link skill
+    </button>
+  }
+  <button
+    type="button"
+    data-testid="link-tool"
+    (click)="openLinkMenu('tool')"
+    class="btn btn-ghost px-2 py-1"
+  >
+    + Link tool
+  </button>
+</div>
+
+<div class="editor" #host></div>
+
+@if (maxLabel()) {
+  <span
+    [attr.data-testid]="countTestId()"
+    class="mt-1.5 block text-right text-[12px] text-fg-muted"
+    >{{ length().toLocaleString("en-US") }}/{{ maxLabel() }}</span
+  >
+}
+
+@if (menu(); as m) {
+  <div
+    class="link-menu"
+    role="listbox"
+    [attr.aria-label]="linkSkills() ? 'Skills and tools' : 'Tools'"
+    [style.top.px]="m.top"
+    [style.left.px]="m.left"
+  >
+    @for (option of m.items; track option.kind + option.name; let i = $index) {
+      @if (i === 0 || m.items[i - 1].kind !== option.kind) {
+        <div class="group" role="presentation">
+          {{ option.kind === "skill" ? "Skills" : "Tools" }}
+        </div>
+      }
+      <button
+        type="button"
+        role="option"
+        class="option"
+        [class.active]="i === m.active"
+        [attr.aria-selected]="i === m.active"
+        (mousedown)="$event.preventDefault(); choose(option)"
+      >
+        <span class="name">{{ option.name }}</span>
+        <span class="description">{{ option.description }}</span>
+      </button>
+    } @empty {
+      <p class="none">
+        {{
+          linkSkills() ? "No matching skills or tools." : "No matching tools."
+        }}
+      </p>
+    }
+  </div>
+}

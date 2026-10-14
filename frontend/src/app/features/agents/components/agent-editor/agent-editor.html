@@ -113,24 +113,37 @@
       </div>
 
       <div class="flex flex-col gap-1.5">
-        <label for="agent-editor-instructions" class="field-label"
-          >Instructions</label
+        <span id="agent-editor-instructions-label" class="field-label"
+          >Instructions</span
         >
-        <textarea
-          id="agent-editor-instructions"
-          rows="8"
-          [maxLength]="limits.instructions"
-          [value]="editor.form().instructions"
-          (input)="onText('instructions', $event)"
-          aria-describedby="agent-editor-instructions-hint"
-          class="field resize-y font-mono text-[13px]"
-        ></textarea>
         <p
           id="agent-editor-instructions-hint"
           class="text-[12px] text-fg-muted"
         >
           {{ instructionsHint }}
         </p>
+        @if (editor.legacyNotice()) {
+          <p
+            data-testid="agent-legacy-notice"
+            class="rounded-md bg-warning-soft px-3 py-2 text-[13px] text-on-warning-soft"
+          >
+            {{ legacyNotice }}
+          </p>
+        }
+        <!-- Tiptap loads on its own, so it stays out of the first paint. -->
+        @defer (on immediate) {
+          <app-prompt-editor
+            [value]="editor.form().instructions"
+            [skills]="editor.librarySkills()"
+            label="Instructions"
+            [maxLength]="limits.instructions"
+            countTestId="agent-instructions-count"
+            (valueChange)="onInstructions($event)"
+          />
+        } @placeholder {
+          <p class="text-[13px] text-fg-muted">Loading editor…</p>
+        }
+        <p class="text-[12px] text-fg-muted">{{ linksHint }}</p>
       </div>
 
       <fieldset class="flex flex-col gap-2">
@@ -155,25 +168,6 @@
           <p class="text-[13px] text-fg-muted">
             No datasets yet — create one in Datasets first.
           </p>
-        }
-      </fieldset>
-
-      <fieldset class="flex flex-col gap-2">
-        <legend class="field-label mb-1.5">Tools</legend>
-        <p class="text-[12px] text-fg-muted">
-          The agent can always list, describe and query its datasets.
-        </p>
-        @for (tool of toolChoices; track tool.id) {
-          <label class="flex w-fit items-center gap-2 text-[13px] text-fg">
-            <input
-              type="checkbox"
-              [attr.data-testid]="'agent-tool-' + tool.id"
-              [checked]="editor.form().tools.includes(tool.id)"
-              (change)="onTool(tool.id, $event)"
-              class="h-3.5 w-3.5 accent-primary"
-            />
-            <span>{{ tool.label }}</span>
-          </label>
         }
       </fieldset>
 

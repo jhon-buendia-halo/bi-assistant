@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { LlmModule } from '../llm/llm.module';
 import { MastraModule } from '../../mastra/mastra.module';
 import { DatasetsModule } from '../datasets/datasets.module';
 import { DatasourcesModule } from '../datasources/datasources.module';
@@ -22,6 +23,7 @@ import { EvalRunsRepository } from './repositories/eval-runs.repository';
     SessionsModule,
     KnowledgeModule,
     UserAgentsModule,
+    LlmModule,
   ],
   controllers: [AgentsController],
   providers: [AgentsService, EvalRunsService, EvalRunsRepository],

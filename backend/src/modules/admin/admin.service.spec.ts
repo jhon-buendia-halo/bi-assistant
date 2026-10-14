@@ -22,6 +22,8 @@ import { AdminOverviewService } from './admin-overview.service';
 import { AdminReadService } from './admin-read.service';
 import { AdminService } from './admin.service';
 import { AllOwnersAgentsRepository } from './repositories/all-owners-agents.repository';
+import { AllOwnersSkillsRepository } from './repositories/all-owners-skills.repository';
+import type { SkillDoc } from '../skills/entities/skill.entity';
 
 /**
  * The admin API's services (admin R37-R68; api.md 2.15; data-model 3.14.8)
@@ -87,6 +89,7 @@ function setup() {
   const resolver = new RoleResolver(directory, roles, connections, {
     bootstrapAdmins: ['admin@contoso.test'],
   } as OrgServerConfig);
+  const skills = new SqliteDocStore<SkillDoc>(db, 'skills');
   const allAgents = new AllOwnersAgentsRepository(agents);
   const reader = new AdminDirectoryReader(
     directory,
@@ -101,6 +104,7 @@ function setup() {
     activity,
     connections,
     allAgents,
+    new AllOwnersSkillsRepository(skills),
     new SqliteTransactions(db),
     reader,
   );
@@ -119,6 +123,7 @@ function setup() {
     overview: new AdminOverviewService(reader, activity),
     assignments,
     agents,
+    skills,
     async user(
       id: string,
       displayName: string,
@@ -452,6 +457,96 @@ describe('AdminService.transferAgents (api.md 86; admin R43, R64)', () => {
       'admin',
     );
     expect(one.message).toBe('Transferred 1 agent to Ada Lovelace');
+  });
+
+  it('copies the skills a draft names to the new owner, renames clashes and remaps the ids', async () => {
+    const t = setup();
+    await withAgents(t);
+    const cfg = (name: string) => ({
+      name,
+      description: '',
+      instructions: '',
+      datasets: ['World Cup Core'],
+      starterQuestions: [],
+    });
+    const skill = (id: string, name: string, ownerId: string) =>
+      t.skills.insert({
+        id,
+        name,
+        description: 'Use when needed.',
+        body: `Body of ${name}.`,
+        files: [{ path: 'reference/a.md', content: 'A' }],
+        ownerId,
+      });
+    await skill('s-cal', 'fiscal-calendar', 'ada');
+    await skill('s-tax', 'tax-rules', 'ada');
+    await skill('g-cal', 'fiscal-calendar', 'grace');
+    await t.agents.update(
+      { id: 'a-goal' },
+      {
+        draft: {
+          ...cfg('Goal analyst'),
+          instructions:
+            'Use [[skill:fiscal-calendar]] and [[skill:tax-rules]].',
+          skills: ['s-cal', 's-tax'],
+        },
+        live: {
+          ...cfg('Goal analyst'),
+          instructions: 'Live: [[skill:fiscal-calendar]].',
+          skills: ['s-cal'],
+        },
+        liveSkills: [
+          {
+            id: 's-cal',
+            name: 'fiscal-calendar',
+            description: 'Use when needed.',
+            body: 'Old body.',
+            files: [],
+          },
+        ],
+      },
+    );
+    await t.agents.update(
+      { id: 'a-card' },
+      { draft: { ...cfg('Card counter'), skills: ['s-cal'] } },
+    );
+
+    await t.admin.transferAgents(
+      { agentIds: ['a-goal', 'a-card'], toUserId: 'grace' },
+      'admin',
+    );
+
+    const graces = await t.skills.find({ ownerId: 'grace' });
+    expect(graces.map((s) => s.name).sort()).toEqual([
+      'fiscal-calendar',
+      'fiscal-calendar-2',
+      'tax-rules',
+    ]);
+    const copyOf = (name: string) => graces.find((s) => s.name === name)!;
+    expect(copyOf('fiscal-calendar-2')).toMatchObject({
+      body: 'Body of fiscal-calendar.',
+      files: [{ path: 'reference/a.md', content: 'A' }],
+    });
+    // The clashing id is copied once for both agents.
+    const calId = copyOf('fiscal-calendar-2').id;
+    const goal = await t.agents.findOne({ id: 'a-goal' });
+    expect(goal?.draft.skills).toEqual([calId, copyOf('tax-rules').id]);
+    expect(goal?.live?.skills).toEqual([calId]);
+    expect(goal?.liveSkills?.map((s) => s.id)).toEqual([calId]);
+    expect(goal?.liveSkills?.[0].body).toBe('Old body.');
+    // Links follow the renamed copy; the copy's name stays consistent.
+    expect(goal?.draft.instructions).toBe(
+      'Use [[skill:fiscal-calendar-2]] and [[skill:tax-rules]].',
+    );
+    expect(goal?.live?.instructions).toBe('Live: [[skill:fiscal-calendar-2]].');
+    expect(goal?.liveSkills?.[0].name).toBe('fiscal-calendar-2');
+    expect((await t.agents.findOne({ id: 'a-card' }))?.draft.skills).toEqual([
+      calId,
+    ]);
+    // The former owner keeps theirs.
+    expect(
+      (await t.skills.find({ ownerId: 'ada' })).map((s) => s.id).sort(),
+    ).toEqual(['s-cal', 's-tax']);
   });
 
   it('refuses a name the new owner already has, ignoring case, and moves nothing', async () => {

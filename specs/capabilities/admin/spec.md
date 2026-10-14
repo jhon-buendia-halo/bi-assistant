@@ -497,6 +497,14 @@ Feature: Private and shared data
     Given I am signed in as "ada@contoso.test" and created the knowledge snippet "Goal"
     When I sign in as "grace@contoso.test" in another browser and click "Knowledge" on the rail
     Then I don't see "Goal"
+
+  Scenario: Skills are private to their owner
+    Given I am signed in as "ada@contoso.test" and created the skill "fiscal-calendar"
+    When I sign in as "grace@contoso.test" in another browser and click "Agents" on the rail
+    And I click "Skills"
+    Then I see "No skills yet. A skill is know-how an agent reads when a question needs it."
+    When I request Ada's skill id through the API
+    Then it answers "Skill \"<id>\" not found" and Ada's skill is unchanged
 ```
 
 ### Feature: Org server API
@@ -807,6 +815,16 @@ Feature: Edit a user
     Then I see the error toast 'Grace Hopper already has an agent named "Goal analyst"'
     When I click "Cancel"
     Then "Agents owned" still lists "Goal analyst"
+
+  Scenario: Transferring an agent copies the skills its draft names to the new owner
+    Given Ada owns the Live agent "Goal analyst" whose draft names her skill "fiscal-calendar"
+    When I open the "Users & groups" tab as "admin@contoso.test" and click "Ada Lovelace"
+    And I click "Transfer ownership", choose "Grace Hopper" as the new owner and click "Transfer"
+    Then I see the toast "Transferred 1 agent to Grace Hopper"
+    When Grace signs in in another browser and clicks "Agents" on the rail
+    And she clicks "Skills"
+    Then Grace sees "fiscal-calendar" used by "Goal analyst"
+    And Ada still sees "fiscal-calendar" in her own skills
 
   Scenario: A user with no groups and no agents
     Given "alan@contoso.test" (Alan Turing) is provisioned and in no group

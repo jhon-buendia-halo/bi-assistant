@@ -76,6 +76,10 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Group mapping.** A rule that gives every member of an identity-provider group a *role* (for *Data owner*, on one datasource). Members get the role on their next request. Groups themselves come from the identity provider and are read-only in the app. See [../capabilities/admin/spec.md](../capabilities/admin/spec.md).
 
+**Built-in skill override.** A Platform admin's edit of a built-in *skill*, made in the skills library. It is stored in the database, shared by every user, and replaces the shipped skill on the next call until **Reset to built-in** deletes it. See [../system/data-model.md](../system/data-model.md) 3.10.2 and ADR-0022.
+
+**In-app skill.** A *skill* a user writes in the app (the skills library) instead of a folder: a name, a "Use when…" description, a body and reference files, stored in the database and private to its owner. It reaches a session only through a *user agent* whose instructions *link* it, and a *Live* agent runs on the copy taken when it was published. See [../system/data-model.md](../system/data-model.md) 3.10.1 and ADR-0021.
+
 **Interpretation.** A one-line, deterministic summary of how an answer was produced (which entities, what kind of query), built by the system at save time. Never model output.
 
 **Knowledge entry.** A curated piece of business knowledge the assistant treats as authoritative. Three kinds: `term` (glossary definition, with optional synonyms and entity bindings), `instruction` (a standing rule) and `default_filter`. Scoped globally, to a dataset or to a datasource. Only enabled entries reach the assistant, within a size budget per turn. Source is `user` or `mined` (drafted by the bootstrap agent, saved disabled for review). The UI says "Knowledge". Code and Jira call these *snippets*.
@@ -83,6 +87,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 **Knowledge bootstrap.** The action that has an agent draft up to 15 knowledge entries from a dataset's schema and a few sample rows. Drafts arrive as "Pending suggestions", disabled.
 
 **Knowledge used.** The list of knowledge entries that were actually included in the context of one answer, recorded when the context was built. It shows what the model was given, not what it applied.
+
+**Link (skill or tool).** A reference written in an agent's instructions (or, for a tool, in an in-app skill's body) with `/` in the editor: shown as a chip, saved as `[[skill:<name>]]` or `[[tool:<name>]]`. The links decide which skills and optional tools the agent gets, and the model sees each as a plain mention (`the "x" tool`). See [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R81-R86 and ADR-0023.
 
 **Live (agent).** The published version of a *user agent*. It is the version that starts sessions. Editing a Live agent changes only its *draft*, and the Live version keeps serving until the draft is published.
 

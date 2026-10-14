@@ -543,7 +543,7 @@ flowchart LR
   - Whether a knowledge rule applies now depends on the model reading the skill, which ADR-0018 avoided by loading it in code. The evals must pass at 100% before the PR (the workflow rule of 2026-10-14).
 
 #### ADR-0021 — User agents choose their tools from the assistant's set and get skills written in the app, stored per user and copied into the Live version
-- **Status:** Accepted
+- **Status:** Accepted; how tools and skills are chosen (checkboxes) is superseded by ADR-0023 (links)
 - **Date:** 2026-10-14
 - **Context:**
   - ADR-0008 made a user agent a stored configuration of the `assistant`. It "can't add tools or relax the guard", and in practice it gets all of the assistant's tools and skills. Its only lever is a block of instructions.
@@ -564,6 +564,44 @@ flowchart LR
   - In-app skills are prompt content written by their owner and read only by that owner's agents, so they add no cross-user injection path. Sharing them waits for a later epic, as agent sharing does (ADR-0010).
   - Transferring an agent (ADR-0010) must carry its draft's skill references to the new owner.
   - In `@mastra/core` 1.66 a function-valued `tools` is not copied into the Mastra instance's tool registry, so the assistant's tools no longer appear there as standalone tools (Mastra's dev studio). No app code reads that registry.
+
+#### ADR-0022 — Built-in skills are edited in the app as org-wide overrides stored in the database, by Platform admins
+- **Status:** Accepted
+- **Date:** 2026-10-14
+- **Context:**
+  - The user asked on 2026-10-14 for every skill to be editable in the app, the built-in ones (`curated-knowledge`, `deep-analysis`, `interactive-visuals`) included. ADR-0021 kept built-ins out of the app.
+  - Built-ins shape every assistant session and two app pipelines: `deep-analysis` phase files and `interactive-visuals` references are templates the app fills, with `{{placeholders}}` (ADR-0018, ADR-0019).
+  - ADR-0019 already lets a folder override a built-in by name, with checks that keep the placeholders intact. [BA-211](https://halo-powered.atlassian.net/browse/BA-211) removes those folders. On an org server the folders were server-wide and unmanaged.
+  - Per-user versions of the assistant's know-how would make answers differ by user and couldn't be evaluated.
+- **Decision:**
+  - **Override, never edit the bundle.** Saving a built-in in the app stores an **override** in a new shared `skill_overrides` collection, keyed by the skill's name. The bundled skill stays as the fallback, and **Reset to built-in** deletes the override.
+  - **It wins over every other level** (in-app override over project over user over built-in) and is read per call, so it applies to the next call without a restart. It keeps the built-in's agents and loading mode, and the built-in's file locations: the assistant's catalog changes only in the description, and `read_file` answers the built-in's paths from the override.
+  - **The same checks as a folder override** (ADR-0019): a `Use when` description, a body that isn't empty, exactly the built-in's `phases/` and `reference/` files, each with the same `{{placeholders}}`. A failing save is refused, so a broken override never reaches a call.
+  - **Org-wide, Platform admin only.** One override per skill serves every user and agent. Changing it needs `edit-policies`; in local mode the local user holds it.
+  - **Drift is shown, not merged.** The override records a hash of the built-in it was made from. When a newer app version ships a different built-in, the library and the editor say so; the override keeps serving until it is saved again or reset.
+- **Consequences:**
+  - An override changes what the plain assistant, every user agent, deep analysis and the visual designer receive, and the shipped eval baseline no longer describes them. Eval runs use the current overrides, so an admin can measure an edit from the Evals tab. The editor warns that a save applies to every session at once.
+  - The loader resolves the winning skill per call (a database read, cached until an override changes) instead of once at startup.
+  - BA-211's removal of the folder levels leaves this as the one way to change a built-in.
+
+#### ADR-0023 — Links in an agent's instructions decide its skills and tools; skills link tools
+- **Status:** Accepted
+- **Date:** 2026-10-14
+- **Context:**
+  - The user asked on 2026-10-14 to follow the agent-poc *Agent configurator guide*: a rich editor where `/` links skills and tools as chips, saved as `[[skill:name]]` and `[[tool:name]]`; the links decide what the agent gets; skills link tools; a Graph tab shows the chain.
+  - The guide stores the prompt and skills as files, makes the whole system prompt editable and uses Mastra's `skill` tool. This app is multi-user (ADR-0010), layers an agent's instructions on a fixed core prompt (ADR-0008), keeps skills in the database (ADR-0021) and renders its own catalog read with `read_file` (ADR-0020). The user chose the guide's behaviour on this architecture.
+  - ADR-0021 made an agent's tools and skills two checkbox lists, separate from its instructions.
+- **Decision:**
+  - **Links are the single source of truth.** An agent's instructions may contain `[[skill:<name>]]` (the owner's in-app skills) and `[[tool:<name>]]` (any assistant tool). On every save the backend derives the agent's `tools` and `skills` from them and refuses unknown links. The checkbox pickers go.
+  - **Skills link tools.** An in-app skill's body may link tools, never skills. A user agent gets the always-on data tools, the optional tools its instructions link, and the optional tools its linked skills link. Linking either visual tool gives both (ADR-0021).
+  - **The model never sees the syntax.** Each link becomes a plain mention (`the "x" tool`, `the "x" skill`) in the agent's context block and in a skill's body when `read_file` serves it.
+  - **A linked skill can't be deleted or renamed** while a draft links it; Live agents keep their copies (ADR-0021).
+  - **Rich editor:** Tiptap 3.31.3, pinned, loaded lazily so it stays out of the initial bundle.
+  - **Unchanged:** database storage and ownership, the fixed core prompt, the app's catalog and `read_file`, built-in skills (every agent gets them; ADR-0022 overrides).
+- **Consequences:**
+  - ADR-0021's tool and skill selection is now derived from text, so an agent's behaviour is readable in one place, and the Graph and Tools tabs can show why each tool is there.
+  - An agent saved before links had every tool (no `tools` list). The editor adds links for what such an agent had when it opens, so a save keeps its behaviour; until then the legacy rule holds.
+  - A new frontend dependency (Tiptap and ProseMirror, about 350 kB, lazy).
 
 ## Level 4 — Code
 

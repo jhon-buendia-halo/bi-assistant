@@ -97,6 +97,73 @@ describe('read_file', () => {
   });
 });
 
+describe('read_file on in-app skills (ADR-0021)', () => {
+  const agentSkill = {
+    id: 's1',
+    name: 'fiscal-calendar',
+    description: 'Use when a question names a fiscal year.',
+    body: 'Our fiscal year starts on 1 July.',
+    files: [{ path: 'reference/quarters.md', content: 'Q1 is July.' }],
+  };
+  const refusal = (path: string) => ({
+    error: `Not a file of an installed skill: ${path}. Use the skill's location folder joined with the path SKILL.md names.`,
+  });
+
+  it("answers the virtual paths from the call's copies, never the disk", () => {
+    const text = skill('text', { 'SKILL.md': 'b' });
+    expect(
+      readSkillPath([text], '/in-app-skills/fiscal-calendar/SKILL.md', [
+        agentSkill,
+      ]),
+    ).toEqual({
+      path: '/in-app-skills/fiscal-calendar/SKILL.md',
+      content:
+        '---\nname: fiscal-calendar\ndescription: Use when a question names a fiscal year.\n---\n\nOur fiscal year starts on 1 July.',
+    });
+    expect(
+      readSkillPath(
+        [text],
+        '/in-app-skills/fiscal-calendar/reference/quarters.md',
+        [agentSkill],
+      ),
+    ).toEqual({
+      path: '/in-app-skills/fiscal-calendar/reference/quarters.md',
+      content: 'Q1 is July.',
+    });
+  });
+
+  it('refuses an in-app path of a skill the call does not have, or any other file', () => {
+    const text = skill('text', { 'SKILL.md': 'b' });
+    for (const path of [
+      '/in-app-skills/other/SKILL.md',
+      '/in-app-skills/fiscal-calendar/reference/nope.md',
+      '/in-app-skills/fiscal-calendar/scripts/x.js',
+    ]) {
+      expect(readSkillPath([text], path, [agentSkill])).toEqual(refusal(path));
+      expect(readSkillPath([text], path)).toEqual(refusal(path));
+    }
+  });
+
+  it("the tool reads them through the call's requestContext", async () => {
+    const text = skill('text', { 'SKILL.md': 'b' });
+    const tool = skillToolsFor('assistant', [text]).read_file as unknown as {
+      execute: (input: unknown, context: unknown) => Promise<unknown>;
+    };
+    const path = '/in-app-skills/fiscal-calendar/SKILL.md';
+    const requestContext = { get: () => [agentSkill] };
+
+    await expect(tool.execute({ path }, { requestContext })).resolves.toEqual(
+      expect.objectContaining({
+        path,
+        content: expect.stringContaining('1 July') as string,
+      }),
+    );
+    await expect(
+      tool.execute({ path }, { requestContext: { get: () => undefined } }),
+    ).resolves.toEqual(refusal(path));
+  });
+});
+
 describe('run_skill_script', () => {
   it('lists only a built-in skill’s Node scripts under scripts/', () => {
     const files = {

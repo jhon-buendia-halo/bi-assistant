@@ -54,12 +54,24 @@ Measured from the compiled `assistant` on `main` at `513009d`:
 
 No configuration this epic allows makes an agent's prompt longer than today's by more than its skills' catalog entries.
 
+- **Built-in skills edited in the app** ([BA-218](https://halo-powered.atlassian.net/browse/BA-218), added on 2026-10-14 at the user's request; ADR-0022).
+  - The skills library also lists the built-in skills, read-only for most users.
+  - A Platform admin can edit one. The edit is an org-wide override in the database that replaces the bundled skill on the next call, with the folder-override checks, a **Modified** chip, **Reset to built-in**, and a notice when a newer app version changes the built-in.
+
+- **Links in instructions, skills that link tools, and new tabs** ([BA-219](https://halo-powered.atlassian.net/browse/BA-219), [BA-220](https://halo-powered.atlassian.net/browse/BA-220), [BA-221](https://halo-powered.atlassian.net/browse/BA-221); added on 2026-10-14 at the user's request; ADR-0023).
+  - An agent's instructions are written in a rich editor where `/` links the owner's in-app skills and the assistant's tools as chips, saved as `[[skill:<name>]]` and `[[tool:<name>]]`. The links are the single source of truth: the backend derives the agent's `tools` and `skills` from them on every save, which **replaces the BA-216 skill picker and the BA-217 tool picker**.
+  - An in-app skill's body may link tools, never skills. An agent gets its directly linked optional tools plus those its linked skills link.
+  - The model never sees the syntax: links become plain mentions in the instructions and in a skill's body when `read_file` serves it.
+  - A skill that a draft links can't be deleted or renamed. An agent saved before links gets a `Tools and skills:` line when opened in the editor.
+  - The agent page's Tools tab shows the whole library with how each tool is linked; a new **Graph** tab draws instructions to skills to tools; the Model tab becomes **LLM Config**, which shows whether the API key is set and never the key.
+  - The design is in [proposals/ba-219-221-design.md](../../../proposals/ba-219-221-design.md).
+
 ## Out of scope
 
 - **New tools**, custom code tools, MCP servers or any tool the assistant doesn't already have.
 - **Replacing the core prompt.** Instructions stay Block 5 (ADR-0008).
-- **User and project skill folders.** [BA-211](https://halo-powered.atlassian.net/browse/BA-211) removes them; in-app skills replace them for users.
-- **Overriding a built-in skill** from the app, and skills for the System agents.
+- **User and project skill folders.** They stay as they are here; [BA-211](https://halo-powered.atlassian.net/browse/BA-211) removes them separately.
+- Skills for the System agents other than the built-in `interactive-visuals` (BA-218 lets an admin edit it).
 - **Sharing skills** with other users. Skills are private to their owner, like agents (ADR-0010); sharing waits for a Requests/Registry epic.
 - **Skill version history** beyond the copy each Live agent holds.
 - Giving in-app skills to the plain assistant (decision 3).
@@ -72,6 +84,10 @@ No configuration this epic allows makes an agent's prompt longer than today's by
 | [BA-217](https://halo-powered.atlassian.net/browse/BA-217) | Choose an agent's tools | 1.14.2 |
 | [BA-215](https://halo-powered.atlassian.net/browse/BA-215) | Write skills in the app | 1.14.3 |
 | [BA-216](https://halo-powered.atlassian.net/browse/BA-216) | Assign skills to an agent | 1.14.4 |
+| [BA-218](https://halo-powered.atlassian.net/browse/BA-218) | Edit built-in skills in the app | 1.14.5 |
+| [BA-219](https://halo-powered.atlassian.net/browse/BA-219) | Link skills and tools in an agent's instructions | 1.14.6 |
+| [BA-220](https://halo-powered.atlassian.net/browse/BA-220) | Skills link tools | 1.14.7 |
+| [BA-221](https://halo-powered.atlassian.net/browse/BA-221) | Tools library, Graph and LLM Config tabs | 1.14.8 |
 
 All stories are built on one branch, `feat/BA-213-agent-tools-skills`, and ship as one PR.
 
@@ -85,7 +101,8 @@ All stories are built on one branch, `feat/BA-213-agent-tools-skills`, and ship 
 - [capabilities/sessions-chat](../../capabilities/sessions-chat/spec.md): R54 (what an agent session applies per call).
 - [capabilities/admin](../../capabilities/admin/spec.md): managing skills needs Create, test and version agents; viewing them needs Use agents.
 - [system/ui.md](../../system/ui.md): the editor's Tools and Skills fields (4.5.1), the skills library and skill editor, and their copy.
-- [product/glossary.md](../../product/glossary.md): *in-app skill*, *tool selection*.
+- [product/glossary.md](../../product/glossary.md): *in-app skill*, *tool selection*, *link (skill or tool)*.
+- BA-219 to BA-221: capability R43, R55, R60, R63, R70, R72 change and R81-R89 are new in [agents-evals](../../capabilities/agents-evals/spec.md); api.md 34, 41, 42, 94, 96-98; data-model.md 3.10 and 3.10.1; agents.md 2.1, 4.1, 4.2, 7.3; ui.md 4.5, 4.5.1, 4.5.3, 4.5.5-4.5.7; tech-stack.md (Tiptap).
 
 ## Acceptance
 
@@ -100,7 +117,7 @@ All stories are built on one branch, `feat/BA-213-agent-tools-skills`, and ship 
 
 ## Dependencies, risks and decisions
 
-- **Depends on BA-211.** BA-215 and BA-216 start once BA-211 has merged to `main` and this branch is rebased on it. BA-217 does not depend on it.
+- **BA-211 is not a dependency** (changed on 2026-10-14). In-app skills are a separate source in the database, and the picker offers only them (decision 3), so they work whether or not the user and project folders exist. BA-211 removes the folders on its own branch; whichever merges second resolves the Skills tab's levels.
 - **ADR number.** ADR-0021 is the next free number on `main` and every open branch today. BA-211 supersedes ADR-0019 on `refactor/BA-198-assistant-skills` and may claim a number first: recheck at merge time.
 - **Risk: prompt variants.** Three toggles make eight prompts. Rules are toggled as whole blocks, and the two most restrictive variants get eval cases. The rest are covered by unit tests on the prompt builder.
 - **Risk: a model calls a tool it wasn't given.** That fails `check-no-tool-errors`. The replacement wording is what prevents it, and the new eval cases measure it.
@@ -109,4 +126,5 @@ All stories are built on one branch, `feat/BA-213-agent-tools-skills`, and ship 
 - **Decision 2: Visuals is one switch:** `create_visual` and `update_visual` together.
 - **Decision 3: the plain assistant and in-app skills.** Skills reach a session only through an agent that has them assigned. The plain assistant keeps only the built-ins, so its prompt and evals don't change with a user's library.
 - **Decision 4: limits.** Up to 10 skills per agent; a description of at most 300 characters; a body of at most 20,000; up to 10 reference files of at most 20,000 each. With 10 skills the catalog grows by at most about 4,600 characters.
+- **Decision 6: links replace the pickers** (2026-10-14, ADR-0023). The BA-216 skill picker and the BA-217 tool picker are replaced by links in the instructions. Decision 3 stands in spirit: skills reach a session only through an agent that **links** them, no longer one that has them ticked; decision 2 (Visuals is one switch) holds, now as linking either visual tool; decision 4's 10-skill cap counts distinct linked skills. The stored `tools` and `skills` lists stay, derived from the links, so no migration.
 - **Decision 5: agent transfer (org mode).** When an admin transfers an agent, its Live version keeps its skill copies and keeps working. The draft's skill references are copied into the new owner's library as new skills, renamed on a name clash. It is built last in BA-216.

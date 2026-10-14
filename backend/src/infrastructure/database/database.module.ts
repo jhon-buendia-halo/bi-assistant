@@ -21,6 +21,8 @@ import {
   DATASETS_STORE,
   PRIVATE_COLLECTIONS,
   SETTINGS_STORE,
+  SKILLS_STORE,
+  SKILL_OVERRIDES_STORE,
   VERIFIED_QUERIES_STORE,
 } from './doc-store';
 import { SqliteDocStore } from './sqlite-doc-store';
@@ -48,6 +50,8 @@ const COLLECTIONS = [
   { token: EVAL_RUNS_STORE, table: 'eval_runs' },
   { token: KNOWLEDGE_STORE, table: 'knowledge_snippets' },
   { token: AGENTS_STORE, table: 'agents' },
+  { token: SKILLS_STORE, table: 'skills' },
+  { token: SKILL_OVERRIDES_STORE, table: 'skill_overrides' },
   { token: USERS_STORE, table: 'users' },
   { token: GROUPS_STORE, table: 'groups' },
   { token: GROUP_MEMBERS_STORE, table: 'group_members' },

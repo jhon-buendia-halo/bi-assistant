@@ -1,5 +1,12 @@
 import { existsSync, lstatSync, readdirSync, readFileSync, statSync } from 'fs';
+import { createHash } from 'crypto';
 import { isAbsolute, join, normalize, resolve, sep } from 'path';
+import { renderSkillDocument } from './agent-skills';
+import {
+  type SkillOverride,
+  skillOverridesVersion,
+  skillOverrideFor,
+} from './skill-overrides';
 
 /**
  * Agent skills (ADR-0018, ADR-0019, agents.md sections 7.3 and 7.4).
@@ -69,6 +76,8 @@ export interface AppSkill {
   /** Lower levels that also hold a valid skill with this name, lowest first. */
   overrides: SkillLevel[];
   warnings: string[];
+  /** Set when an in-app override of this built-in is served (ADR-0022). */
+  inApp?: SkillOverride;
 }
 
 export interface SkippedSkill {
@@ -249,7 +258,7 @@ function readSkill(root: string, folder: string, strict: boolean): ReadSkill {
   }
   result.description = values.description ?? '';
   const body = document.replace(FRONT_MATTER, '');
-  for (const linked of new Set(body.match(LINKED_FILE) ?? [])) {
+  for (const linked of linkedFilePaths(body)) {
     if (!isRegularFile(join(dir, linked)))
       problems.push(`${linked} is missing`);
   }
@@ -370,6 +379,37 @@ function placeholders(text: string): string[] {
   return [...new Set([...text.matchAll(PLACEHOLDER)].map((m) => m[1]))].sort();
 }
 
+/** The files of a built-in an override must carry, file by file. */
+export function requiredOverrideFiles(
+  builtIn: Pick<AppSkill, 'dir'>,
+): { path: string; size: number }[] {
+  return skillFiles(builtIn.dir).filter((file) =>
+    REQUIRED_FOLDERS.includes(file.path.split('/')[0]),
+  );
+}
+
+/**
+ * The placeholder refusal for one override file, or null when it uses the
+ * same `{{placeholders}}` as the built-in's file (ADR-0019, ADR-0022).
+ */
+export function placeholderProblem(
+  path: string,
+  expectedText: string,
+  actualText: string,
+): string | null {
+  const expected = placeholders(expectedText);
+  const actual = placeholders(actualText);
+  if (expected.join('\n') === actual.join('\n')) return null;
+  return expected.length
+    ? `${path} must use the placeholders ${expected.map((name) => `{{${name}}}`).join(', ')}`
+    : `${path} must use no placeholders`;
+}
+
+/** The refusal for a required file an override lacks. */
+export function missingFileProblem(path: string): string {
+  return `${path} is missing (the skill it overrides has it)`;
+}
+
 /**
  * What an override of a harness-loaded built-in must keep: the code sends
  * its body, reads its phase and reference files by path, and fills the
@@ -380,26 +420,18 @@ function harnessOverrideProblems(builtIn: AppSkill, read: ReadSkill): string[] {
   if (read.document !== undefined && !skillBody(read.document)) {
     problems.push('the body is empty');
   }
-  const required = skillFiles(builtIn.dir).filter((file) =>
-    REQUIRED_FOLDERS.includes(file.path.split('/')[0]),
-  );
-  for (const { path } of required) {
+  for (const { path } of requiredOverrideFiles(builtIn)) {
     const own = join(read.dir, path);
     if (!isRegularFile(own)) {
-      problems.push(`${path} is missing (the skill it overrides has it)`);
+      problems.push(missingFileProblem(path));
       continue;
     }
-    const expected = placeholders(
+    const problem = placeholderProblem(
+      path,
       readFileSync(join(builtIn.dir, path), 'utf8'),
+      readFileSync(own, 'utf8'),
     );
-    const actual = placeholders(readFileSync(own, 'utf8'));
-    if (expected.join('\n') !== actual.join('\n')) {
-      problems.push(
-        expected.length
-          ? `${path} must use the placeholders ${expected.map((name) => `{{${name}}}`).join(', ')}`
-          : `${path} must use no placeholders`,
-      );
-    }
+    if (problem) problems.push(problem);
   }
   return problems;
 }
@@ -496,6 +528,7 @@ export function resolveSkills(
 }
 
 let resolved: ResolvedSkills | undefined;
+let shipped: ReadonlyMap<string, AppSkill> | undefined;
 
 /** Every level, loaded once per process; a broken built-in throws here. */
 export function resolvedAppSkills(): ResolvedSkills {
@@ -503,6 +536,7 @@ export function resolvedAppSkills(): ResolvedSkills {
     const builtIn = loadAppSkills(skillsRoot());
     validateAgentSkills(builtIn, AGENT_SKILLS);
     validateAgentSkills(builtIn, HARNESS_SKILLS);
+    shipped = builtIn;
     resolved = resolveSkills(
       builtIn,
       { user: userSkillsRoot(), project: projectSkillsRoot() },
@@ -512,9 +546,111 @@ export function resolvedAppSkills(): ResolvedSkills {
   return resolved;
 }
 
-/** The skill that won for each name, across the three levels. */
+/** What a built-in skill ships with: the content an override replaces. */
+export interface ShippedBuiltIn {
+  description: string;
+  body: string;
+  files: { path: string; content: string }[];
+}
+
+/** The bundled skill `name` as shipped, or undefined when it isn't built in. */
+export function shippedBuiltIn(name: string): ShippedBuiltIn | undefined {
+  resolvedAppSkills();
+  const skill = shipped?.get(name);
+  if (!skill) return undefined;
+  return {
+    description: skill.description,
+    body: skillBody(skill.document),
+    files: requiredOverrideFiles(skill).map(({ path }) => ({
+      path,
+      content: readFileSync(join(skill.dir, path), 'utf8'),
+    })),
+  };
+}
+
+/** SHA-256 of a built-in's description, body and files (data-model 3.10.2). */
+export function builtInHash(content: ShippedBuiltIn): string {
+  const files = [...content.files].sort((a, b) =>
+    a.path < b.path ? -1 : a.path > b.path ? 1 : 0,
+  );
+  return createHash('sha256')
+    .update(
+      JSON.stringify([
+        content.description,
+        content.body,
+        files.map((file) => [file.path, file.content]),
+      ]),
+    )
+    .digest('hex');
+}
+
+/** The bundled skills, whatever overrides them. */
+export function shippedSkills(): ReadonlyMap<string, AppSkill> {
+  resolvedAppSkills();
+  return shipped ?? new Map();
+}
+
+/** The skill with the in-app override of its built-in served (ADR-0022). */
+function withOverride(skill: AppSkill, override: SkillOverride): AppSkill {
+  const lower = [...skill.overrides, skill.level].filter(
+    (level): level is SkillLevel => level !== 'built-in',
+  );
+  return {
+    ...skill,
+    description: override.description,
+    document: renderSkillDocument({
+      name: skill.name,
+      description: override.description,
+      body: override.body,
+    }),
+    level: 'built-in',
+    overrides: lower,
+    inApp: override,
+  };
+}
+
+let effective:
+  | { base: ResolvedSkills; version: number; skills: Map<string, AppSkill> }
+  | undefined;
+
+/**
+ * The skills as served right now: the three levels with the in-app
+ * overrides on top. Rebuilt only when the overrides change, so it is cheap
+ * to call on every request. An override of a name that is not built in is
+ * ignored.
+ */
+function effectiveSkills(): Map<string, AppSkill> {
+  const base = resolvedAppSkills();
+  const version = skillOverridesVersion();
+  if (effective?.base === base && effective.version === version) {
+    return effective.skills;
+  }
+  const skills = new Map(base.skills);
+  for (const [name, skill] of base.skills) {
+    const override = shipped?.has(name) ? skillOverrideFor(name) : undefined;
+    if (override) skills.set(name, withOverride(skill, override));
+  }
+  effective = { base, version, skills };
+  return skills;
+}
+
+/** The skill that won for each name, across the levels and the overrides. */
 export function appSkills(): ReadonlyMap<string, AppSkill> {
-  return resolvedAppSkills().skills;
+  return effectiveSkills();
+}
+
+/** The names of the built-in skills, even when a user or project skill overrides one. */
+export function builtInSkillNames(): string[] {
+  return [...shippedSkills().keys()];
+}
+
+/**
+ * The `phases/…` and `reference(s)/….md` paths a skill body names: what the
+ * folder-skill check requires to exist, and what an in-app skill's body may
+ * only name when the skill has them (data-model 3.10.1).
+ */
+export function linkedFilePaths(body: string): string[] {
+  return [...new Set(body.match(LINKED_FILE) ?? [])];
 }
 
 function winningSkill(name: string): AppSkill {
@@ -567,7 +703,30 @@ export function appSkillFile(name: string, path: string): string {
   const skill = winningSkill(name);
   const relative = safeRelativePath(path);
   if (relative === null) throw new Error(`Invalid skill file path "${path}"`);
+  const served = servedOverrideFile(skill, relative.split(sep).join('/'));
+  if (served !== undefined) return served;
   return readFileSync(join(skill.dir, relative), 'utf8');
+}
+
+/** An in-app override's own text for `path` (`SKILL.md` included), if any. */
+function servedOverrideFile(skill: AppSkill, path: string): string | undefined {
+  if (!skill.inApp) return undefined;
+  if (path === 'SKILL.md') return skill.document;
+  return skill.inApp.files.find((file) => file.path === path)?.content;
+}
+
+/** The files of a skill as served: the folder's, with an override's content. */
+export function servedSkillFiles(
+  skill: AppSkill,
+): { path: string; size: number }[] {
+  const files = skillFiles(skill.dir);
+  if (!skill.inApp) return files;
+  return files.map((file) => {
+    const text = servedOverrideFile(skill, file.path);
+    return text === undefined
+      ? file
+      : { path: file.path, size: Buffer.byteLength(text, 'utf8') };
+  });
 }
 
 export interface AgentSkillsView {
@@ -575,9 +734,12 @@ export interface AgentSkillsView {
   skills: {
     name: string;
     description: string;
-    level: SkillLevel;
+    /** `in-app` only for a user agent's own skills (api.md 34a). */
+    level: SkillLevel | 'in-app';
     loading: SkillLoading;
     overrides: SkillLevel[];
+    /** An in-app override of this built-in is served (ADR-0022). */
+    modified?: boolean;
     files: { path: string; size: number }[];
     warnings: string[];
   }[];
@@ -586,7 +748,8 @@ export interface AgentSkillsView {
 
 /** What `GET /agents/:key/skills` returns for a registry key (api.md 34a). */
 export function agentSkillsView(agent: string): AgentSkillsView {
-  const { skills, skipped, levels } = resolvedAppSkills();
+  const { skipped, levels } = resolvedAppSkills();
+  const skills = effectiveSkills();
   const order = (level: SkillLevel) => (level === 'user' ? 0 : 1);
   return {
     levels,
@@ -599,7 +762,8 @@ export function agentSkillsView(agent: string): AgentSkillsView {
         level: skill.level,
         loading: skill.loading,
         overrides: skill.overrides,
-        files: skillFiles(skill.dir),
+        ...(skill.inApp ? { modified: true } : {}),
+        files: servedSkillFiles(skill),
         warnings: skill.warnings,
       })),
     skipped: skipped
@@ -623,18 +787,26 @@ export function agentSkillFile(
 ): SkillFileResult {
   const skill = appSkills().get(name);
   if (!skill || !skill.agents.includes(agent)) return { error: 'no-skill' };
-  return readSkillFile(skill.dir, path);
+  return readSkillFile(skill.dir, path, skill);
 }
 
 /**
  * A file of the skill folder `dir`, by a path `skillFiles` lists. Content is
  * null for a file too large to show or one that isn't text.
  */
-export function readSkillFile(dir: string, path: string): SkillFileResult {
+export function readSkillFile(
+  dir: string,
+  path: string,
+  skill?: AppSkill,
+): SkillFileResult {
   if (safeRelativePath(path) === null) return { error: 'invalid-path' };
-  const file = skillFiles(dir).find((entry) => entry.path === path);
+  const file = (skill ? servedSkillFiles(skill) : skillFiles(dir)).find(
+    (entry) => entry.path === path,
+  );
   if (!file) return { error: 'no-file' };
   if (file.size > MAX_SHOWN_FILE_BYTES) return { ...file, content: null };
+  const served = skill ? servedOverrideFile(skill, path) : undefined;
+  if (served !== undefined) return { ...file, content: served };
   const bytes = readFileSync(join(dir, file.path));
   return {
     ...file,

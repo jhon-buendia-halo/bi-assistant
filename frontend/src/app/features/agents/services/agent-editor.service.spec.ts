@@ -14,7 +14,31 @@ const DRAFT = {
   instructions: 'Answer in one sentence.',
   datasets: ['World Cup Core'],
   starterQuestions: [],
+  tools: [],
 };
+
+const skill = (id: string) => ({
+  id,
+  name: id,
+  description: `Use when ${id}`,
+  fileCount: 0,
+  agents: [],
+  tools: [],
+  updatedAt: '',
+});
+const SKILLS = [
+  'alpha',
+  'beta',
+  'gamma',
+  'delta',
+  'e',
+  'f',
+  'g',
+  'h',
+  'i',
+  'j',
+  'k',
+].map(skill);
 
 describe('AgentEditorService', () => {
   let editor: AgentEditorService;
@@ -40,7 +64,11 @@ describe('AgentEditorService', () => {
   afterEach(() => http.verify());
 
   /** Answers the requests `open` makes. */
-  async function open(agentId: string | null, status = 'draft') {
+  async function open(
+    agentId: string | null,
+    status = 'draft',
+    draft: Record<string, unknown> = DRAFT,
+  ) {
     editor.open(agentId);
     http
       .expectOne(`${API_BASE_URL}/llm/settings`)
@@ -48,6 +76,7 @@ describe('AgentEditorService', () => {
     http
       .expectOne(`${API_BASE_URL}/datasets`)
       .flush({ datasets: [{ name: 'World Cup Core', tables: [] }] });
+    http.expectOne(`${API_BASE_URL}/skills`).flush({ skills: SKILLS });
     if (agentId) {
       http.expectOne(`${API_BASE_URL}/agents/${agentId}`).flush({
         key: agentId,
@@ -55,7 +84,7 @@ describe('AgentEditorService', () => {
         kind: 'user',
         status,
         hasUnpublishedChanges: false,
-        draft: DRAFT,
+        draft,
       });
     }
     await new Promise((resolve) => setTimeout(resolve));
@@ -94,22 +123,21 @@ describe('AgentEditorService', () => {
     expect(editor.status()).toBe('draft');
   });
 
-  it('a new agent has all tools ticked; toggling one marks it changed and is saved', async () => {
+  it('saves the instructions with their links and no tools or skills', async () => {
     await open(null);
-    expect(editor.form().tools).toEqual([
-      'sample_rows',
-      'ask_clarification',
-      'visuals',
-    ]);
-    editor.update({ name: 'Cup historian' });
-    editor.toggleTool('sample_rows', false);
+    editor.update({
+      name: 'Cup historian',
+      instructions: 'Use [[skill:alpha]] and [[tool:sample_rows]].',
+    });
     expect(editor.changed()).toBeTrue();
-    editor.toggleTool('visuals', false);
-    editor.toggleTool('visuals', true);
 
     const saved = editor.save();
     const req = http.expectOne(`${API_BASE_URL}/agents`);
-    expect(req.request.body.tools).toEqual(['ask_clarification', 'visuals']);
+    expect(req.request.body.instructions).toBe(
+      'Use [[skill:alpha]] and [[tool:sample_rows]].',
+    );
+    expect('tools' in req.request.body).toBeFalse();
+    expect('skills' in req.request.body).toBeFalse();
     req.flush({
       ok: true,
       message: 'saved',
@@ -117,14 +145,42 @@ describe('AgentEditorService', () => {
     });
     await saved;
     expect(editor.changed()).toBeFalse();
+    expect(editor.librarySkills().length).toBe(11);
   });
 
-  it('a draft saved before tools could be chosen opens with all ticked and unchanged', async () => {
-    await open('cup-historian');
-    expect(editor.form().tools.length).toBe(3);
-    expect(editor.changed()).toBeFalse();
-    editor.toggleTool('ask_clarification', false);
+  it('a draft saved with the checkboxes opens with links appended, dirty, with the notice', async () => {
+    await open('cup-historian', 'draft', {
+      ...DRAFT,
+      tools: undefined,
+      skills: ['alpha', 'deleted-id'],
+    });
+    expect(editor.form().instructions).toBe(
+      'Answer in one sentence.\nTools and skills: [[skill:alpha]] [[tool:sample_rows]] [[tool:ask_clarification]] [[tool:create_visual]]',
+    );
+    expect(editor.legacyNotice()).toBeTrue();
     expect(editor.changed()).toBeTrue();
+    expect(editor.saved().instructions).toBe('Answer in one sentence.');
+  });
+
+  it('a draft whose links already match opens clean, and saving clears the notice', async () => {
+    await open('cup-historian', 'draft', {
+      ...DRAFT,
+      instructions: 'Use [[tool:sample_rows]].',
+      tools: ['sample_rows'],
+    });
+    expect(editor.legacyNotice()).toBeFalse();
+    expect(editor.changed()).toBeFalse();
+
+    await open('cup-historian', 'draft', { ...DRAFT, tools: undefined });
+    expect(editor.legacyNotice()).toBeTrue();
+    const saved = editor.save();
+    http.expectOne(`${API_BASE_URL}/agents/cup-historian/draft`).flush({
+      ok: true,
+      message: 'saved',
+      agent: { key: 'cup-historian', id: 'cup-historian', status: 'draft' },
+    });
+    await saved;
+    expect(editor.legacyNotice()).toBeFalse();
   });
 
   it('a refused save changes nothing', async () => {

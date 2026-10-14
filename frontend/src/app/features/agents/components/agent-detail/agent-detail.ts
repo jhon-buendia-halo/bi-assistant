@@ -17,6 +17,7 @@ import {
   CircleCheck,
   CircleX,
   Cpu,
+  Network,
   Trash2,
   Gauge,
   Loader2,
@@ -52,14 +53,37 @@ import {
 } from '../../../datasources/models/datasource.model';
 import { DatasourcesApiService } from '../../../datasources/services/datasources-api.service';
 import { AgentSkills } from '../agent-skills/agent-skills';
+import { AgentGraph } from '../agent-graph/agent-graph';
+import { AgentLlmConfig } from '../agent-llm-config/agent-llm-config';
+import { AgentToolLinks } from '../agent-tool-links/agent-tool-links';
+import { LinkedText } from '../linked-text/linked-text';
+import { knownLinks } from '../../services/prompt-links';
+import {
+  SkillSummary,
+  SkillsApiService,
+} from '../../services/skills-api.service';
 
-type AgentTab = 'prompt' | 'tools' | 'skills' | 'memory' | 'model' | 'evals';
+type AgentTab =
+  | 'prompt'
+  | 'tools'
+  | 'skills'
+  | 'graph'
+  | 'memory'
+  | 'model'
+  | 'evals';
 /** Sub-tabs inside the evals tab. */
 type EvalTab = 'questions' | 'runs';
 
 @Component({
   selector: 'app-agent-detail',
-  imports: [LucideAngularModule, AgentSkills],
+  imports: [
+    LucideAngularModule,
+    AgentSkills,
+    AgentGraph,
+    AgentLlmConfig,
+    AgentToolLinks,
+    LinkedText,
+  ],
   templateUrl: './agent-detail.html',
   styleUrl: './agent-detail.scss',
 })
@@ -71,6 +95,7 @@ export class AgentDetail implements OnDestroy {
   readonly CircleCheck = CircleCheck;
   readonly CircleX = CircleX;
   readonly Cpu = Cpu;
+  readonly Network = Network;
   readonly Gauge = Gauge;
   readonly Loader2 = Loader2;
   readonly ListChecks = ListChecks;
@@ -85,6 +110,7 @@ export class AgentDetail implements OnDestroy {
   readonly Wrench = Wrench;
 
   private readonly api = inject(AgentsApiService);
+  private readonly skillsApi = inject(SkillsApiService);
   private readonly datasourcesApi = inject(DatasourcesApiService);
   private readonly evalSelection = inject(EvalSelectionService);
   private readonly toast = inject(ToastService);
@@ -146,8 +172,9 @@ export class AgentDetail implements OnDestroy {
         label: `Skills${skills ? ` (${skills.skills.length})` : ''}`,
         icon: this.BookOpen,
       },
+      { id: 'graph' as const, label: 'Graph', icon: this.Network },
       { id: 'memory' as const, label: 'Memory', icon: this.Brain },
-      { id: 'model' as const, label: 'Model', icon: this.Cpu },
+      { id: 'model' as const, label: 'LLM Config', icon: this.Cpu },
       { id: 'evals' as const, label: 'Evals', icon: this.Gauge },
     ];
   });
@@ -203,11 +230,43 @@ export class AgentDetail implements OnDestroy {
     });
   }
 
+  /** The owner's skills, for the Graph tab and the instruction chips. */
+  readonly librarySkills = signal<SkillSummary[] | null>(null);
+  readonly librarySkillsError = signal<string | null>(null);
+  /** The names that exist, so a link to anything else shows as not found. */
+  readonly knownLinkSet = computed(() =>
+    knownLinks(this.librarySkills() ?? []),
+  );
+
+  private loadLibrarySkills(key: string): void {
+    this.librarySkills.set(null);
+    this.librarySkillsError.set(null);
+    this.skillsApi.list().subscribe({
+      next: (res) => {
+        if (this.agentKey() === key) this.librarySkills.set(res.skills);
+      },
+      error: (err) => {
+        if (this.agentKey() === key) {
+          this.librarySkillsError.set(
+            err?.error?.message ?? 'Backend unreachable',
+          );
+        }
+      },
+    });
+  }
+
+  /** Whether the user agent sets its own model. */
+  readonly modelOverride = computed(() => {
+    const agent = this.agent();
+    return !!(agent?.live ?? agent?.draft)?.model;
+  });
+
   private loadAgent(key: string): void {
     this.api.getAgent(key).subscribe({
       next: (agent) => {
         this.agent.set(agent);
         this.loading.set(false);
+        if (agent.kind === 'user') this.loadLibrarySkills(key);
       },
       error: (err) => {
         this.error.set(err?.error?.message ?? 'Backend unreachable');

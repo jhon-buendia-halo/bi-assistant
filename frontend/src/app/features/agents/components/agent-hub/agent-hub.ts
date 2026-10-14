@@ -8,6 +8,7 @@ import {
   signal,
 } from '@angular/core';
 import {
+  BookOpen,
   ChevronDown,
   ChevronUp,
   Loader2,
@@ -39,6 +40,7 @@ import { AgentCard } from '../agent-card/agent-card';
   templateUrl: './agent-hub.html',
 })
 export class AgentHub implements OnInit {
+  readonly BookOpen = BookOpen;
   readonly ChevronDown = ChevronDown;
   readonly ChevronUp = ChevronUp;
   readonly Loader2 = Loader2;
@@ -55,6 +57,8 @@ export class AgentHub implements OnInit {
   readonly openAgent = output<Agent>();
   /** New agent; the shell opens the agent editor (R54). */
   readonly newAgent = output<void>();
+  /** Skills; the shell opens the skills library (R68). */
+  readonly openSkills = output<void>();
   /** Start chat on a card; the shell creates or composes the session (R53). */
   readonly startChat = output<Agent>();
   /** Key of the agent whose session is being created, if any. */

@@ -786,7 +786,7 @@ A behaviour-preserving refactor of the app's Mastra agents to the Agent Skills l
 
 ### Milestone 1.14 — Agent Hub: tools and skills per agent ([BA-213](https://halo-powered.atlassian.net/browse/BA-213))
 
-A user agent's builder chooses its tools from the assistant's own set, writes skills in the app and assigns them to any of their agents. Instructions stay layered on the fixed core prompt, and every guard enforced in code holds for every agent. Builds on Milestone 1.9 (ADR-0008) and Milestone 1.13 (ADR-0020); 1.14.3 and 1.14.4 depend on [BA-211](https://halo-powered.atlassian.net/browse/BA-211). All stories are built on the branch `feat/BA-213-agent-tools-skills` and ship as one PR. Epic spec: [specs/epics/BA-213/spec.md](specs/epics/BA-213/spec.md). Decision: ADR-0021 in [specs/system/architecture.md](specs/system/architecture.md).
+A user agent's builder chooses its tools from the assistant's own set, writes skills in the app and assigns them to any of their agents; from 1.14.6 the builder does both by linking skills and tools in the agent's instructions (ADR-0023). Instructions stay layered on the fixed core prompt, and every guard enforced in code holds for every agent. Builds on Milestone 1.9 (ADR-0008) and Milestone 1.13 (ADR-0020). [BA-211](https://halo-powered.atlassian.net/browse/BA-211) (removing the skill folders) is not a dependency. All stories are built on the branch `feat/BA-213-agent-tools-skills` and ship as one PR. Epic spec: [specs/epics/BA-213/spec.md](specs/epics/BA-213/spec.md). Decisions: ADR-0021 and ADR-0023 in [specs/system/architecture.md](specs/system/architecture.md).
 
 #### 1.14.1 — ADR, epic spec and roadmap for agent tools and skills ([BA-214](https://halo-powered.atlassian.net/browse/BA-214))  `✅ Done`
 - **Intent:** the epic is scoped, its runtime approach decided and its prompt cost measured before any code.
@@ -800,21 +800,49 @@ A user agent's builder chooses its tools from the assistant's own set, writes sk
 - **Scope:** `tools` in the agent configuration (absent means all); the assistant's tools and prompt built per call from the requestContext; `list_entities`, `describe_entity` and `run_readonly_sql` always on; `sample_rows`, `ask_clarification` and Visuals (`create_visual` + `update_visual`) optional; tool-free replacement wording for the rules that name a tool that is off; a tool picker in the agent editor; the preview runs the draft's tools; eval cases with clarification off and with Visuals off.
 - **Out of scope:** new tools; tools for the System agents.
 - **Acceptance:** a golden test proves the plain assistant's prompt is unchanged; a recording-stub E2E proves a tool turned off is not offered; the world-cup evals and the new cases pass at 100% over 3 runs.
-- **Notes:** does not depend on BA-211.
+- **Notes:** does not depend on BA-211. The checkbox tool picker is replaced by links in the instructions in 1.14.6 ([BA-219](https://halo-powered.atlassian.net/browse/BA-219)); the stored `tools` list stays, derived from the links.
 
-#### 1.14.3 — Write skills in the app ([BA-215](https://halo-powered.atlassian.net/browse/BA-215))  `📋 Planned`
+#### 1.14.3 — Write skills in the app ([BA-215](https://halo-powered.atlassian.net/browse/BA-215))  `🚧 In progress`
 - **Intent:** a user captures reusable know-how as a skill without touching the disk or restarting the app.
 - **Scope:** an owner-scoped `skills` collection (name, description, body, reference files); create, list, get, update and delete endpoints; a skills library page and a skill editor in the Agents area; the file-skill checks (kebab-case name unique per owner and not a built-in name, `Use when` description, linked files present) and size limits.
 - **Out of scope:** scripts; overriding built-in skills; sharing skills between users.
 - **Acceptance:** Playwright covers create → edit → delete and each refusal; an API test proves two users never see each other's skills.
-- **Notes:** depends on BA-211 being merged.
+- **Notes:** endpoints 94-98 in api.md 2.6.1; rules R68-R74.
 
-#### 1.14.4 — Assign skills to an agent ([BA-216](https://halo-powered.atlassian.net/browse/BA-216))  `📋 Planned`
+#### 1.14.4 — Assign skills to an agent ([BA-216](https://halo-powered.atlassian.net/browse/BA-216))  `🚧 In progress`
 - **Intent:** the same skill serves several agents, and a Live agent never changes until it is republished.
 - **Scope:** `skills` in the agent configuration; a skill picker in the agent editor; the agent session's catalog (built-in on-demand skills plus the agent's); `read_file` over a virtual location for in-app skills; publish copies the skills' content into the Live version; the agent page's Skills tab for user agents; agent transfer carries the draft's skill references.
 - **Out of scope:** in-app skills for the plain assistant.
 - **Acceptance:** a recording-stub E2E proves an assigned skill is in the catalog, `read_file` returns its body, and a Live session keeps the published copy after the skill is edited; the world-cup evals pass at 100% over 3 runs.
-- **Notes:** depends on 1.14.3 and on BA-211 being merged.
+- **Notes:** depends on 1.14.3. In-app skill locations are virtual paths under `/in-app-skills/`, read by the unchanged `read_file`, so the plain assistant's prompt stays byte-identical. The checkbox skill picker is replaced by links in the instructions in 1.14.6 ([BA-219](https://halo-powered.atlassian.net/browse/BA-219)); the stored `skills` list stays, derived from the links.
+
+#### 1.14.5 — Edit built-in skills in the app ([BA-218](https://halo-powered.atlassian.net/browse/BA-218))  `🚧 In progress`
+- **Intent:** every skill can be changed from the app, the built-in ones included, without breaking the pipelines that fill their templates.
+- **Scope:** ADR-0022; the skills library's Built-in section; a built-in skill editor (description, body, the built-in's own files; no files added or removed); org-wide overrides in a shared `skill_overrides` collection, resolved per call over every other level; the folder-override checks (placeholders kept); **Modified** chip, **Reset to built-in**, and a notice when the shipped built-in changed; `edit-policies` to change, Use agents to view.
+- **Out of scope:** per-user overrides; version history of an override; editing a built-in's file list.
+- **Acceptance:** an API test proves a refused override (a missing placeholder) changes nothing; a recording-stub E2E proves a `curated-knowledge` override's description reaches the plain assistant's catalog and Reset restores the built-in; a user without `edit-policies` can't save; the world-cup evals pass at 100% over 3 runs with no override.
+- **Notes:** decisions taken with the user on 2026-10-14: Platform admin only, all three built-ins, applied on Save with Reset as the undo.
+
+#### 1.14.6 — Link skills and tools in an agent's instructions ([BA-219](https://halo-powered.atlassian.net/browse/BA-219))  `🚧 In progress`
+- **Intent:** the agent's builder writes its instructions and links the skills and tools it should use with `/`, and what is linked is what the agent gets, replacing the checkbox pickers.
+- **Scope:** ADR-0023; `[[skill:<name>]]` and `[[tool:<name>]]` in the instructions; a lazy-loaded Tiptap editor with the `/` menu, chips (broken links in a danger colour), **+ Link skill** and **+ Link tool**, counters and hints; the backend derives `tools` and `skills` from the links on every save and ignores the request's lists; refusals `Unknown skill`, `Unknown tool` and the 10-skill cap; links become plain mentions in Block 5; a skill linked by a draft can't be deleted or renamed; legacy agents get a `Tools and skills:` line and a notice; read-only chips on the Prompt template tab; the editor's Tools and Skills checkboxes are removed (replacing the pickers of 1.14.2 and 1.14.4).
+- **Out of scope:** linking built-in skills; skills linking skills; replacing the core prompt; a draft-wide link rewrite when a skill is renamed.
+- **Acceptance:** unit tests for link parsing, derivation, resolution and the refusals; a recording-stub E2E proves only linked tools are offered, a linked skill reaches the catalog and the model never sees `[[`; `/` inside a word doesn't open the menu; the plain assistant's prompt is byte-identical; the world-cup evals pass at 100% over 3 runs.
+- **Notes:** design in [proposals/ba-219-221-design.md](proposals/ba-219-221-design.md), applying the agent-poc *Agent configurator guide* on this app's architecture. Rules R43, R55, R60, R72, R81-R86.
+
+#### 1.14.7 — Skills link tools ([BA-220](https://halo-powered.atlassian.net/browse/BA-220))  `🚧 In progress`
+- **Intent:** a skill carries the tools it needs, so an agent that links the skill gets them.
+- **Scope:** the skill editor's Body is the link editor, tools only; `Skills can link tools only` and `Unknown tool` refusals; `tools` on `SkillSummary`; the optional tools an agent's linked skills link are added to its selection at call time (Live copies, or the current skills in a preview); in-app `SKILL.md` content served with links resolved and shown as chips on the Skills tab.
+- **Out of scope:** links in built-in skill bodies or overrides; skills linking skills.
+- **Acceptance:** unit tests for the effective selection (direct links plus skill links, Live copies versus preview); a recording-stub E2E proves a linked skill's tool is offered; `read_file` serves no `[[`.
+- **Notes:** depends on 1.14.6. Rules R70, R84, R86.
+
+#### 1.14.8 — Tools library, Graph and LLM Config tabs ([BA-221](https://halo-powered.atlassian.net/browse/BA-221))  `🚧 In progress`
+- **Intent:** the builder sees why each tool is there, how instructions, skills and tools connect, and which model settings the agent runs on.
+- **Scope:** the Tools tab of a user agent as the whole library with `Always on`, `Linked` and `Not linked` and where each link comes from; a new Graph tab (SVG, three columns, hover and focus highlight, legend, **Show unlinked**, the four steps of what happens on each message; `buildFlowGraph` as a pure function); the Model tab becomes **LLM Config** (provider, model, API key `Set` or `Not set`, max output tokens, reasoning effort; never the key); `toolLinks` and `llm` in the agent detail (api 34).
+- **Out of scope:** editing LLM settings from the tab; a graph for built-in agents.
+- **Acceptance:** unit tests for the graph layout and `connectedTo`, `toolLinks` and that `llm` never carries the key; Playwright shows the chain instructions to skill to tool, the `Show unlinked` toggle, and `API key Set` without the key.
+- **Notes:** depends on 1.14.6 and 1.14.7. Rules R87-R89.
 
 ## Release 2 — Multi-user  (no target date yet)
 

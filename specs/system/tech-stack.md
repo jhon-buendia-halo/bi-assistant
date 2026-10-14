@@ -28,6 +28,7 @@ Versions are taken from `frontend/package.json` and `backend/package.json`. A ba
 | `@fontsource/noto-sans` | 5.3.0 | The bundled Noto Sans webfont (OFL-1.1), Latin subset, weights 400/500/600/700, listed in the `styles` of `angular.json` so the font files ship with the renderer ([ui.md](ui.md) §6.2). |
 | marked | 18.0.13 | Renders assistant markdown in the chat (`shared/pipes/markdown.pipe.ts`). |
 | DOMPurify | 3.4.15 | Sanitises the HTML `marked` produces before it is bound into the page. |
+| Tiptap (`@tiptap/core`, `@tiptap/pm`, `@tiptap/extension-document`, `-paragraph`, `-text`, `-mention`, `@tiptap/extensions`, `@tiptap/suggestion`) | 3.31.3 (all, pinned exact) | The link editor of an agent's instructions and a skill's body (ui.md 4.5.5, ADR-0023). Loaded lazily with a dynamic `import()`, so it stays out of the initial bundle. |
 | tslib | ^2.3.0 | TypeScript helpers (`importHelpers`). |
 | Playwright (`@playwright/test`) | 1.63.0 | End-to-end tests. They drive the web app in Chromium by default and the real Electron app (`_electron.launch`) in the `desktop` project. |
 | axe-core | 4.13.0 | Accessibility audit injected into the page by the layout spec. |

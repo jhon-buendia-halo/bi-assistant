@@ -4,6 +4,7 @@ jest.mock('../../mastra/mastra.service', () => ({ MastraService: class {} }));
 jest.mock('../../mastra/evals/assistant.evals', () => ({
   ASSISTANT_EVAL_SETS: [],
 }));
+jest.mock('../llm/llm.service', () => ({ LlmService: class {} }));
 
 import BetterSqlite3 from 'better-sqlite3';
 import { SqliteDocStore } from '../../infrastructure/database/sqlite-doc-store';
@@ -11,6 +12,8 @@ import type { MastraService } from '../../mastra/mastra.service';
 import type { DatasetsRepository } from '../datasets/repositories/datasets.repository';
 import { CurrentUserService, LOCAL_USER } from '../auth/current-user.service';
 import { BuiltinAgentPinsRepository } from '../user-agents/repositories/builtin-agent-pins.repository';
+import type { SkillDoc } from '../skills/entities/skill.entity';
+import { SkillsRepository } from '../skills/repositories/skills.repository';
 import { UserAgentsRepository } from '../user-agents/repositories/user-agents.repository';
 import { UserAgentsService } from '../user-agents/user-agents.service';
 import { AgentsService } from './agents.service';
@@ -64,12 +67,14 @@ const asDemoUser =
 
 function build() {
   const db = new BetterSqlite3(':memory:');
+  const skills = new SqliteDocStore<SkillDoc>(db, 'skills');
   const userAgents = new UserAgentsService(
     new UserAgentsRepository(new SqliteDocStore(db, 'agents')),
     new BuiltinAgentPinsRepository(new SqliteDocStore(db, 'settings'), users),
     {
       list: jest.fn().mockResolvedValue([{ name: 'World Cup Core' }]),
     } as unknown as DatasetsRepository,
+    new SkillsRepository(skills),
   );
   const registry = {
     'sql-fixer': fakeAgent('sql-fixer', ['b']),
@@ -81,7 +86,7 @@ function build() {
     'assistant-eval-judge': fakeAgent('assistant-eval-judge', []),
   };
   const mastra = { listAgents: () => registry } as unknown as MastraService;
-  return { db, service: new AgentsService(mastra, userAgents) };
+  return { db, skills, service: new AgentsService(mastra, userAgents) };
 }
 
 describe('AgentsService (built-in and user agents)', () => {
@@ -138,7 +143,8 @@ describe('AgentsService (built-in and user agents)', () => {
         id: created.id,
         name: 'Health plan analyst',
         description: 'Plans',
-        tools: ['create_visual', 'run_readonly_sql'],
+        // No links: only the always-on tools (ADR-0023).
+        tools: ['run_readonly_sql'],
         kind: 'user',
         status: 'draft',
         pinned: false,
@@ -196,13 +202,12 @@ describe('AgentsService (built-in and user agents)', () => {
         key: created.id,
         kind: 'user',
         status: 'live',
-        instructions: 'You are the assistant.',
+        instructions: 'You are the assistant. [tools: ]',
         draft: { instructions: 'Focus on plans' },
         live: { instructions: 'Focus on plans' },
         model: null,
       });
       expect(detail?.toolDetails.map((tool) => tool.name)).toEqual([
-        'create_visual',
         'run_readonly_sql',
       ]);
       expect(await ctx.service.get('unknown')).toBeNull();
@@ -215,7 +220,7 @@ describe('AgentsService (built-in and user agents)', () => {
       const created = await ctx.service.create({
         name: 'KPI lookup',
         datasets: ['World Cup Core'],
-        tools: ['sample_rows'],
+        instructions: 'Look at [[tool:sample_rows]].',
       });
 
       // Draft only: the draft's selection.
@@ -237,13 +242,13 @@ describe('AgentsService (built-in and user agents)', () => {
       await ctx.service.saveDraft(created.id, {
         name: 'KPI lookup',
         datasets: ['World Cup Core'],
-        tools: ['sample_rows', 'ask_clarification', 'visuals'],
+        instructions:
+          '[[tool:sample_rows]] [[tool:ask_clarification]] [[tool:create_visual]]',
       });
       await ctx.service.publish(created.id);
       await ctx.service.saveDraft(created.id, {
         name: 'KPI lookup',
         datasets: ['World Cup Core'],
-        tools: [],
       });
       summary = (await ctx.service.list()).find(
         (agent) => agent.key === created.id,
@@ -344,4 +349,264 @@ describe('AgentsService (built-in and user agents)', () => {
       ).rejects.toThrow('Skill "deep-analysis" has no file "phases/9.md"');
     }),
   );
+  describe("a user agent's in-app skills (ADR-0021; api.md 34a, 34b)", () => {
+    const skill = (id: string, name: string, body: string): SkillDoc => ({
+      id,
+      name,
+      description: `Use when ${name}.`,
+      body,
+      files: [{ path: 'reference/q.md', content: 'Q1 is July.' }],
+    });
+
+    it(
+      "follows the assistant's skills with the draft's current ones, then the Live copies after a publish",
+      asDemoUser(async () => {
+        await ctx.skills.insert(skill('s2', 'zeta', 'Z body.'));
+        await ctx.skills.insert(skill('s1', 'alpha', 'A body.'));
+        const created = await ctx.service.create({
+          name: 'Analyst',
+          datasets: ['World Cup Core'],
+          instructions: 'Use [[skill:zeta]] and [[skill:alpha]].',
+        });
+        const inApp = (view: { skills: { level: string; name: string }[] }) =>
+          view.skills.filter((entry) => entry.level === 'in-app');
+
+        const draftView = await ctx.service.skills(created.id);
+        expect(draftView.skills.map((s) => s.name).slice(-2)).toEqual([
+          'alpha',
+          'zeta',
+        ]);
+        expect(inApp(draftView)[0]).toMatchObject({
+          name: 'alpha',
+          description: 'Use when alpha.',
+          level: 'in-app',
+          loading: 'on-demand',
+          overrides: [],
+          warnings: [],
+          files: [
+            {
+              path: 'SKILL.md',
+              size: Buffer.byteLength(
+                '---\nname: alpha\ndescription: Use when alpha.\n---\n\nA body.',
+              ),
+            },
+            { path: 'reference/q.md', size: 11 },
+          ],
+        });
+        // The levels row never lists in-app.
+        expect(draftView.levels.map((l) => l.level)).toEqual([
+          'built-in',
+          'user',
+          'project',
+        ]);
+
+        await ctx.service.publish(created.id);
+        await ctx.skills.update({ id: 's1' }, { body: 'Edited.' });
+        const skillMd = await ctx.service.skillFile(
+          created.id,
+          'alpha',
+          'SKILL.md',
+        );
+        expect(skillMd.content).toBe(
+          '---\nname: alpha\ndescription: Use when alpha.\n---\n\nA body.',
+        );
+        expect(
+          (await ctx.service.skillFile(created.id, 'alpha', 'reference/q.md'))
+            .content,
+        ).toBe('Q1 is July.');
+        await expect(
+          ctx.service.skillFile(created.id, 'alpha', 'reference/nope.md'),
+        ).rejects.toThrow('Skill "alpha" has no file "reference/nope.md"');
+        // Another agent's skill is not this agent's.
+        await expect(
+          ctx.service.skillFile('assistant', 'alpha', 'SKILL.md'),
+        ).rejects.toThrow('Agent "assistant" has no skill "alpha"');
+      }),
+    );
+
+    it(
+      'flags unpublished changes when a skill is edited after the publish, and shows no in-app skills for built-ins',
+      asDemoUser(async () => {
+        await ctx.skills.insert(skill('s1', 'alpha', 'A body.'));
+        const created = await ctx.service.create({
+          name: 'Analyst',
+          datasets: ['World Cup Core'],
+          instructions: 'Use [[skill:alpha]].',
+        });
+        const published = await ctx.service.publish(created.id);
+        expect(published.hasUnpublishedChanges).toBe(false);
+        await ctx.skills.update({ id: 's1' }, { body: 'Edited.' });
+        const listed = (await ctx.service.list()).find(
+          (agent) => agent.key === created.id,
+        );
+        expect(listed?.hasUnpublishedChanges).toBe(true);
+        expect(
+          (await ctx.service.skills('assistant')).skills.some(
+            (s) => s.level === 'in-app',
+          ),
+        ).toBe(false);
+      }),
+    );
+  });
+
+  describe('links (ADR-0023; api.md 34)', () => {
+    const skill = (name: string, body: string): SkillDoc => ({
+      id: `id-${name}`,
+      name,
+      description: `Use when ${name}.`,
+      body,
+      files: [],
+    });
+    const link = (
+      detail: { toolLinks?: { name: string; status?: string }[] } | null,
+      name: string,
+    ) => detail?.toolLinks?.find((entry) => entry.name === name);
+
+    it(
+      'adds the tools a linked skill links to the selection and reports where each link comes from',
+      asDemoUser(async () => {
+        await ctx.skills.insert(skill('alpha', 'Use [[tool:sample_rows]].'));
+        await ctx.skills.insert(skill('beta', 'Also [[tool:sample_rows]].'));
+        const created = await ctx.service.create({
+          name: 'Analyst',
+          datasets: ['World Cup Core'],
+          instructions:
+            'Use [[skill:alpha]], [[skill:beta]] and [[tool:update_visual]] and [[tool:run_readonly_sql]].',
+        });
+        const detail = await ctx.service.get(created.id);
+        expect(detail?.toolLinks?.map((entry) => entry.name)).toEqual([
+          'ask_clarification',
+          'create_visual',
+          'describe_entity',
+          'list_entities',
+          'run_readonly_sql',
+          'sample_rows',
+          'update_visual',
+        ]);
+        expect(link(detail, 'sample_rows')).toEqual({
+          name: 'sample_rows',
+          status: 'linked',
+          linkedVia: { instructions: false, skills: ['alpha', 'beta'] },
+        });
+        // The pair: linking one gives both.
+        expect(link(detail, 'update_visual')).toMatchObject({
+          status: 'linked',
+          linkedVia: { instructions: true, skills: [] },
+        });
+        expect(link(detail, 'create_visual')).toMatchObject({
+          status: 'linked',
+        });
+        expect(link(detail, 'ask_clarification')).toEqual({
+          name: 'ask_clarification',
+          status: 'not-linked',
+          linkedVia: { instructions: false, skills: [] },
+        });
+        expect(link(detail, 'run_readonly_sql')).toEqual({
+          name: 'run_readonly_sql',
+          status: 'always-on',
+          linkedVia: { instructions: true, skills: [] },
+        });
+        expect(link(detail, 'list_entities')?.status).toBe('always-on');
+        // sample_rows comes only through the skills, yet the agent has it.
+        expect(detail?.instructions).toBe(
+          'You are the assistant. [tools: sample_rows,visuals]',
+        );
+        // A built-in agent has no links.
+        expect((await ctx.service.get('assistant'))?.toolLinks).toBeUndefined();
+      }),
+    );
+
+    it(
+      'reads toolLinks from the Live version and its copies, not the draft',
+      asDemoUser(async () => {
+        await ctx.skills.insert(skill('alpha', 'Use [[tool:sample_rows]].'));
+        const created = await ctx.service.create({
+          name: 'Analyst',
+          datasets: ['World Cup Core'],
+          instructions: 'Use [[skill:alpha]].',
+        });
+        await ctx.service.publish(created.id);
+        await ctx.skills.update({ id: 'id-alpha' }, { body: 'No tools.' });
+        await ctx.service.saveDraft(created.id, {
+          name: 'Analyst',
+          datasets: ['World Cup Core'],
+          instructions: 'Nothing linked.',
+        });
+        const detail = await ctx.service.get(created.id);
+        expect(link(detail, 'sample_rows')).toMatchObject({
+          status: 'linked',
+          linkedVia: { instructions: false, skills: ['alpha'] },
+        });
+      }),
+    );
+
+    it('serves the LLM settings of any agent without the key', async () => {
+      const db = new BetterSqlite3(':memory:');
+      const llm = {
+        getView: jest.fn().mockResolvedValue({
+          provider: 'openai',
+          model: 'gpt-5',
+          baseUrl: null,
+          apiKeyMasked: '••••••••1234',
+          reasoningEffort: 'high',
+          configured: true,
+        }),
+      };
+      const registry = { assistant: fakeAgent('assistant', []) };
+      const service = new AgentsService(
+        { listAgents: () => registry } as unknown as MastraService,
+        new UserAgentsService(
+          new UserAgentsRepository(new SqliteDocStore(db, 'agents')),
+          new BuiltinAgentPinsRepository(
+            new SqliteDocStore(db, 'settings'),
+            users,
+          ),
+          {
+            list: jest.fn().mockResolvedValue([{ name: 'World Cup Core' }]),
+          } as unknown as DatasetsRepository,
+          new SkillsRepository(new SqliteDocStore(db, 'skills')),
+        ),
+        llm as never,
+      );
+      await users.runAs(LOCAL_USER, async () => {
+        expect((await service.get('assistant'))?.llm).toEqual({
+          provider: 'openai',
+          providerName: 'OpenAI',
+          model: 'gpt-5',
+          apiKeyConfigured: true,
+          maxOutputTokens: null,
+          reasoningEffort: 'high',
+        });
+        const created = await service.create({
+          name: 'Fast',
+          datasets: ['World Cup Core'],
+          model: 'gpt-5.1',
+          reasoningEffort: 'low',
+        });
+        const detail = await service.get(created.id);
+        expect(detail?.llm).toMatchObject({
+          model: 'gpt-5.1',
+          reasoningEffort: 'low',
+        });
+        expect(JSON.stringify(detail)).not.toContain('1234');
+        llm.getView.mockResolvedValue({
+          provider: null,
+          model: null,
+          baseUrl: null,
+          apiKeyMasked: null,
+          reasoningEffort: 'high',
+          configured: false,
+        });
+        expect((await service.get('assistant'))?.llm).toEqual({
+          provider: null,
+          providerName: null,
+          model: null,
+          apiKeyConfigured: false,
+          maxOutputTokens: null,
+          reasoningEffort: null,
+        });
+      });
+      db.close();
+    });
+  });
 });

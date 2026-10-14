@@ -35,6 +35,8 @@ import { join } from 'path';
 import { RequestContext } from '@mastra/core/request-context';
 import { catalogSkills } from '../app-skills';
 import { AGENT_TOOLS_CONTEXT_KEY } from '../agent-tools';
+import { AGENT_SKILLS_CONTEXT_KEY, type AgentSkill } from '../agent-skills';
+import { setSkillOverrides } from '../skill-overrides';
 import { assistantAgent, assistantVariant } from './assistant.agent';
 
 /**
@@ -151,5 +153,104 @@ describe('assistant tool selection (ADR-0021, agents.md 2.1)', () => {
       assistantVariant(['sample_rows']),
     );
     expect(assistantVariant()).not.toBe(assistantVariant([]));
+  });
+});
+
+describe("an agent's in-app skills in the catalog (ADR-0021, agents.md 7.3)", () => {
+  const fiscal: AgentSkill = {
+    id: 's1',
+    name: 'fiscal-calendar',
+    description: 'Use when a question names a fiscal year.',
+    body: 'Our fiscal year starts on 1 July.',
+    files: [],
+  };
+  const aaa: AgentSkill = { ...fiscal, id: 's2', name: 'aaa-first' };
+
+  async function promptWith(
+    skills?: AgentSkill[],
+    tools?: string[],
+  ): Promise<string> {
+    const requestContext = contextWith(tools);
+    if (skills) requestContext.set(AGENT_SKILLS_CONTEXT_KEY, skills);
+    return (await assistantAgent.getInstructions({ requestContext })) as string;
+  }
+
+  it('is byte-identical to today without skills, even with an empty list', async () => {
+    expect(portable(await promptWith(undefined))).toBe(GOLDEN);
+    expect(portable(await promptWith([]))).toBe(GOLDEN);
+  });
+
+  it('lists the agent skills with their virtual location, sorted with the built-in ones', async () => {
+    const text = await promptWith([fiscal, aaa]);
+    const names = [...text.matchAll(/<name>(.+?)<\/name>/g)].map((m) => m[1]);
+    expect(names).toEqual([
+      'aaa-first',
+      'curated-knowledge',
+      'fiscal-calendar',
+    ]);
+    expect(text).toContain(
+      '    <name>fiscal-calendar</name>\n    <description>Use when a question names a fiscal year.</description>\n    <location>/in-app-skills/fiscal-calendar/SKILL.md</location>',
+    );
+    // Only the Skills section changes.
+    const before = (await promptWith(undefined)).split('## Skills')[0];
+    expect(text.split('## Skills')[0]).toBe(before);
+  });
+
+  it('keeps the tools, and the selection wording, with skills', async () => {
+    expect(
+      Object.keys(
+        await assistantAgent.listTools({
+          requestContext: (() => {
+            const context = contextWith(['sample_rows']);
+            context.set(AGENT_SKILLS_CONTEXT_KEY, [fiscal]);
+            return context;
+          })(),
+        }),
+      ),
+    ).toEqual(await toolNames(['sample_rows']));
+    expect(await promptWith([fiscal], ['sample_rows'])).toContain(
+      "- You can't create or change visuals in this session.",
+    );
+  });
+
+  it('does not cache the skills case, and keeps the base variants cached', () => {
+    expect(assistantVariant(undefined, [fiscal])).not.toBe(
+      assistantVariant(undefined, [fiscal]),
+    );
+    expect(assistantVariant(undefined, [fiscal]).tools).toBe(
+      assistantVariant().tools,
+    );
+    expect(assistantVariant(undefined, [])).toBe(assistantVariant());
+  });
+});
+
+describe('assistant prompt with an in-app override of a built-in skill (ADR-0022)', () => {
+  afterEach(() => setSkillOverrides([]));
+
+  it('rebuilds the cached variants when an override changes, and restores the golden prompt on reset', async () => {
+    const cached = assistantVariant();
+    setSkillOverrides([
+      {
+        name: 'curated-knowledge',
+        description: 'Use when the edited description applies.',
+        body: 'Edited body.',
+        files: [],
+        baseHash: 'h',
+      },
+    ]);
+    const changed = assistantVariant();
+    expect(changed).not.toBe(cached);
+    expect(changed.instructions).toContain(
+      'Use when the edited description applies.',
+    );
+    expect(await prompt()).toContain(
+      'Use when the edited description applies.',
+    );
+    // The same version is cached again.
+    expect(assistantVariant()).toBe(changed);
+
+    setSkillOverrides([]);
+    expect(portable(await prompt())).toBe(GOLDEN);
+    expect(Object.keys(await assistantAgent.listTools())).toEqual(FULL_TOOLS);
   });
 });

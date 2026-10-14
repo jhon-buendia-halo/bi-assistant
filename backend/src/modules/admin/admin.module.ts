@@ -5,6 +5,7 @@ import { AdminOverviewService } from './admin-overview.service';
 import { AdminReadService } from './admin-read.service';
 import { AdminService } from './admin.service';
 import { AllOwnersAgentsRepository } from './repositories/all-owners-agents.repository';
+import { AllOwnersSkillsRepository } from './repositories/all-owners-skills.repository';
 
 /**
  * The Admin area's API (admin R22, R34-R68; api.md 2.15). The directory,
@@ -19,6 +20,7 @@ import { AllOwnersAgentsRepository } from './repositories/all-owners-agents.repo
     AdminOverviewService,
     AdminDirectoryReader,
     AllOwnersAgentsRepository,
+    AllOwnersSkillsRepository,
   ],
 })
 export class AdminModule {}

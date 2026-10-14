@@ -185,15 +185,21 @@
             </h3>
             @if (agentInstructions()) {
               <pre
+                data-testid="agent-instructions"
                 class="mt-2 max-w-full overflow-x-auto rounded-xl bg-surface-muted p-4 font-mono text-[12px] leading-relaxed whitespace-pre-wrap text-fg"
-                >{{ agentInstructions() }}</pre>
+              ><app-linked-text [text]="agentInstructions()" [known]="knownLinkSet()" /></pre>
             } @else {
               <p class="mt-2 text-[13px] text-fg-muted">No instructions yet.</p>
             }
           }
         }
         @case ("tools") {
-          @if (agent.toolDetails.length === 0) {
+          @if (agent.toolLinks; as toolLinks) {
+            <app-agent-tool-links
+              [toolLinks]="toolLinks"
+              [toolDetails]="agent.toolDetails"
+            />
+          } @else if (agent.toolDetails.length === 0) {
             <p class="text-[13px] text-fg-muted">
               This agent runs in a single step with no tools.
             </p>
@@ -249,6 +255,32 @@
             />
           }
         }
+        @case ("graph") {
+          @if (isUserAgent() && agent.toolLinks; as toolLinks) {
+            @if (librarySkillsError(); as graphErr) {
+              <p class="text-[13px] text-on-danger-soft">{{ graphErr }}</p>
+            } @else if (librarySkills(); as library) {
+              <app-agent-graph
+                [instructions]="agentInstructions()"
+                [skills]="library"
+                [toolLinks]="toolLinks"
+              />
+            } @else {
+              <div class="flex items-center gap-2.5 text-[13px] text-fg-muted">
+                <lucide-angular
+                  [img]="Loader2"
+                  [size]="14"
+                  class="animate-spin"
+                />
+                <span>Loading graph…</span>
+              </div>
+            }
+          } @else {
+            <p class="text-[13px] text-fg-muted">
+              This agent has no links: it gets all of its tools.
+            </p>
+          }
+        }
         @case ("memory") {
           @if (agent.memory; as memory) {
             <div class="flex max-w-[520px] flex-col gap-2.5 text-[13px]">
@@ -292,24 +324,10 @@
           }
         }
         @case ("model") {
-          @if (agent.model; as model) {
-            <div class="flex max-w-[520px] flex-col gap-2.5 text-[13px]">
-              <div class="flex justify-between border-b border-border pb-2.5">
-                <span class="text-fg-muted">Model</span>
-                <span class="font-mono text-fg">{{ model.id }}</span>
-              </div>
-              <div class="flex justify-between">
-                <span class="text-fg-muted">Provider</span>
-                <span class="font-mono text-fg">{{
-                  model.provider
-                }}</span>
-              </div>
-            </div>
-          } @else {
-            <p class="text-[13px] text-fg-muted">
-              No model resolved — save an LLM configuration in Settings first.
-            </p>
-          }
+          <app-agent-llm-config
+            [llm]="agent.llm"
+            [modelOverride]="modelOverride()"
+          />
         }
         @case ("evals") {
           @if (evalSets().length > 0 || evalTab() === "runs") {

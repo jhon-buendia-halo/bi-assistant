@@ -1,0 +1,97 @@
+<div class="flex flex-col">
+  <button type="button" (click)="back.emit()" class="btn btn-ghost w-fit">
+    <lucide-angular [img]="ArrowLeft" [size]="15" />
+    <span>Back</span>
+  </button>
+
+  <div class="mt-4 flex items-center">
+    <h2
+      class="text-[24px] leading-8 font-light tracking-[0.12px] text-fg-strong"
+    >
+      Skills
+    </h2>
+    @if (auth.can("create-agents")) {
+      <button
+        type="button"
+        data-testid="skill-new"
+        (click)="openSkill.emit(null)"
+        class="btn btn-primary ml-auto"
+      >
+        <lucide-angular [img]="Plus" [size]="14" />
+        <span>New skill</span>
+      </button>
+    }
+  </div>
+
+  @if (loading()) {
+    <div class="mt-10 flex items-center gap-2.5 text-fg-muted">
+      <lucide-angular [img]="Loader2" [size]="16" class="animate-spin" />
+      <span>Loading skills…</span>
+    </div>
+  } @else if (error(); as err) {
+    <p
+      class="mt-8 rounded-md bg-danger-soft px-3 py-2.5 text-[13px] text-on-danger-soft"
+    >
+      {{ err }}
+    </p>
+  } @else {
+    <h3 class="mt-6 text-[13px] font-semibold text-fg-muted">Your skills</h3>
+    <div class="card mt-2 flex flex-col">
+      @for (skill of skills(); track skill.id) {
+        <button
+          type="button"
+          [attr.data-testid]="'skill-row-' + skill.name"
+          (click)="openSkill.emit(skill)"
+          class="flex w-full items-start gap-4 border-b border-border p-4 text-left last:border-b-0 hover:bg-surface-muted"
+        >
+          <span class="flex min-w-0 flex-1 flex-col gap-1">
+            <span class="font-mono text-[14px] text-fg-strong">{{
+              skill.name
+            }}</span>
+            <span class="line-clamp-2 text-[13px] text-fg-muted">{{
+              skill.description
+            }}</span>
+          </span>
+          <span class="shrink-0 text-[12px] text-fg-muted">{{
+            usedBy(skill.agents)
+          }}</span>
+        </button>
+      } @empty {
+        <p class="p-8 text-center text-[13px] text-fg-muted">
+          No skills yet. A skill is know-how an agent reads when a question
+          needs it.
+        </p>
+      }
+    </div>
+
+    <h3 class="mt-8 text-[13px] font-semibold text-fg-muted">
+      Built-in · included in every agent
+    </h3>
+    <div class="card mt-2 flex flex-col">
+      @for (skill of builtIn(); track skill.name) {
+        <button
+          type="button"
+          [attr.data-testid]="'builtin-skill-row-' + skill.name"
+          (click)="openBuiltIn.emit(skill.name)"
+          class="flex w-full flex-col items-start gap-1 border-b border-border p-4 text-left last:border-b-0 hover:bg-surface-muted"
+        >
+          <span class="flex flex-wrap items-center gap-2">
+            <span class="font-mono text-[14px] text-fg-strong">{{
+              skill.name
+            }}</span>
+            <span class="chip">{{ loadingLabel(skill.loading) }}</span>
+            @if (skill.modified) {
+              <span class="chip chip-warning">Modified</span>
+            }
+          </span>
+          <span class="line-clamp-2 text-[13px] text-fg-muted">{{
+            skill.description
+          }}</span>
+          @if (notice(skill); as drift) {
+            <span class="text-[12px] text-on-warning-soft">{{ drift }}</span>
+          }
+        </button>
+      }
+    </div>
+  }
+</div>

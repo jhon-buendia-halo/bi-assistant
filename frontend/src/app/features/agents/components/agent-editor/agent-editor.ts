@@ -17,11 +17,10 @@ import {
   Upload,
   X,
 } from 'lucide-angular';
-import { AgentToolId } from '../../services/agents-api.service';
+import { PromptEditor } from '../prompt-editor/prompt-editor';
 import { AgentEditorService } from '../../services/agent-editor.service';
 import {
   AGENT_FIELD_LIMITS,
-  AGENT_TOOL_CHOICES,
   REASONING_EFFORT_CHOICES,
   ReasoningEffortChoice,
   modelPlaceholder,
@@ -34,7 +33,7 @@ import {
  */
 @Component({
   selector: 'app-agent-editor',
-  imports: [LucideAngularModule],
+  imports: [LucideAngularModule, PromptEditor],
   templateUrl: './agent-editor.html',
 })
 export class AgentEditor implements OnInit, OnDestroy {
@@ -47,10 +46,13 @@ export class AgentEditor implements OnInit, OnDestroy {
   readonly X = X;
 
   readonly limits = AGENT_FIELD_LIMITS;
-  readonly toolChoices = AGENT_TOOL_CHOICES;
   readonly efforts = REASONING_EFFORT_CHOICES;
   readonly instructionsHint =
-    "Added to the assistant's context in every turn. The assistant's own rules and the read-only guard still apply.";
+    "Added to the assistant's context in every turn. The assistant's own rules and the read-only guard still apply. Type / to link a skill or a tool.";
+  readonly linksHint =
+    'Linked skills and tools decide what the agent gets. Every agent also gets the built-in skills and can always list, describe and query its datasets.';
+  readonly legacyNotice =
+    'Links were added for what this agent had. Save to keep them.';
 
   readonly editor = inject(AgentEditorService);
 
@@ -78,8 +80,12 @@ export class AgentEditor implements OnInit, OnDestroy {
     this.editor.close();
   }
 
+  onInstructions(value: string): void {
+    this.editor.update({ instructions: value });
+  }
+
   onText(
-    field: 'name' | 'description' | 'instructions' | 'model',
+    field: 'name' | 'description' | 'model',
     event: Event,
   ): void {
     this.editor.update({ [field]: (event.target as HTMLInputElement).value });
@@ -94,10 +100,6 @@ export class AgentEditor implements OnInit, OnDestroy {
 
   onDataset(name: string, event: Event): void {
     this.editor.toggleDataset(name, (event.target as HTMLInputElement).checked);
-  }
-
-  onTool(id: AgentToolId, event: Event): void {
-    this.editor.toggleTool(id, (event.target as HTMLInputElement).checked);
   }
 
   onStarter(index: number, event: Event): void {

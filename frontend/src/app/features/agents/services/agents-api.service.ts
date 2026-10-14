@@ -20,6 +20,8 @@ export interface AgentConfig {
   starterQuestions: string[];
   /** Absent on a draft saved before tools could be chosen: all three. */
   tools?: AgentToolId[];
+  /** Ids of the in-app skills the agent uses (R43); absent: none. */
+  skills?: string[];
   model?: string;
   reasoningEffort?: 'low' | 'medium' | 'high';
 }
@@ -56,7 +58,30 @@ export interface AgentMemoryDetail {
   generateTitle: boolean;
 }
 
+/** Where a library tool is linked from, for a user agent (api.md 34). */
+export type ToolLinkStatus = 'always-on' | 'linked' | 'not-linked';
+
+export interface AgentToolLink {
+  name: string;
+  status: ToolLinkStatus;
+  linkedVia: { instructions: boolean; skills: string[] };
+}
+
+/** The LLM the agent runs on; the key is never sent, only whether it is set. */
+export interface AgentLlm {
+  provider: string | null;
+  providerName: string | null;
+  model: string | null;
+  apiKeyConfigured: boolean;
+  maxOutputTokens: number | null;
+  reasoningEffort: string | null;
+}
+
 export interface AgentDetail extends Agent {
+  /** User agents only: each library tool with its link status. */
+  toolLinks?: AgentToolLink[];
+  /** The LLM configuration the agent uses (LLM Config tab). */
+  llm?: AgentLlm;
   /** User agents only: the working copy and the published copy. */
   draft?: AgentConfig;
   live?: AgentConfig;
@@ -137,7 +162,7 @@ export interface EvalRunView {
 }
 
 /** Where a skill comes from (agents.md 7.3). */
-export type SkillLevel = 'built-in' | 'user' | 'project';
+export type SkillLevel = 'built-in' | 'user' | 'project' | 'in-app';
 
 /** One skill level's folder, as the backend resolved it at startup. */
 export interface AgentSkillLevel {
@@ -163,6 +188,8 @@ export interface AgentSkill {
   /** Every file in the folder, `SKILL.md` first, then sorted. */
   files: AgentSkillFileEntry[];
   warnings: string[];
+  /** A built-in skill replaced by an app-wide override (R63). */
+  modified?: boolean;
 }
 
 export interface AgentSkippedSkill {

@@ -34,8 +34,15 @@ export class AllOwnersAgentsRepository {
     return doc?.ownerId ? doc : null;
   }
 
-  /** Move an agent to another owner, unpinned (admin R64). */
-  async moveTo(id: string, ownerId: string): Promise<UserAgentDoc | null> {
-    return this.store.update({ id }, { ownerId, pinned: false });
+  /**
+   * Move an agent to another owner, unpinned (admin R64). `patch` carries
+   * the skill ids remapped to the new owner's copies (data-model 3.10).
+   */
+  async moveTo(
+    id: string,
+    ownerId: string,
+    patch: Partial<UserAgentDoc> = {},
+  ): Promise<UserAgentDoc | null> {
+    return this.store.update({ id }, { ...patch, ownerId, pinned: false });
   }
 }

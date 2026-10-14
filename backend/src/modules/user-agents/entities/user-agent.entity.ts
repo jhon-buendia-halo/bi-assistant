@@ -1,5 +1,6 @@
 import type { ReasoningEffort } from '../../llm/llm.types';
 import type { OptionalAgentTool } from '../../../mastra/agent-tools';
+import type { SkillCopy } from '../../skills/entities/skill.entity';
 
 /** `official` = the assistant, `system` = the five helpers, `user` = built here. */
 export type AgentKind = 'official' | 'system' | 'user';
@@ -25,6 +26,11 @@ export interface AgentConfig {
    * canonical order; absent means all three, empty means none (ADR-0021).
    */
   tools?: OptionalAgentTool[];
+  /**
+   * Ids of the owner's in-app skills (data-model 3.10.1), at most 10,
+   * de-duplicated, in the order given; absent means none (ADR-0021).
+   */
+  skills?: string[];
 }
 
 /** One document in the `agents` collection. */
@@ -34,6 +40,11 @@ export interface UserAgentDoc {
   draft: AgentConfig;
   /** The published copy; absent until the first publish. */
   live?: AgentConfig;
+  /**
+   * Copies of the skills the Live version names, taken at each publish, in
+   * the order of `live.skills`; a Live agent runs on these (ADR-0021).
+   */
+  liveSkills?: SkillCopy[];
   publishedAt?: string;
   pinned: boolean;
   /** The owning user's id in org server mode (data-model 3.15). */

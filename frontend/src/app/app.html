@@ -506,6 +506,7 @@
                     class="w-full max-w-[960px]"
                     (openAgent)="openAgent($event)"
                     (newAgent)="openAgentEditor(null)"
+                    (openSkills)="openSkillsLibrary()"
                     [startingAgentKey]="startingAgentKey()"
                     (startChat)="startChatWithAgent($event)"
                   />
@@ -529,6 +530,35 @@
                     [agentId]="editingAgentId()"
                     (back)="closeAgentEditor()"
                     (preview)="rightPanelOpen.set(true)"
+                  />
+                </div>
+              } @else if (mainView() === "skills") {
+                <div class="flex flex-1 justify-center overflow-y-auto px-8 py-10">
+                  <app-skills-library
+                    class="w-full max-w-[960px]"
+                    (back)="mainView.set('agents')"
+                    (openSkill)="openSkillEditor($event?.id ?? null)"
+                    (openBuiltIn)="openBuiltInSkillEditor($event)"
+                  />
+                </div>
+              } @else if (mainView() === "skill-editor") {
+                <div class="flex flex-1 justify-center overflow-y-auto px-8 py-10">
+                  <app-skill-editor
+                    class="w-full max-w-[960px]"
+                    [skillId]="editingSkillId()"
+                    (back)="openSkillsLibrary()"
+                    (deleted)="mainView.set('skills')"
+                  />
+                </div>
+              } @else if (
+                mainView() === "builtin-skill-editor" && editingBuiltInName();
+                as builtInName
+              ) {
+                <div class="flex flex-1 justify-center overflow-y-auto px-8 py-10">
+                  <app-builtin-skill-editor
+                    class="w-full max-w-[960px]"
+                    [skillName]="builtInName"
+                    (back)="openSkillsLibrary()"
                   />
                 </div>
               } @else if (mainView() === "knowledge") {

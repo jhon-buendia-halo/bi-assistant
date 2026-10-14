@@ -1,5 +1,5 @@
 import { join } from 'path';
-import type { AppSkill } from '../app-skills';
+import type { CatalogEntry } from '../agent-skills';
 import { type OptionalAgentTool, selects } from '../agent-tools';
 
 /**
@@ -265,7 +265,7 @@ const NO_SCRIPTS =
 
 /** The `## Skills` section (agents.md 7.5); empty when there are no skills. */
 export function skillsSection(
-  skills: readonly Pick<AppSkill, 'name' | 'description' | 'dir'>[],
+  skills: readonly CatalogEntry[],
   canRunScripts: boolean,
 ): string[] {
   if (!skills.length) return [];
@@ -286,7 +286,7 @@ export function skillsSection(
         '  <skill>',
         `    <name>${escapeXml(skill.name)}</name>`,
         `    <description>${escapeXml(skill.description)}</description>`,
-        `    <location>${escapeXml(join(skill.dir, 'SKILL.md'))}</location>`,
+        `    <location>${escapeXml(skill.location ?? join(skill.dir ?? '', 'SKILL.md'))}</location>`,
         '  </skill>',
       ]),
     '</available_skills>',
@@ -300,7 +300,7 @@ export function skillsSection(
  */
 export function buildAssistantInstructions(
   tools: Record<string, PromptTool>,
-  skills: readonly Pick<AppSkill, 'name' | 'description' | 'dir'>[],
+  skills: readonly CatalogEntry[],
   selection?: readonly OptionalAgentTool[],
 ): string {
   const skillLines = skillsSection(skills, 'run_skill_script' in tools);
