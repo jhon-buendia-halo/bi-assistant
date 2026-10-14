@@ -571,7 +571,7 @@ Feature: Sessions started from an agent
 
 E2E: `frontend/e2e/assistant-skills.spec.ts`
 
-What the assistant is told about skills, checked on the request the model receives. "The model" is the recording stub described under the Feature "Sessions started from an agent". Which skills each agent gets, where user and project skills come from, and how they load: [agents.md](../../system/agents.md) sections 7.3 and 7.4; decisions ADR-0018, ADR-0019 and ADR-0025; the prompt's sections are in agents.md 2.1, and the framework's catalog and skill tools in agents.md 3.9 and 7.5. A user-level skill is a folder written into the test's data dir before the app starts. Curated knowledge is seeded through the backend API ([knowledge](../knowledge/spec.md) R15-R19).
+What the assistant is told about skills, checked on the request the model receives. "The model" is the recording stub described under the Feature "Sessions started from an agent". Which skills each agent gets and how they load: [agents.md](../../system/agents.md) sections 7.3 and 7.4; decisions ADR-0018, ADR-0021 and ADR-0025; the prompt's sections are in agents.md 2.1, and the framework's catalog and skill tools in agents.md 3.9 and 7.5. The plain assistant gets only the skills that ship with the app. The old skills folder is written into the test's data dir before the app starts. Curated knowledge is seeded through the backend API ([knowledge](../knowledge/spec.md) R15-R19).
 
 ```gherkin
 Feature: Skills the assistant is given
@@ -607,32 +607,23 @@ Feature: Skills the assistant is given
     And the model received none of the curated-knowledge rules unless it read them
     And the model's skill catalog lists "curated-knowledge"
 
-  Scenario: A user-level skill is offered to the assistant on demand
-    Given a user-level skill "sql-style" described "Use when writing SQL for the World Cup data."
+  Scenario: A skills folder left in the data dir by an older version is ignored
+    Given the data dir holds a skills folder from an older version, with a skill "sql-style" described "Use when writing SQL for the World Cup data."
     And a session over "World Cup Core"
     When I send "Who won the 2022 World Cup?"
     Then I see the stub's answer
     And the assistant's prompt has no "## Skills" section
-    And the model's skill catalog lists "curated-knowledge" and "sql-style", the latter with that description
+    And the model's skill catalog lists only "curated-knowledge"
+    And the model received nothing of the "sql-style" skill
     And the model is offered the framework's skill tool
 
   Scenario: The assistant loads a skill with the skill tool
-    Given a user-level skill "sql-style" described "Use when writing SQL for the World Cup data."
-    And the model will load "sql-style" with the skill tool
-    And a session over "World Cup Core"
-    When I send "Who won the 2022 World Cup?"
-    Then I see the stub's answer
-    And the model got the instructions of "sql-style" back from the skill tool
-
-  Scenario: A user-level override of the curated-knowledge skill is the one the model reads
-    Given a user-level skill "curated-knowledge" whose body is the team's own rules
+    Given the model will load "curated-knowledge" with the skill tool
     And an enabled curated-knowledge instruction for "World Cup Core"
-    And the model will load "curated-knowledge" with the skill tool
     And a session over "World Cup Core"
     When I send "Who won the 2022 World Cup?"
     Then I see the stub's answer
-    And the model got the team's own rules back from the skill tool
-    And the model received none of the built-in curated-knowledge rules
+    And the model got the instructions of "curated-knowledge" back from the skill tool
 ```
 
 ## Acceptance

@@ -293,12 +293,10 @@ export class AgentsService {
           description: skill.description,
           level: 'in-app' as const,
           loading: 'on-demand' as const,
-          overrides: [],
           files: inAppFiles(skill).map(({ path, content }) => ({
             path,
             size: Buffer.byteLength(content),
           })),
-          warnings: [],
         })),
       ],
     };

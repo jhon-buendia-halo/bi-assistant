@@ -288,7 +288,7 @@ flowchart LR
     sqlagents["sql-fixer, sql-verifier agents"]
     bootstrap["knowledge-bootstrap agent"]
     tools["tools/<br/>(dataset, create/update_visual, ask_clarification)"]
-    skills["skills/<br/>(built-in, user and project levels; declared per agent; ADR-0018, ADR-0019)"]
+    skills["skills/<br/>(built-in only; declared per agent; ADR-0018, ADR-0021)"]
     evals["evals/<br/>(assistant evals, eval-judge agent)"]
   end
 
@@ -475,7 +475,7 @@ flowchart LR
   - Existing users who never chose a theme move from System to Light.
 
 #### ADR-0018 — Agent know-how as app-owned skills with progressive disclosure, declared per agent
-- **Status:** Accepted; partly superseded by ADR-0019 (where skills come from, and scripts) and ADR-0020 (how on-demand skills are listed and read)
+- **Status:** Accepted; partly superseded by ADR-0019 (where skills come from, and scripts) and ADR-0020 (how on-demand skills are listed and read). ADR-0021 supersedes ADR-0019, so skills again come only from the bundle.
 - **Date:** 2026-10-13
 - **Context:**
   - The `assistant` sends one ~160-line system prompt on every call. It mixes rules every question needs (grounding, SQL safety) with rules only some turns need: curated knowledge, visuals, dialects. Deep analysis inlines its own phase prompts in `DeepAnalysisService`, and the designer gets the whole `interactive-visuals` skill (spec mode and freeform) on every call.
@@ -496,7 +496,7 @@ flowchart LR
   - Mastra's skill catalog, tools and agent-level `skills` are framework behaviour (1.66). A Mastra upgrade re-runs the request-recording E2E that asserts what each call carries.
 
 #### ADR-0019 — Built-in, user and project skill levels that override by name; scripts reserved for built-in skills
-- **Status:** Accepted; partly superseded by ADR-0020 (the script runner is built)
+- **Status:** Superseded by ADR-0021 (built-in skills only). Before that, partly superseded by ADR-0020 (the script runner is built)
 - **Date:** 2026-10-14
 - **Context:**
   - ADR-0018 made every skill app-owned: the only skills an agent can get ship in the build, and nobody can add or adjust one without a release.
@@ -518,7 +518,7 @@ flowchart LR
   - Adding the script runner later is one story inside the rules above.
 
 #### ADR-0020 — A sectioned assistant prompt with the app's own skill catalog, read through `read_file`; built-in scripts run through `run_skill_script`
-- **Status:** Superseded by ADR-0025 (the sectioned prompt's identity, `## Tools` and `## Working rules` stay)
+- **Status:** Superseded by ADR-0025 (the sectioned prompt's identity, `## Tools` and `## Working rules` stay). Its mentions of user and project skills no longer apply since ADR-0021
 - **Date:** 2026-10-14
 - **Context:**
   - Under ADR-0018 the framework renders the on-demand catalog, with its own usage note and a `<source>` tag, and offers `skill`, `skill_search` and `skill_read`. Neither the wording nor the tools are ours to shape.
@@ -541,6 +541,25 @@ flowchart LR
   - No built-in skill ships a script today, so `run_skill_script` isn't offered until one does. It is tested with a fixture skill.
   - Every assistant call carries the Tools section (about 1,000 characters) and, since `curated-knowledge` is always listed, the Skills section and `read_file`.
   - Whether a knowledge rule applies now depends on the model reading the skill, which ADR-0018 avoided by loading it in code. The evals must pass at 100% before the PR (the workflow rule of 2026-10-14).
+
+#### ADR-0021 — Built-in skills only; user and project skill levels removed
+- **Status:** Accepted
+- **Date:** 2026-10-14
+- **Context:**
+  - ADR-0019 added user (`<data dir>/skills/`) and project (`QUESTIONS_TO_INSIGHTS_PROJECT_SKILLS_DIR`) skill levels that override the built-in skills by name. Version 0.32 shipped them, with the Skills tab showing levels, overrides, warnings and skipped skills.
+  - Such a skill is an unreviewed prompt change: no eval or review gate covers it, and an override of a harness-loaded skill changes chat, deep analysis or visuals for every session. On an org server it applies to every user.
+  - The user decided on 2026-10-14: "delete user and project skills, for now we are going to use only the built-in skills."
+- **Decision:**
+  - **Built-in only.** The backend loads skills only from the bundle (`backend/src/mastra/skills/<name>/`), as ADR-0018 set out. It reads no user or project folder and no `QUESTIONS_TO_INSIGHTS_PROJECT_SKILLS_DIR`. There are no overrides by name, no skipped skills and no per-skill warnings.
+  - **Fail at startup, as before.** A broken built-in skill still stops the backend.
+  - **Old folders ignored.** A `<data dir>/skills/` folder left by 0.32 is neither read nor deleted, so no migration is needed.
+  - **Unchanged.** Which agents get which skill and how they load (ADR-0018 as amended by ADR-0020), the sectioned prompt and catalog, `read_file` and `run_skill_script` (ADR-0020).
+  - **Skills tab.** It shows each agent's skills, their loading mode, files and contents, without levels, overrides, warnings or a Skipped section. `GET /agents/:key/skills` drops the matching fields.
+- **Consequences:**
+  - Every skill an agent gets is reviewed in a PR and covered by the evals and E2E, like any other prompt change.
+  - Changing an agent's know-how needs a release again. Someone who dropped skills into the data dir loses them silently after the update; the folder stays on disk.
+  - The startup loader, the skills endpoint and the Skills tab get simpler: no targeting front matter (`agents`), no override checks, no level paths.
+  - Bringing user or project skills back later needs a new ADR.
 
 #### ADR-0022 — User agents choose their tools from the assistant's set and get skills written in the app, stored per user and copied into the Live version
 - **Status:** Accepted; how tools and skills are chosen (checkboxes) is superseded by ADR-0024 (links)
@@ -575,14 +594,14 @@ flowchart LR
   - Per-user versions of the assistant's know-how would make answers differ by user and couldn't be evaluated.
 - **Decision:**
   - **Override, never edit the bundle.** Saving a built-in in the app stores an **override** in a new shared `skill_overrides` collection, keyed by the skill's name. The bundled skill stays as the fallback, and **Reset to built-in** deletes the override.
-  - **It wins over every other level** (in-app override over project over user over built-in) and is read per call, so it applies to the next call without a restart. It keeps the built-in's agents and loading mode, and the built-in's file locations: the assistant's catalog changes only in the description, and `read_file` answers the built-in's paths from the override.
+  - **It wins over the bundled skill** with that name and is read per call, so it applies to the next call without a restart. It keeps the built-in's agents and loading mode, and the built-in's file locations: the assistant's catalog changes only in the description, and `read_file` answers the built-in's paths from the override.
   - **The same checks as a folder override** (ADR-0019): a `Use when` description, a body that isn't empty, exactly the built-in's `phases/` and `reference/` files, each with the same `{{placeholders}}`. A failing save is refused, so a broken override never reaches a call.
   - **Org-wide, Platform admin only.** One override per skill serves every user and agent. Changing it needs `edit-policies`; in local mode the local user holds it.
   - **Drift is shown, not merged.** The override records a hash of the built-in it was made from. When a newer app version ships a different built-in, the library and the editor say so; the override keeps serving until it is saved again or reset.
 - **Consequences:**
   - An override changes what the plain assistant, every user agent, deep analysis and the visual designer receive, and the shipped eval baseline no longer describes them. Eval runs use the current overrides, so an admin can measure an edit from the Evals tab. The editor warns that a save applies to every session at once.
   - The loader resolves the winning skill per call (a database read, cached until an override changes) instead of once at startup.
-  - BA-211's removal of the folder levels leaves this as the one way to change a built-in.
+  - ADR-0021 removed the folder levels, so this is the one way to change a built-in.
 
 #### ADR-0024 — Links in an agent's instructions decide its skills and tools; skills link tools
 - **Status:** Accepted

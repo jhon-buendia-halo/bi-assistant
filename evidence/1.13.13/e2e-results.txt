@@ -1,0 +1,25 @@
+# 1.13.13 (BA-211) impacted Playwright specs, web target
+# Command (frontend/): E2E_SKIP_DOCKER=1 npm run test:e2e -- e2e/agent-skills.spec.ts e2e/assistant-skills.spec.ts e2e/designer-skills.spec.ts
+# Final re-run below: npx playwright test --project=web --reporter=list <same three files> (build unchanged)
+# Specs: frontend/e2e/agent-skills.spec.ts, frontend/e2e/assistant-skills.spec.ts, frontend/e2e/designer-skills.spec.ts
+
+Running 10 tests using 1 worker
+
+  ✓   1 [web] › e2e/agent-skills.spec.ts:38:5 › shows the designer's built-in skill and the content of its files (3.8s)
+  ✓   2 [web] › e2e/agent-skills.spec.ts:65:5 › an agent without skills says so (3.3s)
+  ✓   3 [web] › e2e/agent-skills.spec.ts:73:5 › the assistant gets only its built-in skills, and an old skills folder is ignored (3.4s)
+  ✓   4 [web] › e2e/assistant-skills.spec.ts:96:5 › the assistant is offered only its own skills (3.6s)
+  ✓   5 [web] › e2e/assistant-skills.spec.ts:130:5 › a turn without curated knowledge carries no knowledge rules (3.2s)
+  ✓   6 [web] › e2e/assistant-skills.spec.ts:144:5 › a turn with curated knowledge carries the block, and the rules stay on demand (3.3s)
+  ✓   7 [web] › e2e/assistant-skills.spec.ts:235:5 › a skills folder left in the data dir by an older version is ignored (4.5s)
+  ✓   8 [web] › e2e/assistant-skills.spec.ts:261:5 › the assistant reads a skill's files with read_file, and only those (3.5s)
+  ✓   9 [web] › e2e/designer-skills.spec.ts:94:5 › a spec-mode designer call carries only the spec-mode reference (3.5s)
+  ✓  10 [web] › e2e/designer-skills.spec.ts:130:5 › a chart asked for in the chat is designed from my request when the model gives no instruction (3.4s)
+
+  10 passed (36.1s)
+
+# Base check: the same two updated spec files run against a build of the base commit (513009d)
+# fail exactly the three scenarios that assert BA-211's behaviour:
+#   agent-skills  "shows the designer's built-in skill ..."   getByText('Where skills come from') expected 0, received 1
+#   agent-skills  "the assistant gets only its built-in skills ..."   tab expected "Skills (2)", received "Skills (3)"
+#   assistant-skills "a skills folder left in the data dir ..."   catalog received an extra "sql-style"

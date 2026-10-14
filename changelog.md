@@ -25,11 +25,23 @@ Running log of every meaningful change, newest first. See *Logging convention* a
 
 ## 2026-10-14
 
+### Removed
+- **User and project skill levels** (roadmap 1.13.13, [BA-211](https://halo-powered.atlassian.net/browse/BA-211), epic [BA-198](https://halo-powered.atlassian.net/browse/BA-198), ADR-0021 superseding ADR-0019). Agents use only the skills that ship with the app:
+  - **Backend.** Skills load only from the bundle. `<data dir>/skills/` is ignored (not read, not deleted) and `QUESTIONS_TO_INSIGHTS_PROJECT_SKILLS_DIR` is gone, with no overrides, skipped skills or warnings. A broken built-in skill still stops startup.
+  - **API.** `GET /agents/:key/skills` answers `{ skills: [{ name, description, loading, files }] }`.
+  - **Skills tab.** Drops "Where skills come from", the level badges, "Overrides …", the warnings, the Skipped section and the "Restart the app" line.
+  - The assistant's prompt, catalog and tools are unchanged (byte-identical prompt).
+  - Specs: architecture ADR-0021; agents.md 2.2, 7.2-7.4; api.md 34a and environment table; ui.md 4.5; data-model.md 4.8; glossary *Skill*; agents-evals R63-R67 and "Agent skills"; sessions-chat "Skills the assistant is given"; BA-198 epic spec. Evidence: [evidence/1.13.13/](evidence/1.13.13/).
+
 ### Added
 - **Agent tools and skills planned** (roadmap 1.14.1, [BA-214](https://halo-powered.atlassian.net/browse/BA-214), epic [BA-213](https://halo-powered.atlassian.net/browse/BA-213)):
   - **ADR-0022.** User agents choose their tools from the assistant's own set (`list_entities`, `describe_entity` and `run_readonly_sql` always on), and get skills written in the app, stored per user and copied into the Live version on publish. The assistant's prompt and tools are to be built per call. ADR-0008's status notes the narrowing.
   - **Epic spec** [specs/epics/BA-213/spec.md](specs/epics/BA-213/spec.md), confirmed with five decisions: a Skills button in the Agent Hub header, Visuals as one switch, no in-app skills for the plain assistant, size limits, and skill copies on agent transfer. It records the prompt measured section by section (8,729 characters; `## Skills` 904; about 160 per catalog entry).
   - **Roadmap.** Milestone 1.14 with features 1.14.1 to 1.14.4; the epic row in [specs/README.md](specs/README.md). Evidence: [evidence/1.14.1/](evidence/1.14.1/).
+- **Intellify sample in Testing Data** (roadmap 1.1.2, [BA-212](https://halo-powered.atlassian.net/browse/BA-212), epic [BA-9](https://halo-powered.atlassian.net/browse/BA-9)). Settings → Testing Data lists a fourth sample, "Intellify": one click creates the `intellify` database on the sample server, seeds schema `intellify` and registers datasource "Intellify PostgreSQL" and dataset "Intellify" (`49/49 entities`, 52 declared joins).
+  - **Model.** The Halo × Marsh Intellify ERD and data dictionary (49 entities, 243 attributes) converted to PostgreSQL: snake_case columns, `char(24)` ObjectIds, `jsonb` embedded objects, every table and column commented with its source field and description. All rows are synthetic (40 clients, 355 plan designs, 306 coverages with premiums, census 2024–2026, credits, fees, surveys, events).
+  - **Seed.** `fixtures/003_intellify.sql.gz` is written by `scripts/generate-intellify-seed.py`, deterministically: rerunning it reproduces the file byte for byte.
+  - **Tests.** `fixtures/registry.spec.ts` checks every bundled seed creates its required tables; `frontend/e2e/testing-data.spec.ts` automates two scenarios of the Testing data Feature. Specs: [testing-data](specs/capabilities/testing-data/spec.md) R2–R4, Flows and Acceptance; glossary; [BA-9 epic spec](specs/epics/BA-9/spec.md). Evidence: [evidence/1.1.2/](evidence/1.1.2/).
 - **Skill levels** (roadmap 1.13.7, [BA-205](https://halo-powered.atlassian.net/browse/BA-205), epic [BA-198](https://halo-powered.atlassian.net/browse/BA-198), ADR-0019). Agents read skills from three levels, and a later level overrides an earlier one by name:
   - **Levels.** Built-in (the bundle) < user (`<data dir>/skills/`) < project (the folder `QUESTIONS_TO_INSIGHTS_PROJECT_SKILLS_DIR` names).
   - **Targeting.** A new user or project skill is on demand for the agents its `agents:` key names (default `assistant`). An override keeps the agents and loading mode of the skill it replaces.

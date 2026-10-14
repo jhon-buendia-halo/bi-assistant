@@ -56,7 +56,7 @@ No configuration this epic allows makes an agent's prompt longer than today's by
 
 - **Built-in skills edited in the app** ([BA-218](https://halo-powered.atlassian.net/browse/BA-218), added on 2026-10-14 at the user's request; ADR-0023).
   - The skills library also lists the built-in skills, read-only for most users.
-  - A Platform admin can edit one. The edit is an org-wide override in the database that replaces the bundled skill on the next call, with the folder-override checks, a **Modified** chip, **Reset to built-in**, and a notice when a newer app version changes the built-in.
+  - A Platform admin can edit one. The edit is an org-wide override in the database that replaces the bundled skill on the next call, with the override checks, a **Modified** chip, **Reset to built-in**, and a notice when a newer app version changes the built-in.
 
 - **Links in instructions, skills that link tools, and new tabs** ([BA-219](https://halo-powered.atlassian.net/browse/BA-219), [BA-220](https://halo-powered.atlassian.net/browse/BA-220), [BA-221](https://halo-powered.atlassian.net/browse/BA-221); added on 2026-10-14 at the user's request; ADR-0024).
   - An agent's instructions are written in a rich editor where `/` links the owner's in-app skills and the assistant's tools as chips, saved as `[[skill:<name>]]` and `[[tool:<name>]]`. The links are the single source of truth: the backend derives the agent's `tools` and `skills` from them on every save, which **replaces the BA-216 skill picker and the BA-217 tool picker**.
@@ -79,7 +79,7 @@ No configuration this epic allows makes an agent's prompt longer than today's by
 
 - **New tools**, custom code tools, MCP servers or any tool the assistant doesn't already have.
 - **Per-agent core prompts.** A user agent's instructions stay Block 5 (ADR-0008); only the shared core prompt can be edited, by an admin (BA-224, ADR-0026), so the edit applies to every agent.
-- **User and project skill folders.** They stay as they are here; [BA-211](https://halo-powered.atlassian.net/browse/BA-211) removes them separately.
+- **User and project skill folders.** Removed by [BA-211](https://halo-powered.atlassian.net/browse/BA-211) (ADR-0021), merged into this branch; only built-in and in-app skills exist.
 - Skills for the System agents other than the built-in `interactive-visuals` (BA-218 lets an admin edit it).
 - **Sharing skills** with other users. Skills are private to their owner, like agents (ADR-0010); sharing waits for a Requests/Registry epic.
 - **Skill version history** beyond the copy each Live agent holds.
@@ -131,8 +131,8 @@ All stories are built on one branch, `feat/BA-213-agent-tools-skills`, and ship 
 
 ## Dependencies, risks and decisions
 
-- **BA-211 is not a dependency** (changed on 2026-10-14). In-app skills are a separate source in the database, and the picker offers only them (decision 3), so they work whether or not the user and project folders exist. BA-211 removes the folders on its own branch; whichever merges second resolves the Skills tab's levels.
-- **ADR number.** ADR-0022 is the next free number on `main` and every open branch today. BA-211 supersedes ADR-0019 on `refactor/BA-198-assistant-skills` and may claim a number first: recheck at merge time.
+- **BA-211 is merged in** (2026-10-14). It removed the user and project folders; the Skills tab's levels are now Built-in and In-app, and in-app skills are a separate source in the database.
+- **ADR number.** BA-211 took ADR-0021 on `main`, so this epic's ADRs are ADR-0022 to ADR-0026.
 - **Risk: prompt variants.** Three toggles make eight prompts. Rules are toggled as whole blocks, and the two most restrictive variants get eval cases. The rest are covered by unit tests on the prompt builder.
 - **Risk: a model calls a tool it wasn't given.** That fails `check-no-tool-errors`. The replacement wording is what prevents it, and the new eval cases measure it.
 - **Risk: on-demand loading is probabilistic** (ADR-0018). An assigned skill can fail to trigger. Its description is the trigger, so the editor asks for a "Use when…" sentence and shows the catalog entry the model will see.

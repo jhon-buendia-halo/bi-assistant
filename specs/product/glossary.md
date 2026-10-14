@@ -138,7 +138,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Row cap.** A limit on rows returned or stored. See [non-functional.md](non-functional.md). A result clipped by a cap is marked *truncated*.
 
-**Sample fixture.** A bundled sample database the app can provision for testing and evals: World Cup (2018 and 2022) and Formula 1. Set up from Settings, Testing Data. Also called *test data* or *sample*.
+**Sample fixture.** A bundled sample database the app can provision for testing and evals: World Cup (2018 and 2022), Formula 1 and Intellify (an employee-benefits data model with synthetic data). Set up from Settings, Testing Data. Also called *test data* or *sample*.
 
 **Sample values.** Up to 5 distinct real values per column, captured when a dataset is saved, so the assistant can match the user's wording to stored values.
 
@@ -146,7 +146,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Session.** One conversation with the assistant, bound to one or more *datasets*. Holds the transcript, the visuals, and owns one *workspace* and one memory thread. Needs a name and at least one dataset. A session started from a *Live* *user agent* is bound to that agent and runs with its instructions (see [../capabilities/sessions-chat/spec.md](../capabilities/sessions-chat/spec.md), R52-R59). Legacy name: *project* (collection `projects`, workspace folders `project-<id>`).
 
-**Skill.** A folder of instructions an agent gets: a `SKILL.md` (a name, a "Use when…" description, then a short phase map or router) plus the `phases/` and `reference/` files it names. It loads *on demand* (the framework lists it in a catalog and the model loads it with the skill tool when a request matches) or *by the app* (code sends it when a condition holds). Skills come from three *skill levels* (built-in, user and project), and a later level overrides an earlier one with the same name. The agent page's Skills tab shows them (see [../system/agents.md](../system/agents.md) 7.3, [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R63-R67).
+**Skill.** A folder of instructions an agent gets: a `SKILL.md` (a name, a "Use when…" description, then a short phase map or router) plus the `phases/` and `reference/` files it names. It loads *on demand* (the framework lists it in a catalog and the model loads it with the skill tool when a request matches) or *by the app* (code sends it when a condition holds). Built-in skills ship with the app (there are no user or project skills); a user can also write *in-app skills* for her agents, and edit a built-in skill's text, which overrides the bundled one. The agent page's Skills tab shows them (see [../system/agents.md](../system/agents.md) 7.3, [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R63-R67).
 
 **Starter question.** One of up to five example questions a *user agent* carries. An empty session started from the agent offers them in its welcome block; clicking one fills the composer without sending it.
 

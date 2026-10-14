@@ -26,11 +26,8 @@ describe('the assistant skills of a call with user folder skills (ADR-0025)', ()
       description: 'Use when writing SQL.',
       dir,
       document: `---\nname: sql-style\ndescription: Use when writing SQL.\n---\n\nFollow reference/rules.md and [[tool:run_readonly_sql]].\n`,
-      level: 'user',
       loading: 'on-demand',
       agents: ['assistant'],
-      overrides: [],
-      warnings: [],
     };
     jest.spyOn(appSkillsModule, 'catalogSkills').mockReturnValue([folderSkill]);
   });

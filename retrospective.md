@@ -30,6 +30,47 @@ Entry template:
 - Take prompt sizes from the compiled agent, never from spec prose. Keep `evidence/1.14.1/measure-prompt.cjs` as the way to do it.
 - In a worktree, run `jira.sh` with `JIRA_CONFIG_FILE=<main checkout>/.env`, pass plain double-quoted one-line descriptions, and never copy the `.env`.
 
+## 2026-10-14 — 1.1.2 Intellify sample as a Testing Data fixture (BA-212)
+
+### What went well
+- Building the database by hand first (generator in the scratchpad, loaded and registered through the API) settled the model conversion before any repo change. Turning it into a fixture then took one catalogue entry plus the generator moved into `scripts/`.
+- The generator is deterministic (seeded RNG, gzip with `mtime=0`), so "recreate it later" holds both through Load in the app and by regenerating the file. Evidence shows the same hash twice.
+- The new catalogue test checks every bundled seed against its required tables, which covers World Cup and Formula 1 too. Before, a seed missing a table only showed up on a real load.
+- The E2E loads into its own database name and drops it afterwards, so it exercises "created the database" without touching the shared `intellify` database.
+
+### What went wrong
+- The first request ("create a data source") was done outside the repo; the follow-up ("add it as seed") then needed the epic gate, a Jira story and a branch. Asking up front where the result should live would have saved a round trip.
+- The dataset I registered by hand carried column descriptions; the fixture's dataset doesn't, because the Postgres connector ignores column comments. That gap surfaced only when the descriptions moved into the seed.
+- A wait loop used `pgrep -f "npm --prefix backend ci"` and matched its own command line, so it never ended (10-minute timeout). That's the same trap as the `pkill -f` lesson.
+- `npm ci` in `frontend/` fails on `main`: `package-lock.json` is out of sync with `package.json` (electron-builder packages). I worked around it with `npm install --package-lock=false`.
+- The Jira script couldn't run from the worktree until the gitignored `.env` was available there.
+
+### What to do differently
+- When a request could become a repo change, ask whether the result should live in the repo (a fixture or seed) or only on this machine before building it.
+- Never wait on a process with `pgrep -f "<its own command>"`. Wait on the background task's notification, or on a file the process writes.
+- For worktree sessions, set the Jira config from the main checkout's `.env` before the first `jira.sh` call, instead of discovering the gap at the epic gate.
+
+## 2026-10-14 — 1.13.13 Built-in skills only: remove user and project skill levels (BA-211)
+
+### What went well
+- Fixing the API shape and the UI removals in the prompt let the specs agent and the code agent work in parallel; the specs matched the code on the first `check-specs.py` run.
+- Hashing `assistantAgent.getInstructions()` before and after proved the prompt byte-identical, which settled that the evals didn't need to run.
+- The E2E agent ran the updated specs against a base-commit build, so the three BA-211 scenarios are shown to fail on base for the intended reasons.
+- Running the one failing frontend unit test on a `git archive` copy of the base proved it fails on `main` too, without stashing or touching another worktree.
+
+### What went wrong
+- The frontend lock file is out of sync with `package.json` (electron-builder's Windows deps), so `npm ci` fails in a fresh worktree; I had to install with `--no-package-lock` to keep tracked files clean.
+- My brief to the specs agent named the file endpoint `…/files`; it is `…/file`. The agent caught it, but a contract in a brief should be copied from api.md, not from memory.
+- The first E2E run showed "an agent without skills says so" failing in a scenario planned as re-run-as-is: a shared helper waited on copy the change removed. Step 6 looked at scenarios, not at helpers.
+- The updated read_file scenario passes on base too: it only dropped its dependency on user skills, so it does not prove BA-211.
+- Several compound shell commands (`git` after `cd &&`, `$(…)` around `jira.sh`) were refused in the isolated worktree and had to be split.
+
+### What to do differently
+- In step 6, grep the impacted spec files' helpers for the copy and test ids the change removes, and list those helpers with the scenarios.
+- When a brief states an endpoint or shape, copy it from api.md.
+- Run `npm install` in `frontend/` and commit the lock file in a separate change, so `npm ci` works in new worktrees.
+- In an isolated worktree, run `git` and `jira.sh` as plain commands from the worktree root, and pass JSON bodies inline in single quotes.
+
 ## 2026-10-14 — 1.13.9 to 1.13.12: sectioned assistant prompt, own skill catalog, lint clean, eval checks, assistant reliability (BA-207 to BA-210)
 
 ### What went well

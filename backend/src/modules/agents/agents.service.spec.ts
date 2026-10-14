@@ -335,10 +335,14 @@ describe('AgentsService (built-in and user agents)', () => {
         view.skills.map((skill) => skill.name);
       const assistant = await ctx.service.skills('assistant');
       expect(names(assistant)).toEqual(['curated-knowledge', 'deep-analysis']);
-      expect(assistant.skills[0]).toMatchObject({
-        level: 'built-in',
+      expect(assistant.skills[0]).toEqual({
+        name: 'curated-knowledge',
+        description: expect.stringMatching(/^Use when /) as string,
         loading: 'on-demand',
+        level: 'built-in',
+        files: [expect.objectContaining({ path: 'SKILL.md' })],
       });
+      expect(Object.keys(assistant)).toEqual(['skills']);
       expect(assistant.skills[1]).toMatchObject({ loading: 'harness' });
 
       const created = await ctx.service.create({ name: 'Analyst' });
@@ -397,7 +401,7 @@ describe('AgentsService (built-in and user agents)', () => {
           datasets: ['World Cup Core'],
           instructions: 'Use [[skill:zeta]] and [[skill:alpha]].',
         });
-        const inApp = (view: { skills: { level: string; name: string }[] }) =>
+        const inApp = (view: { skills: { level?: string; name: string }[] }) =>
           view.skills.filter((entry) => entry.level === 'in-app');
 
         const draftView = await ctx.service.skills(created.id);
@@ -410,8 +414,6 @@ describe('AgentsService (built-in and user agents)', () => {
           description: 'Use when alpha.',
           level: 'in-app',
           loading: 'on-demand',
-          overrides: [],
-          warnings: [],
           files: [
             {
               path: 'SKILL.md',
@@ -422,12 +424,6 @@ describe('AgentsService (built-in and user agents)', () => {
             { path: 'references/q.md', size: 11 },
           ],
         });
-        // The levels row never lists in-app.
-        expect(draftView.levels.map((l) => l.level)).toEqual([
-          'built-in',
-          'user',
-          'project',
-        ]);
 
         await ctx.service.publish(created.id);
         await ctx.skills.update({ id: 's1' }, { body: 'Edited.' });
