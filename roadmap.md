@@ -738,7 +738,7 @@ A behaviour-preserving refactor of the app's Mastra agents to the Agent Skills l
   - A file outside the skill is refused.
   - Screenshots of the tab with the Details panel open.
 
-#### 1.13.9 — Sectioned assistant prompt with the app's own skill catalog, `read_file` and `run_skill_script` ([BA-207](https://halo-powered.atlassian.net/browse/BA-207))  `🚧 In progress`
+#### 1.13.9 — Sectioned assistant prompt with the app's own skill catalog, `read_file` and `run_skill_script` ([BA-207](https://halo-powered.atlassian.net/browse/BA-207))  `✅ Done`
 - **Intent:** the assistant's prompt reads like the Agent Skills template the user gave (identity, Tools, Working rules, Skills), and the model reads and uses skills with tools the app controls.
 - **Scope:** ADR-0020.
   - **Prompt.** The identity paragraph, then `## Tools` generated from the assistant's tools (name, input names, first sentence of the description), then `## Working rules` (today's rules, word for word), then `## Skills` when the assistant has on-demand skills: the user's instructions plus an `<available_skills>` catalog with name, description and the absolute `SKILL.md` path.
@@ -754,13 +754,13 @@ A behaviour-preserving refactor of the app's Mastra agents to the Agent Skills l
   - Unit tests cover the read and script limits and a wrapped description.
   - The impacted E2E specs, unit tests and builds pass. The world-cup evals pass at 100%.
 
-#### 1.13.10 — Backend lint and format clean ([BA-208](https://halo-powered.atlassian.net/browse/BA-208))  `🚧 In progress`
+#### 1.13.10 — Backend lint and format clean ([BA-208](https://halo-powered.atlassian.net/browse/BA-208))  `✅ Done`
 - **Intent:** `hermes verify` and `npm run lint` pass on the backend, so a lint or type error is always new.
 - **Scope:** fix the 217 ESLint errors in 35 files, the 21 files Prettier would rewrite and the 4 `tsc` errors in specs, with no behaviour change. No rule is disabled in the config; a per-line disable needs a reason.
 - **Out of scope:** the frontend (it has no lint script); the 2 remaining warnings in production code.
 - **Acceptance:** in `backend/`, ESLint without `--fix` reports 0 errors, `prettier --check` passes, `tsc --noEmit` reports 0 errors, and Jest and the build pass with the same test count.
 
-#### 1.13.11 — Eval checks: a wider correct query passes; discovery cases don't require `list_entities` ([BA-209](https://halo-powered.atlassian.net/browse/BA-209))  `🚧 In progress`
+#### 1.13.11 — Eval checks: a wider correct query passes; discovery cases don't require `list_entities` ([BA-209](https://halo-powered.atlassian.net/browse/BA-209))  `✅ Done`
 - **Intent:** the assistant evals fail only when an answer is wrong, so the 100% bar (CLAUDE.md, step 9) measures the assistant and not the checks.
 - **Scope:**
   - `result-set-match` passes when one complete, untruncated query contains every reference row in a row of its own, with extra rows allowed.
@@ -770,7 +770,7 @@ A behaviour-preserving refactor of the app's Mastra agents to the Agent Skills l
 - **Acceptance:** unit tests cover a wider query that passes, a missing reference row that fails, and rows from two queries that are never combined. The world-cup evals pass at 100% (3 runs).
 - **Notes:** decided with the user 2026-10-14. The cases had failed on every run before this change, with correct answers.
 
-#### 1.13.12 — Assistant reliability for the 100% eval bar ([BA-210](https://halo-powered.atlassian.net/browse/BA-210))  `🚧 In progress`
+#### 1.13.12 — Assistant reliability for the 100% eval bar ([BA-210](https://halo-powered.atlassian.net/browse/BA-210))  `✅ Done`
 - **Intent:** the assistant asks when "best" has no measure, and charts what the user asked, so the world-cup evals can pass at 100% (CLAUDE.md, step 9).
 - **Scope:**
   - **Rule A4.** A new sentence: a "best/top/performed well" question with no measure is ambiguous even when several measures could be covered, so the model asks before any query (agents.md 2.1, Appendix A).

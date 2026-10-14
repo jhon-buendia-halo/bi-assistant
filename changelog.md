@@ -2,6 +2,27 @@
 
 Running log of every meaningful change, newest first. See *Logging convention* and *Evidence convention* in [CLAUDE.md](CLAUDE.md). Release versions come from Conventional Commits (`version-on-merge.yml`); this file records what shipped and links to the evidence.
 
+## 2026-10-15
+
+### Changed
+- **Sectioned assistant prompt and the app's own skill catalog** (roadmap 1.13.9, [BA-207](https://halo-powered.atlassian.net/browse/BA-207), epic [BA-198](https://halo-powered.atlassian.net/browse/BA-198), ADR-0020):
+  - **Prompt.** Identity, then `## Tools` (generated from the tools), `## Working rules`, then `## Skills` with an `<available_skills>` catalog the app renders (name, description, `SKILL.md` path).
+  - **Tools.** `read_file` reads only listed skills' files, and replaces the framework's `skill`/`skill_search`/`skill_read`. `run_skill_script` runs a built-in skill's Node scripts with no shell, a minimal environment and a timeout; none ships yet.
+  - **`curated-knowledge` on demand.** The knowledge block travels without its rules, and the model reads them with `read_file`.
+  - **Descriptions.** A `SKILL.md` description may wrap.
+  - Specs: agents.md 2.1, 3.9, 3.10, 7.3-7.5 and Appendix A; sessions-chat "Skills the assistant is given". Evidence: [evidence/1.13.9/](evidence/1.13.9/).
+- **Eval checks** (roadmap 1.13.11, [BA-209](https://halo-powered.atlassian.net/browse/BA-209)). `result-set-match` passes a single complete query that holds every reference row, with extra rows and columns allowed. `schema-discovery` and `f1-schema-discovery` no longer require `list_entities`. Specs: agents-evals R31, agents.md 8. Evidence: [evidence/1.13.11/](evidence/1.13.11/).
+- **Workflow eval bar** ([CLAUDE.md](CLAUDE.md) step 9). The evals must pass at 100%: every case in 3 runs out of 3.
+
+### Fixed
+- **Assistant reliability** (roadmap 1.13.12, [BA-210](https://halo-powered.atlassian.net/browse/BA-210)):
+  - **Rules.** A4: asks when "best" has no measure. A12: adds nothing from general knowledge about what the data doesn't cover. A32: joins names in the same query. A35: answers "what data do I have" without a query.
+  - **`create_visual`.** With no instruction it uses the user's request (`turn-question`).
+  - **Designer data.** The designer is shown the result sets the instruction is about, not the largest.
+  - **`ask_clarification`.** It takes one string with one option per line, and a malformed call is retried instead of shown as a card with no options.
+  - Specs: agents.md 2.1, 3.5, 3.6, 4.2, 5.1, 6.2; sessions-chat R42 and a new scenario; visuals "Skills the designer is given". World-cup evals at 10/10 in 3 of 3 runs. Evidence: [evidence/1.13.12/](evidence/1.13.12/).
+- **Backend lint, format and types** (roadmap 1.13.10, [BA-208](https://halo-powered.atlassian.net/browse/BA-208)). ESLint went from 217 errors to 0, Prettier is clean and `tsc` reports 0 errors, with no behaviour change. Evidence: [evidence/1.13.10/](evidence/1.13.10/).
+
 ## 2026-10-14
 
 ### Added

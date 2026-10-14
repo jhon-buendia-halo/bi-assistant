@@ -24,11 +24,11 @@ Entry template:
 
 ### What went wrong
 - I described "curated-knowledge on demand" to the user before checking which built-ins could be on demand; the clarification that followed (deep-analysis' phase templates, the designer without tools) should have been in the first question.
-- The 100% bar took four rounds of 3 eval runs (9b4e0c2, 306f361, 9c29efa, c948702), each surfacing a new rare failure; two rounds were stopped half-way once a run had failed.
+- The 100% bar took five rounds of 3 eval runs (9b4e0c2, 306f361, 9c29efa, c948702, f30bca2), each before the last surfacing a new rare failure; two rounds were stopped half-way once a run had failed.
 - Two E2E tests failed on my own test code (`.card` matched `<main class="card">`; a turn matcher that looked at the whole history) before they tested anything.
 - A plain `nest build` in the worktree wiped the web UI the running app served (`deleteOutDir`).
 - I first answered an out-of-band workflow question with a status report on another topic.
-- The night ended without the gate passing (9, 10, 10 on c948702): every round fixed the last failure and a new rare one showed up. The epic wasn't merged.
+- The gate took five rounds of 3 eval runs; the fourth (c948702) ended the night at 9, 10, 10 and the merge waited a day. The fifth (f30bca2, rule A12) passed 10, 10, 10.
 
 ### What to do differently
 - For an eval failure, read `toolCalls[].input/output` and decide model fault vs check fault before touching code; stop a 3-run round as soon as one run fails and fix first.
