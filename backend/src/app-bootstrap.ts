@@ -17,7 +17,11 @@ import { AddressInfo } from 'node:net';
 import { extname, join, resolve } from 'node:path';
 import { AppModule } from './app.module';
 import { loadOrgServerConfig } from './config/org-server.config';
+import { DATA_DIR } from './infrastructure/database/database.module';
 import { startupDeveloperSettings } from './infrastructure/developer-settings/developer-settings.file';
+import { setIntellifyApiInfo } from './intellify-api/api-info';
+import { createIntellifyApi } from './intellify-api/bootstrap';
+import { intellifyApiConfig, readOrCreateApiKey } from './intellify-api/config';
 
 export interface CreateAppOptions {
   port: number;
@@ -40,6 +44,8 @@ export interface CreatedApp {
   webRoot: string | null;
   /** `ORG_PUBLIC_BASE_URL` in org server mode, null in local mode. */
   orgPublicBaseUrl: string | null;
+  /** Where the embedded Intellify RFP API listens; null when it is off or failed. */
+  intellifyApiUrl: string | null;
 }
 
 /** `WEB_ROOT` env, else `<package>/public` (next to `dist/`). */
@@ -100,6 +106,44 @@ function installDeveloperLogExport(): void {
   installNestLogExport();
 }
 
+/**
+ * Starts the Intellify RFP API (ADR-0027) next to the app, unless
+ * `INTELLIFY_API=off`. Never throws: a failure is logged and the app runs on
+ * without it (`getIntellifyApiInfo()` stays null).
+ */
+async function startEmbeddedIntellifyApi(
+  app: INestApplication,
+  logger: Logger,
+): Promise<string | null> {
+  try {
+    const config = intellifyApiConfig();
+    if (!config.enabled) return null;
+    const apiKeys = config.apiKeys.length
+      ? config.apiKeys
+      : [readOrCreateApiKey(DATA_DIR)];
+    const api = await createIntellifyApi({
+      port: config.port,
+      host: config.host,
+      db: config.db,
+      apiKeys,
+    });
+    setIntellifyApiInfo({ url: api.url, apiKey: apiKeys[0] });
+    logger.log(`Intellify API listening on ${api.url}`);
+    // Closing the app closes the API with it.
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- called with `this` below
+    const originalClose = app.close;
+    app.close = async () => {
+      setIntellifyApiInfo(null);
+      await api.close().catch(() => undefined);
+      return originalClose.call(app) as Promise<void>;
+    };
+    return api.url;
+  } catch (error) {
+    logger.warn(`Intellify API not started: ${(error as Error).message}`);
+    return null;
+  }
+}
+
 export async function createApp(
   options: CreateAppOptions,
 ): Promise<CreatedApp> {
@@ -145,6 +189,8 @@ export async function createApp(
     await app.listen(options.port);
   }
 
+  const intellifyApiUrl = await startEmbeddedIntellifyApi(app, logger);
+
   const address = app.getHttpServer().address() as AddressInfo;
   const port = address.port;
   const displayHost =
@@ -159,5 +205,6 @@ export async function createApp(
     port,
     webRoot: serveWeb ? webRoot : null,
     orgPublicBaseUrl: orgConfig?.publicBaseUrl ?? null,
+    intellifyApiUrl,
   };
 }
