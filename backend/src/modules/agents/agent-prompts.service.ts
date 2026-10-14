@@ -23,7 +23,7 @@ import { AgentPromptOverridesRepository } from './repositories/agent-prompt-over
 /** The most characters a system prompt may have. */
 export const PROMPT_MAX_CHARS = 20000;
 
-/** Where the assistant's prompt must start (ADR-0008, kept by ADR-0025). */
+/** Where the assistant's prompt must start (ADR-0008, kept by ADR-0026). */
 const ASSISTANT_IDENTITY_START = 'You are the Questions to Insights assistant';
 
 const ASSISTANT_KEY = 'assistant';
@@ -32,7 +32,7 @@ const ASSISTANT_KEY = 'assistant';
 const ANY_LINK = /\[\[.*?\]\]/;
 
 /**
- * Built-in agents' system prompts edited in the app (ADR-0025): an org-wide
+ * Built-in agents' system prompts edited in the app (ADR-0026): an org-wide
  * override per registry key, stored in `agent_prompt_overrides`. The current
  * overrides are mirrored into the `agent-prompt-overrides` bridge, which the
  * agents read per call, so a save or reset applies to the next call.

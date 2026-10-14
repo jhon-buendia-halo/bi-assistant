@@ -434,7 +434,7 @@ flowchart LR
   - The theme is per renderer origin, so the desktop app and the npm CLI's browser tab can hold different preferences.
 
 #### ADR-0008 — User-built agents are stored configurations of the assistant
-- **Status:** Accepted; which tools and skills a user agent gets is narrowed by ADR-0021; the core prompt it layers on becomes editable by ADR-0025
+- **Status:** Accepted; which tools and skills a user agent gets is narrowed by ADR-0022; the core prompt it layers on becomes editable by ADR-0026
 - **Date:** 2026-10-09
 - **Context:**
   - The Agent Hub ([BA-150](https://halo-powered.atlassian.net/browse/BA-150)) lets users build their own agents: a name, a description, instructions, datasets, starter questions and an optional model override. Each one is drafted, published and chatted with.
@@ -518,7 +518,7 @@ flowchart LR
   - Adding the script runner later is one story inside the rules above.
 
 #### ADR-0020 — A sectioned assistant prompt with the app's own skill catalog, read through `read_file`; built-in scripts run through `run_skill_script`
-- **Status:** Superseded by ADR-0024 (the sectioned prompt's identity, `## Tools` and `## Working rules` stay)
+- **Status:** Superseded by ADR-0025 (the sectioned prompt's identity, `## Tools` and `## Working rules` stay)
 - **Date:** 2026-10-14
 - **Context:**
   - Under ADR-0018 the framework renders the on-demand catalog, with its own usage note and a `<source>` tag, and offers `skill`, `skill_search` and `skill_read`. Neither the wording nor the tools are ours to shape.
@@ -542,8 +542,8 @@ flowchart LR
   - Every assistant call carries the Tools section (about 1,000 characters) and, since `curated-knowledge` is always listed, the Skills section and `read_file`.
   - Whether a knowledge rule applies now depends on the model reading the skill, which ADR-0018 avoided by loading it in code. The evals must pass at 100% before the PR (the workflow rule of 2026-10-14).
 
-#### ADR-0021 — User agents choose their tools from the assistant's set and get skills written in the app, stored per user and copied into the Live version
-- **Status:** Accepted; how tools and skills are chosen (checkboxes) is superseded by ADR-0023 (links)
+#### ADR-0022 — User agents choose their tools from the assistant's set and get skills written in the app, stored per user and copied into the Live version
+- **Status:** Accepted; how tools and skills are chosen (checkboxes) is superseded by ADR-0024 (links)
 - **Date:** 2026-10-14
 - **Context:**
   - ADR-0008 made a user agent a stored configuration of the `assistant`. It "can't add tools or relax the guard", and in practice it gets all of the assistant's tools and skills. Its only lever is a block of instructions.
@@ -565,11 +565,11 @@ flowchart LR
   - Transferring an agent (ADR-0010) must carry its draft's skill references to the new owner.
   - In `@mastra/core` 1.66 a function-valued `tools` is not copied into the Mastra instance's tool registry, so the assistant's tools no longer appear there as standalone tools (Mastra's dev studio). No app code reads that registry.
 
-#### ADR-0022 — Built-in skills are edited in the app as org-wide overrides stored in the database, by Platform admins
+#### ADR-0023 — Built-in skills are edited in the app as org-wide overrides stored in the database, by Platform admins
 - **Status:** Accepted
 - **Date:** 2026-10-14
 - **Context:**
-  - The user asked on 2026-10-14 for every skill to be editable in the app, the built-in ones (`curated-knowledge`, `deep-analysis`, `interactive-visuals`) included. ADR-0021 kept built-ins out of the app.
+  - The user asked on 2026-10-14 for every skill to be editable in the app, the built-in ones (`curated-knowledge`, `deep-analysis`, `interactive-visuals`) included. ADR-0022 kept built-ins out of the app.
   - Built-ins shape every assistant session and two app pipelines: `deep-analysis` phase files and `interactive-visuals` references are templates the app fills, with `{{placeholders}}` (ADR-0018, ADR-0019).
   - ADR-0019 already lets a folder override a built-in by name, with checks that keep the placeholders intact. [BA-211](https://halo-powered.atlassian.net/browse/BA-211) removes those folders. On an org server the folders were server-wide and unmanaged.
   - Per-user versions of the assistant's know-how would make answers differ by user and couldn't be evaluated.
@@ -584,33 +584,33 @@ flowchart LR
   - The loader resolves the winning skill per call (a database read, cached until an override changes) instead of once at startup.
   - BA-211's removal of the folder levels leaves this as the one way to change a built-in.
 
-#### ADR-0023 — Links in an agent's instructions decide its skills and tools; skills link tools
+#### ADR-0024 — Links in an agent's instructions decide its skills and tools; skills link tools
 - **Status:** Accepted
 - **Date:** 2026-10-14
 - **Context:**
   - The user asked on 2026-10-14 to follow the agent-poc *Agent configurator guide*: a rich editor where `/` links skills and tools as chips, saved as `[[skill:name]]` and `[[tool:name]]`; the links decide what the agent gets; skills link tools; a Graph tab shows the chain.
-  - The guide stores the prompt and skills as files, makes the whole system prompt editable and uses Mastra's `skill` tool. This app is multi-user (ADR-0010), layers an agent's instructions on a fixed core prompt (ADR-0008), keeps skills in the database (ADR-0021) and renders its own catalog read with `read_file` (ADR-0020). The user chose the guide's behaviour on this architecture.
-  - ADR-0021 made an agent's tools and skills two checkbox lists, separate from its instructions.
+  - The guide stores the prompt and skills as files, makes the whole system prompt editable and uses Mastra's `skill` tool. This app is multi-user (ADR-0010), layers an agent's instructions on a fixed core prompt (ADR-0008), keeps skills in the database (ADR-0022) and renders its own catalog read with `read_file` (ADR-0020). The user chose the guide's behaviour on this architecture.
+  - ADR-0022 made an agent's tools and skills two checkbox lists, separate from its instructions.
 - **Decision:**
   - **Links are the single source of truth.** An agent's instructions may contain `[[skill:<name>]]` (the owner's in-app skills) and `[[tool:<name>]]` (any assistant tool). On every save the backend derives the agent's `tools` and `skills` from them and refuses unknown links. The checkbox pickers go.
-  - **Skills link tools.** An in-app skill's body may link tools, never skills. A user agent gets the always-on data tools, the optional tools its instructions link, and the optional tools its linked skills link. Linking either visual tool gives both (ADR-0021).
+  - **Skills link tools.** An in-app skill's body may link tools, never skills. A user agent gets the always-on data tools, the optional tools its instructions link, and the optional tools its linked skills link. Linking either visual tool gives both (ADR-0022).
   - **The model never sees the syntax.** Each link becomes a plain mention (`the "x" tool`, `the "x" skill`) in the agent's context block and in a skill's body when `read_file` serves it.
-  - **A linked skill can't be deleted or renamed** while a draft links it; Live agents keep their copies (ADR-0021).
+  - **A linked skill can't be deleted or renamed** while a draft links it; Live agents keep their copies (ADR-0022).
   - **Rich editor:** Tiptap 3.31.3, pinned, loaded lazily so it stays out of the initial bundle.
-  - **Unchanged:** database storage and ownership, the fixed core prompt, the app's catalog and `read_file`, built-in skills (every agent gets them; ADR-0022 overrides).
+  - **Unchanged:** database storage and ownership, the fixed core prompt, the app's catalog and `read_file`, built-in skills (every agent gets them; ADR-0023 overrides).
 - **Consequences:**
-  - ADR-0021's tool and skill selection is now derived from text, so an agent's behaviour is readable in one place, and the Graph and Tools tabs can show why each tool is there.
+  - ADR-0022's tool and skill selection is now derived from text, so an agent's behaviour is readable in one place, and the Graph and Tools tabs can show why each tool is there.
   - An agent saved before links had every tool (no `tools` list). The editor adds links for what such an agent had when it opens, so a save keeps its behaviour; until then the legacy rule holds.
   - A new frontend dependency (Tiptap and ProseMirror, about 350 kB, lazy).
 
-#### ADR-0024 — On-demand skills reach the assistant through Mastra's agent skills, as in the agent-poc reference
+#### ADR-0025 — On-demand skills reach the assistant through Mastra's agent skills, as in the agent-poc reference
 - **Status:** Accepted
 - **Date:** 2026-10-14
 - **Context:**
   - ADR-0020 replaced Mastra's skill catalog and tools with the app's own `## Skills` section, `read_file` and `run_skill_script`, so the app owned the wording.
   - The user asked on 2026-10-14 for skills to be called as in the agent-poc reference: the agent declares `skills`, Mastra lists them in its `<available_skills>` system message, and the model calls `skill({ name })` to load one.
   - Mastra 1.66 supports this: `AgentConfig.skills` accepts inline skills from `createSkill` (instructions and reference files, no filesystem), as a function resolved per request.
-  - ADR-0023 resolves links to plain mentions before the model sees them, and in-app skills live in the database (ADR-0021), with built-in overrides (ADR-0022).
+  - ADR-0024 resolves links to plain mentions before the model sees them, and in-app skills live in the database (ADR-0022), with built-in overrides (ADR-0023).
 - **Decision:**
   - **The `assistant` declares its on-demand skills per request** through Mastra's `skills` option: the built-in on-demand skills (with an in-app override's content when there is one) and, for a call bound to a user agent, that agent's in-app skills (Live copies, or current ones in a preview). Each is a `createSkill` with its links resolved and its reference files as `references`.
   - **Mastra renders the catalog and provides the skill tools.** The app's `## Skills` section, `read_file`, `run_skill_script` and the `/in-app-skills/` paths are removed.
@@ -620,12 +620,12 @@ flowchart LR
   - The plain assistant's prompt changes (no `## Skills` section, no `read_file` line), so the golden fixture and Appendix A are regenerated, and the evals must pass at 100% on the branch.
   - No built-in skill ships a script, so dropping `run_skill_script` loses nothing today. A skill that needs exact checks still names the tool or guard that applies them (ADR-0018).
 
-#### ADR-0025 — Every built-in agent's system prompt is editable as an org-wide override, by Platform admins
+#### ADR-0026 — Every built-in agent's system prompt is editable as an org-wide override, by Platform admins
 - **Status:** Accepted
 - **Date:** 2026-10-14
 - **Context:**
-  - The user asked on 2026-10-14 for every agent to be editable, as in the agent-poc reference, whose System Prompt tab edits the agent's prompt in place. User agents already edit their instructions (ADR-0023). The built-in agents' prompts were fixed in code: the assistant's core prompt (ADR-0008 layered user agents on it) and the five System agents'.
-  - ADR-0022 already edits built-in skills as org-wide overrides in the database, read per call, with Reset and drift detection.
+  - The user asked on 2026-10-14 for every agent to be editable, as in the agent-poc reference, whose System Prompt tab edits the agent's prompt in place. User agents already edit their instructions (ADR-0024). The built-in agents' prompts were fixed in code: the assistant's core prompt (ADR-0008 layered user agents on it) and the five System agents'.
+  - ADR-0023 already edits built-in skills as org-wide overrides in the database, read per call, with Reset and drift detection.
   - The assistant's `## Tools` section is generated from the tools a call offers (ADR-0020, BA-217), and every user agent runs on the assistant.
 - **Decision:**
   - **Same pattern as built-in skills.** Saving a built-in agent's prompt stores an override in a shared `agent_prompt_overrides` collection keyed by the registry key; the shipped prompt stays as the fallback and **Reset to built-in** deletes the override. Read per call; a save applies to the next call. Platform admins only (`edit-policies`). A hash of the shipped text shows drift.

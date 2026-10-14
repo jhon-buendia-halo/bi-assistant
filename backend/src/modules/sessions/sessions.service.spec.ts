@@ -106,7 +106,7 @@ describe('SessionsService streaming', () => {
         id: string;
         agentName?: string;
         live: Record<string, unknown> | null;
-        /** The copies taken at the last publish (ADR-0021). */
+        /** The copies taken at the last publish (ADR-0022). */
         liveSkills?: Record<string, unknown>[];
         /** The current skill documents the draft names (a preview). */
         currentSkills?: Record<string, unknown>[];
@@ -613,7 +613,7 @@ describe('SessionsService streaming', () => {
       ).toBe(false);
     });
 
-    it("puts the agent's tool selection on the turn and trims Block 1 (ADR-0021)", async () => {
+    it("puts the agent's tool selection on the turn and trims Block 1 (ADR-0022)", async () => {
       const { service, agent } = buildStreaming(answerStream([]), {
         userAgent: {
           id: 'agent-1',
@@ -681,7 +681,7 @@ describe('SessionsService streaming', () => {
       expect(block1).toContain('Interactive visuals in this session');
     });
 
-    it("puts the agent's skill copies on the turn, and none for a plain session (ADR-0021)", async () => {
+    it("puts the agent's skill copies on the turn, and none for a plain session (ADR-0022)", async () => {
       const copy = {
         id: 'skill-1',
         name: 'fiscal-calendar',
@@ -740,7 +740,7 @@ describe('SessionsService streaming', () => {
       expect(skills.map((skill) => skill.body)).toEqual([current.body]);
     });
 
-    it('turns links in the instructions into plain mentions in Block 5 (ADR-0023)', async () => {
+    it('turns links in the instructions into plain mentions in Block 5 (ADR-0024)', async () => {
       const { service, agent } = buildStreaming(answerStream([]), {
         userAgent: {
           id: 'agent-1',

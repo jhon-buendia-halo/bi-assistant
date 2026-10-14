@@ -1,5 +1,5 @@
 /**
- * Bridge for the in-app overrides of built-in skills (ADR-0022, agents.md
+ * Bridge for the in-app overrides of built-in skills (ADR-0023, agents.md
  * 7.3). `app-skills.ts` is plain code with no Nest DI, so the skills
  * service installs the current overrides here when the app starts and
  * after every save or reset. Resolution reads them per call, so a change

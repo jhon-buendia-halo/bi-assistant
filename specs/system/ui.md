@@ -358,7 +358,7 @@ Capability: [agents-evals](../capabilities/agents-evals/spec.md) R76-R80. The sk
 
 #### 4.5.5 Link editor and chips
 
-Capability: [agents-evals](../capabilities/agents-evals/spec.md) R81-R86; decision ADR-0023. Used by the agent editor's Instructions (4.5.1), the System Prompt tab's edit state (4.5.9, 4.5.11) and the skill editor's Body (4.5.3).
+Capability: [agents-evals](../capabilities/agents-evals/spec.md) R81-R86; decision ADR-0024. Used by the agent editor's Instructions (4.5.1), the System Prompt tab's edit state (4.5.9, 4.5.11) and the skill editor's Body (4.5.3).
 
 - **Editor:** a lazy-loaded Tiptap editor (tech-stack.md) in a `field`-styled box, monospace 13 px. It holds paragraphs of text and `mention` chips; each line is a paragraph, saved joined by `\n`, each chip saved as `[[skill:<name>]]` or `[[tool:<name>]]`, so load and save round-trip exactly. While the editor loads the box shows a muted `Loading editor…`. It has `role="textbox"`, `aria-multiline="true"` and an `aria-label` equal to the field label (`Instructions`, `Body`). The counter `<n>/<max>` under it (12 px `fg-muted`, `on-danger-soft` over the limit) counts the saved text.
 - **Buttons** under the editor, `btn btn-ghost` with a plus icon: **+ Link skill** and **+ Link tool** (the skill editor has only **+ Link tool**; the assistant's prompt editor has **+ Link skill or tool** and **+ Link tool**). They open the menu limited to that kind and insert at the cursor, or at the end if the user hasn't clicked into the editor.
@@ -394,7 +394,7 @@ Capability: [agents-evals](../capabilities/agents-evals/spec.md) R90. The agent 
 
 #### 4.5.9 System Prompt tab, user agent
 
-Capability: [agents-evals](../capabilities/agents-evals/spec.md) R92-R94; decision ADR-0024 (layout as in the agent-poc reference). The agent detail's `prompt` tab for a user agent.
+Capability: [agents-evals](../capabilities/agents-evals/spec.md) R92-R94; decision ADR-0025 (layout as in the agent-poc reference). The agent detail's `prompt` tab for a user agent.
 
 - **Reading state:** the agent's own section first, an `h3` micro-heading `Agent instructions` with, right-aligned, **Edit** (`data-testid="agent-prompt-edit"`, `pencil` icon, `btn btn-secondary`; hidden without Create agents), and the instructions in a `surface-muted` block with links as chips (4.5.5), or `No instructions yet.` Under it a collapsed `<details>` titled `Assistant core prompt (fixed)` (13 px `fg-muted`) holding the assistant's prompt in the monospace pre block of 4.5.
 - **Edit state** (`data-testid="agent-prompt-editor"`), replacing the instructions block: the link editor of 4.5.5 over the draft's instructions, with the `<n>/4,000` counter; a toolbar above it with **+ Link skill or tool** (`btn btn-ghost`, plus icon, opens the menu with both groups) and the hint `Type / to link a skill or tool. The agent only gets the skills and tools its instructions link.` (12 px `fg-muted`); under the editor a `Linked:` row (12 px `fg-muted`) with one chip per link in the text (4.5.5; a broken one `chip-danger`), or `none`; when a link is broken, an inline `danger-soft` block `No <kind> named <name>. Remove the link or create the skill on the Skills tab.` (plus ` (and others)` when more than one); then **Cancel** (`btn btn-ghost`) and **Save prompt** (`data-testid="agent-prompt-save"`, `save` icon, `btn btn-primary`; `Saving…` in flight; disabled in flight, when unchanged and with a broken link). Saving toasts `Draft saved`, returns to the reading state and, for a Live agent, shows `Unpublished changes` in the detail header.
@@ -403,7 +403,7 @@ Capability: [agents-evals](../capabilities/agents-evals/spec.md) R92-R94; decisi
 
 #### 4.5.11 System Prompt tab, built-in agent
 
-Capability: [agents-evals](../capabilities/agents-evals/spec.md) R97-R104; decision ADR-0025. The agent detail's `prompt` tab for the Official and System agents.
+Capability: [agents-evals](../capabilities/agents-evals/spec.md) R97-R104; decision ADR-0026. The agent detail's `prompt` tab for the Official and System agents.
 
 - **Header line:** a `chip` `Built-in` and, while overridden, a `chip chip-warning` `Modified` (`data-testid="agent-prompt-modified"`); right-aligned, 8 px apart, **Reset to built-in** (`data-testid="agent-prompt-reset"`, rotate-ccw icon, `btn btn-secondary`; only while modified; native confirm `Reset the system prompt of "<name>" to the built-in version?`) and **Edit** (`data-testid="agent-prompt-edit"`, `pencil` icon, `btn btn-secondary`). Both are hidden without Edit policies and templates, and the tab is then read-only.
 - **Reading state:** the prompt as served in the monospace pre block of 4.5 (`data-testid="agent-prompt-view"`). For the assistant the block shows `prompt.editable` with its `[[tool:…]]` and `[[skill:…]]` links as chips (4.5.5), a muted note `## Tools — generated from the tools the assistant gets` where the `## Tools` section sits, and under it a collapsed `<details>` `Prompt as sent to the model` (13 px `fg-muted`) holding `instructions` (the generated tool list included).

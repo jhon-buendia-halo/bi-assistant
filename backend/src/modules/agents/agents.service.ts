@@ -58,7 +58,7 @@ export interface AgentSummary {
   description: string;
   /** Tool names the agent can call, sorted alphabetically. A user agent
    * runs on the assistant, so it lists the assistant's tools its effective
-   * configuration selects (ADR-0021). */
+   * configuration selects (ADR-0022). */
   tools: string[];
   kind: AgentKind;
   status: AgentStatus;
@@ -153,7 +153,7 @@ export interface AgentDetail extends AgentSummary {
   toolLinks?: AgentToolLink[];
   /** The LLM settings the agent runs on, an agent's overrides applied. */
   llm: AgentLlmDetail;
-  /** Built-in agents only: the editable system prompt (api.md 34, ADR-0025). */
+  /** Built-in agents only: the editable system prompt (api.md 34, ADR-0026). */
   prompt?: AgentPromptView;
 }
 
@@ -556,7 +556,7 @@ function toolSelectionContext(
  * Every library tool of a user agent with its status and where the link
  * comes from, for the Tools and Graph tabs: the Live version, else the
  * draft. A tool the effective selection gives without a link (a config
- * saved before ADR-0023) shows as `linked` with no source.
+ * saved before ADR-0024) shows as `linked` with no source.
  */
 function toolLinks(
   doc: UserAgentDoc,

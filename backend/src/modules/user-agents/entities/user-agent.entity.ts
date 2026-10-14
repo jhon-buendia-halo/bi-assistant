@@ -23,12 +23,12 @@ export interface AgentConfig {
   reasoningEffort?: ReasoningEffort;
   /**
    * The optional assistant tools the agent gets, de-duplicated and in
-   * canonical order; absent means all three, empty means none (ADR-0021).
+   * canonical order; absent means all three, empty means none (ADR-0022).
    */
   tools?: OptionalAgentTool[];
   /**
    * Ids of the owner's in-app skills (data-model 3.10.1), at most 10,
-   * de-duplicated, in the order given; absent means none (ADR-0021).
+   * de-duplicated, in the order given; absent means none (ADR-0022).
    */
   skills?: string[];
 }
@@ -42,7 +42,7 @@ export interface UserAgentDoc {
   live?: AgentConfig;
   /**
    * Copies of the skills the Live version names, taken at each publish, in
-   * the order of `live.skills`; a Live agent runs on these (ADR-0021).
+   * the order of `live.skills`; a Live agent runs on these (ADR-0022).
    */
   liveSkills?: SkillCopy[];
   publishedAt?: string;

@@ -117,7 +117,7 @@ export function validateSkill(
   if (missing) {
     refuse(`The body names ${missing}, which this skill doesn't have`);
   }
-  // A body links tools only (ADR-0023).
+  // A body links tools only (ADR-0024).
   const links = parseLinks(body);
   if (links.skills.length) refuse('Skills can link tools only');
   const unknownTool = links.tools.find((tool) => !isLibraryTool(tool));

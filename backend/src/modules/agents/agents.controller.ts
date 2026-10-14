@@ -79,7 +79,7 @@ export class AgentsController {
     });
   }
 
-  /** Save a built-in agent's shared system prompt override (ADR-0025). */
+  /** Save a built-in agent's shared system prompt override (ADR-0026). */
   @Put(':key/prompt')
   @RequirePermission('edit-policies')
   savePrompt(
@@ -95,7 +95,7 @@ export class AgentsController {
     });
   }
 
-  /** Reset a built-in agent's system prompt to the shipped one (ADR-0025). */
+  /** Reset a built-in agent's system prompt to the shipped one (ADR-0026). */
   @Delete(':key/prompt')
   @RequirePermission('edit-policies')
   resetPrompt(@Param('key') key: string): Promise<AgentResult> {

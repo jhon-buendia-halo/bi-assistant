@@ -43,7 +43,7 @@ function splitId(id: string): { kind: LinkKind; name: string } {
 }
 
 /**
- * The text editor of instructions and skill bodies (ADR-0023): plain lines
+ * The text editor of instructions and skill bodies (ADR-0024): plain lines
  * with skill and tool chips. Type "/" (or press a `+ Link` button) to pick
  * one. The saved text carries the chips as `[[skill:name]]` and
  * `[[tool:name]]`. Loaded lazily, so Tiptap stays out of the initial bundle.

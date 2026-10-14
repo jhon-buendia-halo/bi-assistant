@@ -1,5 +1,5 @@
 /**
- * A user agent's tool selection (ADR-0021, agents.md 2.1 and 4.2): which of
+ * A user agent's tool selection (ADR-0022, agents.md 2.1 and 4.2): which of
  * the assistant's optional tools a call offers. `list_entities`,
  * `describe_entity` and `run_readonly_sql` are always given and never listed.
  */

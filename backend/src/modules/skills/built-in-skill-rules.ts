@@ -22,7 +22,7 @@ export interface OverrideFields {
 
 /**
  * Coerce and validate a PUT /skills/built-in/:name payload (api.md 101,
- * ADR-0022). The description is trimmed. The file checks are the ones a
+ * ADR-0023). The description is trimmed. The file checks are the ones a
  * folder override passes (ADR-0019), shared through `app-skills`; the first
  * refusal that applies is thrown, so a broken override never reaches a call.
  */

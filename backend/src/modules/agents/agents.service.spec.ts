@@ -27,7 +27,7 @@ const selectionOf = (args?: Context) =>
 /**
  * A registry entry with just the accessors `AgentsService` reads. Like the
  * real assistant, it drops `create_visual` and says so in its prompt when
- * the call's tool selection leaves out `visuals` (ADR-0021).
+ * the call's tool selection leaves out `visuals` (ADR-0022).
  */
 function fakeAgent(name: string, tools: string[], instructions = '') {
   return {
@@ -122,7 +122,7 @@ describe('AgentsService (built-in and user agents)', () => {
   );
 
   it(
-    "adds the editable prompt to a built-in agent's detail only (ADR-0025)",
+    "adds the editable prompt to a built-in agent's detail only (ADR-0026)",
     asDemoUser(async () => {
       const view = {
         editable: 'E',
@@ -172,7 +172,7 @@ describe('AgentsService (built-in and user agents)', () => {
         id: created.id,
         name: 'Health plan analyst',
         description: 'Plans',
-        // No links: only the always-on tools (ADR-0023).
+        // No links: only the always-on tools (ADR-0024).
         tools: ['run_readonly_sql'],
         kind: 'user',
         status: 'draft',
@@ -378,7 +378,7 @@ describe('AgentsService (built-in and user agents)', () => {
       ).rejects.toThrow('Skill "deep-analysis" has no file "phases/9.md"');
     }),
   );
-  describe("a user agent's in-app skills (ADR-0021; api.md 34a, 34b)", () => {
+  describe("a user agent's in-app skills (ADR-0022; api.md 34a, 34b)", () => {
     const skill = (id: string, name: string, body: string): SkillDoc => ({
       id,
       name,
@@ -478,7 +478,7 @@ describe('AgentsService (built-in and user agents)', () => {
     );
   });
 
-  describe('links (ADR-0023; api.md 34)', () => {
+  describe('links (ADR-0024; api.md 34)', () => {
     const skill = (name: string, body: string): SkillDoc => ({
       id: `id-${name}`,
       name,

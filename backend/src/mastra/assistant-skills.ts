@@ -4,12 +4,12 @@ import { resolveLinks } from './agent-links';
 import { catalogSkills, skillBody, skillReferences } from './app-skills';
 
 /**
- * The skills the assistant declares to Mastra on a call (ADR-0024, agents.md
+ * The skills the assistant declares to Mastra on a call (ADR-0025, agents.md
  * 7.3): the on-demand skills that reach it (built-in, with an in-app
  * override's content, and user or project folder skills) plus the call's
  * `agent-skills` (Live copies, or current ones for a preview), sorted by
  * name. An agent skill replaces a same-named folder skill. Links are
- * resolved to plain mentions (ADR-0023) in the instructions and in every
+ * resolved to plain mentions (ADR-0024) in the instructions and in every
  * reference file. Mastra serves a skill's files at `references/<key>`, so a
  * file is keyed by its name under `references/` (or a folder skill's
  * `reference/`), and a folder skill's `reference/` mentions are pointed there.

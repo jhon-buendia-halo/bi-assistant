@@ -66,7 +66,7 @@ export const knowledgeBootstrapAgent = new Agent({
   name: 'Knowledge Bootstrap',
   description:
     "Mines business-glossary terms, instructions and coverage facts from a dataset's schema and sample rows.",
-  // The shipped prompt, or the in-app override (ADR-0025).
+  // The shipped prompt, or the in-app override (ADR-0026).
   instructions: () =>
     agentInstructions('knowledge-bootstrap', KNOWLEDGE_BOOTSTRAP_PROMPT),
   // Same configured model as the analysis agent; see ../model-resolver.

@@ -312,13 +312,13 @@ export class SessionsService implements OnModuleInit {
     if (overrides.model || overrides.reasoningEffort) {
       requestContext.set(AGENT_OVERRIDES_CONTEXT_KEY, overrides);
     }
-    // The agent's tool selection (ADR-0021): only a list without all three
+    // The agent's tool selection (ADR-0022): only a list without all three
     // optional tools goes on the context; otherwise every tool is offered.
-    // The agent's in-app skills join the assistant's catalog (ADR-0021): the
+    // The agent's in-app skills join the assistant's catalog (ADR-0022): the
     // copies its Live version runs on, or for a preview the current skills.
     const agentSkills = agent ? await this.agentSkillsFor(session) : [];
     // The tools offered are those the instructions link plus those its
-    // skills link (ADR-0023); a config without `tools` keeps every tool.
+    // skills link (ADR-0024); a config without `tools` keeps every tool.
     if (agent?.tools) {
       const tools = effectiveOptionalTools(agent.tools, agentSkills);
       if (!isFullSelection(tools)) {
@@ -358,7 +358,7 @@ export class SessionsService implements OnModuleInit {
         },
         ...(metrics ? [{ role: 'system' as const, content: metrics }] : []),
         // The knowledge block; its rules are the on-demand curated-knowledge
-        // skill (ADR-0024).
+        // skill (ADR-0025).
         ...knowledgeContext(knowledge.block),
         ...(verified ? [{ role: 'system' as const, content: verified }] : []),
         // Last, so the base prompt and every curated block come first.

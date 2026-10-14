@@ -5,7 +5,7 @@ import {
 } from './agent-tools';
 
 /**
- * Links in an agent's instructions and in an in-app skill's body (ADR-0023,
+ * Links in an agent's instructions and in an in-app skill's body (ADR-0024,
  * agents.md 4.3): `[[skill:<name>]]` and `[[tool:<name>]]`. They are stored
  * as written and turned into plain mentions before the model reads them.
  */

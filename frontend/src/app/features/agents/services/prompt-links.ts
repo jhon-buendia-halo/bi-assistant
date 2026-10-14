@@ -1,5 +1,5 @@
 /**
- * Links in an agent's instructions or a skill's body (ADR-0023). Mirrors the
+ * Links in an agent's instructions or a skill's body (ADR-0024). Mirrors the
  * backend: `[[skill:<name>]]` and `[[tool:<name>]]`.
  */
 const LINK = /\[\[(skill|tool):([A-Za-z0-9_-]+)\]\]/g;

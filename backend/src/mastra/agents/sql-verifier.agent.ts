@@ -23,7 +23,7 @@ export const sqlVerifierAgent = new Agent({
   name: 'SQL Verifier',
   description:
     "Careful mode's second opinion — re-derives the SQL for a question independently to corroborate the answer.",
-  // The shipped prompt, or the in-app override (ADR-0025).
+  // The shipped prompt, or the in-app override (ADR-0026).
   instructions: () => agentInstructions('sql-verifier', SQL_VERIFIER_PROMPT),
   // Same configured model as the analysis agent; see ../model-resolver.
   model: async () => resolveAgentModel(),

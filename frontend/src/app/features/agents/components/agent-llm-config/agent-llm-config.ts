@@ -2,7 +2,7 @@ import { Component, computed, input } from '@angular/core';
 import { AgentLlm } from '../../services/agents-api.service';
 
 /**
- * The LLM Config tab (ADR-0023): the provider, model, key state and limits
+ * The LLM Config tab (ADR-0024): the provider, model, key state and limits
  * an agent runs on, read-only. The API key is never shown, only whether one
  * is set.
  */

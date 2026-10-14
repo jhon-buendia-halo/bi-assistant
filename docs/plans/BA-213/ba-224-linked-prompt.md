@@ -1,6 +1,6 @@
 # BA-224 addendum — the shipped assistant prompt links its tools and skill
 
-Asked by the user on 2026-10-14: "update the system prompt to link the skills and tools correctly with a /". As the agent-poc guide says for an existing agent ("turn plain-text tool mentions into `[[tool:…]]` links"), the **shipped** assistant prompt (`ASSISTANT_WORKING_RULES` in `backend/src/mastra/agents/assistant-prompt.ts`) writes every tool mention as a link, and links the built-in skill it relies on. In the editor they are chips; the model sees plain mentions (`the "x" tool`, `the "x" skill`, ADR-0023).
+Asked by the user on 2026-10-14: "update the system prompt to link the skills and tools correctly with a /". As the agent-poc guide says for an existing agent ("turn plain-text tool mentions into `[[tool:…]]` links"), the **shipped** assistant prompt (`ASSISTANT_WORKING_RULES` in `backend/src/mastra/agents/assistant-prompt.ts`) writes every tool mention as a link, and links the built-in skill it relies on. In the editor they are chips; the model sees plain mentions (`the "x" tool`, `the "x" skill`, ADR-0024).
 
 ## 1. Exact line changes in ASSISTANT_WORKING_RULES (everything else stays byte-identical)
 

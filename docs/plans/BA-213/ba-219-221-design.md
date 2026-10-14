@@ -1,6 +1,6 @@
 # BA-219, BA-220, BA-221 — design (source for specs and code)
 
-Epic BA-213. Decided with the user on 2026-10-14: apply the agent-poc **Agent configurator guide** (`/home/jhonbuendia/projects/agent-poc/docs/AGENT_CONFIGURATOR_GUIDE.md`, reference code in `/home/jhonbuendia/projects/agent-poc/be` and `/ui`) **on this app's architecture**: database storage, per-user agents layered on the fixed assistant core prompt, the app's own skill catalog + `read_file` (ADR-0020), built-in overrides (ADR-0022), Mastra 1.66, Nest CommonJS, Angular 20. Links replace the BA-217 tool checkboxes and the BA-216 skill checkboxes. Decision: ADR-0023.
+Epic BA-213. Decided with the user on 2026-10-14: apply the agent-poc **Agent configurator guide** (`/home/jhonbuendia/projects/agent-poc/docs/AGENT_CONFIGURATOR_GUIDE.md`, reference code in `/home/jhonbuendia/projects/agent-poc/be` and `/ui`) **on this app's architecture**: database storage, per-user agents layered on the fixed assistant core prompt, the app's own skill catalog + `read_file` (ADR-0020), built-in overrides (ADR-0023), Mastra 1.66, Nest CommonJS, Angular 20. Links replace the BA-217 tool checkboxes and the BA-216 skill checkboxes. Decision: ADR-0024.
 
 ## 1. Links (BA-219)
 

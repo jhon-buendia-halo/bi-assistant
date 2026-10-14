@@ -6,7 +6,7 @@ import * as appSkillsModule from './app-skills';
 import type { AppSkill } from './app-skills';
 import { assistantSkillSources, assistantSkills } from './assistant-skills';
 
-describe('the assistant skills of a call with user folder skills (ADR-0024)', () => {
+describe('the assistant skills of a call with user folder skills (ADR-0025)', () => {
   let dir: string;
   let folderSkill: AppSkill;
 

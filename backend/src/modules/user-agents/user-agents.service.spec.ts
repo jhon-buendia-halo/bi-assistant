@@ -94,7 +94,7 @@ describe('normalizeAgentConfig', () => {
     expect(config).not.toHaveProperty('reasoningEffort');
   });
 
-  it('ignores the tools and skills of the request (derived from the links, ADR-0023)', () => {
+  it('ignores the tools and skills of the request (derived from the links, ADR-0024)', () => {
     const config = normalizeAgentConfig({
       name: 'A',
       tools: ['visuals'],
@@ -304,7 +304,7 @@ describe('UserAgentsService', () => {
   });
 });
 
-describe('user agent skills (ADR-0021; R43, R44, R60)', () => {
+describe('user agent skills (ADR-0022; R43, R44, R60)', () => {
   let ctx: ReturnType<typeof build>;
   const skill = (id: string, body = 'Body.'): SkillDoc => ({
     id,

@@ -41,7 +41,7 @@ describe('entityOrientationLines (agents.md 4.1 Block 1)', () => {
     );
   });
 
-  it('leaves sample_rows out of the hint when it is not selected (ADR-0021)', () => {
+  it('leaves sample_rows out of the hint when it is not selected (ADR-0022)', () => {
     expect(entityOrientationLines(['Core'], datasets, ['visuals']).at(-1)).toBe(
       'Use describe_entity / run_readonly_sql to inspect and query them.',
     );

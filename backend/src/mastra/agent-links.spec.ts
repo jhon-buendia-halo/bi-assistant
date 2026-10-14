@@ -8,7 +8,7 @@ import {
   resolveLinks,
 } from './agent-links';
 
-describe('agent links (ADR-0023, agents.md 4.3)', () => {
+describe('agent links (ADR-0024, agents.md 4.3)', () => {
   it('parses skill and tool links, distinct and in order of appearance', () => {
     expect(
       parseLinks(

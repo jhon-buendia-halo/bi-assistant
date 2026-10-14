@@ -27,7 +27,7 @@ Running log of every meaningful change, newest first. See *Logging convention* a
 
 ### Added
 - **Agent tools and skills planned** (roadmap 1.14.1, [BA-214](https://halo-powered.atlassian.net/browse/BA-214), epic [BA-213](https://halo-powered.atlassian.net/browse/BA-213)):
-  - **ADR-0021.** User agents choose their tools from the assistant's own set (`list_entities`, `describe_entity` and `run_readonly_sql` always on), and get skills written in the app, stored per user and copied into the Live version on publish. The assistant's prompt and tools are to be built per call. ADR-0008's status notes the narrowing.
+  - **ADR-0022.** User agents choose their tools from the assistant's own set (`list_entities`, `describe_entity` and `run_readonly_sql` always on), and get skills written in the app, stored per user and copied into the Live version on publish. The assistant's prompt and tools are to be built per call. ADR-0008's status notes the narrowing.
   - **Epic spec** [specs/epics/BA-213/spec.md](specs/epics/BA-213/spec.md), confirmed with five decisions: a Skills button in the Agent Hub header, Visuals as one switch, no in-app skills for the plain assistant, size limits, and skill copies on agent transfer. It records the prompt measured section by section (8,729 characters; `## Skills` 904; about 160 per catalog entry).
   - **Roadmap.** Milestone 1.14 with features 1.14.1 to 1.14.4; the epic row in [specs/README.md](specs/README.md). Evidence: [evidence/1.14.1/](evidence/1.14.1/).
 - **Skill levels** (roadmap 1.13.7, [BA-205](https://halo-powered.atlassian.net/browse/BA-205), epic [BA-198](https://halo-powered.atlassian.net/browse/BA-198), ADR-0019). Agents read skills from three levels, and a later level overrides an earlier one by name:

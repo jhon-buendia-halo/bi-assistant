@@ -96,7 +96,7 @@ export const visualizationAgent = new Agent({
   name: 'Interactive Visual Designer',
   description:
     'Turns a completed analysis answer into an interactive visual, and tailors it on request.',
-  // The shipped prompt, or the in-app override (ADR-0025).
+  // The shipped prompt, or the in-app override (ADR-0026).
   instructions: () => agentInstructions('visualization', VISUALIZATION_PROMPT),
   // Keep analysis on the configured model while using the smaller sibling for
   // the bounded code-transformation step.

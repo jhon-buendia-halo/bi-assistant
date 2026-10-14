@@ -29,7 +29,7 @@ export type SkillLoading = 'on-demand' | 'harness';
 /** Built-in on-demand skills each agent's catalog lists, by registry key. */
 export const AGENT_SKILLS: Readonly<Record<string, readonly string[]>> = {
   // How to apply the curated-knowledge block: the model loads it with
-  // Mastra's skill tool when a call carries the block (ADR-0024).
+  // Mastra's skill tool when a call carries the block (ADR-0025).
   assistant: ['curated-knowledge'],
 };
 
@@ -76,7 +76,7 @@ export interface AppSkill {
   /** Lower levels that also hold a valid skill with this name, lowest first. */
   overrides: SkillLevel[];
   warnings: string[];
-  /** Set when an in-app override of this built-in is served (ADR-0022). */
+  /** Set when an in-app override of this built-in is served (ADR-0023). */
   inApp?: SkillOverride;
 }
 
@@ -390,7 +390,7 @@ export function requiredOverrideFiles(
 
 /**
  * The placeholder refusal for one override file, or null when it uses the
- * same `{{placeholders}}` as the built-in's file (ADR-0019, ADR-0022).
+ * same `{{placeholders}}` as the built-in's file (ADR-0019, ADR-0023).
  */
 export function placeholderProblem(
   path: string,
@@ -590,7 +590,7 @@ export function shippedSkills(): ReadonlyMap<string, AppSkill> {
   return shipped ?? new Map();
 }
 
-/** The skill with the in-app override of its built-in served (ADR-0022). */
+/** The skill with the in-app override of its built-in served (ADR-0023). */
 function withOverride(skill: AppSkill, override: SkillOverride): AppSkill {
   const lower = [...skill.overrides, skill.level].filter(
     (level): level is SkillLevel => level !== 'built-in',
@@ -671,7 +671,7 @@ function winningSkill(name: string): AppSkill {
 
 /**
  * The on-demand skills an agent gets, sorted by name: what the assistant
- * declares to Mastra's skill tool (ADR-0024, agents.md 7.3).
+ * declares to Mastra's skill tool (ADR-0025, agents.md 7.3).
  */
 export function catalogSkills(agent: string): AppSkill[] {
   return [...appSkills().values()]
@@ -684,7 +684,7 @@ export function catalogSkills(agent: string): AppSkill[] {
 /**
  * A skill's text files other than `SKILL.md` and `scripts/`, as served (an
  * in-app override's content included), keyed by their path in the skill
- * folder: the `references` the assistant's skill tool serves (ADR-0024).
+ * folder: the `references` the assistant's skill tool serves (ADR-0025).
  * Files too large to show or that aren't text are left out.
  */
 export function skillReferences(skill: AppSkill): Record<string, string> {
@@ -765,7 +765,7 @@ export interface AgentSkillsView {
     level: SkillLevel | 'in-app';
     loading: SkillLoading;
     overrides: SkillLevel[];
-    /** An in-app override of this built-in is served (ADR-0022). */
+    /** An in-app override of this built-in is served (ADR-0023). */
     modified?: boolean;
     files: { path: string; size: number }[];
     warnings: string[];

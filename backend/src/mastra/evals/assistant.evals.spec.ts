@@ -94,7 +94,7 @@ function sentRequestContext(): { get(key: string): unknown } {
   return config.data[0].requestContext;
 }
 
-describe('tool selection in the eval cases (agents.md 8.1, ADR-0021)', () => {
+describe('tool selection in the eval cases (agents.md 8.1, ADR-0022)', () => {
   const setCases = (id: string) =>
     ASSISTANT_EVAL_SETS.find((set) => set.id === id)?.cases ?? [];
 

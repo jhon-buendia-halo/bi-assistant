@@ -89,7 +89,7 @@ async function toolNames(tools?: string[]): Promise<string[]> {
   );
 }
 
-describe('assistant tool selection (ADR-0021, agents.md 2.1)', () => {
+describe('assistant tool selection (ADR-0022, agents.md 2.1)', () => {
   it('gives the unchanged full prompt and tools with no selection', async () => {
     expect((await assistantAgent.getInstructions()) as string).toBe(GOLDEN);
     expect(await prompt()).toBe(GOLDEN);
@@ -150,7 +150,7 @@ describe('assistant tool selection (ADR-0021, agents.md 2.1)', () => {
   });
 });
 
-describe("the assistant's skills per call (ADR-0024, agents.md 7.3)", () => {
+describe("the assistant's skills per call (ADR-0025, agents.md 7.3)", () => {
   const fiscal: AgentSkill = {
     id: 's1',
     name: 'fiscal-calendar',
@@ -249,7 +249,7 @@ describe("the assistant's skills per call (ADR-0024, agents.md 7.3)", () => {
   });
 });
 
-describe("the assistant's prompt override (ADR-0025, agents.md 2.1)", () => {
+describe("the assistant's prompt override (ADR-0026, agents.md 2.1)", () => {
   const SELECTIONS: (string[] | undefined)[] = [
     undefined,
     [],

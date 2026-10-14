@@ -19,7 +19,7 @@ const STATUS_CHIPS: Record<ToolLinkStatus, string> = {
 };
 
 /**
- * The Tools tab of a user agent (ADR-0023): every library tool, sorted by
+ * The Tools tab of a user agent (ADR-0024): every library tool, sorted by
  * name, with whether the agent gets it and what links it.
  */
 @Component({

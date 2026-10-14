@@ -17,7 +17,7 @@ import type {
 import { SkillOverridesRepository } from './repositories/skill-overrides.repository';
 
 /**
- * Built-in skills edited in the app (R75-R80, ADR-0022): an org-wide
+ * Built-in skills edited in the app (R75-R80, ADR-0023): an org-wide
  * override per skill, stored in `skill_overrides`. The current overrides are
  * mirrored into the `skill-overrides` bridge, which the loader reads per
  * call, so a save or reset applies to the next call.

@@ -10,7 +10,7 @@ import {
 
 /**
  * The shipped, editable system prompt of each built-in agent, by registry
- * key (ADR-0025, data-model 3.10.3): the assistant's without its generated
+ * key (ADR-0026, data-model 3.10.3): the assistant's without its generated
  * `## Tools` section, a System agent's whole static instructions.
  */
 const SHIPPED: Readonly<Record<string, string>> = {

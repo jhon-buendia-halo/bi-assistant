@@ -1,5 +1,5 @@
 /**
- * The shipped system prompts of the System agents (ADR-0025). Plain text with
+ * The shipped system prompts of the System agents (ADR-0026). Plain text with
  * no Mastra import, so the prompt-override service can read them. Each agent
  * serves its own through `agentInstructions` (../agent-prompt-overrides).
  */

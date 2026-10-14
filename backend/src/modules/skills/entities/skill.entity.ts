@@ -42,7 +42,7 @@ export interface SkillSummary {
   fileCount: number;
   /** Names of the caller's agents whose draft or Live version names it. */
   agents: string[];
-  /** Tools its body links, sorted and distinct (ADR-0023). */
+  /** Tools its body links, sorted and distinct (ADR-0024). */
   tools: string[];
   updatedAt: string;
 }

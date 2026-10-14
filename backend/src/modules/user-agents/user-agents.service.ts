@@ -41,9 +41,9 @@ export interface AgentConfigInput {
   starterQuestions?: string[];
   model?: string;
   reasoningEffort?: ReasoningEffort;
-  /** Ignored: derived from the instructions' links (ADR-0023). */
+  /** Ignored: derived from the instructions' links (ADR-0024). */
   tools?: string[];
-  /** Ignored: derived from the instructions' links (ADR-0023). */
+  /** Ignored: derived from the instructions' links (ADR-0024). */
   skills?: string[];
 }
 
@@ -94,7 +94,7 @@ export class UserAgentsService {
       throw new BadRequestException('Select at least one dataset to publish');
     }
     // The skills the draft names are copied as they are now; a Live agent
-    // runs on these copies until it is published again (R44, ADR-0021).
+    // runs on these copies until it is published again (R44, ADR-0022).
     const copies = (await this.skillsFor(doc.draft.skills)).map(toSkillCopy);
     const live: AgentConfig = { ...doc.draft };
     if (doc.draft.skills) live.skills = copies.map((copy) => copy.id);
@@ -123,7 +123,7 @@ export class UserAgentsService {
   /**
    * Names of the caller's agents whose draft instructions link the skill
    * `name`, sorted; a skill they link cannot be deleted or renamed
-   * (ADR-0023). Live copies are not checked: they keep running.
+   * (ADR-0024). Live copies are not checked: they keep running.
    */
   async draftsLinking(name: string): Promise<string[]> {
     return (await this.repository.list())
@@ -178,7 +178,7 @@ export class UserAgentsService {
   }
 
   /**
-   * Derive `skills` and `tools` from the instructions' links (ADR-0023): the
+   * Derive `skills` and `tools` from the instructions' links (ADR-0024): the
    * skills are the caller's in-app skills the links name, the tools the
    * optional ones linked directly. Refuses an unknown skill, more than 10
    * skills, then an unknown tool, by name.

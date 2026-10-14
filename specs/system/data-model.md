@@ -431,7 +431,7 @@ User-built agents: a stored configuration of the assistant, with a working draft
 | `live` | `AgentConfig` | no | The published copy. Absent until the first publish. |
 | `publishedAt` | ISO | no | Set at each publish. |
 | `pinned` | boolean | yes | `false` on create. |
-| `liveSkills` | `SkillCopy[]` | no | Copies of the skills the Live version names, taken at each publish, in the order of `live.skills`: `{ id, name, description, body, files }` as in 3.10.1. A Live agent runs on these copies, never on the current skills (ADR-0021). Keeps only the ids that still have a skill to copy, so it is `[]` after a republish that drops every skill. Absent until a publish whose Live version names a skill. |
+| `liveSkills` | `SkillCopy[]` | no | Copies of the skills the Live version names, taken at each publish, in the order of `live.skills`: `{ id, name, description, body, files }` as in 3.10.1. A Live agent runs on these copies, never on the current skills (ADR-0022). Keeps only the ids that still have a skill to copy, so it is `[]` after a republish that drops every skill. Absent until a publish whose Live version names a skill. |
 | `ownerId` | string | no | The owning user's id in org server mode; absent in local mode (section 3.15). |
 | `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
 
@@ -446,25 +446,25 @@ User-built agents: a stored configuration of the assistant, with a working draft
 | `starterQuestions` | string[] | yes | Up to 5, each up to 200 characters; blank ones dropped, de-duplicated. |
 | `model` | string | no | A model or deployment name of the configured provider. |
 | `reasoningEffort` | enum | no | `low` \| `medium` \| `high`. |
-| `skills` | string[] | no | Ids of the in-app skills (3.10.1) of the agent's owner that `instructions` link (links to built-in on-demand skills are ignored: they are not stored and not counted), at most 10, de-duplicated, in the order of the links. **Derived from the links on every create and draft save** (ADR-0023); the request's own list is ignored. Absent means none. |
-| `tools` | string[] | no | The optional tool groups the agent's `instructions` link directly: any of `sample_rows`, `ask_clarification` and `visuals` (`create_visual` with `update_visual`), de-duplicated and stored in that order. **Derived from the links on every create and draft save** (ADR-0023); the request's own list is ignored. Absent means all three (a draft saved before links); an empty list means none. The tools an agent gets at call time are this list plus the optional tools its linked skills' bodies link ([agents.md](agents.md) 2.1); that union is not stored. `list_entities`, `describe_entity` and `run_readonly_sql` are always given and never listed ([agents.md](agents.md) 2.1). No migration: a document without the field keeps every tool (ADR-0021); the editor adds links for it when opened (R85). |
+| `skills` | string[] | no | Ids of the in-app skills (3.10.1) of the agent's owner that `instructions` link (links to built-in on-demand skills are ignored: they are not stored and not counted), at most 10, de-duplicated, in the order of the links. **Derived from the links on every create and draft save** (ADR-0024); the request's own list is ignored. Absent means none. |
+| `tools` | string[] | no | The optional tool groups the agent's `instructions` link directly: any of `sample_rows`, `ask_clarification` and `visuals` (`create_visual` with `update_visual`), de-duplicated and stored in that order. **Derived from the links on every create and draft save** (ADR-0024); the request's own list is ignored. Absent means all three (a draft saved before links); an empty list means none. The tools an agent gets at call time are this list plus the optional tools its linked skills' bodies link ([agents.md](agents.md) 2.1); that union is not stored. `list_entities`, `describe_entity` and `run_readonly_sql` are always given and never listed ([agents.md](agents.md) 2.1). No migration: a document without the field keeps every tool (ADR-0022); the editor adds links for it when opened (R85). |
 
 Saving a draft replaces the whole `draft` object. Publishing sets `live` to a copy of `draft`. "Unpublished changes" is derived (`live` exists and differs from `draft`), not stored. When comparing, an absent `tools` list counts as all three tools, and an absent `skills` list as an empty one. The agent also has unpublished changes when a skill its draft names differs (name, description, body or files) from its copy in `liveSkills`, or has no copy there.
 
 Deleting a skill, or renaming it, is refused while the `draft` of any of its owner's agents links it by name (`"<name>" is linked by <agent names>. Unlink it first.`), so a draft's `skills` never holds an id without a skill. `live.skills` and `liveSkills` are untouched either way, so Live agents keep the copy they run on.
 
-In org server mode a Platform admin can transfer an agent to another owner ([api.md](api.md) 86, admin R64): its `ownerId` changes and `pinned` resets to `false`; `draft`, `live` and `publishedAt` are kept. Sessions keep their `agentId` and `ownerId`, so for the former owner the agent no longer resolves and their sessions behave as for a deleted agent. The skills the draft names are copied into the new owner's `skills` as new documents (a clashing name gets `-2`, `-3`, … appended; a name that would pass 64 characters is cut before the suffix), and the ids in `draft.skills`, `live.skills` and `liveSkills` are replaced by the copies' ids. When a copy was renamed, every `[[skill:<old name>]]` link in the agent's draft and Live instructions is rewritten to the copy's name, and its `liveSkills` copy takes that name (ADR-0023). Only skills the draft names are copied: an id that only `live.skills` and `liveSkills` name keeps its old id, since its `liveSkills` copy is self-contained. The former owner keeps their skills.
+In org server mode a Platform admin can transfer an agent to another owner ([api.md](api.md) 86, admin R64): its `ownerId` changes and `pinned` resets to `false`; `draft`, `live` and `publishedAt` are kept. Sessions keep their `agentId` and `ownerId`, so for the former owner the agent no longer resolves and their sessions behave as for a deleted agent. The skills the draft names are copied into the new owner's `skills` as new documents (a clashing name gets `-2`, `-3`, … appended; a name that would pass 64 characters is cut before the suffix), and the ids in `draft.skills`, `live.skills` and `liveSkills` are replaced by the copies' ids. When a copy was renamed, every `[[skill:<old name>]]` link in the agent's draft and Live instructions is rewritten to the copy's name, and its `liveSkills` copy takes that name (ADR-0024). Only skills the draft names are copied: an id that only `live.skills` and `liveSkills` name keeps its old id, since its `liveSkills` copy is self-contained. The former owner keeps their skills.
 
 ### 3.10.1 `skills` — in-app skills
 
-Skills a user writes in the app and assigns to their agents (ADR-0021). They are text only and never run. Rules: [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R68-R74; how an agent's session reads them: [agents.md](agents.md) 7.3.
+Skills a user writes in the app and assigns to their agents (ADR-0022). They are text only and never run. Rules: [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R68-R74; how an agent's session reads them: [agents.md](agents.md) 7.3.
 
 | Field | Type | Req | Meaning |
 |---|---|---|---|
 | `id` | uuid | yes | |
 | `name` | string | yes | Lowercase letters, digits and single hyphens (`^[a-z0-9]+(-[a-z0-9]+)*$`), at most 64 characters. Unique among the owner's skills, and never the name of a built-in skill. |
 | `description` | string | yes | Starts with `Use when`; at most 300 characters. It is the skill's catalog entry, the text the model decides by. |
-| `body` | string | yes | Not empty; at most 20,000 characters. May link tools with `[[tool:<name>]]`, never skills (ADR-0023); nothing extra is stored, the tools a skill links are read from its body. |
+| `body` | string | yes | Not empty; at most 20,000 characters. May link tools with `[[tool:<name>]]`, never skills (ADR-0024); nothing extra is stored, the tools a skill links are read from its body. |
 | `files` | `{ path, content }[]` | yes | Reference files, at most 10. `path` is `references/<file name>`, the file name matching `^[A-Za-z0-9][A-Za-z0-9._-]*$` and at most 100 characters; paths are unique. `content` is at most 20,000 characters. Every `references/…` path the body names is one of them. May be empty. |
 | `ownerId` | string | yes | The owning user (3.15). |
 | `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
@@ -473,7 +473,7 @@ Skills a user writes in the app and assigns to their agents (ADR-0021). They are
 
 ### 3.10.2 `skill_overrides` — built-in skills edited in the app
 
-One document per overridden built-in skill, shared by every user (ADR-0022). Rules: [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R75-R80; resolution: [agents.md](agents.md) 7.3.
+One document per overridden built-in skill, shared by every user (ADR-0023). Rules: [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R75-R80; resolution: [agents.md](agents.md) 7.3.
 
 | Field | Type | Req | Meaning |
 |---|---|---|---|
@@ -487,7 +487,7 @@ One document per overridden built-in skill, shared by every user (ADR-0022). Rul
 
 ### 3.10.3 `agent_prompt_overrides` — built-in agents' system prompts edited in the app
 
-One document per built-in agent whose system prompt was edited, shared by every user (ADR-0025). Rules: [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R97-R104; resolution: [agents.md](agents.md) 1.1 and 2.1-2.6.
+One document per built-in agent whose system prompt was edited, shared by every user (ADR-0026). Rules: [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R97-R104; resolution: [agents.md](agents.md) 1.1 and 2.1-2.6.
 
 | Field | Type | Req | Meaning |
 |---|---|---|---|

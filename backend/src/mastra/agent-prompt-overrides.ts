@@ -1,6 +1,6 @@
 /**
  * Bridge for the in-app overrides of built-in agents' system prompts
- * (ADR-0025, agents.md 2). The agents are plain code with no Nest DI, so the
+ * (ADR-0026, agents.md 2). The agents are plain code with no Nest DI, so the
  * prompt service installs the current overrides here when the app starts and
  * after every save or reset. Each agent reads them per call, so a change
  * applies to the next call without a restart. An override of a key that is

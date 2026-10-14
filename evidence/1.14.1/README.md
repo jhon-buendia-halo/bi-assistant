@@ -9,6 +9,6 @@ This is a planning-only change: no code, UI or test changes, so there is no E2E 
 | [prompt-measurement.json](prompt-measurement.json) | The assistant prompt measured section by section from the compiled agent at `513009d`: the figures in the epic spec's *Prompt cost* table. |
 | [measure-prompt.cjs](measure-prompt.cjs) | The script that produced it. Run `npx nest build` in `backend/`, then `node evidence/1.14.1/measure-prompt.cjs backend/dist`. |
 
-Changed: [specs/epics/BA-213/spec.md](../../specs/epics/BA-213/spec.md) (confirmed by the user on 2026-10-14, with its five decisions), ADR-0021 and ADR-0008's status line in [specs/system/architecture.md](../../specs/system/architecture.md), Milestone 1.14 in [roadmap.md](../../roadmap.md), and the epic row in [specs/README.md](../../specs/README.md).
+Changed: [specs/epics/BA-213/spec.md](../../specs/epics/BA-213/spec.md) (confirmed by the user on 2026-10-14, with its five decisions), ADR-0022 and ADR-0008's status line in [specs/system/architecture.md](../../specs/system/architecture.md), Milestone 1.14 in [roadmap.md](../../roadmap.md), and the epic row in [specs/README.md](../../specs/README.md).
 
 Branch: `feat/BA-213-agent-tools-skills`, the epic branch that all BA-213 stories share.

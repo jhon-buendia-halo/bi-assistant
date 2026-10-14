@@ -26,7 +26,7 @@ export const evalJudgeAgent = new Agent({
   name: 'Assistant Eval Judge',
   description:
     "Grades one assistant eval case's tool calls and final answer against a rubric.",
-  // The shipped prompt, or the in-app override (ADR-0025).
+  // The shipped prompt, or the in-app override (ADR-0026).
   instructions: () =>
     agentInstructions('assistant-eval-judge', EVAL_JUDGE_PROMPT),
   model: async () => resolveAgentModel(),

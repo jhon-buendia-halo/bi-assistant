@@ -20,7 +20,7 @@ export const sqlFixerAgent = new Agent({
   name: 'SQL Fixer',
   description:
     'Repairs a SQL statement that failed to execute, using the engine error as the signal.',
-  // The shipped prompt, or the in-app override (ADR-0025).
+  // The shipped prompt, or the in-app override (ADR-0026).
   instructions: () => agentInstructions('sql-fixer', SQL_FIXER_PROMPT),
   // Same configured model as the analysis agent; see ../model-resolver.
   model: async () => resolveAgentModel(),

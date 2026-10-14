@@ -9,7 +9,7 @@ import {
 } from '../../services/flow-graph';
 import { SkillSummary } from '../../services/skills-api.service';
 
-/** The four steps under the graph (ADR-0023). */
+/** The four steps under the graph (ADR-0024). */
 export const GRAPH_STEPS = [
   "The assistant's core prompt and this agent's instructions are sent, with links turned into plain mentions.",
   'The skill catalog lists the built-in skills and the linked skills; the model reads a skill when a question matches it.',
@@ -18,7 +18,7 @@ export const GRAPH_STEPS = [
 ];
 
 /**
- * The Graph tab of a user agent (ADR-0023): its instructions, the skills they
+ * The Graph tab of a user agent (ADR-0024): its instructions, the skills they
  * link and the tools linked from either, as an SVG, and what happens on each
  * message. Hover or focus a node to trace its chain.
  */

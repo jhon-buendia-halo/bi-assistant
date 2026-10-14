@@ -1,7 +1,7 @@
 /**
- * A user agent's in-app skills on a call (ADR-0021, agents.md 4.2 and 7.3):
+ * A user agent's in-app skills on a call (ADR-0022, agents.md 4.2 and 7.3):
  * the `agent-skills` requestContext key and the shape of a call's copies.
- * They reach the model through Mastra's skills (ADR-0024).
+ * They reach the model through Mastra's skills (ADR-0025).
  */
 
 /** requestContext key carrying the agent's skills of a call (agents.md 4.2). */

@@ -81,7 +81,7 @@ const NO_VISUALS = `Interactive visuals:
 
 const FULL_RULES = ASSISTANT_WORKING_RULES.join('\n');
 
-describe('assistantWorkingRules (tool selection, ADR-0021)', () => {
+describe('assistantWorkingRules (tool selection, ADR-0022)', () => {
   it('is the full rules for every tool', () => {
     expect(assistantWorkingRules()).toEqual([...ASSISTANT_WORKING_RULES]);
     expect(

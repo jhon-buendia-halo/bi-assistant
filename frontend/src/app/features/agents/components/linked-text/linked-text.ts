@@ -7,7 +7,7 @@ import {
 /**
  * Read-only text with its `[[skill:…]]` and `[[tool:…]]` links shown as chips:
  * a skill `chip-info`, a tool `chip-neutral`, a link to something that does
- * not exist `chip-danger` (ADR-0023).
+ * not exist `chip-danger` (ADR-0024).
  */
 @Component({
   selector: 'app-linked-text',

@@ -18,7 +18,7 @@ import { validateSkill, type SkillFields } from './skill-rules';
 
 /**
  * In-app skills: know-how a user writes and assigns to their agents
- * (R68-R74, ADR-0021). Private to their owner; another user's skill answers
+ * (R68-R74, ADR-0022). Private to their owner; another user's skill answers
  * as not found because the repository only sees the caller's.
  */
 @Injectable()
@@ -60,7 +60,7 @@ export class SkillsService {
     return toSkill(doc, (await this.agentNamesBySkill()).get(id));
   }
 
-  /** Delete the skill unless a draft links it (api.md 98, ADR-0023). */
+  /** Delete the skill unless a draft links it (api.md 98, ADR-0024). */
   async delete(id: string): Promise<SkillDoc> {
     const doc = await this.require(id);
     await this.assertUnlinked(doc.name);

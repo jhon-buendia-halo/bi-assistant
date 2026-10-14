@@ -65,7 +65,7 @@ function build() {
 
 afterEach(() => setAgentPromptOverrides([]));
 
-describe('AgentPromptsService (ADR-0025)', () => {
+describe('AgentPromptsService (ADR-0026)', () => {
   it('shows the shipped prompt of every built-in agent, unmodified', async () => {
     const { service } = build();
     for (const key of Object.keys(REGISTRY)) {

@@ -26,7 +26,7 @@ import { sqlVerifierAgent } from './sql-verifier.agent';
 import { visualizationAgent } from './visualization.agent';
 
 /**
- * Each fixture is the agent's instructions as they were before ADR-0025
+ * Each fixture is the agent's instructions as they were before ADR-0026
  * (the static array joined with `\n`), so no override means no change.
  */
 const AGENTS = {
@@ -49,7 +49,7 @@ const served = (key: keyof typeof AGENTS) =>
 afterEach(() => setAgentPromptOverrides([]));
 
 describe.each(Object.keys(AGENTS) as (keyof typeof AGENTS)[])(
-  'System agent %s (ADR-0025)',
+  'System agent %s (ADR-0026)',
   (key) => {
     it('serves its shipped prompt byte for byte with no override', () => {
       expect(served(key)).toBe(fixture(key));

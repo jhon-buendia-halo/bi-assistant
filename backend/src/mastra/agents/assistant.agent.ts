@@ -35,17 +35,17 @@ type AssistantTools = Partial<typeof ALL_TOOLS>;
 /** The tools and prompt of one tool selection, built once each (8 variants). */
 interface AssistantVariant {
   tools: AssistantTools;
-  /** The prompt as served: the shipped one, or the in-app override's (ADR-0025). */
+  /** The prompt as served: the shipped one, or the in-app override's (ADR-0026). */
   readonly instructions: string;
 }
 
 const variants = new Map<string, AssistantVariant>();
 
 /**
- * The tools a call offers under `selection` (ADR-0021, agents.md 2.1): the
+ * The tools a call offers under `selection` (ADR-0022, agents.md 2.1): the
  * always-given tools and the selected optional ones, in the usual order.
  * Undefined selects every tool. Skills are not part of it: Mastra gives the
- * skill tools and lists the skills (ADR-0024).
+ * skill tools and lists the skills (ADR-0025).
  */
 export function assistantVariant(
   selection?: readonly OptionalAgentTool[],
@@ -61,10 +61,10 @@ export function assistantVariant(
   const tools = Object.fromEntries(
     Object.entries(ALL_TOOLS).filter(([name]) => !dropped.has(name)),
   ) as AssistantTools;
-  // Identity, ## Tools, ## Working rules (agents.md 2.1; ADR-0024).
+  // Identity, ## Tools, ## Working rules (agents.md 2.1; ADR-0025).
   const shipped = buildAssistantInstructions(tools, selection);
   // With an override, its text with the Tools section inserted, rebuilt when
-  // the overrides change (ADR-0025).
+  // the overrides change (ADR-0026).
   let served: { version: number; text: string } | undefined;
   const variant: AssistantVariant = {
     tools,
@@ -97,11 +97,11 @@ export const assistantAgent = new Agent({
   description:
     "Answers business questions over a session's datasets — plans the analysis, writes and runs the SQL, and explains the result.",
   // The prompt and tools follow the call's tool selection (`agent-tools`,
-  // ADR-0021); a call without one gets every tool and the full prompt.
+  // ADR-0022); a call without one gets every tool and the full prompt.
   instructions: ({ requestContext }) =>
     assistantVariant(toolSelectionFrom(requestContext)).instructions,
   // The on-demand skills of the call, given to the model through Mastra's
-  // skill tool (ADR-0024): built-in (with overrides), user and project skills
+  // skill tool (ADR-0025): built-in (with overrides), user and project skills
   // and the agent's own copies.
   skills: ({ requestContext }) => assistantSkills(requestContext),
   // Dynamic model resolved at call time from the persisted LLM settings

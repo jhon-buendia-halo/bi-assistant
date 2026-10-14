@@ -20,7 +20,7 @@ Stack neutrality: the contracts below (agent ids, prompts, tool names and schema
 An **agent** is a named, stateless-by-default LLM wrapper with:
 
 - a stable **registry key** (used by the backend and the UI to look it up) and its own **id**, **display name** and one-line **description** (shown in the Agents catalogue);
-- a **system prompt** ("instructions"), a fixed array of lines joined with `\n`. The prompt of a built-in agent can be **overridden** in the app by a Platform admin: the saved text is stored in `agent_prompt_overrides` ([data-model.md](data-model.md) 3.10.3), read at every call (like the built-in skills' overrides, 7.3) and replaces the shipped text, so a save applies to the next call, a Reset restores the shipped text, and with no override every prompt is the shipped one, byte for byte (ADR-0025). The override reaches every caller of the agent: chat turns, user agents (they run on the assistant), deep analysis, the grounding pass, evals, the designer pipeline, the SQL fixer and verifier, the knowledge bootstrap and the judge. It changes the prompt only: tools, output schemas, guards and harness-loaded skills stay in code;
+- a **system prompt** ("instructions"), a fixed array of lines joined with `\n`. The prompt of a built-in agent can be **overridden** in the app by a Platform admin: the saved text is stored in `agent_prompt_overrides` ([data-model.md](data-model.md) 3.10.3), read at every call (like the built-in skills' overrides, 7.3) and replaces the shipped text, so a save applies to the next call, a Reset restores the shipped text, and with no override every prompt is the shipped one, byte for byte (ADR-0026). The override reaches every caller of the agent: chat turns, user agents (they run on the assistant), deep analysis, the grounding pass, evals, the designer pipeline, the SQL fixer and verifier, the knowledge bootstrap and the judge. It changes the prompt only: tools, output schemas, guards and harness-loaded skills stay in code;
 - a **model**, resolved *at call time* (never at construction) from the persisted LLM settings — see 1.3;
 - optionally a **tool set**, a **conversation memory** and a **workspace** (a per-session sandboxed folder, see 7).
 
@@ -50,7 +50,7 @@ All agents are registered once in a single framework instance and looked up by *
 
 The prompt each row's agent runs on is the shipped one unless overridden (1.1). Lookup of an unknown key throws. The catalogue lists agents sorted by display name.
 
-**User agents** are not registry entries. They are stored documents ([data-model.md](data-model.md) section 3.10) and run on the `assistant`; the decision is ADR-0008 in [architecture.md](architecture.md). The catalogue endpoint merges them with the six registered agents ([api.md](api.md) section 2.6). A session started from a user agent runs the `assistant` with the agent's Live instructions as context Block 5 (4.1), its datasets as the session's datasets, its model and effort overrides (1.3, 1.4) passed on the requestContext (4.2), only the tools its tool selection gives it (2.1, ADR-0021), and its in-app skills given to the model through the framework's skill tools (7.3, ADR-0024). Rules: sessions-chat R52-R59.
+**User agents** are not registry entries. They are stored documents ([data-model.md](data-model.md) section 3.10) and run on the `assistant`; the decision is ADR-0008 in [architecture.md](architecture.md). The catalogue endpoint merges them with the six registered agents ([api.md](api.md) section 2.6). A session started from a user agent runs the `assistant` with the agent's Live instructions as context Block 5 (4.1), its datasets as the session's datasets, its model and effort overrides (1.3, 1.4) passed on the requestContext (4.2), only the tools its tool selection gives it (2.1, ADR-0022), and its in-app skills given to the model through the framework's skill tools (7.3, ADR-0025). Rules: sessions-chat R52-R59.
 
 Not registered (never listed in the catalogue):
 
@@ -181,7 +181,7 @@ LenAI deployments are never swapped to `openai/gpt-4.1-mini` (rule 2 requires no
 
 **Tools.** `list_entities`, `describe_entity`, `sample_rows`, `run_readonly_sql`, `create_visual`, `update_visual`, `ask_clarification` (section 3). It is also bound to the session workspace, whose file tools it is offered (3.8), and it is given its own skills (7.4).
 
-**Tool selection (ADR-0021, ADR-0023).** A call for a session bound to a user agent carries the agent's tool selection on the requestContext (`agent-tools`, 4.2). **The selection is the optional tools the agent's instructions link directly, plus those the bodies of its linked skills link** (the call's skill copies: the Live version's `liveSkills`, a preview's current skills), from `sample_rows`, `ask_clarification` and `visuals` (`create_visual` with `update_visual`; linking either gives both). The links are written as `[[tool:<name>]]` and `[[skill:<name>]]` (regex `/\[\[(skill|tool):([A-Za-z0-9_-]+)\]\]/g`); the directly linked groups are stored in `tools` on every save ([data-model.md](data-model.md) 3.10) and the skills' are added per call. A user agent whose config has no `tools` (saved before links) is selected every tool, unchanged. Linking an always-given tool changes nothing. `list_entities`, `describe_entity` and `run_readonly_sql` are always given. A call with no selection on its context, or with all three selected, gets the tools and prompt described in the rest of this section, unchanged. Otherwise the `assistant` builds both for the call:
+**Tool selection (ADR-0022, ADR-0024).** A call for a session bound to a user agent carries the agent's tool selection on the requestContext (`agent-tools`, 4.2). **The selection is the optional tools the agent's instructions link directly, plus those the bodies of its linked skills link** (the call's skill copies: the Live version's `liveSkills`, a preview's current skills), from `sample_rows`, `ask_clarification` and `visuals` (`create_visual` with `update_visual`; linking either gives both). The links are written as `[[tool:<name>]]` and `[[skill:<name>]]` (regex `/\[\[(skill|tool):([A-Za-z0-9_-]+)\]\]/g`); the directly linked groups are stored in `tools` on every save ([data-model.md](data-model.md) 3.10) and the skills' are added per call. A user agent whose config has no `tools` (saved before links) is selected every tool, unchanged. Linking an always-given tool changes nothing. `list_entities`, `describe_entity` and `run_readonly_sql` are always given. A call with no selection on its context, or with all three selected, gets the tools and prompt described in the rest of this section, unchanged. Otherwise the `assistant` builds both for the call:
 
 - **Tools offered:** only the always-given tools and the selected ones, in the usual order. A tool that is not selected is not offered, so the model can't call it whatever the prompt or instructions say.
 - **`## Tools`:** one line per tool offered (the rule above), so an unselected tool has no line.
@@ -215,14 +215,14 @@ The prompt and tools depend only on the selection, so there are eight variants; 
 
 **Max steps.** 15 (`ASSISTANT_MAX_STEPS`), shared by production turns and the eval harness so evals measure the same constraints.
 
-**Prompt requirements.** The prompt MUST start with `You are the Questions to Insights assistant` (asserted by E2E on the Prompt tab). An admin can override the prompt (ADR-0025), under these requirements:
+**Prompt requirements.** The prompt MUST start with `You are the Questions to Insights assistant` (asserted by E2E on the Prompt tab). An admin can override the prompt (ADR-0026), under these requirements:
 
 - **Editable text.** What the admin edits, and what Reset restores, is the prompt **without** its `## Tools` section: the identity paragraph, a blank line, `## Working rules`, then the rules, as built for the full tool selection. The override must start with the identity line above ([api.md](api.md) 103).
 - **Serving.** The prompt is the override with the generated `## Tools` section (part 2 below: the tools the call offers) inserted before the first line that is exactly `## Working rules`, or appended at the end after a blank line when the override has no such line.
-- **Links.** The override may contain `[[tool:<name>]]` links, resolved to plain mentions like all links (4.1, ADR-0023). They are **mentions only**: the assistant keeps all its tools, since user agents gate their tools through their own instructions and gating the base would strip every agent. It may not contain `[[skill:…]]` links: in-app skills are private and the prompt is shared.
+- **Links.** The override may contain `[[tool:<name>]]` links, resolved to plain mentions like all links (4.1, ADR-0024). They are **mentions only**: the assistant keeps all its tools, since user agents gate their tools through their own instructions and gating the base would strip every agent. It may not contain `[[skill:…]]` links: in-app skills are private and the prompt is shared.
 - **Tool selection.** The replacements for unselected tools (the Tool selection list above) apply only to blocks of the override that match the shipped block verbatim; a block the admin edited is left as written. Without an override nothing changes.
 
-Without an override the prompt has three parts, in this order (ADR-0024; exact text in Appendix A). The on-demand skills are not part of it: the framework adds its own `<available_skills>` system message and skill tools (7.3, 7.5).
+Without an override the prompt has three parts, in this order (ADR-0025; exact text in Appendix A). The on-demand skills are not part of it: the framework adds its own `<available_skills>` system message and skill tools (7.3, 7.5).
 
 1. **Identity:** the A1-A3 paragraph.
 2. **`## Tools`:** one line per tool the assistant is given, in the order it is given them: `- <name>(<input names, comma-separated>): <first sentence of the tool's description>`. The lines are generated from the tools, so a tool change updates this section. The framework's workspace tools (3.8) and skill tools (3.9) are not listed.
@@ -304,7 +304,7 @@ After validation the title is trimmed and capped at 100 characters (empty → `I
 
 **Model.** Section 1.5. Effort `low`; output cap 6.7.
 
-**Prompt (the shipped text, verbatim, joined by newlines; a saved override replaces it, 1.1, ADR-0025):**
+**Prompt (the shipped text, verbatim, joined by newlines; a saved override replaces it, 1.1, ADR-0026):**
 
 ```
 You create compact interactive visuals from completed data-analysis answers.
@@ -346,7 +346,7 @@ Dialect: <databricks|postgres|sqlite>
 
 **Tools / memory / steps.** None / stateless / 1, `toolChoice: 'none'`, effort `low`.
 
-**Prompt (the shipped text, verbatim; a saved override replaces it, 1.1, ADR-0025):**
+**Prompt (the shipped text, verbatim; a saved override replaces it, 1.1, ADR-0026):**
 
 ```
 You repair a single SQL statement that failed to execute.
@@ -394,7 +394,7 @@ Dialect: <databricks|postgres|sqlite>
 
 **Tools / memory / steps.** None / stateless / 1, `toolChoice: 'none'`, effort = user setting.
 
-**Prompt (the shipped text, verbatim; a saved override replaces it, 1.1, ADR-0025):**
+**Prompt (the shipped text, verbatim; a saved override replaces it, 1.1, ADR-0026):**
 
 ```
 You independently derive the SQL that answers a business question.
@@ -456,7 +456,7 @@ Draft = {
 
 **Tools / memory / steps.** None / stateless / 1, `toolChoice: 'none'`, no effort option.
 
-**Prompt (the shipped text, verbatim; a saved override replaces it, 1.1, ADR-0025):**
+**Prompt (the shipped text, verbatim; a saved override replaces it, 1.1, ADR-0026):**
 
 ```
 You are given one dataset's entity schemas (fully-qualified
@@ -514,7 +514,7 @@ Assistant's final answer to the user:
 
 **Tools / memory / steps.** None / stateless / 1, `toolChoice: 'none'`, provider option `temperature: 0`. Same model as the assistant.
 
-**Prompt (the shipped text, verbatim; a saved override replaces it, 1.1, ADR-0025):**
+**Prompt (the shipped text, verbatim; a saved override replaces it, 1.1, ADR-0026):**
 
 ```
 You are a strict, impartial grader for an automated eval suite.
@@ -691,7 +691,7 @@ Because the assistant (and designer) are bound to the session workspace, the fra
 
 ### 3.9 The framework's skill tools
 
-The assistant's on-demand skills (7.3) are loaded by the framework's skill tools (`skill`, `skill_search`, `skill_read`), which Mastra adds because the agent declares `skills` (ADR-0024). They are framework tools, like the workspace tools (3.8): the app doesn't define them, and `## Tools` doesn't list them. The model sees the skills in the framework's `<available_skills>` system message and loads one with the skill tool, which returns its instructions; its reference files are read through the framework as well. The app has no `read_file` and no `run_skill_script` tool: no built-in skill ships a script, and a skill's `scripts/` is never run.
+The assistant's on-demand skills (7.3) are loaded by the framework's skill tools (`skill`, `skill_search`, `skill_read`), which Mastra adds because the agent declares `skills` (ADR-0025). They are framework tools, like the workspace tools (3.8): the app doesn't define them, and `## Tools` doesn't list them. The model sees the skills in the framework's `<available_skills>` system message and loads one with the skill tool, which returns its instructions; its reference files are read through the framework as well. The app has no `read_file` and no `run_skill_script` tool: no built-in skill ships a script, and a skill's `scripts/` is never run.
 
 > Implementation note: in Mastra 1.66 the tools are `skill({ name })` (loads a skill's instructions), `skill_search({ query, skillNames?, topK? })` and `skill_read({ skillName, path, startLine?, endLine? })` (reads a skill's file). Mastra adds two system messages: the `<available_skills>` list (each `<skill>` with `<name>`, `<description>`, `<location>inline/<name>/SKILL.md</location>` and `<source>local</source>`) and a usage note telling the model to call the `skill` tool with the skill's name and to read its files with `skill_read`. A skill's files are served at `references/<key>`: an in-app skill's `references/<file name>` is keyed `<file name>`, so the path its body names is the path `skill_read` reads; a folder skill's `reference/` files are served under `references/` too, and its body's `reference/` mentions are pointed there (`mastra/assistant-skills.ts`).
 
@@ -860,7 +860,7 @@ After every successful `run_readonly_sql`, cheap dialect-agnostic heuristics ins
 
 ### 5.5 Tool-only turn synthesis
 
-If a completed turn produced neither text nor a visual (the model spent every step on tools), make one extra **tool-free** call on the assistant with the instructions overridden to `You are a data analyst writing the final answer from completed query results.`, `maxSteps: 1`, `toolChoice: 'none'`, and input (this per-call instructions override replaces whatever prompt the assistant would serve, an override of ADR-0025 included, so it is unaffected by one):
+If a completed turn produced neither text nor a visual (the model spent every step on tools), make one extra **tool-free** call on the assistant with the instructions overridden to `You are a data analyst writing the final answer from completed query results.`, `maxSteps: 1`, `toolChoice: 'none'`, and input (this per-call instructions override replaces whatever prompt the assistant would serve, an override of ADR-0026 included, so it is unaffected by one):
 
 ```
 Answer the original user question using only the tool results below.
@@ -1200,24 +1200,24 @@ The decisions are ADR-0018 and ADR-0019 in [architecture.md](architecture.md).
   3. **Project:** `<QUESTIONS_TO_INSIGHTS_PROJECT_SKILLS_DIR>/<name>/` when that variable is set ([api.md](api.md) environment table). A relative path resolves against the launch directory (1.7). When the variable is not set the level is empty. When it names a folder that does not exist, the backend logs `[skills] Project skills folder not found: <path>` and the level is empty.
 
   The levels mean the same in local mode and on an org server, where both folders are on the server and shared by every user. The backend reads all three once, when it starts. A change is picked up only after a restart. The app never writes the user or project folder. Folders whose name starts with `.` are ignored.
-- **Override by name.** A later level overrides an earlier one with the same name: project over user over built-in. An **in-app override** of a built-in ([data-model.md](data-model.md) 3.10.2, ADR-0022) wins over all three. It is read per call, not at startup, so a save or a reset applies to the next call. It keeps the built-in's agents, loading mode and file locations: the framework's catalog shows its description and the skill tool returns its content, and the deep-analysis service and the visual designer read its phase and reference files. Eval runs use it too. The skill that wins is the only one with that name any agent gets. Its body and files replace the others' wholesale; nothing is merged.
+- **Override by name.** A later level overrides an earlier one with the same name: project over user over built-in. An **in-app override** of a built-in ([data-model.md](data-model.md) 3.10.2, ADR-0023) wins over all three. It is read per call, not at startup, so a save or a reset applies to the next call. It keeps the built-in's agents, loading mode and file locations: the framework's catalog shows its description and the skill tool returns its content, and the deep-analysis service and the visual designer read its phase and reference files. Eval runs use it too. The skill that wins is the only one with that name any agent gets. Its body and files replace the others' wholesale; nothing is merged.
 - **Layout.** `SKILL.md` starts with front matter between `---` lines:
   - `name` equal to the folder name, and `description`, which starts with `Use when`. Both are required. `name` is on one line. `description` may wrap onto indented continuation lines, or use a `>` or `|` block; the lines are joined with single spaces.
   - `agents` (user and project skills only): one agent registry key, or a one-line list such as `[assistant]`.
   - A built-in skill holds no other key. A user or project skill may carry others, such as `license` or `metadata`; they are ignored.
 
   The body that follows is short: a phase map or a router that names the files to read. Linked files sit under `phases/` (steps run in order) and `reference/` (material read when a step needs it; `references/` is accepted too), and `SKILL.md` names each one by its relative path. Other files in the folder are allowed and can be read on demand. An exact check is TypeScript in the backend, and the skill names the tool or guard that applies it.
-- **Scripts.** `scripts/` holds a skill's bundled scripts. No script is run: the app has no script tool (ADR-0024), and no built-in skill has one today.
+- **Scripts.** `scripts/` holds a skill's bundled scripts. No script is run: the app has no script tool (ADR-0025), and no built-in skill has one today.
 - **Which agents get a skill.**
   - A built-in skill reaches the agents 7.4 names, in the loading mode it names.
   - A new user or project skill is on demand for the agents its `agents` key names, or for the `assistant` when it has none. Only an agent that can load a skill on demand may be named. Today that is the `assistant`; the other agents run without tools.
   - An override keeps the agents and the loading mode of the skill it replaces. Its own `agents` key is ignored.
   - User agents and eval runs run on the `assistant` (1.2, 8), so they get its skills, user and project ones included.
-- **On demand (ADR-0024).** The on-demand skills an agent gets are declared to the framework on every request, through the agent's `skills` option as a function of the request context (Mastra `AgentConfig.skills`, `createSkill` from `@mastra/core/skills`). Each skill is `createSkill({ name, description, instructions, references })`: its body with the links resolved (ADR-0023) as the instructions, and its reference files, links resolved, as `references`. User and project skills are given the same way, from their files, until BA-211 removes them. The framework then renders its own `<available_skills>` system message (7.5) and gives the model its skill tools (3.9). Skills are sorted by name. An agent with no on-demand skills declares none. The catalog wording and the tools are the framework's to change: a framework upgrade re-runs the evals.
+- **On demand (ADR-0025).** The on-demand skills an agent gets are declared to the framework on every request, through the agent's `skills` option as a function of the request context (Mastra `AgentConfig.skills`, `createSkill` from `@mastra/core/skills`). Each skill is `createSkill({ name, description, instructions, references })`: its body with the links resolved (ADR-0024) as the instructions, and its reference files, links resolved, as `references`. User and project skills are given the same way, from their files, until BA-211 removes them. The framework then renders its own `<available_skills>` system message (7.5) and gives the model its skill tools (3.9). Skills are sorted by name. An agent with no on-demand skills declares none. The catalog wording and the tools are the framework's to change: a framework upgrade re-runs the evals.
 - **Harness-loaded.** A skill whose condition the code can decide is kept out of every catalog. The caller reads the body, or the one linked file it needs, from the skill that wins for that name, and sends it as a system message on that call.
-- **In-app skills (ADR-0021).** A user writes skills in the app ([data-model.md](data-model.md) 3.10.1) and assigns them to their agents. They reach a call only through the `agent-skills` key (4.2), so the plain assistant, the other agents and eval runs never get them.
+- **In-app skills (ADR-0022).** A user writes skills in the app ([data-model.md](data-model.md) 3.10.1) and assigns them to their agents. They reach a call only through the `agent-skills` key (4.2), so the plain assistant, the other agents and eval runs never get them.
   - **Skills of the call.** The `skills` function returns the assistant's on-demand skills plus the agent's skills, sorted together by name. An agent's skill named like a user or project skill replaces that skill in this call only. A call without `agent-skills` gets the assistant's on-demand skills alone. They are built per call, like the tools (2.1).
-  - **Content.** An in-app skill has no path and no file on disk: it is a `createSkill` whose instructions are its body and whose `references` are its reference files, keyed by their path. **Links are resolved before the framework sees them** (ADR-0023): a `[[tool:x]]` in the body or a reference file reaches the model as `the "x" tool`, so it never sees `[[`. A skill's body may link tools only; the optional tools it links are added to the agent's selection (2.1).
+  - **Content.** An in-app skill has no path and no file on disk: it is a `createSkill` whose instructions are its body and whose `references` are its reference files, keyed by their path. **Links are resolved before the framework sees them** (ADR-0024): a `[[tool:x]]` in the body or a reference file reaches the model as `the "x" tool`, so it never sees `[[`. A skill's body may link tools only; the optional tools it links are added to the agent's selection (2.1).
   - **No scripts.** An in-app skill has no `scripts/`.
 - **Built-in check.** When the backend starts, it validates every built-in skill folder:
   - `SKILL.md` is present, both keys are present (`name` on one line) and no other key is used;
@@ -1248,7 +1248,7 @@ Built-in skills, declared in code (`AGENT_SKILLS` for on-demand, `HARNESS_SKILLS
 
 ### 7.5 The assistant's skill catalog
 
-The app renders no Skills section in the assistant's prompt (ADR-0024). The framework renders `<available_skills>` itself as a system message of the call, listing each skill the `skills` function returned (7.3) with its name and description, and a usage note telling the model to load a skill with the skill tool (3.9) when its description matches the task. Its wording is the framework's; tests assert what the call carries, not a fixed text.
+The app renders no Skills section in the assistant's prompt (ADR-0025). The framework renders `<available_skills>` itself as a system message of the call, listing each skill the `skills` function returned (7.3) with its name and description, and a usage note telling the model to load a skill with the skill tool (3.9) when its description matches the task. Its wording is the framework's; tests assert what the call carries, not a fixed text.
 
 ---
 

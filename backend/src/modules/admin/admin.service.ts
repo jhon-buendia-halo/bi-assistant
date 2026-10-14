@@ -64,7 +64,7 @@ function remapSkills(
 ): Partial<UserAgentDoc> {
   if (!copied.size) return {};
   const remap = (id: string) => copied.get(id) ?? id;
-  // A copy under a new name: the instructions' links follow it (ADR-0023).
+  // A copy under a new name: the instructions' links follow it (ADR-0024).
   const relink = (config: AgentConfig): AgentConfig => ({
     ...config,
     instructions: resolveSkillLinkNames(config.instructions, renamed),

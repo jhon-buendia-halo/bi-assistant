@@ -2,7 +2,7 @@ import { resolveLinks } from '../agent-links';
 import { type OptionalAgentTool, selects } from '../agent-tools';
 
 /**
- * The assistant's sectioned system prompt (ADR-0024, agents.md 2.1 and
+ * The assistant's sectioned system prompt (ADR-0025, agents.md 2.1 and
  * Appendix A): identity, `## Tools` generated from the tools it is given,
  * then `## Working rules`. On-demand skills are not in it: Mastra lists them
  * and gives the model its skill tool.
@@ -122,7 +122,7 @@ export const ASSISTANT_WORKING_RULES: readonly string[] = [
 
 /**
  * The clarification paragraph (A4-A7) when `ask_clarification` is not
- * selected (agents.md 2.1, ADR-0021).
+ * selected (agents.md 2.1, ADR-0022).
  */
 export const NO_CLARIFICATION_RULES: readonly string[] = [
   "You can't ask the user a question back in this session. When a question is",
@@ -271,7 +271,7 @@ export function buildAssistantInstructions(
 }
 
 /**
- * The shipped editable text of the assistant (ADR-0025): the prompt without
+ * The shipped editable text of the assistant (ADR-0026): the prompt without
  * its generated `## Tools` section — identity, a blank line, `## Working
  * rules`, then the rules for the full tool selection.
  */
@@ -373,7 +373,7 @@ function selectionReplacements(
 }
 
 /**
- * The prompt of a call under an in-app override (ADR-0025, agents.md 2.1):
+ * The prompt of a call under an in-app override (ADR-0026, agents.md 2.1):
  * the override text with the BA-217 rule replacements applied to the blocks
  * that match the shipped ones verbatim (an edited block stays as written),
  * links turned into plain mentions, and the generated `## Tools` section
