@@ -62,8 +62,8 @@ type DesignerMode = 'spec' | 'freeform';
 
 /** The interactive-visuals reference each designer mode reads (agents.md 7.2). */
 const DESIGNER_REFERENCES: Record<DesignerMode, string> = {
-  spec: 'references/spec-mode.md',
-  freeform: 'references/freeform.md',
+  spec: 'reference/spec-mode.md',
+  freeform: 'reference/freeform.md',
 };
 
 /**

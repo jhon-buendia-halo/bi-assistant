@@ -244,11 +244,11 @@ describe('visualizationData', () => {
 describe('VisualizationService skill', () => {
   const SPEC_MODE = appSkillFile(
     'interactive-visuals',
-    'references/spec-mode.md',
+    'reference/spec-mode.md',
   ).trimEnd();
   const FREEFORM = appSkillFile(
     'interactive-visuals',
-    'references/freeform.md',
+    'reference/freeform.md',
   ).trimEnd();
   /** The system message the designer gets for one mode (agents.md 6.4, 7.2). */
   const skillMessage = (reference: string) => ({

@@ -23,13 +23,13 @@ const SQL =
 const VISUAL_TITLE = 'Matches by stage';
 const SKILL_TAG = '<interactive-visuals-skill>';
 
-/** Lines only `references/spec-mode.md` of the interactive-visuals skill has. */
+/** Lines only `reference/spec-mode.md` of the interactive-visuals skill has. */
 const SPEC_MODE_TEXT = [
   '## The spec',
   '- **`select` picks the result set.** The `<data>` block is a list of separate',
   '- **Never invent a column.** Every `column`, `x`, `y`, `series` and table column',
 ];
-/** Lines only `references/freeform.md` of the interactive-visuals skill has. */
+/** Lines only `reference/freeform.md` of the interactive-visuals skill has. */
 const FREEFORM_TEXT = [
   '## Fallback: freeform HTML/CSS/JavaScript',
   '### Data access',
