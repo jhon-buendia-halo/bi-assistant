@@ -639,10 +639,30 @@ describe('SessionsService streaming', () => {
 
     const message = session.messages.at(-1)!;
     expect(message.clarification?.question).toBe('Which season?');
+    // Option strings are split into the stored label and description.
+    expect(message.clarification?.options).toEqual([
+      { label: '2022' },
+      { label: '2018', description: 'the earlier tournament' },
+    ]);
     expect(message.data).toEqual([
       expect.objectContaining({ tool: 'run_readonly_sql', input: 'select 1' }),
     ]);
     expect(message.entities).toEqual(['main.football.matches']);
+  });
+
+  it('shows no card for a malformed clarification, only the one the model asks again', async () => {
+    const { service, session } = buildStreaming(
+      streamOf(retriedClarificationChunks()),
+    );
+
+    await service.streamMessage('session-1', 'Which team?', () => {});
+
+    const cards = session.messages.filter((m) => m.clarification);
+    expect(cards).toHaveLength(1);
+    expect(cards[0].clarification?.options).toEqual([
+      { label: 'Most titles' },
+      { label: 'Highest win rate', description: 'share of matches won' },
+    ]);
   });
 
   it('marks a record truncated when storage keeps fewer rows than returned', async () => {
@@ -1757,7 +1777,7 @@ function* clarificationChunks() {
       toolName: 'ask_clarification',
       args: {
         question: 'Which season?',
-        options: [{ label: '2022' }, { label: '2018' }],
+        options: ['2022', '2018 — the earlier tournament'],
       },
     },
   };
@@ -1799,6 +1819,40 @@ function answerStream(...args: Parameters<typeof answerChunks>) {
 
 function clarificationStream() {
   return streamOf(clarificationChunks());
+}
+
+/** A malformed ask_clarification call, its validation error, then a valid one. */
+function* retriedClarificationChunks() {
+  yield {
+    type: 'tool-call',
+    payload: {
+      toolCallId: 'call-0',
+      toolName: 'ask_clarification',
+      args: {
+        question: 'Which measure?',
+        options: '\n<parameter name="label">Most titles',
+      },
+    },
+  };
+  yield {
+    type: 'tool-result',
+    payload: {
+      toolCallId: 'call-0',
+      toolName: 'ask_clarification',
+      result: { error: true, message: 'Tool input validation failed' },
+    },
+  };
+  yield {
+    type: 'tool-call',
+    payload: {
+      toolCallId: 'call-1',
+      toolName: 'ask_clarification',
+      args: {
+        question: 'Which measure?',
+        options: ['Most titles', 'Highest win rate — share of matches won'],
+      },
+    },
+  };
 }
 
 function toolOnlyStream(count: number) {

@@ -143,7 +143,7 @@ All terms are defined in [glossary](../../product/glossary.md): **Session**, **D
 ### Clarification
 
 - R41. The assistant SHALL ask at most one clarifying question per user question, with 2–4 options. It asks only when interpretations diverge materially, or when real data values are ambiguous. In that case the options quote the actual values.
-- R42. A clarification SHALL end the turn immediately: the model stops. The question is persisted as an assistant message carrying the options and any data records, entities, reasoning and knowledge gathered before it, and `done` is sent.
+- R42. A clarification SHALL end the turn immediately: the model stops. A clarification the model sends malformed SHALL NOT be shown: the model is told and asks again, so a card always has its options. The question is persisted as an assistant message carrying the options and any data records, entities, reasoning and knowledge gathered before it, and `done` is sent.
 - R43. Only the latest clarification card SHALL be actionable. Its controls:
   - Each option is numbered, and picking it sends the option label as the next user message.
   - "Something else" opens a "Type your own answer…" field with "Send custom answer". It toggles to "Cancel custom answer".
@@ -381,7 +381,7 @@ Feature: Session management
 
 ### Feature: Chat answers and reliability signals
 
-E2E: none yet.
+E2E: `frontend/e2e/chat-clarification.spec.ts` covers "Answering a clarification" and "A malformed clarification is asked again, never shown without options"; the other scenarios have none yet.
 
 ```gherkin
 Feature: Chat answers and reliability signals
@@ -421,6 +421,12 @@ Feature: Chat answers and reliability signals
     When I click "Highest win rate"
     Then "Highest win rate" is sent as my next message
     And the assistant continues the analysis without asking again
+
+  Scenario: A malformed clarification is asked again, never shown without options
+    Given the assistant first asks "Which measure of best do you mean?" with options it sends malformed
+    And then asks it again with options "Most titles" and "Highest win rate"
+    When I ask "Which team performed best?"
+    Then I see one clarification card with "1 Most titles" and "2 Highest win rate"
 
   Scenario: Typing my own clarification answer or skipping it
     Given the latest message is a clarification card

@@ -2,7 +2,12 @@ import { RequestContext } from '@mastra/core/request-context';
 import type { z } from 'zod';
 import { setDatasetToolServices } from '../tool-services';
 import type { DatasetToolServices } from '../tool-services';
-import { askClarificationTool, parseJsonList } from './clarification.tool';
+import {
+  askClarificationTool,
+  clarificationOptions,
+  parseClarification,
+  parseJsonList,
+} from './clarification.tool';
 import {
   SESSION_ID_CONTEXT_KEY,
   TURN_QUESTION_CONTEXT_KEY,
@@ -88,12 +93,14 @@ describe('create_visual (agents.md 3.6)', () => {
 });
 
 describe('ask_clarification options (agents.md 3.5)', () => {
-  // The tool keeps the Zod schema it was built with.
   const schema = askClarificationTool.inputSchema as unknown as z.ZodType;
-  const options = [
-    { label: 'Most titles', description: 'Tournaments won' },
-    { label: 'Best win rate' },
-  ];
+  const options = ['Most titles — tournaments won', 'Best win rate'];
+
+  it('takes a flat list of 2-4 option strings', () => {
+    expect(schema.safeParse({ question: 'Which?', options }).success).toBe(
+      true,
+    );
+  });
 
   it('reads a well-formed JSON-encoded list as the list', () => {
     const parsed = schema.safeParse({
@@ -104,15 +111,15 @@ describe('ask_clarification options (agents.md 3.5)', () => {
     expect((parsed.data as { options: unknown }).options).toEqual(options);
   });
 
-  it('still accepts the list itself', () => {
-    expect(schema.safeParse({ question: 'Which?', options }).success).toBe(
-      true,
-    );
-  });
-
-  it('rejects a malformed JSON string and a list outside 2-4 options', () => {
-    const malformed = '[{"label": "Most titles"}, "label": "Best win rate"]';
-    for (const value of [malformed, JSON.stringify(options.slice(0, 1))]) {
+  it('rejects malformed options: broken JSON, objects, blanks, or outside 2-4', () => {
+    for (const value of [
+      '\n<parameter name="label">Most titles',
+      '["Most titles", "label": "Best win rate"]',
+      [{ label: 'Most titles' }, { label: 'Best win rate' }],
+      ['Most titles', '  '],
+      ['Only one'],
+      ['a', 'b', 'c', 'd', 'e'],
+    ]) {
       expect(
         schema.safeParse({ question: 'Which?', options: value }).success,
       ).toBe(false);
@@ -123,5 +130,40 @@ describe('ask_clarification options (agents.md 3.5)', () => {
     expect(parseJsonList('not json')).toBe('not json');
     expect(parseJsonList('{"a": 1}')).toBe('{"a": 1}');
     expect(parseJsonList(options)).toBe(options);
+  });
+
+  it('splits each option at the first spaced dash into label and description', () => {
+    expect(
+      clarificationOptions([
+        'Most titles — tournaments won outright',
+        'Win rate – share of matches won — all tournaments',
+        'Goals scored',
+        'Ratio — ',
+        'Head-to-head',
+      ]),
+    ).toEqual([
+      { label: 'Most titles', description: 'tournaments won outright' },
+      {
+        label: 'Win rate',
+        description: 'share of matches won — all tournaments',
+      },
+      { label: 'Goals scored' },
+      { label: 'Ratio' },
+      { label: 'Head-to-head' },
+    ]);
+  });
+
+  it('turns only a valid call into a clarification', () => {
+    expect(parseClarification({ question: 'Which?', options })).toEqual({
+      question: 'Which?',
+      options: [
+        { label: 'Most titles', description: 'tournaments won' },
+        { label: 'Best win rate' },
+      ],
+    });
+    expect(
+      parseClarification({ question: 'Which?', options: 'Most titles' }),
+    ).toBeUndefined();
+    expect(parseClarification(undefined)).toBeUndefined();
   });
 });

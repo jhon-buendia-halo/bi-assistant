@@ -12,6 +12,56 @@ export function parseJsonList(value: unknown): unknown {
   }
 }
 
+/** The tool's input, shared with the orchestrator's check. */
+const clarificationInput = z.object({
+  question: z.string().describe('The clarifying question, short and direct'),
+  // A flat list of strings: models serialize a list of objects wrongly
+  // now and then. A JSON-encoded list sent as one string is read as the
+  // list itself (agents.md 3.5, BA-210).
+  options: z
+    .preprocess(parseJsonList, z.array(z.string().trim().min(1)).min(2).max(4))
+    .describe(
+      '2-4 answer options. Each is a short title, optionally followed by " — " and one line explaining it',
+    ),
+});
+
+/** One option as stored and shown (data-model `ClarificationOption`). */
+export interface ClarificationOption {
+  label: string;
+  description?: string;
+}
+
+/** A dash with a space on each side (`Title — explanation`), or ending the text. */
+const OPTION_SEPARATOR = /\s+[—–](?:\s+|$)/;
+
+/** Split each option string into its label and optional description. */
+export function clarificationOptions(options: string[]): ClarificationOption[] {
+  return options.map((option) => {
+    const text = option.trim();
+    const match = OPTION_SEPARATOR.exec(text);
+    if (!match) return { label: text };
+    const label = text.slice(0, match.index).trim();
+    const description = text.slice(match.index + match[0].length).trim();
+    return description ? { label, description } : { label };
+  });
+}
+
+/**
+ * The question and options of an `ask_clarification` call, or undefined when
+ * its input fails the tool's schema: such a call is left to fail like any
+ * tool, so the model retries instead of the user seeing an empty card.
+ */
+export function parseClarification(
+  args: unknown,
+): { question: string; options: ClarificationOption[] } | undefined {
+  const parsed = clarificationInput.safeParse(args);
+  if (!parsed.success) return undefined;
+  return {
+    question: parsed.data.question,
+    options: clarificationOptions(parsed.data.options),
+  };
+}
+
 /**
  * UI-facing tool: asking it ends the turn — the harness intercepts the call,
  * renders a clarification card to the user, and the user's pick arrives as
@@ -31,25 +81,6 @@ export const askClarificationTool = createTool({
     'user question — do not call this when the intent is already clear or the',
     'user just answered a clarification.',
   ].join(' '),
-  inputSchema: z.object({
-    question: z.string().describe('The clarifying question, short and direct'),
-    // Some models send the list JSON-encoded as one string; a well-formed
-    // one is read as the list itself (agents.md 3.5, BA-210).
-    options: z.preprocess(
-      parseJsonList,
-      z
-        .array(
-          z.object({
-            label: z.string().describe('Short option title'),
-            description: z
-              .string()
-              .optional()
-              .describe('One line explaining what this option means'),
-          }),
-        )
-        .min(2)
-        .max(4),
-    ),
-  }),
+  inputSchema: clarificationInput,
   execute: () => Promise.resolve({ delivered: true }),
 });

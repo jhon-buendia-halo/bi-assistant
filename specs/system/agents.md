@@ -628,9 +628,10 @@ All tools belong to the `assistant`. Every tool returns a JSON object; **tools n
 ### 3.5 `ask_clarification`
 
 - **Description:** `Ask the user ONE clarifying question with 2-4 concrete answer options, either before starting an analysis when their question is ambiguous (unclear scope, metric, timeframe, or entity), or mid-analysis when the data itself is ambiguous — a filter value, member/entity name or timeframe with several plausible matches. When the ambiguity is about values, quote the actual values found in the data as the options. The user picks an option or types their own answer, which arrives as the next message; continue the analysis from there. At most one call per user question — do not call this when the intent is already clear or the user just answered a clarification.`
-- **Input:** `{ question: string ("The clarifying question, short and direct"), options: [{ label: string ("Short option title"), description?: string ("One line explaining what this option means") }] (2..4) }`. `options` sent as one JSON-encoded string is read as the list when it parses to an array; a malformed string is a validation error.
+- **Input:** `{ question: string ("The clarifying question, short and direct"), options: string[] (2..4, each non-empty; "2-4 answer options. Each is a short title, optionally followed by \" — \" and one line explaining it") }`. A flat list of strings, because models serialize a list of objects wrongly now and then (1.13.12). `options` sent as one JSON-encoded string is read as the list when it parses to an array; anything else that isn't a list of 2-4 strings is a validation error.
+- **Options as stored:** each string becomes `{label, description?}` (the persisted `ClarificationOption`, [data-model.md](data-model.md)): split at the first ` — ` or ` – ` (a dash with a space on each side), label before it, description after; with no such dash the whole string is the label.
 - **Output:** `{ delivered: true }` (placeholder; never actually reaches the model in a streamed turn).
-- **Side effects:** in a streamed turn the orchestrator intercepts the *call* and ends the turn (5.1).
+- **Side effects:** in a streamed turn the orchestrator intercepts a *valid* call and ends the turn (5.1). A call whose input fails the schema is not intercepted: it runs like any tool, the model gets the validation error and can retry, so no card is ever shown without options.
 
 ### 3.6 `create_visual`
 
@@ -785,7 +786,7 @@ User prompts are trimmed; an empty prompt is a 400 `message is required`. When t
 3. Consume the stream:
    - `reasoning-delta` → emit `reasoning` event with the delta.
    - `text-delta` → append to the answer, emit `text`.
-   - `tool-call` named `ask_clarification` → capture `{question (default "Can you clarify?"), options}` and **abort the model turn** (it must not keep analysing behind the card).
+   - `tool-call` named `ask_clarification` whose input passes the tool's schema (3.5) → capture `{question, options}` (options split as 3.5 says) and **abort the model turn** (it must not keep analysing behind the card). A call that fails the schema is handled like any other tool call, so the model sees the validation error and retries.
    - any other `tool-call` → emit `tool` with `{ name, rationale? }` (the rationale travels with the call so the UI shows the reason before the result).
    - `tool-result` of `create_visual` / `update_visual` → when it has `visualId` and `version`, remember a visual event `{visualId, version, title (default "Interactive visual"), action: created|updated}` and emit `visual-updated` with it; then emit `tool-result` `{ tool, input: <instruction>, error? }`. Not captured as data.
    - `tool-result` of `run_readonly_sql` or `sample_rows` → convert to a **data record** and push it onto the live `turn-data-records` array; emit `tool-result` `{ tool, input, rowCount, error?, rationale? }`.

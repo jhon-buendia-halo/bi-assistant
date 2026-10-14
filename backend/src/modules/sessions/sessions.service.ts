@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { RequestContext } from '@mastra/core/request-context';
+import { parseClarification } from '../../mastra/tools/clarification.tool';
 import { MastraService } from '../../mastra/mastra.service';
 import {
   AGENT_OVERRIDES_CONTEXT_KEY,
@@ -1321,19 +1322,17 @@ export class SessionsService implements OnModuleInit {
             args?: Record<string, unknown>;
           };
           if (payload.toolName) calledTools.add(payload.toolName);
-          if (payload.toolName === 'ask_clarification') {
-            // Clarification ends the turn — the card renders in the UI and the
-            // user's pick arrives as the next message. Abort so the model
-            // does not keep analysing (and spending) behind the card.
-            const args = payload.args ?? {};
-            clarification = {
-              question: String(
-                (args['question'] as string | undefined) ?? 'Can you clarify?',
-              ),
-              options: Array.isArray(args['options'])
-                ? (args['options'] as { label: string; description?: string }[])
-                : [],
-            };
+          // A valid clarification ends the turn — the card renders in the UI
+          // and the user's pick arrives as the next message. Abort so the
+          // model does not keep analysing (and spending) behind the card. A
+          // malformed one runs like any tool: the model gets the validation
+          // error and asks again (agents.md 3.5, 5.1).
+          const asked =
+            payload.toolName === 'ask_clarification'
+              ? parseClarification(payload.args)
+              : undefined;
+          if (asked) {
+            clarification = asked;
             turn.abort();
             break;
           }

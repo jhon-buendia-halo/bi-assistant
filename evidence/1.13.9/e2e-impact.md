@@ -48,3 +48,12 @@ Not re-run, because they touch none of these files: `appearance`, `layout-access
 | Agents (`agents.spec.ts`) | the Prompt tab, the evals tab and eval runs | Re-run as-is (BA-209 changes how eval checks score, BA-210 the prompt and tools) |
 | Agent editor (`agent-editor.spec.ts`), agent hub (`agent-hub.spec.ts`) | eval and prompt views | Re-run as-is |
 | Chat and visuals (`chat-and-visuals.spec.ts`) | clarification card and visuals | Re-run as-is |
+
+### BA-210: `ask_clarification` takes a flat list of strings; a malformed call is not shown
+
+| Feature (spec) | Scenario | Decision |
+|---|---|---|
+| Chat answers and reliability signals (`chat-clarification.spec.ts`, new file: the Feature had `E2E: none yet`) | Answering a clarification | **Add** |
+| | A malformed clarification is asked again, never shown without options | **Add** (fails on the base, where the malformed call became a card) |
+| | the other scenarios of the Feature | Still `E2E: none yet`; untouched by this change |
+| Skills the assistant is given (`assistant-skills.spec.ts`), Agents (`agents.spec.ts`) | all | Re-run as-is: the `ask_clarification(question, options)` line and the tools list keep their names |
