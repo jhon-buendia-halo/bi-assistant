@@ -57,3 +57,7 @@ Not re-run, because they touch none of these files: `appearance`, `layout-access
 | | A malformed clarification is asked again, never shown without options | **Add** (fails on the base, where the malformed call became a card) |
 | | the other scenarios of the Feature | Still `E2E: none yet`; untouched by this change |
 | Skills the assistant is given (`assistant-skills.spec.ts`), Agents (`agents.spec.ts`) | all | Re-run as-is: the `ask_clarification(question, options)` line and the tools list keep their names |
+
+### BA-210: rule A32 "in the same query"; a leaked parameter wrapper around `options` is dropped
+
+No scenario changes: re-run as-is `chat-clarification.spec.ts`, `assistant-skills.spec.ts` and `agents.spec.ts` (the prompt and the clarification tool).

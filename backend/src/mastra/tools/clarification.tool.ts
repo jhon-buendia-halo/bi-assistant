@@ -1,11 +1,23 @@
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
 
-/** A JSON-encoded array becomes the array; anything else passes as is. */
+/**
+ * Tool-call text Claude models sometimes leak around an argument:
+ * `<parameter name="options">[…]</parameter>`.
+ */
+const LEAKED_PARAMETER =
+  /^\s*<parameter name="[^"]*">\s*|\s*<\/parameter>\s*$/g;
+
+/**
+ * A JSON-encoded array becomes the array, after dropping a leaked parameter
+ * wrapper around it; anything else passes as is.
+ */
 export function parseJsonList(value: unknown): unknown {
-  if (typeof value !== 'string' || !value.trim().startsWith('[')) return value;
+  if (typeof value !== 'string') return value;
+  const text = value.replace(LEAKED_PARAMETER, '').trim();
+  if (!text.startsWith('[')) return value;
   try {
-    const parsed: unknown = JSON.parse(value);
+    const parsed: unknown = JSON.parse(text);
     return Array.isArray(parsed) ? parsed : value;
   } catch {
     return value;

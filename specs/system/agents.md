@@ -189,7 +189,7 @@ LenAI deployments are never swapped to `openai/gpt-4.1-mini` (rule 2 requires no
 
 1. **Identity:** the A1-A3 paragraph.
 2. **`## Tools`:** one line per tool the assistant is given, in the order it is given them: `- <name>(<input names, comma-separated>): <first sentence of the tool's description>`. The lines are generated from the tools, so a tool change updates this section. `read_file` and `run_skill_script` (3.9, 3.10) are listed only when they are offered. The framework's workspace tools (3.8) are not listed.
-3. **`## Working rules`:** rules A4-A12 and A19-A35 below, word for word as before, apart from what 1.13.12 added: a sentence in A4, and A35.
+3. **`## Working rules`:** rules A4-A12 and A19-A35 below, word for word as before, apart from what 1.13.12 added: a sentence in A4, "in the same query" in A32, and A35.
 4. **`## Skills`:** only when the assistant has on-demand skills (7.3). Fixed instructions, then the `<available_skills>` catalog (7.5).
 
 The rules encoded, in this order:
@@ -240,7 +240,7 @@ The rules encoded, in this order:
 - A29. Ground every claim in retrieved data; never invent values.
 - A30. A ratio needs two genuinely different measures; never divide a sum by itself or alias the same expression twice (that returns 1 everywhere); look for the real denominator.
 - A31. A metric identical on every row — above all 1 or 0 — is a fault in its own query: fix it before answering, never report it as a finding.
-- A32. Identifiers are not answers: join to the entity holding the id's name and report the name ("a reader … cannot act on 'id 5'").
+- A32. Identifiers are not answers: join to the entity holding the id's name in the same query, so one result holds the whole answer, and report the name ("a reader … cannot act on 'id 5'"). "In the same query" was added in 1.13.12.
 - A33. Only call something "top", "highest" or "lowest" when values actually differ and the query ordered by them; when everything ties, say so.
 - A34. A warning attached to a query result is about its own SQL: act on it and re-run before answering, rather than passing it to the user.
 - A35. When the user asks what data they have, describe the datasets from the session context and `describe_entity` alone, without running any query (added in 1.13.12).
@@ -628,7 +628,7 @@ All tools belong to the `assistant`. Every tool returns a JSON object; **tools n
 ### 3.5 `ask_clarification`
 
 - **Description:** `Ask the user ONE clarifying question with 2-4 concrete answer options, either before starting an analysis when their question is ambiguous (unclear scope, metric, timeframe, or entity), or mid-analysis when the data itself is ambiguous — a filter value, member/entity name or timeframe with several plausible matches. When the ambiguity is about values, quote the actual values found in the data as the options. The user picks an option or types their own answer, which arrives as the next message; continue the analysis from there. At most one call per user question — do not call this when the intent is already clear or the user just answered a clarification.`
-- **Input:** `{ question: string ("The clarifying question, short and direct"), options: string[] (2..4, each non-empty; "2-4 answer options. Each is a short title, optionally followed by \" — \" and one line explaining it") }`. A flat list of strings, because models serialize a list of objects wrongly now and then (1.13.12). `options` sent as one JSON-encoded string is read as the list when it parses to an array; anything else that isn't a list of 2-4 strings is a validation error.
+- **Input:** `{ question: string ("The clarifying question, short and direct"), options: string[] (2..4, each non-empty; "2-4 answer options. Each is a short title, optionally followed by \" — \" and one line explaining it") }`. A flat list of strings, because models serialize a list of objects wrongly now and then (1.13.12). `options` sent as one JSON-encoded string is read as the list when it parses to an array, after dropping a leaked `<parameter name="…">` / `</parameter>` wrapper around it (a tool-call glitch seen with Claude models); anything else that isn't a list of 2-4 strings is a validation error.
 - **Options as stored:** each string becomes `{label, description?}` (the persisted `ClarificationOption`, [data-model.md](data-model.md)): split at the first ` — ` or ` – ` (a dash with a space on each side), label before it, description after; with no such dash the whole string is the label.
 - **Output:** `{ delivered: true }` (placeholder; never actually reaches the model in a streamed turn).
 - **Side effects:** in a streamed turn the orchestrator intercepts a *valid* call and ends the turn (5.1). A call whose input fails the schema is not intercepted: it runs like any tool, the model gets the validation error and can retry, so no card is ever shown without options.
@@ -1461,8 +1461,9 @@ Rules:
   0 — as a fault in your own query. Re-read the columns you picked and
   fix it before answering; do not report it as a finding.
 - Identifiers are not answers. When a result is keyed by an id, join to
-  the entity holding that id's name and report the name. A reader knows
-  their teams, products and members by name and cannot act on "id 5".
+  the entity holding that id's name in the same query, so one result
+  holds the whole answer, and report the name. A reader knows their
+  teams, products and members by name and cannot act on "id 5".
 - Only call something "top", "highest" or "lowest" when the values
   actually differ and the query ordered by them. When everything ties,
   say so plainly.

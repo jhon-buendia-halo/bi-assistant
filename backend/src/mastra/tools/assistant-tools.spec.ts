@@ -126,6 +126,22 @@ describe('ask_clarification options (agents.md 3.5)', () => {
     }
   });
 
+  it('reads a JSON list wrapped in leaked tool-call parameter text', () => {
+    const leaked = `\n<parameter name="options">${JSON.stringify(options)}`;
+    expect(parseJsonList(leaked)).toEqual(options);
+    expect(parseJsonList(`${leaked}</parameter>`)).toEqual(options);
+    expect(
+      schema.safeParse({ question: 'Which?', options: leaked }).success,
+    ).toBe(true);
+    // A leaked wrapper around a single title is still not a list.
+    expect(
+      schema.safeParse({
+        question: 'Which?',
+        options: '\n<parameter name="label">Most titles',
+      }).success,
+    ).toBe(false);
+  });
+
   it('leaves anything that is not a JSON array untouched', () => {
     expect(parseJsonList('not json')).toBe('not json');
     expect(parseJsonList('{"a": 1}')).toBe('{"a": 1}');

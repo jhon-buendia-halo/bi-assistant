@@ -775,7 +775,8 @@ A behaviour-preserving refactor of the app's Mastra agents to the Agent Skills l
 - **Scope:**
   - **Rule A4.** A new sentence: a "best/top/performed well" question with no measure is ambiguous even when several measures could be covered, so the model asks before any query (agents.md 2.1, Appendix A).
   - **`create_visual`.** With no instruction it uses the turn's user message, carried as the new requestContext key `turn-question` (agents.md 3.6, 4.2).
-  - **`ask_clarification`.** `options` is a flat list of strings (`"Title — explanation"`) the orchestrator splits into the stored `{label, description}`, because the model sometimes serialized the list of objects wrongly. A well-formed JSON-encoded list is read as the list. A call that fails the schema is no longer turned into a card: the model gets the error and asks again (agents.md 3.5, 5.1; sessions-chat R42).
+  - **`ask_clarification`.** `options` is a flat list of strings (`"Title — explanation"`) the orchestrator splits into the stored `{label, description}`, because the model sometimes serialized the list of objects wrongly. A well-formed JSON-encoded list is read as the list. A leaked `<parameter name="…">` wrapper around the JSON list is dropped. A call that fails the schema is no longer turned into a card: the model gets the error and asks again (agents.md 3.5, 5.1; sessions-chat R42).
+  - **Rule A32.** "Join to the entity holding the name" becomes "in the same query", so one result holds the whole answer (the model was looking names up in a second query).
   - **Rule A35.** A question about what data the user has is answered from the session context and `describe_entity`, without running a query (the `schema-discovery` check kept by 1.13.11).
 - **Out of scope:** checks and reference SQL (1.13.11); other wording of the working rules.
 - **Acceptance:** unit tests for the three behaviours. The world-cup evals pass at 100% over 3 runs.
