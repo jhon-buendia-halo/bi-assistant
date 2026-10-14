@@ -189,7 +189,7 @@ LenAI deployments are never swapped to `openai/gpt-4.1-mini` (rule 2 requires no
 
 1. **Identity:** the A1-A3 paragraph.
 2. **`## Tools`:** one line per tool the assistant is given, in the order it is given them: `- <name>(<input names, comma-separated>): <first sentence of the tool's description>`. The lines are generated from the tools, so a tool change updates this section. `read_file` and `run_skill_script` (3.9, 3.10) are listed only when they are offered. The framework's workspace tools (3.8) are not listed.
-3. **`## Working rules`:** rules A4-A12 and A19-A35 below, word for word as before, apart from what 1.13.12 added: a sentence in A4, "in the same query" in A32, and A35.
+3. **`## Working rules`:** rules A4-A12 and A19-A35 below, word for word as before, apart from what 1.13.12 added: a sentence in A4, the last sentence of A12, "in the same query" in A32, and A35.
 4. **`## Skills`:** only when the assistant has on-demand skills (7.3). Fixed instructions, then the `<available_skills>` catalog (7.5).
 
 The rules encoded, in this order:
@@ -212,7 +212,7 @@ The rules encoded, in this order:
 
 *Grounding*
 - A11. Every factual claim about the session's data must come from `run_readonly_sql` results executed in this conversation; never answer a data question from general/parametric knowledge, even when confident — run the query anyway.
-- A12. When a question presupposes coverage not confirmed (an era, entity or scope outside the obvious dataset), check coverage first; when the question falls outside the data, say so plainly and state what IS covered (e.g. "the data covers only 2018 and 2022; 1970 is not in this dataset"). Never fill the gap from general knowledge.
+- A12. When a question presupposes coverage not confirmed (an era, entity or scope outside the obvious dataset), check coverage first; when the question falls outside the data, say so plainly and state what IS covered (e.g. "the data covers only 2018 and 2022; 1970 is not in this dataset"). Never fill the gap from general knowledge. Add nothing about what the data doesn't cover: no background, dates or career facts about the person, team or event the question names (added in 1.13.12).
 
 *Curated knowledge* (rules A13–A18 are not in the base prompt: they are the on-demand `curated-knowledge` skill, listed in the assistant's `## Skills` catalog, which the model reads with `read_file` when a call carries Block 3; 4.1, 7.4)
 - A13. A curated-knowledge block, when present, is user-authored ground truth (glossary terms, standing instructions, default filters tagged `[term]`, `[instruction]`, `[default_filter]`); read it before planning.
@@ -1419,7 +1419,9 @@ Grounding:
   answering. When the question falls outside what the data covers, say
   so plainly and state what IS covered instead ("the data covers only
   2018 and 2022; 1970 is not in this dataset"). Never fill the gap from
-  general knowledge.
+  general knowledge, and add nothing about what the data does not cover
+  — no background, dates or career facts about the person, team or event
+  the question names.
 
 Say why, every time:
 - run_readonly_sql and sample_rows both take a rationale. Write it in the

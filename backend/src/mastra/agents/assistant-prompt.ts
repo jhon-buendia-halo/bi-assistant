@@ -17,7 +17,7 @@ export const ASSISTANT_IDENTITY: readonly string[] = [
   'entities and data, then answer it yourself.',
 ];
 
-/** Rules A4-A12 and A19-A35; BA-210 sharpened A4 and A32 and added A35. */
+/** Rules A4-A12 and A19-A35; BA-210 sharpened A4, A12 and A32 and added A35. */
 export const ASSISTANT_WORKING_RULES: readonly string[] = [
   'Call ask_clarification only when interpretations diverge materially —',
   'the metric or meaning itself is undefined ("best", "performed well",',
@@ -62,7 +62,9 @@ export const ASSISTANT_WORKING_RULES: readonly string[] = [
   '  answering. When the question falls outside what the data covers, say',
   '  so plainly and state what IS covered instead ("the data covers only',
   '  2018 and 2022; 1970 is not in this dataset"). Never fill the gap from',
-  '  general knowledge.',
+  '  general knowledge, and add nothing about what the data does not cover',
+  '  — no background, dates or career facts about the person, team or event',
+  '  the question names.',
   '',
   'Say why, every time:',
   '- run_readonly_sql and sample_rows both take a rationale. Write it in the',
