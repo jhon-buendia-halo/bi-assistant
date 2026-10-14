@@ -1,0 +1,26 @@
+Checks run on feat/BA-9-intellify-sample, 2026-10-14
+
+backend  npx jest                        Test Suites: 70 passed, 70 total; Tests: 1159 passed, 1159 total
+         (includes the new fixtures/registry.spec.ts: every seedable fixture's seed creates its required
+          tables; ids/names unique; intellify owns schema intellify, declares 52 FKs, is schema-qualified)
+backend  npm run lint                    0 errors, 2 warnings (pre-existing, not in files this story touched)
+backend  npm run build                   exit 0
+frontend npm run build                   exit 0
+frontend ng test --watch=false           311 run, 310 passed, 1 failed: App "should support keyboard resizing
+                                         from the separator" (Expected 525 to be 548). Pre-existing and unrelated:
+                                         the right panel is clamped to the 800 px headless window (see
+                                         evidence/1.9.4/unit-tests.txt); no frontend code changed in this story.
+repo     python3 scripts/check-specs.py  ALL CHECKS PASSED
+
+Seed reproducibility: python3 scripts/generate-intellify-seed.py <out>
+  tables=49 attributes=243 rows=6937
+  47d14e8e99377a8beb28ff1848072bbefcc8af81f46c6acc2f17cdd7a2bd37dd  backend/src/modules/testing-data/fixtures/003_intellify.sql.gz
+  47d14e8e99377a8beb28ff1848072bbefcc8af81f46c6acc2f17cdd7a2bd37dd  regenerated copy
+
+API smoke test against the branch build (isolated data dir, port 3101):
+  before : Intellify 0/49 loaded=false (panel order: world-cup, formula-1, intellify, world-cup-rest)
+  load   : ok=true — Seeded intellify on 127.0.0.1:55432 and loaded 49 entities into dataset "Intellify"
+  after  : loaded=true
+  dataset: 49 tables, 243 columns, 243 with samples, 52 join references
+  remove : Removed the Intellify datasource and dataset from this app. The database itself was left untouched.
+  final  : loaded=false

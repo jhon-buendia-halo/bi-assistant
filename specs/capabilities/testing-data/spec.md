@@ -23,11 +23,12 @@ Defined once in [the glossary](../../product/glossary.md); used here as follows.
   |---|---|---|---|---|---|---|
   | `world-cup` | World Cup | `world_cup` | bundled SQL | "World Cup PostgreSQL" | "World Cup" | 9: `tournaments`, `teams`, `matches`, `venues`, `players`, `goals`, `match_team_statistics`, views `v_match_results`, `v_player_goal_totals` |
   | `formula-1` | Formula 1 | `formula1` | bundled gzipped SQL | "Formula 1 PostgreSQL" | "Formula 1" | 48 (seasons, drivers, constructors, circuits, races, standings and per-session results; full list in the catalogue) |
-  | `world-cup-rest` | World Cup (REST API) | `world_cup` | none (register-only, kind REST) | "World Cup REST API" | "World Cup (REST)" | the same 9 names as World Cup, keyed `api.world_cup.<table>` |
+  | `intellify` | Intellify | `intellify` | bundled gzipped SQL | "Intellify PostgreSQL" | "Intellify" | 49: every collection of the Intellify data model (clients, products, plan designs, policies, coverages and financials, census, carrier credits, fees, surveys, MercerVIP point solutions, platform reference lists; full list in the catalogue) |
+| `world-cup-rest` | World Cup (REST API) | `world_cup` | none (register-only, kind REST) | "World Cup REST API" | "World Cup (REST)" | the same 9 names as World Cup, keyed `api.world_cup.<table>` |
 
-  World Cup describes "Men’s FIFA World Cup, 2018 and 2022 — tournaments, matches, teams, venues, players, goals and two reporting views." Formula 1 describes "Formula One world championship, 1950 to 2026 — seasons, drivers, constructors, circuits, races, standings and per-session results." The REST sample describes "The World Cup sample over a local REST API ('npm run worldcup:api' serves it on http://127.0.0.1:55080)."
-- R3. The default connection of the PostgreSQL samples SHALL be host `127.0.0.1`, port `55432` (overridable with the `WORLD_CUP_DB_PORT` environment variable), SSL off, and the development-only credentials of the repository's compose database: user `world_cup`, password `world_cup_dev`; database `world_cup` for World Cup and `formula1` for Formula 1 (both live on the same server, which is the first sample's superuser). The REST sample's defaults are placeholders (`127.0.0.1:55080`).
-- R4. The seed files are data assets: `001_world_cup.sql` (a transaction that creates schema `world_cup` with tables for confederations, countries, teams, tournaments, tournament teams, venues, players, squad members, matches, match team statistics, goals, disciplinary events, indexes and reporting views) and `002_formula_1.sql.gz` (a gzipped dump creating schema `formula1`). A rebuild SHALL carry them over verbatim; they are not described row by row. The World Cup SQL is also shipped as the compose database's first-boot init script and the two copies SHALL be kept identical.
+  World Cup describes "Men’s FIFA World Cup, 2018 and 2022 — tournaments, matches, teams, venues, players, goals and two reporting views." Formula 1 describes "Formula One world championship, 1950 to 2026 — seasons, drivers, constructors, circuits, races, standings and per-session results." Intellify describes "Intellify employee-benefits data model (Halo × Marsh), synthetic data — clients, lines of coverage, plan designs, policies and premiums, census, carrier credits and point solutions." The REST sample describes "The World Cup sample over a local REST API ('npm run worldcup:api' serves it on http://127.0.0.1:55080)."
+- R3. The default connection of the PostgreSQL samples SHALL be host `127.0.0.1`, port `55432` (overridable with the `WORLD_CUP_DB_PORT` environment variable), SSL off, and the development-only credentials of the repository's compose database: user `world_cup`, password `world_cup_dev`; database `world_cup` for World Cup, `formula1` for Formula 1 and `intellify` for Intellify (all live on the same server, whose superuser is the first sample's user). The REST sample's defaults are placeholders (`127.0.0.1:55080`).
+- R4. The seed files are data assets: `001_world_cup.sql` (a transaction that creates schema `world_cup` with tables for confederations, countries, teams, tournaments, tournament teams, venues, players, squad members, matches, match team statistics, goals, disciplinary events, indexes and reporting views) `002_formula_1.sql.gz` (a gzipped dump creating schema `formula1`) and `003_intellify.sql.gz` (gzipped; creates schema `intellify` with the 49 tables of the Intellify data model, their 52 foreign keys, a comment on every table and column naming the source collection or Mongo field, and deterministic synthetic rows). The Intellify seed is generated, not hand-written: `python3 scripts/generate-intellify-seed.py` rewrites it byte for byte, so change the generator and regenerate rather than editing the seed. A rebuild SHALL carry them over verbatim; they are not described row by row. The World Cup SQL is also shipped as the compose database's first-boot init script and the two copies SHALL be kept identical.
 
 ### Status
 
@@ -94,7 +95,7 @@ Settings → **Testing Data** (see [ui.md](../../system/ui.md)). Heading "Testin
 
 ### Feature: Testing data
 
-E2E: none yet
+E2E: `frontend/e2e/testing-data.spec.ts` for "Lists the bundled samples and what is loaded" and "Loads the Intellify sample into a new database"; the other scenarios are not automated yet.
 
 ```gherkin
 Feature: Testing data
@@ -104,7 +105,7 @@ Feature: Testing data
 
   Scenario: Lists the bundled samples and what is loaded
     When I open Settings and click "Testing Data"
-    Then I see the "World Cup", "Formula 1" and "World Cup (REST API)" samples
+    Then I see the "World Cup", "Formula 1", "Intellify" and "World Cup (REST API)" samples
     And each shows "0/<required> entities" with a cross when nothing is loaded
     And each shows its description
 
@@ -138,6 +139,16 @@ Feature: Testing data
     And I see a message that ends with "— created the database"
     And the sample shows "48/48 entities"
 
+  Scenario: Loads the Intellify sample into a new database
+    Given a database name that does not exist on the server
+    When I expand the "Intellify" sample and set Database to that name
+    And I click "Load testing data"
+    Then I see a warning that schema "intellify" will be dropped and recreated
+    When I click "Confirm"
+    Then I see a message that starts with "Seeded intellify on 127.0.0.1:55432 and loaded 49 entities into dataset "Intellify"" and ends with "— created the database"
+    And the sample shows "49/49 entities" and "127.0.0.1:55432/<that name>"
+    And "Intellify PostgreSQL" appears under "Datasource Configuration"
+
   Scenario: Tests the connection from the card
     Given I am in "Testing Data" with the "World Cup" sample expanded
     When I click "Test connection"
@@ -167,8 +178,9 @@ Feature: Testing data
 
 1. With the compose database up, loading World Cup from the panel yields a registered "World Cup PostgreSQL" datasource, a "World Cup" dataset with the 9 required entities (with sample values and join references), and a `9/9 entities` status; loading it again recreates the schema without duplicating records.
 2. Loading Formula 1 into a server that lacks the `formula1` database creates it, seeds 48 required tables and reports `48/48 entities`.
-3. Remove clears both app-side records and leaves the database intact; status returns to `0/<required>`.
-4. A failure at any stage (connection, creation, seed, missing entities) produces the corresponding message and does not leave a dataset behind; a seed failure leaves nothing registered.
-5. The assistant eval start checks the datasets bound to the chosen datasource against the required entities of the fixture the selected questions belong to (by `schema.table`), so a loaded fixture lets its question set run and a datasource lacking those entities is refused ([agents-evals](../agents-evals/spec.md)).
+3. Loading Intellify into a server that lacks the `intellify` database creates it, seeds the 49 tables and reports `49/49 entities`; the "Intellify" dataset carries the 52 declared foreign keys as join references.
+4. Remove clears both app-side records and leaves the database intact; status returns to `0/<required>`.
+5. A failure at any stage (connection, creation, seed, missing entities) produces the corresponding message and does not leave a dataset behind; a seed failure leaves nothing registered.
+6. The assistant eval start checks the datasets bound to the chosen datasource against the required entities of the fixture the selected questions belong to (by `schema.table`), so a loaded fixture lets its question set run and a datasource lacking those entities is refused ([agents-evals](../agents-evals/spec.md)).
 
-<!-- sources: backend/src/modules/testing-data/**, backend/src/modules/testing-data/fixtures/registry.ts, backend/src/modules/agents/eval-runs.service.ts (fixture preflight), docker-compose.yml, backend/package.json (worldcup scripts), frontend/src/app/features/testing-data/**, frontend/src/app/app.html (Testing Data navigation) -->
+<!-- sources: backend/src/modules/testing-data/**, scripts/generate-intellify-seed.py, backend/src/modules/testing-data/fixtures/registry.ts, backend/src/modules/agents/eval-runs.service.ts (fixture preflight), docker-compose.yml, backend/package.json (worldcup scripts), frontend/src/app/features/testing-data/**, frontend/src/app/app.html (Testing Data navigation) -->
