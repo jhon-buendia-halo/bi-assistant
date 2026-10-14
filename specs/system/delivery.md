@@ -32,6 +32,7 @@ Electron loads the renderer from `file://`. An absolute base (`/`) would resolve
 | `APP_DATA_DIR` | Electron's `userData` directory. The profile name tracks the app name; if only the pre-rename directory (`Questions to Insights`) exists on an existing install, that one is kept. On **Windows**, backend data (`app.sqlite`, `mastra.sqlite`, `workspaces`) is moved once from the roaming profile to `%LOCALAPPDATA%\Halo BI Assistant`, with rollback and a diagnostics entry on failure, because roaming profiles are often synced or locked. |
 | `QUESTIONS_TO_INSIGHTS_USER_DATA_DIR` | Overrides `userData` entirely and disables the Windows redirect. Used by the Playwright fixture so tests never touch a real profile; also the way to run an isolated desktop instance from a worktree. |
 | `APP_SECRET` | The backend derives the AES-256-GCM key that encrypts stored API keys from it. Taken from the `APP_SECRET` environment variable if set; otherwise read from `<APP_DATA_DIR>/.app-secret`, or generated (32 random bytes, hex) and written there with mode 0600. It must stay stable across launches. Back up `.app-secret` with the data; without it stored keys cannot be decrypted. The backend itself, run bare without `APP_SECRET`, reads or creates `.app-secret` in its own data dir the same way. |
+| `.intellify-api-key` | The key of the embedded Intellify RFP API (ADR-0027). Taken from `INTELLIFY_API_KEY` if set; otherwise read from `<APP_DATA_DIR>/.intellify-api-key`, or generated (32 random bytes, hex) and written there with mode 0600, as `.app-secret` is. The Testing Data registration stores it on the "Intellify RFP API" datasource, so a lost file only means registering the sample again. |
 | Other files in the profile | `logs/system.ndjson` (diagnostics, rotated to `system.previous.ndjson` above 5 MB; the last 2,000 entries are kept in memory). |
 
 ### Dev and branding helpers
@@ -84,6 +85,7 @@ Electron loads the renderer from `file://`. An absolute base (`/`) would resolve
 | `evals:assistant` | `nest build && node dist/mastra/evals/run-assistant-evals.js` | The assistant eval suite from the command line, same suite the Agents screen runs. Needs `EVAL_DATASETS` (comma-separated saved dataset names) and one of `EVAL_SET` (a question set id) or `EVAL_CASES` (comma-separated case ids); optional `EVAL_TIMEOUT_MS`, `EVAL_ROW_LIMIT`. Example: `EVAL_DATASETS="World Cup Core" EVAL_SET=world-cup npm run evals:assistant`. |
 | `worldcup:api:dump` | `ts-node scripts/worldcup-rest-api/dump.ts` | Snapshot the World Cup Postgres into JSON files for the test REST API (`WORLD_CUP_DB_*` env). |
 | `worldcup:api` | `ts-node scripts/worldcup-rest-api/serve.ts` | Zero-dependency REST + OpenAPI server over that snapshot on `127.0.0.1:55080` (`WORLD_CUP_API_PORT`), for exercising the REST connector. |
+| `intellify-api` | `node dist/intellify-api/main.js` | Run the Intellify RFP API alone (ADR-0027; needs `build` first), configured only by environment: `INTELLIFY_API_KEY` (required), `INTELLIFY_API_HOST`, `INTELLIFY_API_PORT` (3100), `INTELLIFY_DB_*` ([api.md](api.md) 6.1). Not needed for local runs: the app starts the API embedded unless `INTELLIFY_API=off`. |
 | `worldcup:rest:setup` | `ts-node scripts/setup-worldcup-rest.ts` | Registers that API as a `rest` datasource and a dataset in a running backend through its HTTP API (`BACKEND_URL`, `WORLD_CUP_API_URL`); idempotent. |
 | `build:web` | `npm --prefix ../frontend run build:web && node scripts/copy-web.js` | Build the UI and copy it to `backend/public/` (gitignored). `copy-web.js` fails if the frontend build has no `index.html`. |
 | `build:all` | `build` then `build:web` | Everything the npm package needs. |
@@ -177,7 +179,7 @@ Startup order matters: the CLI creates the data directory, sets `APP_DATA_DIR`, 
 
 **Build and pack:** in `backend/`, `npm run build:web` (frontend build then `scripts/copy-web.js` into `public/`), `npm run build:all`, and `prepack` runs `build:all`. To test locally: `npm pack`, then `npm i <tarball>` in a scratch directory and run the bin.
 
-**Data layout the CLI creates** under the data dir: `app.sqlite`, `mastra.sqlite`, `observability.duckdb`, `workspaces/`, `.app-secret` (see [data-model.md](data-model.md)). The native modules (better-sqlite3, DuckDB, LibSQL) arrive as prebuilt binaries; if npm starts compiling them, the Node version is unsupported or a toolchain is missing.
+**Data layout the CLI creates** under the data dir: `app.sqlite`, `mastra.sqlite`, `observability.duckdb`, `workspaces/`, `.app-secret`, `.intellify-api-key` (see [data-model.md](data-model.md) and section 1). The native modules (better-sqlite3, DuckDB, LibSQL) arrive as prebuilt binaries; if npm starts compiling them, the Node version is unsupported or a toolchain is missing.
 
 First run needs an LLM provider in Settings (or `OPENAI_API_KEY` in the environment, which makes the backend fall back to `openai/gpt-4o-mini` when no settings are saved).
 
@@ -363,6 +365,7 @@ Defaults are shared state: the desktop app uses Electron's `userData` directory 
 | Web (CLI) port | 3000 (falls back to a free port) | `--port` |
 | Bare backend (`start:dev`) data dir and port | `<cwd>/data`, `PORT` or 3000 | `APP_DATA_DIR`, `PORT` |
 | Secret | persisted `.app-secret` in the data dir | `APP_SECRET` |
+| Intellify API port | 3100 (the embedded Intellify RFP API) | `--intellify-api-port <n>` (CLI) or `INTELLIFY_API_PORT`; `0` picks a free port, printed on the CLI banner (`Intellify API: http://127.0.0.1:<port>`); the E2E fixture sets `0`. `--no-intellify-api` or `INTELLIFY_API=off` skips it |
 | Sample Postgres | project `questions-to-insights-world-cup`, port 55432 | `docker compose -p <name>` plus `WORLD_CUP_DB_PORT=<port>`; the e2e fixtures read the same variable (and `WORLD_CUP_DB_HOST`) |
 | Observability profile | same project; ports 6006, 3001, 4317, 4318 | `docker compose -p <name>` plus `PHOENIX_PORT`, `GRAFANA_PORT`, `OTLP_GRPC_PORT`, `OTLP_HTTP_PORT` (see *Observability profile* above) |
 | Playwright | needs port 3000 free | one e2e run at a time per machine; each test already gets its own temp profile |

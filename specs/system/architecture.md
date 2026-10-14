@@ -92,6 +92,7 @@ flowchart TB
   entra["Microsoft Entra ID<br/>(OIDC provider, SCIM client)"]
 
   backend["NestJS backend<br/>(backend/src, createApp)<br/>API + Mastra agents"]
+  intellifyapi["Intellify RFP API<br/>(backend/src/intellify-api, second Nest app, :3100)"]
 
   subgraph data["APP_DATA_DIR (userData, or ~/.questions-to-insights for the CLI)"]
     appdb[("app.sqlite<br/>(better-sqlite3 DocStore;<br/>org mode adds users, groups,<br/>roles, auth sessions, activity)")]
@@ -125,6 +126,8 @@ flowchart TB
   backend -->|"DuckDB (@mastra/duckdb)"| obsdb
   backend -->|"fs read/write (Mastra workspace)"| ws
   backend -->|"pg / @databricks/sql / HTTPS"| ext
+  backend -->|"HTTP + X-API-Key (RFP tools, REST datasource)"| intellifyapi
+  intellifyapi -->|"pg: READ ONLY over intellify.*, writes to rfp.*"| intellifydb[("intellify_mercer_demo<br/>(PostgreSQL)")]
   backend -.->|"OTLP traces, metrics + logs,<br/>only when developer observability is on"| devtools
   backend -.->|"agent traces (OpenInference),<br/>only when developer observability is on"| phoenix
 ```
@@ -136,6 +139,7 @@ flowchart TB
 - **Angular renderer** (`frontend/src/`) — the UI.
 - **NestJS backend** (`backend/src/`) — API, Mastra agents, SQLite app store, per-session workspaces.
 - **npm CLI** (`backend/src/cli.ts`) — serves the same backend + bundled UI in a browser. With the `ORG_*` configuration it is the **org server** (ADR-0010): no new container, the backend gains an auth module (OIDC sign-in, SCIM, roles, owner scoping; ADR-0011) and is reached through the organisation's reverse proxy. How to run it: [delivery.md](delivery.md) section 4.1.
+- **Intellify RFP API** (`backend/src/intellify-api/`) — a second NestJS application in the backend package, started in-process by `createApp()` on its own port (default 3100) or alone; the app reaches it only over HTTP with an API key (ADR-0027).
 
 #### ADR-0001 — Electron desktop app with an Angular renderer and a NestJS child-process backend *(retroactive)*
 - **Status:** Accepted
@@ -254,6 +258,24 @@ flowchart TB
   - Nothing runs as the local user by default any more. Code outside a request, such as the eval CLI, must run as Demo User explicitly.
   - A data folder used in local mode and then opened by an org server shows none of its private items there: they belong to `local`, which is no org user.
 
+#### ADR-0027 — The Intellify RFP API: a second NestJS service in the backend package, API-key protected, with its own `rfp` schema
+- **Status:** Accepted
+- **Date:** 2026-10-14
+- **Context:**
+  - The RFP Builder agent (ADR-0028) must reach the Intellify data model (the `intellify` fixture, BA-212) only through a REST API that we build, and must save the state of an RFP so a consultant can resume it.
+  - The app reaches external data only through datasources (ADR-0005's connectors; the REST kind reads OpenAPI specs and sends an API key header), and its SQL path is read-only by design (datasources R33-R35). The RFP needs writes.
+  - The backend already runs as one NestJS application in three deliveries (Electron child process, npm CLI, org server; ADR-0001, ADR-0002). A second process would need supervision in each.
+- **Decision:**
+  - **A second NestJS application** lives at `backend/src/intellify-api/`, compiled by the same build, with its own module tree, port (`INTELLIFY_API_PORT`, default 3100), authentication (`X-API-Key`), error shape, OpenAPI document (`GET /openapi.json`) and PostgreSQL pool. It imports nothing from the app's modules and the app calls it only over HTTP.
+  - **Embedded by default, standalone on demand.** `createApp()` starts it in-process after the app listens unless `INTELLIFY_API=off`; `node dist/intellify-api/main.js` runs it alone. The only in-process link is a value (`IntellifyApiInfo`: URL and key) that the Testing Data loader uses to register the API as a REST datasource.
+  - **Reads are read-only, writes are confined.** Reads over `intellify.*` run in `READ ONLY` transactions. Writes go only to a new `rfp` schema in the same database (`rfp.rfps`, `rfp_lines`, `rfp_carriers`, `rfp_requirements`, `rfp_timeline`, `rfp.schema_migrations`), created by versioned SQL migrations the API applies at start under an advisory lock. No foreign key crosses the schemas, because the Intellify loader drops `intellify` with CASCADE.
+  - **The package is a projection of the record.** The API renders the RFP document (Markdown, and PDF with pdfkit), the exhibits (CSV) and a zip from the stored record and the live Intellify data, so any client gets the same package.
+- **Consequences:**
+  - Two new dependencies (`@nestjs/swagger`, `pdfkit`), both pure JavaScript; the packaged desktop app grows accordingly.
+  - A new container in the C4 model and a new external database coordinate set (`INTELLIFY_DB_*`); data-model.md documents the `rfp` schema and api.md the API's routes, since `check-specs.py` covers every controller under `backend/src`.
+  - The API key is the whole access boundary: records carry `created_by` as an attribute only. Per-user access would need the app's auth to be forwarded, which is deferred.
+  - A missing or stopped database degrades the API (503, `/health` down) without stopping the app.
+
 ## Level 3 — Components
 
 **Backend**
@@ -287,7 +309,9 @@ flowchart LR
     designer["visualization agent"]
     sqlagents["sql-fixer, sql-verifier agents"]
     bootstrap["knowledge-bootstrap agent"]
+    rfpagent["rfp agent"]
     tools["tools/<br/>(dataset, create/update_visual, ask_clarification)"]
+    rfptools["tools/rfp.tools.ts (HTTP)"]
     skills["skills/<br/>(built-in only; declared per agent; ADR-0018, ADR-0021)"]
     evals["evals/<br/>(assistant evals, eval-judge agent)"]
   end
@@ -325,6 +349,10 @@ flowchart LR
   mastrasvc --> designer
   mastrasvc --> sqlagents
   mastrasvc --> bootstrap
+  mastrasvc --> rfpagent
+  rfpagent --> rfptools
+  rfpagent -.->|"rfp-process (catalog + skill tool)"| skills
+  rfptools -->|"restTarget(), exportRfpPackage()"| toolsvc
   assistant --> tools
   assistant -.->|"its skills (catalog + skill tools)"| skills
   designer -.->|"interactive-visuals (pipeline-loaded)"| skills
@@ -434,7 +462,7 @@ flowchart LR
   - The theme is per renderer origin, so the desktop app and the npm CLI's browser tab can hold different preferences.
 
 #### ADR-0008 — User-built agents are stored configurations of the assistant
-- **Status:** Accepted; which tools and skills a user agent gets is narrowed by ADR-0022; the core prompt it layers on becomes editable by ADR-0026
+- **Status:** Accepted; which tools and skills a user agent gets is narrowed by ADR-0022; the core prompt it layers on becomes editable by ADR-0026; narrowed by ADR-0028 (sessions may bind to a built-in agent)
 - **Date:** 2026-10-09
 - **Context:**
   - The Agent Hub ([BA-150](https://halo-powered.atlassian.net/browse/BA-150)) lets users build their own agents: a name, a description, instructions, datasets, starter questions and an optional model override. Each one is drafted, published and chatted with.
@@ -654,6 +682,24 @@ flowchart LR
   - Supersedes ADR-0008's fixed core prompt: the core can change without a release, for every session and user agent. The code-enforced guards (read-only SQL, dataset scoping, grounding, repair) still hold whatever a prompt says.
   - The shipped eval baseline describes the shipped prompts only; eval runs use the overrides, so an admin can measure an edit. The editor warns that a save applies at once.
   - A System agent's prompt edit can degrade a structured-output pipeline (designer, fixer, verifier, bootstrap, judge); their callers' existing fallbacks for unusable output still apply.
+
+#### ADR-0028 — A built-in RFP Builder agent with dedicated HTTP tools, resolved through a REST datasource; sessions can bind to a built-in agent
+- **Status:** Accepted
+- **Date:** 2026-10-14
+- **Context:**
+  - The user asked for an agent that walks a Mercer benefits consultant through building a carrier RFP, built in code with its own prompt, skill and tools (not a user agent, which can only configure the assistant's tools; ADR-0022, ADR-0024).
+  - Sessions bind to user agents only (ADR-0008); every turn runs the `assistant`, with its SQL repair, grounding guard and careful mode. Start chat is offered to the Official assistant (which opens the composer) and to Live user agents.
+  - The BA-213 epic listed new tools as out of scope; the user amended it on 2026-10-14.
+- **Decision:**
+  - **A registered agent `rfp`** (`mastra/agents/rfp.agent.ts`), kind `official` in the hub, with a generated `## Tools` section and an editable prompt like the assistant's (ADR-0026), the on-demand built-in skill `rfp-process` (one reference file per stage, through the framework's skill tool; ADR-0025), conversation memory as the assistant's, and its own tools in `mastra/tools/rfp.tools.ts`: read tools over the Intellify API, write tools for the RFP record, `export_rfp_package`, and the shared `ask_clarification`. It has no SQL tool and no workspace tools.
+  - **Tools resolve the API from the session's datasets:** the REST datasource bound to the session's dataset gives the base URL and the key; nothing is read from the environment or settings.
+  - **Sessions bind to a built-in agent** through a new `agentKey` field (`agentId` stays for user agents). Start chat on an official agent that declares a required dataset creates the session over that dataset; the Official assistant keeps opening the composer. A turn runs the session's agent; the assistant-only passes (grounding guard, careful mode, result guards) apply only to the assistant. The session records the active RFP (`rfpId`) from the tools' results so a resumed chat starts at the right stage.
+  - **The package reaches the consultant from the chat:** `export_rfp_package` stores the API's package in the session workspace (`rfp/<rfpId>/`) and the answer carries an `rfpPackage` reference with a download route, as deep-analysis reports do.
+- **Consequences:**
+  - ADR-0008's "every turn runs the assistant" narrows to "runs the session's agent"; its guarantees stay for assistant sessions, and the RFP agent's safety comes from having no SQL path (ADR-0027).
+  - The hub has two Official agents; Start chat semantics depend on whether the agent declares a dataset.
+  - The eval harness runs a case on the set's agent, and an `rfp` eval set exists; prompt, skill or tool changes to the agent must pass it at 100% over 3 runs.
+  - Evals that create RFPs write to `rfp.*`; they tag records with `created_by = eval:<jobId>` and delete them afterwards.
 
 ## Level 4 — Code
 

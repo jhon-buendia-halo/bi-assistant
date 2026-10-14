@@ -126,6 +126,7 @@ Terms are defined once in [the glossary](../../product/glossary.md); this capabi
 - Endpoints (list, test, save, delete, inventory with `refresh` / `cachedOnly`, REST discover): see [api.md](../../system/api.md), section Datasources.
 - Collections: `connections` (datasource documents; the legacy anonymous Databricks shape is migrated on read) and `datasource_inventories` (one snapshot per datasource id): see [data-model.md](../../system/data-model.md).
 - Datasources are consumed by sessions (read-only SQL, sampling), datasets (inventory, sampling, foreign keys), knowledge, metrics, evals and testing-data. They use no agent directly; the SQL repair and verification agents that operate on top of read-only SQL are in [agents.md](../../system/agents.md).
+- The Intellify RFP API is registered as a REST datasource (see [../rfp/spec.md](../rfp/spec.md)).
 - Terms: [glossary](../../product/glossary.md).
 
 ## UI

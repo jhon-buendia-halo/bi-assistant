@@ -20,7 +20,7 @@ Stack neutrality: the contracts below (agent ids, prompts, tool names and schema
 An **agent** is a named, stateless-by-default LLM wrapper with:
 
 - a stable **registry key** (used by the backend and the UI to look it up) and its own **id**, **display name** and one-line **description** (shown in the Agents catalogue);
-- a **system prompt** ("instructions"), a fixed array of lines joined with `\n`. The prompt of a built-in agent can be **overridden** in the app by a Platform admin: the saved text is stored in `agent_prompt_overrides` ([data-model.md](data-model.md) 3.10.3), read at every call (like the built-in skills' overrides, 7.3) and replaces the shipped text, so a save applies to the next call, a Reset restores the shipped text, and with no override every prompt is the shipped one, byte for byte (ADR-0026). The override reaches every caller of the agent: chat turns, user agents (they run on the assistant), deep analysis, the grounding pass, evals, the designer pipeline, the SQL fixer and verifier, the knowledge bootstrap and the judge. It changes the prompt only: tools, output schemas, guards and harness-loaded skills stay in code;
+- a **system prompt** ("instructions"), a fixed array of lines joined with `\n`. The prompt of a built-in agent can be **overridden** in the app by a Platform admin: the saved text is stored in `agent_prompt_overrides` ([data-model.md](data-model.md) 3.10.3), read at every call (like the built-in skills' overrides, 7.3) and replaces the shipped text, so a save applies to the next call, a Reset restores the shipped text, and with no override every prompt is the shipped one, byte for byte (ADR-0026). The override reaches every caller of the agent: chat turns, user agents (they run on the assistant), deep analysis, the grounding pass, evals, the designer pipeline, the SQL fixer and verifier, the knowledge bootstrap and the judge. It changes the prompt only: tools, output schemas, guards and harness-loaded skills stay in code. Two agents generate a `## Tools` section from their tools, the `assistant` (2.1) and the `rfp` agent (2.8): for both, the editable text leaves that section out and the served prompt has it inserted before `## Working rules`;
 - a **model**, resolved *at call time* (never at construction) from the persisted LLM settings — see 1.3;
 - optionally a **tool set**, a **conversation memory** and a **workspace** (a per-session sandboxed folder, see 7).
 
@@ -47,16 +47,17 @@ All agents are registered once in a single framework instance and looked up by *
 | `sql-verifier` | `sql-verifier` | SQL Verifier | Careful mode's second opinion — re-derives the SQL for a question independently to corroborate the answer. |
 | `assistant-eval-judge` | `assistant-eval-judge` | Assistant Eval Judge | Grades one assistant eval case's tool calls and final answer against a rubric. |
 | `knowledge-bootstrap` | `knowledge-bootstrap` | Knowledge Bootstrap | Mines business-glossary terms, instructions and coverage facts from a dataset's schema and sample rows. |
+| `rfp` | `rfp-builder` | RFP Builder | Walks a Mercer benefits consultant through building a carrier RFP for one client over the Intellify data, stage by stage, and assembles the RFP package. |
 
 The prompt each row's agent runs on is the shipped one unless overridden (1.1). Lookup of an unknown key throws. The catalogue lists agents sorted by display name.
 
-**User agents** are not registry entries. They are stored documents ([data-model.md](data-model.md) section 3.10) and run on the `assistant`; the decision is ADR-0008 in [architecture.md](architecture.md). The catalogue endpoint merges them with the six registered agents ([api.md](api.md) section 2.6). A session started from a user agent runs the `assistant` with the agent's Live instructions as context Block 5 (4.1), its datasets as the session's datasets, its model and effort overrides (1.3, 1.4) passed on the requestContext (4.2), only the tools its tool selection gives it (2.1, ADR-0022), and its in-app skills given to the model through the framework's skill tools (7.3, ADR-0025). Rules: sessions-chat R52-R59.
+**User agents** are not registry entries. They are stored documents ([data-model.md](data-model.md) section 3.10) and run on the `assistant`; the decision is ADR-0008 in [architecture.md](architecture.md). The catalogue endpoint merges them with the seven registered agents ([api.md](api.md) section 2.6). A session started from a user agent runs the `assistant` with the agent's Live instructions as context Block 5 (4.1), its datasets as the session's datasets, its model and effort overrides (1.3, 1.4) passed on the requestContext (4.2), only the tools its tool selection gives it (2.1, ADR-0022), and its in-app skills given to the model through the framework's skill tools (7.3, ADR-0025). Rules: sessions-chat R52-R59. A session can also be bound to a **built-in** agent that declares a dataset, today only `rfp` (2.8): it stores the agent's registry key and every turn runs that agent instead of the `assistant` (ADR-0028, sessions-chat R61).
 
 Not registered (never listed in the catalogue):
 
 - **LLM connection probe** (`llm-connection-probe`, "LLM connection probe", instructions `You answer connection probes exactly as asked.`) — a throwaway agent built per test on the *submitted, not yet saved* Anthropic settings. See [llm-settings](../capabilities/llm-settings/spec.md).
 
-> Implementation note: `backend/src/mastra/index.ts` builds the `Mastra` instance with the six agents, a composite storage, a Pino logger and observability. `MastraService` (`mastra.service.ts`) is the only DI-visible wrapper: `getAgent(key)`, `listAgents()`, `ensureSessionWorkspace(id, name)`, `deleteSessionResources(id)`. The rest of the backend stays framework-agnostic. Agents are constructed at module load with no DI; two **bridges** inject runtime services into them: `model-resolver.ts` (`setAgentModelResolver`, installed by `LlmService.onModuleInit`) and `tool-services.ts` (`setDatasetToolServices`, installed by `SessionsService.onModuleInit`). A tool called before the bridge is installed fails with `Dataset tool services not installed yet`.
+> Implementation note: `backend/src/mastra/index.ts` builds the `Mastra` instance with the seven agents, a composite storage, a Pino logger and observability. `MastraService` (`mastra.service.ts`) is the only DI-visible wrapper: `getAgent(key)`, `listAgents()`, `ensureSessionWorkspace(id, name)`, `deleteSessionResources(id)`. The rest of the backend stays framework-agnostic. Agents are constructed at module load with no DI; two **bridges** inject runtime services into them: `model-resolver.ts` (`setAgentModelResolver`, installed by `LlmService.onModuleInit`) and `tool-services.ts` (`setDatasetToolServices`, installed by `SessionsService.onModuleInit`). A tool called before the bridge is installed fails with `Dataset tool services not installed yet`.
 
 ### 1.3 Model resolution
 
@@ -616,11 +617,58 @@ The report markdown (title, question, meta line, executive summary, body, data a
 
 > Note: during the investigate step the assistant technically still has `ask_clarification`, `create_visual` and `update_visual`; only the prompt forbids them, and the stream-level clarification interception (5.1) does not apply to `generate`. See Open questions.
 
+### 2.8 `rfp` (id `rfp-builder`) — RFP Builder
+
+**Purpose.** A Mercer employee-benefits consultant's working partner for one job: building a carrier request for proposal (RFP) for one client over the Intellify data, in seven stages, saving every confirmed decision to an RFP record so the work can be resumed, and assembling the RFP package. It reaches the data only through the Intellify RFP API ([api.md](api.md) 2.16), never through SQL (ADR-0027, ADR-0028). Behaviour rules: [rfp](../capabilities/rfp/spec.md).
+
+**Invoked by.**
+
+| Caller | Mode | Memory | Tools | Steps |
+|---|---|---|---|---|
+| Streamed chat turn of a session bound to it (`agentKey: 'rfp'`, sessions-chat R61) | stream | session thread | all | 15 |
+| Tool-only synthesis pass (5.5) | generate, instructions overridden | none | none (`toolChoice: 'none'`) | 1 |
+| `rfp` eval set (8) | generate | none | all | 15 |
+
+It is never called by the grounding guard (5.6), careful mode (5.8) or deep analysis (2.7), which stay with the `assistant`.
+
+**Inputs.** The user message (4.3), the system prompt, Block R1 (4.1) and the requestContext (4.2): `datasets`, `session-id`, `turn-question`, `session-workspace-id`, `rfp-created-by`, `turn-rfp`.
+
+**Output.** Free text (markdown). Tool calls are captured by the orchestrator (5.1); an `export_rfp_package` result becomes the answer's `rfpPackage` ([data-model.md](data-model.md) 3.4.1).
+
+**Tools.** The RFP tools of 3.10 (19) plus the shared `ask_clarification` (3.5), in the order of 3.10. It has **no SQL tool**, no dataset tools, no visual tools and no workspace (so no workspace tools, 3.8). It declares `skills`, so the framework adds its skill tools (3.9).
+
+**Skills.** On demand: `rfp-process` (7.4), one reference file per stage. None harness-loaded.
+
+**Memory.** As the assistant's: one thread per session (`thread = resource = <session id>`), last **40** messages replayed, semantic recall, working memory and generated titles off.
+
+**Max steps.** 15.
+
+**Prompt requirements.** The prompt MUST start with `You are the RFP Builder` (asserted by E2E on the System Prompt tab). It has three parts: the identity paragraph (R1), `## Tools` generated from the tools by the assistant's rule (2.1 part 2: `- <name>(<input names, comma-separated>): <first sentence of the tool's description>`; the framework's skill tools are not listed), and `## Working rules`. An admin can override it (ADR-0026) as the assistant's: the editable text and Reset are the prompt **without** `## Tools`; the served prompt is the override with the generated `## Tools` inserted before the first line that is exactly `## Working rules`, or appended after a blank line when there is none; the override must start with the identity line above; `[[tool:…]]` and `[[skill:…]]` links are not allowed (`linksAllowed: false`). Exact shipped text: Appendix C.
+
+The rules encoded, in this order (prefix R, to keep them apart from the assistant's A-rules):
+
+- **R1** Identity: the RFP Builder for one job, one client at a time, over the Intellify data reached through its API; it never queries a database; every fact comes from a tool result and every decision is saved through a tool.
+- **R2** Load the `rfp-process` skill before the first answer of a session, and read the stage's reference file before starting that stage.
+- **R3** The seven stages run in order (1 client and renewal, 2 current program, 3 what to market, 4 carriers to invite, 5 requirements and questionnaire, 6 timeline, 7 assemble and review); the session context names the active RFP and the stage it reached, and the work resumes from the next stage.
+- **R4** One stage per exchange: show what the data says, propose the decision, ask the consultant to confirm or change it; save a confirmed decision with the matching `set_rfp_*` tool and advance the stage with `update_rfp`; never save an unconfirmed decision.
+- **R5** `ask_clarification` only when a choice forks the work (several matching clients, several renewal dates, unclear plan year); otherwise ask in the answer with options from the data.
+- **R6** Grounding: every figure, carrier, plan, date and name comes from a tool result in the conversation; no gap is filled from general knowledge of carriers, benchmarks, market trends or rates; missing data is said and asked for.
+- **R7** Names, never ids, in answers; ids for tool calls only.
+- **R8** Money is annual and in USD unless the data says otherwise; the plan year and renewal increase go beside every premium.
+- **R9** Rows flagged deleted are not mentioned.
+- **R10** Short sections; tables for plans, premiums, carriers, requirements and milestones; each reply only what the stage needs.
+- **R11** The narrative sections (executive summary, client background, scope statement, instructions to bidders, evaluation criteria) are written from the saved record and the data, in the consultant's voice, and saved with `update_rfp`.
+- **R12** `export_rfp_package` only after the stage-7 review is confirmed; then say what the package holds and that it downloads from the chat.
+- **R13** Scope: RFPs over the Intellify data only; anything else gets one sentence saying what it does instead.
+- **R14** A tool error is its own to handle: read it, fix the call, retry; report a problem only when the consultant must act (for example, the Intellify RFP API sample is not loaded).
+
+> Implementation note: `mastra/agents/rfp.agent.ts` (`rfpAgent`, registered as `rfp`); the shipped text without `## Tools` is `RFP_PROMPT` in `agents/system-prompts.ts` and `SHIPPED.rfp` in `shipped-agent-prompts.ts`; `## Tools` lines come from `mastra/tool-section.ts`; skills from `catalogSkills('rfp')` through `mastra/skill-sources.ts`; tools in `mastra/tools/rfp.tools.ts`.
+
 ---
 
 ## 3. Tools
 
-All tools belong to the `assistant`. Every tool returns a JSON object; **tools never throw to the model** — failures come back as `{ error: string }` so the model can react. Data tools are scoped by the session's dataset names on the requestContext (4.2).
+All tools belong to the `assistant` (3.1-3.9) or to the RFP Builder (3.10); `ask_clarification` is shared by both. Every tool returns a JSON object; **tools never throw to the model** — failures come back as `{ error: string }` so the model can react. Data tools are scoped by the session's dataset names on the requestContext (4.2).
 
 **Entity/datasource resolution rules** (shared):
 
@@ -694,6 +742,41 @@ Because the assistant (and designer) are bound to the session workspace, the fra
 The assistant's on-demand skills (7.3) are loaded by the framework's skill tools (`skill`, `skill_search`, `skill_read`), which Mastra adds because the agent declares `skills` (ADR-0025). They are framework tools, like the workspace tools (3.8): the app doesn't define them, and `## Tools` doesn't list them. The model sees the skills in the framework's `<available_skills>` system message and loads one with the skill tool, which returns its instructions; its reference files are read through the framework as well. The app has no `read_file` and no `run_skill_script` tool: no built-in skill ships a script, and a skill's `scripts/` is never run.
 
 > Implementation note: in Mastra 1.66 the tools are `skill({ name })` (loads a skill's instructions), `skill_search({ query, skillNames?, topK? })` and `skill_read({ skillName, path, startLine?, endLine? })` (reads a skill's file). Mastra adds two system messages: the `<available_skills>` list (each `<skill>` with `<name>`, `<description>`, `<location>inline/<name>/SKILL.md</location>` and `<source>local</source>`) and a usage note telling the model to call the `skill` tool with the skill's name and to read its files with `skill_read`. A skill's files are served at `references/<key>`: an in-app skill's `references/<file name>` is keyed `<file name>`, so the path its body names is the path `skill_read` reads; a folder skill's `reference/` files are served under `references/` too, and its body's `reference/` mentions are pointed there (`mastra/assistant-skills.ts`).
+
+### 3.10 RFP tools
+
+The RFP Builder's tools (2.8, ADR-0028), in the order it is given them. They call the Intellify RFP API ([api.md](api.md) 2.16) over HTTP; none of them runs SQL. The description's first sentence (below) is what the prompt's generated `## Tools` line shows; every input is `.describe()`d.
+
+**Shared behaviour.**
+
+- **Target.** Each call resolves `{ baseUrl, headers }` from the session: the first dataset in `datasets` (4.2) bound to a datasource of kind `rest`, then the tool-services bridge's `restTarget(datasourceId)` (secrets resolved server-side; headers built as the REST connector builds them, so the key goes in `X-API-Key`). Nothing is read from the environment or settings. With no REST datasource in scope: `{ error: 'No Intellify API datasource is bound to this session. Load the "Intellify RFP API" sample in Settings → Testing Data and start the chat from the RFP Builder card.' }`.
+- **Call.** `fetch` with a **20 s** timeout and `Accept: application/json`. A 2xx returns the JSON body (shaped as the Output column says). Any other status returns `{ error: '<status> <code>: <message>[; <details>]' }` from the API's error shape; a network failure or timeout returns `{ error: 'Intellify API unreachable at <baseUrl>: <cause>' }`. **Nothing throws to the model.**
+- **Scalar inputs.** Every input is a string, number or boolean (retrospective 1.13.9-12: models serialize array parameters wrongly now and then). A list input is one string with one row per line and ` | ` between fields. The parser trims each line, drops a leading `-`, `*` or `1.` marker, ignores blank lines, and checks the field count before any HTTP call: a bad row returns `{ error: 'Row <n> "<text>": expected <k> fields separated by " | "' }`. `-` in an optional field means empty.
+
+| Tool | Description (first sentence) | Input | Calls | Output |
+|---|---|---|---|---|
+| `list_clients` | Find Intellify clients by name or client code. | `query?: string` (name or code fragment) | `GET /v1/clients?q=&per_page=50` | `{ clients: [...] }` (client rows) |
+| `get_client_renewals` | The client's lines of coverage with their carriers, policy numbers, renewal effective dates and kick-off dates. | `clientOneCode: string` | `GET /v1/clients/{c}/renewals` | the response |
+| `get_client_program` | The client's current program: every plan design per line with carrier, funding, plan type, eligibility status, census mapping and the latest financials. | `clientOneCode`, `line?: string` | `GET /v1/clients/{c}/program?line=` | the response |
+| `get_plan_design` | One plan design in full: the complete financial document, eligibility versions, census plans mapped to it and alternate plans. | `clientOneCode`, `planDesignId` | `GET /v1/clients/{c}/plans/{id}` | the response |
+| `get_client_financials` | Premiums, rates by tier, enrolment, contributions and fees per coverage, with totals. | `clientOneCode`, `line?` | `GET /v1/clients/{c}/financials?line=` | `{ planYear, columns, rows, totals }`; the rows also become a chat data record (5.1) |
+| `get_client_census` | The client's census for a plan year: headcount, eligibility, enrolment, demographics, states, tiers and the census plans with their mapping. | `clientOneCode`, `year?: string` | `GET /v1/clients/{c}/census?year=` | the response |
+| `get_client_commercials` | Contribution strategy periods, carrier credits, ancillary fees, the national survey answers and point solutions. | `clientOneCode` | `GET /v1/clients/{c}/commercials` | the response |
+| `get_marketing_history` | Past wizard runs (marketing, renewal, benchmark, new plan) and the alternate plans they produced. | `clientOneCode` | `GET /v1/clients/{c}/wizards` | the response |
+| `list_reference_data` | The reference lists: lines of coverage (products), funding types or plan types. | `kind: 'products' \| 'funding-types' \| 'plan-types'`, `line?` | the matching collection | `{ items: [...] }` |
+| `list_carriers` | Carriers and the lines they write; with a client, which lines they are incumbent on and their final credits. | `line?`, `clientOneCode?` | `GET /v1/carriers?line=&clientOneCode=` | `{ carriers: [...] }` |
+| `create_rfp` | Create a draft RFP record for a client and plan year. | `clientOneCode`, `planYear: number`, `title?` | `POST /v1/rfps` with `createdBy` from `rfp-created-by` (4.2) | `Rfp`; sets `turn-rfp.rfpId` |
+| `list_rfps` | Existing RFP records, newest first. | `clientOneCode?`, `status?` | `GET /v1/rfps?clientOneCode=&status=` (no `createdBy`, so shared drafts show; own records first) | `{ rfps: RfpSummary[] }` |
+| `get_rfp` | One RFP record with its lines, carriers, requirements, timeline and narrative sections. | `rfpId` | `GET /v1/rfps/{id}` | `Rfp`; sets `turn-rfp.rfpId` |
+| `update_rfp` | Change an RFP's title, status, effective date, completed stage, or one narrative section. | `rfpId`, `title?`, `status?: 'draft' \| 'ready' \| 'issued' \| 'closed'`, `effectiveDate?`, `stage?: 0..7`, `sectionName?: 'executiveSummary' \| 'clientBackground' \| 'scopeStatement' \| 'instructionsToBidders' \| 'evaluationCriteria' \| 'notes'`, `sectionText?` | `PATCH /v1/rfps/{id}` (one section per call) | `Rfp` |
+| `set_rfp_lines` | Replace the lines of coverage in scope, one per line of text. | `rfpId`, `lines: string`, rows `<line> \| as-is\|alternate \| <plan design ids, comma-separated, or all> \| <alt funding or -> \| <alt plan type or -> \| <notes>` | `PUT /v1/rfps/{id}/lines` | `Rfp` |
+| `set_rfp_carriers` | Replace the carriers invited, one per line of text. | `rfpId`, `carriers: string`, rows `<carrier> \| <lines, comma-separated> \| incumbent yes\|no \| <email or -> \| <notes>` | `PUT /v1/rfps/{id}/carriers` | `Rfp` |
+| `set_rfp_requirements` | Replace the requirements and questionnaire, one per line of text. | `rfpId`, `requirements: string`, rows `<section> \| <question> \| required yes\|no \| text\|yes_no\|number\|table\|attachment` | `PUT /v1/rfps/{id}/requirements` | `Rfp` |
+| `set_rfp_timeline` | Replace the timeline, one milestone per line of text. | `rfpId`, `milestones: string`, rows `<milestone> \| <YYYY-MM-DD> \| <owner> \| <notes>` | `PUT /v1/rfps/{id}/timeline` | `Rfp` |
+| `export_rfp_package` | Assemble the RFP package (Markdown and PDF document, CSV exhibits) and make it downloadable from this chat. | `rfpId` | bridge `exportRfpPackage(sessionId, datasourceId, rfpId)`: `GET /v1/rfps/{id}/package.zip`, unzipped into the session workspace `rfp/<rfpId>/` ([data-model.md](data-model.md) 4.1) | `{ rfpId, title, files: [{ name, bytes }], exportedAt }` |
+| `ask_clarification` | shared (3.5) | as 3.5 | none | as 3.5 |
+
+**Tool-services bridge.** Besides the dataset services (1.2), `mastra/tool-services.ts` carries two methods for these tools, installed by `SessionsService.onModuleInit`: `restTarget(datasourceId): Promise<{ baseUrl: string; headers: Record<string, string> }>` and `exportRfpPackage(sessionId, datasourceId, rfpId): Promise<RfpPackageResult>` (implemented in `modules/rfp-packages/rfp-packages.service.ts`; re-exporting overwrites the folder).
 
 ---
 
@@ -772,6 +855,16 @@ No budget beyond the 4,000-character limit on instructions (agents-evals R43). I
 
 The eval harness (8.5) sends only Block 1's dataset half (no visuals lines) plus Block 3; a case with `agentTools` gets its selection's hint (2.1), and its tool-only synthesis pass (5.5) runs with the case's requestContext.
 
+**Block R1 — RFP orientation** (a session bound to the RFP Builder, 2.8, and its eval cases). For the `rfp` agent Block 1 is replaced by this block, and Blocks 2-5 are not sent:
+
+```
+Intellify RFP API for this session: datasource <datasource id> ("<datasource name>").
+Active RFP in this session: <rfpId> — "<title>" for <client name> (<oneCode>), plan year <planYear>, status <status>, last completed stage <stage>.   ← or "No RFP is active in this session yet: start at stage 1."
+Today is <YYYY-MM-DD>.
+```
+
+The datasource is the REST datasource the tools resolve (3.10); the active RFP is the session's `rfpId` ([data-model.md](data-model.md) 3.4), read from the API when the turn starts.
+
 ### 4.2 requestContext keys
 
 | Key | Set by | Value | Read by |
@@ -786,6 +879,10 @@ The eval harness (8.5) sends only Block 1's dataset half (no visuals lines) plus
 | `agent-overrides` | session-scoped assistant calls, only for a session bound to a user agent that still exists and whose Live version (for a preview session, its draft) sets an override | `{ model?: string; reasoningEffort?: 'low'\|'medium'\|'high' }` from the Live version | the `assistant`'s model function (1.3); the turn's provider options (1.4) |
 | `agent-skills` | session-scoped assistant calls, only for a session bound to a user agent that still exists and whose Live version names skills (for a preview session, its draft) | the agent's skills as `{ id, name, description, body, files }`: the `liveSkills` copies, or for a preview the current skills the draft links | the `assistant`'s `skills` function (7.3), which gives them to the framework's skill tools (3.9) |
 | `agent-tools` | session-scoped assistant calls, only for a session bound to a user agent that still exists and whose Live version (for a preview session, its draft) has a `tools` list; its value is computed per call as the stored `tools` plus the optional tool groups its skills' bodies link (copies in `agent-skills`), and the assistant treats a selection of all three as no selection; eval cases with `agentTools` (8.1) | the effective optional tools, e.g. `['sample_rows']` (direct links and skill links, 2.1) | the `assistant`'s tools and instructions functions (2.1); Block 1 (4.1) |
+| `rfp-created-by` | calls of the `rfp` agent: chat turns (the current user's owner key); `rfp` eval runs (`eval:<jobId>`) | the creator recorded on new RFP records | `create_rfp` (3.10); eval clean-up (8.1) |
+| `turn-rfp` | calls of the `rfp` agent (a fresh holder per turn) | **live** `{ rfpId? }` holder, filled when `create_rfp` or `get_rfp` succeeds | the orchestrator, which stores it on the session as `rfpId` after the turn (5.1) |
+
+The `rfp` agent's calls also carry `datasets`, `session-id`, `turn-question` and `session-workspace-id` (the export tool writes through the bridge into the session workspace); none of the `agent-*` keys, `active-visual-id`, `turn-data-records` or `knowledge-used`.
 
 A fresh context object is created per call, so nothing leaks between turns or sessions.
 
@@ -821,6 +918,14 @@ User prompts are trimmed; an empty prompt is a 400 `message is required`. When t
 Wire format of these events: [api.md](api.md). Errors thrown during the stream (other than the turn's own abort) propagate and are sent as an `error` event by the controller.
 
 **Data record** (from a `run_readonly_sql` / `sample_rows` result; shape in [data-model.md](data-model.md)): `input` = the corrected SQL when repaired, else the SQL, else the entity key; failed calls keep `{tool, input, error, rationale?}`; successful ones keep `columns` (declared, else first row's keys), at most **200** rows, `rowCount` = rows returned, `truncated` when the tool flagged it or rows > 200, `rationale`, and the tool's `warnings`.
+
+**Per-agent turn (ADR-0028).** The turn runs the session's agent: the `assistant`, or the built-in agent named by the session's `agentKey` ([data-model.md](data-model.md) 3.4). For `agentKey: 'rfp'` the steps above change as follows; an assistant turn is unchanged.
+
+- Step 2: the context is Block R1 only (4.1) and the requestContext carries the `rfp` keys (4.2); no metrics, knowledge, verified-query or agent-instructions block.
+- Step 3: clarification interception is kept. A `tool-result` that carries `columns` and `rows` (`get_client_financials`) becomes a data record like a SQL result (`{ tool, input: <client and line summary>, columns, rows (≤ 200), rowCount }`; SQL records are unchanged). A `tool-result` of `export_rfp_package` emits the `rfp-package` event ([api.md](api.md) 3.1) and is stored as the answer's `rfpPackage`. Every other RFP tool result emits `tool-result { tool, input: <its first string argument>, error? }`.
+- Step 5: tool-only synthesis is kept.
+- Steps 6 and 7: the **grounding guard (5.6), careful mode (5.8) and the result guards (5.4) apply only to the `assistant`**; an `rfp` turn has no SQL to guard.
+- After the turn the orchestrator stores `turn-rfp.rfpId`, when set, on the session as `rfpId`.
 
 **Non-streamed turn** (`POST /sessions/:id/messages`): a single generate with the same options; persists only `{content, reasoning?, knowledge?}` — no data records, no clarification interception, no synthesis, grounding guard or cross-check.
 
@@ -1227,8 +1332,49 @@ Skills, declared in code (`AGENT_SKILLS` for on-demand, `HARNESS_SKILLS` for har
 | `assistant` | `curated-knowledge` (how to apply Block 3, 4.1), and in a session bound to a user agent that agent's in-app skills (7.3) | `deep-analysis`: one phase file per deep-analysis call (2.7). |
 | `visualization` (designer) | none (it runs without tools) | `interactive-visuals` (7.2): the router body of `SKILL.md`, plus `reference/spec-mode.md` on spec calls or `reference/freeform.md` on freeform calls |
 | `sql-fixer`, `sql-verifier`, `knowledge-bootstrap`, `assistant-eval-judge` | none | none |
+| `rfp` (RFP Builder, 2.8) | `rfp-process` (below) | none |
 
-`curated-knowledge` is the only built-in skill on demand (ADR-0020), so every assistant call carries the framework's skill catalog and skill tools. Two other on-demand skills were measured and cut on 2026-10-13. A visuals skill would have cost a catalog plus usage note of about 1,045 characters on every turn to save 427. A dialects skill had no existing guidance to move.
+`curated-knowledge` is the assistant's only built-in skill on demand (ADR-0020), so every assistant call carries the framework's skill catalog and skill tools. Two other on-demand skills were measured and cut on 2026-10-13. A visuals skill would have cost a catalog plus usage note of about 1,045 characters on every turn to save 427. A dialects skill had no existing guidance to move.
+
+**The `rfp-process` skill** (`mastra/skills/rfp-process/`, `AGENT_SKILLS.rfp`): the RFP Builder's seven-stage process (2.8 R2-R4), loaded on demand through the skill tool (3.9), with one reference file per stage read with `skill_read`. Its `SKILL.md`, verbatim:
+
+```
+---
+name: rfp-process
+description: Use when building or resuming a carrier RFP for a client over the Intellify data: the seven stages, what each stage reads, decides and saves, and how the package is assembled. Read the stage's reference file before starting it.
+---
+Building a carrier RFP runs through seven stages, in order. Before each
+stage, read its reference file; it says which tools to call, what to show,
+which decision to ask for, and which tool saves it.
+
+| Stage | Decides | Reference |
+|---|---|---|
+| 1. Client and renewal | which client, which plan year and renewal | reference/1-client-and-renewal.md |
+| 2. Current program | what is in place today, per line | reference/2-current-program.md |
+| 3. What to market | lines in scope, as-is or alternates | reference/3-market-scope.md |
+| 4. Carriers to invite | the bid list and incumbents | reference/4-carriers.md |
+| 5. Requirements and questionnaire | what bidders must answer | reference/5-requirements.md |
+| 6. Timeline | milestones from kick-off to effective date | reference/6-timeline.md |
+| 7. Assemble and review | the narrative sections and the package | reference/7-package.md |
+
+Rules that hold in every stage:
+- Resume from the stage after the one the session context says was
+  completed; re-read that RFP with get_rfp first.
+- Saving is explicit: set_rfp_* replaces the whole list it names, so send
+  the complete list every time, and update_rfp(stage) marks the stage done.
+- Line-per-row inputs use " | " between fields, exactly as each reference
+  shows; a tool answers with a validation error naming the bad row.
+```
+
+Reference files (each 40-80 lines; a rebuild may tune the wording but keeps the tools, decision, row format and save step of each):
+
+- `reference/1-client-and-renewal.md`: `list_clients` with the consultant's words, then `get_client_renewals`; show the client, headcount, latest census year and a table of lines (carrier, effective date, kick-off date, status, premium, increase); the plan year is the renewal's effective year; decision: client and plan year; save with `create_rfp` (or offer to resume a draft found with `list_rfps` and `get_rfp`), then `update_rfp(stage=1)`.
+- `reference/2-current-program.md`: `get_client_program`, `get_client_financials`, `get_client_census` (latest year), `get_client_commercials`; show per line the plans (carrier, funding, type, enrolled, annual premium, increase), census headline numbers, participation, employer contribution, credits expiring before the effective date, unmapped census plans as a data-quality note; ask only "anything missing or wrong?"; save `clientBackground` with `update_rfp`, then `update_rfp(stage=2)`.
+- `reference/3-market-scope.md`: `get_marketing_history`, `list_reference_data` (funding types, plan types); propose lines to market from what the data shows (renewal increases above the client's average, alternates from past wizards), never assuming what the data doesn't say; row format `<line> | as-is|alternate | <plan design ids, comma-separated, or all> | <alternate funding or -> | <alternate plan type or -> | <notes>`; save with `set_rfp_lines`, write `scopeStatement`, `update_rfp(stage=3)`.
+- `reference/4-carriers.md`: `list_carriers(line, clientOneCode)` per line in scope; propose incumbents plus carriers writing the line; flag an incumbent whose final credits expire at renewal; row format `<carrier name> | <lines, comma-separated> | incumbent yes|no | <contact email or -> | <notes>`; `set_rfp_carriers`, `update_rfp(stage=4)`.
+- `reference/5-requirements.md`: a standard questionnaire by section (Company and financials; Network and access; Plan design match; Pricing and rate guarantees; Funding and stop-loss, for self-funded lines; Administration and service; Implementation; Data and reporting; Point solutions and wellness; Legal and compliance), 3-6 questions each tailored to the lines and funding in scope, plus the consultant's client-specific asks; row format `<section> | <question> | required yes|no | text|yes_no|number|table|attachment`; `set_rfp_requirements`, `update_rfp(stage=5)`.
+- `reference/6-timeline.md`: default milestones from the effective date E and kick-off date K (K = E − kick-off days, else E − 120 days): RFP issued K; intent to bid K+5; questions due K+10; answers published K+14; proposals due K+30; clarifications K+37; analysis and shortlist K+45; finalist presentations K+55; best-and-final K+62; decision K+70; carrier notification K+72; implementation kick-off K+80; open enrollment materials E−45; open enrollment E−30 to E−16; effective date E; owners Mercer consultant, client HR or carriers; no date before the session context's today unless the consultant says so; row format `<milestone> | <YYYY-MM-DD> | <owner> | <notes>`; `set_rfp_timeline`, `update_rfp(stage=6)`.
+- `reference/7-package.md`: `get_rfp`; write and save `executiveSummary`, `instructionsToBidders` and `evaluationCriteria` from templates filled from the record; review checklist (every line has plans or an explicit "all", at least two carriers per line, every section has questions, the timeline ends on the effective date); `update_rfp` with `status='ready'` and `stage=7`; then `export_rfp_package` and what to say afterwards.
 
 ### 7.5 The assistant's skill catalog
 
@@ -1238,12 +1384,12 @@ The app renders no Skills section in the assistant's prompt (ADR-0025). The fram
 
 ## 8. Evals
 
-Behaviour of the Agents → Evals UI (set list, question selection, runs list, report download) is owned by [agents-evals](../capabilities/agents-evals/spec.md); endpoints by [api.md](api.md). Only the `assistant` has evals; every other agent reports none (`Agent "<key>" has no evals to run`).
+Behaviour of the Agents → Evals UI (set list, question selection, runs list, report download) is owned by [agents-evals](../capabilities/agents-evals/spec.md); endpoints by [api.md](api.md). Only the `assistant` and the `rfp` agent (RFP Builder) have evals; every other agent reports none (`Agent "<key>" has no evals to run`).
 
 ### 8.1 Case and set format
 
 ```
-EvalSet  = { id, name, description, fixtureId, cases: EvalCase[] }
+EvalSet  = { id, name, description, fixtureId, agentKey?, cases: EvalCase[] }   agentKey: the registry key the set runs on (default `assistant`)
 EvalCase = {
   id: string                 unique across all sets
   question: string           sent verbatim as the user message
@@ -1265,6 +1411,22 @@ Built-in check types used by the cases (each exposes an id, name and a descripti
 | `world-cup` | World Cup | `world-cup` (PostgreSQL) | 12: `champion-2022`, `final-score-2018`, `top-scorer-2022`, `shootouts`, `biggest-venue` (distinctRows), `schema-discovery`, `ambiguous-best-team` (judge), `possession-vs-result` (judge), `out-of-scope` (judge), `visual-request` (judge), `no-clarification-best-team` (judge, `agentTools` without `ask_clarification`), `no-visuals-chart-request` (judge, `agentTools` without `visuals`) |
 | `world-cup-rest` | World Cup (REST API) | `world-cup-rest` (REST) | the same 12 with ids prefixed `rest-` and `expectedSql` ported to SQLite over `api.world_cup.*`; a base case with `expectedSql` but no port is a startup error |
 | `formula-1` | Formula 1 | `formula-1` (PostgreSQL) | `f1-champion-2023`, `f1-british-gp-2023`, `f1-most-race-wins`, `f1-most-titles-tie`, `f1-monaco-2024-podium`, `f1-schema-discovery`, `f1-ambiguous-dominant-driver` (judge), `f1-pole-to-win-2023` (judge), `f1-out-of-scope-motogp` (judge), `f1-visual-request` (judge) |
+| `rfp` | RFP Builder | `intellify-api` (REST, self-registering) | 8, `agentKey: 'rfp'`: listed below |
+
+**The `rfp` set** runs on the RFP Builder (2.8). Its cases have no `expectedSql` (the agent runs no SQL). Each case gets Block R1 (4.1) instead of Block 1's dataset half, and `rfp-created-by = eval:<jobId>`; after the run the harness deletes the run's drafts with `DELETE /v1/rfps?createdBy=eval:<jobId>` through the same `restTarget` (3.10). Expected strings are read from the seeded API with the sample loaded before the ids are frozen.
+
+| Id | Question | Checks |
+|---|---|---|
+| `rfp-skill-first` | "Start an RFP for Orchard Manufacturing" | `calledTool('skill')`, `toolOrder(['skill','list_clients'])` (or `get_client_renewals` after it), `noToolErrors`; judge: names the client, its code `IC100100` and its lines with renewal dates from the data, and proposes the plan year or asks to confirm it, without inventing carriers or figures |
+| `rfp-program-review` | "Show me Orchard Manufacturing's current medical program with this year's premiums and the renewal increase" | `calledTool('get_client_program')` (or `get_client_financials`), `includes('<carrier from the seed>')`, `matches(/\$?[\d,]+(\.\d+)?/)`, `noToolErrors`; judge: a table per plan with carrier, funding, enrolled, annual premium and increase; plan year 2026 named; no benchmark claims |
+| `rfp-create-draft` | "Create the RFP for Maple Ridge Hospitality for the 2027 plan year, medical and dental only" | `calledTool('create_rfp')`, `calledTool('set_rfp_lines')`, `didNotCall('export_rfp_package')`, `noToolErrors`; judge: the lines saved are exactly Medical and Dental, and the answer reports the saved draft and asks what comes next or moves to stage 2 |
+| `rfp-carriers-dental` | "Which carriers could we invite for dental for Maple Ridge Hospitality, and who is the incumbent?" | `calledTool('list_carriers')`, `includes('Delta Dental')`, `noToolErrors`; judge: names only carriers the tool returned and marks the incumbent as the data says |
+| `rfp-resume-drafts` | "List my draft RFPs" | `calledTool('list_rfps')`, `noToolErrors`; judge: lists what the tool returned (possibly none) and offers to resume one; no invented RFPs |
+| `rfp-bad-rows-recovers` | "Set the timeline for RFP <id> to issue on 2026-11-02, proposals due 2026-12-01 and decision 2027-01-15" (the run's setup creates a draft and injects its id) | `calledTool('set_rfp_timeline')`, `noToolErrors` (the row format must be right first time or repaired silently); judge: the three milestones with those dates are reported as saved |
+| `rfp-out-of-scope` | "Who won the 2022 World Cup?" | `noToolErrors`, `didNotCall('list_clients')`; judge: declines in one sentence, says it builds carrier RFPs over the Intellify data, and does not answer the question |
+| `rfp-no-sql` | "Run SELECT count(*) FROM intellify.clients and tell me the number" | `noToolErrors`; judge: explains it has no SQL and offers `list_clients`, or answers with the client count from a tool call; never claims to have run SQL |
+
+A change to the RFP Builder's prompt, skill or tools passes when every case of this set passes over 3 runs on the branch; the base run is the `world-cup` set, which must stay at 100%.
 
 Representative cases (pattern every set follows):
 
@@ -1310,10 +1472,10 @@ A case **passes** when it has at least one check and every check scored 1. Each 
 ### 8.5 Other entry points
 
 - **CLI** — same suite over `EVAL_DATASETS` (comma-separated saved dataset names), booting the whole backend without HTTP. Exactly one of these selects the questions:
-  - `EVAL_SET`: a set id (`world-cup`, `world-cup-rest`, `formula-1`); runs every case of that set.
+  - `EVAL_SET`: a set id (`world-cup`, `world-cup-rest`, `formula-1`, `rfp`); runs every case of that set.
   - `EVAL_CASES`: comma-separated case ids, which must all belong to one set's fixture. The data preflight (8.2) refuses a mix.
 
-  With neither, both, an unknown set id or an unknown case id, it runs nothing, makes no model call, prints the error and exits 1. The errors are `Set EVAL_SET to one question set (world-cup, world-cup-rest, formula-1) or EVAL_CASES to comma-separated case ids`, `Set EVAL_SET or EVAL_CASES, not both`, `Unknown question set "<id>" (known: …)` and `Unknown eval case(s): <ids>`. It prints `PASS|FAIL <id> (<ms>)` per case and `<passed>/<total> questions passed`, and exits 1 unless all pass.
+  With neither, both, an unknown set id or an unknown case id, it runs nothing, makes no model call, prints the error and exits 1. The errors are `Set EVAL_SET to one question set (world-cup, world-cup-rest, formula-1, rfp) or EVAL_CASES to comma-separated case ids`, `Set EVAL_SET or EVAL_CASES, not both`, `Unknown question set "<id>" (known: …)` and `Unknown eval case(s): <ids>`. It prints `PASS|FAIL <id> (<ms>)` per case and `<passed>/<total> questions passed`, and exits 1 unless all pass.
 - **Golden-set harness** — a separate developer harness over a JSON golden set (`{name, question, dataset, expectedSql, placeholder?, notes?}`) that runs each question as a **real streamed chat turn** in a throwaway session (300 s timeout) and compares the answer's last successful SQL result with `expectedSql` using 5.9 (strict width). Verdicts `PASS|FAIL|ERROR|SKIP`.
 
 > Implementation note: `mastra/evals/assistant.evals.ts` (`runEvals` from `@mastra/core/evals`, checks from `@mastra/evals/checks`), `result-set-check.ts`, `assistant-eval-datasets.ts`, `run-assistant-evals.ts` (`npm run evals:assistant`), `modules/agents/eval-runs.service.ts`, `eval-regression.ts`, `eval-report.ts`; golden set `backend/eval/golden-set.json` via `npm run eval` (`scripts/run-eval.ts`).
@@ -1500,3 +1662,62 @@ Curated knowledge:
 ```
 
 > Implementation note (file map): agents in `backend/src/mastra/agents/*.agent.ts`; tools in `mastra/tools/`; context builders `mastra/context-blocks.ts`; step budget `mastra/agent-constants.ts`; bridges `mastra/model-resolver.ts`, `mastra/tool-services.ts`; tuning `mastra/model-compat.ts`; storage `mastra/storage.ts`; workspaces `mastra/session-workspaces.ts`; skills `mastra/app-skills.ts` and `mastra/skills/<name>/`; orchestration `modules/sessions/sessions.service.ts`, `turn-data.ts`, `result-guards.ts`, `result-compare.ts`, `chart-heuristic.ts`; designer pipeline `modules/sessions/visualization.service.ts`, `visual-spec.ts`, `visual-runtime.ts`, `visualization-document.ts`; knowledge bootstrap `modules/knowledge/knowledge.service.ts`; deep analysis `modules/deep-analysis/`; catalogue and eval runs `modules/agents/`; model settings `modules/llm/`.
+
+## Appendix C — `rfp` (RFP Builder) system prompt (shipped wording)
+
+The shipped text, `RFP_PROMPT`, which is also the editable text and what Reset restores (2.8). Lines are joined with `\n`. A rebuild may tune the wording but must keep every rule R1-R14, the opening phrase `You are the RFP Builder` and the `## Working rules` heading.
+
+```
+You are the RFP Builder — a Mercer employee-benefits consultant's working
+partner for one job: building a carrier request for proposal (RFP) for one
+client, stage by stage, over the Intellify data reached through its API.
+You never query a database. Every fact you state comes from a tool result
+in this conversation, and every decision the consultant makes is saved
+through a tool, so the RFP can be resumed in a later session.
+
+## Working rules
+Process:
+- Load the "rfp-process" skill before your first answer in a session, and
+  read the stage's reference file before you start that stage. The seven
+  stages run in order: 1 client and renewal, 2 current program, 3 what to
+  market, 4 carriers to invite, 5 requirements and questionnaire,
+  6 timeline, 7 assemble and review. The session context names the active
+  RFP and the stage it reached; resume from the next stage.
+- One stage per exchange: show what the data says, propose the decision,
+  and ask the consultant to confirm or change it. Save a confirmed decision
+  with the matching set_rfp_* tool, then advance the stage with update_rfp,
+  before moving on. Never save a decision the consultant has not confirmed.
+- Use ask_clarification only when a choice forks the work: several clients
+  match a name, several lines renew at different dates, or the plan year is
+  unclear. Otherwise ask in your answer, with the options from the data.
+
+Grounding:
+- Every figure, carrier, plan, date and name comes from a tool result in
+  this conversation. Never fill a gap from general knowledge about carriers,
+  benchmarks, market trends or rates; when the data lacks something, say so
+  and ask the consultant for it.
+- Show names, never ids: plan names and types, carrier names, lines of
+  coverage. Keep ids for tool calls only.
+- Money is annual and in USD unless the data says otherwise. Show the plan
+  year and the renewal increase beside every premium.
+- Rows flagged deleted are not in the data you receive; do not mention them.
+
+Writing:
+- Answer in short sections. Use a table for plans, premiums, carriers,
+  requirements and milestones. Keep each reply to what the stage needs.
+- You write the RFP's narrative sections (executive summary, client
+  background, scope statement, instructions to bidders, evaluation
+  criteria) from the saved record and the data, in the consultant's voice,
+  and save each with update_rfp so the exported document carries them.
+- Call export_rfp_package only after the stage-7 review is confirmed. Then
+  say what the package holds and that it can be downloaded from this chat.
+
+Scope and errors:
+- You build RFPs over the Intellify data only. For anything else, say in
+  one sentence what you do instead, and stay on the RFP.
+- A tool error is yours to handle: read it, fix the call and retry. Report a
+  problem only when the consultant must act, for example when the Intellify
+  API sample is not loaded.
+```
+
+The served prompt is not this text alone: a `## Tools` section is generated from the agent's tools (one line per tool, in the order of 3.10, by the rule of 2.8) and inserted, after a blank line, before the line `## Working rules`. The descriptions those lines quote are in 3.10.

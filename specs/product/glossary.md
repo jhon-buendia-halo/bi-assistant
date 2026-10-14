@@ -6,11 +6,11 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Active visual.** The visual currently open in the right-hand panel. The assistant tailors it by default when the user asks for a change. See *Visual*.
 
-**Agent.** A configured LLM role with its own instructions, optional tools and optional memory. The product ships six built-in agents (the assistant, the visual designer, the SQL fixer, the SQL verifier, the knowledge bootstrap agent and the eval judge), and users can build their own (*user agent*). See [../system/agents.md](../system/agents.md). The *Agent Hub* lists them all.
+**Agent.** A configured LLM role with its own instructions, optional tools and optional memory. The product ships seven built-in agents (the assistant, the *RFP Builder*, the visual designer, the SQL fixer, the SQL verifier, the knowledge bootstrap agent and the eval judge), and users can build their own (*user agent*). See [../system/agents.md](../system/agents.md). The *Agent Hub* lists them all.
 
 **Agent error.** In *org server mode*, a chat turn in a session started from a *user agent* that ended in an error instead of an answer. A stopped turn, a refused request and a preview turn don't count. The admin Overview counts agents with errors in the last 7 days. See [../capabilities/admin/spec.md](../capabilities/admin/spec.md) R40.
 
-**Agent Hub.** The Agents screen. It shows every agent as a card, grouped in sections (Official, Mine and System, pinned cards first), with a search over name and description, filter pills (All, Pinned, Official and Mine) and a *pin* on each card. A card opens the agent's detail view. See [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md).
+**Agent Hub.** The Agents screen. It shows every agent as a card, grouped in sections (Official, which holds the *Official agents*: the assistant and the *RFP Builder*; Mine; and System; pinned cards first), with a search over name and description, filter pills (All, Pinned, Official and Mine) and a *pin* on each card. A card opens the agent's detail view. See [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md).
 
 **Angle.** One sub-question of a *deep analysis*. A plan has between 3 and 5 angles (hard cap 5). Each is investigated on its own.
 
@@ -26,7 +26,11 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Careful mode.** An opt-in per-turn setting in the chat. After the assistant answers, a second agent (the *SQL verifier*) re-derives the SQL independently, runs it, and compares its result set with the answer's. The answer gets an agree, disagree or error badge. Slower per answer. See *Cross-check*.
 
+**Carrier.** An insurer that writes one or more *lines of coverage*. A carrier is the *incumbent* on a client's line when it carries the client's live policy for that line. The *RFP Builder* proposes the carriers to invite to bid on an *RFP*. See [../capabilities/rfp/spec.md](../capabilities/rfp/spec.md).
+
 **Catalog.** The top level of an *entity* name. A Databricks Unity Catalog catalog; the database name on PostgreSQL; `api` on a REST API datasource. See *Entity*.
+
+**Census.** A client's employee data for one plan year: headcount, eligible and enrolled employees, average age and salary, gender split, employees by state, enrolment by coverage tier and by employee class. The census names its own plans, which are mapped to the client's *plan designs*. It is the first *exhibit* of an *RFP package*.
 
 **Clarification.** A question the assistant asks the user, with 2 to 4 options, when interpretations diverge materially. The turn ends; the user's pick (or typed answer) arrives as the next message. At most one per user question.
 
@@ -66,6 +70,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Eval set.** A named group of eval cases bound to one *sample fixture* (World Cup on PostgreSQL, World Cup on REST, Formula 1).
 
+**Exhibit.** A table attached to an *RFP package* as a CSV file with a header row, computed from the Intellify data for the RFP's client and lines in scope: A census, B plan designs, C financials and D carriers.
+
 **Feedback.** The user's thumbs-up or thumbs-down on an answer. Thumbs-up also saves a *verified query*. Thumbs-down only marks the answer as wrong.
 
 **Fixture.** See *Sample fixture*.
@@ -82,6 +88,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **In-app skill.** A *skill* a user writes in the app (the skills library) instead of a folder: a name, a "Use when…" description, a body and reference files, stored in the database and private to its owner. It reaches a session only through a *user agent* whose instructions *link* it, and a *Live* agent runs on the copy taken when it was published. See [../system/data-model.md](../system/data-model.md) 3.10.1 and ADR-0022.
 
+**Intellify RFP API.** The REST API the app ships for the *RFP Builder*: read routes over the Intellify sample data and the store of *RFP* records, protected by an API key and described by an OpenAPI document. It starts with the app by default, on its own port, and can also run on its own. The app reaches it through the REST *datasource* that the "Intellify RFP API" *sample fixture* registers. See [../capabilities/rfp/spec.md](../capabilities/rfp/spec.md) and ADR-0027.
+
 **Interpretation.** A one-line, deterministic summary of how an answer was produced (which entities, what kind of query), built by the system at save time. Never model output.
 
 **Knowledge entry.** A curated piece of business knowledge the assistant treats as authoritative. Three kinds: `term` (glossary definition, with optional synonyms and entity bindings), `instruction` (a standing rule) and `default_filter`. Scoped globally, to a dataset or to a datasource. Only enabled entries reach the assistant, within a size budget per turn. Source is `user` or `mined` (drafted by the bootstrap agent, saved disabled for review). The UI says "Knowledge". Code and Jira call these *snippets*.
@@ -89,6 +97,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 **Knowledge bootstrap.** The action that has an agent draft up to 15 knowledge entries from a dataset's schema and a few sample rows. Drafts arrive as "Pending suggestions", disabled.
 
 **Knowledge used.** The list of knowledge entries that were actually included in the context of one answer, recorded when the context was built. It shows what the model was given, not what it applied.
+
+**Line of coverage.** A kind of employee benefit a client offers and a *carrier* insures, such as medical, dental, vision, life, disability, voluntary benefits or an employee assistance programme. The Intellify data has 12 (its *products*). Also called a *line*. An *RFP* markets one or more lines.
 
 **Link (skill or tool).** A reference written in an agent's instructions (or, for a tool, in an in-app skill's body) with `/` in the editor: shown as a chip, saved as `[[skill:<name>]]` or `[[tool:<name>]]`. The links decide which skills and optional tools the agent gets, and the model sees each as a plain mention (`the "x" tool`). See [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R81-R86 and ADR-0024.
 
@@ -110,7 +120,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Mined entry.** A *knowledge entry* with source `mined`.
 
-**Official agent.** The app's own *assistant*, shown in the agent hub as the Official agent. It is the only built-in agent that can start a chat.
+**Official agent.** One of the app's own agents that can start a chat: the *assistant* and the *RFP Builder*, shown in the agent hub's Official section. They are the only built-in agents that can start a chat.
 
 **Org server mode.** The app run by an organisation on its own server for many people: they sign in with Microsoft Entra ID, the directory is pushed by SCIM, *roles* decide what each person can do, and private data is kept per *owner*. Turned on by server configuration. Opposite of *local mode*. See [../capabilities/admin/spec.md](../capabilities/admin/spec.md).
 
@@ -122,6 +132,8 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Pin.** A user's mark on an agent, built-in or user-built, so it can be found quickly. Pins are stored locally and survive a restart.
 
+**Plan design.** One benefit plan a client offers on a *line of coverage*: its carrier, funding type (for example fully insured or self-funded), plan type and state, with the financials of its coverage (premiums, rates by tier, enrolment, contributions and fees).
+
 **Platform admin.** The *role* that holds every *permission*: manages users, roles, group mappings, policies, datasources, datasets and the LLM configuration, and sees the Admin area.
 
 **Preview chat.** A conversation in the agent editor's Details panel that runs a *user agent*'s saved *draft*. It is held in memory only, never listed with the sessions, and discarded with its memory when the editor closes.
@@ -130,9 +142,17 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Reasoning trail.** The "How I worked this out" list on an answer: one step per data-gathering call, with the assistant's plain-language rationale, the statement used and the outcome. The prose is the model's; ordering and outcomes come from what actually ran.
 
+**Renewal kick-off.** The date work on a line's renewal starts: the renewal effective date minus the policy's kick-off timing, a number of days. Intellify plans are taken to run by calendar year, so a renewal takes effect on 1 January after the plan year. An *RFP*'s timeline is built from the kick-off and the effective date.
+
 **Report.** The markdown output of a *deep analysis*: title, executive summary, findings by angle, data appendix.
 
 **Result guard.** A deterministic check on a query result that attaches a *warning*: a ratio of a sum to itself, a metric constant on every row, an unordered "top N".
+
+**RFP (request for proposal).** The document a benefits consultant sends *carriers* to invite bids on a client's *lines of coverage* at renewal. In the app, an RFP record kept by the *Intellify RFP API*: the client, plan year, effective date, status (`draft`, `ready`, `issued` or `closed`, moving forward only), the last completed stage, narrative sections, and the lines in scope, carriers invited, requirements and timeline. See [../capabilities/rfp/spec.md](../capabilities/rfp/spec.md).
+
+**RFP Builder.** The second *Official agent*: a built-in agent that walks a Mercer benefits consultant through building an *RFP* for one client in seven stages over the Intellify data, saves each decision the consultant confirms through the *Intellify RFP API*, and assembles the *RFP package*. It has its own prompt, the `rfp-process` skill and its own tools, and no SQL tool. See [../capabilities/rfp/spec.md](../capabilities/rfp/spec.md) and [../system/agents.md](../system/agents.md).
+
+**RFP package.** What the *RFP Builder* hands the consultant for one *RFP*: the RFP document in Markdown and PDF, the four *exhibits* as CSV files and a manifest, together in one zip that downloads from the chat. It is regenerated from the stored record and the live data on every export.
 
 **Role.** A named set of *permissions* given to a user in *org server mode*: **User** (implicit for everyone signed in), *Maker*, *Data owner*, *Approver* or *Platform admin*. Roles are fixed and additive; a user's roles are their direct assignments plus their *group mappings*. See [../capabilities/admin/spec.md](../capabilities/admin/spec.md).
 
@@ -144,7 +164,7 @@ Names in `code font` are the identifiers used in persisted documents and the API
 
 **Schema.** The middle level of an *entity* name.
 
-**Session.** One conversation with the assistant, bound to one or more *datasets*. Holds the transcript, the visuals, and owns one *workspace* and one memory thread. Needs a name and at least one dataset. A session started from a *Live* *user agent* is bound to that agent and runs with its instructions (see [../capabilities/sessions-chat/spec.md](../capabilities/sessions-chat/spec.md), R52-R59). Legacy name: *project* (collection `projects`, workspace folders `project-<id>`).
+**Session.** One conversation with the assistant, bound to one or more *datasets*. Holds the transcript, the visuals, and owns one *workspace* and one memory thread. Needs a name and at least one dataset. A session started from a *Live* *user agent* is bound to that agent and runs with its instructions (see [../capabilities/sessions-chat/spec.md](../capabilities/sessions-chat/spec.md), R52-R59). A session started from the *RFP Builder* is bound to it and runs it on every turn (see [../capabilities/rfp/spec.md](../capabilities/rfp/spec.md)). Legacy name: *project* (collection `projects`, workspace folders `project-<id>`).
 
 **Skill.** A folder of instructions an agent gets: a `SKILL.md` (a name, a "Use when…" description, then a short phase map or router) plus the `phases/` and `reference/` files it names. It loads *on demand* (the framework lists it in a catalog and the model loads it with the skill tool when a request matches) or *by the app* (code sends it when a condition holds). Built-in skills ship with the app (there are no user or project skills); a user can also write *in-app skills* for her agents, and edit a built-in skill's text, which overrides the bundled one. The agent page's Skills tab shows them (see [../system/agents.md](../system/agents.md) 7.3, [../capabilities/agents-evals/spec.md](../capabilities/agents-evals/spec.md) R63-R67).
 
