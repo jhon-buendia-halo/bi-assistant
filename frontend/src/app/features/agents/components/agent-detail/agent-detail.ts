@@ -22,6 +22,7 @@ import {
   Gauge,
   Loader2,
   ListChecks,
+  MessageSquare,
   MessageSquarePlus,
   Pencil,
   ChevronRight,
@@ -56,21 +57,26 @@ import { AgentSkills } from '../agent-skills/agent-skills';
 import { AgentGraph } from '../agent-graph/agent-graph';
 import { AgentLlmConfig } from '../agent-llm-config/agent-llm-config';
 import { AgentToolLinks } from '../agent-tool-links/agent-tool-links';
-import { LinkedText } from '../linked-text/linked-text';
+import { AgentChatBox } from '../agent-chat-box/agent-chat-box';
+import { AgentSkillsInline } from '../agent-skills-inline/agent-skills-inline';
+import { AgentSystemPrompt } from '../agent-system-prompt/agent-system-prompt';
+import { AgentPageState } from '../../services/agent-page-state.service';
+import {
+  AGENT_TAB_ORDER,
+  AgentTabId,
+  defaultAgentTab,
+  hasChatTab,
+  skillsCount,
+} from '../../services/agent-page.util';
+import { agentKind } from '../../services/agent-hub.util';
 import { knownLinks } from '../../services/prompt-links';
 import {
+  BuiltInSkillSummary,
   SkillSummary,
   SkillsApiService,
 } from '../../services/skills-api.service';
 
-type AgentTab =
-  | 'prompt'
-  | 'tools'
-  | 'skills'
-  | 'graph'
-  | 'memory'
-  | 'model'
-  | 'evals';
+type AgentTab = AgentTabId;
 /** Sub-tabs inside the evals tab. */
 type EvalTab = 'questions' | 'runs';
 
@@ -82,7 +88,9 @@ type EvalTab = 'questions' | 'runs';
     AgentGraph,
     AgentLlmConfig,
     AgentToolLinks,
-    LinkedText,
+    AgentChatBox,
+    AgentSkillsInline,
+    AgentSystemPrompt,
   ],
   templateUrl: './agent-detail.html',
   styleUrl: './agent-detail.scss',
@@ -99,6 +107,7 @@ export class AgentDetail implements OnDestroy {
   readonly Gauge = Gauge;
   readonly Loader2 = Loader2;
   readonly ListChecks = ListChecks;
+  readonly MessageSquare = MessageSquare;
   readonly MessageSquarePlus = MessageSquarePlus;
   readonly Pencil = Pencil;
   readonly ChevronRight = ChevronRight;
@@ -115,6 +124,7 @@ export class AgentDetail implements OnDestroy {
   private readonly evalSelection = inject(EvalSelectionService);
   private readonly toast = inject(ToastService);
   private readonly auth = inject(AuthService);
+  private readonly pageState = inject(AgentPageState);
 
   readonly selectedEvalCaseId = computed(
     () => this.evalSelection.selection()?.evalCase.id ?? null,
@@ -139,6 +149,8 @@ export class AgentDetail implements OnDestroy {
   readonly startChat = output<AgentDetailModel>();
   /** Edit a user agent; the shell opens the agent editor on its draft (R54). */
   readonly edit = output<AgentDetailModel>();
+  /** An admin's Edit on a built-in skill; the shell opens its editor. */
+  readonly openBuiltInSkill = output<string>();
   /** True while a session is being created from this agent. */
   readonly starting = input(false);
 
@@ -146,6 +158,8 @@ export class AgentDetail implements OnDestroy {
   readonly error = signal<string | null>(null);
   readonly agent = signal<AgentDetailModel | null>(null);
   readonly activeTab = signal<AgentTab>('prompt');
+  /** The Chat Box mounts the first time it is shown, then stays. */
+  readonly chatMounted = signal(false);
 
   /** The skills tab's content, loaded with the agent (R63). */
   readonly skills = signal<AgentSkillsView | null>(null);
@@ -155,29 +169,45 @@ export class AgentDetail implements OnDestroy {
   readonly tabs = computed(() => {
     const agent = this.agent();
     const skills = this.skills();
-    return [
-      {
-        id: 'prompt' as const,
-        label: 'Prompt template',
-        icon: this.ScrollText,
-      },
-      {
-        id: 'tools' as const,
-        label: `Tools${agent ? ` (${agent.toolDetails.length})` : ''}`,
-        icon: this.Wrench,
-      },
-      {
-        id: 'skills' as const,
-        // Skipped skills don't count (R66).
-        label: `Skills${skills ? ` (${skills.skills.length})` : ''}`,
-        icon: this.BookOpen,
-      },
-      { id: 'graph' as const, label: 'Graph', icon: this.Network },
-      { id: 'memory' as const, label: 'Memory', icon: this.Brain },
-      { id: 'model' as const, label: 'LLM Config', icon: this.Cpu },
-      { id: 'evals' as const, label: 'Evals', icon: this.Gauge },
-    ];
+    const kind = agent ? agentKind(agent) : 'system';
+    const icons = {
+      chat: this.MessageSquare,
+      prompt: this.ScrollText,
+      skills: this.BookOpen,
+      tools: this.Wrench,
+      graph: this.Network,
+      memory: this.Brain,
+      evals: this.Gauge,
+      model: this.Cpu,
+    };
+    const labels: Record<string, string> = {
+      tools: `Tools${agent ? ` (${agent.toolDetails.length})` : ''}`,
+      // A user agent counts its linked skills and the built-ins; skipped
+      // skills don't count (R66).
+      skills: `Skills${this.skillsCountLabel(kind, skills)}`,
+    };
+    return AGENT_TAB_ORDER.filter(
+      (tab) => tab.id !== 'chat' || hasChatTab(kind),
+    ).map((tab) => ({
+      id: tab.id,
+      label: labels[tab.id] ?? tab.label,
+      icon: icons[tab.id],
+    }));
   });
+
+  private skillsCountLabel(
+    kind: string,
+    skills: AgentSkillsView | null,
+  ): string {
+    if (kind === 'user') {
+      const library = this.librarySkills();
+      const builtIn = this.builtInSkills();
+      return library && builtIn
+        ? ` (${skillsCount(this.agentInstructions(), library, builtIn.length)})`
+        : '';
+    }
+    return skills ? ` (${skills.skills.length})` : '';
+  }
 
   constructor() {
     // The eval list is only needed once the evals tab is opened. The guard is
@@ -190,12 +220,19 @@ export class AgentDetail implements OnDestroy {
       this.loadDatasources();
     });
 
+    // The Chat Box mounts when first shown.
+    effect(() => {
+      if (this.activeTab() === 'chat') this.chatMounted.set(true);
+    });
+
     // Reload whenever the selected agent changes.
     effect(() => {
       const key = this.agentKey();
       this.loading.set(true);
       this.error.set(null);
-      this.activeTab.set('prompt');
+      this.chatMounted.set(false);
+      this.librarySkills.set(null);
+      this.pageState.reset();
       this.evalsRequested.set(false);
       this.evalSets.set([]);
       this.selectedSetId.set(null);
@@ -206,7 +243,7 @@ export class AgentDetail implements OnDestroy {
       this.evalSelection.clear();
       this.publishing.set(false);
       this.deleting.set(false);
-      this.loadAgent(key);
+      this.loadAgent(key, true);
       this.loadSkills(key);
     });
   }
@@ -239,7 +276,6 @@ export class AgentDetail implements OnDestroy {
   );
 
   private loadLibrarySkills(key: string): void {
-    this.librarySkills.set(null);
     this.librarySkillsError.set(null);
     this.skillsApi.list().subscribe({
       next: (res) => {
@@ -261,12 +297,43 @@ export class AgentDetail implements OnDestroy {
     return !!(agent?.live ?? agent?.draft)?.model;
   });
 
-  private loadAgent(key: string): void {
+  /** The built-in skills, for a user agent's Skills tab. */
+  readonly builtInSkills = signal<BuiltInSkillSummary[] | null>(null);
+
+  private loadBuiltInSkills(key: string): void {
+    this.builtInSkills.set(null);
+    this.skillsApi.listBuiltIn().subscribe({
+      next: (res) => {
+        if (this.agentKey() === key) this.builtInSkills.set(res.skills);
+      },
+      error: () => {
+        if (this.agentKey() === key) this.builtInSkills.set([]);
+      },
+    });
+  }
+
+  /** Reload the owner's skills after the Skills tab changed one. */
+  reloadLibrary(): void {
+    this.loadLibrarySkills(this.agentKey());
+    this.loadSkills(this.agentKey());
+  }
+
+  /** Reload the agent after the System Prompt saved its draft. */
+  reloadAgent(): void {
+    this.loadAgent(this.agentKey());
+  }
+
+  private loadAgent(key: string, initial = false): void {
     this.api.getAgent(key).subscribe({
       next: (agent) => {
+        if (this.agentKey() !== key) return;
         this.agent.set(agent);
         this.loading.set(false);
-        if (agent.kind === 'user') this.loadLibrarySkills(key);
+        if (initial) this.activeTab.set(defaultAgentTab(agentKind(agent)));
+        if (agent.kind === 'user') {
+          this.loadLibrarySkills(key);
+          if (initial) this.loadBuiltInSkills(key);
+        }
       },
       error: (err) => {
         this.error.set(err?.error?.message ?? 'Backend unreachable');
@@ -310,10 +377,10 @@ export class AgentDetail implements OnDestroy {
     );
   });
 
-  /** The user agent's own instructions: Live version, else draft (R6). */
+  /** The user agent's own instructions: the draft, else the Live version (R6). */
   readonly agentInstructions = computed(() => {
     const agent = this.agent();
-    return (agent?.live ?? agent?.draft)?.instructions ?? '';
+    return (agent?.draft ?? agent?.live)?.instructions ?? '';
   });
 
   readonly publishing = signal(false);
@@ -650,6 +717,7 @@ export class AgentDetail implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.pageState.reset();
     clearTimeout(this.pollTimer);
     this.evalSelection.clear();
   }

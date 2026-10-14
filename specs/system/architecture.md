@@ -518,7 +518,7 @@ flowchart LR
   - Adding the script runner later is one story inside the rules above.
 
 #### ADR-0020 — A sectioned assistant prompt with the app's own skill catalog, read through `read_file`; built-in scripts run through `run_skill_script`
-- **Status:** Accepted
+- **Status:** Superseded by ADR-0024 (the sectioned prompt's identity, `## Tools` and `## Working rules` stay)
 - **Date:** 2026-10-14
 - **Context:**
   - Under ADR-0018 the framework renders the on-demand catalog, with its own usage note and a `<source>` tag, and offers `skill`, `skill_search` and `skill_read`. Neither the wording nor the tools are ours to shape.
@@ -602,6 +602,23 @@ flowchart LR
   - ADR-0021's tool and skill selection is now derived from text, so an agent's behaviour is readable in one place, and the Graph and Tools tabs can show why each tool is there.
   - An agent saved before links had every tool (no `tools` list). The editor adds links for what such an agent had when it opens, so a save keeps its behaviour; until then the legacy rule holds.
   - A new frontend dependency (Tiptap and ProseMirror, about 350 kB, lazy).
+
+#### ADR-0024 — On-demand skills reach the assistant through Mastra's agent skills, as in the agent-poc reference
+- **Status:** Accepted
+- **Date:** 2026-10-14
+- **Context:**
+  - ADR-0020 replaced Mastra's skill catalog and tools with the app's own `## Skills` section, `read_file` and `run_skill_script`, so the app owned the wording.
+  - The user asked on 2026-10-14 for skills to be called as in the agent-poc reference: the agent declares `skills`, Mastra lists them in its `<available_skills>` system message, and the model calls `skill({ name })` to load one.
+  - Mastra 1.66 supports this: `AgentConfig.skills` accepts inline skills from `createSkill` (instructions and reference files, no filesystem), as a function resolved per request.
+  - ADR-0023 resolves links to plain mentions before the model sees them, and in-app skills live in the database (ADR-0021), with built-in overrides (ADR-0022).
+- **Decision:**
+  - **The `assistant` declares its on-demand skills per request** through Mastra's `skills` option: the built-in on-demand skills (with an in-app override's content when there is one) and, for a call bound to a user agent, that agent's in-app skills (Live copies, or current ones in a preview). Each is a `createSkill` with its links resolved and its reference files as `references`.
+  - **Mastra renders the catalog and provides the skill tools.** The app's `## Skills` section, `read_file`, `run_skill_script` and the `/in-app-skills/` paths are removed.
+  - **Harness-loaded skills don't change:** `deep-analysis` and `interactive-visuals` are still read by code and sent as system messages.
+- **Consequences:**
+  - Supersedes ADR-0020. The catalog's wording and the skill tools are framework behaviour again: a Mastra upgrade re-runs the evals and the request-recording E2E that asserts what each call carries.
+  - The plain assistant's prompt changes (no `## Skills` section, no `read_file` line), so the golden fixture and Appendix A are regenerated, and the evals must pass at 100% on the branch.
+  - No built-in skill ships a script, so dropping `run_skill_script` loses nothing today. A skill that needs exact checks still names the tool or guard that applies them (ADR-0018).
 
 ## Level 4 — Code
 

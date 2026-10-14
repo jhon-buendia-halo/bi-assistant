@@ -5,14 +5,7 @@ import { datasetTools } from '../tools/dataset.tools';
 import { askClarificationTool } from '../tools/clarification.tool';
 import { visualTools } from '../tools/visual.tools';
 import { SESSION_WORKSPACE_CONTEXT_KEY } from '../session-workspaces';
-import { catalogSkills } from '../app-skills';
-import {
-  type AgentSkill,
-  agentSkillsFrom,
-  mergedCatalog,
-} from '../agent-skills';
-import { skillOverridesVersion } from '../skill-overrides';
-import { skillToolsFor } from '../skill-tools';
+import { assistantSkills } from '../assistant-skills';
 import {
   OPTIONAL_AGENT_TOOLS,
   OPTIONAL_TOOL_NAMES,
@@ -28,7 +21,6 @@ const ALL_TOOLS = {
   ...datasetTools,
   ...visualTools,
   ask_clarification: askClarificationTool,
-  ...skillToolsFor('assistant'),
 };
 
 type AssistantTools = Partial<typeof ALL_TOOLS>;
@@ -40,43 +32,16 @@ interface AssistantVariant {
 }
 
 const variants = new Map<string, AssistantVariant>();
-/** The overrides version the cached variants were built under (ADR-0022). */
-let variantsVersion = skillOverridesVersion();
 
 /**
  * The tools a call offers under `selection` (ADR-0021, agents.md 2.1): the
  * always-given tools and the selected optional ones, in the usual order.
- * Undefined selects every tool. `read_file` / `run_skill_script` stay
- * whenever the assistant has on-demand skills.
+ * Undefined selects every tool. Skills are not part of it: Mastra gives the
+ * skill tools and lists the skills (ADR-0024).
  */
 export function assistantVariant(
   selection?: readonly OptionalAgentTool[],
-  agentSkills?: readonly AgentSkill[],
 ): AssistantVariant {
-  const base = baseVariant(selection);
-  if (!agentSkills?.length) return base;
-  // The agent's in-app skills join the catalog (ADR-0021, agents.md 7.3).
-  // The tools don't change, so only the prompt is rebuilt, and it is not
-  // cached: it follows each agent's copies and a cache would grow with them.
-  return {
-    tools: base.tools,
-    instructions: buildAssistantInstructions(
-      base.tools,
-      mergedCatalog(catalogSkills('assistant'), agentSkills),
-      selection,
-    ),
-  };
-}
-
-function baseVariant(
-  selection?: readonly OptionalAgentTool[],
-): AssistantVariant {
-  // The catalog is baked into the prompt: drop every variant when an in-app
-  // override of a built-in skill changes (ADR-0022).
-  if (variantsVersion !== skillOverridesVersion()) {
-    variants.clear();
-    variantsVersion = skillOverridesVersion();
-  }
   const key = selectionKey(selection);
   const cached = variants.get(key);
   if (cached) return cached;
@@ -90,13 +55,8 @@ function baseVariant(
   ) as AssistantTools;
   const variant = {
     tools,
-    // Identity, ## Tools, ## Working rules, then ## Skills when it has
-    // on-demand skills (agents.md 2.1, 7.5; ADR-0020).
-    instructions: buildAssistantInstructions(
-      tools,
-      catalogSkills('assistant'),
-      selection,
-    ),
+    // Identity, ## Tools, ## Working rules (agents.md 2.1; ADR-0024).
+    instructions: buildAssistantInstructions(tools, selection),
   };
   variants.set(key, variant);
   return variant;
@@ -112,10 +72,11 @@ export const assistantAgent = new Agent({
   // The prompt and tools follow the call's tool selection (`agent-tools`,
   // ADR-0021); a call without one gets every tool and the full prompt.
   instructions: ({ requestContext }) =>
-    assistantVariant(
-      toolSelectionFrom(requestContext),
-      agentSkillsFrom(requestContext),
-    ).instructions,
+    assistantVariant(toolSelectionFrom(requestContext)).instructions,
+  // The on-demand skills of the call, given to the model through Mastra's
+  // skill tool (ADR-0024): built-in (with overrides), user and project skills
+  // and the agent's own copies.
+  skills: ({ requestContext }) => assistantSkills(requestContext),
   // Dynamic model resolved at call time from the persisted LLM settings
   // (provider / model / runtime API key); see ../model-resolver. A session
   // bound to a user agent may override the model name for this agent only.
@@ -135,9 +96,7 @@ export const assistantAgent = new Agent({
     if (typeof workspaceId !== 'string' || !mastra) return undefined;
     return mastra.listWorkspaces()[workspaceId]?.workspace;
   },
-  // No framework `skills`: the app renders the catalog into the prompt and
-  // gives read_file / run_skill_script instead (ADR-0020). Harness-loaded
-  // skills are sent by their callers.
+  // Harness-loaded skills (deep-analysis) are sent by their callers.
   tools: ({ requestContext }) =>
     assistantVariant(toolSelectionFrom(requestContext)).tools,
 });

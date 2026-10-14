@@ -28,8 +28,8 @@ export type SkillLoading = 'on-demand' | 'harness';
 
 /** Built-in on-demand skills each agent's catalog lists, by registry key. */
 export const AGENT_SKILLS: Readonly<Record<string, readonly string[]>> = {
-  // How to apply the curated-knowledge block: the model reads it with
-  // read_file when a call carries the block (ADR-0020).
+  // How to apply the curated-knowledge block: the model loads it with
+  // Mastra's skill tool when a call carries the block (ADR-0024).
   assistant: ['curated-knowledge'],
 };
 
@@ -660,9 +660,8 @@ function winningSkill(name: string): AppSkill {
 }
 
 /**
- * The on-demand skills an agent gets, sorted by name: the catalog the app
- * renders into its prompt and the only folders `read_file` may read
- * (agents.md 7.3, 7.5).
+ * The on-demand skills an agent gets, sorted by name: what the assistant
+ * declares to Mastra's skill tool (ADR-0024, agents.md 7.3).
  */
 export function catalogSkills(agent: string): AppSkill[] {
   return [...appSkills().values()]
@@ -670,6 +669,24 @@ export function catalogSkills(agent: string): AppSkill[] {
       (skill) => skill.loading === 'on-demand' && skill.agents.includes(agent),
     )
     .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+}
+
+/**
+ * A skill's text files other than `SKILL.md` and `scripts/`, as served (an
+ * in-app override's content included), keyed by their path in the skill
+ * folder: the `references` the assistant's skill tool serves (ADR-0024).
+ * Files too large to show or that aren't text are left out.
+ */
+export function skillReferences(skill: AppSkill): Record<string, string> {
+  const references: Record<string, string> = {};
+  for (const { path } of servedSkillFiles(skill)) {
+    if (path === 'SKILL.md' || path.startsWith('scripts/')) continue;
+    const result = readSkillFile(skill.dir, path, skill);
+    if ('content' in result && result.content !== null) {
+      references[path] = result.content;
+    }
+  }
+  return references;
 }
 
 /** A harness-loaded skill's whole `SKILL.md`. */

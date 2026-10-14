@@ -355,7 +355,7 @@ describe('AgentsService (built-in and user agents)', () => {
       name,
       description: `Use when ${name}.`,
       body,
-      files: [{ path: 'reference/q.md', content: 'Q1 is July.' }],
+      files: [{ path: 'references/q.md', content: 'Q1 is July.' }],
     });
 
     it(
@@ -390,7 +390,7 @@ describe('AgentsService (built-in and user agents)', () => {
                 '---\nname: alpha\ndescription: Use when alpha.\n---\n\nA body.',
               ),
             },
-            { path: 'reference/q.md', size: 11 },
+            { path: 'references/q.md', size: 11 },
           ],
         });
         // The levels row never lists in-app.
@@ -411,12 +411,12 @@ describe('AgentsService (built-in and user agents)', () => {
           '---\nname: alpha\ndescription: Use when alpha.\n---\n\nA body.',
         );
         expect(
-          (await ctx.service.skillFile(created.id, 'alpha', 'reference/q.md'))
+          (await ctx.service.skillFile(created.id, 'alpha', 'references/q.md'))
             .content,
         ).toBe('Q1 is July.');
         await expect(
-          ctx.service.skillFile(created.id, 'alpha', 'reference/nope.md'),
-        ).rejects.toThrow('Skill "alpha" has no file "reference/nope.md"');
+          ctx.service.skillFile(created.id, 'alpha', 'references/nope.md'),
+        ).rejects.toThrow('Skill "alpha" has no file "references/nope.md"');
         // Another agent's skill is not this agent's.
         await expect(
           ctx.service.skillFile('assistant', 'alpha', 'SKILL.md'),

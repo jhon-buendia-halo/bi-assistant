@@ -13,8 +13,8 @@ export interface SystemBlock {
 
 /**
  * Block 3 of a turn (agents.md 4.1): the curated-knowledge block alone. How
- * to apply it is the on-demand `curated-knowledge` skill in the assistant's
- * catalog (7.4, ADR-0020). Nothing when no knowledge applies. Every caller
+ * to apply it is the on-demand `curated-knowledge` skill among the assistant's
+ * skills (7.4, ADR-0024). Nothing when no knowledge applies. Every caller
  * that sends the block goes through here.
  */
 export function knowledgeContext(block: string | undefined): SystemBlock[] {

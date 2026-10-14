@@ -165,34 +165,49 @@
 
     <!-- Tab panels -->
     <div class="mt-6">
-      @switch (activeTab()) {
-        @case ("prompt") {
-          @if (agent.instructions) {
-            <pre
-              class="max-w-full overflow-x-auto rounded-xl bg-surface-muted p-4 font-mono text-[12px] leading-relaxed whitespace-pre-wrap text-fg"
-              >{{ agent.instructions }}</pre>
-          } @else {
-            <p class="text-[13px] text-fg-muted">
-              This agent builds its prompt at request time, so there is no
-              static template to show.
-            </p>
-          }
-          @if (isUserAgent()) {
-            <h3
-              class="mt-6 text-[12px] font-medium tracking-wider text-fg-muted uppercase"
-            >
-              Agent instructions
-            </h3>
-            @if (agentInstructions()) {
-              <pre
-                data-testid="agent-instructions"
-                class="mt-2 max-w-full overflow-x-auto rounded-xl bg-surface-muted p-4 font-mono text-[12px] leading-relaxed whitespace-pre-wrap text-fg"
-              ><app-linked-text [text]="agentInstructions()" [known]="knownLinkSet()" /></pre>
-            } @else {
-              <p class="mt-2 text-[13px] text-fg-muted">No instructions yet.</p>
+      @if (chatMounted() && agent.kind !== "system") {
+        <div [class.hidden]="activeTab() !== 'chat'" data-testid="agent-panel-chat">
+          <app-agent-chat-box
+            [style.height]="isUserAgent() ? 'calc(100vh - 22rem)' : null"
+            [style.min-height]="isUserAgent() ? '420px' : null"
+            [agent]="agent"
+            [starting]="starting()"
+            (startChat)="startChat.emit($event)"
+            (edit)="edit.emit($event)"
+          />
+        </div>
+      }
+      <div [class.hidden]="activeTab() !== 'prompt'">
+        <app-agent-system-prompt
+          [agent]="agent"
+          [library]="librarySkills()"
+          (saved)="reloadAgent()"
+        />
+      </div>
+      @if (isUserAgent()) {
+        <div [class.hidden]="activeTab() !== 'skills'">
+          @if (librarySkillsError(); as libraryErr) {
+            <p class="text-[13px] text-on-danger-soft">{{ libraryErr }}</p>
+          } @else if (librarySkills(); as library) {
+            @if (builtInSkills(); as builtIn) {
+              <app-agent-skills-inline
+                [agentKey]="agent.key"
+                [instructions]="agentInstructions()"
+                [library]="library"
+                [builtIn]="builtIn"
+                (changed)="reloadLibrary()"
+                (openBuiltIn)="openBuiltInSkill.emit($event)"
+              />
             }
+          } @else {
+            <div class="flex items-center gap-2.5 text-[13px] text-fg-muted">
+              <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
+              <span>Loading skills…</span>
+            </div>
           }
-        }
+        </div>
+      }
+      @switch (activeTab()) {
         @case ("tools") {
           @if (agent.toolLinks; as toolLinks) {
             <app-agent-tool-links
@@ -240,7 +255,9 @@
           }
         }
         @case ("skills") {
-          @if (skillsLoading()) {
+          @if (isUserAgent()) {
+            <!-- The inline Skills tab above stays mounted. -->
+          } @else if (skillsLoading()) {
             <div class="flex items-center gap-2.5 text-[13px] text-fg-muted">
               <lucide-angular [img]="Loader2" [size]="14" class="animate-spin" />
               <span>Loading skills…</span>

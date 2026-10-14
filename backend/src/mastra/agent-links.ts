@@ -13,7 +13,7 @@ import {
 /** Same expression as the frontend's `prompt-links`. */
 const LINK_SOURCE = String.raw`\[\[(skill|tool):([A-Za-z0-9_-]+)\]\]`;
 
-/** The assistant tools a link may name (`read_file` and `run_skill_script` are not in it). */
+/** The assistant tools a link may name (Mastra's skill tools are not in it). */
 export const LIBRARY_TOOLS = [
   'ask_clarification',
   'create_visual',

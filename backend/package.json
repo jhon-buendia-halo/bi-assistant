@@ -117,6 +117,9 @@
     ],
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
+    "moduleNameMapper": {
+      "^@mastra/core/skills$": "<rootDir>/mastra/testing/mastra-skills.stub.ts"
+    },
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
     },

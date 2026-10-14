@@ -516,9 +516,10 @@
                   <app-agent-detail
                     class="w-full max-w-[960px]"
                     [agentKey]="activeAgentKey()!"
-                    (back)="mainView.set('agents')"
+                    (back)="closeAgentDetail()"
                     (deleted)="onAgentDeleted()"
                     (edit)="openAgentEditor($event.key)"
+                    (openBuiltInSkill)="openBuiltInSkillEditor($event, true)"
                     [starting]="startingAgentKey() === activeAgentKey()"
                     (startChat)="startChatWithAgent($event)"
                   />
@@ -558,7 +559,7 @@
                   <app-builtin-skill-editor
                     class="w-full max-w-[960px]"
                     [skillName]="builtInName"
-                    (back)="openSkillsLibrary()"
+                    (back)="closeBuiltInSkillEditor()"
                   />
                 </div>
               } @else if (mainView() === "knowledge") {

@@ -65,6 +65,10 @@ export class PromptEditor implements OnDestroy {
   /** The saved text may not be longer than this. */
   readonly maxLength = input(Infinity);
   readonly countTestId = input<string | null>(null);
+  /** `single`: one `+ Link skill or tool` button that opens the whole menu. */
+  readonly toolbar = input<'kinds' | 'single'>('kinds');
+  /** Text beside the button of the `single` toolbar. */
+  readonly toolbarHint = input('');
   readonly valueChange = output<string>();
 
   protected readonly menu = signal<LinkMenu | null>(null);

@@ -8,7 +8,7 @@ import {
 
 const NAME_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const FILE_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
-const REFERENCE_PREFIX = 'reference/';
+const REFERENCE_PREFIX = 'references/';
 
 export interface SkillFields {
   name: string;
@@ -37,12 +37,12 @@ function filesOf(value: unknown): SkillFile[] {
 }
 
 /**
- * Every `reference/<file name>` the body names, whatever the extension
+ * Every `references/<file name>` the body names, whatever the extension
  * (data-model 3.10.1). A trailing `.` ends a sentence, not the file name.
  */
 function referencedPaths(body: string): string[] {
   const found: string[] =
-    body.match(/\breference\/[A-Za-z0-9][A-Za-z0-9._-]*/g) ?? [];
+    body.match(/\breferences\/[A-Za-z0-9][A-Za-z0-9._-]*/g) ?? [];
   return found.map((path) => path.replace(/\.+$/, ''));
 }
 
@@ -98,7 +98,7 @@ export function validateSkill(
       !FILE_NAME_PATTERN.test(fileName) ||
       fileName.length > SKILL_LIMITS.fileName
     ) {
-      refuse('Name reference files reference/<file name>');
+      refuse('Name reference files references/<file name>');
     }
   }
   const seen = new Set<string>();

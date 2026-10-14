@@ -63,6 +63,7 @@ import { BuiltInSkillEditor } from './features/agents/components/builtin-skill-e
 import { BuiltInSkillEditorService } from './features/agents/services/builtin-skill-editor.service';
 import { SkillEditorService } from './features/agents/services/skill-editor.service';
 import { AgentEditorService } from './features/agents/services/agent-editor.service';
+import { AgentPageState } from './features/agents/services/agent-page-state.service';
 import { Agent } from './features/agents/services/agents-api.service';
 import { agentKind } from './features/agents/services/agent-hub.util';
 import { KnowledgeList } from './features/knowledge/components/knowledge-list/knowledge-list';
@@ -261,11 +262,19 @@ export class App {
   }
 
   readonly agentEditor = inject(AgentEditorService);
+  private readonly agentPageState = inject(AgentPageState);
+
+  /** All agents, from an agent's page; asks about an unsaved edit first. */
+  closeAgentDetail(): void {
+    if (!this.confirmLeaveAgentEditor()) return;
+    this.mainView.set('agents');
+  }
   /** The user agent open in the editor; null = a new agent. */
   readonly editingAgentId = signal<string | null>(null);
 
   /** New agent on the hub, or Edit in a user agent's detail (R54). */
   openAgentEditor(agentId: string | null): void {
+    if (!this.confirmLeaveAgentEditor()) return;
     this.editingAgentId.set(agentId);
     this.mainView.set('agent-editor');
   }
@@ -298,8 +307,9 @@ export class App {
         ? this.agentEditor.changed()
         : view === 'skill-editor'
           ? this.skillEditor.changed()
-          : view === 'builtin-skill-editor' &&
-            this.builtInSkillEditor.changed();
+          : view === 'builtin-skill-editor'
+            ? this.builtInSkillEditor.changed()
+            : view === 'agent-detail' && this.agentPageState.dirty();
     if (!changed) return true;
     return window.confirm('Discard unsaved changes?');
   }
@@ -324,9 +334,24 @@ export class App {
   }
 
   /** A built-in row in the library. */
-  openBuiltInSkillEditor(name: string): void {
+  openBuiltInSkillEditor(name: string, fromAgent = false): void {
+    if (fromAgent && !this.confirmLeaveAgentEditor()) return;
     this.editingBuiltInName.set(name);
+    this.builtInFromAgent = fromAgent;
     this.mainView.set('builtin-skill-editor');
+  }
+
+  /** The built-in editor was opened from an agent's Skills tab. */
+  private builtInFromAgent = false;
+
+  /** Back from the built-in editor: to the agent's page, or the library. */
+  closeBuiltInSkillEditor(): void {
+    if (this.builtInFromAgent && this.activeAgentKey()) {
+      if (!this.confirmLeaveAgentEditor()) return;
+      this.mainView.set('agent-detail');
+      return;
+    }
+    this.openSkillsLibrary();
   }
 
   /** An editor is open: its unsaved changes are asked about before leaving. */

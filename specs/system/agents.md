@@ -50,7 +50,7 @@ All agents are registered once in a single framework instance and looked up by *
 
 Lookup of an unknown key throws. The catalogue lists agents sorted by display name.
 
-**User agents** are not registry entries. They are stored documents ([data-model.md](data-model.md) section 3.10) and run on the `assistant`; the decision is ADR-0008 in [architecture.md](architecture.md). The catalogue endpoint merges them with the six registered agents ([api.md](api.md) section 2.6). A session started from a user agent runs the `assistant` with the agent's Live instructions as context Block 5 (4.1), its datasets as the session's datasets, its model and effort overrides (1.3, 1.4) passed on the requestContext (4.2), only the tools its tool selection gives it (2.1, ADR-0021), and its in-app skills in the assistant's catalog (7.3). Rules: sessions-chat R52-R59.
+**User agents** are not registry entries. They are stored documents ([data-model.md](data-model.md) section 3.10) and run on the `assistant`; the decision is ADR-0008 in [architecture.md](architecture.md). The catalogue endpoint merges them with the six registered agents ([api.md](api.md) section 2.6). A session started from a user agent runs the `assistant` with the agent's Live instructions as context Block 5 (4.1), its datasets as the session's datasets, its model and effort overrides (1.3, 1.4) passed on the requestContext (4.2), only the tools its tool selection gives it (2.1, ADR-0021), and its in-app skills given to the model through the framework's skill tools (7.3, ADR-0024). Rules: sessions-chat R52-R59.
 
 Not registered (never listed in the catalogue):
 
@@ -181,7 +181,7 @@ LenAI deployments are never swapped to `openai/gpt-4.1-mini` (rule 2 requires no
 
 **Tools.** `list_entities`, `describe_entity`, `sample_rows`, `run_readonly_sql`, `create_visual`, `update_visual`, `ask_clarification` (section 3). It is also bound to the session workspace, whose file tools it is offered (3.8), and it is given its own skills (7.4).
 
-**Tool selection (ADR-0021, ADR-0023).** A call for a session bound to a user agent carries the agent's tool selection on the requestContext (`agent-tools`, 4.2). **The selection is the optional tools the agent's instructions link directly, plus those the bodies of its linked skills link** (the call's skill copies: the Live version's `liveSkills`, a preview's current skills), from `sample_rows`, `ask_clarification` and `visuals` (`create_visual` with `update_visual`; linking either gives both). The links are written as `[[tool:<name>]]` and `[[skill:<name>]]` (regex `/\[\[(skill|tool):([A-Za-z0-9_-]+)\]\]/g`); the directly linked groups are stored in `tools` on every save ([data-model.md](data-model.md) 3.10) and the skills' are added per call. A user agent whose config has no `tools` (saved before links) is selected every tool, unchanged. Linking an always-given tool changes nothing. `list_entities`, `describe_entity` and `run_readonly_sql` are always given, and so is `read_file` while the assistant has on-demand skills. A call with no selection on its context, or with all three selected, gets the tools and prompt described in the rest of this section, unchanged. Otherwise the `assistant` builds both for the call:
+**Tool selection (ADR-0021, ADR-0023).** A call for a session bound to a user agent carries the agent's tool selection on the requestContext (`agent-tools`, 4.2). **The selection is the optional tools the agent's instructions link directly, plus those the bodies of its linked skills link** (the call's skill copies: the Live version's `liveSkills`, a preview's current skills), from `sample_rows`, `ask_clarification` and `visuals` (`create_visual` with `update_visual`; linking either gives both). The links are written as `[[tool:<name>]]` and `[[skill:<name>]]` (regex `/\[\[(skill|tool):([A-Za-z0-9_-]+)\]\]/g`); the directly linked groups are stored in `tools` on every save ([data-model.md](data-model.md) 3.10) and the skills' are added per call. A user agent whose config has no `tools` (saved before links) is selected every tool, unchanged. Linking an always-given tool changes nothing. `list_entities`, `describe_entity` and `run_readonly_sql` are always given. A call with no selection on its context, or with all three selected, gets the tools and prompt described in the rest of this section, unchanged. Otherwise the `assistant` builds both for the call:
 
 - **Tools offered:** only the always-given tools and the selected ones, in the usual order. A tool that is not selected is not offered, so the model can't call it whatever the prompt or instructions say.
 - **`## Tools`:** one line per tool offered (the rule above), so an unselected tool has no line.
@@ -209,18 +209,17 @@ LenAI deployments are never swapped to `openai/gpt-4.1-mini` (rule 2 requires no
   Each replacement is sent with the line breaks shown. Appendix A keeps the full-selection prompt only.
 - **Context Block 1 (4.1):** without `visuals`, the visuals half is left out (the blank separator, the `Interactive visuals in this session…` heading, the visual lines or `(none yet)`, and the open-visual line), so the block ends with its dataset half; without `sample_rows`, its hint reads `Use describe_entity / run_readonly_sql to inspect and query them.`
 
-The prompt and tools depend only on the selection, so there are eight variants; the links never change them, only the selection they produce. A call with `agent-skills` (4.2) builds its prompt per call instead of caching it, since it follows each agent's copies; the tool set is the cached variant. The deep-analysis calls (2.7), the grounding pass (5.6) and the tool-only synthesis pass (5.5) run with the turn's requestContext and so with the same selection.
+The prompt and tools depend only on the selection, so there are eight variants; the links never change them, only the selection they produce. The prompt and the tool set are cached variants; a call's skills are resolved per call by the framework's `skills` function (7.3), not through the prompt. The deep-analysis calls (2.7), the grounding pass (5.6) and the tool-only synthesis pass (5.5) run with the turn's requestContext and so with the same selection.
 
 **Memory.** One persistent thread per session: `thread = resource = <session id>`. The last **40** messages are replayed into each turn; semantic recall off; working memory off; auto-generated thread titles off. Deleting a session deletes its thread. The Agents UI shows "Recent messages replayed" / "40 messages" (asserted by E2E).
 
 **Max steps.** 15 (`ASSISTANT_MAX_STEPS`), shared by production turns and the eval harness so evals measure the same constraints.
 
-**Prompt requirements.** The prompt MUST start with `You are the Questions to Insights assistant` (asserted by E2E on the Prompt tab). It has four parts, in this order (ADR-0020; exact text in Appendix A, Skills section in 7.5):
+**Prompt requirements.** The prompt MUST start with `You are the Questions to Insights assistant` (asserted by E2E on the Prompt tab). It has three parts, in this order (ADR-0024; exact text in Appendix A). The on-demand skills are not part of it: the framework adds its own `<available_skills>` system message and skill tools (7.3, 7.5).
 
 1. **Identity:** the A1-A3 paragraph.
-2. **`## Tools`:** one line per tool the assistant is given, in the order it is given them: `- <name>(<input names, comma-separated>): <first sentence of the tool's description>`. The lines are generated from the tools, so a tool change updates this section. `read_file` and `run_skill_script` (3.9, 3.10) are listed only when they are offered. The framework's workspace tools (3.8) are not listed.
+2. **`## Tools`:** one line per tool the assistant is given, in the order it is given them: `- <name>(<input names, comma-separated>): <first sentence of the tool's description>`. The lines are generated from the tools, so a tool change updates this section. The framework's workspace tools (3.8) and skill tools (3.9) are not listed.
 3. **`## Working rules`:** rules A4-A12 and A19-A35 below, word for word as before, apart from what 1.13.12 added: a sentence in A4, the last sentence of A12, "in the same query" in A32, and A35.
-4. **`## Skills`:** only when the assistant has on-demand skills (7.3). Fixed instructions, then the `<available_skills>` catalog (7.5).
 
 The rules encoded, in this order:
 
@@ -244,7 +243,7 @@ The rules encoded, in this order:
 - A11. Every factual claim about the session's data must come from `run_readonly_sql` results executed in this conversation; never answer a data question from general/parametric knowledge, even when confident — run the query anyway.
 - A12. When a question presupposes coverage not confirmed (an era, entity or scope outside the obvious dataset), check coverage first; when the question falls outside the data, say so plainly and state what IS covered (e.g. "the data covers only 2018 and 2022; 1970 is not in this dataset"). Never fill the gap from general knowledge. Add nothing about what the data doesn't cover: no background, dates or career facts about the person, team or event the question names (added in 1.13.12).
 
-*Curated knowledge* (rules A13–A18 are not in the base prompt: they are the on-demand `curated-knowledge` skill, listed in the assistant's `## Skills` catalog, which the model reads with `read_file` when a call carries Block 3; 4.1, 7.4)
+*Curated knowledge* (rules A13–A18 are not in the base prompt: they are the on-demand `curated-knowledge` skill, listed in the framework's skill catalog, which the model loads with the skill tool when a call carries Block 3; 4.1, 7.4)
 - A13. A curated-knowledge block, when present, is user-authored ground truth (glossary terms, standing instructions, default filters tagged `[term]`, `[instruction]`, `[default_filter]`); read it before planning.
 - A14. It outranks anything inferred from column names or sample values; follow a term's meaning even when the column name suggests otherwise and say which term was followed when they disagree. It cannot override the data: if a term names a value no row holds, do not invent rows.
 - A15. Apply every `[default_filter]` to every query unless the question explicitly asks for the excluded rows; name the applied filters in one short business sentence at the end ("excludes test accounts, as configured"); when the excluded rows are needed, drop the filter and say so.
@@ -681,31 +680,13 @@ All tools belong to the `assistant`. Every tool returns a JSON object; **tools n
 
 ### 3.8 Workspace tools
 
-Because the assistant (and designer) are bound to the session workspace, the framework also offers its filesystem tools, with **delete disabled**: `mastra_workspace_read_file`, `mastra_workspace_write_file`, `mastra_workspace_edit_file`, `mastra_workspace_list_files`, `mastra_workspace_file_stat`, `mastra_workspace_mkdir` and `mastra_workspace_grep`. With them comes one framework system message that names the workspace folder and says relative paths resolve from it. The prompts never mention these tools. The framework's skill tools (`skill`, `skill_search`, `skill_read`) are never offered: the assistant reads skills with `read_file` (3.9) instead (ADR-0020).
+Because the assistant (and designer) are bound to the session workspace, the framework also offers its filesystem tools, with **delete disabled**: `mastra_workspace_read_file`, `mastra_workspace_write_file`, `mastra_workspace_edit_file`, `mastra_workspace_list_files`, `mastra_workspace_file_stat`, `mastra_workspace_mkdir` and `mastra_workspace_grep`. With them comes one framework system message that names the workspace folder and says relative paths resolve from it. The prompts never mention these tools.
 
-### 3.9 `read_file`
+### 3.9 The framework's skill tools
 
-Offered to the assistant only when it has on-demand skills (7.3). Read-only.
+The assistant's on-demand skills (7.3) are loaded by the framework's skill tools (`skill`, `skill_search`, `skill_read`), which Mastra adds because the agent declares `skills` (ADR-0024). They are framework tools, like the workspace tools (3.8): the app doesn't define them, and `## Tools` doesn't list them. The model sees the skills in the framework's `<available_skills>` system message and loads one with the skill tool, which returns its instructions; its reference files are read through the framework as well. The app has no `read_file` and no `run_skill_script` tool: no built-in skill ships a script, and a skill's `scripts/` is never run.
 
-- **Description:** `Read one file of an installed skill by its absolute path: the location the skill list gives for SKILL.md, or that folder joined with a path SKILL.md names. Only files inside the listed skills' folders can be read.`
-- **Input:** `path` (string): an absolute path.
-- **Output:** `{ path, content }` for a text file, the path being as given. A file larger than 256 KB or not UTF-8 text answers `{ path, error: "This file is larger than 256 KB or isn't text, so it can't be read." }`.
-- **In-app skills:** a path `/in-app-skills/<name>/SKILL.md` or `/in-app-skills/<name>/reference/<file name>`, where `<name>` is an in-app skill in the call's catalog (7.3), is answered from the call's `agent-skills` copies (4.2), never from the disk. Any other path under `/in-app-skills/` gets the error below. The tool's description and input are unchanged.
-- **Limits:** the path, normalised, must be a regular file inside the folder of a skill the assistant's catalog lists. Symbolic links are neither followed nor read. Anything else answers `{ error: "Not a file of an installed skill: <path>. Use the skill's location folder joined with the path SKILL.md names." }`.
-
-### 3.10 `run_skill_script`
-
-Offered to the assistant only when its catalog lists a built-in skill with at least one script (7.3). No built-in skill has one today, so it isn't offered yet.
-
-- **Description:** `Run one of a built-in skill's bundled scripts and return its output. Use it instead of reading the script. Arguments are passed as a list, never through a shell.`
-- **Input:** `skill` (string), the skill's name; `script` (string), the script's path in the skill folder, e.g. `scripts/validate.js`; `args` (string list, optional, at most 20, each at most 2,000 characters).
-- **Runs:**
-  - only a listed regular file under that built-in skill's `scripts/` ending in `.js`, `.mjs` or `.cjs`;
-  - with the backend's own Node runtime (`ELECTRON_RUN_AS_NODE=1` set, so the desktop app's runtime acts as Node) and no shell;
-  - in the skill's folder, with an environment of only `PATH`, `ELECTRON_RUN_AS_NODE` and `NODE_ENV`, so no app secret or API key reaches the script;
-  - with 30 seconds before it is killed.
-- **Output:** `{ exitCode, stdout, stderr }`, each stream capped at 20,000 characters with `…[truncated]` appended. A timeout adds `timedOut: true` with `exitCode: null`.
-- **Refusals:** `{ error: "Unknown skill: <skill>" }` (not a listed built-in skill) and `{ error: "Not a script of <skill>: <script>" }`.
+> Implementation note: in Mastra 1.66 the tools are `skill({ name })` (loads a skill's instructions), `skill_search({ query, skillNames?, topK? })` and `skill_read({ skillName, path, startLine?, endLine? })` (reads a skill's file). Mastra adds two system messages: the `<available_skills>` list (each `<skill>` with `<name>`, `<description>`, `<location>inline/<name>/SKILL.md</location>` and `<source>local</source>`) and a usage note telling the model to call the `skill` tool with the skill's name and to read its files with `skill_read`. A skill's files are served at `references/<key>`: an in-app skill's `references/<file name>` is keyed `<file name>`, so the path its body names is the path `skill_read` reads; a folder skill's `reference/` files are served under `references/` too, and its body's `reference/` mentions are pointed there (`mastra/assistant-skills.ts`).
 
 ---
 
@@ -796,7 +777,7 @@ The eval harness (8.5) sends only Block 1's dataset half (no visuals lines) plus
 | `session-workspace-id` | every session-scoped call; designer calls | `session-<id>` | workspace resolver (7.1) |
 | `knowledge-used` | every session-scoped call | the knowledge snippets put in Block 3 | persistence of the answer's `knowledge` field |
 | `agent-overrides` | session-scoped assistant calls, only for a session bound to a user agent that still exists and whose Live version (for a preview session, its draft) sets an override | `{ model?: string; reasoningEffort?: 'low'\|'medium'\|'high' }` from the Live version | the `assistant`'s model function (1.3); the turn's provider options (1.4) |
-| `agent-skills` | session-scoped assistant calls, only for a session bound to a user agent that still exists and whose Live version names skills (for a preview session, its draft) | the agent's skills as `{ id, name, description, body, files }`: the `liveSkills` copies, or for a preview the current skills the draft links | the `assistant`'s instructions function (its `## Skills` catalog, 7.3) and `read_file` (3.9) |
+| `agent-skills` | session-scoped assistant calls, only for a session bound to a user agent that still exists and whose Live version names skills (for a preview session, its draft) | the agent's skills as `{ id, name, description, body, files }`: the `liveSkills` copies, or for a preview the current skills the draft links | the `assistant`'s `skills` function (7.3), which gives them to the framework's skill tools (3.9) |
 | `agent-tools` | session-scoped assistant calls, only for a session bound to a user agent that still exists and whose Live version (for a preview session, its draft) has a `tools` list; its value is computed per call as the stored `tools` plus the optional tool groups its skills' bodies link (copies in `agent-skills`), and the assistant treats a selection of all three as no selection; eval cases with `agentTools` (8.1) | the effective optional tools, e.g. `['sample_rows']` (direct links and skill links, 2.1) | the `assistant`'s tools and instructions functions (2.1); Block 1 (4.1) |
 
 A fresh context object is created per call, so nothing leaks between turns or sessions.
@@ -1212,26 +1193,25 @@ The decisions are ADR-0018 and ADR-0019 in [architecture.md](architecture.md).
   3. **Project:** `<QUESTIONS_TO_INSIGHTS_PROJECT_SKILLS_DIR>/<name>/` when that variable is set ([api.md](api.md) environment table). A relative path resolves against the launch directory (1.7). When the variable is not set the level is empty. When it names a folder that does not exist, the backend logs `[skills] Project skills folder not found: <path>` and the level is empty.
 
   The levels mean the same in local mode and on an org server, where both folders are on the server and shared by every user. The backend reads all three once, when it starts. A change is picked up only after a restart. The app never writes the user or project folder. Folders whose name starts with `.` are ignored.
-- **Override by name.** A later level overrides an earlier one with the same name: project over user over built-in. An **in-app override** of a built-in ([data-model.md](data-model.md) 3.10.2, ADR-0022) wins over all three. It is read per call, not at startup, so a save or a reset applies to the next call. It keeps the built-in's agents, loading mode and file locations: the catalog shows its description at the built-in's `<location>`, `read_file` answers the built-in's paths with its content, and the deep-analysis service and the visual designer read its phase and reference files. Eval runs use it too. The skill that wins is the only one with that name any agent gets. Its body and files replace the others' wholesale; nothing is merged.
+- **Override by name.** A later level overrides an earlier one with the same name: project over user over built-in. An **in-app override** of a built-in ([data-model.md](data-model.md) 3.10.2, ADR-0022) wins over all three. It is read per call, not at startup, so a save or a reset applies to the next call. It keeps the built-in's agents, loading mode and file locations: the framework's catalog shows its description and the skill tool returns its content, and the deep-analysis service and the visual designer read its phase and reference files. Eval runs use it too. The skill that wins is the only one with that name any agent gets. Its body and files replace the others' wholesale; nothing is merged.
 - **Layout.** `SKILL.md` starts with front matter between `---` lines:
   - `name` equal to the folder name, and `description`, which starts with `Use when`. Both are required. `name` is on one line. `description` may wrap onto indented continuation lines, or use a `>` or `|` block; the lines are joined with single spaces.
   - `agents` (user and project skills only): one agent registry key, or a one-line list such as `[assistant]`.
   - A built-in skill holds no other key. A user or project skill may carry others, such as `license` or `metadata`; they are ignored.
 
   The body that follows is short: a phase map or a router that names the files to read. Linked files sit under `phases/` (steps run in order) and `reference/` (material read when a step needs it; `references/` is accepted too), and `SKILL.md` names each one by its relative path. Other files in the folder are allowed and can be read on demand. An exact check is TypeScript in the backend, and the skill names the tool or guard that applies it.
-- **Scripts.** `scripts/` holds a skill's bundled scripts. Only a built-in skill's Node scripts run, through `run_skill_script` (3.10, ADR-0020): no shell, a minimal environment and a timeout. No built-in skill has a script today. A user or project skill's `scripts/` is never run.
+- **Scripts.** `scripts/` holds a skill's bundled scripts. No script is run: the app has no script tool (ADR-0024), and no built-in skill has one today.
 - **Which agents get a skill.**
   - A built-in skill reaches the agents 7.4 names, in the loading mode it names.
   - A new user or project skill is on demand for the agents its `agents` key names, or for the `assistant` when it has none. Only an agent that can load a skill on demand may be named. Today that is the `assistant`; the other agents run without tools.
   - An override keeps the agents and the loading mode of the skill it replaces. Its own `agents` key is ignored.
   - User agents and eval runs run on the `assistant` (1.2, 8), so they get its skills, user and project ones included.
-- **On demand.** The on-demand skills an agent gets make up its catalog, sorted by name. The app renders the catalog itself into the `## Skills` section of the assistant's prompt (2.1, 7.5): `<available_skills>` with each skill's name, its description and the absolute path of its `SKILL.md` as `<location>`. The model reads a skill with `read_file` (3.9) and runs a built-in skill's scripts with `run_skill_script` (3.10). The framework's skill catalog, usage note and `skill` / `skill_search` / `skill_read` tools are not used (ADR-0020). An agent with no on-demand skills gets no Skills section and no `read_file`.
+- **On demand (ADR-0024).** The on-demand skills an agent gets are declared to the framework on every request, through the agent's `skills` option as a function of the request context (Mastra `AgentConfig.skills`, `createSkill` from `@mastra/core/skills`). Each skill is `createSkill({ name, description, instructions, references })`: its body with the links resolved (ADR-0023) as the instructions, and its reference files, links resolved, as `references`. User and project skills are given the same way, from their files, until BA-211 removes them. The framework then renders its own `<available_skills>` system message (7.5) and gives the model its skill tools (3.9). Skills are sorted by name. An agent with no on-demand skills declares none. The catalog wording and the tools are the framework's to change: a framework upgrade re-runs the evals.
 - **Harness-loaded.** A skill whose condition the code can decide is kept out of every catalog. The caller reads the body, or the one linked file it needs, from the skill that wins for that name, and sends it as a system message on that call.
 - **In-app skills (ADR-0021).** A user writes skills in the app ([data-model.md](data-model.md) 3.10.1) and assigns them to their agents. They reach a call only through the `agent-skills` key (4.2), so the plain assistant, the other agents and eval runs never get them.
-  - **Catalog.** The `## Skills` catalog of such a call holds the assistant's on-demand skills plus the agent's skills, sorted together by name. An agent's skill named like a user or project skill replaces that skill in this call's catalog only: `read_file` still reads that skill's folder by its absolute path, because its allow-list is the assistant's catalog at startup. The catalog is built per call, like the tools (2.1); a call without `agent-skills` gets today's catalog.
-  - **Location.** An in-app skill's `<location>` is `/in-app-skills/<name>/SKILL.md`. It is a virtual path that `read_file` answers from the call's copies (3.9); nothing is written to disk.
-  - **`SKILL.md`.** Reading it returns the front matter and the body: `---`, `name: <name>`, `description: <description>`, `---`, a blank line, then the body. The reference files are read at `/in-app-skills/<name>/reference/<file name>`. **Links are resolved when served** (ADR-0023): a `[[tool:x]]` in the body or a reference file reaches the model as `the "x" tool`, so it never sees `[[`. A skill's body may link tools only; the optional tools it links are added to the agent's selection (2.1).
-  - **No scripts.** An in-app skill has no `scripts/`, and the Skills section's script sentence is unchanged.
+  - **Skills of the call.** The `skills` function returns the assistant's on-demand skills plus the agent's skills, sorted together by name. An agent's skill named like a user or project skill replaces that skill in this call only. A call without `agent-skills` gets the assistant's on-demand skills alone. They are built per call, like the tools (2.1).
+  - **Content.** An in-app skill has no path and no file on disk: it is a `createSkill` whose instructions are its body and whose `references` are its reference files, keyed by their path. **Links are resolved before the framework sees them** (ADR-0023): a `[[tool:x]]` in the body or a reference file reaches the model as `the "x" tool`, so it never sees `[[`. A skill's body may link tools only; the optional tools it links are added to the agent's selection (2.1).
+  - **No scripts.** An in-app skill has no `scripts/`.
 - **Built-in check.** When the backend starts, it validates every built-in skill folder:
   - `SKILL.md` is present, both keys are present (`name` on one line) and no other key is used;
   - `name` equals the folder, and `description` starts with `Use when`;
@@ -1245,7 +1225,7 @@ The decisions are ADR-0018 and ADR-0019 in [architecture.md](architecture.md).
 
   A skill with any problem is **skipped**: the backend keeps running, logs the warning `[skills] Skipped <level> skill "<folder>": <problem>; <problem>`, and the agent page lists it under Skipped ([agents-evals](../capabilities/agents-evals/spec.md) R63-R67). A skipped override leaves the skill of the level below in place. A skill that passes may carry **warnings**, shown on the agent page: `agents is ignored on an override`, and `scripts/ is not run for user and project skills`.
 
-> Implementation note: `mastra/app-skills.ts` resolves the bundle root (`skills/` next to the compiled file, with the Mastra Studio source layout as fallback), the user root from `APP_DATA_DIR` (as `mastra/storage.ts` does) and the project root from the variable. It validates and resolves all three when `mastra/index.ts` is loaded, and serves `appSkillDocument(name)` / `appSkillBody(name)` / `appSkillFile(name, path)` from the winning skill. `catalogSkills(agent)` gives an agent's on-demand skills. `mastra/skill-tools.ts` builds `read_file` and `run_skill_script` over them, and `mastra/agents/assistant-prompt.ts` builds the sectioned prompt. Agents are given no framework `skills`, and workspaces are built without a `skills` option. `agentSkillsView(agent)` feeds `GET /agents/:key/skills` ([api.md](api.md) 2.6).
+> Implementation note: `mastra/app-skills.ts` resolves the bundle root (`skills/` next to the compiled file, with the Mastra Studio source layout as fallback), the user root from `APP_DATA_DIR` (as `mastra/storage.ts` does) and the project root from the variable. It validates and resolves all three when `mastra/index.ts` is loaded, and serves `appSkillDocument(name)` / `appSkillBody(name)` / `appSkillFile(name, path)` from the winning skill. `catalogSkills(agent)` gives an agent's on-demand skills. The assistant's `skills` function builds the framework skills from them and from `agent-skills`, and `mastra/agents/assistant-prompt.ts` builds the sectioned prompt. Workspaces are built without a `skills` option. `agentSkillsView(agent)` feeds `GET /agents/:key/skills` ([api.md](api.md) 2.6).
 
 ### 7.4 Skills per agent
 
@@ -1257,33 +1237,11 @@ Built-in skills, declared in code (`AGENT_SKILLS` for on-demand, `HARNESS_SKILLS
 | `visualization` (designer) | none (it runs without tools) | `interactive-visuals` (7.2): the router body of `SKILL.md`, plus `reference/spec-mode.md` on spec calls or `reference/freeform.md` on freeform calls |
 | `sql-fixer`, `sql-verifier`, `knowledge-bootstrap`, `assistant-eval-judge` | none | none |
 
-`curated-knowledge` is the only built-in skill on demand (ADR-0020), so every assistant call carries the `## Skills` section and `read_file`. Two other on-demand skills were measured and cut on 2026-10-13. A visuals skill would have cost a catalog plus usage note of about 1,045 characters on every turn to save 427. A dialects skill had no existing guidance to move. The first user or project skill that reaches the `assistant` gives it the `## Skills` section and `read_file` on every turn (7.3).
+`curated-knowledge` is the only built-in skill on demand (ADR-0020), so every assistant call carries the framework's skill catalog and skill tools. Two other on-demand skills were measured and cut on 2026-10-13. A visuals skill would have cost a catalog plus usage note of about 1,045 characters on every turn to save 427. A dialects skill had no existing guidance to move. A user or project skill that reaches the `assistant` joins the same catalog (7.3).
 
-### 7.5 The assistant's `## Skills` section
+### 7.5 The assistant's skill catalog
 
-Appended after `## Working rules`, separated by a blank line, only when the assistant has on-demand skills (7.3). `<name>`, `<description>` and the path are XML-escaped. Skills are sorted by name. The script sentence depends on whether `run_skill_script` is offered:
-
-```
-## Skills
-Skills are folders of instructions, scripts and references for specific kinds
-of work. Below is the list of installed skills (name, description, location).
-
-Before starting any task that matches a skill's description, read that skill's
-SKILL.md with read_file and follow it. Several skills may apply; read each one.
-Read files that SKILL.md references only when the current step needs them.
-<script sentence>
-
-<available_skills>
-  <skill>
-    <name>sql-style</name>
-    <description>Use when writing or reviewing SQL.</description>
-    <location>/abs/path/to/skills/sql-style/SKILL.md</location>
-  </skill>
-</available_skills>
-```
-
-- With `run_skill_script` offered, the script sentence is: `Run bundled scripts with run_skill_script rather than reading them into context, unless SKILL.md says otherwise.`
-- Without it: `Bundled scripts can't be run here: don't read them into context unless SKILL.md says otherwise.`
+The app renders no Skills section in the assistant's prompt (ADR-0024). The framework renders `<available_skills>` itself as a system message of the call, listing each skill the `skills` function returned (7.3) with its name and description, and a usage note telling the model to load a skill with the skill tool (3.9) when its description matches the task. Its wording is the framework's; tests assert what the call carries, not a fixed text.
 
 ---
 
@@ -1396,7 +1354,7 @@ A case **passes** when it has at least one check and every check scored 1. Each 
 
 ## Appendix A — `assistant` system prompt (current wording)
 
-Lines are joined with `\n`. A rebuild may tune the wording but must keep every rule A1–A12 and A19–A35, the opening phrase and the section headings (2.1). Rules A13–A18 are the `curated-knowledge` skill (Appendix B), not part of this prompt. The `## Tools` lines are generated from the tools (2.1). The built-in `curated-knowledge` skill is always in the catalog, so the shipped prompt always ends with the `## Skills` section (7.5) after a blank line, and `- read_file(path): …` follows `ask_clarification` (plus `- run_skill_script(skill, script, args): …` when offered). Below: the prompt up to the end of the working rules, then the Skills section with the built-in catalog, `<bundle>` being the folder the app's built-in skills are installed in.
+Lines are joined with `\n`. A rebuild may tune the wording but must keep every rule A1–A12 and A19–A35, the opening phrase and the section headings (2.1). Rules A13–A18 are the `curated-knowledge` skill (Appendix B), not part of this prompt. The `## Tools` lines are generated from the tools (2.1). The prompt has no Skills section (7.5): the on-demand skills reach the model through the framework. **This appendix must be regenerated from `assistantAgent.getInstructions()`** (the full-selection prompt, as the golden fixture `assistant-prompt.full.txt` is) whenever the prompt changes.
 
 ```
 You are the Questions to Insights assistant — a data analyst working over
@@ -1415,7 +1373,6 @@ entities and data, then answer it yourself.
 - create_visual(sourceMessageAt, instruction): Create a new interactive visual (HTML/CSS/JS chart) from one of your completed analysis answers.
 - update_visual(visualId, instruction): Tailor an existing interactive visual: change chart type, colours, labels, filters, which series or how many items are shown, etc.
 - ask_clarification(question, options): Ask the user ONE clarifying question with 2-4 concrete answer options, either before starting an analysis when their question is ambiguous (unclear scope, metric, timeframe, or entity), or mid-analysis when the data itself is ambiguous — a filter value, member/entity name or timeframe with several plausible matches.
-- read_file(path): Read one file of an installed skill by its absolute path: the location the skill list gives for SKILL.md, or that folder joined with a path SKILL.md names.
 
 ## Working rules
 Call ask_clarification only when interpretations diverge materially —
@@ -1516,28 +1473,11 @@ Rules:
 - When the user asks what data they have, describe the datasets from the
   session context and describe_entity alone: answer without running any
   query.
-
-## Skills
-Skills are folders of instructions, scripts and references for specific kinds
-of work. Below is the list of installed skills (name, description, location).
-
-Before starting any task that matches a skill's description, read that skill's
-SKILL.md with read_file and follow it. Several skills may apply; read each one.
-Read files that SKILL.md references only when the current step needs them.
-Bundled scripts can't be run here: don't read them into context unless SKILL.md says otherwise.
-
-<available_skills>
-  <skill>
-    <name>curated-knowledge</name>
-    <description>Use when the turn carries a curated dataset knowledge block: how to apply its [term], [instruction] and [default_filter] snippets.</description>
-    <location><bundle>/curated-knowledge/SKILL.md</location>
-  </skill>
-</available_skills>
 ```
 
 ## Appendix B — `curated-knowledge` skill body (current wording)
 
-The body of `skills/curated-knowledge/SKILL.md` after its front matter (`name: curated-knowledge`, `description: "Use when the turn carries a curated dataset knowledge block: how to apply its [term], [instruction] and [default_filter] snippets."`). An on-demand skill: the model reads it with `read_file` when a call carries Block 3 (4.1, 7.4). A rebuild may tune the wording but must keep rules A13–A18.
+The body of `skills/curated-knowledge/SKILL.md` after its front matter (`name: curated-knowledge`, `description: "Use when the turn carries a curated dataset knowledge block: how to apply its [term], [instruction] and [default_filter] snippets."`). An on-demand skill: the model loads it with the framework's skill tool when a call carries Block 3 (4.1, 7.4). A rebuild may tune the wording but must keep rules A13–A18.
 
 ```
 Curated knowledge:

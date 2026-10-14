@@ -75,7 +75,7 @@ describe('SkillsService (api.md 94-98; agents-evals R68-R74)', () => {
           ...valid,
           name: '  fiscal-calendar ',
           description: `  ${valid.description} `,
-          files: [{ path: 'reference/quarters.md', content: 'Q1 is July.' }],
+          files: [{ path: 'references/quarters.md', content: 'Q1 is July.' }],
         });
         expect(skill).toMatchObject({
           name: 'fiscal-calendar',
@@ -83,7 +83,7 @@ describe('SkillsService (api.md 94-98; agents-evals R68-R74)', () => {
           body: valid.body,
           fileCount: 1,
           agents: [],
-          files: [{ path: 'reference/quarters.md', content: 'Q1 is July.' }],
+          files: [{ path: 'references/quarters.md', content: 'Q1 is July.' }],
         });
         expect(skill.id).toMatch(/^[0-9a-f-]{36}$/);
         expect(skill).not.toHaveProperty('ownerId');
@@ -135,51 +135,56 @@ describe('SkillsService (api.md 94-98; agents-evals R68-R74)', () => {
         'eleven files',
         {
           files: Array.from({ length: 11 }, (_, i) => ({
-            path: `reference/f${i}.md`,
+            path: `references/f${i}.md`,
             content: '',
           })),
         },
         'A skill has at most 10 reference files',
       ],
       [
-        'a path outside reference/',
+        'a path outside references/',
         { files: [{ path: 'scripts/run.js', content: '' }] },
-        'Name reference files reference/<file name>',
+        'Name reference files references/<file name>',
       ],
       [
         'a bad file name',
-        { files: [{ path: 'reference/.hidden', content: '' }] },
-        'Name reference files reference/<file name>',
+        { files: [{ path: 'references/.hidden', content: '' }] },
+        'Name reference files references/<file name>',
       ],
       [
         'a nested file name',
-        { files: [{ path: 'reference/a/b.md', content: '' }] },
-        'Name reference files reference/<file name>',
+        { files: [{ path: 'references/a/b.md', content: '' }] },
+        'Name reference files references/<file name>',
       ],
       [
         'a duplicate path',
         {
           files: [
-            { path: 'reference/a.md', content: '' },
-            { path: 'reference/a.md', content: '' },
+            { path: 'references/a.md', content: '' },
+            { path: 'references/a.md', content: '' },
           ],
         },
-        'Two reference files are named "reference/a.md"',
+        'Two reference files are named "references/a.md"',
       ],
       [
         'a long file',
-        { files: [{ path: 'reference/a.md', content: 'x'.repeat(20_001) }] },
-        '"reference/a.md" is at most 20,000 characters',
+        { files: [{ path: 'references/a.md', content: 'x'.repeat(20_001) }] },
+        '"references/a.md" is at most 20,000 characters',
       ],
       [
         'a body naming a missing file',
-        { body: 'See reference/quarters.md.' },
-        "The body names reference/quarters.md, which this skill doesn't have",
+        { body: 'See references/quarters.md.' },
+        "The body names references/quarters.md, which this skill doesn't have",
       ],
       [
         'a body naming a missing file that is not markdown',
-        { body: 'Rates are in reference/rates.csv, by quarter.' },
-        "The body names reference/rates.csv, which this skill doesn't have",
+        { body: 'Rates are in references/rates.csv, by quarter.' },
+        "The body names references/rates.csv, which this skill doesn't have",
+      ],
+      [
+        'the singular folder name',
+        { files: [{ path: 'reference/a.md', content: '' }] },
+        'Name reference files references/<file name>',
       ],
     ];
 
@@ -244,7 +249,7 @@ describe('SkillsService (api.md 94-98; agents-evals R68-R74)', () => {
       asAda(async () => {
         const created = await t.service.create({
           ...valid,
-          files: [{ path: 'reference/a.md', content: 'A' }],
+          files: [{ path: 'references/a.md', content: 'A' }],
         });
         const saved = await t.service.save(created.id, {
           ...valid,

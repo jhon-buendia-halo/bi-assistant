@@ -22,12 +22,12 @@ Agent Hub and agent detail
 - R2. Search SHALL match the trimmed query, case-insensitively, as a substring of the agent's name or description, and SHALL apply as the user types. The filters SHALL show: All, the sections of R1; Pinned, a single **Pinned** section holding every pinned agent of any kind, ordered by kind (Official, Mine, System) and then by name; Official, only the assistant, in the Official section; Mine, only user agents, pinned or not, in the Mine section (pinned first, R1). The System section SHALL show only under All. Search and filter combine. States: while loading, "Loading agents…"; on failure, the backend's message or "Backend unreachable"; a non-empty query that matches nothing, `No agents match "<query>"`; otherwise the Pinned filter with nothing pinned shows `No pinned agents yet.` and the Mine filter with no user agents shows `No agents of yours yet.`. Under All with no user agents, the Mine section is omitted.
 - R3. Each section SHALL show its first row of 3 cards. When more of its agents match the search and filter, a `Show more (<n>)` control SHALL follow, where n is the number of hidden cards. Clicking it SHALL show every card of the section and turn the control into `Show less`, which collapses the section to its first row again. Each section expands on its own. The search text, the filter and the expanded sections SHALL reset each time the hub opens, including on return from a detail view.
 - R4. Each card's pin toggle SHALL read `Pin`, with the accessible name `Pin <name>`, or `Pinned`, with the accessible name `Unpin <name>`, and SHALL expose its pressed state. Clicking it, or a card's **Start chat**, SHALL NOT open the agent. The change SHALL show on the hub at once: the toggle flips and the card re-orders within its own section (pinned cards first, R1). It SHALL NOT move the card to another section or hide a section. Under the Pinned filter, unpinning removes the card from the Pinned section. The change is then saved (R47), so it survives a restart. If saving fails, the card SHALL return to its previous state and an error toast SHALL show the backend's message or "Backend unreachable". A successful pin or unpin raises no toast.
-- R5. Clicking a card anywhere but its pin toggle or its **Start chat** SHALL open the agent's detail view. The view SHALL show an **All agents** back button to the hub, the name as heading, the id, the description and, for a user agent, its `Draft` or `Live` chip and `Unpublished changes` badge; then these tabs: **Prompt template**, **Tools (N)**, **Memory**, **LLM Config**, **Evals**, with **Graph** after Tools for a user agent, with Prompt template selected first. Opening a different agent SHALL reset all tab, selection and run state. A Live user agent's detail and the Official agent's detail SHALL offer **Start chat** (R53). A user agent's detail SHALL also offer **Edit**, which opens the agent editor on its draft (R54), and two more actions:
+- R5. Clicking a card anywhere but its pin toggle or its **Start chat** SHALL open the agent's detail view. The view SHALL show an **All agents** back button to the hub, the name as heading, the id, the description and, for a user agent, its `Draft` or `Live` chip and `Unpublished changes` badge; then these tabs, in this order: **Chat Box** (not for System agents), **System Prompt**, **Skills (N)**, **Tools (N)**, **Graph** (user agents only), **Memory**, **Evals** and **LLM Config**. The first tab shown is Chat Box for a user agent and for the Official agent, and System Prompt for a System agent (R90, R91). Opening a different agent SHALL reset all tab, selection and run state. A Live user agent's detail and the Official agent's detail SHALL offer **Start chat** (R53). A user agent's detail SHALL also offer **Edit**, which opens the agent editor on its draft (R54), and two more actions:
   - **Publish**, shown only when the agent has no Live version or has unpublished changes. It publishes the draft (R44, R45) and shows the backend's message as a toast: `Agent "<name>" is Live`, or the refusal, such as `Select at least one dataset to publish`. On success the detail reloads, so the button disappears and the chip reads `Live`.
   - **Delete**, which first asks `Delete "<name>"?` with the explanation `Its sessions keep their transcripts and continue with the assistant.`. Cancelling changes nothing. Confirming deletes the agent (R50), shows the toast `Agent "<name>" deleted` and returns to the hub, which no longer lists it. A failure shows the backend's message as a toast and stays on the detail.
 
   Built-in agents (Official and System) SHALL offer neither Edit, Publish nor Delete. System agents SHALL NOT offer Start chat.
-- R6. The Prompt template tab SHALL show the agent's instructions as plain text. If the agent builds its prompt at request time and has no static text, it SHALL say "This agent builds its prompt at request time, so there is no static template to show." For a user agent the tab SHALL show the assistant's prompt, then, under the label `Agent instructions`, the agent's own instructions (Live version, else draft) with each link shown as a read-only chip (R86), or `No instructions yet.` when they are empty. The Tools tab SHALL list each tool alphabetically with its name, description and the names of its input parameters; for a user agent it SHALL be the tool library of R87. An agent with no tools SHALL show "This agent runs in a single step with no tools." A user agent lists the assistant's tools (R49).
+- R6. The System Prompt tab SHALL show the agent's instructions as plain text. If the agent builds its prompt at request time and has no static text, it SHALL say "This agent builds its prompt at request time, so there is no static template to show." For a user agent the tab SHALL show the assistant's prompt, then, under the label `Agent instructions`, the agent's own instructions (Live version, else draft) with each link shown as a read-only chip (R86), or `No instructions yet.` when they are empty; the user agent's owner can edit them in place (R92-R94). The Tools tab SHALL list each tool alphabetically with its name, description and the names of its input parameters; for a user agent it SHALL be the tool library of R87. An agent with no tools SHALL show "This agent runs in a single step with no tools." A user agent lists the assistant's tools (R49).
 - R7. The Memory tab SHALL show, for an agent with memory: "Recent messages replayed" (`<N> messages`, "Disabled" or "Default"), "Semantic recall", "Working memory" and "Auto-generated titles" (each "Enabled" or "Disabled"), and "Storage" when known. An agent with no memory SHALL show "This agent is stateless — no memory is configured." For the assistant: 40 messages replayed, semantic recall off, titles off. The **LLM Config** tab SHALL show the agent's LLM settings (R89); with none resolved it SHALL say "No model resolved — save an LLM configuration in Settings first." (see [../llm-settings/spec.md](../llm-settings/spec.md)). For a user agent the Memory tab describes the assistant (R49).
 - R8. Requesting an agent that does not exist SHALL fail with `Agent "<key>" not found` (HTTP 404), shown in the detail view.
 - R9. The system SHALL tolerate an agent whose prompt, tools, memory or model cannot be read: that facet is simply empty, the rest still loads.
@@ -154,11 +154,11 @@ User agents (definitions)
 - R57. **Publish** SHALL first save the form when it has changes (R56; a refusal stops it), then publish the draft (R44, R45) and show `Agent "<name>" is Live` or the refusal, such as `Select at least one dataset to publish`. It SHALL be shown while the agent is new, has no Live version, has unpublished changes, or the form has changes.
 - R58. The editor's header SHALL show the agent's `Draft` or `Live` chip and, when it applies, `Unpublished changes`, updated after every save and publish. Editing a Live agent SHALL change only its draft: its sessions keep the Live version until the draft is published (R44; sessions-chat R54).
 - R59. **Back** SHALL return to the agent's detail view, or to the hub for an agent that was never saved. Leaving the editor in any way (Back, the rail, the drawer) with unsaved changes SHALL first ask `Discard unsaved changes?`. Cancelling SHALL keep the editor open with its changes.
-- R60. **Preview** SHALL open the **preview chat** in the right Details panel, beside the form (app-shell R10). While the editor is open, the Details panel SHALL always hold the preview chat, however it is opened. The preview SHALL behave like a session started from the agent (sessions-chat R54, R55, R58), titled `Preview`, except that it runs the saved **draft**:
+- R60. The agent page's **Chat Box** tab (R90) SHALL reuse this mechanism for a user agent: the same preview session over the saved draft, in the page instead of the Details panel. **Preview** SHALL open the **preview chat** in the right Details panel, beside the form (app-shell R10). While the editor is open, the Details panel SHALL always hold the preview chat, however it is opened. The preview SHALL behave like a session started from the agent (sessions-chat R54, R55, R58), titled `Preview`, except that it runs the saved **draft**:
   - sending a preview message SHALL first save the form when it has changes (R56; a refusal stops the send), so the preview always runs what Save stored;
   - each preview turn SHALL use the draft's current instructions, model and effort overrides, the tools and skills its links select (R43, R82) with the current content of the linked skills, and those of its datasets that exist;
   - with no existing dataset in the draft, the panel SHALL say `Select at least one dataset to preview` and the composer SHALL be disabled.
-- R61. A preview conversation SHALL NOT be listed with the sessions or stored in the sessions collection. **Reset preview** SHALL discard it and start an empty one. Leaving the editor, or closing the Details panel, SHALL discard it together with its agent memory and workspace files. Preview conversations left behind when the app stopped SHALL be discarded at the next backend start.
+- R61. A preview conversation SHALL NOT be listed with the sessions or stored in the sessions collection. **Reset preview** SHALL discard it and start an empty one. Leaving the editor, or closing the Details panel, SHALL discard it together with its agent memory and workspace files. Preview conversations left behind when the app stopped SHALL be discarded at the next backend start. The same holds for the Chat Box tab's conversation: **New chat** discards it and leaving the agent page discards it (R90).
 
 ### Ownership and permissions
 
@@ -166,14 +166,14 @@ User agents (definitions)
 
 ### Skills tab
 
-- R63. The agent detail SHALL have a read-only **Skills (<n>)** tab. It lists the skills the agent gets ([agents.md](../../system/agents.md) 7.3, 7.4), one per name: its built-in skills, the user and project skills that reach it, and the overrides that replace a built-in. Each skill SHALL show:
+- R63. The agent detail SHALL have a **Skills (<n>)** tab. For the Official agent and the System agents it SHALL be read-only. It lists the skills the agent gets ([agents.md](../../system/agents.md) 7.3, 7.4), one per name: its built-in skills, the user and project skills that reach it, and the overrides that replace a built-in. Each skill SHALL show:
   - its name and its description;
   - the level it comes from (Built-in, User or Project);
   - whether it loads on demand or is loaded by the app;
   - the lower levels it overrides;
   - its warnings.
 
-  A user agent SHALL show the assistant's skills, with a line saying it runs on the assistant, followed by its own skills at the level **In-app**: the copies its Live version runs on, else the skills its draft links. The content of an in-app skill's `SKILL.md` SHALL show its tool links as read-only chips (R86); built-in skills stay plain text.
+  A user agent's Skills tab SHALL instead be the inline skill library of R95 and R96, not the list above. In the read-only tab, an in-app skill's `SKILL.md` SHALL show its tool links as read-only chips (R86); built-in skills stay plain text.
 - R64. Expanding a skill SHALL list every file in its folder, `SKILL.md` first, with `SKILL.md` selected. The selected file's content SHALL be shown exactly as stored. A file larger than 256 KB, or one that isn't text, SHALL be listed but its content not shown.
 - R65. The tab SHALL show where each level's skills come from: built-in ships with the app; the user folder's path; the project folder's path, or that `QUESTIONS_TO_INSIGHTS_PROJECT_SKILLS_DIR` is not set. A folder that doesn't exist SHALL be marked not found.
 - R66. A user or project skill that fails its checks SHALL be listed under **Skipped**, with every problem, on the page of each agent it would have reached. It SHALL NOT count toward the tab's number, and the agent SHALL NOT get it.
@@ -185,7 +185,7 @@ In-app skills: know-how a user writes in the app and assigns to their agents (AD
 
 - R68. The Agent Hub's header SHALL offer **Skills**, beside **New agent**. It SHALL open the **skills library**, a page in the Agents area. **Back** SHALL return to the hub.
 - R69. The library's **Your skills** section (R75) SHALL list the user's skills sorted by name. Each row SHALL show the name, the description and the agents that use it (`Used by <names>`, or `Not used by any agent`), and open the skill editor. **New skill** SHALL open the skill editor empty. With no skills: `No skills yet. A skill is know-how an agent reads when a question needs it.`
-- R70. The **skill editor** SHALL hold: **Name**; **Description**, with the hint `Start with "Use when…". The agent reads the skill only when a question matches it.`; **Body**, the link editor of R81 limited to tools (R84), at most 20,000 characters; and **Reference files**, each a path field (`reference/<file name>`) and a content field, with **Add reference file** (disabled at 10) and **Remove reference file**. Each field SHALL enforce its limit as the user types ([data-model.md](../../system/data-model.md) 3.10.1). Under the description the editor SHALL show **What the agent sees**: the catalog entry, the name and the description.
+- R70. The **skill editor** SHALL hold: **Name**; **Description**, with the hint `Start with "Use when…". The agent reads the skill only when a question matches it.`; **Body**, the link editor of R81 limited to tools (R84), at most 20,000 characters; and **Reference files**, each a path field (`references/<file name>`) and a content field, with **Add reference file** (disabled at 10) and **Remove reference file**. Each field SHALL enforce its limit as the user types ([data-model.md](../../system/data-model.md) 3.10.1). Under the description the editor SHALL show **What the agent sees**: the catalog entry, the name and the description.
 - R71. **Save** SHALL create or save the skill and show `Skill "<name>" created` or `Skill saved`. A refusal SHALL show the backend's message as an error toast and change nothing ([api.md](../../system/api.md) 96). Save SHALL be disabled while nothing changed or while a save is in flight. Leaving with unsaved changes SHALL first ask `Discard unsaved changes?`.
 - R72. **Delete** SHALL ask `Delete "<name>"?`, followed by `Agents using it keep it in their Live version until republished.` when a Live agent uses it. When a draft of any of the user's agents links the skill, Delete and a rename of the skill SHALL be refused with the backend's message `"<name>" is linked by <agent names, comma-separated>. Unlink it first.` as an error toast, changing nothing. Otherwise deleting SHALL show `Skill "<name>" deleted` and return to the library.
 - R73. Changing or deleting a skill SHALL NOT change a Live agent. The agents whose draft links a changed skill SHALL show **Unpublished changes** (R44), and their sessions SHALL keep the copies taken at their last publish. A preview SHALL use the current skill.
@@ -211,7 +211,7 @@ The editor and menu that link skills and tools in an agent's instructions and in
 - R83. Before the model sees them, every link SHALL become a plain mention: `[[tool:x]]` as `the "x" tool` and `[[skill:x]]` as `the "x" skill`. This applies to the agent's instructions and to an in-app skill's body when the model reads it ([../../system/agents.md](../../system/agents.md) 4.1, 7.3). The model never sees `[[`.
 - R84. In the skill editor the menu SHALL list tools only and the only button SHALL be **+ Link tool**. A skill body that links a skill SHALL be refused with `Skills can link tools only`, and a link to an unknown tool with `Unknown tool "<name>"`. Built-in skill bodies SHALL NOT have links.
 - R85. An agent saved before links, whose draft has no `tools`, or has `tools` or `skills` its instructions do not link, SHALL open in the editor with a new last line `Tools and skills: ` followed by a chip for each such item (no `tools` stands for `sample_rows`, `ask_clarification` and `create_visual`), and the notice `Links were added for what this agent had. Save to keep them.`, with the form unsaved. Until it is saved the agent keeps its stored tools, and an agent with no `tools` keeps every tool. Refusals on a create or draft save come after the name checks, in this order: `Unknown skill "<name>"`, `Unknown tool "<name>"`, `An agent can have at most 10 skills`.
-- R86. Read-only views of text with links (the Prompt template tab for a user agent, R6, and an in-app skill's `SKILL.md` on the Skills tab, R63) SHALL show the same chips, not editable.
+- R86. Read-only views of text with links (the System Prompt tab for a user agent when it is not being edited, R6, and an in-app skill's `SKILL.md` on the Skills tab, R63) SHALL show the same chips, not editable.
 
 ### Tools, Graph and LLM Config tabs
 
@@ -220,6 +220,31 @@ The agent detail's tabs for tools, their links and the model settings ([../../sy
 - R87. For a user agent the **Tools** tab SHALL list every tool of the library by name with its status: `Always on`, `Linked` or `Not linked`, and for a linked tool where the link comes from: `Linked from the instructions` and/or `Linked by <skill names>`. The status comes from the Live version, else the draft. A built-in agent's Tools tab is unchanged (R6).
 - R88. The **Graph** tab (user agents only) SHALL draw three columns, Instructions, the linked skills and the tools, with an edge for each link; hovering or focusing a node highlights its chain; a legend names Instructions, Skill, Tool and Always on; **Show unlinked** adds the owner's unlinked skills and the not-linked tools, greyed. Under the drawing, `What happens on each message` lists four steps. A built-in agent's Graph tab SHALL say `This agent has no links: it gets all of its tools.`
 - R89. The **LLM Config** tab (every agent; it replaces the Model tab) SHALL be read-only and show `Provider`, `Model` (with ` (agent override)` when a user agent sets one), `API key` as `Set` or `Not set`, `Max output tokens` (`Default` when the app sets no cap, which is the case for the assistant today) and `Reasoning effort` (the effective one). The key's value SHALL never be shown or sent. Settings are changed in [../llm-settings/spec.md](../llm-settings/spec.md).
+
+### Agent page tabs
+
+The Chat Box, System Prompt and Skills tabs of the agent detail, which work as in the agent-poc reference (ADR-0024; [../../system/ui.md](../../system/ui.md) 4.5, 4.5.8-4.5.10). The other tabs are R6, R7, R87-R89.
+
+- R90. **Chat Box** SHALL be the first tab of a user agent and of the Official agent. It SHALL NOT exist for System agents, which have no chat.
+  - **User agent:** the tab SHALL hold a chat with the agent's **draft**, built on the preview mechanism of R60 and R61: an in-memory session that is not listed with the sessions, discarded when the user leaves the agent page and swept at the next backend start. The header SHALL read `Chat with the draft` and offer **New chat**, which discards the conversation and starts an empty one. It SHALL run what the draft stores: edits saved from the System Prompt tab (R93) apply to the next message of a new chat. When the draft has no existing dataset the tab SHALL say `Add a dataset to this agent to chat with it.` with an **Edit** link to the agent editor and no composer.
+  - **Official agent:** the tab SHALL say `Chats with the assistant run over datasets you choose.` and offer **Start chat** (R53), which opens the new-session screen.
+  - Viewing the tab needs Use agents. Sending in a user agent's draft chat needs Create, test and version agents, as the preview does (R62).
+- R91. The tabs SHALL open on their defaults: **System Prompt** for System agents, **Chat Box** otherwise. The **System Prompt** tab for the Official and System agents SHALL show the core prompt read-only (R6).
+- R92. On a user agent, the **System Prompt** tab SHALL show the assistant's core prompt read-only and collapsed, titled `Assistant core prompt (fixed)`, under the agent's own section, **Agent instructions**: the instructions with their links as chips (R86) and an **Edit** button, shown only with Create, test and version agents. Only the agent's instructions are editable; the core prompt never is.
+- R93. **Edit** SHALL turn the section into the link editor of R81 over the draft's instructions, with:
+  - a toolbar with **+ Link skill or tool**, which opens the menu of R81 with both groups, and the hint `Type / to link a skill or tool. The agent only gets the skills and tools its instructions link.`;
+  - a `Linked:` row with a chip for each link (R82), or `none`, a broken link in the danger colour;
+  - when a link names a skill or tool that does not exist, the error `No <kind> named <name>. Remove the link or create the skill on the Skills tab.`, with ` (and others)` appended when more than one is broken;
+  - **Cancel**, which restores the saved text, and **Save prompt**, which reads `Saving…` while in flight and SHALL be disabled while saving, while the text is unchanged and while a link is broken.
+
+  **Save prompt** SHALL store the text as the draft, with the draft's other fields unchanged, and show the toast `Draft saved` (R56). The links derive the draft's `tools` and `skills` as always (R43). When the agent is Live, the header SHALL then show **Unpublished changes** (R44). The agent editor's Instructions field (R55) stays, and edits the same draft.
+- R94. Leaving the agent page, or switching to another agent or tab, with an unsaved System Prompt edit SHALL first ask `Discard unsaved changes?` (R59). Cancelling SHALL keep the edit open. The editor's character limit and counter are R81's.
+- R95. On a user agent, the **Skills** tab SHALL be the user's skill library inline (R68-R74), with no change of page:
+  - the user's skills, sorted by name, each row showing the name, the description, its linked tools as chips and a chip for this agent: `Linked` when the draft's links name the skill, `Not linked` when they do not;
+  - **New skill**, and **Edit** and **Delete** on each row, which open an inline form in the tab with the skill editor's fields and rules (R70-R72); **Save** and **Cancel** return to the list in the same tab. The new skill is `Not linked` until the agent's instructions link it (R93);
+  - the **Built-in · included in every agent** section as in the library (R75), read-only, with an **Edit** button on each row for a user with Edit policies and templates, which opens the built-in skill editor (R76);
+  - the tab's number, `Skills (<n>)`, SHALL be the skills the draft links plus the built-in skills the agent gets.
+- R96. The Skills tab's **New skill**, **Edit** and **Delete** SHALL need Create, test and version agents, and be hidden without it (R74). A refusal SHALL show as in R71 and R72, for instance a skill the agent's draft links cannot be deleted or renamed (R72), and the tab SHALL stay on the list or form.
 
 ## Edge cases and errors
 
@@ -253,7 +278,7 @@ The agent detail's tabs for tools, their links and the model settings ([../../sy
 
 ## UI
 
-Main view "Agents" (the Agent Hub) and an agent's detail view, with the Details panel on the right ([../../system/ui.md](../../system/ui.md) sections 4.4 and 4.5, [../app-shell/spec.md](../app-shell/spec.md)). Agent Hub: loading, error, populated (Official, Mine and System sections, pinned cards first, Show more), the Pinned filter's single Pinned section, no match, empty Pinned filter, empty Mine filter. Hub cards and agent detail also carry **Start chat** (R53); a user agent's detail carries **Edit**. Agent editor (R54-R61, R81-R86): new and edit titles, the form with the link editor and its menu, saving, publishing, the unsaved-changes confirmation, and the preview chat in the Details panel (empty, no-dataset, running, reset). Agent detail: loading, error, its tabs (the Graph tab for user agents; the LLM Config tab; the Skills tab: loading, error, no skills, skill list, an expanded skill, a file that isn't shown, Skipped), and for user agents the Publish and Delete actions and the delete confirmation. Evals tab: loading ("Loading evals…"), error, no evals, set list, open set (idle, starting/running, finished), Executions (loading, empty, populated, expanded).
+Main view "Agents" (the Agent Hub) and an agent's detail view, with the Details panel on the right ([../../system/ui.md](../../system/ui.md) sections 4.4 and 4.5, [../app-shell/spec.md](../app-shell/spec.md)). Agent Hub: loading, error, populated (Official, Mine and System sections, pinned cards first, Show more), the Pinned filter's single Pinned section, no match, empty Pinned filter, empty Mine filter. Hub cards and agent detail also carry **Start chat** (R53); a user agent's detail carries **Edit**. Agent editor (R54-R61, R81-R86): new and edit titles, the form with the link editor and its menu, saving, publishing, the unsaved-changes confirmation, and the preview chat in the Details panel (empty, no-dataset, running, reset). Agent detail: loading, error, its tabs (the Chat Box tab, the System Prompt tab in its read and edit states, the inline Skills tab of a user agent (R90-R96); the Graph tab for user agents; the LLM Config tab; the read-only Skills tab: loading, error, no skills, skill list, an expanded skill, a file that isn't shown, Skipped), and for user agents the Publish and Delete actions and the delete confirmation. Evals tab: loading ("Loading evals…"), error, no evals, set list, open set (idle, starting/running, finished), Executions (loading, empty, populated, expanded).
 
 ## Flows
 
@@ -269,7 +294,9 @@ Feature: Agents
     Then I see the "sql-fixer" agent in the System section
     When I open the "Questions to Insights Assistant" agent
     Then I see the heading "Questions to Insights Assistant"
-    And the Prompt tab is shown, containing "You are the Questions to Insights assistant"
+    And the Chat Box tab is shown, with "Start chat"
+    When I open the System Prompt tab
+    Then I see "You are the Questions to Insights assistant"
     When I open the Tools tab
     Then I see "run_readonly_sql" and "ask_clarification"
     When I open the Memory tab
@@ -546,13 +573,13 @@ Feature: Agent skills
     Then the tab reads "Skills (2)"
     And "broken" is listed under Skipped with "description is missing"
 
-  Scenario: A user agent shows its in-app skill at the level In-app
+  Scenario: A user agent's Skills tab is its inline library, not the read-only list
     Given a skill "fiscal-calendar" with the description "Use when a question names a fiscal year."
     And a Live user agent "Finance helper" over "World Cup Core" whose instructions link the skill "fiscal-calendar"
     When I open "Finance helper"
     And I open the Skills tab
-    Then I see a line saying it runs on the assistant
-    And I see the skill "fiscal-calendar" from "In-app", "On demand"
+    Then I see the skill "fiscal-calendar" with the chip "Linked" and the buttons "Edit" and "Delete"
+    And I see no "Where skills come from" section
 ```
 
 E2E: none yet for the Feature below.
@@ -688,13 +715,13 @@ Feature: Agent editor
     And I type "/fis" in "Instructions" and pick "fiscal-calendar"
     And I click "Save"
     And I send "What happened in fiscal 2018?" in the preview
-    Then the model's catalog lists "fiscal-calendar" at "/in-app-skills/fiscal-calendar/SKILL.md"
+    Then the model's skill catalog lists "fiscal-calendar"
     And the model's instructions contain 'the "fiscal-calendar" skill' and no "[["
     When I click "Publish"
     And I change the body of "fiscal-calendar" to "Our fiscal year starts on 1 April." in the skills library
     Then "Finance helper" shows "Unpublished changes"
-    When I start a chat with "Finance helper" and the model reads "/in-app-skills/fiscal-calendar/SKILL.md"
-    Then it reads "Our fiscal year starts on 1 July."
+    When I start a chat with "Finance helper" and the model loads "fiscal-calendar" with the skill tool
+    Then it gets "Our fiscal year starts on 1 July."
 
   Scenario: A linked skill's tools come with it
     Given a skill "chart-style" that links the tool "create_visual" in its body
@@ -790,6 +817,79 @@ Feature: Agent editor
     When I untick "Gone (missing)" and click "Save"
     Then the "Cup historian" card no longer shows a missing-dataset note
 
+  Scenario: Editing the System Prompt in place saves a draft with the link
+    Given a skill "fiscal-calendar" with the description "Use when a question names a fiscal year."
+    And a Live user agent "Cup historian" over "World Cup Core" with the instructions "Answer in one sentence."
+    When I open "Cup historian" from "Agents"
+    Then the Chat Box tab is shown
+    When I open the System Prompt tab
+    Then I see "Assistant core prompt (fixed)" collapsed and the instructions "Answer in one sentence."
+    When I click "Edit"
+    Then I see the hint "Type / to link a skill or tool. The agent only gets the skills and tools its instructions link."
+    And "Save prompt" is disabled
+    When I type "/fis" in the instructions and pick "fiscal-calendar"
+    Then the "Linked:" row shows the chip "fiscal-calendar"
+    When I click "Save prompt"
+    Then I see the toast "Draft saved"
+    And the header shows "Unpublished changes"
+    And the Skills tab shows "fiscal-calendar" as "Linked"
+
+  Scenario: A broken link disables Save prompt
+    Given a Live user agent "Cup historian" over "World Cup Core" with the instructions "Answer in one sentence."
+    When I open "Cup historian" from "Agents", open the System Prompt tab and click "Edit"
+    And I type "[[skill:gone]]" at the end of the instructions
+    Then I see "No skill named gone. Remove the link or create the skill on the Skills tab."
+    And "Save prompt" is disabled
+    When I remove the broken link
+    Then the error is gone and "Save prompt" is disabled because nothing changed
+
+  Scenario: Leaving an unsaved System Prompt edit asks first
+    Given a Live user agent "Cup historian" over "World Cup Core" with the instructions "Answer in one sentence."
+    When I open "Cup historian" from "Agents", open the System Prompt tab and click "Edit"
+    And I type " Be brief." and click "All agents"
+    Then I am asked "Discard unsaved changes?"
+    When I cancel
+    Then the System Prompt tab is still open with " Be brief." typed
+
+  Scenario: The Chat Box tab chats with the draft, and New chat starts over
+    Given a Live user agent "Cup historian" over "World Cup Core" with the instructions "Answer in one sentence."
+    When I open "Cup historian" from "Agents"
+    Then the Chat Box tab shows "Chat with the draft" and "New chat"
+    When I send "Who won in 2014?" in the Chat Box
+    Then I see the stub's answer in the Chat Box
+    And the model received "Answer in one sentence." as the agent's instructions
+    And "Cup historian" is not listed in "Sessions navigation"
+    When I click "New chat"
+    Then the Chat Box is empty
+    When I click "All agents" and open "Cup historian" again
+    Then the Chat Box is empty
+
+  Scenario: The Chat Box needs a dataset
+    Given a draft user agent "Empty historian" with no dataset
+    When I open "Empty historian" from "Agents"
+    Then the Chat Box tab shows "Add a dataset to this agent to chat with it." and an "Edit" link
+
+  Scenario: The Official agent's Chat Box offers Start chat
+    When I open "Questions to Insights Assistant" from "Agents"
+    Then the Chat Box tab shows "Chats with the assistant run over datasets you choose." and "Start chat"
+
+  Scenario: The Skills tab shows what is linked and creates a skill inline
+    Given a skill "fiscal-calendar" with the description "Use when a question names a fiscal year."
+    And a skill "chart-style" with the description "Use when drawing a chart." that links the tool "create_visual"
+    And a Live user agent "Finance helper" over "World Cup Core" whose instructions link the skill "fiscal-calendar"
+    When I open "Finance helper" from "Agents" and open the Skills tab
+    Then "fiscal-calendar" shows the chip "Linked"
+    And "chart-style" shows the chip "Not linked" and the tool chip "create_visual"
+    And I see the "Built-in · included in every agent" section
+    When I click "New skill"
+    And I fill the inline form with the name "fy-rules", the description "Use when a question names a fiscal year." and the body "The fiscal year starts on 1 July."
+    And I click "Save"
+    Then I see the toast 'Skill "fy-rules" created'
+    And "fy-rules" is listed in the tab as "Not linked"
+    And I am still on the Skills tab of "Finance helper"
+    When I click "Delete" on "fy-rules" and confirm
+    Then "fy-rules" is no longer listed
+
   Scenario: The editor has no detectable accessibility violations in either theme
     When I click "Agents" and click "New agent"
     And I click "Preview"
@@ -813,11 +913,11 @@ Feature: Skill library
     When I click "New skill"
     And I type "fiscal-calendar" into "Name"
     And I type "Use when a question names a fiscal year." into "Description"
-    And I type "Our fiscal year starts on 1 July. See reference/quarters.md." into "Body"
+    And I type "Our fiscal year starts on 1 July. See references/quarters.md." into "Body"
     And I click "Save"
-    Then I see the error toast "The body names reference/quarters.md, which this skill doesn't have"
+    Then I see the error toast "The body names references/quarters.md, which this skill doesn't have"
     When I click "Add reference file"
-    And I type "reference/quarters.md" into "Path of reference file 1"
+    And I type "references/quarters.md" into "Path of reference file 1"
     And I type "Q1 is July to September." into "Content of reference file 1"
     And I click "Save"
     Then I see the toast 'Skill "fiscal-calendar" created'

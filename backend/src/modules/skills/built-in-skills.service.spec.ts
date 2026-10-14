@@ -11,7 +11,7 @@ import {
   shippedBuiltIn,
 } from '../../mastra/app-skills';
 import { setSkillOverrides } from '../../mastra/skill-overrides';
-import { readSkillPath } from '../../mastra/skill-tools';
+import { assistantSkillSources } from '../../mastra/assistant-skills';
 import { CurrentUserService, LOCAL_USER } from '../auth/current-user.service';
 import { phasePrompt } from '../deep-analysis/deep-analysis.phases';
 import { BuiltInSkillsService } from './built-in-skills.service';
@@ -229,7 +229,7 @@ describe('BuiltInSkillsService', () => {
     ).not.toHaveProperty('modified');
   });
 
-  it('shows an on-demand override in the catalog at the built-in location and via read_file', async () => {
+  it("shows an on-demand override in the assistant's skills", async () => {
     const { service } = build();
     const original = catalogSkills('assistant')[0];
     await service.save('curated-knowledge', {
@@ -243,13 +243,13 @@ describe('BuiltInSkillsService', () => {
       description: DESCRIPTION,
       dir: original.dir,
     });
-    const read = readSkillPath(
-      catalogSkills('assistant'),
-      `${original.dir}/SKILL.md`,
-    );
-    expect(read).toMatchObject({
-      content: expect.stringContaining('Edited curated knowledge.') as string,
-    });
+    expect(assistantSkillSources()).toEqual([
+      expect.objectContaining({
+        name: 'curated-knowledge',
+        description: DESCRIPTION,
+        body: 'Edited curated knowledge.',
+      }),
+    ]);
   });
 
   it('restores the built-in on reset, also when there was no override', async () => {

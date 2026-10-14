@@ -1,22 +1,36 @@
 <div class="mb-2 flex flex-wrap items-center gap-2">
-  @if (linkSkills()) {
+  @if (toolbar() === "single") {
     <button
       type="button"
-      data-testid="link-skill"
-      (click)="openLinkMenu('skill')"
+      data-testid="link-any"
+      (click)="openLinkMenu()"
       class="btn btn-ghost px-2 py-1"
     >
-      + Link skill
+      + Link skill or tool
+    </button>
+    @if (toolbarHint()) {
+      <span class="text-[12px] text-fg-muted">{{ toolbarHint() }}</span>
+    }
+  } @else {
+    @if (linkSkills()) {
+      <button
+        type="button"
+        data-testid="link-skill"
+        (click)="openLinkMenu('skill')"
+        class="btn btn-ghost px-2 py-1"
+      >
+        + Link skill
+      </button>
+    }
+    <button
+      type="button"
+      data-testid="link-tool"
+      (click)="openLinkMenu('tool')"
+      class="btn btn-ghost px-2 py-1"
+    >
+      + Link tool
     </button>
   }
-  <button
-    type="button"
-    data-testid="link-tool"
-    (click)="openLinkMenu('tool')"
-    class="btn btn-ghost px-2 py-1"
-  >
-    + Link tool
-  </button>
 </div>
 
 <div class="editor" #host></div>

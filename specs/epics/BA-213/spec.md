@@ -18,7 +18,7 @@ The agent's instructions stay layered on the fixed core prompt. The read-only SQ
 
 - **Tool selection** ([BA-217](https://halo-powered.atlassian.net/browse/BA-217)).
   - An agent's configuration names the optional tools it gets. `list_entities`, `describe_entity` and `run_readonly_sql` are always on, because an agent without them can't ground an answer.
-  - The optional tools are `sample_rows`, `ask_clarification`, and **Visuals** (`create_visual` and `update_visual` together, since one without the other makes no sense). `read_file` stays implied: it is offered whenever the agent has skills in its catalog.
+  - The optional tools are `sample_rows`, `ask_clarification`, and **Visuals** (`create_visual` and `update_visual` together, since one without the other makes no sense). The framework's skill tool is not one of the choices: an agent with skills always has it (since BA-223, ADR-0024).
   - A tool that is off is not offered to the model. The prompt's `## Tools` section lists only the tools offered.
   - Working rules that name a tool that is off are replaced by tool-free wording. For example, with clarification off the agent picks the most natural reading and states the assumption; with Visuals off it says it can't draw a visual here.
   - The plain assistant and agents with every tool on get today's prompt, byte for byte.
@@ -30,7 +30,7 @@ The agent's instructions stay layered on the fixed core prompt. The read-only SQ
   - Text only: no scripts, ever.
 - **Skills assigned to agents** ([BA-216](https://halo-powered.atlassian.net/browse/BA-216)).
   - The editor gets a skill picker over the owner's in-app skills.
-  - A session bound to the agent gets a `## Skills` catalog of the built-in on-demand skills (`curated-knowledge` today) plus the agent's skills. `read_file` reads an in-app skill through a virtual location resolved from the call's agent configuration, never from disk.
+  - A session bound to the agent gets the built-in on-demand skills (`curated-knowledge` today) plus the agent's skills, given to the model through the framework's skill catalog and skill tool (since BA-223, ADR-0024; first built as an app-rendered `## Skills` catalog with `read_file` over virtual paths).
   - **Publish copies** each assigned skill's content into the Live version. Editing or deleting a skill changes no Live agent until it is republished, the same guarantee instructions have (R44, R58 in [agents-evals](../../capabilities/agents-evals/spec.md)). The preview chat reads the skills' current content.
   - The agent page's Skills tab shows a user agent's own skills.
 
@@ -46,7 +46,7 @@ Measured from the compiled `assistant` on `main` at `513009d`:
 | `## Working rules` | 5,894 |
 | `## Skills` with `curated-knowledge` | 904 |
 
-- `curated-knowledge` is already on demand, so the `## Skills` section and `read_file` are already sent on every assistant call. Assigning skills to an agent adds catalog entries only: about **160 characters per skill**, plus the length of its description beyond a short one.
+- At the time of this measurement `curated-knowledge` was already on demand, so the `## Skills` section and `read_file` were sent on every assistant call (BA-223 later moved the catalog to the framework). Assigning skills to an agent adds catalog entries only: about **160 characters per skill**, plus the length of its description beyond a short one.
 - Turning tools off makes the prompt shorter:
   - clarification off: the tool line (357) and the clarification paragraph (1,347), partly replaced by one shorter sentence;
   - Visuals off: two tool lines (313) and the visuals rules (428), replaced by one sentence;
@@ -61,10 +61,14 @@ No configuration this epic allows makes an agent's prompt longer than today's by
 - **Links in instructions, skills that link tools, and new tabs** ([BA-219](https://halo-powered.atlassian.net/browse/BA-219), [BA-220](https://halo-powered.atlassian.net/browse/BA-220), [BA-221](https://halo-powered.atlassian.net/browse/BA-221); added on 2026-10-14 at the user's request; ADR-0023).
   - An agent's instructions are written in a rich editor where `/` links the owner's in-app skills and the assistant's tools as chips, saved as `[[skill:<name>]]` and `[[tool:<name>]]`. The links are the single source of truth: the backend derives the agent's `tools` and `skills` from them on every save, which **replaces the BA-216 skill picker and the BA-217 tool picker**.
   - An in-app skill's body may link tools, never skills. An agent gets its directly linked optional tools plus those its linked skills link.
-  - The model never sees the syntax: links become plain mentions in the instructions and in a skill's body when `read_file` serves it.
+  - The model never sees the syntax: links become plain mentions in the instructions and in a skill's body when the skill tool serves it.
   - A skill that a draft links can't be deleted or renamed. An agent saved before links gets a `Tools and skills:` line when opened in the editor.
   - The agent page's Tools tab shows the whole library with how each tool is linked; a new **Graph** tab draws instructions to skills to tools; the Model tab becomes **LLM Config**, which shows whether the API key is set and never the key.
   - The design is in [proposals/ba-219-221-design.md](../../../proposals/ba-219-221-design.md).
+- **The agent page as in the reference, and skills through the skill tool** ([BA-222](https://halo-powered.atlassian.net/browse/BA-222), [BA-223](https://halo-powered.atlassian.net/browse/BA-223); added on 2026-10-14 at the user's request; ADR-0024).
+  - BA-222: the agent page gets a **Chat Box** tab (chat with the draft), a **System Prompt** tab whose agent instructions are editable in place with links, and an inline **Skills** tab (the user's library with `Linked` and `Not linked`), in the tab order Chat Box, System Prompt, Skills, Tools, Graph, Memory, Evals, LLM Config.
+  - BA-223: the assistant gets its on-demand skills through Mastra's `skills` option, resolved per request, with the framework's own catalog and skill tool. The app's `## Skills` section, `read_file`, `run_skill_script` and the `/in-app-skills/` paths are removed.
+  - The design is in [proposals/ba-222-223-design.md](../../../proposals/ba-222-223-design.md).
 
 ## Out of scope
 
@@ -88,6 +92,8 @@ No configuration this epic allows makes an agent's prompt longer than today's by
 | [BA-219](https://halo-powered.atlassian.net/browse/BA-219) | Link skills and tools in an agent's instructions | 1.14.6 |
 | [BA-220](https://halo-powered.atlassian.net/browse/BA-220) | Skills link tools | 1.14.7 |
 | [BA-221](https://halo-powered.atlassian.net/browse/BA-221) | Tools library, Graph and LLM Config tabs | 1.14.8 |
+| [BA-222](https://halo-powered.atlassian.net/browse/BA-222) | Agent page as in the reference: Chat Box, editable System Prompt and Skills tabs | 1.14.9 |
+| [BA-223](https://halo-powered.atlassian.net/browse/BA-223) | Skills reach the model through Mastra's skill tool | 1.14.10 |
 
 All stories are built on one branch, `feat/BA-213-agent-tools-skills`, and ship as one PR.
 
@@ -102,6 +108,7 @@ All stories are built on one branch, `feat/BA-213-agent-tools-skills`, and ship 
 - [capabilities/admin](../../capabilities/admin/spec.md): managing skills needs Create, test and version agents; viewing them needs Use agents.
 - [system/ui.md](../../system/ui.md): the editor's Tools and Skills fields (4.5.1), the skills library and skill editor, and their copy.
 - [product/glossary.md](../../product/glossary.md): *in-app skill*, *tool selection*, *link (skill or tool)*.
+- BA-222 and BA-223: ADR-0024 (supersedes ADR-0020); capability [agents-evals](../../capabilities/agents-evals/spec.md) R5, R6, R60, R61, R63, R86 change and R90-R96 are new, with new Agent editor scenarios; [sessions-chat](../../capabilities/sessions-chat/spec.md) R54 and the Skills Feature; agents.md 1.2, 2.1, 3.9 (replaces 3.9 and 3.10), 4.2, 7.3-7.5 and Appendix A; ui.md 4.5 and 4.5.8-4.5.10; glossary *Skill*.
 - BA-219 to BA-221: capability R43, R55, R60, R63, R70, R72 change and R81-R89 are new in [agents-evals](../../capabilities/agents-evals/spec.md); api.md 34, 41, 42, 94, 96-98; data-model.md 3.10 and 3.10.1; agents.md 2.1, 4.1, 4.2, 7.3; ui.md 4.5, 4.5.1, 4.5.3, 4.5.5-4.5.7; tech-stack.md (Tiptap).
 
 ## Acceptance
@@ -110,7 +117,7 @@ All stories are built on one branch, `feat/BA-213-agent-tools-skills`, and ship 
 - New eval cases run an agent with clarification off and one with Visuals off, and pass at 100% over 3 runs, with no tool errors.
 - A recording-stub E2E proves, on the real request, that:
   - a tool turned off in the draft is not offered, and its preview answers without it;
-  - an assigned in-app skill is in the catalog and `read_file` returns its body;
+  - an assigned in-app skill is in the model's skill catalog and the skill tool returns its body;
   - after the skill is edited, a session of the Live agent still gets the published copy until the agent is republished.
 - In org server mode, a user sees and assigns only their own skills (an API test with two users).
 - `python3 scripts/check-specs.py` passes.
@@ -128,3 +135,4 @@ All stories are built on one branch, `feat/BA-213-agent-tools-skills`, and ship 
 - **Decision 4: limits.** Up to 10 skills per agent; a description of at most 300 characters; a body of at most 20,000; up to 10 reference files of at most 20,000 each. With 10 skills the catalog grows by at most about 4,600 characters.
 - **Decision 6: links replace the pickers** (2026-10-14, ADR-0023). The BA-216 skill picker and the BA-217 tool picker are replaced by links in the instructions. Decision 3 stands in spirit: skills reach a session only through an agent that **links** them, no longer one that has them ticked; decision 2 (Visuals is one switch) holds, now as linking either visual tool; decision 4's 10-skill cap counts distinct linked skills. The stored `tools` and `skills` lists stay, derived from the links, so no migration.
 - **Decision 5: agent transfer (org mode).** When an admin transfers an agent, its Live version keeps its skill copies and keeps working. The draft's skill references are copied into the new owner's library as new skills, renamed on a name clash. It is built last in BA-216.
+- **Decision 7: reference-style agent page and skill tool** (2026-10-14, ADR-0024). The agent page and the way skills reach the model follow the agent-poc reference. The page keeps this app's database storage, per-user agents, fixed core prompt, built-in overrides and links (ADR-0023); only the instructions are editable on the System Prompt tab. The assistant declares its on-demand skills through Mastra's `skills` option and the framework renders the catalog and provides the skill tool, replacing the app's own (ADR-0020). Decisions 3 and 6 stand. Acceptance: the world-cup evals pass at 100% (3 runs per case) on `claude-sonnet-5`, base versus branch.

@@ -464,7 +464,7 @@ Skills a user writes in the app and assigns to their agents (ADR-0021). They are
 | `name` | string | yes | Lowercase letters, digits and single hyphens (`^[a-z0-9]+(-[a-z0-9]+)*$`), at most 64 characters. Unique among the owner's skills, and never the name of a built-in skill. |
 | `description` | string | yes | Starts with `Use when`; at most 300 characters. It is the skill's catalog entry, the text the model decides by. |
 | `body` | string | yes | Not empty; at most 20,000 characters. May link tools with `[[tool:<name>]]`, never skills (ADR-0023); nothing extra is stored, the tools a skill links are read from its body. |
-| `files` | `{ path, content }[]` | yes | Reference files, at most 10. `path` is `reference/<file name>`, the file name matching `^[A-Za-z0-9][A-Za-z0-9._-]*$` and at most 100 characters; paths are unique. `content` is at most 20,000 characters. Every `reference/…` path the body names is one of them. May be empty. |
+| `files` | `{ path, content }[]` | yes | Reference files, at most 10. `path` is `references/<file name>`, the file name matching `^[A-Za-z0-9][A-Za-z0-9._-]*$` and at most 100 characters; paths are unique. `content` is at most 20,000 characters. Every `references/…` path the body names is one of them. May be empty. |
 | `ownerId` | string | yes | The owning user (3.15). |
 | `createdAt`, `updatedAt` | ISO | yes | Store-maintained. |
 

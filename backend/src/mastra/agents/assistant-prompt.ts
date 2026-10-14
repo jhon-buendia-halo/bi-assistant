@@ -1,11 +1,10 @@
-import { join } from 'path';
-import type { CatalogEntry } from '../agent-skills';
 import { type OptionalAgentTool, selects } from '../agent-tools';
 
 /**
- * The assistant's sectioned system prompt (ADR-0020, agents.md 2.1, 7.5 and
+ * The assistant's sectioned system prompt (ADR-0024, agents.md 2.1 and
  * Appendix A): identity, `## Tools` generated from the tools it is given,
- * `## Working rules`, then `## Skills` when it has on-demand skills.
+ * then `## Working rules`. On-demand skills are not in it: Mastra lists them
+ * and gives the model its skill tool.
  */
 
 export const ASSISTANT_IDENTITY: readonly string[] = [
@@ -249,50 +248,6 @@ export function toolLines(tools: Record<string, PromptTool>): string[] {
   );
 }
 
-function escapeXml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-}
-
-const RUN_SCRIPTS =
-  'Run bundled scripts with run_skill_script rather than reading them into context, unless SKILL.md says otherwise.';
-const NO_SCRIPTS =
-  "Bundled scripts can't be run here: don't read them into context unless SKILL.md says otherwise.";
-
-/** The `## Skills` section (agents.md 7.5); empty when there are no skills. */
-export function skillsSection(
-  skills: readonly CatalogEntry[],
-  canRunScripts: boolean,
-): string[] {
-  if (!skills.length) return [];
-  return [
-    '## Skills',
-    'Skills are folders of instructions, scripts and references for specific kinds',
-    'of work. Below is the list of installed skills (name, description, location).',
-    '',
-    "Before starting any task that matches a skill's description, read that skill's",
-    'SKILL.md with read_file and follow it. Several skills may apply; read each one.',
-    'Read files that SKILL.md references only when the current step needs them.',
-    canRunScripts ? RUN_SCRIPTS : NO_SCRIPTS,
-    '',
-    '<available_skills>',
-    ...[...skills]
-      .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
-      .flatMap((skill) => [
-        '  <skill>',
-        `    <name>${escapeXml(skill.name)}</name>`,
-        `    <description>${escapeXml(skill.description)}</description>`,
-        `    <location>${escapeXml(skill.location ?? join(skill.dir ?? '', 'SKILL.md'))}</location>`,
-        '  </skill>',
-      ]),
-    '</available_skills>',
-  ];
-}
-
 /**
  * The whole prompt, lines joined with `\n`. `tools` are the tools the call
  * is offered and `selection` the agent's tool selection: undefined (every
@@ -300,10 +255,8 @@ export function skillsSection(
  */
 export function buildAssistantInstructions(
   tools: Record<string, PromptTool>,
-  skills: readonly CatalogEntry[],
   selection?: readonly OptionalAgentTool[],
 ): string {
-  const skillLines = skillsSection(skills, 'run_skill_script' in tools);
   return [
     ...ASSISTANT_IDENTITY,
     '',
@@ -312,6 +265,5 @@ export function buildAssistantInstructions(
     '',
     '## Working rules',
     ...assistantWorkingRules(selection),
-    ...(skillLines.length ? ['', ...skillLines] : []),
   ].join('\n');
 }

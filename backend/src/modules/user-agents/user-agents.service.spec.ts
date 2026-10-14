@@ -311,7 +311,7 @@ describe('user agent skills (ADR-0021; R43, R44, R60)', () => {
     name: `skill-${id}`,
     description: 'Use when needed.',
     body,
-    files: [{ path: 'reference/a.md', content: 'A' }],
+    files: [{ path: 'references/a.md', content: 'A' }],
   });
 
   beforeEach(async () => {
@@ -378,7 +378,7 @@ describe('user agent skills (ADR-0021; R43, R44, R60)', () => {
         name: 'skill-b',
         description: 'Use when needed.',
         body: 'Body.',
-        files: [{ path: 'reference/a.md', content: 'A' }],
+        files: [{ path: 'references/a.md', content: 'A' }],
       },
       expect.objectContaining({ id: 'a' }),
     ]);

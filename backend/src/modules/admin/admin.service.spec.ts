@@ -475,7 +475,7 @@ describe('AdminService.transferAgents (api.md 86; admin R43, R64)', () => {
         name,
         description: 'Use when needed.',
         body: `Body of ${name}.`,
-        files: [{ path: 'reference/a.md', content: 'A' }],
+        files: [{ path: 'references/a.md', content: 'A' }],
         ownerId,
       });
     await skill('s-cal', 'fiscal-calendar', 'ada');
@@ -525,7 +525,7 @@ describe('AdminService.transferAgents (api.md 86; admin R43, R64)', () => {
     const copyOf = (name: string) => graces.find((s) => s.name === name)!;
     expect(copyOf('fiscal-calendar-2')).toMatchObject({
       body: 'Body of fiscal-calendar.',
-      files: [{ path: 'reference/a.md', content: 'A' }],
+      files: [{ path: 'references/a.md', content: 'A' }],
     });
     // The clashing id is copied once for both agents.
     const calId = copyOf('fiscal-calendar-2').id;
