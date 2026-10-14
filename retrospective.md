@@ -14,6 +14,26 @@ Entry template:
 
 ---
 
+## 2026-10-14 — 1.1.2 Intellify sample as a Testing Data fixture (BA-212)
+
+### What went well
+- Building the database by hand first (generator in the scratchpad, loaded and registered through the API) settled the model conversion before any repo change. Turning it into a fixture then took one catalogue entry plus the generator moved into `scripts/`.
+- The generator is deterministic (seeded RNG, gzip with `mtime=0`), so "recreate it later" holds both through Load in the app and by regenerating the file. Evidence shows the same hash twice.
+- The new catalogue test checks every bundled seed against its required tables, which covers World Cup and Formula 1 too. Before, a seed missing a table only showed up on a real load.
+- The E2E loads into its own database name and drops it afterwards, so it exercises "created the database" without touching the shared `intellify` database.
+
+### What went wrong
+- The first request ("create a data source") was done outside the repo; the follow-up ("add it as seed") then needed the epic gate, a Jira story and a branch. Asking up front where the result should live would have saved a round trip.
+- The dataset I registered by hand carried column descriptions; the fixture's dataset doesn't, because the Postgres connector ignores column comments. That gap surfaced only when the descriptions moved into the seed.
+- A wait loop used `pgrep -f "npm --prefix backend ci"` and matched its own command line, so it never ended (10-minute timeout). That's the same trap as the `pkill -f` lesson.
+- `npm ci` in `frontend/` fails on `main`: `package-lock.json` is out of sync with `package.json` (electron-builder packages). I worked around it with `npm install --package-lock=false`.
+- The Jira script couldn't run from the worktree until the gitignored `.env` was available there.
+
+### What to do differently
+- When a request could become a repo change, ask whether the result should live in the repo (a fixture or seed) or only on this machine before building it.
+- Never wait on a process with `pgrep -f "<its own command>"`. Wait on the background task's notification, or on a file the process writes.
+- For worktree sessions, set the Jira config from the main checkout's `.env` before the first `jira.sh` call, instead of discovering the gap at the epic gate.
+
 ## 2026-10-14 — 1.13.9 to 1.13.12: sectioned assistant prompt, own skill catalog, lint clean, eval checks, assistant reliability (BA-207 to BA-210)
 
 ### What went well

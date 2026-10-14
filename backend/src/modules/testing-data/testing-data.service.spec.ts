@@ -539,6 +539,7 @@ describe('a register-only fixture (no bundled SQL)', () => {
     expect(status.fixtures.map((fixture) => fixture.id)).toEqual([
       'world-cup',
       'formula-1',
+      'intellify',
       'world-cup-rest',
       'register-only',
     ]);

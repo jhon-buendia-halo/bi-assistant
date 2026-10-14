@@ -1,0 +1,4 @@
+Running 2 tests using 1 worker
+  ✓  1 [web] › e2e/testing-data.spec.ts:57:5 › lists the bundled samples and what is loaded (3.5s)
+  ✓  2 [web] › e2e/testing-data.spec.ts:90:7 › loads the Intellify sample into a new database › seeds it, registers it and reports 49/49 (4.7s)
+  2 passed (8.9s)

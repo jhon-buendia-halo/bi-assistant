@@ -14,11 +14,12 @@ Know, with numbers, whether a change made answers better or worse. A golden data
 - Evals on customer data.
 
 ## Stories
-Jira lists **no child issues**; the roadmap mirrors the epic as one feature.
+Jira holds the epic's planning and eval stories (BA-127, BA-128, BA-182, BA-186, BA-188, BA-190, BA-193); the roadmap mirrors them as 1.1.1. Stories with their own roadmap feature are listed below.
 
 | Story | Summary | Roadmap feature |
 |---|---|---|
 | — | Golden dataset and eval suite | 1.1.1 |
+| [BA-212](https://halo-powered.atlassian.net/browse/BA-212) | Intellify sample as a Testing Data fixture | 1.1.2 |
 
 ## Specs touched
 - Capabilities: [agents-evals](../../capabilities/agents-evals/spec.md) (question sets, runs, reports, comparison), [testing-data](../../capabilities/testing-data/spec.md) (fixtures the golden set is bound to).

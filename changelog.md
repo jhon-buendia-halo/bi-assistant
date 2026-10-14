@@ -26,6 +26,10 @@ Running log of every meaningful change, newest first. See *Logging convention* a
 ## 2026-10-14
 
 ### Added
+- **Intellify sample in Testing Data** (roadmap 1.1.2, [BA-212](https://halo-powered.atlassian.net/browse/BA-212), epic [BA-9](https://halo-powered.atlassian.net/browse/BA-9)). Settings → Testing Data lists a fourth sample, "Intellify": one click creates the `intellify` database on the sample server, seeds schema `intellify` and registers datasource "Intellify PostgreSQL" and dataset "Intellify" (`49/49 entities`, 52 declared joins).
+  - **Model.** The Halo × Marsh Intellify ERD and data dictionary (49 entities, 243 attributes) converted to PostgreSQL: snake_case columns, `char(24)` ObjectIds, `jsonb` embedded objects, every table and column commented with its source field and description. All rows are synthetic (40 clients, 355 plan designs, 306 coverages with premiums, census 2024–2026, credits, fees, surveys, events).
+  - **Seed.** `fixtures/003_intellify.sql.gz` is written by `scripts/generate-intellify-seed.py`, deterministically: rerunning it reproduces the file byte for byte.
+  - **Tests.** `fixtures/registry.spec.ts` checks every bundled seed creates its required tables; `frontend/e2e/testing-data.spec.ts` automates two scenarios of the Testing data Feature. Specs: [testing-data](specs/capabilities/testing-data/spec.md) R2–R4, Flows and Acceptance; glossary; [BA-9 epic spec](specs/epics/BA-9/spec.md). Evidence: [evidence/1.1.2/](evidence/1.1.2/).
 - **Skill levels** (roadmap 1.13.7, [BA-205](https://halo-powered.atlassian.net/browse/BA-205), epic [BA-198](https://halo-powered.atlassian.net/browse/BA-198), ADR-0019). Agents read skills from three levels, and a later level overrides an earlier one by name:
   - **Levels.** Built-in (the bundle) < user (`<data dir>/skills/`) < project (the folder `QUESTIONS_TO_INSIGHTS_PROJECT_SKILLS_DIR` names).
   - **Targeting.** A new user or project skill is on demand for the agents its `agents:` key names (default `assistant`). An override keeps the agents and loading mode of the skill it replaces.
