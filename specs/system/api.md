@@ -437,7 +437,7 @@ Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra regi
 |---|---|---|---|
 | 33 | `GET /agents` | Agent catalogue | yes |
 | 34 | `GET /agents/:key` | One agent in detail | yes |
-| 34a | `GET /agents/:key/skills` | The agent's skills, their levels and the skipped skills | yes |
+| 34a | `GET /agents/:key/skills` | The agent's skills | yes |
 | 34b | `GET /agents/:key/skills/:name/file` | One file of one of the agent's skills | yes |
 | 35 | `GET /agents/:key/evals` | Eval question sets | yes |
 | 36 | `POST /agents/:key/evals/run` | Start an eval run | yes |
@@ -462,28 +462,22 @@ Controller prefix `/agents`. Capability: agents-evals. `:key` is the Mastra regi
 - Errors (Style B): `404 "Agent \"<key>\" not found"`. `:key` is resolved as a registry key first, then as a user-agent id.
 
 #### 34a. `GET /agents/:key/skills`
-- Response `200`: `AgentSkillsView`. A user agent runs on the assistant, so it answers with the assistant's skills. The levels, override rules and checks are in [agents.md](agents.md) 7.3; the response shows what the backend resolved when it started.
+- Response `200`: `AgentSkillsView`. A user agent runs on the assistant, so it answers with the assistant's skills. Only built-in skills exist; how they load and are checked is in [agents.md](agents.md) 7.3. The response shows what the backend loaded when it started.
   ```ts
-  type SkillLevel = 'built-in' | 'user' | 'project';
   AgentSkillsView = {
-    levels: { level: SkillLevel; path: string | null /* null for built-in, and for project when the variable is unset */; found: boolean }[]; // always the three, in this order
     skills: {
-      name: string; description: string; level: SkillLevel;
+      name: string; description: string;
       loading: 'on-demand' | 'harness';
-      overrides: SkillLevel[];      // lower levels that also hold a valid skill with this name, lowest first
       files: { path: string; size: number }[]; // every regular file in the folder, relative, '/'-separated; SKILL.md first, then sorted
-      warnings: string[];           // agents.md 7.3
     }[];                            // sorted by name
-    skipped: { name: string /* folder */; level: 'user' | 'project'; problems: string[] }[]; // sorted by level, then name
   }
   ```
-- A skipped skill is listed for the agents it would have reached: those its `agents` key names when that is readable, the agents of the skill it would override, else `assistant`.
 - Errors (Style B): `404 "Agent \"<key>\" not found"`.
 
 #### 34b. `GET /agents/:key/skills/:name/file`
 - Query: `path` (required), a path relative to the skill's folder as listed in `files`.
 - Response `200`: `{ path: string; size: number; content: string | null }`. `content` is `null` when the file is larger than 256 KB or is not UTF-8 text (it holds a NUL byte); the UI says so instead of showing it.
-- Reads only the winning skill's folder (34a). Symbolic links are neither listed nor read.
+- Reads only that skill's folder (34a). Symbolic links are neither listed nor read.
 - Errors (Style B): `404 "Agent \"<key>\" not found"`; `404 "Agent \"<key>\" has no skill \"<name>\""`; `400 "Invalid skill file path \"<path>\""` for an empty, absolute or `..` path; `404 "Skill \"<name>\" has no file \"<path>\""`.
 
 #### 35. `GET /agents/:key/evals`
@@ -1221,11 +1215,10 @@ Argument parsing is **strict**: an unknown flag or malformed argument prints `qu
 | Variable | Read in | Meaning | Default |
 |---|---|---|---|
 | `PORT` | `main.ts` (Electron-spawned/standalone start) | Listen port. The Electron main process sets it from `BACKEND_PORT`. Ignored by the CLI (which uses `--port`). | `3000` |
-| `APP_DATA_DIR` | database module, Mastra storage, app skills; set by CLI and Electron main | Directory for `app.sqlite`, `mastra.sqlite`, `observability.duckdb`, `workspaces/`, and the user skills folder `skills/`. | database: `<cwd>/data`; Mastra storage: `<INIT_CWD or PWD or cwd>/data` |
+| `APP_DATA_DIR` | database module, Mastra storage; set by CLI and Electron main | Directory for `app.sqlite`, `mastra.sqlite`, `observability.duckdb` and `workspaces/`. | database: `<cwd>/data`; Mastra storage: `<INIT_CWD or PWD or cwd>/data` |
 | `APP_SECRET` | crypto service; set by CLI and Electron main | Key material for encrypting API keys at rest (SHA-256 to an AES-256-GCM key). Missing: the crypto service reads `<APP_DATA_DIR>/.app-secret`, or generates it (32 random bytes hex, mode 0600) and logs where. Must stay stable across launches. | `<APP_DATA_DIR>/.app-secret` |
 | `WEB_ROOT` | `app-bootstrap.ts` | Directory holding the built web UI (`index.html`). | `<package>/public` |
 | `INIT_CWD`, `PWD` | Mastra storage | Launch directory used to place the fallback `data/` folder (Studio changes `cwd`). | process cwd |
-| `QUESTIONS_TO_INSIGHTS_PROJECT_SKILLS_DIR` | `mastra/app-skills.ts`, at startup | The project skills folder, the highest of the three skill levels ([agents.md](agents.md) 7.3). Relative paths resolve against the launch directory. On an org server it applies to every user. | unset: no project skills |
 | `VISUAL_MODEL` | visual designer agent | Forces the designer model (router id `provider/model`). Unset: reasoning-family models are swapped for `openai/gpt-4.1-mini` and `nano` models upgraded to their `mini` sibling; others kept. | unset |
 | `OPENAI_API_KEY` | Mastra's env-bound model router (via model resolver) | Fallback model credential (`openai/gpt-4o-mini`) when no LLM settings are saved. | unset |
 | `WORLD_CUP_DB_PORT` | testing-data fixture registry | Port of the sample PostgreSQL server in the form prefill and compose stack. | `55432` |

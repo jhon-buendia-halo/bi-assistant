@@ -227,10 +227,13 @@ describe('AgentsService (built-in and user agents)', () => {
         view.skills.map((skill) => skill.name);
       const assistant = await ctx.service.skills('assistant');
       expect(names(assistant)).toEqual(['curated-knowledge', 'deep-analysis']);
-      expect(assistant.skills[0]).toMatchObject({
-        level: 'built-in',
+      expect(assistant.skills[0]).toEqual({
+        name: 'curated-knowledge',
+        description: expect.stringMatching(/^Use when /) as string,
         loading: 'on-demand',
+        files: [expect.objectContaining({ path: 'SKILL.md' })],
       });
+      expect(Object.keys(assistant)).toEqual(['skills']);
       expect(assistant.skills[1]).toMatchObject({ loading: 'harness' });
 
       const created = await ctx.service.create({ name: 'Analyst' });

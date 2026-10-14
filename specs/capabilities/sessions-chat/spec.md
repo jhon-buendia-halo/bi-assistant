@@ -558,7 +558,7 @@ Feature: Sessions started from an agent
 
 E2E: `frontend/e2e/assistant-skills.spec.ts`
 
-What the assistant is told about skills, checked on the request the model receives. "The model" is the recording stub described under the Feature "Sessions started from an agent". Which skills each agent gets, where user and project skills come from, and how they load: [agents.md](../../system/agents.md) sections 7.3 and 7.4; decisions ADR-0018, ADR-0019 and ADR-0020; the prompt's sections are in agents.md 2.1 and 7.5. A user-level skill is a folder written into the test's data dir before the app starts. Curated knowledge is seeded through the backend API ([knowledge](../knowledge/spec.md) R15-R19).
+What the assistant is told about skills, checked on the request the model receives. "The model" is the recording stub described under the Feature "Sessions started from an agent". Which skills each agent gets and how they load: [agents.md](../../system/agents.md) sections 7.3 and 7.4; decisions ADR-0018, ADR-0020 and ADR-0021; the prompt's sections are in agents.md 2.1 and 7.5. Skills ship only with the app. The old skills folder is written into the test's data dir before the app starts. Curated knowledge is seeded through the backend API ([knowledge](../knowledge/spec.md) R15-R19).
 
 ```gherkin
 Feature: Skills the assistant is given
@@ -594,35 +594,21 @@ Feature: Skills the assistant is given
     And the model received none of the curated-knowledge rules unless it read them
     And the assistant's catalog lists "curated-knowledge"
 
-  Scenario: A user-level skill is offered to the assistant on demand
-    Given a user-level skill "sql-style" described "Use when writing SQL for the World Cup data."
+  Scenario: A skills folder left in the data dir by an older version is ignored
+    Given the data dir holds a skills folder from an older version, with a skill "sql-style" described "Use when writing SQL for the World Cup data."
     And a session over "World Cup Core"
     When I send "Who won the 2022 World Cup?"
     Then I see the stub's answer
-    And the assistant's prompt ends with a "## Skills" section
-    And its catalog lists "curated-knowledge" and "sql-style", the latter with that description and the path of its SKILL.md
-    And the "## Tools" section lists "read_file"
-    And the model is offered "read_file" and none of the framework's skill tools
+    And its catalog lists only "curated-knowledge"
+    And the model received nothing of the "sql-style" skill
 
   Scenario: The assistant reads a skill's files with read_file, and only those
-    Given a user-level skill "sql-style" described "Use when writing SQL for the World Cup data."
-    And the model will call read_file on that skill's SKILL.md, then on a file outside every skill
+    Given the model will call read_file on the SKILL.md the catalog lists for "curated-knowledge", then on a file outside every skill
     And a session over "World Cup Core"
     When I send "Who won the 2022 World Cup?"
     Then I see the stub's answer
     And the model got the text of that SKILL.md back from the first read_file call
     And the second read_file call was refused with "Not a file of an installed skill"
-
-  Scenario: A user-level override of the curated-knowledge skill is the one the model reads
-    Given a user-level skill "curated-knowledge" whose body is the team's own rules
-    And an enabled curated-knowledge instruction for "World Cup Core"
-    And the model will call read_file on the SKILL.md the catalog lists for "curated-knowledge"
-    And a session over "World Cup Core"
-    When I send "Who won the 2022 World Cup?"
-    Then I see the stub's answer
-    And the catalog's "curated-knowledge" location is in the user skills folder
-    And the model got the team's own rules back from read_file
-    And the model received none of the built-in curated-knowledge rules
 ```
 
 ## Acceptance

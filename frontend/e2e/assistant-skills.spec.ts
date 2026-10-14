@@ -174,11 +174,12 @@ test('a turn with curated knowledge carries the block, and the rules stay on dem
 });
 
 /**
- * Writes a user-level skill into the data dir and restarts the backend, which
- * reads skills only at startup (agents.md 7.3). The LLM settings and the
- * dataset the Background saved live in the same data dir, so they survive.
+ * Writes a skill into `<data dir>/skills/`, where older versions read user
+ * skills, and restarts the backend so it starts with the folder in place
+ * (agents.md 7.3). The LLM settings and the dataset the Background saved live
+ * in the same data dir, so they survive.
  */
-async function withUserSkill(
+async function withOldSkillsFolder(
   {
     app,
     appDataDir,
@@ -213,135 +214,78 @@ async function withUserSkill(
   );
   if (app.target === 'web') {
     await app.restartCli();
-    await app.page.reload();
     return app.page;
   }
   await app.close();
   return (await launchApp(appDataDir)).page;
 }
 
-test('a user-level skill is offered to the assistant on demand', async ({
+/** Whether a request is a chat turn whose latest user message is `question`. */
+function isTurnFor(request: StubRequest, question: string): boolean {
+  const lastUser = request.messages
+    .filter((message) => message.role === 'user')
+    .at(-1);
+  return (
+    request.stream &&
+    lastUser !== undefined &&
+    messageText(lastUser).includes(question)
+  );
+}
+
+test('a skills folder left in the data dir by an older version is ignored', async ({
   app,
   appDataDir,
   launchApp,
 }) => {
   const description = 'Use when writing SQL for the World Cup data.';
-  const page = await withUserSkill(
+  const body = 'Prefer CTEs and one clause per line.';
+  const page = await withOldSkillsFolder(
     { app, appDataDir, launchApp },
     'sql-style',
     description,
-    'Prefer CTEs and one clause per line.',
+    body,
   );
   await createWorldCupSession(page);
   const request = await ask(page, QUESTION);
 
-  const prompt = systemTexts(request)[0];
-  const skills = prompt.indexOf('\n## Skills\n');
-  expect(skills, '## Skills after ## Working rules').toBeGreaterThan(
-    prompt.indexOf('\n## Working rules\n'),
-  );
-  expect(prompt.trimEnd().endsWith('</available_skills>')).toBe(true);
-  expect(catalogSkills(request)).toEqual(['curated-knowledge', 'sql-style']);
-  expect(prompt).toContain(`<description>${description}</description>`);
-  expect(prompt).toContain(
-    `<location>${path.join(appDataDir, 'skills', 'sql-style', 'SKILL.md')}</location>`,
-  );
-  expect(prompt).toContain('\n- read_file(path): ');
-  expect(request.tools).toContain('read_file');
-  for (const tool of FRAMEWORK_SKILL_TOOLS) {
-    expect(request.tools).not.toContain(tool);
+  expect(catalogSkills(request)).toEqual(['curated-knowledge']);
+  expect(stub.requests.length).toBeGreaterThan(0);
+  for (const sent of stub.requests) {
+    const everything = JSON.stringify(sent);
+    expect(everything).not.toContain('sql-style');
+    expect(everything).not.toContain(description);
+    expect(everything).not.toContain(body);
   }
 });
 
 test("the assistant reads a skill's files with read_file, and only those", async ({
-  app,
+  page,
   appDataDir,
-  launchApp,
 }) => {
-  const page = await withUserSkill(
-    { app, appDataDir, launchApp },
-    'sql-style',
-    'Use when writing SQL for the World Cup data.',
-    'Prefer CTEs and one clause per line.',
-  );
-  const skillMd = path.join(appDataDir, 'skills', 'sql-style', 'SKILL.md');
   const outside = path.join(appDataDir, 'app.sqlite');
   let turn = 0;
   stub.reply = (request) => {
-    const isTurn =
-      request.stream &&
-      request.messages.some(
-        (message) =>
-          message.role === 'user' && messageText(message).includes(QUESTION),
-      );
-    if (!isTurn) return { text: STUB_ANSWER };
+    if (!isTurnFor(request, QUESTION)) return { text: STUB_ANSWER };
     turn += 1;
-    if (turn === 1)
-      return { toolCall: { name: 'read_file', arguments: { path: skillMd } } };
+    // The model reads the SKILL.md the catalog lists for curated-knowledge.
+    const location = catalogLocation(request, 'curated-knowledge');
+    if (turn === 1 && location)
+      return { toolCall: { name: 'read_file', arguments: { path: location } } };
     if (turn === 2)
       return { toolCall: { name: 'read_file', arguments: { path: outside } } };
     return { text: STUB_ANSWER };
   };
   await createWorldCupSession(page);
-  await ask(page, QUESTION);
-
-  const results = toolResults(turnRequests(stub, QUESTION).at(-1)!);
-  expect(results).toHaveLength(2);
-  expect(results[0]).toContain('Prefer CTEs and one clause per line.');
-  expect(results[0]).toContain('name: sql-style');
-  expect(results[1]).toContain('Not a file of an installed skill');
-  expect(results[1]).not.toContain('SQLite format');
-});
-
-test('a user-level override of the curated-knowledge skill is the one the model reads', async ({
-  app,
-  appDataDir,
-  launchApp,
-}) => {
-  const override =
-    'Curated knowledge (team override): follow the glossary before anything else.';
-  const page = await withUserSkill(
-    { app, appDataDir, launchApp },
-    'curated-knowledge',
-    'Use when the turn carries a curated dataset knowledge block.',
-    override,
-  );
-  await createKnowledgeSnippet(page, {
-    kind: 'instruction',
-    title: 'Coverage',
-    body: 'Only the 2018 and 2022 tournaments are in this data.',
-    datasetId: WORLD_CUP_DATASET,
-  });
-  // The model reads whatever SKILL.md the catalog lists for the skill.
-  let turn = 0;
-  stub.reply = (request) => {
-    const isTurn =
-      request.stream &&
-      request.messages.some(
-        (message) =>
-          message.role === 'user' && messageText(message).includes(QUESTION),
-      );
-    if (!isTurn) return { text: STUB_ANSWER };
-    turn += 1;
-    const location = catalogLocation(request, 'curated-knowledge');
-    if (turn === 1 && location)
-      return { toolCall: { name: 'read_file', arguments: { path: location } } };
-    return { text: STUB_ANSWER };
-  };
-  await createWorldCupSession(page);
   const request = await ask(page, QUESTION);
 
-  expect(catalogLocation(request, 'curated-knowledge')).toBe(
-    path.join(appDataDir, 'skills', 'curated-knowledge', 'SKILL.md'),
+  const skillMd = catalogLocation(request, 'curated-knowledge') ?? '';
+  expect(skillMd.endsWith(path.join('curated-knowledge', 'SKILL.md'))).toBe(
+    true,
   );
-  const systems = systemTexts(request);
-  expect(
-    systems.some((text) => text.startsWith(KNOWLEDGE_BLOCK_START)),
-    'a curated-knowledge block',
-  ).toBe(true);
   const results = toolResults(turnRequests(stub, QUESTION).at(-1)!);
-  expect(results).toHaveLength(1);
-  expect(results[0]).toContain(override);
-  expect(results[0]).not.toContain(KNOWLEDGE_RULE);
-  expect(systems.join('\n')).not.toContain(KNOWLEDGE_RULE);
+  expect(results).toHaveLength(2);
+  expect(results[0]).toContain('name: curated-knowledge');
+  expect(results[0]).toContain(KNOWLEDGE_RULE);
+  expect(results[1]).toContain('Not a file of an installed skill');
+  expect(results[1]).not.toContain('SQLite format');
 });
