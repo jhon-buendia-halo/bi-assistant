@@ -770,6 +770,16 @@ A behaviour-preserving refactor of the app's Mastra agents to the Agent Skills l
 - **Acceptance:** unit tests cover a wider query that passes, a missing reference row that fails, and rows from two queries that are never combined. The world-cup evals pass at 100% (3 runs).
 - **Notes:** decided with the user 2026-10-14. The cases had failed on every run before this change, with correct answers.
 
+#### 1.13.12 — Assistant reliability for the 100% eval bar ([BA-210](https://halo-powered.atlassian.net/browse/BA-210))  `🚧 In progress`
+- **Intent:** the assistant asks when "best" has no measure, and charts what the user asked, so the world-cup evals can pass at 100% (CLAUDE.md, step 9).
+- **Scope:**
+  - **Rule A4.** A new sentence: a "best/top/performed well" question with no measure is ambiguous even when several measures could be covered, so the model asks before any query (agents.md 2.1, Appendix A).
+  - **`create_visual`.** With no instruction it uses the turn's user message, carried as the new requestContext key `turn-question` (agents.md 3.6, 4.2).
+  - **`ask_clarification`.** A well-formed JSON-encoded `options` string is read as the list (agents.md 3.5).
+- **Out of scope:** checks and reference SQL (1.13.11); other wording of the working rules.
+- **Acceptance:** unit tests for the three behaviours. The world-cup evals pass at 100% over 3 runs.
+- **Notes:** `ambiguous-best-team` passed 1 of 4 runs and `visual-request` failed once with `create_visual({})`, both on the base before BA-207.
+
 ## Release 2 — Multi-user  (no target date yet)
 
 The app becomes multi-user. An organisation self-hosts it as an org server, with sign-in, roles and an admin panel. Local mode stays the default. Direction: [specs/product/vision.md](specs/product/vision.md). Not part of the 1.0 Beta.

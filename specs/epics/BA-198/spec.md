@@ -47,6 +47,7 @@ The refactor keeps what the user sees unchanged. Answers, clarifications, visual
 | [BA-207](https://halo-powered.atlassian.net/browse/BA-207) | Sectioned assistant prompt with the app's own skill catalog, `read_file` and `run_skill_script` | 1.13.9 |
 | [BA-208](https://halo-powered.atlassian.net/browse/BA-208) | Backend lint and format clean | 1.13.10 |
 | [BA-209](https://halo-powered.atlassian.net/browse/BA-209) | Eval checks: a wider correct query passes; discovery cases don't require `list_entities` | 1.13.11 |
+| [BA-210](https://halo-powered.atlassian.net/browse/BA-210) | Assistant reliability for the 100% eval bar: ask on an undefined measure, `create_visual` defaults to the user's request, JSON-encoded clarification options | 1.13.12 |
 
 All stories are built on `refactor/BA-198-assistant-skills` (worktree `.claude/worktrees/BA-198-assistant-skills`) and ship as one PR.
 

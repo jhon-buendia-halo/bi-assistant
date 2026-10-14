@@ -30,6 +30,7 @@ import { DATASETS_CONTEXT_KEY } from '../../mastra/tools/dataset.tools';
 import {
   ACTIVE_VISUAL_CONTEXT_KEY,
   SESSION_ID_CONTEXT_KEY,
+  TURN_QUESTION_CONTEXT_KEY,
   TURN_RECORDS_CONTEXT_KEY,
 } from '../../mastra/tools/visual.tools';
 import {
@@ -264,6 +265,7 @@ export class SessionsService implements OnModuleInit {
     const requestContext = new RequestContext();
     requestContext.set(DATASETS_CONTEXT_KEY, session.datasets);
     requestContext.set(SESSION_ID_CONTEXT_KEY, session.id);
+    if (question) requestContext.set(TURN_QUESTION_CONTEXT_KEY, question);
     if (activeVisualId) {
       requestContext.set(ACTIVE_VISUAL_CONTEXT_KEY, activeVisualId);
     }

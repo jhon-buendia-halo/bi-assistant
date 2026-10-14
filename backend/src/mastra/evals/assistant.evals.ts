@@ -13,6 +13,7 @@ import { ASSISTANT_MAX_STEPS } from '../agent-constants';
 import { DATASETS_CONTEXT_KEY } from '../tools/dataset.tools';
 import {
   SESSION_ID_CONTEXT_KEY,
+  TURN_QUESTION_CONTEXT_KEY,
   TURN_RECORDS_CONTEXT_KEY,
 } from '../tools/visual.tools';
 import { getDatasetToolServices } from '../tool-services';
@@ -890,10 +891,12 @@ function evalRequestContext(
   datasets: string[],
   sessionId: string | undefined,
   turnRecords: ToolDataRecord[],
+  question: string,
 ): RequestContext {
   const requestContext = new RequestContext();
   requestContext.set(DATASETS_CONTEXT_KEY, datasets);
   if (sessionId) requestContext.set(SESSION_ID_CONTEXT_KEY, sessionId);
+  requestContext.set(TURN_QUESTION_CONTEXT_KEY, question);
   requestContext.set(TURN_RECORDS_CONTEXT_KEY, turnRecords);
   return requestContext;
 }
@@ -1113,7 +1116,12 @@ export async function runAssistantEvalCase(
       data: [
         {
           input: evalCase.question,
-          requestContext: evalRequestContext(datasets, sessionId, turnRecords),
+          requestContext: evalRequestContext(
+            datasets,
+            sessionId,
+            turnRecords,
+            evalCase.question,
+          ),
         },
       ],
       scorers: evalCase.scorers,

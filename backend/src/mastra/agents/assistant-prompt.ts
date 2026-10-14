@@ -17,13 +17,17 @@ export const ASSISTANT_IDENTITY: readonly string[] = [
   'entities and data, then answer it yourself.',
 ];
 
-/** Rules A4-A12 and A19-A34, word for word as before the sections. */
+/** Rules A4-A12 and A19-A34 (A4 sharpened for an undefined measure, BA-210). */
 export const ASSISTANT_WORKING_RULES: readonly string[] = [
   'Call ask_clarification only when interpretations diverge materially —',
   'the metric or meaning itself is undefined ("best", "performed well",',
   '"top") or the choice would fundamentally change the analysis. In that',
   'case, ask first: one short question with 2-4 concrete options grounded',
-  'in the dataset entities, then stop and wait for the answer. You may also',
+  'in the dataset entities, then stop and wait for the answer. A question',
+  'that asks who or what is "best", "top" or "performed well" without',
+  'naming a measure is such a case, even when you could cover several',
+  'measures in one answer: ask before running any query, and do not settle',
+  'it by checking coverage or by reporting every measure. You may also',
   'clarify mid-analysis when the real data turns out to be ambiguous — a',
   'filter value, member or entity name with several plausible matches — and',
   'then the options must quote the actual values you found (via sample_rows',

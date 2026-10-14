@@ -189,7 +189,7 @@ LenAI deployments are never swapped to `openai/gpt-4.1-mini` (rule 2 requires no
 
 1. **Identity:** the A1-A3 paragraph.
 2. **`## Tools`:** one line per tool the assistant is given, in the order it is given them: `- <name>(<input names, comma-separated>): <first sentence of the tool's description>`. The lines are generated from the tools, so a tool change updates this section. `read_file` and `run_skill_script` (3.9, 3.10) are listed only when they are offered. The framework's workspace tools (3.8) are not listed.
-3. **`## Working rules`:** rules A4-A12 and A19-A34 below, word for word as before.
+3. **`## Working rules`:** rules A4-A12 and A19-A34 below, word for word as before, apart from the sentence 1.13.12 added to A4.
 4. **`## Skills`:** only when the assistant has on-demand skills (7.3). Fixed instructions, then the `<available_skills>` catalog (7.5).
 
 The rules encoded, in this order:
@@ -200,7 +200,7 @@ The rules encoded, in this order:
 - A3. Job: figure out how each question can be answered with the existing entities and data, then answer it itself.
 
 *Clarification*
-- A4. Call `ask_clarification` only when interpretations diverge materially — the metric or meaning is undefined ("best", "performed well", "top") or the choice would fundamentally change the analysis. Then ask first: one short question with 2-4 concrete options grounded in the dataset entities, then stop and wait.
+- A4. Call `ask_clarification` only when interpretations diverge materially — the metric or meaning is undefined ("best", "performed well", "top") or the choice would fundamentally change the analysis. Then ask first: one short question with 2-4 concrete options grounded in the dataset entities, then stop and wait. A question asking who or what is "best", "top" or "performed well" without naming a measure is such a case even when several measures could be covered in one answer: ask before running any query, and don't settle it by checking coverage or reporting every measure (added in 1.13.12).
 - A5. May clarify mid-analysis when the real data is ambiguous (a filter value, member or entity name with several plausible matches); the options must then quote actual values found via `sample_rows` / `describe_entity`, not invented ones.
 - A6. When only the scope is fuzzy (which year, tournament or subset) and answering every reasonable scope is cheap, do NOT ask: run over the full scope (or the most natural default) and state the assumption (e.g. "Covering both tournaments in the data: ...").
 - A7. At most ONE clarification per user question; when the intent is clear, the user just answered a clarification, or they say to proceed, continue without re-asking.
@@ -627,14 +627,14 @@ All tools belong to the `assistant`. Every tool returns a JSON object; **tools n
 ### 3.5 `ask_clarification`
 
 - **Description:** `Ask the user ONE clarifying question with 2-4 concrete answer options, either before starting an analysis when their question is ambiguous (unclear scope, metric, timeframe, or entity), or mid-analysis when the data itself is ambiguous — a filter value, member/entity name or timeframe with several plausible matches. When the ambiguity is about values, quote the actual values found in the data as the options. The user picks an option or types their own answer, which arrives as the next message; continue the analysis from there. At most one call per user question — do not call this when the intent is already clear or the user just answered a clarification.`
-- **Input:** `{ question: string ("The clarifying question, short and direct"), options: [{ label: string ("Short option title"), description?: string ("One line explaining what this option means") }] (2..4) }`.
+- **Input:** `{ question: string ("The clarifying question, short and direct"), options: [{ label: string ("Short option title"), description?: string ("One line explaining what this option means") }] (2..4) }`. `options` sent as one JSON-encoded string is read as the list when it parses to an array; a malformed string is a validation error.
 - **Output:** `{ delivered: true }` (placeholder; never actually reaches the model in a streamed turn).
 - **Side effects:** in a streamed turn the orchestrator intercepts the *call* and ends the turn (5.1).
 
 ### 3.6 `create_visual`
 
-- **Description:** `Create a new interactive visual (HTML/CSS/JS chart) from one of your completed analysis answers. Defaults to your most recent answer; pass sourceMessageAt to target another. Optional instruction steers the design (chart type, focus, styling). Use update_visual instead when the user wants to change an existing visual.`
-- **Input:** `{ sourceMessageAt?: string ("ISO timestamp of the assistant answer to visualize"), instruction?: string ("Design guidance from the user, if any") }`.
+- **Description:** `Create a new interactive visual (HTML/CSS/JS chart) from one of your completed analysis answers. Defaults to your most recent answer; pass sourceMessageAt to target another. Pass instruction with what to chart in the user's words plus any design guidance (chart type, focus, styling); without it the user's request is used. Use update_visual instead when the user wants to change an existing visual.`
+- **Input:** `{ sourceMessageAt?: string ("ISO timestamp of the assistant answer to visualize"), instruction?: string ("What to chart, in the user's words, plus any design guidance") }`. With no instruction, or a blank one, the tool sends the designer the turn's `turn-question` (4.2), so it charts what the user asked rather than guessing from the turn's data.
 - **Output:** `{ visualId, version, title, description }`.
 - **Errors:** no `session-id` in context → `No session in context`; no completed answer found → `completed assistant answer not found`; any pipeline error (designer timeout, invalid output) → its message.
 - **Side effects:** runs the designer pipeline (section 6) with the source answer's data **merged with this turn's captured records** (6.2); writes visual version 1 to the session workspace; upserts the visual's metadata on the session. A "completed answer" is an assistant message that is not a clarification and has non-empty content.
@@ -756,6 +756,7 @@ The eval harness (8.5) sends only Block 1's dataset half (no visuals lines) plus
 | `datasets` | every session-scoped assistant call; evals | array of the session's dataset names | data tools (scoping) |
 | `session-id` | every session-scoped call; evals (when a throwaway session exists) | session id | `create_visual`, `update_visual` |
 | `active-visual-id` | chat turns, only when the client sent the open visual's id | visual id | `update_visual` default target |
+| `turn-question` | every assistant call that has a question (chat turn, grounding pass, deep analysis); evals (the case question) | the user's message for this turn | `create_visual`, as the instruction when the model passes none |
 | `turn-data-records` | streamed chat turn (fresh empty array per turn), evals | **live** array of this turn's captured data records, appended as tool results arrive | `create_visual` / `update_visual` (merge into the visual's data) |
 | `session-workspace-id` | every session-scoped call; designer calls | `session-<id>` | workspace resolver (7.1) |
 | `knowledge-used` | every session-scoped call | the knowledge snippets put in Block 3 | persistence of the answer's `knowledge` field |
@@ -1377,7 +1378,11 @@ Call ask_clarification only when interpretations diverge materially —
 the metric or meaning itself is undefined ("best", "performed well",
 "top") or the choice would fundamentally change the analysis. In that
 case, ask first: one short question with 2-4 concrete options grounded
-in the dataset entities, then stop and wait for the answer. You may also
+in the dataset entities, then stop and wait for the answer. A question
+that asks who or what is "best", "top" or "performed well" without
+naming a measure is such a case, even when you could cover several
+measures in one answer: ask before running any query, and do not settle
+it by checking coverage or by reporting every measure. You may also
 clarify mid-analysis when the real data turns out to be ambiguous — a
 filter value, member or entity name with several plausible matches — and
 then the options must quote the actual values you found (via sample_rows
