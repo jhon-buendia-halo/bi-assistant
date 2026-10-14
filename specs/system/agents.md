@@ -189,7 +189,7 @@ LenAI deployments are never swapped to `openai/gpt-4.1-mini` (rule 2 requires no
 
 1. **Identity:** the A1-A3 paragraph.
 2. **`## Tools`:** one line per tool the assistant is given, in the order it is given them: `- <name>(<input names, comma-separated>): <first sentence of the tool's description>`. The lines are generated from the tools, so a tool change updates this section. `read_file` and `run_skill_script` (3.9, 3.10) are listed only when they are offered. The framework's workspace tools (3.8) are not listed.
-3. **`## Working rules`:** rules A4-A12 and A19-A34 below, word for word as before, apart from the sentence 1.13.12 added to A4.
+3. **`## Working rules`:** rules A4-A12 and A19-A35 below, word for word as before, apart from what 1.13.12 added: a sentence in A4, and A35.
 4. **`## Skills`:** only when the assistant has on-demand skills (7.3). Fixed instructions, then the `<available_skills>` catalog (7.5).
 
 The rules encoded, in this order:
@@ -243,6 +243,7 @@ The rules encoded, in this order:
 - A32. Identifiers are not answers: join to the entity holding the id's name and report the name ("a reader … cannot act on 'id 5'").
 - A33. Only call something "top", "highest" or "lowest" when values actually differ and the query ordered by them; when everything ties, say so.
 - A34. A warning attached to a query result is about its own SQL: act on it and re-run before answering, rather than passing it to the user.
+- A35. When the user asks what data they have, describe the datasets from the session context and `describe_entity` alone, without running any query (added in 1.13.12).
 
 Reference wording of the full prompt: Appendix A.
 
@@ -1352,7 +1353,7 @@ A case **passes** when it has at least one check and every check scored 1. Each 
 
 ## Appendix A — `assistant` system prompt (current wording)
 
-Lines are joined with `\n`. A rebuild may tune the wording but must keep every rule A1–A12 and A19–A34, the opening phrase and the section headings (2.1). Rules A13–A18 are the `curated-knowledge` skill (Appendix B), not part of this prompt. The `## Tools` lines are generated from the tools (2.1). The built-in `curated-knowledge` skill is always in the catalog, so the shipped prompt always ends with the `## Skills` section (7.5) after a blank line, and `- read_file(path): …` follows `ask_clarification` (plus `- run_skill_script(skill, script, args): …` when offered). Below: the prompt up to the end of the working rules, then the Skills section with the built-in catalog, `<bundle>` being the folder the app's built-in skills are installed in.
+Lines are joined with `\n`. A rebuild may tune the wording but must keep every rule A1–A12 and A19–A35, the opening phrase and the section headings (2.1). Rules A13–A18 are the `curated-knowledge` skill (Appendix B), not part of this prompt. The `## Tools` lines are generated from the tools (2.1). The built-in `curated-knowledge` skill is always in the catalog, so the shipped prompt always ends with the `## Skills` section (7.5) after a blank line, and `- read_file(path): …` follows `ask_clarification` (plus `- run_skill_script(skill, script, args): …` when offered). Below: the prompt up to the end of the working rules, then the Skills section with the built-in catalog, `<bundle>` being the folder the app's built-in skills are installed in.
 
 ```
 You are the Questions to Insights assistant — a data analyst working over
@@ -1466,6 +1467,9 @@ Rules:
   say so plainly.
 - A warning attached to a query result is about your own SQL. Act on it
   and re-run before answering, rather than passing it to the user.
+- When the user asks what data they have, describe the datasets from the
+  session context and describe_entity alone: answer without running any
+  query.
 
 ## Skills
 Skills are folders of instructions, scripts and references for specific kinds

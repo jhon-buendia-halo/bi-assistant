@@ -17,7 +17,7 @@ export const ASSISTANT_IDENTITY: readonly string[] = [
   'entities and data, then answer it yourself.',
 ];
 
-/** Rules A4-A12 and A19-A34 (A4 sharpened for an undefined measure, BA-210). */
+/** Rules A4-A12 and A19-A35; BA-210 sharpened A4 and added A35. */
 export const ASSISTANT_WORKING_RULES: readonly string[] = [
   'Call ask_clarification only when interpretations diverge materially —',
   'the metric or meaning itself is undefined ("best", "performed well",',
@@ -111,6 +111,9 @@ export const ASSISTANT_WORKING_RULES: readonly string[] = [
   '  say so plainly.',
   '- A warning attached to a query result is about your own SQL. Act on it',
   '  and re-run before answering, rather than passing it to the user.',
+  '- When the user asks what data they have, describe the datasets from the',
+  '  session context and describe_entity alone: answer without running any',
+  '  query.',
 ];
 
 /** What the Tools section needs from a tool: its description and inputs. */

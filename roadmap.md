@@ -776,6 +776,7 @@ A behaviour-preserving refactor of the app's Mastra agents to the Agent Skills l
   - **Rule A4.** A new sentence: a "best/top/performed well" question with no measure is ambiguous even when several measures could be covered, so the model asks before any query (agents.md 2.1, Appendix A).
   - **`create_visual`.** With no instruction it uses the turn's user message, carried as the new requestContext key `turn-question` (agents.md 3.6, 4.2).
   - **`ask_clarification`.** A well-formed JSON-encoded `options` string is read as the list (agents.md 3.5).
+  - **Rule A35.** A question about what data the user has is answered from the session context and `describe_entity`, without running a query (the `schema-discovery` check kept by 1.13.11).
 - **Out of scope:** checks and reference SQL (1.13.11); other wording of the working rules.
 - **Acceptance:** unit tests for the three behaviours. The world-cup evals pass at 100% over 3 runs.
 - **Notes:** `ambiguous-best-team` passed 1 of 4 runs and `visual-request` failed once with `create_visual({})`, both on the base before BA-207.
