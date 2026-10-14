@@ -372,6 +372,14 @@ Feature: Skills the designer is given
     And the panel shows the visual "Matches by stage"
     And the designer received the interactive-visuals router and its spec-mode reference
     And the designer received nothing of the freeform reference
+
+  Scenario: A chart asked for in the chat is designed from my request when the model gives no instruction
+    Given a session over "World Cup Core"
+    And I sent "How many matches were played at each stage?" and the model answered from one query
+    When I send "Chart the matches per stage as bars."
+    And the model calls create_visual with no instruction, then answers
+    Then the panel shows the visual "Matches by stage"
+    And the designer received "Chart the matches per stage as bars." as its instruction
 ```
 
 ## Acceptance

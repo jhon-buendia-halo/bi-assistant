@@ -37,3 +37,14 @@ Production files touched only in types and formatting: `assistant.evals.ts`, `vi
 - Org: `org-isolation` and `org-permissions` (sessions controller).
 
 Not re-run, because they touch none of these files: `appearance`, `layout-accessibility`, `navigation`, `llm-settings`, `local-sign-in`, `developer-*`, `agent-hub`, and the other org specs.
+
+## BA-209 (eval checks) and BA-210 (assistant reliability)
+
+| Feature (spec) | Scenario | Decision |
+|---|---|---|
+| Skills the designer is given (`designer-skills.spec.ts`) | A chart asked for in the chat is designed from my request when the model gives no instruction | **Add** (BA-210: `create_visual` uses the turn's question) |
+| | A spec visual is designed with the spec-mode instructions only | Re-run as-is |
+| Skills the assistant is given (`assistant-skills.spec.ts`) | all | Re-run as-is: the `## Tools` line for `ask_clarification` keeps its inputs, and the prompt gains rule A35 |
+| Agents (`agents.spec.ts`) | the Prompt tab, the evals tab and eval runs | Re-run as-is (BA-209 changes how eval checks score, BA-210 the prompt and tools) |
+| Agent editor (`agent-editor.spec.ts`), agent hub (`agent-hub.spec.ts`) | eval and prompt views | Re-run as-is |
+| Chat and visuals (`chat-and-visuals.spec.ts`) | clarification card and visuals | Re-run as-is |

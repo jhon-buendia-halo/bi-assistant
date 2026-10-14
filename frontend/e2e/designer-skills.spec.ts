@@ -5,6 +5,7 @@ import {
   LlmStub,
   StubReply,
   StubRequest,
+  messageText,
   startLlmStub,
   systemTexts,
 } from './helpers/llm-stub';
@@ -124,4 +125,45 @@ test('a spec-mode designer call carries only the spec-mode reference', async ({
   expect.soft(skill).not.toContain('name: interactive-visuals');
   for (const line of SPEC_MODE_TEXT) expect.soft(skill).toContain(line);
   for (const line of FREEFORM_TEXT) expect.soft(skill).not.toContain(line);
+});
+
+test('a chart asked for in the chat is designed from my request when the model gives no instruction', async ({
+  page,
+}) => {
+  const CHART_REQUEST = 'Chart the matches per stage as bars.';
+  const isChartTurn = (request: StubRequest) =>
+    request.messages.some(
+      (message) =>
+        message.role === 'user' && messageText(message).includes(CHART_REQUEST),
+    );
+  stub.reply = (request) => {
+    if (isDesignerCall(request)) return { text: JSON.stringify(SPEC_REPLY) };
+    if (request.stream && isChartTurn(request)) {
+      // The model asks for a visual without saying what to chart.
+      return hasToolResult(request) && request.messages.at(-1)?.role === 'tool'
+        ? { text: 'Here is the chart.' }
+        : { toolCall: { name: 'create_visual', arguments: {} } };
+    }
+    return scriptedReply(request);
+  };
+  await createWorldCupSession(page);
+  const composer = page.getByPlaceholder('Ask a follow-up question…');
+  await composer.fill(QUESTION);
+  await page.getByRole('button', { name: 'Send message' }).click();
+  await expect(page.getByText(ANSWER)).toBeVisible();
+
+  await composer.fill(CHART_REQUEST);
+  await page.getByRole('button', { name: 'Send message' }).click();
+  await expect(page.getByText('Here is the chart.')).toBeVisible();
+  await expect(
+    page.locator('iframe[title="Interactive visualization"]'),
+  ).toBeVisible();
+  await expect(page.getByText(VISUAL_TITLE).first()).toBeVisible();
+
+  const designer = stub.requests.filter(isDesignerCall).at(-1)!;
+  const prompt = designer.messages
+    .filter((message) => message.role === 'user')
+    .map(messageText)
+    .join('\n');
+  expect(prompt).toContain(`<instruction>\n${CHART_REQUEST}\n</instruction>`);
 });
