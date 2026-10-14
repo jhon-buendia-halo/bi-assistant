@@ -161,6 +161,21 @@ User agents (definitions)
 
 - R62. In both modes user agents, their pins, pins of built-in agents and eval runs SHALL belong to the user who created them: each user sees only their own user agents (the Mine section) and their own pins and eval runs, and agent names are unique per owner. Viewing the hub, an agent's detail, its eval questions, Start chat and pinning need Use agents; New agent, Edit, Save, Publish, Delete and running, listing, downloading or deleting eval runs need Create, test and version agents, and their controls are hidden without it. Rules: [../admin/spec.md](../admin/spec.md) R21, R25, R29-R31.
 
+### Skills tab
+
+- R63. The agent detail SHALL have a read-only **Skills (<n>)** tab. It lists the skills the agent gets ([agents.md](../../system/agents.md) 7.3, 7.4), one per name: its built-in skills, the user and project skills that reach it, and the overrides that replace a built-in. Each skill SHALL show:
+  - its name and its description;
+  - the level it comes from (Built-in, User or Project);
+  - whether it loads on demand or is loaded by the app;
+  - the lower levels it overrides;
+  - its warnings.
+
+  A user agent SHALL show the assistant's skills, with a line saying it runs on the assistant.
+- R64. Expanding a skill SHALL list every file in its folder, `SKILL.md` first, with `SKILL.md` selected. The selected file's content SHALL be shown exactly as stored. A file larger than 256 KB, or one that isn't text, SHALL be listed but its content not shown.
+- R65. The tab SHALL show where each level's skills come from: built-in ships with the app; the user folder's path; the project folder's path, or that `QUESTIONS_TO_INSIGHTS_PROJECT_SKILLS_DIR` is not set. A folder that doesn't exist SHALL be marked not found.
+- R66. A user or project skill that fails its checks SHALL be listed under **Skipped**, with every problem, on the page of each agent it would have reached. It SHALL NOT count toward the tab's number, and the agent SHALL NOT get it.
+- R67. The tab SHALL say that skills are read when the app starts and that a change needs a restart. Nothing on the tab changes a skill, and viewing it needs only Use agents (R62). The backend SHALL refuse a file path outside the skill's folder ([api.md](../../system/api.md) 34b).
+
 ## Edge cases and errors
 
 - Pinning while the backend is unreachable: the card moves, then moves back, and the error toast reads "Backend unreachable".
@@ -183,6 +198,7 @@ User agents (definitions)
 ## Contracts
 
 - Agent definition endpoints `POST /agents`, `PUT /agents/:id/draft`, `POST /agents/:id/publish`, `DELETE /agents/:id`, `PUT /agents/:key/pin`, and the merged `GET /agents` / `GET /agents/:key`: [../../system/api.md](../../system/api.md) section 2.6.
+- Skills endpoints `GET /agents/:key/skills` and `GET /agents/:key/skills/:name/file`: [../../system/api.md](../../system/api.md) section 2.6. Skill levels, overrides and checks: [../../system/agents.md](../../system/agents.md) 7.3; folders on disk: [../../system/data-model.md](../../system/data-model.md) 4.8; decision ADR-0019.
 - The `agents` collection (user agents) and the built-in pins document: [../../system/data-model.md](../../system/data-model.md) sections 3.10 and 3.2; decision ADR-0008 in [../../system/architecture.md](../../system/architecture.md).
 - Endpoints `GET /agents`, `GET /agents/:key`, `GET /agents/:key/evals`, `POST /agents/:key/evals/run`, `GET /agents/:key/evals/runs`, `GET|DELETE /agents/:key/evals/runs/:jobId`, `GET /agents/:key/evals/runs/:jobId/download`: [../../system/api.md](../../system/api.md).
 - Eval run documents (run, per-question result, check result, tool call, regression summary): [../../system/data-model.md](../../system/data-model.md).
@@ -192,7 +208,7 @@ User agents (definitions)
 
 ## UI
 
-Main view "Agents" (the Agent Hub) and an agent's detail view, with the Details panel on the right ([../../system/ui.md](../../system/ui.md) sections 4.4 and 4.5, [../app-shell/spec.md](../app-shell/spec.md)). Agent Hub: loading, error, populated (Official, Mine and System sections, pinned cards first, Show more), the Pinned filter's single Pinned section, no match, empty Pinned filter, empty Mine filter. Hub cards and agent detail also carry **Start chat** (R53); a user agent's detail carries **Edit**. Agent editor (R54-R61): new and edit titles, the form, saving, publishing, the unsaved-changes confirmation, and the preview chat in the Details panel (empty, no-dataset, running, reset). Agent detail: loading, error, five tabs, and for user agents the Publish and Delete actions and the delete confirmation. Evals tab: loading ("Loading evals…"), error, no evals, set list, open set (idle, starting/running, finished), Executions (loading, empty, populated, expanded).
+Main view "Agents" (the Agent Hub) and an agent's detail view, with the Details panel on the right ([../../system/ui.md](../../system/ui.md) sections 4.4 and 4.5, [../app-shell/spec.md](../app-shell/spec.md)). Agent Hub: loading, error, populated (Official, Mine and System sections, pinned cards first, Show more), the Pinned filter's single Pinned section, no match, empty Pinned filter, empty Mine filter. Hub cards and agent detail also carry **Start chat** (R53); a user agent's detail carries **Edit**. Agent editor (R54-R61): new and edit titles, the form, saving, publishing, the unsaved-changes confirmation, and the preview chat in the Details panel (empty, no-dataset, running, reset). Agent detail: loading, error, six tabs (the Skills tab: loading, error, no skills, skill list, an expanded skill, a file that isn't shown, Skipped), and for user agents the Publish and Delete actions and the delete confirmation. Evals tab: loading ("Loading evals…"), error, no evals, set list, open set (idle, starting/running, finished), Executions (loading, empty, populated, expanded).
 
 ## Flows
 
@@ -428,6 +444,54 @@ Feature: Agent Hub
     And I click "Show more (2)"
     Then the axe scan reports no violations in the Light theme
     And the axe scan reports no violations in the Dark theme
+```
+
+E2E: `frontend/e2e/agent-skills.spec.ts`
+
+### Feature: Agent skills
+
+The Skills tab (R63-R67). User and project skills are folders written into the test's data dir and into a folder named by `QUESTIONS_TO_INSIGHTS_PROJECT_SKILLS_DIR` before the app starts.
+
+```gherkin
+Feature: Agent skills
+
+  Scenario: Shows the designer's built-in skill and the content of its files
+    When I open the "Interactive Visual Designer" agent
+    And I open the Skills tab
+    Then the tab reads "Skills (1)"
+    And I see the skill "interactive-visuals" from "Built-in", "Loaded by the app"
+    And the "User" level shows the data dir's skills folder, not found
+    And the "Project" level shows "Not set (QUESTIONS_TO_INSIGHTS_PROJECT_SKILLS_DIR)"
+    When I open the "interactive-visuals" skill
+    Then I see the files "SKILL.md", "reference/freeform.md" and "reference/spec-mode.md"
+    And the content of "SKILL.md" is shown
+    When I select "reference/spec-mode.md"
+    Then I see the content of "reference/spec-mode.md"
+
+  Scenario: An agent without skills says so
+    When I open the "SQL Fixer" agent
+    And I open the Skills tab
+    Then the tab reads "Skills (0)"
+    And I see "This agent has no skills."
+
+  Scenario: A user skill and a project override reach the assistant
+    Given a user-level skill "sql-style" described "Use when writing SQL for the World Cup data."
+    And a user-level skill "curated-knowledge" overriding the built-in one
+    And a project-level skill "curated-knowledge" overriding both
+    When I open the "Questions to Insights Assistant" agent
+    And I open the Skills tab
+    Then the tab reads "Skills (3)"
+    And I see the skill "sql-style" from "User", "On demand"
+    And I see the skill "curated-knowledge" from "Project", "Loaded by the app", "Overrides built-in and user"
+    And I see the skill "deep-analysis" from "Built-in", "Loaded by the app"
+    And the "Project" level shows the project folder
+
+  Scenario: A broken user skill is skipped and says why
+    Given a user-level skill "broken" with no description
+    When I open the "Questions to Insights Assistant" agent
+    And I open the Skills tab
+    Then the tab reads "Skills (2)"
+    And "broken" is listed under Skipped with "description is missing"
 ```
 
 E2E: none yet for the Feature below.

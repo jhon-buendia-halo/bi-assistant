@@ -288,7 +288,7 @@ flowchart LR
     sqlagents["sql-fixer, sql-verifier agents"]
     bootstrap["knowledge-bootstrap agent"]
     tools["tools/<br/>(dataset, create/update_visual, ask_clarification)"]
-    skills["skills/<br/>(app-owned, declared per agent; ADR-0018)"]
+    skills["skills/<br/>(built-in, user and project levels; declared per agent; ADR-0018, ADR-0019)"]
     evals["evals/<br/>(assistant evals, eval-judge agent)"]
   end
 
@@ -475,7 +475,7 @@ flowchart LR
   - Existing users who never chose a theme move from System to Light.
 
 #### ADR-0018 — Agent know-how as app-owned skills with progressive disclosure, declared per agent
-- **Status:** Accepted
+- **Status:** Accepted; partly superseded by ADR-0019 (where skills come from, and scripts)
 - **Date:** 2026-10-13
 - **Context:**
   - The `assistant` sends one ~160-line system prompt on every call. It mixes rules every question needs (grounding, SQL safety) with rules only some turns need: curated knowledge, visuals, dialects. Deep analysis inlines its own phase prompts in `DeepAnalysisService`, and the designer gets the whole `interactive-visuals` skill (spec mode and freeform) on every call.
@@ -494,6 +494,28 @@ flowchart LR
   - On-demand skills add a tool round trip when they load, and they can fail to trigger. That's why only rules the model must judge go on demand, and evals measure them.
   - Editing a skill is a prompt change. It ships with the build and is covered by the same evals and E2E as an edit to an agent's instructions.
   - Mastra's skill catalog, tools and agent-level `skills` are framework behaviour (1.66). A Mastra upgrade re-runs the request-recording E2E that asserts what each call carries.
+
+#### ADR-0019 — Built-in, user and project skill levels that override by name; scripts reserved for built-in skills
+- **Status:** Accepted
+- **Date:** 2026-10-14
+- **Context:**
+  - ADR-0018 made every skill app-owned: the only skills an agent can get ship in the build, and nobody can add or adjust one without a release.
+  - The user asked on 2026-10-14 for the layout of Agent Skills tools: user-level skills, and project-level skills that override them by name, each a `SKILL.md` with `phases/`, `reference/` and `scripts/`.
+  - The backend runs as the desktop app, the npx CLI or a multi-user org server, so "user" and "project" need one meaning that holds in all three. The app has no organization record: one org server is one organization.
+  - A script is code the model runs on the backend host. A folder anyone can drop files into would make that arbitrary code execution, on the org server as the server's own account.
+- **Decision:**
+  - **Three levels, later overrides earlier by name:** built-in (the bundle) < user (`<data dir>/skills/`) < project (the folder `QUESTIONS_TO_INSIGHTS_PROJECT_SKILLS_DIR` names, e.g. a checkout of the organization's skills repo). The levels mean the same in every mode. On the org server both folders are server-wide; there are no per-person skills.
+  - **Read at startup.** The backend reads all three levels once when it starts. The app never writes the user or project folders.
+  - **Targeting.** A new user or project skill is on demand, for the agents its optional `agents` front-matter key names (default `assistant`). Only an agent that can load a skill on demand may be named. An override keeps the agents and the loading mode of the skill it replaces.
+  - **Failure isolation.** A broken built-in skill still stops the backend. A broken user or project skill is skipped, logged and shown on the agent page. An override of a harness-loaded built-in must carry every phase and reference file the built-in has, each with the same placeholders; otherwise it is skipped and the built-in stays.
+  - **Scripts only for built-in skills, not built yet.** `scripts/` is reserved for built-in skills, which ship with reviewed code. They would run through one tool: arguments only (no shell), only files in the skill's `scripts/` folder, a timeout, and the output returned verbatim. No built-in skill needs a script today, so the runner is not built. User and project skills are text only: their `scripts/` is never run.
+  - **Read-only Skills tab.** The agent page shows each agent's skills, the level each comes from, what it overrides, its files and their contents, and the skipped skills with their problems.
+- **Consequences:**
+  - A user or administrator can change an agent's instructions without a release. Such a change has no eval or review gate in the app: the Skills tab is the only place it shows, and an override of a harness-loaded skill changes chat, deep analysis or visuals for every session.
+  - The first on-demand skill added at the user or project level gives the assistant the skill catalog, its usage note and the skill tools on every turn (about 1,000 characters, agents.md 7.3).
+  - Eval runs and user agents run on the assistant, so they get its user and project skills too.
+  - Picking up a changed skill needs a restart.
+  - Adding the script runner later is one story inside the rules above.
 
 ## Level 4 — Code
 

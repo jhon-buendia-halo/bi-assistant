@@ -736,6 +736,10 @@ A spec visual's synthetic bundle is: body `<div id="qti-chart-root"></div>`, emp
 
 Workspaces hold no skills. Skills ship with the backend build and each agent declares its own ([agents.md](agents.md) sections 7.3 and 7.4). Until version 0.31, every workspace got a copy of the `interactive-visuals` skill at `.agents/skills/interactive-visuals/SKILL.md`, and the framework discovered skills there. Those copies are left on disk untouched and are never read, so no migration is needed.
 
+### 4.8 User and project skill folders
+
+Two folders hold skills that add to or override the built-in ones ([agents.md](agents.md) 7.3, ADR-0019): `<APP_DATA_DIR>/skills/<name>/` (user level) and `<QUESTIONS_TO_INSIGHTS_PROJECT_SKILLS_DIR>/<name>/` (project level). Each skill folder holds a `SKILL.md` and the files it links (`phases/`, `reference/`). Other files, `scripts/` included, are allowed but never run. The app only reads these folders, once at startup. It never creates or writes them, so nothing in them needs a migration. Deleting a skill folder and restarting removes the skill.
+
 ### 4.7 Legacy visual layout
 
 Visuals created before versioning keep their **v1 files directly under `visuals/<id>/`** (no `v1/` directory) and have no `versions`/`currentVersion` in the session metadata. Rules readers must apply:

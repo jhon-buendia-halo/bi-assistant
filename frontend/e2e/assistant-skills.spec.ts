@@ -1,3 +1,5 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import type { Page } from '@playwright/test';
 import { test, expect } from './fixtures/app.fixture';
 import {
@@ -132,4 +134,104 @@ test('a turn with curated knowledge carries the rules right after the block', as
   expect(systems.filter((text) => text.includes(KNOWLEDGE_RULE))).toHaveLength(
     1,
   );
+});
+
+/**
+ * Writes a user-level skill into the data dir and restarts the backend, which
+ * reads skills only at startup (agents.md 7.3). The LLM settings and the
+ * dataset the Background saved live in the same data dir, so they survive.
+ */
+async function withUserSkill(
+  {
+    app,
+    appDataDir,
+    launchApp,
+  }: {
+    app: {
+      target: string;
+      restartCli(): Promise<void>;
+      close(): Promise<void>;
+      page: Page;
+    };
+    appDataDir: string;
+    launchApp: (dir: string) => Promise<{ page: Page }>;
+  },
+  name: string,
+  description: string,
+  body: string,
+): Promise<Page> {
+  const dir = path.join(appDataDir, 'skills', name);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(
+    path.join(dir, 'SKILL.md'),
+    [
+      '---',
+      `name: ${name}`,
+      `description: ${description}`,
+      '---',
+      '',
+      body,
+      '',
+    ].join('\n'),
+  );
+  if (app.target === 'web') {
+    await app.restartCli();
+    await app.page.reload();
+    return app.page;
+  }
+  await app.close();
+  return (await launchApp(appDataDir)).page;
+}
+
+test('a user-level skill is offered to the assistant on demand', async ({
+  app,
+  appDataDir,
+  launchApp,
+}) => {
+  const description = 'Use when writing SQL for the World Cup data.';
+  const page = await withUserSkill(
+    { app, appDataDir, launchApp },
+    'sql-style',
+    description,
+    'Prefer CTEs and one clause per line.',
+  );
+  await createWorldCupSession(page);
+  const request = await ask(page, QUESTION);
+
+  expect(catalogSkills(request)).toEqual(['sql-style']);
+  expect(systemTexts(request).join('\n')).toContain(description);
+  for (const tool of SKILL_TOOLS) expect(request.tools).toContain(tool);
+});
+
+test('a user-level override of the curated-knowledge skill reaches the turn', async ({
+  app,
+  appDataDir,
+  launchApp,
+}) => {
+  const override =
+    'Curated knowledge (team override): follow the glossary before anything else.';
+  const page = await withUserSkill(
+    { app, appDataDir, launchApp },
+    'curated-knowledge',
+    'Use when the turn carries a curated dataset knowledge block.',
+    override,
+  );
+  await createKnowledgeSnippet(page, {
+    kind: 'instruction',
+    title: 'Coverage',
+    body: 'Only the 2018 and 2022 tournaments are in this data.',
+    datasetId: WORLD_CUP_DATASET,
+  });
+  await createWorldCupSession(page);
+  const request = await ask(page, QUESTION);
+
+  const systems = systemTexts(request);
+  const block = systems.findIndex((text) =>
+    text.startsWith(KNOWLEDGE_BLOCK_START),
+  );
+  expect(block, 'a curated-knowledge block').toBeGreaterThanOrEqual(0);
+  expect(systems[block + 1]).toBe(override);
+  expect(systems.join('\n')).not.toContain(KNOWLEDGE_RULE);
+  // The override is a harness-loaded skill, so it is in no catalog.
+  expect(catalogSkills(request)).toEqual([]);
 });

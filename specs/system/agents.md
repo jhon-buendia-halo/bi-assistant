@@ -245,7 +245,7 @@ Reference wording of the full prompt: Appendix A.
 
 **Invoked by.** Only the visual pipeline (section 6): `create_visual` / `update_visual` tools, the "create visual" button endpoint, the panel tailor endpoint, the panel auto-repair endpoint. Never by the user directly.
 
-**Inputs.** One user prompt assembled by the pipeline (6.4) plus one extra system message carrying the interactive-visuals skill (7.2) for the mode of the call: the `SKILL.md` body without its front matter, a blank line, then `references/spec-mode.md` (spec mode) or `references/freeform.md` (freeform mode), never both. It is read from the app bundle (7.3) and wrapped in `<interactive-visuals-skill>` … `</interactive-visuals-skill>`. requestContext carries only the session-workspace id. The designer has no skills of its own in a catalog (7.4).
+**Inputs.** One user prompt assembled by the pipeline (6.4) plus one extra system message carrying the interactive-visuals skill (7.2) for the mode of the call: the `SKILL.md` body without its front matter, a blank line, then `reference/spec-mode.md` (spec mode) or `reference/freeform.md` (freeform mode), never both. It is read from the skill that wins for its name (7.3: the built-in one unless a user or project skill overrides it) and wrapped in `<interactive-visuals-skill>` … `</interactive-visuals-skill>`. requestContext carries only the session-workspace id. The designer has no skills of its own in a catalog (7.4).
 
 **Outputs.** Structured, one of two schemas depending on mode:
 
@@ -973,7 +973,7 @@ The skill text (7.2) is sent as an extra system message, built from four parts i
 
 1. `<interactive-visuals-skill>`
 2. the router body of `SKILL.md`, front matter removed, then a blank line
-3. the mode's reference: `references/spec-mode.md` for a spec call, `references/freeform.md` for a freeform call
+3. the mode's reference: `reference/spec-mode.md` for a spec call, `reference/freeform.md` for a freeform call
 4. `</interactive-visuals-skill>`
 
 A spec call never carries the freeform reference, and a freeform call never carries the spec-mode one. That includes the freeform fallback after two failed spec attempts.
@@ -1095,7 +1095,7 @@ A fixed, hand-written browser script renders a spec. It is the same code that is
 
 One app-owned skill, a markdown file with front matter `name: interactive-visuals`, `description: Use when turning a completed, data-grounded analysis answer into a JSON chart spec (or, as a fallback, a self-contained HTML/CSS/JavaScript visual) for the Questions to Insights session panel.`
 
-**Loading.** Harness-loaded (7.3). `SKILL.md` is a short router. It gives the visual's purpose, says that a spec request returns only the spec and the runtime draws it, and names the reference each request uses. The *Spec mode* rules below are `references/spec-mode.md`, apart from the first one (the runtime owns axes, tooltips…), which stays in the router that both modes receive. The *Freeform fallback* rules are `references/freeform.md`. For each designer call the pipeline reads the router body and the call's reference from the app bundle and sends them as one system message (6.4). The designer prompt tells the model to follow it. The skill is in no agent's catalog (7.4).
+**Loading.** Harness-loaded (7.3). `SKILL.md` is a short router. It gives the visual's purpose, says that a spec request returns only the spec and the runtime draws it, and names the reference each request uses. The *Spec mode* rules below are `reference/spec-mode.md`, apart from the first one (the runtime owns axes, tooltips…), which stays in the router that both modes receive. The *Freeform fallback* rules are `reference/freeform.md`. For each designer call the pipeline reads the router body and the call's reference from the skill that wins for the name `interactive-visuals` (7.3) and sends them as one system message (6.4). The designer prompt tells the model to follow it. The skill is in no agent's catalog (7.4).
 
 **Content (contract — rules the designer must follow):**
 
@@ -1134,27 +1134,57 @@ One app-owned skill, a markdown file with front matter `name: interactive-visual
 
 The full current wording lives with the skill asset; a rebuild may reword it but must keep every rule above.
 
-### 7.3 App skills: layout, loading and the startup check
+### 7.3 Skills: levels, layout, loading and validation
 
-The decision is ADR-0018 in [architecture.md](architecture.md).
+The decisions are ADR-0018 and ADR-0019 in [architecture.md](architecture.md).
 
-- **Where.** Every skill is app-owned and ships with the backend build, one folder per skill: `skills/<name>/`. There are no user-authored skills.
-- **Layout.** `SKILL.md` starts with front matter holding exactly two keys, each on one line: `name`, equal to the folder name, and `description`, which starts with `Use when`. The body that follows is short: a phase map or a router that names the files to read. Linked files sit under `phases/` (steps run in order) and `references/` (material read when a step needs it), and `SKILL.md` names each one by its relative path. Skills hold no scripts: an exact check is TypeScript in the backend, and the skill names the tool or guard that applies it.
-- **On demand.** The skills an agent declares (7.4) are listed in that agent's catalog. The framework adds the catalog as a system message (`<available_skills>` with each skill's name, description and location), followed by its usage note, and offers the agent the `skill`, `skill_search` and `skill_read` tools. `skill` returns the body of `SKILL.md` and `skill_read` returns one file by its path in the skill's folder. An agent with no declared skills gets no catalog and none of the three tools.
-- **Harness-loaded.** A skill whose condition the code can decide is kept out of every catalog. The caller reads the body or the one linked file it needs from the bundle and sends it as a system message on that call.
-- **Startup check.** When the backend starts, it validates every skill folder: `SKILL.md` present, both keys present on one line each, `name` equal to the folder, `description` starting with `Use when`, and every `phases/…` or `references/…` path the body names present. A missing skills folder fails the same way. Any failure stops the backend with `Invalid app skills:` followed by one line per problem (`<skill>: <problem>`). Each agent's skill list (7.4) must name existing skills, otherwise startup fails with `Unknown skill "<name>" declared for agent "<agent>"`.
+- **Levels.** Skills come from three levels, one folder per skill (`<level folder>/<name>/`):
+  1. **Built-in:** ships with the backend build (`skills/<name>/`).
+  2. **User:** `<data dir>/skills/<name>/`. The data dir is `APP_DATA_DIR` (the CLI's `--data-dir`, the desktop app's user-data folder). A missing `skills/` folder means the level is empty.
+  3. **Project:** `<QUESTIONS_TO_INSIGHTS_PROJECT_SKILLS_DIR>/<name>/` when that variable is set ([api.md](api.md) environment table). A relative path resolves against the launch directory (1.7). When the variable is not set the level is empty. When it names a folder that does not exist, the backend logs `[skills] Project skills folder not found: <path>` and the level is empty.
 
-> Implementation note: `mastra/app-skills.ts` resolves the bundle root (`skills/` next to the compiled file, with the Mastra Studio source layout as fallback), validates it when `mastra/index.ts` is loaded, and serves `appSkillDocument(name)` / `appSkillFile(name, path)` to callers. Agents pass `skills: skillPathsFor('<agent>')` (Mastra agent-level skills); workspaces are built without a `skills` option.
+  The levels mean the same in local mode and on an org server, where both folders are on the server and shared by every user. The backend reads all three once, when it starts. A change is picked up only after a restart. The app never writes the user or project folder. Folders whose name starts with `.` are ignored.
+- **Override by name.** A later level overrides an earlier one with the same name: project over user over built-in. The skill that wins is the only one with that name any agent gets. Its body and files replace the others' wholesale; nothing is merged.
+- **Layout.** `SKILL.md` starts with front matter between `---` lines:
+  - `name` equal to the folder name, and `description`, which starts with `Use when`. Both are required, each on one line.
+  - `agents` (user and project skills only): one agent registry key, or a one-line list such as `[assistant]`.
+  - A built-in skill holds no other key. A user or project skill may carry others, such as `license` or `metadata`; they are ignored.
+
+  The body that follows is short: a phase map or a router that names the files to read. Linked files sit under `phases/` (steps run in order) and `reference/` (material read when a step needs it; `references/` is accepted too), and `SKILL.md` names each one by its relative path. Other files in the folder are allowed and can be read on demand. An exact check is TypeScript in the backend, and the skill names the tool or guard that applies it.
+- **Scripts.** `scripts/` is reserved for built-in skills. Such scripts would run through one tool, with arguments only (no shell), only files in the skill's `scripts/` folder, a timeout, and the output returned verbatim. No built-in skill has a script today, so the tool does not exist. A user or project skill's `scripts/` is never run.
+- **Which agents get a skill.**
+  - A built-in skill reaches the agents 7.4 names, in the loading mode it names.
+  - A new user or project skill is on demand for the agents its `agents` key names, or for the `assistant` when it has none. Only an agent that can load a skill on demand may be named. Today that is the `assistant`; the other agents run without tools.
+  - An override keeps the agents and the loading mode of the skill it replaces. Its own `agents` key is ignored.
+  - User agents and eval runs run on the `assistant` (1.2, 8), so they get its skills, user and project ones included.
+- **On demand.** The on-demand skills an agent gets are listed in that agent's catalog. The framework adds the catalog as a system message (`<available_skills>` with each skill's name, description and location), followed by its usage note, and offers the agent the `skill`, `skill_search` and `skill_read` tools. `skill` returns the body of `SKILL.md` and `skill_read` returns one file by its path in the skill's folder. An agent with no on-demand skills gets no catalog and none of the three tools.
+- **Harness-loaded.** A skill whose condition the code can decide is kept out of every catalog. The caller reads the body, or the one linked file it needs, from the skill that wins for that name, and sends it as a system message on that call.
+- **Built-in check.** When the backend starts, it validates every built-in skill folder:
+  - `SKILL.md` is present, both keys are on one line each and no other key is used;
+  - `name` equals the folder, and `description` starts with `Use when`;
+  - every `phases/…` or `reference/…` path the body names is present.
+
+  A missing built-in folder fails the same way. Any failure stops the backend with `Invalid app skills:` followed by one line per problem (`<skill>: <problem>`). The two tables in 7.4 must name existing built-in skills, otherwise startup fails with `Unknown skill "<name>" declared for agent "<agent>"`.
+- **User and project check.** A user or project skill is checked with the same rules, apart from the extra keys it may carry, and with three more:
+  - its `agents` names only agents that load skills on demand. The problems are `unknown agent "<key>"` and `agent "<key>" does not load skills on demand`;
+  - an override of a harness-loaded skill has a non-empty body (`the body is empty`);
+  - an override of a harness-loaded skill has every file the built-in has under `phases/` and `reference/` (`<path> is missing (the skill it overrides has it)`), each with exactly the same `{{placeholders}}` (`<path> must use the placeholders {{a}}, {{b}}`).
+
+  A skill with any problem is **skipped**: the backend keeps running, logs the warning `[skills] Skipped <level> skill "<folder>": <problem>; <problem>`, and the agent page lists it under Skipped ([agents-evals](../capabilities/agents-evals/spec.md) R63-R67). A skipped override leaves the skill of the level below in place. A skill that passes may carry **warnings**, shown on the agent page: `agents is ignored on an override`, and `scripts/ is not run for user and project skills`.
+
+> Implementation note: `mastra/app-skills.ts` resolves the bundle root (`skills/` next to the compiled file, with the Mastra Studio source layout as fallback), the user root from `APP_DATA_DIR` (as `mastra/storage.ts` does) and the project root from the variable. It validates and resolves all three when `mastra/index.ts` is loaded, and serves `appSkillDocument(name)` / `appSkillBody(name)` / `appSkillFile(name, path)` from the winning skill. Agents pass `skills: skillPathsFor('<agent>')` (Mastra agent-level skills); workspaces are built without a `skills` option. `agentSkillsView(agent)` feeds `GET /agents/:key/skills` ([api.md](api.md) 2.6).
 
 ### 7.4 Skills per agent
 
+Built-in skills, declared in code (`AGENT_SKILLS` for on-demand, `HARNESS_SKILLS` for harness-loaded):
+
 | Agent | On demand (catalog) | Harness-loaded |
 |---|---|---|
-| `assistant` | none | `curated-knowledge`: body after Block 3, on calls that carry it (4.1). `deep-analysis`: one phase file per deep-analysis call (2.7). |
-| `visualization` (designer) | none | `interactive-visuals` (7.2): the router body of `SKILL.md`, plus `references/spec-mode.md` on spec calls or `references/freeform.md` on freeform calls |
+| `assistant` | none built in; any user or project skill that targets it (7.3) | `curated-knowledge`: body after Block 3, on calls that carry it (4.1). `deep-analysis`: one phase file per deep-analysis call (2.7). |
+| `visualization` (designer) | none (it runs without tools) | `interactive-visuals` (7.2): the router body of `SKILL.md`, plus `reference/spec-mode.md` on spec calls or `reference/freeform.md` on freeform calls |
 | `sql-fixer`, `sql-verifier`, `knowledge-bootstrap`, `assistant-eval-judge` | none | none |
 
-No skill is on demand today. Two were measured and cut on 2026-10-13. A visuals skill would have cost a catalog plus usage note of about 1,045 characters on every turn to save 427. A dialects skill had no existing guidance to move. A future on-demand skill is added to `AGENT_SKILLS`, and the assistant then gets the catalog and the skill tools (7.3).
+No built-in skill is on demand. Two were measured and cut on 2026-10-13. A visuals skill would have cost a catalog plus usage note of about 1,045 characters on every turn to save 427. A dialects skill had no existing guidance to move. The first user or project skill that reaches the `assistant` gives it the catalog and the skill tools on every turn (7.3).
 
 ---
 
@@ -1242,7 +1272,7 @@ A case **passes** when it has at least one check and every check scored 1. Each 
 
 ## 9. Agents catalogue (introspection contract)
 
-`GET /agents` and `GET /agents/:key` expose, per registered agent: `key`, `id`, `name`, `description`, `tools` (sorted names); detail adds `instructions` (prompt flattened to text), `toolDetails` (`{name, description, inputs: top-level input field names}`), `memory` (`null` when none, else `{storage, lastMessages, semanticRecall, workingMemory, generateTitle}`), and `model` (`{id, provider}` of the currently resolved model, `null` when it cannot be resolved without settings). Any accessor that throws is reported as empty. UI strings for agents without tools/memory/evals (`This agent runs in a single step with no tools.`, `This agent is stateless — no memory is configured.`, `No evals configured for this agent yet.`) are owned by [agents-evals](../capabilities/agents-evals/spec.md).
+`GET /agents` and `GET /agents/:key` expose, per registered agent: `key`, `id`, `name`, `description`, `tools` (sorted names); detail adds `instructions` (prompt flattened to text), `toolDetails` (`{name, description, inputs: top-level input field names}`), `memory` (`null` when none, else `{storage, lastMessages, semanticRecall, workingMemory, generateTitle}`), and `model` (`{id, provider}` of the currently resolved model, `null` when it cannot be resolved without settings). An agent's skills are a separate endpoint, `GET /agents/:key/skills` (7.3, [api.md](api.md) 2.6). Any accessor that throws is reported as empty. UI strings for agents without tools/memory/evals (`This agent runs in a single step with no tools.`, `This agent is stateless — no memory is configured.`, `No evals configured for this agent yet.`) are owned by [agents-evals](../capabilities/agents-evals/spec.md).
 
 ---
 
