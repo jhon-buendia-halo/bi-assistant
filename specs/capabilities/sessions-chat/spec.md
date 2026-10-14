@@ -552,7 +552,7 @@ Feature: Sessions started from an agent
 
 E2E: `frontend/e2e/assistant-skills.spec.ts`
 
-What the assistant is told about skills, checked on the request the model receives. "The model" is the recording stub described under the Feature "Sessions started from an agent". Which skills each agent gets, where user and project skills come from, and how they load: [agents.md](../../system/agents.md) sections 7.3 and 7.4; decisions ADR-0018 and ADR-0019. A user-level skill is a folder written into the test's data dir before the app starts. Curated knowledge is seeded through the backend API ([knowledge](../knowledge/spec.md) R15-R19).
+What the assistant is told about skills, checked on the request the model receives. "The model" is the recording stub described under the Feature "Sessions started from an agent". Which skills each agent gets, where user and project skills come from, and how they load: [agents.md](../../system/agents.md) sections 7.3 and 7.4; decisions ADR-0018, ADR-0019 and ADR-0020; the prompt's sections are in agents.md 2.1 and 7.5. A user-level skill is a folder written into the test's data dir before the app starts. Curated knowledge is seeded through the backend API ([knowledge](../knowledge/spec.md) R15-R19).
 
 ```gherkin
 Feature: Skills the assistant is given
@@ -565,9 +565,10 @@ Feature: Skills the assistant is given
     Given a session over "World Cup Core"
     When I send "Who won the 2022 World Cup?"
     Then I see the stub's answer
-    And the skill catalog the model received lists exactly the assistant's skills
+    And the assistant's prompt has "## Tools" and then "## Working rules", and no "## Skills"
+    And the "## Tools" section lists "run_readonly_sql" and "ask_clarification"
     And the model received nothing of the "interactive-visuals" skill
-    And the model is offered the "skill" and "skill_read" tools only when the assistant has skills
+    And the model is offered neither "read_file" nor the framework's "skill", "skill_search" or "skill_read"
 
   Scenario: A turn without curated knowledge carries no knowledge rules
     Given a session over "World Cup Core"
@@ -591,8 +592,19 @@ Feature: Skills the assistant is given
     And a session over "World Cup Core"
     When I send "Who won the 2022 World Cup?"
     Then I see the stub's answer
-    And the skill catalog the model received lists "sql-style" with that description
-    And the model is offered the "skill" and "skill_read" tools
+    And the assistant's prompt ends with a "## Skills" section
+    And its catalog lists "sql-style" with that description and the path of its SKILL.md
+    And the "## Tools" section lists "read_file"
+    And the model is offered "read_file" and none of the framework's skill tools
+
+  Scenario: The assistant reads a skill's files with read_file, and only those
+    Given a user-level skill "sql-style" described "Use when writing SQL for the World Cup data."
+    And the model will call read_file on that skill's SKILL.md, then on a file outside every skill
+    And a session over "World Cup Core"
+    When I send "Who won the 2022 World Cup?"
+    Then I see the stub's answer
+    And the model got the text of that SKILL.md back from the first read_file call
+    And the second read_file call was refused with "Not a file of an installed skill"
 
   Scenario: A user-level override of the curated-knowledge skill reaches the turn
     Given a user-level skill "curated-knowledge" whose body is the team's own rules

@@ -738,6 +738,22 @@ A behaviour-preserving refactor of the app's Mastra agents to the Agent Skills l
   - A file outside the skill is refused.
   - Screenshots of the tab with the Details panel open.
 
+#### 1.13.9 — Sectioned assistant prompt with the app's own skill catalog, `read_file` and `run_skill_script` ([BA-207](https://halo-powered.atlassian.net/browse/BA-207))  `🚧 In progress`
+- **Intent:** the assistant's prompt reads like the Agent Skills template the user gave (identity, Tools, Working rules, Skills), and the model reads and uses skills with tools the app controls.
+- **Scope:** ADR-0020.
+  - **Prompt.** The identity paragraph, then `## Tools` generated from the assistant's tools (name, input names, first sentence of the description), then `## Working rules` (today's rules, word for word), then `## Skills` when the assistant has on-demand skills: the user's instructions plus an `<available_skills>` catalog with name, description and the absolute `SKILL.md` path.
+  - **`read_file(path)`.** Read-only, limited to the regular files of the listed skills. It replaces the framework's catalog and its `skill`, `skill_search` and `skill_read` tools.
+  - **`run_skill_script(skill, script, args)`.** For built-in skills' Node scripts: no shell, `scripts/` only, a minimal environment, a 30-second timeout, output returned verbatim. Offered only when such a skill exists.
+  - **Unchanged.** Harness-loaded skills stay out of the catalog.
+  - **Descriptions.** `SKILL.md` descriptions may wrap over several lines.
+  - **Specs.** agents.md §2.1, §3.9-3.10, §7.3-7.4 and Appendices A and C; the sessions-chat Feature "Skills the assistant is given".
+- **Out of scope:** a shell or bash tool; Python scripts; scripts in user or project skills; moving harness-loaded skills into the catalog; rewording the working rules.
+- **Acceptance:**
+  - A recorded request (stub LLM) shows the four sections in order, the catalog with the `SKILL.md` path, `read_file` offered and no framework skill tools.
+  - A scripted `read_file` call returns the file, and one outside the skills is refused.
+  - Unit tests cover the read and script limits and a wrapped description.
+  - Full web and org E2E, unit tests and builds pass. The world-cup evals before and after show no regression.
+
 ## Release 2 — Multi-user  (no target date yet)
 
 The app becomes multi-user. An organisation self-hosts it as an org server, with sign-in, roles and an admin panel. Local mode stays the default. Direction: [specs/product/vision.md](specs/product/vision.md). Not part of the 1.0 Beta.

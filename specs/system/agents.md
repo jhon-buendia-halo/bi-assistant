@@ -185,7 +185,14 @@ LenAI deployments are never swapped to `openai/gpt-4.1-mini` (rule 2 requires no
 
 **Max steps.** 15 (`ASSISTANT_MAX_STEPS`), shared by production turns and the eval harness so evals measure the same constraints.
 
-**Prompt requirements.** The prompt MUST start with `You are the Questions to Insights assistant` (asserted by E2E on the Prompt tab). It encodes these rules, in this order:
+**Prompt requirements.** The prompt MUST start with `You are the Questions to Insights assistant` (asserted by E2E on the Prompt tab). It has four parts, in this order (ADR-0020; exact text in Appendix A, Skills section in 7.5):
+
+1. **Identity:** the A1-A3 paragraph.
+2. **`## Tools`:** one line per tool the assistant is given, in the order it is given them: `- <name>(<input names, comma-separated>): <first sentence of the tool's description>`. The lines are generated from the tools, so a tool change updates this section. `read_file` and `run_skill_script` (3.9, 3.10) are listed only when they are offered. The framework's workspace tools (3.8) are not listed.
+3. **`## Working rules`:** rules A4-A12 and A19-A34 below, word for word as before.
+4. **`## Skills`:** only when the assistant has on-demand skills (7.3). Fixed instructions, then the `<available_skills>` catalog (7.5).
+
+The rules encoded, in this order:
 
 *Role*
 - A1. Identity: "the Questions to Insights assistant — a data analyst working over the catalogs, schemas and entities in the user's session datasets."
@@ -642,7 +649,30 @@ All tools belong to the `assistant`. Every tool returns a JSON object; **tools n
 
 ### 3.8 Workspace tools
 
-Because the assistant (and designer) are bound to the session workspace, the framework also offers its filesystem tools, with **delete disabled**: `mastra_workspace_read_file`, `mastra_workspace_write_file`, `mastra_workspace_edit_file`, `mastra_workspace_list_files`, `mastra_workspace_file_stat`, `mastra_workspace_mkdir` and `mastra_workspace_grep`. With them comes one framework system message that names the workspace folder and says relative paths resolve from it. The prompts never mention these tools. The skill tools (`skill`, `skill_search`, `skill_read`) come with an agent's skills, not with the workspace (7.3).
+Because the assistant (and designer) are bound to the session workspace, the framework also offers its filesystem tools, with **delete disabled**: `mastra_workspace_read_file`, `mastra_workspace_write_file`, `mastra_workspace_edit_file`, `mastra_workspace_list_files`, `mastra_workspace_file_stat`, `mastra_workspace_mkdir` and `mastra_workspace_grep`. With them comes one framework system message that names the workspace folder and says relative paths resolve from it. The prompts never mention these tools. The framework's skill tools (`skill`, `skill_search`, `skill_read`) are never offered: the assistant reads skills with `read_file` (3.9) instead (ADR-0020).
+
+### 3.9 `read_file`
+
+Offered to the assistant only when it has on-demand skills (7.3). Read-only.
+
+- **Description:** `Read one file of an installed skill by its absolute path: the location the skill list gives for SKILL.md, or that folder joined with a path SKILL.md names. Only files inside the listed skills' folders can be read.`
+- **Input:** `path` (string): an absolute path.
+- **Output:** `{ path, content }` for a text file, the path being as given. A file larger than 256 KB or not UTF-8 text answers `{ path, error: "This file is larger than 256 KB or isn't text, so it can't be read." }`.
+- **Limits:** the path, normalised, must be a regular file inside the folder of a skill the assistant's catalog lists. Symbolic links are neither followed nor read. Anything else answers `{ error: "Not a file of an installed skill: <path>. Use the skill's location folder joined with the path SKILL.md names." }`.
+
+### 3.10 `run_skill_script`
+
+Offered to the assistant only when its catalog lists a built-in skill with at least one script (7.3). No built-in skill has one today, so it isn't offered yet.
+
+- **Description:** `Run one of a built-in skill's bundled scripts and return its output. Use it instead of reading the script. Arguments are passed as a list, never through a shell.`
+- **Input:** `skill` (string), the skill's name; `script` (string), the script's path in the skill folder, e.g. `scripts/validate.js`; `args` (string list, optional, at most 20, each at most 2,000 characters).
+- **Runs:**
+  - only a listed regular file under that built-in skill's `scripts/` ending in `.js`, `.mjs` or `.cjs`;
+  - with the backend's own Node runtime (`ELECTRON_RUN_AS_NODE=1` set, so the desktop app's runtime acts as Node) and no shell;
+  - in the skill's folder, with an environment of only `PATH`, `ELECTRON_RUN_AS_NODE` and `NODE_ENV`, so no app secret or API key reaches the script;
+  - with 30 seconds before it is killed.
+- **Output:** `{ exitCode, stdout, stderr }`, each stream capped at 20,000 characters with `…[truncated]` appended. A timeout adds `timedOut: true` with `exitCode: null`.
+- **Refusals:** `{ error: "Unknown skill: <skill>" }` (not a listed built-in skill) and `{ error: "Not a script of <skill>: <script>" }`.
 
 ---
 
@@ -1146,21 +1176,21 @@ The decisions are ADR-0018 and ADR-0019 in [architecture.md](architecture.md).
   The levels mean the same in local mode and on an org server, where both folders are on the server and shared by every user. The backend reads all three once, when it starts. A change is picked up only after a restart. The app never writes the user or project folder. Folders whose name starts with `.` are ignored.
 - **Override by name.** A later level overrides an earlier one with the same name: project over user over built-in. The skill that wins is the only one with that name any agent gets. Its body and files replace the others' wholesale; nothing is merged.
 - **Layout.** `SKILL.md` starts with front matter between `---` lines:
-  - `name` equal to the folder name, and `description`, which starts with `Use when`. Both are required, each on one line.
+  - `name` equal to the folder name, and `description`, which starts with `Use when`. Both are required. `name` is on one line. `description` may wrap onto indented continuation lines, or use a `>` or `|` block; the lines are joined with single spaces.
   - `agents` (user and project skills only): one agent registry key, or a one-line list such as `[assistant]`.
   - A built-in skill holds no other key. A user or project skill may carry others, such as `license` or `metadata`; they are ignored.
 
   The body that follows is short: a phase map or a router that names the files to read. Linked files sit under `phases/` (steps run in order) and `reference/` (material read when a step needs it; `references/` is accepted too), and `SKILL.md` names each one by its relative path. Other files in the folder are allowed and can be read on demand. An exact check is TypeScript in the backend, and the skill names the tool or guard that applies it.
-- **Scripts.** `scripts/` is reserved for built-in skills. Such scripts would run through one tool, with arguments only (no shell), only files in the skill's `scripts/` folder, a timeout, and the output returned verbatim. No built-in skill has a script today, so the tool does not exist. A user or project skill's `scripts/` is never run.
+- **Scripts.** `scripts/` holds a skill's bundled scripts. Only a built-in skill's Node scripts run, through `run_skill_script` (3.10, ADR-0020): no shell, a minimal environment and a timeout. No built-in skill has a script today. A user or project skill's `scripts/` is never run.
 - **Which agents get a skill.**
   - A built-in skill reaches the agents 7.4 names, in the loading mode it names.
   - A new user or project skill is on demand for the agents its `agents` key names, or for the `assistant` when it has none. Only an agent that can load a skill on demand may be named. Today that is the `assistant`; the other agents run without tools.
   - An override keeps the agents and the loading mode of the skill it replaces. Its own `agents` key is ignored.
   - User agents and eval runs run on the `assistant` (1.2, 8), so they get its skills, user and project ones included.
-- **On demand.** The on-demand skills an agent gets are listed in that agent's catalog. The framework adds the catalog as a system message (`<available_skills>` with each skill's name, description and location), followed by its usage note, and offers the agent the `skill`, `skill_search` and `skill_read` tools. `skill` returns the body of `SKILL.md` and `skill_read` returns one file by its path in the skill's folder. An agent with no on-demand skills gets no catalog and none of the three tools.
+- **On demand.** The on-demand skills an agent gets make up its catalog, sorted by name. The app renders the catalog itself into the `## Skills` section of the assistant's prompt (2.1, 7.5): `<available_skills>` with each skill's name, its description and the absolute path of its `SKILL.md` as `<location>`. The model reads a skill with `read_file` (3.9) and runs a built-in skill's scripts with `run_skill_script` (3.10). The framework's skill catalog, usage note and `skill` / `skill_search` / `skill_read` tools are not used (ADR-0020). An agent with no on-demand skills gets no Skills section and no `read_file`.
 - **Harness-loaded.** A skill whose condition the code can decide is kept out of every catalog. The caller reads the body, or the one linked file it needs, from the skill that wins for that name, and sends it as a system message on that call.
 - **Built-in check.** When the backend starts, it validates every built-in skill folder:
-  - `SKILL.md` is present, both keys are on one line each and no other key is used;
+  - `SKILL.md` is present, both keys are present (`name` on one line) and no other key is used;
   - `name` equals the folder, and `description` starts with `Use when`;
   - every `phases/…` or `reference/…` path the body names is present.
 
@@ -1172,7 +1202,7 @@ The decisions are ADR-0018 and ADR-0019 in [architecture.md](architecture.md).
 
   A skill with any problem is **skipped**: the backend keeps running, logs the warning `[skills] Skipped <level> skill "<folder>": <problem>; <problem>`, and the agent page lists it under Skipped ([agents-evals](../capabilities/agents-evals/spec.md) R63-R67). A skipped override leaves the skill of the level below in place. A skill that passes may carry **warnings**, shown on the agent page: `agents is ignored on an override`, and `scripts/ is not run for user and project skills`.
 
-> Implementation note: `mastra/app-skills.ts` resolves the bundle root (`skills/` next to the compiled file, with the Mastra Studio source layout as fallback), the user root from `APP_DATA_DIR` (as `mastra/storage.ts` does) and the project root from the variable. It validates and resolves all three when `mastra/index.ts` is loaded, and serves `appSkillDocument(name)` / `appSkillBody(name)` / `appSkillFile(name, path)` from the winning skill. Agents pass `skills: skillPathsFor('<agent>')` (Mastra agent-level skills); workspaces are built without a `skills` option. `agentSkillsView(agent)` feeds `GET /agents/:key/skills` ([api.md](api.md) 2.6).
+> Implementation note: `mastra/app-skills.ts` resolves the bundle root (`skills/` next to the compiled file, with the Mastra Studio source layout as fallback), the user root from `APP_DATA_DIR` (as `mastra/storage.ts` does) and the project root from the variable. It validates and resolves all three when `mastra/index.ts` is loaded, and serves `appSkillDocument(name)` / `appSkillBody(name)` / `appSkillFile(name, path)` from the winning skill. `catalogSkills(agent)` gives an agent's on-demand skills. `mastra/skill-tools.ts` builds `read_file` and `run_skill_script` over them, and `mastra/agents/assistant-prompt.ts` builds the sectioned prompt. Agents are given no framework `skills`, and workspaces are built without a `skills` option. `agentSkillsView(agent)` feeds `GET /agents/:key/skills` ([api.md](api.md) 2.6).
 
 ### 7.4 Skills per agent
 
@@ -1184,7 +1214,33 @@ Built-in skills, declared in code (`AGENT_SKILLS` for on-demand, `HARNESS_SKILLS
 | `visualization` (designer) | none (it runs without tools) | `interactive-visuals` (7.2): the router body of `SKILL.md`, plus `reference/spec-mode.md` on spec calls or `reference/freeform.md` on freeform calls |
 | `sql-fixer`, `sql-verifier`, `knowledge-bootstrap`, `assistant-eval-judge` | none | none |
 
-No built-in skill is on demand. Two were measured and cut on 2026-10-13. A visuals skill would have cost a catalog plus usage note of about 1,045 characters on every turn to save 427. A dialects skill had no existing guidance to move. The first user or project skill that reaches the `assistant` gives it the catalog and the skill tools on every turn (7.3).
+No built-in skill is on demand. Two were measured and cut on 2026-10-13. A visuals skill would have cost a catalog plus usage note of about 1,045 characters on every turn to save 427. A dialects skill had no existing guidance to move. The first user or project skill that reaches the `assistant` gives it the `## Skills` section and `read_file` on every turn (7.3).
+
+### 7.5 The assistant's `## Skills` section
+
+Appended after `## Working rules`, separated by a blank line, only when the assistant has on-demand skills (7.3). `<name>`, `<description>` and the path are XML-escaped. Skills are sorted by name. The script sentence depends on whether `run_skill_script` is offered:
+
+```
+## Skills
+Skills are folders of instructions, scripts and references for specific kinds
+of work. Below is the list of installed skills (name, description, location).
+
+Before starting any task that matches a skill's description, read that skill's
+SKILL.md with read_file and follow it. Several skills may apply; read each one.
+Read files that SKILL.md references only when the current step needs them.
+<script sentence>
+
+<available_skills>
+  <skill>
+    <name>sql-style</name>
+    <description>Use when writing or reviewing SQL.</description>
+    <location>/abs/path/to/skills/sql-style/SKILL.md</location>
+  </skill>
+</available_skills>
+```
+
+- With `run_skill_script` offered, the script sentence is: `Run bundled scripts with run_skill_script rather than reading them into context, unless SKILL.md says otherwise.`
+- Without it: `Bundled scripts can't be run here: don't read them into context unless SKILL.md says otherwise.`
 
 ---
 

@@ -475,7 +475,7 @@ flowchart LR
   - Existing users who never chose a theme move from System to Light.
 
 #### ADR-0018 — Agent know-how as app-owned skills with progressive disclosure, declared per agent
-- **Status:** Accepted; partly superseded by ADR-0019 (where skills come from, and scripts)
+- **Status:** Accepted; partly superseded by ADR-0019 (where skills come from, and scripts) and ADR-0020 (how on-demand skills are listed and read)
 - **Date:** 2026-10-13
 - **Context:**
   - The `assistant` sends one ~160-line system prompt on every call. It mixes rules every question needs (grounding, SQL safety) with rules only some turns need: curated knowledge, visuals, dialects. Deep analysis inlines its own phase prompts in `DeepAnalysisService`, and the designer gets the whole `interactive-visuals` skill (spec mode and freeform) on every call.
@@ -496,7 +496,7 @@ flowchart LR
   - Mastra's skill catalog, tools and agent-level `skills` are framework behaviour (1.66). A Mastra upgrade re-runs the request-recording E2E that asserts what each call carries.
 
 #### ADR-0019 — Built-in, user and project skill levels that override by name; scripts reserved for built-in skills
-- **Status:** Accepted
+- **Status:** Accepted; partly superseded by ADR-0020 (the script runner is built)
 - **Date:** 2026-10-14
 - **Context:**
   - ADR-0018 made every skill app-owned: the only skills an agent can get ship in the build, and nobody can add or adjust one without a release.
@@ -516,6 +516,30 @@ flowchart LR
   - Eval runs and user agents run on the assistant, so they get its user and project skills too.
   - Picking up a changed skill needs a restart.
   - Adding the script runner later is one story inside the rules above.
+
+#### ADR-0020 — A sectioned assistant prompt with the app's own skill catalog, read through `read_file`; built-in scripts run through `run_skill_script`
+- **Status:** Accepted
+- **Date:** 2026-10-14
+- **Context:**
+  - Under ADR-0018 the framework renders the on-demand catalog, with its own usage note and a `<source>` tag, and offers `skill`, `skill_search` and `skill_read`. Neither the wording nor the tools are ours to shape.
+  - The user asked on 2026-10-14 for the system prompt of Agent Skills tools: identity, `## Tools`, `## Working rules` and `## Skills`. The Skills section has fixed instructions and an `<available_skills>` list giving each skill's name, description and the path to its `SKILL.md`. The model reads skills with a file tool and runs bundled scripts instead of reading them.
+  - ADR-0019 reserved scripts for built-in skills behind a restricted runner but didn't build it. A shell would run as the backend's account, for every user on the org server. The packaged app ships Node (the backend's own runtime), not Python.
+- **Decision:**
+  - **Sectioned prompt.** The assistant's prompt is the identity paragraph, then `## Tools` (one line per tool, generated from the tools it is given), then `## Working rules` (the existing rules, word for word), then `## Skills` when it has on-demand skills. The Skills section holds the instructions and the catalog, rendered by the app.
+  - **Own catalog and `read_file`.** The assistant is no longer given framework skills, so the framework adds no catalog, usage note or skill tools. The app gives it `read_file(path)` instead: read-only, and limited to the regular files inside the folders of the skills its catalog lists.
+  - **`run_skill_script`.** A built-in skill in the catalog can bundle Node scripts under `scripts/` (`.js`, `.mjs`, `.cjs`). They run through `run_skill_script(skill, script, args)`:
+    - with the backend's own Node and no shell;
+    - only listed files under that skill's `scripts/`, with arguments passed as an argument list;
+    - with a minimal environment that carries no app secrets, the skill folder as working directory and a 30-second timeout;
+    - with stdout, stderr and the exit code returned verbatim (capped).
+
+    The tool is offered only when such a skill exists. User and project skills stay text only.
+  - **Harness-loaded skills unchanged.** `curated-knowledge`, `deep-analysis` and `interactive-visuals` are still sent by code and never listed.
+- **Consequences:**
+  - The prompt the model sees, and the one the Prompt tab shows, are the same text, catalog included. A framework upgrade can no longer change the skill wording.
+  - `read_file` and `run_skill_script` are app code that touches the disk and spawns processes. Both are covered by unit tests on their limits (paths, symbolic links, size, extensions, timeout, environment).
+  - No built-in skill ships a script today, so `run_skill_script` isn't offered until one does. It is tested with a fixture skill.
+  - Every assistant call carries the Tools section (about 1,000 characters). The prompt change is measured with the world-cup evals before the PR.
 
 ## Level 4 — Code
 
