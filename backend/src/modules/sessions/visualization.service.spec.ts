@@ -62,7 +62,7 @@ import { getDatasetToolServices } from '../../mastra/tool-services';
 import { resolveVisualizationModel } from '../../mastra/agents/visualization.agent';
 import { setAgentModelResolver } from '../../mastra/model-resolver';
 import { createZip } from './zip-archive';
-import { appSkillDocument } from '../../mastra/app-skills';
+import { appSkillBody, appSkillFile } from '../../mastra/app-skills';
 import {
   isSchemaEnvelopeError,
   unwrapSchemaEnvelope,
@@ -242,28 +242,79 @@ describe('visualizationData', () => {
 });
 
 describe('VisualizationService skill', () => {
-  it('sends the bundled interactive-visuals skill, not a workspace copy', async () => {
+  const SPEC_MODE = appSkillFile(
+    'interactive-visuals',
+    'references/spec-mode.md',
+  ).trimEnd();
+  const FREEFORM = appSkillFile(
+    'interactive-visuals',
+    'references/freeform.md',
+  ).trimEnd();
+  /** The system message the designer gets for one mode (agents.md 6.4, 7.2). */
+  const skillMessage = (reference: string) => ({
+    role: 'system',
+    content: [
+      '<interactive-visuals-skill>',
+      appSkillBody('interactive-visuals').trimEnd(),
+      '',
+      reference,
+      '</interactive-visuals-skill>',
+    ].join('\n'),
+  });
+  const contextAt = (agent: { generate: jest.Mock }, call: number) =>
+    (
+      (agent.generate.mock.calls as unknown[][])[call][1] as {
+        context: { role: string; content: string }[];
+      }
+    ).context;
+  const workspaceSkillReads = (filesystem: { readFile: jest.Mock }) =>
+    (filesystem.readFile.mock.calls as unknown[][])
+      .map(([path]) => String(path))
+      .filter((path) => path.includes('.agents'));
+
+  it('sends a spec-mode call the router and the spec-mode reference only', async () => {
     const { service, agent, filesystem } = build();
+    agent.generate.mockResolvedValue({ object: specOutput });
 
     await service.create(sessionWithRows(3, 3), undefined);
 
-    const options = (agent.generate.mock.calls as unknown[][])[0][1] as {
-      context: { role: string; content: string }[];
-    };
-    expect(options.context).toEqual([
-      {
-        role: 'system',
-        content: [
-          '<interactive-visuals-skill>',
-          appSkillDocument('interactive-visuals'),
-          '</interactive-visuals-skill>',
-        ].join('\n'),
-      },
-    ]);
-    const reads = (filesystem.readFile.mock.calls as unknown[][]).map(
-      ([path]) => String(path),
-    );
-    expect(reads.filter((path) => path.includes('.agents'))).toEqual([]);
+    expect(agent.generate).toHaveBeenCalledTimes(1);
+    const context = contextAt(agent, 0);
+    expect(context).toEqual([skillMessage(SPEC_MODE)]);
+    expect(context[0].content).toContain(SPEC_MODE);
+    expect(context[0].content).not.toContain(FREEFORM);
+    expect(context[0].content).not.toContain('## Fallback: freeform');
+    expect(context[0].content).not.toContain('name: interactive-visuals');
+    expect(workspaceSkillReads(filesystem)).toEqual([]);
+  });
+
+  it('sends a freeform call the router and the freeform reference only', async () => {
+    const { service, agent, filesystem } = build();
+    const session = sessionWithRows(3, 3);
+    // No rows: the spec attempt is skipped and the freeform designer runs.
+    delete session.messages[1].data;
+
+    await service.create(session, undefined);
+
+    expect(agent.generate).toHaveBeenCalledTimes(1);
+    const context = contextAt(agent, 0);
+    expect(context).toEqual([skillMessage(FREEFORM)]);
+    expect(context[0].content).toContain(FREEFORM);
+    expect(context[0].content).not.toContain(SPEC_MODE);
+    expect(context[0].content).not.toContain('## The spec');
+    expect(workspaceSkillReads(filesystem)).toEqual([]);
+  });
+
+  it('switches to the freeform reference when the spec attempts fail', async () => {
+    const { service, agent } = build();
+    // The stub returns the freeform bundle for every call, so both spec
+    // attempts fail and the third call is the freeform fallback.
+    await service.create(sessionWithRows(20, 20), undefined);
+
+    expect(agent.generate).toHaveBeenCalledTimes(3);
+    expect(contextAt(agent, 0)).toEqual([skillMessage(SPEC_MODE)]);
+    expect(contextAt(agent, 1)).toEqual([skillMessage(SPEC_MODE)]);
+    expect(contextAt(agent, 2)).toEqual([skillMessage(FREEFORM)]);
   });
 });
 

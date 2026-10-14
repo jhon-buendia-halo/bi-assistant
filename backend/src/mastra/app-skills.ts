@@ -6,8 +6,8 @@ import { join, normalize, sep } from 'path';
  *
  * Skills ship with the backend build under `skills/<name>/`. Each agent
  * declares its own on-demand skills below; harness-loaded skills are read by
- * their callers through `appSkillDocument` / `appSkillFile` and never appear
- * in a catalog. The whole folder is validated when this module is first used,
+ * their callers through `appSkillDocument` / `appSkillBody` / `appSkillFile`
+ * and never appear in a catalog. The whole folder is validated when this module is first used,
  * so a broken skill stops the backend at startup instead of silently never
  * triggering.
  */

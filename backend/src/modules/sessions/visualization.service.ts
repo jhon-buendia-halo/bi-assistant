@@ -40,7 +40,7 @@ import {
 } from './visual-runtime';
 import { recommendedFormBlock } from './chart-heuristic';
 import { createZip } from './zip-archive';
-import { appSkillDocument } from '../../mastra/app-skills';
+import { appSkillBody, appSkillFile } from '../../mastra/app-skills';
 import {
   ChatMessage,
   InteractiveVisualization,
@@ -59,6 +59,25 @@ type Bundle = InteractiveVisualBundle;
 
 /** What the designer is asked to return on a given attempt. */
 type DesignerMode = 'spec' | 'freeform';
+
+/** The interactive-visuals reference each designer mode reads (agents.md 7.2). */
+const DESIGNER_REFERENCES: Record<DesignerMode, string> = {
+  spec: 'references/spec-mode.md',
+  freeform: 'references/freeform.md',
+};
+
+/**
+ * The skill text one designer call gets: the `interactive-visuals` router,
+ * a blank line, then the reference for the mode it runs, never the other.
+ * Harness-loaded from the app bundle (agents.md 6.4, 7.2, 7.4).
+ */
+function designerSkill(mode: DesignerMode): string {
+  return [
+    appSkillBody('interactive-visuals').trimEnd(),
+    '',
+    appSkillFile('interactive-visuals', DESIGNER_REFERENCES[mode]).trimEnd(),
+  ].join('\n');
+}
 
 /** The spec-mode structured output: title, takeaway and the spec itself. */
 type SpecOutput = z.infer<typeof specVisualOutputSchema>;
@@ -546,8 +565,6 @@ export class VisualizationService {
     workspace: Awaited<ReturnType<MastraService['ensureSessionWorkspace']>>,
     context: DesignContext,
   ): Promise<Bundle> {
-    // Harness-loaded from the app bundle (agents.md 7.2, 7.4).
-    const skill = appSkillDocument('interactive-visuals');
     const requestContext = new RequestContext();
     requestContext.set(SESSION_WORKSPACE_CONTEXT_KEY, workspace.id);
 
@@ -558,24 +575,18 @@ export class VisualizationService {
     const specEligible =
       records.length > 0 && (!context.current || !!context.current.spec);
     if (specEligible) {
-      const bundle = await this.designSpec(
-        requestContext,
-        skill,
-        context,
-        records,
-      );
+      const bundle = await this.designSpec(requestContext, context, records);
       if (bundle) return bundle;
       this.logger.warn(
         'Spec attempts failed; falling back to the freeform HTML/CSS/JS designer',
       );
     }
-    return this.designFreeform(requestContext, skill, context);
+    return this.designFreeform(requestContext, context);
   }
 
   /** Up to two spec attempts; `undefined` means "fall back to freeform". */
   private async designSpec(
     requestContext: RequestContext,
-    skill: string,
     context: DesignContext,
     records: ChartDataRecord[],
   ): Promise<Bundle | undefined> {
@@ -585,7 +596,6 @@ export class VisualizationService {
       try {
         output = await this.runDesigner(
           requestContext,
-          skill,
           context,
           feedback,
           'spec',
@@ -629,7 +639,6 @@ export class VisualizationService {
   /** Legacy path: freeform HTML/CSS/JS, retried once when it will not parse. */
   private async designFreeform(
     requestContext: RequestContext,
-    skill: string,
     context: DesignContext,
   ): Promise<Bundle> {
     let feedback: DesignerFeedback | undefined =
@@ -637,7 +646,6 @@ export class VisualizationService {
     for (let attempt = 0; attempt < 2; attempt++) {
       const bundle = await this.runDesigner(
         requestContext,
-        skill,
         context,
         feedback,
         'freeform',
@@ -756,21 +764,18 @@ export class VisualizationService {
 
   private async runDesigner(
     requestContext: RequestContext,
-    skill: string,
     context: DesignContext,
     feedback: DesignerFeedback | undefined,
     mode: 'spec',
   ): Promise<SpecOutput>;
   private async runDesigner(
     requestContext: RequestContext,
-    skill: string,
     context: DesignContext,
     feedback?: DesignerFeedback,
     mode?: 'freeform',
   ): Promise<Bundle>;
   private async runDesigner(
     requestContext: RequestContext,
-    skill: string,
     context: DesignContext,
     feedback?: DesignerFeedback,
     mode: DesignerMode = 'freeform',
@@ -832,7 +837,7 @@ export class VisualizationService {
             role: 'system',
             content: [
               '<interactive-visuals-skill>',
-              skill,
+              designerSkill(mode),
               '</interactive-visuals-skill>',
             ].join('\n'),
           },

@@ -30,7 +30,8 @@ Defined in [glossary](../../product/glossary.md): **Visual**, **Visual version**
   - the instruction, if any;
   - the current visual when tailoring;
   - a bounded data block: up to the 3 largest successful result sets in run order, sharing a budget of about 100 rows (never below 20 per set), shrunk until the block is under 40,000 characters;
-  - a deterministic recommended-form block computed from the same rows.
+  - a deterministic recommended-form block computed from the same rows;
+  - the `interactive-visuals` skill for the mode it runs: the router with the spec-mode reference for a spec, with the freeform reference for the fallback, never both ([agents.md](../../system/agents.md) section 7.2).
 
   When rows were cut, the prompt says so.
 - R6. When there are rows, the designer SHALL first produce a visual spec, unless it is tailoring a freeform visual (see R9). A spec has:
@@ -348,6 +349,31 @@ Feature: Visual tailoring
     And its footer shows "Session: World Cup analysis · Version 1"
 ```
 
+### Feature: Skills the designer is given
+
+E2E: `frontend/e2e/designer-skills.spec.ts`
+
+What the visual designer is told, checked on the request the model receives. "The model" is the recording stub described under the Feature "Sessions started from an agent" in [sessions-chat](../sessions-chat/spec.md#feature-sessions-started-from-an-agent); here it also runs one query for the answer and returns a valid spec for the designer's call. Which parts of the `interactive-visuals` skill reach the designer: [agents.md](../../system/agents.md) sections 6.4 and 7.2; decision ADR-0018.
+
+```gherkin
+Feature: Skills the designer is given
+
+  Background:
+    Given a "World Cup Core" dataset exists
+    And the model is the recording stub
+
+  Scenario: A spec visual is designed with the spec-mode instructions only
+    Given a session over "World Cup Core"
+    When I send "How many matches were played at each stage?"
+    And the model runs a query counting the matches per stage, then answers
+    Then I see the answer with "Data used (1 query)"
+    When I click "Generate interactive visuals"
+    Then I see the toast "Interactive visual generated"
+    And the panel shows the visual "Matches by stage"
+    And the designer received the interactive-visuals router and its spec-mode reference
+    And the designer received nothing of the freeform reference
+```
+
 ## Acceptance
 
 - Every scenario above passes. The covered scenario runs in `chat-and-visuals.spec.ts`.
@@ -360,4 +386,4 @@ Feature: Visual tailoring
   - **Repair data source.** Repair regenerates from the source answer's data, not from the current version's stored (possibly refreshed or merged) data. A repaired tailored visual can lose the rows a chat turn added.
   - **Default source answer.** When the assistant creates a visual without naming an answer, "latest completed answer" can be a previous visual event card rather than the current turn's answer, which is not persisted yet.
 
-<!-- sources: backend/src/modules/sessions/visualization.service.ts, visualization-document.ts, visual-spec.ts, visual-runtime.ts, chart-heuristic.ts, zip-archive.ts, sessions.service.ts (generate/tailor/revert/refresh/repair/saveVisualMetadata), sessions.controller.ts; backend/src/mastra/agents/visualization.agent.ts, tools/visual.tools.ts; frontend/src/app/features/sessions/components/interactive-visual-panel/*, session-chat/session-chat.html|ts (visual cards, follow-up chips), services/sessions-api.service.ts; frontend/src/app/app.ts (showVisualization, revert, download, generate, loadLatestVisualization); frontend/e2e/chat-and-visuals.spec.ts -->
+<!-- sources: backend/src/modules/sessions/visualization.service.ts, visualization-document.ts, visual-spec.ts, visual-runtime.ts, chart-heuristic.ts, zip-archive.ts, sessions.service.ts (generate/tailor/revert/refresh/repair/saveVisualMetadata), sessions.controller.ts; backend/src/mastra/agents/visualization.agent.ts, tools/visual.tools.ts; frontend/src/app/features/sessions/components/interactive-visual-panel/*, session-chat/session-chat.html|ts (visual cards, follow-up chips), services/sessions-api.service.ts; frontend/src/app/app.ts (showVisualization, revert, download, generate, loadLatestVisualization); frontend/e2e/chat-and-visuals.spec.ts, designer-skills.spec.ts -->

@@ -233,6 +233,35 @@ describe('the bundled skills', () => {
     }
   });
 
+  it('serve a skill body without its front matter', () => {
+    const document = appSkillDocument('interactive-visuals');
+    const body = appSkillBody('interactive-visuals');
+
+    expect(body.startsWith('# Interactive Visuals\n')).toBe(true);
+    expect(body).not.toContain('name: interactive-visuals');
+    // Trimmed at both ends (appSkillBody), so compare against the trimmed file.
+    expect(document.trimEnd().endsWith(body)).toBe(true);
+    expect(document.trimEnd().slice(0, -body.length)).toMatch(
+      /^---\nname: interactive-visuals\ndescription: Use when [^\n]*\n---\n+$/,
+    );
+  });
+
+  it('serve the interactive-visuals references the router names', () => {
+    const body = appSkillBody('interactive-visuals');
+    for (const reference of [
+      'references/spec-mode.md',
+      'references/freeform.md',
+    ]) {
+      expect(body).toContain(reference);
+    }
+    expect(
+      appSkillFile('interactive-visuals', 'references/spec-mode.md'),
+    ).toMatch(/^## The spec\n/);
+    expect(
+      appSkillFile('interactive-visuals', 'references/freeform.md'),
+    ).toMatch(/^## Fallback: freeform HTML\/CSS\/JavaScript\n/);
+  });
+
   it('refuse a file path outside the skill folder', () => {
     expect(() => appSkillFile('interactive-visuals', '../../index.ts')).toThrow(
       'Invalid skill file path "../../index.ts"',
