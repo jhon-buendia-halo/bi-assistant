@@ -552,7 +552,7 @@ Feature: Sessions started from an agent
 
 E2E: `frontend/e2e/assistant-skills.spec.ts`
 
-What the assistant is told about skills, checked on the request the model receives. "The model" is the recording stub described under the Feature "Sessions started from an agent". Which skills each agent gets, and how they load: [agents.md](../../system/agents.md) sections 7.3 and 7.4; decision ADR-0018.
+What the assistant is told about skills, checked on the request the model receives. "The model" is the recording stub described under the Feature "Sessions started from an agent". Which skills each agent gets, and how they load: [agents.md](../../system/agents.md) sections 7.3 and 7.4; decision ADR-0018. Curated knowledge is seeded through the backend API ([knowledge](../knowledge/spec.md) R15-R19).
 
 ```gherkin
 Feature: Skills the assistant is given
@@ -568,6 +568,23 @@ Feature: Skills the assistant is given
     And the skill catalog the model received lists exactly the assistant's skills
     And the model received nothing of the "interactive-visuals" skill
     And the model is offered the "skill" and "skill_read" tools only when the assistant has skills
+
+  Scenario: A turn without curated knowledge carries no knowledge rules
+    Given a session over "World Cup Core"
+    And no curated knowledge applies to "World Cup Core"
+    When I send "Who won the 2022 World Cup?"
+    Then I see the stub's answer
+    And the model received no curated-knowledge block
+    And the model received none of the curated-knowledge rules
+
+  Scenario: A turn with curated knowledge carries the rules right after the block
+    Given an enabled curated-knowledge instruction for "World Cup Core"
+    And a session over "World Cup Core"
+    When I send "Who won the 2022 World Cup?"
+    Then I see the stub's answer
+    And the model received the curated-knowledge block with that instruction
+    And the next message the model received holds the curated-knowledge rules
+    And the assistant's prompt itself holds none of the curated-knowledge rules
 ```
 
 ## Acceptance

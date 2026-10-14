@@ -39,6 +39,7 @@ import {
 import type { KnowledgeUse } from '../knowledge/entities/knowledge-snippet.entity';
 import {
   entityOrientationLines,
+  knowledgeContext,
   schemaSnapshotBlock,
 } from '../../mastra/context-blocks';
 import { DatasetsRepository } from '../datasets/repositories/datasets.repository';
@@ -319,9 +320,8 @@ export class SessionsService implements OnModuleInit {
           ].join('\n'),
         },
         ...(metrics ? [{ role: 'system' as const, content: metrics }] : []),
-        ...(knowledge.block
-          ? [{ role: 'system' as const, content: knowledge.block }]
-          : []),
+        // The block, then the curated-knowledge skill right after it.
+        ...knowledgeContext(knowledge.block),
         ...(verified ? [{ role: 'system' as const, content: verified }] : []),
         // Last, so the base prompt and every curated block come first.
         ...(agent?.instructions.trim()

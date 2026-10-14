@@ -2,7 +2,28 @@
 // chat turn), the assistant eval harness (no session, but the same
 // datasets), and `KnowledgeService` (mining drafts from a dataset's schema).
 // No Nest DI here, same pattern as `tool-services.ts`.
+import { appSkillBody } from './app-skills';
 import type { DatasetColumnSnapshot, DatasetSnapshot } from './tool-services';
+
+/** One per-turn system message (agents.md 4.1). */
+export interface SystemBlock {
+  role: 'system';
+  content: string;
+}
+
+/**
+ * Block 3 of a turn (agents.md 4.1): the curated-knowledge block, then the
+ * harness-loaded `curated-knowledge` skill that says how to apply it (7.4).
+ * Nothing when no knowledge applies, so a turn without a block never carries
+ * the rules. Every caller that sends the block goes through here.
+ */
+export function knowledgeContext(block: string | undefined): SystemBlock[] {
+  if (!block?.trim()) return [];
+  return [
+    { role: 'system', content: block },
+    { role: 'system', content: appSkillBody('curated-knowledge') },
+  ];
+}
 
 /** Join hints shown up front to the assistant — enough for a wide dataset. */
 const JOIN_HINT_CHARS = 1_500;

@@ -16,7 +16,7 @@ import {
   TURN_RECORDS_CONTEXT_KEY,
 } from '../tools/visual.tools';
 import { getDatasetToolServices } from '../tool-services';
-import { entityOrientationLines } from '../context-blocks';
+import { entityOrientationLines, knowledgeContext } from '../context-blocks';
 import { runResultSetCheck } from './result-set-check';
 import type { ResultSetCheckOptions } from './result-set-check';
 import {
@@ -1088,9 +1088,7 @@ export async function runAssistantEvalCase(
         maxSteps: ASSISTANT_MAX_STEPS,
         context: [
           { role: 'system', content: orientation },
-          ...(knowledgeBlock
-            ? [{ role: 'system' as const, content: knowledgeBlock }]
-            : []),
+          ...knowledgeContext(knowledgeBlock),
         ],
         onStepFinish: (step: unknown) => captureStepRecords(step, turnRecords),
       },

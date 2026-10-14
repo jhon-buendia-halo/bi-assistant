@@ -183,6 +183,19 @@ export function appSkillDocument(name: string): string {
   return bundledSkill(name).document;
 }
 
+/**
+ * A harness-loaded skill's `SKILL.md` without its front matter, trimmed: the
+ * text a caller sends as the skill's system message.
+ */
+export function appSkillBody(name: string): string {
+  return skillBody(bundledSkill(name).document);
+}
+
+/** A `SKILL.md` document without its front matter, trimmed. */
+export function skillBody(document: string): string {
+  return document.replace(FRONT_MATTER, '').trim();
+}
+
 /** One linked file of a skill, by its path in the skill's folder. */
 export function appSkillFile(name: string, path: string): string {
   const skill = bundledSkill(name);

@@ -3,9 +3,11 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import {
   AGENT_SKILLS,
+  appSkillBody,
   appSkillDocument,
   appSkillFile,
   loadAppSkills,
+  skillBody,
   skillPathsFor,
   skillsRoot,
   validateAgentSkills,
@@ -157,6 +159,31 @@ describe('loadAppSkills', () => {
   });
 });
 
+describe('skillBody', () => {
+  it('drops the front matter and the blank lines around the body', () => {
+    expect(skillBody(`${VALID}\n\n`)).toBe(
+      'Read phases/1-intake.md first, then references/style.md.',
+    );
+  });
+
+  it('keeps the body text exactly, line breaks included', () => {
+    const body = 'Rules:\n- one\n  continued — "quoted"\n- two';
+    expect(
+      skillBody(
+        [
+          '---',
+          'name: x',
+          'description: Use when x.',
+          '---',
+          '',
+          body,
+          '',
+        ].join('\n'),
+      ),
+    ).toBe(body);
+  });
+});
+
 describe('validateAgentSkills', () => {
   it('fails on a skill an agent declares that does not exist', () => {
     skill('demo', VALID, {
@@ -189,6 +216,21 @@ describe('the bundled skills', () => {
       (AGENT_SKILLS.assistant ?? []).map((name) => join(skillsRoot(), name)),
     );
     expect(skillPathsFor('sql-fixer')).toEqual([]);
+  });
+
+  it('serve the curated-knowledge rules as a harness-loaded body', () => {
+    const skill = loadAppSkills(skillsRoot()).get('curated-knowledge');
+    expect(skill?.description).toMatch(/^Use when the turn carries a curated/);
+    const body = appSkillBody('curated-knowledge');
+    expect(body.startsWith('Curated knowledge:\n')).toBe(true);
+    expect(
+      body.endsWith('never assume a snippet exists that you cannot see.'),
+    ).toBe(true);
+    expect(body).not.toContain('---');
+    // Harness-loaded only: no agent's catalog lists it.
+    for (const names of Object.values(AGENT_SKILLS)) {
+      expect(names).not.toContain('curated-knowledge');
+    }
   });
 
   it('refuse a file path outside the skill folder', () => {

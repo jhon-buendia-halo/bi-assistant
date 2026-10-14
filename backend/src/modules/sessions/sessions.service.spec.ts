@@ -66,6 +66,7 @@ jest.mock('./visualization-document', () => ({
 
 import { BadRequestException, Logger } from '@nestjs/common';
 import { resolveAgentModel } from '../../mastra/model-resolver';
+import { appSkillBody } from '../../mastra/app-skills';
 
 /** No session in these tests was started from a user agent. */
 const userAgentsStub = {
@@ -354,6 +355,92 @@ describe('SessionsService streaming', () => {
     expect(session.messages.at(-1)?.knowledge).toEqual(used);
   });
 
+  describe('the curated-knowledge skill (agents.md 4.1, 7.4)', () => {
+    const BLOCK =
+      'Curated dataset knowledge (user-authored — treat as authoritative over anything you infer from schema):\n- [instruction] Coverage: only 2018 and 2022.';
+    type Context = { role: string; content: string }[];
+    const streamedContext = (agent: { stream: jest.Mock }) =>
+      ((agent.stream.mock.calls as unknown[][])[0][1] as { context: Context })
+        .context;
+    const afterBlock = (context: Context) => {
+      const index = context.findIndex((m) => m.content === BLOCK);
+      expect(index).toBeGreaterThan(0);
+      return context[index + 1];
+    };
+
+    it('sends the skill right after the knowledge block', async () => {
+      const { service, agent } = buildStreaming(
+        answerStream([{ sql: 'select 1', rows: [{ n: 1 }] }]),
+        { knowledgeBlock: BLOCK },
+      );
+
+      await service.streamMessage('session-1', 'Who won?', () => {});
+
+      const context = streamedContext(agent);
+      expect(afterBlock(context)).toEqual({
+        role: 'system',
+        content: appSkillBody('curated-knowledge'),
+      });
+      expect(
+        context.filter((m) => m.content.startsWith('Curated knowledge:')),
+      ).toHaveLength(1);
+    });
+
+    it('sends no knowledge rules when no knowledge applies', async () => {
+      const { service, agent } = buildStreaming(
+        answerStream([{ sql: 'select 1', rows: [{ n: 1 }] }]),
+      );
+
+      await service.streamMessage('session-1', 'Who won?', () => {});
+
+      const text = streamedContext(agent)
+        .map((m) => m.content)
+        .join('\n');
+      expect(text).not.toContain('Curated dataset knowledge');
+      expect(text).not.toContain('Curated knowledge:');
+    });
+
+    it('keeps the skill after the block in the grounding pass', async () => {
+      const { service, agent } = buildStreaming(answerStream([]), {
+        knowledgeBlock: BLOCK,
+        answer: 'France won.',
+      });
+
+      await service.streamMessage('session-1', 'Who won?', () => {});
+
+      const [, corrective] = (agent.generate.mock.calls as unknown[][])[0] as [
+        string,
+        { context: Context },
+      ];
+      expect(afterBlock(corrective.context).content).toBe(
+        appSkillBody('curated-knowledge'),
+      );
+    });
+
+    it('gives a deep-analysis call the same block and skill', async () => {
+      const { service, session } = buildStreaming(answerStream([]), {
+        knowledgeBlock: BLOCK,
+      });
+
+      const options = await service.backgroundAgentOptions(session, 'Why?');
+
+      expect(afterBlock(options.context).content).toBe(
+        appSkillBody('curated-knowledge'),
+      );
+      expect(options).not.toHaveProperty('memory');
+    });
+
+    it('gives a deep-analysis call no rules when no knowledge applies', async () => {
+      const { service, session } = buildStreaming(answerStream([]));
+
+      const options = await service.backgroundAgentOptions(session, 'Why?');
+
+      expect(options.context.map((m) => m.content).join('\n')).not.toContain(
+        'Curated knowledge:',
+      );
+    });
+  });
+
   it('omits the knowledge record when no snippet applied', async () => {
     const { service, session } = buildStreaming(
       answerStream([{ sql: 'select 1', rows: [{ n: 1 }] }]),
@@ -454,8 +541,12 @@ describe('SessionsService streaming', () => {
       expect(last).toContain(
         '<agent-instructions>\nAlways name the tournament year.\n</agent-instructions>',
       );
-      expect(context[context.length - 2].content).toContain(
+      // The knowledge block and its skill (agents.md 4.1) come before it.
+      expect(context[context.length - 3].content).toContain(
         'Curated dataset knowledge',
+      );
+      expect(context[context.length - 2].content).toBe(
+        appSkillBody('curated-knowledge'),
       );
     });
 

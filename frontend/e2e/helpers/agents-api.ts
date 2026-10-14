@@ -134,3 +134,33 @@ export async function saveAgentDraft(
 export async function publishAgent(page: Page, id: string): Promise<void> {
   await call(page, 'POST', `/agents/${encodeURIComponent(id)}/publish`);
 }
+
+export interface KnowledgeSnippetInput {
+  kind: 'instruction' | 'term' | 'default_filter';
+  title: string;
+  body: string;
+  /** The dataset's name; omit for a global snippet. */
+  datasetId?: string;
+  enabled?: boolean;
+}
+
+/**
+ * Saves a curated knowledge snippet (`POST /knowledge`, api.md 50) and
+ * returns its id. The knowledge routes answer bare bodies with real status
+ * codes (Style B), so this does not go through `call`.
+ */
+export async function createKnowledgeSnippet(
+  page: Page,
+  input: KnowledgeSnippetInput,
+): Promise<string> {
+  const { datasetId, ...snippet } = input;
+  const response = await page.request.fetch(`${apiBase(page)}/knowledge`, {
+    method: 'POST',
+    data: { ...snippet, scope: datasetId ? { datasetId } : null },
+    headers: await authHeaders(page),
+  });
+  expect(response.status(), `POST /knowledge → HTTP ${response.status()}`).toBe(
+    201,
+  );
+  return ((await response.json()) as { id: string }).id;
+}
