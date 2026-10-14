@@ -534,12 +534,13 @@ flowchart LR
     - with stdout, stderr and the exit code returned verbatim (capped).
 
     The tool is offered only when such a skill exists. User and project skills stay text only.
-  - **Harness-loaded skills unchanged.** `curated-knowledge`, `deep-analysis` and `interactive-visuals` are still sent by code and never listed.
+  - **`curated-knowledge` becomes on demand** (added the same day, at the user's request, before the change shipped). The built-in skill is listed in the assistant's catalog, and the knowledge block travels without its rules: the model reads them with `read_file`. `deep-analysis` stays harness-loaded, because its phase files are templates that the deep-analysis service fills and calls one by one. `interactive-visuals` stays harness-loaded, because the designer runs without tools and can't read a file.
 - **Consequences:**
   - The prompt the model sees, and the one the Prompt tab shows, are the same text, catalog included. A framework upgrade can no longer change the skill wording.
   - `read_file` and `run_skill_script` are app code that touches the disk and spawns processes. Both are covered by unit tests on their limits (paths, symbolic links, size, extensions, timeout, environment).
   - No built-in skill ships a script today, so `run_skill_script` isn't offered until one does. It is tested with a fixture skill.
-  - Every assistant call carries the Tools section (about 1,000 characters). The prompt change is measured with the world-cup evals before the PR.
+  - Every assistant call carries the Tools section (about 1,000 characters) and, since `curated-knowledge` is always listed, the Skills section and `read_file`.
+  - Whether a knowledge rule applies now depends on the model reading the skill, which ADR-0018 avoided by loading it in code. The evals must pass at 100% before the PR (the workflow rule of 2026-10-14).
 
 ## Level 4 — Code
 

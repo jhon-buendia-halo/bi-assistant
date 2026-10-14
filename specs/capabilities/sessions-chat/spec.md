@@ -565,10 +565,11 @@ Feature: Skills the assistant is given
     Given a session over "World Cup Core"
     When I send "Who won the 2022 World Cup?"
     Then I see the stub's answer
-    And the assistant's prompt has "## Tools" and then "## Working rules", and no "## Skills"
-    And the "## Tools" section lists "run_readonly_sql" and "ask_clarification"
-    And the model received nothing of the "interactive-visuals" skill
-    And the model is offered neither "read_file" nor the framework's "skill", "skill_search" or "skill_read"
+    And the assistant's prompt has "## Tools", "## Working rules" and "## Skills", in that order
+    And the "## Tools" section lists "run_readonly_sql", "ask_clarification" and "read_file"
+    And its catalog lists only "curated-knowledge", with the path of its SKILL.md
+    And the model received nothing of the "interactive-visuals" or "deep-analysis" skills
+    And the model is offered "read_file" and none of the framework's "skill", "skill_search" or "skill_read"
 
   Scenario: A turn without curated knowledge carries no knowledge rules
     Given a session over "World Cup Core"
@@ -578,14 +579,14 @@ Feature: Skills the assistant is given
     And the model received no curated-knowledge block
     And the model received none of the curated-knowledge rules
 
-  Scenario: A turn with curated knowledge carries the rules right after the block
+  Scenario: A turn with curated knowledge carries the block, and the rules stay on demand
     Given an enabled curated-knowledge instruction for "World Cup Core"
     And a session over "World Cup Core"
     When I send "Who won the 2022 World Cup?"
     Then I see the stub's answer
     And the model received the curated-knowledge block with that instruction
-    And the next message the model received holds the curated-knowledge rules
-    And the assistant's prompt itself holds none of the curated-knowledge rules
+    And the model received none of the curated-knowledge rules unless it read them
+    And the assistant's catalog lists "curated-knowledge"
 
   Scenario: A user-level skill is offered to the assistant on demand
     Given a user-level skill "sql-style" described "Use when writing SQL for the World Cup data."
@@ -593,7 +594,7 @@ Feature: Skills the assistant is given
     When I send "Who won the 2022 World Cup?"
     Then I see the stub's answer
     And the assistant's prompt ends with a "## Skills" section
-    And its catalog lists "sql-style" with that description and the path of its SKILL.md
+    And its catalog lists "curated-knowledge" and "sql-style", the latter with that description and the path of its SKILL.md
     And the "## Tools" section lists "read_file"
     And the model is offered "read_file" and none of the framework's skill tools
 
@@ -606,13 +607,15 @@ Feature: Skills the assistant is given
     And the model got the text of that SKILL.md back from the first read_file call
     And the second read_file call was refused with "Not a file of an installed skill"
 
-  Scenario: A user-level override of the curated-knowledge skill reaches the turn
+  Scenario: A user-level override of the curated-knowledge skill is the one the model reads
     Given a user-level skill "curated-knowledge" whose body is the team's own rules
     And an enabled curated-knowledge instruction for "World Cup Core"
+    And the model will call read_file on the SKILL.md the catalog lists for "curated-knowledge"
     And a session over "World Cup Core"
     When I send "Who won the 2022 World Cup?"
     Then I see the stub's answer
-    And the next message after the curated-knowledge block holds the team's own rules
+    And the catalog's "curated-knowledge" location is in the user skills folder
+    And the model got the team's own rules back from read_file
     And the model received none of the built-in curated-knowledge rules
 ```
 

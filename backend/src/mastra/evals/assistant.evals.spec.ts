@@ -49,7 +49,7 @@ beforeEach(() => {
 });
 
 describe('runAssistantEvalCase context (agents.md 4.1, 8.5)', () => {
-  it('sends the curated-knowledge skill right after the knowledge block', async () => {
+  it('sends the knowledge block without the on-demand skill', async () => {
     const result = await runAssistantEvalCase(
       evalCase,
       ['World Cup Core'],
@@ -59,10 +59,12 @@ describe('runAssistantEvalCase context (agents.md 4.1, 8.5)', () => {
 
     expect(result.error).toBeUndefined();
     const contents = sentContext().map((message) => message.content);
-    expect(contents).toHaveLength(3);
+    expect(contents).toHaveLength(2);
     expect(contents[0]).toContain('Datasets for this session: World Cup Core.');
     expect(contents[1]).toBe(BLOCK);
-    expect(contents[2]).toBe(appSkillBody('curated-knowledge'));
+    expect(contents.join('\n')).not.toContain(
+      appSkillBody('curated-knowledge'),
+    );
     expect(sentContext().every((message) => message.role === 'system')).toBe(
       true,
     );

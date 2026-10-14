@@ -255,14 +255,16 @@ describe('the bundled skills', () => {
     expect(appSkillDocument('interactive-visuals')).toMatch(
       /^---\nname: interactive-visuals\ndescription: Use when /,
     );
-    // No built-in skill is on demand, and no user or project level exists
-    // in the test environment, so every catalog is empty.
-    expect(AGENT_SKILLS.assistant).toEqual([]);
-    expect(catalogSkills('assistant')).toEqual([]);
+    // curated-knowledge is the only built-in on-demand skill (ADR-0020), and
+    // no user or project level exists in the test environment.
+    expect(AGENT_SKILLS.assistant).toEqual(['curated-knowledge']);
+    expect(catalogSkills('assistant').map((skill) => skill.name)).toEqual([
+      'curated-knowledge',
+    ]);
     expect(catalogSkills('sql-fixer')).toEqual([]);
   });
 
-  it('serve the curated-knowledge rules as a harness-loaded body', () => {
+  it('serve the curated-knowledge rules as an on-demand skill of the assistant', () => {
     const skill = loadAppSkills(skillsRoot()).get('curated-knowledge');
     expect(skill?.description).toMatch(/^Use when the turn carries a curated/);
     const body = appSkillBody('curated-knowledge');
@@ -271,8 +273,9 @@ describe('the bundled skills', () => {
       body.endsWith('never assume a snippet exists that you cannot see.'),
     ).toBe(true);
     expect(body).not.toContain('---');
-    // Harness-loaded only: no agent's catalog lists it.
-    for (const names of Object.values(AGENT_SKILLS)) {
+    // On demand: the assistant's catalog lists it, and no code sends it.
+    expect(AGENT_SKILLS.assistant).toContain('curated-knowledge');
+    for (const names of Object.values(HARNESS_SKILLS)) {
       expect(names).not.toContain('curated-knowledge');
     }
   });
@@ -431,7 +434,7 @@ describe('resolveSkills (built-in < user < project)', () => {
 
     expect(winner).toMatchObject({
       level: 'project',
-      loading: 'harness',
+      loading: 'on-demand',
       agents: ['assistant'],
       overrides: ['built-in', 'user'],
     });
@@ -521,7 +524,13 @@ describe('resolveSkills (built-in < user < project)', () => {
   it('checks an override of a harness-loaded skill against the built-in files and placeholders', () => {
     mkdirSync(projectRoot, { recursive: true });
     write(userRoot, 'deep-analysis', deepAnalysis('Plan {{question}} only.'));
-    write(projectRoot, 'curated-knowledge', knowledge(''));
+    write(projectRoot, 'deep-analysis', {
+      ...deepAnalysis('Plan {{datasets}} for {{question}}.'),
+      'SKILL.md': md(
+        ['name: deep-analysis', 'description: Use when analysing deeply.'],
+        '',
+      ),
+    });
 
     const { skills, skipped } = resolve();
 
@@ -535,11 +544,10 @@ describe('resolveSkills (built-in < user < project)', () => {
           'phases/1-plan.md must use the placeholders {{datasets}}, {{question}}',
         ],
       ],
-      ['curated-knowledge', 'project', ['the body is empty']],
+      ['deep-analysis', 'project', ['the body is empty']],
     ]);
     // A skipped override leaves the level below in place.
     expect(skills.get('deep-analysis')?.level).toBe('built-in');
-    expect(skills.get('curated-knowledge')?.level).toBe('built-in');
   });
 
   it('needs every phase file of the harness-loaded skill it overrides', () => {

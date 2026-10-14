@@ -214,7 +214,7 @@ The rules encoded, in this order:
 - A11. Every factual claim about the session's data must come from `run_readonly_sql` results executed in this conversation; never answer a data question from general/parametric knowledge, even when confident — run the query anyway.
 - A12. When a question presupposes coverage not confirmed (an era, entity or scope outside the obvious dataset), check coverage first; when the question falls outside the data, say so plainly and state what IS covered (e.g. "the data covers only 2018 and 2022; 1970 is not in this dataset"). Never fill the gap from general knowledge.
 
-*Curated knowledge* (rules A13–A18 are not in the base prompt: they are the `curated-knowledge` skill, sent as the system message right after Block 3, and only on calls that carry that block; 4.1, 7.4)
+*Curated knowledge* (rules A13–A18 are not in the base prompt: they are the on-demand `curated-knowledge` skill, listed in the assistant's `## Skills` catalog, which the model reads with `read_file` when a call carries Block 3; 4.1, 7.4)
 - A13. A curated-knowledge block, when present, is user-authored ground truth (glossary terms, standing instructions, default filters tagged `[term]`, `[instruction]`, `[default_filter]`); read it before planning.
 - A14. It outranks anything inferred from column names or sample values; follow a term's meaning even when the column name suggests otherwise and say which term was followed when they disagree. It cannot override the data: if a term names a value no row holds, do not invent rows.
 - A15. Apply every `[default_filter]` to every query unless the question explicitly asks for the excluded rows; name the applied filters in one short business sentence at the end ("excludes test accounts, as configured"); when the excluded rows are needed, drop the filter and say so.
@@ -723,7 +723,7 @@ Curated dataset knowledge (user-authored — treat as authoritative over anythin
 
 Budget 2,000 characters; the first entry that doesn't fit ends the list. The list of snippets that made it in (`{id, kind, title, body, datasetId?}`) is threaded through the turn and persisted on the answer as `knowledge` — exactly what the model saw, even if the store changes mid-turn.
 
-The block is followed, as the next system message, by the body of the `curated-knowledge` skill (7.4): its `SKILL.md` without front matter, trimmed, starting `Curated knowledge:` (rules A13–A18, Appendix B). When no snippet applies, neither message is sent. Every caller that sends Block 3 sends the pair: the chat turn, the grounding pass, deep-analysis calls and the eval suite.
+No rules travel with the block. How to apply it is the on-demand `curated-knowledge` skill (7.4, rules A13–A18, Appendix B): the assistant's catalog always lists it, and its description tells the model to read it when the call carries this block. When no snippet applies, the block is not sent. Every caller that sends Block 3 sends it the same way: the chat turn, the grounding pass, deep-analysis calls and the eval suite.
 
 **Block 4 — verified reference queries** (only when the call has a question and stored verified pairs share vocabulary with it):
 
@@ -1210,7 +1210,7 @@ Built-in skills, declared in code (`AGENT_SKILLS` for on-demand, `HARNESS_SKILLS
 
 | Agent | On demand (catalog) | Harness-loaded |
 |---|---|---|
-| `assistant` | none built in; any user or project skill that targets it (7.3) | `curated-knowledge`: body after Block 3, on calls that carry it (4.1). `deep-analysis`: one phase file per deep-analysis call (2.7). |
+| `assistant` | `curated-knowledge` (how to apply Block 3, 4.1), and any user or project skill that targets it (7.3) | `deep-analysis`: one phase file per deep-analysis call (2.7). |
 | `visualization` (designer) | none (it runs without tools) | `interactive-visuals` (7.2): the router body of `SKILL.md`, plus `reference/spec-mode.md` on spec calls or `reference/freeform.md` on freeform calls |
 | `sql-fixer`, `sql-verifier`, `knowledge-bootstrap`, `assistant-eval-judge` | none | none |
 
@@ -1351,7 +1351,7 @@ A case **passes** when it has at least one check and every check scored 1. Each 
 
 ## Appendix A — `assistant` system prompt (current wording)
 
-Lines are joined with `\n`. A rebuild may tune the wording but must keep every rule A1–A12 and A19–A34, the opening phrase and the section headings (2.1). Rules A13–A18 are the `curated-knowledge` skill (Appendix B), not part of this prompt. This is the prompt with no on-demand skills. The `## Tools` lines are generated from the tools (2.1). With skills, `- read_file(path): …` (and `- run_skill_script(skill, script, args): …` when offered) follow `ask_clarification`, and the `## Skills` section (7.5) follows the working rules after a blank line.
+Lines are joined with `\n`. A rebuild may tune the wording but must keep every rule A1–A12 and A19–A34, the opening phrase and the section headings (2.1). Rules A13–A18 are the `curated-knowledge` skill (Appendix B), not part of this prompt. The `## Tools` lines are generated from the tools (2.1). The built-in `curated-knowledge` skill is always in the catalog, so the shipped prompt always ends with the `## Skills` section (7.5) after a blank line, and `- read_file(path): …` follows `ask_clarification` (plus `- run_skill_script(skill, script, args): …` when offered). Below: the prompt up to the end of the working rules, then the Skills section with the built-in catalog, `<bundle>` being the folder the app's built-in skills are installed in.
 
 ```
 You are the Questions to Insights assistant — a data analyst working over
@@ -1370,6 +1370,7 @@ entities and data, then answer it yourself.
 - create_visual(sourceMessageAt, instruction): Create a new interactive visual (HTML/CSS/JS chart) from one of your completed analysis answers.
 - update_visual(visualId, instruction): Tailor an existing interactive visual: change chart type, colours, labels, filters, which series or how many items are shown, etc.
 - ask_clarification(question, options): Ask the user ONE clarifying question with 2-4 concrete answer options, either before starting an analysis when their question is ambiguous (unclear scope, metric, timeframe, or entity), or mid-analysis when the data itself is ambiguous — a filter value, member/entity name or timeframe with several plausible matches.
+- read_file(path): Read one file of an installed skill by its absolute path: the location the skill list gives for SKILL.md, or that folder joined with a path SKILL.md names.
 
 ## Working rules
 Call ask_clarification only when interpretations diverge materially —
@@ -1460,11 +1461,28 @@ Rules:
   say so plainly.
 - A warning attached to a query result is about your own SQL. Act on it
   and re-run before answering, rather than passing it to the user.
+
+## Skills
+Skills are folders of instructions, scripts and references for specific kinds
+of work. Below is the list of installed skills (name, description, location).
+
+Before starting any task that matches a skill's description, read that skill's
+SKILL.md with read_file and follow it. Several skills may apply; read each one.
+Read files that SKILL.md references only when the current step needs them.
+Bundled scripts can't be run here: don't read them into context unless SKILL.md says otherwise.
+
+<available_skills>
+  <skill>
+    <name>curated-knowledge</name>
+    <description>Use when the turn carries a curated dataset knowledge block: how to apply its [term], [instruction] and [default_filter] snippets.</description>
+    <location><bundle>/curated-knowledge/SKILL.md</location>
+  </skill>
+</available_skills>
 ```
 
 ## Appendix B — `curated-knowledge` skill body (current wording)
 
-The body of `skills/curated-knowledge/SKILL.md` after its front matter (`name: curated-knowledge`, `description: "Use when the turn carries a curated dataset knowledge block: how to apply its [term], [instruction] and [default_filter] snippets."`), sent after Block 3 (4.1). A rebuild may tune the wording but must keep rules A13–A18.
+The body of `skills/curated-knowledge/SKILL.md` after its front matter (`name: curated-knowledge`, `description: "Use when the turn carries a curated dataset knowledge block: how to apply its [term], [instruction] and [default_filter] snippets."`). An on-demand skill: the model reads it with `read_file` when a call carries Block 3 (4.1, 7.4). A rebuild may tune the wording but must keep rules A13–A18.
 
 ```
 Curated knowledge:

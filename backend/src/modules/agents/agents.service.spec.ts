@@ -229,8 +229,9 @@ describe('AgentsService (built-in and user agents)', () => {
       expect(names(assistant)).toEqual(['curated-knowledge', 'deep-analysis']);
       expect(assistant.skills[0]).toMatchObject({
         level: 'built-in',
-        loading: 'harness',
+        loading: 'on-demand',
       });
+      expect(assistant.skills[1]).toMatchObject({ loading: 'harness' });
 
       const created = await ctx.service.create({ name: 'Analyst' });
       expect(names(await ctx.service.skills(created.id))).toEqual(

@@ -20,7 +20,7 @@ The refactor keeps what the user sees unchanged. Answers, clarifications, visual
 - **Startup check.** A skill without a `name` or `description`, a description that doesn't start with "Use when", or a link in `SKILL.md` to a missing file fails the backend at startup (and a unit test), not silently at run time.
 - **Assistant core prompt.** Keeps the rules that apply to every data question: identity (still starting `You are the Questions to Insights assistant`), clarification, method, grounding, rationale, visuals, SQL rules and result sanity. The curated-knowledge rules, about 23% of the prompt, move into a skill.
 - **Skills:**
-  - `curated-knowledge` (harness, assistant): how to apply `[term]`, `[instruction]` and `[default_filter]` snippets, sent only when the turn carries a knowledge block.
+  - `curated-knowledge` (assistant): how to apply `[term]`, `[instruction]` and `[default_filter]` snippets. Harness-loaded after the knowledge block until 1.13.9, on demand in the assistant's catalog since (ADR-0020).
   - `deep-analysis` (harness, assistant): `SKILL.md` phase map plus `phases/1-plan.md`, `phases/2-investigate.md` and `phases/3-report.md`. The deep-analysis service loads one phase per call. The phases run in sequence without user approval between them, as today.
   - `interactive-visuals` (harness, designer): `SKILL.md` becomes a router, with `reference/spec-mode.md` and `reference/freeform.md`. The pipeline loads only the mode it runs.
 - **Specs** describe the new structure: where each rule now lives, and which skills each agent sees.
@@ -63,13 +63,13 @@ All stories are built on `refactor/BA-198-assistant-skills` (worktree `.claude/w
 - The full web E2E suite and the org suite are green. The backend unit and API tests, lint on changed files, both builds and `check-specs.py` pass.
 - A recorded model request (stub LLM) shows that:
   - the assistant's system prompt is the core prompt plus the catalog of its own skills, and the catalog has no `interactive-visuals`;
-  - a turn with a knowledge block carries the `curated-knowledge` skill, and a turn without one doesn't;
+  - a turn with a knowledge block carries the block and lists `curated-knowledge` in the catalog, and a turn without one carries no block;
   - each deep-analysis call carries only its own phase;
   - a spec-mode designer call carries `spec-mode.md` and not `freeform.md`.
 - A skill with no description fails the backend at startup, and a unit test covers it.
 - The Agents prompt tab still shows a prompt that starts with `You are the Questions to Insights assistant`.
 - A user-level skill reaches the assistant's catalog, a user-level override of a harness-loaded skill reaches its call, and a broken user skill is skipped without stopping the backend (recorded request and unit tests).
-- The assistant's recorded request has the four prompt sections, the app's own catalog with `SKILL.md` paths, and `read_file` instead of the framework's skill tools. The world-cup evals after 1.13.9 show no regression against the head before it.
+- The assistant's recorded request has the four prompt sections, the app's own catalog with `SKILL.md` paths (`curated-knowledge` included), and `read_file` instead of the framework's skill tools. The world-cup evals pass at 100% after 1.13.9.
 - The Skills tab shows each agent's skills with their level, overrides, files and contents, and the skipped skills (E2E).
 
 ## Dependencies, risks and open questions
@@ -80,7 +80,7 @@ All stories are built on `refactor/BA-198-assistant-skills` (worktree `.claude/w
 
   BA-201 merged into BA-200.
 
-- **Triggering is probabilistic.** A rule moved into an on-demand skill may simply never load. So no skill here is on demand: every skill is loaded by the harness. The catalog mechanism, the per-agent declaration and the startup check are in place for a future on-demand skill.
+- **Triggering is probabilistic.** A rule moved into an on-demand skill may simply never load. Until 1.13.9 every skill was loaded by the harness for that reason. Since 1.13.9 `curated-knowledge` is on demand at the user's request (ADR-0020), so the evals must pass at 100% with it.
 - **Eval noise.** A single run before and after with `gpt-4o-mini` can flip a case for reasons unrelated to the refactor. A flipped case is re-run once before it counts as a regression.
 - **Bundle paths.** Skills must resolve from `dist/` in the CLI, the Electron backend and Mastra Studio (the build already copies `mastra/skills/**`). The loader resolves one root and fails at startup when it is missing.
 - **ADR numbering.** ADR-0018 and Milestone 1.13 skip the numbers the open BA-82 and BA-2 branches hold. Re-check both at merge time.

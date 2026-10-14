@@ -21,12 +21,14 @@ export type SkillLoading = 'on-demand' | 'harness';
 
 /** Built-in on-demand skills each agent's catalog lists, by registry key. */
 export const AGENT_SKILLS: Readonly<Record<string, readonly string[]>> = {
-  assistant: [],
+  // How to apply the curated-knowledge block: the model reads it with
+  // read_file when a call carries the block (ADR-0020).
+  assistant: ['curated-knowledge'],
 };
 
 /** Built-in skills code sends to each agent itself (agents.md 7.4). */
 export const HARNESS_SKILLS: Readonly<Record<string, readonly string[]>> = {
-  assistant: ['curated-knowledge', 'deep-analysis'],
+  assistant: ['deep-analysis'],
   visualization: ['interactive-visuals'],
 };
 

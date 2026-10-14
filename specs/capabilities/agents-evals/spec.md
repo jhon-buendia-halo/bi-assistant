@@ -482,7 +482,7 @@ Feature: Agent skills
     And I open the Skills tab
     Then the tab reads "Skills (3)"
     And I see the skill "sql-style" from "User", "On demand"
-    And I see the skill "curated-knowledge" from "Project", "Loaded by the app", "Overrides built-in and user"
+    And I see the skill "curated-knowledge" from "Project", "On demand", "Overrides built-in and user"
     And I see the skill "deep-analysis" from "Built-in", "Loaded by the app"
     And the "Project" level shows the project folder
 

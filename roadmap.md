@@ -744,15 +744,15 @@ A behaviour-preserving refactor of the app's Mastra agents to the Agent Skills l
   - **Prompt.** The identity paragraph, then `## Tools` generated from the assistant's tools (name, input names, first sentence of the description), then `## Working rules` (today's rules, word for word), then `## Skills` when the assistant has on-demand skills: the user's instructions plus an `<available_skills>` catalog with name, description and the absolute `SKILL.md` path.
   - **`read_file(path)`.** Read-only, limited to the regular files of the listed skills. It replaces the framework's catalog and its `skill`, `skill_search` and `skill_read` tools.
   - **`run_skill_script(skill, script, args)`.** For built-in skills' Node scripts: no shell, `scripts/` only, a minimal environment, a 30-second timeout, output returned verbatim. Offered only when such a skill exists.
-  - **Unchanged.** Harness-loaded skills stay out of the catalog.
+  - **`curated-knowledge` on demand** (added 2026-10-14 at the user's request). The built-in skill is listed in the catalog and the knowledge block travels without its rules. `deep-analysis` and `interactive-visuals` stay harness-loaded.
   - **Descriptions.** `SKILL.md` descriptions may wrap over several lines.
   - **Specs.** agents.md §2.1, §3.9-3.10, §7.3-7.4 and Appendices A and C; the sessions-chat Feature "Skills the assistant is given".
-- **Out of scope:** a shell or bash tool; Python scripts; scripts in user or project skills; moving harness-loaded skills into the catalog; rewording the working rules.
+- **Out of scope:** a shell or bash tool; Python scripts; scripts in user or project skills; moving `deep-analysis` or `interactive-visuals` into a catalog; rewording the working rules.
 - **Acceptance:**
   - A recorded request (stub LLM) shows the four sections in order, the catalog with the `SKILL.md` path, `read_file` offered and no framework skill tools.
   - A scripted `read_file` call returns the file, and one outside the skills is refused.
   - Unit tests cover the read and script limits and a wrapped description.
-  - Full web and org E2E, unit tests and builds pass. The world-cup evals before and after show no regression.
+  - The impacted E2E specs, unit tests and builds pass. The world-cup evals pass at 100%.
 
 ## Release 2 — Multi-user  (no target date yet)
 

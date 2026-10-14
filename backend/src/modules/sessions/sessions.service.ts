@@ -320,7 +320,8 @@ export class SessionsService implements OnModuleInit {
           ].join('\n'),
         },
         ...(metrics ? [{ role: 'system' as const, content: metrics }] : []),
-        // The block, then the curated-knowledge skill right after it.
+        // The knowledge block; its rules are the on-demand curated-knowledge
+        // skill in the catalog (ADR-0020).
         ...knowledgeContext(knowledge.block),
         ...(verified ? [{ role: 'system' as const, content: verified }] : []),
         // Last, so the base prompt and every curated block come first.

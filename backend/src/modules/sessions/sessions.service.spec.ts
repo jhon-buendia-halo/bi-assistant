@@ -355,20 +355,25 @@ describe('SessionsService streaming', () => {
     expect(session.messages.at(-1)?.knowledge).toEqual(used);
   });
 
-  describe('the curated-knowledge skill (agents.md 4.1, 7.4)', () => {
+  describe('the curated-knowledge block, its skill on demand (agents.md 4.1, 7.4)', () => {
     const BLOCK =
       'Curated dataset knowledge (user-authored — treat as authoritative over anything you infer from schema):\n- [instruction] Coverage: only 2018 and 2022.';
     type Context = { role: string; content: string }[];
     const streamedContext = (agent: { stream: jest.Mock }) =>
       ((agent.stream.mock.calls as unknown[][])[0][1] as { context: Context })
         .context;
-    const afterBlock = (context: Context) => {
-      const index = context.findIndex((m) => m.content === BLOCK);
-      expect(index).toBeGreaterThan(0);
-      return context[index + 1];
+    /** The block is sent, and the skill's rules are not (ADR-0020). */
+    const expectBlockWithoutRules = (context: Context) => {
+      expect(context.filter((m) => m.content === BLOCK)).toHaveLength(1);
+      expect(
+        context.some((m) => m.content.includes('Curated knowledge:')),
+      ).toBe(false);
+      expect(
+        context.some((m) => m.content === appSkillBody('curated-knowledge')),
+      ).toBe(false);
     };
 
-    it('sends the skill right after the knowledge block', async () => {
+    it('sends the knowledge block without the skill', async () => {
       const { service, agent } = buildStreaming(
         answerStream([{ sql: 'select 1', rows: [{ n: 1 }] }]),
         { knowledgeBlock: BLOCK },
@@ -376,14 +381,7 @@ describe('SessionsService streaming', () => {
 
       await service.streamMessage('session-1', 'Who won?', () => {});
 
-      const context = streamedContext(agent);
-      expect(afterBlock(context)).toEqual({
-        role: 'system',
-        content: appSkillBody('curated-knowledge'),
-      });
-      expect(
-        context.filter((m) => m.content.startsWith('Curated knowledge:')),
-      ).toHaveLength(1);
+      expectBlockWithoutRules(streamedContext(agent));
     });
 
     it('sends no knowledge rules when no knowledge applies', async () => {
@@ -400,7 +398,7 @@ describe('SessionsService streaming', () => {
       expect(text).not.toContain('Curated knowledge:');
     });
 
-    it('keeps the skill after the block in the grounding pass', async () => {
+    it('sends the same block, without the skill, in the grounding pass', async () => {
       const { service, agent } = buildStreaming(answerStream([]), {
         knowledgeBlock: BLOCK,
         answer: 'France won.',
@@ -412,21 +410,17 @@ describe('SessionsService streaming', () => {
         string,
         { context: Context },
       ];
-      expect(afterBlock(corrective.context).content).toBe(
-        appSkillBody('curated-knowledge'),
-      );
+      expectBlockWithoutRules(corrective.context);
     });
 
-    it('gives a deep-analysis call the same block and skill', async () => {
+    it('gives a deep-analysis call the same block, without the skill', async () => {
       const { service, session } = buildStreaming(answerStream([]), {
         knowledgeBlock: BLOCK,
       });
 
       const options = await service.backgroundAgentOptions(session, 'Why?');
 
-      expect(afterBlock(options.context).content).toBe(
-        appSkillBody('curated-knowledge'),
-      );
+      expectBlockWithoutRules(options.context);
       expect(options).not.toHaveProperty('memory');
     });
 
@@ -541,12 +535,9 @@ describe('SessionsService streaming', () => {
       expect(last).toContain(
         '<agent-instructions>\nAlways name the tournament year.\n</agent-instructions>',
       );
-      // The knowledge block and its skill (agents.md 4.1) come before it.
-      expect(context[context.length - 3].content).toContain(
+      // The knowledge block (agents.md 4.1) comes right before it.
+      expect(context[context.length - 2].content).toContain(
         'Curated dataset knowledge',
-      );
-      expect(context[context.length - 2].content).toBe(
-        appSkillBody('curated-knowledge'),
       );
     });
 
