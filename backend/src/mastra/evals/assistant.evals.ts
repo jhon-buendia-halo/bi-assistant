@@ -186,7 +186,8 @@ const WORLD_CUP_EVAL_CASES: AssistantEvalCase[] = [
     intent:
       'Pure discovery — must inspect the session datasets rather than invent entities or run SQL.',
     scorers: [
-      checks.calledTool('list_entities'),
+      // The session context already lists the entities, so calling
+      // list_entities is not required (agents-evals, BA-209).
       checks.includes('matches'),
       checks.didNotCall('run_readonly_sql'),
       checks.noToolErrors(),
@@ -483,7 +484,7 @@ const FORMULA_1_EVAL_CASES: AssistantEvalCase[] = [
     intent:
       'Pure discovery — must inspect the session datasets rather than invent entities or run SQL.',
     scorers: [
-      checks.calledTool('list_entities'),
+      // The session context already lists the entities (BA-209).
       checks.includes('driver'),
       checks.didNotCall('run_readonly_sql'),
       checks.noToolErrors(),

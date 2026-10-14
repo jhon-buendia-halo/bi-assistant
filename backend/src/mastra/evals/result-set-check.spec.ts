@@ -253,7 +253,7 @@ describe('runResultSetCheck', () => {
     expect(result?.passed).toBe(true);
   });
 
-  it('allows repeated venue facts only when the case explicitly uses distinct rows', async () => {
+  it('accepts repeated venue facts, with or without distinct rows', async () => {
     reference([{ venue: 'Lusail Stadium', attendance: 88966 }]);
     const records = [
       sql([
@@ -280,7 +280,7 @@ describe('runResultSetCheck', () => {
           records,
         )
       )?.passed,
-    ).toBe(false);
+    ).toBe(true);
     expect(
       (
         await runResultSetCheck(
@@ -301,9 +301,29 @@ describe('runResultSetCheck', () => {
         { stadium: 'Lusail Stadium', attendance: 88000 },
       ],
       [
-        { stadium: 'Lusail Stadium', attendance: 88966 },
         { stadium: 'Other Stadium', attendance: 88966 },
+        { stadium: 'Lusail Stadium', attendance: 88966 },
       ],
+    ].map((rows) => ({ rows })),
+  )(
+    'accepts the distinct fact among other rows (extra rows are allowed): %p',
+    async ({ rows }) => {
+      reference([{ venue: 'Lusail Stadium', attendance: 88966 }]);
+      const result = await runResultSetCheck(
+        'SELECT reference',
+        ['World Cup'],
+        snapshot,
+        [sql(rows)],
+        { distinctRows: true },
+      );
+      expect(result?.passed).toBe(true);
+    },
+  );
+
+  it.each(
+    [
+      [{ stadium: 'Lusail Stadium', attendance: 88000 }],
+      [{ stadium: 'Other Stadium', attendance: 88966 }],
       [{ stadium: 'Lusail Stadium' }],
       [],
     ].map((rows) => ({ rows })),
@@ -319,7 +339,7 @@ describe('runResultSetCheck', () => {
     expect(result?.passed).toBe(false);
   });
 
-  it('does not discard extra rows from a leaderboard to manufacture a match', async () => {
+  it('accepts a leaderboard that holds the answer row (extra rows are allowed)', async () => {
     reference([{ player: 'Lionel Messi', goals: 4 }]);
     const result = await runResultSetCheck(
       'SELECT reference',
@@ -327,12 +347,94 @@ describe('runResultSetCheck', () => {
       snapshot,
       [
         sql([
-          { player: 'Lionel Messi', goals: 4 },
           { player: 'Kylian Mbappe', goals: 3 },
+          { player: 'Lionel Messi', goals: 4 },
+        ]),
+      ],
+    );
+    expect(result?.passed).toBe(true);
+  });
+
+  it('accepts the final among all knockout matches, with extra columns', async () => {
+    reference([
+      {
+        home_team: 'France',
+        away_team: 'Croatia',
+        home_goals: 4,
+        away_goals: 2,
+      },
+    ]);
+    const result = await runResultSetCheck(
+      'SELECT reference',
+      ['World Cup'],
+      snapshot,
+      [
+        sql([
+          {
+            stage: 'semi_final',
+            home: 'France',
+            away: 'Belgium',
+            home_goals: 1,
+            away_goals: 0,
+          },
+          {
+            stage: 'final',
+            home: 'France',
+            away: 'Croatia',
+            home_goals: 4,
+            away_goals: 2,
+          },
+        ]),
+      ],
+    );
+    expect(result?.passed).toBe(true);
+  });
+
+  it('rejects a leaderboard whose row for the answer holds the wrong figure', async () => {
+    reference([{ player: 'Lionel Messi', goals: 4 }]);
+    const result = await runResultSetCheck(
+      'SELECT reference',
+      ['World Cup'],
+      snapshot,
+      [
+        sql([
+          { player: 'Lionel Messi', goals: 3 },
+          { player: 'Kylian Mbappe', goals: 8 },
         ]),
       ],
     );
     expect(result?.passed).toBe(false);
+    expect(result?.reason).toContain('no row holds the reference row');
+  });
+
+  it('needs a row of its own for each reference row', async () => {
+    reference([
+      { team: 'Argentina', goals: 3 },
+      { team: 'Argentina', goals: 3 },
+    ]);
+    const once = [sql([{ team: 'Argentina', goals: 3, stage: 'final' }])];
+    expect(
+      (
+        await runResultSetCheck(
+          'SELECT reference',
+          ['World Cup'],
+          snapshot,
+          once,
+        )
+      )?.passed,
+    ).toBe(false);
+  });
+
+  it('rejects any rows when the reference is empty', async () => {
+    reference([]);
+    const result = await runResultSetCheck(
+      'SELECT reference',
+      ['World Cup'],
+      snapshot,
+      [sql([{ team: 'Argentina' }])],
+    );
+    expect(result?.passed).toBe(false);
+    expect(result?.reason).toContain('expected no rows, got 1');
   });
 
   it('requires every reference fact, even when a narrower SQL result agrees', async () => {

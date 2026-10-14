@@ -754,6 +754,22 @@ A behaviour-preserving refactor of the app's Mastra agents to the Agent Skills l
   - Unit tests cover the read and script limits and a wrapped description.
   - The impacted E2E specs, unit tests and builds pass. The world-cup evals pass at 100%.
 
+#### 1.13.10 — Backend lint and format clean ([BA-208](https://halo-powered.atlassian.net/browse/BA-208))  `🚧 In progress`
+- **Intent:** `hermes verify` and `npm run lint` pass on the backend, so a lint or type error is always new.
+- **Scope:** fix the 217 ESLint errors in 35 files, the 21 files Prettier would rewrite and the 4 `tsc` errors in specs, with no behaviour change. No rule is disabled in the config; a per-line disable needs a reason.
+- **Out of scope:** the frontend (it has no lint script); the 2 remaining warnings in production code.
+- **Acceptance:** in `backend/`, ESLint without `--fix` reports 0 errors, `prettier --check` passes, `tsc --noEmit` reports 0 errors, and Jest and the build pass with the same test count.
+
+#### 1.13.11 — Eval checks: a wider correct query passes; discovery cases don't require `list_entities` ([BA-209](https://halo-powered.atlassian.net/browse/BA-209))  `🚧 In progress`
+- **Intent:** the assistant evals fail only when an answer is wrong, so the 100% bar (CLAUDE.md, step 9) measures the assistant and not the checks.
+- **Scope:**
+  - `result-set-match` passes when one complete, untruncated query contains every reference row in a row of its own, with extra rows allowed.
+  - `schema-discovery` and `f1-schema-discovery` drop `calledTool('list_entities')`, because the session context already lists the entities.
+  - The rules are in agents-evals R31 and agents.md 8.
+- **Out of scope:** careful mode's comparison (`result-compare.ts`) and the golden-set harness.
+- **Acceptance:** unit tests cover a wider query that passes, a missing reference row that fails, and rows from two queries that are never combined. The world-cup evals pass at 100% (3 runs).
+- **Notes:** decided with the user 2026-10-14. The cases had failed on every run before this change, with correct answers.
+
 ## Release 2 — Multi-user  (no target date yet)
 
 The app becomes multi-user. An organisation self-hosts it as an org server, with sign-in, roles and an admin panel. Local mode stays the default. Direction: [specs/product/vision.md](specs/product/vision.md). Not part of the 1.0 Beta.

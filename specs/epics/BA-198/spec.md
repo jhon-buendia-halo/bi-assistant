@@ -45,6 +45,8 @@ The refactor keeps what the user sees unchanged. Answers, clarifications, visual
 | [BA-205](https://halo-powered.atlassian.net/browse/BA-205) | Skill levels: built-in, user and project skills that override by name | 1.13.7 |
 | [BA-206](https://halo-powered.atlassian.net/browse/BA-206) | Agent page Skills tab: an agent's skills, their level, files and contents | 1.13.8 |
 | [BA-207](https://halo-powered.atlassian.net/browse/BA-207) | Sectioned assistant prompt with the app's own skill catalog, `read_file` and `run_skill_script` | 1.13.9 |
+| [BA-208](https://halo-powered.atlassian.net/browse/BA-208) | Backend lint and format clean | 1.13.10 |
+| [BA-209](https://halo-powered.atlassian.net/browse/BA-209) | Eval checks: a wider correct query passes; discovery cases don't require `list_entities` | 1.13.11 |
 
 All stories are built on `refactor/BA-198-assistant-skills` (worktree `.claude/worktrees/BA-198-assistant-skills`) and ship as one PR.
 
