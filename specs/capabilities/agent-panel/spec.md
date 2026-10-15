@@ -197,7 +197,8 @@ Feature: Agent panel
     Given an agent whose instructions have a "## Workflow" section with the steps "Understand", "Analyse" and "Report"
     When I start a chat with that agent
     Then the workflow bar is shown under the page header, above the chat
-    And it shows the three steps with "Understand" as current and "0/3 done"
+    And it shows the three steps as upcoming, none as current, and "0/3 done"
+    And "Your next step:" shows the action of "Understand"
     And no step shows as "Done"
 
   Scenario: The agent moves the workflow bar as we go
