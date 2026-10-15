@@ -17,6 +17,8 @@ export const TURN_RFP_CONTEXT_KEY = 'turn-rfp';
 /** The value of `turn-rfp`. */
 export interface TurnRfpHolder {
   rfpId?: string;
+  /** The RFP's last completed stage (0 to 7), from the latest create/get/update result. */
+  stage?: number;
 }
 
 /** What Block R1 says about the active RFP (an `Rfp` or `RfpSummary`, api.md 2.16.4). */

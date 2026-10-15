@@ -6,7 +6,7 @@ jest.mock('marked', () =>
 import { NotFoundException } from '@nestjs/common';
 import type { RfpService } from '../rfp/rfp.service';
 import type { ExhibitsQueries } from './exhibits.queries';
-import { packageFileName } from './package.controller';
+import { PackageController, packageFileName } from './package.controller';
 import {
   buildPackageFiles,
   generationTime,
@@ -59,6 +59,39 @@ describe('RFP package', () => {
     expect(files[1].data.subarray(0, 5).toString()).toBe('%PDF-');
   });
 
+  it('marks a draft package: title, draft line, manifest draft and stage (BA-229)', async () => {
+    const files = await buildPackageFiles(
+      fixtureRfp(),
+      fixtureData(),
+      GENERATED_AT,
+      { draft: true, compressPdf: false },
+    );
+    expect(files.map((f) => f.name)).toEqual(FILES);
+    const markdown = files[0].data.toString('utf8').split('\n');
+    expect(markdown[0]).toBe(
+      '# DRAFT — Orchard Manufacturing — 2027 benefits RFP',
+    );
+    expect(markdown[2]).toBe(
+      `Draft exported ${GENERATED_AT.slice(0, 10)} at stage 4 of 7 — not for release to carriers.`,
+    );
+    const manifest = JSON.parse(files[6].data.toString('utf8')) as Record<
+      string,
+      unknown
+    >;
+    expect(manifest).toMatchObject({ draft: true, stage: 4, files: FILES });
+
+    // The final package carries none of it.
+    const final = await buildPackageFiles(
+      fixtureRfp(),
+      fixtureData(),
+      GENERATED_AT,
+    );
+    expect(final[0].data.toString('utf8')).not.toContain('DRAFT');
+    expect(JSON.parse(final[6].data.toString('utf8'))).not.toHaveProperty(
+      'draft',
+    );
+  });
+
   describe('PackageService', () => {
     const rfps = { get: jest.fn() } as unknown as jest.Mocked<RfpService>;
     const queries = {
@@ -81,6 +114,15 @@ describe('RFP package', () => {
       );
     });
 
+    it('zips a draft package on request', async () => {
+      const { zip } = await service.zip(fixtureRfp().id, { draft: true });
+      const entries = unzip(zip);
+      expect(entries[0].data.toString('utf8')).toMatch(/^# DRAFT — /);
+      expect(
+        JSON.parse(entries[6].data.toString('utf8')) as unknown,
+      ).toMatchObject({ draft: true, stage: 4 });
+    });
+
     it('answers 404 for an unknown exhibit name', async () => {
       await expect(service.exhibitCsv('id', 'exhibit-z')).rejects.toThrow(
         new NotFoundException('Exhibit "exhibit-z" not found'),
@@ -97,6 +139,19 @@ describe('RFP package', () => {
         'RFP "x" not found',
       );
     });
+  });
+
+  it('package.zip takes draft=true only when it is exactly "true" (BA-229)', async () => {
+    const zip = jest
+      .fn()
+      .mockResolvedValue({ rfp: fixtureRfp(), zip: Buffer.from('z') });
+    const controller = new PackageController({ zip } as never);
+    await controller.packageZip('id', 'true');
+    expect(zip).toHaveBeenLastCalledWith('id', { draft: true });
+    await controller.packageZip('id');
+    expect(zip).toHaveBeenLastCalledWith('id', { draft: false });
+    await controller.packageZip('id', 'yes');
+    expect(zip).toHaveBeenLastCalledWith('id', { draft: false });
   });
 
   it('names files and stamps generation time to the second', () => {

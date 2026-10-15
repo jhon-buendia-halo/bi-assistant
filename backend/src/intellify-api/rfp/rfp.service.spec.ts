@@ -135,4 +135,20 @@ describe('RfpService', () => {
     // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(repo.delete).not.toHaveBeenCalled();
   });
+
+  it("bulk-deletes a creator's drafts, and every record of an eval run", async () => {
+    const { db } = fakeDb(() => []);
+    const repo = {
+      deleteCreatedBy: jest.fn().mockResolvedValue(2),
+    } as unknown as jest.Mocked<RfpRepository>;
+    const service = new RfpService(db, repo);
+    await expect(service.removeDrafts('local')).resolves.toEqual({
+      deleted: 2,
+    });
+    await service.removeDrafts('eval:job-7');
+    expect(repo.deleteCreatedBy.mock.calls.map((c) => c.slice(1))).toEqual([
+      ['local', false],
+      ['eval:job-7', true],
+    ]);
+  });
 });

@@ -14,6 +14,7 @@ import {
   GENERIC_STARTER_PROMPTS,
   GENERIC_WELCOME_DESCRIPTION,
   SessionChat,
+  skillStepLabel,
 } from './session-chat';
 
 function sessionWith(message: ChatMessage): Session {
@@ -21,7 +22,10 @@ function sessionWith(message: ChatMessage): Session {
     id: 'session-1',
     name: 'Session 1',
     datasets: [],
-    messages: [{ role: 'user', content: 'Ask', at: '2026-01-01T00:00:00.000Z' }, message],
+    messages: [
+      { role: 'user', content: 'Ask', at: '2026-01-01T00:00:00.000Z' },
+      message,
+    ],
   };
 }
 
@@ -53,7 +57,8 @@ describe('SessionChat trust UX', () => {
   };
 
   it('renders the server-built interpretation caption verbatim', async () => {
-    const line = 'Computed from 1 query over main.health.claims — 500 rows analyzed.';
+    const line =
+      'Computed from 1 query over main.health.claims — 500 rows analyzed.';
     const el = await render({ ...answer, interpretation: line });
     const caption = el.querySelector(`[title="${line}"]`);
     expect(caption?.textContent?.trim()).toBe(line);
@@ -61,7 +66,9 @@ describe('SessionChat trust UX', () => {
 
   it('shows the Verified chip only on verified answers', async () => {
     const plain = await render(answer);
-    expect(plain.querySelector('[title="Matches an approved query"]')).toBeNull();
+    expect(
+      plain.querySelector('[title="Matches an approved query"]'),
+    ).toBeNull();
 
     TestBed.resetTestingModule();
     const verified = await render({ ...answer, verified: true });
@@ -78,7 +85,8 @@ describe('SessionChat trust UX', () => {
       data: [{ ...answer.data![0], truncated: true }],
     });
     expect(
-      el.querySelector('[title="Row cap reached — counts may be incomplete"]')
+      el
+        .querySelector('[title="Row cap reached — counts may be incomplete"]')
         ?.textContent?.trim(),
     ).toBe('(truncated)');
     expect(el.querySelector('[aria-label="Copy SQL"]')).toBeTruthy();
@@ -105,7 +113,9 @@ describe('SessionChat trust UX', () => {
     );
 
     expect(chips.length).toBe(3);
-    expect(chips[0].textContent).toContain('Drill into "Cardiology (312 claims)"');
+    expect(chips[0].textContent).toContain(
+      'Drill into "Cardiology (312 claims)"',
+    );
     expect(chips[1].textContent).toContain('Why "Cardiology (312 claims)"?');
 
     chips[0].click();
@@ -119,9 +129,7 @@ describe('SessionChat trust UX', () => {
     // Dismiss clears the row.
     chips[2].click();
     fixture.detectChanges();
-    expect(
-      el.querySelector('[aria-label="Follow-up suggestions"]'),
-    ).toBeNull();
+    expect(el.querySelector('[aria-label="Follow-up suggestions"]')).toBeNull();
   });
 
   it('hides follow-up chips when no visual is open', async () => {
@@ -131,7 +139,9 @@ describe('SessionChat trust UX', () => {
     }).compileComponents();
     fixture = TestBed.createComponent(SessionChat);
     fixture.componentRef.setInput('session', sessionWith(answer));
-    fixture.componentRef.setInput('dataPointSelection', { value: 'Cardiology' });
+    fixture.componentRef.setInput('dataPointSelection', {
+      value: 'Cardiology',
+    });
     fixture.detectChanges();
 
     expect(
@@ -162,7 +172,10 @@ describe('SessionChat trust UX', () => {
     TestBed.resetTestingModule();
     const differs = await render({
       ...answer,
-      crossCheck: { status: 'disagree', note: 'results differ — treat with care' },
+      crossCheck: {
+        status: 'disagree',
+        note: 'results differ — treat with care',
+      },
     });
     const amber = differs.querySelector(
       '[title="results differ — treat with care"]',
@@ -225,7 +238,8 @@ describe('SessionChat trust UX', () => {
         },
         {
           step: 3,
-          rationale: 'I tried splitting by plan tier, but that column is absent.',
+          rationale:
+            'I tried splitting by plan tier, but that column is absent.',
           tool: 'run_readonly_sql',
           error: 'column plan_tier not found',
         },
@@ -352,9 +366,7 @@ describe('SessionChat deep analysis', () => {
     expect(el.querySelector('.prose-dark')?.innerHTML).toContain(
       '<strong>12.4%</strong>',
     );
-    expect(
-      el.querySelector('[aria-label="Download report"]'),
-    ).toBeTruthy();
+    expect(el.querySelector('[aria-label="Download report"]')).toBeTruthy();
   });
 
   it('downloads the report markdown', () => {
@@ -392,6 +404,10 @@ describe('SessionChat deep analysis', () => {
     expect(card.textContent).toContain('Acme RFP');
     expect(card.textContent).toContain('RFP package · 2 files');
     expect(card.textContent).toContain('Download package (.zip)');
+    expect(card.textContent).toContain('Download RFP (PDF)');
+    expect(
+      card.querySelector('[data-testid="rfp-package-download"]')!.classList,
+    ).toContain('btn-secondary');
 
     const api = TestBed.inject(SessionsApiService);
     const download = spyOn(api, 'downloadRfpPackage').and.returnValue(
@@ -400,11 +416,95 @@ describe('SessionChat deep analysis', () => {
     card
       .querySelector<HTMLButtonElement>('[data-testid="rfp-package-download"]')!
       .click();
-    expect(download).toHaveBeenCalledWith('session-1', 'rfp-1', undefined);
+    expect(download).toHaveBeenCalledWith(
+      'session-1',
+      'rfp-1',
+      undefined,
+      undefined,
+    );
     card
-      .querySelectorAll<HTMLButtonElement>('[data-testid="rfp-package-file"]')[1]
+      .querySelector<HTMLButtonElement>(
+        '[data-testid="rfp-package-download-pdf"]',
+      )!
       .click();
-    expect(download).toHaveBeenCalledWith('session-1', 'rfp-1', 'rfp.pdf');
+    expect(download).toHaveBeenCalledWith(
+      'session-1',
+      'rfp-1',
+      'rfp.pdf',
+      undefined,
+    );
+    card
+      .querySelectorAll<HTMLButtonElement>(
+        '[data-testid="rfp-package-file"]',
+      )[1]
+      .click();
+    expect(download).toHaveBeenCalledWith(
+      'session-1',
+      'rfp-1',
+      'rfp.pdf',
+      undefined,
+    );
+    expect(
+      card.querySelector('[data-testid="rfp-package-draft-chip"]'),
+    ).toBeNull();
+  });
+
+  it('renders a draft RFP package card with the Draft chip and downloads the draft (BA-229)', () => {
+    const el = mount([
+      {
+        role: 'assistant',
+        content: 'Draft ready.',
+        at: '2026-01-01T00:00:02.000Z',
+        rfpPackage: {
+          rfpId: 'rfp-1',
+          title: 'DRAFT — Acme RFP',
+          files: [
+            { name: 'rfp.md', bytes: 10 },
+            { name: 'rfp.pdf', bytes: 20 },
+          ],
+          exportedAt: '2026-01-01T00:00:02.000Z',
+          draft: true,
+        },
+      },
+    ]);
+    const card = el.querySelector('[data-testid="rfp-package-card"]')!;
+    expect(
+      card.querySelector('[data-testid="rfp-package-label"]')!.textContent,
+    ).toContain('RFP package (draft) · 2 files');
+    const chip = card.querySelector('[data-testid="rfp-package-draft-chip"]')!;
+    expect(chip.textContent?.trim()).toBe('Draft');
+    expect(chip.classList).toContain('chip-warning');
+    expect(card.textContent).toContain('Download draft (.zip)');
+    expect(card.textContent).not.toContain('Download package (.zip)');
+    expect(card.textContent).toContain('Download draft (PDF)');
+    expect(
+      card.querySelector('[data-testid="rfp-package-download-pdf"]')!.classList,
+    ).toContain('btn-primary');
+
+    const api = TestBed.inject(SessionsApiService);
+    const download = spyOn(api, 'downloadRfpPackage').and.returnValue(
+      of(new Blob(['x'])),
+    );
+    card
+      .querySelector<HTMLButtonElement>('[data-testid="rfp-package-download"]')!
+      .click();
+    expect(download).toHaveBeenCalledWith(
+      'session-1',
+      'rfp-1',
+      undefined,
+      true,
+    );
+    card
+      .querySelectorAll<HTMLButtonElement>(
+        '[data-testid="rfp-package-file"]',
+      )[1]
+      .click();
+    expect(download).toHaveBeenCalledWith(
+      'session-1',
+      'rfp-1',
+      'rfp.pdf',
+      true,
+    );
   });
 
   it('hides Careful, Deep analysis and visuals in a session bound to a built-in agent', () => {
@@ -414,7 +514,9 @@ describe('SessionChat deep analysis', () => {
       at: '2026-01-01T00:00:02.000Z',
     };
     const assistantEl = mount([answer]);
-    expect(assistantEl.querySelector('[aria-label="Careful mode"]')).toBeTruthy();
+    expect(
+      assistantEl.querySelector('[aria-label="Careful mode"]'),
+    ).toBeTruthy();
     expect(assistantEl.textContent).toContain('Generate interactive visuals');
 
     fixture.componentRef.setInput('session', {
@@ -460,7 +562,9 @@ describe('SessionChat deep analysis', () => {
 
     fixture.componentInstance.draft.set('Why are denials rising?');
     fixture.detectChanges();
-    el.querySelector<HTMLButtonElement>('[aria-label="Deep analysis"]')!.click();
+    el.querySelector<HTMLButtonElement>(
+      '[aria-label="Deep analysis"]',
+    )!.click();
     fixture.detectChanges();
 
     // A job, not a chat turn — and the composer is free again.
@@ -657,7 +761,9 @@ describe('SessionChat welcome message', () => {
   it('hides the welcome once the session has messages', async () => {
     const el = await render({
       ...emptySession,
-      messages: [{ role: 'user', content: 'Ask', at: '2026-01-01T00:00:00.000Z' }],
+      messages: [
+        { role: 'user', content: 'Ask', at: '2026-01-01T00:00:00.000Z' },
+      ],
     });
     expect(el.querySelector('[data-testid="session-welcome"]')).toBeNull();
   });
@@ -698,7 +804,7 @@ describe('SessionChat welcome message', () => {
     expect(starterTexts(el)).toEqual(agent.starterQuestions);
   });
 
-  it('shows at most five of the agent\'s starter questions', async () => {
+  it("shows at most five of the agent's starter questions", async () => {
     const starterQuestions = ['1?', '2?', '3?', '4?', '5?', '6?'];
     const el = await render({
       ...emptySession,
@@ -775,5 +881,14 @@ describe('SessionChat beforeSend', () => {
     expect(stream).toHaveBeenCalledTimes(1);
     expect(stream.calls.mostRecent().args[1]).toBe('Who won in 2014?');
     expect(chat.draft()).toBe('');
+  });
+});
+
+describe('skillStepLabel', () => {
+  it('labels the skill tools by what they do and nothing else', () => {
+    expect(skillStepLabel('skill')).toBe('Using skill');
+    expect(skillStepLabel('skill_read')).toBe('Reading skill file');
+    expect(skillStepLabel('skill_search')).toBe('Searching skills');
+    expect(skillStepLabel('get_rfp')).toBeNull();
   });
 });

@@ -11,6 +11,7 @@ import { buildHeaders } from '../datasources/connectors/rest.connector';
 import type { RestApiConfig } from '../datasources/entities/datasource.entity';
 import type { RestTarget, RfpPackageResult } from '../../mastra/tool-services';
 import { createZip } from '../sessions/zip-archive';
+import { safeRelativePath } from '../sessions/workspace-files';
 import { readZip } from './zip-reader';
 
 /** A file served by the package download route (api.md #105). */
@@ -26,6 +27,8 @@ const REQUEST_TIMEOUT_MS = 20_000;
 const PACKAGES_DIR = 'rfp';
 /** RFP ids are UUIDs; anything else never names a package folder. */
 const RFP_ID = /^[A-Za-z0-9_-]+$/;
+/** Subfolder of `rfp/<rfpId>/` holding the draft package (BA-229). */
+const DRAFT_DIR = 'draft';
 
 const CONTENT_TYPES: Record<string, string> = {
   '.md': 'text/markdown',
@@ -73,20 +76,25 @@ export class RfpPackagesService {
   /**
    * Fetch `GET /v1/rfps/:id/package.zip` and unzip it into the session
    * workspace `rfp/<rfpId>/`, replacing what an earlier export stored there
-   * (the record is the source of truth; data-model 4.1).
+   * (the record is the source of truth; data-model 4.1). With `draft`, it
+   * fetches `package.zip?draft=true` into `rfp/<rfpId>/draft/` instead,
+   * replacing an earlier draft and leaving the final package alone; a final
+   * export in turn leaves the draft alone.
    */
   async exportRfpPackage(
     sessionId: string,
     datasourceId: string,
     rfpId: string,
+    options: { draft?: boolean } = {},
   ): Promise<RfpPackageResult> {
+    const draft = options.draft === true;
     if (!RFP_ID.test(rfpId ?? '')) {
       throw new BadRequestException(`Invalid RFP id "${rfpId}"`);
     }
     const target = await this.restTarget(datasourceId);
     const response = await this.call(
       target,
-      `/v1/rfps/${encodeURIComponent(rfpId)}/package.zip`,
+      `/v1/rfps/${encodeURIComponent(rfpId)}/package.zip${draft ? '?draft=true' : ''}`,
       'application/zip',
     );
     const files = readZip(Buffer.from(await response.arrayBuffer()));
@@ -95,8 +103,18 @@ export class RfpPackagesService {
         throw new Error(`The RFP package holds an unsafe path "${file.name}"`);
       }
     }
-    const folder = packageFolder(sessionId, rfpId);
-    await rm(folder, { recursive: true, force: true });
+    const folder = packageFolder(sessionId, rfpId, draft);
+    if (draft) {
+      await rm(folder, { recursive: true, force: true });
+    } else {
+      // Everything but the draft subfolder.
+      const root = packageFolder(sessionId, rfpId);
+      const stale = await readdir(root).catch(() => [] as string[]);
+      for (const entry of stale) {
+        if (entry === DRAFT_DIR) continue;
+        await rm(join(root, entry), { recursive: true, force: true });
+      }
+    }
     await mkdir(folder, { recursive: true });
     for (const file of files) {
       const path = join(folder, file.name);
@@ -111,6 +129,7 @@ export class RfpPackagesService {
         bytes: file.data.length,
       })),
       exportedAt: new Date().toISOString(),
+      ...(draft ? { draft: true as const } : {}),
     };
   }
 
@@ -122,11 +141,12 @@ export class RfpPackagesService {
     sessionId: string,
     rfpId: string,
     file?: string,
+    draft = false,
   ): Promise<RfpPackageDownload> {
     const notFound = () =>
       new NotFoundException(`RFP package "${rfpId}" not found`);
     if (!RFP_ID.test(rfpId ?? '')) throw notFound();
-    const folder = packageFolder(sessionId, rfpId);
+    const folder = packageFolder(sessionId, rfpId, draft);
     if (!(await isDirectory(folder))) throw notFound();
 
     if (file) {
@@ -149,7 +169,10 @@ export class RfpPackagesService {
       };
     }
 
-    const names = await listFiles(folder);
+    const names = (await listFiles(folder)).filter(
+      // The final package's folder also holds the draft's.
+      (name) => draft || name.split('/')[0] !== DRAFT_DIR,
+    );
     if (!names.length) throw notFound();
     const entries = await Promise.all(
       names.map(async (name) => ({
@@ -160,7 +183,7 @@ export class RfpPackagesService {
     const manifest = entries.find((e) => e.name === 'manifest.json')?.data;
     const title = manifest ? manifestTitle(manifest, '') : '';
     return {
-      filename: `rfp-${slug(title) || rfpId.slice(0, 8)}.zip`,
+      filename: `rfp-${slug(title) || rfpId.slice(0, 8)}${draft ? '-draft' : ''}.zip`,
       contentType: 'application/zip',
       body: createZip(entries),
     };
@@ -189,29 +212,14 @@ export class RfpPackagesService {
   }
 }
 
-/** `rfp/<rfpId>/` in the session workspace (data-model 4.1). */
-function packageFolder(sessionId: string, rfpId: string): string {
-  return join(sessionWorkspacePath(sessionId), PACKAGES_DIR, rfpId);
-}
-
-/**
- * A package-relative path in `/` form, or undefined for an absolute path, a
- * `..` segment or an empty name.
- */
-function safeRelativePath(name: string): string | undefined {
-  const normalized = name.replace(/\\/g, '/');
-  if (
-    !normalized ||
-    normalized.startsWith('/') ||
-    /^[a-zA-Z]:/.test(normalized)
-  ) {
-    return undefined;
-  }
-  const segments = normalized.split('/');
-  if (segments.some((s) => s === '..' || s === '.' || s === '')) {
-    return undefined;
-  }
-  return segments.join('/');
+/** `rfp/<rfpId>/` (or `rfp/<rfpId>/draft/`) in the session workspace (data-model 4.1). */
+function packageFolder(
+  sessionId: string,
+  rfpId: string,
+  draft = false,
+): string {
+  const folder = join(sessionWorkspacePath(sessionId), PACKAGES_DIR, rfpId);
+  return draft ? join(folder, DRAFT_DIR) : folder;
 }
 
 /** `<status> <code>: <message>[; <details>]` from the API's error shape. */

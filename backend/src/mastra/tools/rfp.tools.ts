@@ -4,6 +4,8 @@ import { getDatasetToolServices, type RestTarget } from '../tool-services';
 import { DATASETS_CONTEXT_KEY } from './dataset.tools';
 import { SESSION_ID_CONTEXT_KEY } from './visual.tools';
 import { askClarificationTool } from './clarification.tool';
+import { showInPanelTool } from './panel.tool';
+import { updateWorkflowTool } from './workflow.tool';
 import {
   RFP_CREATED_BY_CONTEXT_KEY,
   TURN_RFP_CONTEXT_KEY,
@@ -204,7 +206,10 @@ async function request(
   return callRfpApi(target, method, path, options);
 }
 
-/** A paged collection's rows (`{ data }`), under `key`. */
+/**
+ * A paged collection's rows (`{ data }`) under `key`, with the API's `total`
+ * (how many match), so the model never has to count rows.
+ */
 async function collection(
   context: Context,
   path: string,
@@ -213,8 +218,11 @@ async function collection(
 ): Promise<unknown> {
   const result = await request(context, 'GET', path, { query });
   if (isFailure(result)) return result;
-  const data = (result as { data?: unknown }).data;
-  return { [key]: Array.isArray(data) ? data : [] };
+  const { data, total } = result as { data?: unknown; total?: unknown };
+  return {
+    [key]: Array.isArray(data) ? data : [],
+    ...(typeof total === 'number' ? { total } : {}),
+  };
 }
 
 /** Remember the RFP this turn created or opened (`turn-rfp`, agents.md 4.2). */
@@ -224,6 +232,17 @@ function rememberRfp(context: Context, result: unknown): void {
   const holder = context.get(TURN_RFP_CONTEXT_KEY) as TurnRfpHolder | undefined;
   if (typeof id === 'string' && holder && typeof holder === 'object') {
     holder.rfpId = id;
+  }
+  rememberStage(context, result);
+}
+
+/** Remember the active RFP's last completed stage, which drives the workflow bar. */
+function rememberStage(context: Context, result: unknown): void {
+  if (isFailure(result)) return;
+  const stage = (result as { stage?: unknown } | null)?.stage;
+  const holder = context.get(TURN_RFP_CONTEXT_KEY) as TurnRfpHolder | undefined;
+  if (typeof stage === 'number' && holder && typeof holder === 'object') {
+    holder.stage = stage;
   }
 }
 
@@ -250,7 +269,7 @@ const rfpId = () =>
 export const listClientsTool = createTool({
   id: 'list_clients',
   description:
-    'Find Intellify clients by name or client code. Each client comes with its code (oneCode), headcount, latest census year, lines offered and next renewal date. Pass part of the name the consultant used; omit query to list every client.',
+    'Find Intellify clients by name or client code. Each client comes with its code (oneCode), headcount, latest census year, lines offered and next renewal date; total is how many clients match. Pass part of the name the consultant used; omit query to list every client.',
   inputSchema: z.object({
     query: z
       .string()
@@ -379,7 +398,7 @@ export const getClientCensusTool = createTool({
 export const getClientCommercialsTool = createTool({
   id: 'get_client_commercials',
   description:
-    'Contribution strategy periods, carrier credits, ancillary fees, the national survey answers and point solutions. Carrier credits show their expiration date and whether they are final.',
+    "Contribution strategy periods, carrier credits, ancillary fees, the national survey answers and point solutions. Carrier credits show their expiration date and whether they are final. The survey answers are the client's own (its region, industry and the cost increase it expects), not a market or industry benchmark.",
   inputSchema: z.object({ clientOneCode: clientOneCode() }),
   execute: async ({ clientOneCode }, { requestContext }) =>
     request(
@@ -493,15 +512,20 @@ export const listRfpsTool = createTool({
       'rfps',
     );
     if (isFailure(result)) return result;
-    const rfps = (result as { rfps: { createdBy?: unknown }[] }).rfps;
+    const { rfps, total } = result as {
+      rfps: { createdBy?: unknown }[];
+      total?: number;
+    };
     const me = contextString(requestContext, RFP_CREATED_BY_CONTEXT_KEY);
-    if (!me) return { rfps };
+    const counted = total === undefined ? {} : { total };
+    if (!me) return { rfps, ...counted };
     // Own records first, each group newest first as the API sends them.
     return {
       rfps: [
         ...rfps.filter((rfp) => rfp?.createdBy === me),
         ...rfps.filter((rfp) => rfp?.createdBy !== me),
       ],
+      ...counted,
     };
   },
 });
@@ -581,9 +605,14 @@ export const updateRfpTool = createTool({
           'Nothing to change: pass title, status, effectiveDate, stage, or sectionName with sectionText',
       };
     }
-    return request(requestContext, 'PATCH', `/v1/rfps/${enc(rfpId)}`, {
-      body,
-    });
+    const result = await request(
+      requestContext,
+      'PATCH',
+      `/v1/rfps/${enc(rfpId)}`,
+      { body },
+    );
+    rememberStage(requestContext, result);
+    return result;
   },
 });
 
@@ -764,26 +793,43 @@ export const setRfpTimelineTool = createTool({
     replaceList(requestContext, rfpId, 'timeline', timelineBody(milestones)),
 });
 
+async function runExport(
+  requestContext: Context,
+  rfpId: string,
+  draft: boolean,
+) {
+  const sessionId = contextString(requestContext, SESSION_ID_CONTEXT_KEY);
+  if (!sessionId) return { error: 'No session in context' };
+  const datasource = await restDatasourceId(requestContext);
+  if (isFailure(datasource)) return datasource;
+  try {
+    return await getDatasetToolServices().exportRfpPackage(
+      sessionId,
+      datasource.datasourceId,
+      rfpId,
+      draft ? { draft: true } : undefined,
+    );
+  } catch (err) {
+    return { error: message(err) };
+  }
+}
+
 export const exportRfpPackageTool = createTool({
   id: 'export_rfp_package',
   description:
     'Assemble the RFP package (Markdown and PDF document, CSV exhibits) and make it downloadable from this chat. Call it only after the consultant confirmed the stage-7 review; exporting again replaces the earlier package.',
   inputSchema: z.object({ rfpId: rfpId() }),
-  execute: async ({ rfpId }, { requestContext }) => {
-    const sessionId = contextString(requestContext, SESSION_ID_CONTEXT_KEY);
-    if (!sessionId) return { error: 'No session in context' };
-    const datasource = await restDatasourceId(requestContext);
-    if (isFailure(datasource)) return datasource;
-    try {
-      return await getDatasetToolServices().exportRfpPackage(
-        sessionId,
-        datasource.datasourceId,
-        rfpId,
-      );
-    } catch (err) {
-      return { error: message(err) };
-    }
-  },
+  execute: ({ rfpId }, { requestContext }) =>
+    runExport(requestContext, rfpId, false),
+});
+
+export const exportRfpDraftTool = createTool({
+  id: 'export_rfp_draft',
+  description:
+    'Export a DRAFT of the RFP package (Markdown and PDF document, CSV exhibits) from what is saved so far, at any stage, and make it downloadable from this chat. Use it when the consultant asks to see or share a draft before the stage-7 review; it never replaces the final package.',
+  inputSchema: z.object({ rfpId: rfpId() }),
+  execute: ({ rfpId }, { requestContext }) =>
+    runExport(requestContext, rfpId, true),
 });
 
 /** Every tool the RFP Builder is given, in the order its prompt lists them (agents.md 3.10). */
@@ -807,5 +853,8 @@ export const rfpTools = {
   set_rfp_requirements: setRfpRequirementsTool,
   set_rfp_timeline: setRfpTimelineTool,
   export_rfp_package: exportRfpPackageTool,
+  export_rfp_draft: exportRfpDraftTool,
+  show_in_panel: showInPanelTool,
+  update_workflow: updateWorkflowTool,
   ask_clarification: askClarificationTool,
 };

@@ -63,7 +63,10 @@ export class RfpController {
   }
 
   @Delete()
-  @ApiOperation({ summary: 'Delete the drafts created by createdBy' })
+  @ApiOperation({
+    summary:
+      'Delete the drafts created by createdBy (every record of an eval run, eval:<jobId>)',
+  })
   @ApiOkResponse({ type: DeletedCountDto })
   removeDrafts(@Query() query: DeleteRfpsQueryDto) {
     return this.rfps.removeDrafts(query.createdBy);

@@ -124,7 +124,8 @@ describe('target resolution (agents.md 3.10)', () => {
       'X-API-Key': 'secret',
       Accept: 'application/json',
     });
-    expect(result).toEqual({ clients: [{ oneCode: 'IC100100' }] });
+    // With the API's total, so the model never counts rows.
+    expect(result).toEqual({ clients: [{ oneCode: 'IC100100' }], total: 1 });
   });
 
   it('answers the fixed message when no REST datasource is in scope', async () => {
@@ -333,6 +334,31 @@ describe('write tools build the request body (api.md 2.16.4)', () => {
     });
   });
 
+  it("remembers the RFP's last completed stage for the workflow tracker", async () => {
+    const context = contextWith();
+    respond(200, { id: RFP_ID, stage: 0 });
+    await run(
+      'create_rfp',
+      { clientOneCode: 'IC100100', planYear: 2027 },
+      context,
+    );
+    expect(context.get(TURN_RFP_CONTEXT_KEY)).toEqual({
+      rfpId: RFP_ID,
+      stage: 0,
+    });
+
+    respond(200, { id: RFP_ID, stage: 3 });
+    await run('update_rfp', { rfpId: RFP_ID, stage: 3 }, context);
+    expect(context.get(TURN_RFP_CONTEXT_KEY)).toEqual({
+      rfpId: RFP_ID,
+      stage: 3,
+    });
+
+    respond(400, { code: 'validation', message: 'no' });
+    await run('update_rfp', { rfpId: RFP_ID, stage: 9 }, context);
+    expect(context.get(TURN_RFP_CONTEXT_KEY)).toMatchObject({ stage: 3 });
+  });
+
   it('update_rfp refuses a section name without text, or nothing to change', async () => {
     expect(
       await run('update_rfp', { rfpId: RFP_ID, sectionName: 'notes' }),
@@ -481,6 +507,38 @@ describe('write tools build the request body (api.md 2.16.4)', () => {
   });
 });
 
+describe('export_rfp_draft (BA-229)', () => {
+  it('asks the bridge for a draft export and returns its result', async () => {
+    const result = {
+      rfpId: RFP_ID,
+      title: 'DRAFT — Orchard — 2027 benefits RFP',
+      files: [{ name: 'rfp.md', bytes: 10 }],
+      exportedAt: '2026-10-14T00:00:00.000Z',
+      draft: true as const,
+    };
+    services.exportRfpPackage.mockResolvedValueOnce(result);
+    expect(await run('export_rfp_draft', { rfpId: RFP_ID })).toEqual(result);
+    expect(services.exportRfpPackage).toHaveBeenCalledWith(
+      's-1',
+      'rest-1',
+      RFP_ID,
+      { draft: true },
+    );
+  });
+
+  it('returns failures as errors, like the final export', async () => {
+    services.exportRfpPackage.mockRejectedValueOnce(new Error('404 not_found'));
+    expect(await run('export_rfp_draft', { rfpId: RFP_ID })).toEqual({
+      error: '404 not_found',
+    });
+    const noSession = contextWith();
+    noSession.set('session-id', undefined);
+    expect(await run('export_rfp_draft', { rfpId: RFP_ID }, noSession)).toEqual(
+      { error: 'No session in context' },
+    );
+  });
+});
+
 describe('export_rfp_package', () => {
   it('asks the bridge to export into the session', async () => {
     const result = {
@@ -496,6 +554,7 @@ describe('export_rfp_package', () => {
       's-1',
       'rest-1',
       RFP_ID,
+      undefined,
     );
     expect(fetchMock).not.toHaveBeenCalled();
   });

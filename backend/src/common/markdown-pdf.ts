@@ -17,6 +17,10 @@ export interface PdfOptions {
   createdAt: Date;
   /** Deflate the content streams (default true; tests turn it off). */
   compress?: boolean;
+  /** Print `DRAFT` in each page's header. */
+  draft?: boolean;
+  /** Written as author, creator and producer (default "Intellify RFP API"). */
+  author?: string;
 }
 
 const FONT = {
@@ -327,19 +331,38 @@ export function renderPdf(
   markdown: string,
   options: PdfOptions,
 ): Promise<Buffer> {
+  const author = options.author ?? 'Intellify RFP API';
   const doc = new PDFDocument({
     size: 'LETTER',
     margin: MARGIN,
     compress: options.compress ?? true,
     info: {
       Title: options.title,
-      Author: 'Intellify RFP API',
-      Creator: 'Intellify RFP API',
-      Producer: 'Intellify RFP API',
+      Author: author,
+      Creator: author,
+      Producer: author,
       CreationDate: options.createdAt,
       ModDate: options.createdAt,
     },
   });
+  if (options.draft) {
+    const stamp = () => {
+      const { x, y } = doc;
+      doc
+        .font(FONT.bold)
+        .fontSize(9)
+        .fillColor(RULE)
+        .text('DRAFT', MARGIN, 28, {
+          width: doc.page.width - MARGIN * 2,
+          align: 'right',
+          lineBreak: false,
+        });
+      doc.x = x;
+      doc.y = y;
+    };
+    stamp();
+    doc.on('pageAdded', stamp);
+  }
   const chunks: Buffer[] = [];
   return new Promise<Buffer>((resolve, reject) => {
     doc.on('data', (chunk: Buffer) => chunks.push(chunk));

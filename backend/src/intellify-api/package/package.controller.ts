@@ -3,6 +3,7 @@ import {
   Get,
   Header,
   Param,
+  Query,
   Res,
   StreamableFile,
 } from '@nestjs/common';
@@ -11,6 +12,7 @@ import {
   ApiOkResponse,
   ApiOperation,
   ApiProduces,
+  ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
 import type { Response } from 'express';
@@ -108,9 +110,20 @@ export class PackageController {
     summary: 'The RFP package: document, PDF, exhibits, manifest',
   })
   @ApiProduces('application/zip')
+  @ApiQuery({
+    name: 'draft',
+    required: false,
+    description:
+      'true: a DRAFT package (marked DRAFT, manifest carries draft and stage)',
+  })
   @ApiOkResponse({ schema: { type: 'string', format: 'binary' } })
-  async packageZip(@Param('id') id: string): Promise<StreamableFile> {
-    const { rfp, zip } = await this.packages.zip(id);
+  async packageZip(
+    @Param('id') id: string,
+    @Query('draft') draft?: string,
+  ): Promise<StreamableFile> {
+    const { rfp, zip } = await this.packages.zip(id, {
+      draft: draft === 'true',
+    });
     return new StreamableFile(zip, {
       type: 'application/zip',
       disposition: `attachment; filename="${packageFileName(rfp.title, 'zip')}"`,

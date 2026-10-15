@@ -50,6 +50,23 @@ const DATASETS = [
 ];
 const NOW = () => new Date('2026-10-14T09:00:00Z');
 
+/** An RFP record as the API answers it (api.md 2.16.4). */
+const RECORD = {
+  id: 'rfp-123',
+  title: 'Maple Ridge Hospitality — 2027 benefits RFP',
+  clientName: 'Maple Ridge Hospitality',
+  clientOneCode: 'IC100137',
+  planYear: 2027,
+  effectiveDate: '2027-01-01',
+  status: 'draft',
+  stage: 6,
+  sections: {},
+  lines: [],
+  carriers: [],
+  requirements: [],
+  timeline: [],
+};
+
 let fetchMock: jest.Mock;
 
 /** The run's config sent to `runEvals`. */
@@ -74,7 +91,7 @@ beforeEach(() => {
 });
 
 describe('the rfp eval set (agents.md 8.1)', () => {
-  it('has the eight cases, on the RFP Builder over the Intellify RFP API', () => {
+  it('has the 28 cases, on the RFP Builder over the Intellify RFP API', () => {
     expect(RFP_EVAL_SET).toMatchObject({
       id: 'rfp',
       name: 'RFP Builder',
@@ -90,7 +107,32 @@ describe('the rfp eval set (agents.md 8.1)', () => {
       'rfp-bad-rows-recovers',
       'rfp-out-of-scope',
       'rfp-no-sql',
+      'rfp-ambiguous-client',
+      'rfp-client-not-found',
+      'rfp-resume-next-stage',
+      'rfp-requirements-not-saved',
+      'rfp-replace-one-carrier',
+      'rfp-carrier-codes-resolved',
+      'rfp-no-benchmark',
+      'rfp-unknown-carrier',
+      'rfp-dental-premiums-annual',
+      'rfp-names-not-ids',
+      'rfp-deleted-rows-hidden',
+      'rfp-draft-export-midway',
+      'rfp-final-export-needs-review',
+      'rfp-final-export-after-review',
+      'rfp-workflow-stage-start',
+      'rfp-timeline-skill-first',
+      'rfp-out-of-scope-hr',
+      'rfp-injection-user',
+      'rfp-injection-in-data',
+      'rfp-multi-line-dates',
     ]);
+    // Each case's custom checks have their own ids.
+    for (const evalCase of RFP_EVAL_SET.cases) {
+      const ids = (evalCase.customChecks ?? []).map((c) => c.id);
+      expect(new Set(ids).size).toBe(ids.length);
+    }
     expect(RFP_EVAL_SET.cases.some((c) => c.expectedSql)).toBe(false);
   });
 
@@ -166,9 +208,16 @@ describe('an rfp case run (agents.md 8.1, 4.1 Block R1)', () => {
       (c) => c.id === 'rfp-bad-rows-recovers',
     )!;
     expect(withDraft.question).toContain(RFP_ID_PLACEHOLDER);
-    fetchMock.mockResolvedValueOnce(
-      new Response(JSON.stringify({ id: 'rfp-123' }), { status: 201 }),
-    );
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: 'rfp-123' }), { status: 201 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(RECORD), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ deleted: 1 }), { status: 200 }),
+      );
 
     const result = await runAssistantEvalCase(
       withDraft,
@@ -186,9 +235,85 @@ describe('an rfp case run (agents.md 8.1, 4.1 Block R1)', () => {
       createdBy: 'eval:job-7',
     });
     expect(sentConfig().data[0].input).toBe(
-      'Set the timeline for RFP rfp-123 to issue on 2026-11-02, proposals due 2026-12-01 and decision 2027-01-15',
+      'Save exactly these three milestones as the timeline of RFP rfp-123, nothing else: RFP issued on 2026-11-02, proposals due 2026-11-20, decision 2026-12-04',
     );
     expect(result.question).toBe(sentConfig().data[0].input);
+    // Marked at its stage, not active in Block R1, and deleted after the case.
+    const urls = (fetchMock.mock.calls as [string, RequestInit][]).map(
+      ([url]) => url,
+    );
+    expect(urls[1]).toBe('http://127.0.0.1:3100/v1/rfps/rfp-123');
+    expect(sentConfig().targetOptions.context[0].content).toContain(
+      'No RFP is active in this session yet',
+    );
+    const [cleanUrl, cleanInit] = fetchMock.mock.calls[2] as [
+      string,
+      RequestInit,
+    ];
+    expect(cleanInit.method).toBe('DELETE');
+    expect(cleanUrl).toBe(
+      'http://127.0.0.1:3100/v1/rfps?createdBy=eval%3Ajob-7',
+    );
+  });
+
+  it('builds a resumed case: its record, Block R1 naming it and its earlier turns', async () => {
+    const resumed = RFP_EVAL_SET.cases.find(
+      (c) => c.id === 'rfp-final-export-after-review',
+    )!;
+    fetchMock.mockImplementation((url: string, init: RequestInit) => {
+      const body =
+        init.method === 'POST'
+          ? { id: 'rfp-123' }
+          : init.method === 'DELETE'
+            ? { deleted: 1 }
+            : RECORD;
+      return Promise.resolve(
+        new Response(JSON.stringify(body), { status: 200 }),
+      );
+    });
+
+    await runAssistantEvalCase(
+      resumed,
+      ['Intellify RFP API'],
+      's-1',
+      undefined,
+      rfpEvalTarget('job-7', NOW),
+    );
+
+    const methods = fetchMock.mock.calls.map(
+      ([url, init]: [string, RequestInit]) =>
+        `${init.method} ${url.replace('http://127.0.0.1:3100', '')}`,
+    );
+    expect(methods).toEqual([
+      'POST /v1/rfps',
+      'PUT /v1/rfps/rfp-123/lines',
+      'PUT /v1/rfps/rfp-123/carriers',
+      'PUT /v1/rfps/rfp-123/requirements',
+      'PUT /v1/rfps/rfp-123/timeline',
+      'PATCH /v1/rfps/rfp-123',
+      // The custom checks read the record back after the run.
+      'GET /v1/rfps/rfp-123',
+      'DELETE /v1/rfps?createdBy=eval%3Ajob-7',
+    ]);
+    const calls = fetchMock.mock.calls as [string, RequestInit][];
+    const patch = JSON.parse(calls[5][1].body as string) as {
+      stage: number;
+      sections: Record<string, string>;
+    };
+    expect(patch).toMatchObject({ stage: 6 });
+    expect(Object.keys(patch.sections)).toEqual(
+      expect.arrayContaining(['executiveSummary', 'evaluationCriteria']),
+    );
+    const config = sentConfig();
+    expect(config.targetOptions.context[0].content).toContain(
+      'Active RFP in this session: rfp-123 — "Maple Ridge Hospitality — 2027 benefits RFP" for Maple Ridge Hospitality (IC100137), plan year 2027, status draft, last completed stage 6.',
+    );
+    const input = config.data[0].input as unknown as {
+      role: string;
+      content: string;
+    }[];
+    expect(input.map((m) => m.role)).toEqual(['user', 'assistant', 'user']);
+    expect(input[2].content).toBe(resumed.question);
   });
 
   it("deletes the run's drafts when it finishes", async () => {
@@ -207,6 +332,85 @@ describe('an rfp case run (agents.md 8.1, 4.1 Block R1)', () => {
     await expect(
       rfpEvalTarget('job-7').finish?.(['Intellify RFP API']),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe('custom checks (agents.md 8.1)', () => {
+  it('scores them on the tool calls, each under its own id', async () => {
+    (runEvals as jest.Mock).mockImplementationOnce(
+      (config: {
+        onItemComplete: (item: {
+          targetResult: unknown;
+          scorerResults: unknown;
+        }) => void;
+      }) => {
+        config.onItemComplete({
+          targetResult: {
+            text: 'Saved.',
+            steps: [
+              {
+                toolCalls: [
+                  {
+                    payload: {
+                      toolCallId: 't1',
+                      toolName: 'set_rfp_carriers',
+                      args: { rfpId: 'r-1' },
+                    },
+                  },
+                ],
+                toolResults: [
+                  {
+                    payload: {
+                      toolCallId: 't1',
+                      result: { error: 'Unknown carrier "BCBS"' },
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+          scorerResults: {},
+        });
+        return Promise.resolve({ scores: {} });
+      },
+    );
+    getDatasets.mockResolvedValue([]);
+    const result = await runAssistantEvalCase(
+      {
+        id: 'demo',
+        question: 'Save it',
+        intent: 'demo',
+        scorers: [],
+        customChecks: [
+          {
+            id: 'one',
+            description: 'a call failed',
+            run: ({ toolCalls }) =>
+              toolCalls[0]?.failed ? undefined : 'it did not fail',
+          },
+          {
+            id: 'two',
+            description: 'the answer says saved',
+            run: ({ answer }) => (answer === 'Saved.' ? undefined : answer),
+          },
+          {
+            id: 'three',
+            description: 'throws',
+            run: () => {
+              throw new Error('boom');
+            },
+          },
+        ],
+      },
+      ['World Cup Core'],
+    );
+    expect(result.error).toBeUndefined();
+    expect(result.checkResults.map((c) => [c.id, c.passed, c.reason])).toEqual([
+      ['one', true, undefined],
+      ['two', true, undefined],
+      ['three', false, 'check error: boom'],
+    ]);
+    expect(result.passed).toBe(false);
   });
 });
 

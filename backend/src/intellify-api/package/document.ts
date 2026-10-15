@@ -84,6 +84,7 @@ export function renderRfpMarkdown(
   rfp: Rfp,
   data: PackageData,
   generatedAt: string,
+  options: { draft?: boolean } = {},
 ): string {
   const out: string[] = [];
   const push = (...blocks: string[]) => out.push(...blocks);
@@ -93,7 +94,12 @@ export function renderRfpMarkdown(
     rfp.clientMissing ? ' — client no longer in Intellify' : ''
   }`;
   push(
-    `# ${rfp.title}`,
+    `# ${options.draft ? 'DRAFT — ' : ''}${rfp.title}`,
+    ...(options.draft
+      ? [
+          `Draft exported ${generatedAt.slice(0, 10)} at stage ${rfp.stage} of 7 — not for release to carriers.`,
+        ]
+      : []),
     [
       `**Client:** ${clientLabel}`,
       `**Plan year:** ${rfp.planYear}`,

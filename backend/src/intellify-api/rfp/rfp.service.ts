@@ -24,6 +24,7 @@ import {
   assertStatusMove,
   defaultEffectiveDate,
   defaultTitle,
+  isEvalCreator,
   isUuid,
   mergeSections,
   resolveCarriers,
@@ -226,9 +227,14 @@ export class RfpService {
     });
   }
 
+  /**
+   * The bulk clean-up (api.md I29): the drafts `createdBy` made, or every
+   * record of an eval run (`eval:<jobId>`), whatever its status, since a run
+   * that reaches stage 7 leaves a `ready` record (rfp R14).
+   */
   async removeDrafts(createdBy: string): Promise<{ deleted: number }> {
     const deleted = await this.db.write((client) =>
-      this.repo.deleteDraftsBy(client, createdBy),
+      this.repo.deleteCreatedBy(client, createdBy, isEvalCreator(createdBy)),
     );
     return { deleted };
   }

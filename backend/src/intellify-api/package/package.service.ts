@@ -10,7 +10,7 @@ import {
   type Exhibit,
 } from './exhibits';
 import { ExhibitsQueries, type PackageData } from './exhibits.queries';
-import { renderPdf } from './pdf';
+import { renderPdf } from '../../common/markdown-pdf';
 
 /** `manifest.json` of the package zip (api.md 2.16.5 I34). */
 export interface PackageManifest {
@@ -18,6 +18,9 @@ export interface PackageManifest {
   title: string;
   generatedAt: string;
   files: string[];
+  /** Only on a draft package (`?draft=true`). */
+  draft?: true;
+  stage?: number;
 }
 
 export interface PackageFile {
@@ -39,13 +42,15 @@ export async function buildPackageFiles(
   rfp: Rfp,
   data: PackageData,
   generatedAt: string,
-  options: { compressPdf?: boolean } = {},
+  options: { compressPdf?: boolean; draft?: boolean } = {},
 ): Promise<PackageFile[]> {
-  const markdown = renderRfpMarkdown(rfp, data, generatedAt);
+  const draft = options.draft === true;
+  const markdown = renderRfpMarkdown(rfp, data, generatedAt, { draft });
   const pdf = await renderPdf(markdown, {
-    title: rfp.title,
+    title: draft ? `DRAFT — ${rfp.title}` : rfp.title,
     createdAt: new Date(generatedAt),
     compress: options.compressPdf,
+    draft,
   });
   const files: PackageFile[] = [
     { name: 'rfp.md', data: Buffer.from(markdown, 'utf8') },
@@ -60,6 +65,7 @@ export async function buildPackageFiles(
     title: rfp.title,
     generatedAt,
     files: [...files.map((f) => f.name), 'manifest.json'],
+    ...(draft ? { draft: true as const, stage: rfp.stage } : {}),
   };
   files.push({
     name: 'manifest.json',
@@ -115,10 +121,15 @@ export class PackageService {
     return exhibitCsv(exhibit);
   }
 
-  async zip(id: string): Promise<{ rfp: Rfp; zip: Buffer }> {
+  async zip(
+    id: string,
+    options: { draft?: boolean } = {},
+  ): Promise<{ rfp: Rfp; zip: Buffer }> {
     const { rfp, data } = await this.load(id);
     const generatedAt = generationTime();
-    const files = await buildPackageFiles(rfp, data, generatedAt);
+    const files = await buildPackageFiles(rfp, data, generatedAt, {
+      draft: options.draft,
+    });
     return { rfp, zip: createZip(files, new Date(generatedAt)) };
   }
 }

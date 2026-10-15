@@ -13,6 +13,7 @@ const SAMPLES = [
   { id: 'formula-1', name: 'Formula 1', required: 48 },
   { id: 'intellify', name: 'Intellify', required: 49 },
   { id: 'world-cup-rest', name: 'World Cup (REST API)', required: 9 },
+  { id: 'intellify-api', name: 'Intellify RFP API', required: 10 },
 ];
 
 async function openTestingData(page: Page): Promise<void> {

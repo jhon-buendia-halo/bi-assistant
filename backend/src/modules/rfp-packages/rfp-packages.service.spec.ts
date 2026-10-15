@@ -186,6 +186,72 @@ describe('RfpPackagesService', () => {
     expect(existsSync(join(folder, 'manifest.json'))).toBe(false);
   });
 
+  it('exports a draft into rfp/<rfpId>/draft/, beside the final package and replacing an earlier draft (BA-229)', async () => {
+    const { service } = build();
+    const respond = (zip: Buffer) =>
+      fetchMock.mockResolvedValue(
+        new Response(new Uint8Array(zip), { status: 200 }),
+      );
+    const folder = join(workspaces, 'session-s-6', 'rfp', RFP_ID);
+
+    respond(packageZip());
+    await service.exportRfpPackage('s-6', 'ds-1', RFP_ID);
+    respond(
+      createZip([
+        { name: 'rfp.md', data: 'draft 1' },
+        { name: 'extra.csv', data: 'x' },
+      ]),
+    );
+    const draft = await service.exportRfpPackage('s-6', 'ds-1', RFP_ID, {
+      draft: true,
+    });
+
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      `http://127.0.0.1:3100/v1/rfps/${RFP_ID}/package.zip?draft=true`,
+      expect.anything(),
+    );
+    expect(draft.draft).toBe(true);
+    expect(draft.files.map((f) => f.name)).toEqual(['rfp.md', 'extra.csv']);
+    expect(readFileSync(join(folder, 'draft', 'rfp.md'), 'utf8')).toBe(
+      'draft 1',
+    );
+    // The final package is untouched.
+    expect(readFileSync(join(folder, 'rfp.md'), 'utf8')).toContain('# Orchard');
+
+    // A second draft replaces the first.
+    respond(createZip([{ name: 'rfp.md', data: 'draft 2' }]));
+    await service.exportRfpPackage('s-6', 'ds-1', RFP_ID, { draft: true });
+    expect(readFileSync(join(folder, 'draft', 'rfp.md'), 'utf8')).toBe(
+      'draft 2',
+    );
+    expect(existsSync(join(folder, 'draft', 'extra.csv'))).toBe(false);
+
+    // A new final export replaces the final files but keeps the draft.
+    respond(createZip([{ name: 'rfp.md', data: 'final 2' }]));
+    const final = await service.exportRfpPackage('s-6', 'ds-1', RFP_ID);
+    expect(final).not.toHaveProperty('draft');
+    expect(readFileSync(join(folder, 'rfp.md'), 'utf8')).toBe('final 2');
+    expect(existsSync(join(folder, 'exhibits'))).toBe(false);
+    expect(readFileSync(join(folder, 'draft', 'rfp.md'), 'utf8')).toBe(
+      'draft 2',
+    );
+
+    // Downloads: the draft with draft=true, the final zip without the draft.
+    const draftZip = await service.download('s-6', RFP_ID, undefined, true);
+    expect(readZip(draftZip.body).map((f) => f.name)).toEqual(['rfp.md']);
+    expect(
+      (await service.download('s-6', RFP_ID, 'rfp.md', true)).body.toString(),
+    ).toBe('draft 2');
+    const finalZip = await service.download('s-6', RFP_ID);
+    expect(readZip(finalZip.body).map((f) => f.name)).toEqual(['rfp.md']);
+    expect(
+      (await service.download('s-6', RFP_ID, 'rfp.md')).body.toString(),
+    ).toBe('final 2');
+    await expect(
+      service.download('s-4', RFP_ID, undefined, true),
+    ).rejects.toThrow(NotFoundException);
+  });
+
   it("reports the API's error as the tools do", async () => {
     const { service } = build();
     fetchMock.mockResolvedValue(
@@ -244,6 +310,18 @@ describe('RfpPackagesService', () => {
         'manifest.json',
         'rfp.md',
       ]);
+    });
+
+    it('names a draft zip with a -draft suffix', async () => {
+      const { service } = build();
+      fetchMock.mockResolvedValue(
+        new Response(new Uint8Array(packageZip()), { status: 200 }),
+      );
+      await service.exportRfpPackage('s-5', 'ds-1', RFP_ID, { draft: true });
+      const download = await service.download('s-5', RFP_ID, undefined, true);
+      expect(download.filename).toBe(
+        'rfp-orchard-manufacturing-2027-benefits-rfp-draft.zip',
+      );
     });
 
     it('serves one file with its content type', async () => {

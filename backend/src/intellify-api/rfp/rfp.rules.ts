@@ -16,6 +16,11 @@ import {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** Whether `createdBy` tags an eval run's records (`eval:<jobId>`, api.md I29). */
+export function isEvalCreator(createdBy: string): boolean {
+  return createdBy.startsWith('eval:');
+}
+
 export function isUuid(value: string): boolean {
   return UUID.test(value);
 }

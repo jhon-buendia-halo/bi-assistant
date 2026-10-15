@@ -5,7 +5,7 @@ jest.mock('marked', () =>
 );
 
 import { renderRfpMarkdown } from './document';
-import { renderPdf } from './pdf';
+import { renderPdf } from '../../common/markdown-pdf';
 import { fixtureData, fixtureRfp, GENERATED_AT } from './rfp-package.stub';
 
 /** The text drawn by `TJ` operators of an uncompressed pdfkit file. */
@@ -55,6 +55,25 @@ describe('renderPdf', () => {
       pdf.toString('latin1').match(/\/Type \/Page\b/g)?.length,
     ).toBeGreaterThanOrEqual(10);
     expect(pdf.toString('latin1')).toMatch(/\/Title \d+ 0 R/);
+  });
+
+  it('prints DRAFT in every page header only when asked (BA-229)', async () => {
+    const draft = await renderPdf(markdown, { ...options, draft: true });
+    const plain = await renderPdf(markdown, options);
+    const pages = draft.toString('latin1').match(/\/Type \/Page\b/g)?.length;
+    expect(pdfText(draft).filter((t) => t === 'DRAFT')).toHaveLength(pages!);
+    expect(pdfText(plain)).not.toContain('DRAFT');
+  });
+
+  it('writes the author option into the metadata', async () => {
+    const pdf = await renderPdf(markdown, {
+      ...options,
+      author: 'Questions to Insights',
+    });
+    expect(pdf.toString('latin1')).toContain('Questions to Insights');
+    expect((await renderPdf(markdown, options)).toString('latin1')).toContain(
+      'Intellify RFP API',
+    );
   });
 
   it('gives the same bytes for the same input', async () => {

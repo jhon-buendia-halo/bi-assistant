@@ -33,6 +33,7 @@ import {
   ThumbsUp,
   TriangleAlert,
   Wrench,
+  BookOpen,
   X,
 } from 'lucide-angular';
 import { SessionsApiService } from '../../services/sessions-api.service';
@@ -47,6 +48,8 @@ import {
   Session,
   ReasoningStep,
   ToolDataRecord,
+  PanelItemEvent,
+  WorkflowView,
   VisualEvent,
 } from '../../models/session.model';
 import {
@@ -128,6 +131,18 @@ export function deepAnalysisProgressLine(job: DeepAnalysisActivity): string {
   }
 }
 
+/** The skill tools of the framework (agents.md 3.9), labelled by what they do. */
+const SKILL_STEP_LABELS: Record<string, string> = {
+  skill: 'Using skill',
+  skill_read: 'Reading skill file',
+  skill_search: 'Searching skills',
+};
+
+/** The label of a skill tool's step, or null for any other tool. */
+export function skillStepLabel(toolName: string): string | null {
+  return SKILL_STEP_LABELS[toolName] ?? null;
+}
+
 @Component({
   selector: 'app-session-chat',
   imports: [LucideAngularModule, MarkdownPipe, NgTemplateOutlet],
@@ -160,6 +175,8 @@ export class SessionChat implements OnDestroy {
   readonly ThumbsUp = ThumbsUp;
   readonly TriangleAlert = TriangleAlert;
   readonly Wrench = Wrench;
+  readonly BookOpen = BookOpen;
+  readonly skillStepLabel = skillStepLabel;
   readonly X = X;
 
   private readonly api = inject(SessionsApiService);
@@ -175,6 +192,10 @@ export class SessionChat implements OnDestroy {
   /** A turn created/updated a visual; the host should refresh the panel. */
   readonly visualUpdated = output<VisualEvent>();
   readonly viewVisual = output<VisualEvent>();
+  /** The agent put something in the right panel (`panel-item`). */
+  readonly panelItem = output<PanelItemEvent>();
+  /** The workflow status bar changed (`workflow` stream event). */
+  readonly workflowChanged = output<WorkflowView>();
   /**
    * The session was persisted (a finished turn, answer feedback) — refresh
    * the host's copies. Same id, so the chat does not re-sync from it.
@@ -301,7 +322,6 @@ export class SessionChat implements OnDestroy {
   );
 
   constructor() {
-
     // Re-sync when the active session changes (component instance is reused).
     effect(() => {
       const session = this.session();
@@ -433,7 +453,7 @@ export class SessionChat implements OnDestroy {
           if (this.activeStream !== controller) return;
           this.toolCalls.set([
             ...this.toolCalls(),
-            { name: call.name, rationale: call.rationale },
+            { name: call.name, rationale: call.rationale, input: call.input },
           ]);
           this.scrollToBottom();
         },
@@ -470,6 +490,14 @@ export class SessionChat implements OnDestroy {
         onVisualUpdated: (event) => {
           if (this.activeStream !== controller) return;
           this.visualUpdated.emit(event);
+        },
+        onPanelItem: (event) => {
+          if (this.activeStream !== controller) return;
+          this.panelItem.emit(event);
+        },
+        onWorkflow: (workflow) => {
+          if (this.activeStream !== controller) return;
+          this.workflowChanged.emit(workflow);
         },
         onDone: (session) => {
           if (this.activeStream !== controller) return;
@@ -755,12 +783,17 @@ export class SessionChat implements OnDestroy {
   /** `rfpId/file` being downloaded right now (`rfpId/` for the zip). */
   readonly rfpDownloading = signal<string | null>(null);
 
+  /** Whether the package holds the rendered `rfp.pdf`. */
+  hasRfpPdf(pkg: RfpPackage): boolean {
+    return pkg.files.some((f) => f.name === 'rfp.pdf');
+  }
+
   /** Save an RFP package's zip, or one of its files (ui.md 4.12). */
   downloadRfpPackage(pkg: RfpPackage, file?: string): void {
     if (this.rfpDownloading()) return;
     this.rfpDownloading.set(`${pkg.rfpId}/${file ?? ''}`);
     this.api
-      .downloadRfpPackage(this.session().id, pkg.rfpId, file)
+      .downloadRfpPackage(this.session().id, pkg.rfpId, file, pkg.draft)
       .subscribe({
         next: (blob) => {
           this.rfpDownloading.set(null);
@@ -769,16 +802,20 @@ export class SessionChat implements OnDestroy {
           link.href = url;
           link.download = file
             ? (file.split('/').pop() ?? file)
-            : `${pkg.rfpId}.zip`;
+            : `${pkg.rfpId}${pkg.draft ? '-draft' : ''}.zip`;
           document.body.appendChild(link);
           link.click();
           link.remove();
           setTimeout(() => URL.revokeObjectURL(url), 0);
-          this.toast.success('RFP package downloaded');
+          this.toast.success(
+            pkg.draft ? 'RFP draft downloaded' : 'RFP package downloaded',
+          );
         },
         error: (err) => {
           this.rfpDownloading.set(null);
-          this.toast.error(err?.error?.message ?? 'RFP package download failed');
+          this.toast.error(
+            err?.error?.message ?? 'RFP package download failed',
+          );
         },
       });
   }

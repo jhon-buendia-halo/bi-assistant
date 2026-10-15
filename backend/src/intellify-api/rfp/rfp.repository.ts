@@ -475,9 +475,19 @@ export class RfpRepository {
   }
 
   /** Deletes the drafts `createdBy` created; returns how many. */
-  async deleteDraftsBy(client: PoolClient, createdBy: string): Promise<number> {
+  /**
+   * Deletes the records `createdBy` made: only the drafts, unless
+   * `anyStatus` (an eval run's records, rfp R14).
+   */
+  async deleteCreatedBy(
+    client: PoolClient,
+    createdBy: string,
+    anyStatus = false,
+  ): Promise<number> {
     const result = await client.query(
-      `DELETE FROM rfp.rfps WHERE created_by = $1 AND status = 'draft'`,
+      anyStatus
+        ? `DELETE FROM rfp.rfps WHERE created_by = $1`
+        : `DELETE FROM rfp.rfps WHERE created_by = $1 AND status = 'draft'`,
       [createdBy],
     );
     return result.rowCount ?? 0;
