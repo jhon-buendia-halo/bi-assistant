@@ -190,7 +190,7 @@
           @if (librarySkillsError(); as libraryErr) {
             <p class="text-[13px] text-on-danger-soft">{{ libraryErr }}</p>
           } @else if (librarySkills(); as library) {
-            @if (builtInSkills(); as builtIn) {
+            @if (everyAgentSkills(); as builtIn) {
               <app-agent-skills-inline
                 [agentKey]="agent.key"
                 [instructions]="agentInstructions()"

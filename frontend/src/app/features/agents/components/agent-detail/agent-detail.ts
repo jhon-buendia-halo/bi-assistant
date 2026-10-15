@@ -65,14 +65,12 @@ import {
   AgentTabId,
   defaultAgentTab,
   hasChatTab,
+  includedInEveryAgent,
   skillsCount,
 } from '../../services/agent-page.util';
 import { agentKind } from '../../services/agent-hub.util';
 import { officialGraphInput } from '../../services/official-links';
-import {
-  knownLinks,
-  linkableBuiltInSkills,
-} from '../../services/prompt-links';
+import { knownLinks, linkableBuiltInSkills } from '../../services/prompt-links';
 import {
   BuiltInSkillSummary,
   SkillSummary,
@@ -203,7 +201,7 @@ export class AgentDetail implements OnDestroy {
   ): string {
     if (kind === 'user') {
       const library = this.librarySkills();
-      const builtIn = this.builtInSkills();
+      const builtIn = this.everyAgentSkills();
       return library && builtIn
         ? ` (${skillsCount(this.agentInstructions(), library, builtIn.length)})`
         : '';
@@ -303,8 +301,13 @@ export class AgentDetail implements OnDestroy {
     return !!(agent?.live ?? agent?.draft)?.model;
   });
 
-  /** The built-in skills, for a user agent's Skills tab. */
+  /** The built-in skills, for the System Prompt links and a user agent's Skills tab. */
   readonly builtInSkills = signal<BuiltInSkillSummary[] | null>(null);
+  /** The ones every agent gets (R75), which a user agent's Skills tab lists and counts. */
+  readonly everyAgentSkills = computed(() => {
+    const builtIn = this.builtInSkills();
+    return builtIn ? includedInEveryAgent(builtIn) : null;
+  });
 
   private loadBuiltInSkills(key: string): void {
     this.builtInSkills.set(null);
@@ -458,7 +461,8 @@ export class AgentDetail implements OnDestroy {
   readonly selectedSetId = signal<string | null>(null);
 
   readonly selectedSet = computed(
-    () => this.evalSets().find((set) => set.id === this.selectedSetId()) ?? null,
+    () =>
+      this.evalSets().find((set) => set.id === this.selectedSetId()) ?? null,
   );
 
   /** Questions of the selected set — what the list renders and the run submits. */
@@ -546,7 +550,9 @@ export class AgentDetail implements OnDestroy {
       },
       error: (err) => {
         this.downloadingRunId.set(null);
-        this.toast.error(err?.error?.message ?? 'Could not download the report');
+        this.toast.error(
+          err?.error?.message ?? 'Could not download the report',
+        );
       },
     });
   }

@@ -5,6 +5,7 @@ import {
   builtInRowNotice,
   loadingChipLabel,
 } from '../../services/builtin-skill-editor.util';
+import { includedInEveryAgent } from '../../services/agent-page.util';
 import { usedByLabel } from '../../services/skill-editor.util';
 import {
   BuiltInSkillSummary,
@@ -45,7 +46,7 @@ export class SkillsLibrary implements OnInit {
     forkJoin([this.api.list(), this.api.listBuiltIn()]).subscribe({
       next: ([mine, builtIn]) => {
         this.skills.set(mine.skills);
-        this.builtIn.set(builtIn.skills);
+        this.builtIn.set(includedInEveryAgent(builtIn.skills));
         this.loading.set(false);
       },
       error: (err) => {

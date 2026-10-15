@@ -5,6 +5,7 @@ import {
   defaultAgentTab,
   draftLinks,
   promptSaveInput,
+  includedInEveryAgent,
   skillLinked,
   skillsCount,
 } from './agent-page.util';
@@ -85,5 +86,19 @@ describe('agent page util', () => {
     const library = [{ name: 'planner' }, { name: 'budget' }];
     expect(skillsCount(text, library, 2)).toBe(3);
     expect(skillsCount('', library, 2)).toBe(2);
+  });
+
+  it("lists only the built-in skills every agent gets, not an Official agent's own (R75)", () => {
+    const builtIn = [
+      { name: 'curated-knowledge', agents: ['assistant'] },
+      { name: 'deep-analysis', agents: ['assistant'] },
+      { name: 'interactive-visuals', agents: ['visualization'] },
+      { name: 'rfp-carriers', agents: ['rfp'] },
+    ];
+    expect(includedInEveryAgent(builtIn).map((skill) => skill.name)).toEqual([
+      'curated-knowledge',
+      'deep-analysis',
+      'interactive-visuals',
+    ]);
   });
 });

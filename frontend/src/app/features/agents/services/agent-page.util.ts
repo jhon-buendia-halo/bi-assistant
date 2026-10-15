@@ -1,8 +1,4 @@
-import {
-  AgentConfig,
-  AgentKind,
-  SaveAgentInput,
-} from './agents-api.service';
+import { AgentConfig, AgentKind, SaveAgentInput } from './agents-api.service';
 import {
   AgentForm,
   agentFormFromConfig,
@@ -102,6 +98,22 @@ export function promptSaveInput(
 export function skillLinked(instructions: string, name: string): boolean {
   return promptSegments(instructions).some(
     (segment) => segment.kind === 'skill' && segment.name === name,
+  );
+}
+
+/**
+ * The agents every user agent builds on: their built-in skills are the ones
+ * "included in every agent" (agents-evals R75). An Official agent's own
+ * skills, such as the RFP Builder's stages, are not.
+ */
+const EVERY_AGENT_SKILL_OWNERS = new Set(['assistant', 'visualization']);
+
+/** The built-in skills every agent gets (R75), out of `GET /skills/built-in`. */
+export function includedInEveryAgent<T extends { agents: string[] }>(
+  skills: readonly T[],
+): T[] {
+  return skills.filter((skill) =>
+    skill.agents.some((agent) => EVERY_AGENT_SKILL_OWNERS.has(agent)),
   );
 }
 
