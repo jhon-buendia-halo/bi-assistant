@@ -47,6 +47,7 @@ import { toolSection, withToolSection } from '../tool-section';
 import { rfpTools } from '../tools/rfp.tools';
 import { rfpAgent, rfpInstructions } from './rfp.agent';
 import { RFP_PROMPT } from './system-prompts';
+import { parseWorkflow } from '../workflow-section';
 
 /**
  * agents.md Appendix C, verbatim, and the served prompt: Appendix C, its
@@ -82,6 +83,9 @@ const TOOL_NAMES = [
   'set_rfp_requirements',
   'set_rfp_timeline',
   'export_rfp_package',
+  'export_rfp_draft',
+  'show_in_panel',
+  'update_workflow',
   'ask_clarification',
 ];
 
@@ -110,7 +114,7 @@ describe('the RFP Builder (agents.md 2.8)', () => {
     );
   });
 
-  it('has the 19 RFP tools and ask_clarification, in order, and nothing else', async () => {
+  it('has the 20 RFP tools, show_in_panel, update_workflow and ask_clarification, in order, and nothing else', async () => {
     expect(Object.keys(await rfpAgent.listTools())).toEqual(TOOL_NAMES);
     expect(Object.keys(rfpTools)).not.toContain('run_readonly_sql');
     // No workspace, so no workspace tools.
@@ -204,13 +208,18 @@ describe("the RFP Builder's prompt (agents.md 2.8, Appendix C)", () => {
     expect([...links.tools].sort()).toEqual(
       [
         'ask_clarification',
+        'create_rfp',
+        'export_rfp_draft',
         'export_rfp_package',
+        'get_client_financials',
         'get_rfp',
         'set_rfp_carriers',
         'set_rfp_lines',
         'set_rfp_requirements',
         'set_rfp_timeline',
+        'show_in_panel',
         'update_rfp',
+        'update_workflow',
       ].sort(),
     );
     // Every link names one of its own tools.
@@ -223,13 +232,32 @@ describe("the RFP Builder's prompt (agents.md 2.8, Appendix C)", () => {
     expect(served).toContain('the "get_rfp" tool');
     for (const [n, skill] of STAGE_SKILLS.entries()) {
       expect(served).toMatch(
-        new RegExp(`\\n  ${n + 1} [^\\n]+ — the "${skill}" skill\\n`),
+        new RegExp(
+          `\\n${n + 1}\\. [^\\n]+ — the "${skill}" skill: [^\\n]+\\.\\n`,
+        ),
       );
     }
     expect(served).toContain(
       "Load a stage's skill before you start that stage",
     );
+    // Identity, Workflow, Tools, Working rules.
+    const order = ['## Workflow', '## Tools', '## Working rules'].map((h) =>
+      served.indexOf(`\n${h}\n`),
+    );
+    expect(order[0]).toBeGreaterThan(0);
+    expect(order).toEqual([...order].sort((a, b) => a - b));
     expect(served).toContain('Use the "ask_clarification" tool only when');
+  });
+
+  it('gives every workflow stage a default action for the user (BA-231)', () => {
+    const phases = parseWorkflow(RFP_PROMPT);
+    expect(phases.map((p) => p.skill)).toEqual(STAGE_SKILLS);
+    for (const phase of phases) {
+      expect(phase.action).toMatch(/^[A-Z].+\.$/);
+      expect(phase.action!.length).toBeLessThanOrEqual(120);
+    }
+    expect(phases[2].action).toBe('Decide which lines go out to bid.');
+    expect(RFP_PROMPT).toContain('and todo with the concrete action for this');
   });
 
   it("resolves an override's links before serving it", () => {

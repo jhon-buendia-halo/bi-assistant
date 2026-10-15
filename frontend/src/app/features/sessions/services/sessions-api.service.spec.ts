@@ -4,8 +4,6 @@ import {
   provideHttpClientTesting,
 } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { LOCAL_SESSION_STORAGE_KEY } from '../../../core/auth/auth.models';
-import { AuthService } from '../../../core/auth/auth.service';
 import { API_BASE_URL } from '../../../core/config/api.config';
 import { SessionsApiService, parseToolEvent } from './sessions-api.service';
 
@@ -23,6 +21,18 @@ describe('SessionsApiService feedback', () => {
 
   afterEach(() => http.verify());
 
+  it('creates from an agent, sending the typed name only when given', () => {
+    service.createFromAgent('rfp', 'Acme').subscribe();
+    expect(http.expectOne(`${API_BASE_URL}/sessions`).request.body).toEqual({
+      agentId: 'rfp',
+      name: 'Acme',
+    });
+    service.createFromAgent('rfp').subscribe();
+    expect(http.expectOne(`${API_BASE_URL}/sessions`).request.body).toEqual({
+      agentId: 'rfp',
+    });
+  });
+
   it('downloads an RFP package zip or one file as a blob', () => {
     service.downloadRfpPackage('s 1', 'rfp-1').subscribe();
     const zip = http.expectOne(
@@ -34,10 +44,31 @@ describe('SessionsApiService feedback', () => {
     service.downloadRfpPackage('s 1', 'rfp-1', 'exhibits/a.csv').subscribe();
     const one = http.expectOne(
       (r) =>
-        r.url === `${API_BASE_URL}/sessions/s%201/rfp-packages/rfp-1/download` &&
+        r.url ===
+          `${API_BASE_URL}/sessions/s%201/rfp-packages/rfp-1/download` &&
         r.params.get('file') === 'exhibits/a.csv',
     );
     one.flush(new Blob(['c']));
+  });
+
+  it('asks for the draft package with draft=true (BA-229)', () => {
+    service.downloadRfpPackage('s 1', 'rfp-1', undefined, true).subscribe();
+    http
+      .expectOne(
+        (r) =>
+          r.url ===
+            `${API_BASE_URL}/sessions/s%201/rfp-packages/rfp-1/download` &&
+          r.params.get('draft') === 'true' &&
+          !r.params.has('file'),
+      )
+      .flush(new Blob(['z']));
+    service.downloadRfpPackage('s 1', 'rfp-1', 'rfp.md', true).subscribe();
+    http
+      .expectOne(
+        (r) =>
+          r.params.get('draft') === 'true' && r.params.get('file') === 'rfp.md',
+      )
+      .flush(new Blob(['m']));
   });
 
   it('posts the rating for a message', () => {
@@ -70,7 +101,9 @@ describe('SessionsApiService feedback', () => {
   });
 
   it('starts a deep-analysis job and polls it', () => {
-    service.startDeepAnalysis('session 1', 'Why are denials rising?').subscribe();
+    service
+      .startDeepAnalysis('session 1', 'Why are denials rising?')
+      .subscribe();
     const started = http.expectOne(
       `${API_BASE_URL}/sessions/session%201/deep-analysis`,
     );
@@ -78,7 +111,11 @@ describe('SessionsApiService feedback', () => {
     expect(started.request.body).toEqual({
       question: 'Why are denials rising?',
     });
-    started.flush({ ok: true, message: 'Deep analysis started', jobId: 'job 1' });
+    started.flush({
+      ok: true,
+      message: 'Deep analysis started',
+      jobId: 'job 1',
+    });
 
     service.deepAnalysisStatus('session 1', 'job 1').subscribe();
     const polled = http.expectOne(
@@ -185,6 +222,34 @@ describe('SessionsApiService streaming', () => {
     });
   });
 
+  it('reads the input a tool call carries, such as the skill it loads', () => {
+    expect(
+      parseToolEvent('{"name":"skill","input":"rfp-client-renewal"}'),
+    ).toEqual({ name: 'skill', input: 'rfp-client-renewal' });
+    expect(parseToolEvent('{"name":"get_rfp","input":"  "}')).toEqual({
+      name: 'get_rfp',
+    });
+  });
+
+  it('hands a workflow frame to onWorkflow', async () => {
+    const workflow = {
+      phases: [{ number: 1, title: 'Scope' }],
+      current: 1,
+      done: [],
+      source: 'agent',
+      skipped: [],
+      waiting: true,
+    };
+    spyOn(globalThis, 'fetch').and.resolveTo(
+      sseResponse({ type: 'workflow', content: JSON.stringify(workflow) }),
+    );
+    const onWorkflow = jasmine.createSpy('onWorkflow');
+
+    await service.streamMessage('session-1', 'question', { onWorkflow });
+
+    expect(onWorkflow).toHaveBeenCalledOnceWith(workflow);
+  });
+
   it('asks for careful mode only when the turn requested it', async () => {
     // A fresh Response per call: a body stream can only be read once.
     const fetchSpy = spyOn(globalThis, 'fetch').and.callFake(() =>
@@ -210,52 +275,34 @@ describe('SessionsApiService streaming', () => {
   });
 });
 
-describe('SessionsApiService streaming auth', () => {
+describe('SessionsApiService streaming', () => {
   let service: SessionsApiService;
 
   beforeEach(() => {
-    localStorage.removeItem(LOCAL_SESSION_STORAGE_KEY);
     TestBed.configureTestingModule({ providers: [provideHttpClient()] });
     service = TestBed.inject(SessionsApiService);
   });
 
-  afterEach(() => localStorage.removeItem(LOCAL_SESSION_STORAGE_KEY));
-
-  it('sends the local token as a bearer header (admin R71, ui.md 1.6)', async () => {
+  it('sends no auth header (BA-232)', async () => {
     const fetchSpy = spyOn(globalThis, 'fetch').and.callFake(() =>
       Promise.resolve(sseResponse({ type: 'done' })),
     );
 
     await service.streamMessage('session-1', 'question', {});
-    let headers = (fetchSpy.calls.mostRecent().args[1] as RequestInit)
+    const headers = (fetchSpy.calls.mostRecent().args[1] as RequestInit)
       .headers as Record<string, string>;
-    expect(headers['Authorization']).toBeUndefined();
-
-    localStorage.setItem(LOCAL_SESSION_STORAGE_KEY, 'tok-123');
-    await service.streamMessage('session-1', 'question', {});
-    headers = (fetchSpy.calls.mostRecent().args[1] as RequestInit)
-      .headers as Record<string, string>;
-    expect(headers).toEqual({
-      'Content-Type': 'application/json',
-      Authorization: 'Bearer tok-123',
-    });
+    expect(headers).toEqual({ 'Content-Type': 'application/json' });
   });
 
-  it('shows the sign-in page when the stream answers 401 (admin R11)', async () => {
-    const auth = TestBed.inject(AuthService);
-    auth.handleUnauthorized('local');
-    auth.status.set('signed-in');
-    localStorage.setItem(LOCAL_SESSION_STORAGE_KEY, 'swept-token');
+  it('reports a failed stream with its plain status', async () => {
     spyOn(globalThis, 'fetch').and.resolveTo(
-      new Response('{}', { status: 401 }),
+      new Response('{}', { status: 403 }),
     );
     const onError = jasmine.createSpy('onError');
 
     await service.streamMessage('session-1', 'question', { onError });
 
-    expect(onError).toHaveBeenCalledOnceWith('Sign in required');
-    expect(auth.status()).toBe('signed-out');
-    expect(localStorage.getItem(LOCAL_SESSION_STORAGE_KEY)).toBeNull();
+    expect(onError).toHaveBeenCalledOnceWith('Stream failed (403)');
   });
 });
 

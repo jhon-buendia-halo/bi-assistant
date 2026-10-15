@@ -8,7 +8,14 @@ Goal: write the remaining narrative sections, review the whole RFP with the
 consultant, and export the package.
 
 Tools for this stage: [[tool:get_rfp]], [[tool:update_rfp]],
-[[tool:export_rfp_package]].
+[[tool:export_rfp_package]], [[tool:show_in_panel]], [[tool:update_workflow]].
+
+## Start
+
+Before anything else in this stage, call `update_workflow` with
+`current` 7, `done` "1,2,3,4,5,6", a `note` saying what you need from
+the consultant in this stage, a `todo` "7: <the action for this
+client>" (one line, at most 120 characters) and `waiting` true.
 
 ## Read
 
@@ -60,6 +67,7 @@ Only after the consultant confirms the review:
 
 1. `update_rfp(rfpId, status='ready', stage=7)`.
 2. `export_rfp_package(rfpId)`.
+3. `show_in_panel(kind='file', path='rfp/<rfpId>/rfp.md')`.
 
 Then say what the package holds: the RFP document in Markdown (`rfp.md`)
 and PDF (`rfp.pdf`), four exhibits as CSV files (A census, B plan designs,

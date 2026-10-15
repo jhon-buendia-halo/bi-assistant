@@ -32,7 +32,7 @@ describe('prompt links', () => {
     expect(promptSegments('')).toEqual([]);
   });
 
-  it('lists the seven library tools without read_file', () => {
+  it('lists the eight library tools without read_file', () => {
     expect(LINKABLE_TOOLS.map((t) => t.name).sort()).toEqual([
       'ask_clarification',
       'create_visual',
@@ -40,6 +40,7 @@ describe('prompt links', () => {
       'list_entities',
       'run_readonly_sql',
       'sample_rows',
+      'show_in_panel',
       'update_visual',
     ]);
   });

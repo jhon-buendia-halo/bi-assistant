@@ -1,5 +1,5 @@
-import { RequirePermission } from '../../common/decorators/auth-requirement.decorators';
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -13,13 +13,13 @@ import {
 import { SessionsService } from './sessions.service';
 import type { SessionDoc } from './entities/session.entity';
 import type {
+  FilePanelItem,
   InteractiveVisualization,
   MessageFeedback,
 } from './entities/session.entity';
 import type { Response } from 'express';
 
 @Controller('sessions')
-@RequirePermission('use-agents')
 export class SessionsController {
   constructor(private readonly sessionsService: SessionsService) {}
 
@@ -199,12 +199,51 @@ export class SessionsController {
     @Param('rfpId') rfpId: string,
     @Res() res: Response,
     @Query('file') file?: string,
+    @Query('draft') draft?: string,
   ): Promise<void> {
     const { filename, contentType, body } =
       await this.sessionsService.downloadRfpPackage(
         id,
         rfpId,
         typeof file === 'string' ? file : undefined,
+        draft === 'true',
+      );
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Length', body.length);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${filename.replace(/["\\\r\n]/g, '_')}"`,
+    );
+    res.send(body);
+  }
+
+  /** A file item's text from the session workspace (api.md #106). */
+  @Get(':id/panel-items/:itemId/file')
+  panelItemFile(
+    @Param('id') id: string,
+    @Param('itemId') itemId: string,
+  ): Promise<{ item: FilePanelItem; contentType: string; text: string }> {
+    return this.sessionsService.panelItemFile(id, itemId);
+  }
+
+  /** A panel item as an attachment: file, document (.md) or table (.csv) (api.md #107). */
+  @Get(':id/panel-items/:itemId/download')
+  async downloadPanelItem(
+    @Param('id') id: string,
+    @Param('itemId') itemId: string,
+    @Res() res: Response,
+    @Query('format') format?: string,
+  ): Promise<void> {
+    if (format !== undefined && !['pdf', 'md', 'csv'].includes(format)) {
+      throw new BadRequestException(
+        `Unknown download format "${format}": use pdf, md or csv`,
+      );
+    }
+    const { filename, contentType, body } =
+      await this.sessionsService.downloadPanelItem(
+        id,
+        itemId,
+        format as 'pdf' | 'md' | 'csv' | undefined,
       );
     res.setHeader('Content-Type', contentType);
     res.setHeader('Content-Length', body.length);
@@ -255,7 +294,7 @@ export class SessionsController {
           )
         : body?.preview === true
           ? await this.sessionsService.createPreview(agentId)
-          : await this.sessionsService.createFromAgent(agentId);
+          : await this.sessionsService.createFromAgent(agentId, body?.name);
       return {
         ok: true,
         message: session.preview

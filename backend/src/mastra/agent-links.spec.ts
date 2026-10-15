@@ -1,4 +1,5 @@
 import {
+  ALWAYS_ON_TOOLS,
   effectiveOptionalTools,
   isLibraryTool,
   LIBRARY_TOOLS,
@@ -36,7 +37,13 @@ describe('agent links (ADR-0024, agents.md 4.3)', () => {
   });
 
   it('knows the library and the optional group of each tool', () => {
-    expect(LIBRARY_TOOLS).toHaveLength(7);
+    expect(LIBRARY_TOOLS).toHaveLength(9);
+    expect(isLibraryTool('show_in_panel')).toBe(true);
+    expect(ALWAYS_ON_TOOLS).toContain('show_in_panel');
+    expect(isLibraryTool('update_workflow')).toBe(true);
+    expect(ALWAYS_ON_TOOLS).toContain('update_workflow');
+    expect(optionalToolOf('update_workflow')).toBeUndefined();
+    expect(optionalToolOf('show_in_panel')).toBeUndefined();
     expect(isLibraryTool('update_visual')).toBe(true);
     expect(isLibraryTool('read_file')).toBe(false);
     expect(optionalToolOf('create_visual')).toBe('visuals');

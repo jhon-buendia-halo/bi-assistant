@@ -90,6 +90,7 @@ const STAGE_SKILLS: [string, string[]][] = [
       "status='ready'",
       'stage=7',
       'export_rfp_package',
+      'show_in_panel',
     ],
   ],
 ];

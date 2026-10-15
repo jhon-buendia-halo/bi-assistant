@@ -9,7 +9,14 @@ questionnaire below, tailor it to the lines and funding in scope, then add
 the consultant's client-specific asks.
 
 Tools for this stage: [[tool:get_rfp]], [[tool:get_client_commercials]],
-[[tool:set_rfp_requirements]], [[tool:update_rfp]].
+[[tool:set_rfp_requirements]], [[tool:update_rfp]], [[tool:update_workflow]].
+
+## Start
+
+Before anything else in this stage, call `update_workflow` with
+`current` 5, `done` "1,2,3,4", a `note` saying what you need from
+the consultant in this stage, a `todo` "5: <the action for this
+client>" (one line, at most 120 characters) and `waiting` true.
 
 ## Read
 
@@ -59,7 +66,8 @@ reword, and for any client-specific asks.
 
 ## Save
 
-Only after the consultant confirms:
+Only after the consultant confirms (a change the consultant states outright,
+such as "swap carrier A for B", is already confirmed: save it at once):
 
 1. `set_rfp_requirements(rfpId, requirements)` with one row per question:
 

@@ -29,8 +29,6 @@ import {
 
 /** App skills only other agents or the harness use. */
 const OTHER_SKILLS = ['interactive-visuals', 'deep-analysis'];
-/** The framework's skill tools, never offered (ADR-0020). */
-const FRAMEWORK_SKILL_TOOLS = ['skill', 'skill_search', 'skill_read'];
 
 const BASE_PROMPT_START = 'You are the Questions to Insights assistant';
 /** Opening of the curated-knowledge block (agents.md 4.1, Block 3). */
@@ -101,30 +99,28 @@ test('the assistant is offered only its own skills', async ({ page }) => {
   expect(prompt.startsWith(BASE_PROMPT_START)).toBe(true);
   const tools = prompt.indexOf('\n## Tools\n');
   const rules = prompt.indexOf('\n## Working rules\n');
-  const skills = prompt.indexOf('\n## Skills\n');
   expect(tools, 'a ## Tools section').toBeGreaterThan(0);
   expect(rules, '## Working rules after ## Tools').toBeGreaterThan(tools);
-  expect(skills, '## Skills after ## Working rules').toBeGreaterThan(rules);
+  // The skills reach the model through the framework's catalog, not the prompt.
+  expect(prompt).not.toContain('\n## Skills\n');
   expect(prompt).toContain(
     '\n- run_readonly_sql(sql, datasourceId, limit, rationale): ',
   );
   expect(prompt).toContain('\n- ask_clarification(question, options): ');
-  expect(prompt).toContain('\n- read_file(path): ');
+  expect(prompt).not.toContain('read_file');
   // The built-in curated-knowledge skill is the whole catalog (ADR-0020).
   expect(catalogSkills(request)).toEqual(['curated-knowledge']);
   const location = catalogLocation(request, 'curated-knowledge') ?? '';
   expect(location.endsWith(path.join('curated-knowledge', 'SKILL.md'))).toBe(
     true,
   );
-  expect(fs.existsSync(location), location).toBe(true);
   for (const name of OTHER_SKILLS) {
     expect(systemTexts(request).join('\n')).not.toContain(`name: ${name}`);
     expect(catalogSkills(request)).not.toContain(name);
   }
-  expect(request.tools).toContain('read_file');
-  for (const tool of FRAMEWORK_SKILL_TOOLS) {
-    expect(request.tools).not.toContain(tool);
-  }
+  expect(request.tools).toContain('skill');
+  expect(request.tools).not.toContain('read_file');
+  expect(request.tools).not.toContain('run_skill_script');
 });
 
 test('a turn without curated knowledge carries no knowledge rules', async ({
@@ -258,34 +254,27 @@ test('a skills folder left in the data dir by an older version is ignored', asyn
   }
 });
 
-test("the assistant reads a skill's files with read_file, and only those", async ({
-  page,
-  appDataDir,
-}) => {
-  const outside = path.join(appDataDir, 'app.sqlite');
+test('the assistant loads a skill with the skill tool', async ({ page }) => {
   let turn = 0;
   stub.reply = (request) => {
     if (!isTurnFor(request, QUESTION)) return { text: STUB_ANSWER };
     turn += 1;
-    // The model reads the SKILL.md the catalog lists for curated-knowledge.
-    const location = catalogLocation(request, 'curated-knowledge');
-    if (turn === 1 && location)
-      return { toolCall: { name: 'read_file', arguments: { path: location } } };
-    if (turn === 2)
-      return { toolCall: { name: 'read_file', arguments: { path: outside } } };
+    if (turn === 1)
+      return {
+        toolCall: { name: 'skill', arguments: { name: 'curated-knowledge' } },
+      };
     return { text: STUB_ANSWER };
   };
+  await createKnowledgeSnippet(page, {
+    kind: 'instruction',
+    title: 'Coverage',
+    body: 'Only the 2018 and 2022 tournaments are in this data.',
+    datasetId: WORLD_CUP_DATASET,
+  });
   await createWorldCupSession(page);
-  const request = await ask(page, QUESTION);
+  await ask(page, QUESTION);
 
-  const skillMd = catalogLocation(request, 'curated-knowledge') ?? '';
-  expect(skillMd.endsWith(path.join('curated-knowledge', 'SKILL.md'))).toBe(
-    true,
-  );
   const results = toolResults(turnRequests(stub, QUESTION).at(-1)!);
-  expect(results).toHaveLength(2);
-  expect(results[0]).toContain('name: curated-knowledge');
+  expect(results).toHaveLength(1);
   expect(results[0]).toContain(KNOWLEDGE_RULE);
-  expect(results[1]).toContain('Not a file of an installed skill');
-  expect(results[1]).not.toContain('SQLite format');
 });

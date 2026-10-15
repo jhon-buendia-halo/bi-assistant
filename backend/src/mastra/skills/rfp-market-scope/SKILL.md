@@ -10,7 +10,14 @@ or plan type.
 
 Tools for this stage: [[tool:get_marketing_history]],
 [[tool:list_reference_data]], [[tool:get_client_renewals]],
-[[tool:get_client_program]], [[tool:set_rfp_lines]], [[tool:update_rfp]].
+[[tool:get_client_program]], [[tool:set_rfp_lines]], [[tool:update_rfp]], [[tool:update_workflow]].
+
+## Start
+
+Before anything else in this stage, call `update_workflow` with
+`current` 3, `done` "1,2", a `note` saying what you need from
+the consultant in this stage, a `todo` "3: <the action for this
+client>" (one line, at most 120 characters) and `waiting` true.
 
 ## Read
 
@@ -45,7 +52,8 @@ reason. Ask the consultant to confirm or change it.
 
 ## Save
 
-Only after the consultant confirms:
+Only after the consultant confirms (a change the consultant states outright,
+such as "swap carrier A for B", is already confirmed: save it at once):
 
 1. `set_rfp_lines(rfpId, lines)` with one row per line in scope:
 

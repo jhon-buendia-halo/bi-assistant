@@ -4,6 +4,8 @@ import { modelOverrideFrom, resolveAgentModel } from '../model-resolver';
 import { datasetTools } from '../tools/dataset.tools';
 import { askClarificationTool } from '../tools/clarification.tool';
 import { visualTools } from '../tools/visual.tools';
+import { showInPanelTool } from '../tools/panel.tool';
+import { updateWorkflowTool } from '../tools/workflow.tool';
 import { SESSION_WORKSPACE_CONTEXT_KEY } from '../session-workspaces';
 import { assistantSkills } from '../assistant-skills';
 import {
@@ -27,6 +29,8 @@ import {
 const ALL_TOOLS = {
   ...datasetTools,
   ...visualTools,
+  show_in_panel: showInPanelTool,
+  update_workflow: updateWorkflowTool,
   ask_clarification: askClarificationTool,
 };
 

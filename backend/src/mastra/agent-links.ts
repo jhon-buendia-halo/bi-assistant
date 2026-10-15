@@ -21,7 +21,9 @@ export const LIBRARY_TOOLS = [
   'list_entities',
   'run_readonly_sql',
   'sample_rows',
+  'show_in_panel',
   'update_visual',
+  'update_workflow',
 ] as const;
 
 /** Given to every agent; linking them changes nothing. */
@@ -29,6 +31,8 @@ export const ALWAYS_ON_TOOLS: readonly string[] = [
   'describe_entity',
   'list_entities',
   'run_readonly_sql',
+  'show_in_panel',
+  'update_workflow',
 ];
 
 export interface ParsedLinks {

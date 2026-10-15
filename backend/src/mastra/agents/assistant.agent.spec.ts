@@ -73,6 +73,8 @@ const FULL_TOOLS = [
   'run_readonly_sql',
   'create_visual',
   'update_visual',
+  'show_in_panel',
+  'update_workflow',
   'ask_clarification',
 ];
 
@@ -108,6 +110,8 @@ describe('assistant tool selection (ADR-0022, agents.md 2.1)', () => {
       'describe_entity',
       'sample_rows',
       'run_readonly_sql',
+      'show_in_panel',
+      'update_workflow',
     ]);
     expect(await toolNames(['visuals'])).toEqual([
       'list_entities',
@@ -115,11 +119,15 @@ describe('assistant tool selection (ADR-0022, agents.md 2.1)', () => {
       'run_readonly_sql',
       'create_visual',
       'update_visual',
+      'show_in_panel',
+      'update_workflow',
     ]);
     expect(await toolNames([])).toEqual([
       'list_entities',
       'describe_entity',
       'run_readonly_sql',
+      'show_in_panel',
+      'update_workflow',
     ]);
   });
 
@@ -311,7 +319,7 @@ describe("the assistant's prompt override (ADR-0026, agents.md 2.1)", () => {
       true,
     );
     expect(text).toMatch(
-      /\n- sample_rows\([^\n]*\n- run_readonly_sql\([^\n]*\n\n## Working rules\nBe brief\.$/,
+      /\n- sample_rows\([^\n]*\n- run_readonly_sql\([^\n]*\n- show_in_panel\([^\n]*\n- update_workflow\([^\n]*\n\n## Working rules\nBe brief\.$/,
     );
     expect(text).not.toContain('create_visual');
   });

@@ -62,6 +62,7 @@ jest.mock('./repositories/sessions.repository', () => ({
 jest.mock('./visualization.service', () => ({
   VisualizationService: class {},
 }));
+jest.mock('../../common/markdown-pdf', () => ({ renderPdf: jest.fn() }));
 jest.mock('./visualization-document', () => ({
   sourceEntities: jest.fn().mockReturnValue([]),
 }));
@@ -70,9 +71,10 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { setDatasetToolServices } from '../../mastra/tool-services';
 import type { DatasetToolServices } from '../../mastra/tool-services';
 import { isoToday } from '../../mastra/rfp-context';
-import { CurrentUserService, LOCAL_USER } from '../auth/current-user.service';
+import { SUPER_ADMIN } from '../../common/super-admin';
 import { SessionsService, type StreamEvent } from './sessions.service';
 import { toolDataRecord } from './turn-data';
+import { setAgentPromptOverrides } from '../../mastra/agent-prompt-overrides';
 import type { SessionDoc } from './entities/session.entity';
 
 const RFP_ID = '7b0c2f0e-1d2a-4c9b-9a51-0f6f1c2d3e4f';
@@ -104,10 +106,11 @@ interface BuildOptions {
   rfp?: Record<string, unknown> | Error;
   /** Set on `turn-rfp` by a tool during the turn (as create_rfp does). */
   openedRfpId?: string;
+  /** Set on `turn-rfp` as `update_rfp` does: the RFP's last completed stage. */
+  openedStage?: number;
 }
 
 function build(options: BuildOptions = {}) {
-  const users = new CurrentUserService();
   const session: SessionDoc = {
     id: 's-1',
     name: 'RFP Builder',
@@ -146,6 +149,10 @@ function build(options: BuildOptions = {}) {
         if (options.openedRfpId) {
           (opts.requestContext.get('turn-rfp') as { rfpId?: string }).rfpId =
             options.openedRfpId;
+        }
+        if (options.openedStage !== undefined) {
+          (opts.requestContext.get('turn-rfp') as { stage?: number }).stage =
+            options.openedStage;
         }
         return Promise.resolve({
           fullStream: streamOf(
@@ -231,8 +238,6 @@ function build(options: BuildOptions = {}) {
     metrics as never,
     knowledge as never,
     userAgents as never,
-    users,
-    undefined,
     rfpPackages as never,
   );
   return {
@@ -246,27 +251,24 @@ function build(options: BuildOptions = {}) {
     metrics,
     verifiedQueries,
     rfpPackages,
-    users,
     streamOptions: () => streamOptions,
   };
 }
 
-/** Run a streamed turn as the local user and collect its events. */
+/** Run a streamed turn and collect its events. */
 async function turn(
   ctx: ReturnType<typeof build>,
   content: string,
   careful = false,
 ): Promise<StreamEvent[]> {
   const events: StreamEvent[] = [];
-  await ctx.users.runAs(LOCAL_USER, () =>
-    ctx.service.streamMessage(
-      's-1',
-      content,
-      (event) => events.push(event),
-      undefined,
-      undefined,
-      careful,
-    ),
+  await ctx.service.streamMessage(
+    's-1',
+    content,
+    (event) => events.push(event),
+    undefined,
+    undefined,
+    careful,
   );
   return events;
 }
@@ -285,6 +287,16 @@ describe('SessionsService sessions bound to a built-in agent (ADR-0028)', () => 
       });
       expect(session).not.toHaveProperty('agentId');
       expect(ctx.mastra.ensureSessionWorkspace).toHaveBeenCalled();
+    });
+
+    it('uses a typed name (trimmed, 64 chars) instead of the agent name', async () => {
+      const ctx = build();
+      const session = await ctx.service.createFromAgent('rfp', '  Acme RFP  ');
+      expect(session).toMatchObject({ name: 'Acme RFP', agentKey: 'rfp' });
+      const blank = await build().service.createFromAgent('rfp', '   ');
+      expect(blank.name).toBe('RFP Builder');
+      const long = await build().service.createFromAgent('rfp', 'x'.repeat(80));
+      expect(long.name).toHaveLength(64);
     });
 
     it('refuses with the requirement while the dataset is missing, creating nothing', async () => {
@@ -330,7 +342,7 @@ describe('SessionsService sessions bound to a built-in agent (ADR-0028)', () => 
   it('installs the RFP bridge methods on the tool services (agents.md 3.10)', async () => {
     const ctx = build();
     (setDatasetToolServices as jest.Mock).mockClear();
-    ctx.repository['listAllOwners' as never] = jest
+    ctx.repository['listAll' as never] = jest
       .fn()
       .mockResolvedValue([]) as never;
     await ctx.service.onModuleInit().catch(() => undefined);
@@ -344,6 +356,14 @@ describe('SessionsService sessions bound to a built-in agent (ADR-0028)', () => 
       's-1',
       'ds-rest',
       RFP_ID,
+      undefined,
+    );
+    await installed.exportRfpPackage('s-1', 'ds-rest', RFP_ID, { draft: true });
+    expect(ctx.rfpPackages.exportRfpPackage).toHaveBeenLastCalledWith(
+      's-1',
+      'ds-rest',
+      RFP_ID,
+      { draft: true },
     );
   });
 
@@ -370,9 +390,9 @@ describe('SessionsService sessions bound to a built-in agent (ADR-0028)', () => 
       expect(context.get('session-id')).toBe('s-1');
       expect(context.get('turn-question')).toBe('Start an RFP for Orchard');
       expect(context.get('session-workspace-id')).toBe('session-s-1');
-      expect(context.get('rfp-created-by')).toBe(LOCAL_USER.id);
+      expect(context.get('rfp-created-by')).toBe(SUPER_ADMIN.id);
       expect(context.get('turn-rfp')).toEqual({});
-      expect(context.get('turn-data-records')).toBeUndefined();
+      expect(context.get('turn-data-records')).toEqual([]);
       expect(context.get('knowledge-used')).toBeUndefined();
       // No metrics, knowledge or verified-query block for the RFP Builder.
       expect(ctx.metrics.definitionBlock).not.toHaveBeenCalled();
@@ -503,6 +523,29 @@ describe('SessionsService sessions bound to a built-in agent (ADR-0028)', () => 
       expect(events.at(-1)?.type).toBe('done');
     });
 
+    it('emits the package event and stores rfpPackage with draft: true for a draft export (BA-229)', async () => {
+      const drafted = {
+        rfpId: RFP_ID,
+        title: 'DRAFT — Orchard Manufacturing — 2027 benefits RFP',
+        files: [{ name: 'rfp.md', bytes: 120 }],
+        exportedAt: '2026-10-14T10:00:00.000Z',
+        draft: true,
+      };
+      const ctx = build({
+        chunks: [
+          toolCall('c0', 'export_rfp_draft', { rfpId: RFP_ID }),
+          toolResult('c0', 'export_rfp_draft', drafted),
+          { type: 'text-delta', payload: { text: 'Draft ready.' } },
+        ],
+      });
+      const events = await turn(ctx, 'Show me a draft');
+      const packageEvent = events.find((event) => event.type === 'rfp-package');
+      expect(JSON.parse(packageEvent!.content!)).toEqual(drafted);
+      expect(ctx.session.messages.at(-1)).toMatchObject({
+        rfpPackage: drafted,
+      });
+    });
+
     it('skips the grounding pass and careful mode, but keeps tool-only synthesis', async () => {
       const ctx = build();
       await turn(ctx, 'Hello', true);
@@ -523,6 +566,237 @@ describe('SessionsService sessions bound to a built-in agent (ADR-0028)', () => 
       );
     });
 
+    describe('the saved stage drives the workflow tracker (ADR-0029)', () => {
+      beforeEach(() => {
+        setAgentPromptOverrides([
+          {
+            key: 'rfp',
+            prompt: '## Workflow\n1. One\n2. Two\n3. Three\n4. Four',
+            baseHash: 'x',
+          },
+        ]);
+      });
+      afterEach(() => setAgentPromptOverrides([]));
+
+      it('moves the workflow on update_rfp, before its tool-result', async () => {
+        const ctx = build({
+          openedStage: 2,
+          chunks: [
+            toolCall('c0', 'update_rfp', { rfpId: RFP_ID, stage: 2 }),
+            toolResult('c0', 'update_rfp', { id: RFP_ID, stage: 2 }),
+            { type: 'text-delta', payload: { text: 'Saved.' } },
+          ],
+        });
+        const events = await turn(ctx, 'Stage two is done');
+        const kinds = events.map((event) => event.type);
+        expect(kinds.indexOf('workflow')).toBeLessThan(
+          kinds.indexOf('tool-result'),
+        );
+        // The workflow lives in the bar: no panel item, no panel-item event.
+        expect(kinds).not.toContain('panel-item');
+        const workflow = events.filter((event) => event.type === 'workflow');
+        expect(workflow).toHaveLength(1);
+        expect(JSON.parse(workflow[0].content!)).toMatchObject({
+          phases: [
+            { number: 1, title: 'One' },
+            { number: 2, title: 'Two' },
+            { number: 3, title: 'Three' },
+            { number: 4, title: 'Four' },
+          ],
+          current: 3,
+          done: [1, 2],
+        });
+        expect(ctx.session.workflowState).toMatchObject({
+          current: 3,
+          done: [1, 2],
+        });
+        expect(ctx.session.panelItems).toBeUndefined();
+      });
+
+      it('emits the workflow event after the auto-drive, and clears waiting with the card when the step changes', async () => {
+        const ctx = build({
+          openedStage: 3,
+          chunks: [
+            toolCall('c0', 'update_rfp', { rfpId: RFP_ID, stage: 3 }),
+            toolResult('c0', 'update_rfp', { id: RFP_ID, stage: 3 }),
+            { type: 'text-delta', payload: { text: 'Saved.' } },
+          ],
+        });
+        ctx.session.workflowState = {
+          current: 3,
+          done: [1, 2],
+          skipped: [5],
+          waiting: true,
+          note: 'Pick the carriers',
+          updatedAt: '2026-10-14T10:00:00.000Z',
+        };
+        const events = await turn(ctx, 'Stage three is done');
+        const kinds = events.map((event) => event.type);
+        expect(kinds).not.toContain('panel-item');
+        expect(kinds.indexOf('workflow')).toBeLessThan(
+          kinds.indexOf('tool-result'),
+        );
+        const workflow = events.filter((event) => event.type === 'workflow');
+        expect(workflow).toHaveLength(1);
+        const view = JSON.parse(workflow[0].content!) as Record<
+          string,
+          unknown
+        >;
+        expect(view).toMatchObject({
+          source: 'prompt',
+          current: 4,
+          done: [1, 2, 3],
+          skipped: [],
+        });
+        expect(view).not.toHaveProperty('waiting');
+        expect(view).not.toHaveProperty('note');
+        expect(ctx.session.workflowState).toMatchObject({ skipped: [5] });
+        expect(ctx.session.workflowState).not.toHaveProperty('waiting');
+      });
+
+      it('keeps waiting and the card while the step stays', async () => {
+        const ctx = build({
+          openedStage: 2,
+          chunks: [
+            toolCall('c0', 'update_rfp', { rfpId: RFP_ID, stage: 2 }),
+            toolResult('c0', 'update_rfp', { id: RFP_ID, stage: 2 }),
+            { type: 'text-delta', payload: { text: 'Saved.' } },
+          ],
+        });
+        ctx.session.workflowState = {
+          current: 3,
+          done: [1, 2],
+          waiting: true,
+          note: 'Pick the carriers',
+          updatedAt: '2026-10-14T10:00:00.000Z',
+        };
+        const events = await turn(ctx, 'Stage two is done');
+        const workflow = events.find((event) => event.type === 'workflow');
+        expect(JSON.parse(workflow!.content!)).toMatchObject({
+          current: 3,
+          waiting: true,
+          note: 'Pick the carriers',
+        });
+      });
+
+      it('emits the workflow event of an update_workflow result', async () => {
+        const ctx = build({
+          chunks: [
+            toolCall('c0', 'update_workflow', { current: 2, note: 'Hello' }),
+            toolResult('c0', 'update_workflow', {
+              updated: true,
+              steps: 4,
+              current: 2,
+              done: [],
+              skipped: [],
+            }),
+            toolCall('c1', 'update_workflow', { steps: 'a | b' }),
+            toolResult('c1', 'update_workflow', {
+              error:
+                'Your ## Workflow section defines the steps; set their status instead',
+            }),
+            { type: 'text-delta', payload: { text: 'Done.' } },
+          ],
+        });
+        ctx.session.workflowState = {
+          current: 2,
+          done: [1],
+          skipped: [4],
+          waiting: true,
+          updatedAt: '2026-10-14T10:00:00.000Z',
+        };
+        const events = await turn(ctx, 'Go on');
+        expect(
+          events.filter((event) => event.type === 'workflow'),
+        ).toHaveLength(1);
+        const first = events.find((event) => event.type === 'workflow');
+        expect(JSON.parse(first!.content!)).toEqual({
+          phases: [
+            { number: 1, title: 'One' },
+            { number: 2, title: 'Two' },
+            { number: 3, title: 'Three' },
+            { number: 4, title: 'Four' },
+          ],
+          source: 'prompt',
+          current: 2,
+          done: [1],
+          skipped: [4],
+          waiting: true,
+        });
+        const results = events
+          .filter((event) => event.type === 'tool-result')
+          .map((event) => JSON.parse(event.content!) as unknown);
+        expect(results).toEqual([
+          { tool: 'update_workflow', input: 'Hello' },
+          {
+            tool: 'update_workflow',
+            error:
+              'Your ## Workflow section defines the steps; set their status instead',
+          },
+        ]);
+      });
+
+      it('moves it after the turn when only get_rfp reported the stage', async () => {
+        const ctx = build({
+          openedStage: 0,
+          chunks: [
+            toolCall('c0', 'get_rfp', { rfpId: RFP_ID }),
+            toolResult('c0', 'get_rfp', { id: RFP_ID, stage: 0 }),
+            { type: 'text-delta', payload: { text: 'Opened.' } },
+          ],
+        });
+        const events = await turn(ctx, 'Open it');
+        expect(events.filter((e) => e.type === 'panel-item')).toHaveLength(0);
+        expect(ctx.session.workflowState).toMatchObject({
+          current: 1,
+          done: [],
+        });
+        const done = events.at(-1)!.session as { workflow?: unknown };
+        expect(done.workflow).toMatchObject({ current: 1, done: [] });
+      });
+
+      it('emits the panel-item event of a show_in_panel result', async () => {
+        const ctx = build({
+          chunks: [
+            toolCall('c0', 'show_in_panel', {
+              kind: 'document',
+              title: 'Notes',
+              markdown: '# Notes',
+            }),
+            toolResult('c0', 'show_in_panel', {
+              shown: true,
+              id: 'doc-1',
+              kind: 'document',
+              title: 'Notes',
+            }),
+            toolCall('c1', 'show_in_panel', { kind: 'file', path: '../x' }),
+            toolResult('c1', 'show_in_panel', {
+              error: 'Invalid file path "../x"',
+            }),
+            { type: 'text-delta', payload: { text: 'Done.' } },
+          ],
+        });
+        ctx.session.panelItems = [
+          {
+            id: 'doc-1',
+            kind: 'document',
+            title: 'Notes',
+            shownAt: '2026-10-14T10:00:00.000Z',
+            markdown: '# Notes',
+          },
+        ];
+        const events = await turn(ctx, 'Show it');
+        expect(events.filter((e) => e.type === 'panel-item')).toHaveLength(1);
+        const results = events
+          .filter((e) => e.type === 'tool-result')
+          .map((e) => JSON.parse(e.content!) as unknown);
+        expect(results).toEqual([
+          { tool: 'show_in_panel', input: 'Notes' },
+          { tool: 'show_in_panel', error: 'Invalid file path "../x"' },
+        ]);
+      });
+    });
+
     it('keeps clarification interception', async () => {
       const ctx = build({
         chunks: [
@@ -540,7 +814,7 @@ describe('SessionsService sessions bound to a built-in agent (ADR-0028)', () => 
     });
   });
 
-  it("serves the package download for the owner's session only (api.md #105)", async () => {
+  it('serves the package download for an existing session only (api.md #105)', async () => {
     const ctx = build();
     await expect(
       ctx.service.downloadRfpPackage('s-1', RFP_ID, 'rfp.md'),
@@ -549,6 +823,14 @@ describe('SessionsService sessions bound to a built-in agent (ADR-0028)', () => 
       's-1',
       RFP_ID,
       'rfp.md',
+      false,
+    );
+    await ctx.service.downloadRfpPackage('s-1', RFP_ID, 'rfp.md', true);
+    expect(ctx.rfpPackages.download).toHaveBeenLastCalledWith(
+      's-1',
+      RFP_ID,
+      'rfp.md',
+      true,
     );
 
     ctx.repository.get.mockResolvedValue(null);

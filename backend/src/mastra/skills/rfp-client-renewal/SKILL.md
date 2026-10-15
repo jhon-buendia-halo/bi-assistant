@@ -9,7 +9,15 @@ year it buys, then open the RFP record. Nothing is marketed yet.
 
 Tools for this stage: [[tool:list_clients]], [[tool:list_rfps]],
 [[tool:get_client_renewals]], [[tool:ask_clarification]], [[tool:get_rfp]],
-[[tool:create_rfp]], [[tool:update_rfp]].
+[[tool:create_rfp]], [[tool:update_rfp]], [[tool:set_rfp_lines]],
+[[tool:update_workflow]].
+
+## Start
+
+Before anything else in this stage, call `update_workflow` with
+`current` 1, leave `done` out (no stage is done yet), a `note` saying what you need from
+the consultant in this stage, a `todo` "1: <the action for this
+client>" (one line, at most 120 characters) and `waiting` true.
 
 ## Read
 
@@ -54,13 +62,19 @@ Tools for this stage: [[tool:list_clients]], [[tool:list_rfps]],
 
 ## Save
 
-Only after the consultant confirms the client and the plan year:
+Only after the consultant confirms the client and the plan year (naming both
+outright, as in "create the RFP for X for 2027", confirms them):
 
 1. `create_rfp(clientOneCode, planYear)`. Leave `title` out unless the
    consultant asked for one: the default is
    `<client name> — <plan year> benefits RFP`, and the effective date
    defaults to 1 January of the plan year.
 2. `update_rfp(rfpId, stage=1)` to mark the stage completed.
+3. When the consultant already named the lines to market (for example
+   "medical and dental only"), save them now with
+   `set_rfp_lines(rfpId, lines)`, one row per line, as-is with all plans
+   unless they said otherwise: `Medical | as-is | all | - | - | -`. Stage 3
+   then starts from them.
 
 Then say the record is saved under its title, and introduce stage 2: a
 review of the current program.

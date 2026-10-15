@@ -85,6 +85,60 @@ export interface AssistantEvalCase {
    * agent would (agents.md 2.1, 4.2). Omitted = every tool.
    */
   agentTools?: OptionalAgentTool[];
+  /**
+   * Deterministic checks the built-in ones cannot express: tool arguments,
+   * the order of particular calls, or state read back after the run. Each
+   * has its own id, so a case can hold several of the same kind (the
+   * built-in checks share one id per kind, see above).
+   */
+  customChecks?: EvalCustomCheck[];
+}
+
+/** One tool call as the agent made it, with its parsed input and output. */
+export interface EvalRawToolCall {
+  name: string;
+  input: unknown;
+  output: unknown;
+  /** The call threw, or its result carries an `error`. */
+  failed: boolean;
+}
+
+/** What a custom check reads. */
+export interface EvalCustomCheckInput {
+  /** The final answer text. */
+  answer: string;
+  toolCalls: EvalRawToolCall[];
+  datasets: string[];
+  /** Values the target's setup produced for the case (e.g. a draft's id). */
+  vars: Record<string, string>;
+}
+
+/**
+ * A deterministic check written in code. `run` answers `undefined` when the
+ * check passes and the reason when it fails; a throw fails it too.
+ */
+export interface EvalCustomCheck {
+  /** Unique within its case. */
+  id: string;
+  description: string;
+  run(
+    input: EvalCustomCheckInput,
+  ): string | undefined | Promise<string | undefined>;
+}
+
+/** One earlier turn sent before a case's question (multi-turn cases). */
+export interface EvalHistoryMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+/** What a target's setup turns a case into before it runs. */
+export interface PreparedEvalQuestion {
+  question: string;
+  /** Earlier turns, oldest first, sent before the question. */
+  history?: EvalHistoryMessage[];
+  /** Values the orientation block and the custom checks read. */
+  vars?: Record<string, string>;
 }
 
 /**
@@ -707,6 +761,8 @@ export interface EvalOrientationInput {
   datasets: string[];
   snapshots: DatasetSnapshot[];
   requestContext: RequestContext;
+  /** The case's setup values (`PreparedEvalQuestion.vars`). */
+  vars?: Record<string, string>;
 }
 
 /**
@@ -729,10 +785,25 @@ export interface EvalTarget {
   /** The question a case sends, after any setup it needs. */
   prepareQuestion?(
     evalCase: AssistantEvalCase,
-    input: Omit<EvalOrientationInput, 'requestContext'>,
-  ): Promise<string>;
+    input: Omit<EvalOrientationInput, 'requestContext' | 'vars'>,
+  ): Promise<string | PreparedEvalQuestion>;
+  /** Clean-up after each case (passed, failed or thrown). Never throws. */
+  afterCase?(datasets: string[]): Promise<void>;
   /** Clean-up once a run's cases are done (or it failed). Never throws. */
   finish?(datasets: string[]): Promise<void>;
+  /**
+   * The registry key of the agent the run's throwaway session is bound to,
+   * so session-scoped tools resolve as in a real chat with this agent
+   * (`update_workflow` reads the bound agent's `## Workflow`); none for the
+   * assistant.
+   */
+  sessionAgentKey?: string;
+  /**
+   * How much of each tool input and output the LLM judge reads; the
+   * report's 2,000 characters when unset. The RFP Builder's tools answer
+   * whole records, so its judge reads more of them.
+   */
+  judgeTraceChars?: number;
 }
 
 /** The assistant's sets, run as they always have been. */
@@ -797,16 +868,17 @@ const MAX_TRACE_FIELD = 2000;
 /** Anything `String()` can render: every non-nullish value. */
 type Stringable = { toString(): string };
 
-function encode(value: unknown): string | undefined {
+function encode(
+  value: unknown,
+  max: number = MAX_TRACE_FIELD,
+): string | undefined {
   if (value === undefined || value === null) return undefined;
   const stringable: Stringable = value;
   const text =
     typeof value === 'string'
       ? value
       : (safeStringify(value) ?? String(stringable));
-  return text.length > MAX_TRACE_FIELD
-    ? `${text.slice(0, MAX_TRACE_FIELD)}… (truncated)`
-    : text;
+  return text.length > max ? `${text.slice(0, max)}… (truncated)` : text;
 }
 
 function safeStringify(value: unknown): string | undefined {
@@ -830,12 +902,26 @@ function safeStringify(value: unknown): string | undefined {
  * flattens the chunk again.
  */
 function extractToolCalls(targetResult: unknown): EvalToolCall[] {
+  return extractRawToolCalls(targetResult).map((call) => ({
+    name: call.name,
+    input: encode(call.input),
+    output: call.thrown ? undefined : encode(call.output),
+    error: call.thrown
+      ? (encode(call.output) ?? 'Tool call failed')
+      : undefined,
+  }));
+}
+
+/** The calls with their parsed input and output (for the custom checks). */
+function extractRawToolCalls(
+  targetResult: unknown,
+): (EvalRawToolCall & { thrown: boolean })[] {
   const resultSteps = field(targetResult, 'steps');
   const steps: unknown[] = Array.isArray(resultSteps)
     ? (resultSteps as unknown[])
     : [targetResult];
 
-  const calls: EvalToolCall[] = [];
+  const calls: (EvalRawToolCall & { thrown: boolean })[] = [];
   for (const step of steps) {
     if (!step) continue;
     const stepCalls = arrayField(step, 'toolCalls');
@@ -857,15 +943,13 @@ function extractToolCalls(targetResult: unknown): EvalToolCall[] {
         field(callPayload, 'toolName') ??
         field(callPayload, 'name') ??
         'unknown';
+      const thrown = Boolean(field(matchPayload, 'isError'));
       calls.push({
         name: String(name),
-        input: encode(
-          field(callPayload, 'input') ?? field(callPayload, 'args'),
-        ),
-        output: field(matchPayload, 'isError') ? undefined : encode(output),
-        error: field(matchPayload, 'isError')
-          ? (encode(output) ?? 'Tool call failed')
-          : undefined,
+        input: field(callPayload, 'input') ?? field(callPayload, 'args'),
+        output,
+        thrown,
+        failed: thrown || typeof field(output, 'error') === 'string',
       });
     }
   }
@@ -1088,11 +1172,14 @@ const EVAL_SESSION_PLACEHOLDER_ANSWER =
 export async function createEvalSession(
   sessions: SessionsService,
   datasets: string[],
+  /** Bind the session to this built-in agent (`EvalTarget.sessionAgentKey`). */
+  agentKey?: string,
 ): Promise<EvalSession> {
-  const session = await sessions.create(
-    `assistant eval ${new Date().toISOString()}`.slice(0, 64),
-    datasets,
-  );
+  const name =
+    `${agentKey ?? 'assistant'} eval ${new Date().toISOString()}`.slice(0, 64);
+  const session = agentKey
+    ? await sessions.createFromAgent(agentKey, name)
+    : await sessions.create(name, datasets);
   await sessions.appendAssistantMessage(session.id, {
     content: EVAL_SESSION_PLACEHOLDER_ANSWER,
   });
@@ -1141,11 +1228,20 @@ async function runJudgeCheck(
   toolCalls: EvalToolCall[],
   /** The question as sent, when the target's setup filled it in. */
   question: string = evalCase.question,
+  /** Earlier turns sent before the question, if any. */
+  history: EvalHistoryMessage[] = [],
 ): Promise<EvalCheckResult | undefined> {
   if (!evalCase.judgeRubric) return undefined;
   const description = `LLM judge: ${evalCase.judgeRubric}`;
   try {
     const prompt = [
+      ...(history.length
+        ? [
+            'Earlier conversation, oldest first:',
+            ...history.map((m) => `${m.role}: ${m.content}`),
+            '',
+          ]
+        : []),
       `Question asked: ${question}`,
       '',
       'Rubric:',
@@ -1238,6 +1334,9 @@ export async function runAssistantEvalCase(
   // Captured from the per-item callback: the run itself only reports numbers.
   let answer = '';
   let toolCalls: EvalToolCall[] = [];
+  let rawToolCalls: EvalRawToolCall[] = [];
+  let history: EvalHistoryMessage[] = [];
+  let vars: Record<string, string> = {};
   let scorerPayloads: Record<string, any> = {};
   // Populated live via onStepFinish as the run executes — the same records a
   // real turn would have threaded through TURN_RECORDS_CONTEXT_KEY.
@@ -1247,10 +1346,17 @@ export async function runAssistantEvalCase(
     const datasetSnapshots =
       await getDatasetToolServices().getDatasets(datasets);
     if (target.prepareQuestion) {
-      question = await target.prepareQuestion(evalCase, {
+      const prepared = await target.prepareQuestion(evalCase, {
         datasets,
         snapshots: datasetSnapshots,
       });
+      if (typeof prepared === 'string') {
+        question = prepared;
+      } else {
+        question = prepared.question;
+        history = prepared.history ?? [];
+        vars = prepared.vars ?? {};
+      }
     }
     const requestContext = evalRequestContext(
       datasets,
@@ -1264,10 +1370,19 @@ export async function runAssistantEvalCase(
       datasets,
       snapshots: datasetSnapshots,
       requestContext,
+      vars,
     });
 
     const result = await runEvals({
-      data: [{ input: question, requestContext }],
+      data: [
+        {
+          // A multi-turn case sends its earlier turns before the question.
+          input: history.length
+            ? [...history, { role: 'user' as const, content: question }]
+            : question,
+          requestContext,
+        },
+      ],
       scorers: evalCase.scorers,
       target: target.agent,
       // Same step budget and dataset/entity + join-hint grounding a real chat
@@ -1285,6 +1400,12 @@ export async function runAssistantEvalCase(
       onItemComplete: ({ targetResult, scorerResults }) => {
         answer = String(targetResult?.text ?? '');
         toolCalls = extractToolCalls(targetResult);
+        rawToolCalls = extractRawToolCalls(targetResult).map((call) => ({
+          name: call.name,
+          input: call.input,
+          output: call.output,
+          failed: call.failed,
+        }));
         scorerPayloads = scorerResults ?? {};
       },
     });
@@ -1342,13 +1463,38 @@ export async function runAssistantEvalCase(
     );
     if (resultSetCheck) checkResults.push(resultSetCheck);
 
+    // Custom checks: tool arguments, call order, state read back.
+    for (const check of evalCase.customChecks ?? []) {
+      checkResults.push(
+        await runCustomCheck(check, {
+          answer,
+          toolCalls: rawToolCalls,
+          datasets,
+          vars,
+        }),
+      );
+    }
+
     // LLM-judge (Feature 2) — for cases where a regex/text check on the
     // final answer would be too brittle.
     const judgeCheck = await runJudgeCheck(
       evalCase,
       answer,
-      toolCalls,
+      target.judgeTraceChars
+        ? rawToolCalls.map((call) => ({
+            name: call.name,
+            input: encode(call.input, target.judgeTraceChars),
+            output: call.failed
+              ? undefined
+              : encode(call.output, target.judgeTraceChars),
+            error: call.failed
+              ? (encode(call.output, target.judgeTraceChars) ??
+                'Tool call failed')
+              : undefined,
+          }))
+        : toolCalls,
       question,
+      history,
     );
     if (judgeCheck) checkResults.push(judgeCheck);
 
@@ -1375,7 +1521,30 @@ export async function runAssistantEvalCase(
       error: err instanceof Error ? err.message : String(err),
       durationMs: Date.now() - startedAt,
     };
+  } finally {
+    await target.afterCase?.(datasets);
   }
+}
+
+/** One custom check's verdict; a throw is a failure with its message. */
+async function runCustomCheck(
+  check: EvalCustomCheck,
+  input: EvalCustomCheckInput,
+): Promise<EvalCheckResult> {
+  let reason: string | undefined;
+  try {
+    reason = await check.run(input);
+  } catch (err) {
+    reason = `check error: ${err instanceof Error ? err.message : String(err)}`;
+  }
+  const passed = reason === undefined;
+  return {
+    id: check.id,
+    description: check.description,
+    score: passed ? 1 : 0,
+    passed,
+    reason,
+  };
 }
 
 /**
@@ -1404,7 +1573,7 @@ export async function runAssistantEvals(
   );
   if (datasetError) throw new Error(datasetError);
   const evalSession = sessions
-    ? await createEvalSession(sessions, datasets)
+    ? await createEvalSession(sessions, datasets, target.sessionAgentKey)
     : undefined;
   try {
     const results: AssistantEvalCaseResult[] = [];

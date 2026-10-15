@@ -113,7 +113,7 @@ export interface ChatMessage {
    */
   report?: AnalysisReport;
   /**
-   * Present when this turn's `export_rfp_package` call stored an RFP package
+   * Present when this turn's `export_rfp_package` or `export_rfp_draft` call stored an RFP package
    * in the session workspace (`rfp/<rfpId>/`; data-model 3.4.1). RFP Builder
    * sessions only.
    */
@@ -127,6 +127,8 @@ export interface RfpPackageRef {
   /** Paths relative to `rfp/<rfpId>/`, e.g. `exhibits/exhibit-a-census.csv`. */
   files: { name: string; bytes: number }[];
   exportedAt: string;
+  /** Present (true) for a draft exported by `export_rfp_draft`, stored under `rfp/<rfpId>/draft/`. */
+  draft?: true;
 }
 
 export interface AnalysisReport {
@@ -191,6 +193,88 @@ export interface InteractiveVisualization extends SessionVisualization {
   version: number;
 }
 
+export type PanelItemKind = 'file' | 'document' | 'table' | 'visual';
+
+interface PanelItemBase {
+  id: string;
+  kind: PanelItemKind;
+  title: string;
+  /** ISO time the agent (or a visual write) put it in the panel; the latest wins. */
+  shownAt: string;
+}
+
+/** A text file of the session workspace (data-model 3.4.4). */
+export interface FilePanelItem extends PanelItemBase {
+  kind: 'file';
+  /** Workspace-relative path, `/`-separated. */
+  path: string;
+  bytes: number;
+}
+
+/** A Markdown document the agent composed. */
+export interface DocumentPanelItem extends PanelItemBase {
+  kind: 'document';
+  markdown: string;
+}
+
+/** A snapshot of one query result of the turn. */
+export interface TablePanelItem extends PanelItemBase {
+  kind: 'table';
+  tool: string;
+  input?: string;
+  columns: string[];
+  rows: Record<string, unknown>[];
+  rowCount: number;
+  truncated?: boolean;
+}
+
+/** An existing visual; id `visual:<visualId>`, upserted. */
+export interface VisualPanelItem extends PanelItemBase {
+  kind: 'visual';
+  visualId: string;
+}
+
+export type PanelItem =
+  FilePanelItem | DocumentPanelItem | TablePanelItem | VisualPanelItem;
+
+/** Where the agent is in its `## Workflow` section (1-based phase numbers). */
+export interface WorkflowState {
+  current: number;
+  done: number[];
+  /** The current phase's card: what the agent needs from the user now (Markdown). */
+  note?: string;
+  /** Agent-defined step titles; only for an agent whose prompt has no `## Workflow`. */
+  steps?: string[];
+  /** Step numbers that do not apply. */
+  skipped?: number[];
+  /** The current step waits for the user's answer or decision. */
+  waiting?: boolean;
+  /** What the user must do per step: step number to action, set by `update_workflow`. */
+  todos?: Record<string, string>;
+  updatedAt: string;
+}
+
+export interface WorkflowPhase {
+  number: number;
+  title: string;
+  /** The skill the phase's line links, when it does. */
+  skill?: string;
+  /** What the user must do in this step: the agent's `todo`, else the prompt's default. */
+  action?: string;
+}
+
+/** The phases of the session's agent with its saved progress (derived). */
+export interface WorkflowView {
+  phases: WorkflowPhase[];
+  /** Where the steps come from: the prompt's `## Workflow` or the agent's own. */
+  source: 'prompt' | 'agent';
+  current: number | null;
+  done: number[];
+  skipped: number[];
+  waiting?: boolean;
+  note?: string;
+}
+
 export interface SessionDoc {
   id: string;
   name: string;
@@ -214,6 +298,10 @@ export interface SessionDoc {
   preview?: boolean;
   messages: ChatMessage[];
   visualizations?: SessionVisualization[];
+  /** What the agent showed in the right panel, oldest first (data-model 3.4.4). */
+  panelItems?: PanelItem[];
+  /** The agent's workflow progress; shown in the workflow bar. */
+  workflowState?: WorkflowState;
   /** The owning user's id in org server mode (data-model 3.15). */
   ownerId?: string;
   createdAt?: string;
@@ -229,5 +317,12 @@ export interface SessionAgentRef {
   starterQuestions: string[];
 }
 
-/** A session on the wire: the stored document plus its derived `agent`. */
-export type SessionView = SessionDoc & { agent?: SessionAgentRef };
+/**
+ * A session on the wire: the stored document plus its derived `agent`,
+ * `workflow` and the full `panelItems` list (visuals included).
+ */
+export type SessionView = SessionDoc & {
+  agent?: SessionAgentRef;
+  panelItems: PanelItem[];
+  workflow?: WorkflowView;
+};

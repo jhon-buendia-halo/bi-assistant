@@ -110,7 +110,7 @@ describe('assistantWorkingRules (tool selection, ADR-0022)', () => {
     expect(rules).toBe(
       FULL_RULES.slice(0, FULL_RULES.indexOf('Interactive visuals:')) +
         NO_VISUALS +
-        FULL_RULES.slice(FULL_RULES.indexOf('\n\nRules:')),
+        FULL_RULES.slice(FULL_RULES.indexOf('\n\nRight panel:')),
     );
     expect(rules).not.toMatch(/create_visual|update_visual/);
     expect(rules).toContain('[[skill:curated-knowledge]]');
@@ -140,7 +140,7 @@ describe('assistantWorkingRules (tool selection, ADR-0022)', () => {
     expect(
       rules.startsWith(`${NO_CLARIFICATION}\n\nFor every question:\n`),
     ).toBe(true);
-    expect(rules).toContain(`\n\n${NO_VISUALS}\n\nRules:\n`);
+    expect(rules).toContain(`\n\n${NO_VISUALS}\n\nRight panel:\n`);
     expect(rules).toContain('   [[tool:describe_entity]]).\n');
     expect(rules).toContain('- [[tool:run_readonly_sql]] takes a rationale.');
     expect(rules).not.toMatch(

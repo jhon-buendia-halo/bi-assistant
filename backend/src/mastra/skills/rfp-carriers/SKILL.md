@@ -9,7 +9,14 @@ carriers that write the line.
 
 Tools for this stage: [[tool:get_rfp]], [[tool:list_carriers]],
 [[tool:get_client_commercials]], [[tool:set_rfp_carriers]],
-[[tool:update_rfp]].
+[[tool:update_rfp]], [[tool:update_workflow]].
+
+## Start
+
+Before anything else in this stage, call `update_workflow` with
+`current` 4, `done` "1,2,3", a `note` saying what you need from
+the consultant in this stage, a `todo` "4: <the action for this
+client>" (one line, at most 120 characters) and `waiting` true.
 
 ## Read
 
@@ -46,7 +53,8 @@ if they have them, or remove carriers.
 
 ## Save
 
-Only after the consultant confirms:
+Only after the consultant confirms (a change the consultant states outright,
+such as "swap carrier A for B", is already confirmed: save it at once):
 
 1. `set_rfp_carriers(rfpId, carriers)` with one row per carrier:
 

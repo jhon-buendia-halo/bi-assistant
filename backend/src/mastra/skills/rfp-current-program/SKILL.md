@@ -12,7 +12,14 @@ background.
 Tools for this stage: [[tool:get_client_program]],
 [[tool:get_client_financials]], [[tool:get_client_census]],
 [[tool:get_client_commercials]], [[tool:get_plan_design]],
-[[tool:update_rfp]].
+[[tool:update_rfp]], [[tool:update_workflow]].
+
+## Start
+
+Before anything else in this stage, call `update_workflow` with
+`current` 2, `done` "1", a `note` saying what you need from
+the consultant in this stage, a `todo` "2: <the action for this
+client>" (one line, at most 120 characters) and `waiting` true.
 
 ## Read
 

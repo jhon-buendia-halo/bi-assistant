@@ -7,7 +7,14 @@ description: Use when an RFP is at stage 6 (timeline): compute the milestones fr
 Goal: agree the milestones from issuing the RFP to the effective date.
 
 Tools for this stage: [[tool:get_rfp]], [[tool:get_client_renewals]],
-[[tool:set_rfp_timeline]], [[tool:update_rfp]].
+[[tool:set_rfp_timeline]], [[tool:update_rfp]], [[tool:update_workflow]].
+
+## Start
+
+Before anything else in this stage, call `update_workflow` with
+`current` 6, `done` "1,2,3,4,5", a `note` saying what you need from
+the consultant in this stage, a `todo` "6: <the action for this
+client>" (one line, at most 120 characters) and `waiting` true.
 
 ## Read
 
@@ -59,7 +66,8 @@ consultant to confirm or move dates.
 
 ## Save
 
-Only after the consultant confirms:
+Only after the consultant confirms (a change the consultant states outright,
+such as "swap carrier A for B", is already confirmed: save it at once):
 
 1. `set_rfp_timeline(rfpId, milestones)` with one row per milestone:
 

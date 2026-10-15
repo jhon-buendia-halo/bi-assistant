@@ -11,8 +11,11 @@ import {
 import {
   SESSION_ID_CONTEXT_KEY,
   TURN_QUESTION_CONTEXT_KEY,
+  TURN_RECORDS_CONTEXT_KEY,
   createVisualTool,
 } from './visual.tools';
+import { showInPanelTool } from './panel.tool';
+import { updateWorkflowTool } from './workflow.tool';
 
 type CreateVisual = DatasetToolServices['createVisual'];
 type CreateVisualMock = jest.Mock<
@@ -34,6 +37,8 @@ function servicesWith(createVisual: CreateVisualMock): DatasetToolServices {
     updateVisual: jest.fn(),
     restTarget: jest.fn(),
     exportRfpPackage: jest.fn(),
+    showPanelItem: jest.fn(),
+    updateWorkflow: jest.fn(),
   };
 }
 
@@ -91,6 +96,130 @@ describe('create_visual (agents.md 3.6)', () => {
     bare.set(SESSION_ID_CONTEXT_KEY, 'session-1');
     await execute({}, { requestContext: bare });
     expect(instructionSent()).toBeUndefined();
+  });
+});
+
+describe('show_in_panel (agents.md 3.11)', () => {
+  const execute = showInPanelTool.execute as unknown as Execute;
+  const shown = {
+    shown: true,
+    id: 'p1',
+    kind: 'document',
+    title: 'Doc',
+  };
+  let showPanelItem: jest.Mock;
+
+  beforeEach(() => {
+    showPanelItem = jest.fn().mockResolvedValue(shown);
+    setDatasetToolServices({
+      ...servicesWith(jest.fn()),
+      showPanelItem,
+    });
+  });
+
+  it("hands the session and the turn's records to the bridge", async () => {
+    const records = [{ tool: 'run_readonly_sql', columns: ['a'], rows: [] }];
+    const requestContext = new RequestContext();
+    requestContext.set(SESSION_ID_CONTEXT_KEY, 'session-1');
+    requestContext.set(TURN_RECORDS_CONTEXT_KEY, records);
+    const input = { kind: 'table', record: 1 };
+
+    expect(await execute(input, { requestContext })).toEqual(shown);
+    expect(showPanelItem).toHaveBeenCalledWith('session-1', input, records);
+  });
+
+  it('answers with an error, never throws', async () => {
+    const requestContext = new RequestContext();
+    expect(await execute({ kind: 'file' }, { requestContext })).toEqual({
+      error: 'No session in context',
+    });
+
+    requestContext.set(SESSION_ID_CONTEXT_KEY, 'session-1');
+    showPanelItem.mockRejectedValue(
+      new Error('path is required for kind "file"'),
+    );
+    expect(await execute({ kind: 'file' }, { requestContext })).toEqual({
+      error: 'path is required for kind "file"',
+    });
+  });
+
+  it('has a flat input shape, so the prompt line lists its inputs', () => {
+    const shape = (
+      showInPanelTool.inputSchema as unknown as z.ZodObject<z.ZodRawShape>
+    ).shape;
+    expect(Object.keys(shape)).toEqual([
+      'kind',
+      'title',
+      'path',
+      'markdown',
+      'record',
+      'visualId',
+    ]);
+  });
+
+  it('shows no workflow: phases is not a kind', () => {
+    const schema = showInPanelTool.inputSchema as unknown as z.ZodTypeAny;
+    expect(schema.safeParse({ kind: 'phases' }).success).toBe(false);
+    expect(schema.safeParse({ kind: 'visual' }).success).toBe(true);
+  });
+});
+
+describe('update_workflow (agents.md 3.11)', () => {
+  const execute = updateWorkflowTool.execute as unknown as Execute;
+  const result = {
+    updated: true,
+    steps: 3,
+    current: 2,
+    done: [1],
+    skipped: [],
+  };
+  let updateWorkflow: jest.Mock;
+
+  beforeEach(() => {
+    updateWorkflow = jest.fn().mockResolvedValue(result);
+    setDatasetToolServices({
+      ...servicesWith(jest.fn()),
+      updateWorkflow,
+    });
+  });
+
+  it('hands the session and the input to the bridge', async () => {
+    const requestContext = new RequestContext();
+    requestContext.set(SESSION_ID_CONTEXT_KEY, 'session-1');
+    const input = { current: 2, done: '1', waiting: true };
+
+    expect(await execute(input, { requestContext })).toEqual(result);
+    expect(updateWorkflow).toHaveBeenCalledWith('session-1', input);
+  });
+
+  it('answers with an error, never throws', async () => {
+    const requestContext = new RequestContext();
+    expect(await execute({}, { requestContext })).toEqual({
+      error: 'No session in context',
+    });
+
+    requestContext.set(SESSION_ID_CONTEXT_KEY, 'session-1');
+    updateWorkflow.mockRejectedValue(
+      new Error('There is no workflow yet: pass steps to create one'),
+    );
+    expect(await execute({}, { requestContext })).toEqual({
+      error: 'There is no workflow yet: pass steps to create one',
+    });
+  });
+
+  it('has a flat input shape, so the prompt line lists its inputs', () => {
+    const shape = (
+      updateWorkflowTool.inputSchema as unknown as z.ZodObject<z.ZodRawShape>
+    ).shape;
+    expect(Object.keys(shape)).toEqual([
+      'steps',
+      'current',
+      'done',
+      'skipped',
+      'waiting',
+      'note',
+      'todo',
+    ]);
   });
 });
 
