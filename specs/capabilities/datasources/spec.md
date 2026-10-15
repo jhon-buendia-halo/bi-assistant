@@ -105,9 +105,9 @@ Terms are defined once in [the glossary](../../product/glossary.md); this capabi
 - R49. A connection saved before datasources existed (one anonymous Databricks connection) SHALL be migrated on first read into a datasource named "Databricks" with id `legacy-databricks`, so existing datasets can bind to it.
 - R50. Datasets that carry no datasource binding SHALL resolve to the default datasource: the first Databricks datasource, otherwise the first datasource in list order.
 
-### Sharing and permissions
+### Availability
 
-- R51. In both modes datasources SHALL be shared by every signed-in user. Listing datasources and reading their inventory need Use agents; creating, testing, discovering REST endpoints for, editing and deleting a datasource need Manage datasources and datasets, and the Datasource Configuration settings section is hidden without it. In local mode a new datasource also gets Dana Data Owner as its Data owner. Rules: [../admin/spec.md](../admin/spec.md) R21, R25, R28, R72.
+- R51. Listing datasources, reading their inventory and creating, testing, discovering REST endpoints for, editing and deleting a datasource SHALL all be available to the user, and the Datasource Configuration settings section is always shown. A datasource has no owner.
 
 ## Edge cases and errors
 

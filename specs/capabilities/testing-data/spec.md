@@ -55,9 +55,9 @@ Defined once in [the glossary](../../product/glossary.md); used here as follows.
 - R18. Removing a fixture SHALL delete its dataset (first) and its datasource from the app only. It SHALL NOT touch the database. Answers: `Removed the <name> datasource and dataset from this app. The database itself was left untouched.`, or `Nothing to remove — the sample is not loaded` when neither existed; unknown id as in R8.
 - R19. Because fixtures are matched to records by **name**, a datasource or dataset the user created by hand with a fixture's name is treated as that fixture's: loading overwrites the datasource's configuration and removing deletes it. Open question: the E2E suite and users commonly create a datasource called "World Cup PostgreSQL" by hand; decide whether to mark fixture-owned records instead of matching by name.
 
-### Permissions
+### Availability
 
-- R20. In both modes every testing-data action SHALL need Manage datasources and datasets, because it creates and removes shared datasources and datasets; the Testing Data section is hidden without it. Rules: [../admin/spec.md](../admin/spec.md) R21, R25.
+- R20. Every testing-data action SHALL be available to the user; the app has no roles or permissions.
 
 ### Self-registering samples
 
@@ -67,7 +67,7 @@ Defined once in [the glossary](../../product/glossary.md); used here as follows.
 
 - **Server not running:** R11's message, with the compose hint.
 - **Database missing and the user cannot create it:** R10's message.
-- **User without permission to drop the schema or create objects:** the seed fails and the transaction rolls back; message per R13 with the server's detail.
+- **Database user without permission to drop the schema or create objects:** the seed fails and the transaction rolls back; message per R13 with the server's detail.
 - **Port or host wrong in the form:** "Test connection" (which uses the generic PostgreSQL connection test, see [datasources](../datasources/spec.md)) shows the `Postgres — …` message inline.
 - **Partial state:** a fixture whose datasource exists but whose dataset is missing or incomplete shows `<n>/<required> entities` and not-loaded; Remove stays disabled because it requires "loaded". Open question: allow Remove for a partially loaded fixture.
 - **Register-only REST sample:** the panel offers "Register testing data" with a PostgreSQL connection form, but the backend refuses (R9). Open question: hide the form and show the script instruction for register-only REST samples, or make the panel able to register them.
@@ -111,7 +111,7 @@ Feature: Testing data
 
   Scenario: Lists the bundled samples and what is loaded
     When I open Settings and click "Testing Data"
-    Then I see the "World Cup", "Formula 1", "Intellify" and "World Cup (REST API)" samples
+    Then I see the "World Cup", "Formula 1", "Intellify", "World Cup (REST API)" and "Intellify RFP API" samples
     And each shows "0/<required> entities" with a cross when nothing is loaded
     And each shows its description
 

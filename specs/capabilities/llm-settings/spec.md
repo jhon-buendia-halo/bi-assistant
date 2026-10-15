@@ -16,7 +16,7 @@ Capability-local vocabulary:
 
 Configuration
 - R1. The system SHALL support exactly three providers: `openai` (shown as "OpenAI"), `anthropic` ("Anthropic") and `lenai` ("LenAI (Halo gateway)"). Any other provider SHALL be rejected with `provider must be one of: openai, anthropic, lenai`.
-- R2. There SHALL be one global configuration, shared by every agent and every session. It SHALL hold: provider, model, base URL (may be empty), the encrypted API key and the reasoning effort.
+- R2. There SHALL be one global configuration, used by every agent and every session. It SHALL hold: provider, model, base URL (may be empty), the encrypted API key and the reasoning effort.
 - R3. The model SHALL be a free-text, non-empty value after trimming; otherwise `model is required`. For `lenai` it is labelled "Deployment name".
 - R4. For `lenai`, the base URL SHALL be required (`baseUrl is required for lenai`). It is the gateway root. Requests for a deployment SHALL go to `<base URL without trailing slashes>/openai/v1/deployments/<deployment>`, carrying the key both as a bearer credential and in an `X-Api-Key` header.
 - R5. For `openai` and `anthropic` the base URL SHALL NOT be required and SHALL NOT be used: `openai` goes to the provider's public API and `anthropic` to its native API.
@@ -76,8 +76,8 @@ Effort levels
 - R41. Every model call SHALL map its effort to the nearest level the model accepts (ties to the higher level) before sending it. A model without levels SHALL keep today's behaviour (R29).
 - R42. The select's hint, linked to it as its accessible description, SHALL read `Used for answers. Test connection always uses the lowest level.` when the model has levels, `Enter a model to see the effort levels it supports.` when the model is empty, and `This model doesn't support a reasoning effort setting.` when it has none.
 
-Sharing and permissions
-- R43. In both modes there SHALL be one LLM configuration for the whole server, used by every user's calls. Reading it needs Use agents; saving it, testing a connection and changing the reasoning effort need Manage LLM configuration. Without that permission the LLM Configuration section and the composer's Reasoning effort control are hidden, and the settings view carries no masked key. Rules: [../admin/spec.md](../admin/spec.md) R21, R26, R28.
+Availability
+- R43. There SHALL be one LLM configuration for the whole server. Reading it, saving it, testing a connection and changing the reasoning effort SHALL all be available to the user: the LLM Configuration section and the composer's Reasoning effort control are always shown, and the settings view always carries the masked key (never the key itself).
 
 ## Edge cases and errors
 
@@ -158,7 +158,8 @@ Feature: LLM settings
 
   Scenario: Sets the reasoning effort from the new-session composer
     Given a configuration is saved
-    When I click "New conversation"
+    When I click "Sessions" on the rail
+    And I click "Start New Conversation"
     Then I see the saved model name and the effort "high"
     When I choose "Low" from the reasoning effort menu
     Then I see "Reasoning effort set to low"
@@ -195,7 +196,8 @@ Feature: LLM settings
 
   Scenario: Shows that no model is configured
     Given nothing is configured
-    When I click "New conversation"
+    When I click "Sessions" on the rail
+    And I click "Start New Conversation"
     Then I see "No model configured"
 
   Scenario: Keeps a key saved under the former development secret

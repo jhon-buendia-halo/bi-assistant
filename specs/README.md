@@ -44,7 +44,7 @@ specs/
 | [deep-analysis](capabilities/deep-analysis/spec.md) | Multi-step deep analysis runs | — |
 | [agents-evals](capabilities/agents-evals/spec.md) | Agent Hub, agent catalogue and user agents, eval sets, eval runs and reports | Agents (`agents.spec.ts`), Agent Hub (`agent-hub.spec.ts`) |
 | [rfp](capabilities/rfp/spec.md) | The RFP Builder agent, the Intellify RFP API, RFP records and the RFP package | RFP builder (E2E: none yet), Intellify RFP API (API-level) |
-| [admin](capabilities/admin/spec.md) | Local and org server modes, local personas and sign-in, sign-in with Entra ID, SCIM directory, roles and permissions, enforcement, data ownership, the Admin area (Overview, Users & groups, Edit a user, Roles & permissions) | Sign in to local mode (`local-sign-in.spec.ts`, Playwright `web` project); Sign in to an org server (`org-sign-in.spec.ts`), Permissions in the app (`org-permissions.spec.ts`), Private and shared data (`org-isolation.spec.ts`), Admin overview (`org-admin-overview.spec.ts`), Users and groups (`org-admin-users.spec.ts`), Edit a user (`org-admin-edit-user.spec.ts`), Roles and permissions (`org-admin-roles.spec.ts`), all in the Playwright `org` project |
+| [agent-panel](capabilities/agent-panel/spec.md) | `show_in_panel`: what an agent shows in the right panel (file, document, table, visual), the workflow bar and its Details, its history and download | Agent panel (E2E: none yet) |
 
 A Gherkin Feature that spans capabilities lives in the capability that owns its main outcome; the others link to it.
 

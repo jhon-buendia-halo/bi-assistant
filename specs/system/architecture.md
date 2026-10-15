@@ -20,14 +20,10 @@ The ADRs below marked *retroactive* document decisions already in place when thi
 ```mermaid
 flowchart LR
   analyst["Analyst<br/>(person)"]
-  member["Organisation member<br/>(person, browser; org server mode)"]
-  admin["Platform admin<br/>(person; org server mode)"]
 
   subgraph qti["Questions to Insights"]
-    system["Questions to Insights<br/>(Electron desktop app, npx web app,<br/>or self-hosted org server)"]
+    system["Questions to Insights<br/>(Electron desktop app<br/>or npx web app)"]
   end
-
-  idp["Microsoft Entra ID<br/>(OIDC sign-in, SCIM provisioning;<br/>org server mode only)"]
 
   subgraph sources["User datasources"]
     pg[("PostgreSQL")]
@@ -47,11 +43,6 @@ flowchart LR
   end
 
   analyst -->|"asks questions, tailors visuals"| system
-  member -->|"signs in, asks questions (HTTPS via the org's TLS proxy)"| system
-  admin -->|"manages users and roles"| system
-  member -->|"authenticates"| idp
-  system -->|"OIDC: discovery, code exchange, JWKS"| idp
-  idp -->|"SCIM 2.0: users, groups, memberships (bearer token)"| system
   analyst -->|"downloads installer"| releases
   analyst -->|"npx / npm i -g (read:packages PAT)"| packages
   system -->|"read-only SQL, schema discovery, sample rows"| pg
@@ -62,10 +53,10 @@ flowchart LR
   system -->|"chat completions (HTTPS)"| openai
 ```
 
-*System context: the analyst uses Questions to Insights, which queries the user's datasources (PostgreSQL, Databricks, REST/OpenAPI), calls the configured LLM provider, and is distributed through GitHub Releases and GitHub Packages. In org server mode, organisation members reach a self-hosted server from a browser and sign in with Microsoft Entra ID, which also pushes the directory to the server through SCIM.*
+*System context: the analyst uses Questions to Insights, which queries the user's datasources (PostgreSQL, Databricks, REST/OpenAPI), calls the configured LLM provider, and is distributed through GitHub Releases and GitHub Packages.*
 
 
-The user asks questions of their data in plain language; Questions to Insights answers with SQL, results, and interactive visuals. External systems: the user's datasources (PostgreSQL, Databricks SQL, REST/OpenAPI), an LLM provider (OpenAI-compatible / LenAI, Anthropic, OpenAI), GitHub (releases, GitHub Packages), and in org server mode the identity provider (Microsoft Entra ID, for OpenID Connect sign-in and SCIM 2.0 provisioning). Two modes run the same build (ADR-0010): **local mode**, one machine with five seeded personas to sign in as, without a password (ADR-0012; the desktop app always, the npx web app by default), and **org server mode**, many users of one organisation on a server it hosts.
+The user asks questions of their data in plain language; Questions to Insights answers with SQL, results, and interactive visuals. External systems: the user's datasources (PostgreSQL, Databricks SQL, REST/OpenAPI), an LLM provider (OpenAI-compatible / LenAI, Anthropic, OpenAI), GitHub (releases, GitHub Packages). There is one user, a built-in super admin who is always the caller and never signs in (ADR-0030).
 
 ## Level 2 — Containers
 
@@ -84,18 +75,11 @@ flowchart TB
     cli["npm CLI<br/>(backend/src/cli.ts)"]
   end
 
-  subgraph org["Org server mode (same npm CLI, ORG_* configuration)"]
-    member["Organisation member's browser"]
-    proxy["Organisation's reverse proxy<br/>(TLS, public hostname)"]
-  end
-
-  entra["Microsoft Entra ID<br/>(OIDC provider, SCIM client)"]
-
   backend["NestJS backend<br/>(backend/src, createApp)<br/>API + Mastra agents"]
   intellifyapi["Intellify RFP API<br/>(backend/src/intellify-api, second Nest app, :3100)"]
 
   subgraph data["APP_DATA_DIR (userData, or ~/.questions-to-insights for the CLI)"]
-    appdb[("app.sqlite<br/>(better-sqlite3 DocStore;<br/>org mode adds users, groups,<br/>roles, auth sessions, activity)")]
+    appdb[("app.sqlite<br/>(better-sqlite3 DocStore)")]
     mastradb[("mastra.sqlite<br/>(LibSQL memory, threads)")]
     obsdb[("observability.duckdb<br/>(Mastra traces)")]
     ws["workspaces/session-id<br/>(filesystem: visuals, reports)"]
@@ -116,11 +100,6 @@ flowchart TB
   browser -->|"HTTP same-origin: UI (public/), API, SSE"| cli
   cli -->|"in-process createApp()<br/>--port (default 3000), --host 127.0.0.1"| backend
   cli -->|"opens URL (unless --no-open)"| browser
-  member -->|"HTTPS: UI, API, SSE<br/>(qti_session cookie)"| proxy
-  proxy -->|"HTTP + X-Forwarded-*<br/>(--host 0.0.0.0)"| cli
-  member -->|"sign-in redirect"| entra
-  backend -->|"OIDC discovery, token exchange, JWKS"| entra
-  entra -->|"SCIM 2.0 over HTTPS via the proxy<br/>(bearer token)"| proxy
   backend -->|"SQL (better-sqlite3)"| appdb
   backend -->|"LibSQL (@mastra/libsql)"| mastradb
   backend -->|"DuckDB (@mastra/duckdb)"| obsdb
@@ -132,13 +111,13 @@ flowchart TB
   backend -.->|"agent traces (OpenInference),<br/>only when developer observability is on"| phoenix
 ```
 
-*Containers: the two delivery modes (Electron spawning the backend as a child process, or the npm CLI serving backend + bundled UI to a browser) share one NestJS backend and its on-disk stores under `APP_DATA_DIR`. In org server mode the same CLI runs behind the organisation's TLS proxy, and the backend talks to Entra ID for sign-in and receives SCIM pushes from it.*
+*Containers: the two delivery modes (Electron spawning the backend as a child process, or the npm CLI serving backend + bundled UI to a browser) share one NestJS backend and its on-disk stores under `APP_DATA_DIR`.*
 
 
 - **Electron main process** (`frontend/electron/main.cjs`) — window shell; spawns and kills the backend.
 - **Angular renderer** (`frontend/src/`) — the UI.
 - **NestJS backend** (`backend/src/`) — API, Mastra agents, SQLite app store, per-session workspaces.
-- **npm CLI** (`backend/src/cli.ts`) — serves the same backend + bundled UI in a browser. With the `ORG_*` configuration it is the **org server** (ADR-0010): no new container, the backend gains an auth module (OIDC sign-in, SCIM, roles, owner scoping; ADR-0011) and is reached through the organisation's reverse proxy. How to run it: [delivery.md](delivery.md) section 4.1.
+- **npm CLI** (`backend/src/cli.ts`) — serves the same backend + bundled UI in a browser. It binds `127.0.0.1` by default (ADR-0030). How to run it: [delivery.md](delivery.md) section 4.1.
 - **Intellify RFP API** (`backend/src/intellify-api/`) — a second NestJS application in the backend package, started in-process by `createApp()` on its own port (default 3100) or alone; the app reaches it only over HTTP with an API key (ADR-0027).
 
 #### ADR-0001 — Electron desktop app with an Angular renderer and a NestJS child-process backend *(retroactive)*
@@ -177,7 +156,7 @@ flowchart TB
   - Unreachable endpoints must never fail startup or requests. Exporters drop data instead.
 
 #### ADR-0010 — Multi-user org server mode with Entra ID sign-in and server-enforced roles
-- **Status:** Accepted; local mode amended by ADR-0012
+- **Status:** Superseded by ADR-0030 (local mode amended by ADR-0012 before that)
 - **Date:** 2026-10-10
 - **Context:**
   - The vision used to rule out multi-user use ("no login, no roles and no shared server"). The Admin Panel epic ([BA-161](https://halo-powered.atlassian.net/browse/BA-161)) reverses that, from the Figma board "Agent Hub — E2E lifecycle (proposed)", section *Admin panel (draft)*.
@@ -217,7 +196,7 @@ flowchart TB
   - The E2E harness needs a local OIDC stub and a SCIM client to drive org server mode without a real Entra ID tenant.
 
 #### ADR-0011 — Backend-run OIDC with `openid-client`, an opaque session cookie and an Origin check
-- **Status:** Accepted
+- **Status:** Superseded by ADR-0030
 - **Date:** 2026-10-10
 - **Context:**
   - ADR-0010 puts sign-in in the backend, and Entra ID is the first provider.
@@ -239,7 +218,7 @@ flowchart TB
   - Background jobs must capture the owner when they start, and re-enter it if they outlive the request.
 
 #### ADR-0012 — Local mode signs in as one of five seeded personas, with a bearer-token auth session
-- **Status:** Accepted
+- **Status:** Superseded by ADR-0030
 - **Date:** 2026-10-11
 - **Context:**
   - ADR-0010 kept local mode as "no sign-in, and one implicit local user who holds every permission". So local mode and the desktop app had no roles, no owner scoping and no Admin area: nobody could try what a User, a Maker or an Approver sees without standing up an org server.
@@ -253,7 +232,7 @@ flowchart TB
   - **Same enforcement.** Roles, the permission guard and owner scoping apply in local mode exactly as on an org server. Migration M13 gives every ownerless document to Demo User (`ownerId: "local"`), so existing data stays with the user who had it.
   - **One mechanism for desktop and web.** The desktop app and the npx web app in local mode sign in the same way, so the web E2E suite covers the desktop path. The desktop app's readiness probe becomes `GET /me`, ready on 200 or 401.
 - **Consequences:**
-  - Local mode is not a security boundary: anyone who can reach the local backend can sign in as any persona. It's a way to see each role, not to protect data (non-functional N78).
+  - Local mode is not a security boundary: anyone who can reach the local backend can sign in as any persona. It's a way to see each role, not to protect data (non-functional N67).
   - `GET /me` answers 401 when nobody is signed in, in both modes. For Demo User it reports Platform admin with source `bootstrap`.
   - Nothing runs as the local user by default any more. Code outside a request, such as the eval CLI, must run as Demo User explicitly.
   - A data folder used in local mode and then opened by an org server shows none of its private items there: they belong to `local`, which is no org user.
@@ -485,7 +464,7 @@ flowchart LR
 
 
 #### ADR-0009 — UI preferences live in the backend, with a browser cache for the first paint
-- **Status:** Accepted; on an org server the document is per user (ADR-0010, [data-model.md](data-model.md) 3.2.1)
+- **Status:** Accepted; the per-user document (ADR-0010) removed by ADR-0030
 - **Date:** 2026-10-10
 - **Context:**
   - ADR-0007 stored the theme choice in the renderer's browser storage, defaulting to System, and the navigation drawer was never remembered (app-shell R2).
@@ -590,7 +569,7 @@ flowchart LR
   - Bringing user or project skills back later needs a new ADR.
 
 #### ADR-0022 — User agents choose their tools from the assistant's set and get skills written in the app, stored per user and copied into the Live version
-- **Status:** Accepted; how tools and skills are chosen (checkboxes) is superseded by ADR-0024 (links)
+- **Status:** Accepted; how tools and skills are chosen (checkboxes) is superseded by ADR-0024 (links); ownership and the Platform-admin restriction removed by ADR-0030
 - **Date:** 2026-10-14
 - **Context:**
   - ADR-0008 made a user agent a stored configuration of the `assistant`. It "can't add tools or relax the guard", and in practice it gets all of the assistant's tools and skills. Its only lever is a block of instructions.
@@ -613,7 +592,7 @@ flowchart LR
   - In `@mastra/core` 1.66 a function-valued `tools` is not copied into the Mastra instance's tool registry, so the assistant's tools no longer appear there as standalone tools (Mastra's dev studio). No app code reads that registry.
 
 #### ADR-0023 — Built-in skills are edited in the app as org-wide overrides stored in the database, by Platform admins
-- **Status:** Accepted
+- **Status:** Accepted; ownership and the Platform-admin restriction removed by ADR-0030
 - **Date:** 2026-10-14
 - **Context:**
   - The user asked on 2026-10-14 for every skill to be editable in the app, the built-in ones (`curated-knowledge`, `deep-analysis`, `interactive-visuals`) included. ADR-0022 kept built-ins out of the app.
@@ -668,7 +647,7 @@ flowchart LR
   - No built-in skill ships a script, so dropping `run_skill_script` loses nothing today. A skill that needs exact checks still names the tool or guard that applies them (ADR-0018).
 
 #### ADR-0026 — Every built-in agent's system prompt is editable as an org-wide override, by Platform admins
-- **Status:** Accepted
+- **Status:** Accepted; ownership and the Platform-admin restriction removed by ADR-0030
 - **Date:** 2026-10-14
 - **Context:**
   - The user asked on 2026-10-14 for every agent to be editable, as in the agent-poc reference, whose System Prompt tab edits the agent's prompt in place. User agents already edit their instructions (ADR-0024). The built-in agents' prompts were fixed in code: the assistant's core prompt (ADR-0008 layered user agents on it) and the five System agents'.
@@ -701,6 +680,49 @@ flowchart LR
   - The eval harness runs a case on the set's agent, and an `rfp` eval set exists; prompt, skill or tool changes to the agent must pass it at 100% over 3 runs.
   - Evals that create RFPs write to `rfp.*`; they tag records with `created_by = eval:<jobId>` and delete them afterwards.
   - Note (2026-10-14, not a new decision): the single `rfp-process` skill with one reference file per stage was split into seven on-demand stage skills, one per stage; the loading mechanism is unchanged (agents.md 7.4).
+
+#### ADR-0029 — One built-in panel tool for every agent; panel items persisted on the session; a `## Workflow` prompt convention; a workflow status bar with its own tool
+- **Status:** Accepted
+- **Date:** 2026-10-14
+- **Context:**
+  - Only `create_visual` and `update_visual` reach the right panel (the `visual-updated` event). The RFP Builder writes the RFP document into the session workspace, but the consultant has to download it to read it; no agent can put a document, a file, a table or its progress beside the chat.
+  - The user asked on 2026-10-14 for a built-in tool that lets the agents decide what the right panel shows.
+  - The same day the user asked for a status bar showing where the workflow defined in the system prompt stands, and a tool for the agent to create the stepper and update it as the user interacts, with its own tool. A tracker inside the right panel is not always visible and shows nothing when the panel is closed or on another item.
+- **Decision:**
+  - **One always-on tool, `show_in_panel`,** in the assistant's core tools (never optional, like `run_readonly_sql`), in the RFP Builder's tools and so in every user agent (they run on the assistant). It is in the Tools library and linkable as a mention. It shows a workspace file, a Markdown document the agent composes, a query result of the turn as a table, an existing visual, or the agent's workflow phases ([agent-panel](../capabilities/agent-panel/spec.md), [agents.md](agents.md) 3.11).
+  - **What an agent shows is a panel item persisted on the session** (`panelItems`, additive, no migration), with a `shownAt` that picks the latest. Visuals join the same history (derived at read time for sessions saved before) so one menu lists everything shown.
+  - **A prompt's `## Workflow` section is a convention the app parses** (one parser, in the backend) to show every phase from the first turn; the agent only moves the marker (`kind: phases`). The RFP Builder's stages move into that section, and its saved stage also drives the tracker.
+  - **A workflow bar with its own always-on tool, `update_workflow`,** for every agent like `show_in_panel` ([agents.md](agents.md) 3.12). The bar is pinned under the page header above the chat, so it is visible whatever the right panel shows, and it renders the same saved workflow state as the tracker. Steps from a `## Workflow` section are fixed and the agent only sets their status; an agent without the section may define its own steps (stored in the state, 2 to 12). `show_in_panel` keeps its `phases` kind and writes the same state, so both stay valid. The new `workflow` stream event carries the whole view; `update_workflow` creates no panel item and does not open the panel. The state gains `steps`, `skipped` and `waiting`, all additive, no migration.
+- **Rejected:**
+  - One tool per kind: five tool lines on every turn and five stream events.
+  - One tool for both the panel and the bar: the bar's inputs (steps, skipped, waiting) do not belong to a panel item, and a call to move the bar would re-open the panel.
+  - A tool-free panel that guesses from the chat: it would not be agent-driven.
+  - Storing phase lists per session: prompt edits would not reach existing sessions.
+  - Table items as pointers into a message's data: the answer is saved after the tool runs, so the pointer would dangle on an aborted turn.
+- **Consequences:**
+  - The assistant's and the RFP Builder's prompts change, so their eval sets must pass at 100% over 3 runs; an existing prompt override shows the drift notice (ADR-0026).
+  - `visual-updated` stays for compatibility and `panel-item` is the general stream event; `workflow` is a second, whole-view event.
+  - The assistant's prompt gains a Workflow block and the RFP Builder's Process rule names `update_workflow`, so the same eval sets cover it; a prompt that overrides these (ADR-0026) shows the drift notice.
+  - The bar's folded state is a per-browser preference in local storage, not a backend setting.
+  - Session documents grow by table snapshots, capped at 200 rows each as an answer's data already is.
+  - Stack-neutral: any rebuild needs one tool, one stored item list per session, one phase parser over the prompt, one workflow state shared by two tools, the bar, and the two extra stream events.
+
+#### ADR-0030 — One built-in super admin; authentication, authorization and the Admin area removed
+- **Status:** Accepted
+- **Date:** 2026-10-14
+- **Context:**
+  - ADR-0010 added org server mode (Entra ID OpenID Connect sign-in, SCIM provisioning, five roles, owner scoping, the Admin area), ADR-0011 its backend session and Origin check, and ADR-0012 local personas with a bearer-token session.
+  - The user decided on 2026-10-14 to keep only a super admin and remove everything related to authentication and authorization (roadmap 1.14.19, [BA-232](https://halo-powered.atlassian.net/browse/BA-232)). The app is used by one person on one machine; every request paid a session read, a role resolution and an owner filter for that one user.
+- **Decision:**
+  - **One built-in super admin is always the caller.** A constant (`id: local`, display name "Super admin") replaces the current-user lookup. There is no sign-in page, no `/me`, no `/auth/*`, `/scim/*` or `/admin/*`, no roles, permissions, permission guard or decorators, no Origin check and no cookies, no `ORG_*` configuration and no org server mode. The Admin area is removed from the UI and from the specs. Nothing in the UI shows a user name.
+  - **Data.** The seven identity collections (users, groups, group memberships, role assignments, group-to-role mappings, auth sessions, activity events) are dropped, and private data is consolidated under the super admin by migration M14 ([data-model.md](data-model.md) section 6). `ownerId` stays on documents as an inert attribute; UI preferences and built-in agent pins become one bare-keyed document each.
+  - **Delivery unchanged.** The web CLI keeps binding `127.0.0.1`. The desktop readiness probe goes back to `GET /sessions` answering 200, and the CLI banner loses its `Mode:` line.
+- **Consequences:**
+  - **Security boundary is the host.** Anyone who can reach the port has full access, the stored LLM key and the developer settings included. The web CLI binds `127.0.0.1`; the desktop backend keeps its current bind (all interfaces) by the user's choice, so on the desktop anyone on the network who reaches its port has full access; `--host 0.0.0.0` on the CLI likewise. See [delivery.md](delivery.md) and [non-functional.md](../product/non-functional.md).
+  - A data folder from an org server opened by this version shows every user's data under the one owner; identity, roles and auth sessions are deleted at first start. RFP records keep `created_by` as a label.
+  - Supersedes ADR-0010, ADR-0011 and ADR-0012 and the per-user clause of ADR-0009. Narrows ADR-0022 (skills are no longer per owner), ADR-0023 and ADR-0026 ("Platform admins" becomes "the user").
+  - Org-mode E2E (the Playwright `org` project, the OIDC stub, the SCIM client) is deleted. The retired dependencies `openid-client` and `cookie` go if nothing else uses them.
+  - Re-introducing multi-user access later needs a new ADR; ADR-0010 to ADR-0012 stay as the record of the design that was removed.
 
 ## Level 4 — Code
 

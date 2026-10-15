@@ -49,7 +49,7 @@ Bootstrap (drafting from data)
 - R28. Mined snippets SHALL never be sent to the assistant until a human enables them (Accept, or the Enabled toggle).
 
 Ownership
-- R29. In both modes knowledge entries, including mined suggestions, SHALL belong to the user who created them or ran the bootstrap. Only that user's enabled entries SHALL be injected into that user's turns, even though datasets are shared. Every knowledge action needs Use agents. Rules: [../admin/spec.md](../admin/spec.md) R29, R30, R32.
+- R29. Knowledge entries, including mined suggestions, SHALL belong to the one user (the built-in super admin; the stored `ownerId` is a legacy attribute, [data-model.md](../../system/data-model.md)). Every enabled entry SHALL be injected into turns. Every knowledge action is available.
 
 ## Edge cases and errors
 

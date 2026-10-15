@@ -32,7 +32,7 @@ Promotion from verified queries
 - R15. Saving a metric started from a candidate SHALL store the verified-query id as its source, and that candidate SHALL stop being offered.
 
 Ownership
-- R16. In both modes metrics SHALL belong to the user who created them: only that user sees, edits, deletes them or has them injected into their turns, and metric names are unique per owner. Every metrics action needs Use agents. Rules: [../admin/spec.md](../admin/spec.md) R29, R31.
+- R16. Metrics SHALL belong to the one user (the built-in super admin; the stored `ownerId` is a legacy attribute, [data-model.md](../../system/data-model.md)): the user sees, edits and deletes every metric, every metric is injected into turns, and metric names are unique. Every metrics action is available.
 
 ## Edge cases and errors
 
