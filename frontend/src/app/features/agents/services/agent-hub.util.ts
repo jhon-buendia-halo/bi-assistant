@@ -49,9 +49,15 @@ function byName(a: Agent, b: Agent): number {
 }
 
 /** Pinned cards first, then the others, each group alphabetical (R1). */
+/** Showcase agents after the agents that can chat (R106), then by name. */
+function showcaseLast(a: Agent, b: Agent): number {
+  if (!!a.showcase !== !!b.showcase) return a.showcase ? 1 : -1;
+  return byName(a, b);
+}
+
 function pinnedFirst(a: Agent, b: Agent): number {
   if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
-  return byName(a, b);
+  return showcaseLast(a, b);
 }
 
 const KIND_ORDER: Record<AgentKind, number> = {
@@ -147,6 +153,8 @@ export const NO_DATASETS_LEFT = "None of this agent's datasets exist";
 export function startChatBlockedReason(agent: Agent): string | null {
   const kind = agentKind(agent);
   if (kind === 'official') {
+    // A showcase agent never chats (R106).
+    if (agent.showcase) return agent.chatRequirement ?? null;
     // An Official agent with a dataset (the RFP Builder) waits for it.
     return agent.chatRequirement && (agent.missingDatasets ?? []).length > 0
       ? agent.chatRequirement
@@ -165,7 +173,11 @@ export function startChatBlockedReason(agent: Agent): string | null {
  * no dataset of its own) rather than creating the session from the agent.
  */
 export function startsInComposer(agent: Agent): boolean {
-  return agentKind(agent) === 'official' && (agent.datasets ?? []).length === 0;
+  return (
+    agentKind(agent) === 'official' &&
+    !agent.showcase &&
+    (agent.datasets ?? []).length === 0
+  );
 }
 
 /** The assistant's entry in the New conversation screen's Agent picker. */
@@ -193,7 +205,7 @@ export function newSessionAgentOptions(
     (agent) => canStartChat(agent) && !startsInComposer(agent),
   );
   const group = (kind: AgentKind) =>
-    startable.filter((agent) => agentKind(agent) === kind).sort(byName);
+    startable.filter((agent) => agentKind(agent) === kind).sort(showcaseLast);
   return [...group('official'), ...group('user')].map((agent) => ({
     agent,
     disabledReason: startChatBlockedReason(agent),
