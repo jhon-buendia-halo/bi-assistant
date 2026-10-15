@@ -14,6 +14,24 @@ Entry template:
 
 ---
 
+## 2026-10-15 — 1.15.1 and 1.15.2 US Health demo: banner and showcase agents (BA-233)
+
+### What went well
+- Reusing the existing "blocked Official agent" path (`chatRequirement`, as the RFP Builder uses while its dataset is missing) made the showcase agents a catalogue flag plus four small UI rules, with no new architecture and no eval gate.
+- Checking the running app with a short Playwright script before handing it over caught three things the unit tests could not: the Assistant's Chat Box text on a showcase page, the showcase cards hidden behind "Show more", and a stray Show more on an always-expanded section.
+
+### What went wrong
+- I placed the showcase constants in the same file as the Mastra `Agent`s; importing it from the services broke four Jest suites (ESM). The RFP Builder already showed the pattern: keep plain data in a separate module.
+- A code comment (`// Showcase agents: …`) inside `agents: { … }` in `mastra/index.ts` made `check-specs.py` count an agent called `agents`.
+- The user had to point out that the Survey Agent was "missing": it existed but sat behind the Official section's Show more. I had judged the hub from the API list, not from what the first screen shows.
+- Running existing Playwright specs in the fast loop rewrote shipped evidence screenshots of 1.14.17 and 1.14.19 (those specs save screenshots on every run); they had to be restored with `git checkout -- evidence/`.
+
+### What to do differently
+- Keep an agent's catalogue data (keys, prompts, reasons) in a module without framework imports, and build the framework objects in a second file, as `rfp.agent.ts` and `showcase-catalog.ts` do.
+- Never write `<word>:` in a comment inside the `agents: { … }` registry block.
+- For a demo change, check the first screen a viewer sees (cards above the fold, nothing behind Show more), not only that the data is there.
+- After any Playwright run, check `git status -- evidence/` and restore screenshots that belong to other features before committing.
+
 ## 2026-10-15 — 1.14.2 to 1.14.19 acceptance gate and merge of epic BA-213
 
 ### What went well
